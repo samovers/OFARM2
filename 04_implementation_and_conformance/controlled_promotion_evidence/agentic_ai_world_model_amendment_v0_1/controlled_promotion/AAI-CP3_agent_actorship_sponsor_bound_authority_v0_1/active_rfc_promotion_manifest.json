@@ -1,8 +1,0 @@
-{
-  "schemaVersion": "ofarm.activeRfcPromotionManifest.v0.1",
-  "phase": "AAI-CP3",
-  "generatedAt": "2026-05-16T15:30:00+02:00",
-  "rfcs": [
-    "02_accepted_rfcs/OFARM_Agent_Actorship_and_Authority_RFC_v0_1.md"
-  ]
-}

@@ -1,9 +1,0 @@
-{
-  "schemaVersion": "ofarm.worldmodeloutputdisposition.v0.1",
-  "worldModelOutputDispositionId": "wm-output-disposition:risk-flag-v0-1",
-  "disposition": "RISK_FLAG",
-  "permittedUseNotes": "May be shown as advisory risk flag and may support a draft scouting plan.",
-  "prohibitedUseNotes": "Must not be recorded as current disease state, treatment record, evidence sufficiency, or compliance basis.",
-  "requiresBridgeForComplianceUse": true,
-  "advisoryOnly": true
-}

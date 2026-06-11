@@ -1,9 +1,0 @@
-{
-  "artifactId": "OFARM_AgentRunFreshnessRequirement_example_evidence_capture_v0_1",
-  "schemaVersion": "0.1",
-  "targetUse": "Evidence attachment candidate",
-  "requiredFreshnessPosture": "STALE_ALLOWED_WITH_WARNING",
-  "freshnessPolicyRef": "FreshnessPolicy:evidence-attachment-draft",
-  "evaluatedState": "FRESH",
-  "onFailure": "DOWNGRADE_TO_ADVISORY"
-}

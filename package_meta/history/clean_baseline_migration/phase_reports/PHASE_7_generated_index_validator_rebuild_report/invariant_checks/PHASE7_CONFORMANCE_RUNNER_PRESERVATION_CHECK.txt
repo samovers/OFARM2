@@ -1,5 +1,0 @@
-cp10_final_readiness: preserved
-cp12_phase7_2: preserved
-cp13_phase7_2: preserved
-cp14_phase7_2: preserved
-cp15_phase7_2: preserved

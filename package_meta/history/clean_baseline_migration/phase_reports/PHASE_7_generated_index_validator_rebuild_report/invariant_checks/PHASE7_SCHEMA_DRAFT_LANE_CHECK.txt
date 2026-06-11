@@ -1,5 +1,0 @@
-schemas exists: true
-drafts_non_default exists: true
-draftContractsPromoted: false
-schemasMoved: false
-draftsMoved: false

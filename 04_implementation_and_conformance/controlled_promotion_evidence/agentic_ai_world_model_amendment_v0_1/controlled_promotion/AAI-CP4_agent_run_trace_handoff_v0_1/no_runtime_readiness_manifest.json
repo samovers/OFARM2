@@ -1,7 +1,0 @@
-{
-  "schemaVersion": "ofarm.noRuntimeReadinessManifest.v0.1",
-  "phase": "AAI-CP4",
-  "runtimeReadinessClaimed": false,
-  "twoAgentCompatibilityClaimed": false,
-  "reason": "CP4 promotes contract law and static conformance examples only. Executed runtime hostile tests remain future CP6 work."
-}

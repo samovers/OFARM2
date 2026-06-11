@@ -1,9 +1,0 @@
-{
-  "schemaVersion": "ofarm.cp9.noActivePromotionManifest.v0.1",
-  "phase": "AAI-CP9",
-  "activeBaselineFilesChanged": [],
-  "acceptedRfcAdded": [],
-  "companionArtifactAdded": [],
-  "machineContractsPromoted": [],
-  "reason": "CP9 validates farmer-facing workflow conformance and UX hardening only."
-}

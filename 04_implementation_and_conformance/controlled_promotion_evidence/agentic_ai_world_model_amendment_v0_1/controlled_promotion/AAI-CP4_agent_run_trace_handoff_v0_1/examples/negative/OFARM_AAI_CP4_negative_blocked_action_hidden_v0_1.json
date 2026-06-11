@@ -1,9 +1,0 @@
-{
-  "caseId": "CP4-NEG-003",
-  "candidate": {
-    "attemptedForbiddenActionClass": "PACK_ACTIVATION",
-    "blockedActionTraceRefs": [],
-    "finalRunOutcome": "COMPLETED_ALLOWED"
-  },
-  "expectedOutcome": "FAIL_POLICY"
-}

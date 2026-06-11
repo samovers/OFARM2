@@ -1,9 +1,0 @@
-{
-  "fixtureId": "output-adapter-field-dossier-frozen-package",
-  "fixtureType": "OUTPUT_ADAPTER_TRACEBACK",
-  "documentMetadataExample": "OFARM_DocumentAssemblyMetadata_example_field_dossier_v0_1.json",
-  "evidenceSufficiencyExample": "OFARM_EvidenceSufficiencyCase_example_attested_document_v0_1.json",
-  "expectedBoundary": "FROZEN_DOCUMENT_ONLY",
-  "expectedAdapterClass": "DOSSIER_EXPORT_PACKAGE",
-  "notes": "The field dossier is eligible for frozen package/attestation handling, not live passport-style API export."
-}

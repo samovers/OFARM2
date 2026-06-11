@@ -1,8 +1,0 @@
-{
-  "schemaVersion": "ofarm.requestblockingbasis.v0.1",
-  "basisType": "EVIDENCE_SUFFICIENCY_POLICY",
-  "basisRef": "policy:evidence-sufficiency:crop-protection-product-identity",
-  "blockingEffect": "BLOCKS_PROMOTION",
-  "basisRationale": "The planned intervention cannot be promoted without product identity evidence.",
-  "reviewPathRef": "review-path:planned-operation-preflight"
-}

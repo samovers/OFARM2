@@ -1,9 +1,0 @@
-{
-  "schemaVersion": "ofarm.requestgovernanceblocker.v0.1",
-  "blockerId": "blocker:req:no-blocking-basis",
-  "blockedRequestRef": "evidenceneed:bad:no-basis",
-  "blockerType": "MISSING_BLOCKING_BASIS",
-  "reason": "Request claimed compliance-blocking posture without pack/rule/policy/review basis.",
-  "expectedDisposition": "DOWNGRADE",
-  "createdAt": "2026-05-15T09:05:00Z"
-}

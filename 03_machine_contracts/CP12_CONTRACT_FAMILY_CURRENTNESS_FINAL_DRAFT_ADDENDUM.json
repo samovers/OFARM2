@@ -1,8 +1,0 @@
-{
-  "status": "draft_non_default_only",
-  "date": "2026-05-28",
-  "family": "cyber_physical_mission",
-  "currentDefault": false,
-  "promotionRequired": true,
-  "schemasPath": "03_machine_contracts/drafts_non_default/cyber_physical_mission/"
-}

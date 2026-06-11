@@ -1,8 +1,0 @@
-{
-  "schemaVersion": "ofarm.cp5.activeCompanionPromotionManifest.v0.1",
-  "generatedAt": "2026-05-16T22:35:00+02:00",
-  "phase": "AAI-CP5",
-  "companionArtifacts": [
-    "01_companion_artifacts/OFARM_Agent_Tool_Manifest_and_Capability_Honesty_Policy_v0_1.md"
-  ]
-}

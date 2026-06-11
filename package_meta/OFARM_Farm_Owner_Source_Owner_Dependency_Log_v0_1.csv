@@ -1,9 +1,0 @@
-id,need,requested_evidence,status,ofarm_consequence_until_provided
-FMIS-OWN-EVID-001,operational_fmis_postgres_or_alloydb_rows,raw warehouse/material movement/carrier/person/audit tables,BLOCKED_EXTERNAL_OWNER,Keep chains candidate-only; no governed execution promotion.
-FMIS-OWN-EVID-002,document_binary_custody_store,"uploaded files, hashes, versions, delete state, custody metadata",BLOCKED_EXTERNAL_OWNER,"Keep document references as EvidenceReference, not EvidenceBundle."
-FMIS-OWN-EVID-003,issued_report_share_submission_store,"frozen report basis, recipient/share target, immutable file/supersession state",BLOCKED_EXTERNAL_OWNER,"Keep report mart rows as PassportViewCandidate, not DocumentAssembly."
-FMIS-OWN-EVID-004,carrier_contractor_performer_relation,first-class performer or carrier relation and documented join semantics,BLOCKED_EXTERNAL_OWNER,Keep UnresolvedActorIdentity; do not infer contractor/carrier performance.
-FMIS-OWN-EVID-005,review_approval_correction_promotion_audit,"old/new values, reviewer, decision time, approval/correction/delete history",BLOCKED_EXTERNAL_OWNER,Keep import records review-required; use loss-map items.
-FMIS-OWN-EVID-006,export_bundle_with_loss_map,"binaries, lineage, report basis, actor/review metadata, explicit loss map",BLOCKED_EXTERNAL_OWNER,Do not claim OFARM-grade export/exit.
-FMIS-OWN-EVID-007,candidate003_storage_lot_quality_packet,redacted row-level storage/lot/quality packet,BLOCKED_EXTERNAL_OWNER,Preferred second real adapter case.
-FMIS-OWN-EVID-008,candidate005_report_share_export_packet,redacted report/share/export chain packet,BLOCKED_EXTERNAL_OWNER,Fallback second real adapter case.

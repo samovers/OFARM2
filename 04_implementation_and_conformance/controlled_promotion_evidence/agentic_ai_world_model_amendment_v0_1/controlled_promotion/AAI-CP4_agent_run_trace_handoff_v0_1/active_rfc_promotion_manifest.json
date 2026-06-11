@@ -1,7 +1,0 @@
-{
-  "schemaVersion": "ofarm.activeRfcPromotionManifest.v0.1",
-  "phase": "AAI-CP4",
-  "rfcs": [
-    "02_accepted_rfcs/OFARM_Agent_Run_Envelope_Trace_and_Handoff_RFC_v0_1.md"
-  ]
-}

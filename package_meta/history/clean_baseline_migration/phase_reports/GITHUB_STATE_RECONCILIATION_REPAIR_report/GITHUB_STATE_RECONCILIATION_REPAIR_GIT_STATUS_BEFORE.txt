@@ -1,4 +1,0 @@
-Initial start check before github_state_reconciliation_repair edits reported expected local/untracked artifacts from the failed reconciliation and final packaging pass, including .DS_Store files, root-level final/report ZIP artifacts, and previous REPORT_ONLY reconciliation files/folder. No unexpected modified tracked source files were reported before applying the repair.
-
-Commit before repair: e1ce57e Materialize CP15 clean baseline package
-Branch: main

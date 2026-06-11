@@ -1,6 +1,0 @@
-{
-  "fixtureId": "manifest_consistency_partner_match",
-  "manifestFile": "OFARM_Capability_Manifest_example_partner_deployment_v0_1.json",
-  "activeArtifactSetFile": "OFARM_ActiveArtifactSet_example_partner_deployment_v0_1.json",
-  "expectedOutcome": "PASS"
-}

@@ -1,9 +1,0 @@
-{
-  "schemaVersion": "ofarm.requestrelevancewindow.v0.1",
-  "requestRelevanceWindowId": "requestwindow:field17:fungicide-gap:2026-05-16",
-  "startsAt": "2026-05-16T09:00:00+02:00",
-  "endsAt": "2026-05-16T20:00:00+02:00",
-  "staleAfter": "2026-05-16T20:00:00+02:00",
-  "relevanceBasis": "Observation should reflect today's canopy condition before preflight.",
-  "afterWindowDisposition": "EXPIRE"
-}

@@ -1,2 +1,0 @@
-cp15MergeEvidence ok: package_meta/history/controlled_amendments/cp15_merge_2026_05_30/CP15_FINAL_ACCEPTANCE_GATE.md
-no live CP15_MERGE_DECISION reference

@@ -1,1 +1,0 @@
-Validators contain hardening checks for README, folder.status, current reader/currentness, generated view, and clean-baseline ledger activeLaw overclaims.

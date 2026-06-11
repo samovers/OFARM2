@@ -1,8 +1,0 @@
-git status --short
-(clean tracked worktree; only ignored previous repair report ZIP was present in git status --short --ignored)
-
-git branch --show-current
-main
-
-git log -1 --oneline
-b3b3136 chore: repair clean-baseline repo currentness and release artifact policy

@@ -1,5 +1,0 @@
-README.md activeLaw=true count: 0
-folder.status.json activeLaw=true count: 0
-current reader/currentness activeLaw=true count: 0
-package_meta/generated activeLaw=true count: 0
-CLEAN_BASELINE_* activeLaw=true count: 0

@@ -1,7 +1,0 @@
-{
-  "fixtureId": "query-execution-field-passport-success",
-  "fixtureType": "QUERY_EXECUTION_PAIR",
-  "requestExample": "OFARM_QueryExecutionRequest_example_field_passport_v0_1.json",
-  "resultExample": "OFARM_QueryExecutionResult_example_field_passport_v0_1.json",
-  "aliasTraceExample": "OFARM_SemanticPathAliasResolutionTrace_example_field_passport_active_v0_1.json"
-}

@@ -1,4 +1,0 @@
-Temporary validation dependency setup:
-$ /Users/einstein/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3 -m pip install --target /private/tmp/ofarm_phase8_pydeps jsonschema
-
-jsonschema installed outside the repository. Final Phase 8 validation used PATH=/Users/einstein/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin:$PATH and PYTHONPATH=/private/tmp/ofarm_phase8_pydeps so wrapper child commands named python3 resolve to the compatible bundled Python 3.12 runtime.

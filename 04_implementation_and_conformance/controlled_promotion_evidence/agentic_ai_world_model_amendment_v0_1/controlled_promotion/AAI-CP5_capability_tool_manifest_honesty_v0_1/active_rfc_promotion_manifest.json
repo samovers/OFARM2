@@ -1,8 +1,0 @@
-{
-  "schemaVersion": "ofarm.cp5.activeRfcPromotionManifest.v0.1",
-  "generatedAt": "2026-05-16T22:35:00+02:00",
-  "phase": "AAI-CP5",
-  "rfcs": [
-    "02_accepted_rfcs/OFARM_Capability_Manifest_Agentic_Extension_RFC_v0_1.md"
-  ]
-}
