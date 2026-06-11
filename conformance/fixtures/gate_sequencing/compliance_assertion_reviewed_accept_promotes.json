@@ -1,0 +1,49 @@
+{
+  "fixtureId": "compliance-assertion-reviewed-accept-promotes",
+  "fixtureType": "COMMIT_PROMOTION_SEQUENCE",
+  "commitClass": "compliance assertion",
+  "requestedInForceCategory": "compliance fact",
+  "currentStateUpdateExpected": true,
+  "expectedStopGate": "CURRENT_STATE_MATERIALIZATION",
+  "expectedStopOutcome": "UPDATED",
+  "terminalOutcome": "PROMOTED_ACCEPTED",
+  "forbiddenShortcutsChecked": [
+    "NO_DIRECT_COMPLIANCE_ASSERTION_TO_COMPLIANCE_FACT_WITHOUT_EVIDENCE_AND_REVIEW"
+  ],
+  "gates": [
+    {
+      "gate": "INGRESS_NORMALIZATION",
+      "outcome": "NORMALIZED_DRAFT"
+    },
+    {
+      "gate": "AUTHORITY",
+      "outcome": "ALLOW",
+      "requiredAuthorityFamily": "ASSERT_SUBMIT"
+    },
+    {
+      "gate": "VALIDATION",
+      "outcome": "PASS"
+    },
+    {
+      "gate": "PACK_PROFILE_APPLICABILITY",
+      "outcome": "APPLICABLE",
+      "contextSnapshotRef": "context:field-17:2026-04-10:pack-set-a"
+    },
+    {
+      "gate": "EVIDENCE_SUFFICIENCY",
+      "outcome": "SATISFIED",
+      "caseExample": "OFARM_EvidenceSufficiencyCase_example_compliance_assertion_v0_1.json"
+    },
+    {
+      "gate": "REVIEW_PROMOTION",
+      "outcome": "PROMOTE_ACCEPTED",
+      "reviewDecisionRef": "review:field-17:organic-input-compliance:accepted:2026-04-10"
+    },
+    {
+      "gate": "CURRENT_STATE_MATERIALIZATION",
+      "outcome": "UPDATED",
+      "targetTwin": "COMPLIANCE",
+      "resultCategory": "compliance fact"
+    }
+  ]
+}

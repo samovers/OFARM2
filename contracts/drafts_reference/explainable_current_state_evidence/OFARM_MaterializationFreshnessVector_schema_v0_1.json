@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/drafts/non-default/explainable-current-state-evidence/materialization-freshness-vector/v0.1",
+  "title": "OFARM MaterializationFreshnessVector schema v0.1 draft/non-default",
+  "description": "Draft/non-default schema for source watermarks, sequence positions, version references, and digest references used to evaluate materialization freshness.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "artifactType",
+    "contractStatus",
+    "draftNonDefault",
+    "promotedToCurrentDefault",
+    "freshnessVectorId",
+    "materializationKeyRef",
+    "observedAt",
+    "versionDimensions",
+    "vectorIsNotMaterializationBasis",
+    "wallClockIsNotSoleHighConsequenceBasis"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.explainableCurrentStateEvidence.materializationFreshnessVector.v0.1-draft"
+    },
+    "artifactType": {
+      "const": "MaterializationFreshnessVector"
+    },
+    "contractStatus": {
+      "const": "DRAFT_NON_DEFAULT"
+    },
+    "draftNonDefault": {
+      "const": true
+    },
+    "promotedToCurrentDefault": {
+      "const": false
+    },
+    "freshnessVectorId": {
+      "$ref": "#/$defs/ref"
+    },
+    "materializationKeyRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "materializationBasisRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "observedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "versionDimensions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "dimensionFamily",
+          "sourceRef"
+        ],
+        "oneOf": [
+          {
+            "required": [
+              "observedVersionRef"
+            ]
+          },
+          {
+            "required": [
+              "observedDigest"
+            ]
+          },
+          {
+            "required": [
+              "observedSequence"
+            ]
+          }
+        ],
+        "properties": {
+          "dimensionFamily": {
+            "enum": [
+              "CANONICAL_ASSERTION_HISTORY",
+              "ACCEPTED_EVENT_CONSEQUENCE",
+              "REVIEW_DECISION",
+              "IDENTITY_LIFECYCLE",
+              "PACK_ACTIVATION_SET",
+              "RULE_EVIDENCE_POLICY",
+              "CONTEXT_SNAPSHOT",
+              "REFERENCE_SNAPSHOT",
+              "AUTHORITY_POLICY",
+              "ADVISORY_MODEL_OUTPUT",
+              "EVALUATION_TIME_BOUNDARY",
+              "QUERY_PLAN_OR_MATERIALIZATION_POLICY"
+            ]
+          },
+          "sourceRef": {
+            "$ref": "#/$defs/ref"
+          },
+          "observedVersionRef": {
+            "$ref": "#/$defs/ref"
+          },
+          "observedDigest": {
+            "type": "string",
+            "minLength": 1
+          },
+          "observedSequence": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "vectorIsNotMaterializationBasis": {
+      "const": true
+    },
+    "wallClockIsNotSoleHighConsequenceBasis": {
+      "const": true
+    }
+  },
+  "$defs": {
+    "ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:/#-]+$"
+    }
+  }
+}

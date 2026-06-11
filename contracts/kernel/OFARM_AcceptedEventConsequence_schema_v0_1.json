@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/acceptedeventconsequence/v0.1",
+  "title": "OFARM AcceptedEventConsequence v0.1",
+  "$comment": "Minimal machine contract derived from Constitution RC2.1 \u00a710.1-10.2 plus Source Truth Record Closure RFC v0.1 \u00a74.3.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "acceptedEventConsequenceId",
+    "consequenceType",
+    "sourceEventRef",
+    "acceptedByReviewDecisionRef",
+    "subject",
+    "anchorScopes",
+    "acceptedAt",
+    "inForceState"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.acceptedeventconsequence.v0.1"
+    },
+    "acceptedEventConsequenceId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "consequenceType": {
+      "enum": [
+        "EXECUTION_CONFIRMED",
+        "STATE_CHANGE_ACCEPTED",
+        "LOT_LINEAGE_ACCEPTED",
+        "COMPLIANCE_STATUS_ACCEPTED",
+        "OTHER_CONSEQUENCE"
+      ]
+    },
+    "sourceEventRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "acceptedByReviewDecisionRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "subjectType",
+        "subjectRef"
+      ],
+      "properties": {
+        "subjectType": {
+          "enum": [
+            "FARM",
+            "SITE",
+            "FIELD",
+            "ZONE",
+            "CROP_CYCLE",
+            "LOT",
+            "FACILITY",
+            "OPERATION"
+          ]
+        },
+        "subjectRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        }
+      }
+    },
+    "anchorScopes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scopeType",
+          "scopeRef"
+        ],
+        "properties": {
+          "scopeType": {
+            "enum": [
+              "FARM",
+              "SITE",
+              "FIELD",
+              "ZONE",
+              "CROP_CYCLE",
+              "LOT",
+              "FACILITY",
+              "OPERATION",
+              "DEPLOYMENT",
+              "TENANT"
+            ]
+          },
+          "scopeRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]+$"
+          }
+        }
+      }
+    },
+    "acceptedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "effectiveFrom": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "effectiveUntil": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "inForceState": {
+      "enum": [
+        "IN_FORCE",
+        "SUPERSEDED",
+        "WITHDRAWN"
+      ]
+    },
+    "supersededByReviewDecisionRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "executionRecordPayloadRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._/:-]+$"
+      },
+      "$comment": "Optional additive bridge to Phase AGR-P3 ExecutionRecordPayload records backing accepted execution detail."
+    }
+  }
+}

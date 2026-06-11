@@ -1,0 +1,177 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/materializationrequest/v0.1",
+  "title": "OFARM MaterializationRequest v0.1",
+  "$comment": "Minimal boundary request envelope for current-state materialization use evaluation derived from Current State Materialization RFC v0.1 and Platform RC2.1 \u00a7\u00a73.8 and 4.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "requestId",
+    "requestedAt",
+    "operation",
+    "targetTwin",
+    "anchorScopes",
+    "evaluationTimePolicy",
+    "useClass",
+    "requiredFreshness",
+    "highConsequenceUse"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.materializationrequest.v0.1"
+    },
+    "requestId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "requestedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "requestedByPartyRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "requestedByAgentRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "operation": {
+      "enum": [
+        "RESOLVE_FOR_USE",
+        "RECOMPUTE_CURRENT_STATE"
+      ]
+    },
+    "targetTwin": {
+      "enum": [
+        "COMPLIANCE",
+        "ADVISORY"
+      ]
+    },
+    "anchorScopes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scopeType",
+          "scopeRef"
+        ],
+        "properties": {
+          "scopeType": {
+            "enum": [
+              "FARM",
+              "SITE",
+              "FIELD",
+              "ZONE",
+              "CROP_CYCLE",
+              "LOT",
+              "FACILITY",
+              "OPERATION",
+              "DEPLOYMENT",
+              "TENANT"
+            ]
+          },
+          "scopeRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]+$"
+          }
+        }
+      }
+    },
+    "evaluationTimePolicy": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "policyType"
+          ],
+          "properties": {
+            "policyType": {
+              "const": "NOW"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "policyType",
+            "asOfTime"
+          ],
+          "properties": {
+            "policyType": {
+              "const": "AS_OF"
+            },
+            "asOfTime": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "policyType",
+            "windowStart",
+            "windowEnd"
+          ],
+          "properties": {
+            "policyType": {
+              "const": "WINDOW"
+            },
+            "windowStart": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "windowEnd": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        }
+      ]
+    },
+    "contextSnapshotRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "materializationBasisRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "reuseCandidateSnapshotRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "useClass": {
+      "enum": [
+        "EXPLORATORY",
+        "HIGH_CONSEQUENCE",
+        "ATTESTED_OUTPUT",
+        "AUDIT_EXPLANATION"
+      ]
+    },
+    "requiredFreshness": {
+      "enum": [
+        "REQUIRE_FRESH",
+        "ALLOW_STALE_EXPLORATORY",
+        "NO_CURRENT_STATE_DEPENDENCY"
+      ]
+    },
+    "highConsequenceUse": {
+      "type": "boolean"
+    },
+    "requestingActionRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "usePurpose": {
+      "type": "string"
+    }
+  }
+}

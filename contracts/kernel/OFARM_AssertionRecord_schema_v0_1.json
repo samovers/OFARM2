@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/assertionrecord/v0.1",
+  "title": "OFARM AssertionRecord v0.1",
+  "$comment": "Minimal machine contract derived from Constitution RC2.1 \u00a710.1-10.2 plus Source Truth Record Closure RFC v0.1 \u00a74.1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "assertionRecordId",
+    "assertionType",
+    "subject",
+    "anchorScopes",
+    "assertedByPartyRef",
+    "assertedAt",
+    "claimState",
+    "evidenceRefs"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.assertionrecord.v0.1"
+    },
+    "assertionRecordId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "assertionType": {
+      "enum": [
+        "OBSERVATION_ASSERTION",
+        "OPERATION_CLAIM_ASSERTION",
+        "COMPLIANCE_ASSERTION",
+        "STRUCTURE_ASSERTION",
+        "LOT_ASSERTION",
+        "OTHER_ASSERTION"
+      ]
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "subjectType",
+        "subjectRef"
+      ],
+      "properties": {
+        "subjectType": {
+          "enum": [
+            "FARM",
+            "SITE",
+            "FIELD",
+            "ZONE",
+            "CROP_CYCLE",
+            "LOT",
+            "FACILITY",
+            "OPERATION",
+            "INPUT",
+            "OTHER"
+          ]
+        },
+        "subjectRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        }
+      }
+    },
+    "anchorScopes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scopeType",
+          "scopeRef"
+        ],
+        "properties": {
+          "scopeType": {
+            "enum": [
+              "FARM",
+              "SITE",
+              "FIELD",
+              "ZONE",
+              "CROP_CYCLE",
+              "LOT",
+              "FACILITY",
+              "OPERATION",
+              "DEPLOYMENT",
+              "TENANT"
+            ]
+          },
+          "scopeRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]+$"
+          }
+        }
+      }
+    },
+    "assertedByPartyRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "benefitingPartyRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "assertedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "occurrenceTime": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "effectiveFrom": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "effectiveUntil": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "provenanceRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "claimState": {
+      "enum": [
+        "PENDING_REVIEW",
+        "IN_FORCE",
+        "CONTESTED",
+        "REJECTED",
+        "SUPERSEDED"
+      ]
+    },
+    "supersedesAssertionRecordRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "supersededByReviewDecisionRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "interventionIntentPayloadRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._/:-]+$"
+      },
+      "$comment": "Optional additive bridge to Phase AGR-P3 InterventionIntentPayload records."
+    },
+    "executionRecordPayloadRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._/:-]+$"
+      },
+      "$comment": "Optional additive bridge to Phase AGR-P3 ExecutionRecordPayload records; operation claims remain assertions until promoted."
+    }
+  }
+}

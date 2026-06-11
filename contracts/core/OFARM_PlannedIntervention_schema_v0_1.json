@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/plannedintervention/v0.1",
+  "title": "OFARM PlannedIntervention v0.1",
+  "$comment": "Minimal machine contract derived from the harmonized Alignment Register v0.13 and the Local Knowledge and Planning Closure RFC v0.1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "plannedInterventionId",
+    "plannedAt",
+    "plannedByPartyRef",
+    "targetScope",
+    "interventionKind",
+    "plannedWindowStart",
+    "plannedWindowEnd",
+    "planState"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.plannedintervention.v0.1"
+    },
+    "plannedInterventionId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "plannedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "plannedByPartyRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "targetScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scopeType",
+        "scopeRef"
+      ],
+      "properties": {
+        "scopeType": {
+          "enum": [
+            "FARM",
+            "SITE",
+            "FIELD",
+            "ZONE",
+            "CROP_CYCLE",
+            "LOT",
+            "FACILITY",
+            "OPERATION",
+            "DEPLOYMENT",
+            "TENANT"
+          ]
+        },
+        "scopeRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        }
+      }
+    },
+    "interventionKind": {
+      "type": "string",
+      "minLength": 1
+    },
+    "plannedWindowStart": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "plannedWindowEnd": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "planState": {
+      "enum": [
+        "DRAFT",
+        "ACTIVE",
+        "CANCELLED",
+        "SUPERSEDED",
+        "COMPLETED"
+      ]
+    },
+    "rationaleNarrativeObservationRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "rationaleLocalMemoryRuleRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "localArtifactRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "expectedOutcomeSummary": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "supersedesPlannedInterventionRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "interventionIntentPayloadRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._/:-]+$"
+      },
+      "$comment": "Optional additive bridge to Phase AGR-P3 InterventionIntentPayload records; does not change plan-versus-execution semantics."
+    }
+  }
+}

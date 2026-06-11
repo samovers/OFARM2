@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/farmidentitypayload/v0.1",
+  "title": "OFARM FarmIdentityPayload v0.1 (candidate)",
+  "$comment": "NEW_CANDIDATE structure-assertion payload for the Farm durable identity (Constitution RC2.1 section 7.24). National holding identifiers such as KMG-MID are profile-governed scheme bindings, never universal core law (section 3.4).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "farmidentitypayloadId",
+    "identityRecordRef",
+    "recordedAt",
+    "displayName",
+    "operatorPartyRef"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.farmidentitypayload.v0.1"
+    },
+    "farmidentitypayloadId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "identityRecordRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "recordedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "displayName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "operatorPartyRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "holdingIdentifiers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scheme",
+          "value"
+        ],
+        "properties": {
+          "scheme": {
+            "type": "string",
+            "minLength": 1
+          },
+          "value": {
+            "type": "string",
+            "minLength": 1
+          },
+          "referenceSnapshotRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]+$"
+          }
+        }
+      }
+    }
+  }
+}

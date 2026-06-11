@@ -1,0 +1,55 @@
+{
+  "fixtureId": "operation-claim-reviewed-accept-promotes",
+  "fixtureType": "COMMIT_PROMOTION_SEQUENCE",
+  "commitClass": "operation claim",
+  "requestedInForceCategory": "accepted executed intervention consequence",
+  "currentStateUpdateExpected": true,
+  "expectedStopGate": "CURRENT_STATE_MATERIALIZATION",
+  "expectedStopOutcome": "UPDATED",
+  "terminalOutcome": "PROMOTED_ACCEPTED",
+  "forbiddenShortcutsChecked": [
+    "NO_DIRECT_OPERATION_CLAIM_TO_ACCEPTED_EXECUTION_WITHOUT_EVIDENCE",
+    "NO_DIRECT_OPERATION_CLAIM_TO_ACCEPTED_EXECUTION_WITHOUT_REVIEW_PROMOTION"
+  ],
+  "gates": [
+    {
+      "gate": "INGRESS_NORMALIZATION",
+      "outcome": "NORMALIZED_DRAFT"
+    },
+    {
+      "gate": "AUTHORITY",
+      "outcome": "ALLOW",
+      "requestExample": "OFARM_AuthorizationDecisionRequest_example_service_provider_report_v0_1.json",
+      "resultExample": "OFARM_AuthorizationDecisionResult_example_service_provider_allow_v0_1.json",
+      "traceExample": "OFARM_AuthorizationDecisionTrace_example_service_provider_allow_v0_1.json"
+    },
+    {
+      "gate": "VALIDATION",
+      "outcome": "PASS"
+    },
+    {
+      "gate": "PACK_PROFILE_APPLICABILITY",
+      "outcome": "APPLICABLE",
+      "contextSnapshotRef": "context:field-17:2026-04-10:pack-set-a"
+    },
+    {
+      "gate": "EVIDENCE_SUFFICIENCY",
+      "outcome": "SATISFIED",
+      "evidenceBundleRefs": [
+        "evidence-bundle:field-17:spray-proof:2026-04-10"
+      ],
+      "reason": "A complete proof bundle was attached before promotion."
+    },
+    {
+      "gate": "REVIEW_PROMOTION",
+      "outcome": "PROMOTE_ACCEPTED",
+      "reviewDecisionRef": "review:field-17:spray-execution:accepted:2026-04-10"
+    },
+    {
+      "gate": "CURRENT_STATE_MATERIALIZATION",
+      "outcome": "UPDATED",
+      "targetTwin": "COMPLIANCE",
+      "resultCategory": "accepted executed intervention consequence"
+    }
+  ]
+}

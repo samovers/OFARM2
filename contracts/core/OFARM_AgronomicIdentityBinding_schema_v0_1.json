@@ -1,0 +1,509 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/agronomicidentitybinding/v0.1",
+  "title": "OFARM AgronomicIdentityBinding v0.1",
+  "$comment": "Small OFARM-owned carrier for binding local agronomic subjects to external schemes, registries, code lists, and attestation surfaces without importing them as OFARM law.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "agronomicIdentityBindingId",
+    "bindingRole",
+    "bindingState",
+    "createdAt",
+    "localSubject",
+    "externalScheme",
+    "bindingValue",
+    "evidenceRefs",
+    "promotionBoundary"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.agronomicidentitybinding.v0.1"
+    },
+    "agronomicIdentityBindingId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:/-]+$"
+    },
+    "bindingRole": {
+      "enum": [
+        "CROP_SPECIES",
+        "VARIETY_CULTIVAR",
+        "SEED_LOT",
+        "CROP_STAGE",
+        "PEST",
+        "WEED",
+        "DISEASE",
+        "TARGET_ORGANISM",
+        "CROP_PROTECTION_PRODUCT",
+        "FERTILIZER_PRODUCT",
+        "NUTRIENT_INPUT",
+        "IRRIGATION_WATER_SOURCE",
+        "PRODUCT_BATCH_OR_LOT",
+        "ACTIVE_SUBSTANCE",
+        "QUANTITY_KIND",
+        "UNIT_CODE",
+        "SAMPLING_METHOD",
+        "MEASUREMENT_METHOD",
+        "THRESHOLD_SOURCE",
+        "REGULATORY_AUTHORISATION",
+        "OTHER"
+      ]
+    },
+    "bindingState": {
+      "enum": [
+        "DRAFT",
+        "ASSERTED",
+        "VERIFIED",
+        "PROVISIONAL",
+        "AMBIGUOUS",
+        "REJECTED",
+        "SUPERSEDED",
+        "STALE"
+      ]
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "createdByPartyRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:/-]+$"
+    },
+    "localSubject": {
+      "$ref": "#/$defs/localSubject"
+    },
+    "externalScheme": {
+      "$ref": "#/$defs/externalScheme"
+    },
+    "bindingValue": {
+      "$ref": "#/$defs/bindingValue"
+    },
+    "profileRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:/-]+$"
+      }
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:/-]+$"
+      }
+    },
+    "referenceSnapshotRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:/-]+$"
+      }
+    },
+    "lineage": {
+      "$ref": "#/$defs/lineage"
+    },
+    "promotionBoundary": {
+      "$ref": "#/$defs/promotionBoundary"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "bindingState": {
+            "const": "VERIFIED"
+          }
+        },
+        "required": [
+          "bindingState"
+        ]
+      },
+      "then": {
+        "properties": {
+          "bindingValue": {
+            "anyOf": [
+              {
+                "required": [
+                  "code"
+                ]
+              },
+              {
+                "required": [
+                  "uri"
+                ]
+              },
+              {
+                "required": [
+                  "registrationRef"
+                ]
+              },
+              {
+                "required": [
+                  "authorisationRef"
+                ]
+              },
+              {
+                "required": [
+                  "gtin"
+                ]
+              },
+              {
+                "required": [
+                  "lotNumber"
+                ]
+              },
+              {
+                "required": [
+                  "quantityKindRef"
+                ]
+              },
+              {
+                "required": [
+                  "unitRef"
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "bindingState": {
+            "const": "AMBIGUOUS"
+          }
+        },
+        "required": [
+          "bindingState"
+        ]
+      },
+      "then": {
+        "properties": {
+          "promotionBoundary": {
+            "properties": {
+              "highConsequenceUse": {
+                "const": "BLOCKED_OR_REVIEW_REQUIRED"
+              }
+            },
+            "required": [
+              "highConsequenceUse"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "localSubject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "subjectType",
+        "subjectRef"
+      ],
+      "properties": {
+        "subjectType": {
+          "enum": [
+            "CROP",
+            "VARIETY",
+            "SEED_LOT",
+            "PRODUCT_OR_INPUT",
+            "ORGANISM",
+            "CROP_STAGE",
+            "METHOD",
+            "THRESHOLD",
+            "QUANTITY_KIND",
+            "UNIT",
+            "WATER_SOURCE",
+            "MATERIAL",
+            "OTHER"
+          ]
+        },
+        "subjectRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:/-]+$"
+        },
+        "scopeRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:/-]+$"
+        }
+      }
+    },
+    "externalScheme": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemeRef",
+        "schemeRole",
+        "issuerRef"
+      ],
+      "properties": {
+        "schemeRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:/-]+$"
+        },
+        "schemeName": {
+          "type": "string"
+        },
+        "schemeRole": {
+          "enum": [
+            "SEMANTIC_ANCHOR",
+            "CODE_BINDING",
+            "EXCHANGE_MAPPING",
+            "RUNTIME_SURFACE",
+            "ATTESTATION_WRAPPER",
+            "LOCAL_PROFILE_SCHEME"
+          ]
+        },
+        "issuerRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:/-]+$"
+        },
+        "schemeVersion": {
+          "type": "string"
+        },
+        "jurisdiction": {
+          "type": "string"
+        },
+        "accessDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "effectiveFrom": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "effectiveUntil": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "bindingValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "capturedLabel"
+      ],
+      "properties": {
+        "capturedLabel": {
+          "type": "string"
+        },
+        "normalizedLabel": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string"
+        },
+        "uri": {
+          "type": "string"
+        },
+        "mappingRelation": {
+          "enum": [
+            "EXACT",
+            "BROAD",
+            "NARROW",
+            "CLOSE",
+            "UNRESOLVED",
+            "LOCAL_ONLY"
+          ]
+        },
+        "registrationRef": {
+          "type": "string"
+        },
+        "authorisationRef": {
+          "type": "string"
+        },
+        "registrantRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:/-]+$"
+        },
+        "gtin": {
+          "type": "string",
+          "pattern": "^[0-9]{8,14}$"
+        },
+        "batchLot": {
+          "type": "string"
+        },
+        "digitalLinkUri": {
+          "type": "string"
+        },
+        "activeSubstanceRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:/-]+$"
+          }
+        },
+        "lotIssuerRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:/-]+$"
+        },
+        "lotNumber": {
+          "type": "string"
+        },
+        "seedCertificateRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:/-]+$"
+        },
+        "declaredNutrientAnalysis": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nutrientDeclaration"
+          }
+        },
+        "quantityKindRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:/-]+$"
+        },
+        "unitRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:/-]+$"
+        },
+        "thresholdSourceRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:/-]+$"
+          }
+        },
+        "sourceDocumentRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:/-]+$"
+        },
+        "effectivePeriod": {
+          "$ref": "#/$defs/effectivePeriod"
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "nutrientDeclaration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "nutrientRef",
+        "quantityKindRef",
+        "unitRef",
+        "value"
+      ],
+      "properties": {
+        "nutrientRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:/-]+$"
+        },
+        "quantityKindRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:/-]+$"
+        },
+        "unitRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:/-]+$"
+        },
+        "value": {
+          "type": "number"
+        },
+        "reportedValue": {
+          "type": "string"
+        }
+      }
+    },
+    "effectivePeriod": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start"
+      ],
+      "properties": {
+        "start": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "end": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "lineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "parentBindingRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:/-]+$"
+          }
+        },
+        "supersedesBindingRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:/-]+$"
+        },
+        "derivedFromBindingRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:/-]+$"
+          }
+        }
+      }
+    },
+    "promotionBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "highConsequenceUse",
+        "maySupportPromotion",
+        "mustNotPromoteTo"
+      ],
+      "properties": {
+        "highConsequenceUse": {
+          "enum": [
+            "ALLOWED_WHEN_PROFILE_AND_EVIDENCE_PASS",
+            "EVIDENCE_ONLY",
+            "REVIEW_REQUIRED",
+            "BLOCKED_OR_REVIEW_REQUIRED",
+            "DISALLOWED"
+          ]
+        },
+        "maySupportPromotion": {
+          "type": "boolean"
+        },
+        "mustNotPromoteTo": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": [
+              "OFARM_CORE_MEANING",
+              "CANONICAL_TRUTH_DIRECTLY",
+              "ACCEPTED_EXECUTION_DIRECTLY",
+              "COMPLIANCE_TRUTH_WITHOUT_EVIDENCE",
+              "WHOLE_FIELD_TRUTH",
+              "REGULATORY_IDENTITY_WITHOUT_JURISDICTION",
+              "PACK_MUTATED_CORE_MEANING"
+            ]
+          }
+        },
+        "evidenceFloor": {
+          "enum": [
+            "LOW",
+            "MEDIUM",
+            "HIGH",
+            "PROFILE_DEFINED"
+          ]
+        },
+        "stageSeparationStatement": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

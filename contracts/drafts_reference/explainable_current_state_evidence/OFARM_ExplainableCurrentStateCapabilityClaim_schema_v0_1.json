@@ -1,0 +1,255 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/drafts/non-default/explainable-current-state-evidence/explainable-current-state-capability-claim/v0.1",
+  "title": "OFARM ExplainableCurrentStateCapabilityClaim schema v0.1 draft/non-default",
+  "description": "Draft/non-default schema for capability claims that distinguish implemented support, conformance evidence, benchmarked runtime envelope, and production-observed telemetry.",
+  "type": "object",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "evidenceLevel": {
+            "enum": [
+              "SINGLE_TENANT_PILOT_BENCHMARKED",
+              "MULTI_TENANT_PILOT_BENCHMARKED",
+              "FLEET_SCALE_SYNTHETIC_BENCHMARKED"
+            ]
+          }
+        },
+        "required": [
+          "evidenceLevel"
+        ]
+      },
+      "then": {
+        "required": [
+          "performanceEnvelope",
+          "benchmarkRunRefs",
+          "storageAmplificationReportRefs"
+        ],
+        "properties": {
+          "benchmarkRunRefs": {
+            "minItems": 1
+          },
+          "storageAmplificationReportRefs": {
+            "minItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "evidenceLevel": {
+            "const": "PRODUCTION_OBSERVED_WITH_TELEMETRY"
+          }
+        },
+        "required": [
+          "evidenceLevel"
+        ]
+      },
+      "then": {
+        "required": [
+          "performanceEnvelope",
+          "benchmarkRunRefs",
+          "storageAmplificationReportRefs",
+          "productionObservedEvidenceRefs"
+        ],
+        "properties": {
+          "benchmarkRunRefs": {
+            "minItems": 1
+          },
+          "storageAmplificationReportRefs": {
+            "minItems": 1
+          },
+          "productionObservedEvidenceRefs": {
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ],
+  "required": [
+    "schemaVersion",
+    "artifactType",
+    "contractStatus",
+    "draftNonDefault",
+    "promotedToCurrentDefault",
+    "claimId",
+    "manifestRef",
+    "runtimeIdentity",
+    "declaredAt",
+    "evidenceLevel",
+    "implementedContractSupport",
+    "noFleetReadinessWithoutBenchmarkEvidence",
+    "benchmarkArtifactsAreNotCanonicalFarmTruth",
+    "doesNotOverrideActiveBaseline"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.explainableCurrentStateEvidence.explainableCurrentStateCapabilityClaim.v0.1-draft"
+    },
+    "artifactType": {
+      "const": "ExplainableCurrentStateCapabilityClaim"
+    },
+    "contractStatus": {
+      "const": "DRAFT_NON_DEFAULT"
+    },
+    "draftNonDefault": {
+      "const": true
+    },
+    "promotedToCurrentDefault": {
+      "const": false
+    },
+    "claimId": {
+      "$ref": "#/$defs/ref"
+    },
+    "manifestRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "runtimeIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runtimeRef",
+        "runtimeVersion"
+      ],
+      "properties": {
+        "runtimeRef": {
+          "$ref": "#/$defs/ref"
+        },
+        "runtimeVersion": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "declaredAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "evidenceLevel": {
+      "enum": [
+        "IMPLEMENTED_NO_BENCHMARK_EVIDENCE",
+        "CONFORMANCE_FIXTURE_PASSING",
+        "SINGLE_TENANT_PILOT_BENCHMARKED",
+        "MULTI_TENANT_PILOT_BENCHMARKED",
+        "FLEET_SCALE_SYNTHETIC_BENCHMARKED",
+        "PRODUCTION_OBSERVED_WITH_TELEMETRY"
+      ]
+    },
+    "implementedContractSupport": {
+      "type": "boolean"
+    },
+    "supportedContractRefs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ref"
+      }
+    },
+    "conformanceTestSupport": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "conformanceRunRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ref"
+          }
+        },
+        "fixtureCoverageRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ref"
+          }
+        }
+      }
+    },
+    "performanceEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "supportedWorkloadProfileRefs",
+        "testedScaleRef",
+        "runtimeQueryMixProfileRefs",
+        "materializationCostProfileRefs",
+        "knownLimitations"
+      ],
+      "properties": {
+        "supportedWorkloadProfileRefs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/ref"
+          }
+        },
+        "testedScaleRef": {
+          "$ref": "#/$defs/ref"
+        },
+        "runtimeQueryMixProfileRefs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/ref"
+          }
+        },
+        "materializationCostProfileRefs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/ref"
+          }
+        },
+        "knownLimitations": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "benchmarkRunRefs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/ref"
+      }
+    },
+    "storageAmplificationReportRefs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/ref"
+      }
+    },
+    "productionObservedEvidenceRefs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/ref"
+      }
+    },
+    "knownLimitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "noFleetReadinessWithoutBenchmarkEvidence": {
+      "const": true
+    },
+    "benchmarkArtifactsAreNotCanonicalFarmTruth": {
+      "const": true
+    },
+    "doesNotOverrideActiveBaseline": {
+      "const": true
+    }
+  },
+  "$defs": {
+    "ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:/#-]+$"
+    }
+  }
+}

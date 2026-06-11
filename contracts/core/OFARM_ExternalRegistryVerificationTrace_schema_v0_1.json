@@ -1,0 +1,392 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/externalregistryverificationtrace/v0.1",
+  "title": "OFARM ExternalRegistryVerificationTrace v0.1",
+  "$comment": "OFARM-owned carrier for evidence-gated external registry/currentness checks. It supports code-binding verification and output gates without turning external registries into OFARM law.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "externalRegistryVerificationTraceId",
+    "profileRef",
+    "verificationPurpose",
+    "createdAt",
+    "traceAuthorityRef",
+    "traceJurisdictionRef",
+    "lookupSurface",
+    "queryInputs",
+    "candidateCount",
+    "selectedExternalId",
+    "selectionRationale",
+    "statusObserved",
+    "datesObserved",
+    "snapshotRefs",
+    "registryAvailability",
+    "discrepancies",
+    "finalOutcome",
+    "highConsequenceUse",
+    "downstreamOutputDisposition"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.externalregistryverificationtrace.v0.1"
+    },
+    "externalRegistryVerificationTraceId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:/-]+$"
+    },
+    "profileRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:/-]+$"
+    },
+    "verificationPurpose": {
+      "enum": [
+        "PRODUCT_AUTHORISATION_IDENTITY",
+        "LABEL_CERTIFICATE_CORRELATION",
+        "ACTIVE_SUBSTANCE_CONTEXT",
+        "COMMERCIAL_IDENTITY_ADJUNCT",
+        "OTHER"
+      ]
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "createdByPartyRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:/-]+$"
+    },
+    "traceAuthorityRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:/-]+$"
+    },
+    "traceJurisdictionRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:/-]+$"
+    },
+    "lookupSurface": {
+      "enum": [
+        "PHYTOWEB_LIVE_SEARCH",
+        "PHYTOWEB_JSON_EXPORT",
+        "PHYTOWEB_LABEL_CERTIFICATE_REVIEW",
+        "EU_PESTICIDES_ACTIVE_SUBSTANCES",
+        "GS1_DIGITAL_LINK_OR_GTIN",
+        "OTHER"
+      ]
+    },
+    "queryInputs": {
+      "$ref": "#/$defs/queryInputs"
+    },
+    "candidateCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "selectedExternalId": {
+      "$ref": "#/$defs/selectedExternalId"
+    },
+    "selectionRationale": {
+      "type": "string",
+      "minLength": 1
+    },
+    "statusObserved": {
+      "enum": [
+        "AUTHORISED",
+        "SELLING_OUT",
+        "USING_OUT",
+        "WITHDRAWN",
+        "SUSPENDED",
+        "EXPIRED",
+        "EMERGENCY_AUTHORISED",
+        "PARALLEL_TRADE",
+        "NOT_FOUND",
+        "MULTIPLE_CANDIDATES",
+        "REGISTRY_UNAVAILABLE",
+        "NOT_CHECKED",
+        "UNKNOWN"
+      ]
+    },
+    "datesObserved": {
+      "$ref": "#/$defs/datesObserved"
+    },
+    "historyObserved": {
+      "$ref": "#/$defs/historyObserved"
+    },
+    "labelCertificateCorrelated": {
+      "$ref": "#/$defs/labelCertificateCorrelated"
+    },
+    "activeSubstanceCrossCheck": {
+      "$ref": "#/$defs/activeSubstanceCrossCheck"
+    },
+    "snapshotRefs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:/-]+$"
+      }
+    },
+    "registryAvailability": {
+      "enum": [
+        "AVAILABLE",
+        "UNAVAILABLE",
+        "PARTIAL",
+        "NOT_CHECKED"
+      ]
+    },
+    "discrepancies": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/discrepancy"
+      }
+    },
+    "finalOutcome": {
+      "enum": [
+        "PASS",
+        "FAIL",
+        "REVIEW_REQUIRED",
+        "REFUSE_OUTPUT",
+        "UNVERIFIED_DUE_TO_SOURCE_UNAVAILABLE"
+      ]
+    },
+    "highConsequenceUse": {
+      "enum": [
+        "ALLOWED_WHEN_PASS",
+        "REQUIRE_REVIEW",
+        "REFUSE_OUTPUT",
+        "EVIDENCE_ONLY"
+      ]
+    },
+    "downstreamOutputDisposition": {
+      "enum": [
+        "PASSPORTVIEW_ALLOWED",
+        "PASSPORTVIEW_REQUIRE_REVIEW",
+        "PASSPORTVIEW_REFUSED_DOCUMENTANNEX_ALLOWED",
+        "DOCUMENTANNEX_ONLY"
+      ]
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "queryInputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "authorisationNumber": {
+          "type": "string"
+        },
+        "tradeName": {
+          "type": "string"
+        },
+        "crop": {
+          "type": "string"
+        },
+        "pestOrEnemy": {
+          "type": "string"
+        },
+        "holder": {
+          "type": "string"
+        },
+        "statusFilters": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "gtin": {
+          "type": "string",
+          "pattern": "^[0-9]{8,14}$"
+        },
+        "activeSubstance": {
+          "type": "string"
+        },
+        "freeTextInput": {
+          "type": "string"
+        },
+        "sourceQueryRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:/-]+$"
+        }
+      }
+    },
+    "selectedExternalId": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "externalIdRole"
+      ],
+      "properties": {
+        "externalId": {
+          "type": "string"
+        },
+        "externalIdRole": {
+          "enum": [
+            "AUTHORISATION_NUMBER",
+            "PARALLEL_TRADE_PERMIT_NUMBER",
+            "GTIN",
+            "EU_ACTIVE_SUBSTANCE_ID",
+            "NONE",
+            "OTHER"
+          ]
+        }
+      }
+    },
+    "datesObserved": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "accessedAt"
+      ],
+      "properties": {
+        "accessedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "sourceUpdatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "sourceAccessDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "statusEffectiveFrom": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "statusEffectiveUntil": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "exportVersionLabel": {
+          "type": "string"
+        },
+        "rawExportFileLabel": {
+          "type": "string"
+        }
+      }
+    },
+    "historyObserved": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "wasObserved"
+      ],
+      "properties": {
+        "wasObserved": {
+          "type": "boolean"
+        },
+        "historyScope": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "labelCertificateCorrelated": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requiredForHighConsequence",
+        "correlationStatus"
+      ],
+      "properties": {
+        "requiredForHighConsequence": {
+          "type": "boolean"
+        },
+        "correlationStatus": {
+          "enum": [
+            "CORRELATED",
+            "NOT_CHECKED",
+            "MISMATCH",
+            "NOT_APPLICABLE",
+            "REQUIRED_BUT_MISSING",
+            "UNKNOWN"
+          ]
+        },
+        "certificateRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:/-]+$"
+        },
+        "labelRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:/-]+$"
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "activeSubstanceCrossCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "crossCheckStatus"
+      ],
+      "properties": {
+        "crossCheckStatus": {
+          "enum": [
+            "PASS",
+            "NOT_CHECKED",
+            "MISMATCH",
+            "ACTIVE_SUBSTANCE_ONLY",
+            "UNKNOWN"
+          ]
+        },
+        "sourceRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:/-]+$"
+        },
+        "activeSubstanceRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:/-]+$"
+          }
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "discrepancy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "discrepancyType",
+        "severity",
+        "note"
+      ],
+      "properties": {
+        "discrepancyType": {
+          "enum": [
+            "NONE",
+            "PRESCRIPTION_AS_APPLIED_MISMATCH",
+            "NAME_COLLISION",
+            "GTIN_ONLY",
+            "EU_ONLY",
+            "MISSING_SNAPSHOT",
+            "WRONG_JURISDICTION",
+            "STALE_SOURCE",
+            "REGISTRY_UNAVAILABLE",
+            "LABEL_CERTIFICATE_MISMATCH",
+            "OTHER"
+          ]
+        },
+        "severity": {
+          "enum": [
+            "INFO",
+            "WARNING",
+            "REVIEW_REQUIRED",
+            "FAIL_CLOSED"
+          ]
+        },
+        "note": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

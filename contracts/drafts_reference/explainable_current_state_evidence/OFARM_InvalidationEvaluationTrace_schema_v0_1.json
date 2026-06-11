@@ -1,0 +1,230 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/drafts/non-default/explainable-current-state-evidence/invalidation-evaluation-trace/v0.1",
+  "title": "OFARM InvalidationEvaluationTrace schema v0.1 draft/non-default",
+  "description": "Draft/non-default schema for explaining why a materialization key stayed fresh, became stale, became invalid, or required recomputation after a trigger.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "artifactType",
+    "contractStatus",
+    "draftNonDefault",
+    "promotedToCurrentDefault",
+    "traceId",
+    "triggerId",
+    "triggerFamily",
+    "triggerSourceRef",
+    "triggerScope",
+    "statusBefore",
+    "statusAfter",
+    "reasonCode",
+    "policyRef",
+    "decisionTime",
+    "evaluatorRuntimeVersion",
+    "fanout",
+    "redaction",
+    "redactionDoesNotUpgradeFreshness"
+  ],
+  "oneOf": [
+    {
+      "required": [
+        "evaluatedMaterializationKeyRef"
+      ]
+    },
+    {
+      "required": [
+        "evaluatedMaterializationKeyPattern"
+      ]
+    }
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.explainableCurrentStateEvidence.invalidationEvaluationTrace.v0.1-draft"
+    },
+    "artifactType": {
+      "const": "InvalidationEvaluationTrace"
+    },
+    "contractStatus": {
+      "const": "DRAFT_NON_DEFAULT"
+    },
+    "draftNonDefault": {
+      "const": true
+    },
+    "promotedToCurrentDefault": {
+      "const": false
+    },
+    "traceId": {
+      "$ref": "#/$defs/ref"
+    },
+    "triggerId": {
+      "$ref": "#/$defs/ref"
+    },
+    "triggerFamily": {
+      "enum": [
+        "BASIS_ADVANCED",
+        "POLICY_CHANGED",
+        "CONTEXT_CHANGED",
+        "IDENTITY_CHANGED",
+        "REFERENCE_CHANGED",
+        "TIME_BOUNDARY_REACHED",
+        "INDEX_CORRUPTION_DETECTED",
+        "ADVISORY_INPUT_CHANGED"
+      ]
+    },
+    "triggerSourceRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "triggerScope": {
+      "type": "string",
+      "minLength": 1
+    },
+    "evaluatedMaterializationKeyRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "evaluatedMaterializationKeyPattern": {
+      "type": "string",
+      "minLength": 1
+    },
+    "dependencyIndexEvidenceRefs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ref"
+      }
+    },
+    "freshnessVectorComparison": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "dimensionFamily",
+          "beforeRef",
+          "afterRef",
+          "advanced"
+        ],
+        "properties": {
+          "dimensionFamily": {
+            "type": "string",
+            "minLength": 1
+          },
+          "beforeRef": {
+            "$ref": "#/$defs/ref"
+          },
+          "afterRef": {
+            "$ref": "#/$defs/ref"
+          },
+          "advanced": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "statusBefore": {
+      "$ref": "#/$defs/freshnessStatus"
+    },
+    "statusAfter": {
+      "$ref": "#/$defs/freshnessStatus"
+    },
+    "reasonCode": {
+      "type": "string",
+      "minLength": 1
+    },
+    "policyRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "decisionTime": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "evaluatorRuntimeVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "fanout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "keysConsidered",
+        "markedStale",
+        "markedInvalid",
+        "markedRecomputeRequired",
+        "unaffected",
+        "maximumScopeExpansion"
+      ],
+      "properties": {
+        "keysConsidered": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "markedStale": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "markedInvalid": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "markedRecomputeRequired": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unaffected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maximumScopeExpansion": {
+          "type": "string"
+        }
+      }
+    },
+    "redaction": {
+      "$ref": "#/$defs/redaction"
+    },
+    "redactionDoesNotUpgradeFreshness": {
+      "const": true
+    }
+  },
+  "$defs": {
+    "ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:/#-]+$"
+    },
+    "freshnessStatus": {
+      "enum": [
+        "FRESH",
+        "STALE",
+        "INVALID",
+        "RECOMPUTE_REQUIRED"
+      ]
+    },
+    "redaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "redactionApplied",
+        "redactionDisclosed"
+      ],
+      "properties": {
+        "redactionApplied": {
+          "type": "boolean"
+        },
+        "redactionDisclosed": {
+          "const": true
+        },
+        "redactionBasisRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ref"
+          }
+        },
+        "redactedFields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

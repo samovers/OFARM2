@@ -1,0 +1,795 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/interventionintentpayload/v0.1",
+  "title": "OFARM InterventionIntentPayload v0.1",
+  "$comment": "Small OFARM-owned carrier for quantity-bearing agronomic recommendation, prescription, and planned-operation payloads. Governed by the Quantity-Bearing Intervention and As-Applied RFC v0.1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "interventionIntentPayloadId",
+    "intentClass",
+    "intentState",
+    "createdAt",
+    "createdByPartyRef",
+    "subject",
+    "targetScope",
+    "interventionKind",
+    "intendedAction",
+    "intendedTimeWindow",
+    "quantityParameters",
+    "evidenceBasisRefs",
+    "promotionBoundary"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.interventionintentpayload.v0.1"
+    },
+    "interventionIntentPayloadId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "intentClass": {
+      "enum": [
+        "RECOMMENDATION",
+        "PRESCRIPTION",
+        "PLANNED_OPERATION",
+        "CANCELLATION",
+        "SUPERSESSION"
+      ]
+    },
+    "intentState": {
+      "enum": [
+        "DRAFT",
+        "PROPOSED",
+        "AUTHORIZED",
+        "ACTIVE",
+        "CANCELLED",
+        "SUPERSEDED",
+        "COMPLETED"
+      ]
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "createdByPartyRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._/:-]+$"
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "subjectType",
+        "subjectRef"
+      ],
+      "properties": {
+        "subjectType": {
+          "enum": [
+            "FARM",
+            "SITE",
+            "FIELD",
+            "ZONE",
+            "CROP_CYCLE",
+            "LOT",
+            "FACILITY",
+            "OPERATION",
+            "DEPLOYMENT",
+            "TENANT",
+            "ASSERTION_RECORD",
+            "DOCUMENT_ASSEMBLY",
+            "SUBMISSION_ASSEMBLY"
+          ]
+        },
+        "subjectRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        }
+      }
+    },
+    "targetScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scopeType",
+        "scopeRef"
+      ],
+      "properties": {
+        "scopeType": {
+          "enum": [
+            "FARM",
+            "SITE",
+            "FIELD",
+            "ZONE",
+            "CROP_CYCLE",
+            "LOT",
+            "FACILITY",
+            "OPERATION",
+            "DEPLOYMENT",
+            "TENANT"
+          ]
+        },
+        "scopeRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        }
+      }
+    },
+    "targetExtentRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._/:-]+$"
+    },
+    "cropCycleRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._/:-]+$"
+    },
+    "interventionKind": {
+      "enum": [
+        "CROP_PROTECTION",
+        "FERTILIZATION",
+        "SEEDING",
+        "IRRIGATION",
+        "CULTIVATION",
+        "HARVEST",
+        "DRYING",
+        "PRUNING",
+        "OTHER_INTERVENTION"
+      ]
+    },
+    "intendedAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actionType",
+        "actionLabel"
+      ],
+      "properties": {
+        "actionType": {
+          "enum": [
+            "APPLY_INPUT",
+            "SEED",
+            "IRRIGATE",
+            "CULTIVATE",
+            "HARVEST",
+            "DRY",
+            "PRUNE",
+            "MONITOR",
+            "OTHER_ACTION"
+          ]
+        },
+        "actionLabel": {
+          "type": "string",
+          "minLength": 1
+        },
+        "methodRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._/:-]+$"
+        },
+        "sequencePosition": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "intendedTimeWindow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start",
+        "end"
+      ],
+      "properties": {
+        "start": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "end": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "timeBasis": {
+          "enum": [
+            "PRESCRIPTION_WINDOW",
+            "PLANNED_WINDOW",
+            "EXECUTION_INTERVAL",
+            "EFFECTIVE_INTERVAL",
+            "OBSERVED_INTERVAL",
+            "UNKNOWN"
+          ]
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "cropBindings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "bindingRole",
+          "schemeRef",
+          "code",
+          "capturedLabel",
+          "bindingStatus"
+        ],
+        "properties": {
+          "bindingRole": {
+            "enum": [
+              "CROP_SPECIES",
+              "VARIETY",
+              "SEED_LOT",
+              "TARGET_ORGANISM",
+              "PEST",
+              "WEED",
+              "DISEASE",
+              "PRODUCT_OR_INPUT",
+              "ACTIVE_SUBSTANCE",
+              "METHOD",
+              "THRESHOLD_SOURCE",
+              "OTHER_BINDING"
+            ]
+          },
+          "schemeRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._/:-]+$"
+          },
+          "schemeVersion": {
+            "type": "string",
+            "minLength": 1
+          },
+          "code": {
+            "type": "string",
+            "minLength": 1
+          },
+          "capturedLabel": {
+            "type": "string",
+            "minLength": 1
+          },
+          "issuerRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._/:-]+$"
+          },
+          "jurisdiction": {
+            "type": "string",
+            "minLength": 1
+          },
+          "registryRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._/:-]+$"
+          },
+          "bindingStatus": {
+            "enum": [
+              "RESOLVED",
+              "PROVISIONAL",
+              "AMBIGUOUS",
+              "UNRESOLVED"
+            ]
+          },
+          "mappingRelation": {
+            "enum": [
+              "EXACT",
+              "BROAD",
+              "NARROW",
+              "RELATED",
+              "LOCAL_ONLY"
+            ]
+          },
+          "evidenceRefs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._/:-]+$"
+            }
+          }
+        }
+      }
+    },
+    "targetOrganismBindings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "bindingRole",
+          "schemeRef",
+          "code",
+          "capturedLabel",
+          "bindingStatus"
+        ],
+        "properties": {
+          "bindingRole": {
+            "enum": [
+              "CROP_SPECIES",
+              "VARIETY",
+              "SEED_LOT",
+              "TARGET_ORGANISM",
+              "PEST",
+              "WEED",
+              "DISEASE",
+              "PRODUCT_OR_INPUT",
+              "ACTIVE_SUBSTANCE",
+              "METHOD",
+              "THRESHOLD_SOURCE",
+              "OTHER_BINDING"
+            ]
+          },
+          "schemeRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._/:-]+$"
+          },
+          "schemeVersion": {
+            "type": "string",
+            "minLength": 1
+          },
+          "code": {
+            "type": "string",
+            "minLength": 1
+          },
+          "capturedLabel": {
+            "type": "string",
+            "minLength": 1
+          },
+          "issuerRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._/:-]+$"
+          },
+          "jurisdiction": {
+            "type": "string",
+            "minLength": 1
+          },
+          "registryRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._/:-]+$"
+          },
+          "bindingStatus": {
+            "enum": [
+              "RESOLVED",
+              "PROVISIONAL",
+              "AMBIGUOUS",
+              "UNRESOLVED"
+            ]
+          },
+          "mappingRelation": {
+            "enum": [
+              "EXACT",
+              "BROAD",
+              "NARROW",
+              "RELATED",
+              "LOCAL_ONLY"
+            ]
+          },
+          "evidenceRefs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._/:-]+$"
+            }
+          }
+        }
+      }
+    },
+    "productOrInputBindings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "bindingRole",
+          "schemeRef",
+          "code",
+          "capturedLabel",
+          "bindingStatus"
+        ],
+        "properties": {
+          "bindingRole": {
+            "enum": [
+              "CROP_SPECIES",
+              "VARIETY",
+              "SEED_LOT",
+              "TARGET_ORGANISM",
+              "PEST",
+              "WEED",
+              "DISEASE",
+              "PRODUCT_OR_INPUT",
+              "ACTIVE_SUBSTANCE",
+              "METHOD",
+              "THRESHOLD_SOURCE",
+              "OTHER_BINDING"
+            ]
+          },
+          "schemeRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._/:-]+$"
+          },
+          "schemeVersion": {
+            "type": "string",
+            "minLength": 1
+          },
+          "code": {
+            "type": "string",
+            "minLength": 1
+          },
+          "capturedLabel": {
+            "type": "string",
+            "minLength": 1
+          },
+          "issuerRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._/:-]+$"
+          },
+          "jurisdiction": {
+            "type": "string",
+            "minLength": 1
+          },
+          "registryRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._/:-]+$"
+          },
+          "bindingStatus": {
+            "enum": [
+              "RESOLVED",
+              "PROVISIONAL",
+              "AMBIGUOUS",
+              "UNRESOLVED"
+            ]
+          },
+          "mappingRelation": {
+            "enum": [
+              "EXACT",
+              "BROAD",
+              "NARROW",
+              "RELATED",
+              "LOCAL_ONLY"
+            ]
+          },
+          "evidenceRefs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._/:-]+$"
+            }
+          }
+        }
+      }
+    },
+    "quantityParameters": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "parameterRole",
+          "quantityKindRef",
+          "unitRef",
+          "value"
+        ],
+        "properties": {
+          "parameterRole": {
+            "enum": [
+              "RATE",
+              "DOSE",
+              "CONCENTRATION",
+              "TOTAL_QUANTITY",
+              "CARRIER_VOLUME",
+              "WATER_VOLUME",
+              "SEED_RATE",
+              "NUTRIENT_RATE",
+              "PRESSURE",
+              "FLOW_RATE",
+              "SPEED",
+              "TIMING_INTERVAL",
+              "APPLICATION_VOLUME",
+              "OTHER_PARAMETER"
+            ]
+          },
+          "materialRole": {
+            "enum": [
+              "PRODUCT",
+              "ACTIVE_SUBSTANCE",
+              "CARRIER",
+              "WATER",
+              "SEED",
+              "FERTILIZER",
+              "NUTRIENT",
+              "OTHER_MATERIAL"
+            ]
+          },
+          "materialRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._/:-]+$"
+          },
+          "quantityKindRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._/:-]+$"
+          },
+          "unitRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._/:-]+$"
+          },
+          "value": {
+            "type": "number"
+          },
+          "normalizedValue": {
+            "type": "number"
+          },
+          "reportedValue": {
+            "type": [
+              "string",
+              "number"
+            ]
+          },
+          "reportedUnitLabel": {
+            "type": "string"
+          },
+          "basisQuantityKindRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._/:-]+$"
+          },
+          "basisUnitRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._/:-]+$"
+          },
+          "basisValue": {
+            "type": "number"
+          },
+          "qualifier": {
+            "enum": [
+              "EXACT",
+              "ESTIMATED",
+              "MINIMUM",
+              "MAXIMUM",
+              "RANGE_MIDPOINT",
+              "LABEL_LIMIT",
+              "MACHINE_REPORTED",
+              "HUMAN_REPORTED",
+              "UNKNOWN"
+            ]
+          },
+          "evidenceRefs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._/:-]+$"
+            }
+          },
+          "notes": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "thresholdRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._/:-]+$"
+      }
+    },
+    "agronomicObservationContextRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._/:-]+$"
+      }
+    },
+    "measurementEvidenceRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._/:-]+$"
+      }
+    },
+    "evidenceBasisRefs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._/:-]+$"
+      }
+    },
+    "authorityRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._/:-]+$"
+    },
+    "delegationGrantRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._/:-]+$"
+    },
+    "contractorPartyRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._/:-]+$"
+    },
+    "machineConstraintRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._/:-]+$"
+      }
+    },
+    "weatherConstraintRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._/:-]+$"
+      }
+    },
+    "variableRateMapRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._/:-]+$"
+    },
+    "plannedInterventionRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._/:-]+$"
+    },
+    "derivedFromIntentPayloadRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._/:-]+$"
+    },
+    "supersedesIntentPayloadRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._/:-]+$"
+    },
+    "exchangeBindingRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._/:-]+$"
+      }
+    },
+    "promotionBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "targetTwin",
+        "highConsequenceUse",
+        "mustNotPromoteTo"
+      ],
+      "properties": {
+        "targetTwin": {
+          "enum": [
+            "ADVISORY",
+            "COMPLIANCE"
+          ]
+        },
+        "highConsequenceUse": {
+          "enum": [
+            "ADVISORY_ONLY",
+            "AUTHORITY_REQUIRED",
+            "PLAN_ONLY",
+            "OPERATION_CLAIM_ONLY",
+            "EVIDENCE_ONLY",
+            "REVIEW_REQUIRED",
+            "ACCEPTED_ONLY",
+            "BLOCKED"
+          ]
+        },
+        "mustNotPromoteTo": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": [
+              "COMPLIANCE_TRUTH",
+              "ACCEPTED_EXECUTION",
+              "CURRENT_STATE_DIRECTLY",
+              "PASSPORT_VIEW_DEFAULT",
+              "DOCUMENT_ATTESTATION",
+              "INVENTORY_DEDUCTION",
+              "LEGAL_EFFECT",
+              "WHOLE_FIELD_TREATMENT"
+            ]
+          }
+        },
+        "stageSeparationStatement": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "notes": {
+      "type": "string"
+    },
+    "identityBindingRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._/:-]+$"
+      }
+    },
+    "codeBindingProfileRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._/:-]+$"
+    },
+    "agronomicIdentityBindingRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._/:-]+$"
+      },
+      "$comment": "Optional Phase AGR-P5 bridge to governed AgronomicIdentityBinding records."
+    },
+    "agronomicCodeBindingProfileRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._/:-]+$",
+      "$comment": "Optional Phase AGR-P5 bridge to an AgronomicCodeBindingProfile that governs scheme/role requirements."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "intentClass": {
+            "const": "PRESCRIPTION"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "authorityRef",
+          "productOrInputBindings"
+        ],
+        "properties": {
+          "promotionBoundary": {
+            "properties": {
+              "targetTwin": {
+                "const": "COMPLIANCE"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "intentClass": {
+            "const": "PLANNED_OPERATION"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "plannedInterventionRef",
+          "derivedFromIntentPayloadRef"
+        ],
+        "properties": {
+          "promotionBoundary": {
+            "properties": {
+              "highConsequenceUse": {
+                "const": "PLAN_ONLY"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "intentClass": {
+            "const": "RECOMMENDATION"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "promotionBoundary": {
+            "properties": {
+              "targetTwin": {
+                "const": "ADVISORY"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

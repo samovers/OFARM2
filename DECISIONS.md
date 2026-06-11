@@ -1,0 +1,22 @@
+# Decision log
+
+Settled during pre-implementation review (2026-06). A fresh agent does not re-litigate these; a genuinely blocking problem with one of them goes to `ERRATA.md` with evidence.
+
+| # | Decision | Why |
+|---|----------|-----|
+| D1 | Kernel / Core / Platform is an **implementation & conformance packaging profile**, not new OFARM authority. | Freeze-compatible; Constitution stays the law. |
+| D2 | Twin metadata attaches to **materialization, promotion, and output paths** — not to every substrate record. Invariant: no Advisory material enters Compliance materialization without a governed bridge. | One-substrate-two-twins law; a universal lane stamp would break the bridge path. |
+| D3 | **Commit class lives on the ingress boundary** (`CommitIngressRequest`/`PromotionTrace`), not on `AssertionRecord`. Store enforces: every authoritative record reachable from exactly one `PromotionTrace`, linked in the same transaction. | Matches shipped contracts; zero schema change. |
+| D4 | `DelegationGrant` and `SharingGrant` are **Kernel**, not optional. | Family workers/contractors and read-only inspectors are the pilot's reality. |
+| D5 | **Operation identity contract deferred**; a spray application is `InterventionEvent` + `ExecutionRecordPayload` + `AcceptedEventConsequence`. | Avoid double-modeling before implementation evidence. |
+| D6 | National identifiers (KMG-MID, GERK, training card, REGSR) are **Slovenia profile bindings**, never universal Core law. | External registries are anchors/bindings, not hidden law. |
+| D7 | Pilot claim scope = **record-keeping completeness**; authorisation status is advisory-only from dated snapshots. | SI register currentness is weaker than the Belgium pattern; honesty over claim inflation. |
+| D8 | **Self-review** for routine operation claims (farmer holds REVIEW_ACCEPT for own farm; evidence floor enforced mechanically; exceptions to advisor queue). Insufficient for certification-grade claims. Software-agent review = Phase 2. | One-person-farm reality; contracts require a named reviewer for every acceptance. |
+| D9 | Product register = **UVHVVR Seznam FFS (REGSR)**; FITO-INFO is shut down. Binding key = **številka odločbe** + validity dates. Snapshot = weekly **HTML parse** (no official export exists — verified), posture declared unofficial-surface-over-official-content. | M0 verification, including a steward browser sweep. |
+| D10 | Storage = **PostgreSQL append-only + JSONB** with explicit edge table, payload digests, schema version+hash, derived-marked projections, gate log. RDF export later. | Boring tech; graph shape preserved at record/relation level; storage layout is legally optimizable. |
+| D11 | Static views: **predefined versioned QuerySpecification + QueryPlanIR artifacts** per `views/VIEWS.md`; no public query compiler in v1. | Defer the product feature, keep the law. |
+| D12 | Invalidation = **basis-set staleness** (any basis member superseded/revoked/version-bumped, context component changed, or time policy expired). Authority/sharing re-evaluated per request at the sharing gate, not via staleness. | One mechanism covering all trigger families; instant access cut on revocation. |
+| D13 | UVHVVR/KGZS outreach and farm recruitment **deferred to 2027**; pilot season = 2027. Consequence recorded: self-review policy and inspector outputs externally unvalidated until then — 2027 outreach is non-negotiable. | Steward decision 2026-06-12; aligns with the 2025/2203 transition and the 31 Jan 2027 first state-registry entry. |
+| D14 | **Privacy rule** (after a real near-miss): no personal data or document-derived real values in any repository or bundle, ever; fictional format-true placeholders only; paste-safe reports. | Steward instruction; also the model's own data-sovereignty law. |
+| D15 | Canonical main evolves in parallel (PRs #2–#9, incl. the **accepted Performance & Explainable Current-State Evidence RFC** and DRAFT_NON_DEFAULT contracts). This package absorbs such changes by **extraction with provenance**; the original "one consolidated post-pilot amendment" wording is superseded by steward-governed parallel amendments on canonical. | Recorded 2026-06-12; the RFC directly shapes M1's materializer. |
+| D16 | M1 implements the **explainable-evidence draft shapes** (MaterializationKey, FreshnessVector, DependencyIndex, InvalidationEvaluationTrace) behind the Kernel's materialization law **without promoting them**. | Accepted RFC demands the capability; contracts remain draft/non-default. |

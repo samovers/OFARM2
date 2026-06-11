@@ -1,0 +1,211 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/drafts/non-default/explainable-current-state-evidence/materialization-dependency-index/v0.1",
+  "title": "OFARM MaterializationDependencyIndex schema v0.1 draft/non-default",
+  "description": "Draft/non-default schema for dependency-indexed invalidation evidence. Dependency indexes are derived runtime infrastructure for invalidation evaluation only.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "artifactType",
+    "contractStatus",
+    "draftNonDefault",
+    "promotedToCurrentDefault",
+    "dependencyIndexId",
+    "generatedAt",
+    "indexPolicyVersion",
+    "derivedOnly",
+    "doesNotCreateCanonicalFarmTruth",
+    "derivationSources",
+    "entries"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.explainableCurrentStateEvidence.materializationDependencyIndex.v0.1-draft"
+    },
+    "artifactType": {
+      "const": "MaterializationDependencyIndex"
+    },
+    "contractStatus": {
+      "const": "DRAFT_NON_DEFAULT"
+    },
+    "draftNonDefault": {
+      "const": true
+    },
+    "promotedToCurrentDefault": {
+      "const": false
+    },
+    "dependencyIndexId": {
+      "$ref": "#/$defs/ref"
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "indexPolicyVersion": {
+      "$ref": "#/$defs/ref"
+    },
+    "derivedOnly": {
+      "const": true
+    },
+    "doesNotCreateCanonicalFarmTruth": {
+      "const": true
+    },
+    "derivationSources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "enum": [
+          "QUERY_PLAN_IR",
+          "VIEW_PROFILE",
+          "OUTPUT_ASSEMBLY_POLICY",
+          "MATERIALIZATION_POLICY",
+          "EXPLICIT_RUNTIME_RULE"
+        ]
+      }
+    },
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "entryId",
+          "dependencySourceRef",
+          "dependencySourceFamily",
+          "impactScope",
+          "affectedUseClasses",
+          "invalidationTriggerClass",
+          "expectedStatusImpactCandidate",
+          "derivationSource"
+        ],
+        "oneOf": [
+          {
+            "required": [
+              "affectedMaterializationKeyRef"
+            ]
+          },
+          {
+            "required": [
+              "affectedMaterializationKeyPattern"
+            ]
+          }
+        ],
+        "properties": {
+          "entryId": {
+            "$ref": "#/$defs/ref"
+          },
+          "dependencySourceRef": {
+            "$ref": "#/$defs/ref"
+          },
+          "dependencySourceFamily": {
+            "enum": [
+              "TRUTH_BASIS",
+              "ACCEPTED_EVENT_CONSEQUENCE",
+              "REVIEW_DECISION",
+              "IDENTITY_LIFECYCLE",
+              "CONTEXT_SNAPSHOT",
+              "PACK_PROFILE_ACTIVATION",
+              "RULE_EVIDENCE_POLICY",
+              "REFERENCE_SNAPSHOT",
+              "EVALUATION_TIME_BOUNDARY",
+              "ADVISORY_MODEL_OUTPUT",
+              "OUTPUT_ASSEMBLY"
+            ]
+          },
+          "affectedMaterializationKeyRef": {
+            "$ref": "#/$defs/ref"
+          },
+          "affectedMaterializationKeyPattern": {
+            "type": "string",
+            "minLength": 1
+          },
+          "impactScope": {
+            "type": "string",
+            "minLength": 1
+          },
+          "affectedUseClasses": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/$defs/useClass"
+            },
+            "uniqueItems": true
+          },
+          "invalidationTriggerClass": {
+            "enum": [
+              "BASIS_ADVANCED",
+              "POLICY_CHANGED",
+              "CONTEXT_CHANGED",
+              "IDENTITY_CHANGED",
+              "REFERENCE_CHANGED",
+              "TIME_BOUNDARY_REACHED",
+              "INDEX_CORRUPTION_DETECTED",
+              "ADVISORY_INPUT_CHANGED"
+            ]
+          },
+          "expectedStatusImpactCandidate": {
+            "$ref": "#/$defs/freshnessStatus"
+          },
+          "derivationSource": {
+            "enum": [
+              "QUERY_PLAN_IR",
+              "VIEW_PROFILE",
+              "OUTPUT_ASSEMBLY_POLICY",
+              "MATERIALIZATION_POLICY",
+              "EXPLICIT_RUNTIME_RULE"
+            ]
+          }
+        }
+      }
+    },
+    "corruptionHandling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "highConsequenceFallbacks"
+      ],
+      "properties": {
+        "highConsequenceFallbacks": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": [
+              "RECOMPUTE",
+              "REFUSE",
+              "REVIEW"
+            ]
+          },
+          "uniqueItems": true
+        }
+      }
+    }
+  },
+  "$defs": {
+    "ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:/#-]+$"
+    },
+    "useClass": {
+      "enum": [
+        "EXPLORATORY_VIEW",
+        "OPERATIONAL_DASHBOARD",
+        "ADVISORY_SCENARIO",
+        "COMPLIANCE_DECISION_SUPPORT",
+        "ATTESTED_OUTPUT",
+        "FORMAL_SUBMISSION",
+        "EXTERNAL_RELIED_UPON_CLAIM",
+        "FORENSIC_AUDIT"
+      ]
+    },
+    "freshnessStatus": {
+      "enum": [
+        "FRESH",
+        "STALE",
+        "INVALID",
+        "RECOMPUTE_REQUIRED"
+      ]
+    }
+  }
+}

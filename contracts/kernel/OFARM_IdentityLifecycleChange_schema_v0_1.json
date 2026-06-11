@@ -1,0 +1,294 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/identitylifecyclechange/v0.1",
+  "title": "OFARM IdentityLifecycleChange v0.1",
+  "$comment": "Minimal machine contract derived from Identity and Lifecycle RFC v0.1, Current State Materialization RFC v0.1, and the runtime identity/lifecycle expansion fixtures. It records governed continuity decisions for non-lot identities and explicit no-mint outcomes where an ephemeral overlay should not become a constitutional identity.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "identityLifecycleChangeId",
+    "evaluatedAt",
+    "subjectFamily",
+    "anchorScopes",
+    "changeKind",
+    "continuityOutcome",
+    "identityContinuityClass",
+    "oldIdentityRefs",
+    "newIdentityRefs",
+    "lineageRelations",
+    "invalidationImpacts",
+    "summary"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.identitylifecyclechange.v0.1"
+    },
+    "identityLifecycleChangeId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "evaluatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "effectiveFrom": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "subjectFamily": {
+      "enum": [
+        "FIELD",
+        "ZONE",
+        "CROP_CYCLE",
+        "LOT",
+        "EQUIPMENT",
+        "FACILITY",
+        "STORAGE_LOCATION",
+        "CONTAINER",
+        "OTHER"
+      ]
+    },
+    "subjectClass": {
+      "type": "string"
+    },
+    "anchorScopes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scopeType",
+          "scopeRef"
+        ],
+        "properties": {
+          "scopeType": {
+            "enum": [
+              "FARM",
+              "SITE",
+              "FIELD",
+              "ZONE",
+              "CROP_CYCLE",
+              "LOT",
+              "FACILITY",
+              "OPERATION",
+              "DEPLOYMENT",
+              "TENANT"
+            ]
+          },
+          "scopeRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]+$"
+          }
+        }
+      }
+    },
+    "changeKind": {
+      "enum": [
+        "CREATE",
+        "REVISION",
+        "SPLIT",
+        "MERGE",
+        "REPLACEMENT",
+        "REPLANT",
+        "OVERLAP_DECLARATION",
+        "OCCUPANCY_EPISODE",
+        "NON_GOVERNED_CLASSIFICATION",
+        "RETIREMENT",
+        "METADATA_CORRECTION"
+      ]
+    },
+    "continuityOutcome": {
+      "enum": [
+        "SAME_IDENTITY_NEW_REVISION",
+        "SAME_IDENTITY_STATE_ONLY",
+        "NEW_IDENTITIES_WITH_SPLIT_FROM",
+        "NEW_IDENTITY_MERGED_FROM",
+        "NEW_IDENTITY_REPLACES",
+        "NEW_IDENTITY_SUCCEEDS",
+        "CONCURRENT_IDENTITIES_WITH_OVERLAP",
+        "NOT_CONSTITUTIONAL_IDENTITY",
+        "RETIRED_NO_SUCCESSOR"
+      ]
+    },
+    "identityContinuityClass": {
+      "enum": [
+        "ONE_TO_ONE",
+        "ONE_TO_MANY",
+        "MANY_TO_ONE",
+        "MANY_TO_MANY",
+        "REFERENCE_ONLY"
+      ]
+    },
+    "oldIdentityRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "newIdentityRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "revisionRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "lineageRelations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fromRef",
+          "toRef",
+          "relationType"
+        ],
+        "properties": {
+          "fromRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]+$"
+          },
+          "toRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]+$"
+          },
+          "relationType": {
+            "enum": [
+              "revises",
+              "replaces",
+              "splitFrom",
+              "mergedFrom",
+              "overlapsWith",
+              "succeeds",
+              "derivedFrom"
+            ]
+          }
+        }
+      }
+    },
+    "eventRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "decisionRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "invalidationImpacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "targetTwin",
+          "effect"
+        ],
+        "properties": {
+          "targetTwin": {
+            "enum": [
+              "COMPLIANCE",
+              "ADVISORY",
+              "BOTH"
+            ]
+          },
+          "effect": {
+            "enum": [
+              "MATERIALIZATION_INVALIDATED",
+              "RECOMPUTE_RECOMMENDED",
+              "STALE_WITH_REVIEW",
+              "NO_NEW_CONSTITUTIONAL_ENTRY"
+            ]
+          },
+          "affectedScopeRefs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._:-]+$"
+            }
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "changeKind": {
+            "const": "SPLIT"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "identityContinuityClass": {
+            "const": "ONE_TO_MANY"
+          },
+          "newIdentityRefs": {
+            "minItems": 2
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "changeKind": {
+            "const": "MERGE"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "identityContinuityClass": {
+            "const": "MANY_TO_ONE"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "continuityOutcome": {
+            "const": "NOT_CONSTITUTIONAL_IDENTITY"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "identityContinuityClass": {
+            "const": "REFERENCE_ONLY"
+          },
+          "newIdentityRefs": {
+            "maxItems": 0
+          },
+          "revisionRefs": {
+            "maxItems": 0
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/drafts/non-default/explainable-current-state-evidence/trace-expansion-policy/v0.1",
+  "title": "OFARM TraceExpansionPolicy schema v0.1 draft/non-default",
+  "description": "Draft/non-default schema for trace tier, retention, regeneration, and redaction policy for explainable current state.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "artifactType",
+    "contractStatus",
+    "draftNonDefault",
+    "promotedToCurrentDefault",
+    "policyId",
+    "appliesToUseClasses",
+    "requiredTraceTier",
+    "retentionPolicy",
+    "reconstructibilityRequired",
+    "redactionPolicy"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.explainableCurrentStateEvidence.traceExpansionPolicy.v0.1-draft"
+    },
+    "artifactType": {
+      "const": "TraceExpansionPolicy"
+    },
+    "contractStatus": {
+      "const": "DRAFT_NON_DEFAULT"
+    },
+    "draftNonDefault": {
+      "const": true
+    },
+    "promotedToCurrentDefault": {
+      "const": false
+    },
+    "policyId": {
+      "$ref": "#/$defs/ref"
+    },
+    "appliesToUseClasses": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/useClass"
+      },
+      "uniqueItems": true
+    },
+    "requiredTraceTier": {
+      "$ref": "#/$defs/traceTier"
+    },
+    "lazyExpansionAllowed": {
+      "type": "boolean"
+    },
+    "highConsequenceCompletionGate": {
+      "enum": [
+        "TRACE_AVAILABLE_BEFORE_COMPLETION",
+        "VALID_REVIEW_WAIVER_REQUIRED",
+        "NOT_APPLICABLE_LOW_CONSEQUENCE"
+      ]
+    },
+    "retentionPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "retentionMode"
+      ],
+      "properties": {
+        "retentionMode": {
+          "enum": [
+            "RETAIN_EXPANDED_TRACE",
+            "RETAIN_COMPACT_RECONSTRUCTIBLE_BASIS",
+            "REGENERATE_FROM_CANONICAL_BASIS",
+            "DISCARD_LOW_CONSEQUENCE_RECOMPUTABLE_TRACE"
+          ]
+        },
+        "minimumRetentionRef": {
+          "$ref": "#/$defs/ref"
+        }
+      }
+    },
+    "reconstructibilityRequired": {
+      "type": "boolean"
+    },
+    "redactionPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "redactionAllowed",
+        "redactionMustBeDisclosed",
+        "redactionDoesNotUpgradeFreshness"
+      ],
+      "properties": {
+        "redactionAllowed": {
+          "type": "boolean"
+        },
+        "redactionMustBeDisclosed": {
+          "const": true
+        },
+        "redactionDoesNotUpgradeFreshness": {
+          "const": true
+        },
+        "authorityPolicyRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ref"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:/#-]+$"
+    },
+    "useClass": {
+      "enum": [
+        "EXPLORATORY_VIEW",
+        "OPERATIONAL_DASHBOARD",
+        "ADVISORY_SCENARIO",
+        "COMPLIANCE_DECISION_SUPPORT",
+        "ATTESTED_OUTPUT",
+        "FORMAL_SUBMISSION",
+        "EXTERNAL_RELIED_UPON_CLAIM",
+        "FORENSIC_AUDIT"
+      ]
+    },
+    "traceTier": {
+      "enum": [
+        "TIER_1_QUALIFICATION",
+        "TIER_2_RECONSTRUCTION",
+        "TIER_3_FORENSIC_REPLAY"
+      ]
+    }
+  }
+}

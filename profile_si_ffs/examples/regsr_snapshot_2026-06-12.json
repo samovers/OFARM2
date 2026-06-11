@@ -1,0 +1,5096 @@
+{
+ "snapshotKind": "SI_UVHVVR_FFS_REG_HTML_PARSE",
+ "officialStatusNote": "Register web database self-declares as unofficial/informational; legal record is the registration decision (odlocba). Lookup surface disclosed per profile posture.",
+ "capturedAt": "2026-06-11T22:58:32+00:00",
+ "registerDay": "2026-06-11",
+ "sourceUrl": "https://spletni2.furs.gov.si/FFS/REGSR/FFS_RegSezn.asp?top=1",
+ "productCount": 623,
+ "products": [
+  {
+   "regsrCode": "1646",
+   "name": "ACCOUNT",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "deltametrin (0,6%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1715",
+   "name": "ACETAMIPRID 200 g/kg (MOSPILAN 20 SG, ACETOGAL, IMPRUS, ALPHAGUARD, CARNADINE)",
+   "registrationValidUntil": "2026-09-01",
+   "activeSubstancesRaw": "acetamiprid (20%)",
+   "manufacturer": "NISSO Chemical Europe GmbH, GALENIKA FITOFARMACIJA A.D., ALBAUGH TKI D.O.O., AGRIA S.A., NUFARM GmbH & Co KG",
+   "representative": "KARSIA D.O.O., GALENIKA-FITOFARMACIJA D.O.O."
+  },
+  {
+   "regsrCode": "1640",
+   "name": "ACETOGAL",
+   "registrationValidUntil": "2034-02-28",
+   "activeSubstancesRaw": "acetamiprid (20%)",
+   "manufacturer": "GALENIKA FITOFARMACIJA A.D.",
+   "representative": "GALENIKA-FITOFARMACIJA D.O.O."
+  },
+  {
+   "regsrCode": "8",
+   "name": "ACTELLIC 50 EC",
+   "registrationValidUntil": "2026-06-15",
+   "activeSubstancesRaw": "pirimifos-metil (50%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1703",
+   "name": "ACUSTIC",
+   "registrationValidUntil": "2027-07-15",
+   "activeSubstancesRaw": "dodin (40%)",
+   "manufacturer": "GALENIKA FITOFARMACIJA A.D.",
+   "representative": "GALENIKA-FITOFARMACIJA D.O.O."
+  },
+  {
+   "regsrCode": "1030",
+   "name": "ADENGO",
+   "registrationValidUntil": "2028-03-01",
+   "activeSubstancesRaw": "izoksaflutol (22,5%), tienkarbazon-metil (9%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1377",
+   "name": "ADENTIS",
+   "registrationValidUntil": "2035-01-30",
+   "activeSubstancesRaw": "tribenuron-metil (75%)",
+   "manufacturer": "AGRIA S.A.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "969",
+   "name": "AFFIRM",
+   "registrationValidUntil": "2026-11-15",
+   "activeSubstancesRaw": "emamektin (0,95%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1393",
+   "name": "AFFIRM OPTI",
+   "registrationValidUntil": "2027-11-15",
+   "activeSubstancesRaw": "emamektin (0,95%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1468",
+   "name": "AFINTO",
+   "registrationValidUntil": "2027-11-30",
+   "activeSubstancesRaw": "flonikamid (50%)",
+   "manufacturer": "ISK Bioscience Europe N.V.",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "10",
+   "name": "AGIL 100 EC",
+   "registrationValidUntil": "2028-02-28",
+   "activeSubstancesRaw": "propakvizafop (10%)",
+   "manufacturer": "ADAMA Agriculture B.V.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1216",
+   "name": "AGREE WG",
+   "registrationValidUntil": "2029-06-30",
+   "activeSubstancesRaw": "Bacillus Thuringiensis subsp. Aizawai sev GC-91 (50%)",
+   "manufacturer": "Mitsui AgriScience International S.A./B.V.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1089",
+   "name": "AKRIS",
+   "registrationValidUntil": "2028-05-31",
+   "activeSubstancesRaw": "dimetenamid-P (28%), terbutilazin (25%)",
+   "manufacturer": "BASF SE",
+   "representative": "SEMENARNA LJUBLJANA, D.O.O."
+  },
+  {
+   "regsrCode": "1459",
+   "name": "ALCOBAN",
+   "registrationValidUntil": "2028-01-31",
+   "activeSubstancesRaw": "ditianon (70%)",
+   "manufacturer": "GLOBACHEM NV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1705",
+   "name": "ALFIL TRIO WG",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "fosetil-Al (50%), folpet (25%), cimoksanil (4%)",
+   "manufacturer": "ALBAUGH TKI D.O.O.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1662",
+   "name": "ALGINURE-342",
+   "registrationValidUntil": "2027-01-31",
+   "activeSubstancesRaw": "kalijevi fosfonati (34,2%)",
+   "manufacturer": "Tilco-Alginure GmbH",
+   "representative": ""
+  },
+  {
+   "regsrCode": "12",
+   "name": "ALIETTE FLASH",
+   "registrationValidUntil": "2027-10-31",
+   "activeSubstancesRaw": "fosetil-Al (80%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "979",
+   "name": "ALISEO",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "nikosulfuron (30%), rimsulfuron (15%)",
+   "manufacturer": "CORTEVA Agrisciences Bulgaria EOOD",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1036",
+   "name": "ALISEO PLUS",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "nikosulfuron (9,2%), rimsulfuron (2,3%), dikamba (60,52%)",
+   "manufacturer": "CORTEVA Agrisciences Bulgaria EOOD",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1228",
+   "name": "ALISTER NEW",
+   "registrationValidUntil": "2027-01-15",
+   "activeSubstancesRaw": "diflufenikan (12%), jodosulfuron (jodosulfuron-metil natrij) (0,75%), mezosulfuron (0,9%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1628",
+   "name": "ALIVE",
+   "registrationValidUntil": "2028-02-28",
+   "activeSubstancesRaw": "propakvizafop (10%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1031",
+   "name": "ALLIANCE",
+   "registrationValidUntil": "2027-01-15",
+   "activeSubstancesRaw": "diflufenikan (60%), metsulfuron-metil (6%)",
+   "manufacturer": "NUFARM GmbH & Co KG",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1597",
+   "name": "ALLUM",
+   "registrationValidUntil": "2027-10-31",
+   "activeSubstancesRaw": "fosetil (80%)",
+   "manufacturer": "UPL Holdings Coöperatief U.A.",
+   "representative": "SEMENARNA LJUBLJANA, D.O.O."
+  },
+  {
+   "regsrCode": "1209",
+   "name": "ALLY SX",
+   "registrationValidUntil": "2027-08-31",
+   "activeSubstancesRaw": "metsulfuron-metil (20%)",
+   "manufacturer": "FMC IP Technology LLC, Vernier Branch",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1644",
+   "name": "ALPHAGUARD",
+   "registrationValidUntil": "2034-02-28",
+   "activeSubstancesRaw": "acetamiprid (20%)",
+   "manufacturer": "AGRIA S.A.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1659",
+   "name": "ALTIVATE",
+   "registrationValidUntil": "2033-06-30",
+   "activeSubstancesRaw": "mezosulfuron (5,83%)",
+   "manufacturer": "CAC Chemical GmbH",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1433",
+   "name": "AMIDIR",
+   "registrationValidUntil": "2027-05-31",
+   "activeSubstancesRaw": "1-naftilacetamid (1-NAD) (2,8%)",
+   "manufacturer": "L. Gobbi S.r.l.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1338",
+   "name": "AMISTAR",
+   "registrationValidUntil": "2028-05-31",
+   "activeSubstancesRaw": "azoksistrobin (25%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1699",
+   "name": "AMISTAR ERA 240 EC",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "azoksistrobin (14%), protiokonazol (10%)",
+   "manufacturer": "CAC Chemical GmbH",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1631",
+   "name": "AMISTAR GOLD",
+   "registrationValidUntil": "2028-05-31",
+   "activeSubstancesRaw": "azoksistrobin (12,5%), difenokonazol (12,5%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1660",
+   "name": "AMISTAR MAX",
+   "registrationValidUntil": "2028-05-31",
+   "activeSubstancesRaw": "azoksistrobin (9,35%), folpet (50%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1652",
+   "name": "AMISTAR PRIME",
+   "registrationValidUntil": "2028-05-15",
+   "activeSubstancesRaw": "azoksistrobin (15%), fenpropidin (28%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1245",
+   "name": "AMPEXIO",
+   "registrationValidUntil": "2026-12-31",
+   "activeSubstancesRaw": "mandipropamid (25%), zoksamid (24%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1276",
+   "name": "AMYLO - X",
+   "registrationValidUntil": "2028-08-31",
+   "activeSubstancesRaw": "Bacillus amyloliquefaciens subsp. plantarum sev D747 (25%)",
+   "manufacturer": "CBC (Europe) S.r.l.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1422",
+   "name": "ANGELUS",
+   "registrationValidUntil": "2027-09-30",
+   "activeSubstancesRaw": "klomazon (36%)",
+   "manufacturer": "ALBAUGH TKI D.O.O.",
+   "representative": "ALBAUGH TKI D.O.O."
+  },
+  {
+   "regsrCode": "1255",
+   "name": "APPLAUD 25 SC",
+   "registrationValidUntil": "2026-12-15",
+   "activeSubstancesRaw": "buprofezin (25,04%)",
+   "manufacturer": "Nichino-Europe Co., Ltd",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "20",
+   "name": "AQ-10",
+   "registrationValidUntil": "2034-07-31",
+   "activeSubstancesRaw": "Ampelomyces quisqualis sev AQ10 (58%)",
+   "manufacturer": "CBC (Europe) S.r.l.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1516",
+   "name": "ARGOS",
+   "registrationValidUntil": "2027-12-31",
+   "activeSubstancesRaw": "olje pomarancevca (84,32%)",
+   "manufacturer": "Arysta LifeSciences Benelux SRL",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1607",
+   "name": "ARTEMIDE",
+   "registrationValidUntil": "2027-08-31",
+   "activeSubstancesRaw": "lambda-cihalotrin (22,2%)",
+   "manufacturer": "SIPCAM OXON S.p.A.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1444",
+   "name": "ARVALIN",
+   "registrationValidUntil": "2027-12-31",
+   "activeSubstancesRaw": "cinkov fosfid (2,5%)",
+   "manufacturer": "Detia Freyberg GmbH",
+   "representative": "DDD, D.O.O. KOPER"
+  },
+  {
+   "regsrCode": "1341",
+   "name": "ASCRA XPRO",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "biksafen (6,5%), fluopiram (6,5%), protiokonazol (13%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1623",
+   "name": "ASSET FIVE",
+   "registrationValidUntil": "2027-06-15",
+   "activeSubstancesRaw": "piretrin (4,65%)",
+   "manufacturer": "PYRAGRO S.R.L.",
+   "representative": "METROB, D.O.O."
+  },
+  {
+   "regsrCode": "1288",
+   "name": "ATLANTIS STAR",
+   "registrationValidUntil": "2032-10-31",
+   "activeSubstancesRaw": "jodosulfuron (jodosulfuron-metil natrij) (0,9%), tienkarbazon-metil (2,25%), mezosulfuron (4,5%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1586",
+   "name": "AVALON",
+   "registrationValidUntil": "2029-04-30",
+   "activeSubstancesRaw": "pirimetanil (40%)",
+   "manufacturer": "GALENIKA FITOFARMACIJA A.D.",
+   "representative": "GALENIKA-FITOFARMACIJA D.O.O."
+  },
+  {
+   "regsrCode": "1679",
+   "name": "AVASTEL",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "fluksapiroksad (7,5%), protiokonazol (15%)",
+   "manufacturer": "ADAMA Agriculture B.V.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1651",
+   "name": "AVOXA",
+   "registrationValidUntil": "2028-09-30",
+   "activeSubstancesRaw": "pinoksaden (33,3%), piroksulam (0,83%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "777",
+   "name": "AXIAL",
+   "registrationValidUntil": "2027-06-30",
+   "activeSubstancesRaw": "pinoksaden (5%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1004",
+   "name": "AXIAL ONE",
+   "registrationValidUntil": "2027-06-30",
+   "activeSubstancesRaw": "pinoksaden (4,5%), florasulam (0,5%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1460",
+   "name": "AZATIN EC",
+   "registrationValidUntil": "2028-01-31",
+   "activeSubstancesRaw": "azadirahtin A (2,6%)",
+   "manufacturer": "Certis USA L.L.C.",
+   "representative": "Mitsui AgriScience International S.A./B.V., METROB, D.O.O."
+  },
+  {
+   "regsrCode": "1438",
+   "name": "AZUMO WG",
+   "registrationValidUntil": "2028-07-31",
+   "activeSubstancesRaw": "žveplo (80%)",
+   "manufacturer": "AZUFRERA Y FERTILIZANTES PALLARES S.A. (AFEPASA)",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1273",
+   "name": "BADGE WG",
+   "registrationValidUntil": "2028-06-30",
+   "activeSubstancesRaw": "bakrove spojine - bakrov oksiklorid (24,5%), bakrove spojine - bakrov hidroksid (24,4%)",
+   "manufacturer": "Gowan Crop Protection Limited",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1724",
+   "name": "BALTAZAR",
+   "registrationValidUntil": "2029-04-30",
+   "activeSubstancesRaw": "pirimetanil (40%)",
+   "manufacturer": "GLOBACHEM NV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1305",
+   "name": "BANARG",
+   "registrationValidUntil": "2027-11-30",
+   "activeSubstancesRaw": "etilen (4%)",
+   "manufacturer": "Linde AG",
+   "representative": "GTG PLIN D.O.O."
+  },
+  {
+   "regsrCode": "1130",
+   "name": "BANDERA",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "nikosulfuron (4%)",
+   "manufacturer": "ALBAUGH TKI D.O.O.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1476",
+   "name": "BANJO",
+   "registrationValidUntil": "2027-04-15",
+   "activeSubstancesRaw": "fluazinam (50%)",
+   "manufacturer": "ADAMA Agriculture B.V.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1710",
+   "name": "BANJO (3)",
+   "registrationValidUntil": "2026-07-15",
+   "activeSubstancesRaw": "fluazinam (50%)",
+   "manufacturer": "ADAMA Agriculture B.V.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "36",
+   "name": "BANVEL 480 S",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "dikamba (48%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1657",
+   "name": "BARRACUDA",
+   "registrationValidUntil": "2033-05-31",
+   "activeSubstancesRaw": "mezotrion (10%)",
+   "manufacturer": "ALBAUGH TKI D.O.O.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "877",
+   "name": "BASAGRAN 480",
+   "registrationValidUntil": "2028-10-31",
+   "activeSubstancesRaw": "bentazon (48%)",
+   "manufacturer": "BASF SE",
+   "representative": "SEMENARNA LJUBLJANA, D.O.O."
+  },
+  {
+   "regsrCode": "43",
+   "name": "BASAMID GRANULAT",
+   "registrationValidUntil": "2027-08-31",
+   "activeSubstancesRaw": "dazomet (95%)",
+   "manufacturer": "Kanesho Soil Treatment SPRL/BVBA",
+   "representative": "Arysta LifeSience Great Britain Ltd., PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1390",
+   "name": "BATALION 450 SC",
+   "registrationValidUntil": "2029-04-30",
+   "activeSubstancesRaw": "pirimetanil (45%)",
+   "manufacturer": "INNVIGO Sp. z.o.o.",
+   "representative": "AGROPROAGRO, D.O.O."
+  },
+  {
+   "regsrCode": "1568",
+   "name": "BATTERY",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "dikamba (1,78%), MCPA (16,1%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1362",
+   "name": "BELKAR",
+   "registrationValidUntil": "2026-08-05",
+   "activeSubstancesRaw": "halauksifen-metil (1%), pikloram (4,8%)",
+   "manufacturer": "CORTEVA Agrisciences Bulgaria EOOD",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1590",
+   "name": "BELO OLJE KARSIA",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "parafinsko olje (83%)",
+   "manufacturer": "W. Neudorff GmbH KG",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1312",
+   "name": "BELOUKHA",
+   "registrationValidUntil": "2027-12-01",
+   "activeSubstancesRaw": "pelargonska kislina (68%)",
+   "manufacturer": "CERTIS BELCHIM BV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1259",
+   "name": "BELTANOL",
+   "registrationValidUntil": "2026-12-31",
+   "activeSubstancesRaw": "8-hidroksikinolin (37,37%)",
+   "manufacturer": "PROBELTE S.A.U.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1698",
+   "name": "BENAFAR",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "protiokonazol (25%)",
+   "manufacturer": "ADAMA Agriculture B.V.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1423",
+   "name": "BENEVIA",
+   "registrationValidUntil": "2027-09-14",
+   "activeSubstancesRaw": "ciantraniliprol (10%)",
+   "manufacturer": "FMC IP Technology LLC, Vernier Branch",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1526",
+   "name": "BENI",
+   "registrationValidUntil": "2028-10-31",
+   "activeSubstancesRaw": "bentazon (87%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1614",
+   "name": "BENTA 480 SL",
+   "registrationValidUntil": "2028-10-31",
+   "activeSubstancesRaw": "bentazon (48%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1136",
+   "name": "BETTIX FLO",
+   "registrationValidUntil": "2027-11-30",
+   "activeSubstancesRaw": "metamitron (70%)",
+   "manufacturer": "UPL Holdings Coöperatief U.A.",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1398",
+   "name": "BIO PLANTELLA ARION PROTI POLŽEM",
+   "registrationValidUntil": "2031-12-31",
+   "activeSubstancesRaw": "železov fosfat (0,98%)",
+   "manufacturer": "Doff Portland Ltd.",
+   "representative": "UNICHEM D.O.O."
+  },
+  {
+   "regsrCode": "1434",
+   "name": "BIO PLANTELLA KENYATOX",
+   "registrationValidUntil": "2027-06-15",
+   "activeSubstancesRaw": "piretrin (0,2%)",
+   "manufacturer": "COPYR S.p.A.",
+   "representative": "UNICHEM D.O.O."
+  },
+  {
+   "regsrCode": "1613",
+   "name": "BIO SREDSTVO PROTI POLŽEM",
+   "registrationValidUntil": "2031-12-31",
+   "activeSubstancesRaw": "železov fosfat (3%)",
+   "manufacturer": "Evergreen Garden Care Poland Sp. z o. o.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1223",
+   "name": "BIOTIP APHICID PLUS",
+   "registrationValidUntil": "2027-06-15",
+   "activeSubstancesRaw": "piretrin (0,2%)",
+   "manufacturer": "COPYR S.p.A.",
+   "representative": "BIOTEH D.O.O."
+  },
+  {
+   "regsrCode": "959",
+   "name": "BIOTIP FLORAL",
+   "registrationValidUntil": "2027-06-15",
+   "activeSubstancesRaw": "piretrin (1,86%)",
+   "manufacturer": "PYRAGRO S.R.L.",
+   "representative": "BIOTEH D.O.O."
+  },
+  {
+   "regsrCode": "1352",
+   "name": "BIOTIP SULFO 800 SC",
+   "registrationValidUntil": "2028-07-31",
+   "activeSubstancesRaw": "žveplo (80%)",
+   "manufacturer": "QEMETICA Agricultural Solutions Poland S.A.",
+   "representative": "BIOTEH D.O.O."
+  },
+  {
+   "regsrCode": "1222",
+   "name": "BIOTIP UBIJ ME NEŽNO PLUS",
+   "registrationValidUntil": "2027-06-15",
+   "activeSubstancesRaw": "piretrin (0,2%)",
+   "manufacturer": "COPYR S.p.A.",
+   "representative": "BIOTEH D.O.O."
+  },
+  {
+   "regsrCode": "1197",
+   "name": "BIOTIP VABA ZA POLŽE",
+   "registrationValidUntil": "2027-08-31",
+   "activeSubstancesRaw": "metaldehid (5%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "BIOTEH D.O.O."
+  },
+  {
+   "regsrCode": "1320",
+   "name": "BIZON",
+   "registrationValidUntil": "2027-01-15",
+   "activeSubstancesRaw": "florasulam (0,38%), diflufenikan (10%), penoksulam (1,5%)",
+   "manufacturer": "CORTEVA Agrisciences Bulgaria EOOD",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1350",
+   "name": "BONACA",
+   "registrationValidUntil": "2028-02-15",
+   "activeSubstancesRaw": "fluroksipir (25%)",
+   "manufacturer": "GALENIKA FITOFARMACIJA A.D.",
+   "representative": "GALENIKA-FITOFARMACIJA D.O.O."
+  },
+  {
+   "regsrCode": "92",
+   "name": "BOOM EFEKT",
+   "registrationValidUntil": "2027-06-30",
+   "activeSubstancesRaw": "glifosat v obliki izopropilamino soli (48,3%)",
+   "manufacturer": "ALBAUGH TKI D.O.O.",
+   "representative": "ALBAUGH TKI D.O.O."
+  },
+  {
+   "regsrCode": "1368",
+   "name": "BOTANIGARD OD",
+   "registrationValidUntil": "2026-09-30",
+   "activeSubstancesRaw": "Beauveria bassiana sev GHA (10,17%)",
+   "manufacturer": "Mycotech Europe Limited",
+   "representative": "METROB, D.O.O."
+  },
+  {
+   "regsrCode": "1369",
+   "name": "BOTANIGARD WP",
+   "registrationValidUntil": "2026-09-30",
+   "activeSubstancesRaw": "Beauveria bassiana sev GHA (22%)",
+   "manufacturer": "Mycotech Europe Limited",
+   "representative": "METROB, D.O.O."
+  },
+  {
+   "regsrCode": "977",
+   "name": "BOTECTOR",
+   "registrationValidUntil": "2028-06-30",
+   "activeSubstancesRaw": "Aureobasidium pullulans (de Bary) Arnaud (seva DSM 14940 in 14941) (100%)",
+   "manufacturer": "SAN Agrow Holding GmbH",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1475",
+   "name": "BOTIGA",
+   "registrationValidUntil": "2031-12-31",
+   "activeSubstancesRaw": "piridat (30%), mezotrion (9%)",
+   "manufacturer": "CERTIS BELCHIM BV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1266",
+   "name": "BOUDHA",
+   "registrationValidUntil": "2027-08-31",
+   "activeSubstancesRaw": "metsulfuron-metil (25%), tribenuron-metil (25%)",
+   "manufacturer": "ALBAUGH TKI D.O.O.",
+   "representative": "ALBAUGH TKI D.O.O."
+  },
+  {
+   "regsrCode": "1344",
+   "name": "BOUNTY",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "tebukonazol (43%)",
+   "manufacturer": "ALBAUGH TKI D.O.O.",
+   "representative": "ALBAUGH TKI D.O.O."
+  },
+  {
+   "regsrCode": "738",
+   "name": "BOXER",
+   "registrationValidUntil": "2028-01-31",
+   "activeSubstancesRaw": "prosulfokarb (80%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1530",
+   "name": "BQM SUPER",
+   "registrationValidUntil": "2027-06-30",
+   "activeSubstancesRaw": "glifosat v obliki izopropilamino soli (48%)",
+   "manufacturer": "SINON EU GmbH",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1169",
+   "name": "BREVIS",
+   "registrationValidUntil": "2027-11-30",
+   "activeSubstancesRaw": "metamitron (15%)",
+   "manufacturer": "ADAMA Agriculture B.V.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "931",
+   "name": "BUTISAN 400 SC",
+   "registrationValidUntil": "2027-10-31",
+   "activeSubstancesRaw": "metazaklor (40%)",
+   "manufacturer": "BASF SE",
+   "representative": "SEMENARNA LJUBLJANA, D.O.O."
+  },
+  {
+   "regsrCode": "1269",
+   "name": "BUTISAN S",
+   "registrationValidUntil": "2027-10-31",
+   "activeSubstancesRaw": "metazaklor (50%)",
+   "manufacturer": "BASF SE",
+   "representative": "SEMENARNA LJUBLJANA, D.O.O."
+  },
+  {
+   "regsrCode": "1265",
+   "name": "BUZZ ULTRA DF",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "tebukonazol (75%)",
+   "manufacturer": "SULPHUR MILLS LIMITED",
+   "representative": "PRAMIT D.O.O."
+  },
+  {
+   "regsrCode": "1726",
+   "name": "CABADEX EXTRA",
+   "registrationValidUntil": "2031-12-31",
+   "activeSubstancesRaw": "florasulam (1,67%), mezotrion (26,7%)",
+   "manufacturer": "CORTEVA Agrisciences Bulgaria EOOD",
+   "representative": "CORTEVA AGRISCIENCE SLO D.O.O."
+  },
+  {
+   "regsrCode": "1572",
+   "name": "CACTAI",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "protiokonazol (30%)",
+   "manufacturer": "CAC Chemical GmbH",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1258",
+   "name": "CALARIS PRO",
+   "registrationValidUntil": "2027-05-31",
+   "activeSubstancesRaw": "mezotrion (5%), terbutilazin (32,6%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "510",
+   "name": "CALLISTO 480 SC",
+   "registrationValidUntil": "2027-05-31",
+   "activeSubstancesRaw": "mezotrion (48%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "557",
+   "name": "CANTUS",
+   "registrationValidUntil": "2027-04-15",
+   "activeSubstancesRaw": "boskalid (50%)",
+   "manufacturer": "BASF SE",
+   "representative": "SEMENARNA LJUBLJANA, D.O.O."
+  },
+  {
+   "regsrCode": "1212",
+   "name": "CAPRENO",
+   "registrationValidUntil": "2027-12-31",
+   "activeSubstancesRaw": "tembotrion (34,5%), tienkarbazon-metil (6,8%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1549",
+   "name": "CAPTAN 80 WG",
+   "registrationValidUntil": "2028-10-31",
+   "activeSubstancesRaw": "kaptan (80%)",
+   "manufacturer": "Arysta LifeScience S.A.S.",
+   "representative": "SEMENARNA LJUBLJANA, D.O.O."
+  },
+  {
+   "regsrCode": "971",
+   "name": "CARAMBA",
+   "registrationValidUntil": "2031-08-31",
+   "activeSubstancesRaw": "metkonazol (6%)",
+   "manufacturer": "BASF SE",
+   "representative": "SEMENARNA LJUBLJANA, D.O.O."
+  },
+  {
+   "regsrCode": "1327",
+   "name": "CARIAL FLEX",
+   "registrationValidUntil": "2026-12-31",
+   "activeSubstancesRaw": "mandipropamid (25%), cimoksanil (18%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1650",
+   "name": "CARNADINE",
+   "registrationValidUntil": "2034-02-28",
+   "activeSubstancesRaw": "acetamiprid (20%)",
+   "manufacturer": "NUFARM GmbH & Co KG",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1701",
+   "name": "CARPOVIRUSINE MAX",
+   "registrationValidUntil": "2039-10-31",
+   "activeSubstancesRaw": "granulozni virus Cydia pomonella (31,25%)",
+   "manufacturer": "UPL Holdings Coöperatief U.A.",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1702",
+   "name": "CARPOVIRUSINE ULTRA",
+   "registrationValidUntil": "2039-10-31",
+   "activeSubstancesRaw": "granulozni virus Cydia pomonella (31,25%)",
+   "manufacturer": "UPL Holdings Coöperatief U.A.",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1622",
+   "name": "CASINO ROYALE",
+   "registrationValidUntil": "2026-09-15",
+   "activeSubstancesRaw": "boskalid (26,7%), piraklostrobin (6,7%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1514",
+   "name": "CAYUNIS",
+   "registrationValidUntil": "2028-10-31",
+   "activeSubstancesRaw": "biksafen (7,5%), spiroksamin (15%), trifloksistrobin (10%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "723",
+   "name": "CELAFLOR CAREO KONCENTRAT",
+   "registrationValidUntil": "2028-02-28",
+   "activeSubstancesRaw": "acetamiprid (0,5%)",
+   "manufacturer": "Evergreen Garden Care Poland Sp. z o. o.",
+   "representative": "SILK D.O.O."
+  },
+  {
+   "regsrCode": "724",
+   "name": "CELAFLOR CAREO RAZPRŠILO PROTI ŠKODLJIVCEM",
+   "registrationValidUntil": "2028-02-28",
+   "activeSubstancesRaw": "acetamiprid (0%)",
+   "manufacturer": "Evergreen Garden Care Poland Sp. z o. o.",
+   "representative": "SILK D.O.O."
+  },
+  {
+   "regsrCode": "1407",
+   "name": "CELAFLOR FORTE - RAZPRŠILKA",
+   "registrationValidUntil": "2027-06-15",
+   "activeSubstancesRaw": "piretrin (0,1%), olje navadne ogršcice (1%)",
+   "manufacturer": "Evergreen Garden Care Poland Sp. z o. o.",
+   "representative": "SILK D.O.O."
+  },
+  {
+   "regsrCode": "1115",
+   "name": "CELAFLOR LIMEX",
+   "registrationValidUntil": "2027-08-31",
+   "activeSubstancesRaw": "metaldehid (3%)",
+   "manufacturer": "Evergreen Garden Care Österreich GmbH",
+   "representative": "SILK D.O.O."
+  },
+  {
+   "regsrCode": "1022",
+   "name": "Celaflor Naturen naravni insekticid za sadje, vrtnine in okrasne rastline - koncentrat",
+   "registrationValidUntil": "2027-06-15",
+   "activeSubstancesRaw": "olje navadne ogršcice (77,7%)",
+   "manufacturer": "Evergreen Garden Care Poland Sp. z o. o.",
+   "representative": "SILK D.O.O."
+  },
+  {
+   "regsrCode": "1021",
+   "name": "Celaflor Naturen naravni insekticid za sadje, vrtnine in okrasne rastline - razpršilka",
+   "registrationValidUntil": "2027-06-15",
+   "activeSubstancesRaw": "olje navadne ogršcice (1,69%)",
+   "manufacturer": "Evergreen Garden Care Poland Sp. z o. o.",
+   "representative": "SILK D.O.O."
+  },
+  {
+   "regsrCode": "760",
+   "name": "CENTIUM 36 CS",
+   "registrationValidUntil": "2027-09-30",
+   "activeSubstancesRaw": "klomazon (36%)",
+   "manufacturer": "FMC Agricultural Solutions A/S",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1311",
+   "name": "CHALLENGE",
+   "registrationValidUntil": "2027-10-31",
+   "activeSubstancesRaw": "aklonifen (60%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1326",
+   "name": "CHAMANE",
+   "registrationValidUntil": "2028-05-31",
+   "activeSubstancesRaw": "azoksistrobin (25%)",
+   "manufacturer": "UPL Holdings Coöperatief U.A.",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1477",
+   "name": "CHANON",
+   "registrationValidUntil": "2027-10-31",
+   "activeSubstancesRaw": "aklonifen (60%)",
+   "manufacturer": "GLOBACHEM NV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1523",
+   "name": "CHECKMATE PUFFER CM-PRO",
+   "registrationValidUntil": "2027-09-01",
+   "activeSubstancesRaw": "(E,E)-8,10-dodekadien-1-ol (codlemone) (9,03%)",
+   "manufacturer": "Suterra Europe Biocontrol S.L.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1594",
+   "name": "CHIKARA 25 WG",
+   "registrationValidUntil": "2033-07-31",
+   "activeSubstancesRaw": "flazasulfuron (25%)",
+   "manufacturer": "ISK Bioscience Europe N.V.",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1664",
+   "name": "CHIMRO",
+   "registrationValidUntil": "2027-09-30",
+   "activeSubstancesRaw": "klomazon (36%)",
+   "manufacturer": "ALBAUGH TKI D.O.O.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "949",
+   "name": "CHORUS 50 WG",
+   "registrationValidUntil": "2027-10-31",
+   "activeSubstancesRaw": "ciprodinil (50%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1566",
+   "name": "CHORUS FORTE",
+   "registrationValidUntil": "2027-10-31",
+   "activeSubstancesRaw": "ciprodinil (7,5%), ditianon (11,5%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1684",
+   "name": "CHORUS NEXT",
+   "registrationValidUntil": "2027-06-30",
+   "activeSubstancesRaw": "pirimetanil (40%)",
+   "manufacturer": "Arysta LifeSciences Benelux SRL",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1722",
+   "name": "CHORUS NEXT BIS",
+   "registrationValidUntil": "2029-04-30",
+   "activeSubstancesRaw": "pirimetanil (40%)",
+   "manufacturer": "GLOBACHEM NV",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1510",
+   "name": "CLAP",
+   "registrationValidUntil": "2027-09-30",
+   "activeSubstancesRaw": "klopiralid (30%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1488",
+   "name": "CLAP FORTE",
+   "registrationValidUntil": "2027-09-30",
+   "activeSubstancesRaw": "klopiralid (72%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1405",
+   "name": "CLINIC XTREME (staro ime CREDIT XTREME)",
+   "registrationValidUntil": "2028-06-30",
+   "activeSubstancesRaw": "glifosat v obliki izopropilamino soli (40,08%), glifosat v obliki kalijeve soli (29,77%)",
+   "manufacturer": "NUFARM GmbH & Co KG",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1463",
+   "name": "CLOMATE",
+   "registrationValidUntil": "2027-09-30",
+   "activeSubstancesRaw": "klomazon (36%)",
+   "manufacturer": "ALBAUGH TKI D.O.O.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1361",
+   "name": "CLOSER",
+   "registrationValidUntil": "2026-08-18",
+   "activeSubstancesRaw": "sulfoksaflor (12%)",
+   "manufacturer": "CORTEVA Agrisciences Bulgaria EOOD",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1417",
+   "name": "CLYDE FX",
+   "registrationValidUntil": "2028-02-15",
+   "activeSubstancesRaw": "florasulam (0,1%), fluroksipir (10%)",
+   "manufacturer": "ALBAUGH TKI D.O.O.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "566",
+   "name": "COLLIS",
+   "registrationValidUntil": "2027-04-15",
+   "activeSubstancesRaw": "boskalid (20%), krezoksim - metil (10%)",
+   "manufacturer": "BASF SE",
+   "representative": "SEMENARNA LJUBLJANA, D.O.O."
+  },
+  {
+   "regsrCode": "1673",
+   "name": "COLPENN 80 WG",
+   "registrationValidUntil": "2028-07-31",
+   "activeSubstancesRaw": "žveplo (80%)",
+   "manufacturer": "UPL Holdings Coöperatief U.A.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1485",
+   "name": "COLUMBO 0,8 MG",
+   "registrationValidUntil": "2028-01-31",
+   "activeSubstancesRaw": "cipermetrin (0,8%)",
+   "manufacturer": "SBM Développement S.A.S.",
+   "representative": "METROB, D.O.O."
+  },
+  {
+   "regsrCode": "1556",
+   "name": "COLZAMID",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "napropamid (45%)",
+   "manufacturer": "UPL Holdings Coöperatief U.A.",
+   "representative": "SEMENARNA LJUBLJANA, D.O.O."
+  },
+  {
+   "regsrCode": "1148",
+   "name": "COMPO BIO SREDSTVO PROTI POLŽEM",
+   "registrationValidUntil": "2031-12-31",
+   "activeSubstancesRaw": "železov fosfat (1,55%)",
+   "manufacturer": "COMPO GMBH",
+   "representative": "METROB, D.O.O."
+  },
+  {
+   "regsrCode": "1360",
+   "name": "COPFORCE EXTRA",
+   "registrationValidUntil": "2026-12-31",
+   "activeSubstancesRaw": "cimoksanil (6%), bakrove spojine - bakrov hidroksid (30%)",
+   "manufacturer": "AGRIA S.A.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "948",
+   "name": "CORAGEN",
+   "registrationValidUntil": "2028-05-31",
+   "activeSubstancesRaw": "klorantraniliprol (20%)",
+   "manufacturer": "FMC IP Technology LLC, Vernier Branch",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1366",
+   "name": "CORELLO DUO",
+   "registrationValidUntil": "2028-09-30",
+   "activeSubstancesRaw": "florasulam (1,42%), piroksulam (7,08%)",
+   "manufacturer": "CORTEVA Agrisciences Bulgaria EOOD",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1616",
+   "name": "COREY",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "nikosulfuron (30%), rimsulfuron (15%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1335",
+   "name": "CORIDA",
+   "registrationValidUntil": "2035-01-30",
+   "activeSubstancesRaw": "tribenuron-metil (75%)",
+   "manufacturer": "AGRIA S.A.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "124",
+   "name": "COSAN",
+   "registrationValidUntil": "2028-07-31",
+   "activeSubstancesRaw": "žveplo (79,6%)",
+   "manufacturer": "Agrostulln Gmbh",
+   "representative": "VELOX, D.O.O."
+  },
+  {
+   "regsrCode": "1053",
+   "name": "COSAVET DF",
+   "registrationValidUntil": "2028-07-31",
+   "activeSubstancesRaw": "žveplo (80%)",
+   "manufacturer": "Sulphur mills limited",
+   "representative": "PRAMIT D.O.O."
+  },
+  {
+   "regsrCode": "1672",
+   "name": "COSAYR",
+   "registrationValidUntil": "2028-05-31",
+   "activeSubstancesRaw": "klorantraniliprol (20%)",
+   "manufacturer": "ADAMA Agriculture B.V.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1054",
+   "name": "COSINUS",
+   "registrationValidUntil": "2028-07-31",
+   "activeSubstancesRaw": "žveplo (80%)",
+   "manufacturer": "Sulphur mills limited",
+   "representative": "PRAMIT D.O.O."
+  },
+  {
+   "regsrCode": "1582",
+   "name": "CROWN MH",
+   "registrationValidUntil": "2033-10-31",
+   "activeSubstancesRaw": "malein hidrazid (27%)",
+   "manufacturer": "Kreglinger Europe NV.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1244",
+   "name": "CUPRABLAU Z 35 WG",
+   "registrationValidUntil": "2029-06-30",
+   "activeSubstancesRaw": "bakrove spojine - bakrov oksiklorid (35%)",
+   "manufacturer": "CINKARNA CELJE, D.D.",
+   "representative": "CINKARNA CELJE, D.D."
+  },
+  {
+   "regsrCode": "127",
+   "name": "CUPRABLAU Z 35 WP",
+   "registrationValidUntil": "2026-12-31",
+   "activeSubstancesRaw": "bakrove spojine - bakrov oksiklorid (35%)",
+   "manufacturer": "CINKARNA CELJE, D.D.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1074",
+   "name": "CUPRABLAU Z 50 WP",
+   "registrationValidUntil": "2026-12-31",
+   "activeSubstancesRaw": "bakrove spojine - bakrov oksiklorid (50%)",
+   "manufacturer": "CINKARNA CELJE, D.D.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1719",
+   "name": "CURATIO",
+   "registrationValidUntil": "2028-01-31",
+   "activeSubstancesRaw": "kalcijev polisulfid (apneno žveplo) (38%)",
+   "manufacturer": "Biofa Gmbh",
+   "representative": "METROB, D.O.O."
+  },
+  {
+   "regsrCode": "1721",
+   "name": "CURATIO",
+   "registrationValidUntil": "2026-11-11",
+   "activeSubstancesRaw": "kalcijev polisulfid (apneno žveplo) (38%)",
+   "manufacturer": "BIOFA AG",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1712",
+   "name": "CURATIO žvepleno apnena brozga (10)",
+   "registrationValidUntil": "2026-07-15",
+   "activeSubstancesRaw": "kalcijev polisulfid (apneno žveplo) (38%)",
+   "manufacturer": "Biofa Gmbh",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1334",
+   "name": "CURZATE PARTNER",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "cimoksanil (60%)",
+   "manufacturer": "CORTEVA Agrisciences Bulgaria EOOD",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1316",
+   "name": "CUSTODIA",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "azoksistrobin (12%), tebukonazol (20%)",
+   "manufacturer": "ADAMA Agriculture B.V.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1211",
+   "name": "CYMBAL",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "cimoksanil (45%)",
+   "manufacturer": "CERTIS BELCHIM BV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1527",
+   "name": "CZAR",
+   "registrationValidUntil": "2027-09-30",
+   "activeSubstancesRaw": "klomazon (36%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1232",
+   "name": "DAIMYO F",
+   "registrationValidUntil": "2027-02-15",
+   "activeSubstancesRaw": "ciazofamid (4%), folpet (40%)",
+   "manufacturer": "ISK Bioscience Europe N.V.",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1170",
+   "name": "DAZIDE ENHANCE",
+   "registrationValidUntil": "2026-09-15",
+   "activeSubstancesRaw": "daminozid (85,14%)",
+   "manufacturer": "Fine Agrochemicals Ltd.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1113",
+   "name": "DECIS 100 EC",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "deltametrin (10%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "134",
+   "name": "DECIS 2,5 EC",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "deltametrin (2,5%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1394",
+   "name": "DECIS TRAP CEŠNJEVA MUHA",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "deltametrin (100%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1619",
+   "name": "DECIS TRAP OLJCNA MUHA",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "deltametrin (100%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1292",
+   "name": "DECIS TRAP OREHOVA MUHA",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "deltametrin (100%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1620",
+   "name": "DECIS TRAP PLODOVA VINSKA MUŠICA",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "deltametrin (100%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1204",
+   "name": "DEGESCH PLOŠCE IN TRAKOVI",
+   "registrationValidUntil": "2027-11-30",
+   "activeSubstancesRaw": "magnezijev fosfid (56%)",
+   "manufacturer": "Detia Freyberg GmbH",
+   "representative": "DDD, D.O.O. KOPER"
+  },
+  {
+   "regsrCode": "666",
+   "name": "DELAN 700 WG",
+   "registrationValidUntil": "2028-01-31",
+   "activeSubstancesRaw": "ditianon (70%)",
+   "manufacturer": "BASF Agro B.V. Arnhem (NL) Freienbach Branch",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1184",
+   "name": "DELAN PRO",
+   "registrationValidUntil": "2027-01-31",
+   "activeSubstancesRaw": "ditianon (12,5%), kalijevi fosfonati (56,12%)",
+   "manufacturer": "BASF Agro B.V. Arnhem (NL) Freienbach Branch",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1533",
+   "name": "DELARO FORTE",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "protiokonazol (9,33%), spiroksamin (10,7%), trifloksistrobin (8%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "140",
+   "name": "DELFIN WG",
+   "registrationValidUntil": "2029-06-30",
+   "activeSubstancesRaw": "Bacillus Thuringiensis subsp. Kurstaki sev SA 11 (85%)",
+   "manufacturer": "Mitsui AgriScience International S.A./B.V.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1445",
+   "name": "DELU REPELENT ZA ODGANJANJE VOLUHARJEV IN KRTOV",
+   "registrationValidUntil": "2027-11-30",
+   "activeSubstancesRaw": "kalcijev karbid (80%)",
+   "manufacturer": "Detia Freyberg GmbH",
+   "representative": "DDD, D.O.O. KOPER"
+  },
+  {
+   "regsrCode": "1550",
+   "name": "DELUX 050 CS",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "deltametrin (5%)",
+   "manufacturer": "INNVIGO Sp. z.o.o.",
+   "representative": "AGROPROAGRO, D.O.O."
+  },
+  {
+   "regsrCode": "142",
+   "name": "DEVRINOL 45 FL",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "napropamid (45%)",
+   "manufacturer": "UPL Holdings Coöperatief U.A.",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1612",
+   "name": "DIASTAR MAXI",
+   "registrationValidUntil": "2028-05-31",
+   "activeSubstancesRaw": "teflutrin (0,5%)",
+   "manufacturer": "Diachem S.p.A.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1213",
+   "name": "DICASH",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "dikamba (48%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "METROB, D.O.O."
+  },
+  {
+   "regsrCode": "1604",
+   "name": "DIFAZ",
+   "registrationValidUntil": "2028-05-31",
+   "activeSubstancesRaw": "azoksistrobin (20%), difenokonazol (12,5%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1189",
+   "name": "DIFCOR 250 EC",
+   "registrationValidUntil": "2027-03-15",
+   "activeSubstancesRaw": "difenokonazol (25%)",
+   "manufacturer": "GLOBACHEM NV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1412",
+   "name": "DIFEND EXTRA",
+   "registrationValidUntil": "2027-09-30",
+   "activeSubstancesRaw": "difenokonazol (2,5%), fludioksonil (2,5%)",
+   "manufacturer": "GLOBACHEM NV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1015",
+   "name": "DIFENZONE",
+   "registrationValidUntil": "2027-03-15",
+   "activeSubstancesRaw": "difenokonazol (25%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1479",
+   "name": "DIGATOR",
+   "registrationValidUntil": "2028-02-28",
+   "activeSubstancesRaw": "kvizalofop-p-etil (10,8%)",
+   "manufacturer": "CAC Chemical GmbH",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1442",
+   "name": "DIRAGER",
+   "registrationValidUntil": "2027-05-31",
+   "activeSubstancesRaw": "NAA (3,7%)",
+   "manufacturer": "L. Gobbi S.r.l.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1356",
+   "name": "DIRAMID",
+   "registrationValidUntil": "2027-05-31",
+   "activeSubstancesRaw": "1-naftilacetamid (1-NAD) (8%)",
+   "manufacturer": "L. Gobbi S.r.l.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "811",
+   "name": "DOMARK 100 EC",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "tetrakonazol (10%)",
+   "manufacturer": "Gowan Crop Protection Limited",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "944",
+   "name": "DUAXO KONCENTRAT",
+   "registrationValidUntil": "2027-03-15",
+   "activeSubstancesRaw": "difenokonazol (1,67%)",
+   "manufacturer": "COMPO GMBH",
+   "representative": "METROB, D.O.O."
+  },
+  {
+   "regsrCode": "945",
+   "name": "DUAXO SPREJ",
+   "registrationValidUntil": "2027-03-15",
+   "activeSubstancesRaw": "difenokonazol (0,02%)",
+   "manufacturer": "COMPO GMBH",
+   "representative": "METROB, D.O.O."
+  },
+  {
+   "regsrCode": "1608",
+   "name": "DUETT TURBO",
+   "registrationValidUntil": "2028-05-31",
+   "activeSubstancesRaw": "mefentriflukonazol (10%), krezoksim - metil (15%)",
+   "manufacturer": "BASF Agro B.V. Arnhem (NL) Freienbach Branch",
+   "representative": "SEMENARNA LJUBLJANA, D.O.O."
+  },
+  {
+   "regsrCode": "172",
+   "name": "DUPLOSAN KV",
+   "registrationValidUntil": "2028-10-15",
+   "activeSubstancesRaw": "mekoprop - P (MCPP-P) (60%)",
+   "manufacturer": "NUFARM GmbH & Co KG",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1372",
+   "name": "DUPLOSAN KV 600",
+   "registrationValidUntil": "2028-10-15",
+   "activeSubstancesRaw": "mekoprop - P (MCPP-P) (60%)",
+   "manufacturer": "NUFARM GmbH & Co KG",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1051",
+   "name": "DYNALI",
+   "registrationValidUntil": "2027-03-15",
+   "activeSubstancesRaw": "difenokonazol (6%), ciflufenamid (3%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "719",
+   "name": "ECODIAN CM",
+   "registrationValidUntil": "2027-09-01",
+   "activeSubstancesRaw": "(Z)-8-dodecen-1-il- acetat (93%), (Z)-8-dodecen-1-ol (1%), (E)-8-dodecen-1-il acetat (6%)",
+   "manufacturer": "GEA s.r.l.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1519",
+   "name": "ECOMETAL",
+   "registrationValidUntil": "2027-08-31",
+   "activeSubstancesRaw": "metaldehid (1,5%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1487",
+   "name": "ECO-TRAP",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "deltametrin (0,02%)",
+   "manufacturer": "VIORYL, Chemical & Agricultural Industry, Research, S. A.",
+   "representative": "KZ AGRARIA KOPER, Z.O.O., KOPER"
+  },
+  {
+   "regsrCode": "1603",
+   "name": "ELANZA",
+   "registrationValidUntil": "2027-03-15",
+   "activeSubstancesRaw": "boskalid (23,3%), difenokonazol (6,6%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1270",
+   "name": "ELATUS ERA",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "protiokonazol (15%), benzovindiflupir (7,5%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1291",
+   "name": "ELATUS PLUS",
+   "registrationValidUntil": "2027-08-02",
+   "activeSubstancesRaw": "benzovindiflupir (10%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1521",
+   "name": "ELTIVIS",
+   "registrationValidUntil": "2028-02-15",
+   "activeSubstancesRaw": "fluroksipir (25%)",
+   "manufacturer": "AGRIA S.A.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1034",
+   "name": "ELUMIS",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "mezotrion (7,5%), nikosulfuron (3%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1403",
+   "name": "EMCEE",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "MCPA (75%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "175",
+   "name": "EMINENT 125 EW",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "tetrakonazol (12,5%)",
+   "manufacturer": "Gowan Crop Protection Limited",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1708",
+   "name": "ENERVIN PRO",
+   "registrationValidUntil": "2027-01-31",
+   "activeSubstancesRaw": "ametoktradin (7,5%), kalijevi fosfonati (45%)",
+   "manufacturer": "BASF Agro B.V. Arnhem (NL) Freienbach Branch",
+   "representative": "SEMENARNA LJUBLJANA, D.O.O."
+  },
+  {
+   "regsrCode": "1043",
+   "name": "ENTAIL",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "nikosulfuron (24%)",
+   "manufacturer": "FMC Agricultural Solutions A/S",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "487",
+   "name": "EQUIP",
+   "registrationValidUntil": "2027-05-31",
+   "activeSubstancesRaw": "foramsulfuron (2,25%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1448",
+   "name": "ERA",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "protiokonazol (30%)",
+   "manufacturer": "CAC Chemical GmbH",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "965",
+   "name": "ERGON",
+   "registrationValidUntil": "2026-08-31",
+   "activeSubstancesRaw": "metsulfuron-metil (6,8%), tifensulfuron-metil (68,2%)",
+   "manufacturer": "ALBAUGH TKI D.O.O.",
+   "representative": "ALBAUGH TKI D.O.O."
+  },
+  {
+   "regsrCode": "1596",
+   "name": "ERUNE 40 SC",
+   "registrationValidUntil": "2029-04-30",
+   "activeSubstancesRaw": "pirimetanil (40%)",
+   "manufacturer": "GLOBACHEM NV",
+   "representative": "METROB, D.O.O."
+  },
+  {
+   "regsrCode": "888",
+   "name": "ESTERON",
+   "registrationValidUntil": "2026-12-31",
+   "activeSubstancesRaw": "2,4-D 2-EHE (90,5%)",
+   "manufacturer": "CORTEVA Agrisciences Bulgaria EOOD",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1285",
+   "name": "EVURE",
+   "registrationValidUntil": "2028-01-31",
+   "activeSubstancesRaw": "tau-fluvalinat (24%)",
+   "manufacturer": "ADAMA Agriculture B.V.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1060",
+   "name": "EXILIS",
+   "registrationValidUntil": "2027-07-15",
+   "activeSubstancesRaw": "6-benziladenin (2%)",
+   "manufacturer": "Fine Agrochemicals Ltd.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1386",
+   "name": "EXIREL",
+   "registrationValidUntil": "2027-09-14",
+   "activeSubstancesRaw": "ciantraniliprol (10%)",
+   "manufacturer": "FMC IP Technology LLC, Vernier Branch",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1165",
+   "name": "FABAN",
+   "registrationValidUntil": "2027-06-30",
+   "activeSubstancesRaw": "pirimetanil (25%), ditianon (25%)",
+   "manufacturer": "BASF SE",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1541",
+   "name": "FAZOR",
+   "registrationValidUntil": "2033-10-31",
+   "activeSubstancesRaw": "malein hidrazid (60%)",
+   "manufacturer": "UPL Holdings Coöperatief U.A.",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "188",
+   "name": "FERRAMOL",
+   "registrationValidUntil": "2031-12-31",
+   "activeSubstancesRaw": "železov fosfat (0,99%)",
+   "manufacturer": "W. Neudorff GmbH KG",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1671",
+   "name": "FERROCIOUS",
+   "registrationValidUntil": "2031-12-31",
+   "activeSubstancesRaw": "železov fosfat (2,97%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1455",
+   "name": "FINEX 700 SC",
+   "registrationValidUntil": "2027-11-30",
+   "activeSubstancesRaw": "metamitron (70%)",
+   "manufacturer": "GLOBACHEM NV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1252",
+   "name": "FINY",
+   "registrationValidUntil": "2027-08-31",
+   "activeSubstancesRaw": "metsulfuron-metil (20%)",
+   "manufacturer": "UPL Holdings Coöperatief U.A.",
+   "representative": "SEMENARNA LJUBLJANA, D.O.O."
+  },
+  {
+   "regsrCode": "1353",
+   "name": "FLAME",
+   "registrationValidUntil": "2035-01-30",
+   "activeSubstancesRaw": "tribenuron-metil (50%)",
+   "manufacturer": "ALBAUGH TKI D.O.O.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1458",
+   "name": "FLASH 500 SC",
+   "registrationValidUntil": "2027-01-15",
+   "activeSubstancesRaw": "diflufenikan (50%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1539",
+   "name": "FLEXIDOR",
+   "registrationValidUntil": "2028-01-31",
+   "activeSubstancesRaw": "izoksaben (50%)",
+   "manufacturer": "CORTEVA Agrisciences Bulgaria EOOD",
+   "representative": "CORTEVA AGRISCIENCE SLO D.O.O."
+  },
+  {
+   "regsrCode": "1336",
+   "name": "FLEXITY",
+   "registrationValidUntil": "2028-10-31",
+   "activeSubstancesRaw": "metrafenon (30%)",
+   "manufacturer": "BASF SE",
+   "representative": "SEMENARNA LJUBLJANA, D.O.O."
+  },
+  {
+   "regsrCode": "1225",
+   "name": "FLORA KENYATOX VERDE PLUS",
+   "registrationValidUntil": "2027-06-15",
+   "activeSubstancesRaw": "piretrin (0,2%)",
+   "manufacturer": "COPYR S.p.A.",
+   "representative": "UNICHEM D.O.O."
+  },
+  {
+   "regsrCode": "762",
+   "name": "FLORA VERDE",
+   "registrationValidUntil": "2027-06-15",
+   "activeSubstancesRaw": "piretrin (1,86%)",
+   "manufacturer": "PYRAGRO S.R.L.",
+   "representative": "UNICHEM D.O.O."
+  },
+  {
+   "regsrCode": "1168",
+   "name": "FLORGIB TABLETE",
+   "registrationValidUntil": "2026-07-15",
+   "activeSubstancesRaw": "giberelinska kislina (GA3) (18,65%)",
+   "manufacturer": "Fine Agrochemicals Ltd.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1321",
+   "name": "FLUROSTAR 200",
+   "registrationValidUntil": "2028-02-15",
+   "activeSubstancesRaw": "fluroksipir (20%)",
+   "manufacturer": "GLOBACHEM NV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1610",
+   "name": "FLUROSTAR FORTE",
+   "registrationValidUntil": "2028-02-15",
+   "activeSubstancesRaw": "fluroksipir (40%)",
+   "manufacturer": "GLOBACHEM NV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1524",
+   "name": "FLUROSTAR SUPER",
+   "registrationValidUntil": "2028-02-15",
+   "activeSubstancesRaw": "florasulam (0,1%), fluroksipir (10%)",
+   "manufacturer": "GLOBACHEM NV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1540",
+   "name": "FLYER",
+   "registrationValidUntil": "2031-12-31",
+   "activeSubstancesRaw": "florasulam (5%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1534",
+   "name": "FLYPACK DACUS TRAP",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "deltametrin (0,02%)",
+   "manufacturer": "SEDQ Healthy Crops, S.L. – C.",
+   "representative": "METROB, D.O.O."
+  },
+  {
+   "regsrCode": "192",
+   "name": "FOCUS ULTRA",
+   "registrationValidUntil": "2027-08-31",
+   "activeSubstancesRaw": "cikloksidim (10%)",
+   "manufacturer": "BASF SE",
+   "representative": "SEMENARNA LJUBLJANA, D.O.O."
+  },
+  {
+   "regsrCode": "196",
+   "name": "FOLICUR EW 250",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "tebukonazol (25%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1256",
+   "name": "FOLLOW 80 WG",
+   "registrationValidUntil": "2029-10-31",
+   "activeSubstancesRaw": "folpet (80%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1617",
+   "name": "FOLPAN 500 SC",
+   "registrationValidUntil": "2029-10-31",
+   "activeSubstancesRaw": "folpet (50%)",
+   "manufacturer": "ADAMA Agriculture B.V.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "201",
+   "name": "FOLPAN 80 WDG",
+   "registrationValidUntil": "2029-10-31",
+   "activeSubstancesRaw": "folpet (80%)",
+   "manufacturer": "ADAMA Agriculture B.V.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "651",
+   "name": "FOLPAN GOLD",
+   "registrationValidUntil": "2029-10-31",
+   "activeSubstancesRaw": "metalaksil-M (4,85%), folpet (40%)",
+   "manufacturer": "ADAMA Agriculture B.V.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1675",
+   "name": "FOLPETIS 500 SC",
+   "registrationValidUntil": "2029-10-31",
+   "activeSubstancesRaw": "folpet (50%)",
+   "manufacturer": "ASCENZA AGRO S.A",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1711",
+   "name": "FONGANIL",
+   "registrationValidUntil": "2026-06-15",
+   "activeSubstancesRaw": "metalaksil-M (46,52%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "748",
+   "name": "FORCE 1,5 G",
+   "registrationValidUntil": "2028-05-31",
+   "activeSubstancesRaw": "teflutrin (1,5%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1373",
+   "name": "FORCE 20 CS",
+   "registrationValidUntil": "2028-05-31",
+   "activeSubstancesRaw": "teflutrin (20%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1464",
+   "name": "FORCE EVO",
+   "registrationValidUntil": "2028-05-31",
+   "activeSubstancesRaw": "teflutrin (0,5%)",
+   "manufacturer": "Diachem S.p.A.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1562",
+   "name": "FOSHIELD",
+   "registrationValidUntil": "2027-01-31",
+   "activeSubstancesRaw": "kalijevi fosfonati (72,6%)",
+   "manufacturer": "Desarrollo Agrícola y Minero S.A.",
+   "representative": "METROB, D.O.O."
+  },
+  {
+   "regsrCode": "1465",
+   "name": "FREQUENT",
+   "registrationValidUntil": "2027-05-31",
+   "activeSubstancesRaw": "fluazifop-p-butil (12,5%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1427",
+   "name": "FRESCO",
+   "registrationValidUntil": "2028-05-31",
+   "activeSubstancesRaw": "metobromuron (40%)",
+   "manufacturer": "CERTIS BELCHIM BV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "492",
+   "name": "FRONTIER X2",
+   "registrationValidUntil": "2026-08-31",
+   "activeSubstancesRaw": "dimetenamid-P (72%)",
+   "manufacturer": "BASF SE",
+   "representative": "SEMENARNA LJUBLJANA, D.O.O."
+  },
+  {
+   "regsrCode": "1546",
+   "name": "FROOTI",
+   "registrationValidUntil": "2027-05-31",
+   "activeSubstancesRaw": "NAA (7,78%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1134",
+   "name": "FROWNCIDE",
+   "registrationValidUntil": "2027-04-15",
+   "activeSubstancesRaw": "fluazinam (50%)",
+   "manufacturer": "ISK Bioscience Europe N.V.",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1441",
+   "name": "FRUIT AUXIN 30 SL",
+   "registrationValidUntil": "2027-05-31",
+   "activeSubstancesRaw": "NAA (3,02%)",
+   "manufacturer": "L. Gobbi S.r.l.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1425",
+   "name": "FRUTAPON",
+   "registrationValidUntil": "2027-11-30",
+   "activeSubstancesRaw": "parafinsko olje (83%)",
+   "manufacturer": "W. Neudorff GmbH KG",
+   "representative": ""
+  },
+  {
+   "regsrCode": "890",
+   "name": "FUEGO",
+   "registrationValidUntil": "2027-10-31",
+   "activeSubstancesRaw": "metazaklor (50%)",
+   "manufacturer": "ADAMA Agriculture B.V.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1110",
+   "name": "FUEGO TOP",
+   "registrationValidUntil": "2027-10-31",
+   "activeSubstancesRaw": "metazaklor (37,5%), kvinmerak (12,5%)",
+   "manufacturer": "ADAMA Agriculture B.V.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "481",
+   "name": "FUSILADE FORTE",
+   "registrationValidUntil": "2027-05-31",
+   "activeSubstancesRaw": "fluazifop-p-butil (15%)",
+   "manufacturer": "NUFARM GmbH & Co KG",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1385",
+   "name": "FUSILADE MAX",
+   "registrationValidUntil": "2027-05-31",
+   "activeSubstancesRaw": "fluazifop-p-butil (12,5%)",
+   "manufacturer": "NUFARM GmbH & Co KG",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1236",
+   "name": "FYSIUM",
+   "registrationValidUntil": "2035-07-31",
+   "activeSubstancesRaw": "1-metilciklopropen (100%)",
+   "manufacturer": "JANSSEN PMP, Preservation and Material Protection a division of Janssen Pharmaceutica NV",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1553",
+   "name": "FYTOSAVE",
+   "registrationValidUntil": "2031-04-22",
+   "activeSubstancesRaw": "COS-OGA (1,25%)",
+   "manufacturer": "FytoFend S. A.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1688",
+   "name": "GARDO SUN",
+   "registrationValidUntil": "2027-01-15",
+   "activeSubstancesRaw": "aklonifen (60%), diflufenikan (3%)",
+   "manufacturer": "GLOBACHEM NV",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1609",
+   "name": "GENKI",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "mezotrion (8%), nikosulfuron (3%)",
+   "manufacturer": "Sumi Agro Europe limited",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1119",
+   "name": "GEOXE",
+   "registrationValidUntil": "2027-09-30",
+   "activeSubstancesRaw": "fludioksonil (50%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1106",
+   "name": "GF-120",
+   "registrationValidUntil": "2029-04-01",
+   "activeSubstancesRaw": "spinosad (spinosin A+spinosin D) (0,02%)",
+   "manufacturer": "CORTEVA Agrisciences Bulgaria EOOD",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1525",
+   "name": "GIFT",
+   "registrationValidUntil": "2029-12-31",
+   "activeSubstancesRaw": "giberelinska kislina (GA3) (9%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1638",
+   "name": "GLOB-PROMET",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "metkonazol (9%), protiokonazol (25%)",
+   "manufacturer": "GLOBACHEM NV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1661",
+   "name": "GOLTIX GOLD",
+   "registrationValidUntil": "2027-11-30",
+   "activeSubstancesRaw": "metamitron (70%)",
+   "manufacturer": "ADAMA Agriculture B.V.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "220",
+   "name": "GOLTIX WG 90",
+   "registrationValidUntil": "2027-11-30",
+   "activeSubstancesRaw": "metamitron (90%)",
+   "manufacturer": "ADAMA Agriculture B.V.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1274",
+   "name": "GRANPROTEC",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "deltametrin (2,5%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1333",
+   "name": "GRASSROOTER",
+   "registrationValidUntil": "2028-01-31",
+   "activeSubstancesRaw": "etefon (48%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1571",
+   "name": "GRETEG",
+   "registrationValidUntil": "2027-03-15",
+   "activeSubstancesRaw": "difenokonazol (25%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "223",
+   "name": "GRODYL",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "amidosulfuron (75%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1388",
+   "name": "GUSTO 3 - POLŽOMOR",
+   "registrationValidUntil": "2027-08-31",
+   "activeSubstancesRaw": "metaldehid (3%)",
+   "manufacturer": "KOLLANT Srl",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1083",
+   "name": "HARMONY 50 SX",
+   "registrationValidUntil": "2027-10-31",
+   "activeSubstancesRaw": "tifensulfuron-metil (50%)",
+   "manufacturer": "FMC IP Technology LLC, Vernier Branch",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1214",
+   "name": "HARPUN",
+   "registrationValidUntil": "2036-07-31",
+   "activeSubstancesRaw": "piriproksifen (10%)",
+   "manufacturer": "GALENIKA FITOFARMACIJA A.D.",
+   "representative": "GALENIKA-FITOFARMACIJA D.O.O."
+  },
+  {
+   "regsrCode": "1592",
+   "name": "HECTOR FLEX",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "dikamba (51,04%), nikosulfuron (6,25%), rimsulfuron (3,13%)",
+   "manufacturer": "CORTEVA Agrisciences Bulgaria EOOD",
+   "representative": "CORTEVA AGRISCIENCE SLO D.O.O."
+  },
+  {
+   "regsrCode": "1365",
+   "name": "HERBOCID XL",
+   "registrationValidUntil": "2031-12-31",
+   "activeSubstancesRaw": "2,4-D (60%)",
+   "manufacturer": "NUFARM GmbH & Co KG",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1670",
+   "name": "HIERRO",
+   "registrationValidUntil": "2031-12-31",
+   "activeSubstancesRaw": "železov fosfat (1%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "698",
+   "name": "HUSSAR OD",
+   "registrationValidUntil": "2032-03-31",
+   "activeSubstancesRaw": "jodosulfuron (jodosulfuron-metil natrij) (10%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1120",
+   "name": "HUSSAR PLUS",
+   "registrationValidUntil": "2033-03-31",
+   "activeSubstancesRaw": "jodosulfuron (jodosulfuron-metil natrij) (5%), mezosulfuron (0,75%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1420",
+   "name": "HUSSAR STAR",
+   "registrationValidUntil": "2028-03-01",
+   "activeSubstancesRaw": "jodosulfuron (jodosulfuron-metil natrij) (3,3%), tienkarbazon-metil (2,5%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1643",
+   "name": "IMPRUS",
+   "registrationValidUntil": "2034-02-28",
+   "activeSubstancesRaw": "acetamiprid (20%)",
+   "manufacturer": "ALBAUGH TKI D.O.O.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "776",
+   "name": "INFINITO",
+   "registrationValidUntil": "2027-08-31",
+   "activeSubstancesRaw": "propamokarb (62,5%), fluopikolid (6,25%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1515",
+   "name": "INPUT",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "protiokonazol (16%), spiroksamin (30%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1318",
+   "name": "IRONMAX PRO",
+   "registrationValidUntil": "2031-12-31",
+   "activeSubstancesRaw": "železov fosfat (2,42%)",
+   "manufacturer": "DE SANGOSSE",
+   "representative": "AGROLIT D.O.O."
+  },
+  {
+   "regsrCode": "1145",
+   "name": "ISOMATE C TT",
+   "registrationValidUntil": "2026-08-30",
+   "activeSubstancesRaw": "(E,E)-8,10-dodekadien-1-ol (codlemone) (56,6%), dodekan-1-ol (30,6%), 1-tetradekanol (7,1%)",
+   "manufacturer": "CBC (Europe) S.r.l.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1254",
+   "name": "ISONET L PLUS",
+   "registrationValidUntil": "2026-08-30",
+   "activeSubstancesRaw": "(Z)-9-dodecen-1-il acetat (8,4%), (E,Z)-7,9-dodekadien-1-il acetat (72%)",
+   "manufacturer": "CBC (Europe) S.r.l.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1677",
+   "name": "JADE",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "protiokonazol (12,5%), tebukonazol (12,5%)",
+   "manufacturer": "Sharda Cropchem Espana S.L.",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1707",
+   "name": "JUDO",
+   "registrationValidUntil": "2027-07-15",
+   "activeSubstancesRaw": "dodin (40%)",
+   "manufacturer": "Farma-Chem S.A.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1177",
+   "name": "KALIMBA",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "dikamba (48%)",
+   "manufacturer": "GHARDA Chemicals Limited",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1337",
+   "name": "KAMBA 480 SL",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "dikamba (48%)",
+   "manufacturer": "GHARDA Chemicals Limited",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1239",
+   "name": "KANEMITE SC",
+   "registrationValidUntil": "2027-11-15",
+   "activeSubstancesRaw": "acekvinocil (16,4%)",
+   "manufacturer": "Summit Agro Romania SRL",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1666",
+   "name": "KARATE 0.4GR",
+   "registrationValidUntil": "2027-08-31",
+   "activeSubstancesRaw": "lambda-cihalotrin (0,4%)",
+   "manufacturer": "SIPCAM OXON S.p.A.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "535",
+   "name": "KARATE ZEON 5 CS",
+   "registrationValidUntil": "2026-08-31",
+   "activeSubstancesRaw": "lambda-cihalotrin (5%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1486",
+   "name": "KARBICURE",
+   "registrationValidUntil": "2037-10-31",
+   "activeSubstancesRaw": "kalijev hidrogen karbonat (85%)",
+   "manufacturer": "Agronaturalis Limited, Suite B, Crown House",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1340",
+   "name": "KELVIN MAX",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "nikosulfuron (6%)",
+   "manufacturer": "ISK Bioscience Europe N.V.",
+   "representative": "BASF SLOVENIJA D.O.O."
+  },
+  {
+   "regsrCode": "1038",
+   "name": "KEMAKOL EXTRA",
+   "registrationValidUntil": "2026-08-31",
+   "activeSubstancesRaw": "kremenov pesek (30%)",
+   "manufacturer": "Witasek PflanzenSchutz GmbH",
+   "representative": "CAREX, D.O.O."
+  },
+  {
+   "regsrCode": "1163",
+   "name": "KOBAN TX",
+   "registrationValidUntil": "2027-05-31",
+   "activeSubstancesRaw": "petoksamid (30%), terbutilazin (18,75%)",
+   "manufacturer": "FMC Agricultural Solutions A/S",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1277",
+   "name": "K-OBIOL EC 250",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "deltametrin (2,5%)",
+   "manufacturer": "2022 Environmental Science FR SAS",
+   "representative": "DDD, D.O.O. KOPER, PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "858",
+   "name": "KOCIDE 2000",
+   "registrationValidUntil": "2029-06-30",
+   "activeSubstancesRaw": "bakrove spojine - bakrov hidroksid (53,8%)",
+   "manufacturer": "Cosaco GmbH",
+   "representative": ""
+  },
+  {
+   "regsrCode": "883",
+   "name": "KORIT 420 FS",
+   "registrationValidUntil": "2028-01-31",
+   "activeSubstancesRaw": "ziram (42%)",
+   "manufacturer": "Kwizda Agro GmbH",
+   "representative": "RWA SLOVENIJA, D.O.O."
+  },
+  {
+   "regsrCode": "1243",
+   "name": "KUDOS",
+   "registrationValidUntil": "2027-05-31",
+   "activeSubstancesRaw": "proheksadion-kalcij (10%)",
+   "manufacturer": "Fine Agrochemicals Ltd.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "252",
+   "name": "KUMULUS DF",
+   "registrationValidUntil": "2028-07-31",
+   "activeSubstancesRaw": "žveplo (80%)",
+   "manufacturer": "BASF SE",
+   "representative": "SEMENARNA LJUBLJANA, D.O.O."
+  },
+  {
+   "regsrCode": "1095",
+   "name": "KUSABI 300 SC",
+   "registrationValidUntil": "2028-06-30",
+   "activeSubstancesRaw": "piriofenon (30%)",
+   "manufacturer": "ISK Bioscience Europe N.V.",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1591",
+   "name": "LAITANE",
+   "registrationValidUntil": "2029-04-30",
+   "activeSubstancesRaw": "pirimetanil (40%)",
+   "manufacturer": "LAINCO, S.A.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1653",
+   "name": "LALSTOP G46 WG",
+   "registrationValidUntil": "2035-03-31",
+   "activeSubstancesRaw": "Clonostachys rosea strain J1446 (Gliocladium catenulatum strain J1446) (90%)",
+   "manufacturer": "Danstar Ferment AG",
+   "representative": "METROB, D.O.O."
+  },
+  {
+   "regsrCode": "838",
+   "name": "LAMARDOR FS 400",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "tebukonazol (15%), protiokonazol (25%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1426",
+   "name": "LANCELOT SUPER",
+   "registrationValidUntil": "2028-05-31",
+   "activeSubstancesRaw": "aminopiralid (30%), florasulam (15%)",
+   "manufacturer": "CORTEVA Agrisciences Bulgaria EOOD",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1147",
+   "name": "LANDSCAPER PRO WEED CONTROL",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "2,4-D (0,8%), dikamba (0,12%)",
+   "manufacturer": "Evergreen Garden Care Österreich GmbH",
+   "representative": "HUMKO, D.O.O., BLED"
+  },
+  {
+   "regsrCode": "513",
+   "name": "LASER 240 SC",
+   "registrationValidUntil": "2029-04-01",
+   "activeSubstancesRaw": "spinosad (spinosin A+spinosin D) (24%)",
+   "manufacturer": "CORTEVA Agrisciences Bulgaria EOOD",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1615",
+   "name": "LASER GR",
+   "registrationValidUntil": "2029-04-01",
+   "activeSubstancesRaw": "spinosad (spinosin A+spinosin D) (0,4%)",
+   "manufacturer": "SBM Développement S.A.S.",
+   "representative": "CORTEVA AGRISCIENCE SLO D.O.O."
+  },
+  {
+   "regsrCode": "1308",
+   "name": "LASER PLUS",
+   "registrationValidUntil": "2029-04-01",
+   "activeSubstancesRaw": "spinosad (spinosin A+spinosin D) (48%)",
+   "manufacturer": "CORTEVA Agrisciences Bulgaria EOOD",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "934",
+   "name": "LAUDIS",
+   "registrationValidUntil": "2027-12-31",
+   "activeSubstancesRaw": "tembotrion (4,4%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1033",
+   "name": "LAUDIS WG 30",
+   "registrationValidUntil": "2027-12-31",
+   "activeSubstancesRaw": "tembotrion (20%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1342",
+   "name": "LBG-01F34",
+   "registrationValidUntil": "2027-01-31",
+   "activeSubstancesRaw": "kalijevi fosfonati (75,5%)",
+   "manufacturer": "LUXEMBOURG PAMOL (CYPRUS) LTD",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1429",
+   "name": "LECTOR DELTA",
+   "registrationValidUntil": "2027-01-15",
+   "activeSubstancesRaw": "diflufenikan (50%), florasulam (5%)",
+   "manufacturer": "NUFARM GmbH & Co KG",
+   "representative": ""
+  },
+  {
+   "regsrCode": "964",
+   "name": "LENTAGRAN WP",
+   "registrationValidUntil": "2031-12-31",
+   "activeSubstancesRaw": "piridat (45%)",
+   "manufacturer": "CERTIS BELCHIM BV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1052",
+   "name": "LEPINOX PLUS",
+   "registrationValidUntil": "2039-06-30",
+   "activeSubstancesRaw": "Bacillus Thuringiensis subsp. Kurstaki sev EG2348 (15%)",
+   "manufacturer": "CBC (Europe) S.r.l.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1577",
+   "name": "LIBRETO",
+   "registrationValidUntil": "2031-12-31",
+   "activeSubstancesRaw": "fenheksamid (50%)",
+   "manufacturer": "GALENIKA FITOFARMACIJA A.D.",
+   "representative": "GALENIKA-FITOFARMACIJA D.O.O."
+  },
+  {
+   "regsrCode": "1156",
+   "name": "LIMA GOLD 3%",
+   "registrationValidUntil": "2027-08-31",
+   "activeSubstancesRaw": "metaldehid (3%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "METROB, D.O.O."
+  },
+  {
+   "regsrCode": "1332",
+   "name": "LONTREL 72SG",
+   "registrationValidUntil": "2026-09-30",
+   "activeSubstancesRaw": "klopiralid (72%)",
+   "manufacturer": "CORTEVA Agrisciences Bulgaria EOOD",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1389",
+   "name": "LUNA CARE",
+   "registrationValidUntil": "2027-06-30",
+   "activeSubstancesRaw": "fluopiram (5%), fosetil-Al (66,6%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1129",
+   "name": "LUNA EXPERIENCE",
+   "registrationValidUntil": "2027-06-30",
+   "activeSubstancesRaw": "tebukonazol (20%), fluopiram (20%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1339",
+   "name": "LUNA MAX",
+   "registrationValidUntil": "2027-05-31",
+   "activeSubstancesRaw": "fluopiram (7,5%), spiroksamin (20%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1642",
+   "name": "LUNA SENSATION",
+   "registrationValidUntil": "2027-06-30",
+   "activeSubstancesRaw": "fluopiram (25%), trifloksistrobin (25%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1067",
+   "name": "MADEX MAX",
+   "registrationValidUntil": "2026-10-31",
+   "activeSubstancesRaw": "granulozni virus Cydia pomonella (0,62%)",
+   "manufacturer": "Andermatt Group AG",
+   "representative": "METROB, D.O.O."
+  },
+  {
+   "regsrCode": "1359",
+   "name": "MAGMA TRIPLE WG",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "fosetil-Al (50%), folpet (25%), cimoksanil (4%)",
+   "manufacturer": "ALBAUGH TKI D.O.O.",
+   "representative": "ALBAUGH TKI D.O.O."
+  },
+  {
+   "regsrCode": "1138",
+   "name": "MAGNELLO",
+   "registrationValidUntil": "2027-03-15",
+   "activeSubstancesRaw": "difenokonazol (10%), tebukonazol (25%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1202",
+   "name": "MAGTOXIN PELETE",
+   "registrationValidUntil": "2027-11-30",
+   "activeSubstancesRaw": "magnezijev fosfid (66%)",
+   "manufacturer": "Detia Freyberg GmbH",
+   "representative": "DDD, D.O.O. KOPER"
+  },
+  {
+   "regsrCode": "1511",
+   "name": "MAJOR 300 SL",
+   "registrationValidUntil": "2027-09-30",
+   "activeSubstancesRaw": "klopiralid (30%)",
+   "manufacturer": "INNVIGO Sp. z.o.o.",
+   "representative": "AGROPROAGRO, D.O.O."
+  },
+  {
+   "regsrCode": "1686",
+   "name": "MATENO DUO",
+   "registrationValidUntil": "2027-01-15",
+   "activeSubstancesRaw": "aklonifen (50%), diflufenikan (10%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1287",
+   "name": "MAVITA 250 EC",
+   "registrationValidUntil": "2027-03-15",
+   "activeSubstancesRaw": "difenokonazol (25%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "917",
+   "name": "MAVRIK 240 EW",
+   "registrationValidUntil": "2028-01-31",
+   "activeSubstancesRaw": "tau-fluvalinat (24%)",
+   "manufacturer": "ADAMA Agriculture B.V.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1716",
+   "name": "MAVRIK 240 EW",
+   "registrationValidUntil": "2026-06-29",
+   "activeSubstancesRaw": "tau-fluvalinat (24%)",
+   "manufacturer": "ADAMA Agriculture B.V.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "718",
+   "name": "MAXCEL",
+   "registrationValidUntil": "2027-07-15",
+   "activeSubstancesRaw": "6-benziladenin (2%)",
+   "manufacturer": "Valent BioSciences Corporation",
+   "representative": "ALBAUGH TKI D.O.O."
+  },
+  {
+   "regsrCode": "726",
+   "name": "MAXIM EXTRA 050 FS",
+   "registrationValidUntil": "2027-09-30",
+   "activeSubstancesRaw": "fludioksonil (2,5%), difenokonazol (2,5%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "270",
+   "name": "MAXIM XL 035 FS",
+   "registrationValidUntil": "2027-09-30",
+   "activeSubstancesRaw": "fludioksonil (2,5%), metalaksil-M (0,97%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1190",
+   "name": "MEDAL (staro ime ARION PRO)",
+   "registrationValidUntil": "2027-08-31",
+   "activeSubstancesRaw": "metaldehid (3%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "METROB, D.O.O."
+  },
+  {
+   "regsrCode": "1348",
+   "name": "MEDAX TOP",
+   "registrationValidUntil": "2027-05-31",
+   "activeSubstancesRaw": "proheksadion-kalcij (5%), mepikvat (30%)",
+   "manufacturer": "BASF SE",
+   "representative": "SEMENARNA LJUBLJANA, D.O.O."
+  },
+  {
+   "regsrCode": "1676",
+   "name": "MELVAR START",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "folpet (30%), protiokonazol (12%)",
+   "manufacturer": "ASCENZA AGRO S.A",
+   "representative": ""
+  },
+  {
+   "regsrCode": "955",
+   "name": "MERLIN FLEXX",
+   "registrationValidUntil": "2027-12-31",
+   "activeSubstancesRaw": "izoksaflutol (24%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "276",
+   "name": "MERPAN 80 WDG",
+   "registrationValidUntil": "2028-10-31",
+   "activeSubstancesRaw": "kaptan (80%)",
+   "manufacturer": "ADAMA Agriculture B.V.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1135",
+   "name": "METAFOL WG",
+   "registrationValidUntil": "2027-11-30",
+   "activeSubstancesRaw": "metamitron (70%)",
+   "manufacturer": "UPL Holdings Coöperatief U.A.",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1078",
+   "name": "METAREX INOV",
+   "registrationValidUntil": "2027-08-31",
+   "activeSubstancesRaw": "metaldehid (4%)",
+   "manufacturer": "DE SANGOSSE",
+   "representative": "AGROLIT D.O.O."
+  },
+  {
+   "regsrCode": "1567",
+   "name": "METSO",
+   "registrationValidUntil": "2031-08-31",
+   "activeSubstancesRaw": "metkonazol (6%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "850",
+   "name": "MEZZO",
+   "registrationValidUntil": "2027-08-31",
+   "activeSubstancesRaw": "metsulfuron-metil (20%)",
+   "manufacturer": "NUFARM GmbH & Co KG",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1103",
+   "name": "MICROTHIOL SC",
+   "registrationValidUntil": "2028-07-31",
+   "activeSubstancesRaw": "žveplo (82,5%)",
+   "manufacturer": "UPL Holdings Coöperatief U.A.",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1102",
+   "name": "MICROTHIOL SPECIAL",
+   "registrationValidUntil": "2028-07-31",
+   "activeSubstancesRaw": "žveplo (80%)",
+   "manufacturer": "UPL Holdings Coöperatief U.A.",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1674",
+   "name": "MIGHTY",
+   "registrationValidUntil": "2033-05-31",
+   "activeSubstancesRaw": "mezotrion (10%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "494",
+   "name": "MIKAL FLASH",
+   "registrationValidUntil": "2027-10-31",
+   "activeSubstancesRaw": "folpet (25%), fosetil-Al (50%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "878",
+   "name": "MIKAL PREMIUM F",
+   "registrationValidUntil": "2027-10-31",
+   "activeSubstancesRaw": "fosetil-Al (50%), folpet (25%), iprovalikarb (4%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1049",
+   "name": "MILAGRO 240 SC",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "nikosulfuron (24%)",
+   "manufacturer": "FMC Agricultural Solutions A/S",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1001",
+   "name": "MILAGRO EXTRA 6 OD",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "nikosulfuron (6%)",
+   "manufacturer": "ISK Bioscience Europe N.V.",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1402",
+   "name": "MILAGRO PLUS",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "nikosulfuron (5%), dikamba (22%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "819",
+   "name": "MILBEKNOCK",
+   "registrationValidUntil": "2029-11-15",
+   "activeSubstancesRaw": "milbemektin (0,93%)",
+   "manufacturer": "CERTIS BELCHIM BV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "695",
+   "name": "MILDICUT",
+   "registrationValidUntil": "2028-07-31",
+   "activeSubstancesRaw": "ciazofamid (2,5%), dinatrijev fosfonat (25%)",
+   "manufacturer": "ISK Bioscience Europe N.V.",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "287",
+   "name": "MIMIC",
+   "registrationValidUntil": "2027-01-31",
+   "activeSubstancesRaw": "tebufenozid (24%)",
+   "manufacturer": "NISSO Chemical Europe GmbH",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1284",
+   "name": "MIRADOR 250 SC",
+   "registrationValidUntil": "2028-05-31",
+   "activeSubstancesRaw": "azoksistrobin (25%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1108",
+   "name": "MIRADOR FORTE",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "azoksistrobin (6%), tebukonazol (10%)",
+   "manufacturer": "ADAMA Agriculture B.V.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1090",
+   "name": "MOCLJIVO ŽVEPLO KARSIA DF",
+   "registrationValidUntil": "2028-07-31",
+   "activeSubstancesRaw": "žveplo (80%)",
+   "manufacturer": "Sulphur mills limited",
+   "representative": "PRAMIT D.O.O."
+  },
+  {
+   "regsrCode": "290",
+   "name": "MODDUS 250 EC",
+   "registrationValidUntil": "2028-04-30",
+   "activeSubstancesRaw": "trineksapak-etil (25%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1176",
+   "name": "MODDUS EVO",
+   "registrationValidUntil": "2028-04-30",
+   "activeSubstancesRaw": "trineksapak-etil (25%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1238",
+   "name": "MONCUT",
+   "registrationValidUntil": "2028-06-15",
+   "activeSubstancesRaw": "flutolanil (46%)",
+   "manufacturer": "Nichino-Europe Co., Ltd",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1436",
+   "name": "MONEX",
+   "registrationValidUntil": "2027-05-31",
+   "activeSubstancesRaw": "NAA (1%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1172",
+   "name": "MONSOON ACTIVE",
+   "registrationValidUntil": "2027-05-31",
+   "activeSubstancesRaw": "foramsulfuron (3%), tienkarbazon-metil (1%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "690",
+   "name": "MOSPILAN 20 SG",
+   "registrationValidUntil": "2027-02-28",
+   "activeSubstancesRaw": "acetamiprid (20%)",
+   "manufacturer": "NISSO Chemical Europe GmbH",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1714",
+   "name": "MOSPILAN 20 SG (10)",
+   "registrationValidUntil": "2026-09-28",
+   "activeSubstancesRaw": "acetamiprid (20%)",
+   "manufacturer": "NISSO Chemical Europe GmbH",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1713",
+   "name": "MOSPILAN 20 SG (9)",
+   "registrationValidUntil": "2026-08-28",
+   "activeSubstancesRaw": "acetamiprid (20%)",
+   "manufacturer": "NISSO Chemical Europe GmbH",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "299",
+   "name": "MOTIVELL",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "nikosulfuron (4%)",
+   "manufacturer": "ISK Bioscience Europe N.V.",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1050",
+   "name": "MOTIVELL EXTRA 6 OD",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "nikosulfuron (6%)",
+   "manufacturer": "ISK Bioscience Europe N.V.",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1709",
+   "name": "MOVENTO SC 100 (3)",
+   "registrationValidUntil": "2026-08-10",
+   "activeSubstancesRaw": "spirotetramat (10%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1117",
+   "name": "MOXA",
+   "registrationValidUntil": "2028-04-30",
+   "activeSubstancesRaw": "trineksapak-etil (25%)",
+   "manufacturer": "GLOBACHEM NV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1260",
+   "name": "MURAL",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "dikamba (48%)",
+   "manufacturer": "GALENIKA FITOFARMACIJA A.D.",
+   "representative": "GALENIKA-FITOFARMACIJA D.O.O."
+  },
+  {
+   "regsrCode": "646",
+   "name": "MUSTANG 306 SE",
+   "registrationValidUntil": "2026-12-31",
+   "activeSubstancesRaw": "florasulam (0,63%), 2,4-D 2-EHE (45,24%)",
+   "manufacturer": "CORTEVA Agrisciences Bulgaria EOOD",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1370",
+   "name": "MUSTANG FORTE",
+   "registrationValidUntil": "2028-05-31",
+   "activeSubstancesRaw": "florasulam (0,5%), 2,4-D (18%), aminopiralid (1%)",
+   "manufacturer": "CORTEVA Agrisciences Bulgaria EOOD",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "952",
+   "name": "MYSTIC 250 EC",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "tebukonazol (25%)",
+   "manufacturer": "NUFARM GmbH & Co KG",
+   "representative": ""
+  },
+  {
+   "regsrCode": "827",
+   "name": "NATIVO 75 WG",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "tebukonazol (50%), trifloksistrobin (25%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "865",
+   "name": "NATURALIS",
+   "registrationValidUntil": "2026-09-30",
+   "activeSubstancesRaw": "Beauveria bassiana sev ATCC 74040 (0,02%)",
+   "manufacturer": "CBC (Europe) S.r.l.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1399",
+   "name": "NATUREN BIO SREDSTVO PROTI POLŽEM",
+   "registrationValidUntil": "2031-12-31",
+   "activeSubstancesRaw": "železov fosfat (1%)",
+   "manufacturer": "Evergreen Garden Care Österreich GmbH",
+   "representative": "SILK D.O.O."
+  },
+  {
+   "regsrCode": "1396",
+   "name": "NATUREN FORTE - KONCENTRAT",
+   "registrationValidUntil": "2027-06-15",
+   "activeSubstancesRaw": "piretrin (0,7%), olje navadne ogršcice (70%)",
+   "manufacturer": "Evergreen Garden Care Poland Sp. z o. o.",
+   "representative": "SILK D.O.O."
+  },
+  {
+   "regsrCode": "1397",
+   "name": "NATUREN FORTE - RAZPRŠILKA",
+   "registrationValidUntil": "2027-06-15",
+   "activeSubstancesRaw": "piretrin (0,1%), olje navadne ogršcice (1%)",
+   "manufacturer": "Evergreen Garden Care Poland Sp. z o. o.",
+   "representative": "SILK D.O.O."
+  },
+  {
+   "regsrCode": "1669",
+   "name": "NAVURA",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "mefentriflukonazol (5%), protiokonazol (10%)",
+   "manufacturer": "BASF SE",
+   "representative": "SEMENARNA LJUBLJANA, D.O.O."
+  },
+  {
+   "regsrCode": "517",
+   "name": "NEEMAZAL - T/S",
+   "registrationValidUntil": "2028-01-31",
+   "activeSubstancesRaw": "azadirahtin A (1%)",
+   "manufacturer": "TRIFOLIO-M",
+   "representative": "METROB, D.O.O."
+  },
+  {
+   "regsrCode": "1185",
+   "name": "NEXT",
+   "registrationValidUntil": "2028-04-30",
+   "activeSubstancesRaw": "trineksapak-etil (25%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "METROB, D.O.O."
+  },
+  {
+   "regsrCode": "975",
+   "name": "NICOSH",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "nikosulfuron (4%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "METROB, D.O.O."
+  },
+  {
+   "regsrCode": "645",
+   "name": "NISSORUN 10 WP",
+   "registrationValidUntil": "2028-01-31",
+   "activeSubstancesRaw": "heksitiazoks (10%)",
+   "manufacturer": "NISSO Chemical Europe GmbH",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1424",
+   "name": "NISSORUN 250 SC",
+   "registrationValidUntil": "2028-01-31",
+   "activeSubstancesRaw": "heksitiazoks (25%)",
+   "manufacturer": "NISSO Chemical Europe GmbH",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "536",
+   "name": "NORDOX 75 WG",
+   "registrationValidUntil": "2026-12-31",
+   "activeSubstancesRaw": "bakrove spojine - bakrov oksid (75%)",
+   "manufacturer": "Nordox Industrier AS",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1548",
+   "name": "NORIOS",
+   "registrationValidUntil": "2028-05-31",
+   "activeSubstancesRaw": "azoksistrobin (25%)",
+   "manufacturer": "UPL Holdings Coöperatief U.A.",
+   "representative": "SEMENARNA LJUBLJANA, D.O.O."
+  },
+  {
+   "regsrCode": "989",
+   "name": "NOVAGIB",
+   "registrationValidUntil": "2026-07-15",
+   "activeSubstancesRaw": "giberelini (GA4 in GA7) (1%)",
+   "manufacturer": "Fine Agrochemicals Ltd.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1354",
+   "name": "OBSTHORMON 24A",
+   "registrationValidUntil": "2027-05-31",
+   "activeSubstancesRaw": "NAA (8,47%)",
+   "manufacturer": "L. Gobbi S.r.l.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1557",
+   "name": "ONYX",
+   "registrationValidUntil": "2031-12-31",
+   "activeSubstancesRaw": "piridat (60%)",
+   "manufacturer": "CERTIS BELCHIM BV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1704",
+   "name": "ORGADIN",
+   "registrationValidUntil": "2027-07-15",
+   "activeSubstancesRaw": "dodin (40%)",
+   "manufacturer": "Anorgachim S.A.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "889",
+   "name": "ORIUS 25 EW",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "tebukonazol (25%)",
+   "manufacturer": "NUFARM GmbH & Co KG",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1478",
+   "name": "OROCIDE PLUS",
+   "registrationValidUntil": "2027-12-31",
+   "activeSubstancesRaw": "olje pomarancevca (5,9%)",
+   "manufacturer": "Oro Agri Europe S.A.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1469",
+   "name": "ORONDIS",
+   "registrationValidUntil": "2028-03-03",
+   "activeSubstancesRaw": "oksatiapiprolin (10%)",
+   "manufacturer": "CORTEVA Agrisciences Bulgaria EOOD",
+   "representative": "CORTEVA AGRISCIENCE SLO D.O.O."
+  },
+  {
+   "regsrCode": "1667",
+   "name": "ORONDIS EVO",
+   "registrationValidUntil": "2028-03-03",
+   "activeSubstancesRaw": "azoksistrobin (25%), oksatiapiprolin (1,2%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1665",
+   "name": "ORONDIS FORTE",
+   "registrationValidUntil": "2027-09-15",
+   "activeSubstancesRaw": "oksatiapiprolin (4%), amisulbrom (14%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1595",
+   "name": "ORONDIS ULTRA",
+   "registrationValidUntil": "2026-12-31",
+   "activeSubstancesRaw": "mandipropamid (25%), oksatiapiprolin (3%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1044",
+   "name": "ORTHOCIDE 80 WG",
+   "registrationValidUntil": "2028-10-31",
+   "activeSubstancesRaw": "kaptan (80%)",
+   "manufacturer": "Arysta LifeScience S.A.S.",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1011",
+   "name": "ORTIVA",
+   "registrationValidUntil": "2028-05-31",
+   "activeSubstancesRaw": "azoksistrobin (25%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "316",
+   "name": "ORTUS 5 SC",
+   "registrationValidUntil": "2027-06-15",
+   "activeSubstancesRaw": "fenpiroksimat (5,12%)",
+   "manufacturer": "Nichino-Europe Co., Ltd",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1181",
+   "name": "OSORNO",
+   "registrationValidUntil": "2033-05-31",
+   "activeSubstancesRaw": "mezotrion (10%)",
+   "manufacturer": "GLOBACHEM NV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1589",
+   "name": "OSORNO 480",
+   "registrationValidUntil": "2033-05-31",
+   "activeSubstancesRaw": "mezotrion (48%)",
+   "manufacturer": "GLOBACHEM NV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1272",
+   "name": "OVITEX",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "parafinsko olje (81,7%)",
+   "manufacturer": "CERTIS BELCHIM BV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1599",
+   "name": "PABLO 25 SC",
+   "registrationValidUntil": "2027-08-31",
+   "activeSubstancesRaw": "paklobutrazol (25%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1040",
+   "name": "PALLAS 75 WG",
+   "registrationValidUntil": "2028-09-30",
+   "activeSubstancesRaw": "piroksulam (7,5%)",
+   "manufacturer": "CORTEVA Agrisciences Bulgaria EOOD",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1636",
+   "name": "PANORAMA",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "metkonazol (9%), protiokonazol (25%)",
+   "manufacturer": "GLOBACHEM NV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "613",
+   "name": "PEAK 75 WG",
+   "registrationValidUntil": "2027-06-15",
+   "activeSubstancesRaw": "prosulfuron (75%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1512",
+   "name": "PECARI 300 EC",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "protiokonazol (30%)",
+   "manufacturer": "GLOBACHEM NV",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "322",
+   "name": "PEPELIN WG",
+   "registrationValidUntil": "2028-07-31",
+   "activeSubstancesRaw": "žveplo (79,6%)",
+   "manufacturer": "Agrostulln Gmbh",
+   "representative": "CINKARNA CELJE, D.D."
+  },
+  {
+   "regsrCode": "1013",
+   "name": "PERGADO C",
+   "registrationValidUntil": "2029-06-30",
+   "activeSubstancesRaw": "bakrove spojine - bakrov oksiklorid (24,47%), mandipropamid (2,5%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1162",
+   "name": "PERGADO D",
+   "registrationValidUntil": "2026-12-31",
+   "activeSubstancesRaw": "mandipropamid (6,25%), ditianon (25%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "825",
+   "name": "PERGADO F",
+   "registrationValidUntil": "2029-06-30",
+   "activeSubstancesRaw": "mandipropamid (5%), folpet (40%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1462",
+   "name": "PERGADO SC",
+   "registrationValidUntil": "2026-12-31",
+   "activeSubstancesRaw": "mandipropamid (25%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1203",
+   "name": "PHOSTOXIN BAG / BAG BLANKET",
+   "registrationValidUntil": "2027-11-30",
+   "activeSubstancesRaw": "aluminijev fosfid (57%)",
+   "manufacturer": "Detia Freyberg GmbH",
+   "representative": "DDD, D.O.O. KOPER"
+  },
+  {
+   "regsrCode": "1201",
+   "name": "PHOSTOXIN PELETE",
+   "registrationValidUntil": "2027-11-30",
+   "activeSubstancesRaw": "aluminijev fosfid (56%)",
+   "manufacturer": "Detia Freyberg GmbH",
+   "representative": "DDD, D.O.O. KOPER"
+  },
+  {
+   "regsrCode": "339",
+   "name": "PIRIMOR 50 WG",
+   "registrationValidUntil": "2027-10-31",
+   "activeSubstancesRaw": "pirimikarb (50%)",
+   "manufacturer": "ADAMA Agriculture B.V.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1404",
+   "name": "PLANTELLA ARION",
+   "registrationValidUntil": "2027-08-31",
+   "activeSubstancesRaw": "metaldehid (3%)",
+   "manufacturer": "KOLLANT Srl",
+   "representative": "UNICHEM D.O.O."
+  },
+  {
+   "regsrCode": "624",
+   "name": "PLANTELLA RHIZOPON I",
+   "registrationValidUntil": "2027-03-15",
+   "activeSubstancesRaw": "IBA (0,5%)",
+   "manufacturer": "Rhizopon B.V. Nizozemska",
+   "representative": "UNICHEM D.O.O."
+  },
+  {
+   "regsrCode": "628",
+   "name": "PLANTELLA RHIZOPON II",
+   "registrationValidUntil": "2027-03-15",
+   "activeSubstancesRaw": "IBA (0,99%)",
+   "manufacturer": "Rhizopon B.V. Nizozemska",
+   "representative": "UNICHEM D.O.O."
+  },
+  {
+   "regsrCode": "629",
+   "name": "PLANTELLA RHIZOPON III",
+   "registrationValidUntil": "2027-03-15",
+   "activeSubstancesRaw": "IBA (0,2%)",
+   "manufacturer": "Rhizopon B.V. Nizozemska",
+   "representative": "UNICHEM D.O.O."
+  },
+  {
+   "regsrCode": "1678",
+   "name": "PLANTLINE C99",
+   "registrationValidUntil": "2038-04-30",
+   "activeSubstancesRaw": "ogljikov dioksid (99,9%)",
+   "manufacturer": "MESSER SLOVENIJA D.O.O.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1428",
+   "name": "PLANTLINE E4",
+   "registrationValidUntil": "2027-11-30",
+   "activeSubstancesRaw": "etilen (4%)",
+   "manufacturer": "MESSER SLOVENIJA D.O.O.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1325",
+   "name": "PMV-01",
+   "registrationValidUntil": "2031-08-07",
+   "activeSubstancesRaw": "Pepino mozaik virus sev CH2 izolat 1906 (100%)",
+   "manufacturer": "De Ceuster Meststoffen nv (DCM)",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "984",
+   "name": "POLECI",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "deltametrin (2,5%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1160",
+   "name": "POL-SULPHUR 80 WG",
+   "registrationValidUntil": "2028-07-31",
+   "activeSubstancesRaw": "žveplo (80%)",
+   "manufacturer": "QEMETICA Agricultural Solutions Poland S.A.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1159",
+   "name": "POL-SULPHUR 80 WP",
+   "registrationValidUntil": "2028-07-31",
+   "activeSubstancesRaw": "žveplo (80%)",
+   "manufacturer": "QEMETICA Agricultural Solutions Poland S.A.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1112",
+   "name": "POL-SULPHUR 800 SC",
+   "registrationValidUntil": "2028-07-31",
+   "activeSubstancesRaw": "žveplo (80%)",
+   "manufacturer": "QEMETICA Agricultural Solutions Poland S.A.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1419",
+   "name": "POLYVERSUM",
+   "registrationValidUntil": "2039-02-28",
+   "activeSubstancesRaw": "Pythium oligandrum sev M1 (25%)",
+   "manufacturer": "BIOPREPARATY, spol. s.r.o",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1167",
+   "name": "POLŽOKILL",
+   "registrationValidUntil": "2027-08-31",
+   "activeSubstancesRaw": "metaldehid (5%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "AGROPROAGRO, D.O.O."
+  },
+  {
+   "regsrCode": "1555",
+   "name": "POLŽOMOR BIO VABA ZA ZATIRANJE POLŽEV",
+   "registrationValidUntil": "2031-12-31",
+   "activeSubstancesRaw": "železov fosfat (0,99%)",
+   "manufacturer": "W. Neudorff GmbH KG",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1290",
+   "name": "POMAX",
+   "registrationValidUntil": "2027-09-30",
+   "activeSubstancesRaw": "pirimetanil (33,6%), fludioksonil (13,3%)",
+   "manufacturer": "GLOBACHEM NV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1453",
+   "name": "PRAKTIS",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "protiokonazol (25%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1723",
+   "name": "PRANAYAMA",
+   "registrationValidUntil": "2029-04-30",
+   "activeSubstancesRaw": "pirimetanil (40%)",
+   "manufacturer": "GLOBACHEM NV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1242",
+   "name": "PRESTOP",
+   "registrationValidUntil": "2035-03-31",
+   "activeSubstancesRaw": "Clonostachys rosea strain J1446 (Gliocladium catenulatum strain J1446) (32%)",
+   "manufacturer": "Danstar Ferment AG",
+   "representative": "METROB, D.O.O."
+  },
+  {
+   "regsrCode": "1601",
+   "name": "PRETIL",
+   "registrationValidUntil": "2029-04-30",
+   "activeSubstancesRaw": "pirimetanil (40%)",
+   "manufacturer": "ALBAUGH TKI D.O.O.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1489",
+   "name": "PREV-GOLD",
+   "registrationValidUntil": "2027-12-31",
+   "activeSubstancesRaw": "olje pomarancevca (5,9%)",
+   "manufacturer": "Oro Agri Europe S.A.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1490",
+   "name": "PREV-GOLD GARDEN",
+   "registrationValidUntil": "2027-12-31",
+   "activeSubstancesRaw": "olje pomarancevca (5,9%)",
+   "manufacturer": "Oro Agri Europe S.A.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "810",
+   "name": "PREVICUR ENERGY",
+   "registrationValidUntil": "2027-10-31",
+   "activeSubstancesRaw": "propamokarb (53%), fosetil (31%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1182",
+   "name": "PRIAXOR EC",
+   "registrationValidUntil": "2027-09-15",
+   "activeSubstancesRaw": "fluksapiroksad (7,5%), piraklostrobin (15%)",
+   "manufacturer": "BASF SE",
+   "representative": "SEMENARNA LJUBLJANA, D.O.O."
+  },
+  {
+   "regsrCode": "1123",
+   "name": "PRIMERO",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "nikosulfuron (4%)",
+   "manufacturer": "ALBAUGH TKI D.O.O.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1656",
+   "name": "PRIMSTAR",
+   "registrationValidUntil": "2028-02-15",
+   "activeSubstancesRaw": "florasulam (0,25%), fluroksipir (10%)",
+   "manufacturer": "CORTEVA Agrisciences Bulgaria EOOD",
+   "representative": "CORTEVA AGRISCIENCE SLO D.O.O."
+  },
+  {
+   "regsrCode": "1624",
+   "name": "PROBOSS",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "boskalid (23,3%), protiokonazol (10%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1474",
+   "name": "PROCER 300 EC",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "protiokonazol (30%)",
+   "manufacturer": "CAC Chemical GmbH",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "774",
+   "name": "PROFILER",
+   "registrationValidUntil": "2027-08-31",
+   "activeSubstancesRaw": "fosetil-Al (66,67%), fluopikolid (4,44%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1471",
+   "name": "PROFUME INSECTICIDE",
+   "registrationValidUntil": "2028-01-31",
+   "activeSubstancesRaw": "sulfuril fluorid (99,8%)",
+   "manufacturer": "Douglas Products & Packaging Co LLC",
+   "representative": "DDD, D.O.O. KOPER"
+  },
+  {
+   "regsrCode": "1226",
+   "name": "PROMAN",
+   "registrationValidUntil": "2028-05-31",
+   "activeSubstancesRaw": "metobromuron (50%)",
+   "manufacturer": "CERTIS BELCHIM BV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "354",
+   "name": "PROMANAL AF NEU",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "parafinsko olje (1,2%)",
+   "manufacturer": "W. Neudorff GmbH KG",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1473",
+   "name": "PROMINO 300 EC",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "protiokonazol (30%)",
+   "manufacturer": "CAC Chemical GmbH",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1634",
+   "name": "PROMINO XTRA",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "azoksistrobin (14%), protiokonazol (10%)",
+   "manufacturer": "CAC Chemical GmbH",
+   "representative": ""
+  },
+  {
+   "regsrCode": "359",
+   "name": "PROPLANT",
+   "registrationValidUntil": "2028-01-31",
+   "activeSubstancesRaw": "propamokarb hidroklorid (72,2%)",
+   "manufacturer": "Arysta LifeSciences Benelux SRL",
+   "representative": "UNICHEM D.O.O."
+  },
+  {
+   "regsrCode": "1324",
+   "name": "PROPULSE",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "fluopiram (12,5%), protiokonazol (12,5%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1267",
+   "name": "PRORADIX",
+   "registrationValidUntil": "2028-06-30",
+   "activeSubstancesRaw": "Pseudomonas sp. sev DSMZ 13134 (5,3%)",
+   "manufacturer": "SP Sourcon Padena GmbH",
+   "representative": ""
+  },
+  {
+   "regsrCode": "973",
+   "name": "PROSARO",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "protiokonazol (12,5%), tebukonazol (12,5%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1416",
+   "name": "PROSPER CS 300",
+   "registrationValidUntil": "2027-05-31",
+   "activeSubstancesRaw": "spiroksamin (30%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1461",
+   "name": "PROTENDO 300 EC",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "protiokonazol (30%)",
+   "manufacturer": "GLOBACHEM NV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1281",
+   "name": "PROXANIL 450 SC",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "propamokarb hidroklorid (40%), cimoksanil (5%)",
+   "manufacturer": "Arysta LifeSciences Benelux SRL",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1565",
+   "name": "PYGRAIN NEW",
+   "registrationValidUntil": "2027-06-15",
+   "activeSubstancesRaw": "piretrin (1,86%)",
+   "manufacturer": "Newpharm S.r.l.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1552",
+   "name": "PYRAMID",
+   "registrationValidUntil": "2029-04-30",
+   "activeSubstancesRaw": "pirimetanil (40%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "832",
+   "name": "PYRUS 400 SC",
+   "registrationValidUntil": "2029-04-30",
+   "activeSubstancesRaw": "pirimetanil (40%)",
+   "manufacturer": "Arysta LifeSciences Benelux SRL",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1446",
+   "name": "QUELEX",
+   "registrationValidUntil": "2026-08-05",
+   "activeSubstancesRaw": "halauksifen-metil (10,42%), florasulam (10%)",
+   "manufacturer": "CORTEVA Agrisciences Bulgaria EOOD",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1099",
+   "name": "QUICK 5 EC",
+   "registrationValidUntil": "2028-02-28",
+   "activeSubstancesRaw": "kvizalofop-p-etil (5%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1579",
+   "name": "QUICKPHOS BAGS",
+   "registrationValidUntil": "2027-11-30",
+   "activeSubstancesRaw": "aluminijev fosfid (56,34%)",
+   "manufacturer": "UPL Holdings Coöperatief U.A.",
+   "representative": "DDD, D.O.O. KOPER"
+  },
+  {
+   "regsrCode": "1143",
+   "name": "QUICKPHOS PELLETS 56 GE",
+   "registrationValidUntil": "2027-11-30",
+   "activeSubstancesRaw": "aluminijev fosfid (56%)",
+   "manufacturer": "UPL Holdings Coöperatief U.A.",
+   "representative": "DDD, D.O.O. KOPER"
+  },
+  {
+   "regsrCode": "1142",
+   "name": "QUICKPHOS TABLETS 56 GE",
+   "registrationValidUntil": "2027-11-30",
+   "activeSubstancesRaw": "aluminijev fosfid (56%)",
+   "manufacturer": "UPL Holdings Coöperatief U.A.",
+   "representative": "DDD, D.O.O. KOPER"
+  },
+  {
+   "regsrCode": "999",
+   "name": "RANMAN TOP",
+   "registrationValidUntil": "2026-07-31",
+   "activeSubstancesRaw": "ciazofamid (16%)",
+   "manufacturer": "ISK Bioscience Europe N.V.",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1314",
+   "name": "RAPSAN 500 SC",
+   "registrationValidUntil": "2027-10-31",
+   "activeSubstancesRaw": "metazaklor (50%)",
+   "manufacturer": "GLOBACHEM NV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1279",
+   "name": "RAPTOL KONCENTRAT",
+   "registrationValidUntil": "2027-06-15",
+   "activeSubstancesRaw": "piretrin (0,46%), olje navadne ogršcice (82,53%)",
+   "manufacturer": "W. Neudorff GmbH KG",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1263",
+   "name": "RAPTOL SPRAY",
+   "registrationValidUntil": "2027-06-15",
+   "activeSubstancesRaw": "piretrin (0%), olje navadne ogršcice (0,83%)",
+   "manufacturer": "W. Neudorff GmbH KG",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1264",
+   "name": "RAPTOL SPRAY AE",
+   "registrationValidUntil": "2027-06-15",
+   "activeSubstancesRaw": "piretrin (0%), olje navadne ogršcice (0,83%)",
+   "manufacturer": "W. Neudorff GmbH KG",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1695",
+   "name": "RASTI FERRO",
+   "registrationValidUntil": "2031-12-31",
+   "activeSubstancesRaw": "železov fosfat (2,97%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "METROB, D.O.O."
+  },
+  {
+   "regsrCode": "1400",
+   "name": "RATRON GW",
+   "registrationValidUntil": "2027-12-31",
+   "activeSubstancesRaw": "cinkov fosfid (2,5%)",
+   "manufacturer": "frunol delicia GmbH",
+   "representative": "RWA SLOVENIJA, D.O.O."
+  },
+  {
+   "regsrCode": "1319",
+   "name": "REBOOT",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "cimoksanil (33%), zoksamid (33%)",
+   "manufacturer": "Gowan Crop Protection Limited",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1364",
+   "name": "RED FOX",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "bakrove spojine - bakrov oksid (8,88%), parafinsko olje (54%)",
+   "manufacturer": "SOXSYS.COM s.r.l",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1379",
+   "name": "REDIGO M",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "metalaksil (2%), protiokonazol (10%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1240",
+   "name": "REDIGO PRO",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "protiokonazol (15%), tebukonazol (2%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1161",
+   "name": "REGALIS PLUS",
+   "registrationValidUntil": "2027-05-31",
+   "activeSubstancesRaw": "proheksadion-kalcij (10%)",
+   "manufacturer": "BASF SE",
+   "representative": "SEMENARNA LJUBLJANA, D.O.O."
+  },
+  {
+   "regsrCode": "1472",
+   "name": "REVIVE II",
+   "registrationValidUntil": "2027-11-15",
+   "activeSubstancesRaw": "emamektin (9,5%)",
+   "manufacturer": "SYNGENTA AGRO AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "769",
+   "name": "REVUS",
+   "registrationValidUntil": "2026-12-31",
+   "activeSubstancesRaw": "mandipropamid (25%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1454",
+   "name": "REVUS TOP",
+   "registrationValidUntil": "2026-12-31",
+   "activeSubstancesRaw": "mandipropamid (25%), difenokonazol (25%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1439",
+   "name": "REVYCARE",
+   "registrationValidUntil": "2026-09-15",
+   "activeSubstancesRaw": "mefentriflukonazol (10%), piraklostrobin (10%)",
+   "manufacturer": "BASF Agro B.V. Arnhem (NL) Freienbach Branch",
+   "representative": "SEMENARNA LJUBLJANA, D.O.O."
+  },
+  {
+   "regsrCode": "1551",
+   "name": "REVYONA",
+   "registrationValidUntil": "2030-03-20",
+   "activeSubstancesRaw": "mefentriflukonazol (7,5%)",
+   "manufacturer": "BASF SE",
+   "representative": "SEMENARNA LJUBLJANA, D.O.O."
+  },
+  {
+   "regsrCode": "1413",
+   "name": "REVYSTAR",
+   "registrationValidUntil": "2030-03-20",
+   "activeSubstancesRaw": "mefentriflukonazol (10%)",
+   "manufacturer": "BASF Agro B.V. Arnhem (NL) Freienbach Branch",
+   "representative": "SEMENARNA LJUBLJANA, D.O.O."
+  },
+  {
+   "regsrCode": "1457",
+   "name": "REVYSTAR XL",
+   "registrationValidUntil": "2028-10-31",
+   "activeSubstancesRaw": "mefentriflukonazol (10%), fluksapiroksad (5%)",
+   "manufacturer": "BASF Agro B.V. Arnhem (NL) Freienbach Branch",
+   "representative": "SEMENARNA LJUBLJANA, D.O.O."
+  },
+  {
+   "regsrCode": "1450",
+   "name": "REVYTREX",
+   "registrationValidUntil": "2028-10-31",
+   "activeSubstancesRaw": "mefentriflukonazol (6,67%), fluksapiroksad (6,67%)",
+   "manufacturer": "BASF Agro B.V. Arnhem (NL) Freienbach Branch",
+   "representative": "SEMENARNA LJUBLJANA, D.O.O."
+  },
+  {
+   "regsrCode": "1649",
+   "name": "RIDOMIL GOLD R",
+   "registrationValidUntil": "2026-12-31",
+   "activeSubstancesRaw": "metalaksil-M (1,94%), bakrove spojine - bakrov oksiklorid (14,19%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1437",
+   "name": "RIM 25 WG",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "rimsulfuron (25%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1484",
+   "name": "RIMURON 25 WG",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "rimsulfuron (25%)",
+   "manufacturer": "CAC Chemical GmbH",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1395",
+   "name": "RINCON 25 SG",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "rimsulfuron (25%)",
+   "manufacturer": "INNVIGO Sp. z.o.o.",
+   "representative": "AGROPROAGRO, D.O.O."
+  },
+  {
+   "regsrCode": "1483",
+   "name": "RINIDI WG",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "nikosulfuron (9,2%), dikamba (55%), rimsulfuron (2,3%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1355",
+   "name": "RIVAL",
+   "registrationValidUntil": "2028-01-31",
+   "activeSubstancesRaw": "propamokarb (60,7%)",
+   "manufacturer": "AGRIA S.A.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1358",
+   "name": "RIVAL DUO",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "propamokarb hidroklorid (40%), cimoksanil (5%)",
+   "manufacturer": "AGRIA S.A.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1569",
+   "name": "RODEO PLUS",
+   "registrationValidUntil": "2027-05-31",
+   "activeSubstancesRaw": "glifosat v obliki kalijeve soli (44,1%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1611",
+   "name": "ROUNDUP DYNAMIC",
+   "registrationValidUntil": "2027-06-30",
+   "activeSubstancesRaw": "glifosat v obliki kalijeve soli (61,3%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "696",
+   "name": "ROUNDUP ENERGY",
+   "registrationValidUntil": "2027-06-30",
+   "activeSubstancesRaw": "glifosat v obliki kalijeve soli (55,1%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1253",
+   "name": "ROUNDUP STAR",
+   "registrationValidUntil": "2027-06-30",
+   "activeSubstancesRaw": "glifosat v obliki kalijeve soli (44,1%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1447",
+   "name": "ROYALTY",
+   "registrationValidUntil": "2027-04-15",
+   "activeSubstancesRaw": "boskalid (50%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1084",
+   "name": "SACRON 45 DG",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "cimoksanil (45%)",
+   "manufacturer": "UPL Holdings Coöperatief U.A.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1056",
+   "name": "SAMSON 4 SC",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "nikosulfuron (4%)",
+   "manufacturer": "ISK Bioscience Europe N.V.",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "983",
+   "name": "SAMSON EXTRA 6 OD",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "nikosulfuron (6%)",
+   "manufacturer": "ISK Bioscience Europe N.V.",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "884",
+   "name": "SAPROL PROTI BOLEZNIM VRTNIC",
+   "registrationValidUntil": "2028-01-31",
+   "activeSubstancesRaw": "tritikonazol (1%)",
+   "manufacturer": "Evergreen Garden Care Poland Sp. z o. o.",
+   "representative": "SILK D.O.O."
+  },
+  {
+   "regsrCode": "963",
+   "name": "SAVVY",
+   "registrationValidUntil": "2027-08-31",
+   "activeSubstancesRaw": "metsulfuron-metil (20%)",
+   "manufacturer": "ALBAUGH TKI D.O.O.",
+   "representative": "ALBAUGH TKI D.O.O."
+  },
+  {
+   "regsrCode": "1200",
+   "name": "SCAB 480 SC",
+   "registrationValidUntil": "2028-10-31",
+   "activeSubstancesRaw": "kaptan (48%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1146",
+   "name": "SCAB 80 WG",
+   "registrationValidUntil": "2028-10-31",
+   "activeSubstancesRaw": "kaptan (80%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "METROB, D.O.O."
+  },
+  {
+   "regsrCode": "1219",
+   "name": "SCALA",
+   "registrationValidUntil": "2029-04-30",
+   "activeSubstancesRaw": "pirimetanil (40%)",
+   "manufacturer": "BASF SE",
+   "representative": "SEMENARNA LJUBLJANA, D.O.O."
+  },
+  {
+   "regsrCode": "1687",
+   "name": "SCATTO",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "deltametrin (2,5%)",
+   "manufacturer": "Gowan Crop Protection Limited",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "396",
+   "name": "SCORE 250 EC",
+   "registrationValidUntil": "2027-03-15",
+   "activeSubstancesRaw": "difenokonazol (25%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "699",
+   "name": "SEKATOR OD",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "amidosulfuron (10%), jodosulfuron (jodosulfuron-metil natrij) (2,5%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1431",
+   "name": "SEKATOR PLUS",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "2,4-D (28,7%), amidosulfuron (2,5%), jodosulfuron (jodosulfuron-metil natrij) (0,63%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1449",
+   "name": "SELECT SUPER",
+   "registrationValidUntil": "2027-08-31",
+   "activeSubstancesRaw": "kletodim (12%)",
+   "manufacturer": "Arysta LifeScience S.A.S.",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1322",
+   "name": "SemiosNET-Codling Moth",
+   "registrationValidUntil": "2027-09-01",
+   "activeSubstancesRaw": "(E,E)-8,10-dodekadien-1-ol (codlemone) (18,05%)",
+   "manufacturer": "SemiosBIO Technologies B.V.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1215",
+   "name": "SERCADIS",
+   "registrationValidUntil": "2028-10-31",
+   "activeSubstancesRaw": "fluksapiroksad (30%)",
+   "manufacturer": "BASF SE",
+   "representative": "SEMENARNA LJUBLJANA, D.O.O."
+  },
+  {
+   "regsrCode": "1331",
+   "name": "SERCADIS PLUS",
+   "registrationValidUntil": "2028-10-31",
+   "activeSubstancesRaw": "difenokonazol (5%), fluksapiroksad (7,5%)",
+   "manufacturer": "BASF Agro B.V. Arnhem (NL) Freienbach Branch",
+   "representative": "SEMENARNA LJUBLJANA, D.O.O."
+  },
+  {
+   "regsrCode": "1094",
+   "name": "SERENADE ASO",
+   "registrationValidUntil": "2028-06-30",
+   "activeSubstancesRaw": "Bacillus amyloliquefaciens (prej subtilis) sev QST 713 (1,4%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1132",
+   "name": "SHARPEN 33 EC",
+   "registrationValidUntil": "2027-01-15",
+   "activeSubstancesRaw": "pendimetalin (33%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "METROB, D.O.O."
+  },
+  {
+   "regsrCode": "1131",
+   "name": "SHARPEN PLUS",
+   "registrationValidUntil": "2027-01-15",
+   "activeSubstancesRaw": "pendimetalin (40%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1629",
+   "name": "SHENZI 200 SC",
+   "registrationValidUntil": "2028-05-31",
+   "activeSubstancesRaw": "klorantraniliprol (20%)",
+   "manufacturer": "FMC IP Technology LLC, Vernier Branch",
+   "representative": "SEMENARNA LJUBLJANA, D.O.O."
+  },
+  {
+   "regsrCode": "520",
+   "name": "SHIRLAN 500 SC",
+   "registrationValidUntil": "2027-04-15",
+   "activeSubstancesRaw": "fluazinam (50%)",
+   "manufacturer": "ISK Bioscience Europe N.V.",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1010",
+   "name": "SHIRUDO (staro ime MASAI)",
+   "registrationValidUntil": "2028-01-31",
+   "activeSubstancesRaw": "tebufenpirad (20%)",
+   "manufacturer": "CERTIS BELCHIM BV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1658",
+   "name": "SHOORI",
+   "registrationValidUntil": "2027-11-30",
+   "activeSubstancesRaw": "flonikamid (10%)",
+   "manufacturer": "ISK Bioscience Europe N.V.",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1027",
+   "name": "SHYFO",
+   "registrationValidUntil": "2027-06-30",
+   "activeSubstancesRaw": "glifosat v obliki izopropilamino soli (48,5%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "METROB, D.O.O."
+  },
+  {
+   "regsrCode": "1195",
+   "name": "SIGNAL 300 ES",
+   "registrationValidUntil": "2029-01-31",
+   "activeSubstancesRaw": "cipermetrin (30%)",
+   "manufacturer": "UPL Holdings Coöperatief U.A.",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "994",
+   "name": "SIGNUM",
+   "registrationValidUntil": "2026-09-15",
+   "activeSubstancesRaw": "boskalid (26,7%), piraklostrobin (6,7%)",
+   "manufacturer": "BASF SE",
+   "representative": "SEMENARNA LJUBLJANA, D.O.O."
+  },
+  {
+   "regsrCode": "1018",
+   "name": "SILICOSEC",
+   "registrationValidUntil": "2037-01-31",
+   "activeSubstancesRaw": "diatomejska zemlja (100%)",
+   "manufacturer": "Biofa Gmbh",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1303",
+   "name": "SILTRA XPRO",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "biksafen (6%), protiokonazol (20%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1717",
+   "name": "SIMPRO",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "propamokarb hidroklorid (40%), cimoksanil (5%)",
+   "manufacturer": "Sharda Cropchem Espana S.L.",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1456",
+   "name": "SINOPIA",
+   "registrationValidUntil": "2027-09-30",
+   "activeSubstancesRaw": "metobromuron (40%), klomazon (2,4%)",
+   "manufacturer": "CERTIS BELCHIM BV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1307",
+   "name": "SISAM",
+   "registrationValidUntil": "2026-12-09",
+   "activeSubstancesRaw": "mandestrobin (25%)",
+   "manufacturer": "Sumitomo Chemical Agro Europe S.A.S.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1598",
+   "name": "SITOFEX",
+   "registrationValidUntil": "2034-05-31",
+   "activeSubstancesRaw": "forklorfenuron (1%)",
+   "manufacturer": "AlzChem Trostberg GmbH",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1347",
+   "name": "SIVANTO PRIME",
+   "registrationValidUntil": "2030-06-09",
+   "activeSubstancesRaw": "flupiradifuron (20%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1639",
+   "name": "SLIPSTREAM",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "metkonazol (9%), protiokonazol (25%)",
+   "manufacturer": "GLOBACHEM NV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1275",
+   "name": "SMARTFRESH PROTABS",
+   "registrationValidUntil": "2035-07-31",
+   "activeSubstancesRaw": "1-metilciklopropen (2%)",
+   "manufacturer": "AgroFresh Holding France S.A.S.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1513",
+   "name": "SOILGUARD 0.5 GR",
+   "registrationValidUntil": "2028-05-31",
+   "activeSubstancesRaw": "teflutrin (0,5%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1406",
+   "name": "SOLABIOL PROTI POLŽEM",
+   "registrationValidUntil": "2031-12-31",
+   "activeSubstancesRaw": "železov fosfat (0,99%)",
+   "manufacturer": "W. Neudorff GmbH KG",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1645",
+   "name": "SORATEL",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "protiokonazol (25%)",
+   "manufacturer": "ADAMA Agriculture B.V.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1351",
+   "name": "SORIALE LX",
+   "registrationValidUntil": "2027-01-31",
+   "activeSubstancesRaw": "kalijevi fosfonati (75,5%)",
+   "manufacturer": "LUXEMBOURG PAMOL (CYPRUS) LTD",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1251",
+   "name": "SPANDIS",
+   "registrationValidUntil": "2027-06-15",
+   "activeSubstancesRaw": "nikosulfuron (10%), prosulfuron (4%), dikamba (40%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1585",
+   "name": "SPIROX",
+   "registrationValidUntil": "2027-05-31",
+   "activeSubstancesRaw": "spiroksamin (50%)",
+   "manufacturer": "Arysta LifeSciences Benelux SRL",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1346",
+   "name": "SPIROX D",
+   "registrationValidUntil": "2027-03-15",
+   "activeSubstancesRaw": "difenokonazol (5%), spiroksamin (40%)",
+   "manufacturer": "Arysta LifeSciences Benelux SRL",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1630",
+   "name": "SPORAX",
+   "registrationValidUntil": "2028-01-31",
+   "activeSubstancesRaw": "propamokarb hidroklorid (72,2%)",
+   "manufacturer": "GLOBACHEM NV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1720",
+   "name": "SPOTLIGHT PLUS (4)",
+   "registrationValidUntil": "2026-09-14",
+   "activeSubstancesRaw": "karfentrazon etil (6%)",
+   "manufacturer": "FMC AGRO ITALIA S.r.l",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1641",
+   "name": "STABILAN 400",
+   "registrationValidUntil": "2028-02-28",
+   "activeSubstancesRaw": "klormekvat klorid (40%)",
+   "manufacturer": "NUFARM GmbH & Co KG",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1207",
+   "name": "STABILAN 750 SL",
+   "registrationValidUntil": "2028-02-28",
+   "activeSubstancesRaw": "klormekvat klorid (75%)",
+   "manufacturer": "NUFARM GmbH & Co KG",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1100",
+   "name": "STALLION SYNC TEC",
+   "registrationValidUntil": "2027-09-30",
+   "activeSubstancesRaw": "pendimetalin (33,3%), klomazon (3%)",
+   "manufacturer": "FMC Agricultural Solutions A/S",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1635",
+   "name": "STAMPA",
+   "registrationValidUntil": "2027-09-30",
+   "activeSubstancesRaw": "fludioksonil (50%)",
+   "manufacturer": "GLOBACHEM NV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1221",
+   "name": "STARANE FORTE",
+   "registrationValidUntil": "2028-02-15",
+   "activeSubstancesRaw": "fluroksipir (33,3%)",
+   "manufacturer": "CORTEVA Agrisciences Bulgaria EOOD",
+   "representative": "CORTEVA AGRISCIENCE SLO D.O.O."
+  },
+  {
+   "regsrCode": "1009",
+   "name": "STOMP AQUA",
+   "registrationValidUntil": "2027-01-15",
+   "activeSubstancesRaw": "pendimetalin (45,5%)",
+   "manufacturer": "BASF Agro B.V. Arnhem (NL) Freienbach Branch",
+   "representative": "SEMENARNA LJUBLJANA, D.O.O."
+  },
+  {
+   "regsrCode": "1391",
+   "name": "STRETCH",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "nikosulfuron (4%)",
+   "manufacturer": "AGRIA S.A.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1097",
+   "name": "SUBSTRAL 2V1",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "2,4-D (0,8%), dikamba (0,12%)",
+   "manufacturer": "Evergreen Garden Care Österreich GmbH",
+   "representative": "SILK D.O.O."
+  },
+  {
+   "regsrCode": "824",
+   "name": "SUBSTRAL 3V1",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "MCPA (0,49%), mekoprop - P (MCPP-P) (0,29%), železov sulfat (18,2%)",
+   "manufacturer": "Evergreen Garden Care Poland Sp. z o. o.",
+   "representative": "SILK D.O.O."
+  },
+  {
+   "regsrCode": "612",
+   "name": "SUCCESSOR 600",
+   "registrationValidUntil": "2027-11-30",
+   "activeSubstancesRaw": "petoksamid (60%)",
+   "manufacturer": "FMC Agricultural Solutions A/S",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1578",
+   "name": "SULFAR",
+   "registrationValidUntil": "2028-07-31",
+   "activeSubstancesRaw": "žveplo (80%)",
+   "manufacturer": "UPL Holdings Coöperatief U.A.",
+   "representative": "SEMENARNA LJUBLJANA, D.O.O."
+  },
+  {
+   "regsrCode": "1602",
+   "name": "SUNDA",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "fenoksaprop-P-etil (6,9%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1663",
+   "name": "SURRENDER",
+   "registrationValidUntil": "2027-09-30",
+   "activeSubstancesRaw": "fludioksonil (10%)",
+   "manufacturer": "GLOBACHEM NV",
+   "representative": ""
+  },
+  {
+   "regsrCode": "420",
+   "name": "SWITCH 62,5 WG",
+   "registrationValidUntil": "2027-09-30",
+   "activeSubstancesRaw": "ciprodinil (37,5%), fludioksonil (25%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "522",
+   "name": "SYLLIT 400 SC",
+   "registrationValidUntil": "2027-07-15",
+   "activeSubstancesRaw": "dodin (40%)",
+   "manufacturer": "Arysta LifeSciences Benelux SRL",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1280",
+   "name": "SYLLIT 544 SC",
+   "registrationValidUntil": "2027-07-15",
+   "activeSubstancesRaw": "dodin (54,4%)",
+   "manufacturer": "Arysta LifeSciences Benelux SRL",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1415",
+   "name": "TAEGRO",
+   "registrationValidUntil": "2033-06-01",
+   "activeSubstancesRaw": "Bacillus amyloliquefaciens sev FZB24 (13%)",
+   "manufacturer": "Novonesis Plant Biosolutions A/S",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1032",
+   "name": "TAJFUN 360",
+   "registrationValidUntil": "2027-09-30",
+   "activeSubstancesRaw": "glifosat v obliki izopropilamino soli (48,54%)",
+   "manufacturer": "ADAMA Agriculture B.V.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "912",
+   "name": "TALENDO",
+   "registrationValidUntil": "2027-05-15",
+   "activeSubstancesRaw": "prokvinazid (20%)",
+   "manufacturer": "CORTEVA Agrisciences Bulgaria EOOD",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1116",
+   "name": "TALENDO EXTRA",
+   "registrationValidUntil": "2027-05-15",
+   "activeSubstancesRaw": "prokvinazid (16%), tetrakonazol (8%)",
+   "manufacturer": "CORTEVA Agrisciences Bulgaria EOOD",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1250",
+   "name": "TALISMAN",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "nikosulfuron (4%)",
+   "manufacturer": "GALENIKA FITOFARMACIJA A.D.",
+   "representative": "GALENIKA-FITOFARMACIJA D.O.O."
+  },
+  {
+   "regsrCode": "1271",
+   "name": "TARCZA 060 FS",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "tebukonazol (6%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1268",
+   "name": "TARGA SUPER",
+   "registrationValidUntil": "2028-02-28",
+   "activeSubstancesRaw": "kvizalofop-p-etil (5%)",
+   "manufacturer": "Nissan Chemical Europe S.A.S.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "424",
+   "name": "TAROT 25 WG",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "rimsulfuron (25%)",
+   "manufacturer": "CORTEVA Agrisciences Bulgaria EOOD",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1581",
+   "name": "TARTAROS",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "protiokonazol (30%)",
+   "manufacturer": "CAC Chemical GmbH",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1668",
+   "name": "TARZEC",
+   "registrationValidUntil": "2028-09-30",
+   "activeSubstancesRaw": "halauksifen-metil (6,95%), piroksulam (25%)",
+   "manufacturer": "CORTEVA Agrisciences Bulgaria EOOD",
+   "representative": "CORTEVA AGRISCIENCE SLO D.O.O."
+  },
+  {
+   "regsrCode": "1070",
+   "name": "TAZER 250 SC",
+   "registrationValidUntil": "2028-05-31",
+   "activeSubstancesRaw": "azoksistrobin (25%)",
+   "manufacturer": "NUFARM GmbH & Co KG",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1191",
+   "name": "TBM 75 WG",
+   "registrationValidUntil": "2035-01-30",
+   "activeSubstancesRaw": "tribenuron-metil (75%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1574",
+   "name": "TEBKIN",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "tebukonazol (25%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1262",
+   "name": "TEBSEME",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "tebukonazol (2,5%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "METROB, D.O.O."
+  },
+  {
+   "regsrCode": "1003",
+   "name": "TEBUSHA 25% EW",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "tebukonazol (25%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1542",
+   "name": "TEFLIX",
+   "registrationValidUntil": "2028-05-31",
+   "activeSubstancesRaw": "teflutrin (1,5%)",
+   "manufacturer": "GLOBACHEM NV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "426",
+   "name": "TELDOR SC 500",
+   "registrationValidUntil": "2031-12-31",
+   "activeSubstancesRaw": "fenheksamid (50%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1179",
+   "name": "TEMSA SC",
+   "registrationValidUntil": "2033-05-31",
+   "activeSubstancesRaw": "mezotrion (10%)",
+   "manufacturer": "GLOBACHEM NV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "747",
+   "name": "TEPPEKI",
+   "registrationValidUntil": "2027-11-30",
+   "activeSubstancesRaw": "flonikamid (50%)",
+   "manufacturer": "ISK Bioscience Europe N.V.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "735",
+   "name": "TERIDOX 500 EC",
+   "registrationValidUntil": "2027-10-15",
+   "activeSubstancesRaw": "dimetaklor (50%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1224",
+   "name": "TERMINATOR PLUS INSEKTICID ZA RASTLINE",
+   "registrationValidUntil": "2027-06-15",
+   "activeSubstancesRaw": "piretrin (0,2%)",
+   "manufacturer": "COPYR S.p.A.",
+   "representative": "BIOTEH D.O.O."
+  },
+  {
+   "regsrCode": "1317",
+   "name": "TERMINATOR PLUS VABA ZA POLŽE",
+   "registrationValidUntil": "2027-08-31",
+   "activeSubstancesRaw": "metaldehid (5%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "BIOTEH D.O.O."
+  },
+  {
+   "regsrCode": "1411",
+   "name": "TERN",
+   "registrationValidUntil": "2028-05-15",
+   "activeSubstancesRaw": "fenpropidin (75%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1700",
+   "name": "THIOVIT GOLD",
+   "registrationValidUntil": "2027-07-31",
+   "activeSubstancesRaw": "žveplo (80%)",
+   "manufacturer": "UPL Holdings Coöperatief U.A.",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "654",
+   "name": "THIOVIT JET",
+   "registrationValidUntil": "2028-07-31",
+   "activeSubstancesRaw": "žveplo (80%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1648",
+   "name": "TIMELINE FX",
+   "registrationValidUntil": "2027-06-30",
+   "activeSubstancesRaw": "florasulam (0,18%), fluroksipir (7,5%), pinoksaden (3%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "442",
+   "name": "TOLUREX 50 SC",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "klorotoluron (50%)",
+   "manufacturer": "ADAMA Agriculture B.V.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "444",
+   "name": "TOPAS 100 EC",
+   "registrationValidUntil": "2027-10-15",
+   "activeSubstancesRaw": "penkonazol (10%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "523",
+   "name": "TOUCHDOWN SYSTEM 4",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "glifosat (v obliki amonijeve soli) (36%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1718",
+   "name": "TREBON 30 EC",
+   "registrationValidUntil": "2026-09-28",
+   "activeSubstancesRaw": "etofenproks (28,75%)",
+   "manufacturer": "",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1376",
+   "name": "TREPACH",
+   "registrationValidUntil": "2028-02-28",
+   "activeSubstancesRaw": "kvizalofop-p-etil (5%)",
+   "manufacturer": "AGRIA S.A.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "728",
+   "name": "TRICO",
+   "registrationValidUntil": "2027-11-01",
+   "activeSubstancesRaw": "olje na osnovi ovcje mašcobe (6,46%)",
+   "manufacturer": "Kwizda Agro GmbH",
+   "representative": "RWA SLOVENIJA, D.O.O."
+  },
+  {
+   "regsrCode": "1573",
+   "name": "TRIKA EXPERT",
+   "registrationValidUntil": "2027-08-31",
+   "activeSubstancesRaw": "lambda-cihalotrin (0,4%)",
+   "manufacturer": "SIPCAM OXON S.p.A.",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1621",
+   "name": "TRINEXT",
+   "registrationValidUntil": "2028-04-30",
+   "activeSubstancesRaw": "trineksapak-etil (25%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1144",
+   "name": "TRINITY",
+   "registrationValidUntil": "2027-01-15",
+   "activeSubstancesRaw": "pendimetalin (30%), klorotoluron (25%), diflufenikan (4%)",
+   "manufacturer": "ADAMA Agriculture B.V.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "455",
+   "name": "U 46 M-FLUID",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "MCPA-DMA (94,3%)",
+   "manufacturer": "NUFARM GmbH & Co KG",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1401",
+   "name": "UNICORN DF",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "tebukonazol (4,5%), žveplo (70%)",
+   "manufacturer": "NUFARM GmbH & Co KG",
+   "representative": ""
+  },
+  {
+   "regsrCode": "694",
+   "name": "UNIVERSALIS",
+   "registrationValidUntil": "2028-05-31",
+   "activeSubstancesRaw": "azoksistrobin (9,35%), folpet (50%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1440",
+   "name": "UNIVERZALNI FUNGICID",
+   "registrationValidUntil": "2039-02-28",
+   "activeSubstancesRaw": "Pythium oligandrum sev M1 (25%)",
+   "manufacturer": "BIOPREPARATY, spol. s.r.o",
+   "representative": "UNICHEM D.O.O."
+  },
+  {
+   "regsrCode": "1685",
+   "name": "VACCIPLANT",
+   "registrationValidUntil": "2034-02-28",
+   "activeSubstancesRaw": "laminarin (4,5%)",
+   "manufacturer": "Laboratoires Goëmar SAS",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1482",
+   "name": "VALENTIA",
+   "registrationValidUntil": "2028-02-15",
+   "activeSubstancesRaw": "florasulam (0,2%), fluroksipir (10%)",
+   "manufacturer": "Barclay Chemicals Manufacturing Ltd, Damastown Way, Damastown Industrial Park",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1002",
+   "name": "VALIS F",
+   "registrationValidUntil": "2028-03-01",
+   "activeSubstancesRaw": "valifenalat (6%), folpet (48%)",
+   "manufacturer": "CERTIS BELCHIM BV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1480",
+   "name": "VELOSTAR",
+   "registrationValidUntil": "2028-05-31",
+   "activeSubstancesRaw": "azoksistrobin (25,01%)",
+   "manufacturer": "SINON EU GmbH",
+   "representative": "VELOX, D.O.O."
+  },
+  {
+   "regsrCode": "1208",
+   "name": "VELUM PRIME",
+   "registrationValidUntil": "2027-06-30",
+   "activeSubstancesRaw": "fluopiram (40%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1545",
+   "name": "VERBEN",
+   "registrationValidUntil": "2026-08-15",
+   "activeSubstancesRaw": "prokvinazid (5%), protiokonazol (20%)",
+   "manufacturer": "CORTEVA Agrisciences Bulgaria EOOD",
+   "representative": "CORTEVA AGRISCIENCE SLO D.O.O."
+  },
+  {
+   "regsrCode": "1481",
+   "name": "VERTIPIN",
+   "registrationValidUntil": "2028-07-31",
+   "activeSubstancesRaw": "žveplo (70%)",
+   "manufacturer": "ACTION PIN",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1564",
+   "name": "VICTUS OD",
+   "registrationValidUntil": "2028-03-31",
+   "activeSubstancesRaw": "nikosulfuron (4%)",
+   "manufacturer": "CORTEVA Agrisciences Bulgaria EOOD",
+   "representative": "CORTEVA AGRISCIENCE SLO D.O.O."
+  },
+  {
+   "regsrCode": "1218",
+   "name": "VIDERYO F",
+   "registrationValidUntil": "2027-02-15",
+   "activeSubstancesRaw": "ciazofamid (4%), folpet (40%)",
+   "manufacturer": "ISK Bioscience Europe N.V.",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1233",
+   "name": "VINCYA F",
+   "registrationValidUntil": "2027-02-15",
+   "activeSubstancesRaw": "ciazofamid (4%), folpet (40%)",
+   "manufacturer": "ISK Bioscience Europe N.V.",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "672",
+   "name": "VINDEX 80 WG",
+   "registrationValidUntil": "2028-07-31",
+   "activeSubstancesRaw": "žveplo (79,6%)",
+   "manufacturer": "Agrostulln Gmbh",
+   "representative": "VELOX, D.O.O."
+  },
+  {
+   "regsrCode": "1418",
+   "name": "VINTEC",
+   "registrationValidUntil": "2032-07-06",
+   "activeSubstancesRaw": "Trichoderma atroviride sev SC1 (15%)",
+   "manufacturer": "BiPA nv",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1158",
+   "name": "VITISAN",
+   "registrationValidUntil": "2026-10-31",
+   "activeSubstancesRaw": "kalijev hidrogen karbonat (99,49%)",
+   "manufacturer": "Biofa Gmbh",
+   "representative": "METROB, D.O.O."
+  },
+  {
+   "regsrCode": "1606",
+   "name": "VITROL GB",
+   "registrationValidUntil": "2036-08-03",
+   "activeSubstancesRaw": "železov pirofosfat (2,4%)",
+   "manufacturer": "",
+   "representative": "MATJAŽ ZUPANCIC S.P."
+  },
+  {
+   "regsrCode": "816",
+   "name": "VIVANDO",
+   "registrationValidUntil": "2028-10-31",
+   "activeSubstancesRaw": "metrafenon (50%)",
+   "manufacturer": "BASF SE",
+   "representative": "SEMENARNA LJUBLJANA, D.O.O."
+  },
+  {
+   "regsrCode": "1528",
+   "name": "VOLIAM",
+   "registrationValidUntil": "2028-05-31",
+   "activeSubstancesRaw": "klorantraniliprol (20%)",
+   "manufacturer": "FMC IP Technology LLC, Vernier Branch",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1133",
+   "name": "WINBY",
+   "registrationValidUntil": "2027-04-15",
+   "activeSubstancesRaw": "fluazinam (50%)",
+   "manufacturer": "ISK Bioscience Europe N.V.",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1443",
+   "name": "WISH TOP",
+   "registrationValidUntil": "2028-02-28",
+   "activeSubstancesRaw": "kvizalofop-p-etil (12%)",
+   "manufacturer": "Sharda Cropchem Limited",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1048",
+   "name": "WÖBRA",
+   "registrationValidUntil": "2026-08-31",
+   "activeSubstancesRaw": "kremenov pesek (47,52%)",
+   "manufacturer": "Flügel GmbH",
+   "representative": "CAREX, D.O.O."
+  },
+  {
+   "regsrCode": "1107",
+   "name": "WÜLFEL VABA ZA VOLUHARJA",
+   "registrationValidUntil": "2027-12-31",
+   "activeSubstancesRaw": "cinkov fosfid (2,4%)",
+   "manufacturer": "Chemishe Fabrik Wülfel GmbH&Co.KG",
+   "representative": "METROB, D.O.O."
+  },
+  {
+   "regsrCode": "1374",
+   "name": "XANADU",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "metsulfuron-metil (4%), bensulfuron-metil (50%)",
+   "manufacturer": "UPL Holdings Coöperatief U.A.",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1432",
+   "name": "XILON",
+   "registrationValidUntil": "2026-10-31",
+   "activeSubstancesRaw": "Trichoderma asperellum sev T34 (1%)",
+   "manufacturer": "Kwizda Agro GmbH",
+   "representative": ""
+  },
+  {
+   "regsrCode": "1725",
+   "name": "YUKON",
+   "registrationValidUntil": "2028-07-31",
+   "activeSubstancesRaw": "bakrove spojine - trivalentni bakrov sulfat (8%), žveplo (64%)",
+   "manufacturer": "UPL Holdings Coöperatief U.A.",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1289",
+   "name": "ZAFTRA AZT 250 SC",
+   "registrationValidUntil": "2028-05-31",
+   "activeSubstancesRaw": "azoksistrobin (25%)",
+   "manufacturer": "Syngenta Crop Protection AG",
+   "representative": "SYNGENTA AGRO D.O.O."
+  },
+  {
+   "regsrCode": "1522",
+   "name": "ZAMZAR",
+   "registrationValidUntil": "2028-02-28",
+   "activeSubstancesRaw": "kvizalofop-p-etil (5%)",
+   "manufacturer": "GALENIKA FITOFARMACIJA A.D.",
+   "representative": "GALENIKA-FITOFARMACIJA D.O.O."
+  },
+  {
+   "regsrCode": "1217",
+   "name": "ZANTARA",
+   "registrationValidUntil": "2027-08-15",
+   "activeSubstancesRaw": "tebukonazol (16,6%), biksafen (5%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "465",
+   "name": "ZATO 50 WG",
+   "registrationValidUntil": "2034-07-31",
+   "activeSubstancesRaw": "trifloksistrobin (50%)",
+   "manufacturer": "Bayer AG, Leverkusen",
+   "representative": "BAYER D.O.O."
+  },
+  {
+   "regsrCode": "1410",
+   "name": "ZENBY",
+   "registrationValidUntil": "2027-09-15",
+   "activeSubstancesRaw": "izofetamid (40%)",
+   "manufacturer": "ISK Bioscience Europe N.V.",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1632",
+   "name": "ZEPPOS",
+   "registrationValidUntil": "2033-03-31",
+   "activeSubstancesRaw": "jodosulfuron (jodosulfuron-metil natrij) (0,6%), mezosulfuron (3%)",
+   "manufacturer": "GLOBACHEM NV",
+   "representative": "CERTIS BELCHIM SI D.O.O."
+  },
+  {
+   "regsrCode": "1282",
+   "name": "ZETROLA",
+   "registrationValidUntil": "2028-02-28",
+   "activeSubstancesRaw": "propakvizafop (10%)",
+   "manufacturer": "ADAMA Agriculture B.V.",
+   "representative": "KARSIA D.O.O."
+  },
+  {
+   "regsrCode": "1435",
+   "name": "ZIGNAL SUPER",
+   "registrationValidUntil": "2027-04-15",
+   "activeSubstancesRaw": "azoksistrobin (15%), fluazinam (37,5%)",
+   "manufacturer": "FMC Agricultural Solutions A/S",
+   "representative": "PICOUNT D.O.O."
+  },
+  {
+   "regsrCode": "1605",
+   "name": "ZORVEC ENTECTA",
+   "registrationValidUntil": "2027-09-15",
+   "activeSubstancesRaw": "amisulbrom (24%), oksatiapiprolin (4,8%)",
+   "manufacturer": "CORTEVA Agrisciences Bulgaria EOOD",
+   "representative": "CORTEVA AGRISCIENCE SLO D.O.O."
+  },
+  {
+   "regsrCode": "1593",
+   "name": "ZORVEC VINABEL",
+   "registrationValidUntil": "2028-03-03",
+   "activeSubstancesRaw": "oksatiapiprolin (4%), zoksamid (30%)",
+   "manufacturer": "CORTEVA Agrisciences Bulgaria EOOD",
+   "representative": "CORTEVA AGRISCIENCE SLO D.O.O."
+  },
+  {
+   "regsrCode": "1467",
+   "name": "ZORVEC ZELAVIN",
+   "registrationValidUntil": "2028-03-03",
+   "activeSubstancesRaw": "oksatiapiprolin (10%)",
+   "manufacturer": "CORTEVA Agrisciences Bulgaria EOOD",
+   "representative": "CORTEVA AGRISCIENCE SLO D.O.O."
+  },
+  {
+   "regsrCode": "1330",
+   "name": "ZOXIS 250 SC",
+   "registrationValidUntil": "2028-05-31",
+   "activeSubstancesRaw": "azoksistrobin (25%)",
+   "manufacturer": "Arysta LifeSciences Benelux SRL",
+   "representative": "PICOUNT D.O.O."
+  }
+ ],
+ "productDetails": [
+  {
+   "registerDay": "2026-06-11",
+   "name": "ACCOUNT",
+   "saleChannel": "v specializiranih prodajalnah FFS Aktivna snov Delež (%) Carinska skupina CAS MoA deltametrin 0.6 38081010 52918-63-5",
+   "activeSubstances": [
+    {
+     "name": "deltametrin",
+     "sharePct": "0.6",
+     "customsGroup": "38081010",
+     "cas": "52918-63-5",
+     "moa": "IRAC: 3A"
+    }
+   ],
+   "formulation": "tekocina za",
+   "hazardGroup": "GHS09",
+   "signalWord": "Pozor",
+   "useCategory": "INSEKTICID",
+   "manufacturer": "Sharda",
+   "authorizedCrops": [
+    {
+     "eppoCode": "HORVX",
+     "label": "jecmen (tretiranje zrnja)"
+    },
+    {
+     "eppoCode": "ZEAMX",
+     "label": "koruza (tretiranje zrnja)"
+    },
+    {
+     "eppoCode": "AVESA",
+     "label": "oves (tretiranje zrnja)"
+    },
+    {
+     "eppoCode": "TRZAX",
+     "label": "pšenica (tretiranje zrnja)"
+    },
+    {
+     "eppoCode": "ORYSA",
+     "label": "riž (tretiranje zrnja)"
+    },
+    {
+     "eppoCode": "SECCE",
+     "label": "rž (tretiranje zrnja)"
+    },
+    {
+     "eppoCode": "1TTLG",
+     "label": "tritikala (tretiranje zrnja)"
+    }
+   ],
+   "targetOrganisms": [
+    {
+     "eppoCode": "CALAGR",
+     "label": "crni žitni žužek ( Sitophilus granarius (Linnaeus)"
+    },
+    {
+     "eppoCode": "SITTCE",
+     "label": "koruzni molj ( Sitotroga cerealella (Olivier)"
+    },
+    {
+     "eppoCode": "TEBRMA",
+     "label": "mavretanski mokar ( Tenebroides mauritanicus (Linnaeus)"
+    },
+    {
+     "eppoCode": "EPHEKU",
+     "label": "mocna vešca ( Ephestia kuehniella Zeller )"
+    },
+    {
+     "eppoCode": "1TRIBG",
+     "label": "mokarji ( Tribolium (Desvaux)"
+    },
+    {
+     "eppoCode": "ORYZSU",
+     "label": "zobati žitnik ( Oryzaephilus surinamensis (Linnaeus)"
+    },
+    {
+     "eppoCode": "RHITDO",
+     "label": "žitni kutar ( Rhyzopertha dominica (Fabricius)"
+    }
+   ],
+   "decisions": [
+    {
+     "decisionType": "Registracija",
+     "decisionNumber": "U34330-50/23/16",
+     "issued": "2024-07-09",
+     "validUntil": "2027-08-15"
+    }
+   ],
+   "inputDigest": "sha256:5efe3f7db35956b258eecf47d993eefb3432fa6c9ddff324ecf0492d941581d7",
+   "inputFile": "d9d0c3b0-furs_regsr_product_detail_ACCOUNT_CODE_1646_20260612.html"
+  }
+ ],
+ "rowProblems": [],
+ "inputs": [
+  {
+   "file": "626cd41c-furs_regsr_full_list_FFS_RegSezn_20260612.html",
+   "digest": "sha256:4cb80aa388eb323130c2a16466bdd9f03ad7c061dac7f4bac1a2d24a06c3f387"
+  },
+  {
+   "file": "d9d0c3b0-furs_regsr_product_detail_ACCOUNT_CODE_1646_20260612.html",
+   "digest": "sha256:5efe3f7db35956b258eecf47d993eefb3432fa6c9ddff324ecf0492d941581d7"
+  }
+ ]
+}

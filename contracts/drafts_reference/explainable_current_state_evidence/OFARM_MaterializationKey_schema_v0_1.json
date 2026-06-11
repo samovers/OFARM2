@@ -1,0 +1,196 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/drafts/non-default/explainable-current-state-evidence/materialization-key/v0.1",
+  "title": "OFARM MaterializationKey schema v0.1 draft/non-default",
+  "description": "Draft/non-default schema for identifying one governed current-state answer for caching, invalidation, trace retrieval, and benchmark measurement.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "artifactType",
+    "contractStatus",
+    "draftNonDefault",
+    "promotedToCurrentDefault",
+    "materializationKeyId",
+    "deploymentScope",
+    "twin",
+    "anchorScopes",
+    "evaluationTimePolicy",
+    "contextSnapshotRef",
+    "materializationPolicyRef",
+    "useClass",
+    "resultShapeFamily",
+    "policyVersionRef"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.explainableCurrentStateEvidence.materializationKey.v0.1-draft"
+    },
+    "artifactType": {
+      "const": "MaterializationKey"
+    },
+    "contractStatus": {
+      "const": "DRAFT_NON_DEFAULT"
+    },
+    "draftNonDefault": {
+      "const": true
+    },
+    "promotedToCurrentDefault": {
+      "const": false
+    },
+    "materializationKeyId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "deploymentScope": {
+      "$ref": "#/$defs/scopedRef"
+    },
+    "twin": {
+      "$ref": "#/$defs/twin"
+    },
+    "anchorScopes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/scopedRef"
+      }
+    },
+    "evaluationTimePolicy": {
+      "$ref": "#/$defs/evaluationTimePolicy"
+    },
+    "contextSnapshotRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "contextBasisDigest": {
+      "type": "string"
+    },
+    "materializationPolicyRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "queryViewOutputProfileRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "useClass": {
+      "$ref": "#/$defs/useClass"
+    },
+    "resultShapeFamily": {
+      "type": "string",
+      "minLength": 1
+    },
+    "policyVersionRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "authorityContextDigest": {
+      "type": "string"
+    },
+    "evidencePolicyRef": {
+      "$ref": "#/$defs/ref"
+    }
+  },
+  "$defs": {
+    "ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:/#-]+$"
+    },
+    "scopedRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scopeType",
+        "scopeRef"
+      ],
+      "properties": {
+        "scopeType": {
+          "enum": [
+            "DEPLOYMENT",
+            "TENANT",
+            "FARM",
+            "SITE",
+            "FIELD",
+            "ZONE",
+            "CROP_CYCLE",
+            "LOT",
+            "FACILITY",
+            "OPERATION"
+          ]
+        },
+        "scopeRef": {
+          "$ref": "#/$defs/ref"
+        }
+      }
+    },
+    "twin": {
+      "enum": [
+        "COMPLIANCE",
+        "ADVISORY"
+      ]
+    },
+    "useClass": {
+      "enum": [
+        "EXPLORATORY_VIEW",
+        "OPERATIONAL_DASHBOARD",
+        "ADVISORY_SCENARIO",
+        "COMPLIANCE_DECISION_SUPPORT",
+        "ATTESTED_OUTPUT",
+        "FORMAL_SUBMISSION",
+        "EXTERNAL_RELIED_UPON_CLAIM",
+        "FORENSIC_AUDIT"
+      ]
+    },
+    "evaluationTimePolicy": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "policyType"
+          ],
+          "properties": {
+            "policyType": {
+              "const": "NOW"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "policyType",
+            "asOfTime"
+          ],
+          "properties": {
+            "policyType": {
+              "const": "AS_OF"
+            },
+            "asOfTime": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "policyType",
+            "windowStart",
+            "windowEnd"
+          ],
+          "properties": {
+            "policyType": {
+              "const": "WINDOW"
+            },
+            "windowStart": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "windowEnd": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

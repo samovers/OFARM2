@@ -1,0 +1,28 @@
+{
+  "fixtureId": "capture-advisory-output-no-hard-truth-shortcut",
+  "fixtureType": "COMMIT_PROMOTION_SEQUENCE",
+  "commitClass": "advisory output",
+  "requestedInForceCategory": "compliance fact",
+  "currentStateUpdateExpected": false,
+  "expectedStopGate": "REVIEW_PROMOTION",
+  "expectedStopOutcome": "RETAIN_DRAFT",
+  "terminalOutcome": "RETAIN_DRAFT",
+  "forbiddenShortcutsChecked": [
+    "NO_DIRECT_ADVISORY_TO_COMPLIANCE_FACT"
+  ],
+  "gates": [
+    {
+      "gate": "INGRESS_NORMALIZATION",
+      "outcome": "NORMALIZED_DRAFT"
+    },
+    {
+      "gate": "VALIDATION",
+      "outcome": "PASS"
+    },
+    {
+      "gate": "REVIEW_PROMOTION",
+      "outcome": "RETAIN_DRAFT",
+      "reason": "Advisory output may raise review attention but may not directly create a compliance fact."
+    }
+  ]
+}

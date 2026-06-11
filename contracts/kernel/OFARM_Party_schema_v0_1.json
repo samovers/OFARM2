@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/party/v0.1",
+  "title": "OFARM Party v0.1 (candidate)",
+  "$comment": "NEW_CANDIDATE implementation-profile contract realizing Constitution RC2.1 section 7.6. A SOFTWARE_AGENT party may act only through the agent actorship contracts (AAI-CP3 law); this record alone grants no authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "partyId",
+    "partyClass",
+    "displayName",
+    "partyState",
+    "recordedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.party.v0.1"
+    },
+    "partyId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "partyClass": {
+      "enum": [
+        "NATURAL_PERSON",
+        "ORGANIZATION",
+        "COOPERATIVE",
+        "PUBLIC_BODY",
+        "SERVICE_COMPANY",
+        "BUYER",
+        "CERTIFIER",
+        "SOFTWARE_AGENT"
+      ]
+    },
+    "displayName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "registeredIdentifiers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scheme",
+          "value"
+        ],
+        "properties": {
+          "scheme": {
+            "type": "string",
+            "minLength": 1
+          },
+          "value": {
+            "type": "string",
+            "minLength": 1
+          },
+          "referenceSnapshotRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]+$"
+          }
+        }
+      }
+    },
+    "partyState": {
+      "enum": [
+        "ACTIVE",
+        "INACTIVE"
+      ]
+    },
+    "recordedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "agentInstanceRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "notes": {
+      "type": "string"
+    }
+  }
+}

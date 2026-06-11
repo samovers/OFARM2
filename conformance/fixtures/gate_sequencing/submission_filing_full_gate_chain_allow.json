@@ -1,0 +1,51 @@
+{
+  "fixtureId": "submission-filing-full-gate-chain-allow",
+  "fixtureType": "PUBLICATION_SEQUENCE",
+  "publicationAction": "FILE_SUBMISSION_ASSEMBLY",
+  "outputKind": "SUBMISSION_ASSEMBLY",
+  "requiresFrozenOutput": true,
+  "expectedStopGate": "PUBLICATION_EXPORT_TRACEABILITY",
+  "expectedStopOutcome": "FILED",
+  "terminalOutcome": "FILED",
+  "gates": [
+    {
+      "gate": "INGRESS_NORMALIZATION",
+      "outcome": "NORMALIZED_DRAFT"
+    },
+    {
+      "gate": "AUTHORITY",
+      "outcome": "ALLOW",
+      "traceExample": "OFARM_AuthorizationDecisionTrace_example_submission_file_allow_v0_1.json"
+    },
+    {
+      "gate": "VALIDATION",
+      "outcome": "PASS"
+    },
+    {
+      "gate": "PACK_PROFILE_APPLICABILITY",
+      "outcome": "APPLICABLE",
+      "contextSnapshotRef": "context:field-17:2026-04-10:pack-set-a"
+    },
+    {
+      "gate": "EVIDENCE_SUFFICIENCY",
+      "outcome": "SATISFIED",
+      "caseExample": "OFARM_EvidenceSufficiencyCase_example_submission_package_v0_1.json"
+    },
+    {
+      "gate": "REVIEW_PROMOTION",
+      "outcome": "PROMOTE_ACCEPTED",
+      "reviewDecisionRef": "review:organic-renewal-submission:approved:2026-04-10"
+    },
+    {
+      "gate": "CURRENT_STATE_MATERIALIZATION",
+      "outcome": "ALLOW_REUSE",
+      "resultExample": "OFARM_MaterializationResult_example_field_compliance_fresh_v0_1.json"
+    },
+    {
+      "gate": "PUBLICATION_EXPORT_TRACEABILITY",
+      "outcome": "FILED",
+      "requestExample": "OFARM_PublicationAssemblyRequest_example_submission_file_v0_1.json",
+      "resultExample": "OFARM_PublicationAssemblyResult_example_submission_filed_v0_1.json"
+    }
+  ]
+}

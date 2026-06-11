@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/drafts/non-default/explainable-current-state-evidence/runtime-storage-amplification-report/v0.1",
+  "title": "OFARM RuntimeStorageAmplificationReport schema v0.1 draft/non-default",
+  "description": "Draft/non-default schema for storage-amplification evidence across canonical substrate, materializations, dependency indexes, traces, projections, and benchmark telemetry.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "artifactType",
+    "contractStatus",
+    "draftNonDefault",
+    "promotedToCurrentDefault",
+    "reportId",
+    "measuredAt",
+    "canonicalSubstrateSizeBytes",
+    "storageComponents",
+    "totalStorageBytes",
+    "totalAmplificationRatio",
+    "benchmarkGeneratedTelemetrySeparated",
+    "doesNotCreateCanonicalFarmTruth"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.explainableCurrentStateEvidence.runtimeStorageAmplificationReport.v0.1-draft"
+    },
+    "artifactType": {
+      "const": "RuntimeStorageAmplificationReport"
+    },
+    "contractStatus": {
+      "const": "DRAFT_NON_DEFAULT"
+    },
+    "draftNonDefault": {
+      "const": true
+    },
+    "promotedToCurrentDefault": {
+      "const": false
+    },
+    "reportId": {
+      "$ref": "#/$defs/ref"
+    },
+    "measuredAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "canonicalSubstrateSizeBytes": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "storageComponents": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "componentFamily",
+          "bytesUsed",
+          "amplificationRatioToCanonical"
+        ],
+        "properties": {
+          "componentFamily": {
+            "enum": [
+              "CANONICAL_ASSERTION_HISTORY_SUBSTRATE",
+              "CONTEXT_REFERENCE_SNAPSHOTS",
+              "MATERIALIZED_CURRENT_STATE_RECORDS",
+              "RETAINED_MATERIALIZATION_SNAPSHOTS",
+              "DEPENDENCY_INDEX",
+              "FRESHNESS_VECTORS",
+              "TRACE_RECORDS",
+              "PROJECTIONS_READ_MODELS_SEARCH_INDEXES",
+              "BENCHMARK_GENERATED_AUXILIARY_TELEMETRY"
+            ]
+          },
+          "bytesUsed": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "amplificationRatioToCanonical": {
+            "type": "number",
+            "minimum": 0
+          },
+          "measurementRef": {
+            "$ref": "#/$defs/ref"
+          }
+        }
+      }
+    },
+    "totalStorageBytes": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "totalAmplificationRatio": {
+      "type": "number",
+      "minimum": 0
+    },
+    "resourceAssumptions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "benchmarkGeneratedTelemetrySeparated": {
+      "const": true
+    },
+    "doesNotCreateCanonicalFarmTruth": {
+      "const": true
+    }
+  },
+  "$defs": {
+    "ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:/#-]+$"
+    }
+  }
+}

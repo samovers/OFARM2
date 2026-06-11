@@ -1,0 +1,840 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/executionrecordpayload/v0.1",
+  "title": "OFARM ExecutionRecordPayload v0.1",
+  "$comment": "Small OFARM-owned carrier for agronomic operation claims, as-applied evidence, accepted execution details, corrections, and disputes. Governed by the Quantity-Bearing Intervention and As-Applied RFC v0.1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "executionRecordPayloadId",
+    "recordClass",
+    "recordState",
+    "capturedAt",
+    "subject",
+    "anchorScopes",
+    "effectiveTimeInterval",
+    "actor",
+    "executionExtent",
+    "actualAction",
+    "sourcePayload",
+    "evidenceRefs",
+    "promotionBoundary"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.executionrecordpayload.v0.1"
+    },
+    "executionRecordPayloadId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "recordClass": {
+      "enum": [
+        "OPERATION_CLAIM",
+        "AS_APPLIED_EVIDENCE",
+        "ACCEPTED_EXECUTION_DETAIL",
+        "CORRECTION",
+        "DISPUTE"
+      ]
+    },
+    "recordState": {
+      "enum": [
+        "CLAIMED",
+        "EVIDENCE_RETAINED",
+        "REVIEW_REQUIRED",
+        "ACCEPTED",
+        "PARTIAL_ACCEPTED",
+        "CORRECTED",
+        "SUPERSEDED",
+        "DISPUTED",
+        "REJECTED"
+      ]
+    },
+    "capturedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "subjectType",
+        "subjectRef"
+      ],
+      "properties": {
+        "subjectType": {
+          "enum": [
+            "FARM",
+            "SITE",
+            "FIELD",
+            "ZONE",
+            "CROP_CYCLE",
+            "LOT",
+            "FACILITY",
+            "OPERATION",
+            "DEPLOYMENT",
+            "TENANT",
+            "ASSERTION_RECORD",
+            "DOCUMENT_ASSEMBLY",
+            "SUBMISSION_ASSEMBLY"
+          ]
+        },
+        "subjectRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        }
+      }
+    },
+    "anchorScopes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scopeType",
+          "scopeRef"
+        ],
+        "properties": {
+          "scopeType": {
+            "enum": [
+              "FARM",
+              "SITE",
+              "FIELD",
+              "ZONE",
+              "CROP_CYCLE",
+              "LOT",
+              "FACILITY",
+              "OPERATION",
+              "DEPLOYMENT",
+              "TENANT"
+            ]
+          },
+          "scopeRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]+$"
+          }
+        }
+      }
+    },
+    "effectiveTimeInterval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start",
+        "end"
+      ],
+      "properties": {
+        "start": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "end": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "timeBasis": {
+          "enum": [
+            "PRESCRIPTION_WINDOW",
+            "PLANNED_WINDOW",
+            "EXECUTION_INTERVAL",
+            "EFFECTIVE_INTERVAL",
+            "OBSERVED_INTERVAL",
+            "UNKNOWN"
+          ]
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "parentIntentPayloadRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._/:-]+$"
+    },
+    "plannedInterventionRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._/:-]+$"
+    },
+    "sourceEventRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._/:-]+$"
+    },
+    "acceptedEventConsequenceRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._/:-]+$"
+    },
+    "reviewDecisionRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._/:-]+$"
+    },
+    "evidenceSufficiencyCaseRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._/:-]+$"
+    },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actorPartyRef"
+      ],
+      "properties": {
+        "actorPartyRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._/:-]+$"
+        },
+        "operatorPartyRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._/:-]+$"
+        },
+        "contractorPartyRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._/:-]+$"
+        },
+        "machineRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._/:-]+$"
+        },
+        "roleAtCapture": {
+          "enum": [
+            "FARMER",
+            "OPERATOR",
+            "CONTRACTOR",
+            "SERVICE_PROVIDER",
+            "MACHINE_AGENT",
+            "IMPORT_ADAPTER",
+            "OTHER_ACTOR"
+          ]
+        }
+      }
+    },
+    "executionExtent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "extentClass",
+        "targetScope",
+        "extentBasisStatus"
+      ],
+      "properties": {
+        "extentClass": {
+          "enum": [
+            "WHOLE_TARGET_SCOPE",
+            "PARTIAL_TARGET_SCOPE",
+            "FAILED_PASS",
+            "RETREATMENT_AREA",
+            "DISPUTED_AREA",
+            "EXTERNAL_GEOMETRY_REFERENCE"
+          ]
+        },
+        "targetScope": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "scopeType",
+            "scopeRef"
+          ],
+          "properties": {
+            "scopeType": {
+              "enum": [
+                "FARM",
+                "SITE",
+                "FIELD",
+                "ZONE",
+                "CROP_CYCLE",
+                "LOT",
+                "FACILITY",
+                "OPERATION",
+                "DEPLOYMENT",
+                "TENANT"
+              ]
+            },
+            "scopeRef": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._:-]+$"
+            }
+          }
+        },
+        "extentRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._/:-]+$"
+        },
+        "scopeExtentBasisRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._/:-]+$"
+        },
+        "geometryRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._/:-]+$"
+        },
+        "area": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "quantityKindRef",
+            "unitRef",
+            "value"
+          ],
+          "properties": {
+            "quantityKindRef": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._/:-]+$"
+            },
+            "unitRef": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._/:-]+$"
+            },
+            "value": {
+              "type": "number"
+            },
+            "qualifier": {
+              "enum": [
+                "EXACT",
+                "ESTIMATED",
+                "MACHINE_REPORTED",
+                "HUMAN_REPORTED",
+                "DISPUTED"
+              ]
+            }
+          }
+        },
+        "extentBasisStatus": {
+          "enum": [
+            "DECLARED_WHOLE_SCOPE",
+            "MACHINE_POLYGON",
+            "OPERATOR_SKETCH",
+            "INFERRED",
+            "ESTIMATED",
+            "DISPUTED",
+            "FUTURE_SCOPE_EXTENT_BASIS_REQUIRED"
+          ]
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "actualAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actionType",
+        "actionLabel"
+      ],
+      "properties": {
+        "actionType": {
+          "enum": [
+            "APPLY_INPUT",
+            "SEED",
+            "IRRIGATE",
+            "CULTIVATE",
+            "HARVEST",
+            "DRY",
+            "PRUNE",
+            "MONITOR",
+            "OTHER_ACTION"
+          ]
+        },
+        "actionLabel": {
+          "type": "string",
+          "minLength": 1
+        },
+        "interventionKind": {
+          "enum": [
+            "CROP_PROTECTION",
+            "FERTILIZATION",
+            "SEEDING",
+            "IRRIGATION",
+            "CULTIVATION",
+            "HARVEST",
+            "DRYING",
+            "PRUNING",
+            "OTHER_INTERVENTION"
+          ]
+        },
+        "methodRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._/:-]+$"
+        },
+        "reasonForPartialOrIneffectiveWork": {
+          "enum": [
+            "NONE",
+            "EQUIPMENT_FAILURE",
+            "WEATHER_INTERRUPTION",
+            "NOZZLE_BLOCKAGE",
+            "SUPPLY_EMPTY",
+            "OPERATOR_DECISION",
+            "GEOMETRY_EXCLUSION",
+            "UNKNOWN"
+          ]
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "actualQuantityParameters": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "parameterRole",
+          "quantityKindRef",
+          "unitRef",
+          "value"
+        ],
+        "properties": {
+          "parameterRole": {
+            "enum": [
+              "RATE",
+              "DOSE",
+              "CONCENTRATION",
+              "TOTAL_QUANTITY",
+              "CARRIER_VOLUME",
+              "WATER_VOLUME",
+              "SEED_RATE",
+              "NUTRIENT_RATE",
+              "PRESSURE",
+              "FLOW_RATE",
+              "SPEED",
+              "TIMING_INTERVAL",
+              "APPLICATION_VOLUME",
+              "OTHER_PARAMETER"
+            ]
+          },
+          "materialRole": {
+            "enum": [
+              "PRODUCT",
+              "ACTIVE_SUBSTANCE",
+              "CARRIER",
+              "WATER",
+              "SEED",
+              "FERTILIZER",
+              "NUTRIENT",
+              "OTHER_MATERIAL"
+            ]
+          },
+          "materialRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._/:-]+$"
+          },
+          "quantityKindRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._/:-]+$"
+          },
+          "unitRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._/:-]+$"
+          },
+          "value": {
+            "type": "number"
+          },
+          "normalizedValue": {
+            "type": "number"
+          },
+          "reportedValue": {
+            "type": [
+              "string",
+              "number"
+            ]
+          },
+          "reportedUnitLabel": {
+            "type": "string"
+          },
+          "basisQuantityKindRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._/:-]+$"
+          },
+          "basisUnitRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._/:-]+$"
+          },
+          "basisValue": {
+            "type": "number"
+          },
+          "qualifier": {
+            "enum": [
+              "EXACT",
+              "ESTIMATED",
+              "MINIMUM",
+              "MAXIMUM",
+              "RANGE_MIDPOINT",
+              "LABEL_LIMIT",
+              "MACHINE_REPORTED",
+              "HUMAN_REPORTED",
+              "UNKNOWN"
+            ]
+          },
+          "evidenceRefs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._/:-]+$"
+            }
+          },
+          "notes": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "equipment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "equipmentRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._/:-]+$"
+        },
+        "tractorOrPowerUnitRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._/:-]+$"
+        },
+        "implementRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._/:-]+$"
+        },
+        "controllerRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._/:-]+$"
+        },
+        "calibrationRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._/:-]+$"
+        },
+        "ddiMappingRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._/:-]+$"
+          }
+        },
+        "timelogRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._/:-]+$"
+          }
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "sourcePayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceClass",
+        "sourceSystemRef"
+      ],
+      "properties": {
+        "sourceClass": {
+          "enum": [
+            "HUMAN_LOG",
+            "CONTRACTOR_REPORT",
+            "MACHINE_TIMELOG",
+            "ISOXML_IMPORT",
+            "EFDI_IMPORT",
+            "ADAPT_IMPORT",
+            "IMAGE_OR_REMOTE_SENSING",
+            "OTHER_SOURCE"
+          ]
+        },
+        "sourceSystemRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._/:-]+$"
+        },
+        "sourcePayloadRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._/:-]+$"
+        },
+        "sourcePayloadHash": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourceRecordTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "lateArrivalPosture": {
+          "enum": [
+            "ON_TIME",
+            "LATE_PRE_DECISION",
+            "LATE_POST_DECISION",
+            "LATE_POST_OUTPUT",
+            "LATE_POST_SUBMISSION"
+          ]
+        },
+        "originalSemanticsRetained": {
+          "type": "boolean"
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "actualVsPlannedDeltas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "deltaType",
+          "deltaStatus"
+        ],
+        "properties": {
+          "deltaType": {
+            "enum": [
+              "PRODUCT_MATCH",
+              "PRODUCT_MISMATCH",
+              "RATE_DELTA",
+              "DOSE_DELTA",
+              "CONCENTRATION_DELTA",
+              "PARTIAL_EXTENT",
+              "FAILED_PASS",
+              "TIME_WINDOW_DELTA",
+              "MISSING_RATE",
+              "MISSING_PRODUCT_ID",
+              "OTHER_DELTA"
+            ]
+          },
+          "deltaStatus": {
+            "enum": [
+              "MATCH",
+              "DIFFERS",
+              "MISSING",
+              "PARTIAL",
+              "DISPUTED",
+              "NOT_APPLICABLE"
+            ]
+          },
+          "plannedRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._/:-]+$"
+          },
+          "actualRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._/:-]+$"
+          },
+          "notes": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._/:-]+$"
+      }
+    },
+    "correctionOfExecutionRecordPayloadRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._/:-]+$"
+    },
+    "supersedesExecutionRecordPayloadRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._/:-]+$"
+    },
+    "supersededByExecutionRecordPayloadRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._/:-]+$"
+    },
+    "disputedExecutionRecordPayloadRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._/:-]+$"
+    },
+    "dispute": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "disputeBasis",
+        "counterEvidenceRefs"
+      ],
+      "properties": {
+        "disputeBasis": {
+          "enum": [
+            "EXTENT_CONFLICT",
+            "QUANTITY_CONFLICT",
+            "PRODUCT_IDENTITY_CONFLICT",
+            "TIMING_CONFLICT",
+            "AUTHORITY_CONFLICT",
+            "EVIDENCE_QUALITY_CONFLICT",
+            "OTHER_DISPUTE"
+          ]
+        },
+        "counterEvidenceRefs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._/:-]+$"
+          }
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "promotionBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "targetTwin",
+        "highConsequenceUse",
+        "mustNotPromoteTo"
+      ],
+      "properties": {
+        "targetTwin": {
+          "enum": [
+            "ADVISORY",
+            "COMPLIANCE"
+          ]
+        },
+        "highConsequenceUse": {
+          "enum": [
+            "ADVISORY_ONLY",
+            "AUTHORITY_REQUIRED",
+            "PLAN_ONLY",
+            "OPERATION_CLAIM_ONLY",
+            "EVIDENCE_ONLY",
+            "REVIEW_REQUIRED",
+            "ACCEPTED_ONLY",
+            "BLOCKED"
+          ]
+        },
+        "mustNotPromoteTo": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": [
+              "COMPLIANCE_TRUTH",
+              "ACCEPTED_EXECUTION",
+              "CURRENT_STATE_DIRECTLY",
+              "PASSPORT_VIEW_DEFAULT",
+              "DOCUMENT_ATTESTATION",
+              "INVENTORY_DEDUCTION",
+              "LEGAL_EFFECT",
+              "WHOLE_FIELD_TREATMENT"
+            ]
+          }
+        },
+        "stageSeparationStatement": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "notes": {
+      "type": "string"
+    },
+    "identityBindingRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._/:-]+$"
+      }
+    },
+    "codeBindingProfileRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._/:-]+$"
+    },
+    "agronomicIdentityBindingRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._/:-]+$"
+      },
+      "$comment": "Optional Phase AGR-P5 bridge to governed AgronomicIdentityBinding records."
+    },
+    "agronomicCodeBindingProfileRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._/:-]+$",
+      "$comment": "Optional Phase AGR-P5 bridge to an AgronomicCodeBindingProfile that governs scheme/role requirements."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "recordClass": {
+            "const": "ACCEPTED_EXECUTION_DETAIL"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "reviewDecisionRef",
+          "evidenceSufficiencyCaseRef",
+          "acceptedEventConsequenceRef",
+          "actualQuantityParameters"
+        ],
+        "properties": {
+          "recordState": {
+            "enum": [
+              "ACCEPTED",
+              "PARTIAL_ACCEPTED"
+            ]
+          },
+          "promotionBoundary": {
+            "properties": {
+              "targetTwin": {
+                "const": "COMPLIANCE"
+              },
+              "highConsequenceUse": {
+                "const": "ACCEPTED_ONLY"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "recordClass": {
+            "const": "CORRECTION"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "correctionOfExecutionRecordPayloadRef"
+        ],
+        "properties": {
+          "recordState": {
+            "const": "CORRECTED"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "recordClass": {
+            "const": "DISPUTE"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "disputedExecutionRecordPayloadRef",
+          "dispute"
+        ],
+        "properties": {
+          "recordState": {
+            "const": "DISPUTED"
+          }
+        }
+      }
+    }
+  ]
+}

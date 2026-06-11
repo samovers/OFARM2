@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/delegationgrant/v0.1",
+  "title": "OFARM DelegationGrant v0.1",
+  "$comment": "Minimal machine contract derived from Constitution RC2.1 \u00a77.14, authority companion policy \u00a75, and Authority Source Record Closure RFC v0.1 \u00a74.3.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "delegationGrantId",
+    "delegatingPartyRef",
+    "delegatePartyRef",
+    "targetScope",
+    "authorityActionClasses",
+    "validFrom",
+    "inheritanceMode",
+    "delegationState"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.delegationgrant.v0.1"
+    },
+    "delegationGrantId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "delegatingPartyRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "delegatePartyRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "sourceAuthorityGrantRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "targetScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scopeType",
+        "scopeRef"
+      ],
+      "properties": {
+        "scopeType": {
+          "enum": [
+            "FARM",
+            "SITE",
+            "FIELD",
+            "ZONE",
+            "CROP_CYCLE",
+            "LOT",
+            "FACILITY",
+            "OPERATION",
+            "DEPLOYMENT",
+            "TENANT"
+          ]
+        },
+        "scopeRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        }
+      }
+    },
+    "authorityFamilies": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "authorityActionClasses": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "validFrom": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "validUntil": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "purpose": {
+      "type": "string"
+    },
+    "conditions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "requiredEvidenceRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "inheritanceMode": {
+      "enum": [
+        "EXACT_ONLY",
+        "DESCENDANT_SCOPES",
+        "DERIVED_LINEAGE_SCOPES",
+        "NO_INHERIT"
+      ]
+    },
+    "delegationState": {
+      "enum": [
+        "ACTIVE",
+        "REVOKED",
+        "EXPIRED",
+        "DRAFT"
+      ]
+    },
+    "notes": {
+      "type": "string"
+    }
+  }
+}

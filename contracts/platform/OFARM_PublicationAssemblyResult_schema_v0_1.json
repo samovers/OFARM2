@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/publicationassemblyresult/v0.1",
+  "title": "OFARM PublicationAssemblyResult v0.1",
+  "$comment": "Minimal boundary result envelope for publication/export assembly derived from Platform RC2.1 \u00a7\u00a73.9 and 10.5-10.6.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "resultId",
+    "requestId",
+    "evaluatedAt",
+    "publicationAction",
+    "outcome",
+    "outputKind",
+    "outputMetadataRef",
+    "problems",
+    "reasonSummary"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.publicationassemblyresult.v0.1"
+    },
+    "resultId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "requestId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "evaluatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "publicationAction": {
+      "enum": [
+        "SERVE_PASSPORT_VIEW",
+        "FREEZE_DOCUMENT_ASSEMBLY",
+        "ATTEST_DOCUMENT_ASSEMBLY",
+        "FILE_SUBMISSION_ASSEMBLY",
+        "EXPORT_API_PAYLOAD"
+      ]
+    },
+    "outcome": {
+      "enum": [
+        "PUBLISHED",
+        "FROZEN",
+        "ATTESTED",
+        "FILED",
+        "DENIED",
+        "REQUIRE_REVIEW",
+        "REQUIRE_HUMAN_APPROVAL"
+      ]
+    },
+    "outputKind": {
+      "enum": [
+        "PASSPORT_VIEW",
+        "REPORT_ASSEMBLY",
+        "DOSSIER_ASSEMBLY",
+        "SUBMISSION_ASSEMBLY"
+      ]
+    },
+    "outputMetadataRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "publicationRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "evidenceSufficiencyCaseRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "authorizationDecisionTraceRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "reasonSummary": {
+      "type": "string"
+    },
+    "problems": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "problemId",
+          "severity",
+          "reasonCode",
+          "title",
+          "detail"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": "ofarm.runtimeproblem.v0.1"
+          },
+          "problemId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]+$"
+          },
+          "severity": {
+            "enum": [
+              "INFO",
+              "WARNING",
+              "ERROR"
+            ]
+          },
+          "reasonCode": {
+            "type": "string",
+            "pattern": "^[A-Z0-9_:-]+$"
+          },
+          "title": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "pointerRefs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "relatedRefs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._:-]+$"
+            }
+          },
+          "suggestedRemediation": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "outputKind": {
+            "const": "PASSPORT_VIEW"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "outcome": {
+            "enum": [
+              "PUBLISHED",
+              "DENIED",
+              "REQUIRE_REVIEW",
+              "REQUIRE_HUMAN_APPROVAL"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "outcome": {
+            "enum": [
+              "ATTESTED",
+              "FILED"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "evidenceSufficiencyCaseRef",
+          "authorizationDecisionTraceRef"
+        ]
+      }
+    }
+  ]
+}

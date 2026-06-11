@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/drafts/non-default/explainable-current-state-evidence/trace-expansion-request/v0.1",
+  "title": "OFARM TraceExpansionRequest schema v0.1 draft/non-default",
+  "description": "Draft/non-default schema for requesting trace expansion for a materialized current-state result.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "artifactType",
+    "contractStatus",
+    "draftNonDefault",
+    "promotedToCurrentDefault",
+    "requestId",
+    "requestedAt",
+    "requesterRef",
+    "authorityContextRef",
+    "materializationKeyRef",
+    "requestedTraceTier",
+    "purpose",
+    "policyRef",
+    "redactionAllowed"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.explainableCurrentStateEvidence.traceExpansionRequest.v0.1-draft"
+    },
+    "artifactType": {
+      "const": "TraceExpansionRequest"
+    },
+    "contractStatus": {
+      "const": "DRAFT_NON_DEFAULT"
+    },
+    "draftNonDefault": {
+      "const": true
+    },
+    "promotedToCurrentDefault": {
+      "const": false
+    },
+    "requestId": {
+      "$ref": "#/$defs/ref"
+    },
+    "requestedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "requesterRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "authorityContextRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "materializationKeyRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "requestedTraceTier": {
+      "$ref": "#/$defs/traceTier"
+    },
+    "purpose": {
+      "enum": [
+        "QUALIFICATION_DISPLAY",
+        "HIGH_CONSEQUENCE_DECISION",
+        "FORMAL_SUBMISSION",
+        "AUDIT",
+        "DISPUTE",
+        "CONFORMANCE_TEST",
+        "FORENSIC_REPLAY"
+      ]
+    },
+    "basisDisclosureScope": {
+      "enum": [
+        "FULL_AUTHORIZED_BASIS",
+        "REDACTED_AUTHORIZED_BASIS",
+        "DIGEST_ONLY",
+        "DENIED"
+      ]
+    },
+    "policyRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "redactionAllowed": {
+      "type": "boolean"
+    }
+  },
+  "$defs": {
+    "ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:/#-]+$"
+    },
+    "traceTier": {
+      "enum": [
+        "TIER_1_QUALIFICATION",
+        "TIER_2_RECONSTRUCTION",
+        "TIER_3_FORENSIC_REPLAY"
+      ]
+    }
+  }
+}

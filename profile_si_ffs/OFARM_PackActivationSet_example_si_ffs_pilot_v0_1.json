@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "ofarm.packactivationset.v0.1",
+  "packActivationSetId": "packactivationset:si.ffs.pilot.v0_1",
+  "evaluatedAt": "2026-06-11T12:00:00Z",
+  "targetScope": {
+    "scopeType": "TENANT",
+    "scopeRef": "tenant:si.ffs.pilot.demo"
+  },
+  "timeContext": {
+    "policyType": "NOW"
+  },
+  "requestedPackRefs": [
+    "pack:si.ffs.pilot.v0_1"
+  ],
+  "activePackRefs": [
+    "pack:si.ffs.pilot.v0_1"
+  ],
+  "activeProfileRefs": [
+    "profile:si.ffs.recordkeeping.v0_1"
+  ],
+  "relevantPrecedenceClasses": [
+    "JURISDICTION_LAW_SAFETY"
+  ],
+  "notes": "Static single-profile activation for the Slovenia FFS record-keeping pilot. No pack overlap exists, so no PackMergeResolutionTrace is required. Regenerate per real tenant at deployment."
+}

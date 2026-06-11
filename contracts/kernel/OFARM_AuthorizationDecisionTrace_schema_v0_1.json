@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/authorizationdecisiontrace/v0.1",
+  "title": "OFARM AuthorizationDecisionTrace v0.1",
+  "$comment": "Minimal machine contract derived from Authority Policy Model RFC v0.1 \u00a710, Platform RC2.1 \u00a714.15, and Authority Source Record Closure RFC v0.1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "traceId",
+    "evaluatedAt",
+    "actingPartyRef",
+    "requestedActionClass",
+    "target",
+    "roleBasisUsed",
+    "grantBasisUsed",
+    "revocationResult",
+    "inheritanceModeApplied",
+    "decisionOutcome"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.authorizationdecisiontrace.v0.1"
+    },
+    "traceId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "evaluatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "actingPartyRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "actingAgentRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "requestedActionClass": {
+      "type": "string"
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "targetTime"
+      ],
+      "properties": {
+        "scope": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "scopeType",
+            "scopeRef"
+          ],
+          "properties": {
+            "scopeType": {
+              "enum": [
+                "FARM",
+                "SITE",
+                "FIELD",
+                "ZONE",
+                "CROP_CYCLE",
+                "LOT",
+                "FACILITY",
+                "OPERATION",
+                "DEPLOYMENT",
+                "TENANT"
+              ]
+            },
+            "scopeRef": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._:-]+$"
+            }
+          }
+        },
+        "targetTime": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "roleBasisUsed": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "grantBasisUsed": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "delegationBasisUsed": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "sharingBasisUsed": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "revocationResult": {
+      "enum": [
+        "NONE_APPLICABLE",
+        "NO_ACTIVE_REVOCATION",
+        "ACTIVE_REVOCATION_FOUND"
+      ]
+    },
+    "inheritanceModeApplied": {
+      "enum": [
+        "EXACT_ONLY",
+        "DESCENDANT_SCOPES",
+        "DERIVED_LINEAGE_SCOPES",
+        "NO_INHERIT"
+      ]
+    },
+    "decisionOutcome": {
+      "enum": [
+        "ALLOW",
+        "DENY",
+        "REQUIRE_REVIEW",
+        "REQUIRE_HUMAN_APPROVAL"
+      ]
+    },
+    "reason": {
+      "type": "string"
+    },
+    "isAIActor": {
+      "type": "boolean"
+    },
+    "revocationDecisionRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "dataSovereigntyBoundaryRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    }
+  }
+}

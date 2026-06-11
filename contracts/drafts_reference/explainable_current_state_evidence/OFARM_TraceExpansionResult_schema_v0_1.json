@@ -1,0 +1,172 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/drafts/non-default/explainable-current-state-evidence/trace-expansion-result/v0.1",
+  "title": "OFARM TraceExpansionResult schema v0.1 draft/non-default",
+  "description": "Draft/non-default schema for the result of trace expansion for a materialized current-state answer.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "artifactType",
+    "contractStatus",
+    "draftNonDefault",
+    "promotedToCurrentDefault",
+    "resultId",
+    "requestRef",
+    "materializationKeyRef",
+    "traceTier",
+    "traceStatus",
+    "generatedAt",
+    "freshnessStatus",
+    "reconstructible",
+    "redaction",
+    "redactionDoesNotUpgradeFreshness"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.explainableCurrentStateEvidence.traceExpansionResult.v0.1-draft"
+    },
+    "artifactType": {
+      "const": "TraceExpansionResult"
+    },
+    "contractStatus": {
+      "const": "DRAFT_NON_DEFAULT"
+    },
+    "draftNonDefault": {
+      "const": true
+    },
+    "promotedToCurrentDefault": {
+      "const": false
+    },
+    "resultId": {
+      "$ref": "#/$defs/ref"
+    },
+    "requestRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "materializationKeyRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "traceTier": {
+      "$ref": "#/$defs/traceTier"
+    },
+    "traceStatus": {
+      "enum": [
+        "AVAILABLE",
+        "AVAILABLE_REDACTED",
+        "RECOMPUTED",
+        "REFUSED",
+        "REVIEW_REQUIRED",
+        "NOT_RECONSTRUCTIBLE"
+      ]
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "freshnessStatus": {
+      "$ref": "#/$defs/freshnessStatus"
+    },
+    "basisRefs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ref"
+      }
+    },
+    "basisDigestRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "contextSnapshotRefs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ref"
+      }
+    },
+    "policyRefs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ref"
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "refusalOrReviewFlags": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "RECOMPUTE_REQUIRED",
+          "REFUSED",
+          "REVIEW_REQUIRED",
+          "AUTHORITY_LIMITED",
+          "SOVEREIGNTY_REDACTED"
+        ]
+      }
+    },
+    "reconstructible": {
+      "type": "boolean"
+    },
+    "redaction": {
+      "$ref": "#/$defs/redaction"
+    },
+    "redactionDoesNotUpgradeFreshness": {
+      "const": true
+    }
+  },
+  "$defs": {
+    "ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:/#-]+$"
+    },
+    "traceTier": {
+      "enum": [
+        "TIER_1_QUALIFICATION",
+        "TIER_2_RECONSTRUCTION",
+        "TIER_3_FORENSIC_REPLAY"
+      ]
+    },
+    "freshnessStatus": {
+      "enum": [
+        "FRESH",
+        "STALE",
+        "INVALID",
+        "RECOMPUTE_REQUIRED"
+      ]
+    },
+    "redaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "redactionApplied",
+        "redactionDisclosed"
+      ],
+      "properties": {
+        "redactionApplied": {
+          "type": "boolean"
+        },
+        "redactionDisclosed": {
+          "const": true
+        },
+        "redactionBasisRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ref"
+          }
+        },
+        "redactedFields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

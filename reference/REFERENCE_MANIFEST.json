@@ -1,0 +1,156 @@
+{
+  "manifestVersion": "0.1",
+  "sourceRepoCommit": "08db4d5deee82eae552192a4042732662689df6f",
+  "budget": "max 30 files",
+  "rule": "Reference files are verbatim, read-only, non-normative within this package. Canonical authority remains the OFARM2 repository. Package-vs-reference discrepancy is an extraction bug: log to ERRATA.md and resolve against the canonical repository.",
+  "entries": [
+    {
+      "packagePath": "reference/law/OFARM_Reference_Model_and_Artifact_Constitution_RC2_1.md",
+      "sourcePath": "00_active_baseline/OFARM_Reference_Model_and_Artifact_Constitution_RC2_1.md",
+      "sha256": "7079e66ab160e2f79bc1a2a6f2c37726c0bea2af921312fcd93b434b9f9c4e3d",
+      "role": "LAW",
+      "reason": "Law the package implements; needed to resolve normative questions standalone."
+    },
+    {
+      "packagePath": "reference/law/OFARM_Platform_Runtime_and_Product_Architecture_RC2_1.md",
+      "sourcePath": "00_active_baseline/OFARM_Platform_Runtime_and_Product_Architecture_RC2_1.md",
+      "sha256": "76357c6c7c184893f80219720f6343a682a859098f3703eb84c282fba0c02256",
+      "role": "LAW",
+      "reason": "Law the package implements; needed to resolve normative questions standalone."
+    },
+    {
+      "packagePath": "reference/law/OFARM_Alignment_Register_v0_13.md",
+      "sourcePath": "00_active_baseline/OFARM_Alignment_Register_v0_13.md",
+      "sha256": "d7e5189f70d1cffb53428bd4d6ecf889caaa73d51790facd6183aa5784ff0327",
+      "role": "LAW",
+      "reason": "Law the package implements; needed to resolve normative questions standalone."
+    },
+    {
+      "packagePath": "reference/law/PROJECT_AUTHORITY.md",
+      "sourcePath": "PROJECT_AUTHORITY.md",
+      "sha256": "52011937cfa353a1bc5dd53ac1883af60d6ea84204f3faa2e99d303308a37d80",
+      "role": "LAW",
+      "reason": "Law the package implements; needed to resolve normative questions standalone."
+    },
+    {
+      "packagePath": "reference/rfcs/OFARM_Identity_and_Lifecycle_RFC_v0_1.md",
+      "sourcePath": "02_accepted_rfcs/OFARM_Identity_and_Lifecycle_RFC_v0_1.md",
+      "sha256": "85b6ccbd0a70dea3db7e2347685d770354efa49b91602b386f1e08193190fde2",
+      "role": "ACCEPTED_RFC",
+      "reason": "RFC behind a shipped contract or pilot gate."
+    },
+    {
+      "packagePath": "reference/rfcs/OFARM_Current_State_Materialization_RFC_v0_1.md",
+      "sourcePath": "02_accepted_rfcs/OFARM_Current_State_Materialization_RFC_v0_1.md",
+      "sha256": "918893ce734feab9374f02fdc11841d50e06482d3b2f4087269627c9e38e21f0",
+      "role": "ACCEPTED_RFC",
+      "reason": "RFC behind a shipped contract or pilot gate."
+    },
+    {
+      "packagePath": "reference/rfcs/OFARM_ContextSnapshot_Closure_RFC_v0_1.md",
+      "sourcePath": "02_accepted_rfcs/OFARM_ContextSnapshot_Closure_RFC_v0_1.md",
+      "sha256": "f7f61c081ccfbc711175377fd7da8c43c1e7880c05792663fa54f22048899dfc",
+      "role": "ACCEPTED_RFC",
+      "reason": "RFC behind a shipped contract or pilot gate."
+    },
+    {
+      "packagePath": "reference/rfcs/OFARM_Event_Ingress_and_Promotion_Boundary_Closure_RFC_v0_1.md",
+      "sourcePath": "02_accepted_rfcs/OFARM_Event_Ingress_and_Promotion_Boundary_Closure_RFC_v0_1.md",
+      "sha256": "2f07429f553e8593a149eb2f2dfc8a6baff8c681545787eeaff5ad04f48ca8db",
+      "role": "ACCEPTED_RFC",
+      "reason": "RFC behind a shipped contract or pilot gate."
+    },
+    {
+      "packagePath": "reference/rfcs/OFARM_Authority_Policy_Model_RFC_v0_1.md",
+      "sourcePath": "02_accepted_rfcs/OFARM_Authority_Policy_Model_RFC_v0_1.md",
+      "sha256": "36a523e4b8d3bd57a30e6720a19c296545b0686127fc66af001e88742637ee69",
+      "role": "ACCEPTED_RFC",
+      "reason": "RFC behind a shipped contract or pilot gate."
+    },
+    {
+      "packagePath": "reference/rfcs/OFARM_Authority_Action_Matrix_v0_1.md",
+      "sourcePath": "02_accepted_rfcs/OFARM_Authority_Action_Matrix_v0_1.md",
+      "sha256": "f88456d0c3d9861fb1c20f1092742440497dce721d9cc82b6d87cdb82eb6f663",
+      "role": "ACCEPTED_RFC",
+      "reason": "RFC behind a shipped contract or pilot gate."
+    },
+    {
+      "packagePath": "reference/rfcs/OFARM_QuerySpecification_Schema_RFC_v0_1.md",
+      "sourcePath": "02_accepted_rfcs/OFARM_QuerySpecification_Schema_RFC_v0_1.md",
+      "sha256": "1e4da7971978503d6bd974bbe12458f3fc718c0b3430c2a0d5a5f39fbe005e30",
+      "role": "ACCEPTED_RFC",
+      "reason": "RFC behind a shipped contract or pilot gate."
+    },
+    {
+      "packagePath": "reference/rfcs/OFARM_Quantity_Bearing_Intervention_and_As_Applied_RFC_v0_1.md",
+      "sourcePath": "02_accepted_rfcs/OFARM_Quantity_Bearing_Intervention_and_As_Applied_RFC_v0_1.md",
+      "sha256": "f12e6fc8e14977890f3fbf8ec5131e219b088bdb3554baa80c5a63bde79656fb",
+      "role": "ACCEPTED_RFC",
+      "reason": "RFC behind a shipped contract or pilot gate."
+    },
+    {
+      "packagePath": "reference/rfcs/OFARM_Agronomic_Code_Binding_and_Standards_Profile_RFC_v0_1.md",
+      "sourcePath": "02_accepted_rfcs/OFARM_Agronomic_Code_Binding_and_Standards_Profile_RFC_v0_1.md",
+      "sha256": "2f558af001a25f49d6242f026e3f91f541ab618dfb1242a3ee895c3f58b6d4b7",
+      "role": "ACCEPTED_RFC",
+      "reason": "RFC behind a shipped contract or pilot gate."
+    },
+    {
+      "packagePath": "reference/rfcs/OFARM_External_Code_Binding_Currentness_and_Verification_RFC_v0_1.md",
+      "sourcePath": "02_accepted_rfcs/OFARM_External_Code_Binding_Currentness_and_Verification_RFC_v0_1.md",
+      "sha256": "f136a736ee04ca5042ab5d11ce7a1f556c78f4523ae93af457243e0fc36c92f6",
+      "role": "ACCEPTED_RFC",
+      "reason": "RFC behind a shipped contract or pilot gate."
+    },
+    {
+      "packagePath": "reference/rfcs/OFARM_Reference_Resolution_and_Semantic_Conformance_RFC_v0_1.md",
+      "sourcePath": "02_accepted_rfcs/OFARM_Reference_Resolution_and_Semantic_Conformance_RFC_v0_1.md",
+      "sha256": "6b869b7af12e8676a1551bd30797c3a38d433ed7a36b7d1274b579c4e9f2fca8",
+      "role": "ACCEPTED_RFC",
+      "reason": "RFC behind a shipped contract or pilot gate."
+    },
+    {
+      "packagePath": "reference/rfcs/OFARM_High_Consequence_Query_and_Output_Gate_Hardening_RFC_v0_1.md",
+      "sourcePath": "02_accepted_rfcs/OFARM_High_Consequence_Query_and_Output_Gate_Hardening_RFC_v0_1.md",
+      "sha256": "fa621ae38308d596f556b296da1ef47bf61ac305a90d377385734ef55eb8f395",
+      "role": "ACCEPTED_RFC",
+      "reason": "RFC behind a shipped contract or pilot gate."
+    },
+    {
+      "packagePath": "reference/rfcs/OFARM_RuntimeProblem_Reason_Code_Registry_RFC_v0_1.md",
+      "sourcePath": "02_accepted_rfcs/OFARM_RuntimeProblem_Reason_Code_Registry_RFC_v0_1.md",
+      "sha256": "503f4fd17b874a7e5469f47fa369b97c468ff660bdcd0dc5952522f7e0c983a9",
+      "role": "ACCEPTED_RFC",
+      "reason": "RFC behind a shipped contract or pilot gate."
+    },
+    {
+      "packagePath": "reference/rfcs/OFARM_AI_Facing_Result_Qualification_and_Trace_Surface_RFC_v0_1.md",
+      "sourcePath": "02_accepted_rfcs/OFARM_AI_Facing_Result_Qualification_and_Trace_Surface_RFC_v0_1.md",
+      "sha256": "f34b4424b5fc48c36d24d18d68f97d1207ec799c6a2374f278874941847fd000",
+      "role": "ACCEPTED_RFC",
+      "reason": "RFC behind a shipped contract or pilot gate."
+    },
+    {
+      "packagePath": "reference/research/OFARM_external_code_binding_currentness_profile_crop_protection_BE_research_report_v0_1.md",
+      "sourcePath": "06_active_supporting_research/syntheses/OFARM_external_code_binding_currentness_profile_crop_protection_BE_research_report_v0_1.md",
+      "sha256": "93ec37c3bb2d4e84440129250f8ff9341890cf2a2fe53d4803c8ed9286103655",
+      "role": "RESEARCH",
+      "reason": "Pattern the Slovenia profile must structurally match (Belgium currentness profile)."
+    },
+    {
+      "packagePath": "reference/companions/OFARM_Evidence_Sufficiency_and_Attestation_Policy_v0_1.md",
+      "sourcePath": "01_companion_artifacts/OFARM_Evidence_Sufficiency_and_Attestation_Policy_v0_1.md",
+      "sha256": "edb101e1a918b614360bc4b1f41713a285c77ed9e98e165d8bf01c8c210f7e5e",
+      "role": "COMPANION_ARTIFACT",
+      "reason": "Evidence-floor policy basis for the SI profile review/evidence policy."
+    },
+    {
+      "packagePath": "reference/rfcs/OFARM_Performance_and_Explainable_Current_State_Evidence_RFC_v0_1.md",
+      "sourcePath": "02_accepted_rfcs/OFARM_Performance_and_Explainable_Current_State_Evidence_RFC_v0_1.md",
+      "sourceRepoCommit": "71ca724a8b6ec23f1655b086a6f549496d10a47f",
+      "sha256": "da7679e53b80c2c46b172e01741f10d9fdeba85d00c4508eae67b0b00d7544a4",
+      "role": "ACCEPTED_RFC",
+      "reason": "Promoted on canonical main in parallel (PR #6); governs materializer explainability/performance evidence that M1 builds."
+    }
+  ]
+}

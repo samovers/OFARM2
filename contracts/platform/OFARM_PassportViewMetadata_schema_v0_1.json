@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/passportviewmetadata/v0.1",
+  "title": "OFARM PassportViewMetadata v0.1",
+  "$comment": "Minimal metadata contract for live/recomputable PassportView outputs derived from the compiled-output taxonomy note and Platform RC2.1 §10.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "passportViewId",
+    "passportFamily",
+    "anchorScope",
+    "generatedAt",
+    "twin",
+    "freezeState",
+    "querySpecificationRef",
+    "queryPlanRef",
+    "contextSnapshotRef",
+    "materializationResultRef",
+    "representationModes",
+    "publicationState"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.passportviewmetadata.v0.1"
+    },
+    "passportViewId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "passportFamily": {
+      "enum": [
+        "FARM",
+        "SITE",
+        "FIELD",
+        "CROP_CYCLE",
+        "LOT",
+        "FACILITY"
+      ]
+    },
+    "anchorScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scopeType",
+        "scopeRef"
+      ],
+      "properties": {
+        "scopeType": {
+          "enum": [
+            "FARM",
+            "SITE",
+            "FIELD",
+            "ZONE",
+            "CROP_CYCLE",
+            "LOT",
+            "FACILITY",
+            "OPERATION",
+            "DEPLOYMENT",
+            "TENANT"
+          ]
+        },
+        "scopeRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        }
+      }
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "twin": {
+      "enum": [
+        "COMPLIANCE",
+        "ADVISORY"
+      ]
+    },
+    "freezeState": {
+      "const": "LIVE_RECOMPUTABLE"
+    },
+    "querySpecificationRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "queryPlanRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "contextSnapshotRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "materializationResultRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "representationModes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "enum": [
+          "HUMAN_READABLE",
+          "MACHINE_READABLE"
+        ]
+      }
+    },
+    "publicationState": {
+      "enum": [
+        "SERVABLE",
+        "SHARED",
+        "EXPORTED"
+      ]
+    },
+    "profileRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "recipientPartyRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "reconstructionPolicyRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "reconstructionTraceRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    }
+  }
+}

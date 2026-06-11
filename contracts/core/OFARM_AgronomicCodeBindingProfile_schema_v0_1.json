@@ -1,0 +1,341 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/agronomiccodebindingprofile/v0.1",
+  "title": "OFARM AgronomicCodeBindingProfile v0.1",
+  "$comment": "Profile-level declaration of agronomic code schemes, roles, evidence floors, unresolved-binding behavior, quantity/unit policy, and pack merge behavior.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "agronomicCodeBindingProfileId",
+    "profileState",
+    "issuedAt",
+    "issuedByPartyRef",
+    "profileScope",
+    "normativePosture",
+    "standardRoleMap",
+    "bindingRequirements",
+    "quantityAndUnitPolicy",
+    "packMergePolicy",
+    "evidenceRefs"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.agronomiccodebindingprofile.v0.1"
+    },
+    "agronomicCodeBindingProfileId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:/-]+$"
+    },
+    "profileState": {
+      "enum": [
+        "DRAFT",
+        "ACTIVE",
+        "DEPRECATED",
+        "SUPERSEDED"
+      ]
+    },
+    "issuedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "issuedByPartyRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:/-]+$"
+    },
+    "profileScope": {
+      "$ref": "#/$defs/profileScope"
+    },
+    "normativePosture": {
+      "$ref": "#/$defs/normativePosture"
+    },
+    "standardRoleMap": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/standardRole"
+      }
+    },
+    "bindingRequirements": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/bindingRequirement"
+      }
+    },
+    "quantityAndUnitPolicy": {
+      "$ref": "#/$defs/quantityAndUnitPolicy"
+    },
+    "packMergePolicy": {
+      "$ref": "#/$defs/packMergePolicy"
+    },
+    "compatibleWithSubstrateBundleRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:/-]+$"
+      }
+    },
+    "mappingCoverageStatementRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:/-]+$"
+      }
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:/-]+$"
+      }
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "profileScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profileDomain",
+        "jurisdiction"
+      ],
+      "properties": {
+        "profileDomain": {
+          "enum": [
+            "GENERAL_CROP",
+            "CROP_PROTECTION",
+            "NUTRIENT_MANAGEMENT",
+            "SEED_AND_VARIETY",
+            "IRRIGATION",
+            "MEASUREMENT_AND_SAMPLING",
+            "MIXED"
+          ]
+        },
+        "jurisdiction": {
+          "type": "string"
+        },
+        "cropSystemRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:/-]+$"
+        },
+        "packRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:/-]+$"
+          }
+        }
+      }
+    },
+    "normativePosture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "externalStandardsPosture",
+        "packMutationRule",
+        "freeTextIdentityRule"
+      ],
+      "properties": {
+        "externalStandardsPosture": {
+          "const": "ANCHORS_AND_BINDINGS_NOT_OFARM_LAW"
+        },
+        "packMutationRule": {
+          "const": "PACKS_CONSTRAIN_BINDINGS_ONLY"
+        },
+        "freeTextIdentityRule": {
+          "const": "FREE_TEXT_IS_EVIDENCE_NOT_ACCEPTED_IDENTITY"
+        }
+      }
+    },
+    "standardRole": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "standardRef",
+        "role",
+        "usage",
+        "status"
+      ],
+      "properties": {
+        "standardRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:/-]+$"
+        },
+        "standardName": {
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "SEMANTIC_ANCHOR",
+            "CODE_BINDING",
+            "EXCHANGE_MAPPING",
+            "RUNTIME_SURFACE",
+            "ATTESTATION_WRAPPER",
+            "LOCAL_PROFILE_SCHEME"
+          ]
+        },
+        "usage": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "PREFERRED",
+            "ALLOWED",
+            "OPTIONAL",
+            "REFERENCE_ONLY",
+            "NOT_RECOMMENDED"
+          ]
+        },
+        "jurisdiction": {
+          "type": "string"
+        },
+        "versionOrAccessDate": {
+          "type": "string"
+        }
+      }
+    },
+    "bindingRequirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bindingRole",
+        "requirementClass",
+        "preferredSchemeRefs",
+        "unresolvedBehavior"
+      ],
+      "properties": {
+        "bindingRole": {
+          "enum": [
+            "CROP_SPECIES",
+            "VARIETY_CULTIVAR",
+            "SEED_LOT",
+            "CROP_STAGE",
+            "PEST",
+            "WEED",
+            "DISEASE",
+            "TARGET_ORGANISM",
+            "CROP_PROTECTION_PRODUCT",
+            "FERTILIZER_PRODUCT",
+            "NUTRIENT_INPUT",
+            "IRRIGATION_WATER_SOURCE",
+            "PRODUCT_BATCH_OR_LOT",
+            "ACTIVE_SUBSTANCE",
+            "QUANTITY_KIND",
+            "UNIT_CODE",
+            "SAMPLING_METHOD",
+            "MEASUREMENT_METHOD",
+            "THRESHOLD_SOURCE",
+            "REGULATORY_AUTHORISATION",
+            "OTHER"
+          ]
+        },
+        "requirementClass": {
+          "enum": [
+            "REQUIRED_FOR_HIGH_CONSEQUENCE",
+            "REQUIRED_WHEN_PRESENT",
+            "OPTIONAL",
+            "PROFILE_SPECIFIC",
+            "DISALLOWED"
+          ]
+        },
+        "preferredSchemeRefs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:/-]+$"
+          }
+        },
+        "unresolvedBehavior": {
+          "enum": [
+            "BLOCK_PROMOTION",
+            "REQUIRE_REVIEW",
+            "EVIDENCE_ONLY",
+            "ALLOW_LOW_CONSEQUENCE_ONLY"
+          ]
+        },
+        "requiresSchemeVersion": {
+          "type": "boolean"
+        },
+        "requiresJurisdiction": {
+          "type": "boolean"
+        },
+        "requiresEvidence": {
+          "type": "boolean"
+        },
+        "requiresReferenceSnapshot": {
+          "type": "boolean"
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "quantityAndUnitPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requireQuantityKindAndUnitCode",
+        "quantityKindSchemeRef",
+        "unitCodeSchemeRef",
+        "preserveOriginalLexicalValueAndUnit"
+      ],
+      "properties": {
+        "requireQuantityKindAndUnitCode": {
+          "const": true
+        },
+        "quantityKindSchemeRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:/-]+$"
+        },
+        "unitCodeSchemeRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:/-]+$"
+        },
+        "preserveOriginalLexicalValueAndUnit": {
+          "const": true
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "packMergePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "conflictDisposition",
+        "profilePrecedenceRule",
+        "mustNotDo"
+      ],
+      "properties": {
+        "conflictDisposition": {
+          "enum": [
+            "FAIL_CLOSED",
+            "REQUIRE_GOVERNED_REVIEW",
+            "PROFILE_PRECEDENCE_WITH_TRACE"
+          ]
+        },
+        "profilePrecedenceRule": {
+          "type": "string"
+        },
+        "mustNotDo": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": [
+              "PACK_MUTATED_CORE_MEANING",
+              "SILENT_SCHEME_SUBSTITUTION",
+              "FREE_TEXT_AS_IDENTITY",
+              "UNRESOLVED_BINDING_AS_COMPLIANCE_TRUTH"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

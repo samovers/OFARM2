@@ -1,0 +1,178 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/semanticeventenvelope/v0.1",
+  "title": "OFARM SemanticEventEnvelope v0.1",
+  "$comment": "Minimal semantic-event boundary contract derived from Constitution RC2.1 \u00a7\u00a710.11, 11, 13; Platform RC2.1 \u00a7\u00a73.2, 6, 12; and the Event Grammar and Commit Matrix companion artifact.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "semanticEventId",
+    "primaryEventFamily",
+    "dominantSemanticConsequence",
+    "anchorScopes",
+    "subjectRefs",
+    "timeSemantics"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.semanticeventenvelope.v0.1"
+    },
+    "semanticEventId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "primaryEventFamily": {
+      "enum": [
+        "StructureEvent",
+        "ObservationEvent",
+        "OccurrenceEvent",
+        "InterventionEvent",
+        "MaterialEvent",
+        "EvidenceEvent",
+        "GovernanceEvent"
+      ]
+    },
+    "eventSubtypeId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._/:-]+$"
+    },
+    "dominantSemanticConsequence": {
+      "type": "string"
+    },
+    "anchorScopes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scopeType",
+          "scopeRef"
+        ],
+        "properties": {
+          "scopeType": {
+            "enum": [
+              "FARM",
+              "SITE",
+              "FIELD",
+              "ZONE",
+              "CROP_CYCLE",
+              "LOT",
+              "FACILITY",
+              "OPERATION",
+              "DEPLOYMENT",
+              "TENANT"
+            ]
+          },
+          "scopeRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]+$"
+          }
+        }
+      }
+    },
+    "subjectRefs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "linkedConsequenceFamilies": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "StructureEvent",
+          "ObservationEvent",
+          "OccurrenceEvent",
+          "InterventionEvent",
+          "MaterialEvent",
+          "EvidenceEvent",
+          "GovernanceEvent"
+        ]
+      }
+    },
+    "timeSemantics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recordTime"
+      ],
+      "properties": {
+        "observationTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "eventTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "assertionTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "recordTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "effectiveFrom": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "effectiveUntil": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "decisionTime": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "eventTime"
+          ]
+        },
+        {
+          "required": [
+            "observationTime"
+          ]
+        },
+        {
+          "required": [
+            "decisionTime"
+          ]
+        }
+      ]
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "notes": {
+      "type": "string"
+    },
+    "interventionIntentPayloadRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._/:-]+$"
+      },
+      "$comment": "Optional additive bridge to Phase AGR-P3 InterventionIntentPayload records."
+    },
+    "executionRecordPayloadRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._/:-]+$"
+      },
+      "$comment": "Optional additive bridge to Phase AGR-P3 ExecutionRecordPayload records."
+    }
+  }
+}

@@ -1,0 +1,256 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/authorizationdecisionresult/v0.1",
+  "title": "OFARM AuthorizationDecisionResult v0.1",
+  "$comment": "Minimal boundary result envelope for the authority gate derived from Authority Policy Model RFC v0.1 \u00a710 and Platform RC2.1 \u00a714.15.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "resultId",
+    "requestId",
+    "evaluatedAt",
+    "requestedActionClass",
+    "actionStage",
+    "decisionOutcome",
+    "revocationResult",
+    "inheritanceModeApplied",
+    "roleBasisUsed",
+    "grantBasisUsed",
+    "delegationBasisUsed",
+    "sharingBasisUsed",
+    "authorizationDecisionTraceRef",
+    "humanApprovalRequired",
+    "finalActionPermitted",
+    "problems",
+    "reasonSummary"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.authorizationdecisionresult.v0.1"
+    },
+    "resultId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "requestId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "evaluatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "requestedActionClass": {
+      "type": "string",
+      "pattern": "^[A-Z_]+$"
+    },
+    "actionStage": {
+      "enum": [
+        "DRAFT_PREPARATION",
+        "PROMOTION",
+        "PUBLICATION",
+        "ATTESTATION",
+        "QUERY_READ",
+        "CURRENT_STATE_USE",
+        "CONTEXT_ACTIVATION"
+      ]
+    },
+    "decisionOutcome": {
+      "enum": [
+        "ALLOW",
+        "DENY",
+        "REQUIRE_REVIEW",
+        "REQUIRE_HUMAN_APPROVAL"
+      ]
+    },
+    "revocationResult": {
+      "enum": [
+        "NONE_APPLICABLE",
+        "NO_ACTIVE_REVOCATION",
+        "ACTIVE_REVOCATION_FOUND"
+      ]
+    },
+    "inheritanceModeApplied": {
+      "enum": [
+        "EXACT_ONLY",
+        "DESCENDANT_SCOPES",
+        "DERIVED_LINEAGE_SCOPES",
+        "NO_INHERIT"
+      ]
+    },
+    "roleBasisUsed": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "grantBasisUsed": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "delegationBasisUsed": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "sharingBasisUsed": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "authorizationDecisionTraceRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "humanApprovalRequired": {
+      "type": "boolean"
+    },
+    "finalActionPermitted": {
+      "type": "boolean"
+    },
+    "reasonSummary": {
+      "type": "string"
+    },
+    "problems": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "problemId",
+          "severity",
+          "reasonCode",
+          "title",
+          "detail"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": "ofarm.runtimeproblem.v0.1"
+          },
+          "problemId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]+$"
+          },
+          "severity": {
+            "enum": [
+              "INFO",
+              "WARNING",
+              "ERROR"
+            ]
+          },
+          "reasonCode": {
+            "type": "string",
+            "pattern": "^[A-Z0-9_:-]+$"
+          },
+          "title": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "pointerRefs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "relatedRefs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._:-]+$"
+            }
+          },
+          "suggestedRemediation": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "decisionOutcome": {
+            "const": "ALLOW"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "finalActionPermitted": {
+            "const": true
+          },
+          "humanApprovalRequired": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "decisionOutcome": {
+            "const": "DENY"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "finalActionPermitted": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "decisionOutcome": {
+            "const": "REQUIRE_HUMAN_APPROVAL"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "finalActionPermitted": {
+            "const": false
+          },
+          "humanApprovalRequired": {
+            "const": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "revocationResult": {
+            "const": "ACTIVE_REVOCATION_FOUND"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "decisionOutcome": {
+            "enum": [
+              "DENY",
+              "REQUIRE_REVIEW"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}
