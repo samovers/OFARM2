@@ -1,0 +1,556 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/agronomicobservationcontext/v0.1",
+  "title": "OFARM AgronomicObservationContext v0.1",
+  "$comment": "Active machine contract derived from the Agronomic Observation and Measurement Context RFC v0.1. It supplies structured context around agronomic observations without replacing NarrativeObservation or bypassing promotion law.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "agronomicObservationContextId",
+    "contextState",
+    "observationClass",
+    "subject",
+    "observedPropertyRef",
+    "phenomenonTime",
+    "observationAgent",
+    "spatialContext",
+    "procedure",
+    "evidenceRefs",
+    "contextCompleteness",
+    "promotionUse"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.agronomicobservationcontext.v0.1"
+    },
+    "agronomicObservationContextId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "contextState": {
+      "enum": [
+        "REPORTED",
+        "REVIEWED",
+        "ACCEPTED_SUPPORT",
+        "DEGRADED_SUPPORT",
+        "DISPUTED",
+        "SUPERSEDED"
+      ]
+    },
+    "observationClass": {
+      "enum": [
+        "HUMAN_SCOUTING",
+        "FIELD_SAMPLE",
+        "SENSOR_OBSERVATION",
+        "LAB_CONTEXT",
+        "REMOTE_SENSING",
+        "MACHINE_OBSERVATION",
+        "THIRD_PARTY_REPORT",
+        "LOCAL_KNOWLEDGE"
+      ]
+    },
+    "narrativeObservationRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "subject": {
+      "$ref": "#/$defs/typedRef"
+    },
+    "targetScope": {
+      "$ref": "#/$defs/scopeRef"
+    },
+    "observedPropertyRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "phenomenonTime": {
+      "$ref": "#/$defs/timeObject"
+    },
+    "observationAgent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "agentType",
+        "agentRef"
+      ],
+      "properties": {
+        "agentType": {
+          "enum": [
+            "PARTY",
+            "SENSOR",
+            "SAMPLER",
+            "IMPORTED_SYSTEM",
+            "SOFTWARE_AGENT",
+            "MACHINE"
+          ]
+        },
+        "agentRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        }
+      }
+    },
+    "spatialContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "spatialBasis"
+      ],
+      "properties": {
+        "scope": {
+          "$ref": "#/$defs/scopeRef"
+        },
+        "partialExtentRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "geometryBasisRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "spatialBasis": {
+          "enum": [
+            "WHOLE_SCOPE",
+            "POINT_SAMPLE",
+            "COMPOSITE_SAMPLE_SUPPORT",
+            "ESTIMATED_PATCH",
+            "MEASURED_POLYGON",
+            "MACHINE_LOGGED_EXTENT",
+            "REMOTE_SENSED_EXTENT",
+            "DISPUTED_GEOMETRY",
+            "UNKNOWN"
+          ]
+        },
+        "spatialQuality": {
+          "enum": [
+            "EXACT_REFERENCE",
+            "MEASURED",
+            "ESTIMATED",
+            "INFERRED",
+            "DISPUTED",
+            "UNKNOWN"
+          ]
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "procedure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "procedureRef",
+        "procedureStatus"
+      ],
+      "properties": {
+        "procedureRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "procedureStatus": {
+          "enum": [
+            "PROFILE_BOUND",
+            "DOCUMENTED_METHOD",
+            "LOCAL_METHOD",
+            "UNSTRUCTURED_HUMAN_OBSERVATION",
+            "UNKNOWN_OR_MISSING"
+          ]
+        },
+        "samplingProtocolRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "measurementMethodRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "thresholdRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "cropCycleRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "cropBindings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/schemeBinding"
+      }
+    },
+    "phenologyStateBinding": {
+      "$ref": "#/$defs/schemeBinding"
+    },
+    "targetOrganismBindings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/schemeBinding"
+      }
+    },
+    "partEvaluated": {
+      "type": "string"
+    },
+    "severityOrPressure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "statement"
+      ],
+      "properties": {
+        "statement": {
+          "type": "string",
+          "minLength": 1
+        },
+        "quantity": {
+          "$ref": "#/$defs/quantity"
+        },
+        "scaleRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        }
+      }
+    },
+    "environmentalContextRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "measurementEvidenceRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "confidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "confidenceClass"
+      ],
+      "properties": {
+        "confidenceClass": {
+          "enum": [
+            "HIGH",
+            "MEDIUM",
+            "LOW",
+            "UNKNOWN",
+            "CONTESTED"
+          ]
+        },
+        "basis": {
+          "type": "string"
+        }
+      }
+    },
+    "uncertainty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "uncertaintyClass"
+      ],
+      "properties": {
+        "uncertaintyClass": {
+          "enum": [
+            "QUANTIFIED",
+            "QUALITATIVE",
+            "UNKNOWN",
+            "NOT_APPLICABLE"
+          ]
+        },
+        "statement": {
+          "type": "string"
+        },
+        "quantity": {
+          "$ref": "#/$defs/quantity"
+        }
+      }
+    },
+    "referenceSnapshotRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "relatedRecommendationRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "relatedPlannedInterventionRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "contextCompleteness": {
+      "enum": [
+        "COMPLETE_FOR_DECLARED_USE",
+        "DEGRADED_REVIEW_REQUIRED",
+        "NARRATIVE_SUPPORT_ONLY",
+        "INCOMPLETE_BLOCK_HIGH_CONSEQUENCE"
+      ]
+    },
+    "promotionUse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowedTwinScope",
+        "highConsequenceUse"
+      ],
+      "properties": {
+        "allowedTwinScope": {
+          "enum": [
+            "ADVISORY_ONLY",
+            "COMPLIANCE_ELIGIBLE_AFTER_REVIEW",
+            "COMPLIANCE_BLOCKED",
+            "BOTH_WITH_POLICY"
+          ]
+        },
+        "highConsequenceUse": {
+          "enum": [
+            "ELIGIBLE_AFTER_EVIDENCE_CHECK",
+            "REVIEW_REQUIRED",
+            "BLOCKED_PENDING_CONTEXT",
+            "BLOCKED_PENDING_RESULT",
+            "LOW_CONSEQUENCE_ONLY"
+          ]
+        },
+        "mustNotPromoteTo": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "ACCEPTED_EXECUTION",
+              "COMPLIANCE_FACT",
+              "PRESCRIPTION",
+              "PLANNED_OPERATION",
+              "CURRENT_STATE_DIRECTLY",
+              "ATTESTED_OUTPUT_DIRECTLY"
+            ]
+          }
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "notes": {
+      "type": "string"
+    },
+    "identityBindingRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._/:-]+$"
+      }
+    },
+    "codeBindingProfileRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._/:-]+$"
+    },
+    "agronomicIdentityBindingRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._/:-]+$"
+      },
+      "$comment": "Optional Phase AGR-P5 bridge to governed AgronomicIdentityBinding records."
+    },
+    "agronomicCodeBindingProfileRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._/:-]+$",
+      "$comment": "Optional Phase AGR-P5 bridge to an AgronomicCodeBindingProfile that governs scheme/role requirements."
+    }
+  },
+  "$defs": {
+    "scopeRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scopeType",
+        "scopeRef"
+      ],
+      "properties": {
+        "scopeType": {
+          "enum": [
+            "FARM",
+            "SITE",
+            "FIELD",
+            "ZONE",
+            "CROP_CYCLE",
+            "LOT",
+            "FACILITY",
+            "OPERATION",
+            "DEPLOYMENT",
+            "TENANT",
+            "SAMPLE",
+            "PARTIAL_EXTENT"
+          ]
+        },
+        "scopeRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        }
+      }
+    },
+    "typedRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "subjectType",
+        "subjectRef"
+      ],
+      "properties": {
+        "subjectType": {
+          "enum": [
+            "FIELD",
+            "ZONE",
+            "CROP_CYCLE",
+            "LOT",
+            "FACILITY",
+            "OPERATION",
+            "SAMPLE",
+            "PARTIAL_EXTENT",
+            "ASSERTION_RECORD",
+            "NARRATIVE_OBSERVATION",
+            "OTHER"
+          ]
+        },
+        "subjectRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        }
+      }
+    },
+    "timeObject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "timeType"
+      ],
+      "properties": {
+        "timeType": {
+          "enum": [
+            "INSTANT",
+            "INTERVAL"
+          ]
+        },
+        "instant": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "intervalStart": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "intervalEnd": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "timeBasis": {
+          "enum": [
+            "OBSERVED_TIME",
+            "SAMPLE_TIME",
+            "RESULT_TIME",
+            "RECORD_TIME",
+            "ESTIMATED_TIME"
+          ]
+        }
+      }
+    },
+    "schemeBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bindingRole",
+        "schemeRef",
+        "bindingStatus"
+      ],
+      "properties": {
+        "bindingRole": {
+          "type": "string",
+          "minLength": 1
+        },
+        "schemeRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "capturedLabel": {
+          "type": "string"
+        },
+        "schemeVersionRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "bindingStatus": {
+          "enum": [
+            "EXACT",
+            "PROVISIONAL",
+            "UNRESOLVED",
+            "NOT_REQUIRED"
+          ]
+        },
+        "evidenceRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]+$"
+          }
+        }
+      }
+    },
+    "quantity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "quantityKindRef",
+        "unitRef"
+      ],
+      "properties": {
+        "quantityKindRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "unitRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "value": {
+          "type": "number"
+        },
+        "originalLexicalValue": {
+          "type": "string"
+        },
+        "qualifier": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

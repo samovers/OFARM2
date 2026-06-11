@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/publicationassemblyrequest/v0.1",
+  "title": "OFARM PublicationAssemblyRequest v0.1",
+  "$comment": "Minimal boundary request envelope for publication/export assembly derived from Platform RC2.1 \u00a7\u00a73.9 and 10.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "requestId",
+    "requestedAt",
+    "requestedByPartyRef",
+    "publicationAction",
+    "outputKind",
+    "outputMetadataRef",
+    "targetScopes",
+    "requiresFrozenOutput",
+    "attestationRequested"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.publicationassemblyrequest.v0.1"
+    },
+    "requestId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "requestedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "requestedByPartyRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "requestedByAgentRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "publicationAction": {
+      "enum": [
+        "SERVE_PASSPORT_VIEW",
+        "FREEZE_DOCUMENT_ASSEMBLY",
+        "ATTEST_DOCUMENT_ASSEMBLY",
+        "FILE_SUBMISSION_ASSEMBLY",
+        "EXPORT_API_PAYLOAD"
+      ]
+    },
+    "outputKind": {
+      "enum": [
+        "PASSPORT_VIEW",
+        "REPORT_ASSEMBLY",
+        "DOSSIER_ASSEMBLY",
+        "SUBMISSION_ASSEMBLY"
+      ]
+    },
+    "outputMetadataRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "targetScopes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scopeType",
+          "scopeRef"
+        ],
+        "properties": {
+          "scopeType": {
+            "enum": [
+              "FARM",
+              "SITE",
+              "FIELD",
+              "ZONE",
+              "CROP_CYCLE",
+              "LOT",
+              "FACILITY",
+              "OPERATION",
+              "DEPLOYMENT",
+              "TENANT"
+            ]
+          },
+          "scopeRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]+$"
+          }
+        }
+      }
+    },
+    "recipientPartyRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "materializationResultRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "evidenceSufficiencyCaseRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "authorizationDecisionTraceRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "profileRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "requiresFrozenOutput": {
+      "type": "boolean"
+    },
+    "attestationRequested": {
+      "type": "boolean"
+    },
+    "reason": {
+      "type": "string"
+    }
+  }
+}

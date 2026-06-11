@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/drafts/non-default/explainable-current-state-evidence/runtime-materialization-benchmark-run/v0.1",
+  "title": "OFARM RuntimeMaterializationBenchmarkRun schema v0.1 draft/non-default",
+  "description": "Draft/non-default schema for benchmark evidence covering materialization, invalidation, trace behavior, storage amplification, and cold rebuild behavior.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "artifactType",
+    "contractStatus",
+    "draftNonDefault",
+    "promotedToCurrentDefault",
+    "benchmarkRunId",
+    "executedAt",
+    "runtimeIdentity",
+    "activeArtifactSetRef",
+    "datasetOrWorkloadGeneratorRef",
+    "runtimeQueryMixProfileRef",
+    "resourceEnvelope",
+    "storageBackendClass",
+    "duration",
+    "cacheState",
+    "latencyMeasurementsRef",
+    "fanoutMeasurementsRef",
+    "storageAmplificationReportRef",
+    "coldRebuildEvidenceRef",
+    "benchmarkEvidenceNotFarmTruth",
+    "doesNotOverrideActiveBaseline"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.explainableCurrentStateEvidence.runtimeMaterializationBenchmarkRun.v0.1-draft"
+    },
+    "artifactType": {
+      "const": "RuntimeMaterializationBenchmarkRun"
+    },
+    "contractStatus": {
+      "const": "DRAFT_NON_DEFAULT"
+    },
+    "draftNonDefault": {
+      "const": true
+    },
+    "promotedToCurrentDefault": {
+      "const": false
+    },
+    "benchmarkRunId": {
+      "$ref": "#/$defs/ref"
+    },
+    "executedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "runtimeIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runtimeRef",
+        "runtimeVersion"
+      ],
+      "properties": {
+        "runtimeRef": {
+          "$ref": "#/$defs/ref"
+        },
+        "runtimeVersion": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "activeArtifactSetRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "datasetOrWorkloadGeneratorRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "runtimeQueryMixProfileRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "workloadProfileRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "resourceEnvelope": {
+      "type": "object",
+      "additionalProperties": true,
+      "minProperties": 1,
+      "description": "Platform-neutral hardware, deployment, tenancy, and resource assumptions."
+    },
+    "storageBackendClass": {
+      "type": "string",
+      "minLength": 1
+    },
+    "scale": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tenantCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "farmCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "fieldCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cropCycleCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "lotCount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "duration": {
+      "type": "string",
+      "minLength": 1
+    },
+    "cacheState": {
+      "enum": [
+        "WARM",
+        "COLD",
+        "MIXED",
+        "DECLARED"
+      ]
+    },
+    "latencyMeasurementsRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "throughputMeasurements": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "fanoutMeasurementsRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "storageAmplificationReportRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "failuresRefusalsAndReviews": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "disposition",
+          "count"
+        ],
+        "properties": {
+          "disposition": {
+            "enum": [
+              "FAILURE",
+              "REFUSAL",
+              "REVIEW_REQUIRED",
+              "WARNING"
+            ]
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "coldRebuildEvidenceRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "reproducibilityNotes": {
+      "type": "string"
+    },
+    "benchmarkEvidenceNotFarmTruth": {
+      "const": true
+    },
+    "doesNotOverrideActiveBaseline": {
+      "const": true
+    }
+  },
+  "$defs": {
+    "ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:/#-]+$"
+    }
+  }
+}

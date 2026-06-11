@@ -1,0 +1,272 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/result-qualification-envelope/v0.1",
+  "title": "OFARM ResultQualificationEnvelope v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "qualificationId",
+    "qualifiedAt",
+    "asOf",
+    "surfaceClass",
+    "twinScope",
+    "truthPosture",
+    "authorityLevel",
+    "candidateStatus",
+    "disputeStatus",
+    "stalenessClass",
+    "evidenceSufficiency",
+    "permissionClass",
+    "dataAbsentReason",
+    "highConsequenceUseAllowed",
+    "allowedUseClasses",
+    "blockedUseClasses",
+    "traceRefs",
+    "displayHints"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.resultqualificationenvelope.v0.1"
+    },
+    "qualificationId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:/#-]+$"
+    },
+    "qualifiedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "asOf": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "surfaceClass": {
+      "enum": [
+        "QUERY_RESULT",
+        "MATERIALIZATION_READ",
+        "PUBLIC_READ_MODEL",
+        "PASSPORT_VIEW_PREVIEW",
+        "DOCUMENT_ASSEMBLY_PREVIEW",
+        "OUTPUT_ASSEMBLY_RESULT"
+      ]
+    },
+    "twinScope": {
+      "enum": [
+        "COMPLIANCE",
+        "ADVISORY",
+        "BOTH",
+        "NONE",
+        "MIXED"
+      ]
+    },
+    "truthPosture": {
+      "enum": [
+        "CANONICAL_HISTORY_DIRECT",
+        "GOVERNED_MATERIALIZATION",
+        "COMPILED_OUTPUT",
+        "CANDIDATE_ONLY",
+        "ADVISORY_ONLY",
+        "UNKNOWN_OR_MIXED"
+      ]
+    },
+    "authorityLevel": {
+      "enum": [
+        "FULL",
+        "SCOPE_LIMITED",
+        "PERMISSION_LIMITED",
+        "REDACTED",
+        "NOT_AUTHORIZED",
+        "NOT_EVALUATED"
+      ]
+    },
+    "candidateStatus": {
+      "enum": [
+        "NOT_CANDIDATE",
+        "CANDIDATE_ONLY",
+        "PROMOTION_PENDING",
+        "PROMOTION_REFUSED",
+        "PROMOTED",
+        "MIXED"
+      ]
+    },
+    "disputeStatus": {
+      "enum": [
+        "NONE",
+        "OPEN_DISPUTE",
+        "DISPUTED_BASIS",
+        "CORRECTED",
+        "SUPERSEDED",
+        "MIXED"
+      ]
+    },
+    "stalenessClass": {
+      "enum": [
+        "FRESH",
+        "STALE_INFORMATIONAL",
+        "STALE_BLOCKING",
+        "INVALIDATED",
+        "NOT_APPLICABLE",
+        "UNKNOWN"
+      ]
+    },
+    "evidenceSufficiency": {
+      "enum": [
+        "SUFFICIENT",
+        "INSUFFICIENT",
+        "MISSING",
+        "REDACTED",
+        "REVIEW_REQUIRED",
+        "NOT_APPLICABLE"
+      ]
+    },
+    "permissionClass": {
+      "enum": [
+        "FULL_DETAIL",
+        "PARTIAL_REDACTION",
+        "AGGREGATED_ONLY",
+        "WITHHELD_BY_AUTHORITY",
+        "TENANT_BOUNDARY_BLOCKED",
+        "NOT_EVALUATED"
+      ]
+    },
+    "dataAbsentReason": {
+      "enum": [
+        "NOT_ABSENT",
+        "NOT_COLLECTED",
+        "NOT_APPLICABLE",
+        "UNKNOWN",
+        "UNAVAILABLE",
+        "REDACTED",
+        "PERMISSION_LIMITED",
+        "NOT_YET_PROMOTED",
+        "STALE_OR_INVALID",
+        "DISPUTED"
+      ]
+    },
+    "highConsequenceUseAllowed": {
+      "type": "boolean"
+    },
+    "allowedUseClasses": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "ADVISORY_DISPLAY",
+          "INFORMATIONAL_DASHBOARD",
+          "FARMER_WORKFLOW_HINT",
+          "COMPLIANCE_REVIEW",
+          "COMPLIANCE_OUTPUT_INPUT",
+          "HIGH_CONSEQUENCE_DECISION",
+          "EXPORT_API_PAYLOAD"
+        ]
+      }
+    },
+    "blockedUseClasses": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "ADVISORY_DISPLAY",
+          "INFORMATIONAL_DASHBOARD",
+          "FARMER_WORKFLOW_HINT",
+          "COMPLIANCE_REVIEW",
+          "COMPLIANCE_OUTPUT_INPUT",
+          "HIGH_CONSEQUENCE_DECISION",
+          "EXPORT_API_PAYLOAD"
+        ]
+      }
+    },
+    "derivedFromPromotionPoint": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:/#-]+$"
+    },
+    "materializationResultRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:/#-]+$"
+    },
+    "queryExecutionResultRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:/#-]+$"
+    },
+    "outputAssemblyResultRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:/#-]+$"
+    },
+    "sourceRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:/#-]+$"
+      }
+    },
+    "redactions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fieldPath",
+          "reasonCode",
+          "redactionClass"
+        ],
+        "properties": {
+          "fieldPath": {
+            "type": "string"
+          },
+          "reasonCode": {
+            "type": "string",
+            "pattern": "^[A-Z0-9_:-]+$"
+          },
+          "redactionClass": {
+            "enum": [
+              "AUTHORITY",
+              "TENANT_BOUNDARY",
+              "PERSONAL_DATA",
+              "CONFIDENTIAL_BUSINESS",
+              "REGULATORY_LIMIT",
+              "UNKNOWN"
+            ]
+          },
+          "safeExplanation": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "traceRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:/#-]+$"
+      }
+    },
+    "displayHints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "safeLabel",
+        "userMessage",
+        "forbiddenLabels"
+      ],
+      "properties": {
+        "safeLabel": {
+          "type": "string"
+        },
+        "userMessage": {
+          "type": "string"
+        },
+        "forbiddenLabels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "nextActionLabel": {
+          "type": "string"
+        }
+      }
+    },
+    "notes": {
+      "type": "string"
+    }
+  }
+}

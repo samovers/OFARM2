@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/cropcycleidentitypayload/v0.1",
+  "title": "OFARM CropCycleIdentityPayload v0.1 (candidate)",
+  "$comment": "NEW_CANDIDATE structure-assertion payload for the CropCycle durable identity (Constitution RC2.1 section 7.21). autoCreated supports low-friction onboarding; auto-created cycles remain revisable under identity-revision law.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "cropcycleidentitypayloadId",
+    "identityRecordRef",
+    "recordedAt",
+    "parentScopeRefs",
+    "seasonLabel",
+    "cycleState"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.cropcycleidentitypayload.v0.1"
+    },
+    "cropcycleidentitypayloadId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "identityRecordRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "recordedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "parentScopeRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      },
+      "minItems": 1
+    },
+    "cropBindingRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "seasonLabel": {
+      "type": "string",
+      "minLength": 1
+    },
+    "cycleState": {
+      "enum": [
+        "PLANNED",
+        "ESTABLISHED",
+        "ACTIVE",
+        "TERMINATED",
+        "FAILED",
+        "COMPLETED"
+      ]
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "endedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "autoCreated": {
+      "type": "boolean"
+    },
+    "overlapRelationRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    }
+  }
+}

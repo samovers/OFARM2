@@ -1,0 +1,233 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/commitingressresult/v0.1",
+  "title": "OFARM CommitIngressResult v0.1",
+  "$comment": "Minimal event-ingress result envelope derived from Platform RC2.1 \u00a7\u00a73, 5.5, 6.6, 12 and the Event Ingress and Promotion Boundary Closure RFC v0.1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "resultId",
+    "requestId",
+    "processedAt",
+    "decisionOutcome",
+    "commitClass",
+    "primaryEventFamily",
+    "semanticEventRef",
+    "idempotencyDisposition",
+    "promotionTraceRef",
+    "problems",
+    "reasonSummary"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.commitingressresult.v0.1"
+    },
+    "resultId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "requestId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "processedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "decisionOutcome": {
+      "enum": [
+        "RETAIN_DRAFT",
+        "REQUIRE_REVIEW",
+        "PROMOTE_ACCEPTED",
+        "DENY",
+        "REPLAY_REUSED_RESULT"
+      ]
+    },
+    "commitClass": {
+      "enum": [
+        "NOTE",
+        "OBSERVATION_ASSERTION",
+        "HYPOTHESIS_ASSERTION",
+        "STRUCTURE_ASSERTION",
+        "OPERATION_CLAIM",
+        "EVIDENCE_RECORD",
+        "COMPLIANCE_ASSERTION",
+        "GOVERNANCE_DECISION",
+        "ADVISORY_OUTPUT"
+      ]
+    },
+    "primaryEventFamily": {
+      "enum": [
+        "StructureEvent",
+        "ObservationEvent",
+        "OccurrenceEvent",
+        "InterventionEvent",
+        "MaterialEvent",
+        "EvidenceEvent",
+        "GovernanceEvent"
+      ]
+    },
+    "semanticEventRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "idempotencyDisposition": {
+      "enum": [
+        "NEW_REQUEST",
+        "REPLAY_MATCH_REUSED_RESULT",
+        "CONFLICTING_REPLAY_BLOCKED",
+        "NOT_EVALUATED"
+      ]
+    },
+    "replayOfRequestId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "emittedAssertionRecordRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "emittedReviewDecisionRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "emittedAcceptedConsequenceRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "inForceResultCategory": {
+      "enum": [
+        "ACCEPTED_STRUCTURAL_STATE",
+        "ACCEPTED_OBSERVATION_OCCURRENCE_STATE",
+        "ACCEPTED_EXECUTED_INTERVENTION_CONSEQUENCE",
+        "ACCEPTED_MATERIAL_STATE",
+        "COMPLIANCE_FACT"
+      ]
+    },
+    "inForceArtifactRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "currentStateMaterializationTriggered": {
+      "type": "boolean"
+    },
+    "promotionTraceRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "reasonSummary": {
+      "type": "string"
+    },
+    "problems": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "problemId",
+          "severity",
+          "reasonCode",
+          "title",
+          "detail"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": "ofarm.runtimeproblem.v0.1"
+          },
+          "problemId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]+$"
+          },
+          "severity": {
+            "enum": [
+              "INFO",
+              "WARNING",
+              "ERROR"
+            ]
+          },
+          "reasonCode": {
+            "type": "string",
+            "pattern": "^[A-Z0-9_:-]+$"
+          },
+          "title": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "pointerRefs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "relatedRefs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._:-]+$"
+            }
+          },
+          "suggestedRemediation": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "decisionOutcome": {
+            "const": "PROMOTE_ACCEPTED"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "inForceResultCategory",
+          "inForceArtifactRefs"
+        ],
+        "properties": {
+          "idempotencyDisposition": {
+            "const": "NEW_REQUEST"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "decisionOutcome": {
+            "const": "REPLAY_REUSED_RESULT"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "replayOfRequestId"
+        ],
+        "properties": {
+          "idempotencyDisposition": {
+            "const": "REPLAY_MATCH_REUSED_RESULT"
+          }
+        }
+      }
+    }
+  ]
+}

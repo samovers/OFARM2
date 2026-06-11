@@ -1,0 +1,522 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/partialextent/v0.1",
+  "title": "OFARM PartialExtent v0.1",
+  "$comment": "Minimal carrier for event-bound sampled, treatment, failed-pass, replant, damage, and disputed geometries. It records geometry basis and quality without turning every slice into a durable OFARM identity.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "partialExtentId",
+    "extentRole",
+    "extentState",
+    "createdAt",
+    "anchorScope",
+    "parentScope",
+    "temporalApplicability",
+    "geometryBasis",
+    "qualityStatement",
+    "durableIdentityPolicy",
+    "evidenceRefs",
+    "promotionBoundary"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.partialextent.v0.1"
+    },
+    "partialExtentId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "extentRole": {
+      "enum": [
+        "SAMPLED_AREA",
+        "OBSERVED_PATCH",
+        "TREATMENT_AREA",
+        "FAILED_PASS",
+        "RETREATMENT_AREA",
+        "REPLANT_AREA",
+        "DAMAGE_AREA",
+        "DISPUTED_GEOMETRY",
+        "OPERATIONAL_PASS",
+        "OTHER"
+      ]
+    },
+    "extentState": {
+      "enum": [
+        "DRAFT",
+        "CLAIMED",
+        "EVIDENCE_RETAINED",
+        "REVIEW_REQUIRED",
+        "ACCEPTED_FOR_DECLARED_USE",
+        "DISPUTED",
+        "SUPERSEDED"
+      ]
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "createdByPartyRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "anchorScope": {
+      "$ref": "#/$defs/scopeRef"
+    },
+    "parentScope": {
+      "$ref": "#/$defs/scopeRef"
+    },
+    "relatedScopes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/scopeRef"
+      }
+    },
+    "temporalApplicability": {
+      "$ref": "#/$defs/timeObject"
+    },
+    "geometryBasis": {
+      "$ref": "#/$defs/geometryBasis"
+    },
+    "qualityStatement": {
+      "$ref": "#/$defs/qualityStatement"
+    },
+    "durableIdentityPolicy": {
+      "$ref": "#/$defs/durableIdentityPolicy"
+    },
+    "relationships": {
+      "$ref": "#/$defs/extentRelationships"
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "referenceSnapshotRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "promotionBoundary": {
+      "$ref": "#/$defs/promotionBoundary"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "agronomicIdentityBindingRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._/:-]+$"
+      },
+      "$comment": "Optional Phase AGR-P5 bridge to governed AgronomicIdentityBinding records."
+    },
+    "agronomicCodeBindingProfileRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._/:-]+$",
+      "$comment": "Optional Phase AGR-P5 bridge to an AgronomicCodeBindingProfile that governs scheme/role requirements."
+    }
+  },
+  "$defs": {
+    "scopeRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scopeType",
+        "scopeRef"
+      ],
+      "properties": {
+        "scopeType": {
+          "enum": [
+            "FARM",
+            "SITE",
+            "FIELD",
+            "ZONE",
+            "CROP_CYCLE",
+            "LOT",
+            "FACILITY",
+            "OPERATION",
+            "DEPLOYMENT",
+            "TENANT",
+            "PARTIAL_EXTENT",
+            "SAMPLE"
+          ]
+        },
+        "scopeRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        }
+      }
+    },
+    "timeObject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "timeType",
+        "timeBasis"
+      ],
+      "properties": {
+        "timeType": {
+          "enum": [
+            "INSTANT",
+            "INTERVAL",
+            "OPEN_INTERVAL",
+            "AS_OF"
+          ]
+        },
+        "instant": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "intervalStart": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "intervalEnd": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "timeBasis": {
+          "enum": [
+            "OBSERVED_TIME",
+            "SAMPLE_TIME",
+            "PRESCRIPTION_WINDOW",
+            "EXECUTION_INTERVAL",
+            "DAMAGE_WINDOW",
+            "REPLANT_WINDOW",
+            "RECORD_TIME",
+            "ESTIMATED_TIME"
+          ]
+        }
+      }
+    },
+    "quantity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "quantityKindRef",
+        "unitRef",
+        "value"
+      ],
+      "properties": {
+        "quantityKindRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._/:-]+$"
+        },
+        "unitRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._/:-]+$"
+        },
+        "value": {
+          "type": "number"
+        },
+        "reportedValue": {
+          "type": "string"
+        },
+        "reportedUnitLabel": {
+          "type": "string"
+        },
+        "qualifier": {
+          "enum": [
+            "EXACT",
+            "ESTIMATED",
+            "MACHINE_REPORTED",
+            "HUMAN_REPORTED",
+            "CALCULATED",
+            "DISPUTED"
+          ]
+        }
+      }
+    },
+    "geometryBasis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "geometryBasisKind",
+        "geometrySource",
+        "geometryMethod",
+        "coordinateReferenceSystem",
+        "representation",
+        "geometryQualityClass"
+      ],
+      "properties": {
+        "geometryBasisKind": {
+          "enum": [
+            "DECLARED_WHOLE_SCOPE",
+            "OPERATOR_SKETCH",
+            "HUMAN_ESTIMATE",
+            "MACHINE_POLYGON",
+            "GNSS_TRACK",
+            "REMOTE_SENSED_EXTENT",
+            "SAMPLE_PROTOCOL_SUPPORT",
+            "LAB_OR_FIELD_SHEET",
+            "INFERRED",
+            "DISPUTED_PARALLEL_GEOMETRY",
+            "NOT_SPATIAL"
+          ]
+        },
+        "geometrySource": {
+          "enum": [
+            "HUMAN_SCOUTING",
+            "OPERATOR_SKETCH",
+            "MACHINE_LOG",
+            "TASK_CONTROLLER",
+            "REMOTE_SENSING",
+            "LAB_OR_SAMPLE_SHEET",
+            "EXTERNAL_REGISTRY",
+            "DERIVED_CALCULATION",
+            "UNKNOWN"
+          ]
+        },
+        "geometryMethod": {
+          "type": "string",
+          "minLength": 1
+        },
+        "coordinateReferenceSystem": {
+          "type": "string",
+          "minLength": 1
+        },
+        "representation": {
+          "enum": [
+            "INLINE_GEOJSON",
+            "EXTERNAL_REFERENCE",
+            "WKT_LITERAL",
+            "FIELD_SKETCH_REF",
+            "POINT_ONLY",
+            "NONE"
+          ]
+        },
+        "geometryRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "wktLiteral": {
+          "type": "string"
+        },
+        "inlineGeoJSON": {
+          "type": "object"
+        },
+        "sourceSystemRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "sourcePayloadRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "sourcePayloadHash": {
+          "type": "string"
+        },
+        "horizontalAccuracy": {
+          "$ref": "#/$defs/quantity"
+        },
+        "simplificationOrInferenceNote": {
+          "type": "string"
+        },
+        "geometryQualityClass": {
+          "enum": [
+            "EXACT_REFERENCE",
+            "MEASURED",
+            "MACHINE_REPORTED",
+            "HUMAN_SKETCHED",
+            "ESTIMATED",
+            "INFERRED",
+            "DISPUTED",
+            "UNKNOWN"
+          ]
+        }
+      }
+    },
+    "qualityStatement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "basisStatus",
+        "qualityClass"
+      ],
+      "properties": {
+        "basisStatus": {
+          "enum": [
+            "ACCEPTED",
+            "PROVISIONAL",
+            "ESTIMATED",
+            "INFERRED",
+            "DISPUTED",
+            "UNRESOLVED",
+            "FUTURE_REVIEW_REQUIRED"
+          ]
+        },
+        "qualityClass": {
+          "enum": [
+            "EXACT_REFERENCE",
+            "MEASURED",
+            "MACHINE_REPORTED",
+            "HUMAN_SKETCHED",
+            "ESTIMATED",
+            "INFERRED",
+            "DISPUTED",
+            "UNKNOWN"
+          ]
+        },
+        "measuredOrStatedArea": {
+          "$ref": "#/$defs/quantity"
+        },
+        "areaBasis": {
+          "enum": [
+            "MEASURED",
+            "MACHINE_REPORTED",
+            "HUMAN_ESTIMATED",
+            "CALCULATED",
+            "DISPUTED",
+            "NOT_APPLICABLE"
+          ]
+        },
+        "precisionStatement": {
+          "type": "string"
+        },
+        "representativenessStatement": {
+          "type": "string"
+        }
+      }
+    },
+    "durableIdentityPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "createsDurableIdentity",
+        "durableIdentityDecision"
+      ],
+      "properties": {
+        "createsDurableIdentity": {
+          "type": "boolean"
+        },
+        "durableIdentityDecision": {
+          "enum": [
+            "EVENT_BOUND_ONLY",
+            "NO_NEW_CONSTITUTIONAL_IDENTITY",
+            "REUSES_EXISTING_SCOPE",
+            "CREATES_OR_REVISES_DURABLE_SCOPE",
+            "REVIEW_REQUIRED"
+          ]
+        },
+        "durableIdentityRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "identityLifecycleChangeRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "rationale": {
+          "type": "string"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "createsDurableIdentity": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "durableIdentityRef"
+            ]
+          }
+        }
+      ]
+    },
+    "extentRelationships": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "supersedesPartialExtentRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "supersededByPartialExtentRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "derivedFromPartialExtentRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]+$"
+          }
+        },
+        "overlapsPartialExtentRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]+$"
+          }
+        },
+        "reTreatmentOfPartialExtentRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]+$"
+          }
+        },
+        "disputedWithPartialExtentRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]+$"
+          }
+        }
+      }
+    },
+    "promotionBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "highConsequenceUse",
+        "mayDriveMaterialization",
+        "mustNotPromoteTo"
+      ],
+      "properties": {
+        "highConsequenceUse": {
+          "enum": [
+            "USE_ALLOWED_FOR_DECLARED_PURPOSE",
+            "REVIEW_REQUIRED",
+            "EVIDENCE_ONLY",
+            "PROVISIONAL_ONLY",
+            "DISPUTE_ONLY"
+          ]
+        },
+        "mayDriveMaterialization": {
+          "type": "boolean"
+        },
+        "mustNotPromoteTo": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "WHOLE_FIELD_TRUTH",
+              "DURABLE_IDENTITY",
+              "ACCEPTED_EXECUTION",
+              "COMPLIANCE_FACT",
+              "CURRENT_STATE_DIRECTLY",
+              "PASSPORT_VIEW_DEFAULT"
+            ]
+          }
+        },
+        "stageSeparationStatement": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

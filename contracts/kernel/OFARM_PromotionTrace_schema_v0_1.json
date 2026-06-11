@@ -1,0 +1,198 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/promotiontrace/v0.1",
+  "title": "OFARM PromotionTrace v0.1",
+  "$comment": "Minimal promotion-trace contract derived from Constitution RC2.1 \u00a7\u00a710-13, Platform RC2.1 \u00a73 and \u00a712, and the Event Ingress and Promotion Boundary Closure RFC v0.1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "promotionTraceId",
+    "requestId",
+    "evaluatedAt",
+    "semanticEventRef",
+    "commitClass",
+    "primaryEventFamily",
+    "idempotencyKey",
+    "idempotencyDisposition",
+    "gateSequence",
+    "finalOutcome",
+    "traceSummary"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.promotiontrace.v0.1"
+    },
+    "promotionTraceId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "requestId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "evaluatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "semanticEventRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "commitClass": {
+      "enum": [
+        "NOTE",
+        "OBSERVATION_ASSERTION",
+        "HYPOTHESIS_ASSERTION",
+        "STRUCTURE_ASSERTION",
+        "OPERATION_CLAIM",
+        "EVIDENCE_RECORD",
+        "COMPLIANCE_ASSERTION",
+        "GOVERNANCE_DECISION",
+        "ADVISORY_OUTPUT"
+      ]
+    },
+    "primaryEventFamily": {
+      "enum": [
+        "StructureEvent",
+        "ObservationEvent",
+        "OccurrenceEvent",
+        "InterventionEvent",
+        "MaterialEvent",
+        "EvidenceEvent",
+        "GovernanceEvent"
+      ]
+    },
+    "idempotencyKey": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "idempotencyDisposition": {
+      "enum": [
+        "NEW_REQUEST",
+        "REPLAY_MATCH_REUSED_RESULT",
+        "CONFLICTING_REPLAY_BLOCKED",
+        "NOT_EVALUATED"
+      ]
+    },
+    "replayOfRequestId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "gateSequence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "gate",
+          "outcome"
+        ],
+        "properties": {
+          "gate": {
+            "enum": [
+              "INGRESS_NORMALIZATION",
+              "AUTHORITY",
+              "VALIDATION",
+              "PACK_PROFILE_APPLICABILITY",
+              "EVIDENCE_SUFFICIENCY",
+              "REVIEW_PROMOTION",
+              "CURRENT_STATE_MATERIALIZATION",
+              "PUBLICATION_EXPORT_TRACEABILITY"
+            ]
+          },
+          "outcome": {
+            "type": "string",
+            "pattern": "^[A-Z0-9_:-]+$"
+          },
+          "rationale": {
+            "type": "string"
+          },
+          "relatedArtifactRefs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._:-]+$"
+            }
+          }
+        }
+      }
+    },
+    "finalOutcome": {
+      "enum": [
+        "RETAIN_DRAFT",
+        "REQUIRE_REVIEW",
+        "PROMOTE_ACCEPTED",
+        "DENY",
+        "REPLAY_REUSED_RESULT"
+      ]
+    },
+    "inForceResultCategory": {
+      "enum": [
+        "ACCEPTED_STRUCTURAL_STATE",
+        "ACCEPTED_OBSERVATION_OCCURRENCE_STATE",
+        "ACCEPTED_EXECUTED_INTERVENTION_CONSEQUENCE",
+        "ACCEPTED_MATERIAL_STATE",
+        "COMPLIANCE_FACT"
+      ]
+    },
+    "emittedAssertionRecordRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "emittedReviewDecisionRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "emittedAcceptedConsequenceRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "authorizationDecisionResultRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "evidenceSufficiencyCaseRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "materializationResultRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "traceSummary": {
+      "type": "string"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "finalOutcome": {
+            "const": "REPLAY_REUSED_RESULT"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "replayOfRequestId"
+        ],
+        "properties": {
+          "idempotencyDisposition": {
+            "const": "REPLAY_MATCH_REUSED_RESULT"
+          }
+        }
+      }
+    }
+  ]
+}

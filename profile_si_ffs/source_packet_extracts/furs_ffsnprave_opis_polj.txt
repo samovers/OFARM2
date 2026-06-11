@@ -1,0 +1,44 @@
+OPIS POLJ
+NapravaID
+StatusNaprave
+SkladnostNaprave
+ZadnjaStevilkaZnaka
+VeljavnostZnaka
+ZadnjiPregled
+VrstaNaprave
+Izdelovalec
+LetoIzdelave
+TipNaprave
+SerijskaStevilka
+LetoNakupa
+ObcinaStalnegaBivaliscaLastnika
+PregledID
+LetoPregleda
+DatumPregleda
+StevilkaZnaka
+SkladnostObPregledu
+StatRegijaMestaPregleda
+ObcinaMestaPregleda
+
+Enolični identifikator naprave.
+Status naprave (aktivna/neaktivna/uničena).
+Skladnost naprave (DA/NE) s predpisi.
+Zadnja dodeljena številka znaka naprave.
+Zadnja veljavnost znaka naprave.
+Zadnji opravljeni pregled naprave.
+Vrsta naprave.
+Izdelovalec naprave.
+Leto izdelave naprave.
+Tip naprave.
+Serijska številka naprave.
+Leto nakupa naprave.
+Občina stalnega prebivališča lastnika naprave.
+Enolični identifikator pregleda naprave.
+Leto pregleda naprave.
+Datum pregleda naprave.
+Stevilka znaka naprave.
+Skladnost naprave ob pregledu (DA/NE) s predpisi.
+Statistična regija kraja, kjer je bil opravljen pregled naprave.
+Občina kraja, kjer je bil opravljen pregled naprave.
+
+

@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/narrativeobservation/v0.1",
+  "title": "OFARM NarrativeObservation v0.1",
+  "$comment": "Minimal machine contract derived from the harmonized Alignment Register v0.13 and the Local Knowledge and Planning Closure RFC v0.1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "narrativeObservationId",
+    "observedAt",
+    "observerPartyRef",
+    "targetScope",
+    "narrativeText",
+    "observationState"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.narrativeobservation.v0.1"
+    },
+    "narrativeObservationId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "observedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "observerPartyRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "capturedByAgentRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "targetScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scopeType",
+        "scopeRef"
+      ],
+      "properties": {
+        "scopeType": {
+          "enum": [
+            "FARM",
+            "SITE",
+            "FIELD",
+            "ZONE",
+            "CROP_CYCLE",
+            "LOT",
+            "FACILITY",
+            "OPERATION",
+            "DEPLOYMENT",
+            "TENANT"
+          ]
+        },
+        "scopeRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        }
+      }
+    },
+    "narrativeText": {
+      "type": "string",
+      "minLength": 1
+    },
+    "observationState": {
+      "enum": [
+        "REPORTED",
+        "REVIEWED",
+        "SUPERSEDED"
+      ]
+    },
+    "languageTag": {
+      "type": "string"
+    },
+    "localArtifactRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "notes": {
+      "type": "string"
+    }
+  }
+}

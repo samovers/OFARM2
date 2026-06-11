@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/drafts/non-default/explainable-current-state-evidence/runtime-query-mix-profile/v0.1",
+  "title": "OFARM RuntimeQueryMixProfile schema v0.1 draft/non-default",
+  "description": "Draft/non-default schema for declaring the query mix exercised by an explainable current-state benchmark.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "artifactType",
+    "contractStatus",
+    "draftNonDefault",
+    "promotedToCurrentDefault",
+    "queryMixProfileId",
+    "declaredAt",
+    "queryClasses"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.explainableCurrentStateEvidence.runtimeQueryMixProfile.v0.1-draft"
+    },
+    "artifactType": {
+      "const": "RuntimeQueryMixProfile"
+    },
+    "contractStatus": {
+      "const": "DRAFT_NON_DEFAULT"
+    },
+    "draftNonDefault": {
+      "const": true
+    },
+    "promotedToCurrentDefault": {
+      "const": false
+    },
+    "queryMixProfileId": {
+      "$ref": "#/$defs/ref"
+    },
+    "declaredAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "queryClasses": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "queryClass",
+          "useClass",
+          "twin",
+          "traceTier",
+          "relativeWeight"
+        ],
+        "properties": {
+          "queryClass": {
+            "enum": [
+              "LOW_CONSEQUENCE_DASHBOARD_READ",
+              "OPERATIONAL_CURRENT_STATE_READ",
+              "ADVISORY_TWIN_SCENARIO_READ",
+              "COMPLIANCE_TWIN_HIGH_CONSEQUENCE_READ",
+              "PASSPORT_VIEW_INPUT_MATERIALIZATION",
+              "DOCUMENT_ASSEMBLY_INPUT_MATERIALIZATION",
+              "FORMAL_SUBMISSION_MATERIALIZATION",
+              "AUDIT_RECONSTRUCTION_TRACE_RETRIEVAL"
+            ]
+          },
+          "useClass": {
+            "$ref": "#/$defs/useClass"
+          },
+          "twin": {
+            "enum": [
+              "COMPLIANCE",
+              "ADVISORY"
+            ]
+          },
+          "traceTier": {
+            "$ref": "#/$defs/traceTier"
+          },
+          "relativeWeight": {
+            "type": "number",
+            "minimum": 0
+          },
+          "expectedResultMode": {
+            "type": "string"
+          },
+          "materializationReadMode": {
+            "enum": [
+              "CREATE",
+              "REFRESH",
+              "REUSE_IF_FRESH",
+              "TRACE_RETRIEVAL_ONLY"
+            ]
+          }
+        }
+      }
+    },
+    "coveredFamilies": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    }
+  },
+  "$defs": {
+    "ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:/#-]+$"
+    },
+    "useClass": {
+      "enum": [
+        "EXPLORATORY_VIEW",
+        "OPERATIONAL_DASHBOARD",
+        "ADVISORY_SCENARIO",
+        "COMPLIANCE_DECISION_SUPPORT",
+        "ATTESTED_OUTPUT",
+        "FORMAL_SUBMISSION",
+        "EXTERNAL_RELIED_UPON_CLAIM",
+        "FORENSIC_AUDIT"
+      ]
+    },
+    "traceTier": {
+      "enum": [
+        "TIER_1_QUALIFICATION",
+        "TIER_2_RECONSTRUCTION",
+        "TIER_3_FORENSIC_REPLAY"
+      ]
+    }
+  }
+}

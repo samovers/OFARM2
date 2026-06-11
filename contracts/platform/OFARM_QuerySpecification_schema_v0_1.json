@@ -1,0 +1,876 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/queryspec/v0.1",
+  "title": "OFARM QuerySpecification v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "target",
+    "graphPattern",
+    "selection",
+    "resultProfile"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.queryspec.v0.1"
+    },
+    "queryId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "queryName": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "DRAFT",
+        "APPROVED",
+        "DEPRECATED"
+      ]
+    },
+    "target": {
+      "$ref": "#/$defs/target"
+    },
+    "anchors": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/anchor"
+      }
+    },
+    "graphPattern": {
+      "$ref": "#/$defs/graphPattern"
+    },
+    "semanticPathAliases": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/semanticPathAlias"
+      }
+    },
+    "filter": {
+      "$ref": "#/$defs/filterClause"
+    },
+    "selection": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/selectionItem"
+      }
+    },
+    "ordering": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/orderBy"
+      }
+    },
+    "pagination": {
+      "$ref": "#/$defs/pagination"
+    },
+    "resultProfile": {
+      "$ref": "#/$defs/resultProfile"
+    },
+    "reconstructionPolicyRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    }
+  },
+  "$defs": {
+    "scopeRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scopeType",
+        "scopeRef"
+      ],
+      "properties": {
+        "scopeType": {
+          "enum": [
+            "FARM",
+            "SITE",
+            "FIELD",
+            "ZONE",
+            "CROP_CYCLE",
+            "LOT",
+            "FACILITY",
+            "OPERATION"
+          ]
+        },
+        "scopeRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        }
+      }
+    },
+    "nowPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policyType"
+      ],
+      "properties": {
+        "policyType": {
+          "const": "NOW"
+        }
+      }
+    },
+    "asOfPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policyType",
+        "asOfTime"
+      ],
+      "properties": {
+        "policyType": {
+          "const": "AS_OF"
+        },
+        "asOfTime": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "windowPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policyType",
+        "windowStart",
+        "windowEnd"
+      ],
+      "properties": {
+        "policyType": {
+          "const": "WINDOW"
+        },
+        "windowStart": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "windowEnd": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "authorityContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "usePurpose": {
+          "type": "string"
+        },
+        "actingPartyRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "requiredAuthorityFamilies": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "OBSERVE_REPORT",
+              "ASSERT_SUBMIT",
+              "OPERATE_INTERVENE",
+              "REVIEW",
+              "GOVERN_DECIDE",
+              "ATTEST_SIGN",
+              "CONTEXT_GOVERNANCE",
+              "SHARE_REVOKE",
+              "RECEIVE_USE"
+            ]
+          }
+        }
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "twin",
+        "anchorScopes",
+        "evaluationTimePolicy"
+      ],
+      "properties": {
+        "twin": {
+          "enum": [
+            "COMPLIANCE",
+            "ADVISORY"
+          ]
+        },
+        "anchorScopes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/scopeRef"
+          }
+        },
+        "evaluationTimePolicy": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/nowPolicy"
+            },
+            {
+              "$ref": "#/$defs/asOfPolicy"
+            },
+            {
+              "$ref": "#/$defs/windowPolicy"
+            }
+          ]
+        },
+        "authorityContext": {
+          "$ref": "#/$defs/authorityContext"
+        }
+      }
+    },
+    "anchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "var",
+        "conceptRef"
+      ],
+      "properties": {
+        "var": {
+          "type": "string",
+          "pattern": "^[a-z][A-Za-z0-9_]*$"
+        },
+        "conceptRef": {
+          "type": "string"
+        },
+        "identityRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "revisionRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        }
+      }
+    },
+    "nodePattern": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "var",
+        "conceptRef"
+      ],
+      "properties": {
+        "var": {
+          "type": "string",
+          "pattern": "^[a-z][A-Za-z0-9_]*$"
+        },
+        "conceptRef": {
+          "type": "string"
+        },
+        "identityRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "stateFacet": {
+          "enum": [
+            "IDENTITY",
+            "REVISION",
+            "STATE",
+            "MATERIALIZATION",
+            "ANY"
+          ]
+        },
+        "requiredPresence": {
+          "enum": [
+            "MUST",
+            "MAY",
+            "MUST_NOT"
+          ]
+        }
+      }
+    },
+    "relationPattern": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fromVar",
+        "predicateRef",
+        "toVar"
+      ],
+      "properties": {
+        "fromVar": {
+          "type": "string",
+          "pattern": "^[a-z][A-Za-z0-9_]*$"
+        },
+        "predicateRef": {
+          "type": "string"
+        },
+        "toVar": {
+          "type": "string",
+          "pattern": "^[a-z][A-Za-z0-9_]*$"
+        },
+        "optional": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "graphPattern": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "nodes",
+        "relations"
+      ],
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/nodePattern"
+          }
+        },
+        "relations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/relationPattern"
+          }
+        }
+      }
+    },
+    "semanticPathAlias": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "alias",
+        "rootVar",
+        "pathRef",
+        "resolvesTo"
+      ],
+      "properties": {
+        "alias": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_]*$"
+        },
+        "rootVar": {
+          "type": "string",
+          "pattern": "^[a-z][A-Za-z0-9_]*$"
+        },
+        "pathRef": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "resolvesTo": {
+          "enum": [
+            "SEMANTIC_ANCHOR",
+            "GOVERNED_CONTENT_NODE"
+          ]
+        },
+        "expectedType": {
+          "type": "string"
+        },
+        "aliasVersionRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        }
+      }
+    },
+    "propertyOperand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "varRef",
+        "propertyRef"
+      ],
+      "properties": {
+        "kind": {
+          "const": "PROPERTY"
+        },
+        "varRef": {
+          "type": "string",
+          "pattern": "^[a-z][A-Za-z0-9_]*$"
+        },
+        "propertyRef": {
+          "type": "string"
+        }
+      }
+    },
+    "pathAliasOperand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "aliasRef"
+      ],
+      "properties": {
+        "kind": {
+          "const": "PATH_ALIAS"
+        },
+        "aliasRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_]*$"
+        }
+      }
+    },
+    "literalOperand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "value"
+      ],
+      "properties": {
+        "kind": {
+          "const": "LITERAL"
+        },
+        "value": {}
+      }
+    },
+    "systemOperand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "propertyRef"
+      ],
+      "properties": {
+        "kind": {
+          "const": "SYSTEM"
+        },
+        "propertyRef": {
+          "enum": [
+            "CURRENT_TIME",
+            "TARGET_TWIN",
+            "ACTING_PARTY"
+          ]
+        }
+      }
+    },
+    "operand": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/propertyOperand"
+        },
+        {
+          "$ref": "#/$defs/pathAliasOperand"
+        },
+        {
+          "$ref": "#/$defs/literalOperand"
+        },
+        {
+          "$ref": "#/$defs/systemOperand"
+        }
+      ]
+    },
+    "logicalFilter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "clauses"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "AND",
+            "OR"
+          ]
+        },
+        "clauses": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/filterClause"
+          }
+        }
+      }
+    },
+    "notFilter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "clause"
+      ],
+      "properties": {
+        "kind": {
+          "const": "NOT"
+        },
+        "clause": {
+          "$ref": "#/$defs/filterClause"
+        }
+      }
+    },
+    "comparisonFilter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "left",
+        "operator",
+        "right"
+      ],
+      "properties": {
+        "kind": {
+          "const": "COMPARE"
+        },
+        "left": {
+          "$ref": "#/$defs/operand"
+        },
+        "operator": {
+          "enum": [
+            "=",
+            "!=",
+            "<",
+            "<=",
+            ">",
+            ">=",
+            "LIKE"
+          ]
+        },
+        "right": {
+          "$ref": "#/$defs/operand"
+        }
+      }
+    },
+    "inFilter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "left",
+        "values"
+      ],
+      "properties": {
+        "kind": {
+          "const": "IN"
+        },
+        "left": {
+          "$ref": "#/$defs/operand"
+        },
+        "values": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/operand"
+          }
+        }
+      }
+    },
+    "existsFilter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "operand"
+      ],
+      "properties": {
+        "kind": {
+          "const": "EXISTS"
+        },
+        "operand": {
+          "$ref": "#/$defs/operand"
+        }
+      }
+    },
+    "spatialFilter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "operator",
+        "left",
+        "right"
+      ],
+      "properties": {
+        "kind": {
+          "const": "SPATIAL"
+        },
+        "operator": {
+          "enum": [
+            "INTERSECTS",
+            "WITHIN",
+            "CONTAINS",
+            "DWITHIN"
+          ]
+        },
+        "left": {
+          "$ref": "#/$defs/operand"
+        },
+        "right": {
+          "$ref": "#/$defs/operand"
+        }
+      }
+    },
+    "temporalFilter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "operator",
+        "left",
+        "right"
+      ],
+      "properties": {
+        "kind": {
+          "const": "TEMPORAL"
+        },
+        "operator": {
+          "enum": [
+            "BEFORE",
+            "AFTER",
+            "OVERLAPS",
+            "DURING"
+          ]
+        },
+        "left": {
+          "$ref": "#/$defs/operand"
+        },
+        "right": {
+          "$ref": "#/$defs/operand"
+        }
+      }
+    },
+    "filterClause": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/logicalFilter"
+        },
+        {
+          "$ref": "#/$defs/notFilter"
+        },
+        {
+          "$ref": "#/$defs/comparisonFilter"
+        },
+        {
+          "$ref": "#/$defs/inFilter"
+        },
+        {
+          "$ref": "#/$defs/existsFilter"
+        },
+        {
+          "$ref": "#/$defs/spatialFilter"
+        },
+        {
+          "$ref": "#/$defs/temporalFilter"
+        }
+      ]
+    },
+    "bindingSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "varRef"
+      ],
+      "properties": {
+        "kind": {
+          "const": "BINDING"
+        },
+        "varRef": {
+          "type": "string",
+          "pattern": "^[a-z][A-Za-z0-9_]*$"
+        }
+      }
+    },
+    "propertySource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "varRef",
+        "propertyRef"
+      ],
+      "properties": {
+        "kind": {
+          "const": "PROPERTY"
+        },
+        "varRef": {
+          "type": "string",
+          "pattern": "^[a-z][A-Za-z0-9_]*$"
+        },
+        "propertyRef": {
+          "type": "string"
+        }
+      }
+    },
+    "pathAliasSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "aliasRef"
+      ],
+      "properties": {
+        "kind": {
+          "const": "PATH_ALIAS"
+        },
+        "aliasRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_]*$"
+        }
+      }
+    },
+    "aggregateSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "function",
+        "source"
+      ],
+      "properties": {
+        "kind": {
+          "const": "AGGREGATE"
+        },
+        "function": {
+          "enum": [
+            "COUNT",
+            "MIN",
+            "MAX",
+            "SUM",
+            "AVG"
+          ]
+        },
+        "source": {
+          "$ref": "#/$defs/operand"
+        }
+      }
+    },
+    "selectionSource": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/bindingSource"
+        },
+        {
+          "$ref": "#/$defs/propertySource"
+        },
+        {
+          "$ref": "#/$defs/pathAliasSource"
+        },
+        {
+          "$ref": "#/$defs/aggregateSource"
+        }
+      ]
+    },
+    "selectionItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "alias",
+        "source"
+      ],
+      "properties": {
+        "alias": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_]*$"
+        },
+        "source": {
+          "$ref": "#/$defs/selectionSource"
+        }
+      }
+    },
+    "orderBy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "by",
+        "direction"
+      ],
+      "properties": {
+        "by": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": [
+                "selectionAlias"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "selectionAlias": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_]*$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "pathAlias"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "pathAlias": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_]*$"
+                }
+              }
+            }
+          ]
+        },
+        "direction": {
+          "enum": [
+            "ASC",
+            "DESC"
+          ]
+        }
+      }
+    },
+    "pagination": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "offset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        }
+      }
+    },
+    "resultProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "RAW_BINDINGS",
+            "OBJECT_GRAPH",
+            "SUMMARY_ROWS",
+            "VIEW_MODULE",
+            "PASSPORT_INPUT",
+            "DOCUMENT_ASSEMBLY_INPUT"
+          ]
+        },
+        "viewModuleRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "allowPartial": {
+          "type": "boolean"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "VIEW_MODULE"
+              }
+            },
+            "required": [
+              "mode"
+            ]
+          },
+          "then": {
+            "required": [
+              "viewModuleRef"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "$comment": "Authority family enum values in this schema use underscore form. See OFARM_Authority_Family_Normalization_Map_v0_1.json for slash-form <-> enum-form normalization."
+}

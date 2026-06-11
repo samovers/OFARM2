@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/equipmentidentitypayload/v0.1",
+  "title": "OFARM EquipmentIdentityPayload v0.1 (candidate)",
+  "$comment": "NEW_CANDIDATE structure-assertion payload for the Equipment/Tool durable identity (Constitution RC2.1 section 7.23). inspectionEvidenceRefs carries e.g. mandatory sprayer-test certificates as EvidenceRecord references.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "equipmentidentitypayloadId",
+    "identityRecordRef",
+    "recordedAt",
+    "displayName"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.equipmentidentitypayload.v0.1"
+    },
+    "equipmentidentitypayloadId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "identityRecordRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "recordedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "displayName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "equipmentClass": {
+      "type": "string",
+      "minLength": 1
+    },
+    "ownerPartyRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "inspectionEvidenceRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "identityBindingRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    }
+  }
+}

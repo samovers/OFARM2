@@ -1,0 +1,202 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/authorizationdecisionrequest/v0.1",
+  "title": "OFARM AuthorizationDecisionRequest v0.1",
+  "$comment": "Minimal boundary request envelope for the authority gate derived from Authority Policy Model RFC v0.1 and Platform RC2.1 \u00a7\u00a73.3 and 14.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "requestId",
+    "requestedAt",
+    "actionClass",
+    "actionStage",
+    "actingPartyRef",
+    "target",
+    "revocationCheckRequired",
+    "nonHumanActor"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.authorizationdecisionrequest.v0.1"
+    },
+    "requestId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "requestedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "actionClass": {
+      "type": "string",
+      "pattern": "^[A-Z_]+$"
+    },
+    "actionStage": {
+      "enum": [
+        "DRAFT_PREPARATION",
+        "PROMOTION",
+        "PUBLICATION",
+        "ATTESTATION",
+        "QUERY_READ",
+        "CURRENT_STATE_USE",
+        "CONTEXT_ACTIVATION"
+      ]
+    },
+    "requiredAuthorityFamily": {
+      "enum": [
+        "OBSERVE_REPORT",
+        "ASSERT_SUBMIT",
+        "OPERATE_INTERVENE",
+        "REVIEW",
+        "GOVERN_DECIDE",
+        "ATTEST_SIGN",
+        "CONTEXT_GOVERNANCE",
+        "SHARE_REVOKE",
+        "RECEIVE_USE"
+      ]
+    },
+    "actingPartyRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "actingAgentRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "targetTime"
+      ],
+      "properties": {
+        "scope": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "scopeType",
+            "scopeRef"
+          ],
+          "properties": {
+            "scopeType": {
+              "enum": [
+                "FARM",
+                "SITE",
+                "FIELD",
+                "ZONE",
+                "CROP_CYCLE",
+                "LOT",
+                "FACILITY",
+                "OPERATION",
+                "DEPLOYMENT",
+                "TENANT"
+              ]
+            },
+            "scopeRef": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._:-]+$"
+            }
+          }
+        },
+        "targetTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "targetKind": {
+          "enum": [
+            "CANONICAL_TRUTH",
+            "PASSPORT_VIEW",
+            "DOCUMENT_ASSEMBLY",
+            "DOSSIER_ASSEMBLY",
+            "SUBMISSION_ASSEMBLY",
+            "QUERY_EXECUTION",
+            "CURRENT_STATE_MATERIALIZATION",
+            "PACK_ACTIVATION"
+          ]
+        },
+        "targetRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "twin": {
+          "enum": [
+            "COMPLIANCE",
+            "ADVISORY"
+          ]
+        }
+      }
+    },
+    "roleCandidateRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "grantCandidateRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "delegationCandidateRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "sharingGrantCandidateRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "usePurpose": {
+      "type": "string"
+    },
+    "revocationCheckRequired": {
+      "type": "boolean"
+    },
+    "nonHumanActor": {
+      "type": "boolean"
+    },
+    "aiAssistance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assisted"
+      ],
+      "properties": {
+        "assisted": {
+          "type": "boolean"
+        },
+        "assistantRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "assistantRoleFamily": {
+          "enum": [
+            "INTERPRETATION_AI",
+            "QUERY_AI",
+            "AUTHORING_AI",
+            "ADVISORY_AI",
+            "SIMULATION_AI"
+          ]
+        },
+        "suggestionMode": {
+          "enum": [
+            "PREPARE",
+            "RECOMMEND",
+            "AUTO_FILL",
+            "AUTO_ROUTE"
+          ]
+        }
+      }
+    }
+  }
+}

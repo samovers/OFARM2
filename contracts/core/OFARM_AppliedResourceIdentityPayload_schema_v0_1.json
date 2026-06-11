@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/appliedresourceidentitypayload/v0.1",
+  "title": "OFARM AppliedResourceIdentityPayload v0.1 (candidate)",
+  "$comment": "NEW_CANDIDATE structure-assertion payload for the AppliedResource durable identity (Constitution RC2.1 section 7.24). Product authorisation identity binds through AgronomicIdentityBinding under the active code-binding profile; free text never becomes compliance-grade identity.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "appliedresourceidentitypayloadId",
+    "identityRecordRef",
+    "recordedAt",
+    "displayName",
+    "resourceClass"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.appliedresourceidentitypayload.v0.1"
+    },
+    "appliedresourceidentitypayloadId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "identityRecordRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "recordedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "displayName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "resourceClass": {
+      "enum": [
+        "PLANT_PROTECTION_PRODUCT",
+        "FERTILIZER",
+        "SEED",
+        "OTHER_INPUT"
+      ]
+    },
+    "identityBindingRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "referenceSnapshotRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    }
+  }
+}

@@ -1,0 +1,211 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/contextsnapshot/v0.1",
+  "title": "OFARM ContextSnapshot v0.1",
+  "$comment": "Minimal machine contract derived from Current State Materialization RFC v0.1 \u00a73.4, Constitution RC2.1 \u00a710.3-10.4, Platform RC2.1 \u00a74.2-4.4 plus \u00a713.6-13.11, and ReferenceSnapshot Closure RFC v0.1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "contextSnapshotId",
+    "generatedAt",
+    "targetTwin",
+    "anchorScopes",
+    "evaluationTimePolicy",
+    "activeArtifactSetRef",
+    "sourcePackActivationSetRefs",
+    "activePackRefs",
+    "activeProfileRefs",
+    "relevantPrecedenceClasses"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.contextsnapshot.v0.1"
+    },
+    "contextSnapshotId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "targetTwin": {
+      "enum": [
+        "COMPLIANCE",
+        "ADVISORY"
+      ]
+    },
+    "anchorScopes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scopeType",
+          "scopeRef"
+        ],
+        "properties": {
+          "scopeType": {
+            "enum": [
+              "FARM",
+              "SITE",
+              "FIELD",
+              "ZONE",
+              "CROP_CYCLE",
+              "LOT",
+              "FACILITY",
+              "OPERATION",
+              "DEPLOYMENT",
+              "TENANT"
+            ]
+          },
+          "scopeRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]+$"
+          }
+        }
+      }
+    },
+    "evaluationTimePolicy": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "policyType"
+          ],
+          "properties": {
+            "policyType": {
+              "const": "NOW"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "policyType",
+            "asOfTime"
+          ],
+          "properties": {
+            "policyType": {
+              "const": "AS_OF"
+            },
+            "asOfTime": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "policyType",
+            "windowStart",
+            "windowEnd"
+          ],
+          "properties": {
+            "policyType": {
+              "const": "WINDOW"
+            },
+            "windowStart": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "windowEnd": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        }
+      ]
+    },
+    "activeArtifactSetRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "sourcePackActivationSetRefs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "activePackRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "activeProfileRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "activeScopedExtensionRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "relevantPrecedenceClasses": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "enum": [
+          "JURISDICTION_LAW_SAFETY",
+          "CERTIFICATION_CLAIM_CONTRACT",
+          "CROP_SYSTEM_BIOPHYSICAL",
+          "TOOLING_METHOD",
+          "LOCAL_COMMUNITY_PREFERENCE"
+        ]
+      }
+    },
+    "governingRuleArtifactRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "evidencePolicyRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "referenceSnapshotRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "identityRevisionRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "packMergeResolutionTraceRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "notes": {
+      "type": "string"
+    }
+  }
+}

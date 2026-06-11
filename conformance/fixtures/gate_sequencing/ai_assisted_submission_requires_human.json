@@ -1,0 +1,22 @@
+{
+  "fixtureId": "ai-assisted-submission-requires-human",
+  "fixtureType": "AUTHORITY_RECHECK_SEQUENCE",
+  "actionClass": "OUTPUT_FILE_SUBMISSION_ASSEMBLY",
+  "actionStage": "PROMOTION",
+  "expectedStopGate": "AUTHORITY",
+  "expectedStopOutcome": "REQUIRE_HUMAN_APPROVAL",
+  "terminalOutcome": "REQUIRE_HUMAN_APPROVAL",
+  "gates": [
+    {
+      "gate": "INGRESS_NORMALIZATION",
+      "outcome": "NORMALIZED_DRAFT"
+    },
+    {
+      "gate": "AUTHORITY",
+      "outcome": "REQUIRE_HUMAN_APPROVAL",
+      "requestExample": "OFARM_AuthorizationDecisionRequest_example_ai_submission_finalize_v0_1.json",
+      "resultExample": "OFARM_AuthorizationDecisionResult_example_ai_submission_require_human_v0_1.json",
+      "traceExample": "OFARM_AuthorizationDecisionTrace_example_ai_submission_require_human_v0_1.json"
+    }
+  ]
+}

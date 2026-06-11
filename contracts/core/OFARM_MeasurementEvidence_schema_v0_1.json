@@ -1,0 +1,564 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/measurementevidence/v0.1",
+  "title": "OFARM MeasurementEvidence v0.1",
+  "$comment": "Active machine contract derived from the Agronomic Observation and Measurement Context RFC v0.1. It carries sampled, sensed, lab-derived, human-scored, image-derived, or imported measurement evidence without making evidence auto-promote to truth.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "measurementEvidenceId",
+    "evidenceClass",
+    "observedPropertyRef",
+    "resultTime",
+    "result",
+    "source",
+    "provenanceRefs",
+    "evidenceStatus"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.measurementevidence.v0.1"
+    },
+    "measurementEvidenceId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "evidenceClass": {
+      "enum": [
+        "SAMPLE_COLLECTION",
+        "FIELD_MEASUREMENT",
+        "LAB_RESULT",
+        "SENSOR_READING",
+        "HUMAN_ASSESSMENT",
+        "IMAGE_INTERPRETATION",
+        "REMOTE_SENSING_RESULT",
+        "MACHINE_IMPORTED_MEASUREMENT",
+        "THIRD_PARTY_STATEMENT"
+      ]
+    },
+    "observedPropertyRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "resultTime": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "phenomenonTime": {
+      "$ref": "#/$defs/timeObject"
+    },
+    "sampleRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "agronomicObservationContextRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceType",
+        "sourceRef"
+      ],
+      "properties": {
+        "sourceType": {
+          "enum": [
+            "HUMAN_OBSERVATION",
+            "INSTRUMENT",
+            "SENSOR",
+            "LAB_REPORT",
+            "MACHINE_TIMELOG",
+            "IMPORTED_FILE",
+            "IMAGE",
+            "REMOTE_SENSING",
+            "THIRD_PARTY_RECORD"
+          ]
+        },
+        "sourceRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "sourceSystemRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "sourceCapturedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "samplingProtocol": {
+      "$ref": "#/$defs/procedureRef"
+    },
+    "measurementMethod": {
+      "$ref": "#/$defs/procedureRef"
+    },
+    "instrument": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "instrumentRef"
+      ],
+      "properties": {
+        "instrumentRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "instrumentKind": {
+          "enum": [
+            "SENSOR",
+            "SAMPLER",
+            "LAB_INSTRUMENT",
+            "MACHINE_CONTROLLER",
+            "HAND_TOOL",
+            "UNKNOWN"
+          ]
+        },
+        "modelRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "serialNumber": {
+          "type": "string"
+        },
+        "firmwareVersion": {
+          "type": "string"
+        }
+      }
+    },
+    "calibration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "calibrationStatus"
+      ],
+      "properties": {
+        "calibrationStatus": {
+          "enum": [
+            "CURRENT",
+            "EXPIRED",
+            "UNKNOWN",
+            "NOT_REQUIRED"
+          ]
+        },
+        "calibrationRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "calibratedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "dueAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "calibrationAuthorityRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        }
+      }
+    },
+    "labContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "labRef"
+      ],
+      "properties": {
+        "labRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "labMethodRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "accreditationRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "matrixRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "analyteRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]+$"
+          }
+        },
+        "samplePreparationNote": {
+          "type": "string"
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "resultKind"
+      ],
+      "properties": {
+        "resultKind": {
+          "enum": [
+            "NUMERIC",
+            "CODED",
+            "QUALITATIVE",
+            "CENSORED_NUMERIC",
+            "ABSENT_PENDING"
+          ]
+        },
+        "quantityKindRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "unitRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "numericValue": {
+          "type": "number"
+        },
+        "normalizedNumericValue": {
+          "type": "number"
+        },
+        "originalLexicalValue": {
+          "type": "string"
+        },
+        "originalUnitText": {
+          "type": "string"
+        },
+        "codedValueRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "qualitativeValue": {
+          "type": "string"
+        },
+        "censoringQualifier": {
+          "enum": [
+            "BELOW_LOD",
+            "BELOW_LOQ",
+            "ABOVE_RANGE",
+            "NON_DETECT",
+            "TRACE_DETECTED"
+          ]
+        },
+        "detectionLimit": {
+          "$ref": "#/$defs/detectionLimit"
+        },
+        "qualifierNote": {
+          "type": "string"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "resultKind": {
+                "const": "NUMERIC"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "quantityKindRef",
+              "unitRef",
+              "numericValue"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "resultKind": {
+                "const": "CENSORED_NUMERIC"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "quantityKindRef",
+              "unitRef",
+              "censoringQualifier",
+              "detectionLimit"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "resultKind": {
+                "const": "CODED"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "codedValueRef"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "resultKind": {
+                "const": "QUALITATIVE"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "qualitativeValue"
+            ]
+          }
+        }
+      ]
+    },
+    "uncertainty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "uncertaintyClass"
+      ],
+      "properties": {
+        "uncertaintyClass": {
+          "enum": [
+            "QUANTIFIED",
+            "INTERVAL",
+            "QUALITATIVE",
+            "UNKNOWN",
+            "NOT_APPLICABLE"
+          ]
+        },
+        "value": {
+          "type": "number"
+        },
+        "unitRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "statement": {
+          "type": "string"
+        },
+        "confidenceLevel": {
+          "type": "string"
+        },
+        "basis": {
+          "type": "string"
+        }
+      }
+    },
+    "chainOfCustodyStatus": {
+      "enum": [
+        "PRESERVED",
+        "PARTIAL",
+        "BROKEN",
+        "NOT_REQUIRED",
+        "UNKNOWN"
+      ]
+    },
+    "originalPayloadRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "originalPayloadHash": {
+      "type": "string"
+    },
+    "provenanceRefs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "referenceSnapshotRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "evidenceStatus": {
+      "enum": [
+        "REPORTED",
+        "NORMALIZED",
+        "DEGRADED_SUPPORT",
+        "REVIEW_REQUIRED",
+        "ACCEPTED_SUPPORT",
+        "SUPERSEDED",
+        "DISPUTED"
+      ]
+    },
+    "degradationReasons": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "CALIBRATION_EXPIRED",
+          "CHAIN_OF_CUSTODY_BROKEN",
+          "LAB_COMPETENCE_UNKNOWN",
+          "UNIT_SEMANTICS_UNRESOLVED",
+          "GEOMETRY_BASIS_WEAK",
+          "CLOCK_UNSYNCHRONIZED",
+          "CODE_BINDING_UNRESOLVED",
+          "METHOD_UNSPECIFIED",
+          "SAMPLE_SUPPORT_UNCLEAR",
+          "DETECTION_LIMIT_UNSPECIFIED",
+          "RESULT_PENDING",
+          "ORIGINAL_PAYLOAD_MISSING"
+        ]
+      }
+    },
+    "upgradeOfMeasurementEvidenceRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "supersedesMeasurementEvidenceRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "identityBindingRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._/:-]+$"
+      }
+    },
+    "codeBindingProfileRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._/:-]+$"
+    },
+    "agronomicIdentityBindingRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._/:-]+$"
+      },
+      "$comment": "Optional Phase AGR-P5 bridge to governed AgronomicIdentityBinding records."
+    },
+    "agronomicCodeBindingProfileRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._/:-]+$",
+      "$comment": "Optional Phase AGR-P5 bridge to an AgronomicCodeBindingProfile that governs scheme/role requirements."
+    }
+  },
+  "$defs": {
+    "timeObject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "timeType"
+      ],
+      "properties": {
+        "timeType": {
+          "enum": [
+            "INSTANT",
+            "INTERVAL"
+          ]
+        },
+        "instant": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "intervalStart": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "intervalEnd": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "timeBasis": {
+          "enum": [
+            "OBSERVED_TIME",
+            "SAMPLE_TIME",
+            "RESULT_TIME",
+            "RECORD_TIME",
+            "ESTIMATED_TIME"
+          ]
+        }
+      }
+    },
+    "procedureRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "procedureRef",
+        "procedureStatus"
+      ],
+      "properties": {
+        "procedureRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "procedureStatus": {
+          "enum": [
+            "PROFILE_BOUND",
+            "DOCUMENTED_METHOD",
+            "LOCAL_METHOD",
+            "UNKNOWN_OR_MISSING"
+          ]
+        },
+        "issuerRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "versionRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "effectiveAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "detectionLimit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "limitType",
+        "quantityKindRef",
+        "unitRef",
+        "value"
+      ],
+      "properties": {
+        "limitType": {
+          "enum": [
+            "LOD",
+            "LOQ",
+            "REPORTING_LIMIT",
+            "METHOD_RANGE"
+          ]
+        },
+        "quantityKindRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "unitRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "value": {
+          "type": "number"
+        },
+        "qualifier": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

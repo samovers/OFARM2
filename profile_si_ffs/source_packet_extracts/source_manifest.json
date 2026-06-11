@@ -1,0 +1,108 @@
+{
+  "package_name": "slovenia_ffs_gerk_eu_recordkeeping_packet_2026-06-12",
+  "generated_at": "2026-06-11T22:41:01.506836+00:00",
+  "status": "derived working extract; not active OFARM law; not legal advice",
+  "sources": [
+    {
+      "name": "EUR-Lex Implementing Regulation (EU) 2023/564 OJ English",
+      "url": "https://eur-lex.europa.eu/eli/reg_impl/2023/564/oj/eng",
+      "local_files": [
+        "raw/eur_lex_2023_564_oj_eng.html",
+        "raw/eur_lex_2023_564_headers.txt",
+        "extracts/eur_lex_2023_564_annex_table.md",
+        "extracts/eur_lex_2023_564_annex_table.tsv"
+      ]
+    },
+    {
+      "name": "EUR-Lex Implementing Regulation (EU) 2025/2203 OJ English",
+      "url": "https://eur-lex.europa.eu/eli/reg_impl/2025/2203/oj/eng",
+      "local_files": [
+        "raw/eur_lex_2025_2203_oj_eng.html",
+        "raw/eur_lex_2025_2203_headers.txt",
+        "extracts/eur_lex_2025_2203_transition_articles.md"
+      ]
+    },
+    {
+      "name": "EUR-Lex consolidated 2023/564 2025-11-23",
+      "url": "https://eur-lex.europa.eu/legal-content/EN/TXT/HTML/?uri=CELEX:02023R0564-20251123",
+      "local_files": [
+        "raw/eur_lex_2023_564_consolidated_2025-11-23.html",
+        "raw/eur_lex_2023_564_consolidated_headers.txt"
+      ]
+    },
+    {
+      "name": "PISRS ZFfS-1 metadata",
+      "url": "https://pisrs.si/api/rezultat/zbirka/id/ZAKO6355",
+      "local_files": [
+        "raw/pisrs_zffs1_metadata.json",
+        "raw/pisrs_zffs1_metadata_headers.txt"
+      ]
+    },
+    {
+      "name": "PISRS ZFfS-1 consolidated NPB2 HTML",
+      "url": "https://pisrs.si/api/datoteke/integracije/358067506",
+      "local_files": [
+        "raw/pisrs_zffs1_npb2.html",
+        "raw/pisrs_zffs1_npb2_html_headers.txt",
+        "extracts/pisrs_zffs1_evidenca_register_articles.md",
+        "extracts/pisrs_zffs1_evidenca_register_article_index.tsv",
+        "extracts/pisrs_zffs1_priloga_check.md"
+      ]
+    },
+    {
+      "name": "PISRS ZFfS-1 consolidated NPB2 PDF",
+      "url": "https://pisrs.si/api/datoteke/integracije/358067512",
+      "local_files": [
+        "raw/pisrs_zffs1_npb2.pdf",
+        "raw/pisrs_zffs1_npb2_pdf_headers.txt"
+      ]
+    },
+    {
+      "name": "FURS FFSNaprave index",
+      "url": "https://spletni2.furs.gov.si/FFS/FFSNaprave/",
+      "local_files": [
+        "raw/furs_ffsnprave_index.html",
+        "raw/furs_ffsnprave_index_headers.txt",
+        "extracts/furs_ffsnprave_download_formats.md",
+        "extracts/furs_ffsnprave_year_links.tsv"
+      ]
+    },
+    {
+      "name": "FURS OPIS_POLJ PDF",
+      "url": "https://SPLETNI2.FURS.GOV.SI/FFS/FFSNaprave/OPIS_POLJ.pdf",
+      "local_files": [
+        "raw/furs_ffsnprave_opis_polj.pdf",
+        "raw/furs_ffsnprave_opis_polj_headers.txt",
+        "extracts/furs_ffsnprave_opis_polj.txt"
+      ]
+    },
+    {
+      "name": "FURS 2026 sample downloads",
+      "url": "https://Spletni2.furs.gov.si/FFS/FFSNaprave/2026/",
+      "local_files": [
+        "furs_samples/2026_FFSPreglediNaprav.xls",
+        "furs_samples/2026_FFSPreglediNaprav.txt",
+        "furs_samples/2026_FFSPreglediNaprav.xml",
+        "furs_samples/2026_FFSPreglediNaprav.xsd",
+        "extracts/furs_ffsnprave_2026_sample_head.txt"
+      ]
+    },
+    {
+      "name": "GERK WebViewer",
+      "url": "https://rkg.gov.si/GERK/WebViewer/",
+      "local_files": [
+        "raw/gerk_webviewer_index.html",
+        "raw/gerk_webviewer_headers.txt",
+        "raw/gerk_viewer_nocache.js",
+        "raw/gerk_nocache_headers.txt",
+        "raw/gerk_viewer_sl_safari_cache.js",
+        "raw/gerk_cache_headers.txt",
+        "extracts/gerk_public_viewer_check.md"
+      ]
+    }
+  ],
+  "known_limits": [
+    "GERK public app assets loaded by HTTP checks, but interactive parcel lookup was not completed because the in-app browser attach timed out.",
+    "No visible PISRS Priloga/priloga paragraph text was found in the consolidated NPB2 HTML for ZFfS-1."
+  ]
+}

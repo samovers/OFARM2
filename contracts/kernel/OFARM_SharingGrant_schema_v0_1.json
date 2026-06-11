@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/sharinggrant/v0.1",
+  "title": "OFARM SharingGrant v0.1",
+  "$comment": "Minimal machine contract derived from Constitution RC2.1 \u00a77.15, authority companion policy \u00a76, and Authority Source Record Closure RFC v0.1 \u00a74.4.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "sharingGrantId",
+    "grantorPartyRef",
+    "granteePartyRef",
+    "sharedArtifactFamily",
+    "sharedArtifactRef",
+    "targetScope",
+    "validFrom",
+    "deliveryMode",
+    "sharingState"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.sharinggrant.v0.1"
+    },
+    "sharingGrantId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "grantorPartyRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "granteePartyRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "sharedArtifactFamily": {
+      "enum": [
+        "PASSPORT_VIEW",
+        "DOCUMENT_ASSEMBLY",
+        "DOSSIER_ASSEMBLY",
+        "SUBMISSION_ASSEMBLY",
+        "EVIDENCE_BUNDLE",
+        "CURRENT_STATE_MATERIALIZATION",
+        "OTHER"
+      ]
+    },
+    "sharedArtifactRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "targetScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scopeType",
+        "scopeRef"
+      ],
+      "properties": {
+        "scopeType": {
+          "enum": [
+            "FARM",
+            "SITE",
+            "FIELD",
+            "ZONE",
+            "CROP_CYCLE",
+            "LOT",
+            "FACILITY",
+            "OPERATION",
+            "DEPLOYMENT",
+            "TENANT"
+          ]
+        },
+        "scopeRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        }
+      }
+    },
+    "validFrom": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "validUntil": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "purpose": {
+      "type": "string"
+    },
+    "deliveryMode": {
+      "enum": [
+        "VIEW_ONLY",
+        "RETRIEVE_COPY",
+        "RECEIVE_EXPORT"
+      ]
+    },
+    "conditions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "sharingState": {
+      "enum": [
+        "ACTIVE",
+        "REVOKED",
+        "EXPIRED",
+        "DRAFT"
+      ]
+    },
+    "notes": {
+      "type": "string"
+    },
+    "dataSovereigntyBoundaryRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    }
+  }
+}

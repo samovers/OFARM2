@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/identityrecord/v0.1",
+  "title": "OFARM IdentityRecord v0.1 (candidate)",
+  "$comment": "NEW_CANDIDATE implementation-profile contract. Generic durable-identity record realizing Constitution RC2.1 sections 7.1-7.5 and 7.19-7.24. Candidate per Constitution 6.16; not a promoted machine contract. Party identities use the OFARM Party contract instead.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "identityRecordId",
+    "identityType",
+    "lifecycleState",
+    "createdAt",
+    "recordedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.identityrecord.v0.1"
+    },
+    "identityRecordId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "identityType": {
+      "enum": [
+        "FARM",
+        "SITE",
+        "FIELD",
+        "MANAGEMENT_ZONE",
+        "MICROCLIMATE_ZONE",
+        "CROP_CYCLE",
+        "LOT",
+        "EQUIPMENT",
+        "APPLIED_RESOURCE",
+        "FACILITY",
+        "STORAGE_LOCATION",
+        "CONTAINER"
+      ]
+    },
+    "identityRevisionLabel": {
+      "type": "string",
+      "minLength": 1
+    },
+    "lifecycleState": {
+      "enum": [
+        "ACTIVE",
+        "ENDED",
+        "SUPERSEDED",
+        "MERGED",
+        "SPLIT"
+      ]
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "recordedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "anchorScopes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scopeType",
+          "scopeRef"
+        ],
+        "properties": {
+          "scopeType": {
+            "enum": [
+              "FARM",
+              "SITE",
+              "FIELD",
+              "ZONE",
+              "CROP_CYCLE",
+              "LOT",
+              "FACILITY",
+              "OPERATION",
+              "DEPLOYMENT",
+              "TENANT"
+            ]
+          },
+          "scopeRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]+$"
+          }
+        }
+      }
+    },
+    "lineage": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "relation",
+          "targetIdentityRef"
+        ],
+        "properties": {
+          "relation": {
+            "enum": [
+              "REVISES",
+              "SUPERSEDES",
+              "SPLIT_FROM",
+              "SPLIT_INTO",
+              "MERGED_FROM",
+              "MERGED_INTO",
+              "SUCCEEDS",
+              "PRECEDED_BY",
+              "OVERLAPS_WITH",
+              "REPLACES",
+              "REPLACED_BY",
+              "DERIVED_FROM"
+            ]
+          },
+          "targetIdentityRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]+$"
+          }
+        }
+      }
+    },
+    "currentPayloadRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "createdByAssertionRecordRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "notes": {
+      "type": "string"
+    }
+  }
+}

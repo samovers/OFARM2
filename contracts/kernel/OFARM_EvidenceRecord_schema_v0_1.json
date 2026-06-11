@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/evidencerecord/v0.1",
+  "title": "OFARM EvidenceRecord v0.1 (candidate)",
+  "$comment": "NEW_CANDIDATE implementation-profile contract realizing Constitution RC2.1 section 10.10: raw asset plus interpretation plus provenance relation. An EvidenceRecord supports truth but does not create accepted state by itself (section 11.6).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "evidenceRecordId",
+    "evidenceClass",
+    "capturedAt",
+    "recordedAt",
+    "capturedByPartyRef",
+    "rawAssetRef",
+    "rawAssetDigest",
+    "evidenceState"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.evidencerecord.v0.1"
+    },
+    "evidenceRecordId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "evidenceClass": {
+      "enum": [
+        "PHOTO",
+        "DOCUMENT",
+        "SENSOR_FILE",
+        "LAB_REPORT",
+        "MACHINE_LOG",
+        "REGISTRY_EXTRACT",
+        "AUDIO_TRANSCRIPT",
+        "OTHER"
+      ]
+    },
+    "capturedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "recordedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "capturedByPartyRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "anchorScopes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scopeType",
+          "scopeRef"
+        ],
+        "properties": {
+          "scopeType": {
+            "enum": [
+              "FARM",
+              "SITE",
+              "FIELD",
+              "ZONE",
+              "CROP_CYCLE",
+              "LOT",
+              "FACILITY",
+              "OPERATION",
+              "DEPLOYMENT",
+              "TENANT"
+            ]
+          },
+          "scopeRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]+$"
+          }
+        }
+      }
+    },
+    "rawAssetRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "rawAssetDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "mediaType": {
+      "type": "string",
+      "minLength": 1
+    },
+    "interpretation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "interpretationClass"
+      ],
+      "properties": {
+        "interpretationClass": {
+          "enum": [
+            "NONE",
+            "STRUCTURED_RECORD",
+            "MEASUREMENT_EVIDENCE",
+            "NARRATIVE_SUMMARY"
+          ]
+        },
+        "structuredRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        },
+        "summary": {
+          "type": "string"
+        }
+      }
+    },
+    "provenanceRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "evidenceState": {
+      "enum": [
+        "CAPTURED",
+        "LINKED",
+        "DISPUTED",
+        "SUPERSEDED"
+      ]
+    },
+    "notes": {
+      "type": "string"
+    }
+  }
+}

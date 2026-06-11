@@ -1,0 +1,23 @@
+{
+  "fixtureId": "revoked-submission-promotion-recheck-denies",
+  "fixtureType": "AUTHORITY_RECHECK_SEQUENCE",
+  "actionClass": "OUTPUT_FILE_SUBMISSION_ASSEMBLY",
+  "actionStage": "PROMOTION",
+  "requiresFinalReauthorization": true,
+  "expectedStopGate": "AUTHORITY",
+  "expectedStopOutcome": "DENY",
+  "terminalOutcome": "DENY",
+  "gates": [
+    {
+      "gate": "INGRESS_NORMALIZATION",
+      "outcome": "NORMALIZED_DRAFT"
+    },
+    {
+      "gate": "AUTHORITY",
+      "outcome": "DENY",
+      "requestExample": "OFARM_AuthorizationDecisionRequest_example_revoked_submission_promotion_v0_1.json",
+      "resultExample": "OFARM_AuthorizationDecisionResult_example_revoked_submission_deny_v0_1.json",
+      "traceExample": "OFARM_AuthorizationDecisionTrace_example_revoked_submission_deny_v0_1.json"
+    }
+  ]
+}

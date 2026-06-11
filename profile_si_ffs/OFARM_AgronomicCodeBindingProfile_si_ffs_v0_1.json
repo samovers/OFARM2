@@ -1,0 +1,210 @@
+{
+  "schemaVersion": "ofarm.agronomiccodebindingprofile.v0.1",
+  "agronomicCodeBindingProfileId": "codebindingprofile:si.ffs.v0_1",
+  "profileState": "ACTIVE",
+  "issuedAt": "2026-06-12T00:00:00Z",
+  "issuedByPartyRef": "party:ofarm2.pilot.steward",
+  "profileScope": {
+    "profileDomain": "CROP_PROTECTION",
+    "jurisdiction": "SI",
+    "packRefs": [
+      "pack:si.ffs.pilot.v0_1"
+    ]
+  },
+  "normativePosture": {
+    "externalStandardsPosture": "ANCHORS_AND_BINDINGS_NOT_OFARM_LAW",
+    "packMutationRule": "PACKS_CONSTRAIN_BINDINGS_ONLY",
+    "freeTextIdentityRule": "FREE_TEXT_IS_EVIDENCE_NOT_ACCEPTED_IDENTITY"
+  },
+  "standardRoleMap": [
+    {
+      "standardRef": "scheme:si.uvhvvr.ffs-reg",
+      "standardName": "UVHVVR Seznam registriranih FFS (REGSR)",
+      "role": "CODE_BINDING",
+      "status": "PREFERRED",
+      "jurisdiction": "SI",
+      "usage": "Product authorisation identity; primary key = stevilka odlocbe + validity dates; product CODE is locator only. Snapshot-based via HTML parse (no official export; register self-declares informational status).",
+      "versionOrAccessDate": "register day 2026-06-11"
+    },
+    {
+      "standardRef": "scheme:si.uvhvvr.ffs-reg.html-surface",
+      "standardName": "REGSR public HTML pages",
+      "role": "RUNTIME_SURFACE",
+      "status": "ALLOWED",
+      "jurisdiction": "SI",
+      "usage": "Lookup/verification surface recorded in ExternalRegistryVerificationTrace.lookupSurface; weekly parse target, monthly manual floor.",
+      "versionOrAccessDate": "2026-06-12"
+    },
+    {
+      "standardRef": "scheme:eppo",
+      "standardName": "EPPO codes",
+      "role": "CODE_BINDING",
+      "status": "PREFERRED",
+      "usage": "Crop species and target organisms; REGSR product pages carry EPPO codes natively.",
+      "versionOrAccessDate": "as carried by register snapshot"
+    },
+    {
+      "standardRef": "scheme:bbch",
+      "standardName": "BBCH growth stages",
+      "role": "CODE_BINDING",
+      "status": "ALLOWED",
+      "usage": "Growth stage where relevant per 2023/564 Annex fn 7."
+    },
+    {
+      "standardRef": "scheme:ucum",
+      "standardName": "UCUM unit codes",
+      "role": "CODE_BINDING",
+      "status": "PREFERRED",
+      "usage": "All dose/area/volume unit codes."
+    },
+    {
+      "standardRef": "scheme:qudt",
+      "standardName": "QUDT quantity kinds",
+      "role": "SEMANTIC_ANCHOR",
+      "status": "ALLOWED",
+      "usage": "Quantity-kind semantics behind unit codes."
+    },
+    {
+      "standardRef": "scheme:cas",
+      "standardName": "CAS registry numbers",
+      "role": "CODE_BINDING",
+      "status": "OPTIONAL",
+      "usage": "Active-substance context as carried by the register; never product identity."
+    },
+    {
+      "standardRef": "scheme:si.gerk-pid",
+      "standardName": "GERK-PID parcel identifiers",
+      "role": "LOCAL_PROFILE_SCHEME",
+      "status": "PREFERRED",
+      "jurisdiction": "SI",
+      "usage": "Field identity binding; legally preferred location identification (IACS unit per Annex). Open-data layer round-trip steward-confirmed 2026-06-12.",
+      "versionOrAccessDate": "open-data layer vintage recorded per sync"
+    },
+    {
+      "standardRef": "scheme:si.kmg-mid",
+      "standardName": "KMG-MID holding numbers",
+      "role": "LOCAL_PROFILE_SCHEME",
+      "status": "PREFERRED",
+      "jurisdiction": "SI",
+      "usage": "Holding identity; required record field per ZFfS-1 Art. 44.b(3)."
+    },
+    {
+      "standardRef": "scheme:si.ffs-izkaznica",
+      "standardName": "FFS training-card numbers",
+      "role": "LOCAL_PROFILE_SCHEME",
+      "status": "PREFERRED",
+      "jurisdiction": "SI",
+      "usage": "Operator training-card number; required record field per Art. 44.b(3); card photo as evidence."
+    },
+    {
+      "standardRef": "scheme:si.ffs-naprave",
+      "standardName": "UVHVVR sprayer-inspection register",
+      "role": "CODE_BINDING",
+      "status": "ALLOWED",
+      "jurisdiction": "SI",
+      "usage": "Equipment inspection evidence; match by sticker number (StevilkaZnaka); official TXT/XLS/XML+XSD yearly downloads.",
+      "versionOrAccessDate": "2026 file verified 2026-06-12"
+    },
+    {
+      "standardRef": "scheme:eu.pesticides-db",
+      "standardName": "EU Pesticides Database",
+      "role": "SEMANTIC_ANCHOR",
+      "status": "REFERENCE_ONLY",
+      "usage": "EU active-substance context only; informational, no legal value, never product authorisation identity."
+    }
+  ],
+  "bindingRequirements": [
+    {
+      "bindingRole": "CROP_PROTECTION_PRODUCT",
+      "requirementClass": "REQUIRED_FOR_HIGH_CONSEQUENCE",
+      "preferredSchemeRefs": [
+        "scheme:si.uvhvvr.ffs-reg"
+      ],
+      "unresolvedBehavior": "REQUIRE_REVIEW",
+      "requiresSchemeVersion": true,
+      "requiresJurisdiction": true
+    },
+    {
+      "bindingRole": "REGULATORY_AUTHORISATION",
+      "requirementClass": "REQUIRED_FOR_HIGH_CONSEQUENCE",
+      "preferredSchemeRefs": [
+        "scheme:si.uvhvvr.ffs-reg"
+      ],
+      "unresolvedBehavior": "REQUIRE_REVIEW",
+      "requiresSchemeVersion": true,
+      "requiresJurisdiction": true
+    },
+    {
+      "bindingRole": "CROP_SPECIES",
+      "requirementClass": "REQUIRED_FOR_HIGH_CONSEQUENCE",
+      "preferredSchemeRefs": [
+        "scheme:eppo"
+      ],
+      "unresolvedBehavior": "REQUIRE_REVIEW"
+    },
+    {
+      "bindingRole": "TARGET_ORGANISM",
+      "requirementClass": "REQUIRED_WHEN_PRESENT",
+      "preferredSchemeRefs": [
+        "scheme:eppo"
+      ],
+      "unresolvedBehavior": "EVIDENCE_ONLY"
+    },
+    {
+      "bindingRole": "CROP_STAGE",
+      "requirementClass": "REQUIRED_WHEN_PRESENT",
+      "preferredSchemeRefs": [
+        "scheme:bbch"
+      ],
+      "unresolvedBehavior": "EVIDENCE_ONLY"
+    },
+    {
+      "bindingRole": "UNIT_CODE",
+      "requirementClass": "REQUIRED_FOR_HIGH_CONSEQUENCE",
+      "preferredSchemeRefs": [
+        "scheme:ucum"
+      ],
+      "unresolvedBehavior": "BLOCK_PROMOTION"
+    },
+    {
+      "bindingRole": "QUANTITY_KIND",
+      "requirementClass": "OPTIONAL",
+      "preferredSchemeRefs": [
+        "scheme:qudt"
+      ],
+      "unresolvedBehavior": "EVIDENCE_ONLY"
+    },
+    {
+      "bindingRole": "ACTIVE_SUBSTANCE",
+      "requirementClass": "OPTIONAL",
+      "preferredSchemeRefs": [
+        "scheme:cas"
+      ],
+      "unresolvedBehavior": "EVIDENCE_ONLY"
+    }
+  ],
+  "quantityAndUnitPolicy": {
+    "requireQuantityKindAndUnitCode": true,
+    "quantityKindSchemeRef": "scheme:qudt",
+    "unitCodeSchemeRef": "scheme:ucum",
+    "preserveOriginalLexicalValueAndUnit": true,
+    "notes": "Annex fn 1/3/9 unit adjustability honored through the quantity model, never free text."
+  },
+  "packMergePolicy": {
+    "conflictDisposition": "FAIL_CLOSED",
+    "profilePrecedenceRule": "Single-profile pilot: no overlapping code-binding profiles may activate in scope; any future overlap fails closed pending governed review.",
+    "mustNotDo": [
+      "PACK_MUTATED_CORE_MEANING",
+      "SILENT_SCHEME_SUBSTITUTION",
+      "FREE_TEXT_AS_IDENTITY",
+      "UNRESOLVED_BINDING_AS_COMPLIANCE_TRUTH"
+    ]
+  },
+  "evidenceRefs": [
+    "evidence:m0.desk-research.2026-06-11",
+    "evidence:m0.source-packet.2026-06-12",
+    "evidence:regsr.parsed-snapshot.2026-06-12",
+    "evidence:rkg.izpis.structure.private-roundtrip.2026-06-12"
+  ],
+  "notes": "Candidate package artifact (Constitution 6.16); ACTIVE within the pilot pack only. Claim scope: record-keeping completeness; authorisation status advisory-only from dated snapshots. Currentness weaker than the Belgium reference pattern and declared so."
+}

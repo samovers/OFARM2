@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "ofarm.referencesnapshot.v0.1",
+  "referenceSnapshotId": "referencesnapshot:si.uvhvvr.ffs-reg.2026-06-11",
+  "referenceClass": "CODE_LIST",
+  "domain": "SI crop-protection product authorisation register (UVHVVR Seznam registriranih FFS)",
+  "issuingAuthorityRef": "party:si.uvhvvr",
+  "jurisdictionRef": "jurisdiction:SI",
+  "canonicalVersionLabel": "register-day-2026-06-11.parse-2026-06-12",
+  "effectiveFrom": "2026-06-11T00:00:00Z",
+  "sourceArtifactRefs": [
+    "artifact:regsr_snapshot_2026-06-12.json",
+    "digest:sha256-609a6eb35e213710",
+    "surface:spletni2.furs.gov.si.FFS.REGSR.FFS_RegSezn.asp"
+  ],
+  "codeBindingRefs": [],
+  "notes": "First real snapshot: 623 products parsed from the official HTML list (no official export exists); register self-declares informational status - legal record is the odlocba. Parser: tooling/regsr_snapshot/parse_regsr.py."
+}

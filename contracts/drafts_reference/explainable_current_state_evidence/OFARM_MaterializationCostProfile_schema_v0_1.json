@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/drafts/non-default/explainable-current-state-evidence/materialization-cost-profile/v0.1",
+  "title": "OFARM MaterializationCostProfile schema v0.1 draft/non-default",
+  "description": "Draft/non-default schema for materialization, freshness-check, trace-retrieval, fanout, and resource-cost observations.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "artifactType",
+    "contractStatus",
+    "draftNonDefault",
+    "promotedToCurrentDefault",
+    "costProfileId",
+    "measuredAt",
+    "workloadEnvelopeRef",
+    "latencyMeasurements",
+    "resourceAssumptions",
+    "knownLimitations"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.explainableCurrentStateEvidence.materializationCostProfile.v0.1-draft"
+    },
+    "artifactType": {
+      "const": "MaterializationCostProfile"
+    },
+    "contractStatus": {
+      "const": "DRAFT_NON_DEFAULT"
+    },
+    "draftNonDefault": {
+      "const": true
+    },
+    "promotedToCurrentDefault": {
+      "const": false
+    },
+    "costProfileId": {
+      "$ref": "#/$defs/ref"
+    },
+    "materializationKeyRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "runtimeQueryMixProfileRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "measuredAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "workloadEnvelopeRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "latencyMeasurements": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "freshnessCheck": {
+          "$ref": "#/$defs/latencyDistribution"
+        },
+        "materializationRecompute": {
+          "$ref": "#/$defs/latencyDistribution"
+        },
+        "traceRetrievalOrExpansion": {
+          "$ref": "#/$defs/latencyDistribution"
+        },
+        "queryByUseClass": {
+          "$ref": "#/$defs/latencyDistribution"
+        }
+      }
+    },
+    "fanoutMeasurements": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "p50Keys": {
+          "type": "number",
+          "minimum": 0
+        },
+        "p95Keys": {
+          "type": "number",
+          "minimum": 0
+        },
+        "p99Keys": {
+          "type": "number",
+          "minimum": 0
+        },
+        "maximumKeys": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "storageAmplificationReportRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "resourceAssumptions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "knownLimitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ref"
+      }
+    }
+  },
+  "$defs": {
+    "ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:/#-]+$"
+    },
+    "latencyDistribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "p50Ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "p95Ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "p99Ms": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/runtimeproblem/v0.1",
+  "title": "OFARM RuntimeProblem v0.1",
+  "$comment": "Minimal reusable runtime failure envelope introduced by the v0.5 closure pass for drift-prone boundary seams. It does not change baseline law; it gives pack/runtime failures a stable machine-readable shape.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "problemId",
+    "severity",
+    "reasonCode",
+    "title",
+    "detail"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.runtimeproblem.v0.1"
+    },
+    "problemId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "severity": {
+      "enum": [
+        "INFO",
+        "WARNING",
+        "ERROR"
+      ]
+    },
+    "reasonCode": {
+      "type": "string",
+      "pattern": "^[A-Z0-9_:-]+$"
+    },
+    "title": {
+      "type": "string"
+    },
+    "detail": {
+      "type": "string"
+    },
+    "pointerRefs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "relatedRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "suggestedRemediation": {
+      "type": "string"
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "folderStatusVersion": "1.1",
+  "canonicalizedAt": "2026-06-11T22:10:00Z",
+  "path": "03_machine_contracts/drafts_non_default/explainable_current_state_evidence",
+  "materialStatus": "PACKAGE_METADATA",
+  "folderClass": "package_meta",
+  "authorityRank": "metadata",
+  "activeLaw": false,
+  "metadataArtifactActiveLaw": false,
+  "doesNotOverrideActiveBaseline": true,
+  "citationAllowed": false,
+  "searchDefault": true,
+  "releaseExport": true,
+  "currentPackage": "OFARM2_2026-05-30_cp15_agentic_software_delivery_model_deployment_governance_merged_v0_2_final_currentness_normalized",
+  "latestControlledPromotion": "post-CP15 accepted RFC draft support",
+  "artifactRole": "metadata",
+  "activeLawSubject": null,
+  "folderStatusSchema": "package_meta/repository_steward_completion_batch2_2026_05_20/FOLDER_STATUS_CANONICAL_SCHEMA_v1_1.json",
+  "canonicalFolderStatusFieldsPresent": true,
+  "notes": [
+    "Explainable Current-State Evidence draft/non-default schemas.",
+    "This metadata does not create semantic law and does not promote these schemas to current/default."
+  ],
+  "generatedOrCuratedAt": "2026-06-11T22:10:00Z",
+  "currentPackageIdentity": "OFARM2_2026-05-30_cp15_agentic_software_delivery_model_deployment_governance_merged_v0_2_final_currentness_normalized",
+  "latestControlledAmendment": "CP15",
+  "semanticLawChanged": false,
+  "defaultReadPath": false,
+  "authorityBoundary": "Folder status metadata is not active law and does not override active OFARM authority."
+}

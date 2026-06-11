@@ -1,0 +1,33 @@
+{
+  "fixtureId": "capture-note-no-compliance-shortcut",
+  "fixtureType": "COMMIT_PROMOTION_SEQUENCE",
+  "commitClass": "note",
+  "requestedInForceCategory": "compliance fact",
+  "currentStateUpdateExpected": false,
+  "expectedStopGate": "REVIEW_PROMOTION",
+  "expectedStopOutcome": "RETAIN_DRAFT",
+  "terminalOutcome": "RETAIN_DRAFT",
+  "forbiddenShortcutsChecked": [
+    "NO_DIRECT_NOTE_TO_COMPLIANCE_FACT"
+  ],
+  "gates": [
+    {
+      "gate": "INGRESS_NORMALIZATION",
+      "outcome": "NORMALIZED_DRAFT"
+    },
+    {
+      "gate": "AUTHORITY",
+      "outcome": "ALLOW",
+      "requiredAuthorityFamily": "OBSERVE_REPORT"
+    },
+    {
+      "gate": "VALIDATION",
+      "outcome": "PASS"
+    },
+    {
+      "gate": "REVIEW_PROMOTION",
+      "outcome": "RETAIN_DRAFT",
+      "reason": "No declared safe promotion path exists from note to compliance fact."
+    }
+  ]
+}

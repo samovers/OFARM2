@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "ofarm.referencesnapshot.v0.1",
+  "referenceSnapshotId": "referencesnapshot:si.mkgp.gerk-layer.2025-06-30",
+  "referenceClass": "OTHER_REFERENCE",
+  "domain": "SI national GERK parcel layer (Identifikacijski sistem za zemljisca Blok/GERK, open data)",
+  "issuingAuthorityRef": "party:si.mkgp",
+  "jurisdictionRef": "jurisdiction:SI",
+  "canonicalVersionLabel": "GERK_RKG_30jun_2025",
+  "effectiveFrom": "2025-06-30T00:00:00Z",
+  "sourceArtifactRefs": [
+    "archive:GERK_RKG_30jun_2025.zip",
+    "surface:podatki.gov.si.blok-gerk-dataset"
+  ],
+  "codeBindingRefs": [],
+  "notes": "Yearly-vintage open-data layer; 856677 records; attributes GERK_PID, RABA_ID, AREA, OPIS_RABE, ENGLISH (no domace ime, no BLOK-ID, no NUP/GrPov). Round-trip verified 2026-06-12: 4/4 known-farm PIDs matched, 0 duplicates. Layer may lag a fresher RKG izpis; discrepancies route to review."
+}

@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/documentassemblymetadata/v0.1",
+  "title": "OFARM DocumentAssemblyMetadata v0.1",
+  "$comment": "Minimal metadata contract for frozen DocumentAssembly-family outputs derived from the compiled-output taxonomy note and Platform RC2.1 §10.5.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "documentAssemblyId",
+    "documentFamily",
+    "anchorScopes",
+    "generatedAt",
+    "frozenAt",
+    "twin",
+    "querySpecificationRefs",
+    "queryPlanRefs",
+    "contextSnapshotRef",
+    "materializationBasisRef",
+    "materializationSnapshotRef",
+    "freezeReason",
+    "reviewState",
+    "durableArtifactRef",
+    "versionLabel"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.documentassemblymetadata.v0.1"
+    },
+    "documentAssemblyId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "documentFamily": {
+      "enum": [
+        "REPORT_ASSEMBLY",
+        "DOSSIER_ASSEMBLY",
+        "SUBMISSION_ASSEMBLY"
+      ]
+    },
+    "anchorScopes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scopeType",
+          "scopeRef"
+        ],
+        "properties": {
+          "scopeType": {
+            "enum": [
+              "FARM",
+              "SITE",
+              "FIELD",
+              "ZONE",
+              "CROP_CYCLE",
+              "LOT",
+              "FACILITY",
+              "OPERATION",
+              "DEPLOYMENT",
+              "TENANT"
+            ]
+          },
+          "scopeRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]+$"
+          }
+        }
+      }
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "frozenAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "twin": {
+      "enum": [
+        "COMPLIANCE",
+        "ADVISORY"
+      ]
+    },
+    "querySpecificationRefs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "queryPlanRefs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "contextSnapshotRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "materializationBasisRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "materializationSnapshotRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "freezeReason": {
+      "type": "string"
+    },
+    "reviewState": {
+      "enum": [
+        "DRAFT",
+        "REVIEW_REQUIRED",
+        "APPROVED",
+        "ATTESTED",
+        "FILED"
+      ]
+    },
+    "durableArtifactRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "versionLabel": {
+      "type": "string"
+    },
+    "evidenceSufficiencyCaseRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "authorizationDecisionTraceRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "reconstructionPolicyRefs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "reconstructionTraceRefs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    }
+  }
+}

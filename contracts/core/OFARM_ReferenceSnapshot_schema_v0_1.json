@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/referencesnapshot/v0.1",
+  "title": "OFARM ReferenceSnapshot v0.1",
+  "$comment": "Minimal machine contract derived from Constitution RC2.1 \u00a75.2, ContextSnapshot Closure RFC v0.1 \u00a73.4, and ReferenceSnapshot Closure RFC v0.1 \u00a74.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "referenceSnapshotId",
+    "referenceClass",
+    "domain",
+    "canonicalVersionLabel",
+    "effectiveFrom",
+    "sourceArtifactRefs"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.referencesnapshot.v0.1"
+    },
+    "referenceSnapshotId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "referenceClass": {
+      "enum": [
+        "CODE_LIST",
+        "RULEBOOK",
+        "TECHNICAL_GUIDANCE",
+        "CERTIFICATION_REFERENCE",
+        "OTHER_REFERENCE"
+      ]
+    },
+    "domain": {
+      "type": "string",
+      "minLength": 1
+    },
+    "issuingAuthorityRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "jurisdictionRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "canonicalVersionLabel": {
+      "type": "string",
+      "minLength": 1
+    },
+    "effectiveFrom": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "effectiveUntil": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "sourceArtifactRefs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "codeBindingRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "notes": {
+      "type": "string"
+    }
+  }
+}
