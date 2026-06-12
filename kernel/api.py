@@ -32,6 +32,11 @@ class FreezeBody(BaseModel):
 class ReviewAcceptBody(BaseModel):
     farmRef: str
     assertionRef: str
+    # acceptance is a governed RESOLUTION, never a bare pointer: the
+    # rationale is mandatory, and routed insufficiencies additionally
+    # require reviewer-attached durable evidence (gate-enforced)
+    rationale: str
+    evidenceRefs: list[str] = []
     idempotencyKey: str | None = None
 
 
@@ -131,6 +136,8 @@ def create_app(store: Store | None = None) -> FastAPI:
                               or f"review-accept:{_uuid.uuid4().hex[:16]}",
             "decisionTime": _now(),
             "reviewTargetAssertionRef": body.assertionRef,
+            "reviewRationale": body.rationale,
+            "reviewEvidenceRefs": body.evidenceRefs,
             "dominantSemanticConsequence": "review acceptance of a queued claim",
         }
         try:

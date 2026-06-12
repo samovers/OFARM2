@@ -168,18 +168,34 @@ class ProductRegister:
         return snapshot_id in self._by_snapshot
 
 
+class ContextNotReconstructible(Exception):
+    """A historical (AS_OF) context cannot be honestly reconstructed."""
+
+
 class ContextAssembler:
     """Assembles (and reuses) per-farm Compliance-twin ContextSnapshots."""
 
     def __init__(self, store):
         self.store = store
 
-    def _spine(self) -> dict:
+    def _spine(self, as_of: str | None = None) -> dict:
         artifact_sets = self.store.find_by_kind("ofarm.activeartifactset.v0.1")
         activation_sets = self.store.find_by_kind("ofarm.packactivationset.v0.1")
         profiles = self.store.find_by_kind("ofarm.agronomiccodebindingprofile.v0.1")
         if not (artifact_sets and activation_sets and profiles):
             raise RuntimeError("context spine not bootstrapped — call context.bootstrap(store)")
+        if as_of is not None and (len(artifact_sets) > 1 or len(activation_sets) > 1
+                                  or len(profiles) > 1):
+            # the single-profile M1 pilot has no versioned activation history
+            # to select from — with multiple activation/profile/artifact-set
+            # records, silently using the latest would apply a possibly-future
+            # pack/profile context to an earlier state. Refuse instead
+            # (hostile re-review finding 4).
+            raise ContextNotReconstructible(
+                "multiple activation/profile/artifact-set records exist; the "
+                "historical pack/profile context for AS_OF cannot be "
+                "reconstructed in this runtime — refusing rather than silently "
+                "using the latest")
         # latest of each (single-profile pilot: exactly one of each is shipped)
         artifact_set = artifact_sets[-1]["payload"]
         activation_set = activation_sets[-1]["payload"]
@@ -196,13 +212,13 @@ class ContextAssembler:
                  evaluation_time_policy: dict | None = None) -> dict:
         """Return the in-force ContextSnapshot payload for a farm, minting a
         new record only on basis drift (content-addressed reuse)."""
-        spine = self._spine()
         policy = evaluation_time_policy or {"policyType": "NOW"}
         # AS_OF context selects the reference snapshots in force AT that
         # moment; a missing family is honest (none was in force yet) and
         # makes the context content — and therefore the snapshot id and the
         # materialization key — distinct from the NOW answer
         as_of = policy.get("asOfTime") if policy.get("policyType") == "AS_OF" else None
+        spine = self._spine(as_of=as_of)
         regsr = current_reference_snapshot(self.store, REGSR_SNAPSHOT_PREFIX, as_of=as_of)
         gerk = current_reference_snapshot(self.store, GERK_SNAPSHOT_PREFIX, as_of=as_of)
         reference_refs = [p["referenceSnapshotId"] for p in (regsr, gerk) if p]

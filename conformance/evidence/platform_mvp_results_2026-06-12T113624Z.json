@@ -1,7 +1,7 @@
 {
   "suite": "conformance:ofarm2.platform-mvp.tests-1-15.v0_1",
   "executed": true,
-  "executedAt": "2026-06-12T09:31:43.835210Z",
+  "executedAt": "2026-06-12T11:36:24.244273Z",
   "runtimeVersion": "ofarm2-kernel-m1.0",
   "exitStatus": 0,
   "allPassed": true,
@@ -9,7 +9,7 @@
     {
       "test": "kernel/tests/test_conformance.py::test_01_append_only",
       "outcome": "passed",
-      "durationSeconds": 0.024
+      "durationSeconds": 0.03
     },
     {
       "test": "kernel/tests/test_conformance.py::test_02_default_deny",
@@ -19,12 +19,12 @@
     {
       "test": "kernel/tests/test_conformance.py::test_03_offline_sync_idempotency",
       "outcome": "passed",
-      "durationSeconds": 0.011
+      "durationSeconds": 0.012
     },
     {
       "test": "kernel/tests/test_conformance.py::test_04_gate_sequencing_fixtures_live",
       "outcome": "passed",
-      "durationSeconds": 0.073
+      "durationSeconds": 0.058
     },
     {
       "test": "kernel/tests/test_conformance.py::test_05_free_text_product_refusal",
@@ -39,67 +39,77 @@
     {
       "test": "kernel/tests/test_conformance.py::test_08_materialization_basis_and_staleness",
       "outcome": "passed",
-      "durationSeconds": 0.03
+      "durationSeconds": 0.028
     },
     {
       "test": "kernel/tests/test_conformance.py::test_09_passport_view_refusal_disclosure",
       "outcome": "passed",
-      "durationSeconds": 0.021
+      "durationSeconds": 0.02
     },
     {
       "test": "kernel/tests/test_conformance.py::test_10_document_assembly_freeze_trace",
       "outcome": "passed",
-      "durationSeconds": 0.03
+      "durationSeconds": 0.035
     },
     {
       "test": "kernel/tests/test_conformance.py::test_11_inspector_read_only",
       "outcome": "passed",
-      "durationSeconds": 0.006
+      "durationSeconds": 0.013
     },
     {
       "test": "kernel/tests/test_conformance.py::test_12_temporal_conformance",
       "outcome": "passed",
-      "durationSeconds": 0.015
+      "durationSeconds": 0.026
     },
     {
       "test": "kernel/tests/test_conformance.py::test_13_reference_resolution",
       "outcome": "passed",
-      "durationSeconds": 0.018
+      "durationSeconds": 0.023
     },
     {
       "test": "kernel/tests/test_conformance.py::test_14_reachability",
       "outcome": "passed",
-      "durationSeconds": 0.017
+      "durationSeconds": 0.018
     },
     {
       "test": "kernel/tests/test_conformance.py::test_15_manifest_grounding",
       "outcome": "passed",
-      "durationSeconds": 0.006
+      "durationSeconds": 0.008
+    },
+    {
+      "test": "kernel/tests/test_conformance.py::test_93_governed_acceptance_semantics",
+      "outcome": "passed",
+      "durationSeconds": 0.265
     },
     {
       "test": "kernel/tests/test_conformance.py::test_94_second_hostile_regressions",
       "outcome": "passed",
-      "durationSeconds": 0.205
+      "durationSeconds": 0.103
     },
     {
       "test": "kernel/tests/test_conformance.py::test_95_hostile_review_regressions",
       "outcome": "passed",
-      "durationSeconds": 0.175
+      "durationSeconds": 0.208
     },
     {
       "test": "kernel/tests/test_conformance.py::test_96_identity_context_invalidation_and_freshness_modes",
       "outcome": "passed",
-      "durationSeconds": 0.14
+      "durationSeconds": 0.144
     },
     {
       "test": "kernel/tests/test_conformance.py::test_97_review_driven_regressions",
       "outcome": "passed",
-      "durationSeconds": 0.119
+      "durationSeconds": 0.089
     },
     {
       "test": "kernel/tests/test_conformance.py::test_98_stale_registry_snapshot_recheck",
       "outcome": "passed",
-      "durationSeconds": 0.014
+      "durationSeconds": 0.012
+    },
+    {
+      "test": "kernel/tests/test_conformance.py::test_98z_as_of_spine_guard",
+      "outcome": "passed",
+      "durationSeconds": 0.022
     },
     {
       "test": "kernel/tests/test_conformance.py::test_99_global_invariants_hold",
@@ -119,16 +129,16 @@
         "DELETE FROM kernel_idempotency",
         "DELETE FROM runtime_trace"
       ],
-      "supersededConsequence": "conseq:b86d2479e8fb4296",
-      "correctionConsequence": "conseq:aa19fb0324924229"
+      "supersededConsequence": "conseq:34851fe3b43040dc",
+      "correctionConsequence": "conseq:98a4c4878cba44c0"
     },
     "test_02": {
-      "denyTraceId": "authztrace:99c617d2950e4f8d"
+      "denyTraceId": "authztrace:ef0d42eb09624eb9"
     },
     "test_03": {
-      "idempotencyKey": "device-demo-2:q-da826c4c0e",
+      "idempotencyKey": "device-demo-2:q-6296838a92",
       "eventTime": "2026-06-10T07:30:00Z",
-      "recordTime": "2026-06-12T09:31:42.935536Z"
+      "recordTime": "2026-06-12T11:36:23.138048Z"
     },
     "test_04": {
       "fixturesReplayed": {
@@ -349,7 +359,7 @@
       "missingBasisRefused": true
     },
     "test_10": {
-      "durableArtifactRef": "document:si.ffs.inspection-register.0429ffdf4880",
+      "durableArtifactRef": "document:si.ffs.inspection-register.e3fa1d44cf18",
       "digestVerified": true,
       "annexedGaps": 4
     },
@@ -360,8 +370,8 @@
     },
     "test_12": {
       "eventTime": "2026-06-08T06:00:00Z",
-      "recordTime": "2026-06-12T09:31:43.119736Z",
-      "acceptedAt": "2026-06-12T09:31:43.124139Z"
+      "recordTime": "2026-06-12T11:36:23.318287Z",
+      "acceptedAt": "2026-06-12T11:36:23.327752Z"
     },
     "test_13": {
       "danglingRefused": true,
@@ -383,6 +393,20 @@
         "OFARM_QueryPlanIR_si_ffs_inspection_register_documentassembly_v0_1.json"
       ]
     },
+    "test_93": {
+      "closedFindings": {
+        "a-d8-queue-door": "HUMAN_APPROVAL_REQUIRED",
+        "b-routine-self-acceptance": "PROMOTE_ACCEPTED",
+        "c-rationale-required": "EVIDENCE_INSUFFICIENT",
+        "d-resolution-requires-evidence": {
+          "thinRefused": "RETAIN_DRAFT",
+          "resolvedPromotes": "PROMOTE_ACCEPTED"
+        },
+        "e-attribution-trace-linked": {
+          "authorityEdges": 2
+        }
+      }
+    },
     "test_94": {
       "closedFindings": {
         "1-reviewer-principal-bound": "PROMOTE_ACCEPTED",
@@ -398,7 +422,7 @@
         },
         "4-as-of-context": {
           "asOfKeeps": "referencesnapshot:si.uvhvvr.ffs-reg.2026-06-11",
-          "nowUses": "referencesnapshot:si.uvhvvr.ffs-reg.hr2-newer-d0976ffee4"
+          "nowUses": "referencesnapshot:si.uvhvvr.ffs-reg.hr2-newer-ada049ddcb"
         },
         "5-inactive-sharing-denied": true,
         "6-invalid-window-refused": "HIGH_CONSEQUENCE_BLOCKED",
@@ -470,6 +494,10 @@
         ],
         "identity": "not confirmable: list surface carries no decision numbers"
       }
+    },
+    "test_98z": {
+      "asOfRefused": "MATERIALIZATION_INVALID",
+      "nowUnaffected": "RECOMPUTE_REQUIRED"
     },
     "test_99": {
       "silentAcceptances": 0

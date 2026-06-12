@@ -313,11 +313,12 @@ class GatePipeline:
 
             # ---------------- VALIDATION (sub-gates) --------------------------
             review_route_reasons: list[dict] = []
-            erp_id = self._validation_gate(cur, sub, commit_class, farm_ref,
-                                           event_time or captured_at, ingested_at,
-                                           review_route_reasons, log,
-                                           temporal_problem=temporal_problem,
-                                           requested_target=requested_target)
+            erp_id, attribution_ref = self._validation_gate(
+                cur, sub, commit_class, farm_ref,
+                event_time or captured_at, ingested_at,
+                review_route_reasons, log,
+                temporal_problem=temporal_problem,
+                requested_target=requested_target)
             if erp_id:
                 envelope["executionRecordPayloadRefs"] = [erp_id]
 
@@ -421,12 +422,17 @@ class GatePipeline:
                     "decidedByPartyRef": acting_party,
                     "decidedAt": now_iso(),
                     "decisionOutcomeState": "ACCEPTED",
-                    "notes": "queue acceptance: distinct reviewer acting under their "
-                             "own transport principal (GOVERNANCE_DECISION commit)",
+                    # the review act carries its own resolution rationale —
+                    # validated non-empty at the validation gate
+                    "notes": "resolution: " + sub["reviewRationale"].strip(),
                 }
+                if sub.get("reviewEvidenceRefs"):
+                    review["evidenceRefs"] = sub["reviewEvidenceRefs"]
                 self.store.insert_record(cur, review)
                 emitted["reviews"].append(review_id)
                 self.store.add_edge(cur, "REVIEW", acceptance_target, review_id)
+                for ev in sub.get("reviewEvidenceRefs") or []:
+                    self.store.add_edge(cur, "EVIDENCE", review_id, ev)
 
                 event_edges = self.store.edges_from(acceptance_target, "EVENT_SOURCE")
                 orig_event = (event_edges[0]["dst_record_id"] if event_edges
@@ -483,7 +489,8 @@ class GatePipeline:
                                             event_id, erp_id, "PENDING_REVIEW")
                 self.store.insert_record(cur, assertion)
                 emitted["assertions"].append(assertion_id)
-                self._assertion_edges(cur, assertion_id, event_id, sub, decision)
+                self._assertion_edges(cur, assertion_id, event_id, sub, decision,
+                                      attribution_ref=attribution_ref)
                 if case_payload:
                     # the stored case must explain the review routing coherently
                     # — never assert 'all floor items satisfied' while routing
@@ -517,7 +524,8 @@ class GatePipeline:
                                             event_id, erp_id, "PENDING_REVIEW")
                 self.store.insert_record(cur, assertion)
                 emitted["assertions"].append(assertion_id)
-                self._assertion_edges(cur, assertion_id, event_id, sub, decision)
+                self._assertion_edges(cur, assertion_id, event_id, sub, decision,
+                                      attribution_ref=attribution_ref)
                 if case_payload:
                     self.store.insert_record(cur, case_payload)
                     trace_refs["evidenceSufficiencyCaseRef"] = case_payload["sufficiencyCaseId"]
@@ -550,7 +558,8 @@ class GatePipeline:
                                             event_id, erp_id, "IN_FORCE")
                 self.store.insert_record(cur, assertion)
                 emitted["assertions"].append(assertion_id)
-                self._assertion_edges(cur, assertion_id, event_id, sub, decision)
+                self._assertion_edges(cur, assertion_id, event_id, sub, decision,
+                                      attribution_ref=attribution_ref)
 
                 if case_payload:
                     self.store.insert_record(cur, case_payload)
@@ -948,8 +957,33 @@ class GatePipeline:
                 refuse("FAIL_SEMANTIC", runtime_problem(
                     "IDENTITY_UNRESOLVED", "Assertion type not acceptable",
                     f"{target['assertionType']} has no acceptance path"))
+            # D8 holds at the queue door too: self-acceptance covers ROUTINE
+            # OPERATION CLAIMS only — a party may never accept their own
+            # compliance (or any non-operation) assertion through the queue
+            # (hostile re-review blocker 1)
+            if (target["assertedByPartyRef"] == sub["actingPartyRef"]
+                    and target["assertionType"] != "OPERATION_CLAIM_ASSERTION"):
+                refuse("FAIL_SEMANTIC", runtime_problem(
+                    "HUMAN_APPROVAL_REQUIRED", "Self-acceptance out of scope",
+                    f"self-review covers routine operation claims only (D8); "
+                    f"{target['assertionType']} asserted by the accepting party "
+                    "requires a DISTINCT reviewer principal"))
+            # a review act is governed, never a bare pointer: it carries its
+            # rationale, and any attached evidence must be durable
+            rationale_text = sub.get("reviewRationale")
+            if not (isinstance(rationale_text, str) and rationale_text.strip()):
+                refuse("FAIL_SEMANTIC", runtime_problem(
+                    "EVIDENCE_INSUFFICIENT", "Acceptance without rationale",
+                    "a review acceptance must state its resolution rationale"))
+            for ref in sub.get("reviewEvidenceRefs") or []:
+                row2 = self.store.get_record(ref)
+                if row2 is None or row2["record_kind"] != "ofarm.evidencerecord.v0.1":
+                    refuse("FAIL_REFERENCE_RESOLUTION", runtime_problem(
+                        "EVIDENCE_REFERENCE_UNAVAILABLE", "Review evidence unresolved",
+                        f"review evidence {ref} does not resolve to a durable "
+                        "EvidenceRecord"))
             log("VALIDATION", "PASS")
-            return None
+            return None, None
 
         # --- compliance-specific validation: a compliance assertion may not
         # ride to COMPLIANCE_STATUS_ACCEPTED on a bare evidence ref. It must
@@ -998,11 +1032,11 @@ class GatePipeline:
                                  if subject_row["payload"]["identityType"] != "FARM"
                                  else "FARM", subject_ref, "complianceClaim.subjectScopeRef")
             log("VALIDATION", "PASS")
-            return None
+            return None, None
 
         if commit_class != "OPERATION_CLAIM":
             log("VALIDATION", "PASS")
-            return None
+            return None, None
 
         if not isinstance(payload, dict):
             refuse("FAIL_SCHEMA", runtime_problem(
@@ -1089,6 +1123,7 @@ class GatePipeline:
         # "X performed this" with no governed basis for X is an exception,
         # not silent truth (hostile review blocker 2, second pass).
         named_actor = payload["actor"]["actorPartyRef"]
+        attribution_ref = None
         if named_actor != sub["actingPartyRef"]:
             basis = self.authority.evaluate(
                 acting_party_ref=named_actor,
@@ -1098,6 +1133,11 @@ class GatePipeline:
             self.store.insert_record(cur, basis.request_payload)
             self.store.insert_record(cur, basis.trace_payload)
             self.store.insert_record(cur, basis.result_payload)
+            # the attribution decision is part of the claim's proof: linked
+            # as AUTHORITY_BASIS on the assertion and surfaced on the trace's
+            # VALIDATION entry, so the trace shows BOTH authority decisions —
+            # submitter authority and named-actor attribution basis
+            attribution_ref = basis.result_payload["resultId"]
             if not basis.allowed:
                 review_route_reasons.append(runtime_problem(
                     "ACTOR_BINDING_UNRESOLVED", "Actor attribution unverified",
@@ -1167,7 +1207,10 @@ class GatePipeline:
                         "identity — D9), so the record routes to review",
                         severity="WARNING"))
 
-        log("VALIDATION", "PASS")
+        # the trace's VALIDATION entry surfaces the attribution decision so
+        # both authority decisions are visible on the promotion path (F3)
+        log("VALIDATION", "PASS",
+            refs=[attribution_ref] if attribution_ref else None)
 
         # the carrier is stored as part of the same transaction; a reused
         # carrier id with DIFFERENT content is a conflict, refused — promoted
@@ -1185,7 +1228,7 @@ class GatePipeline:
                 f"executionRecordPayloadId {erp_id} already names a record with "
                 "different content; mint a new carrier id (corrections supersede "
                 "via supersedesConsequenceRef, they never overwrite)"))
-        return erp_id
+        return erp_id, attribution_ref
 
     # ======================================================================
     # evidence sufficiency (auto-generated from the SI policy template)
@@ -1249,6 +1292,24 @@ class GatePipeline:
         return self._case_from_checks(sub, farm_ref, assertion_id, erp_id,
                                       checks, hard, soft, evidence_refs)
 
+    # route-reason codes whose resolution requires NEW durable evidence (or a
+    # corrected carrier) at acceptance — a bare "approve anyway" is refused
+    NEEDS_EVIDENCE_CODES = frozenset({
+        "ACTOR_BINDING_UNRESOLVED", "PRODUCT_BINDING_UNRESOLVED",
+        "IDENTITY_UNRESOLVED", "EVIDENCE_INSUFFICIENT", "SUPERSEDED_RECORD_USED",
+    })
+
+    def _route_reasons_for(self, assertion_ref: str) -> list[dict]:
+        """The recorded problems of the original commit that queued this
+        assertion — what the review act must actually resolve."""
+        for row in self.store.find_by_kind("ofarm.commitingressresult.v0.1"):
+            p = row["payload"]
+            if (p.get("idempotencyDisposition") == "NEW_REQUEST"
+                    and assertion_ref in p.get("emittedAssertionRecordRefs", [])):
+                return [pr for pr in p.get("problems", [])
+                        if pr.get("severity") in ("WARNING", "ERROR")]
+        return []
+
     def _recover_compliance_claim(self, assertion_id: str) -> dict | None:
         """The structured claim captured verbatim with the original event."""
         import json as _json
@@ -1265,11 +1326,21 @@ class GatePipeline:
     def _acceptance_case(self, sub, farm_ref, target) -> tuple[dict, list[dict]]:
         """Sufficiency case for a queue acceptance: evaluates the TARGET
         assertion's durable evidence (and, for compliance claims, the claim
-        captured with its event) — the named reviewer resolves the routed
-        exceptions; missing durable evidence refuses the acceptance."""
+        captured with its event) AND the resolution of the original
+        route-to-review reasons — acceptance is a governed resolution, never
+        a thin 'approve anyway' (hostile re-review blocker 2)."""
         target_id = target["assertionRecordId"]
         evidence_refs = target.get("evidenceRefs", [])
         checks = {"durable-evidence": bool(self._durable_evidence(evidence_refs))}
+        route_reasons = self._route_reasons_for(target_id)
+        needs_new_evidence = [r for r in route_reasons
+                              if r.get("reasonCode") in self.NEEDS_EVIDENCE_CODES]
+        review_evidence = self._durable_evidence(sub.get("reviewEvidenceRefs") or [])
+        # routed insufficiencies are resolved by NEW reviewer-attached durable
+        # evidence; the distinct review act itself resolves only the
+        # review-routing reasons that demanded a distinct human
+        checks["route-reasons-resolved"] = (not needs_new_evidence
+                                            or bool(review_evidence))
         claim_statement = None
         if target["assertionType"] == "COMPLIANCE_ASSERTION":
             claim = self._recover_compliance_claim(target_id)
@@ -1399,10 +1470,15 @@ class GatePipeline:
             a["evidenceRefs"] = [event_id]
         return a
 
-    def _assertion_edges(self, cur, assertion_id, event_id, sub, authz_decision):
+    def _assertion_edges(self, cur, assertion_id, event_id, sub, authz_decision,
+                         attribution_ref: str | None = None):
         self.store.add_edge(cur, "EVENT_SOURCE", assertion_id, event_id)
         self.store.add_edge(cur, "AUTHORITY_BASIS", assertion_id,
                             authz_decision.result_payload["resultId"])
+        if attribution_ref:
+            # second authority decision: the named-actor attribution basis is
+            # reachable from the assertion exactly like submitter authority
+            self.store.add_edge(cur, "AUTHORITY_BASIS", assertion_id, attribution_ref)
         for ev in ((sub.get("payload") or {}).get("evidenceRefs")
                    or sub.get("evidenceRefs") or []):
             if self.store.record_exists(ev):

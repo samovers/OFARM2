@@ -21,7 +21,7 @@ import hashlib
 import uuid
 
 from . import config
-from .context import ContextAssembler, now_iso, parse_ts
+from .context import ContextAssembler, ContextNotReconstructible, now_iso, parse_ts
 from .contracts import canonical_json
 from psycopg.types.json import Jsonb
 
@@ -476,8 +476,38 @@ class Materializer:
         }
         self.store.insert_record(cur, request)
 
-        ctx = self.context.assemble(cur, farm_ref, target_twin=twin,
-                                    evaluation_time_policy=time_policy)
+        try:
+            ctx = self.context.assemble(cur, farm_ref, target_twin=twin,
+                                        evaluation_time_policy=time_policy)
+        except ContextNotReconstructible as exc:
+            from .problems import runtime_problem
+            problem = runtime_problem(
+                "MATERIALIZATION_INVALID", "Historical context not reconstructible",
+                str(exc))
+            refusal = {
+                "schemaVersion": "ofarm.materializationresult.v0.1",
+                "resultId": _mint("matres"),
+                "requestId": request_id,
+                "evaluatedAt": now_iso(),
+                "decisionOutcome": "REFUSE_USE",
+                "targetTwin": twin,
+                "anchorScopes": [{"scopeType": "FARM", "scopeRef": farm_ref}],
+                "requiredFreshness": required_freshness,
+                "highConsequenceUse": high_consequence,
+                "freshnessState": "INVALID",
+                "satisfiedFreshnessRequirement": False,
+                "materializationBasisRef": "basis:none",
+                "materializationSnapshotRef": "snapshot:none",
+                "contextSnapshotRef": "contextsnapshot:not-reconstructible",
+                "invalidationTriggerFamilies": ["CONTEXT"],
+                "problems": [problem],
+                "reasonSummary": "refused: historical context cannot be reconstructed",
+            }
+            self.store.insert_record(cur, refusal)
+            return {"decision": "REFUSE_USE", "freshness": "INVALID",
+                    "materialization": None, "materializationResult": refusal,
+                    "contextSnapshotRef": "contextsnapshot:not-reconstructible",
+                    "recomputed": False, "problems": [problem]}
         key = self.build_key(farm_ref, twin=twin, use_class=use_class,
                              time_policy=time_policy,
                              context_snapshot_ref=ctx["contextSnapshotId"])

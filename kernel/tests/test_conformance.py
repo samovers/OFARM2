@@ -204,6 +204,9 @@ def _replay_commit_fixture(store, pipeline, fixture):
                "farmRef": demo.FARM, "idempotencyKey": f"fixture:{fid}:s2:{uid()}",
                "decisionTime": context.now_iso(),
                "reviewTargetAssertionRef": step1["emittedAssertionRecordRefs"][0],
+               "reviewRationale": "fixture replay: advisor reviewed the structured "
+                                  "claim and its evidence; acceptance resolves the "
+                                  "distinct-reviewer routing",
                "dominantSemanticConsequence": "review acceptance of a queued claim"}
         expected_commit_class = "GOVERNANCE_DECISION"
     elif fid == "capture-note-no-compliance-shortcut":
@@ -780,6 +783,181 @@ def test_15_manifest_grounding(store):
 
 
 # =========================================================================
+# 93. Hostile re-review regressions (PR #2, formal review): D8 holds at the
+#     queue door, acceptance is a governed resolution, attribution basis is
+#     trace-linked.
+# =========================================================================
+
+def test_93_governed_acceptance_semantics(store, pipeline):
+    from fastapi.testclient import TestClient
+    from kernel.api import create_app
+    client = TestClient(create_app(store))
+    closed = {}
+
+    def queue_compliance():
+        r = pipeline.commit({
+            "commitClass": "COMPLIANCE_ASSERTION", "actingPartyRef": demo.FARMER,
+            "farmRef": demo.FARM, "idempotencyKey": f"hr3:a:{uid()}",
+            "eventTime": "2026-06-10T09:00:00Z",
+            "evidenceRefs": [demo.PHOTO_EVIDENCE],
+            "payload": {"complianceClaim": {
+                "statement": "fictional demo: D8 queue-door regression",
+                "assertedStatus": "CLAIMED_COMPLIANT",
+                "governingRuleRefs": [config.EVIDENCE_POLICY_REF],
+                "subjectScopeRef": demo.FARM}},
+            "confirmAccept": True})
+        assert r["decisionOutcome"] == "REQUIRE_REVIEW"
+        return r["emittedAssertionRecordRefs"][0]
+
+    # (a) D8 holds at the queue door: the farmer cannot accept their OWN
+    # compliance assertion through /review/accept; the advisor can
+    queued = queue_compliance()
+    self_accept = client.post("/review/accept",
+                              json={"farmRef": demo.FARM, "assertionRef": queued,
+                                    "rationale": "self-acceptance attempt"},
+                              headers={"x-acting-party": demo.FARMER})
+    assert self_accept.status_code == 200
+    assert self_accept.json()["decisionOutcome"] == "RETAIN_DRAFT"
+    assert self_accept.json()["problems"][0]["reasonCode"] == "HUMAN_APPROVAL_REQUIRED", \
+        "compliance self-review must not re-enter through the queue (D8)"
+    advisor_accept = client.post("/review/accept",
+                                 json={"farmRef": demo.FARM, "assertionRef": queued,
+                                       "rationale": "advisor reviewed claim and "
+                                                    "evidence; routing resolved"},
+                                 headers={"x-acting-party": demo.ADVISOR})
+    assert advisor_accept.json()["decisionOutcome"] == "PROMOTE_ACCEPTED"
+    closed["a-d8-queue-door"] = self_accept.json()["problems"][0]["reasonCode"]
+
+    # (b) routine OPERATION self-acceptance from the queue stays lawful (D8)
+    routine = pipeline.commit(demo.spray_submission(
+        f"hr3:b:{uid()}", erp_id=f"erp:hr3.{uid()}", confirm=False))
+    assert routine["decisionOutcome"] == "RETAIN_DRAFT"
+    own_op = client.post("/review/accept",
+                         json={"farmRef": demo.FARM,
+                               "assertionRef": routine["emittedAssertionRecordRefs"][0],
+                               "rationale": "self-review of a routine operation claim "
+                                            "meeting the floor (D8)"},
+                         headers={"x-acting-party": demo.FARMER})
+    assert own_op.json()["decisionOutcome"] == "PROMOTE_ACCEPTED"
+    closed["b-routine-self-acceptance"] = own_op.json()["decisionOutcome"]
+
+    # (c) acceptance without rationale refuses at the gate (the API field is
+    # mandatory too — this pins the pipeline-level guard)
+    queued2 = queue_compliance()
+    bare = pipeline.commit({
+        "commitClass": "GOVERNANCE_DECISION", "actingPartyRef": demo.ADVISOR,
+        "farmRef": demo.FARM, "idempotencyKey": f"hr3:c:{uid()}",
+        "decisionTime": context.now_iso(),
+        "reviewTargetAssertionRef": queued2})
+    assert bare["decisionOutcome"] == "RETAIN_DRAFT"
+    assert bare["problems"][0]["reasonCode"] == "EVIDENCE_INSUFFICIENT", \
+        "a review acceptance must carry its resolution rationale"
+    closed["c-rationale-required"] = bare["problems"][0]["reasonCode"]
+
+    # (d) a routed insufficiency (unverifiable actor attribution) cannot be
+    # accepted with rationale alone — the resolution needs NEW durable
+    # evidence attached by the reviewer
+    stranger = f"party:hr3.stranger.{uid()}"
+    with store.tx() as cur:
+        store.insert_record(cur, {
+            "schemaVersion": "ofarm.party.v0.1", "partyId": stranger,
+            "partyClass": "NATURAL_PERSON",
+            "displayName": "HR3 Stranger (fictional)",
+            "partyState": "ACTIVE", "recordedAt": context.now_iso()})
+    routed = demo.spray_submission(f"hr3:d:{uid()}", erp_id=f"erp:hr3.{uid()}")
+    routed["payload"]["actor"]["actorPartyRef"] = stranger
+    routed_result = pipeline.commit(routed)
+    assert routed_result["decisionOutcome"] == "REQUIRE_REVIEW"
+    routed_assertion = routed_result["emittedAssertionRecordRefs"][0]
+
+    thin = client.post("/review/accept",
+                       json={"farmRef": demo.FARM, "assertionRef": routed_assertion,
+                             "rationale": "approve anyway"},
+                       headers={"x-acting-party": demo.ADVISOR})
+    assert thin.json()["decisionOutcome"] == "RETAIN_DRAFT", \
+        "an 'approve anyway' without new evidence must refuse"
+
+    statement_evidence = f"evidence:hr3.statement.{uid()}"
+    with store.tx() as cur:
+        store.insert_record(cur, {
+            "schemaVersion": "ofarm.evidencerecord.v0.1",
+            "evidenceRecordId": statement_evidence,
+            "evidenceClass": "DOCUMENT",
+            "capturedAt": context.now_iso(), "recordedAt": context.now_iso(),
+            "capturedByPartyRef": demo.ADVISOR,
+            "anchorScopes": [{"scopeType": "FARM", "scopeRef": demo.FARM}],
+            "rawAssetRef": "asset:hr3.statement.0001",
+            "rawAssetDigest": "sha256:" + "cd" * 32,
+            "mediaType": "application/pdf",
+            "evidenceState": "CAPTURED",
+            "notes": "fictional reviewer-attached statement resolving the "
+                     "actor-attribution exception"})
+    resolved = client.post("/review/accept",
+                           json={"farmRef": demo.FARM,
+                                 "assertionRef": routed_assertion,
+                                 "rationale": "operator statement obtained and "
+                                              "attached; attribution verified by "
+                                              "the advisor",
+                                 "evidenceRefs": [statement_evidence]},
+                           headers={"x-acting-party": demo.ADVISOR})
+    assert resolved.json()["decisionOutcome"] == "PROMOTE_ACCEPTED"
+    review_ref = resolved.json()["emittedReviewDecisionRefs"][0]
+    review = store.get_payload(review_ref)
+    assert review["evidenceRefs"] == [statement_evidence], \
+        "the resolution evidence must ride the ReviewDecision"
+    assert any(e["dst_record_id"] == statement_evidence
+               for e in store.edges_from(review_ref, "EVIDENCE"))
+    closed["d-resolution-requires-evidence"] = {
+        "thinRefused": thin.json()["decisionOutcome"],
+        "resolvedPromotes": resolved.json()["decisionOutcome"]}
+
+    # (e) the named-actor attribution basis is trace-linked: two
+    # AUTHORITY_BASIS edges on the assertion, and the trace's VALIDATION
+    # entry surfaces the attribution decision
+    operator = f"party:hr3.operator.{uid()}"
+    with store.tx() as cur:
+        store.insert_record(cur, {
+            "schemaVersion": "ofarm.party.v0.1", "partyId": operator,
+            "partyClass": "NATURAL_PERSON",
+            "displayName": "HR3 Delegated Operator (fictional)",
+            "partyState": "ACTIVE", "recordedAt": context.now_iso()})
+        store.insert_record(cur, {
+            "schemaVersion": "ofarm.delegationgrant.v0.1",
+            "delegationGrantId": f"deleg:hr3.operator.{uid()}",
+            "delegatingPartyRef": demo.FARMER, "delegatePartyRef": operator,
+            "sourceAuthorityGrantRefs": [demo.FARMER_GRANT],
+            "targetScope": {"scopeType": "FARM", "scopeRef": demo.FARM},
+            "authorityActionClasses": ["ASSERT_OPERATION_CLAIM"],
+            "validFrom": demo.VALID_FROM,
+            "inheritanceMode": "DESCENDANT_SCOPES",
+            "delegationState": "ACTIVE"})
+    attributed = demo.spray_submission(f"hr3:e:{uid()}", erp_id=f"erp:hr3.{uid()}")
+    attributed["payload"]["actor"] = {"actorPartyRef": operator,
+                                      "roleAtCapture": "OPERATOR"}
+    res = pipeline.commit(attributed)
+    assert res["decisionOutcome"] == "PROMOTE_ACCEPTED"
+    assertion_ref = res["emittedAssertionRecordRefs"][0]
+    authority_edges = store.edges_from(assertion_ref, "AUTHORITY_BASIS")
+    assert len(authority_edges) == 2, \
+        "submitter authority AND attribution basis must both be edge-linked"
+    basis_kinds = {store.get_record(e["dst_record_id"])["record_kind"]
+                   for e in authority_edges}
+    assert basis_kinds == {"ofarm.authorizationdecisionresult.v0.1"}
+    trace = store.get_payload(res["promotionTraceRef"])
+    validation_entries = [g for g in trace["gateSequence"]
+                          if g["gate"] == "VALIDATION" and g["outcome"] == "PASS"]
+    assert validation_entries and validation_entries[0].get("relatedArtifactRefs"), \
+        "the trace must surface the attribution decision on its VALIDATION entry"
+    linked = set(validation_entries[0]["relatedArtifactRefs"])
+    edge_dsts = {e["dst_record_id"] for e in authority_edges}
+    assert linked & edge_dsts, \
+        "the trace's attribution ref must be one of the assertion's authority bases"
+    closed["e-attribution-trace-linked"] = {"authorityEdges": len(authority_edges)}
+
+    record_detail("test_93", {"closedFindings": closed})
+
+
+# =========================================================================
 # 94. Second hostile-review regressions (PR #2): reviewer principal,
 #     actor attribution, containment hardening, as-of context, inactive
 #     sharing, invalid windows, trace-payload consistency.
@@ -814,18 +992,23 @@ def test_94_second_hostile_regressions(store, pipeline, materializer, outputs):
     from kernel.api import create_app
     client = TestClient(create_app(store))
     spoofed = client.post("/review/accept",
-                          json={"farmRef": demo.FARM, "assertionRef": queued},
+                          json={"farmRef": demo.FARM, "assertionRef": queued,
+                                "rationale": "spoof attempt"},
                           headers={"x-acting-party": demo.WORKER})
     assert spoofed.status_code == 200 and spoofed.json()["decisionOutcome"] == "DENY", \
         "a principal without REVIEW_ACCEPT cannot accept from the queue"
     accepted = client.post("/review/accept",
-                           json={"farmRef": demo.FARM, "assertionRef": queued},
+                           json={"farmRef": demo.FARM, "assertionRef": queued,
+                                 "rationale": "advisor reviewed the structured claim "
+                                              "and evidence; distinct-reviewer routing "
+                                              "resolved by this act"},
                            headers={"x-acting-party": demo.ADVISOR})
     assert accepted.status_code == 200
     assert accepted.json()["decisionOutcome"] == "PROMOTE_ACCEPTED"
     assert accepted.json()["inForceResultCategory"] == "COMPLIANCE_FACT"
     double = client.post("/review/accept",
-                         json={"farmRef": demo.FARM, "assertionRef": queued},
+                         json={"farmRef": demo.FARM, "assertionRef": queued,
+                               "rationale": "double-accept attempt"},
                          headers={"x-acting-party": demo.ADVISOR})
     assert double.json()["decisionOutcome"] == "RETAIN_DRAFT", \
         "a second acceptance of the same target must refuse (already reviewed)"
@@ -1712,6 +1895,44 @@ def test_98_stale_registry_snapshot_recheck(store, pipeline):
     real = _json.loads((config.PROFILE_ROOT / "examples" /
                         "regsr_snapshot_2026-06-12.json").read_text())
     pipeline.products.register_artifact(restored, real)
+
+
+# =========================================================================
+# 98z. AS_OF spine guard (hostile re-review finding 4): when multiple
+#      activation/profile/artifact-set records exist, the M1 runtime cannot
+#      reconstruct the historical pack/profile context — AS_OF must refuse
+#      rather than silently use the latest. Runs late: the duplicate
+#      activation record permanently changes the spine's "latest" selection.
+# =========================================================================
+
+def test_98z_as_of_spine_guard(store, pipeline, materializer):
+    import json as _json
+    original = store.find_by_kind("ofarm.packactivationset.v0.1")[-1]["payload"]
+    duplicate = dict(original)
+    duplicate["packActivationSetId"] = f"packactivationset:si.ffs.pilot.dup-test.{uid()}"
+    duplicate["notes"] = ("SYNTHETIC TEST duplicate of the pilot activation set "
+                          "(identical content, new id) — AS_OF spine-guard "
+                          "regression only")
+    with store.tx() as cur:
+        store.insert_record(cur, duplicate)
+
+    with store.tx() as cur:
+        refused = materializer.resolve_for_use(
+            cur, demo.FARM,
+            time_policy={"policyType": "AS_OF", "asOfTime": context.now_iso()},
+            recompute_if_needed=True)
+    assert refused["decision"] == "REFUSE_USE"
+    assert refused["problems"][0]["reasonCode"] == "MATERIALIZATION_INVALID", \
+        "AS_OF with ambiguous activation history must refuse, never guess"
+
+    # NOW materialization remains lawful (current context is unambiguous:
+    # the latest record; the duplicate's content is identical)
+    with store.tx() as cur:
+        now_ok = materializer.resolve_for_use(cur, demo.FARM)
+    assert now_ok["decision"] in ("ALLOW_REUSE", "RECOMPUTE_REQUIRED")
+    record_detail("test_98z", {
+        "asOfRefused": refused["problems"][0]["reasonCode"],
+        "nowUnaffected": now_ok["decision"]})
 
 
 # =========================================================================
