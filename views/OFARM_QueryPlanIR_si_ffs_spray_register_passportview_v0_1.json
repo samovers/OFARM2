@@ -1,0 +1,82 @@
+{
+  "schemaVersion": "ofarm.queryplanir.v0.1",
+  "planId": "queryplan:si.ffs.spray-register.passportview.v0_1",
+  "sourceQuerySpecificationId": "queryspec:si.ffs.spray-register.passportview.v0_1",
+  "normalizedTarget": {
+    "twin": "COMPLIANCE",
+    "anchorScopes": [
+      {
+        "scopeType": "FARM",
+        "scopeRef": "farm:ANCHOR-PARAMETER"
+      }
+    ],
+    "evaluationTimePolicy": {
+      "policyType": "NOW"
+    },
+    "contextSnapshotRef": "contextsnapshot:si.ffs.pilot.compliance.demo.v0_1"
+  },
+  "resolvedPathAliases": [],
+  "executionSteps": [
+    {
+      "stepId": "step:si.ffs.passport.materialize",
+      "executorType": "CURRENT_STATE_MATERIALIZATION",
+      "operationType": "MATCH",
+      "inputBindings": [],
+      "outputBindingSetId": "bindings:si.ffs.passport.register",
+      "targetRef": "matkey-derivation:si.ffs.spray-register.per-farm",
+      "freshnessRequirement": "REQUIRE_FRESH"
+    },
+    {
+      "stepId": "step:si.ffs.passport.pending",
+      "executorType": "SEMANTIC_GRAPH",
+      "operationType": "MATCH",
+      "inputBindings": [],
+      "outputBindingSetId": "bindings:si.ffs.passport.pending",
+      "dependsOn": [
+        "step:si.ffs.passport.materialize"
+      ],
+      "targetRef": "ofarm:AssertionRecord/claimState=PENDING_REVIEW",
+      "freshnessRequirement": "NO_CURRENT_STATE_DEPENDENCY"
+    },
+    {
+      "stepId": "step:si.ffs.passport.advisories",
+      "executorType": "SEMANTIC_GRAPH",
+      "operationType": "MATCH",
+      "inputBindings": [],
+      "outputBindingSetId": "bindings:si.ffs.passport.advisories",
+      "dependsOn": [
+        "step:si.ffs.passport.materialize"
+      ],
+      "targetRef": "ofarm:SemanticEventEnvelope/commitClass=ADVISORY_OUTPUT",
+      "freshnessRequirement": "NO_CURRENT_STATE_DEPENDENCY"
+    },
+    {
+      "stepId": "step:si.ffs.passport.project",
+      "executorType": "SEMANTIC_GRAPH",
+      "operationType": "PROJECT",
+      "inputBindings": [
+        "register",
+        "pending",
+        "advisories"
+      ],
+      "outputBindingSetId": "bindings:si.ffs.passport.final",
+      "dependsOn": [
+        "step:si.ffs.passport.materialize",
+        "step:si.ffs.passport.pending",
+        "step:si.ffs.passport.advisories"
+      ]
+    }
+  ],
+  "materializationPolicy": {
+    "requiredFreshness": "REQUIRE_FRESH",
+    "highConsequenceUse": false
+  },
+  "equivalenceRequirements": {
+    "semanticEquivalenceRequired": true,
+    "projectionTraceBackRequired": true
+  },
+  "outputAssembly": {
+    "mode": "PASSPORT_VIEW"
+  },
+  "reconstructionTraceExpectation": "TRACE_OPTIONAL_LOW_CONSEQUENCE"
+}

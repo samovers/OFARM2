@@ -1,0 +1,228 @@
+-- OFARM2 Kernel truth store DDL (M1 brief task 2)
+-- Storage posture per PLATFORM.md §"Storage posture (binding for the pilot)":
+--   * append-only record tables, immutable payload digests (sha256)
+--   * schema version + schema hash stored per record
+--   * explicit relation/edge table (authority, evidence, review, lineage, materialization refs)
+--   * materialization/projection tables marked derived / derived-recomputable
+--   * no authoritative writes into projections, caches, or report stores
+--   * outbox/gate-log tables for enforcement traces
+--   * the PromotionTrace reachability link written in the same transaction as the commit (D3)
+
+-- ---------------------------------------------------------------------------
+-- Append-only enforcement (Kernel rule 1): correction is supersession.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION kernel_forbid_mutation() RETURNS trigger AS $$
+BEGIN
+  RAISE EXCEPTION 'OFARM Kernel rule 1 (append-only): % on %.% is forbidden; correction is supersession',
+    TG_OP, TG_TABLE_SCHEMA, TG_TABLE_NAME;
+END
+$$ LANGUAGE plpgsql;
+
+-- ---------------------------------------------------------------------------
+-- kernel_record: one row per governed contract record. JSONB payload is
+-- validated against the package contracts on write (application layer);
+-- payload_sha256 is the digest of the canonical JSON serialization;
+-- schema_hash is the sha256 of the exact contract file used to validate.
+-- record_time is server commit time and never collapses with the event /
+-- assertion / effective times inside the payload (Kernel rule 6).
+-- lane: 'canonical' = package contract lane; 'draft' = drafts_reference
+-- shapes implemented behind Kernel law without promotion (D16).
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS kernel_record (
+  record_id      text PRIMARY KEY,
+  record_kind    text NOT NULL,            -- schemaVersion const, e.g. 'ofarm.assertionrecord.v0.1'
+  lane           text NOT NULL DEFAULT 'canonical' CHECK (lane IN ('canonical', 'draft')),
+  schema_hash    text NOT NULL,
+  payload        jsonb NOT NULL,
+  payload_sha256 text NOT NULL,
+  record_time    timestamptz NOT NULL DEFAULT now(),
+  tenant_ref     text NOT NULL DEFAULT 'tenant:si.ffs.pilot.demo'
+);
+CREATE INDEX IF NOT EXISTS ix_kernel_record_kind ON kernel_record (record_kind);
+
+DROP TRIGGER IF EXISTS trg_kernel_record_append_only ON kernel_record;
+CREATE TRIGGER trg_kernel_record_append_only
+  BEFORE UPDATE OR DELETE ON kernel_record
+  FOR EACH STATEMENT EXECUTE FUNCTION kernel_forbid_mutation();
+
+-- ---------------------------------------------------------------------------
+-- kernel_edge: explicit, durable relation table. References are edges,
+-- not JSON-path conventions (PLATFORM.md). Append-only.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS kernel_edge (
+  edge_id       bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  edge_type     text NOT NULL CHECK (edge_type IN (
+                  'AUTHORITY_BASIS',        -- record -> AuthorizationDecisionResult / grant
+                  'EVIDENCE',               -- record -> EvidenceRecord
+                  'REVIEW',                 -- consequence/assertion -> ReviewDecision
+                  'EVENT_SOURCE',           -- assertion/consequence -> SemanticEventEnvelope
+                  'LINEAGE_SUPERSEDES',     -- new record -> superseded record
+                  'LINEAGE_REVISES',        -- revision -> revised
+                  'MATERIALIZATION_BASIS',  -- MaterializationBasis -> contributing record
+                  'PROMOTION_EMITS'         -- PromotionTrace -> emitted record (reachability, D3)
+                )),
+  src_record_id text NOT NULL,
+  dst_record_id text NOT NULL,
+  record_time   timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS ix_kernel_edge_src ON kernel_edge (src_record_id, edge_type);
+CREATE INDEX IF NOT EXISTS ix_kernel_edge_dst ON kernel_edge (dst_record_id, edge_type);
+
+-- Reachability invariant (KERNEL.md): every authoritative record reachable
+-- from EXACTLY ONE PromotionTrace. "At most one" is this unique index;
+-- "at least one" is the deferred constraint trigger below.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_promotion_emits_dst
+  ON kernel_edge (dst_record_id) WHERE edge_type = 'PROMOTION_EMITS';
+
+DROP TRIGGER IF EXISTS trg_kernel_edge_append_only ON kernel_edge;
+CREATE TRIGGER trg_kernel_edge_append_only
+  BEFORE UPDATE OR DELETE ON kernel_edge
+  FOR EACH STATEMENT EXECUTE FUNCTION kernel_forbid_mutation();
+
+-- "At least one" half of the reachability invariant, checked at COMMIT time
+-- so the PROMOTION_EMITS edge can land later in the same transaction (D3:
+-- linked in the same transaction; no schema change is required or permitted).
+CREATE OR REPLACE FUNCTION kernel_require_promotion_reachability() RETURNS trigger AS $$
+BEGIN
+  IF NEW.record_kind IN (
+       'ofarm.assertionrecord.v0.1',
+       'ofarm.semanticeventenvelope.v0.1',
+       'ofarm.reviewdecision.v0.1',
+       'ofarm.acceptedeventconsequence.v0.1'
+     )
+     AND NOT EXISTS (
+       SELECT 1 FROM kernel_edge
+        WHERE edge_type = 'PROMOTION_EMITS' AND dst_record_id = NEW.record_id
+     )
+  THEN
+    RAISE EXCEPTION 'OFARM Kernel reachability invariant: authoritative record % (%) has no PromotionTrace link in this transaction',
+      NEW.record_id, NEW.record_kind;
+  END IF;
+  RETURN NULL;
+END
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_kernel_record_reachability ON kernel_record;
+CREATE CONSTRAINT TRIGGER trg_kernel_record_reachability
+  AFTER INSERT ON kernel_record
+  DEFERRABLE INITIALLY DEFERRED
+  FOR EACH ROW EXECUTE FUNCTION kernel_require_promotion_reachability();
+
+-- ---------------------------------------------------------------------------
+-- kernel_gate_log: enforcement/outbox trace. Every gate outcome that affects
+-- promotion, rejection, review, activation, or publication lands here
+-- (PLATFORM.md). Append-only. Zero silent acceptances (PILOT_SI.md success
+-- criterion) is auditable from this table joined to kernel_record.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS kernel_gate_log (
+  entry_id     bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  request_id   text NOT NULL,
+  gate         text NOT NULL,
+  outcome      text NOT NULL,
+  reason_code  text,
+  rationale    text,
+  related_refs jsonb,
+  record_time  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS ix_kernel_gate_log_request ON kernel_gate_log (request_id);
+
+DROP TRIGGER IF EXISTS trg_kernel_gate_log_append_only ON kernel_gate_log;
+CREATE TRIGGER trg_kernel_gate_log_append_only
+  BEFORE UPDATE OR DELETE ON kernel_gate_log
+  FOR EACH STATEMENT EXECUTE FUNCTION kernel_forbid_mutation();
+
+-- ---------------------------------------------------------------------------
+-- kernel_idempotency: replay bookkeeping for the ingress boundary
+-- (Event Ingress and Promotion Boundary Closure RFC §2.4). Append-only:
+-- a key is claimed once; replays read, never rewrite.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS kernel_idempotency (
+  idempotency_key       text PRIMARY KEY,
+  request_id            text NOT NULL,
+  source_payload_digest text,
+  result_record_id      text NOT NULL,
+  record_time           timestamptz NOT NULL DEFAULT now()
+);
+
+DROP TRIGGER IF EXISTS trg_kernel_idempotency_append_only ON kernel_idempotency;
+CREATE TRIGGER trg_kernel_idempotency_append_only
+  BEFORE UPDATE OR DELETE ON kernel_idempotency
+  FOR EACH STATEMENT EXECUTE FUNCTION kernel_forbid_mutation();
+
+-- ---------------------------------------------------------------------------
+-- DERIVED / RECOMPUTABLE tables. Never authoritative (Kernel rule 5; the
+-- explainable-evidence RFC §6.2: the dependency index may accelerate
+-- invalidation; it may not become the only surviving explanation of truth).
+-- These tables are recomputable from kernel_record + kernel_edge and are
+-- exempt from the append-only rule for that reason.
+-- ---------------------------------------------------------------------------
+
+-- derived: one row per live materialization key/answer. The governed records
+-- (MaterializationBasis/Result/Snapshot, ContextSnapshot) live in
+-- kernel_record; this is the runtime index over them.
+CREATE TABLE IF NOT EXISTS derived_materialization (
+  materialization_id   text PRIMARY KEY,
+  key_digest           text NOT NULL,        -- digest of the draft MaterializationKey shape
+  materialization_key  jsonb NOT NULL,       -- draft MaterializationKey (implemented, not promoted — D16)
+  target_twin          text NOT NULL,
+  anchor_scope_ref     text NOT NULL,
+  time_policy          jsonb NOT NULL,
+  use_class            text NOT NULL,
+  freshness            text NOT NULL CHECK (freshness IN ('FRESH', 'STALE', 'INVALID')),
+  current_state        jsonb NOT NULL,
+  basis_record_id      text NOT NULL,
+  snapshot_record_id   text NOT NULL,
+  context_snapshot_ref text NOT NULL,
+  freshness_vector     jsonb NOT NULL,       -- draft MaterializationFreshnessVector (D16)
+  generated_at         timestamptz NOT NULL DEFAULT now(),
+  superseded_by        text
+);
+CREATE INDEX IF NOT EXISTS ix_derived_mat_key ON derived_materialization (key_digest);
+
+-- derived: dependency index entries (draft MaterializationDependencyIndex
+-- shape, D16). Connects basis changes to affected materialization keys
+-- (explainable-evidence RFC §6).
+CREATE TABLE IF NOT EXISTS derived_dependency_index (
+  entry_id                 bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  dependency_source_ref    text NOT NULL,
+  dependency_source_family text NOT NULL,
+  key_digest               text NOT NULL,
+  entry                    jsonb NOT NULL,
+  generated_at             timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS ix_derived_dep_source ON derived_dependency_index (dependency_source_ref);
+CREATE INDEX IF NOT EXISTS ix_derived_dep_key ON derived_dependency_index (key_digest);
+
+-- runtime evidence lane: draft-shape traces (InvalidationEvaluationTrace …)
+-- recorded append-only but OUTSIDE the canonical record table — implemented
+-- behind Kernel law without promoting the draft contracts (D16). Not part of
+-- the reachability invariant (traces are runtime evidence, not source truth).
+CREATE TABLE IF NOT EXISTS runtime_trace (
+  trace_id       text PRIMARY KEY,
+  trace_kind     text NOT NULL,
+  schema_hash    text NOT NULL,
+  payload        jsonb NOT NULL,
+  payload_sha256 text NOT NULL,
+  record_time    timestamptz NOT NULL DEFAULT now()
+);
+
+DROP TRIGGER IF EXISTS trg_runtime_trace_append_only ON runtime_trace;
+CREATE TRIGGER trg_runtime_trace_append_only
+  BEFORE UPDATE OR DELETE ON runtime_trace
+  FOR EACH STATEMENT EXECUTE FUNCTION kernel_forbid_mutation();
+
+-- frozen export artifacts (DocumentAssembly documents): durable, append-only,
+-- digest-addressed so a later inspection can verify the handed-over artifact
+-- against the store (views/VIEWS.md "Identification").
+CREATE TABLE IF NOT EXISTS export_artifact (
+  artifact_ref       text PRIMARY KEY,
+  digest             text NOT NULL,
+  metadata_record_id text NOT NULL,
+  document           jsonb NOT NULL,
+  record_time        timestamptz NOT NULL DEFAULT now()
+);
+
+DROP TRIGGER IF EXISTS trg_export_artifact_append_only ON export_artifact;
+CREATE TRIGGER trg_export_artifact_append_only
+  BEFORE UPDATE OR DELETE ON export_artifact
+  FOR EACH STATEMENT EXECUTE FUNCTION kernel_forbid_mutation();

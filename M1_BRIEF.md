@@ -18,6 +18,21 @@ Stack (decided, D10): Python 3.11+ / FastAPI / PostgreSQL / pytest. Repo layout 
 6. **Static views**: author the two QuerySpecification + QueryPlanIR JSON artifacts against `views/VIEWS.md` and the real store; wire `PassportViewMetadata` / `DocumentAssemblyMetadata` emission with `ResultQualificationEnvelope`s and refusal behavior.
 7. **Capability Manifest**: generate `manifest:si.ffs.pilot.v0_1` from the actual runtime surfaces, declaring every unsupported surface (`PLATFORM.md` list); regenerate `ActiveArtifactSet` to reference real artifacts; verify with the manifest-grounding pattern.
 
+## Status (2026-06-12 — first M1 build increment, branch `m1/kernel`)
+
+| Brief task | Status |
+|---|---|
+| 1 — RFC absorbed; explainable-evidence draft shapes | **DONE** — `kernel/materializer.py`; draft records carry the DRAFT_NON_DEFAULT quintet and land only in `runtime_trace`, never promoted (D16) |
+| 2 — Store schema | **DONE** — `kernel/schema.sql` + `kernel/store.py`: append-only enforced in-database (statement-level triggers), JSONB validated on write, explicit edge table, gate log, reachability as a deferred same-transaction constraint trigger (D3) |
+| 3 — Gate pipeline | **DONE** — `kernel/gates.py` + `kernel/authority.py`: full chain with named sub-gates, default deny, revocation re-check, self-review per D8 (operation claims only), every refusal a registry-coded `RuntimeProblem` |
+| 4 — Materializer | **DONE** — deterministic recompute with `MaterializationBasis` receipts; basis-set invalidation (D12); key/freshness-vector/dependency-index/invalidation-trace shapes behind Kernel law |
+| 5 — Conformance green | **DONE** — tests 1–15 + the 8 fixtures replayed live + review-driven regressions (17/17); executed JSON evidence in `conformance/evidence/`; package self-check PASS |
+| 6 — Static views | **DONE** — four QuerySpecification/QueryPlanIR artifacts in `views/`; PassportView + DocumentAssembly emission with qualification envelopes and refusal behavior in `kernel/views.py` |
+| 7 — Capability Manifest | **DONE** — generated from actual runtime surfaces, grounding-verified; conformance level deliberately `NONE` (RFC §11.4 no-over-claim); unsupported surfaces declared in `profile_si_ffs/UNSUPPORTED_SURFACES.md` |
+
+Adversarially reviewed by a multi-agent panel: 44 confirmed findings (3 blockers)
+fixed or honestly dispositioned; ERRATA E-001 filed. Open items in `WORKLOG.md`.
+
 ## Definition of done
 
 An engineer (or agent) who has never seen the canonical repository can: commit a spray-record operation claim through the full gate chain using the SI profile and the fictional onboarding example; watch it refuse correctly when the evidence floor is unmet, authority is revoked, or the snapshot binding breaks; promote it via self-review; query a FRESH materialized register whose basis resolves completely; and export a frozen register that refuses when it should. Tests 1–15 green, fixtures green, self-check green.
