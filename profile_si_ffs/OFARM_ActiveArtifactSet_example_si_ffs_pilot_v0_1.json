@@ -1,7 +1,7 @@
 {
   "schemaVersion": "ofarm.activeartifactset.v0.1",
   "activeArtifactSetId": "activeartifactset:si.ffs.pilot.v0_1",
-  "generatedAt": "2026-06-12T00:00:00Z",
+  "generatedAt": "2026-06-12T07:29:58.204912Z",
   "deploymentScope": {
     "scopeType": "TENANT",
     "scopeRef": "tenant:si.ffs.pilot.demo"
@@ -24,12 +24,18 @@
     "contract:ofarm.referencesnapshot.v0.1",
     "view:si.ffs.spray-register.passportview.v0_1",
     "view:si.ffs.inspection-register.documentassembly.v0_1",
+    "queryspec:si.ffs.spray-register.passportview.v0_1",
+    "queryplan:si.ffs.spray-register.passportview.v0_1",
+    "queryspec:si.ffs.inspection-register.documentassembly.v0_1",
+    "queryplan:si.ffs.inspection-register.documentassembly.v0_1",
     "policy:si.ffs.evidence-review.v0_1",
     "codebindingprofile:si.ffs.v0_1",
-    "referencesnapshot:si.uvhvvr.ffs-reg.2026-06-11"
+    "referencesnapshot:si.uvhvvr.ffs-reg.2026-06-11",
+    "referencesnapshot:si.mkgp.gerk-layer.2025-06-30",
+    "manifest:si.ffs.pilot.v0_1"
   ],
   "sourcePackActivationSetRefs": [
     "packactivationset:si.ffs.pilot.v0_1"
   ],
-  "notes": "Pilot artifact state incl. the cut SI code-binding profile and the first real register ReferenceSnapshot. Static view artifacts and Capability Manifest remain M1 deliverables; regenerate then."
+  "notes": "Regenerated at M1 against real artifacts: the four authored QuerySpecification/QueryPlanIR view artifacts, the Capability Manifest, both shipped ReferenceSnapshots, and the cut SI code-binding profile. Unsupported-surface posture: see UNSUPPORTED_SURFACES.md (manifest contract carries no free text)."
 }

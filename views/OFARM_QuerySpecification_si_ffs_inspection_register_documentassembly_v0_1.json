@@ -1,0 +1,169 @@
+{
+  "schemaVersion": "ofarm.queryspec.v0.1",
+  "queryId": "queryspec:si.ffs.inspection-register.documentassembly.v0_1",
+  "queryName": "SI FFS inspection register (frozen DocumentAssembly). Anchor scope farm:ANCHOR-PARAMETER and the AS_OF/WINDOW bounds are substituted with the requesting farm and requested period at freeze time; the shipped window is a representative full-season example per views/VIEWS.md.",
+  "status": "APPROVED",
+  "target": {
+    "twin": "COMPLIANCE",
+    "anchorScopes": [
+      {
+        "scopeType": "FARM",
+        "scopeRef": "farm:ANCHOR-PARAMETER"
+      }
+    ],
+    "evaluationTimePolicy": {
+      "policyType": "WINDOW",
+      "windowStart": "2026-01-01T00:00:00Z",
+      "windowEnd": "2026-12-31T23:59:59Z"
+    },
+    "authorityContext": {
+      "usePurpose": "frozen exportable inspection register the farmer hands over; gaps are content, annex never promotes",
+      "requiredAuthorityFamilies": [
+        "ATTEST_SIGN",
+        "RECEIVE_USE"
+      ]
+    }
+  },
+  "graphPattern": {
+    "nodes": [
+      {
+        "var": "consequence",
+        "conceptRef": "ofarm:AcceptedEventConsequence",
+        "stateFacet": "STATE",
+        "requiredPresence": "MUST"
+      },
+      {
+        "var": "event",
+        "conceptRef": "ofarm:SemanticEventEnvelope",
+        "requiredPresence": "MUST"
+      },
+      {
+        "var": "execution",
+        "conceptRef": "ofarm:ExecutionRecordPayload",
+        "requiredPresence": "MUST"
+      },
+      {
+        "var": "annexClaim",
+        "conceptRef": "ofarm:AssertionRecord",
+        "stateFacet": "STATE",
+        "requiredPresence": "MAY"
+      },
+      {
+        "var": "sufficiencyCase",
+        "conceptRef": "ofarm:EvidenceSufficiencyCase",
+        "requiredPresence": "MUST"
+      }
+    ],
+    "relations": [
+      {
+        "fromVar": "consequence",
+        "predicateRef": "ofarm:sourceEventRef",
+        "toVar": "event"
+      },
+      {
+        "fromVar": "event",
+        "predicateRef": "ofarm:executionRecordPayloadRefs",
+        "toVar": "execution"
+      },
+      {
+        "fromVar": "annexClaim",
+        "predicateRef": "ofarm:eventSource",
+        "toVar": "event",
+        "optional": true
+      }
+    ]
+  },
+  "filter": {
+    "kind": "AND",
+    "clauses": [
+      {
+        "kind": "COMPARE",
+        "left": {
+          "kind": "PROPERTY",
+          "varRef": "consequence",
+          "propertyRef": "inForceState"
+        },
+        "operator": "=",
+        "right": {
+          "kind": "LITERAL",
+          "value": "IN_FORCE"
+        }
+      },
+      {
+        "kind": "TEMPORAL",
+        "operator": "DURING",
+        "left": {
+          "kind": "PROPERTY",
+          "varRef": "consequence",
+          "propertyRef": "effectiveFrom"
+        },
+        "right": {
+          "kind": "SYSTEM",
+          "propertyRef": "CURRENT_TIME"
+        }
+      }
+    ]
+  },
+  "selection": [
+    {
+      "alias": "acceptedEntry",
+      "source": {
+        "kind": "BINDING",
+        "varRef": "consequence"
+      }
+    },
+    {
+      "alias": "eventTime",
+      "source": {
+        "kind": "PROPERTY",
+        "varRef": "event",
+        "propertyRef": "timeSemantics.eventTime"
+      }
+    },
+    {
+      "alias": "executionDetail",
+      "source": {
+        "kind": "BINDING",
+        "varRef": "execution"
+      }
+    },
+    {
+      "alias": "annexClaims",
+      "source": {
+        "kind": "BINDING",
+        "varRef": "annexClaim"
+      }
+    },
+    {
+      "alias": "sufficiency",
+      "source": {
+        "kind": "BINDING",
+        "varRef": "sufficiencyCase"
+      }
+    },
+    {
+      "alias": "acceptedCount",
+      "source": {
+        "kind": "AGGREGATE",
+        "function": "COUNT",
+        "source": {
+          "kind": "PROPERTY",
+          "varRef": "consequence",
+          "propertyRef": "acceptedEventConsequenceId"
+        }
+      }
+    }
+  ],
+  "ordering": [
+    {
+      "by": {
+        "selectionAlias": "eventTime"
+      },
+      "direction": "ASC"
+    }
+  ],
+  "resultProfile": {
+    "mode": "DOCUMENT_ASSEMBLY_INPUT",
+    "allowPartial": false
+  }
+}

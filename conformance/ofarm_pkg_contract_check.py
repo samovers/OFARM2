@@ -139,6 +139,17 @@ INSTANCE_BINDINGS = {
         "contracts/core/OFARM_ReferenceSnapshot_schema_v0_1.json",
     "profile_si_ffs/OFARM_ReferenceSnapshot_example_si_gerk_layer_2025-06-30.json":
         "contracts/core/OFARM_ReferenceSnapshot_schema_v0_1.json",
+    # M1 deliverables (M1_BRIEF tasks 6-7). The two QuerySpecification
+    # artifacts are deliberately NOT bound here: their schema uses allOf/
+    # if/then/default, outside this validator's declared keyword subset
+    # (it would fail loudly with SUBSET GAP) — they are fully validated by
+    # kernel/tests/test_conformance.py with a complete 2020-12 validator.
+    "profile_si_ffs/OFARM_Capability_Manifest_si_ffs_pilot_v0_1.json":
+        "contracts/platform/OFARM_Capability_Manifest_schema_v0_1.json",
+    "views/OFARM_QueryPlanIR_si_ffs_spray_register_passportview_v0_1.json":
+        "contracts/platform/OFARM_QueryPlanIR_schema_v0_1.json",
+    "views/OFARM_QueryPlanIR_si_ffs_inspection_register_documentassembly_v0_1.json":
+        "contracts/platform/OFARM_QueryPlanIR_schema_v0_1.json",
 }
 
 

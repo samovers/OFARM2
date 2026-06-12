@@ -1,0 +1,187 @@
+{
+  "schemaVersion": "ofarm.queryspec.v0.1",
+  "queryId": "queryspec:si.ffs.spray-register.passportview.v0_1",
+  "queryName": "SI FFS spray register (live PassportView). Anchor scope farm:ANCHOR-PARAMETER is substituted with the requesting farm at execution; one farm per execution per views/VIEWS.md.",
+  "status": "APPROVED",
+  "target": {
+    "twin": "COMPLIANCE",
+    "anchorScopes": [
+      {
+        "scopeType": "FARM",
+        "scopeRef": "farm:ANCHOR-PARAMETER"
+      }
+    ],
+    "evaluationTimePolicy": {
+      "policyType": "NOW"
+    },
+    "authorityContext": {
+      "usePurpose": "live spray register for farmer and advisor; read-only inspector via SharingGrant",
+      "requiredAuthorityFamilies": [
+        "RECEIVE_USE"
+      ]
+    }
+  },
+  "graphPattern": {
+    "nodes": [
+      {
+        "var": "consequence",
+        "conceptRef": "ofarm:AcceptedEventConsequence",
+        "stateFacet": "STATE",
+        "requiredPresence": "MUST"
+      },
+      {
+        "var": "event",
+        "conceptRef": "ofarm:SemanticEventEnvelope",
+        "requiredPresence": "MUST"
+      },
+      {
+        "var": "execution",
+        "conceptRef": "ofarm:ExecutionRecordPayload",
+        "requiredPresence": "MUST"
+      },
+      {
+        "var": "pendingClaim",
+        "conceptRef": "ofarm:AssertionRecord",
+        "stateFacet": "STATE",
+        "requiredPresence": "MAY"
+      },
+      {
+        "var": "advisoryFlag",
+        "conceptRef": "ofarm:SemanticEventEnvelope",
+        "requiredPresence": "MAY"
+      }
+    ],
+    "relations": [
+      {
+        "fromVar": "consequence",
+        "predicateRef": "ofarm:sourceEventRef",
+        "toVar": "event"
+      },
+      {
+        "fromVar": "event",
+        "predicateRef": "ofarm:executionRecordPayloadRefs",
+        "toVar": "execution"
+      },
+      {
+        "fromVar": "pendingClaim",
+        "predicateRef": "ofarm:eventSource",
+        "toVar": "event",
+        "optional": true
+      }
+    ]
+  },
+  "filter": {
+    "kind": "AND",
+    "clauses": [
+      {
+        "kind": "COMPARE",
+        "left": {
+          "kind": "PROPERTY",
+          "varRef": "consequence",
+          "propertyRef": "inForceState"
+        },
+        "operator": "=",
+        "right": {
+          "kind": "LITERAL",
+          "value": "IN_FORCE"
+        }
+      },
+      {
+        "kind": "COMPARE",
+        "left": {
+          "kind": "PROPERTY",
+          "varRef": "execution",
+          "propertyRef": "actualAction.interventionKind"
+        },
+        "operator": "=",
+        "right": {
+          "kind": "LITERAL",
+          "value": "CROP_PROTECTION"
+        }
+      }
+    ]
+  },
+  "selection": [
+    {
+      "alias": "entry",
+      "source": {
+        "kind": "BINDING",
+        "varRef": "consequence"
+      }
+    },
+    {
+      "alias": "eventTime",
+      "source": {
+        "kind": "PROPERTY",
+        "varRef": "event",
+        "propertyRef": "timeSemantics.eventTime"
+      }
+    },
+    {
+      "alias": "productBinding",
+      "source": {
+        "kind": "PROPERTY",
+        "varRef": "execution",
+        "propertyRef": "agronomicIdentityBindingRefs"
+      }
+    },
+    {
+      "alias": "dose",
+      "source": {
+        "kind": "PROPERTY",
+        "varRef": "execution",
+        "propertyRef": "actualQuantityParameters"
+      }
+    },
+    {
+      "alias": "parcel",
+      "source": {
+        "kind": "PROPERTY",
+        "varRef": "execution",
+        "propertyRef": "executionExtent.targetScope"
+      }
+    },
+    {
+      "alias": "operator",
+      "source": {
+        "kind": "PROPERTY",
+        "varRef": "execution",
+        "propertyRef": "actor"
+      }
+    },
+    {
+      "alias": "equipment",
+      "source": {
+        "kind": "PROPERTY",
+        "varRef": "execution",
+        "propertyRef": "equipment"
+      }
+    },
+    {
+      "alias": "pendingClaims",
+      "source": {
+        "kind": "BINDING",
+        "varRef": "pendingClaim"
+      }
+    },
+    {
+      "alias": "advisoryFlags",
+      "source": {
+        "kind": "BINDING",
+        "varRef": "advisoryFlag"
+      }
+    }
+  ],
+  "ordering": [
+    {
+      "by": {
+        "selectionAlias": "eventTime"
+      },
+      "direction": "DESC"
+    }
+  ],
+  "resultProfile": {
+    "mode": "PASSPORT_INPUT",
+    "allowPartial": false
+  }
+}

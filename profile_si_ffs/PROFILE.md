@@ -37,15 +37,19 @@ resolved product binding (against a dated snapshot) · dose with valid UCUM unit
 ## Shipped instances (validated by `../conformance/ofarm_pkg_contract_check.py`)
 
 - `OFARM_PackActivationSet_example_si_ffs_pilot_v0_1.json` — static single-profile activation (no overlap → no merge trace needed)
-- `OFARM_ActiveArtifactSet_example_si_ffs_pilot_v0_1.json` — pilot artifact state; **regenerate at M1** when the deferred instances below exist
+- `OFARM_ActiveArtifactSet_example_si_ffs_pilot_v0_1.json` — pilot artifact state; **regenerated at M1** against the real artifacts (views, manifest, snapshots)
 - `OFARM_ContextSnapshot_example_si_ffs_pilot_compliance_v0_1.json` — demo-tenant Compliance-twin context spine; runtime generates per-farm snapshots referencing the same activation/artifact sets
+- `OFARM_AgronomicCodeBindingProfile_si_ffs_v0_1.json` (`codebindingprofile:si.ffs.v0_1`) — cut at M0 from verified registry facts (REGSR lookup surface, no-official-export posture, weekly-parse cadence); ACTIVE within the pilot pack
+- `OFARM_ReferenceSnapshot_example_si_uvhvvr_ffs_reg_2026-06-11.json` — first real REGSR snapshot (623 products parsed)
+- `OFARM_ReferenceSnapshot_example_si_gerk_layer_2025-06-30.json` — national GERK open-data layer vintage
+- `OFARM_Capability_Manifest_si_ffs_pilot_v0_1.json` (`manifest:si.ffs.pilot.v0_1`) — generated at M1 from the actual runtime surfaces; conformance level deliberately `NONE`; unsupported-surface posture in `UNSUPPORTED_SURFACES.md`
 
-## Deferred instances (deliberate — do not fabricate before verification)
+## Deferred instances
 
-| Instance | Why deferred | Due |
-|---|---|---|
-| SI `AgronomicCodeBindingProfile` JSON (`codebindingprofile:si.ffs.v0_1`) | Requires M0-verified registry facts (lookup surface, export format, cadence, identifier stability) — fabricating them would violate the profile's own discipline | M0/M1 |
-| Capability Manifest (`manifest:si.ffs.pilot.v0_1`) | Declares the deployment's actual runtime surfaces + unsupported-surface posture (`../PLATFORM.md`); premature before the API exists | M1 |
+None remain — every instance deferred at package cut shipped by M1 (2026-06-12; the
+code-binding profile and both reference snapshots at M0 close, the Capability Manifest at
+M1). Earlier revisions of this section listed the code-binding profile as deferred after it
+had already shipped — recorded in `../ERRATA.md` alongside E-002's currentness sweep.
 
 ## Reserved identifiers
 

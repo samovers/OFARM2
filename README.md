@@ -27,9 +27,12 @@ No production readiness of any kind is claimed: not software-delivery, model-dep
 KERNEL.md CORE.md PLATFORM.md PILOT_SI.md CAPTURE_MAPPING.md ERRATA.md
 contracts/   kernel/ (23 extracted + 3 candidate)  core/ (11 extracted + 5 candidate)
              platform/ (10 extracted)              CONTRACTS_MANIFEST.json (digests + provenance)
-profile_si_ffs/   PROFILE.md + 3 validated example instances (activation set, artifact set, context snapshot)
-views/            VIEWS.md (normative specs; QuerySpec/QueryPlanIR JSON due M1)
+profile_si_ffs/   PROFILE.md + 7 validated instances (activation set, artifact set, context snapshot,
+                  code-binding profile, 2 reference snapshots, Capability Manifest) + UNSUPPORTED_SURFACES.md
+views/            VIEWS.md + the 4 authored QuerySpec/QueryPlanIR artifacts (M1)
+kernel/           the M1 implementation: store, gates, materializer, views, manifest, API, conformance tests
 conformance/      ofarm_pkg_contract_check.py + CONFORMANCE.md + fixtures/gate_sequencing/ (9 inherited)
+                  + evidence/ (executed platform-MVP suite results)
 reference/        REFERENCE_MANIFEST.json + law/ (4) + rfcs/ (14) + research/ (1) + companions/
 ```
 
@@ -37,6 +40,7 @@ Honest count: ~52 contracts and instances, ~20 reference files, ~95 files total 
 
 ## Discipline
 
+- **Currentness note (package cut date):** `2026-06-12` is the **Slovenia-local** package cut date. The source packet was generated `2026-06-11T22:41:01Z` UTC (= 00:41 CEST, 2026-06-12) — see `profile_si_ffs/source_packet_extracts/source_manifest.json`. M0-closure and handoff dates throughout the package use the Slovenia-local date; the UTC timestamp is preserved in the source manifest. The package is not future-dated.
 - **Law freeze (this repository):** findings go to `ERRATA.md` only — never into reference copies or as new law. The canonical repository evolves in parallel under steward governance; its changes are absorbed here by extraction with provenance (see `DECISIONS.md` D15).
 - **Reference lane:** verbatim, read-only, non-normative within the package, budget ≤ 30 files; additions require a manifest entry with a reason.
 - **Verification:** `python3 conformance/ofarm_pkg_contract_check.py` must pass before any commit touching the package.

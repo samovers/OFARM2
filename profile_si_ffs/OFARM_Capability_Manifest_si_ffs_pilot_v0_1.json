@@ -1,0 +1,195 @@
+{
+  "schemaVersion": "ofarm.capabilitymanifest.v0.1",
+  "manifestId": "manifest:si.ffs.pilot.v0_1",
+  "status": "ACTIVE",
+  "ofarmVersion": "RC2.1",
+  "platformVersion": "ofarm2-kernel-m1.0",
+  "publishedAt": "2026-06-12T07:29:58.204769Z",
+  "deploymentScope": {
+    "scopeType": "TENANT",
+    "scopeRef": "tenant:si.ffs.pilot.demo"
+  },
+  "capabilitySections": {
+    "artifactSupport": {
+      "supportedArtifactTypes": [
+        "ofarm.acceptedeventconsequence.v0.1",
+        "ofarm.activeartifactset.v0.1",
+        "ofarm.agronomiccodebindingprofile.v0.1",
+        "ofarm.agronomicidentitybinding.v0.1",
+        "ofarm.agronomicobservationcontext.v0.1",
+        "ofarm.appliedresourceidentitypayload.v0.1",
+        "ofarm.assertionrecord.v0.1",
+        "ofarm.authoritygrant.v0.1",
+        "ofarm.authorizationdecisionrequest.v0.1",
+        "ofarm.authorizationdecisionresult.v0.1",
+        "ofarm.authorizationdecisiontrace.v0.1",
+        "ofarm.capabilitymanifest.v0.1",
+        "ofarm.commitingressrequest.v0.1",
+        "ofarm.commitingressresult.v0.1",
+        "ofarm.contextsnapshot.v0.1",
+        "ofarm.cropcycleidentitypayload.v0.1",
+        "ofarm.delegationgrant.v0.1",
+        "ofarm.documentassemblymetadata.v0.1",
+        "ofarm.equipmentidentitypayload.v0.1",
+        "ofarm.evidencerecord.v0.1",
+        "ofarm.evidencesufficiencycase.v0.2",
+        "ofarm.executionrecordpayload.v0.1",
+        "ofarm.externalregistryverificationtrace.v0.1",
+        "ofarm.farmidentitypayload.v0.1",
+        "ofarm.fieldidentitypayload.v0.1",
+        "ofarm.identitylifecyclechange.v0.1",
+        "ofarm.identityrecord.v0.1",
+        "ofarm.interventionintentpayload.v0.1",
+        "ofarm.materializationbasis.v0.1",
+        "ofarm.materializationrequest.v0.1",
+        "ofarm.materializationresult.v0.1",
+        "ofarm.materializationsnapshot.v0.1",
+        "ofarm.measurementevidence.v0.1",
+        "ofarm.narrativeobservation.v0.1",
+        "ofarm.packactivationset.v0.1",
+        "ofarm.partialextent.v0.1",
+        "ofarm.party.v0.1",
+        "ofarm.passportviewmetadata.v0.1",
+        "ofarm.plannedintervention.v0.1",
+        "ofarm.promotiontrace.v0.1",
+        "ofarm.publicationassemblyrequest.v0.1",
+        "ofarm.publicationassemblyresult.v0.1",
+        "ofarm.queryplanir.v0.1",
+        "ofarm.queryspec.v0.1",
+        "ofarm.referencesnapshot.v0.1",
+        "ofarm.resultqualificationenvelope.v0.1",
+        "ofarm.reviewdecision.v0.1",
+        "ofarm.revocationdecision.v0.1",
+        "ofarm.roleassignment.v0.1",
+        "ofarm.runtimeproblem.v0.1",
+        "ofarm.semanticeventenvelope.v0.1",
+        "ofarm.sharinggrant.v0.1"
+      ]
+    },
+    "packSupport": {
+      "supportsPackActivation": true,
+      "activePackRefs": [
+        "pack:si.ffs.pilot.v0_1"
+      ],
+      "activeProfileRefs": [
+        "profile:si.ffs.recordkeeping.v0_1"
+      ],
+      "supportedPrecedenceClasses": [
+        "JURISDICTION_LAW_SAFETY"
+      ],
+      "supportedSurfaceFamilies": [
+        "VOCABULARY_BINDINGS",
+        "EVIDENCE_POLICY",
+        "VALIDATION_RULE",
+        "VIEW_SHAPING",
+        "DOCUMENT_ASSEMBLY_SHAPING"
+      ]
+    },
+    "querySupport": {
+      "querySpecificationSchemaRef": "contracts/platform/OFARM_QuerySpecification_schema_v0_1.json",
+      "queryPlanSchemaRef": "contracts/platform/OFARM_QueryPlanIR_schema_v0_1.json",
+      "supportsGuidedQueryUI": false,
+      "supportsAIMediatedQuery": false,
+      "supportsPublicExpertQuery": false,
+      "supportedResultModes": [
+        "PASSPORT_VIEW",
+        "DOCUMENT_ASSEMBLY_INPUT"
+      ]
+    },
+    "eventSupport": {
+      "supportedEventFamilies": [
+        "EvidenceEvent",
+        "GovernanceEvent",
+        "InterventionEvent",
+        "ObservationEvent",
+        "StructureEvent"
+      ],
+      "supportedCommitClasses": [
+        "advisory output",
+        "compliance assertion",
+        "evidence record",
+        "governance decision",
+        "hypothesis assertion",
+        "note",
+        "observation assertion",
+        "operation claim",
+        "structure assertion"
+      ]
+    },
+    "authoritySupport": {
+      "supportedAuthorityFamilies": [
+        "observe/report",
+        "assert/submit",
+        "govern/decide",
+        "attest/sign",
+        "share/revoke",
+        "receive/use"
+      ],
+      "supportedActionClasses": [
+        "ASSERT_COMPLIANCE",
+        "ASSERT_OPERATION_CLAIM",
+        "ASSERT_STRUCTURE",
+        "OBSERVE_ATTACH_EVIDENCE",
+        "OBSERVE_CREATE_OBSERVATION",
+        "OUTPUT_APPROVE_DOCUMENT_ASSEMBLY",
+        "OUTPUT_FILE_SUBMISSION_ASSEMBLY",
+        "RECEIVE_READ_DATA",
+        "REVIEW_ACCEPT"
+      ],
+      "supportsHumanOnlyRestrictions": true
+    },
+    "importExportSupport": {
+      "declaredSurfaces": [
+        {
+          "surfaceType": "IMPORT_MAPPING",
+          "targetRef": "scheme:si.uvhvvr.ffs-reg.html-surface",
+          "direction": "IMPORT",
+          "status": "PARTIAL"
+        },
+        {
+          "surfaceType": "EXPORT_MAPPING",
+          "targetRef": "view:si.ffs.inspection-register.documentassembly.v0_1",
+          "direction": "EXPORT",
+          "status": "SUPPORTED"
+        },
+        {
+          "surfaceType": "API_CONTRACT",
+          "targetRef": "api:ofarm2.kernel.m1",
+          "direction": "BIDIRECTIONAL",
+          "status": "SUPPORTED"
+        }
+      ]
+    },
+    "enforcementSupport": {
+      "supportedGates": [
+        "INGRESS_NORMALIZATION",
+        "AUTHORITY",
+        "VALIDATION",
+        "PACK_APPLICABILITY",
+        "EVIDENCE_SUFFICIENCY",
+        "REVIEW_PROMOTION",
+        "CURRENT_STATE_MATERIALIZATION",
+        "PUBLICATION_EXPORT"
+      ],
+      "supportsMergeResolutionTrace": false,
+      "supportsAuthorizationDecisionTrace": true,
+      "supportsProjectionTraceBack": true,
+      "supportsFreshnessEvaluation": true
+    }
+  },
+  "registryRelation": {
+    "manifestRegistryRef": "registry:ofarm2-implementation-package.v0_1",
+    "artifactRegistryRef": "registry:ofarm2-implementation-package.v0_1",
+    "activeArtifactSetRef": "activeartifactset:si.ffs.pilot.v0_1",
+    "discoveryVisibility": "PRIVATE"
+  },
+  "conformance": {
+    "minimumConformanceLevel": "NONE",
+    "testSuiteRefs": [
+      "conformance:ofarm2.platform-mvp.tests-1-15.v0_1"
+    ],
+    "declaredProfileRefs": [
+      "profile:si.ffs.recordkeeping.v0_1"
+    ]
+  }
+}

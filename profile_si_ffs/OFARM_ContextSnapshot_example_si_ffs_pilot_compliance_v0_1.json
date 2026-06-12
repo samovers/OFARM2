@@ -25,7 +25,7 @@
   "relevantPrecedenceClasses": [
     "JURISDICTION_LAW_SAFETY"
   ],
-  "notes": "Demo-tenant example of the Compliance-twin context spine. Runtime generates per-farm snapshots referencing the same activation set and artifact set, adding referenceSnapshotRefs for the FITO-INFO snapshot in force and evidencePolicyRefs for policy:si.ffs.evidence-review.v0_1.",
+  "notes": "Demo-tenant example of the Compliance-twin context spine. Runtime generates per-farm snapshots referencing the same activation set and artifact set, adding referenceSnapshotRefs for the REGSR product-register snapshot in force and evidencePolicyRefs for policy:si.ffs.evidence-review.v0_1.",
   "referenceSnapshotRefs": [
     "referencesnapshot:si.uvhvvr.ffs-reg.2026-06-11",
     "referencesnapshot:si.mkgp.gerk-layer.2025-06-30"
