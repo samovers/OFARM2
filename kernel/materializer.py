@@ -149,10 +149,16 @@ class Materializer:
         key_id = key["materializationKeyId"]
 
         # ---- gather in-force substrate (Compliance twin: hard truth only) ----
-        consequences = self.store.in_force_consequences(farm_ref)
+        # AS_OF reconstructs in-force-ness as of that moment from the append-
+        # only substrate (acceptance and supersession-edge record times) —
+        # never silently treated like NOW (hostile review finding 6)
+        as_of = (time_policy.get("asOfTime")
+                 if time_policy["policyType"] == "AS_OF" else None)
+        consequences = self.store.in_force_consequences(farm_ref, as_of=as_of)
         window = time_policy if time_policy["policyType"] == "WINDOW" else None
         ws = parse_ts(window["windowStart"]) if window else None
         we = parse_ts(window["windowEnd"]) if window else None
+        as_of_dt = parse_ts(as_of) if as_of else None
         entries, assertion_refs, consequence_refs, review_refs, identity_refs = [], [], [], [], []
         for row in consequences:
             c = row["payload"]
@@ -172,6 +178,12 @@ class Materializer:
                 # only with a real datetime comparison, never a string compare
                 if eff is None or ws is None or we is None or not (ws <= eff <= we):
                     continue
+            if as_of_dt is not None:
+                eff = parse_ts(c.get("effectiveFrom")
+                               or (event or {}).get("timeSemantics", {}).get("eventTime")
+                               or c["acceptedAt"])
+                if eff is None or eff > as_of_dt:
+                    continue   # the event had not (effectively) happened by asOfTime
             consequence_refs.append(c["acceptedEventConsequenceId"])
             review_refs.append(c["acceptedByReviewDecisionRef"])
             entry = {
@@ -541,9 +553,13 @@ class Materializer:
             "invalidationTriggerFamilies": (
                 [] if freshness == "FRESH" or mat is None else ["TRUTH_BASIS"]),
             "problems": problems,
-            "reasonSummary": ("reused FRESH materialization" if decision == "ALLOW_REUSE"
-                              else "recomputed for this use" if recomputed
-                              else "refused: not demonstrably FRESH"),
+            # the reason never overstates freshness: a stale reuse says so
+            "reasonSummary": (
+                ("reused FRESH materialization" if freshness == "FRESH" else
+                 f"reused STALE materialization under {effective_requirement}; "
+                 "high-consequence use barred") if decision == "ALLOW_REUSE"
+                else "recomputed for this use" if recomputed
+                else "refused: not demonstrably FRESH"),
         }
         self.store.insert_record(cur, result_payload)
         return {

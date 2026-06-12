@@ -129,6 +129,52 @@ class AuthorityEvaluator:
             out.append((g, self._revocations_for(g["authorityGrantId"], at)))
         return out
 
+    def _live_source_authority(self, delegation: dict, action_class: str,
+                               scope: dict, at: str) -> tuple[bool, list[dict]]:
+        """A delegation is only as alive as the authority it was derived from:
+        the delegator must STILL hold a live, unrevoked source grant covering
+        the delegated action and scope — delegation may not outlive or exceed
+        its source (authority law; hostile review blocker 3). Fail closed:
+        a delegation with no provable source path grants nothing.
+
+        Returns (live, source_revocations_found)."""
+        source_refs = delegation.get("sourceAuthorityGrantRefs") or []
+        if not source_refs:
+            return False, []
+        delegator = delegation["delegatingPartyRef"]
+        source_revocations: list[dict] = []
+        for ref in source_refs:
+            row = self.store.get_record(ref)
+            if row is None or row["record_kind"] != "ofarm.authoritygrant.v0.1":
+                continue
+            g = row["payload"]
+            target = g["grantTarget"]
+            delegator_roles = {r["roleAssignmentId"]
+                               for r in self._role_assignments(delegator, at)}
+            controls = ((target["targetKind"] == "PARTY"
+                         and target["targetRef"] == delegator)
+                        or (target["targetKind"] == "ROLE_ASSIGNMENT"
+                            and target["targetRef"] in delegator_roles))
+            if not controls:
+                continue
+            if g["grantState"] != "ACTIVE" or not _time_valid(g, at):
+                continue
+            if action_class not in g["authorityActionClasses"]:
+                continue
+            # no widening: the source must cover both the delegation's own
+            # scope and the scope being requested right now
+            if not self._scope_covers(g["targetScope"], g["inheritanceMode"],
+                                      delegation["targetScope"]):
+                continue
+            if not self._scope_covers(g["targetScope"], g["inheritanceMode"], scope):
+                continue
+            revs = self._revocations_for(g["authorityGrantId"], at)
+            if revs:
+                source_revocations.extend(revs)
+                continue
+            return True, []
+        return False, source_revocations
+
     def _matching_delegations(self, party_ref: str, action_class: str, scope: dict, at: str):
         out = []
         for row in self.store.find_by_kind("ofarm.delegationgrant.v0.1"):
@@ -141,7 +187,19 @@ class AuthorityEvaluator:
                 continue
             if not self._scope_covers(d["targetScope"], d["inheritanceMode"], scope):
                 continue
-            out.append((d, self._revocations_for(d["delegationGrantId"], at)))
+            revocations = self._revocations_for(d["delegationGrantId"], at)
+            source_live, source_revocations = self._live_source_authority(
+                d, action_class, scope, at)
+            if not source_live:
+                if source_revocations:
+                    # the delegation chain is broken by a revoked source —
+                    # surfaces as ACTIVE_REVOCATION_FOUND, never silence
+                    revocations = revocations + source_revocations
+                else:
+                    # no provable source path at all: the delegation is not
+                    # a candidate (default deny), not a revocation case
+                    continue
+            out.append((d, revocations))
         return out
 
     def _party(self, party_ref: str) -> dict | None:
@@ -223,6 +281,16 @@ class AuthorityEvaluator:
             reason = f"acting party {acting_party_ref} is not a recorded Party"
             problems.append(runtime_problem(
                 "ACTOR_BINDING_UNRESOLVED", "Unknown acting party", reason))
+        elif party.get("partyState") != "ACTIVE":
+            # party lifecycle fails closed: an INACTIVE party with otherwise
+            # live grants still acts as nobody (hostile review finding 7)
+            outcome = "DENY"
+            revocation_result = "NONE_APPLICABLE"
+            reason = (f"acting party {acting_party_ref} is "
+                      f"{party.get('partyState')}, not ACTIVE — no authority path "
+                      "is evaluated for a non-active party")
+            problems.append(runtime_problem(
+                "AUTHORITY_DENIED", "Party not active", reason))
         elif revoked_only:
             outcome = revocation_disposition  # DENY or REQUIRE_REVIEW (schema allOf 4)
             revocation_result = "ACTIVE_REVOCATION_FOUND"

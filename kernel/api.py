@@ -50,7 +50,20 @@ def create_app(store: Store | None = None) -> FastAPI:
                     app.state.store.unreachable_authoritative_records()}
 
     @app.post("/commit")
-    def commit(body: CommitBody):
+    def commit(body: CommitBody, x_acting_party: str = Header(...)):
+        # The transport principal binds to the submitted actor BEFORE the
+        # pipeline runs: a body-supplied actingPartyRef is never trusted on
+        # its own (hostile review blocker 1). In M1 the principal is the
+        # required X-Acting-Party header — a development principal pending
+        # OIDC (M2), declared in profile_si_ffs/UNSUPPORTED_SURFACES.md —
+        # but the binding contract is the same one OIDC will fill: the
+        # gate's actor is the transport's actor, or the commit is refused.
+        if body.submission.get("actingPartyRef") != x_acting_party:
+            raise HTTPException(status_code=403, detail={
+                "reasonCode": "ACTOR_BINDING_UNRESOLVED",
+                "detail": "submission.actingPartyRef does not match the "
+                          "transport principal (X-Acting-Party); body-level "
+                          "actor spoofing is refused"})
         try:
             return app.state.pipeline.commit(body.submission)
         except (ContractViolation, KeyError) as exc:

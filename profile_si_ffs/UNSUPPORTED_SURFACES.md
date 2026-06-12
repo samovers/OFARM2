@@ -33,6 +33,18 @@ re-verification is identity-grade only where the snapshot carries decision
 numbers (detail pages); list rows are locators, and locator-only
 re-verification routes to review instead of pretending.
 
+**API authentication posture (M1, declared):** the M1 HTTP surface is a
+**conformance/development surface, not a production-authenticated runtime**.
+The transport principal is the required `X-Acting-Party` header, which the
+`/commit` and read endpoints bind to the submitted/acting party — a mismatch
+is refused (`ACTOR_BINDING_UNRESOLVED`), so body-level actor spoofing is
+denied, but the header itself is **not authentication**. OIDC onto
+Party/RoleAssignment (Keycloak per PLATFORM.md) is the M2 binding layer and
+will fill exactly this principal slot. Related declared limitation: inline
+distinct-reviewer acceptance (`reviewerPartyRef` ≠ acting party in one
+request) exists for conformance-fixture replay; the production advisor-queue
+flow where the reviewer acts under their own principal is M2.
+
 **Runtime evidence level** (Performance & Explainable Current-State Evidence
 RFC §11.3): `CONFORMANCE_FIXTURE_PASSING` at most once the M1 suite is green —
 no benchmark, load, storage-amplification, or production evidence exists, so

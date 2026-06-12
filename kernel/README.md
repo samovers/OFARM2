@@ -37,7 +37,7 @@ Environment overrides: `OFARM_PG_DSN` (full DSN) or `OFARM_PG_SOCKET_DIR` /
 
 | Endpoint | What |
 |---|---|
-| `POST /commit` | one capture through the full gate chain; body `{"submission": {...}}`; always returns the `CommitIngressResult` envelope (refusals are data with registry reason codes, not transport errors) |
+| `POST /commit` | one capture through the full gate chain; body `{"submission": {...}}`; requires `X-Acting-Party` matching `submission.actingPartyRef` (transport-principal binding — a development principal pending OIDC at M2, see `profile_si_ffs/UNSUPPORTED_SURFACES.md`); always returns the `CommitIngressResult` envelope (refusals are data with registry reason codes, not transport errors) |
 | `GET /views/passport/{farmRef}` | the live spray register (View 1) — freshness, exception rows, advisory flags; header `X-Acting-Party` |
 | `POST /views/inspection-register/freeze` | freeze the exportable inspection register (View 2); body `{farmRef, windowStart, windowEnd}` |
 | `GET /records/{id}` | record + payload + digests; default deny per request |

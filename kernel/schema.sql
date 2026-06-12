@@ -79,6 +79,31 @@ CREATE TRIGGER trg_kernel_edge_append_only
   BEFORE UPDATE OR DELETE ON kernel_edge
   FOR EACH STATEMENT EXECUTE FUNCTION kernel_forbid_mutation();
 
+-- A PROMOTION_EMITS edge is only reachability evidence if its SOURCE really
+-- is a stored PromotionTrace — an edge from arbitrary text must never satisfy
+-- the invariant (hostile review blocker 5). Checked deferred so the trace can
+-- land later in the same transaction.
+CREATE OR REPLACE FUNCTION kernel_require_trace_source() RETURNS trigger AS $$
+BEGIN
+  IF NEW.edge_type = 'PROMOTION_EMITS' AND NOT EXISTS (
+       SELECT 1 FROM kernel_record
+        WHERE record_id = NEW.src_record_id
+          AND record_kind = 'ofarm.promotiontrace.v0.1'
+     )
+  THEN
+    RAISE EXCEPTION 'OFARM Kernel reachability invariant: PROMOTION_EMITS source % is not a stored PromotionTrace',
+      NEW.src_record_id;
+  END IF;
+  RETURN NULL;
+END
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_kernel_edge_trace_source ON kernel_edge;
+CREATE CONSTRAINT TRIGGER trg_kernel_edge_trace_source
+  AFTER INSERT ON kernel_edge
+  DEFERRABLE INITIALLY DEFERRED
+  FOR EACH ROW EXECUTE FUNCTION kernel_require_trace_source();
+
 -- "At least one" half of the reachability invariant, checked at COMMIT time
 -- so the PROMOTION_EMITS edge can land later in the same transaction (D3:
 -- linked in the same transaction; no schema change is required or permitted).

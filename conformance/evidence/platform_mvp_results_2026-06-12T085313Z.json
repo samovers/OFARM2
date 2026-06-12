@@ -1,7 +1,7 @@
 {
   "suite": "conformance:ofarm2.platform-mvp.tests-1-15.v0_1",
   "executed": true,
-  "executedAt": "2026-06-12T07:29:59.101932Z",
+  "executedAt": "2026-06-12T08:53:13.542869Z",
   "runtimeVersion": "ofarm2-kernel-m1.0",
   "exitStatus": 0,
   "allPassed": true,
@@ -9,87 +9,92 @@
     {
       "test": "kernel/tests/test_conformance.py::test_01_append_only",
       "outcome": "passed",
-      "durationSeconds": 0.021
+      "durationSeconds": 0.036
     },
     {
       "test": "kernel/tests/test_conformance.py::test_02_default_deny",
       "outcome": "passed",
-      "durationSeconds": 0.002
+      "durationSeconds": 0.003
     },
     {
       "test": "kernel/tests/test_conformance.py::test_03_offline_sync_idempotency",
       "outcome": "passed",
-      "durationSeconds": 0.009
+      "durationSeconds": 0.015
     },
     {
       "test": "kernel/tests/test_conformance.py::test_04_gate_sequencing_fixtures_live",
       "outcome": "passed",
-      "durationSeconds": 0.046
+      "durationSeconds": 0.063
     },
     {
       "test": "kernel/tests/test_conformance.py::test_05_free_text_product_refusal",
       "outcome": "passed",
-      "durationSeconds": 0.007
+      "durationSeconds": 0.013
     },
     {
       "test": "kernel/tests/test_conformance.py::test_07_revoked_delegation_recheck",
       "outcome": "passed",
-      "durationSeconds": 0.002
+      "durationSeconds": 0.003
     },
     {
       "test": "kernel/tests/test_conformance.py::test_08_materialization_basis_and_staleness",
       "outcome": "passed",
-      "durationSeconds": 0.023
+      "durationSeconds": 0.186
     },
     {
       "test": "kernel/tests/test_conformance.py::test_09_passport_view_refusal_disclosure",
       "outcome": "passed",
-      "durationSeconds": 0.017
+      "durationSeconds": 0.223
     },
     {
       "test": "kernel/tests/test_conformance.py::test_10_document_assembly_freeze_trace",
       "outcome": "passed",
-      "durationSeconds": 0.024
+      "durationSeconds": 0.092
     },
     {
       "test": "kernel/tests/test_conformance.py::test_11_inspector_read_only",
       "outcome": "passed",
-      "durationSeconds": 0.005
+      "durationSeconds": 0.007
     },
     {
       "test": "kernel/tests/test_conformance.py::test_12_temporal_conformance",
       "outcome": "passed",
-      "durationSeconds": 0.013
+      "durationSeconds": 0.018
     },
     {
       "test": "kernel/tests/test_conformance.py::test_13_reference_resolution",
       "outcome": "passed",
-      "durationSeconds": 0.016
+      "durationSeconds": 0.02
     },
     {
       "test": "kernel/tests/test_conformance.py::test_14_reachability",
       "outcome": "passed",
-      "durationSeconds": 0.015
+      "durationSeconds": 0.019
     },
     {
       "test": "kernel/tests/test_conformance.py::test_15_manifest_grounding",
       "outcome": "passed",
-      "durationSeconds": 0.006
+      "durationSeconds": 0.008
+    },
+    {
+      "test": "kernel/tests/test_conformance.py::test_95_hostile_review_regressions",
+      "outcome": "passed",
+      "durationSeconds": 0.675
     },
     {
       "test": "kernel/tests/test_conformance.py::test_96_identity_context_invalidation_and_freshness_modes",
       "outcome": "passed",
-      "durationSeconds": 0.074
+      "durationSeconds": 0.506
     },
     {
       "test": "kernel/tests/test_conformance.py::test_97_review_driven_regressions",
       "outcome": "passed",
-      "durationSeconds": 0.209
+      "durationSeconds": 0.115
     },
     {
       "test": "kernel/tests/test_conformance.py::test_98_stale_registry_snapshot_recheck",
       "outcome": "passed",
-      "durationSeconds": 0.01
+      "durationSeconds": 0.015
     },
     {
       "test": "kernel/tests/test_conformance.py::test_99_global_invariants_hold",
@@ -109,16 +114,16 @@
         "DELETE FROM kernel_idempotency",
         "DELETE FROM runtime_trace"
       ],
-      "supersededConsequence": "conseq:9f6b5ba7babe4792",
-      "correctionConsequence": "conseq:2493ef4c5ebc4408"
+      "supersededConsequence": "conseq:5b45ed2b499d497a",
+      "correctionConsequence": "conseq:98df6cfe0d3a4a19"
     },
     "test_02": {
-      "denyTraceId": "authztrace:d6af50371e104a5b"
+      "denyTraceId": "authztrace:7a8c6c813eaf4e11"
     },
     "test_03": {
-      "idempotencyKey": "device-demo-2:q-898de6c689",
+      "idempotencyKey": "device-demo-2:q-87ae238218",
       "eventTime": "2026-06-10T07:30:00Z",
-      "recordTime": "2026-06-12T07:29:58.619303Z"
+      "recordTime": "2026-06-12T08:53:11.550063Z"
     },
     "test_04": {
       "fixturesReplayed": {
@@ -339,7 +344,7 @@
       "missingBasisRefused": true
     },
     "test_10": {
-      "durableArtifactRef": "document:si.ffs.inspection-register.882fac31f96f",
+      "durableArtifactRef": "document:si.ffs.inspection-register.4d8f2524f943",
       "digestVerified": true,
       "annexedGaps": 4
     },
@@ -350,8 +355,8 @@
     },
     "test_12": {
       "eventTime": "2026-06-08T06:00:00Z",
-      "recordTime": "2026-06-12T07:29:58.755338Z",
-      "acceptedAt": "2026-06-12T07:29:58.758912Z"
+      "recordTime": "2026-06-12T08:53:12.158340Z",
+      "acceptedAt": "2026-06-12T08:53:12.163522Z"
     },
     "test_13": {
       "danglingRefused": true,
@@ -372,6 +377,26 @@
         "OFARM_QuerySpecification_si_ffs_inspection_register_documentassembly_v0_1.json",
         "OFARM_QueryPlanIR_si_ffs_inspection_register_documentassembly_v0_1.json"
       ]
+    },
+    "test_95": {
+      "closedFindings": {
+        "b1-actor-spoofing-denied": "ACTOR_BINDING_UNRESOLVED",
+        "b2-forged-digest-blocked": "CONFLICTING_REPLAY_BLOCKED",
+        "b3-delegation-source-bounded": [
+          "revoked-source",
+          "missing-source",
+          "wrong-action",
+          "widened-scope"
+        ],
+        "b4-cross-farm-payload-refused": "SCOPE_NOT_AUTHORIZED",
+        "b5-fake-trace-edge-rejected": true,
+        "f6-as-of-reconstruction": {
+          "asOfExcludesLater": true,
+          "asOfSurvivesLaterSupersession": true
+        },
+        "f7-inactive-party-denied": "DENY",
+        "f8-honest-stale-reason": "reused STALE materialization under ALLOW_STALE_EXPLORATORY; high-consequence use barred"
+      }
     },
     "test_96": {
       "indexResolvedFlips": {

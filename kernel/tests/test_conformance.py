@@ -768,6 +768,280 @@ def test_15_manifest_grounding(store):
 
 
 # =========================================================================
+# 95. Hostile-review regressions (PR #2 hostile review): each leg pins one
+#     of the eight findings closed — boundary trust, not gate sequencing.
+# =========================================================================
+
+def test_95_hostile_review_regressions(store, pipeline, materializer):
+    from kernel.gates import GatePipeline
+    closed = {}
+
+    # B1 — the HTTP boundary binds the transport principal to the actor:
+    # body-level spoofing is refused before the pipeline runs
+    from fastapi.testclient import TestClient
+    from kernel.api import create_app
+    client = TestClient(create_app(store))
+    spoof = demo.spray_submission(f"hr:b1:{uid()}", erp_id=f"erp:hr.{uid()}")
+    no_header = client.post("/commit", json={"submission": spoof})
+    assert no_header.status_code == 422, "missing principal header must refuse"
+    mismatched = client.post("/commit", json={"submission": spoof},
+                             headers={"x-acting-party": demo.WORKER})
+    assert mismatched.status_code == 403
+    assert mismatched.json()["detail"]["reasonCode"] == "ACTOR_BINDING_UNRESOLVED"
+    bound = client.post("/commit", json={"submission": spoof},
+                        headers={"x-acting-party": demo.FARMER})
+    assert bound.status_code == 200 and bound.json()["decisionOutcome"]
+    closed["b1-actor-spoofing-denied"] = "ACTOR_BINDING_UNRESOLVED"
+
+    # B2 — a forged caller-supplied digest cannot fake a matching replay:
+    # the server always computes the canonical digest itself
+    original = demo.spray_submission(f"hr:b2:{uid()}", erp_id=f"erp:hr.{uid()}")
+    first = pipeline.commit(original)
+    assert first["decisionOutcome"] == "PROMOTE_ACCEPTED"
+    forged = demo.spray_submission(original["idempotencyKey"],
+                                   erp_id=original["payload"]["executionRecordPayloadId"],
+                                   dose_value=0.9)
+    forged["sourcePayloadDigest"] = GatePipeline._source_digest(original)
+    replay = pipeline.commit(forged)
+    assert replay["decisionOutcome"] == "DENY"
+    assert replay["idempotencyDisposition"] == "CONFLICTING_REPLAY_BLOCKED", \
+        "a different body with a forged prior digest is a conflict, not a replay"
+    closed["b2-forged-digest-blocked"] = replay["idempotencyDisposition"]
+
+    # B3 — delegation is bounded by LIVE source authority (four legs)
+    now = context.now_iso()
+    delegator = f"party:hr.delegator.{uid()}"
+    delegate = f"party:hr.delegate.{uid()}"
+    source_grant = f"grant:hr.source.{uid()}"
+    farm_scope = {"scopeType": "FARM", "scopeRef": demo.FARM}
+    with store.tx() as cur:
+        for pid, name in ((delegator, "Delegator"), (delegate, "Delegate")):
+            store.insert_record(cur, {
+                "schemaVersion": "ofarm.party.v0.1", "partyId": pid,
+                "partyClass": "NATURAL_PERSON",
+                "displayName": f"HR {name} (fictional)",
+                "partyState": "ACTIVE", "recordedAt": now})
+        store.insert_record(cur, {
+            "schemaVersion": "ofarm.authoritygrant.v0.1",
+            "authorityGrantId": source_grant,
+            "grantedByPartyRef": demo.FARMER,
+            "grantTarget": {"targetKind": "PARTY", "targetRef": delegator},
+            "targetScope": farm_scope,
+            "authorityActionClasses": ["ASSERT_OPERATION_CLAIM"],
+            "validFrom": demo.VALID_FROM,
+            "inheritanceMode": "DESCENDANT_SCOPES", "grantState": "ACTIVE"})
+
+        def delegation(did, source_refs, actions=("ASSERT_OPERATION_CLAIM",)):
+            store.insert_record(cur, {
+                "schemaVersion": "ofarm.delegationgrant.v0.1",
+                "delegationGrantId": did,
+                "delegatingPartyRef": delegator, "delegatePartyRef": delegate,
+                "sourceAuthorityGrantRefs": list(source_refs),
+                "targetScope": farm_scope,
+                "authorityActionClasses": list(actions),
+                "validFrom": demo.VALID_FROM,
+                "inheritanceMode": "DESCENDANT_SCOPES",
+                "delegationState": "ACTIVE"})
+        good_delegation = f"deleg:hr.good.{uid()}"
+        delegation(good_delegation, [source_grant])
+
+    evaluate = pipeline.authority.evaluate
+    live = evaluate(acting_party_ref=delegate, action_class="ASSERT_OPERATION_CLAIM",
+                    action_stage="PROMOTION", scope=farm_scope)
+    assert live.outcome == "ALLOW" and \
+        live.result_payload["delegationBasisUsed"] == [good_delegation]
+
+    # (a) revoked SOURCE grant kills the delegation, audibly
+    with store.tx() as cur:
+        store.insert_record(cur, {
+            "schemaVersion": "ofarm.revocationdecision.v0.1",
+            "revocationDecisionId": f"revoke:hr.source.{uid()}",
+            "revokesArtifactFamily": "AUTHORITY_GRANT",
+            "revokesArtifactRef": source_grant,
+            "decidedByPartyRef": demo.FARMER,
+            "decidedAt": context.now_iso(), "effectiveFrom": context.now_iso(),
+            "revocationMode": "TERMINATE", "targetScope": farm_scope})
+    dead = evaluate(acting_party_ref=delegate, action_class="ASSERT_OPERATION_CLAIM",
+                    action_stage="PROMOTION", scope=farm_scope)
+    assert dead.outcome == "DENY"
+    assert dead.result_payload["revocationResult"] == "ACTIVE_REVOCATION_FOUND", \
+        "delegated authority must not outlive its revoked source grant"
+
+    # (b) missing source ref / (c) source lacking the action / (d) broader
+    # scope than the source — all default-deny, never silently allowed
+    with store.tx() as cur:
+        delegation(f"deleg:hr.nosource.{uid()}", ["grant:hr.does.not.exist"])
+    b = evaluate(acting_party_ref=delegate, action_class="ASSERT_OPERATION_CLAIM",
+                 action_stage="PROMOTION", scope=farm_scope)
+    assert b.outcome == "DENY", "a delegation with no provable source grants nothing"
+
+    narrow_grant = f"grant:hr.narrow.{uid()}"
+    with store.tx() as cur:
+        store.insert_record(cur, {
+            "schemaVersion": "ofarm.authoritygrant.v0.1",
+            "authorityGrantId": narrow_grant,
+            "grantedByPartyRef": demo.FARMER,
+            "grantTarget": {"targetKind": "PARTY", "targetRef": delegator},
+            "targetScope": farm_scope,
+            "authorityActionClasses": ["OBSERVE_CREATE_OBSERVATION"],  # not the delegated action
+            "validFrom": demo.VALID_FROM,
+            "inheritanceMode": "EXACT_ONLY", "grantState": "ACTIVE"})
+        delegation(f"deleg:hr.wrongaction.{uid()}", [narrow_grant])
+    c = evaluate(acting_party_ref=delegate, action_class="ASSERT_OPERATION_CLAIM",
+                 action_stage="PROMOTION", scope=farm_scope)
+    assert c.outcome == "DENY", "the source must cover the delegated action class"
+
+    exact_grant = f"grant:hr.exact.{uid()}"
+    with store.tx() as cur:
+        store.insert_record(cur, {
+            "schemaVersion": "ofarm.authoritygrant.v0.1",
+            "authorityGrantId": exact_grant,
+            "grantedByPartyRef": demo.FARMER,
+            "grantTarget": {"targetKind": "PARTY", "targetRef": delegator},
+            "targetScope": farm_scope,
+            "authorityActionClasses": ["ASSERT_OPERATION_CLAIM"],
+            "validFrom": demo.VALID_FROM,
+            "inheritanceMode": "EXACT_ONLY",   # farm only, no descendants
+            "grantState": "ACTIVE"})
+        delegation(f"deleg:hr.widened.{uid()}", [exact_grant])
+    d = evaluate(acting_party_ref=delegate, action_class="ASSERT_OPERATION_CLAIM",
+                 action_stage="PROMOTION",
+                 scope={"scopeType": "FIELD", "scopeRef": demo.FIELD})
+    assert d.outcome == "DENY", \
+        "a delegation must not widen the source grant's scope/inheritance"
+    closed["b3-delegation-source-bounded"] = ["revoked-source", "missing-source",
+                                              "wrong-action", "widened-scope"]
+
+    # B4 — cross-farm payload containment beyond supersession: farm-A
+    # authority cannot create accepted truth targeting a farm-B identity
+    foreign_farm = f"farm:hr.kmetija.b.{uid()}"
+    foreign_field = f"field:hr.kmetija.b.{uid()}"
+    with store.tx() as cur:
+        store.insert_record(cur, {
+            "schemaVersion": "ofarm.identityrecord.v0.1",
+            "identityRecordId": foreign_farm, "identityType": "FARM",
+            "lifecycleState": "ACTIVE", "createdAt": now, "recordedAt": now})
+        store.insert_record(cur, {
+            "schemaVersion": "ofarm.identityrecord.v0.1",
+            "identityRecordId": foreign_field, "identityType": "FIELD",
+            "lifecycleState": "ACTIVE", "createdAt": now, "recordedAt": now,
+            "anchorScopes": [{"scopeType": "FARM", "scopeRef": foreign_farm}]})
+    before = count_kind(store, "ofarm.acceptedeventconsequence.v0.1")
+    contaminated = demo.spray_submission(f"hr:b4:{uid()}", erp_id=f"erp:hr.{uid()}")
+    contaminated["subjectRef"] = foreign_field
+    contaminated["payload"]["subject"] = {"subjectType": "FIELD",
+                                          "subjectRef": foreign_field}
+    contaminated["payload"]["executionExtent"]["targetScope"] = {
+        "scopeType": "FIELD", "scopeRef": foreign_field}
+    r = pipeline.commit(contaminated)
+    assert r["decisionOutcome"] == "RETAIN_DRAFT"
+    assert r["problems"][0]["reasonCode"] == "SCOPE_NOT_AUTHORIZED"
+    assert count_kind(store, "ofarm.acceptedeventconsequence.v0.1") == before
+    closed["b4-cross-farm-payload-refused"] = r["problems"][0]["reasonCode"]
+
+    # B5 — a PROMOTION_EMITS edge from arbitrary text cannot satisfy the
+    # reachability invariant: the source must be a stored PromotionTrace
+    with pytest.raises(psycopg.errors.RaiseException) as exc:
+        with store.tx() as cur:
+            store.insert_record(cur, {
+                "schemaVersion": "ofarm.reviewdecision.v0.1",
+                "reviewDecisionId": f"review:hr.orphan.{uid()}",
+                "reviewedArtifactFamily": "ASSERTION_RECORD",
+                "reviewedArtifactRef": "assert:whatever",
+                "reviewAction": "REVIEW_ACCEPT",
+                "anchorScopes": [farm_scope],
+                "decidedByPartyRef": demo.FARMER,
+                "decidedAt": context.now_iso(),
+                "decisionOutcomeState": "ACCEPTED"})
+            cur.execute(
+                "INSERT INTO kernel_edge (edge_type, src_record_id, dst_record_id) "
+                "VALUES ('PROMOTION_EMITS', 'fake:trace', "
+                "(SELECT record_id FROM kernel_record WHERE record_id LIKE 'review:hr.orphan%' LIMIT 1))")
+    assert "not a stored PromotionTrace" in str(exc.value)
+    closed["b5-fake-trace-edge-rejected"] = True
+
+    # F6 — AS_OF is real reconstruction, not NOW in disguise
+    spray1 = pipeline.commit(demo.spray_submission(
+        f"hr:f6a:{uid()}", erp_id=f"erp:hr.{uid()}",
+        event_start="2026-06-08T06:00:00Z", event_end="2026-06-08T06:30:00Z"))
+    as_of_t = context.now_iso()
+    spray2 = pipeline.commit(demo.spray_submission(
+        f"hr:f6b:{uid()}", erp_id=f"erp:hr.{uid()}"))
+    assert {spray1["decisionOutcome"], spray2["decisionOutcome"]} == {"PROMOTE_ACCEPTED"}
+    with store.tx() as cur:
+        as_of = materializer.resolve_for_use(
+            cur, demo.FARM, time_policy={"policyType": "AS_OF", "asOfTime": as_of_t})
+        now_view = materializer.resolve_for_use(cur, demo.FARM)
+    as_of_refs = {e["consequenceRef"] for e in
+                  as_of["materialization"]["current_state"]["entries"]}
+    now_refs = {e["consequenceRef"] for e in
+                now_view["materialization"]["current_state"]["entries"]}
+    assert spray2["emittedAcceptedConsequenceRefs"][0] not in as_of_refs, \
+        "a consequence accepted after asOfTime must not appear in AS_OF state"
+    assert spray2["emittedAcceptedConsequenceRefs"][0] in now_refs
+    assert spray1["emittedAcceptedConsequenceRefs"][0] in as_of_refs
+
+    # supersession is as-of-aware: correcting spray1 NOW does not rewrite
+    # what was in force at as_of_t (the append-only substrate remembers)
+    correction = demo.spray_submission(f"hr:f6c:{uid()}", erp_id=f"erp:hr.{uid()}",
+                                       event_start="2026-06-08T06:00:00Z",
+                                       event_end="2026-06-08T06:30:00Z",
+                                       dose_value=0.25)
+    correction["supersedesConsequenceRef"] = spray1["emittedAcceptedConsequenceRefs"][0]
+    assert pipeline.commit(correction)["decisionOutcome"] == "PROMOTE_ACCEPTED"
+    with store.tx() as cur:
+        as_of_after = materializer.resolve_for_use(
+            cur, demo.FARM, time_policy={"policyType": "AS_OF", "asOfTime": as_of_t})
+    as_of_after_refs = {e["consequenceRef"] for e in
+                       as_of_after["materialization"]["current_state"]["entries"]}
+    assert spray1["emittedAcceptedConsequenceRefs"][0] in as_of_after_refs, \
+        "as-of state must show what was in force then, not the later correction"
+    closed["f6-as-of-reconstruction"] = {"asOfExcludesLater": True,
+                                         "asOfSurvivesLaterSupersession": True}
+
+    # F7 — an INACTIVE party with otherwise-valid grants acts as nobody
+    ghost = f"party:hr.inactive.{uid()}"
+    with store.tx() as cur:
+        store.insert_record(cur, {
+            "schemaVersion": "ofarm.party.v0.1", "partyId": ghost,
+            "partyClass": "NATURAL_PERSON",
+            "displayName": "HR Inactive Party (fictional)",
+            "partyState": "INACTIVE", "recordedAt": now})
+        store.insert_record(cur, {
+            "schemaVersion": "ofarm.authoritygrant.v0.1",
+            "authorityGrantId": f"grant:hr.ghost.{uid()}",
+            "grantedByPartyRef": demo.FARMER,
+            "grantTarget": {"targetKind": "PARTY", "targetRef": ghost},
+            "targetScope": farm_scope,
+            "authorityActionClasses": ["ASSERT_OPERATION_CLAIM"],
+            "validFrom": demo.VALID_FROM,
+            "inheritanceMode": "DESCENDANT_SCOPES", "grantState": "ACTIVE"})
+    g = evaluate(acting_party_ref=ghost, action_class="ASSERT_OPERATION_CLAIM",
+                 action_stage="PROMOTION", scope=farm_scope)
+    assert g.outcome == "DENY" and "not ACTIVE" in g.result_payload["reasonSummary"]
+    closed["f7-inactive-party-denied"] = g.outcome
+
+    # F8 — a stale reuse says STALE, never "reused FRESH materialization"
+    regsr = context.current_reference_snapshot(store, context.REGSR_SNAPSHOT_PREFIX)
+    with store.tx() as cur:
+        materializer.invalidate_for_sources(
+            cur, [regsr["referenceSnapshotId"]], trigger_family="REFERENCE_CHANGED",
+            trigger_source_ref="test:f8", farm_scope_ref=demo.FARM)
+        stale_reuse = materializer.resolve_for_use(
+            cur, demo.FARM, required_freshness="ALLOW_STALE_EXPLORATORY",
+            recompute_if_needed=False)
+    assert stale_reuse["decision"] == "ALLOW_REUSE"
+    summary = stale_reuse["materializationResult"]["reasonSummary"]
+    assert "STALE" in summary and "FRESH" not in summary.split("STALE")[0], \
+        f"stale reuse must say so honestly, got: {summary!r}"
+    with store.tx() as cur:   # leave the suite FRESH
+        materializer.resolve_for_use(cur, demo.FARM)
+    closed["f8-honest-stale-reason"] = summary
+
+    record_detail("test_95", {"closedFindings": closed})
+
+
+# =========================================================================
 # 96. Identity/context invalidation + freshness-mode semantics (steward PR
 #     review findings 2 and 4): field revision, crop-cycle replant, and
 #     context change invalidate via the dependency index — not broadening —

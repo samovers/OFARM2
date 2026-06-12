@@ -197,28 +197,50 @@ class Store:
     def is_superseded(self, record_id: str) -> bool:
         return bool(self.edges_to(record_id, "LINEAGE_SUPERSEDES"))
 
-    def in_force_consequences(self, farm_scope_ref: str) -> list[dict]:
+    def in_force_consequences(self, farm_scope_ref: str,
+                              as_of: str | None = None) -> list[dict]:
         """Accepted event consequences in force for a farm scope.
 
-        In force = payload says IN_FORCE and no LINEAGE_SUPERSEDES edge points
-        at the record. Derived current state is computed from these with
-        receipts (Kernel rule 5).
+        In force NOW = payload says IN_FORCE and no LINEAGE_SUPERSEDES edge
+        points at the record. With `as_of` (an ISO timestamp) the answer is
+        reconstructed from the append-only substrate AS OF that moment:
+        accepted by then, and any supersession edge recorded AFTER it does
+        not count — exactly what the edges' record times exist for.
         """
         with self.conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT r.* FROM kernel_record r
-                WHERE r.record_kind = 'ofarm.acceptedeventconsequence.v0.1'
-                  AND r.payload ->> 'inForceState' = 'IN_FORCE'
-                  AND r.payload -> 'anchorScopes' @> %s
-                  AND NOT EXISTS (
-                    SELECT 1 FROM kernel_edge e
-                     WHERE e.dst_record_id = r.record_id
-                       AND e.edge_type = 'LINEAGE_SUPERSEDES')
-                ORDER BY r.record_time, r.record_id
-                """,
-                (Jsonb([{"scopeType": "FARM", "scopeRef": farm_scope_ref}]),),
-            )
+            if as_of is None:
+                cur.execute(
+                    """
+                    SELECT r.* FROM kernel_record r
+                    WHERE r.record_kind = 'ofarm.acceptedeventconsequence.v0.1'
+                      AND r.payload ->> 'inForceState' = 'IN_FORCE'
+                      AND r.payload -> 'anchorScopes' @> %s
+                      AND NOT EXISTS (
+                        SELECT 1 FROM kernel_edge e
+                         WHERE e.dst_record_id = r.record_id
+                           AND e.edge_type = 'LINEAGE_SUPERSEDES')
+                    ORDER BY r.record_time, r.record_id
+                    """,
+                    (Jsonb([{"scopeType": "FARM", "scopeRef": farm_scope_ref}]),),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT r.* FROM kernel_record r
+                    WHERE r.record_kind = 'ofarm.acceptedeventconsequence.v0.1'
+                      AND r.payload ->> 'inForceState' = 'IN_FORCE'
+                      AND r.payload -> 'anchorScopes' @> %s
+                      AND (r.payload ->> 'acceptedAt')::timestamptz <= %s::timestamptz
+                      AND NOT EXISTS (
+                        SELECT 1 FROM kernel_edge e
+                         WHERE e.dst_record_id = r.record_id
+                           AND e.edge_type = 'LINEAGE_SUPERSEDES'
+                           AND e.record_time <= %s::timestamptz)
+                    ORDER BY r.record_time, r.record_id
+                    """,
+                    (Jsonb([{"scopeType": "FARM", "scopeRef": farm_scope_ref}]),
+                     as_of, as_of),
+                )
             return cur.fetchall()
 
     # -- conformance helpers ----------------------------------------------------

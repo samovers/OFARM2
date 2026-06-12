@@ -144,10 +144,13 @@ class GatePipeline:
 
     @staticmethod
     def _source_digest(sub: dict) -> str:
-        """Digest of the WHOLE submission: payload-less classes (notes,
-        observations) must not collapse to the digest of {} — different
-        submissions under one idempotency key are conflicts, not replays."""
-        return sub.get("sourcePayloadDigest") or sha256_of(
+        """ALWAYS the server-computed canonical digest of the whole semantic
+        submission. A caller-supplied sourcePayloadDigest is evidence metadata
+        at most — it never participates in idempotency decisions, or a forged
+        prior digest could turn a different body into a false 'matching
+        replay' (hostile review blocker 2). Payload-less classes digest their
+        full submission, never the constant digest of {}."""
+        return sha256_of(
             {k: v for k, v in sub.items() if k != "sourcePayloadDigest"})
 
     def _commit_in_tx(self, cur, sub: dict) -> dict:
@@ -720,6 +723,37 @@ class GatePipeline:
                     f"subjectType {subject_type} is not promotable to an accepted "
                     "consequence; the claim stays a draft"))
 
+        # --- semantic: farm containment for EVERY governed scope-bearing
+        # field, not only supersession (hostile review blocker 4): farm-A
+        # authority must never create accepted truth whose target is a
+        # farm-B identity. A FARM-typed ref must BE the authorized farm; any
+        # other governed scope ref must resolve to an identity anchored on it.
+        def assert_contained(scope_type: str, scope_ref: str, where: str):
+            if scope_type in ("TENANT", "DEPLOYMENT"):
+                return
+            if scope_type == "FARM":
+                if scope_ref != farm_ref:
+                    refuse("FAIL_SEMANTIC", runtime_problem(
+                        "SCOPE_NOT_AUTHORIZED", "Cross-farm scope refused",
+                        f"{where} names farm {scope_ref}; this commit is "
+                        f"authorized on {farm_ref} only"))
+                return
+            row = self.store.get_record(scope_ref)
+            if row is not None and row["record_kind"] == "ofarm.identityrecord.v0.1":
+                anchors = row["payload"].get("anchorScopes", [])
+                if {"scopeType": "FARM", "scopeRef": farm_ref} not in anchors:
+                    refuse("FAIL_SEMANTIC", runtime_problem(
+                        "SCOPE_NOT_AUTHORIZED", "Cross-farm scope refused",
+                        f"{where} names {scope_ref}, which is not anchored on "
+                        f"{farm_ref}; authority on one farm never reaches "
+                        "another farm's identities"))
+
+        if commit_class in PROMOTION_TARGET_BY_CLASS:
+            assert_contained(sub.get("subjectType", "FARM"),
+                             sub.get("subjectRef", farm_ref), "subject")
+        for s in sub.get("targetScopes") or []:
+            assert_contained(s["scopeType"], s["scopeRef"], "targetScopes")
+
         # --- semantic: a correction must name a real, in-force consequence on
         # THIS farm (an unvalidated ref could knock another farm's truth out
         # of force or dangle)
@@ -787,6 +821,12 @@ class GatePipeline:
                 refuse("FAIL_REFERENCE_RESOLUTION", runtime_problem(
                     "EVIDENCE_REFERENCE_UNAVAILABLE", "Compliance subject unresolved",
                     f"complianceClaim.subjectScopeRef {subject_ref!r} does not resolve"))
+            # the claimed subject must be contained in the authorized farm too
+            subject_row = self.store.get_record(subject_ref)
+            if subject_row["record_kind"] == "ofarm.identityrecord.v0.1":
+                assert_contained(subject_row["payload"]["identityType"]
+                                 if subject_row["payload"]["identityType"] != "FARM"
+                                 else "FARM", subject_ref, "complianceClaim.subjectScopeRef")
             log("VALIDATION", "PASS")
             return None
 
@@ -860,6 +900,16 @@ class GatePipeline:
                            [runtime_problem(
                                "EVIDENCE_REFERENCE_UNAVAILABLE", "Dangling references",
                                f"these references do not resolve in the store: {dangling}")])
+
+        # --- containment over the carrier's own scope-bearing fields: the
+        # subject, the execution extent target, and every anchor scope must
+        # be the authorized farm or an identity anchored on it (blocker 4)
+        assert_contained(payload["subject"]["subjectType"],
+                         payload["subject"]["subjectRef"], "carrier subject")
+        assert_contained(field_scope["scopeType"], field_scope["scopeRef"],
+                         "executionExtent.targetScope")
+        for s in payload.get("anchorScopes", []):
+            assert_contained(s["scopeType"], s["scopeRef"], "carrier anchorScopes")
 
         # --- code-binding sub-gate (vs the SI profile instance) ---
         bindings = [self.store.get_payload(r)
