@@ -18,7 +18,8 @@ import json
 
 from . import config
 from .context import now_iso
-from .policy import COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS, COMMIT_CLASS_TO_FAMILY
+from .policy import (COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS,
+                     COMMIT_CLASS_TO_FAMILY, NON_COMMIT_ACTION_CLASSES)
 
 MANIFEST_ID = "manifest:si.ffs.pilot.v0_1"
 MANIFEST_PATH = config.PROFILE_ROOT / "OFARM_Capability_Manifest_si_ffs_pilot_v0_1.json"
@@ -43,7 +44,7 @@ def build_manifest(store) -> dict:
         "manifestId": MANIFEST_ID,
         "status": "ACTIVE",
         "ofarmVersion": "RC2.1",
-        "platformVersion": "ofarm2-kernel-m1.0",
+        "platformVersion": config.RUNTIME_VERSION,
         "publishedAt": now_iso(),
         "deploymentScope": {"scopeType": "TENANT", "scopeRef": config.TENANT_REF},
         "capabilitySections": {
@@ -89,13 +90,9 @@ def build_manifest(store) -> dict:
                 ],
                 # accepted Action Matrix vocabulary only — the exact classes
                 # the authority gate evaluates (no parallel runtime dialect)
-                "supportedActionClasses": sorted(set(
-                    COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS.values()) | {
-                    "REVIEW_ACCEPT",
-                    "OUTPUT_APPROVE_DOCUMENT_ASSEMBLY",
-                    "OUTPUT_FILE_SUBMISSION_ASSEMBLY",
-                    "RECEIVE_READ_DATA",
-                }),
+                "supportedActionClasses": sorted(
+                    set(COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS.values())
+                    | NON_COMMIT_ACTION_CLASSES),
                 "supportsHumanOnlyRestrictions": True,
             },
             "importExportSupport": {
@@ -171,9 +168,9 @@ def build_artifact_set() -> dict:
             "view:si.ffs.spray-register.passportview.v0_1",
             "view:si.ffs.inspection-register.documentassembly.v0_1",
             *VIEW_ARTIFACTS,
-            "policy:si.ffs.evidence-review.v0_1",
+            config.EVIDENCE_POLICY_REF,
             config.CODE_BINDING_PROFILE_REF,
-            "referencesnapshot:si.uvhvvr.ffs-reg.2026-06-11",
+            config.SHIPPED_REGSR_SNAPSHOT_REF,
             "referencesnapshot:si.mkgp.gerk-layer.2025-06-30",
             MANIFEST_ID,
         ],
@@ -215,13 +212,14 @@ def verify_grounding(store, manifest: dict, artifact_set: dict) -> list[str]:
     # no canonical-baseline evidence exists -> the only grounded level is NONE
     if manifest["conformance"]["minimumConformanceLevel"] != "NONE":
         failures.append("over-claimed conformance level without evidence (RFC §11.4)")
-    # action-class claims must be exactly the accepted Action Matrix names the
-    # runtime evaluates; portable attestation stays unclaimed
+    # action-class claims must match the policy tables (the persisted JSON
+    # is checked against the code, catching disk-vs-code drift; the four
+    # non-commit classes ground in their evaluate() call sites via the
+    # law-binding stage test, not here); portable attestation stays unclaimed
     claimed_actions = set(manifest["capabilitySections"]["authoritySupport"]
                           ["supportedActionClasses"])
-    evaluated = set(COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS.values()) | {
-        "REVIEW_ACCEPT", "OUTPUT_APPROVE_DOCUMENT_ASSEMBLY",
-        "OUTPUT_FILE_SUBMISSION_ASSEMBLY", "RECEIVE_READ_DATA"}
+    evaluated = (set(COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS.values())
+                 | NON_COMMIT_ACTION_CLASSES)
     if claimed_actions != evaluated:
         failures.append(f"action-class claims drift from runtime: {claimed_actions ^ evaluated}")
     if "OUTPUT_ATTEST_DOCUMENT_ASSEMBLY" in claimed_actions:

@@ -15,18 +15,14 @@ pin.
 """
 from __future__ import annotations
 
-import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-from . import policy
-from .context import now_iso, parse_ts
-from .contracts import canonical_json
+from . import policy, sufficiency
+from .context import parse_ts
+from .contracts import ContractViolation, canonical_json
+from .emission import PromotionEmitter, ReplayWriter
 from .problems import runtime_problem
-
-
-def mint(prefix: str) -> str:
-    return f"{prefix}:{uuid.uuid4().hex[:16]}"
 
 
 # ---------------------------------------------------------------------------
@@ -35,7 +31,8 @@ def mint(prefix: str) -> str:
 
 @dataclass
 class GatePass:
-    refs: list[str] | None = None
+    """The stage passed; anything worth recording is already in the gate
+    log / trace via ctx.log — the result carries no payload."""
 
 
 @dataclass
@@ -44,11 +41,6 @@ class GateRefusal:
     outcome: str
     final_outcome: str
     problems: list[dict]
-    rationale: str = ""
-
-    def __post_init__(self):
-        if not self.rationale and self.problems:
-            self.rationale = self.problems[0]["detail"]
 
 
 @dataclass
@@ -89,6 +81,7 @@ class GateContext:
     temporal_problem: dict | None = None
     requested_target: str | None = None
     acceptance_target: str | None = None
+    acceptance_payload: dict | None = None   # the target assertion, fetched once
     # stage products
     authz_decision: Any = None
     erp_id: str | None = None
@@ -119,6 +112,13 @@ class GateContext:
                             reason_code=reason_code, rationale=rationale,
                             related_refs=refs)
 
+    def record_authority_decision(self, decision) -> None:
+        """Every authority evaluation persists its request/trace/result —
+        one helper so no call site can store a partial decision."""
+        self.store.insert_record(self.cur, decision.request_payload)
+        self.store.insert_record(self.cur, decision.trace_payload)
+        self.store.insert_record(self.cur, decision.result_payload)
+
     def ensure_envelope_stored(self) -> None:
         """Refusals are traceable history, not silence: the normalized draft
         event is recorded even when the chain refuses."""
@@ -138,10 +138,7 @@ class IngressNormalizer:
     replays. Capture is not commitment (Kernel rule 3): this is where a
     device draft becomes a governed submission."""
 
-    def run(self, ctx: GateContext) -> GatePass | GateReplay | GateRefusal:
-        from .contracts import ContractViolation
-        from .emission import ReplayWriter
-
+    def run(self, ctx: GateContext) -> GatePass | GateReplay:
         sub = ctx.sub
         prior = ctx.store.idempotency_lookup(ctx.cur, ctx.idem_key)
         if prior is not None:
@@ -244,9 +241,7 @@ class AuthorityGate:
             revocation_disposition=policy.revocation_disposition(
                 ctx.commit_class, sub.get("ingressChannel", "MANUAL_UI")),
         )
-        ctx.store.insert_record(ctx.cur, decision.request_payload)
-        ctx.store.insert_record(ctx.cur, decision.trace_payload)
-        ctx.store.insert_record(ctx.cur, decision.result_payload)
+        ctx.record_authority_decision(decision)
         ctx.authz_decision = decision
         ctx.trace_refs["authorizationDecisionResultRef"] = \
             decision.result_payload["resultId"]
@@ -255,7 +250,7 @@ class AuthorityGate:
                       decision.trace_payload["traceId"]]
         if decision.outcome == "ALLOW":
             ctx.log("AUTHORITY", "ALLOW", refs=authz_refs)
-            return GatePass(refs=authz_refs)
+            return GatePass()
         if decision.outcome == "REQUIRE_REVIEW":
             ctx.log("AUTHORITY", "REQUIRE_REVIEW",
                     reason_code=decision.problems[0]["reasonCode"]
@@ -263,8 +258,7 @@ class AuthorityGate:
                     rationale=decision.result_payload["reasonSummary"],
                     refs=authz_refs)
             return GateRefusal("AUTHORITY", "REQUIRE_REVIEW", "REQUIRE_REVIEW",
-                               decision.problems,
-                               decision.result_payload["reasonSummary"])
+                               decision.problems)
         # DENY | REQUIRE_HUMAN_APPROVAL
         ctx.log("AUTHORITY", decision.outcome,
                 reason_code=decision.problems[0]["reasonCode"]
@@ -273,8 +267,24 @@ class AuthorityGate:
                 refs=authz_refs)
         final = "DENY" if decision.outcome == "DENY" else "REQUIRE_REVIEW"
         return GateRefusal("AUTHORITY", decision.outcome, final,
-                           decision.problems,
-                           decision.result_payload["reasonSummary"])
+                           decision.problems)
+
+
+# ---------------------------------------------------------------------------
+# stage: envelope persistence (after validation confirmed the carrier)
+# ---------------------------------------------------------------------------
+
+class EnvelopePersist:
+    """The normalized envelope becomes authoritative once validation has
+    confirmed the carrier; the carrier ref rides the envelope. Its
+    reachability edge lands with the trace (same transaction, D3)."""
+
+    def run(self, ctx: GateContext) -> GatePass:
+        if ctx.erp_id:
+            ctx.envelope["executionRecordPayloadRefs"] = [ctx.erp_id]
+        ctx.store.insert_record(ctx.cur, ctx.envelope)
+        ctx.envelope_stored = True
+        return GatePass()
 
 
 # ---------------------------------------------------------------------------
@@ -286,7 +296,7 @@ class ProfileApplicabilityGate:
         snapshot = ctx.context_assembler.assemble(ctx.cur, ctx.farm_ref)
         ctx.log("PACK_PROFILE_APPLICABILITY", "APPLICABLE",
                 refs=[snapshot["contextSnapshotId"]])
-        return GatePass(refs=[snapshot["contextSnapshotId"]])
+        return GatePass()
 
 
 # ---------------------------------------------------------------------------
@@ -295,12 +305,9 @@ class ProfileApplicabilityGate:
 
 class EvidenceSufficiencyGate:
     def run(self, ctx: GateContext) -> GatePass | GateRefusal:
-        from . import sufficiency
-
         if ctx.acceptance_target:
-            target_payload = ctx.store.get_payload(ctx.acceptance_target)
             case = sufficiency.build_acceptance_case(
-                ctx.store, ctx.sub, ctx.farm_ref, target_payload)
+                ctx.store, ctx.sub, ctx.farm_ref, ctx.acceptance_payload)
             if case["outcome"]["decision"] == "REFUSE":
                 ctx.log("EVIDENCE_SUFFICIENCY", "INSUFFICIENT",
                         reason_code="EVIDENCE_INSUFFICIENT",
@@ -335,8 +342,7 @@ class EvidenceSufficiencyGate:
                         "EVIDENCE_INSUFFICIENT", "Evidence floor unmet",
                         case["outcome"]["rationale"],
                         suggested_remediation="attach the missing floor items and "
-                        "resubmit; the claim stays a draft")],
-                    case["outcome"]["rationale"])
+                        "resubmit; the claim stays a draft")])
             ctx.case_payload = case
             ctx.review_route_reasons.extend(floor_failures)
             ctx.log("EVIDENCE_SUFFICIENCY", "SATISFIED")
@@ -354,7 +360,6 @@ class EvidenceSufficiencyGate:
 
 class ReviewPromotionGate:
     def run(self, ctx: GateContext) -> GatePass | GateRefusal:
-        from .emission import PromotionEmitter
         emitter = PromotionEmitter(ctx)
         sub = ctx.sub
 
@@ -420,17 +425,14 @@ class ReviewPromotionGate:
             acting_party_ref=ctx.acting_party, action_class="REVIEW_ACCEPT",
             action_stage="PROMOTION",
             scope={"scopeType": "FARM", "scopeRef": ctx.farm_ref})
-        ctx.store.insert_record(ctx.cur, review_auth.request_payload)
-        ctx.store.insert_record(ctx.cur, review_auth.trace_payload)
-        ctx.store.insert_record(ctx.cur, review_auth.result_payload)
+        ctx.record_authority_decision(review_auth)
         if not review_auth.allowed:
             ctx.log("REVIEW_PROMOTION", "REQUIRE_REVIEW",
                     reason_code="AUTHORITY_DENIED",
                     rationale=f"{ctx.acting_party} holds no REVIEW_ACCEPT for "
                               f"{ctx.farm_ref}")
             return GateRefusal("REVIEW_PROMOTION", "REQUIRE_REVIEW",
-                               "REQUIRE_REVIEW", review_auth.problems,
-                               "reviewer lacks REVIEW_ACCEPT authority")
+                               "REQUIRE_REVIEW", review_auth.problems)
 
         emitter.emit_self_review_promotion()
         return GatePass()
@@ -455,4 +457,4 @@ class MaterializationGate:
         ctx.materialization_triggered = True
         ctx.log("CURRENT_STATE_MATERIALIZATION", "UPDATED",
                 refs=[mat["basisRef"], mat["snapshotRef"]])
-        return GatePass(refs=[mat["basisRef"], mat["snapshotRef"]])
+        return GatePass()

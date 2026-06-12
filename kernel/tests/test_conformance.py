@@ -1906,7 +1906,6 @@ def test_98_stale_registry_snapshot_recheck(store, pipeline):
 # =========================================================================
 
 def test_98z_as_of_spine_guard(store, pipeline, materializer):
-    import json as _json
     original = store.find_by_kind("ofarm.packactivationset.v0.1")[-1]["payload"]
     duplicate = dict(original)
     duplicate["packActivationSetId"] = f"packactivationset:si.ffs.pilot.dup-test.{uid()}"

@@ -18,23 +18,19 @@ an undeterminable dependency boundary broadens invalidation, never narrows it.
 from __future__ import annotations
 
 import hashlib
-import uuid
 
 from . import config, policy
-from .context import ContextAssembler, ContextNotReconstructible, now_iso, parse_ts
+from .context import (ContextAssembler, ContextNotReconstructible,
+                      mint as _mint, now_iso, parse_ts)
 from .contracts import canonical_json
 from psycopg.types.json import Jsonb
 
 MATERIALIZATION_POLICY_REF = "policy:si.ffs.materialization.v0_1"
 RESULT_SHAPE_FAMILY = "si.ffs.spray-register.v0_1"
-RUNTIME_VERSION = "ofarm2-kernel-m1.0"
+RUNTIME_VERSION = config.RUNTIME_VERSION
 
 # use-class mapping is policy, not materializer code (issue #3)
 _USE_CLASS_MAP = policy.USE_CLASS_TO_CANONICAL
-
-
-def _mint(prefix: str) -> str:
-    return f"{prefix}:{uuid.uuid4().hex[:16]}"
 
 
 def _digest12(obj) -> str:

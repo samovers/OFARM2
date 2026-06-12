@@ -11,7 +11,10 @@ This module is the ORCHESTRATION SHELL only (issue #3): runtime policy lives
 in kernel/policy.py as declarative tables, each gate is a named stage in
 kernel/stages.py with a narrow typed contract (GatePass / GateRefusal /
 GateReplay), validation is decomposed into named units in
-kernel/validators.py, and every record emission lives in kernel/emission.py.
+kernel/validators.py, and every PROMOTION-flavor emission (assertions,
+reviews, consequences, traces, results, replays) lives in
+kernel/emission.py — stages and validators store their own gate records
+(authority decisions, sufficiency cases, carriers) where they decide them.
 
 The invariants are unchanged: every authoritative write crosses the chain
 inside ONE transaction (D3); every refusal is a registry-coded RuntimeProblem
@@ -23,21 +26,24 @@ from __future__ import annotations
 import psycopg
 
 from .authority import AuthorityEvaluator
-from .context import ContextAssembler, ProductRegister, now_iso
+from .context import ContextAssembler, ProductRegister, mint, now_iso
 from .contracts import sha256_of
-from .emission import PromotionTraceWriter
+from .emission import PromotionTraceWriter, ReplayWriter
 from .materializer import Materializer
-from .stages import (AuthorityGate, EvidenceSufficiencyGate, GateContext,
-                     GateRefusal, GateReplay, IngressNormalizer,
+from .stages import (AuthorityGate, EnvelopePersist, EvidenceSufficiencyGate,
+                     GateContext, GateRefusal, GateReplay, IngressNormalizer,
                      MaterializationGate, ProfileApplicabilityGate,
-                     ReviewPromotionGate, mint)
+                     ReviewPromotionGate)
 from .validators import ValidationGate
 
 # law-pinned stage order (PLATFORM.md gate pipeline); validation's internal
-# order is kernel/validators.py's COMMON_SEQUENCE / OPERATION_SEQUENCE
+# order lives in kernel/validators.py (the common sequence, then the
+# class-specific branch: governance acceptance, compliance claim, or the
+# operation sequence)
 CHAIN = (
     AuthorityGate(),
     ValidationGate(),
+    EnvelopePersist(),
     ProfileApplicabilityGate(),
     EvidenceSufficiencyGate(),
     ReviewPromotionGate(),
@@ -71,7 +77,6 @@ class GatePipeline:
                     cur, submission["idempotencyKey"])
                 if prior is None:
                     raise
-                from .emission import ReplayWriter
                 ctx = self._new_context(cur, submission)
                 return ReplayWriter().write(ctx, prior)
 
@@ -111,13 +116,6 @@ class GatePipeline:
                 # traceable history, not silence) — emitted under this trace
                 ctx.ensure_envelope_stored()
                 return PromotionTraceWriter().write(ctx)
-            if isinstance(stage, ValidationGate):
-                # the carrier ref rides the envelope; the envelope becomes
-                # authoritative once validation confirmed the carrier
-                if ctx.erp_id:
-                    ctx.envelope["executionRecordPayloadRefs"] = [ctx.erp_id]
-                ctx.store.insert_record(cur, ctx.envelope)
-                ctx.envelope_stored = True
 
         if ctx.final_outcome == "PROMOTE_ACCEPTED":
             MaterializationGate().run(ctx)

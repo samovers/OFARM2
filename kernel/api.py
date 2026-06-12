@@ -12,8 +12,9 @@ import json
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
-from . import config, context, manifest as manifest_mod
+from . import context, manifest as manifest_mod
 from .contracts import ContractViolation
+from .problems import runtime_problem
 from .gates import GatePipeline
 from .store import Store
 from .views import OutputGenerator
@@ -70,11 +71,14 @@ def create_app(store: Store | None = None) -> FastAPI:
         # but the binding contract is the same one OIDC will fill: the
         # gate's actor is the transport's actor, or the commit is refused.
         if body.submission.get("actingPartyRef") != x_acting_party:
-            raise HTTPException(status_code=403, detail={
-                "reasonCode": "ACTOR_BINDING_UNRESOLVED",
-                "detail": "submission.actingPartyRef does not match the "
-                          "transport principal (X-Acting-Party); body-level "
-                          "actor spoofing is refused"})
+            # full RuntimeProblem shape even at the transport edge; the fixed
+            # problemId keeps these pre-pipeline refusals off the in-pipeline
+            # problem counter
+            raise HTTPException(status_code=403, detail=runtime_problem(
+                "ACTOR_BINDING_UNRESOLVED", "Transport principal mismatch",
+                "submission.actingPartyRef does not match the transport "
+                "principal (X-Acting-Party); body-level actor spoofing is "
+                "refused", problem_id="problem:api-principal-mismatch"))
         try:
             return app.state.pipeline.commit(body.submission)
         except (ContractViolation, KeyError) as exc:
@@ -93,7 +97,7 @@ def create_app(store: Store | None = None) -> FastAPI:
         """Farm scopes governing a record's readability; None = unresolvable.
         Governance/trace records resolve through their declared scope fields
         or their linked records — never default-open."""
-        payload, kind = row["payload"], row["record_kind"]
+        payload = row["payload"]
         farms = [s["scopeRef"] for s in payload.get("anchorScopes", [])
                  if isinstance(s, dict) and s.get("scopeType") == "FARM"]
         for field in ("targetScopes",):
@@ -156,9 +160,10 @@ def create_app(store: Store | None = None) -> FastAPI:
         def deny():
             # default deny; distinguish "exists but permission-limited"
             # from "does not exist" (reason-code registry safe-UI rule)
-            raise HTTPException(status_code=403, detail={
-                "reasonCode": "PERMISSION_REDACTED",
-                "detail": "the record exists but you are not authorized to read it"})
+            raise HTTPException(status_code=403, detail=runtime_problem(
+                "PERMISSION_REDACTED", "Read not authorized",
+                "the record exists but you are not authorized to read it",
+                problem_id="problem:api-read-denied"))
 
         if kind == "ofarm.party.v0.1":
             # a party record is readable by that party alone at this surface

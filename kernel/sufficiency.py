@@ -1,21 +1,18 @@
 """EvidenceSufficiencyCase builders — auto-generated from the SI policy
 template (policy:si.ffs.evidence-review.v0_1), never hand-authored
-(CAPTURE_MAPPING). Cases are generated at exactly two points: claim
-promotion and DocumentAssembly freeze (PROFILE.md) — plus queue acceptance,
-whose case evaluates the resolution of the original route-to-review reasons.
+(CAPTURE_MAPPING). The runtime generates cases at three points: claim
+promotion, DocumentAssembly freeze, and queue acceptance (whose case
+evaluates the resolution of the original route-to-review reasons —
+PROFILE.md names the first two; the third is the acceptance leg of the
+first, demanded by the formal hostile re-review).
 """
 from __future__ import annotations
 
 import json
-import uuid
 
 from . import config, policy
-from .context import now_iso
+from .context import mint as _mint, now_iso
 from .problems import runtime_problem
-
-
-def _mint(prefix: str) -> str:
-    return f"{prefix}:{uuid.uuid4().hex[:16]}"
 
 
 def durable_evidence(store, refs: list[str]) -> list[str]:
@@ -54,7 +51,7 @@ def route_reasons_for(store, assertion_ref: str) -> list[dict]:
     return []
 
 
-def build_case_from_checks(store, sub, farm_ref, assertion_id, erp_id,
+def build_case_from_checks(store, farm_ref, assertion_id, erp_id,
                            checks, hard, soft, evidence_refs, *,
                            claim_statement: str | None = None) -> tuple[dict, list[dict]]:
     arguments = []
@@ -153,7 +150,7 @@ def build_floor_case(store, sub, commit_class, farm_ref, assertion_id,
             "evidence-bundle": bool(durable_evidence(store, evidence_refs)),
         }
         return build_case_from_checks(
-            store, sub, farm_ref, assertion_id, erp_id, checks, tuple(checks),
+            store, farm_ref, assertion_id, erp_id, checks, tuple(checks),
             (), evidence_refs,
             claim_statement=claim.get("statement")
             or "compliance assertion (no statement supplied)")
@@ -179,7 +176,7 @@ def build_floor_case(store, sub, commit_class, farm_ref, assertion_id,
     }
     evidence_refs = payload.get("evidenceRefs", []) or sub.get("evidenceRefs", [])
     return build_case_from_checks(
-        store, sub, farm_ref, assertion_id, erp_id, checks,
+        store, farm_ref, assertion_id, erp_id, checks,
         policy.OPERATION_FLOOR_HARD_ITEMS, policy.OPERATION_FLOOR_SOFT_ITEMS,
         evidence_refs)
 
@@ -213,7 +210,7 @@ def build_acceptance_case(store, sub, farm_ref, target) -> dict:
         claim_statement = (claim or {}).get("statement")
     erp_ref = (target.get("executionRecordPayloadRefs") or [None])[0]
     case, _ = build_case_from_checks(
-        store, sub, farm_ref, target_id, erp_ref, checks, tuple(checks), (),
+        store, farm_ref, target_id, erp_ref, checks, tuple(checks), (),
         evidence_refs, claim_statement=claim_statement)
     return case
 

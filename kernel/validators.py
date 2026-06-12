@@ -14,9 +14,9 @@ from datetime import datetime, timedelta, timezone
 
 from . import config, policy
 from .context import REGSR_SNAPSHOT_PREFIX, current_reference_snapshot, parse_ts
-from .contracts import ContractViolation, sha256_of
+from .contracts import ContractViolation, UnknownContract, sha256_of
 from .problems import runtime_problem
-from .stages import GateContext, GateRefusal
+from .stages import GateContext, GatePass, GateRefusal
 
 
 def _refusal(ctx: GateContext, outcome: str, problem: dict,
@@ -71,6 +71,15 @@ def _assert_contained(ctx: GateContext, scope_type: str, scope_ref: str,
     return None
 
 
+def _verified_product_binding(ctx: GateContext) -> dict | None:
+    """The carrier's first CROP_PROTECTION_PRODUCT binding, if any."""
+    bindings = [ctx.store.get_payload(r)
+                for r in ctx.sub["payload"].get("agronomicIdentityBindingRefs", [])]
+    product_bindings = [b for b in bindings
+                        if b and b["bindingRole"] == "CROP_PROTECTION_PRODUCT"]
+    return product_bindings[0] if product_bindings else None
+
+
 # ---------------------------------------------------------------------------
 # the named validators, in law-pinned order
 # ---------------------------------------------------------------------------
@@ -85,6 +94,9 @@ class TemporalConformanceValidator:
         event_time = ctx.event_time or ctx.captured_at
         et = parse_ts(event_time)
         if et is None:
+            # defensive double-check: the ingress normalizer pre-cleans junk
+            # times, so through the pipeline this branch is unreachable — it
+            # guards direct stage use (and future normalizer changes)
             return _refusal(ctx, "FAIL_TEMPORAL", runtime_problem(
                 "EVIDENCE_INSUFFICIENT", "Unparseable event time",
                 f"event time {event_time!r} is not a valid timestamp (ERRATA "
@@ -195,6 +207,7 @@ class GovernanceAcceptanceValidator:
                 "EVIDENCE_REFERENCE_UNAVAILABLE", "Acceptance target unresolved",
                 f"{target_ref} does not resolve to a stored AssertionRecord"))
         target = row["payload"]
+        ctx.acceptance_payload = target   # fetched once; later stages reuse it
         if {"scopeType": "FARM", "scopeRef": ctx.farm_ref} \
                 not in target["anchorScopes"]:
             return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
@@ -278,15 +291,16 @@ class ComplianceClaimValidator:
                 f"complianceClaim.governingRuleRefs must name recognized governed "
                 f"rules/policies; missing or unknown: {unknown_rules or 'none given'}"))
         subject_ref = claim.get("subjectScopeRef")
-        if not subject_ref or not ctx.store.record_exists(subject_ref):
+        subject_row = ctx.store.get_record(subject_ref) if subject_ref else None
+        if subject_row is None:
             return _refusal(ctx, "FAIL_REFERENCE_RESOLUTION", runtime_problem(
                 "EVIDENCE_REFERENCE_UNAVAILABLE", "Compliance subject unresolved",
                 f"complianceClaim.subjectScopeRef {subject_ref!r} does not resolve"))
-        subject_row = ctx.store.get_record(subject_ref)
         if subject_row["record_kind"] == "ofarm.identityrecord.v0.1":
-            identity_type = subject_row["payload"]["identityType"]
+            # a FARM identity's record id IS the farm ref, so the FARM branch
+            # of _assert_contained compares it directly against ctx.farm_ref
             refusal = _assert_contained(
-                ctx, identity_type if identity_type != "FARM" else "FARM",
+                ctx, subject_row["payload"]["identityType"],
                 subject_ref, "complianceClaim.subjectScopeRef")
             if refusal:
                 return refusal
@@ -307,7 +321,9 @@ class CarrierSchemaValidator:
                 "an operation claim requires an ExecutionRecordPayload carrier"))
         try:
             contract = ctx.store.registry.validate(payload)
-        except ContractViolation as exc:
+        except (ContractViolation, UnknownContract) as exc:
+            # UnknownContract too: an unknown carrier schemaVersion is a
+            # governed refusal, never an unrecorded crash (pride review)
             return _refusal(ctx, "FAIL_SCHEMA", runtime_problem(
                 "EVIDENCE_INSUFFICIENT", "Carrier schema violation", str(exc)))
         if contract.kind != "ofarm.executionrecordpayload.v0.1":
@@ -330,6 +346,8 @@ class CarrierSemanticsValidator:
 
     def run(self, ctx: GateContext) -> GateRefusal | None:
         payload = ctx.sub["payload"]
+        # latest profile instance: the single-profile pilot ships exactly one
+        # (the spine guard in context.py refuses ambiguous AS_OF histories)
         profile = ctx.store.find_by_kind(
             "ofarm.agronomiccodebindingprofile.v0.1")[-1]["payload"]
         params = payload.get("actualQuantityParameters", [])
@@ -406,9 +424,7 @@ class ActorAttributionValidator:
             action_class="ASSERT_OPERATION_CLAIM",
             action_stage="DRAFT_PREPARATION",
             scope={"scopeType": "FARM", "scopeRef": ctx.farm_ref})
-        ctx.store.insert_record(ctx.cur, basis.request_payload)
-        ctx.store.insert_record(ctx.cur, basis.trace_payload)
-        ctx.store.insert_record(ctx.cur, basis.result_payload)
+        ctx.record_authority_decision(basis)
         ctx.attribution_ref = basis.result_payload["resultId"]
         if not basis.allowed:
             ctx.review_route_reasons.append(runtime_problem(
@@ -430,10 +446,8 @@ class CodeBindingValidator:
         payload = ctx.sub["payload"]
         bindings = [ctx.store.get_payload(r)
                     for r in payload.get("agronomicIdentityBindingRefs", [])]
-        product_bindings = [b for b in bindings
-                            if b and b["bindingRole"] == "CROP_PROTECTION_PRODUCT"]
         crop_bindings = [b for b in bindings if b and b["bindingRole"] == "CROP_SPECIES"]
-        product_binding = product_bindings[0] if product_bindings else None
+        product_binding = _verified_product_binding(ctx)
         if product_binding is None or product_binding["bindingState"] != "VERIFIED":
             state = product_binding["bindingState"] if product_binding else "MISSING"
             ctx.review_route_reasons.append(runtime_problem(
@@ -456,12 +470,7 @@ class RegistryReverificationValidator:
     decision-number data; anything weaker routes to review."""
 
     def run(self, ctx: GateContext) -> GateRefusal | None:
-        payload = ctx.sub["payload"]
-        bindings = [ctx.store.get_payload(r)
-                    for r in payload.get("agronomicIdentityBindingRefs", [])]
-        product_bindings = [b for b in bindings
-                            if b and b["bindingRole"] == "CROP_PROTECTION_PRODUCT"]
-        product_binding = product_bindings[0] if product_bindings else None
+        product_binding = _verified_product_binding(ctx)
         if not (product_binding and product_binding["bindingState"] == "VERIFIED"):
             return None
         current = current_reference_snapshot(ctx.store, REGSR_SNAPSHOT_PREFIX)
@@ -551,21 +560,27 @@ OPERATION_SEQUENCE = (
 class ValidationGate:
     """Runs the named validators in law-pinned order; first refusal stops
     the chain (already logged); review-route reasons accumulate on the
-    context for the REVIEW_PROMOTION gate to honor."""
+    context for the REVIEW_PROMOTION gate to honor. Individual validators
+    return GateRefusal | None; the gate itself speaks the chain's typed
+    contract (GatePass | GateRefusal)."""
 
-    def run(self, ctx: GateContext) -> GateRefusal | None:
+    def run(self, ctx: GateContext) -> GatePass | GateRefusal:
         for validator in COMMON_SEQUENCE:
             refusal = validator.run(ctx)
             if refusal:
                 return refusal
 
+        # PASS-logging convention: branch-terminal validators (governance,
+        # compliance) log their own PASS because they end the sequence; the
+        # operation sequence logs one PASS here so the attribution ref can
+        # ride the single VALIDATION entry
         if ctx.commit_class == "GOVERNANCE_DECISION":
-            return GovernanceAcceptanceValidator().run(ctx)   # logs PASS itself
+            return GovernanceAcceptanceValidator().run(ctx) or GatePass()
         if ctx.commit_class == "COMPLIANCE_ASSERTION":
-            return ComplianceClaimValidator().run(ctx)        # logs PASS itself
+            return ComplianceClaimValidator().run(ctx) or GatePass()
         if ctx.commit_class != "OPERATION_CLAIM":
             ctx.log("VALIDATION", "PASS")
-            return None
+            return GatePass()
 
         for validator in OPERATION_SEQUENCE:
             refusal = validator.run(ctx)
@@ -575,4 +590,4 @@ class ValidationGate:
         # both authority decisions are visible on the promotion path
         ctx.log("VALIDATION", "PASS",
                 refs=[ctx.attribution_ref] if ctx.attribution_ref else None)
-        return CarrierStore().run(ctx)
+        return CarrierStore().run(ctx) or GatePass()

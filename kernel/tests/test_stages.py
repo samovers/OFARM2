@@ -1,9 +1,11 @@
-"""Stage-contract tests (issue #3): the policy tables, freshness semantics,
-and validator contracts are tested at their OWN boundaries — typed input,
-typed result. Behavior-first discipline: the conformance suite
-(test_conformance.py) remains the only arbiter of law; these tests pin the
-stage contracts so a future edit that bends a table or a validator's
-disposition fails HERE, before it can look law-consistent end to end.
+"""Stage-contract tests (issue #3): the policy tables, the freshness
+semantics, and a sample of validator contracts are tested at their OWN
+boundaries — typed input, typed result. Coverage is honest: five of the
+validators are exercised here; the rest are pinned end to end by the
+conformance suite (test_conformance.py), which remains the only arbiter
+of law. These tests exist so a future edit that bends a table or a tested
+validator's disposition fails HERE, before it can look law-consistent
+end to end.
 """
 from __future__ import annotations
 
@@ -12,8 +14,9 @@ from contextlib import contextmanager
 
 from kernel import config, policy
 from kernel.stages import GateContext, GateRefusal
-from kernel.validators import (PromotionTargetValidator, ScopeContainmentValidator,
-                               SupersessionValidator, TemporalConformanceValidator)
+from kernel.validators import (CarrierSchemaValidator, PromotionTargetValidator,
+                               ScopeContainmentValidator, SupersessionValidator,
+                               TemporalConformanceValidator)
 from kernel import demo
 
 
@@ -29,9 +32,8 @@ def test_policy_action_classes_are_accepted_matrix_vocabulary():
                  / "OFARM_Authority_Action_Matrix_v0_1.md").read_text()
     accepted = set(re.findall(r"^\| ([A-Z][A-Z_]+) \|", matrix_md, re.MULTILINE))
     assert accepted, "could not parse the Action Matrix vocabulary"
-    runtime_classes = set(policy.COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS.values()) | {
-        "REVIEW_ACCEPT", "OUTPUT_APPROVE_DOCUMENT_ASSEMBLY",
-        "OUTPUT_FILE_SUBMISSION_ASSEMBLY", "RECEIVE_READ_DATA"}
+    runtime_classes = (set(policy.COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS.values())
+                       | policy.NON_COMMIT_ACTION_CLASSES)
     drift = runtime_classes - accepted
     assert not drift, f"runtime action classes outside the accepted matrix: {drift}"
 
@@ -50,16 +52,20 @@ def test_policy_tables_are_closed_and_consistent():
     for assertion_type, (target, ctype) in policy.ACCEPTANCE_BY_ASSERTION_TYPE.items():
         assert policy.PROMOTION_TARGET_TO_CONSEQUENCE_TYPE[target] == ctype
         commit_class = next(
-            c for c, t in policy.COMMIT_CLASS_TO_ASSERTION_TYPE.items()
-            if t == assertion_type)
+            (c for c, t in policy.COMMIT_CLASS_TO_ASSERTION_TYPE.items()
+             if t == assertion_type), None)
+        assert commit_class is not None, \
+            f"acceptance table names unmapped assertion type {assertion_type}"
         assert policy.COMMIT_CLASS_TO_PROMOTION_TARGET[commit_class] == target
     # D8: self-acceptance scope is exactly routine operation claims
     assert policy.SELF_ACCEPTABLE_ASSERTION_TYPES == {"OPERATION_CLAIM_ASSERTION"}
 
 
 def test_freshness_use_policy_truth_table():
-    """The three requirement modes are distinct semantics; INVALID never
-    satisfies anything; high consequence escalates to REQUIRE_FRESH."""
+    """The requirement modes behave as the RFC pins them (ALLOW_STALE_
+    EXPLORATORY and NO_CURRENT_STATE_DEPENDENCY intentionally share a
+    satisfaction set — they differ in meaning, not membership); INVALID
+    never satisfies anything; high consequence escalates to REQUIRE_FRESH."""
     cases = {
         # (required, high_consequence, state) -> satisfied
         ("REQUIRE_FRESH", False, "FRESH"): True,
@@ -187,3 +193,17 @@ def test_supersession_validator_contract(store):
         refusal2 = SupersessionValidator().run(ctx2)
         assert isinstance(refusal2, GateRefusal)
         assert refusal2.problems[0]["reasonCode"] == "SUPERSEDED_RECORD_USED"
+
+
+def test_carrier_schema_validator_refuses_unknown_contract(store):
+    """An unknown carrier schemaVersion is a governed FAIL_SCHEMA refusal,
+    never an uncaught crash (pride review: UnknownContract escaped the
+    except clause as a 500)."""
+    with scratch_tx(store) as cur:
+        ctx = _ctx(store, cur, {
+            "commitClass": "OPERATION_CLAIM",
+            "payload": {"schemaVersion": "ofarm.no-such-contract.v9.9"}})
+        refusal = CarrierSchemaValidator().run(ctx)
+        assert isinstance(refusal, GateRefusal)
+        assert (refusal.gate, refusal.outcome) == ("VALIDATION", "FAIL_SCHEMA")
+        assert refusal.problems[0]["reasonCode"] == "EVIDENCE_INSUFFICIENT"

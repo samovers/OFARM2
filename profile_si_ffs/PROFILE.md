@@ -28,7 +28,7 @@ Reference pattern: `../reference/rfcs/OFARM_External_Code_Binding_Currentness_an
 **Evidence floor for promoting an operation claim to accepted execution:**
 resolved product binding (against a dated snapshot) · dose with valid UCUM unit · valid parcel ref (GERK-bound field or explicit `PartialExtent`) · crop binding (EPPO, may come from auto-created cycle) · operator party (with `DelegationGrant` if not the holder) · event time within plausibility window. Photo evidence: encouraged, never required for the floor.
 
-**Sufficiency cases** are auto-generated from this policy template at exactly two points: operation-claim promotion and DocumentAssembly freeze. Drafts and notes never generate cases.
+**Sufficiency cases** are auto-generated from this policy template at three points: operation-claim promotion, DocumentAssembly freeze, and review-queue acceptance (the acceptance leg of promotion — its case evaluates whether the original route-to-review reasons are actually resolved). Drafts and notes never generate cases.
 
 **Review:** farmer self-review for routine claims meeting the floor (the deliberate "confirm & accept" step). Exceptions — unresolved binding, implausible dose, dispute, post-sync discrepancy, late evidence — route to the advisor queue. Self-review is sufficient for record-keeping use, insufficient for certification-grade claims. Software-agent review: Phase-2 candidate, not in this profile version.
 

@@ -77,6 +77,18 @@ ACCEPTANCE_BY_ASSERTION_TYPE = {
                               "STATE_CHANGE_ACCEPTED"),
 }
 
+# action classes the runtime evaluates OUTSIDE the commit-class map:
+# review acceptance, publication approval/filing, and read access. One
+# home consumed by the manifest builder, its grounding check, and the
+# law-binding test — never re-typed per call site. (The literals at the
+# evaluate() call sites themselves are the things these ground.)
+NON_COMMIT_ACTION_CLASSES = frozenset({
+    "REVIEW_ACCEPT",
+    "OUTPUT_APPROVE_DOCUMENT_ASSEMBLY",
+    "OUTPUT_FILE_SUBMISSION_ASSEMBLY",
+    "RECEIVE_READ_DATA",
+})
+
 # D8: self-acceptance from the review queue is lawful ONLY for routine
 # operation claims; everything else needs a distinct reviewer principal
 SELF_ACCEPTABLE_ASSERTION_TYPES = frozenset({"OPERATION_CLAIM_ASSERTION"})

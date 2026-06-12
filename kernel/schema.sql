@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS kernel_edge (
                   'REVIEW',                 -- consequence/assertion -> ReviewDecision
                   'EVENT_SOURCE',           -- assertion/consequence -> SemanticEventEnvelope
                   'LINEAGE_SUPERSEDES',     -- new record -> superseded record
-                  'LINEAGE_REVISES',        -- revision -> revised
+                  'LINEAGE_REVISES',        -- reserved; M1 emits corrections as LINEAGE_SUPERSEDES
                   'MATERIALIZATION_BASIS',  -- MaterializationBasis -> contributing record
                   'PROMOTION_EMITS'         -- PromotionTrace -> emitted record (reachability, D3)
                 )),

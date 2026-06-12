@@ -17,6 +17,11 @@ PROFILE_ROOT = PACKAGE_ROOT / "profile_si_ffs"
 
 TENANT_REF = "tenant:si.ffs.pilot.demo"
 
+RUNTIME_VERSION = "ofarm2-kernel-m1.0"
+
+# the first real REGSR snapshot shipped with the package (M0)
+SHIPPED_REGSR_SNAPSHOT_REF = "referencesnapshot:si.uvhvvr.ffs-reg.2026-06-11"
+
 # Reserved identifiers (profile_si_ffs/PROFILE.md)
 PROFILE_REF = "profile:si.ffs.recordkeeping.v0_1"
 PACK_REF = "pack:si.ffs.pilot.v0_1"

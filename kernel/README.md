@@ -21,17 +21,20 @@ PGBIN=$(dirname "$(which initdb)")        # e.g. /opt/homebrew/opt/postgresql@17
 # 3. the API (migrates + bootstraps the SI context spine on startup)
 .venv/bin/uvicorn --factory kernel.api:create_app --port 8800
 
-# 4. the conformance suite (tests 1-15 + the 8 fixtures replayed live;
-#    uses its own database ofarm_kernel_test, recreated per run;
-#    writes a JSON evidence file under conformance/evidence/)
-.venv/bin/python -m pytest kernel/tests/test_conformance.py -q
+# 4. the test suites: conformance (tests 1-15 + the 8 fixtures replayed
+#    live; uses its own database ofarm_kernel_test, recreated per run;
+#    writes a JSON evidence file under conformance/evidence/) plus the
+#    stage-contract tests (policy tables, validator dispositions)
+.venv/bin/python -m pytest kernel/tests/ -q
 
 # 5. the package self-check (before every commit — AGENTS.md rule 3)
 python3 conformance/ofarm_pkg_contract_check.py
 ```
 
 Environment overrides: `OFARM_PG_DSN` (full DSN) or `OFARM_PG_SOCKET_DIR` /
-`OFARM_PG_PORT` / `OFARM_PG_DBNAME` / `OFARM_PG_USER`.
+`OFARM_PG_PORT` / `OFARM_PG_DBNAME` / `OFARM_PG_USER`; the test harness
+additionally honors `OFARM_PG_ADMIN_DSN` (admin connection used to recreate
+the test database, e.g. a CI service container).
 
 ## Client surface
 
@@ -39,6 +42,7 @@ Environment overrides: `OFARM_PG_DSN` (full DSN) or `OFARM_PG_SOCKET_DIR` /
 |---|---|
 | `POST /commit` | one capture through the full gate chain; body `{"submission": {...}}`; requires `X-Acting-Party` matching `submission.actingPartyRef` (transport-principal binding — a development principal pending OIDC at M2, see `profile_si_ffs/UNSUPPORTED_SURFACES.md`); always returns the `CommitIngressResult` envelope (refusals are data with registry reason codes, not transport errors) |
 | `GET /views/passport/{farmRef}` | the live spray register (View 1) — freshness, exception rows, advisory flags; header `X-Acting-Party` |
+| `POST /review/accept` | governed queue acceptance: body `{farmRef, assertionRef, rationale, evidenceRefs?, idempotencyKey?}`; the rationale is mandatory and routed insufficiencies additionally require reviewer-attached durable evidence (gate-enforced) |
 | `POST /views/inspection-register/freeze` | freeze the exportable inspection register (View 2); body `{farmRef, windowStart, windowEnd}` |
 | `GET /records/{id}` | record + payload + digests; default deny per request |
 | `GET /manifest` | the generated Capability Manifest |
@@ -57,6 +61,7 @@ is a complete `ExecutionRecordPayload` per `contracts/core/`.
 | `contracts.py` | contract registry: every write validated against `contracts/` (canonical lane) or `contracts/drafts_reference/` (draft lane, D16) |
 | `store.py` | the append-only truth store; edges, gate log, idempotency, in-force queries, reachability check |
 | `problems.py` | `RuntimeProblem` factory; reason codes verbatim from the registry RFC — unknown codes refuse loudly |
+| `config.py` | deployment constants: tenant/profile/pack/policy refs, runtime version, database DSN assembly |
 | `context.py` | SI profile instance bootstrap, in-force reference snapshots, per-farm `ContextSnapshot` assembly with content-addressed reuse (basis drift mints, sameness reuses) |
 | `authority.py` | default-deny evaluator: roles, grants, delegations bounded by live source authority, sharing, prospective revocation, party lifecycle, non-human actor rule |
 | `policy.py` | runtime policy as data: commit-class ↔ action-class/promotion/consequence tables, freshness-use policy, floor items, routing-resolution rules (issue #3) |
@@ -70,7 +75,7 @@ is a complete `ExecutionRecordPayload` per `contracts/core/`.
 | `manifest.py` | Capability Manifest + ActiveArtifactSet generation from actual runtime surfaces + grounding verification |
 | `api.py` | the FastAPI surface above |
 | `demo.py` | fictional format-true onboarding + spray submission builders (the package's worked example) |
-| `tests/` | conformance suite (tests 1–15, fixtures replayed live, JSON evidence) |
+| `tests/` | conformance suite (tests 1–15, fixtures replayed live, JSON evidence) + stage-contract tests (`test_stages.py`; engineering tests, excluded from the conformance evidence file) |
 
 ## Deliberately not here (do not drift — M1_BRIEF.md)
 

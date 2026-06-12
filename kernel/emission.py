@@ -10,20 +10,29 @@ claim land together in the SAME transaction as everything they prove (D3).
 """
 from __future__ import annotations
 
-from . import policy
-from .context import now_iso
+from typing import TYPE_CHECKING
+
+from . import policy, sufficiency
+from .context import mint, now_iso
 from .problems import runtime_problem
-from .stages import GateContext, mint
+
+if TYPE_CHECKING:   # type-only: keeps stages -> emission imports acyclic
+    from .stages import GateContext
 
 
 class PromotionEmitter:
     """Owns AssertionRecord / ReviewDecision / AcceptedEventConsequence
     creation and the edges required for traceability."""
 
-    def __init__(self, ctx: GateContext):
+    def __init__(self, ctx: "GateContext"):
         self.ctx = ctx
 
     # ---------------------------------------------------------------- build --
+
+    def _submission_evidence_refs(self) -> list:
+        sub = self.ctx.sub
+        return ((sub.get("payload") or {}).get("evidenceRefs")
+                or sub.get("evidenceRefs") or [])
 
     def _build_assertion(self, claim_state: str) -> dict:
         ctx, sub = self.ctx, self.ctx.sub
@@ -38,8 +47,7 @@ class PromotionEmitter:
             "assertedByPartyRef": ctx.acting_party,
             "assertedAt": now_iso(),
             "claimState": claim_state,
-            "evidenceRefs": (sub.get("payload") or {}).get("evidenceRefs")
-                            or sub.get("evidenceRefs") or [],
+            "evidenceRefs": self._submission_evidence_refs(),
         }
         if sub.get("eventTime"):
             assertion["occurrenceTime"] = sub["eventTime"]
@@ -61,8 +69,7 @@ class PromotionEmitter:
             # reachable from the assertion exactly like submitter authority
             ctx.store.add_edge(ctx.cur, "AUTHORITY_BASIS", ctx.assertion_id,
                                ctx.attribution_ref)
-        for ev in ((ctx.sub.get("payload") or {}).get("evidenceRefs")
-                   or ctx.sub.get("evidenceRefs") or []):
+        for ev in self._submission_evidence_refs():
             if ctx.store.record_exists(ev):
                 ctx.store.add_edge(ctx.cur, "EVIDENCE", ctx.assertion_id, ev)
 
@@ -74,7 +81,6 @@ class PromotionEmitter:
         self._link_assertion()
 
     def _store_case(self, amend_for_routing: bool) -> None:
-        from . import sufficiency
         ctx = self.ctx
         if not ctx.case_payload:
             return
@@ -90,7 +96,7 @@ class PromotionEmitter:
     def emit_pending_assertion(self, *, amend_case_for_routing: bool) -> None:
         """The claim lands in the queue (or stays a captured draft)."""
         self._emit_assertion("PENDING_REVIEW")
-        self._store_case(amend_case_for_routing)
+        self._store_case(amend_for_routing=amend_case_for_routing)
 
     def emit_self_review_promotion(self) -> None:
         """The deliberate confirm-accept step is the review act (D8):
@@ -98,7 +104,7 @@ class PromotionEmitter:
         AcceptedEventConsequence, supersession lineage, all edge-linked."""
         ctx, sub = self.ctx, self.ctx.sub
         self._emit_assertion("IN_FORCE")
-        self._store_case(False)
+        self._store_case(amend_for_routing=False)
 
         review_id = mint("review")
         review = {
@@ -163,7 +169,7 @@ class PromotionEmitter:
         AUTHORITY gate; this promotes the TARGET assertion's consequence
         carrying the reviewer's resolution rationale and evidence."""
         ctx, sub = self.ctx, self.ctx.sub
-        target_payload = ctx.store.get_payload(ctx.acceptance_target)
+        target_payload = ctx.acceptance_payload
         review_id = mint("review")
         review = {
             "schemaVersion": "ofarm.reviewdecision.v0.1",
@@ -227,7 +233,7 @@ class PromotionTraceWriter:
     PromotionTrace, its PROMOTION_EMITS edges, the CommitIngressResult, and
     the idempotency claim — same transaction as the commit (D3)."""
 
-    def write(self, ctx: GateContext) -> dict:
+    def write(self, ctx: "GateContext") -> dict:
         trace_id = mint("promtrace")
         trace = {
             "schemaVersion": "ofarm.promotiontrace.v0.1",
@@ -253,10 +259,12 @@ class PromotionTraceWriter:
             if refs:
                 trace[key] = refs
         ctx.store.insert_record(ctx.cur, trace)
+        # every listed ref was inserted earlier in THIS transaction (the
+        # envelope by the shell, the rest by the emitter), so each gets its
+        # reachability edge unconditionally
         for ref in ([ctx.event_id] + ctx.emitted["assertions"]
                     + ctx.emitted["reviews"] + ctx.emitted["consequences"]):
-            if ctx.store.record_exists(ref) or ref == ctx.event_id:
-                ctx.store.add_edge(ctx.cur, "PROMOTION_EMITS", trace_id, ref)
+            ctx.store.add_edge(ctx.cur, "PROMOTION_EMITS", trace_id, ref)
 
         result = {
             "schemaVersion": "ofarm.commitingressresult.v0.1",
@@ -346,7 +354,7 @@ class ReplayWriter:
             "idempotencyKey": ctx.idem_key,
             "idempotencyDisposition": disposition,
             "replayOfRequestId": prior["request_id"],
-            "gateSequence": [{"gate": "INGRESS_NORMALIZATION", "outcome": disposition}],
+            "gateSequence": ctx.gate_sequence,   # exactly the one logged entry
             "finalOutcome": outcome,
             "traceSummary": f"replay of {prior['request_id']}: {disposition}",
         }
