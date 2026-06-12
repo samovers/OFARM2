@@ -155,9 +155,14 @@ class OutputGenerator:
                     access.problems[0] if access.problems else runtime_problem(
                         "AUTHORITY_DENIED", "Read denied", "no read path to this farm"))
 
+            # the no-recompute render is an exploratory serve: STALE is
+            # honored as ALLOW_STALE_EXPLORATORY semantics (banner + export
+            # bar below), never silently treated as FRESH
             resolution = self.materializer.resolve_for_use(
                 cur, farm_ref, use_class="OPERATIONAL_DASHBOARD",
-                required_freshness="REQUIRE_FRESH", high_consequence=False,
+                required_freshness=("REQUIRE_FRESH" if allow_recompute
+                                    else "ALLOW_STALE_EXPLORATORY"),
+                high_consequence=False,
                 recompute_if_needed=allow_recompute)
             mat = resolution["materialization"]
             if mat is None:
@@ -233,9 +238,11 @@ class OutputGenerator:
                               else "FREEZE_DOCUMENT_ASSEMBLY")
         output_kind = "SUBMISSION_ASSEMBLY" if as_submission else "REPORT_ASSEMBLY"
         final_outcome = "FILED" if as_submission else "FROZEN"
+        # accepted Action Matrix names: approval-before-freeze vs formal filing
         decision = self.authority.evaluate(
             acting_party_ref=requesting_party_ref,
-            action_class="FILE_SUBMISSION" if as_submission else "EXPORT_REGISTER",
+            action_class=("OUTPUT_FILE_SUBMISSION_ASSEMBLY" if as_submission
+                          else "OUTPUT_APPROVE_DOCUMENT_ASSEMBLY"),
             action_stage="PUBLICATION",
             scope={"scopeType": "FARM", "scopeRef": farm_ref})
         with self.store.tx() as cur:

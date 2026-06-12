@@ -18,7 +18,7 @@ import json
 
 from . import config
 from .context import now_iso
-from .gates import COMMIT_CLASS_TO_FAMILY
+from .gates import ACTION_CLASS_BY_COMMIT, COMMIT_CLASS_TO_FAMILY
 
 MANIFEST_ID = "manifest:si.ffs.pilot.v0_1"
 MANIFEST_PATH = config.PROFILE_ROOT / "OFARM_Capability_Manifest_si_ffs_pilot_v0_1.json"
@@ -77,17 +77,25 @@ def build_manifest(store) -> dict:
                 "supportedCommitClasses": commit_classes,
             },
             "authoritySupport": {
-                # no attest/sign: attestation is uniformly disabled in this
-                # runtime (portableEnvelopeMode NONE everywhere) — claiming
-                # the family would be a capability over-claim
+                # Families follow the accepted Authority Action Matrix:
+                # OUTPUT_APPROVE_DOCUMENT_ASSEMBLY / OUTPUT_FILE_SUBMISSION_
+                # ASSEMBLY are attest/sign-family actions the runtime performs
+                # (freeze approval, local filing). OUTPUT_ATTEST_DOCUMENT_
+                # ASSEMBLY (portable signature) is deliberately NOT claimed —
+                # attestation envelopes stay NONE everywhere.
                 "supportedAuthorityFamilies": [
-                    "observe/report", "assert/submit", "review",
-                    "share/revoke", "receive/use",
+                    "observe/report", "assert/submit", "govern/decide",
+                    "attest/sign", "share/revoke", "receive/use",
                 ],
-                "supportedActionClasses": sorted(
-                    [f"COMMIT_{c}" for c in COMMIT_CLASS_TO_FAMILY]
-                    + ["REVIEW_ACCEPT", "READ_REGISTER", "EXPORT_REGISTER",
-                       "FILE_SUBMISSION"]),
+                # accepted Action Matrix vocabulary only — the exact classes
+                # the authority gate evaluates (no parallel runtime dialect)
+                "supportedActionClasses": sorted(set(
+                    ACTION_CLASS_BY_COMMIT.values()) | {
+                    "REVIEW_ACCEPT",
+                    "OUTPUT_APPROVE_DOCUMENT_ASSEMBLY",
+                    "OUTPUT_FILE_SUBMISSION_ASSEMBLY",
+                    "RECEIVE_READ_DATA",
+                }),
                 "supportsHumanOnlyRestrictions": True,
             },
             "importExportSupport": {
@@ -207,9 +215,17 @@ def verify_grounding(store, manifest: dict, artifact_set: dict) -> list[str]:
     # no canonical-baseline evidence exists -> the only grounded level is NONE
     if manifest["conformance"]["minimumConformanceLevel"] != "NONE":
         failures.append("over-claimed conformance level without evidence (RFC §11.4)")
-    if "attest/sign" in manifest["capabilitySections"]["authoritySupport"][
-            "supportedAuthorityFamilies"]:
-        failures.append("attest/sign claimed while attestation is disabled")
+    # action-class claims must be exactly the accepted Action Matrix names the
+    # runtime evaluates; portable attestation stays unclaimed
+    claimed_actions = set(manifest["capabilitySections"]["authoritySupport"]
+                          ["supportedActionClasses"])
+    evaluated = set(ACTION_CLASS_BY_COMMIT.values()) | {
+        "REVIEW_ACCEPT", "OUTPUT_APPROVE_DOCUMENT_ASSEMBLY",
+        "OUTPUT_FILE_SUBMISSION_ASSEMBLY", "RECEIVE_READ_DATA"}
+    if claimed_actions != evaluated:
+        failures.append(f"action-class claims drift from runtime: {claimed_actions ^ evaluated}")
+    if "OUTPUT_ATTEST_DOCUMENT_ASSEMBLY" in claimed_actions:
+        failures.append("portable attestation claimed while disabled")
     return failures
 
 

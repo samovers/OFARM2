@@ -1,7 +1,7 @@
 {
   "schemaVersion": "ofarm.activeartifactset.v0.1",
   "activeArtifactSetId": "activeartifactset:si.ffs.pilot.v0_1",
-  "generatedAt": "2026-06-12T01:23:32.729096Z",
+  "generatedAt": "2026-06-12T07:29:58.204912Z",
   "deploymentScope": {
     "scopeType": "TENANT",
     "scopeRef": "tenant:si.ffs.pilot.demo"

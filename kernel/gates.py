@@ -38,6 +38,24 @@ COMMIT_CLASS_TO_FAMILY = {
     "ADVISORY_OUTPUT": "GovernanceEvent",
 }
 
+# commitClass is ingress vocabulary; authority is evaluated in the accepted
+# Authority Action Matrix vocabulary (reference/rfcs/OFARM_Authority_Action_
+# Matrix_v0_1.md) — grants, traces, manifests, and evidence all speak the
+# accepted names, never a parallel runtime dialect. ADVISORY_OUTPUT maps to
+# the observe/report capture class: the matrix defines no advisory-output
+# action, and advisory outputs never promote (least-authority fit).
+ACTION_CLASS_BY_COMMIT = {
+    "NOTE": "OBSERVE_CREATE_OBSERVATION",
+    "OBSERVATION_ASSERTION": "OBSERVE_CREATE_OBSERVATION",
+    "HYPOTHESIS_ASSERTION": "OBSERVE_CREATE_OBSERVATION",
+    "STRUCTURE_ASSERTION": "ASSERT_STRUCTURE",
+    "OPERATION_CLAIM": "ASSERT_OPERATION_CLAIM",
+    "EVIDENCE_RECORD": "OBSERVE_ATTACH_EVIDENCE",
+    "COMPLIANCE_ASSERTION": "ASSERT_COMPLIANCE",
+    "GOVERNANCE_DECISION": "REVIEW_ACCEPT",
+    "ADVISORY_OUTPUT": "OBSERVE_CREATE_OBSERVATION",
+}
+
 COMMIT_CLASS_TO_ASSERTION_TYPE = {
     "OBSERVATION_ASSERTION": "OBSERVATION_ASSERTION",
     "STRUCTURE_ASSERTION": "STRUCTURE_ASSERTION",
@@ -238,7 +256,7 @@ class GatePipeline:
             offline = sub.get("ingressChannel") == "OFFLINE_SYNC_REPLAY"
             decision = self.authority.evaluate(
                 acting_party_ref=acting_party,
-                action_class=f"COMMIT_{commit_class}",
+                action_class=ACTION_CLASS_BY_COMMIT[commit_class],
                 action_stage="PROMOTION",
                 scope={"scopeType": "FARM", "scopeRef": farm_ref},
                 acting_agent_ref=sub.get("actingAgentRef"),
@@ -729,6 +747,49 @@ class GatePipeline:
                     f"{supersedes} was already superseded; correct the current "
                     "in-force record instead"))
 
+        # --- compliance-specific validation: a compliance assertion may not
+        # ride to COMPLIANCE_STATUS_ACCEPTED on a bare evidence ref. It must
+        # carry a minimal STRUCTURED claim — statement, asserted status,
+        # recognized governing rules, resolvable subject — before the
+        # sufficiency case even evaluates it (steward review finding 3).
+        if commit_class == "COMPLIANCE_ASSERTION":
+            claim = (payload or {}).get("complianceClaim") \
+                if isinstance(payload, dict) else None
+            if not isinstance(claim, dict):
+                refuse("FAIL_SEMANTIC", runtime_problem(
+                    "EVIDENCE_INSUFFICIENT", "Unstructured compliance claim",
+                    "a compliance assertion requires a structured complianceClaim "
+                    "payload (statement, assertedStatus, governingRuleRefs, "
+                    "subjectScopeRef); a bare claim cannot become a compliance fact"))
+            if not (isinstance(claim.get("statement"), str) and claim["statement"].strip()):
+                refuse("FAIL_SEMANTIC", runtime_problem(
+                    "EVIDENCE_INSUFFICIENT", "Compliance claim without statement",
+                    "complianceClaim.statement must state what is being claimed"))
+            if claim.get("assertedStatus") not in (
+                    "CLAIMED_COMPLIANT", "CLAIMED_NON_COMPLIANT",
+                    "CLAIMED_PARTIALLY_COMPLIANT"):
+                refuse("FAIL_SEMANTIC", runtime_problem(
+                    "EVIDENCE_INSUFFICIENT", "Compliance claim without asserted status",
+                    "complianceClaim.assertedStatus must be one of CLAIMED_COMPLIANT, "
+                    "CLAIMED_NON_COMPLIANT, CLAIMED_PARTIALLY_COMPLIANT"))
+            rule_refs = claim.get("governingRuleRefs") or []
+            recognized = {config.EVIDENCE_POLICY_REF, config.PROFILE_REF,
+                          config.PACK_REF, config.CODE_BINDING_PROFILE_REF}
+            unknown_rules = [r for r in rule_refs
+                             if r not in recognized and not self.store.record_exists(r)]
+            if not rule_refs or unknown_rules:
+                refuse("FAIL_SEMANTIC", runtime_problem(
+                    "EVIDENCE_INSUFFICIENT", "Governing rules unresolved",
+                    f"complianceClaim.governingRuleRefs must name recognized governed "
+                    f"rules/policies; missing or unknown: {unknown_rules or 'none given'}"))
+            subject_ref = claim.get("subjectScopeRef")
+            if not subject_ref or not self.store.record_exists(subject_ref):
+                refuse("FAIL_REFERENCE_RESOLUTION", runtime_problem(
+                    "EVIDENCE_REFERENCE_UNAVAILABLE", "Compliance subject unresolved",
+                    f"complianceClaim.subjectScopeRef {subject_ref!r} does not resolve"))
+            log("VALIDATION", "PASS")
+            return None
+
         if commit_class != "OPERATION_CLAIM":
             log("VALIDATION", "PASS")
             return None
@@ -895,13 +956,30 @@ class GatePipeline:
         bindings = [b for b in bindings if b]
 
         if commit_class == "COMPLIANCE_ASSERTION":
-            # compliance claims are not spray carriers: the floor is a real
-            # evidence bundle backing the asserted compliance state
+            # the case evaluates the ACTUAL structured claim and provenance,
+            # not mere presence of a durable evidence record (review finding 3)
+            claim = (payload or {}).get("complianceClaim") or {}
             evidence_refs = sub.get("evidenceRefs", [])
-            checks = {"evidence-bundle": bool(self._durable_evidence(evidence_refs))}
-            hard, soft = ("evidence-bundle",), ()
-            return self._case_from_checks(sub, farm_ref, assertion_id, erp_id,
-                                          checks, hard, soft, evidence_refs)
+            recognized = {config.EVIDENCE_POLICY_REF, config.PROFILE_REF,
+                          config.PACK_REF, config.CODE_BINDING_PROFILE_REF}
+            checks = {
+                "claim-statement": bool(isinstance(claim.get("statement"), str)
+                                        and claim.get("statement", "").strip()),
+                "asserted-status": claim.get("assertedStatus") in (
+                    "CLAIMED_COMPLIANT", "CLAIMED_NON_COMPLIANT",
+                    "CLAIMED_PARTIALLY_COMPLIANT"),
+                "governing-rules": bool(claim.get("governingRuleRefs")) and all(
+                    r in recognized or self.store.record_exists(r)
+                    for r in claim.get("governingRuleRefs", [])),
+                "subject-resolves": bool(claim.get("subjectScopeRef"))
+                    and self.store.record_exists(claim.get("subjectScopeRef", "")),
+                "evidence-bundle": bool(self._durable_evidence(evidence_refs)),
+            }
+            hard = tuple(checks)   # every item is floor for a compliance claim
+            return self._case_from_checks(
+                sub, farm_ref, assertion_id, erp_id, checks, hard, (), evidence_refs,
+                claim_statement=claim.get("statement")
+                or "compliance assertion (no statement supplied)")
 
         checks = {
             "product-binding": any(
@@ -936,7 +1014,8 @@ class GatePipeline:
         return out
 
     def _case_from_checks(self, sub, farm_ref, assertion_id, erp_id,
-                          checks, hard, soft, evidence_refs) -> tuple[dict, list[dict]]:
+                          checks, hard, soft, evidence_refs, *,
+                          claim_statement: str | None = None) -> tuple[dict, list[dict]]:
         arguments = []
         for name, ok in checks.items():
             arguments.append({
@@ -974,7 +1053,8 @@ class GatePipeline:
                 "claimId": "claim:floor",
                 "claimType": "COMPLIANCE_CLAIM",
                 "claimRef": assertion_id,
-                "statement": "this operation claim meets the SI record-keeping evidence floor",
+                "statement": claim_statement or
+                    "this operation claim meets the SI record-keeping evidence floor",
             }],
             "arguments": arguments,
             "evidenceBundles": [{

@@ -309,9 +309,10 @@ class AuthorityEvaluator:
         materialization staleness (PLATFORM.md invalidation posture)."""
         at = now_iso()
         scope = {"scopeType": "FARM", "scopeRef": farm_ref}
+        # RECEIVE_READ_DATA per the accepted Authority Action Matrix
         direct = self.evaluate(
             acting_party_ref=requesting_party_ref,
-            action_class="READ_REGISTER",
+            action_class="RECEIVE_READ_DATA",
             action_stage="QUERY_READ",
             scope=scope,
         )

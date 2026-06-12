@@ -1,7 +1,7 @@
 {
   "suite": "conformance:ofarm2.platform-mvp.tests-1-15.v0_1",
   "executed": true,
-  "executedAt": "2026-06-12T07:03:59.774348Z",
+  "executedAt": "2026-06-12T07:29:59.101932Z",
   "runtimeVersion": "ofarm2-kernel-m1.0",
   "exitStatus": 0,
   "allPassed": true,
@@ -9,7 +9,7 @@
     {
       "test": "kernel/tests/test_conformance.py::test_01_append_only",
       "outcome": "passed",
-      "durationSeconds": 0.019
+      "durationSeconds": 0.021
     },
     {
       "test": "kernel/tests/test_conformance.py::test_02_default_deny",
@@ -24,12 +24,12 @@
     {
       "test": "kernel/tests/test_conformance.py::test_04_gate_sequencing_fixtures_live",
       "outcome": "passed",
-      "durationSeconds": 0.044
+      "durationSeconds": 0.046
     },
     {
       "test": "kernel/tests/test_conformance.py::test_05_free_text_product_refusal",
       "outcome": "passed",
-      "durationSeconds": 0.008
+      "durationSeconds": 0.007
     },
     {
       "test": "kernel/tests/test_conformance.py::test_07_revoked_delegation_recheck",
@@ -59,17 +59,17 @@
     {
       "test": "kernel/tests/test_conformance.py::test_12_temporal_conformance",
       "outcome": "passed",
-      "durationSeconds": 0.012
+      "durationSeconds": 0.013
     },
     {
       "test": "kernel/tests/test_conformance.py::test_13_reference_resolution",
       "outcome": "passed",
-      "durationSeconds": 0.014
+      "durationSeconds": 0.016
     },
     {
       "test": "kernel/tests/test_conformance.py::test_14_reachability",
       "outcome": "passed",
-      "durationSeconds": 0.013
+      "durationSeconds": 0.015
     },
     {
       "test": "kernel/tests/test_conformance.py::test_15_manifest_grounding",
@@ -77,14 +77,19 @@
       "durationSeconds": 0.006
     },
     {
+      "test": "kernel/tests/test_conformance.py::test_96_identity_context_invalidation_and_freshness_modes",
+      "outcome": "passed",
+      "durationSeconds": 0.074
+    },
+    {
       "test": "kernel/tests/test_conformance.py::test_97_review_driven_regressions",
       "outcome": "passed",
-      "durationSeconds": 0.198
+      "durationSeconds": 0.209
     },
     {
       "test": "kernel/tests/test_conformance.py::test_98_stale_registry_snapshot_recheck",
       "outcome": "passed",
-      "durationSeconds": 0.009
+      "durationSeconds": 0.01
     },
     {
       "test": "kernel/tests/test_conformance.py::test_99_global_invariants_hold",
@@ -104,16 +109,16 @@
         "DELETE FROM kernel_idempotency",
         "DELETE FROM runtime_trace"
       ],
-      "supersededConsequence": "conseq:b68dbdfe1b054763",
-      "correctionConsequence": "conseq:4b6dcee493614f6c"
+      "supersededConsequence": "conseq:9f6b5ba7babe4792",
+      "correctionConsequence": "conseq:2493ef4c5ebc4408"
     },
     "test_02": {
-      "denyTraceId": "authztrace:1017ebb8d1d54325"
+      "denyTraceId": "authztrace:d6af50371e104a5b"
     },
     "test_03": {
-      "idempotencyKey": "device-demo-2:q-04c0fa802c",
+      "idempotencyKey": "device-demo-2:q-898de6c689",
       "eventTime": "2026-06-10T07:30:00Z",
-      "recordTime": "2026-06-12T07:03:59.385045Z"
+      "recordTime": "2026-06-12T07:29:58.619303Z"
     },
     "test_04": {
       "fixturesReplayed": {
@@ -323,7 +328,7 @@
         "markedStale": 1,
         "markedInvalid": 0,
         "keysConsidered": 2,
-        "maximumScopeExpansion": "farm-scope broadening applied (uncertain dependency boundary)",
+        "maximumScopeExpansion": "farm-scope broadening applied for 1 trigger(s) with no dependency entry (uncertain boundary)",
         "markedRecomputeRequired": 0
       }
     },
@@ -334,7 +339,7 @@
       "missingBasisRefused": true
     },
     "test_10": {
-      "durableArtifactRef": "document:si.ffs.inspection-register.bafc87eb8b73",
+      "durableArtifactRef": "document:si.ffs.inspection-register.882fac31f96f",
       "digestVerified": true,
       "annexedGaps": 4
     },
@@ -345,8 +350,8 @@
     },
     "test_12": {
       "eventTime": "2026-06-08T06:00:00Z",
-      "recordTime": "2026-06-12T07:03:59.518467Z",
-      "acceptedAt": "2026-06-12T07:03:59.521966Z"
+      "recordTime": "2026-06-12T07:29:58.755338Z",
+      "acceptedAt": "2026-06-12T07:29:58.758912Z"
     },
     "test_13": {
       "danglingRefused": true,
@@ -368,10 +373,26 @@
         "OFARM_QueryPlanIR_si_ffs_inspection_register_documentassembly_v0_1.json"
       ]
     },
+    "test_96": {
+      "indexResolvedFlips": {
+        "field-revision": 1,
+        "crop-cycle-replant": 1,
+        "context-activation-change": 1
+      },
+      "partialBatchBroadening": "explicit",
+      "freshnessModes": {
+        "REQUIRE_FRESH": "REFUSE_USE",
+        "ALLOW_STALE_EXPLORATORY": "ALLOW_REUSE",
+        "ALLOW_STALE_EXPLORATORY+highConsequence": "REFUSE_USE",
+        "NO_CURRENT_STATE_DEPENDENCY": "ALLOW_REUSE"
+      }
+    },
     "test_97": {
       "closedFindings": {
         "compliance-self-review-routes": "REQUIRE_REVIEW",
+        "unstructured-compliance-refused": "EVIDENCE_INSUFFICIENT",
         "dangling-supersession-refused": "EVIDENCE_REFERENCE_UNAVAILABLE",
+        "cross-farm-supersession-refused": "SCOPE_NOT_AUTHORIZED",
         "unlawful-target-refused": "HIGH_CONSEQUENCE_BLOCKED",
         "carrier-id-conflict-refused": "RETRY_CONFLICT",
         "self-declared-acceptance-refused": "HIGH_CONSEQUENCE_BLOCKED",

@@ -4,7 +4,7 @@
   "status": "ACTIVE",
   "ofarmVersion": "RC2.1",
   "platformVersion": "ofarm2-kernel-m1.0",
-  "publishedAt": "2026-06-12T01:23:32.728971Z",
+  "publishedAt": "2026-06-12T07:29:58.204769Z",
   "deploymentScope": {
     "scopeType": "TENANT",
     "scopeRef": "tenant:si.ffs.pilot.demo"
@@ -120,23 +120,20 @@
       "supportedAuthorityFamilies": [
         "observe/report",
         "assert/submit",
-        "review",
+        "govern/decide",
+        "attest/sign",
         "share/revoke",
         "receive/use"
       ],
       "supportedActionClasses": [
-        "COMMIT_ADVISORY_OUTPUT",
-        "COMMIT_COMPLIANCE_ASSERTION",
-        "COMMIT_EVIDENCE_RECORD",
-        "COMMIT_GOVERNANCE_DECISION",
-        "COMMIT_HYPOTHESIS_ASSERTION",
-        "COMMIT_NOTE",
-        "COMMIT_OBSERVATION_ASSERTION",
-        "COMMIT_OPERATION_CLAIM",
-        "COMMIT_STRUCTURE_ASSERTION",
-        "EXPORT_REGISTER",
-        "FILE_SUBMISSION",
-        "READ_REGISTER",
+        "ASSERT_COMPLIANCE",
+        "ASSERT_OPERATION_CLAIM",
+        "ASSERT_STRUCTURE",
+        "OBSERVE_ATTACH_EVIDENCE",
+        "OBSERVE_CREATE_OBSERVATION",
+        "OUTPUT_APPROVE_DOCUMENT_ASSEMBLY",
+        "OUTPUT_FILE_SUBMISSION_ASSEMBLY",
+        "RECEIVE_READ_DATA",
         "REVIEW_ACCEPT"
       ],
       "supportsHumanOnlyRestrictions": true

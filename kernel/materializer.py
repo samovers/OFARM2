@@ -196,8 +196,17 @@ class Materializer:
                         entry["actor"] = erp["actor"]
                         entry["equipment"] = erp.get("equipment", {})
                         entry["bindingRefs"] = erp.get("agronomicIdentityBindingRefs", [])
-                        if erp["executionExtent"]["targetScope"]["scopeType"] == "FIELD":
-                            identity_refs.append(erp["executionExtent"]["targetScope"]["scopeRef"])
+                        # identity basis: every governed identity whose revision
+                        # or lifecycle change affects this entry's interpretation
+                        # (extent target + carrier anchor scopes that resolve to
+                        # identity records — fields, zones, crop cycles, sites)
+                        for scope in ([erp["executionExtent"]["targetScope"]]
+                                      + erp.get("anchorScopes", [])):
+                            if scope["scopeType"] in ("FIELD", "ZONE", "CROP_CYCLE",
+                                                      "SITE", "LOT", "FACILITY"):
+                                ident = self.store.get_record(scope["scopeRef"])
+                                if ident and ident["record_kind"] == "ofarm.identityrecord.v0.1":
+                                    identity_refs.append(scope["scopeRef"])
             entries.append(entry)
             # assertions joined through the shared source event
             for edge in self.store.edges_to(c["sourceEventRef"], "EVENT_SOURCE"):
@@ -318,6 +327,11 @@ class Materializer:
                    entry(config.EVIDENCE_POLICY_REF, "RULE_EVIDENCE_POLICY", "POLICY_CHANGED", "STALE"),
                    entry(basis["anchorScopes"][0]["scopeRef"], "IDENTITY_LIFECYCLE",
                          "IDENTITY_CHANGED", "STALE")]
+        # every identity the basis names is an invalidation dependency — a
+        # field revision or crop-cycle replant must stale exactly the keys
+        # that depended on that identity (Current-State RFC trigger families)
+        for ref in basis.get("identityBasisRefs", []):
+            entries.append(entry(ref, "IDENTITY_LIFECYCLE", "IDENTITY_CHANGED", "STALE"))
         for ref in reference_refs:
             entries.append(entry(ref, "REFERENCE_SNAPSHOT", "REFERENCE_CHANGED", "STALE"))
         for ref in basis["contributingAcceptedConsequenceRefs"]:
@@ -360,16 +374,23 @@ class Materializer:
         never narrow unsafely).
         """
         cur.execute(
-            "SELECT DISTINCT key_digest FROM derived_dependency_index "
+            "SELECT dependency_source_ref, key_digest FROM derived_dependency_index "
             "WHERE dependency_source_ref = ANY(%s)", (source_refs,))
-        key_ids = [r["key_digest"] for r in cur.fetchall()]
+        rows = cur.fetchall()
+        key_ids = sorted({r["key_digest"] for r in rows})
+        resolved_sources = {r["dependency_source_ref"] for r in rows}
+        unresolved = [s for s in source_refs if s not in resolved_sources]
         broadened = ""
-        if not key_ids and farm_scope_ref:
+        if unresolved and farm_scope_ref:
+            # RFC §6.5: when ANY trigger in the batch has no dependency entry,
+            # broaden for it rather than narrow unsafely — mixed batches must
+            # not under-invalidate just because some triggers resolved
             cur.execute(
                 "SELECT DISTINCT key_digest FROM derived_materialization "
                 "WHERE anchor_scope_ref = %s AND superseded_by IS NULL", (farm_scope_ref,))
-            key_ids = [r["key_digest"] for r in cur.fetchall()]
-            broadened = "farm-scope broadening applied (uncertain dependency boundary)"
+            key_ids = sorted(set(key_ids) | {r["key_digest"] for r in cur.fetchall()})
+            broadened = (f"farm-scope broadening applied for {len(unresolved)} "
+                         "trigger(s) with no dependency entry (uncertain boundary)")
 
         cur.execute(
             "SELECT count(*) AS n FROM derived_materialization WHERE superseded_by IS NULL")
@@ -454,9 +475,23 @@ class Materializer:
             "ORDER BY generated_at DESC LIMIT 1", (key["materializationKeyId"],))
         live = cur.fetchone()
 
+        # Freshness is purpose-sensitive (Current-State RFC §6.4): the three
+        # requirement modes are distinct semantics, not synonyms for FRESH.
+        # High-consequence use always escalates to REQUIRE_FRESH (§8/§9).
+        effective_requirement = ("REQUIRE_FRESH" if high_consequence
+                                 else required_freshness)
+
+        def requirement_satisfied(freshness_state: str) -> bool:
+            # INVALID never satisfies any requirement (the contract forbids
+            # ALLOW_REUSE/satisfied on an INVALID state — allOf 2)
+            if effective_requirement in ("NO_CURRENT_STATE_DEPENDENCY",
+                                         "ALLOW_STALE_EXPLORATORY"):
+                return freshness_state in ("FRESH", "STALE")
+            return freshness_state == "FRESH"
+
         recomputed = False
         problems = []
-        if live and live["freshness"] == "FRESH":
+        if live and requirement_satisfied(live["freshness"]):
             decision, mat = "ALLOW_REUSE", live
         elif recompute_if_needed:
             # STALE/INVALID/absent → recompute (allowed path; refusal and review
@@ -479,6 +514,7 @@ class Materializer:
                 "(Kernel rule 7)"))
 
         freshness = mat["freshness"] if mat else "INVALID"
+        satisfied = mat is not None and requirement_satisfied(freshness)
         result_payload = {
             "schemaVersion": "ofarm.materializationresult.v0.1",
             "resultId": _mint("matres"),
@@ -490,7 +526,11 @@ class Materializer:
             "requiredFreshness": required_freshness,
             "highConsequenceUse": high_consequence,
             "freshnessState": freshness,
-            "satisfiedFreshnessRequirement": freshness == "FRESH",
+            # computed from (requirement, useClass escalation, freshness) —
+            # never the constant freshness == FRESH (RFC §6.4); the contract
+            # forbids satisfied=true when freshnessState is INVALID, which
+            # requirement_satisfied honors (INVALID never satisfies)
+            "satisfiedFreshnessRequirement": satisfied and freshness != "INVALID",
             "materializationBasisRef": mat["basis_record_id"] if mat else "basis:none",
             "materializationSnapshotRef": mat["snapshot_record_id"] if mat else "snapshot:none",
             "contextSnapshotRef": ctx["contextSnapshotId"],

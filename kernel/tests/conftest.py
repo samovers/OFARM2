@@ -34,6 +34,9 @@ def record_detail(test_id: str, detail: dict) -> None:
 
 
 def _admin_dsn() -> str:
+    explicit = os.environ.get("OFARM_PG_ADMIN_DSN")
+    if explicit:
+        return explicit  # CI: service-container postgres database
     socket_dir = os.environ.get("OFARM_PG_SOCKET_DIR", str(config.PACKAGE_ROOT / ".pgrun"))
     port = os.environ.get("OFARM_PG_PORT", "54317")
     user = os.environ.get("OFARM_PG_USER", "ofarm")

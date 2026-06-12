@@ -178,6 +178,8 @@ def _replay_commit_fixture(store, pipeline, fixture):
     elif fid == "compliance-assertion-reviewed-accept-promotes":
         # D8: self-review covers routine operation claims only — a compliance
         # assertion needs a DISTINCT reviewer (the advisor holds REVIEW_ACCEPT)
+        # AND a structured claim: statement, asserted status, recognized
+        # governing rules, resolvable subject (steward review finding 3)
         sub = {"commitClass": "COMPLIANCE_ASSERTION", "actingPartyRef": demo.FARMER,
                "farmRef": demo.FARM, "idempotencyKey": f"fixture:{fid}:{uid()}",
                "eventTime": "2026-06-10T09:00:00Z",
@@ -185,6 +187,12 @@ def _replay_commit_fixture(store, pipeline, fixture):
                "requestedPromotionTarget": "COMPLIANCE_FACT",
                "confirmAccept": True,
                "reviewerPartyRef": demo.ADVISOR,
+               "payload": {"complianceClaim": {
+                   "statement": "fictional demo: record-keeping for the 2026 vine "
+                                "cycle on this farm is complete per the SI floor",
+                   "assertedStatus": "CLAIMED_COMPLIANT",
+                   "governingRuleRefs": [config.EVIDENCE_POLICY_REF],
+                   "subjectScopeRef": demo.FARM}},
                "dominantSemanticConsequence": "compliance assertion captured"}
     elif fid == "capture-note-no-compliance-shortcut":
         sub = {"commitClass": "NOTE", "actingPartyRef": demo.FARMER,
@@ -544,7 +552,7 @@ def test_09_passport_view_refusal_disclosure(store, pipeline, outputs):
             "grantedByPartyRef": demo.FARMER,
             "grantTarget": {"targetKind": "PARTY", "targetRef": demo.FARMER},
             "targetScope": {"scopeType": "FARM", "scopeRef": fresh_farm},
-            "authorityActionClasses": ["READ_REGISTER"],
+            "authorityActionClasses": ["RECEIVE_READ_DATA"],
             "validFrom": demo.VALID_FROM,
             "inheritanceMode": "DESCENDANT_SCOPES", "grantState": "ACTIVE"})
     refused = outputs.passport_view(fresh_farm, demo.FARMER,
@@ -760,6 +768,126 @@ def test_15_manifest_grounding(store):
 
 
 # =========================================================================
+# 96. Identity/context invalidation + freshness-mode semantics (steward PR
+#     review findings 2 and 4): field revision, crop-cycle replant, and
+#     context change invalidate via the dependency index — not broadening —
+#     and the three requiredFreshness modes are distinct semantics.
+# =========================================================================
+
+INVTRACE_KIND = ("ofarm.explainableCurrentStateEvidence."
+                 "invalidationEvaluationTrace.v0.1-draft")
+
+
+def test_96_identity_context_invalidation_and_freshness_modes(
+        store, pipeline, materializer):
+    accepted_spray(pipeline)
+    with store.tx() as cur:
+        resolution = materializer.resolve_for_use(cur, demo.FARM)
+    mat = resolution["materialization"]
+    ctx_ref = mat["context_snapshot_ref"]
+
+    # every identity the basis names is dependency-indexed (finding 2)
+    with store.conn.cursor() as cur:
+        cur.execute(
+            "SELECT DISTINCT dependency_source_ref FROM derived_dependency_index "
+            "WHERE key_digest = %s AND dependency_source_family = 'IDENTITY_LIFECYCLE'",
+            (mat["key_digest"],))
+        identity_sources = {r["dependency_source_ref"] for r in cur.fetchall()}
+    assert demo.FIELD in identity_sources, "field identity must be dependency-indexed"
+    assert demo.CYCLE in identity_sources, "crop-cycle identity must be dependency-indexed"
+
+    def latest_trace():
+        with store.conn.cursor() as cur:
+            cur.execute("SELECT payload FROM runtime_trace WHERE trace_kind = %s "
+                        "ORDER BY record_time DESC, trace_id DESC LIMIT 1",
+                        (INVTRACE_KIND,))
+            return cur.fetchone()["payload"]
+
+    def flip_via_index(source, family, label):
+        # farm_scope_ref=None: resolution must come from the dependency
+        # index alone — broadening would mask an indexing gap
+        with store.tx() as cur:
+            n = materializer.invalidate_for_sources(
+                cur, [source], trigger_family=family,
+                trigger_source_ref=f"test:{label}", farm_scope_ref=None,
+                reason_code=family)
+        assert n > 0, f"{label}: must stale via the dependency index, no broadening"
+        trace = latest_trace()
+        assert trace["fanout"]["maximumScopeExpansion"] == "", \
+            f"{label}: no scope expansion expected"
+        with store.tx() as cur:   # restore FRESH for the next leg
+            materializer.resolve_for_use(cur, demo.FARM)
+        return n
+
+    flips = {
+        "field-revision": flip_via_index(demo.FIELD, "IDENTITY_CHANGED", "field-revision"),
+        "crop-cycle-replant": flip_via_index(demo.CYCLE, "IDENTITY_CHANGED",
+                                             "crop-cycle-replant"),
+        "context-activation-change": flip_via_index(ctx_ref, "CONTEXT_CHANGED",
+                                                    "context-activation-change"),
+    }
+
+    # partial-batch broadening is explicit: one resolvable + one unknown
+    # trigger must broaden (and say so), never under-invalidate (RFC §6.5)
+    with store.tx() as cur:
+        n = materializer.invalidate_for_sources(
+            cur, ["unknown:trigger:source", demo.FIELD],
+            trigger_family="IDENTITY_CHANGED",
+            trigger_source_ref="test:partial-batch", farm_scope_ref=demo.FARM)
+    assert n > 0
+    assert "broadening" in latest_trace()["fanout"]["maximumScopeExpansion"], \
+        "partial trigger resolution must broaden explicitly"
+
+    # freshness-mode semantics (finding 4): produce a genuinely STALE live
+    # materialization, then exercise the three modes without recompute
+    with store.tx() as cur:
+        materializer.resolve_for_use(cur, demo.FARM)   # FRESH baseline
+    regsr = context.current_reference_snapshot(store, context.REGSR_SNAPSHOT_PREFIX)
+    with store.tx() as cur:
+        materializer.invalidate_for_sources(
+            cur, [regsr["referenceSnapshotId"]], trigger_family="REFERENCE_CHANGED",
+            trigger_source_ref="test:freshness-modes", farm_scope_ref=demo.FARM)
+
+    with store.tx() as cur:
+        strict = materializer.resolve_for_use(cur, demo.FARM,
+                                              recompute_if_needed=False)
+    assert strict["decision"] == "REFUSE_USE" and strict["freshness"] == "STALE"
+    assert strict["materializationResult"]["satisfiedFreshnessRequirement"] is False
+
+    with store.tx() as cur:
+        exploratory = materializer.resolve_for_use(
+            cur, demo.FARM, required_freshness="ALLOW_STALE_EXPLORATORY",
+            recompute_if_needed=False)
+    assert exploratory["decision"] == "ALLOW_REUSE"
+    assert exploratory["freshness"] == "STALE"
+    assert exploratory["materializationResult"]["satisfiedFreshnessRequirement"] is True
+
+    with store.tx() as cur:
+        escalated = materializer.resolve_for_use(
+            cur, demo.FARM, required_freshness="ALLOW_STALE_EXPLORATORY",
+            high_consequence=True, recompute_if_needed=False)
+    assert escalated["decision"] == "REFUSE_USE", \
+        "high-consequence use escalates ALLOW_STALE_EXPLORATORY to REQUIRE_FRESH"
+
+    with store.tx() as cur:
+        nodep = materializer.resolve_for_use(
+            cur, demo.FARM, required_freshness="NO_CURRENT_STATE_DEPENDENCY",
+            recompute_if_needed=False)
+    assert nodep["decision"] == "ALLOW_REUSE"
+    assert nodep["materializationResult"]["satisfiedFreshnessRequirement"] is True
+
+    with store.tx() as cur:   # leave the suite FRESH
+        materializer.resolve_for_use(cur, demo.FARM)
+    record_detail("test_96", {
+        "indexResolvedFlips": flips,
+        "partialBatchBroadening": "explicit",
+        "freshnessModes": {"REQUIRE_FRESH": strict["decision"],
+                           "ALLOW_STALE_EXPLORATORY": exploratory["decision"],
+                           "ALLOW_STALE_EXPLORATORY+highConsequence": escalated["decision"],
+                           "NO_CURRENT_STATE_DEPENDENCY": nodep["decision"]}})
+
+
+# =========================================================================
 # 97. Review-driven regressions: behaviors fixed after the adversarial
 #     law-conformance review — each leg pins a confirmed finding closed.
 # =========================================================================
@@ -768,13 +896,20 @@ def test_97_review_driven_regressions(store, pipeline):
     closed = {}
 
     # (a) a compliance assertion self-reviewed by its asserter routes to the
-    # advisor queue — self-review covers routine operation claims only (D8)
+    # advisor queue — self-review covers routine operation claims only (D8);
+    # the structured claim is valid, the reviewer identity is the exception
+    structured_claim = {"complianceClaim": {
+        "statement": "fictional demo: self-reviewed compliance claim",
+        "assertedStatus": "CLAIMED_COMPLIANT",
+        "governingRuleRefs": [config.EVIDENCE_POLICY_REF],
+        "subjectScopeRef": demo.FARM}}
     self_reviewed = {"commitClass": "COMPLIANCE_ASSERTION",
                      "actingPartyRef": demo.FARMER, "farmRef": demo.FARM,
                      "idempotencyKey": f"reg:a:{uid()}",
                      "eventTime": "2026-06-10T09:00:00Z",
                      "evidenceRefs": [demo.PHOTO_EVIDENCE],
                      "requestedPromotionTarget": "COMPLIANCE_FACT",
+                     "payload": structured_claim,
                      "confirmAccept": True}
     r = pipeline.commit(self_reviewed)
     assert r["decisionOutcome"] == "REQUIRE_REVIEW"
@@ -782,20 +917,77 @@ def test_97_review_driven_regressions(store, pipeline):
         "a self-reviewed compliance assertion must never mint a compliance fact"
     closed["compliance-self-review-routes"] = r["decisionOutcome"]
 
-    # (b) cross-farm supersession is refused: a correction may only supersede
-    # this farm's own truth
-    foreign = f"farm:demo.kmetija.x.{uid()}"
+    # (a2) an UNSTRUCTURED compliance claim is refused at validation even with
+    # a distinct reviewer — thin claims never reach COMPLIANCE_STATUS_ACCEPTED
+    thin = dict(self_reviewed, idempotencyKey=f"reg:a2:{uid()}",
+                reviewerPartyRef=demo.ADVISOR, payload=None)
+    r = pipeline.commit(thin)
+    assert r["decisionOutcome"] == "RETAIN_DRAFT"
+    assert r["problems"][0]["reasonCode"] == "EVIDENCE_INSUFFICIENT"
+    closed["unstructured-compliance-refused"] = r["problems"][0]["reasonCode"]
+
+    # (b) dangling supersession ref is refused outright
     sub = demo.spray_submission(f"reg:b:{uid()}", erp_id=f"erp:reg.{uid()}")
     accepted = pipeline.commit(demo.spray_submission(f"reg:b0:{uid()}",
                                                      erp_id=f"erp:reg.{uid()}"))
     victim = accepted["inForceArtifactRefs"][0]
-    sub["farmRef"] = demo.FARM
     sub["supersedesConsequenceRef"] = "conseq:does.not.exist"
     r = pipeline.commit(sub)
     assert r["decisionOutcome"] == "RETAIN_DRAFT"
     assert r["problems"][0]["reasonCode"] == "EVIDENCE_REFERENCE_UNAVAILABLE"
     closed["dangling-supersession-refused"] = r["problems"][0]["reasonCode"]
     assert not store.is_superseded(victim)
+
+    # (b2) REAL cross-farm supersession: a valid accepted consequence exists
+    # on farm B; a farm-A commit attempts to supersede it — refused, no
+    # LINEAGE_SUPERSEDES edge, B's truth stays in force (review finding 5)
+    farm_b = f"farm:demo.kmetija.b.{uid()}"
+    field_b = f"field:demo.kmetija.b.gerk-1000002.{uid()}"
+    farmer_b = f"party:demo.farmer.b.{uid()}"
+    now = context.now_iso()
+    with store.tx() as cur:
+        store.insert_record(cur, {
+            "schemaVersion": "ofarm.party.v0.1", "partyId": farmer_b,
+            "partyClass": "NATURAL_PERSON",
+            "displayName": "Demo Farmer B (fictional)",
+            "partyState": "ACTIVE", "recordedAt": now})
+        for ident, itype in ((farm_b, "FARM"), (field_b, "FIELD")):
+            store.insert_record(cur, {
+                "schemaVersion": "ofarm.identityrecord.v0.1",
+                "identityRecordId": ident, "identityType": itype,
+                "lifecycleState": "ACTIVE", "createdAt": now, "recordedAt": now,
+                **({"anchorScopes": [{"scopeType": "FARM", "scopeRef": farm_b}]}
+                   if itype == "FIELD" else {})})
+        store.insert_record(cur, {
+            "schemaVersion": "ofarm.authoritygrant.v0.1",
+            "authorityGrantId": f"grant:demo.farmer.b.{uid()}",
+            "grantedByPartyRef": farmer_b,
+            "grantTarget": {"targetKind": "PARTY", "targetRef": farmer_b},
+            "targetScope": {"scopeType": "FARM", "scopeRef": farm_b},
+            "authorityActionClasses": ["ASSERT_OPERATION_CLAIM", "REVIEW_ACCEPT"],
+            "validFrom": demo.VALID_FROM,
+            "inheritanceMode": "DESCENDANT_SCOPES", "grantState": "ACTIVE"})
+    sub_b = demo.spray_submission(f"reg:b2:{uid()}", erp_id=f"erp:reg.{uid()}",
+                                  actor_ref=farmer_b)
+    sub_b["farmRef"], sub_b["subjectRef"] = farm_b, field_b
+    sub_b["payload"]["anchorScopes"] = [{"scopeType": "FARM", "scopeRef": farm_b}]
+    sub_b["payload"]["subject"] = {"subjectType": "FIELD", "subjectRef": field_b}
+    sub_b["payload"]["executionExtent"]["targetScope"] = {
+        "scopeType": "FIELD", "scopeRef": field_b}
+    accepted_b = pipeline.commit(sub_b)
+    assert accepted_b["decisionOutcome"] == "PROMOTE_ACCEPTED"
+    victim_b = accepted_b["inForceArtifactRefs"][0]
+
+    attack = demo.spray_submission(f"reg:b3:{uid()}", erp_id=f"erp:reg.{uid()}")
+    attack["supersedesConsequenceRef"] = victim_b   # farm-A commit, farm-B truth
+    r = pipeline.commit(attack)
+    assert r["decisionOutcome"] == "RETAIN_DRAFT"
+    assert r["problems"][0]["reasonCode"] == "SCOPE_NOT_AUTHORIZED"
+    assert not store.is_superseded(victim_b), "farm B's truth must stay in force"
+    assert not store.edges_to(victim_b, "LINEAGE_SUPERSEDES")
+    in_force_b = {row["record_id"] for row in store.in_force_consequences(farm_b)}
+    assert victim_b in in_force_b
+    closed["cross-farm-supersession-refused"] = r["problems"][0]["reasonCode"]
 
     # (c) an unlawful promotion target is refused (no shortcut to truth):
     # an observation cannot request a COMPLIANCE_FACT

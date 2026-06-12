@@ -1,5 +1,11 @@
 # Worklog
 
+## 2026-06-12 — PR #2 steward review: all five findings implemented (branch `m1/kernel`)
+
+- **Done:** (1) authority vocabulary moved to the accepted Action Matrix — commitClass→action-class map at the gate (`ASSERT_OPERATION_CLAIM`, `ASSERT_COMPLIANCE`, `OBSERVE_*`, `OUTPUT_APPROVE/FILE_*`, `RECEIVE_READ_DATA`, `REVIEW_ACCEPT`), demo grants/manifest/tests updated, no parallel dialect remains; (2) every `identityBasisRefs` member dependency-indexed (extent target + carrier anchor identities incl. crop cycles) with explicit partial-batch broadening per RFC §6.5; (3) compliance assertions now require a structured claim (statement, asserted status, recognized governing rules, resolvable subject) validated at the gate AND evaluated by the sufficiency case — thin claims refuse, self-review still routes to the advisor; (4) `requiredFreshness` modes implemented as distinct semantics with high-consequence escalation; (5) real cross-farm supersession regression (farm-B truth attacked from farm A → `SCOPE_NOT_AUTHORIZED`, no edge) + GitHub Actions CI (`.github/workflows/conformance.yml`: self-check + suite on postgres service, evidence artifact upload). New tests 96 + extended 97; suite 18/18; self-check PASS.
+- **Red:** ADVISORY_OUTPUT has no Action Matrix class — mapped to `OBSERVE_CREATE_OBSERVATION` (least-authority, never promotes); candidate for the post-pilot matrix amendment if the steward wants a dedicated class.
+- **Next:** steward re-review of PR #2; first CI run on push validates the workflow.
+
 ## 2026-06-12 — Preflight-review cleanup (branch `m1/kernel`, commit 1c623c3)
 
 - **Done:** investigated the external preflight review's five findings against the M1 kernel — implementation verified unaffected (zero FITO references in `kernel/`/`views/`; binding path already REGSR + decision-number identity per D9); landed the minimum controlled patch set: ERRATA E-002 (stale FITO-INFO wording), five doc locations re-worded to SI:UVHVVR-FFS-REG/REGSR, PROFILE.md shipped/deferred status corrected (nothing deferred remains), CONTRACTS_MANIFEST profileInstances 3→9 to match the checker, README counts + Slovenia-local cut-date currentness note.

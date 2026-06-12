@@ -18,6 +18,7 @@ from .context import now_iso
 
 FARM = "farm:demo.kmetija.a"
 FIELD = "field:demo.kmetija.a.gerk-1000001"
+CYCLE = "cycle:demo.kmetija.a.vine-2026"
 FARMER = "party:demo.farmer.one"
 WORKER = "party:demo.worker.one"
 ADVISOR = "party:demo.advisor.one"
@@ -33,11 +34,13 @@ INSPECTOR_SHARE = "share:demo.inspector.one.read"
 REGSR_SNAPSHOT = "referencesnapshot:si.uvhvvr.ffs-reg.2026-06-11"
 
 VALID_FROM = "2026-01-01T00:00:00Z"
+# Accepted Authority Action Matrix vocabulary only
+# (reference/rfcs/OFARM_Authority_Action_Matrix_v0_1.md)
 ACTION_CLASSES = [
-    "COMMIT_OPERATION_CLAIM", "COMMIT_STRUCTURE_ASSERTION", "COMMIT_NOTE",
-    "COMMIT_ADVISORY_OUTPUT", "COMMIT_COMPLIANCE_ASSERTION",
-    "COMMIT_OBSERVATION_ASSERTION", "COMMIT_EVIDENCE_RECORD",
-    "REVIEW_ACCEPT", "READ_REGISTER", "EXPORT_REGISTER", "FILE_SUBMISSION",
+    "OBSERVE_CREATE_OBSERVATION", "OBSERVE_ATTACH_EVIDENCE",
+    "ASSERT_STRUCTURE", "ASSERT_OPERATION_CLAIM", "ASSERT_COMPLIANCE",
+    "OUTPUT_APPROVE_DOCUMENT_ASSEMBLY", "OUTPUT_FILE_SUBMISSION_ASSEMBLY",
+    "RECEIVE_READ_DATA",
 ]
 
 
@@ -76,6 +79,10 @@ def substrate_records() -> list[dict]:
          "identityType": "EQUIPMENT", "lifecycleState": "ACTIVE",
          "createdAt": t, "recordedAt": t,
          "anchorScopes": [farm_scope]},
+        {"schemaVersion": "ofarm.identityrecord.v0.1", "identityRecordId": CYCLE,
+         "identityType": "CROP_CYCLE", "lifecycleState": "ACTIVE",
+         "createdAt": t, "recordedAt": t,
+         "anchorScopes": [farm_scope]},
 
         {"schemaVersion": "ofarm.roleassignment.v0.1",
          "roleAssignmentId": "role:demo.farmer.one.holder",
@@ -91,16 +98,31 @@ def substrate_records() -> list[dict]:
          "validFrom": VALID_FROM,
          "inheritanceMode": "DESCENDANT_SCOPES",
          "grantState": "ACTIVE",
-         "purpose": "holding farmer: full pilot action set on own farm (D8 self-review)"},
+         "purpose": "holding farmer: pilot action set on own farm, accepted "
+                    "Action Matrix vocabulary"},
+
+        # REVIEW_ACCEPT is a separate grant per the matrix's posture for
+        # govern/decide actions (NO_INHERIT default, not delegable) — the
+        # D8 self-review act on the farmer's own farm, exact scope only
+        {"schemaVersion": "ofarm.authoritygrant.v0.1",
+         "authorityGrantId": "grant:demo.farmer.one.review",
+         "grantedByPartyRef": FARMER,
+         "grantTarget": {"targetKind": "PARTY", "targetRef": FARMER},
+         "targetScope": farm_scope,
+         "authorityActionClasses": ["REVIEW_ACCEPT"],
+         "validFrom": VALID_FROM,
+         "inheritanceMode": "NO_INHERIT",
+         "grantState": "ACTIVE",
+         "purpose": "self-review of routine operation claims on own farm (D8)"},
 
         {"schemaVersion": "ofarm.authoritygrant.v0.1",
          "authorityGrantId": "grant:demo.advisor.one.review",
          "grantedByPartyRef": FARMER,
          "grantTarget": {"targetKind": "PARTY", "targetRef": ADVISOR},
          "targetScope": farm_scope,
-         "authorityActionClasses": ["REVIEW_ACCEPT", "READ_REGISTER"],
+         "authorityActionClasses": ["REVIEW_ACCEPT", "RECEIVE_READ_DATA"],
          "validFrom": VALID_FROM,
-         "inheritanceMode": "DESCENDANT_SCOPES",
+         "inheritanceMode": "NO_INHERIT",
          "grantState": "ACTIVE",
          "purpose": "advisor reviews queue exceptions and non-routine claims "
                     "(D8: self-review covers routine operation claims only)"},
@@ -110,7 +132,7 @@ def substrate_records() -> list[dict]:
          "delegatingPartyRef": FARMER, "delegatePartyRef": WORKER,
          "sourceAuthorityGrantRefs": [FARMER_GRANT],
          "targetScope": farm_scope,
-         "authorityActionClasses": ["COMMIT_OPERATION_CLAIM", "COMMIT_EVIDENCE_RECORD"],
+         "authorityActionClasses": ["ASSERT_OPERATION_CLAIM", "OBSERVE_ATTACH_EVIDENCE"],
          "validFrom": VALID_FROM,
          "inheritanceMode": "DESCENDANT_SCOPES",
          "delegationState": "ACTIVE",
@@ -232,7 +254,8 @@ def spray_payload(erp_id: str = "erp:demo.spray.0001", *,
         "recordState": "CLAIMED",
         "capturedAt": event_end,
         "subject": {"subjectType": "FIELD", "subjectRef": FIELD},
-        "anchorScopes": [{"scopeType": "FARM", "scopeRef": FARM}],
+        "anchorScopes": [{"scopeType": "FARM", "scopeRef": FARM},
+                         {"scopeType": "CROP_CYCLE", "scopeRef": CYCLE}],
         "effectiveTimeInterval": {"start": event_start, "end": event_end,
                                   "timeBasis": "EXECUTION_INTERVAL"},
         "actor": {"actorPartyRef": actor_ref, "roleAtCapture":
