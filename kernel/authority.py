@@ -387,6 +387,13 @@ class AuthorityEvaluator:
         if direct.allowed:
             return direct
 
+        # sharing never resurrects a non-active party: the inactive-party
+        # denial applies to SharingGrant reads exactly as to direct grants
+        # (hostile review finding 5, second pass)
+        party = self._party(requesting_party_ref)
+        if party is None or party.get("partyState") != "ACTIVE":
+            return direct   # already a fail-closed DENY
+
         sharing_basis, revocation_refs = [], []
         for row in self.store.find_by_kind("ofarm.sharinggrant.v0.1"):
             g = row["payload"]

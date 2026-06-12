@@ -25,7 +25,7 @@ from .authority import AuthorityEvaluator
 from .contracts import canonical_json
 from .materializer import Materializer
 from .problems import runtime_problem
-from .context import now_iso
+from .context import now_iso, parse_ts
 
 PASSPORT_VIEW_REF = "view:si.ffs.spray-register.passportview.v0_1"
 DOCASM_VIEW_REF = "view:si.ffs.inspection-register.documentassembly.v0_1"
@@ -101,6 +101,11 @@ class OutputGenerator:
         for r in rows:
             a = r["payload"]
             if {"scopeType": "FARM", "scopeRef": farm_ref} not in a["anchorScopes"]:
+                continue
+            # an assertion accepted via a separate review act keeps its
+            # captured claimState (append-only) — the REVIEW edge is what
+            # says it left the queue
+            if self.store.edges_from(a["assertionRecordId"], "REVIEW"):
                 continue
             if a["claimState"] in ("PENDING_REVIEW", "CONTESTED"):
                 out.append({
@@ -290,6 +295,19 @@ class OutputGenerator:
                 problem = decision.problems[0] if decision.problems else runtime_problem(
                     "AUTHORITY_DENIED", "Export denied", "no export authority")
                 publication_result("DENIED", [problem], "export authority denied")
+                return _refusal_response(problem)
+
+            # an invalid window must never freeze a valid-looking empty
+            # register: refuse before any materialization, with no durable
+            # artifact (hostile review finding 6, second pass)
+            ws, we = parse_ts(window_start), parse_ts(window_end)
+            if ws is None or we is None or ws > we:
+                problem = runtime_problem(
+                    "HIGH_CONSEQUENCE_BLOCKED", "Invalid window refused",
+                    f"window [{window_start!r}, {window_end!r}] is unparseable or "
+                    "inverted; a frozen register over an invalid period would be a "
+                    "valid-looking lie (no temporal reason code exists — ERRATA E-001)")
+                publication_result("DENIED", [problem], "invalid window")
                 return _refusal_response(problem)
 
             # high-consequence: freeze only from a demonstrably FRESH window

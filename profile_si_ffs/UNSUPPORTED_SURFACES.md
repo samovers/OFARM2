@@ -40,10 +40,11 @@ The transport principal is the required `X-Acting-Party` header, which the
 is refused (`ACTOR_BINDING_UNRESOLVED`), so body-level actor spoofing is
 denied, but the header itself is **not authentication**. OIDC onto
 Party/RoleAssignment (Keycloak per PLATFORM.md) is the M2 binding layer and
-will fill exactly this principal slot. Related declared limitation: inline
-distinct-reviewer acceptance (`reviewerPartyRef` ≠ acting party in one
-request) exists for conformance-fixture replay; the production advisor-queue
-flow where the reviewer acts under their own principal is M2.
+will fill exactly this principal slot. Distinct-reviewer acceptance happens
+ONLY through `/review/accept` (a `GOVERNANCE_DECISION` commit under the
+reviewer's own principal); a reviewer named inside the submitter's request
+never promotes — that inline path was removed after the second hostile
+review.
 
 **Runtime evidence level** (Performance & Explainable Current-State Evidence
 RFC §11.3): `CONFORMANCE_FIXTURE_PASSING` at most once the M1 suite is green —

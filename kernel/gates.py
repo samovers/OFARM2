@@ -22,7 +22,7 @@ from . import config
 from .authority import AuthorityEvaluator
 from .context import (REGSR_SNAPSHOT_PREFIX, ContextAssembler, ProductRegister,
                       current_reference_snapshot, now_iso)
-from .contracts import ContractViolation, sha256_of
+from .contracts import ContractViolation, canonical_json, sha256_of
 from .materializer import Materializer
 from .problems import runtime_problem
 
@@ -75,6 +75,18 @@ CONSEQUENCE_TYPE_BY_TARGET = {
     "ACCEPTED_STRUCTURAL_STATE": "STATE_CHANGE_ACCEPTED",
     "ACCEPTED_OBSERVATION_OCCURRENCE_STATE": "STATE_CHANGE_ACCEPTED",
     "COMPLIANCE_FACT": "COMPLIANCE_STATUS_ACCEPTED",
+}
+
+# what a queued assertion promotes to when a reviewer accepts it via a
+# GOVERNANCE_DECISION commit (the reviewer's own governed act — never a
+# body-named reviewer inside the submitter's request)
+ACCEPTANCE_BY_ASSERTION_TYPE = {
+    "OPERATION_CLAIM_ASSERTION": ("ACCEPTED_EXECUTED_INTERVENTION_CONSEQUENCE",
+                                  "EXECUTION_CONFIRMED"),
+    "COMPLIANCE_ASSERTION": ("COMPLIANCE_FACT", "COMPLIANCE_STATUS_ACCEPTED"),
+    "STRUCTURE_ASSERTION": ("ACCEPTED_STRUCTURAL_STATE", "STATE_CHANGE_ACCEPTED"),
+    "OBSERVATION_ASSERTION": ("ACCEPTED_OBSERVATION_OCCURRENCE_STATE",
+                              "STATE_CHANGE_ACCEPTED"),
 }
 
 EVENT_TIME_PLAUSIBILITY_PAST_DAYS = 400
@@ -222,6 +234,12 @@ class GatePipeline:
             envelope["evidenceRefs"] = sub["evidenceRefs"]
         if sub.get("noteText") is not None:
             envelope["notes"] = sub["noteText"]
+        if commit_class == "COMPLIANCE_ASSERTION" and isinstance(sub.get("payload"), dict) \
+                and isinstance(sub["payload"].get("complianceClaim"), dict):
+            # the structured claim is captured verbatim with the event so a
+            # later review act can re-evaluate exactly what was claimed
+            envelope["notes"] = "complianceClaim:" + canonical_json(
+                sub["payload"]["complianceClaim"])
 
         ingress_request = {
             "schemaVersion": "ofarm.commitingressrequest.v0.1",
@@ -315,7 +333,29 @@ class GatePipeline:
             # ---------------- EVIDENCE_SUFFICIENCY ----------------------------
             assertion_id = _mint("assert")
             case_payload = None
-            if commit_class in ("OPERATION_CLAIM", "COMPLIANCE_ASSERTION"):
+            acceptance_target = (sub.get("reviewTargetAssertionRef")
+                                 if commit_class == "GOVERNANCE_DECISION" else None)
+            if acceptance_target:
+                target_payload = self.store.get_payload(acceptance_target)
+                case_payload, _ = self._acceptance_case(sub, farm_ref, target_payload)
+                if case_payload["outcome"]["decision"] == "REFUSE":
+                    log("EVIDENCE_SUFFICIENCY", "INSUFFICIENT",
+                        reason_code="EVIDENCE_INSUFFICIENT",
+                        rationale=case_payload["outcome"]["rationale"])
+                    raise _Refused(
+                        "EVIDENCE_SUFFICIENCY", "INSUFFICIENT", "RETAIN_DRAFT",
+                        [runtime_problem(
+                            "EVIDENCE_INSUFFICIENT", "Acceptance floor unmet",
+                            case_payload["outcome"]["rationale"],
+                            suggested_remediation="the target claim stays queued; it "
+                            "cannot be accepted without its durable evidence floor")])
+                self.store.insert_record(cur, case_payload)
+                trace_refs["evidenceSufficiencyCaseRef"] = case_payload["sufficiencyCaseId"]
+                log("EVIDENCE_SUFFICIENCY",
+                    "SATISFIED" if case_payload["outcome"]["decision"] == "ALLOW"
+                    else "SATISFIED_WITH_EXCEPTIONS",
+                    rationale=case_payload["outcome"]["rationale"])
+            elif commit_class in ("OPERATION_CLAIM", "COMPLIANCE_ASSERTION"):
                 case_payload, floor_failures = self._sufficiency_case(
                     sub, commit_class, farm_ref, assertion_id, erp_id)
                 if case_payload["outcome"]["decision"] == "REFUSE":
@@ -349,8 +389,88 @@ class GatePipeline:
                     "compliance assertion requires a distinct reviewer and routes "
                     "to the advisor queue", severity="WARNING"))
 
+            # A body-named DISTINCT reviewer is a forgeable review act: the
+            # submitter's request must never promote on another party's
+            # authority (hostile review blocker 1, second pass). The claim
+            # lands in the queue; the reviewer accepts under their OWN
+            # principal via a GOVERNANCE_DECISION commit.
+            if (sub.get("confirmAccept")
+                    and sub.get("reviewerPartyRef") not in (None, acting_party)):
+                review_route_reasons.append(runtime_problem(
+                    "HUMAN_APPROVAL_REQUIRED", "Distinct reviewer requires own act",
+                    f"reviewer {sub['reviewerPartyRef']} must accept under their own "
+                    "transport principal (GOVERNANCE_DECISION commit / review "
+                    "acceptance); a reviewer named inside the submitter's request "
+                    "is forgeable and never promotes", severity="WARNING"))
+
             promotes = commit_class in PROMOTION_TARGET_BY_CLASS
-            if not promotes:
+            if acceptance_target:
+                # ---- queue acceptance: the reviewer's OWN governed act ----
+                # The AUTHORITY gate above already evaluated REVIEW_ACCEPT for
+                # the transport-bound acting party; this branch performs the
+                # acceptance and promotes the TARGET assertion's consequence.
+                target_payload = self.store.get_payload(acceptance_target)
+                review_id = _mint("review")
+                review = {
+                    "schemaVersion": "ofarm.reviewdecision.v0.1",
+                    "reviewDecisionId": review_id,
+                    "reviewedArtifactFamily": "ASSERTION_RECORD",
+                    "reviewedArtifactRef": acceptance_target,
+                    "reviewAction": "REVIEW_ACCEPT",
+                    "anchorScopes": [{"scopeType": "FARM", "scopeRef": farm_ref}],
+                    "decidedByPartyRef": acting_party,
+                    "decidedAt": now_iso(),
+                    "decisionOutcomeState": "ACCEPTED",
+                    "notes": "queue acceptance: distinct reviewer acting under their "
+                             "own transport principal (GOVERNANCE_DECISION commit)",
+                }
+                self.store.insert_record(cur, review)
+                emitted["reviews"].append(review_id)
+                self.store.add_edge(cur, "REVIEW", acceptance_target, review_id)
+
+                event_edges = self.store.edges_from(acceptance_target, "EVENT_SOURCE")
+                orig_event = (event_edges[0]["dst_record_id"] if event_edges
+                              else event_id)
+                category, ctype = ACCEPTANCE_BY_ASSERTION_TYPE[
+                    target_payload["assertionType"]]
+                consequence_id = _mint("conseq")
+                consequence = {
+                    "schemaVersion": "ofarm.acceptedeventconsequence.v0.1",
+                    "acceptedEventConsequenceId": consequence_id,
+                    "consequenceType": ctype,
+                    "sourceEventRef": orig_event,
+                    "acceptedByReviewDecisionRef": review_id,
+                    "subject": target_payload["subject"],
+                    "anchorScopes": [{"scopeType": "FARM", "scopeRef": farm_ref}],
+                    "acceptedAt": now_iso(),
+                    "inForceState": "IN_FORCE",
+                }
+                if target_payload.get("occurrenceTime"):
+                    consequence["effectiveFrom"] = target_payload["occurrenceTime"]
+                if target_payload.get("executionRecordPayloadRefs"):
+                    consequence["executionRecordPayloadRefs"] = \
+                        target_payload["executionRecordPayloadRefs"]
+                self.store.insert_record(cur, consequence)
+                emitted["consequences"].append(consequence_id)
+                self.store.add_edge(cur, "REVIEW", consequence_id, review_id)
+                self.store.add_edge(cur, "EVENT_SOURCE", consequence_id, orig_event)
+
+                log("REVIEW_PROMOTION", "PROMOTE_ACCEPTED", refs=[review_id])
+                final_outcome = "PROMOTE_ACCEPTED"
+                in_force_category = category
+                in_force_refs = [consequence_id]
+
+                self.materializer.invalidate_for_sources(
+                    cur, [consequence_id],
+                    trigger_family="BASIS_ADVANCED",
+                    trigger_source_ref=consequence_id,
+                    farm_scope_ref=farm_ref,
+                    reason_code="TRUTH_BASIS_ADVANCED")
+                mat = self.materializer.recompute(cur, farm_ref)
+                materialization_triggered = True
+                log("CURRENT_STATE_MATERIALIZATION", "UPDATED",
+                    refs=[mat["basisRef"], mat["snapshotRef"]])
+            elif not promotes:
                 reason = {
                     "NOTE": "No declared safe promotion path exists from note to compliance fact.",
                     "ADVISORY_OUTPUT": "Advisory output may raise review attention but may not directly create a compliance fact.",
@@ -406,9 +526,11 @@ class GatePipeline:
                 final_outcome = "RETAIN_DRAFT"
             else:
                 # the deliberate confirm-accept step IS the review act (D8) —
-                # but only with REVIEW_ACCEPT authority on this farm, checked
-                # mechanically; self-review cannot bypass the gates above.
-                reviewer = sub.get("reviewerPartyRef", acting_party)
+                # SELF-review only: the reviewer is the transport-bound acting
+                # party, never a body-named third party. REVIEW_ACCEPT
+                # authority is still checked mechanically; self-review cannot
+                # bypass the gates above.
+                reviewer = acting_party
                 review_auth = self.authority.evaluate(
                     acting_party_ref=reviewer, action_class="REVIEW_ACCEPT",
                     action_stage="PROMOTION",
@@ -724,13 +846,19 @@ class GatePipeline:
                     "consequence; the claim stays a draft"))
 
         # --- semantic: farm containment for EVERY governed scope-bearing
-        # field, not only supersession (hostile review blocker 4): farm-A
-        # authority must never create accepted truth whose target is a
-        # farm-B identity. A FARM-typed ref must BE the authorized farm; any
-        # other governed scope ref must resolve to an identity anchored on it.
+        # field, with no escape hatches (hostile review blockers 4 + 3 of the
+        # second pass): a FARM-typed ref must BE the authorized farm; TENANT/
+        # DEPLOYMENT are not commitable claim scopes on this path; any other
+        # governed scope ref must RESOLVE, BE an IdentityRecord, and be
+        # anchored on the authorized farm — missing or non-identity refs
+        # refuse instead of falling through.
         def assert_contained(scope_type: str, scope_ref: str, where: str):
             if scope_type in ("TENANT", "DEPLOYMENT"):
-                return
+                refuse("FAIL_SEMANTIC", runtime_problem(
+                    "SCOPE_NOT_AUTHORIZED", "Non-farm claim scope refused",
+                    f"{where} uses scope type {scope_type}; commit-path claims are "
+                    "farm-anchored — tenant/deployment scopes are not commitable "
+                    "targets in this pilot"))
             if scope_type == "FARM":
                 if scope_ref != farm_ref:
                     refuse("FAIL_SEMANTIC", runtime_problem(
@@ -739,14 +867,23 @@ class GatePipeline:
                         f"authorized on {farm_ref} only"))
                 return
             row = self.store.get_record(scope_ref)
-            if row is not None and row["record_kind"] == "ofarm.identityrecord.v0.1":
-                anchors = row["payload"].get("anchorScopes", [])
-                if {"scopeType": "FARM", "scopeRef": farm_ref} not in anchors:
-                    refuse("FAIL_SEMANTIC", runtime_problem(
-                        "SCOPE_NOT_AUTHORIZED", "Cross-farm scope refused",
-                        f"{where} names {scope_ref}, which is not anchored on "
-                        f"{farm_ref}; authority on one farm never reaches "
-                        "another farm's identities"))
+            if row is None:
+                refuse("FAIL_REFERENCE_RESOLUTION", runtime_problem(
+                    "IDENTITY_UNRESOLVED", "Scope ref unresolved",
+                    f"{where} names {scope_ref}, which does not resolve to any "
+                    "stored record"))
+            if row["record_kind"] != "ofarm.identityrecord.v0.1":
+                refuse("FAIL_SEMANTIC", runtime_problem(
+                    "IDENTITY_UNRESOLVED", "Scope ref is not a governed identity",
+                    f"{where} names {scope_ref} ({row['record_kind']}); governed "
+                    "claim scopes must be IdentityRecords"))
+            anchors = row["payload"].get("anchorScopes", [])
+            if {"scopeType": "FARM", "scopeRef": farm_ref} not in anchors:
+                refuse("FAIL_SEMANTIC", runtime_problem(
+                    "SCOPE_NOT_AUTHORIZED", "Cross-farm scope refused",
+                    f"{where} names {scope_ref}, which is not anchored on "
+                    f"{farm_ref}; authority on one farm never reaches "
+                    "another farm's identities"))
 
         if commit_class in PROMOTION_TARGET_BY_CLASS:
             assert_contained(sub.get("subjectType", "FARM"),
@@ -780,6 +917,39 @@ class GatePipeline:
                     "SUPERSEDED_RECORD_USED", "Target already superseded",
                     f"{supersedes} was already superseded; correct the current "
                     "in-force record instead"))
+
+        # --- governance-decision validation: a review acceptance names a
+        # real, queued, farm-contained assertion that has not been reviewed
+        if commit_class == "GOVERNANCE_DECISION":
+            target_ref = sub.get("reviewTargetAssertionRef")
+            if not target_ref:
+                refuse("FAIL_SEMANTIC", runtime_problem(
+                    "EVIDENCE_INSUFFICIENT", "Acceptance without target",
+                    "a governance-decision commit requires reviewTargetAssertionRef"))
+            row = self.store.get_record(target_ref)
+            if row is None or row["record_kind"] != "ofarm.assertionrecord.v0.1":
+                refuse("FAIL_REFERENCE_RESOLUTION", runtime_problem(
+                    "EVIDENCE_REFERENCE_UNAVAILABLE", "Acceptance target unresolved",
+                    f"{target_ref} does not resolve to a stored AssertionRecord"))
+            target = row["payload"]
+            if {"scopeType": "FARM", "scopeRef": farm_ref} not in target["anchorScopes"]:
+                refuse("FAIL_SEMANTIC", runtime_problem(
+                    "SCOPE_NOT_AUTHORIZED", "Cross-farm acceptance refused",
+                    f"{target_ref} is not anchored on {farm_ref}"))
+            if target["claimState"] != "PENDING_REVIEW":
+                refuse("FAIL_SEMANTIC", runtime_problem(
+                    "SUPERSEDED_RECORD_USED", "Target not pending review",
+                    f"{target_ref} has claimState {target['claimState']}"))
+            if self.store.edges_from(target_ref, "REVIEW"):
+                refuse("FAIL_SEMANTIC", runtime_problem(
+                    "SUPERSEDED_RECORD_USED", "Target already reviewed",
+                    f"{target_ref} already carries a review decision"))
+            if target["assertionType"] not in ACCEPTANCE_BY_ASSERTION_TYPE:
+                refuse("FAIL_SEMANTIC", runtime_problem(
+                    "IDENTITY_UNRESOLVED", "Assertion type not acceptable",
+                    f"{target['assertionType']} has no acceptance path"))
+            log("VALIDATION", "PASS")
+            return None
 
         # --- compliance-specific validation: a compliance assertion may not
         # ride to COMPLIANCE_STATUS_ACCEPTED on a bare evidence ref. It must
@@ -910,6 +1080,32 @@ class GatePipeline:
                          "executionExtent.targetScope")
         for s in payload.get("anchorScopes", []):
             assert_contained(s["scopeType"], s["scopeRef"], "carrier anchorScopes")
+
+        # --- actor attribution is governed, never free text with a party id:
+        # the carrier's actor must BE the authorized submitter, or the named
+        # actor must hold their own live authority path for this operation on
+        # this farm (the verifiable on-behalf-of basis: grant or delegation).
+        # Anything weaker routes to the advisor queue — a record claiming
+        # "X performed this" with no governed basis for X is an exception,
+        # not silent truth (hostile review blocker 2, second pass).
+        named_actor = payload["actor"]["actorPartyRef"]
+        if named_actor != sub["actingPartyRef"]:
+            basis = self.authority.evaluate(
+                acting_party_ref=named_actor,
+                action_class="ASSERT_OPERATION_CLAIM",
+                action_stage="DRAFT_PREPARATION",
+                scope={"scopeType": "FARM", "scopeRef": farm_ref})
+            self.store.insert_record(cur, basis.request_payload)
+            self.store.insert_record(cur, basis.trace_payload)
+            self.store.insert_record(cur, basis.result_payload)
+            if not basis.allowed:
+                review_route_reasons.append(runtime_problem(
+                    "ACTOR_BINDING_UNRESOLVED", "Actor attribution unverified",
+                    f"the carrier names {named_actor} as the operator, but that "
+                    "party holds no live grant or delegation for this operation "
+                    f"on {farm_ref}; the attribution claim routes to review",
+                    severity="WARNING",
+                    related_refs=[basis.result_payload["resultId"]]))
 
         # --- code-binding sub-gate (vs the SI profile instance) ---
         bindings = [self.store.get_payload(r)
@@ -1052,6 +1248,43 @@ class GatePipeline:
         evidence_refs = payload.get("evidenceRefs", []) or sub.get("evidenceRefs", [])
         return self._case_from_checks(sub, farm_ref, assertion_id, erp_id,
                                       checks, hard, soft, evidence_refs)
+
+    def _recover_compliance_claim(self, assertion_id: str) -> dict | None:
+        """The structured claim captured verbatim with the original event."""
+        import json as _json
+        for edge in self.store.edges_from(assertion_id, "EVENT_SOURCE"):
+            event = self.store.get_payload(edge["dst_record_id"])
+            notes = (event or {}).get("notes", "")
+            if notes.startswith("complianceClaim:"):
+                try:
+                    return _json.loads(notes[len("complianceClaim:"):])
+                except ValueError:
+                    return None
+        return None
+
+    def _acceptance_case(self, sub, farm_ref, target) -> tuple[dict, list[dict]]:
+        """Sufficiency case for a queue acceptance: evaluates the TARGET
+        assertion's durable evidence (and, for compliance claims, the claim
+        captured with its event) — the named reviewer resolves the routed
+        exceptions; missing durable evidence refuses the acceptance."""
+        target_id = target["assertionRecordId"]
+        evidence_refs = target.get("evidenceRefs", [])
+        checks = {"durable-evidence": bool(self._durable_evidence(evidence_refs))}
+        claim_statement = None
+        if target["assertionType"] == "COMPLIANCE_ASSERTION":
+            claim = self._recover_compliance_claim(target_id)
+            checks["claim-recoverable"] = claim is not None
+            checks["claim-statement"] = bool(
+                claim and isinstance(claim.get("statement"), str)
+                and claim["statement"].strip())
+            checks["asserted-status"] = bool(claim) and claim.get("assertedStatus") in (
+                "CLAIMED_COMPLIANT", "CLAIMED_NON_COMPLIANT",
+                "CLAIMED_PARTIALLY_COMPLIANT")
+            claim_statement = (claim or {}).get("statement")
+        erp_ref = (target.get("executionRecordPayloadRefs") or [None])[0]
+        return self._case_from_checks(
+            sub, farm_ref, target_id, erp_ref, checks, tuple(checks), (),
+            evidence_refs, claim_statement=claim_statement)
 
     def _durable_evidence(self, refs: list[str]) -> list[str]:
         """Refs that resolve to actual EvidenceRecords — the durable proof

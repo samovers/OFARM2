@@ -80,19 +80,39 @@ CREATE TRIGGER trg_kernel_edge_append_only
   FOR EACH STATEMENT EXECUTE FUNCTION kernel_forbid_mutation();
 
 -- A PROMOTION_EMITS edge is only reachability evidence if its SOURCE really
--- is a stored PromotionTrace — an edge from arbitrary text must never satisfy
--- the invariant (hostile review blocker 5). Checked deferred so the trace can
--- land later in the same transaction.
+-- is a stored PromotionTrace AND that trace's own payload agrees: the edge
+-- destination must be the trace's semantic event or appear in its emitted
+-- refs, and an accepted consequence may only be emitted under a promotion-
+-- compatible outcome. Reconstruction from the edge table and from the trace
+-- payload must never disagree (hostile review blockers 5 + 7). Checked
+-- deferred so the trace can land later in the same transaction.
 CREATE OR REPLACE FUNCTION kernel_require_trace_source() RETURNS trigger AS $$
+DECLARE
+  trace jsonb;
 BEGIN
-  IF NEW.edge_type = 'PROMOTION_EMITS' AND NOT EXISTS (
-       SELECT 1 FROM kernel_record
-        WHERE record_id = NEW.src_record_id
-          AND record_kind = 'ofarm.promotiontrace.v0.1'
-     )
-  THEN
+  IF NEW.edge_type <> 'PROMOTION_EMITS' THEN
+    RETURN NULL;
+  END IF;
+  SELECT payload INTO trace FROM kernel_record
+   WHERE record_id = NEW.src_record_id
+     AND record_kind = 'ofarm.promotiontrace.v0.1';
+  IF trace IS NULL THEN
     RAISE EXCEPTION 'OFARM Kernel reachability invariant: PROMOTION_EMITS source % is not a stored PromotionTrace',
       NEW.src_record_id;
+  END IF;
+  IF NOT (trace ->> 'semanticEventRef' = NEW.dst_record_id
+          OR COALESCE(trace -> 'emittedAssertionRecordRefs', '[]'::jsonb) ? NEW.dst_record_id
+          OR COALESCE(trace -> 'emittedReviewDecisionRefs', '[]'::jsonb) ? NEW.dst_record_id
+          OR COALESCE(trace -> 'emittedAcceptedConsequenceRefs', '[]'::jsonb) ? NEW.dst_record_id)
+  THEN
+    RAISE EXCEPTION 'OFARM Kernel reachability invariant: edge destination % is not listed in the payload of PromotionTrace %',
+      NEW.dst_record_id, NEW.src_record_id;
+  END IF;
+  IF COALESCE(trace -> 'emittedAcceptedConsequenceRefs', '[]'::jsonb) ? NEW.dst_record_id
+     AND trace ->> 'finalOutcome' <> 'PROMOTE_ACCEPTED'
+  THEN
+    RAISE EXCEPTION 'OFARM Kernel reachability invariant: accepted consequence % emitted under non-promotion outcome %',
+      NEW.dst_record_id, trace ->> 'finalOutcome';
   END IF;
   RETURN NULL;
 END

@@ -29,6 +29,12 @@ class FreezeBody(BaseModel):
     windowEnd: str
 
 
+class ReviewAcceptBody(BaseModel):
+    farmRef: str
+    assertionRef: str
+    idempotencyKey: str | None = None
+
+
 def create_app(store: Store | None = None) -> FastAPI:
     app = FastAPI(
         title="OFARM2 Kernel (M1)",
@@ -108,6 +114,29 @@ def create_app(store: Store | None = None) -> FastAPI:
                     if resolved:
                         return resolved
         return None
+
+    @app.post("/review/accept")
+    def review_accept(body: ReviewAcceptBody, x_acting_party: str = Header(...)):
+        # the review act is the REVIEWER'S own governed commit: the reviewer
+        # IS the transport principal — there is no body-named reviewer field
+        # to forge (hostile review blocker 1, second pass)
+        import uuid as _uuid
+        from .context import now_iso as _now
+        submission = {
+            "commitClass": "GOVERNANCE_DECISION",
+            "ingressChannel": "MANUAL_UI",
+            "actingPartyRef": x_acting_party,
+            "farmRef": body.farmRef,
+            "idempotencyKey": body.idempotencyKey
+                              or f"review-accept:{_uuid.uuid4().hex[:16]}",
+            "decisionTime": _now(),
+            "reviewTargetAssertionRef": body.assertionRef,
+            "dominantSemanticConsequence": "review acceptance of a queued claim",
+        }
+        try:
+            return app.state.pipeline.commit(submission)
+        except (ContractViolation, KeyError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
 
     @app.get("/records/{record_id}")
     def get_record(record_id: str, x_acting_party: str = Header(...)):

@@ -64,16 +64,30 @@ def bootstrap(store) -> list[str]:
     return inserted
 
 
-def current_reference_snapshot(store, prefix: str) -> dict | None:
-    """The in-force reference snapshot of a family = latest effectiveFrom."""
+def current_reference_snapshot(store, prefix: str,
+                               as_of: str | None = None) -> dict | None:
+    """The in-force reference snapshot of a family = latest effectiveFrom.
+
+    With `as_of`, the latest snapshot whose effectiveFrom <= asOfTime — an
+    AS_OF answer must not silently apply a future register vintage to an
+    earlier state (hostile review: context must be as-of-aware too). None
+    means no snapshot of this family was in force at that moment."""
     rows = store.find_by_kind("ofarm.referencesnapshot.v0.1")
-    candidates = [
-        r["payload"] for r in rows
-        if r["payload"]["referenceSnapshotId"].startswith(prefix)
-    ]
+    bound = parse_ts(as_of) if as_of else None
+    candidates = []
+    for r in rows:
+        p = r["payload"]
+        if not p["referenceSnapshotId"].startswith(prefix):
+            continue
+        eff = parse_ts(p["effectiveFrom"])
+        if eff is None:
+            continue   # unparseable validity never selects (fail closed)
+        if bound is not None and eff > bound:
+            continue
+        candidates.append((eff, p))
     if not candidates:
         return None
-    return max(candidates, key=lambda p: p["effectiveFrom"])
+    return max(candidates, key=lambda pair: pair[0])[1]
 
 
 class ProductRegister:
@@ -184,8 +198,13 @@ class ContextAssembler:
         new record only on basis drift (content-addressed reuse)."""
         spine = self._spine()
         policy = evaluation_time_policy or {"policyType": "NOW"}
-        regsr = current_reference_snapshot(self.store, REGSR_SNAPSHOT_PREFIX)
-        gerk = current_reference_snapshot(self.store, GERK_SNAPSHOT_PREFIX)
+        # AS_OF context selects the reference snapshots in force AT that
+        # moment; a missing family is honest (none was in force yet) and
+        # makes the context content — and therefore the snapshot id and the
+        # materialization key — distinct from the NOW answer
+        as_of = policy.get("asOfTime") if policy.get("policyType") == "AS_OF" else None
+        regsr = current_reference_snapshot(self.store, REGSR_SNAPSHOT_PREFIX, as_of=as_of)
+        gerk = current_reference_snapshot(self.store, GERK_SNAPSHOT_PREFIX, as_of=as_of)
         reference_refs = [p["referenceSnapshotId"] for p in (regsr, gerk) if p]
 
         material_basis = {
