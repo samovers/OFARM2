@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from contextlib import contextmanager
 
-from kernel import config, policy
+from kernel import config, policy, sufficiency
 from kernel.stages import GateContext, GateRefusal
 from kernel.validators import (CarrierSchemaValidator, PromotionTargetValidator,
                                ScopeContainmentValidator, SupersessionValidator,
@@ -62,9 +62,11 @@ def test_policy_tables_are_closed_and_consistent():
 
 
 def test_freshness_use_policy_truth_table():
-    """The requirement modes behave as the RFC pins them (ALLOW_STALE_
-    EXPLORATORY and NO_CURRENT_STATE_DEPENDENCY intentionally share a
-    satisfaction set — they differ in meaning, not membership); INVALID
+    """The requirement-mode truth table. ALLOW_STALE_EXPLORATORY and
+    NO_CURRENT_STATE_DEPENDENCY intentionally share a satisfaction set:
+    the latter is kernel-narrowed to stale-allowed because the candidate
+    contracts leave it undescribed (defined nowhere in reference/ — see
+    profile_si_ffs/UNSUPPORTED_SURFACES.md and ERRATA E-003). INVALID
     never satisfies anything; high consequence escalates to REQUIRE_FRESH."""
     cases = {
         # (required, high_consequence, state) -> satisfied
@@ -207,3 +209,45 @@ def test_carrier_schema_validator_refuses_unknown_contract(store):
         assert isinstance(refusal, GateRefusal)
         assert (refusal.gate, refusal.outcome) == ("VALIDATION", "FAIL_SCHEMA")
         assert refusal.problems[0]["reasonCode"] == "EVIDENCE_INSUFFICIENT"
+
+
+def test_compliance_claim_validator_refuses_non_identity_subject(store):
+    """A complianceClaim.subjectScopeRef resolving to a NON-IDENTITY record
+    (here: the demo farmer's Party record) is a governed FAIL_SEMANTIC
+    refusal, never a silent pass (steward review of PR #4, finding 1)."""
+    from kernel.validators import ComplianceClaimValidator
+    with scratch_tx(store) as cur:
+        ctx = _ctx(store, cur, {
+            "commitClass": "COMPLIANCE_ASSERTION",
+            "payload": {"complianceClaim": {
+                "statement": "fictional demo: stage-test claim",
+                "assertedStatus": "CLAIMED_COMPLIANT",
+                "governingRuleRefs": [config.EVIDENCE_POLICY_REF],
+                "subjectScopeRef": demo.FARMER}}})
+        refusal = ComplianceClaimValidator().run(ctx)
+        assert isinstance(refusal, GateRefusal)
+        assert (refusal.gate, refusal.outcome, refusal.final_outcome) == \
+            ("VALIDATION", "FAIL_SEMANTIC", "RETAIN_DRAFT")
+        assert refusal.problems[0]["reasonCode"] == "IDENTITY_UNRESOLVED"
+
+        # type-confused claim fields are governed refusals, never crashes
+        for bad in ({"assertedStatus": ["CLAIMED_COMPLIANT"]},
+                    {"governingRuleRefs": {config.EVIDENCE_POLICY_REF: True}},
+                    {"governingRuleRefs": True}):
+            sub = {"commitClass": "COMPLIANCE_ASSERTION",
+                   "payload": {"complianceClaim": {
+                       "statement": "fictional demo: stage-test claim",
+                       "assertedStatus": "CLAIMED_COMPLIANT",
+                       "governingRuleRefs": [config.EVIDENCE_POLICY_REF],
+                       "subjectScopeRef": demo.FARM, **bad}}}
+            r = ComplianceClaimValidator().run(_ctx(store, cur, sub))
+            assert isinstance(r, GateRefusal), f"must refuse, not crash: {bad}"
+            assert r.problems[0]["reasonCode"] == "EVIDENCE_INSUFFICIENT"
+
+
+def test_compliance_claim_recovery_fails_closed(store):
+    """recover_compliance_claim returns None (never a guess) when no durable
+    ComplianceClaim record is linked — acceptance's claim-recoverable check
+    then fails closed."""
+    assert sufficiency.recover_compliance_claim(
+        store, "assert:does.not.exist") is None

@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/complianceclaim/v0.1",
+  "title": "OFARM ComplianceClaim v0.1 (candidate)",
+  "$comment": "NEW_CANDIDATE implementation-profile contract. Durable carrier for the structured compliance claim captured verbatim with a COMPLIANCE_ASSERTION commit, so a later review act re-evaluates exactly what was claimed (Constitution RC2.1 sections 10-11 governance/compliance posture). Candidate per Constitution 6.16; not a promoted machine contract. Replaces the M1-interim serialization of the claim into SemanticEventEnvelope.notes (steward review of PR #4, finding 3). Linked from its semantic event by a COMPLIANCE_CLAIM edge; like ExecutionRecordPayload it is a carrier, not an authoritative promotion product, so it carries no PromotionTrace reachability requirement.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "complianceClaimId",
+    "statement",
+    "assertedStatus",
+    "governingRuleRefs",
+    "subjectScopeRef"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.complianceclaim.v0.1"
+    },
+    "complianceClaimId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "statement": {
+      "type": "string",
+      "minLength": 1,
+      "description": "What is being claimed, in the asserter's words."
+    },
+    "assertedStatus": {
+      "enum": [
+        "CLAIMED_COMPLIANT",
+        "CLAIMED_NON_COMPLIANT",
+        "CLAIMED_PARTIALLY_COMPLIANT"
+      ]
+    },
+    "governingRuleRefs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      },
+      "description": "The governed rules/policies the claim is made against."
+    },
+    "subjectScopeRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$",
+      "description": "The governed IdentityRecord the claim is about (gate-enforced: must resolve to a farm-contained IdentityRecord)."
+    },
+    "anchorScopes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["scopeType", "scopeRef"],
+        "properties": {
+          "scopeType": {
+            "enum": ["FARM"]
+          },
+          "scopeRef": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]+$"
+          }
+        }
+      }
+    },
+    "sourceEventRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]+$",
+      "description": "The SemanticEventEnvelope this claim was captured with."
+    }
+  }
+}

@@ -163,6 +163,7 @@ def build_artifact_set() -> dict:
             "contract:ofarm.reviewdecision.v0.1",
             "contract:ofarm.acceptedeventconsequence.v0.1",
             "contract:ofarm.executionrecordpayload.v0.1",
+            "contract:ofarm.complianceclaim.v0.1",
             "contract:ofarm.agronomicidentitybinding.v0.1",
             "contract:ofarm.referencesnapshot.v0.1",
             "view:si.ffs.spray-register.passportview.v0_1",

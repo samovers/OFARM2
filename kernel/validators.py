@@ -276,12 +276,23 @@ class ComplianceClaimValidator:
             return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
                 "EVIDENCE_INSUFFICIENT", "Compliance claim without statement",
                 "complianceClaim.statement must state what is being claimed"))
-        if claim.get("assertedStatus") not in policy.COMPLIANCE_ASSERTED_STATUSES:
+        status = claim.get("assertedStatus")
+        if not isinstance(status, str) \
+                or status not in policy.COMPLIANCE_ASSERTED_STATUSES:
             return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
                 "EVIDENCE_INSUFFICIENT", "Compliance claim without asserted status",
                 "complianceClaim.assertedStatus must be one of CLAIMED_COMPLIANT, "
                 "CLAIMED_NON_COMPLIANT, CLAIMED_PARTIALLY_COMPLIANT"))
         rule_refs = claim.get("governingRuleRefs") or []
+        # type-checked, not just truthy: a non-list shape must be a governed
+        # refusal here, never a late ContractViolation or an uncaught
+        # TypeError at the carrier write (own verification of PR #4 fixes)
+        if not isinstance(rule_refs, list) \
+                or not all(isinstance(r, str) for r in rule_refs):
+            return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
+                "EVIDENCE_INSUFFICIENT", "Governing rules unresolved",
+                "complianceClaim.governingRuleRefs must be a list of governed "
+                "rule/policy refs"))
         unknown_rules = [r for r in rule_refs
                          if r not in self.RECOGNIZED_RULE_REFS
                          and not ctx.store.record_exists(r)]
@@ -296,14 +307,21 @@ class ComplianceClaimValidator:
             return _refusal(ctx, "FAIL_REFERENCE_RESOLUTION", runtime_problem(
                 "EVIDENCE_REFERENCE_UNAVAILABLE", "Compliance subject unresolved",
                 f"complianceClaim.subjectScopeRef {subject_ref!r} does not resolve"))
-        if subject_row["record_kind"] == "ofarm.identityrecord.v0.1":
-            # a FARM identity's record id IS the farm ref, so the FARM branch
-            # of _assert_contained compares it directly against ctx.farm_ref
-            refusal = _assert_contained(
-                ctx, subject_row["payload"]["identityType"],
-                subject_ref, "complianceClaim.subjectScopeRef")
-            if refusal:
-                return refusal
+        if subject_row["record_kind"] != "ofarm.identityrecord.v0.1":
+            # steward review (PR #4): a resolvable-but-non-identity subject is
+            # refused, never silently passed — same taxonomy as the scope path
+            return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
+                "IDENTITY_UNRESOLVED", "Scope ref is not a governed identity",
+                f"complianceClaim.subjectScopeRef names {subject_ref} "
+                f"({subject_row['record_kind']}); governed claim scopes must "
+                "be IdentityRecords"))
+        # a FARM identity's record id IS the farm ref, so the FARM branch
+        # of _assert_contained compares it directly against ctx.farm_ref
+        refusal = _assert_contained(
+            ctx, subject_row["payload"]["identityType"],
+            subject_ref, "complianceClaim.subjectScopeRef")
+        if refusal:
+            return refusal
         ctx.log("VALIDATION", "PASS")
         return None
 

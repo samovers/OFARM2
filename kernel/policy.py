@@ -178,6 +178,11 @@ USE_CLASS_TO_CANONICAL = {
 # requirement -> freshness states that satisfy it. INVALID never satisfies
 # anything (the MaterializationResult contract forbids satisfied=true on an
 # INVALID state — allOf 2).
+# NO_CURRENT_STATE_DEPENDENCY is deliberately narrowed to stale-allowed
+# inside resolve_for_use: the mode is an undescribed enum value in the
+# candidate contracts (defined nowhere in reference/ — ERRATA E-003), and
+# its no-current-state intent is honored at the QueryPlanIR step layer
+# instead (declared in profile_si_ffs/UNSUPPORTED_SURFACES.md).
 FRESHNESS_USE_POLICY = {
     "REQUIRE_FRESH": frozenset({"FRESH"}),
     "ALLOW_STALE_EXPLORATORY": frozenset({"FRESH", "STALE"}),

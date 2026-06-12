@@ -5,7 +5,7 @@ Status: implementation and conformance packaging profile — not OFARM law. One 
 ## Components
 
 1. **Truth store** — PostgreSQL, append-only record tables, JSONB payloads validated against the package contracts on write. Not a triple store; RDF export is a later derived projection.
-2. **Gate pipeline** — the EnforcementChain as literal middleware. Every authoritative write crosses it; every refusal emits a `RuntimeProblem` with a registry reason code.
+2. **Gate pipeline** — the EnforcementChain as a transaction-scoped orchestration chain. Every authoritative write crosses it; every refusal emits a `RuntimeProblem` with a registry reason code.
 3. **Materializer** — deterministic: in-force records in → current state + `MaterializationBasis` + freshness out.
 4. **Mobile capture app** — offline-first (local draft queue; drafts are drafts until the server commits). Photos as `EvidenceRecord`s. Target: spray record entered in the field in ≤ 90 seconds (see `CAPTURE_MAPPING.md`).
 5. **Registry adapter** — imports the product register into `ReferenceSnapshot`s on the cadence the SI profile declares; generates `ExternalRegistryVerificationTrace`s at binding time. Snapshot-based; no live-integration claim.

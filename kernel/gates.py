@@ -1,4 +1,5 @@
-"""Gate pipeline (M1 brief task 3): the EnforcementChain as literal middleware.
+"""Gate pipeline (M1 brief task 3): the EnforcementChain as a
+transaction-scoped orchestration chain.
 
 ingress normalization → authority (default deny; revocation re-check)
 → validation (named validator units, kernel/validators.py)

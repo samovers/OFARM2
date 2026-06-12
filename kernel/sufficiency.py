@@ -8,8 +8,6 @@ first, demanded by the formal hostile re-review).
 """
 from __future__ import annotations
 
-import json
-
 from . import config, policy
 from .context import mint as _mint, now_iso
 from .problems import runtime_problem
@@ -27,15 +25,17 @@ def durable_evidence(store, refs: list[str]) -> list[str]:
 
 
 def recover_compliance_claim(store, assertion_id: str) -> dict | None:
-    """The structured claim captured verbatim with the original event."""
+    """The structured claim captured verbatim with the original event, as a
+    durable ComplianceClaim record reached via the COMPLIANCE_CLAIM edge
+    (steward review of PR #4 finding 3 — references are edges, never a
+    string-prefix parse of narrative notes)."""
     for edge in store.edges_from(assertion_id, "EVENT_SOURCE"):
-        event = store.get_payload(edge["dst_record_id"])
-        notes = (event or {}).get("notes", "")
-        if notes.startswith("complianceClaim:"):
-            try:
-                return json.loads(notes[len("complianceClaim:"):])
-            except ValueError:
-                return None
+        for claim_edge in store.edges_from(edge["dst_record_id"],
+                                           "COMPLIANCE_CLAIM"):
+            payload = store.get_payload(claim_edge["dst_record_id"])
+            if payload and payload.get(
+                    "schemaVersion") == "ofarm.complianceclaim.v0.1":
+                return payload
     return None
 
 

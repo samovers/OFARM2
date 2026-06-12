@@ -75,6 +75,7 @@ _ID_FIELDS = {
     "ofarm.identitylifecyclechange.v0.1": "identityLifecycleChangeId",
     "ofarm.assertionrecord.v0.1": "assertionRecordId",
     "ofarm.evidencerecord.v0.1": "evidenceRecordId",
+    "ofarm.complianceclaim.v0.1": "complianceClaimId",
     "ofarm.evidencesufficiencycase.v0.2": "sufficiencyCaseId",
     "ofarm.reviewdecision.v0.1": "reviewDecisionId",
     "ofarm.acceptedeventconsequence.v0.1": "acceptedEventConsequenceId",

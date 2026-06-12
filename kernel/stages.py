@@ -19,8 +19,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from . import policy, sufficiency
-from .context import parse_ts
-from .contracts import ContractViolation, canonical_json
+from .context import mint, parse_ts
+from .contracts import ContractViolation
 from .emission import PromotionEmitter, ReplayWriter
 from .problems import runtime_problem
 
@@ -189,13 +189,6 @@ class IngressNormalizer:
             envelope["evidenceRefs"] = sub["evidenceRefs"]
         if sub.get("noteText") is not None:
             envelope["notes"] = sub["noteText"]
-        if ctx.commit_class == "COMPLIANCE_ASSERTION" \
-                and isinstance(sub.get("payload"), dict) \
-                and isinstance(sub["payload"].get("complianceClaim"), dict):
-            # the structured claim is captured verbatim with the event so a
-            # later review act can re-evaluate exactly what was claimed
-            envelope["notes"] = "complianceClaim:" + canonical_json(
-                sub["payload"]["complianceClaim"])
         ctx.envelope = envelope
 
         ingress_request = {
@@ -284,6 +277,30 @@ class EnvelopePersist:
             ctx.envelope["executionRecordPayloadRefs"] = [ctx.erp_id]
         ctx.store.insert_record(ctx.cur, ctx.envelope)
         ctx.envelope_stored = True
+        if ctx.commit_class == "COMPLIANCE_ASSERTION":
+            # the validated claim fields become a durable ComplianceClaim
+            # carrier record (candidate contract, whose closed shape IS the
+            # lawful claim) linked to the event, so a later review act
+            # re-evaluates exactly what was claimed — never tunneled through
+            # the envelope's narrative notes (steward review of PR #4,
+            # finding 3). Validation has already confirmed shape and subject
+            # containment; like the ExecutionRecordPayload, the carrier is
+            # stored where it is confirmed, not promotion-emitted.
+            claim = ctx.sub["payload"]["complianceClaim"]
+            claim_record = {
+                "schemaVersion": "ofarm.complianceclaim.v0.1",
+                "complianceClaimId": mint("compclaim"),
+                "statement": claim["statement"],
+                "assertedStatus": claim["assertedStatus"],
+                "governingRuleRefs": claim["governingRuleRefs"],
+                "subjectScopeRef": claim["subjectScopeRef"],
+                "anchorScopes": [
+                    {"scopeType": "FARM", "scopeRef": ctx.farm_ref}],
+                "sourceEventRef": ctx.event_id,
+            }
+            ctx.store.insert_record(ctx.cur, claim_record)
+            ctx.store.add_edge(ctx.cur, "COMPLIANCE_CLAIM", ctx.event_id,
+                               claim_record["complianceClaimId"])
         return GatePass()
 
 
