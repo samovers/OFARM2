@@ -42,7 +42,7 @@ Software-agent auto-review is the named Phase-2 candidate (the agent actorship c
 
 | Milestone | Duration | Definition of done |
 |-----------|----------|--------------------|
-| **M0 — grounding** | 2–3 wks | EU 2023/564 Annex fields + SI rules verified with UVHVVR guidance; FITO-INFO access path established (or fallback declared); GERK data path confirmed; 3–5 farms + 1 advisor recruited; SI `AgronomicCodeBindingProfile` instance drafted from verified facts. |
+| **M0 — grounding** | 2–3 wks | EU 2023/564 Annex fields + SI rules verified with UVHVVR guidance; REGSR snapshot path established (FITO-INFO verified shut down; scripted HTML-parse cadence declared — ERRATA E-002); GERK data path confirmed; 3–5 farms + 1 advisor recruited; SI `AgronomicCodeBindingProfile` instance drafted from verified facts. |
 | **M1 — Kernel running** | 4–6 wks | Store + gates + materializer green against `conformance/`; static view artifacts (QuerySpec + QueryPlanIR) authored per `views/VIEWS.md`; Capability Manifest instance generated; a second person builds a client from this package alone. |
 | **M2 — Core on Kernel** | 3–4 wks | Identities, registry snapshots, GERK onboarding, code bindings enforced; `ActiveArtifactSet` regenerated against real artifacts. |
 | **M3 — the app** | 4–6 wks | Offline capture → sync → review → materialized register, end to end on a real phone on a real farm; ≤ 90 s per record. |

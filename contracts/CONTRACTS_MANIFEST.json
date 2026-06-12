@@ -535,11 +535,36 @@
     },
     {
       "packagePath": "profile_si_ffs/OFARM_ActiveArtifactSet_example_si_ffs_pilot_v0_1.json",
-      "status": "AUTHORED_EXAMPLE"
+      "status": "AUTHORED_EXAMPLE_REGENERATED_AT_M1"
     },
     {
       "packagePath": "profile_si_ffs/OFARM_ContextSnapshot_example_si_ffs_pilot_compliance_v0_1.json",
       "status": "AUTHORED_EXAMPLE"
+    },
+    {
+      "packagePath": "profile_si_ffs/OFARM_AgronomicCodeBindingProfile_si_ffs_v0_1.json",
+      "status": "AUTHORED_INSTANCE_M0_VERIFIED"
+    },
+    {
+      "packagePath": "profile_si_ffs/OFARM_ReferenceSnapshot_example_si_uvhvvr_ffs_reg_2026-06-11.json",
+      "status": "AUTHORED_INSTANCE_REAL_SNAPSHOT"
+    },
+    {
+      "packagePath": "profile_si_ffs/OFARM_ReferenceSnapshot_example_si_gerk_layer_2025-06-30.json",
+      "status": "AUTHORED_INSTANCE_REAL_SNAPSHOT"
+    },
+    {
+      "packagePath": "profile_si_ffs/OFARM_Capability_Manifest_si_ffs_pilot_v0_1.json",
+      "status": "GENERATED_AT_M1"
+    },
+    {
+      "packagePath": "views/OFARM_QueryPlanIR_si_ffs_spray_register_passportview_v0_1.json",
+      "status": "AUTHORED_VIEW_ARTIFACT_M1"
+    },
+    {
+      "packagePath": "views/OFARM_QueryPlanIR_si_ffs_inspection_register_documentassembly_v0_1.json",
+      "status": "AUTHORED_VIEW_ARTIFACT_M1"
     }
-  ]
+  ],
+  "profileInstancesNote": "Inventory of authored/generated instances schema-validated by conformance/ofarm_pkg_contract_check.py (INSTANCE_BINDINGS). The two authored QuerySpecification artifacts in views/ are deliberately NOT bound there (their schema uses keywords outside the self-check's declared validator subset) and are fully validated by kernel/tests/test_conformance.py test 15 instead."
 }
