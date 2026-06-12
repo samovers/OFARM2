@@ -58,8 +58,13 @@ is a complete `ExecutionRecordPayload` per `contracts/core/`.
 | `store.py` | the append-only truth store; edges, gate log, idempotency, in-force queries, reachability check |
 | `problems.py` | `RuntimeProblem` factory; reason codes verbatim from the registry RFC — unknown codes refuse loudly |
 | `context.py` | SI profile instance bootstrap, in-force reference snapshots, per-farm `ContextSnapshot` assembly with content-addressed reuse (basis drift mints, sameness reuses) |
-| `authority.py` | default-deny evaluator: roles, grants, delegations, sharing, prospective revocation, non-human actor rule |
-| `gates.py` | the EnforcementChain: ingress → authority → validation sub-gates → applicability → evidence sufficiency → review/promotion (self-review, D8) → materialization |
+| `authority.py` | default-deny evaluator: roles, grants, delegations bounded by live source authority, sharing, prospective revocation, party lifecycle, non-human actor rule |
+| `policy.py` | runtime policy as data: commit-class ↔ action-class/promotion/consequence tables, freshness-use policy, floor items, routing-resolution rules (issue #3) |
+| `gates.py` | the orchestration shell: wires the stage chain; one commit = one transaction (D3); no embedded policy branches |
+| `stages.py` | the named gate stages with typed results (`GatePass`/`GateRefusal`/`GateReplay`) sharing one transaction-scoped `GateContext` |
+| `validators.py` | the named validation units (temporal, target, containment, supersession, governance acceptance, compliance claim, carrier, references, attribution, code binding, registry re-verification) in law-pinned order |
+| `sufficiency.py` | `EvidenceSufficiencyCase` builders — floor cases, acceptance cases, routing amendments — auto-generated, never hand-authored |
+| `emission.py` | every record emission: `PromotionEmitter` (both promotion flavors share it), `PromotionTraceWriter` (reachability accounting), `ReplayWriter` |
 | `materializer.py` | deterministic recompute with `MaterializationBasis` receipts; basis-set invalidation (D12); the four explainable-evidence draft shapes behind Kernel law (D16) |
 | `views.py` | View 1 (PassportView) + View 2 (DocumentAssembly freeze/file) with `ResultQualificationEnvelope`s and refusal behavior |
 | `manifest.py` | Capability Manifest + ActiveArtifactSet generation from actual runtime surfaces + grounding verification |

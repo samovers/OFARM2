@@ -18,7 +18,7 @@ import json
 
 from . import config
 from .context import now_iso
-from .gates import ACTION_CLASS_BY_COMMIT, COMMIT_CLASS_TO_FAMILY
+from .policy import COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS, COMMIT_CLASS_TO_FAMILY
 
 MANIFEST_ID = "manifest:si.ffs.pilot.v0_1"
 MANIFEST_PATH = config.PROFILE_ROOT / "OFARM_Capability_Manifest_si_ffs_pilot_v0_1.json"
@@ -90,7 +90,7 @@ def build_manifest(store) -> dict:
                 # accepted Action Matrix vocabulary only — the exact classes
                 # the authority gate evaluates (no parallel runtime dialect)
                 "supportedActionClasses": sorted(set(
-                    ACTION_CLASS_BY_COMMIT.values()) | {
+                    COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS.values()) | {
                     "REVIEW_ACCEPT",
                     "OUTPUT_APPROVE_DOCUMENT_ASSEMBLY",
                     "OUTPUT_FILE_SUBMISSION_ASSEMBLY",
@@ -219,7 +219,7 @@ def verify_grounding(store, manifest: dict, artifact_set: dict) -> list[str]:
     # runtime evaluates; portable attestation stays unclaimed
     claimed_actions = set(manifest["capabilitySections"]["authoritySupport"]
                           ["supportedActionClasses"])
-    evaluated = set(ACTION_CLASS_BY_COMMIT.values()) | {
+    evaluated = set(COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS.values()) | {
         "REVIEW_ACCEPT", "OUTPUT_APPROVE_DOCUMENT_ASSEMBLY",
         "OUTPUT_FILE_SUBMISSION_ASSEMBLY", "RECEIVE_READ_DATA"}
     if claimed_actions != evaluated:

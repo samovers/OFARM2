@@ -34,11 +34,11 @@ jobs:
         run: pip install fastapi uvicorn pytest "psycopg[binary]" jsonschema rfc3339-validator httpx
       - name: Package self-check (must PASS before anything else)
         run: python3 conformance/ofarm_pkg_contract_check.py
-      - name: Platform MVP conformance suite (tests 1-15 + fixtures live)
+      - name: Platform MVP conformance suite + stage-contract tests
         env:
           OFARM_PG_DSN: "host=localhost port=5432 dbname=ofarm_kernel_test user=ofarm password=ofarm"
           OFARM_PG_ADMIN_DSN: "host=localhost port=5432 dbname=postgres user=ofarm password=ofarm"
-        run: python -m pytest kernel/tests/test_conformance.py -q
+        run: python -m pytest kernel/tests/ -q
       - name: Upload executed evidence
         if: always()
         uses: actions/upload-artifact@v4

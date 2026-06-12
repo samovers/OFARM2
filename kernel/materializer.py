@@ -20,7 +20,7 @@ from __future__ import annotations
 import hashlib
 import uuid
 
-from . import config
+from . import config, policy
 from .context import ContextAssembler, ContextNotReconstructible, now_iso, parse_ts
 from .contracts import canonical_json
 from psycopg.types.json import Jsonb
@@ -29,15 +29,8 @@ MATERIALIZATION_POLICY_REF = "policy:si.ffs.materialization.v0_1"
 RESULT_SHAPE_FAMILY = "si.ffs.spray-register.v0_1"
 RUNTIME_VERSION = "ofarm2-kernel-m1.0"
 
-_USE_CLASS_MAP = {
-    # draft MaterializationKey useClass -> canonical MaterializationRequest useClass
-    "OPERATIONAL_DASHBOARD": "EXPLORATORY",
-    "EXPLORATORY_VIEW": "EXPLORATORY",
-    "COMPLIANCE_DECISION_SUPPORT": "HIGH_CONSEQUENCE",
-    "ATTESTED_OUTPUT": "ATTESTED_OUTPUT",
-    "FORMAL_SUBMISSION": "ATTESTED_OUTPUT",
-    "FORENSIC_AUDIT": "AUDIT_EXPLANATION",
-}
+# use-class mapping is policy, not materializer code (issue #3)
+_USE_CLASS_MAP = policy.USE_CLASS_TO_CANONICAL
 
 
 def _mint(prefix: str) -> str:
@@ -518,18 +511,11 @@ class Materializer:
         live = cur.fetchone()
 
         # Freshness is purpose-sensitive (Current-State RFC §6.4): the three
-        # requirement modes are distinct semantics, not synonyms for FRESH.
-        # High-consequence use always escalates to REQUIRE_FRESH (§8/§9).
-        effective_requirement = ("REQUIRE_FRESH" if high_consequence
-                                 else required_freshness)
-
+        # requirement modes are distinct semantics, not synonyms for FRESH —
+        # the FRESHNESS_USE_POLICY table in kernel/policy.py is the rule.
         def requirement_satisfied(freshness_state: str) -> bool:
-            # INVALID never satisfies any requirement (the contract forbids
-            # ALLOW_REUSE/satisfied on an INVALID state — allOf 2)
-            if effective_requirement in ("NO_CURRENT_STATE_DEPENDENCY",
-                                         "ALLOW_STALE_EXPLORATORY"):
-                return freshness_state in ("FRESH", "STALE")
-            return freshness_state == "FRESH"
+            return policy.freshness_satisfied(required_freshness,
+                                              high_consequence, freshness_state)
 
         recomputed = False
         problems = []
@@ -584,10 +570,11 @@ class Materializer:
                 [] if freshness == "FRESH" or mat is None else ["TRUTH_BASIS"]),
             "problems": problems,
             # the reason never overstates freshness: a stale reuse says so
+            # (wording is policy — kernel/policy.py)
             "reasonSummary": (
-                ("reused FRESH materialization" if freshness == "FRESH" else
-                 f"reused STALE materialization under {effective_requirement}; "
-                 "high-consequence use barred") if decision == "ALLOW_REUSE"
+                policy.reuse_reason_summary(freshness, required_freshness,
+                                            high_consequence)
+                if decision == "ALLOW_REUSE"
                 else "recomputed for this use" if recomputed
                 else "refused: not demonstrably FRESH"),
         }

@@ -1,0 +1,189 @@
+"""Stage-contract tests (issue #3): the policy tables, freshness semantics,
+and validator contracts are tested at their OWN boundaries — typed input,
+typed result. Behavior-first discipline: the conformance suite
+(test_conformance.py) remains the only arbiter of law; these tests pin the
+stage contracts so a future edit that bends a table or a validator's
+disposition fails HERE, before it can look law-consistent end to end.
+"""
+from __future__ import annotations
+
+import re
+from contextlib import contextmanager
+
+from kernel import config, policy
+from kernel.stages import GateContext, GateRefusal
+from kernel.validators import (PromotionTargetValidator, ScopeContainmentValidator,
+                               SupersessionValidator, TemporalConformanceValidator)
+from kernel import demo
+
+
+# =========================================================================
+# policy tables: internally consistent and bound to the ACCEPTED law
+# =========================================================================
+
+def test_policy_action_classes_are_accepted_matrix_vocabulary():
+    """Every action class the runtime evaluates must appear verbatim in the
+    accepted Authority Action Matrix — parsed from the law file itself, so
+    a parallel runtime dialect can never silently reappear."""
+    matrix_md = (config.PACKAGE_ROOT / "reference" / "rfcs"
+                 / "OFARM_Authority_Action_Matrix_v0_1.md").read_text()
+    accepted = set(re.findall(r"^\| ([A-Z][A-Z_]+) \|", matrix_md, re.MULTILINE))
+    assert accepted, "could not parse the Action Matrix vocabulary"
+    runtime_classes = set(policy.COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS.values()) | {
+        "REVIEW_ACCEPT", "OUTPUT_APPROVE_DOCUMENT_ASSEMBLY",
+        "OUTPUT_FILE_SUBMISSION_ASSEMBLY", "RECEIVE_READ_DATA"}
+    drift = runtime_classes - accepted
+    assert not drift, f"runtime action classes outside the accepted matrix: {drift}"
+
+
+def test_policy_tables_are_closed_and_consistent():
+    # every commit class has a family and an authority action
+    assert set(policy.COMMIT_CLASS_TO_FAMILY) == \
+        set(policy.COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS)
+    # every promotion target has a consequence type
+    for target in policy.COMMIT_CLASS_TO_PROMOTION_TARGET.values():
+        assert target in policy.PROMOTION_TARGET_TO_CONSEQUENCE_TYPE
+    # promoting classes are a subset of commit classes
+    assert set(policy.COMMIT_CLASS_TO_PROMOTION_TARGET) <= \
+        set(policy.COMMIT_CLASS_TO_FAMILY)
+    # the acceptance table agrees with the promotion tables, assertion-type-wise
+    for assertion_type, (target, ctype) in policy.ACCEPTANCE_BY_ASSERTION_TYPE.items():
+        assert policy.PROMOTION_TARGET_TO_CONSEQUENCE_TYPE[target] == ctype
+        commit_class = next(
+            c for c, t in policy.COMMIT_CLASS_TO_ASSERTION_TYPE.items()
+            if t == assertion_type)
+        assert policy.COMMIT_CLASS_TO_PROMOTION_TARGET[commit_class] == target
+    # D8: self-acceptance scope is exactly routine operation claims
+    assert policy.SELF_ACCEPTABLE_ASSERTION_TYPES == {"OPERATION_CLAIM_ASSERTION"}
+
+
+def test_freshness_use_policy_truth_table():
+    """The three requirement modes are distinct semantics; INVALID never
+    satisfies anything; high consequence escalates to REQUIRE_FRESH."""
+    cases = {
+        # (required, high_consequence, state) -> satisfied
+        ("REQUIRE_FRESH", False, "FRESH"): True,
+        ("REQUIRE_FRESH", False, "STALE"): False,
+        ("REQUIRE_FRESH", False, "INVALID"): False,
+        ("ALLOW_STALE_EXPLORATORY", False, "FRESH"): True,
+        ("ALLOW_STALE_EXPLORATORY", False, "STALE"): True,
+        ("ALLOW_STALE_EXPLORATORY", False, "INVALID"): False,
+        ("ALLOW_STALE_EXPLORATORY", True, "STALE"): False,   # escalated
+        ("NO_CURRENT_STATE_DEPENDENCY", False, "STALE"): True,
+        ("NO_CURRENT_STATE_DEPENDENCY", False, "INVALID"): False,
+        ("NO_CURRENT_STATE_DEPENDENCY", True, "STALE"): False,  # escalated
+    }
+    for (required, high, state), expected in cases.items():
+        assert policy.freshness_satisfied(required, high, state) is expected, \
+            (required, high, state)
+    # honest reuse wording
+    assert policy.reuse_reason_summary("FRESH", "REQUIRE_FRESH", False) == \
+        "reused FRESH materialization"
+    stale_text = policy.reuse_reason_summary("STALE", "ALLOW_STALE_EXPLORATORY", False)
+    assert "STALE" in stale_text and "high-consequence use barred" in stale_text
+
+
+# =========================================================================
+# validator contracts: typed input -> typed result, dispositions pinned
+# =========================================================================
+
+class _Rollback(Exception):
+    """Roll the stage-test transaction back: contract tests must leave no
+    rows behind (their gate-log writes are scratch, not evidence)."""
+
+
+@contextmanager
+def scratch_tx(store):
+    try:
+        with store.tx() as cur:
+            yield cur
+            raise _Rollback
+    except _Rollback:
+        pass
+
+
+def _ctx(store, cur, sub: dict) -> GateContext:
+    return GateContext(
+        cur=cur, store=store, authority=None, context_assembler=None,
+        materializer=None, products=None, sub=sub,
+        request_id="cir:stage-test", ingested_at="2026-06-12T00:00:00Z",
+        source_digest="sha256:stage-test",
+        commit_class=sub.get("commitClass", "OPERATION_CLAIM"),
+        farm_ref=sub.get("farmRef", demo.FARM),
+        acting_party=sub.get("actingPartyRef", demo.FARMER),
+        idem_key="stage-test", event_id="event:stage-test",
+        assertion_id="assert:stage-test",
+        event_time=sub.get("eventTime"),
+        captured_at=sub.get("capturedAt", "2026-06-12T00:00:00Z"))
+
+
+def test_temporal_validator_contract(store):
+    with scratch_tx(store) as cur:
+        # junk pre-parse problem -> refusal, FAIL_TEMPORAL, RETAIN_DRAFT
+        ctx = _ctx(store, cur, {"eventTime": None})
+        ctx.temporal_problem = {"schemaVersion": "ofarm.runtimeproblem.v0.1",
+                                "problemId": "problem:stage-test",
+                                "severity": "ERROR",
+                                "reasonCode": "EVIDENCE_INSUFFICIENT",
+                                "title": "t", "detail": "junk time"}
+        refusal = TemporalConformanceValidator().run(ctx)
+        assert isinstance(refusal, GateRefusal)
+        assert (refusal.gate, refusal.outcome, refusal.final_outcome) == \
+            ("VALIDATION", "FAIL_TEMPORAL", "RETAIN_DRAFT")
+
+        # implausible-but-parseable time -> review route, NOT a refusal
+        ctx2 = _ctx(store, cur, {"eventTime": "2020-01-01T00:00:00Z"})
+        assert TemporalConformanceValidator().run(ctx2) is None
+        assert ctx2.review_route_reasons, "implausible time must route to review"
+        assert ctx2.review_route_reasons[0]["severity"] == "WARNING"
+
+
+def test_promotion_target_validator_contract(store):
+    with scratch_tx(store) as cur:
+        ctx = _ctx(store, cur, {"commitClass": "OBSERVATION_ASSERTION",
+                                "eventTime": "2026-06-10T09:00:00Z"})
+        ctx.requested_target = "COMPLIANCE_FACT"   # unlawful for observations
+        refusal = PromotionTargetValidator().run(ctx)
+        assert isinstance(refusal, GateRefusal)
+        assert refusal.problems[0]["reasonCode"] == "HIGH_CONSEQUENCE_BLOCKED"
+
+        ctx2 = _ctx(store, cur, {"commitClass": "OPERATION_CLAIM",
+                                 "subjectType": "OTHER", "subjectRef": "x:y"})
+        refusal2 = PromotionTargetValidator().run(ctx2)
+        assert isinstance(refusal2, GateRefusal)
+        assert refusal2.problems[0]["reasonCode"] == "IDENTITY_UNRESOLVED"
+
+
+def test_scope_containment_validator_contract(store):
+    with scratch_tx(store) as cur:
+        # TENANT is never a commitable claim scope
+        ctx = _ctx(store, cur, {
+            "commitClass": "OPERATION_CLAIM",
+            "targetScopes": [{"scopeType": "TENANT", "scopeRef": config.TENANT_REF}]})
+        refusal = ScopeContainmentValidator().run(ctx)
+        assert isinstance(refusal, GateRefusal)
+        assert refusal.problems[0]["reasonCode"] == "SCOPE_NOT_AUTHORIZED"
+
+        # the demo field is anchored on the demo farm -> pass
+        ctx2 = _ctx(store, cur, {
+            "commitClass": "OPERATION_CLAIM",
+            "subjectType": "FIELD", "subjectRef": demo.FIELD})
+        assert ScopeContainmentValidator().run(ctx2) is None
+
+
+def test_supersession_validator_contract(store):
+    with scratch_tx(store) as cur:
+        ctx = _ctx(store, cur, {
+            "commitClass": "OPERATION_CLAIM",
+            "supersedesConsequenceRef": "conseq:does.not.exist"})
+        refusal = SupersessionValidator().run(ctx)
+        assert isinstance(refusal, GateRefusal)
+        assert refusal.problems[0]["reasonCode"] == "EVIDENCE_REFERENCE_UNAVAILABLE"
+
+        # a non-consequence target is the wrong kind
+        ctx2 = _ctx(store, cur, {
+            "commitClass": "OPERATION_CLAIM",
+            "supersedesConsequenceRef": demo.FARMER})   # a Party record
+        refusal2 = SupersessionValidator().run(ctx2)
+        assert isinstance(refusal2, GateRefusal)
+        assert refusal2.problems[0]["reasonCode"] == "SUPERSEDED_RECORD_USED"
