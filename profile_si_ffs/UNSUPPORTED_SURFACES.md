@@ -46,6 +46,23 @@ reviewer's own principal); a reviewer named inside the submitter's request
 never promotes — that inline path was removed after the second hostile
 review.
 
+**Freshness mode `NO_CURRENT_STATE_DEPENDENCY` (M1, declared):** inside
+`Materializer.resolve_for_use` this mode is **conservatively narrowed to
+stale-allowed** (the same satisfaction set as `ALLOW_STALE_EXPLORATORY`);
+with no live materialization and recomputation disabled it refuses with
+`MATERIALIZATION_BASIS_MISSING` (Kernel rule 7) rather than serving without
+a basis. This is deliberate, twice over: the mode is an **undescribed enum
+value** in the candidate contracts (defined nowhere in `reference/` — ERRATA
+E-003), and the `MaterializationResult` contract admits **no lawful no-basis
+outcome** (closed `decisionOutcome` enum; `allOf` forbids `ALLOW_REUSE` on an
+INVALID state) — a "true no-materialization path" through the materializer
+would have to misreport freshness. The mode's actual no-current-state intent
+is honored at the **QueryPlanIR step layer**: the two shipped views mark
+exactly their direct-substrate-read steps (pending claims, advisory flags)
+with this requirement, and those steps never touch the materializer
+(`kernel/views.py`). No production caller routes this mode through
+`resolve_for_use`.
+
 **Runtime evidence level** (Performance & Explainable Current-State Evidence
 RFC §11.3): `CONFORMANCE_FIXTURE_PASSING` at most once the M1 suite is green —
 no benchmark, load, storage-amplification, or production evidence exists, so

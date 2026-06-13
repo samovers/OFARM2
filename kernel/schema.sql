@@ -57,14 +57,23 @@ CREATE TABLE IF NOT EXISTS kernel_edge (
                   'REVIEW',                 -- consequence/assertion -> ReviewDecision
                   'EVENT_SOURCE',           -- assertion/consequence -> SemanticEventEnvelope
                   'LINEAGE_SUPERSEDES',     -- new record -> superseded record
-                  'LINEAGE_REVISES',        -- revision -> revised
+                  'LINEAGE_REVISES',        -- reserved; M1 emits corrections as LINEAGE_SUPERSEDES
                   'MATERIALIZATION_BASIS',  -- MaterializationBasis -> contributing record
-                  'PROMOTION_EMITS'         -- PromotionTrace -> emitted record (reachability, D3)
+                  'PROMOTION_EMITS',        -- PromotionTrace -> emitted record (reachability, D3)
+                  'COMPLIANCE_CLAIM'        -- semantic event -> ComplianceClaim carrier record
                 )),
   src_record_id text NOT NULL,
   dst_record_id text NOT NULL,
   record_time   timestamptz NOT NULL DEFAULT now()
 );
+-- CREATE TABLE IF NOT EXISTS never updates an existing CHECK: refresh the
+-- edge vocabulary idempotently so pre-existing databases pick up new types
+ALTER TABLE kernel_edge DROP CONSTRAINT IF EXISTS kernel_edge_edge_type_check;
+ALTER TABLE kernel_edge ADD CONSTRAINT kernel_edge_edge_type_check CHECK (edge_type IN (
+  'AUTHORITY_BASIS', 'EVIDENCE', 'REVIEW', 'EVENT_SOURCE',
+  'LINEAGE_SUPERSEDES', 'LINEAGE_REVISES', 'MATERIALIZATION_BASIS',
+  'PROMOTION_EMITS', 'COMPLIANCE_CLAIM'));
+
 CREATE INDEX IF NOT EXISTS ix_kernel_edge_src ON kernel_edge (src_record_id, edge_type);
 CREATE INDEX IF NOT EXISTS ix_kernel_edge_dst ON kernel_edge (dst_record_id, edge_type);
 

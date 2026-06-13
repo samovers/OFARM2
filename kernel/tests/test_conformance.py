@@ -17,7 +17,7 @@ import jsonschema
 import psycopg
 import pytest
 
-from kernel import config, context, demo
+from kernel import config, context, demo, sufficiency
 from kernel.contracts import canonical_json
 from .conftest import record_detail
 
@@ -1502,6 +1502,11 @@ def test_95_hostile_review_regressions(store, pipeline, materializer):
     summary = stale_reuse["materializationResult"]["reasonSummary"]
     assert "STALE" in summary and "FRESH" not in summary.split("STALE")[0], \
         f"stale reuse must say so honestly, got: {summary!r}"
+    # the result reports the family that ACTUALLY staled the mat — a
+    # reference change is CONTEXT, never a hard-coded TRUTH_BASIS
+    # (steward review of PR #4, finding 2)
+    assert stale_reuse["materializationResult"][
+        "invalidationTriggerFamilies"] == ["CONTEXT"]
     with store.tx() as cur:   # leave the suite FRESH
         materializer.resolve_for_use(cur, demo.FARM)
     closed["f8-honest-stale-reason"] = summary
@@ -1595,6 +1600,9 @@ def test_96_identity_context_invalidation_and_freshness_modes(
                                               recompute_if_needed=False)
     assert strict["decision"] == "REFUSE_USE" and strict["freshness"] == "STALE"
     assert strict["materializationResult"]["satisfiedFreshnessRequirement"] is False
+    assert strict["materializationResult"][
+        "invalidationTriggerFamilies"] == ["CONTEXT"], \
+        "a reference-change staling must report CONTEXT (PR #4 finding 2)"
 
     with store.tx() as cur:
         exploratory = materializer.resolve_for_use(
@@ -1603,6 +1611,8 @@ def test_96_identity_context_invalidation_and_freshness_modes(
     assert exploratory["decision"] == "ALLOW_REUSE"
     assert exploratory["freshness"] == "STALE"
     assert exploratory["materializationResult"]["satisfiedFreshnessRequirement"] is True
+    assert exploratory["materializationResult"][
+        "invalidationTriggerFamilies"] == ["CONTEXT"]
 
     with store.tx() as cur:
         escalated = materializer.resolve_for_use(
@@ -1618,6 +1628,22 @@ def test_96_identity_context_invalidation_and_freshness_modes(
     assert nodep["decision"] == "ALLOW_REUSE"
     assert nodep["materializationResult"]["satisfiedFreshnessRequirement"] is True
 
+    # NO_CURRENT_STATE_DEPENDENCY with NO materialization at all and
+    # recompute disabled refuses (declared M1 narrowing — UNSUPPORTED_
+    # SURFACES.md, ERRATA E-003): a never-materialized key (FORENSIC_AUDIT
+    # use class) must refuse with MATERIALIZATION_BASIS_MISSING, never
+    # serve without a basis
+    with store.tx() as cur:
+        nobasis = materializer.resolve_for_use(
+            cur, demo.FARM, use_class="FORENSIC_AUDIT",
+            required_freshness="NO_CURRENT_STATE_DEPENDENCY",
+            recompute_if_needed=False)
+    assert nobasis["decision"] == "REFUSE_USE"
+    assert nobasis["materializationResult"]["freshnessState"] == "INVALID"
+    assert nobasis["materializationResult"][
+        "satisfiedFreshnessRequirement"] is False
+    assert nobasis["problems"][0]["reasonCode"] == "MATERIALIZATION_BASIS_MISSING"
+
     with store.tx() as cur:   # leave the suite FRESH
         materializer.resolve_for_use(cur, demo.FARM)
     record_detail("test_96", {
@@ -1626,7 +1652,9 @@ def test_96_identity_context_invalidation_and_freshness_modes(
         "freshnessModes": {"REQUIRE_FRESH": strict["decision"],
                            "ALLOW_STALE_EXPLORATORY": exploratory["decision"],
                            "ALLOW_STALE_EXPLORATORY+highConsequence": escalated["decision"],
-                           "NO_CURRENT_STATE_DEPENDENCY": nodep["decision"]}})
+                           "NO_CURRENT_STATE_DEPENDENCY": nodep["decision"],
+                           "NO_CURRENT_STATE_DEPENDENCY+noBasis":
+                               nobasis["decision"]}})
 
 
 # =========================================================================
@@ -1667,6 +1695,45 @@ def test_97_review_driven_regressions(store, pipeline):
     assert r["decisionOutcome"] == "RETAIN_DRAFT"
     assert r["problems"][0]["reasonCode"] == "EVIDENCE_INSUFFICIENT"
     closed["unstructured-compliance-refused"] = r["problems"][0]["reasonCode"]
+
+    # (a3) a compliance claim whose subject resolves to a NON-IDENTITY
+    # record (here: an EvidenceRecord) is refused, never silently passed
+    # (steward review of PR #4, finding 1)
+    bad_subject = dict(
+        self_reviewed, idempotencyKey=f"reg:a3:{uid()}",
+        payload={"complianceClaim": dict(
+            structured_claim["complianceClaim"],
+            subjectScopeRef=demo.PHOTO_EVIDENCE)})
+    r = pipeline.commit(bad_subject)
+    assert r["decisionOutcome"] == "RETAIN_DRAFT"
+    assert r["problems"][0]["reasonCode"] == "IDENTITY_UNRESOLVED"
+    assert "not a governed identity" in r["problems"][0]["title"]
+    closed["non-identity-compliance-subject-refused"] = \
+        r["problems"][0]["reasonCode"]
+
+    # (a4) the structured claim is a durable ComplianceClaim record linked
+    # by a COMPLIANCE_CLAIM edge; the envelope's notes stays the farmer's
+    # narrative, never a machine tunnel (steward review of PR #4, finding 3)
+    noted = dict(self_reviewed, idempotencyKey=f"reg:a4:{uid()}",
+                 noteText="fictional demo: farmer narrative note")
+    r = pipeline.commit(noted)
+    assert r["decisionOutcome"] == "REQUIRE_REVIEW"
+    assertion_ref = r["emittedAssertionRecordRefs"][0]
+    event_ref = store.edges_from(assertion_ref, "EVENT_SOURCE")[0]["dst_record_id"]
+    event = store.get_payload(event_ref)
+    assert event["notes"] == "fictional demo: farmer narrative note", \
+        "notes must carry the narrative, not a complianceClaim: tunnel"
+    claim_edges = store.edges_from(event_ref, "COMPLIANCE_CLAIM")
+    assert len(claim_edges) == 1, "exactly one durable claim record per event"
+    claim_rec = store.get_payload(claim_edges[0]["dst_record_id"])
+    assert claim_rec["schemaVersion"] == "ofarm.complianceclaim.v0.1"
+    assert claim_rec["statement"] == \
+        structured_claim["complianceClaim"]["statement"]
+    assert claim_rec["sourceEventRef"] == event_ref
+    recovered = sufficiency.recover_compliance_claim(store, assertion_ref)
+    assert recovered is not None and recovered["assertedStatus"] == \
+        "CLAIMED_COMPLIANT", "acceptance must recover the durable claim"
+    closed["durable-compliance-claim-record"] = claim_rec["complianceClaimId"].split(":")[0]
 
     # (b) dangling supersession ref is refused outright
     sub = demo.spray_submission(f"reg:b:{uid()}", erp_id=f"erp:reg.{uid()}")
@@ -1906,7 +1973,6 @@ def test_98_stale_registry_snapshot_recheck(store, pipeline):
 # =========================================================================
 
 def test_98z_as_of_spine_guard(store, pipeline, materializer):
-    import json as _json
     original = store.find_by_kind("ofarm.packactivationset.v0.1")[-1]["payload"]
     duplicate = dict(original)
     duplicate["packActivationSetId"] = f"packactivationset:si.ffs.pilot.dup-test.{uid()}"

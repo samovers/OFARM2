@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import itertools
 
-# Registry codes used by this runtime (verbatim from the RFC).
+# Registry codes this runtime may emit (verbatim from the RFC).
 REGISTERED_REASON_CODES = {
     # authority
     "AUTHORITY_DENIED",
@@ -80,12 +80,3 @@ def runtime_problem(
         problem["suggestedRemediation"] = suggested_remediation
     return problem
 
-
-class GateRefusal(Exception):
-    """A gate refused; carries the RuntimeProblem and the gate outcome."""
-
-    def __init__(self, gate: str, outcome: str, problem: dict):
-        super().__init__(f"{gate} -> {outcome}: {problem['detail']}")
-        self.gate = gate
-        self.outcome = outcome
-        self.problem = problem

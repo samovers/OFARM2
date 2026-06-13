@@ -319,6 +319,13 @@
       "lawBasis": "see $comment in file"
     },
     {
+      "packagePath": "contracts/kernel/OFARM_ComplianceClaim_schema_v0_1.json",
+      "sourcePath": null,
+      "status": "NEW_CANDIDATE",
+      "promotionLadderStage": "CANDIDATE_ARTIFACT",
+      "lawBasis": "see $comment in file"
+    },
+    {
       "packagePath": "contracts/kernel/OFARM_Party_schema_v0_1.json",
       "sourcePath": null,
       "status": "NEW_CANDIDATE",

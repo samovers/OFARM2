@@ -4,7 +4,7 @@
   "status": "ACTIVE",
   "ofarmVersion": "RC2.1",
   "platformVersion": "ofarm2-kernel-m1.0",
-  "publishedAt": "2026-06-12T07:29:58.204769Z",
+  "publishedAt": "2026-06-12T21:17:45.377127Z",
   "deploymentScope": {
     "scopeType": "TENANT",
     "scopeRef": "tenant:si.ffs.pilot.demo"
@@ -26,6 +26,7 @@
         "ofarm.capabilitymanifest.v0.1",
         "ofarm.commitingressrequest.v0.1",
         "ofarm.commitingressresult.v0.1",
+        "ofarm.complianceclaim.v0.1",
         "ofarm.contextsnapshot.v0.1",
         "ofarm.cropcycleidentitypayload.v0.1",
         "ofarm.delegationgrant.v0.1",

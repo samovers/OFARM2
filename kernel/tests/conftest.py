@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 import os
 from datetime import datetime, timezone
-from pathlib import Path
 
 import psycopg
 import pytest
@@ -73,7 +72,10 @@ def materializer(store):
 
 
 def pytest_runtest_logreport(report):
-    if report.when == "call":
+    # the evidence file claims the named conformance suite, so it carries
+    # conformance results only; engineering tests (test_stages.py) run in
+    # the same session but never masquerade as suite evidence
+    if report.when == "call" and "test_conformance.py" in report.nodeid:
         _RESULTS.append({
             "test": report.nodeid,
             "outcome": report.outcome,
@@ -82,13 +84,15 @@ def pytest_runtest_logreport(report):
 
 
 def pytest_sessionfinish(session, exitstatus):
+    if not _RESULTS:
+        return  # no conformance tests ran (e.g. -k filter); nothing to attest
     EVIDENCE_DIR.mkdir(exist_ok=True)
     ts = datetime.now(timezone.utc)
     payload = {
         "suite": "conformance:ofarm2.platform-mvp.tests-1-15.v0_1",
         "executed": True,
         "executedAt": ts.isoformat().replace("+00:00", "Z"),
-        "runtimeVersion": "ofarm2-kernel-m1.0",
+        "runtimeVersion": config.RUNTIME_VERSION,
         "exitStatus": exitstatus,
         "allPassed": exitstatus == 0 and all(r["outcome"] == "passed" for r in _RESULTS),
         "results": _RESULTS,

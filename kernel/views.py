@@ -16,7 +16,6 @@ record-keeping completeness, never current-compliance (PILOT_SI.md).
 from __future__ import annotations
 
 import hashlib
-import uuid
 
 from psycopg.types.json import Jsonb
 
@@ -25,7 +24,7 @@ from .authority import AuthorityEvaluator
 from .contracts import canonical_json
 from .materializer import Materializer
 from .problems import runtime_problem
-from .context import now_iso, parse_ts
+from .context import mint as _mint, now_iso, parse_ts
 
 PASSPORT_VIEW_REF = "view:si.ffs.spray-register.passportview.v0_1"
 DOCASM_VIEW_REF = "view:si.ffs.inspection-register.documentassembly.v0_1"
@@ -39,10 +38,6 @@ CLAIM_STATEMENT = ("This register faithfully and traceably reflects what the far
                    "It claims record-keeping completeness only — never current-"
                    "compliance against the authorisation register, certification, "
                    "or legal advice.")
-
-
-def _mint(prefix: str) -> str:
-    return f"{prefix}:{uuid.uuid4().hex[:16]}"
 
 
 def _qualification(*, surface_class: str, staleness: str, sufficiency: str,

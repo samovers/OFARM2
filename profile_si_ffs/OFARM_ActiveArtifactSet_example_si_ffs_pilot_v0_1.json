@@ -1,7 +1,7 @@
 {
   "schemaVersion": "ofarm.activeartifactset.v0.1",
   "activeArtifactSetId": "activeartifactset:si.ffs.pilot.v0_1",
-  "generatedAt": "2026-06-12T07:29:58.204912Z",
+  "generatedAt": "2026-06-12T21:17:45.377266Z",
   "deploymentScope": {
     "scopeType": "TENANT",
     "scopeRef": "tenant:si.ffs.pilot.demo"
@@ -20,6 +20,7 @@
     "contract:ofarm.reviewdecision.v0.1",
     "contract:ofarm.acceptedeventconsequence.v0.1",
     "contract:ofarm.executionrecordpayload.v0.1",
+    "contract:ofarm.complianceclaim.v0.1",
     "contract:ofarm.agronomicidentitybinding.v0.1",
     "contract:ofarm.referencesnapshot.v0.1",
     "view:si.ffs.spray-register.passportview.v0_1",

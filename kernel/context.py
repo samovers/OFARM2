@@ -12,7 +12,6 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import datetime, timezone
-from pathlib import Path
 
 from . import config
 from .contracts import canonical_json
@@ -32,6 +31,12 @@ GERK_SNAPSHOT_PREFIX = "referencesnapshot:si.mkgp.gerk-layer"
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def mint(prefix: str) -> str:
+    """The kernel's single id-minting helper (id-safe, pattern-conformant)."""
+    import uuid
+    return f"{prefix}:{uuid.uuid4().hex[:16]}"
 
 
 def parse_ts(value) -> datetime | None:
@@ -104,7 +109,7 @@ class ProductRegister:
         # the shipped real parse (623 products, fictional-free: public register data)
         shipped = config.PROFILE_ROOT / "examples" / "regsr_snapshot_2026-06-12.json"
         if shipped.exists():
-            self.register_artifact("referencesnapshot:si.uvhvvr.ffs-reg.2026-06-11",
+            self.register_artifact(config.SHIPPED_REGSR_SNAPSHOT_REF,
                                    json.loads(shipped.read_text()))
 
     def register_artifact(self, snapshot_id: str, artifact: dict) -> None:

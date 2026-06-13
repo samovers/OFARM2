@@ -14,6 +14,7 @@ binding references real *public register* data (REGSR product 1646 "ACCOUNT")
 """
 from __future__ import annotations
 
+from . import config
 from .context import now_iso
 
 FARM = "farm:demo.kmetija.a"
@@ -31,7 +32,7 @@ PHOTO_EVIDENCE = "evidence:demo.spray.photo.1"
 FARMER_GRANT = "grant:demo.farmer.one.full"
 WORKER_DELEGATION = "deleg:demo.worker.one.spray"
 INSPECTOR_SHARE = "share:demo.inspector.one.read"
-REGSR_SNAPSHOT = "referencesnapshot:si.uvhvvr.ffs-reg.2026-06-11"
+REGSR_SNAPSHOT = config.SHIPPED_REGSR_SNAPSHOT_REF
 
 VALID_FROM = "2026-01-01T00:00:00Z"
 # Accepted Authority Action Matrix vocabulary only
@@ -186,7 +187,7 @@ def substrate_records() -> list[dict]:
 
         {"schemaVersion": "ofarm.externalregistryverificationtrace.v0.1",
          "externalRegistryVerificationTraceId": "trace:demo.regver.account",
-         "profileRef": "codebindingprofile:si.ffs.v0_1",
+         "profileRef": config.CODE_BINDING_PROFILE_REF,
          "verificationPurpose": "PRODUCT_AUTHORISATION_IDENTITY",
          "createdAt": t,
          "traceAuthorityRef": "party:si.uvhvvr",
@@ -285,7 +286,7 @@ def spray_payload(erp_id: str = "erp:demo.spray.0001", *,
                 "an operation claim is not an accepted execution (Kernel rule 4)"},
         "agronomicIdentityBindingRefs":
             binding_refs if binding_refs is not None else [PRODUCT_BINDING, CROP_BINDING],
-        "agronomicCodeBindingProfileRef": "codebindingprofile:si.ffs.v0_1",
+        "agronomicCodeBindingProfileRef": config.CODE_BINDING_PROFILE_REF,
     }
 
 

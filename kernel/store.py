@@ -15,7 +15,6 @@ enforces the storage posture:
 """
 from __future__ import annotations
 
-import json
 from contextlib import contextmanager
 
 import psycopg
@@ -23,7 +22,7 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from . import config
-from .contracts import ContractRegistry, ContractViolation, canonical_json, sha256_of
+from .contracts import ContractRegistry, ContractViolation, sha256_of
 
 AUTHORITATIVE_KINDS = (
     "ofarm.assertionrecord.v0.1",

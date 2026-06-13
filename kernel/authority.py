@@ -9,11 +9,10 @@ store; the evaluator simply stops finding a valid path through them.
 """
 from __future__ import annotations
 
-import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from .context import now_iso
+from .context import mint as _mint, now_iso
 from .problems import runtime_problem
 
 # Scope types a FARM-scoped grant covers under DESCENDANT_SCOPES
@@ -31,10 +30,6 @@ class AuthorityDecision:
     @property
     def allowed(self) -> bool:
         return self.outcome == "ALLOW"
-
-
-def _mint(prefix: str) -> str:
-    return f"{prefix}:{uuid.uuid4().hex[:16]}"
 
 
 def _parse_dt(value: str) -> datetime | None:

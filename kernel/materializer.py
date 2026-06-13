@@ -18,30 +18,36 @@ an undeterminable dependency boundary broadens invalidation, never narrows it.
 from __future__ import annotations
 
 import hashlib
-import uuid
 
-from . import config
-from .context import ContextAssembler, ContextNotReconstructible, now_iso, parse_ts
+from . import config, policy
+from .context import (ContextAssembler, ContextNotReconstructible,
+                      mint as _mint, now_iso, parse_ts)
 from .contracts import canonical_json
 from psycopg.types.json import Jsonb
 
 MATERIALIZATION_POLICY_REF = "policy:si.ffs.materialization.v0_1"
 RESULT_SHAPE_FAMILY = "si.ffs.spray-register.v0_1"
-RUNTIME_VERSION = "ofarm2-kernel-m1.0"
+INVALIDATION_TRACE_KIND = ("ofarm.explainableCurrentStateEvidence."
+                           "invalidationEvaluationTrace.v0.1-draft")
 
-_USE_CLASS_MAP = {
-    # draft MaterializationKey useClass -> canonical MaterializationRequest useClass
-    "OPERATIONAL_DASHBOARD": "EXPLORATORY",
-    "EXPLORATORY_VIEW": "EXPLORATORY",
-    "COMPLIANCE_DECISION_SUPPORT": "HIGH_CONSEQUENCE",
-    "ATTESTED_OUTPUT": "ATTESTED_OUTPUT",
-    "FORMAL_SUBMISSION": "ATTESTED_OUTPUT",
-    "FORENSIC_AUDIT": "AUDIT_EXPLANATION",
+# InvalidationEvaluationTrace triggerFamily -> MaterializationResult
+# invalidationTriggerFamilies enum (the result contract's closed vocabulary).
+# INDEX_CORRUPTION_DETECTED is deliberately absent: the result enum has no
+# family for it and the M1 runtime never emits it — an unknown family raises
+# loudly rather than guessing (the problems.py posture).
+_TRIGGER_TO_RESULT_FAMILY = {
+    "BASIS_ADVANCED": "TRUTH_BASIS",
+    "IDENTITY_CHANGED": "IDENTITY_LIFECYCLE",
+    "CONTEXT_CHANGED": "CONTEXT",
+    "REFERENCE_CHANGED": "CONTEXT",
+    "POLICY_CHANGED": "CONTEXT",
+    "TIME_BOUNDARY_REACHED": "TIME_POLICY",
+    "ADVISORY_INPUT_CHANGED": "TWIN_SPECIFIC",
 }
+RUNTIME_VERSION = config.RUNTIME_VERSION
 
-
-def _mint(prefix: str) -> str:
-    return f"{prefix}:{uuid.uuid4().hex[:16]}"
+# use-class mapping is policy, not materializer code (issue #3)
+_USE_CLASS_MAP = policy.USE_CLASS_TO_CANONICAL
 
 
 def _digest12(obj) -> str:
@@ -452,6 +458,32 @@ class Materializer:
 
     # -------------------------------------------------------- resolve for use --
 
+    def _stale_trigger_families(self, cur, key_digest: str,
+                                generated_at) -> list[str]:
+        """The ACTUAL trigger families that staled this materialization,
+        derived from its InvalidationEvaluationTrace rows (steward review
+        finding 2: never the constant TRUTH_BASIS). Strictly NEWER than the
+        mat's generated_at: in the commit-gate transaction the trace that
+        staled the PRIOR mat shares the transaction timestamp with the new
+        mat, and must never be attributed to it."""
+        cur.execute(
+            "SELECT DISTINCT payload ->> 'triggerFamily' AS family "
+            "FROM runtime_trace WHERE trace_kind = %s "
+            "AND payload ->> 'evaluatedMaterializationKeyRef' = %s "
+            "AND payload ->> 'statusAfter' = 'STALE' "
+            "AND record_time > %s",
+            (INVALIDATION_TRACE_KIND, key_digest, generated_at))
+        families = set()
+        for row in cur.fetchall():
+            family = _TRIGGER_TO_RESULT_FAMILY.get(row["family"])
+            if family is None:
+                raise ValueError(
+                    f"unmapped invalidation trigger family {row['family']!r} — "
+                    "extend _TRIGGER_TO_RESULT_FAMILY from the result contract, "
+                    "never guess (registry RFC posture)")
+            families.add(family)
+        return sorted(families)
+
     def resolve_for_use(self, cur, farm_ref: str, *, twin: str = "COMPLIANCE",
                         use_class: str = "OPERATIONAL_DASHBOARD",
                         time_policy: dict | None = None,
@@ -517,19 +549,14 @@ class Materializer:
             "ORDER BY generated_at DESC LIMIT 1", (key["materializationKeyId"],))
         live = cur.fetchone()
 
-        # Freshness is purpose-sensitive (Current-State RFC §6.4): the three
-        # requirement modes are distinct semantics, not synonyms for FRESH.
-        # High-consequence use always escalates to REQUIRE_FRESH (§8/§9).
-        effective_requirement = ("REQUIRE_FRESH" if high_consequence
-                                 else required_freshness)
-
+        # Freshness is purpose-sensitive (Current-State RFC §6.4 — the RFC
+        # pins purpose-sensitivity, not the individual mode names); the
+        # FRESHNESS_USE_POLICY table in kernel/policy.py is the rule.
+        # NO_CURRENT_STATE_DEPENDENCY is kernel-narrowed to stale-allowed
+        # here (profile_si_ffs/UNSUPPORTED_SURFACES.md; ERRATA E-003).
         def requirement_satisfied(freshness_state: str) -> bool:
-            # INVALID never satisfies any requirement (the contract forbids
-            # ALLOW_REUSE/satisfied on an INVALID state — allOf 2)
-            if effective_requirement in ("NO_CURRENT_STATE_DEPENDENCY",
-                                         "ALLOW_STALE_EXPLORATORY"):
-                return freshness_state in ("FRESH", "STALE")
-            return freshness_state == "FRESH"
+            return policy.freshness_satisfied(required_freshness,
+                                              high_consequence, freshness_state)
 
         recomputed = False
         problems = []
@@ -576,18 +603,22 @@ class Materializer:
             "materializationBasisRef": mat["basis_record_id"] if mat else "basis:none",
             "materializationSnapshotRef": mat["snapshot_record_id"] if mat else "snapshot:none",
             "contextSnapshotRef": ctx["contextSnapshotId"],
-            # honest trigger reporting: absence of any materialization is not a
-            # truth-basis trigger (the MATERIALIZATION_BASIS_MISSING problem
-            # explains it); TRUTH_BASIS is the only trigger family the M1
-            # wiring can actually fire (basis-advance via the commit gate)
+            # honest trigger reporting: absence of any materialization is not
+            # a trigger (the MATERIALIZATION_BASIS_MISSING problem explains
+            # it); a stale mat reports the families its own invalidation
+            # traces recorded — never a hard-coded TRUTH_BASIS (steward
+            # review finding 2)
             "invalidationTriggerFamilies": (
-                [] if freshness == "FRESH" or mat is None else ["TRUTH_BASIS"]),
+                [] if freshness == "FRESH" or mat is None
+                else self._stale_trigger_families(
+                    cur, mat["key_digest"], mat["generated_at"])),
             "problems": problems,
             # the reason never overstates freshness: a stale reuse says so
+            # (wording is policy — kernel/policy.py)
             "reasonSummary": (
-                ("reused FRESH materialization" if freshness == "FRESH" else
-                 f"reused STALE materialization under {effective_requirement}; "
-                 "high-consequence use barred") if decision == "ALLOW_REUSE"
+                policy.reuse_reason_summary(freshness, required_freshness,
+                                            high_consequence)
+                if decision == "ALLOW_REUSE"
                 else "recomputed for this use" if recomputed
                 else "refused: not demonstrably FRESH"),
         }
