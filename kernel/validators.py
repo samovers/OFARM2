@@ -392,6 +392,31 @@ class CarrierSemanticsValidator:
         return None
 
 
+class ExecutionExtentValidator:
+    """A non-whole extent must quantify what was treated. A PARTIAL_TARGET_SCOPE
+    / FAILED_PASS / RETREATMENT_AREA / DISPUTED_AREA / EXTERNAL_GEOMETRY_REFERENCE
+    claim that carries no area, geometryRef, extentRef, or scopeExtentBasisRef
+    is an incomplete carrier: "size treated" is a required SI record field, so
+    promotion is blocked (the carrier is corrected and resubmitted, exactly as
+    for a dose missing its unit) — never silently materialized as whole-scope."""
+
+    def run(self, ctx: GateContext) -> GateRefusal | None:
+        extent = ctx.sub["payload"].get("executionExtent", {})
+        if extent.get("extentClass") not in policy.NON_WHOLE_EXTENT_CLASSES:
+            return None
+        if (extent.get("area") or extent.get("geometryRef")
+                or extent.get("extentRef") or extent.get("scopeExtentBasisRef")):
+            return None
+        return _refusal(ctx, "FAIL_CARRIER", runtime_problem(
+            "EVIDENCE_INSUFFICIENT", "Partial extent unquantified",
+            f"executionExtent.extentClass is {extent.get('extentClass')} but the "
+            "carrier states no area, geometryRef, extentRef, or scopeExtentBasisRef; "
+            "'size treated' is a required SI record field, so the claim stays a "
+            "draft rather than silently materializing as whole-scope (the reason-"
+            "code registry has no extent-completeness code — see ERRATA E-004)"),
+            rationale="non-whole extent carries no quantified bound")
+
+
 class ReferenceResolutionValidator:
     """Every package-local ref in the carrier resolves, and every scope-
     bearing carrier field is contained in the authorized farm."""
@@ -584,6 +609,7 @@ COMMON_SEQUENCE = (
 OPERATION_SEQUENCE = (
     CarrierSchemaValidator(),
     CarrierSemanticsValidator(),
+    ExecutionExtentValidator(),
     ReferenceResolutionValidator(),
     ActorAttributionValidator(),
     CodeBindingValidator(),

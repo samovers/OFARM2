@@ -102,6 +102,13 @@ CONSEQUENCE_SUBJECT_TYPES = frozenset({
 # commit path (hostile review: no tenant/deployment escape hatch)
 NON_COMMITABLE_SCOPE_TYPES = frozenset({"TENANT", "DEPLOYMENT"})
 
+# execution-extent classes that claim LESS than the whole target scope and so
+# must quantify what was treated ("size treated" is a required SI record
+# field). WHOLE_TARGET_SCOPE needs no bound — it is the whole scope.
+NON_WHOLE_EXTENT_CLASSES = frozenset({
+    "PARTIAL_TARGET_SCOPE", "FAILED_PASS", "RETREATMENT_AREA",
+    "DISPUTED_AREA", "EXTERNAL_GEOMETRY_REFERENCE"})
+
 # why a non-promoting commit class retains its draft at REVIEW_PROMOTION —
 # wording pinned by the inherited gate-sequencing fixtures
 NON_PROMOTING_RETAIN_REASONS = {

@@ -118,6 +118,38 @@ def test_m2_wrong_kind_binding_ref_is_governed_refusal(pipeline):
 
 
 # ---------------------------------------------------------------------------
+# M3 — a non-whole extent must quantify what was treated
+# ---------------------------------------------------------------------------
+
+def test_m3_partial_extent_without_bound_stays_draft(pipeline):
+    # a PARTIAL_TARGET_SCOPE spray carrying no area / geometryRef / extentRef /
+    # scopeExtentBasisRef is an incomplete carrier ("size treated" is a required
+    # SI field); it must not silently promote as if whole-scope (Kernel rule 4/7).
+    sub = demo.spray_submission(f"m3:{uid()}", erp_id=f"erp:m3.{uid()}")
+    sub["payload"]["executionExtent"] = {
+        "extentClass": "PARTIAL_TARGET_SCOPE",
+        "targetScope": {"scopeType": "FIELD", "scopeRef": demo.FIELD},
+        "extentBasisStatus": "OPERATOR_SKETCH"}
+    r = pipeline.commit(sub)
+    assert r["decisionOutcome"] == "RETAIN_DRAFT"
+    assert any(p["reasonCode"] == "EVIDENCE_INSUFFICIENT" for p in r["problems"])
+    assert not r.get("emittedAcceptedConsequenceRefs")
+
+
+def test_m3_partial_extent_with_area_promotes(pipeline):
+    # positive control: the same partial spray WITH a quantified area promotes.
+    sub = demo.spray_submission(f"m3-ok:{uid()}", erp_id=f"erp:m3ok.{uid()}")
+    sub["payload"]["executionExtent"] = {
+        "extentClass": "PARTIAL_TARGET_SCOPE",
+        "targetScope": {"scopeType": "FIELD", "scopeRef": demo.FIELD},
+        "extentBasisStatus": "OPERATOR_SKETCH",
+        "area": {"quantityKindRef": "scheme:qudt:Area",
+                 "unitRef": "scheme:ucum:har", "value": 0.5}}
+    r = pipeline.commit(sub)
+    assert r["decisionOutcome"] == "PROMOTE_ACCEPTED"
+
+
+# ---------------------------------------------------------------------------
 # H1 — AS_OF in-force reconstruction runs on the single server-commit axis
 # ---------------------------------------------------------------------------
 

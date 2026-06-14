@@ -1,5 +1,14 @@
 # Worklog
 
+## 2026-06-14 — Close review mediums M3 + M6 (branch `m1/extent-and-bridge-test`, PR stacked on #5)
+
+- **Done:** the last two M1-kernel leftovers from the 2026-06-14 review, as a separate PR:
+  - **M3 (Rule 4/7) — unquantified partial extent.** A non-whole `executionExtent.extentClass` (PARTIAL_TARGET_SCOPE / FAILED_PASS / RETREATMENT_AREA / DISPUTED_AREA / EXTERNAL_GEOMETRY_REFERENCE) carrying no `area`/`geometryRef`/`extentRef`/`scopeExtentBasisRef` reached PROMOTE_ACCEPTED and materialized as if whole-scope — "size treated" silently lost. New `ExecutionExtentValidator` (in `OPERATION_SEQUENCE`, right after carrier semantics) blocks promotion (FAIL_CARRIER / RETAIN_DRAFT) for an unquantified non-whole extent; `NON_WHOLE_EXTENT_CLASSES` single-homed in `policy.py`. The reason-code registry has no extent-completeness code, so `EVIDENCE_INSUFFICIENT` is used with explanatory detail and **ERRATA E-004** filed (same gap class as E-001 temporal).
+  - **M6 (test-integrity, Rule 4) — advisory→compliance bridge had no negative test.** Added conformance `test_08b`: commits an ADVISORY_OUTPUT (RETAIN_DRAFT, no consequence) alongside an accepted spray, then asserts no advisory-derived id appears in the MaterializationBasis or any register row, and every register row resolves to an EXECUTION_CONFIRMED consequence — pinning the "no Advisory material in a Compliance materialization" invariant that previously rested on silent defaults.
+  - Verification: suite **43/43** (25 conformance incl. `test_08b` + 8 stage + 10 review-fix regressions in `test_review_fixes.py`), `ofarm_pkg_contract_check.py` PASS.
+- **Red:** nothing new. Remaining review items lean M2 and are deferred by design: M1 (revocation narrowing, fails closed), M4 (`disputeStatus`, latent — CONTEST verbs are M2), M5 (watermark isolation, single-writer pilot).
+- **Next:** review/merge of PR #5, then this PR (stacked on `m1/kernel-review-fixes`; retarget to `main` after #5 merges).
+
 ## 2026-06-14 — Law-grounded kernel review: four findings fixed (branch `m1/kernel-review-fixes`, PR #5)
 
 - **Done:** a multi-agent review of the M1 kernel (9 dimensions × the seven Kernel rules, per-finding adversarial verification by lens-diverse skeptics, completeness critic — 90 agents) surfaced 0 blockers / 3 high / 6 medium / 9 low / 9 nit; **no live privilege-escalation or silent-allow** — every authority defect fails closed. Fixed the three high + one medium, each pinned by a new regression test (`kernel/tests/test_review_fixes.py`, excluded from the named conformance evidence by nodeid, like the stage tests):
