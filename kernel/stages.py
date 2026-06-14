@@ -365,27 +365,33 @@ class EvidenceSufficiencyGate:
             ctx.log("EVIDENCE_SUFFICIENCY", "SATISFIED")
             return GatePass()
 
-        # A promoting class with no durable-evidence floor here (operation /
-        # compliance are handled above) still owes the AssertionRecord
-        # evidence floor (minItems:1). It is met by real submitted evidence,
-        # never by manufacturing a self-reference to the captured event: a
-        # promoting claim with no evidence stays a draft (Kernel rule 4 / rule
-        # 7), it is not its own proof.
-        if (ctx.commit_class in policy.COMMIT_CLASS_TO_PROMOTION_TARGET
-                and not submission_evidence_refs(ctx.sub)):
-            ctx.log("EVIDENCE_SUFFICIENCY", "INSUFFICIENT",
-                    reason_code="EVIDENCE_INSUFFICIENT",
-                    rationale="a promoting assertion must carry at least one "
-                              "evidence ref; the captured event is not its own proof")
-            return GateRefusal(
-                "EVIDENCE_SUFFICIENCY", "INSUFFICIENT", "RETAIN_DRAFT",
-                [runtime_problem(
-                    "EVIDENCE_INSUFFICIENT", "Evidence floor unmet",
-                    "this commit class promotes to accepted state and must carry "
-                    "at least one evidence ref; the captured event cannot serve "
-                    "as its own evidence",
-                    suggested_remediation="attach evidence and resubmit; the claim "
-                    "stays a draft")])
+        # A promoting class with no class-specific durable-evidence floor here
+        # (operation / compliance are handled above) still owes the
+        # AssertionRecord evidence floor (minItems:1) — and that floor is met
+        # ONLY by evidence that resolves to durable EvidenceRecords. These
+        # classes do not run ReferenceResolutionValidator, so the resolution
+        # check lives here: a self-reference to the captured event, a dangling
+        # ref, or a wrong-kind ref is fake evidence, not proof. Any of them
+        # keeps the claim a draft (Kernel rule 4 / rule 7).
+        if ctx.commit_class in policy.COMMIT_CLASS_TO_PROMOTION_TARGET:
+            refs = submission_evidence_refs(ctx.sub)
+            durable = sufficiency.durable_evidence(ctx.store, refs)
+            if not refs or len(durable) != len(refs):
+                ctx.log("EVIDENCE_SUFFICIENCY", "INSUFFICIENT",
+                        reason_code="EVIDENCE_INSUFFICIENT",
+                        rationale="a promoting assertion must carry evidence that "
+                                  "resolves to durable EvidenceRecords; absent, "
+                                  "dangling, or wrong-kind refs are not proof")
+                return GateRefusal(
+                    "EVIDENCE_SUFFICIENCY", "INSUFFICIENT", "RETAIN_DRAFT",
+                    [runtime_problem(
+                        "EVIDENCE_INSUFFICIENT", "Evidence floor unmet",
+                        "this commit class promotes to accepted state and must carry "
+                        "evidence resolving to durable EvidenceRecords; the captured "
+                        "event cannot be its own evidence, and a dangling or "
+                        "wrong-kind ref is not evidence",
+                        suggested_remediation="attach durable evidence and resubmit; "
+                        "the claim stays a draft")])
 
         ctx.log("EVIDENCE_SUFFICIENCY", "NOT_REQUIRED",
                 rationale="sufficiency cases are generated only at operation-claim "

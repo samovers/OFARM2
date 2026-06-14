@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import uuid
 
+import pytest
+
 from kernel import demo, policy
 from kernel.store import Store
 
@@ -63,9 +65,32 @@ def test_h3_promoting_observation_without_evidence_stays_draft(pipeline):
     assert not r.get("emittedAcceptedConsequenceRefs")
 
 
+@pytest.mark.parametrize("bad_refs, why", [
+    (["evidence:does.not.exist"], "dangling ref resolves to nothing"),
+    ([demo.FARMER], "wrong-kind ref resolves to a Party, not an EvidenceRecord"),
+])
+def test_h3_promoting_observation_with_unresolvable_evidence_stays_draft(
+        pipeline, bad_refs, why):
+    # PR #5 review follow-up: observation/structure skip
+    # ReferenceResolutionValidator, so the evidence-sufficiency gate must
+    # reject evidence that does not resolve to a durable EvidenceRecord —
+    # a dangling or wrong-kind ref is fake evidence, as bad as the old
+    # self-evidence backfill (Kernel rule 4 / rule 7).
+    r = pipeline.commit({
+        "commitClass": "OBSERVATION_ASSERTION",
+        "actingPartyRef": demo.FARMER, "farmRef": demo.FARM,
+        "idempotencyKey": f"h3-bad-ev:{uid()}",
+        "eventTime": "2026-06-10T09:00:00Z",
+        "evidenceRefs": bad_refs,
+        "confirmAccept": True})
+    assert r["decisionOutcome"] == "RETAIN_DRAFT", why
+    assert any(p["reasonCode"] == "EVIDENCE_INSUFFICIENT" for p in r["problems"]), why
+    assert not r.get("emittedAcceptedConsequenceRefs"), why
+
+
 def test_h3_promoting_observation_with_evidence_promotes(pipeline):
-    # positive control: the same observation WITH real evidence promotes,
-    # and its evidenceRefs are the submitted evidence (not the event id).
+    # positive control: the same observation WITH a real, resolving durable
+    # EvidenceRecord promotes (evidenceRefs are the submitted evidence).
     r = pipeline.commit({
         "commitClass": "OBSERVATION_ASSERTION",
         "actingPartyRef": demo.FARMER, "farmRef": demo.FARM,
