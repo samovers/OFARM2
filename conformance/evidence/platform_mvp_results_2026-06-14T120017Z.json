@@ -1,7 +1,7 @@
 {
   "suite": "conformance:ofarm2.platform-mvp.tests-1-15.v0_1",
   "executed": true,
-  "executedAt": "2026-06-12T21:29:56.353273Z",
+  "executedAt": "2026-06-14T12:00:17.412014Z",
   "runtimeVersion": "ofarm2-kernel-m1.0",
   "exitStatus": 0,
   "allPassed": true,
@@ -9,7 +9,7 @@
     {
       "test": "kernel/tests/test_conformance.py::test_01_append_only",
       "outcome": "passed",
-      "durationSeconds": 0.026
+      "durationSeconds": 0.024
     },
     {
       "test": "kernel/tests/test_conformance.py::test_02_default_deny",
@@ -19,42 +19,42 @@
     {
       "test": "kernel/tests/test_conformance.py::test_03_offline_sync_idempotency",
       "outcome": "passed",
-      "durationSeconds": 0.012
+      "durationSeconds": 0.01
     },
     {
       "test": "kernel/tests/test_conformance.py::test_04_gate_sequencing_fixtures_live",
       "outcome": "passed",
-      "durationSeconds": 0.059
+      "durationSeconds": 0.053
     },
     {
       "test": "kernel/tests/test_conformance.py::test_05_free_text_product_refusal",
       "outcome": "passed",
-      "durationSeconds": 0.01
+      "durationSeconds": 0.008
     },
     {
       "test": "kernel/tests/test_conformance.py::test_07_revoked_delegation_recheck",
       "outcome": "passed",
-      "durationSeconds": 0.003
+      "durationSeconds": 0.002
     },
     {
       "test": "kernel/tests/test_conformance.py::test_08_materialization_basis_and_staleness",
       "outcome": "passed",
-      "durationSeconds": 0.029
+      "durationSeconds": 0.025
     },
     {
       "test": "kernel/tests/test_conformance.py::test_09_passport_view_refusal_disclosure",
       "outcome": "passed",
-      "durationSeconds": 0.023
+      "durationSeconds": 0.02
     },
     {
       "test": "kernel/tests/test_conformance.py::test_10_document_assembly_freeze_trace",
       "outcome": "passed",
-      "durationSeconds": 0.03
+      "durationSeconds": 0.026
     },
     {
       "test": "kernel/tests/test_conformance.py::test_11_inspector_read_only",
       "outcome": "passed",
-      "durationSeconds": 0.006
+      "durationSeconds": 0.005
     },
     {
       "test": "kernel/tests/test_conformance.py::test_12_temporal_conformance",
@@ -64,57 +64,57 @@
     {
       "test": "kernel/tests/test_conformance.py::test_13_reference_resolution",
       "outcome": "passed",
-      "durationSeconds": 0.018
+      "durationSeconds": 0.016
     },
     {
       "test": "kernel/tests/test_conformance.py::test_14_reachability",
       "outcome": "passed",
-      "durationSeconds": 0.018
+      "durationSeconds": 0.016
     },
     {
       "test": "kernel/tests/test_conformance.py::test_15_manifest_grounding",
       "outcome": "passed",
-      "durationSeconds": 0.008
+      "durationSeconds": 0.007
     },
     {
       "test": "kernel/tests/test_conformance.py::test_93_governed_acceptance_semantics",
       "outcome": "passed",
-      "durationSeconds": 0.325
+      "durationSeconds": 0.326
     },
     {
       "test": "kernel/tests/test_conformance.py::test_94_second_hostile_regressions",
       "outcome": "passed",
-      "durationSeconds": 0.129
+      "durationSeconds": 0.12
     },
     {
       "test": "kernel/tests/test_conformance.py::test_95_hostile_review_regressions",
       "outcome": "passed",
-      "durationSeconds": 0.207
+      "durationSeconds": 0.213
     },
     {
       "test": "kernel/tests/test_conformance.py::test_96_identity_context_invalidation_and_freshness_modes",
       "outcome": "passed",
-      "durationSeconds": 0.128
+      "durationSeconds": 0.139
     },
     {
       "test": "kernel/tests/test_conformance.py::test_97_review_driven_regressions",
       "outcome": "passed",
-      "durationSeconds": 0.096
+      "durationSeconds": 0.088
     },
     {
       "test": "kernel/tests/test_conformance.py::test_98_stale_registry_snapshot_recheck",
       "outcome": "passed",
-      "durationSeconds": 0.014
+      "durationSeconds": 0.012
     },
     {
       "test": "kernel/tests/test_conformance.py::test_98z_as_of_spine_guard",
       "outcome": "passed",
-      "durationSeconds": 0.026
+      "durationSeconds": 0.02
     },
     {
       "test": "kernel/tests/test_conformance.py::test_99_global_invariants_hold",
       "outcome": "passed",
-      "durationSeconds": 0.006
+      "durationSeconds": 0.003
     }
   ],
   "details": {
@@ -129,16 +129,16 @@
         "DELETE FROM kernel_idempotency",
         "DELETE FROM runtime_trace"
       ],
-      "supersededConsequence": "conseq:6359e9d1397e465b",
-      "correctionConsequence": "conseq:0b5951ed0de242db"
+      "supersededConsequence": "conseq:16033ec911714781",
+      "correctionConsequence": "conseq:f4658ce5040140a7"
     },
     "test_02": {
-      "denyTraceId": "authztrace:54cb3a7c116e450d"
+      "denyTraceId": "authztrace:15f8bf991e7f4f08"
     },
     "test_03": {
-      "idempotencyKey": "device-demo-2:q-3ed2a9a19b",
+      "idempotencyKey": "device-demo-2:q-0aed8fbb4d",
       "eventTime": "2026-06-10T07:30:00Z",
-      "recordTime": "2026-06-12T21:29:55.175907Z"
+      "recordTime": "2026-06-14T12:00:16.199175Z"
     },
     "test_04": {
       "fixturesReplayed": {
@@ -359,7 +359,7 @@
       "missingBasisRefused": true
     },
     "test_10": {
-      "durableArtifactRef": "document:si.ffs.inspection-register.a13e5c0df858",
+      "durableArtifactRef": "document:si.ffs.inspection-register.fabf308bfd37",
       "digestVerified": true,
       "annexedGaps": 4
     },
@@ -370,8 +370,8 @@
     },
     "test_12": {
       "eventTime": "2026-06-08T06:00:00Z",
-      "recordTime": "2026-06-12T21:29:55.350318Z",
-      "acceptedAt": "2026-06-12T21:29:55.354715Z"
+      "recordTime": "2026-06-14T12:00:16.350093Z",
+      "acceptedAt": "2026-06-14T12:00:16.354340Z"
     },
     "test_13": {
       "danglingRefused": true,
@@ -422,7 +422,7 @@
         },
         "4-as-of-context": {
           "asOfKeeps": "referencesnapshot:si.uvhvvr.ffs-reg.2026-06-11",
-          "nowUses": "referencesnapshot:si.uvhvvr.ffs-reg.hr2-newer-b4da323508"
+          "nowUses": "referencesnapshot:si.uvhvvr.ffs-reg.hr2-newer-4d18f60ba1"
         },
         "5-inactive-sharing-denied": true,
         "6-invalid-window-refused": "HIGH_CONSEQUENCE_BLOCKED",

@@ -119,6 +119,22 @@ EVENT_TIME_PLAUSIBILITY_PAST_DAYS = 400
 EVENT_TIME_PLAUSIBILITY_FUTURE_HOURS = 24
 DOSE_SANITY_MAX = 10000.0
 
+# the UCUM unit scheme: a resolved dose unit is this EXACT prefix followed by
+# a non-empty code token. A bare "scheme:ucum", an empty code, or a substring
+# look-alike ("scheme:ucumbersome") is a namespace label, not a unit — and a
+# namespace label is not a resolved unit (Kernel rule 4: no shortcut to truth).
+UCUM_SCHEME_PREFIX = "scheme:ucum:"
+
+
+def is_resolved_ucum_unit(unit_ref: str | None) -> bool:
+    """True only for a well-formed scheme:ucum:<code> reference with a
+    non-empty code. (Code-level validation against a profile-pinned UCUM
+    allow-list is a further hardening; this closes the bare/empty/substring
+    holes that let a meaningless unit promote.)"""
+    if not unit_ref or not unit_ref.startswith(UCUM_SCHEME_PREFIX):
+        return False
+    return bool(unit_ref[len(UCUM_SCHEME_PREFIX):].strip())
+
 # the SI evidence floor for operation claims (policy:si.ffs.evidence-review.
 # v0_1): hard items refuse promotion outright; soft items route to the
 # advisor queue (unresolved-binding behavior per the code-binding profile)

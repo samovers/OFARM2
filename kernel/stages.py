@@ -21,7 +21,7 @@ from typing import Any
 from . import policy, sufficiency
 from .context import mint, parse_ts
 from .contracts import ContractViolation
-from .emission import PromotionEmitter, ReplayWriter
+from .emission import PromotionEmitter, ReplayWriter, submission_evidence_refs
 from .problems import runtime_problem
 
 
@@ -364,6 +364,28 @@ class EvidenceSufficiencyGate:
             ctx.review_route_reasons.extend(floor_failures)
             ctx.log("EVIDENCE_SUFFICIENCY", "SATISFIED")
             return GatePass()
+
+        # A promoting class with no durable-evidence floor here (operation /
+        # compliance are handled above) still owes the AssertionRecord
+        # evidence floor (minItems:1). It is met by real submitted evidence,
+        # never by manufacturing a self-reference to the captured event: a
+        # promoting claim with no evidence stays a draft (Kernel rule 4 / rule
+        # 7), it is not its own proof.
+        if (ctx.commit_class in policy.COMMIT_CLASS_TO_PROMOTION_TARGET
+                and not submission_evidence_refs(ctx.sub)):
+            ctx.log("EVIDENCE_SUFFICIENCY", "INSUFFICIENT",
+                    reason_code="EVIDENCE_INSUFFICIENT",
+                    rationale="a promoting assertion must carry at least one "
+                              "evidence ref; the captured event is not its own proof")
+            return GateRefusal(
+                "EVIDENCE_SUFFICIENCY", "INSUFFICIENT", "RETAIN_DRAFT",
+                [runtime_problem(
+                    "EVIDENCE_INSUFFICIENT", "Evidence floor unmet",
+                    "this commit class promotes to accepted state and must carry "
+                    "at least one evidence ref; the captured event cannot serve "
+                    "as its own evidence",
+                    suggested_remediation="attach evidence and resubmit; the claim "
+                    "stays a draft")])
 
         ctx.log("EVIDENCE_SUFFICIENCY", "NOT_REQUIRED",
                 rationale="sufficiency cases are generated only at operation-claim "
