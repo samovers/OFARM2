@@ -420,14 +420,24 @@ class ExecutionExtentValidator:
                 "draft rather than silently materializing as whole-scope (the reason-"
                 "code registry has no extent-completeness code — see ERRATA E-004)"),
                 rationale="non-whole extent carries no quantified bound")
-        dangling = [r for r in present_refs if not ctx.store.record_exists(r)]
-        if dangling:
+        # a ref bound must resolve to a RECOGNIZED extent-bound carrier kind —
+        # "resolves to something" is not "resolves to the right kind of thing".
+        # policy.M1_ALLOWED_EXTENT_BOUND_KINDS is empty in M1 (no extent
+        # ingestion surface), so both a dangling ref and a wrong-kind existing
+        # record are invalid bounds; inline `area` is the only M1 bound.
+        invalid = []
+        for ref in present_refs:
+            row = ctx.store.get_record(ref)
+            if row is None or row["record_kind"] not in policy.M1_ALLOWED_EXTENT_BOUND_KINDS:
+                invalid.append(ref)
+        if invalid:
             return _refusal(ctx, "FAIL_REFERENCE_RESOLUTION", runtime_problem(
                 "EVIDENCE_REFERENCE_UNAVAILABLE", "Partial extent bound unresolved",
-                f"executionExtent names extent bound(s) {dangling} that do not "
-                "resolve in the store; a dangling ref is not a real bound, so "
-                "'size treated' stays unquantified and the claim stays a draft"),
-                rationale=f"dangling extent bound refs: {dangling}")
+                f"executionExtent names extent bound(s) {invalid} that do not "
+                "resolve to a recognized extent-bound carrier; M1 accepts only an "
+                "inline `area` bound (ref bounds need an extent ingestion surface — "
+                "M2; see UNSUPPORTED_SURFACES.md), so the claim stays a draft"),
+                rationale=f"unrecognized extent bound refs: {invalid}")
         return None
 
 

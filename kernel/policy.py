@@ -109,6 +109,15 @@ NON_WHOLE_EXTENT_CLASSES = frozenset({
     "PARTIAL_TARGET_SCOPE", "FAILED_PASS", "RETREATMENT_AREA",
     "DISPUTED_AREA", "EXTERNAL_GEOMETRY_REFERENCE"})
 
+# record kinds an extent ref (geometryRef / extentRef / scopeExtentBasisRef)
+# may resolve to as a real bound. EMPTY in M1: there is no geometry / extent /
+# scope-extent-basis ingestion surface, so NO record can be a valid ref bound
+# and the only accepted M1 bound is an inline `area` (value+unit). "Resolves to
+# something" is not "resolves to the right kind of thing" — an existing record
+# of the wrong kind is not an extent bound. M2 populates this when an extent
+# carrier is ingested. (Declared in profile_si_ffs/UNSUPPORTED_SURFACES.md.)
+M1_ALLOWED_EXTENT_BOUND_KINDS = frozenset()
+
 # why a non-promoting commit class retains its draft at REVIEW_PROMOTION —
 # wording pinned by the inherited gate-sequencing fixtures
 NON_PROMOTING_RETAIN_REASONS = {

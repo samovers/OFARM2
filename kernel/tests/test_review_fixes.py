@@ -136,26 +136,34 @@ def test_m3_partial_extent_without_bound_stays_draft(pipeline):
     assert not r.get("emittedAcceptedConsequenceRefs")
 
 
-@pytest.mark.parametrize("ref_field, ref_value", [
-    ("geometryRef", "geometry:missing"),
-    ("extentRef", "extent:missing"),
-    ("scopeExtentBasisRef", "basis:missing"),
+@pytest.mark.parametrize("ref_field, ref_value, why", [
+    # dangling: the ref resolves to nothing
+    ("geometryRef", "geometry:missing", "dangling geometryRef"),
+    ("extentRef", "extent:missing", "dangling extentRef"),
+    ("scopeExtentBasisRef", "basis:missing", "dangling scopeExtentBasisRef"),
+    # wrong-kind: the ref resolves, but not to an extent-bound carrier
+    ("geometryRef", demo.FARMER, "wrong-kind geometryRef -> Party"),
+    ("extentRef", demo.PHOTO_EVIDENCE, "wrong-kind extentRef -> EvidenceRecord"),
+    ("scopeExtentBasisRef", demo.FIELD, "wrong-kind scopeExtentBasisRef -> Identity"),
 ])
-def test_m3_partial_extent_with_dangling_bound_ref_stays_draft(
-        pipeline, ref_field, ref_value):
-    # PR #6 re-review: a non-whole extent whose only "bound" is a ref that does
-    # not resolve is a fake bound — it must refuse, not promote as whole-scope.
-    sub = demo.spray_submission(f"m3-dangling:{uid()}", erp_id=f"erp:m3d.{uid()}")
+def test_m3_partial_extent_with_invalid_bound_ref_stays_draft(
+        pipeline, ref_field, ref_value, why):
+    # PR #6 re-reviews: a non-whole extent whose only "bound" is a ref that does
+    # not resolve to a recognized extent-bound carrier is a fake bound. M1 has
+    # no extent ingestion surface (policy.M1_ALLOWED_EXTENT_BOUND_KINDS empty),
+    # so both dangling AND wrong-kind existing refs must refuse — "resolves to
+    # something" is not "resolves to the right kind of thing".
+    sub = demo.spray_submission(f"m3-bad:{uid()}", erp_id=f"erp:m3b.{uid()}")
     sub["payload"]["executionExtent"] = {
         "extentClass": "PARTIAL_TARGET_SCOPE",
         "targetScope": {"scopeType": "FIELD", "scopeRef": demo.FIELD},
         "extentBasisStatus": "OPERATOR_SKETCH",
         ref_field: ref_value}
     r = pipeline.commit(sub)
-    assert r["decisionOutcome"] == "RETAIN_DRAFT", ref_field
+    assert r["decisionOutcome"] == "RETAIN_DRAFT", why
     assert any(p["reasonCode"] == "EVIDENCE_REFERENCE_UNAVAILABLE"
-               for p in r["problems"]), ref_field
-    assert not r.get("emittedAcceptedConsequenceRefs"), ref_field
+               for p in r["problems"]), why
+    assert not r.get("emittedAcceptedConsequenceRefs"), why
 
 
 def test_m3_partial_extent_with_area_promotes(pipeline):
