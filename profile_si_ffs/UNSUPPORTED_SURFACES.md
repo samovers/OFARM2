@@ -20,6 +20,18 @@ already-active governance boundaries apply in full if any is ever exposed):
 - sustainability-charter claim features
 - livestock semantics
 
+**Partial-extent ref bounds (M1, declared):** a non-whole `executionExtent`
+(`PARTIAL_TARGET_SCOPE` / `FAILED_PASS` / `RETREATMENT_AREA` / `DISPUTED_AREA`
+/ `EXTERNAL_GEOMETRY_REFERENCE`) must carry an inline `area` (value + unit) in
+M1. The `geometryRef` / `extentRef` / `scopeExtentBasisRef` ref bounds are
+**not accepted**: `ExecutionExtentValidator` resolves them against
+`policy.M1_ALLOWED_EXTENT_BOUND_KINDS`, which is **empty** because M1 has no
+geometry / extent ingestion surface — so no record (dangling or wrong-kind)
+can serve as a real bound. An unquantified non-whole extent refuses
+(`EVIDENCE_INSUFFICIENT`, ERRATA E-004); a ref bound refuses
+(`EVIDENCE_REFERENCE_UNAVAILABLE`); both stay RETAIN_DRAFT. M2 populates the
+allowed-kinds table when an extent carrier is ingested.
+
 **Use types beyond surface-areas** (Reg. 2023/564 Annex): closed-space and
 seed-treatment record rows are not implemented in pilot v1
 (`SI_RECORD_FIELDS.md` §D.1).

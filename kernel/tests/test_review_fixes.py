@@ -118,6 +118,68 @@ def test_m2_wrong_kind_binding_ref_is_governed_refusal(pipeline):
 
 
 # ---------------------------------------------------------------------------
+# M3 — a non-whole extent must quantify what was treated
+# ---------------------------------------------------------------------------
+
+def test_m3_partial_extent_without_bound_stays_draft(pipeline):
+    # a PARTIAL_TARGET_SCOPE spray carrying no area / geometryRef / extentRef /
+    # scopeExtentBasisRef is an incomplete carrier ("size treated" is a required
+    # SI field); it must not silently promote as if whole-scope (Kernel rule 4/7).
+    sub = demo.spray_submission(f"m3:{uid()}", erp_id=f"erp:m3.{uid()}")
+    sub["payload"]["executionExtent"] = {
+        "extentClass": "PARTIAL_TARGET_SCOPE",
+        "targetScope": {"scopeType": "FIELD", "scopeRef": demo.FIELD},
+        "extentBasisStatus": "OPERATOR_SKETCH"}
+    r = pipeline.commit(sub)
+    assert r["decisionOutcome"] == "RETAIN_DRAFT"
+    assert any(p["reasonCode"] == "EVIDENCE_INSUFFICIENT" for p in r["problems"])
+    assert not r.get("emittedAcceptedConsequenceRefs")
+
+
+@pytest.mark.parametrize("ref_field, ref_value, why", [
+    # dangling: the ref resolves to nothing
+    ("geometryRef", "geometry:missing", "dangling geometryRef"),
+    ("extentRef", "extent:missing", "dangling extentRef"),
+    ("scopeExtentBasisRef", "basis:missing", "dangling scopeExtentBasisRef"),
+    # wrong-kind: the ref resolves, but not to an extent-bound carrier
+    ("geometryRef", demo.FARMER, "wrong-kind geometryRef -> Party"),
+    ("extentRef", demo.PHOTO_EVIDENCE, "wrong-kind extentRef -> EvidenceRecord"),
+    ("scopeExtentBasisRef", demo.FIELD, "wrong-kind scopeExtentBasisRef -> Identity"),
+])
+def test_m3_partial_extent_with_invalid_bound_ref_stays_draft(
+        pipeline, ref_field, ref_value, why):
+    # PR #6 re-reviews: a non-whole extent whose only "bound" is a ref that does
+    # not resolve to a recognized extent-bound carrier is a fake bound. M1 has
+    # no extent ingestion surface (policy.M1_ALLOWED_EXTENT_BOUND_KINDS empty),
+    # so both dangling AND wrong-kind existing refs must refuse — "resolves to
+    # something" is not "resolves to the right kind of thing".
+    sub = demo.spray_submission(f"m3-bad:{uid()}", erp_id=f"erp:m3b.{uid()}")
+    sub["payload"]["executionExtent"] = {
+        "extentClass": "PARTIAL_TARGET_SCOPE",
+        "targetScope": {"scopeType": "FIELD", "scopeRef": demo.FIELD},
+        "extentBasisStatus": "OPERATOR_SKETCH",
+        ref_field: ref_value}
+    r = pipeline.commit(sub)
+    assert r["decisionOutcome"] == "RETAIN_DRAFT", why
+    assert any(p["reasonCode"] == "EVIDENCE_REFERENCE_UNAVAILABLE"
+               for p in r["problems"]), why
+    assert not r.get("emittedAcceptedConsequenceRefs"), why
+
+
+def test_m3_partial_extent_with_area_promotes(pipeline):
+    # positive control: the same partial spray WITH a quantified area promotes.
+    sub = demo.spray_submission(f"m3-ok:{uid()}", erp_id=f"erp:m3ok.{uid()}")
+    sub["payload"]["executionExtent"] = {
+        "extentClass": "PARTIAL_TARGET_SCOPE",
+        "targetScope": {"scopeType": "FIELD", "scopeRef": demo.FIELD},
+        "extentBasisStatus": "OPERATOR_SKETCH",
+        "area": {"quantityKindRef": "scheme:qudt:Area",
+                 "unitRef": "scheme:ucum:har", "value": 0.5}}
+    r = pipeline.commit(sub)
+    assert r["decisionOutcome"] == "PROMOTE_ACCEPTED"
+
+
+# ---------------------------------------------------------------------------
 # H1 — AS_OF in-force reconstruction runs on the single server-commit axis
 # ---------------------------------------------------------------------------
 

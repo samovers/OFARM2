@@ -392,6 +392,55 @@ class CarrierSemanticsValidator:
         return None
 
 
+class ExecutionExtentValidator:
+    """A non-whole extent must quantify what was treated, and the bound must be
+    REAL. A PARTIAL_TARGET_SCOPE / FAILED_PASS / RETREATMENT_AREA / DISPUTED_AREA
+    / EXTERNAL_GEOMETRY_REFERENCE claim must carry an inline `area` (value+unit)
+    or an extent ref (geometryRef / extentRef / scopeExtentBasisRef) that
+    RESOLVES in the store. No bound at all, or a bound whose only ref is
+    dangling/fake, is an incomplete carrier — "size treated" is a required SI
+    record field — so the claim stays a draft, never silently materialized as
+    whole-scope (corrected and resubmitted, like a dose missing its unit).
+    M1 has no geometry/extent ingestion path, so a ref bound resolves only once
+    such a record exists; the inline `area` is the always-available bound."""
+
+    def run(self, ctx: GateContext) -> GateRefusal | None:
+        extent = ctx.sub["payload"].get("executionExtent", {})
+        if extent.get("extentClass") not in policy.NON_WHOLE_EXTENT_CLASSES:
+            return None
+        present_refs = [r for r in (extent.get("geometryRef"),
+                                    extent.get("extentRef"),
+                                    extent.get("scopeExtentBasisRef")) if r]
+        if not extent.get("area") and not present_refs:
+            return _refusal(ctx, "FAIL_CARRIER", runtime_problem(
+                "EVIDENCE_INSUFFICIENT", "Partial extent unquantified",
+                f"executionExtent.extentClass is {extent.get('extentClass')} but the "
+                "carrier states no area, geometryRef, extentRef, or scopeExtentBasisRef; "
+                "'size treated' is a required SI record field, so the claim stays a "
+                "draft rather than silently materializing as whole-scope (the reason-"
+                "code registry has no extent-completeness code — see ERRATA E-004)"),
+                rationale="non-whole extent carries no quantified bound")
+        # a ref bound must resolve to a RECOGNIZED extent-bound carrier kind —
+        # "resolves to something" is not "resolves to the right kind of thing".
+        # policy.M1_ALLOWED_EXTENT_BOUND_KINDS is empty in M1 (no extent
+        # ingestion surface), so both a dangling ref and a wrong-kind existing
+        # record are invalid bounds; inline `area` is the only M1 bound.
+        invalid = []
+        for ref in present_refs:
+            row = ctx.store.get_record(ref)
+            if row is None or row["record_kind"] not in policy.M1_ALLOWED_EXTENT_BOUND_KINDS:
+                invalid.append(ref)
+        if invalid:
+            return _refusal(ctx, "FAIL_REFERENCE_RESOLUTION", runtime_problem(
+                "EVIDENCE_REFERENCE_UNAVAILABLE", "Partial extent bound unresolved",
+                f"executionExtent names extent bound(s) {invalid} that do not "
+                "resolve to a recognized extent-bound carrier; M1 accepts only an "
+                "inline `area` bound (ref bounds need an extent ingestion surface — "
+                "M2; see UNSUPPORTED_SURFACES.md), so the claim stays a draft"),
+                rationale=f"unrecognized extent bound refs: {invalid}")
+        return None
+
+
 class ReferenceResolutionValidator:
     """Every package-local ref in the carrier resolves, and every scope-
     bearing carrier field is contained in the authorized farm."""
@@ -584,6 +633,7 @@ COMMON_SEQUENCE = (
 OPERATION_SEQUENCE = (
     CarrierSchemaValidator(),
     CarrierSemanticsValidator(),
+    ExecutionExtentValidator(),
     ReferenceResolutionValidator(),
     ActorAttributionValidator(),
     CodeBindingValidator(),

@@ -509,6 +509,56 @@ def test_08_materialization_basis_and_staleness(store, pipeline, materializer):
 
 
 # =========================================================================
+# 8b. Advisory -> Compliance bridge invariant (Kernel rule 4)
+# =========================================================================
+
+def test_08b_advisory_never_enters_compliance_materialization(
+        store, pipeline, materializer):
+    """No Advisory material enters a Compliance materialization without a
+    governed bridge: an ADVISORY_OUTPUT (which RETAIN_DRAFTs) must never appear
+    as a MaterializationBasis contributor or a register row, and every register
+    row must resolve to an EXECUTION_CONFIRMED consequence (Kernel rule 4)."""
+    accepted_spray(pipeline)   # a real accepted spray => a register to probe
+    adv = pipeline.commit({
+        "commitClass": "ADVISORY_OUTPUT", "actingPartyRef": demo.FARMER,
+        "farmRef": demo.FARM, "idempotencyKey": f"rule4:adv:{uid()}",
+        "noteText": "fictional authorisation-mismatch advisory",
+        "eventTime": "2026-06-10T09:00:00Z",
+        "dominantSemanticConsequence": "advisory output captured"})
+    assert adv["decisionOutcome"] == "RETAIN_DRAFT"
+    assert not adv.get("emittedAcceptedConsequenceRefs")
+    advisory_ids = {adv.get("semanticEventRef"), adv.get("promotionTraceRef")}
+    advisory_ids |= set(adv.get("emittedAssertionRecordRefs") or [])
+    advisory_ids.discard(None)
+
+    with store.tx() as cur:
+        resolution = materializer.resolve_for_use(cur, demo.FARM)
+    mat = resolution["materialization"]
+    basis = store.get_payload(mat["basis_record_id"])
+    contributors = set(
+        basis.get("contributingAssertionRefs", [])
+        + basis.get("contributingAcceptedConsequenceRefs", [])
+        + basis.get("contributingReviewDecisionRefs", [])
+        + basis.get("identityBasisRefs", [])
+        + basis.get("contextSnapshotRefs", []))
+    assert not (advisory_ids & contributors), \
+        "an advisory record reached the MaterializationBasis (Rule 4 breach)"
+
+    entries = mat["current_state"]["entries"]
+    entry_refs = ({e.get("consequenceRef") for e in entries}
+                  | {e.get("eventRef") for e in entries})
+    assert not (advisory_ids & entry_refs), \
+        "an advisory record appears as a register row (Rule 4 breach)"
+    assert entries, "the accepted spray must produce at least one register row"
+    for e in entries:
+        cp = store.get_payload(e["consequenceRef"])
+        assert cp and cp.get("consequenceType") == "EXECUTION_CONFIRMED", \
+            f"non-execution consequence {e['consequenceRef']} leaked into register"
+    record_detail("test_08b", {"advisoryOutcome": adv["decisionOutcome"],
+                               "registerRows": len(entries)})
+
+
+# =========================================================================
 # 9. PassportView refusal / disclosure
 # =========================================================================
 
