@@ -1,5 +1,11 @@
 # Worklog
 
+## 2026-06-14 — CI: bump GitHub Actions to Node-24-capable versions (branch `ci/node24-readiness`)
+
+- **Done:** ahead of GitHub's **2026-06-16** runner default-to-Node-24 switch, bumped the conformance workflow's action pins to the minimum Node-24-capable majors: `actions/checkout@v4→v5`, `actions/setup-python@v5→v6`, `actions/upload-artifact@v4→v6`. Pins-only change; `python-version: "3.12"`, the upload `name`/`path`, and `runs-on: ubuntu-latest` are untouched (YAML re-parsed clean). Verified by a 5-agent web-research pass against the first-party github.blog changelog + each action's `action.yml`: all three old pins were node20-era; `upload-artifact@v5` is still node20 (so v6 is the floor); `checkout@v6` was **deliberately skipped** (it adds a credential-handling change with reported regressions — v5 is the clean node24 floor). No breaking changes affect this workflow's usage.
+- **Red:** none. 2026-06-16 is **not** a hard-fail — node20 actions are force-run under Node 24 with only a deprecation warning; the hard removal of Node 20 is **fall 2026**. This is the recommended-now fix (silences warnings, ready before the fall removal), not an emergency. Did NOT add `ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION` (that is the opt-OUT, the opposite of the goal).
+- **Next:** the PR's own CI run exercises the bumped versions end-to-end; merge once green.
+
 ## 2026-06-14 — Close review mediums M3 + M6 (branch `m1/extent-and-bridge-test`, PR stacked on #5)
 
 - **Done:** the last two M1-kernel leftovers from the 2026-06-14 review, as a separate PR:
