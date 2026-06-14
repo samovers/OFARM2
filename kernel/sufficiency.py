@@ -13,6 +13,9 @@ from .context import mint as _mint, now_iso
 from .problems import runtime_problem
 
 
+BINDING_KIND = "ofarm.agronomicidentitybinding.v0.1"
+
+
 def durable_evidence(store, refs: list[str]) -> list[str]:
     """Refs that resolve to actual EvidenceRecords — the durable proof
     bundle. A ref to some other record is not evidence of execution."""
@@ -21,6 +24,20 @@ def durable_evidence(store, refs: list[str]) -> list[str]:
         rec = store.get_record(ref)
         if rec and rec["record_kind"] == "ofarm.evidencerecord.v0.1":
             out.append(ref)
+    return out
+
+
+def resolved_bindings(store, refs: list[str]) -> list[dict]:
+    """Payloads of refs that resolve to actual AgronomicIdentityBinding
+    records. A ref to any other kind is NOT a binding (wrong-kind refs are
+    refused at validation); kind-filtering here keeps every downstream
+    b['bindingRole'] dereference crash-free — a malformed ref refuses, it
+    never raises a bare KeyError past the gate (Kernel rule 7)."""
+    out = []
+    for ref in refs or []:
+        row = store.get_record(ref)
+        if row and row["record_kind"] == BINDING_KIND:
+            out.append(row["payload"])
     return out
 
 
@@ -156,21 +173,19 @@ def build_floor_case(store, sub, commit_class, farm_ref, assertion_id,
             or "compliance assertion (no statement supplied)")
 
     # OPERATION_CLAIM: the SI floor (policy.OPERATION_FLOOR_*)
-    bindings = [store.get_payload(r)
-                for r in payload.get("agronomicIdentityBindingRefs", [])]
-    bindings = [b for b in bindings if b]
+    bindings = resolved_bindings(store, payload.get("agronomicIdentityBindingRefs", []))
     checks = {
         "product-binding": any(
-            b["bindingRole"] == "CROP_PROTECTION_PRODUCT"
-            and b["bindingState"] == "VERIFIED"
+            b.get("bindingRole") == "CROP_PROTECTION_PRODUCT"
+            and b.get("bindingState") == "VERIFIED"
             and b.get("referenceSnapshotRefs") for b in bindings),
         "dose-unit": any(
             p["parameterRole"] in ("DOSE", "RATE")
-            and p.get("unitRef", "").startswith("scheme:ucum")
+            and policy.is_resolved_ucum_unit(p.get("unitRef"))
             for p in payload.get("actualQuantityParameters", [])),
         "parcel": payload.get("executionExtent", {}).get("targetScope", {})
                         .get("scopeType") in ("FIELD", "ZONE"),
-        "crop-binding": any(b["bindingRole"] == "CROP_SPECIES" for b in bindings),
+        "crop-binding": any(b.get("bindingRole") == "CROP_SPECIES" for b in bindings),
         "operator": bool(payload.get("actor", {}).get("actorPartyRef")),
         "event-time": bool(payload.get("effectiveTimeInterval", {}).get("start")),
     }

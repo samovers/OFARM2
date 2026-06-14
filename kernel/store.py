@@ -202,9 +202,16 @@ class Store:
 
         In force NOW = payload says IN_FORCE and no LINEAGE_SUPERSEDES edge
         points at the record. With `as_of` (an ISO timestamp) the answer is
-        reconstructed from the append-only substrate AS OF that moment:
-        accepted by then, and any supersession edge recorded AFTER it does
-        not count — exactly what the edges' record times exist for.
+        reconstructed from the append-only substrate AS OF that moment on a
+        SINGLE time axis — the server commit clock (`record_time`): a
+        consequence counts if its record was committed by then and no
+        LINEAGE_SUPERSEDES edge against it was committed by then. The record
+        row and its supersession edge are written in one transaction and
+        share that clock, so the reconstruction can never show a self-
+        contradictory hole (or duplicate) at a supersession boundary. The
+        payload's `acceptedAt` is a receipt of when acceptance was claimed —
+        never the as-of selection key, which would mix the app clock with the
+        edge's server clock and collapse Kernel rule 6 (times stay distinct).
         """
         with self.conn.cursor() as cur:
             if as_of is None:
@@ -229,7 +236,7 @@ class Store:
                     WHERE r.record_kind = 'ofarm.acceptedeventconsequence.v0.1'
                       AND r.payload ->> 'inForceState' = 'IN_FORCE'
                       AND r.payload -> 'anchorScopes' @> %s
-                      AND (r.payload ->> 'acceptedAt')::timestamptz <= %s::timestamptz
+                      AND r.record_time <= %s::timestamptz
                       AND NOT EXISTS (
                         SELECT 1 FROM kernel_edge e
                          WHERE e.dst_record_id = r.record_id

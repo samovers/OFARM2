@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from . import config, policy
+from . import config, policy, sufficiency
 from .context import REGSR_SNAPSHOT_PREFIX, current_reference_snapshot, parse_ts
 from .contracts import ContractViolation, UnknownContract, sha256_of
 from .problems import runtime_problem
@@ -72,11 +72,13 @@ def _assert_contained(ctx: GateContext, scope_type: str, scope_ref: str,
 
 
 def _verified_product_binding(ctx: GateContext) -> dict | None:
-    """The carrier's first CROP_PROTECTION_PRODUCT binding, if any."""
-    bindings = [ctx.store.get_payload(r)
-                for r in ctx.sub["payload"].get("agronomicIdentityBindingRefs", [])]
+    """The carrier's first CROP_PROTECTION_PRODUCT binding, if any. Resolves
+    binding refs kind-checked (a wrong-kind ref is not a binding and never a
+    KeyError); CodeBindingValidator refuses wrong-kind refs governably first."""
+    bindings = sufficiency.resolved_bindings(
+        ctx.store, ctx.sub["payload"].get("agronomicIdentityBindingRefs", []))
     product_bindings = [b for b in bindings
-                        if b and b["bindingRole"] == "CROP_PROTECTION_PRODUCT"]
+                        if b.get("bindingRole") == "CROP_PROTECTION_PRODUCT"]
     return product_bindings[0] if product_bindings else None
 
 
@@ -372,7 +374,7 @@ class CarrierSemanticsValidator:
         dose_params = [p for p in params if p["parameterRole"] in ("DOSE", "RATE")]
         if profile["quantityAndUnitPolicy"]["requireQuantityKindAndUnitCode"]:
             bad_units = [p for p in dose_params
-                         if not p.get("unitRef", "").startswith("scheme:ucum")
+                         if not policy.is_resolved_ucum_unit(p.get("unitRef"))
                          or not p.get("quantityKindRef")]
             if not dose_params or bad_units:
                 return _refusal(ctx, "FAIL_CARRIER", runtime_problem(
@@ -462,9 +464,23 @@ class CodeBindingValidator:
 
     def run(self, ctx: GateContext) -> GateRefusal | None:
         payload = ctx.sub["payload"]
-        bindings = [ctx.store.get_payload(r)
-                    for r in payload.get("agronomicIdentityBindingRefs", [])]
-        crop_bindings = [b for b in bindings if b and b["bindingRole"] == "CROP_SPECIES"]
+        refs = payload.get("agronomicIdentityBindingRefs", [])
+        # A binding ref must name a governed AgronomicIdentityBinding. A ref to
+        # any other (already-resolving) record kind is malformed input: refuse
+        # governably (Kernel rule 7) instead of dereferencing it into a bare
+        # KeyError that escapes the pipeline as an untraced 500. (Dangling
+        # refs are already caught by ReferenceResolutionValidator upstream.)
+        wrong_kind = [r for r in refs
+                      if (row := ctx.store.get_record(r)) is not None
+                      and row["record_kind"] != sufficiency.BINDING_KIND]
+        if wrong_kind:
+            return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
+                "PRODUCT_BINDING_UNRESOLVED", "Binding ref is not a binding",
+                f"agronomicIdentityBindingRefs names {wrong_kind}, which do not "
+                "resolve to AgronomicIdentityBinding records; a binding ref must "
+                "be a governed binding, never another record kind"))
+        bindings = sufficiency.resolved_bindings(ctx.store, refs)
+        crop_bindings = [b for b in bindings if b.get("bindingRole") == "CROP_SPECIES"]
         product_binding = _verified_product_binding(ctx)
         if product_binding is None or product_binding["bindingState"] != "VERIFIED":
             state = product_binding["bindingState"] if product_binding else "MISSING"

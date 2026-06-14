@@ -21,7 +21,7 @@ from typing import Any
 from . import policy, sufficiency
 from .context import mint, parse_ts
 from .contracts import ContractViolation
-from .emission import PromotionEmitter, ReplayWriter
+from .emission import PromotionEmitter, ReplayWriter, submission_evidence_refs
 from .problems import runtime_problem
 
 
@@ -364,6 +364,34 @@ class EvidenceSufficiencyGate:
             ctx.review_route_reasons.extend(floor_failures)
             ctx.log("EVIDENCE_SUFFICIENCY", "SATISFIED")
             return GatePass()
+
+        # A promoting class with no class-specific durable-evidence floor here
+        # (operation / compliance are handled above) still owes the
+        # AssertionRecord evidence floor (minItems:1) — and that floor is met
+        # ONLY by evidence that resolves to durable EvidenceRecords. These
+        # classes do not run ReferenceResolutionValidator, so the resolution
+        # check lives here: a self-reference to the captured event, a dangling
+        # ref, or a wrong-kind ref is fake evidence, not proof. Any of them
+        # keeps the claim a draft (Kernel rule 4 / rule 7).
+        if ctx.commit_class in policy.COMMIT_CLASS_TO_PROMOTION_TARGET:
+            refs = submission_evidence_refs(ctx.sub)
+            durable = sufficiency.durable_evidence(ctx.store, refs)
+            if not refs or len(durable) != len(refs):
+                ctx.log("EVIDENCE_SUFFICIENCY", "INSUFFICIENT",
+                        reason_code="EVIDENCE_INSUFFICIENT",
+                        rationale="a promoting assertion must carry evidence that "
+                                  "resolves to durable EvidenceRecords; absent, "
+                                  "dangling, or wrong-kind refs are not proof")
+                return GateRefusal(
+                    "EVIDENCE_SUFFICIENCY", "INSUFFICIENT", "RETAIN_DRAFT",
+                    [runtime_problem(
+                        "EVIDENCE_INSUFFICIENT", "Evidence floor unmet",
+                        "this commit class promotes to accepted state and must carry "
+                        "evidence resolving to durable EvidenceRecords; the captured "
+                        "event cannot be its own evidence, and a dangling or "
+                        "wrong-kind ref is not evidence",
+                        suggested_remediation="attach durable evidence and resubmit; "
+                        "the claim stays a draft")])
 
         ctx.log("EVIDENCE_SUFFICIENCY", "NOT_REQUIRED",
                 rationale="sufficiency cases are generated only at operation-claim "

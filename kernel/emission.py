@@ -20,6 +20,16 @@ if TYPE_CHECKING:   # type-only: keeps stages -> emission imports acyclic
     from .stages import GateContext
 
 
+def submission_evidence_refs(sub: dict) -> list:
+    """Evidence refs the submission actually carries — the carrier payload's,
+    else the top-level submission's, else none. The single source of truth for
+    'did this submission bring evidence', shared by the emitter and the
+    evidence-sufficiency gate so the floor it enforces and the refs it writes
+    can never diverge."""
+    return ((sub.get("payload") or {}).get("evidenceRefs")
+            or sub.get("evidenceRefs") or [])
+
+
 class PromotionEmitter:
     """Owns AssertionRecord / ReviewDecision / AcceptedEventConsequence
     creation and the edges required for traceability."""
@@ -30,9 +40,7 @@ class PromotionEmitter:
     # ---------------------------------------------------------------- build --
 
     def _submission_evidence_refs(self) -> list:
-        sub = self.ctx.sub
-        return ((sub.get("payload") or {}).get("evidenceRefs")
-                or sub.get("evidenceRefs") or [])
+        return submission_evidence_refs(self.ctx.sub)
 
     def _build_assertion(self, claim_state: str) -> dict:
         ctx, sub = self.ctx, self.ctx.sub
@@ -53,10 +61,11 @@ class PromotionEmitter:
             assertion["occurrenceTime"] = sub["eventTime"]
         if ctx.erp_id:
             assertion["executionRecordPayloadRefs"] = [ctx.erp_id]
-        if not assertion["evidenceRefs"]:
-            # AssertionRecord requires >=1 evidence ref; the semantic event
-            # itself is the captured evidence basis for evidence-light classes
-            assertion["evidenceRefs"] = [ctx.event_id]
+        # No evidence backfill: the AssertionRecord evidence floor (minItems:1)
+        # is met by real submitted evidence, never by self-referencing the
+        # captured event (Kernel rule 4: a claim is not its own proof). A
+        # promoting class with no evidence is refused at the evidence-
+        # sufficiency gate before emission, so evidenceRefs is non-empty here.
         return assertion
 
     def _link_assertion(self) -> None:
