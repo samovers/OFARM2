@@ -46,6 +46,9 @@ REGISTERED_REASON_CODES = {
     "DISPUTE_OPEN",
     "SUPERSEDED_RECORD_USED",
     "CORRECTION_REQUIRED",
+    # import / source fidelity (M2 G2 governed import mechanism)
+    "SOURCE_FIDELITY_LOSS",
+    "DUPLICATE_IMPORT_AMBIGUOUS",
 }
 
 _counter = itertools.count(1)

@@ -157,6 +157,7 @@ Every ticket here is `profile_si_ffs` package/profile content riding a Phase-1 m
 - **Read first:** `profile_si_ffs/PROFILE.md` (REGSR row); `profile_si_ffs/M0_DESK_RESEARCH.md` §3/§4a; `tooling/regsr_snapshot/parse_regsr.py`; D9; tickets G2, G3.
 - **Exact behavior change:** a scheduled trigger parses → G2 imports a REGSR snapshot with `effectiveFrom` + parser version + source digest; bound products carry the detail-page decision-number key enabling G3 identity-grade re-verification; parse/import failure → refusal trace, no snapshot.
 - **Required tests:** a parse fixture imports as a REGSR snapshot via the generic mechanism; the decision-number key drives an identity-grade verify (not a review route); the weekly cadence config is honored. (Fixtures only — no live HTTP.)
+- **Folded-in from G2 review (H2 — import-triggered staling):** G2's importer does not broad-stale materializations; it relies on **context-key drift** (a new in-force REGSR `ReferenceSnapshot` changes the `ContextSnapshot` → a new `MaterializationKey`, so a post-import NOW materialization never reuses a pre-import row — D12). Before this real scheduled import ships, **confirm context-key drift suffices** for affected farms, or add an explicit broad-stale (`materializer.invalidate_for_sources(..., farm_scope_ref=...)` for the reference family). Decide and record.
 - **Acceptance:** upgrades **only** the scheduled snapshot-import capability in `kernel/manifest.py` `IMPORT_MAPPING`; no live-integration / production-currentness / current-compliance claim; self-check PASS.
 - **Non-goals:** live HTML fetch in tests/CI; any current-compliance claim; an official-feed switch (outreach-gated to 2027, D13).
 
@@ -169,6 +170,7 @@ Every ticket here is `profile_si_ffs` package/profile content riding a Phase-1 m
 - **Read first:** `profile_si_ffs/PROFILE.md` (GERK row); `profile_si_ffs/M0_DESK_RESEARCH.md` §4/§4a; `tooling/gerk_roundtrip/gerk_roundtrip.py`; `profile_si_ffs/ONBOARDING_RKG_IZPIS.md` (the layer has no *domače ime*/BLOK/NUP — those come from the farmer/izpis).
 - **Exact behavior change:** the layer imports as a dated GERK snapshot via G2; per-PID geometry/area are available to back Field identities (G1) and partial-extent bounds (G7); failure → refusal trace.
 - **Required tests:** a small layer fixture imports as a GERK snapshot; a PID resolves to its geometry/area; missing PID handled governably. (Fixtures only.)
+- **Folded-in from G2 review (H2):** as P1 — confirm context-key-drift invalidation suffices for the GERK reference family, or add an explicit broad-stale, before the real scheduled import ships.
 - **Acceptance:** SI specifics confined to the package adapter; self-check PASS.
 - **Non-goals:** per-farmer government export (open layer + farmer-confirmed PIDs only); personal KMG↔GERK linkage in-repo (D14).
 

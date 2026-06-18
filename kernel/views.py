@@ -146,7 +146,11 @@ class OutputGenerator:
         access = self.authority.evaluate_read(
             requesting_party_ref=requesting_party_ref, farm_ref=farm_ref,
             artifact_family="PASSPORT_VIEW")
-        with self.store.tx() as cur:
+        # serialized write path (M2 G2): this render can recompute a
+        # materialization, so it must hold the single-writer lock — a scheduled
+        # import must not commit a newer ReferenceSnapshot mid-render and leave
+        # the output reflecting a pre-import context (PR #10 review).
+        with self.store.serialized_tx() as cur:
             self.store.insert_record(cur, access.request_payload)
             self.store.insert_record(cur, access.trace_payload)
             self.store.insert_record(cur, access.result_payload)
@@ -245,7 +249,11 @@ class OutputGenerator:
                           else "OUTPUT_APPROVE_DOCUMENT_ASSEMBLY"),
             action_stage="PUBLICATION",
             scope={"scopeType": "FARM", "scopeRef": farm_ref})
-        with self.store.tx() as cur:
+        # serialized write path (M2 G2): freezing high-consequence ATTESTED_OUTPUT
+        # resolves a fresh materialization, so it must hold the single-writer lock
+        # — a scheduled import must not commit a newer ReferenceSnapshot mid-freeze
+        # and let the frozen document claim FRESH over a pre-import context (PR #10 review).
+        with self.store.serialized_tx() as cur:
             self.store.insert_record(cur, decision.request_payload)
             self.store.insert_record(cur, decision.trace_payload)
             self.store.insert_record(cur, decision.result_payload)
