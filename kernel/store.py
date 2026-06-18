@@ -68,8 +68,16 @@ class Store:
 
     @contextmanager
     def tx(self):
-        """One commit = one transaction. The reachability constraint trigger
-        fires at COMMIT of this block (D3)."""
+        """One transaction. The reachability constraint trigger fires at COMMIT
+        of this block (D3).
+
+        CONVENTION (M2 G2, PR #10 review H1): plain ``tx()`` does NOT hold the
+        single-writer lock. During G2's single-writer phase (until M5/L2 lifts
+        the lock), any governed write that can affect truth, context,
+        materialization, imports, or outputs MUST use ``serialized_tx()``
+        instead. ``tx()`` is for bootstrap/test setup and explicitly safe
+        audit/read-decision traces only (e.g. recording a read-authorization
+        decision). New write-capable paths default to ``serialized_tx()``."""
         with self.conn.transaction():
             with self.conn.cursor() as cur:
                 yield cur

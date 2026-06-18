@@ -156,6 +156,39 @@ def test_g2_output_render_serializes_under_lock(store):
         b.close()
 
 
+def test_g2_freeze_serializes_under_lock(store):
+    # PR #10 review H3: the high-consequence freeze path must also hold the
+    # single-writer lock. While connection A holds serialized_tx, an inspection-
+    # register freeze on connection B must BLOCK until A releases.
+    from kernel.views import OutputGenerator
+    a, b = Store(), Store()
+    done = threading.Event()
+    box = {}
+
+    def freeze():
+        try:
+            box["result"] = OutputGenerator(b).freeze_inspection_register(
+                demo.FARM, demo.FARMER, "2026-01-01T00:00:00Z", "2026-12-31T23:59:59Z")
+        except Exception as exc:
+            box["err"] = repr(exc)
+        finally:
+            done.set()
+
+    t = threading.Thread(target=freeze)
+    try:
+        with a.serialized_tx():
+            t.start()
+            assert not done.wait(timeout=0.6), \
+                "freeze must serialize behind the single-writer lock, not interleave"
+        t.join(timeout=10)
+        assert done.is_set() and "err" not in box, box.get("err")
+        assert box["result"] is not None
+    finally:
+        t.join(timeout=10)
+        a.close()
+        b.close()
+
+
 def test_g2_concurrent_first_structure_assertions_one_governed_winner(store):
     # H1: two concurrent first STRUCTURE_ASSERTIONs for the SAME new identity.
     # The single-writer lock serializes them — exactly one promotes; the other

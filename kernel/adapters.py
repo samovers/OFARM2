@@ -124,6 +124,16 @@ class ImportRunner:
                 return {"imported": False, "snapshotRef": None,
                         "disposition": "CONFLICT", "problem": problem}
 
+            # Invalidation posture (M2 G2, PR #10 review H2): the runner does NOT
+            # broad-stale existing materializations on import. It relies on
+            # context-key DRIFT — a new in-force ReferenceSnapshot changes the
+            # ContextSnapshot (ContextAssembler folds the current reference
+            # snapshots into the context basis), hence the MaterializationKey,
+            # so a post-import NOW materialization never reuses a pre-import row
+            # (D12). For G2's fixture scheme there is no SI context to stale at
+            # all. P1/P2 (real scheduled REGSR/GERK imports) must confirm this
+            # suffices or add an explicit broad-stale (invalidate_for_sources with
+            # a farm/reference-family scope) — see the P1/P2 tickets.
             self.store.insert_record(cur, snapshot)
             self.store.log_gate(
                 cur, request_id, self.GATE, "IMPORTED",
