@@ -98,6 +98,22 @@ SELF_ACCEPTABLE_ASSERTION_TYPES = frozenset({"OPERATION_CLAIM_ASSERTION"})
 CONSEQUENCE_SUBJECT_TYPES = frozenset({
     "FARM", "SITE", "FIELD", "ZONE", "CROP_CYCLE", "LOT", "FACILITY", "OPERATION"})
 
+# Which typed identity-payload contract introduces which IdentityRecord type
+# (M2 G1). Generic Core structural data — the durable identity types are
+# Constitution vocabulary (RC2.1 §7), NOT jurisdiction schemes (KMG-MID/GERK
+# are SI bindings, P4). A structure-assertion commit carries one of these
+# payloads; the promotion emitter creates/locates the IdentityRecord of the
+# mapped type, and the identity registry materializes the current payload per
+# identity. Adding an identity type here is the ONLY change needed to support
+# committing it — the gate chain stays generic (no per-type branches).
+STRUCTURE_PAYLOAD_IDENTITY_TYPE = {
+    "ofarm.farmidentitypayload.v0.1": "FARM",
+    "ofarm.fieldidentitypayload.v0.1": "FIELD",
+    "ofarm.cropcycleidentitypayload.v0.1": "CROP_CYCLE",
+    "ofarm.equipmentidentitypayload.v0.1": "EQUIPMENT",
+    "ofarm.appliedresourceidentitypayload.v0.1": "APPLIED_RESOURCE",
+}
+
 # scope types that are never commitable claim targets on the farm-anchored
 # commit path (hostile review: no tenant/deployment escape hatch)
 NON_COMMITABLE_SCOPE_TYPES = frozenset({"TENANT", "DEPLOYMENT"})

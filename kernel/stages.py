@@ -85,6 +85,7 @@ class GateContext:
     # stage products
     authz_decision: Any = None
     erp_id: str | None = None
+    structure_payload_id: str | None = None   # typed identity-payload carrier (G1)
     attribution_ref: str | None = None
     case_payload: dict | None = None
     invalidation_sources: list[str] = field(default_factory=list)
@@ -301,6 +302,18 @@ class EnvelopePersist:
             ctx.store.insert_record(ctx.cur, claim_record)
             ctx.store.add_edge(ctx.cur, "COMPLIANCE_CLAIM", ctx.event_id,
                                claim_record["complianceClaimId"])
+        elif ctx.commit_class == "STRUCTURE_ASSERTION" and ctx.structure_payload_id:
+            # the validated typed identity payload becomes a durable carrier
+            # record linked to the event (generic over identity type — the
+            # payload IS its own contract). Stored here like the ComplianceClaim
+            # carrier: a refused commit retains the captured carrier as history,
+            # but the IdentityRecord is created only at promotion, so a refused
+            # structure assertion never leaves a phantom identity. The identity
+            # registry reaches the payload via this edge: in-force structural
+            # consequence -> sourceEvent -> STRUCTURE_PAYLOAD edge -> payload.
+            ctx.store.insert_record(ctx.cur, ctx.sub["payload"])
+            ctx.store.add_edge(ctx.cur, "STRUCTURE_PAYLOAD", ctx.event_id,
+                               ctx.structure_payload_id)
         return GatePass()
 
 

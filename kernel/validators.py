@@ -328,6 +328,42 @@ class ComplianceClaimValidator:
         return None
 
 
+class StructureCarrierValidator:
+    """The structure-assertion carrier is a typed identity payload — Farm,
+    Field, CropCycle, Equipment, or AppliedResource (contracts/core/). It
+    validates against its own contract and must be a recognized identity-payload
+    kind; a missing, malformed, or wrong-kind payload keeps the claim a draft
+    (Kernel rule 4: no shortcut to truth; rule 7: refuse over pretend). Generic
+    over identity type — no scheme logic, no per-type branch."""
+
+    def run(self, ctx: GateContext) -> GateRefusal | None:
+        payload = ctx.sub.get("payload")
+        if not isinstance(payload, dict):
+            return _refusal(ctx, "FAIL_CARRIER", runtime_problem(
+                "EVIDENCE_INSUFFICIENT", "Missing structure payload",
+                "a structure assertion requires a typed identity payload carrier "
+                "(Farm/Field/CropCycle/Equipment/AppliedResource); the claim stays "
+                "a draft"))
+        try:
+            contract = ctx.store.registry.validate(payload)
+        except (ContractViolation, UnknownContract) as exc:
+            # an unknown or malformed carrier schema is a governed refusal,
+            # never an unrecorded crash (mirrors CarrierSchemaValidator)
+            return _refusal(ctx, "FAIL_SCHEMA", runtime_problem(
+                "EVIDENCE_INSUFFICIENT", "Structure payload schema violation", str(exc)))
+        if contract.kind not in policy.STRUCTURE_PAYLOAD_IDENTITY_TYPE:
+            return _refusal(ctx, "FAIL_CARRIER", runtime_problem(
+                "EVIDENCE_INSUFFICIENT", "Wrong structure carrier",
+                f"structure assertions carry a typed identity payload "
+                f"(one of {sorted(policy.STRUCTURE_PAYLOAD_IDENTITY_TYPE)}), got "
+                f"{contract.kind}; the claim stays a draft"))
+        # validated; the carrier id rides to EnvelopePersist (storage + edge)
+        # and to the promotion emitter (IdentityRecord creation)
+        ctx.structure_payload_id = payload[contract.id_field]
+        ctx.log("VALIDATION", "PASS")
+        return None
+
+
 class CarrierSchemaValidator:
     """The operation carrier validates against its contract, and a caller
     may never self-declare an accepted/corrected/disputed record class
@@ -662,6 +698,8 @@ class ValidationGate:
             return GovernanceAcceptanceValidator().run(ctx) or GatePass()
         if ctx.commit_class == "COMPLIANCE_ASSERTION":
             return ComplianceClaimValidator().run(ctx) or GatePass()
+        if ctx.commit_class == "STRUCTURE_ASSERTION":
+            return StructureCarrierValidator().run(ctx) or GatePass()
         if ctx.commit_class != "OPERATION_CLAIM":
             ctx.log("VALIDATION", "PASS")
             return GatePass()

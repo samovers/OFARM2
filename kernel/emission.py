@@ -100,6 +100,53 @@ class PromotionEmitter:
         ctx.trace_refs["evidenceSufficiencyCaseRef"] = \
             ctx.case_payload["sufficiencyCaseId"]
 
+    def _ensure_identity_record(self, event_ref: str) -> None:
+        """At promotion, materialize the durable IdentityRecord for a structure
+        assertion from its typed payload carrier (event -> STRUCTURE_PAYLOAD ->
+        payload, linked at EnvelopePersist). Created only on acceptance, so a
+        refused or still-queued structure assertion never leaves a phantom
+        identity. A superseding assertion about an EXISTING identity does not
+        recreate it — the identity registry derives the current payload from
+        in-force structural consequences, never editing the prior record
+        (Kernel rule 1). Generic over identity type (policy map); no scheme
+        logic. A no-op for any non-structure promotion (no such edge)."""
+        ctx = self.ctx
+        edges = ctx.store.edges_from(event_ref, "STRUCTURE_PAYLOAD")
+        if not edges:
+            return
+        payload_ref = edges[0]["dst_record_id"]
+        payload = ctx.store.get_payload(payload_ref)
+        if payload is None:
+            return
+        identity_ref = payload["identityRecordRef"]
+        if ctx.store.record_exists(identity_ref):
+            return   # revision/supersession: the identity is already durable
+        identity_type = policy.STRUCTURE_PAYLOAD_IDENTITY_TYPE[payload["schemaVersion"]]
+        # the structure AssertionRecord that introduced the identity, via the
+        # event's EVENT_SOURCE edge (resolves on both promotion flavors)
+        creators = [e["src_record_id"]
+                    for e in ctx.store.edges_to(event_ref, "EVENT_SOURCE")
+                    if (r := ctx.store.get_record(e["src_record_id"])) is not None
+                    and r["record_kind"] == "ofarm.assertionrecord.v0.1"]
+        t = now_iso()
+        identity = {
+            "schemaVersion": "ofarm.identityrecord.v0.1",
+            "identityRecordId": identity_ref,
+            "identityType": identity_type,
+            "lifecycleState": "ACTIVE",
+            "createdAt": t,
+            "recordedAt": t,
+            "currentPayloadRef": payload_ref,
+        }
+        if creators:
+            identity["createdByAssertionRecordRef"] = creators[0]
+        # anchorScopes minItems is 1: the farm is the top scope (no self-anchor),
+        # every other identity anchors on the authorized farm (matches the M1
+        # demo's field/equipment/crop-cycle anchoring)
+        if identity_type != "FARM":
+            identity["anchorScopes"] = [{"scopeType": "FARM", "scopeRef": ctx.farm_ref}]
+        ctx.store.insert_record(ctx.cur, identity)
+
     # ------------------------------------------------------- emission flows --
 
     def emit_pending_assertion(self, *, amend_case_for_routing: bool) -> None:
@@ -165,6 +212,10 @@ class PromotionEmitter:
             ctx.store.add_edge(ctx.cur, "LINEAGE_SUPERSEDES",
                                consequence_id, superseded)
 
+        # a structure assertion materializes its durable IdentityRecord here —
+        # only on acceptance, never for a refused or queued capture (G1)
+        self._ensure_identity_record(ctx.event_id)
+
         ctx.log("REVIEW_PROMOTION", "PROMOTE_ACCEPTED", refs=[review_id])
         ctx.final_outcome = "PROMOTE_ACCEPTED"
         ctx.in_force_category = target
@@ -228,6 +279,10 @@ class PromotionEmitter:
         ctx.emitted["consequences"].append(consequence_id)
         ctx.store.add_edge(ctx.cur, "REVIEW", consequence_id, review_id)
         ctx.store.add_edge(ctx.cur, "EVENT_SOURCE", consequence_id, orig_event)
+
+        # a queued structure assertion materializes its IdentityRecord at the
+        # reviewer's acceptance, from the ORIGINAL event's payload carrier (G1)
+        self._ensure_identity_record(orig_event)
 
         ctx.log("REVIEW_PROMOTION", "PROMOTE_ACCEPTED", refs=[review_id])
         ctx.final_outcome = "PROMOTE_ACCEPTED"
