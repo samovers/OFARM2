@@ -80,6 +80,74 @@ def _count_in_force_structural(store, identity_ref, farm_ref=demo.FARM) -> int:
     return n
 
 
+def _inject_conflicting_structural_state(store):
+    """Fabricate a throwaway farm whose single identity has TWO in-force
+    structural consequences — the conflict D18 normally prevents (e.g. the H1
+    concurrent-write race). Clearly synthetic and isolated on its own farm so it
+    never pollutes the demo farm's registry. Records are fully reachable
+    (PROMOTION_EMITS + a PROMOTE_ACCEPTED trace) so global invariants still hold."""
+    s = uid()
+    farm, field, event = f"farm:m2conf.{s}", f"field:m2conf.{s}", f"event:m2conf.{s}"
+    review, trace = f"review:m2conf.{s}", f"promtrace:m2conf.{s}"
+    c1, c2 = f"conseq:m2conf.{s}.a", f"conseq:m2conf.{s}.b"
+    t = now_iso()
+    anchors = [{"scopeType": "FARM", "scopeRef": farm}]
+    with store.tx() as cur:
+        store.insert_record(cur, {
+            "schemaVersion": "ofarm.semanticeventenvelope.v0.1", "semanticEventId": event,
+            "primaryEventFamily": "StructureEvent",
+            "dominantSemanticConsequence": "fabricated conflict (test)",
+            "anchorScopes": anchors, "subjectRefs": [farm],
+            "timeSemantics": {"eventTime": t, "recordTime": t}})
+        store.insert_record(cur, {
+            "schemaVersion": "ofarm.fieldidentitypayload.v0.1",
+            "fieldidentitypayloadId": f"fp:m2conf.{s}", "identityRecordRef": field,
+            "recordedAt": t, "displayName": "conflict field (fictional)",
+            "parentFarmIdentityRef": farm, "declaredArea": {"value": 1.0, "unitCode": "har"}})
+        store.add_edge(cur, "STRUCTURE_PAYLOAD", event, f"fp:m2conf.{s}")
+        store.insert_record(cur, {
+            "schemaVersion": "ofarm.reviewdecision.v0.1", "reviewDecisionId": review,
+            "reviewedArtifactFamily": "ASSERTION_RECORD", "reviewedArtifactRef": event,
+            "reviewAction": "REVIEW_ACCEPT", "anchorScopes": anchors,
+            "decidedByPartyRef": demo.FARMER, "decidedAt": t,
+            "decisionOutcomeState": "ACCEPTED", "notes": "fabricated test review"})
+        for cid in (c1, c2):
+            store.insert_record(cur, {
+                "schemaVersion": "ofarm.acceptedeventconsequence.v0.1",
+                "acceptedEventConsequenceId": cid, "consequenceType": "STATE_CHANGE_ACCEPTED",
+                "sourceEventRef": event, "acceptedByReviewDecisionRef": review,
+                "subject": {"subjectType": "FARM", "subjectRef": farm},
+                "anchorScopes": anchors, "acceptedAt": t, "inForceState": "IN_FORCE"})
+        store.insert_record(cur, {
+            "schemaVersion": "ofarm.promotiontrace.v0.1", "promotionTraceId": trace,
+            "requestId": f"cir:m2conf.{s}", "evaluatedAt": t, "semanticEventRef": event,
+            "commitClass": "STRUCTURE_ASSERTION", "primaryEventFamily": "StructureEvent",
+            "idempotencyKey": f"cir:m2conf.{s}", "idempotencyDisposition": "NEW_REQUEST",
+            "gateSequence": [{"gate": "REVIEW_PROMOTION", "outcome": "PROMOTE_ACCEPTED"}],
+            "finalOutcome": "PROMOTE_ACCEPTED", "traceSummary": "fabricated conflict (test)",
+            "emittedReviewDecisionRefs": [review], "emittedAcceptedConsequenceRefs": [c1, c2]})
+        for ref in (event, review, c1, c2):
+            store.add_edge(cur, "PROMOTION_EMITS", trace, ref)
+    return farm, field
+
+
+def test_g1_registry_conflict_marks_materialization_invalid(store, materializer):
+    """H2 (hostile re-review): an unresolved structural conflict is NOT fresh
+    current state — the registry surfaces the conflict AND marks the
+    materialization INVALID (snapshot + derived row + return), never FRESH."""
+    farm, field = _inject_conflicting_structural_state(store)
+    with store.tx() as cur:
+        reg = materializer.materialize_identity_registry(cur, farm)
+    assert reg["freshness"] == "INVALID"
+    assert reg["currentState"]["conflictCount"] >= 1
+    entries = {e["identityRecordRef"]: e for e in reg["currentState"]["identities"]}
+    assert entries[field].get("conflict") is True
+    with store.conn.cursor() as cur:
+        cur.execute("SELECT freshness FROM derived_materialization "
+                    "WHERE key_digest = %s AND superseded_by IS NULL", (reg["keyDigest"],))
+        assert cur.fetchone()["freshness"] == "INVALID"
+
+
 def _accept(pipeline, assertion_ref, *, key):
     return pipeline.commit({
         "commitClass": "GOVERNANCE_DECISION", "ingressChannel": "MANUAL_UI",

@@ -519,7 +519,12 @@ class StructureSemanticsValidator:
                             "EVIDENCE_REFERENCE_UNAVAILABLE", "Structure payload ref unresolved",
                             f"{field} ref {ref} does not resolve to a {expected}"))
 
-        # D18: explicit supersession for an identity that already has state
+        # D18: explicit supersession for an identity that already has state.
+        # NOTE (PR #9 H1): this is read-before-write. In the single-writer pilot
+        # (D13) the serial path is fully governed; under TRUE concurrency two
+        # first assertions for one identityRecordRef could both pass here before
+        # either commits. G2's serialized write path closes that race (see the
+        # G2 ticket's folded-in hardening) — it is not a single-writer hole.
         in_force = _in_force_structural_consequences_for(ctx, identity_ref)
         supersedes = ctx.sub.get("supersedesConsequenceRef")
         if len(in_force) > 1:

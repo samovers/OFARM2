@@ -462,6 +462,13 @@ class Materializer:
         for ref in (consequence_refs + assertion_refs + review_refs):
             self.store.add_edge(cur, "MATERIALIZATION_BASIS", basis_id, ref)
 
+        # an unresolved structural conflict makes the current state untrustworthy:
+        # it is NOT fresh current state (Current-State RFC — INVALID is for a
+        # broken/unresolved basis). D18 should prevent conflicts from ever
+        # arising; if one does (e.g. the H1 concurrent-write race G2 serializes),
+        # the registry refuses to present it as fresh (PR #9 hostile-review H2).
+        freshness = "INVALID" if conflict_count else "FRESH"
+
         mat_id = _mint("mat")
         snapshot_id = _mint("matsnap")
         snapshot = {
@@ -471,7 +478,7 @@ class Materializer:
             "twin": twin,
             "anchorScopes": [{"scopeType": "FARM", "scopeRef": farm_ref}],
             "materializationBasisRef": basis_id,
-            "freshnessState": "FRESH",
+            "freshnessState": freshness,
             "declaredUseClass": _USE_CLASS_MAP.get(use_class, "EXPLORATORY"),
             "retentionReason": "derived identity registry retained with its receipts "
                                "(Kernel rule 5)",
@@ -503,10 +510,10 @@ class Materializer:
               (materialization_id, key_digest, materialization_key, target_twin,
                anchor_scope_ref, time_policy, use_class, freshness, current_state,
                basis_record_id, snapshot_record_id, context_snapshot_ref, freshness_vector)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, 'FRESH', %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (mat_id, key_id, Jsonb(key), twin, farm_ref, Jsonb(time_policy), use_class,
-             Jsonb(current_state), basis_id, snapshot_id, ctx_ref, Jsonb(vector)))
+             freshness, Jsonb(current_state), basis_id, snapshot_id, ctx_ref, Jsonb(vector)))
         for entry in dep_index["entries"]:
             cur.execute(
                 "INSERT INTO derived_dependency_index "
@@ -522,7 +529,7 @@ class Materializer:
             "basisRef": basis_id,
             "snapshotRef": snapshot_id,
             "contextSnapshotRef": ctx_ref,
-            "freshness": "FRESH",
+            "freshness": freshness,
             "currentState": current_state,
             "freshnessVector": vector,
         }
