@@ -45,6 +45,7 @@ REGISTERED_REASON_CODES = {
     # correction/dispute
     "DISPUTE_OPEN",
     "SUPERSEDED_RECORD_USED",
+    "CORRECTION_REQUIRED",
 }
 
 _counter = itertools.count(1)

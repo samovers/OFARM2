@@ -32,9 +32,9 @@ APPLIED_RESOURCE = "resource:demo.account"
 PRODUCT_BINDING = "binding:demo.product.account"
 CROP_BINDING = "binding:demo.crop.vine"
 PHOTO_EVIDENCE = "evidence:demo.spray.photo.1"
-# the farmer's eRKG / registration printout, the durable evidence backing the
-# onboarding structure assertions (fictional, format-true — no real document)
-ONBOARDING_EVIDENCE = "evidence:demo.rkg.izpis.1"
+# a generic registration document — the durable evidence backing the onboarding
+# structure assertions (fictional, format-true — no real document, no SI naming)
+ONBOARDING_EVIDENCE = "evidence:demo.registration.1"
 FARMER_GRANT = "grant:demo.farmer.one.full"
 WORKER_DELEGATION = "deleg:demo.worker.one.spray"
 INSPECTOR_SHARE = "share:demo.inspector.one.read"
@@ -164,12 +164,12 @@ def substrate_records() -> list[dict]:
          "capturedAt": VALID_FROM, "recordedAt": t,
          "capturedByPartyRef": FARMER,
          "anchorScopes": [farm_scope],
-         "rawAssetRef": "asset:demo.rkg.izpis.0001",
+         "rawAssetRef": "asset:demo.registration.0001",
          "rawAssetDigest": "sha256:" + "cd" * 32,
          "mediaType": "application/pdf",
          "evidenceState": "CAPTURED",
-         "notes": "fictional eRKG/registration printout backing onboarding "
-                  "structure assertions (no real holding/parcel values)"},
+         "notes": "fictional registration document backing onboarding structure "
+                  "assertions (no real holding/parcel values)"},
 
         {"schemaVersion": "ofarm.agronomicidentitybinding.v0.1",
          "agronomicIdentityBindingId": PRODUCT_BINDING,
@@ -343,12 +343,10 @@ def structure_submission(payload: dict, *, idem_key: str,
 def onboard(store) -> None:
     """Commit the demo farm's domain identities through the full gate chain as
     STRUCTURE_ASSERTIONs (M2 G1) — the IdentityRecords are created on
-    acceptance, never bootstrapped. Idempotent: a no-op once the Farm identity
-    exists. Order Farm -> Field -> CropCycle -> Equipment -> AppliedResource."""
-    if store.record_exists(FARM):
-        return
-    from .gates import GatePipeline   # lazy import: avoids any module-load cycle
-    pipe = GatePipeline(store)
+    acceptance, never bootstrapped. Idempotent and RESUMABLE: each missing
+    identity is committed independently, so a partial prior run is completed
+    rather than skipped. Order Farm -> Field -> CropCycle -> Equipment ->
+    AppliedResource (a child's parent identity must already exist)."""
     plan = [
         (farm_identity_payload(), "onboard:demo:farm"),
         (field_identity_payload(), "onboard:demo:field"),
@@ -356,7 +354,13 @@ def onboard(store) -> None:
         (equipment_identity_payload(), "onboard:demo:equipment"),
         (appliedresource_identity_payload(), "onboard:demo:appliedresource"),
     ]
+    if all(store.record_exists(p["identityRecordRef"]) for p, _ in plan):
+        return   # fully onboarded already
+    from .gates import GatePipeline   # lazy import: avoids any module-load cycle
+    pipe = GatePipeline(store)
     for payload, key in plan:
+        if store.record_exists(payload["identityRecordRef"]):
+            continue   # resume: this identity is already committed
         result = pipe.commit(structure_submission(payload, idem_key=key))
         if result["decisionOutcome"] != "PROMOTE_ACCEPTED":
             raise RuntimeError(

@@ -71,6 +71,60 @@ def _assert_contained(ctx: GateContext, scope_type: str, scope_ref: str,
     return None
 
 
+def _assert_parent_scope_contained(ctx: GateContext, ref: str,
+                                   where: str) -> GateRefusal | None:
+    """A structure payload's parent scope ref must resolve to a farm-contained
+    IdentityRecord (or be the authorized farm itself)."""
+    if ref == ctx.farm_ref:
+        return None
+    row = ctx.store.get_record(ref)
+    if row is None:
+        return _refusal(ctx, "FAIL_REFERENCE_RESOLUTION", runtime_problem(
+            "IDENTITY_UNRESOLVED", "Parent scope unresolved",
+            f"{where} names {ref}, which does not resolve to any stored record"))
+    if row["record_kind"] != "ofarm.identityrecord.v0.1":
+        return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
+            "IDENTITY_UNRESOLVED", "Parent scope is not a governed identity",
+            f"{where} names {ref} ({row['record_kind']}); a parent scope must be "
+            "an IdentityRecord"))
+    if {"scopeType": "FARM", "scopeRef": ctx.farm_ref} \
+            not in row["payload"].get("anchorScopes", []):
+        return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
+            "SCOPE_NOT_AUTHORIZED", "Cross-farm parent scope refused",
+            f"{where} names {ref}, which is not anchored on {ctx.farm_ref}"))
+    return None
+
+
+def _in_force_structural_consequences_for(ctx: GateContext,
+                                          identity_ref: str) -> list[str]:
+    """In-force structural consequence ids whose carried identity payload
+    targets this identity (in-force consequence -> sourceEvent ->
+    STRUCTURE_PAYLOAD -> payload.identityRecordRef)."""
+    out = []
+    for row in ctx.store.in_force_consequences(ctx.farm_ref):
+        c = row["payload"]
+        edges = ctx.store.edges_from(c["sourceEventRef"], "STRUCTURE_PAYLOAD")
+        if not edges:
+            continue
+        p = ctx.store.get_payload(edges[0]["dst_record_id"])
+        if p and p.get("identityRecordRef") == identity_ref:
+            out.append(c["acceptedEventConsequenceId"])
+    return out
+
+
+def _structure_target_identity(ctx: GateContext, assertion_ref: str) -> str | None:
+    """The identity a queued STRUCTURE_ASSERTION targets, resolved from its
+    carrier: assertion -> EVENT_SOURCE -> event -> STRUCTURE_PAYLOAD -> payload."""
+    ev = ctx.store.edges_from(assertion_ref, "EVENT_SOURCE")
+    if not ev:
+        return None
+    sp = ctx.store.edges_from(ev[0]["dst_record_id"], "STRUCTURE_PAYLOAD")
+    if not sp:
+        return None
+    payload = ctx.store.get_payload(sp[0]["dst_record_id"])
+    return payload.get("identityRecordRef") if payload else None
+
+
 def _verified_product_binding(ctx: GateContext) -> dict | None:
     """The carrier's first CROP_PROTECTION_PRODUCT binding, if any. Resolves
     binding refs kind-checked (a wrong-kind ref is not a binding and never a
@@ -237,6 +291,41 @@ class GovernanceAcceptanceValidator:
                 f"self-review covers routine operation claims only (D8); "
                 f"{target['assertionType']} asserted by the accepting party "
                 "requires a DISTINCT reviewer principal"))
+        # Acceptance-time re-validation (TOCTOU): the world can change between a
+        # claim being queued and a reviewer accepting it, so supersession/D18 is
+        # re-checked against CURRENT in-force state, not the state at submission
+        # (PR #9 re-review blockers). The queued correction's supersession target
+        # is the LINEAGE_SUPERSEDES_INTENT edge recorded at queue time.
+        intent_edges = ctx.store.edges_from(target_ref, "LINEAGE_SUPERSEDES_INTENT")
+        intent = intent_edges[0]["dst_record_id"] if intent_edges else None
+        if target["assertionType"] == "STRUCTURE_ASSERTION":
+            identity_ref = _structure_target_identity(ctx, target_ref)
+            in_force = (_in_force_structural_consequences_for(ctx, identity_ref)
+                        if identity_ref else [])
+            if len(in_force) > 1:
+                return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
+                    "CORRECTION_REQUIRED", "Ambiguous structural state",
+                    f"{identity_ref} has multiple in-force structural consequences "
+                    f"{in_force}; refusing rather than silently choosing one"))
+            if in_force and not intent:
+                return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
+                    "CORRECTION_REQUIRED", "Existing identity requires supersession",
+                    f"{identity_ref} now has current structural state ({in_force[0]}) that "
+                    "was not in force when this was queued; it must explicitly supersede "
+                    "that consequence (D18) — resubmit as a revision or a new identity"))
+            if intent and intent not in in_force:
+                return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
+                    "SUPERSEDED_RECORD_USED", "Queued supersession target not current",
+                    f"the consequence this queued correction would supersede ({intent}) is "
+                    f"no longer {identity_ref}'s current structural state; resubmit against "
+                    "the current consequence"))
+        elif intent and ctx.store.is_superseded(intent):
+            # a non-structure queued correction whose target was superseded since
+            # it was queued must not silently re-supersede it
+            return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
+                "SUPERSEDED_RECORD_USED", "Queued supersession target already superseded",
+                f"the consequence this queued correction would supersede ({intent}) has "
+                "itself been superseded since it was queued; resubmit against current state"))
         # a review act is governed, never a bare pointer
         rationale_text = ctx.sub.get("reviewRationale")
         if not (isinstance(rationale_text, str) and rationale_text.strip()):
@@ -358,8 +447,107 @@ class StructureCarrierValidator:
                 f"(one of {sorted(policy.STRUCTURE_PAYLOAD_IDENTITY_TYPE)}), got "
                 f"{contract.kind}; the claim stays a draft"))
         # validated; the carrier id rides to EnvelopePersist (storage + edge)
-        # and to the promotion emitter (IdentityRecord creation)
+        # and to the promotion emitter (IdentityRecord creation). PASS is logged
+        # by StructureSemanticsValidator, the branch-terminal validator.
         ctx.structure_payload_id = payload[contract.id_field]
+        return None
+
+
+class StructureSemanticsValidator:
+    """Beyond schema (StructureCarrierValidator), the structure carrier's
+    INTERNAL references are governed (D17): because the assertion subject is
+    always the farm, the payload's own refs are where cross-farm / dangling /
+    wrong-kind injection would hide. Each is checked against the policy
+    ref-field spec. Also enforces D18: a re-assertion of an identity that
+    already has in-force structural state must explicitly supersede that
+    identity's current structural consequence — never a silent latest-wins.
+    Generic over identity type; no scheme logic."""
+
+    def run(self, ctx: GateContext) -> GateRefusal | None:
+        payload = ctx.sub["payload"]
+        kind = payload["schemaVersion"]
+        identity_type = policy.STRUCTURE_PAYLOAD_IDENTITY_TYPE[kind]
+        identity_ref = payload["identityRecordRef"]
+
+        # a Farm identity payload may only assert the authorized farm itself
+        if identity_type == "FARM" and identity_ref != ctx.farm_ref:
+            return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
+                "SCOPE_NOT_AUTHORIZED", "Farm identity must be the authorized farm",
+                f"a Farm identity payload may only assert {ctx.farm_ref}, "
+                f"not {identity_ref}"))
+
+        # an existing identity must be the same type and farm-contained (a
+        # revision never changes an identity's type or steals another farm's)
+        existing = ctx.store.get_record(identity_ref)
+        if existing is not None:
+            if existing["record_kind"] != "ofarm.identityrecord.v0.1":
+                return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
+                    "IDENTITY_UNRESOLVED", "Identity ref is not an identity",
+                    f"identityRecordRef {identity_ref} names a "
+                    f"{existing['record_kind']}, not an IdentityRecord"))
+            if existing["payload"]["identityType"] != identity_type:
+                return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
+                    "IDENTITY_UNRESOLVED", "Identity type mismatch",
+                    f"identityRecordRef {identity_ref} already names a "
+                    f"{existing['payload']['identityType']} identity, not {identity_type}"))
+            if identity_type != "FARM" and {"scopeType": "FARM", "scopeRef": ctx.farm_ref} \
+                    not in existing["payload"].get("anchorScopes", []):
+                return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
+                    "SCOPE_NOT_AUTHORIZED", "Cross-farm identity refused",
+                    f"identityRecordRef {identity_ref} is not anchored on {ctx.farm_ref}"))
+
+        # payload-internal refs resolve to the right kinds / are farm-contained
+        for field, category, is_list in policy.STRUCTURE_PAYLOAD_REF_FIELDS.get(kind, []):
+            val = payload.get(field)
+            if val is None:
+                continue
+            for ref in (val if is_list else [val]):
+                if category == "PARENT_FARM":
+                    if ref != ctx.farm_ref:
+                        return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
+                            "SCOPE_NOT_AUTHORIZED", "Parent farm mismatch",
+                            f"{field} must be the authorized farm {ctx.farm_ref}, not {ref}"))
+                elif category == "PARENT_SCOPE":
+                    refusal = _assert_parent_scope_contained(ctx, ref, field)
+                    if refusal:
+                        return refusal
+                else:
+                    expected = policy.STRUCTURE_REF_CATEGORY_KIND[category]
+                    row = ctx.store.get_record(ref)
+                    if row is None or row["record_kind"] != expected:
+                        return _refusal(ctx, "FAIL_REFERENCE_RESOLUTION", runtime_problem(
+                            "EVIDENCE_REFERENCE_UNAVAILABLE", "Structure payload ref unresolved",
+                            f"{field} ref {ref} does not resolve to a {expected}"))
+
+        # D18: explicit supersession for an identity that already has state
+        in_force = _in_force_structural_consequences_for(ctx, identity_ref)
+        supersedes = ctx.sub.get("supersedesConsequenceRef")
+        if len(in_force) > 1:
+            return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
+                "CORRECTION_REQUIRED", "Ambiguous structural state",
+                f"{identity_ref} has multiple in-force structural consequences "
+                f"{in_force}; refusing rather than silently choosing one"))
+        if in_force:
+            if not supersedes:
+                return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
+                    "CORRECTION_REQUIRED", "Existing identity requires supersession",
+                    f"{identity_ref} already has current structural state; submit this "
+                    "either as a revision that explicitly supersedes the current "
+                    f"structural consequence ({in_force[0]}) or as a new identity with "
+                    "a different identityRecordRef"))
+            if supersedes != in_force[0]:
+                return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
+                    "SUPERSEDED_RECORD_USED", "Supersession target mismatch",
+                    f"supersedesConsequenceRef {supersedes} does not name {identity_ref}'s "
+                    f"current structural consequence ({in_force[0]})"))
+        elif supersedes:
+            # superseding something, but THIS identity has no structural state:
+            # the ref belongs to another identity or a non-structural consequence
+            return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
+                "SUPERSEDED_RECORD_USED", "Supersession target not this identity",
+                f"supersedesConsequenceRef {supersedes} is not a current structural "
+                f"consequence of {identity_ref}"))
+
         ctx.log("VALIDATION", "PASS")
         return None
 
@@ -699,7 +887,10 @@ class ValidationGate:
         if ctx.commit_class == "COMPLIANCE_ASSERTION":
             return ComplianceClaimValidator().run(ctx) or GatePass()
         if ctx.commit_class == "STRUCTURE_ASSERTION":
-            return StructureCarrierValidator().run(ctx) or GatePass()
+            refusal = StructureCarrierValidator().run(ctx)
+            if refusal:
+                return refusal
+            return StructureSemanticsValidator().run(ctx) or GatePass()
         if ctx.commit_class != "OPERATION_CLAIM":
             ctx.log("VALIDATION", "PASS")
             return GatePass()

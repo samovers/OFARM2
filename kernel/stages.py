@@ -432,6 +432,23 @@ class ReviewPromotionGate:
                 "compliance assertion requires a distinct reviewer and routes "
                 "to the advisor queue", severity="WARNING"))
 
+        # D17 bounded self-acceptance: a STRUCTURE_ASSERTION may take the
+        # self-review (confirm-accept) path ONLY when it carries a recognized
+        # farm-owned identity payload (StructureSelfAcceptancePolicy). Anything
+        # else routes to a distinct reviewer — never "all STRUCTURE_ASSERTIONs
+        # self-review". The actor's ASSERT_STRUCTURE (AuthorityGate) +
+        # REVIEW_ACCEPT (below) authority and semantic validation (ValidationGate)
+        # are the other D17 conditions, enforced by those gates.
+        if (ctx.commit_class == "STRUCTURE_ASSERTION" and sub.get("confirmAccept")
+                and sub.get("reviewerPartyRef", ctx.acting_party) == ctx.acting_party
+                and not policy.structure_self_acceptable(
+                    (sub.get("payload") or {}).get("schemaVersion", ""))):
+            ctx.review_route_reasons.append(runtime_problem(
+                "HUMAN_APPROVAL_REQUIRED", "Structure self-review out of bounded class",
+                "self-acceptance of structure assertions is limited to the farm's own "
+                "setup identities (D17); this assertion routes to a distinct reviewer",
+                severity="WARNING"))
+
         # A body-named DISTINCT reviewer is a forgeable review act: the claim
         # lands in the queue; the reviewer accepts under their OWN principal
         # via a GOVERNANCE_DECISION commit.

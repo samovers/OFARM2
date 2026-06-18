@@ -360,12 +360,13 @@ class Materializer:
 
         as_of = (time_policy.get("asOfTime")
                  if time_policy["policyType"] == "AS_OF" else None)
-        # current payload per identity = the LATEST in-force structural
-        # consequence for it (in_force_consequences is ordered by record_time,
-        # so a non-superseding re-assertion would let the latest win; a proper
-        # supersession leaves exactly one in force). A structural identity
-        # consequence is one whose source event carries a STRUCTURE_PAYLOAD edge.
-        by_identity: dict[str, dict] = {}
+        # group in-force structural consequences by the identity their carried
+        # payload targets (a structural identity consequence is one whose source
+        # event has a STRUCTURE_PAYLOAD edge). D18 guarantees at most one per
+        # identity at the commit gate; the registry NEVER silently picks a winner
+        # if more than one is ever in force — it surfaces a CONFLICT instead
+        # (PR #9 review, blocker 4).
+        candidates: dict[str, list] = {}
         for row in self.store.in_force_consequences(farm_ref, as_of=as_of):
             c = row["payload"]
             event_ref = c["sourceEventRef"]
@@ -377,30 +378,58 @@ class Materializer:
             if payload is None:
                 continue
             identity_ref = payload["identityRecordRef"]
-            identity = self.store.get_payload(identity_ref)
             assertion_refs = [
                 e["src_record_id"]
                 for e in self.store.edges_to(event_ref, "EVENT_SOURCE")
                 if (r := self.store.get_record(e["src_record_id"])) is not None
                 and r["record_kind"] == "ofarm.assertionrecord.v0.1"]
-            by_identity[identity_ref] = {
-                "identityRecordRef": identity_ref,
-                "identityType": (identity or {}).get("identityType")
-                or policy.STRUCTURE_PAYLOAD_IDENTITY_TYPE.get(payload["schemaVersion"]),
-                "lifecycleState": (identity or {}).get("lifecycleState"),
-                "currentPayloadRef": payload_ref,
-                "sourceConsequenceRef": c["acceptedEventConsequenceId"],
+            candidates.setdefault(identity_ref, []).append({
+                "consequenceRef": c["acceptedEventConsequenceId"],
                 "reviewDecisionRef": c["acceptedByReviewDecisionRef"],
                 "acceptedAt": c["acceptedAt"],
+                "payloadRef": payload_ref,
+                "payload": payload,
+                "identity": self.store.get_payload(identity_ref),
                 "assertionRefs": assertion_refs,
-                "currentPayload": payload,
-            }
+            })
 
-        entries = [by_identity[k] for k in sorted(by_identity)]
-        consequence_refs = [e["sourceConsequenceRef"] for e in entries]
-        review_refs = sorted({e["reviewDecisionRef"] for e in entries})
-        assertion_refs = sorted({a for e in entries for a in e["assertionRefs"]})
-        identity_refs = [e["identityRecordRef"] for e in entries]
+        entries, identity_refs = [], []
+        cons_set, review_set, assertion_set = set(), set(), set()
+        conflict_count = 0
+        for identity_ref in sorted(candidates):
+            cands = candidates[identity_ref]
+            identity_refs.append(identity_ref)
+            for cand in cands:
+                cons_set.add(cand["consequenceRef"])
+                review_set.add(cand["reviewDecisionRef"])
+                assertion_set.update(cand["assertionRefs"])
+            kind = cands[0]["payload"]["schemaVersion"]
+            itype = (cands[0]["identity"] or {}).get("identityType") \
+                or policy.STRUCTURE_PAYLOAD_IDENTITY_TYPE.get(kind)
+            if len(cands) == 1:
+                cand = cands[0]
+                entries.append({
+                    "identityRecordRef": identity_ref,
+                    "identityType": itype,
+                    "lifecycleState": (cand["identity"] or {}).get("lifecycleState"),
+                    "currentPayloadRef": cand["payloadRef"],
+                    "sourceConsequenceRef": cand["consequenceRef"],
+                    "acceptedAt": cand["acceptedAt"],
+                    "currentPayload": cand["payload"],
+                })
+            else:
+                conflict_count += 1
+                entries.append({
+                    "identityRecordRef": identity_ref,
+                    "identityType": itype,
+                    "conflict": True,
+                    "conflictingConsequenceRefs":
+                        sorted(c["consequenceRef"] for c in cands),
+                })
+
+        consequence_refs = sorted(cons_set)
+        review_refs = sorted(review_set)
+        assertion_refs = sorted(assertion_set)
 
         generated_at = now_iso()
         current_state = {
@@ -411,6 +440,7 @@ class Materializer:
             "generatedAt": generated_at,
             "identities": entries,
             "identityCount": len(entries),
+            "conflictCount": conflict_count,
         }
 
         # ---- governed receipts (canonical records) ----
