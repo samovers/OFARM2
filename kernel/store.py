@@ -15,6 +15,7 @@ enforces the storage posture:
 """
 from __future__ import annotations
 
+import hashlib
 from contextlib import contextmanager
 
 import psycopg
@@ -23,6 +24,15 @@ from psycopg.types.json import Jsonb
 
 from . import config
 from .contracts import ContractRegistry, ContractViolation, sha256_of
+
+# Single-writer advisory-lock key (M2 G2): a stable signed-64-bit derived from
+# the tenant ref. Every governed WRITE entry point (user commit + scheduled
+# import) acquires this transaction-scoped lock, so a scheduled import can never
+# interleave with a user commit, and concurrent structure-identity commits
+# serialize (closing the D18 read-before-write race — PR #9 H1). The lock stays
+# on until the freshness-vector snapshot-isolation/watermark fix (M5/L2).
+_SINGLE_WRITER_LOCK_KEY = int.from_bytes(
+    hashlib.sha256(config.TENANT_REF.encode()).digest()[:8], "big", signed=True)
 
 AUTHORITATIVE_KINDS = (
     "ofarm.assertionrecord.v0.1",
@@ -62,6 +72,22 @@ class Store:
         fires at COMMIT of this block (D3)."""
         with self.conn.transaction():
             with self.conn.cursor() as cur:
+                yield cur
+
+    @contextmanager
+    def serialized_tx(self):
+        """A governed WRITE transaction holding the single-writer advisory lock
+        (M2 G2). User commits and scheduled imports share this lock, so they can
+        never interleave (single-writer invariant by construction) and concurrent
+        structure-identity commits serialize (D18 race, PR #9 H1). The lock is
+        transaction-scoped — Postgres releases it at COMMIT/ROLLBACK — so it is
+        held for exactly the life of the write and never leaks. Within a single
+        connection it is granted immediately (no self-contention); it only blocks
+        a *different* connection's write, which is the cross-writer race we mean
+        to serialize."""
+        with self.conn.transaction():
+            with self.conn.cursor() as cur:
+                cur.execute("SELECT pg_advisory_xact_lock(%s)", (_SINGLE_WRITER_LOCK_KEY,))
                 yield cur
 
     # -- canonical record writes ----------------------------------------------

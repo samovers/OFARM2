@@ -68,12 +68,14 @@ class GatePipeline:
         """Run one capture through the full chain. Returns the
         CommitIngressResult payload. One call = one transaction (D3)."""
         try:
-            with self.store.tx() as cur:
+            with self.store.serialized_tx() as cur:
                 return self._commit_in_tx(cur, submission)
         except psycopg.errors.UniqueViolation:
             # a concurrent commit won the idempotency-key race; our transaction
-            # rolled back completely — serve the replay path against the winner
-            with self.store.tx() as cur:
+            # rolled back completely — serve the replay path against the winner.
+            # (Under the single-writer lock — M2 G2 — writers serialize, so this
+            # backstop is now reached only across connections that bypass it.)
+            with self.store.serialized_tx() as cur:
                 prior = self.store.idempotency_lookup(
                     cur, submission["idempotencyKey"])
                 if prior is None:
