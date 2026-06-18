@@ -13,6 +13,12 @@ in a `ParseResult`, and pass scheme-specific snapshot metadata in `snapshot_meta
 The `ReferenceSnapshot` IS the governed import record: the source digest and the
 retained-artifact ref ride `sourceArtifactRefs`, the effective date is
 `effectiveFrom`, and the parser/version label is `canonicalVersionLabel`.
+
+Audit posture: each import attempt is recorded as an append-only `kernel_gate_log`
+row (IMPORTED / REFUSED / REPLAY_REUSED). A refusal also returns a `RuntimeProblem`
+as data — it is NOT persisted as a standalone `RuntimeProblem` record (contracts
+are frozen; the gate log is the enforcement trace). A first-class import-result
+contract is out of scope for G2.
 """
 from __future__ import annotations
 
