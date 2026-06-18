@@ -100,12 +100,71 @@ class PromotionEmitter:
         ctx.trace_refs["evidenceSufficiencyCaseRef"] = \
             ctx.case_payload["sufficiencyCaseId"]
 
+    def _ensure_identity_record(self, event_ref: str) -> None:
+        """At promotion, materialize the durable IdentityRecord for a structure
+        assertion from its typed payload carrier (event -> STRUCTURE_PAYLOAD ->
+        payload, linked at EnvelopePersist). Created only on acceptance, so a
+        refused or still-queued structure assertion never leaves a phantom
+        identity. A superseding assertion about an EXISTING identity does not
+        recreate it — the identity registry derives the current payload from
+        in-force structural consequences, never editing the prior record
+        (Kernel rule 1). Generic over identity type (policy map); no scheme
+        logic. A no-op for any non-structure promotion (no such edge)."""
+        ctx = self.ctx
+        edges = ctx.store.edges_from(event_ref, "STRUCTURE_PAYLOAD")
+        if not edges:
+            return
+        payload_ref = edges[0]["dst_record_id"]
+        payload = ctx.store.get_payload(payload_ref)
+        if payload is None:
+            return
+        identity_ref = payload["identityRecordRef"]
+        if ctx.store.record_exists(identity_ref):
+            return   # revision/supersession: the identity is already durable
+        identity_type = policy.STRUCTURE_PAYLOAD_IDENTITY_TYPE[payload["schemaVersion"]]
+        # the structure AssertionRecord that introduced the identity, via the
+        # event's EVENT_SOURCE edge (resolves on both promotion flavors)
+        creators = [e["src_record_id"]
+                    for e in ctx.store.edges_to(event_ref, "EVENT_SOURCE")
+                    if (r := ctx.store.get_record(e["src_record_id"])) is not None
+                    and r["record_kind"] == "ofarm.assertionrecord.v0.1"]
+        t = now_iso()
+        # NOTE: currentPayloadRef is deliberately NOT set. The IdentityRecord is
+        # append-only, so it cannot track the current payload after a later
+        # supersession — the identity registry derives "current payload" from
+        # in-force structural consequences (Kernel rule 5). createdByAssertionRecordRef
+        # records the creating commit; the creation payload is reachable through
+        # that assertion's event -> STRUCTURE_PAYLOAD edge (PR #9 review, minor 4).
+        identity = {
+            "schemaVersion": "ofarm.identityrecord.v0.1",
+            "identityRecordId": identity_ref,
+            "identityType": identity_type,
+            "lifecycleState": "ACTIVE",
+            "createdAt": t,
+            "recordedAt": t,
+        }
+        if creators:
+            identity["createdByAssertionRecordRef"] = creators[0]
+        # anchorScopes minItems is 1: the farm is the top scope (no self-anchor),
+        # every other identity anchors on the authorized farm (matches the M1
+        # demo's field/equipment/crop-cycle anchoring)
+        if identity_type != "FARM":
+            identity["anchorScopes"] = [{"scopeType": "FARM", "scopeRef": ctx.farm_ref}]
+        ctx.store.insert_record(ctx.cur, identity)
+
     # ------------------------------------------------------- emission flows --
 
     def emit_pending_assertion(self, *, amend_case_for_routing: bool) -> None:
         """The claim lands in the queue (or stays a captured draft)."""
         self._emit_assertion("PENDING_REVIEW")
         self._store_case(amend_for_routing=amend_case_for_routing)
+        # a queued CORRECTION remembers its supersession target so the eventual
+        # reviewer acceptance can retire the prior consequence — supersession
+        # takes effect on acceptance, never while the claim is only pending
+        superseded = self.ctx.sub.get("supersedesConsequenceRef")
+        if superseded:
+            self.ctx.store.add_edge(self.ctx.cur, "LINEAGE_SUPERSEDES_INTENT",
+                                    self.ctx.assertion_id, superseded)
 
     def emit_self_review_promotion(self) -> None:
         """The deliberate confirm-accept step is the review act (D8):
@@ -164,6 +223,10 @@ class PromotionEmitter:
         if superseded:
             ctx.store.add_edge(ctx.cur, "LINEAGE_SUPERSEDES",
                                consequence_id, superseded)
+
+        # a structure assertion materializes its durable IdentityRecord here —
+        # only on acceptance, never for a refused or queued capture (G1)
+        self._ensure_identity_record(ctx.event_id)
 
         ctx.log("REVIEW_PROMOTION", "PROMOTE_ACCEPTED", refs=[review_id])
         ctx.final_outcome = "PROMOTE_ACCEPTED"
@@ -224,17 +287,30 @@ class PromotionEmitter:
         if target_payload.get("executionRecordPayloadRefs"):
             consequence["executionRecordPayloadRefs"] = \
                 target_payload["executionRecordPayloadRefs"]
+        # a queued CORRECTION carries its supersession to acceptance: retire
+        # the prior consequence (LINEAGE_SUPERSEDES) so it leaves force, exactly
+        # as the self-review path does — a queued correction must not become a
+        # second in-force consequence (PR #9 review, blocker 3)
+        intent = ctx.store.edges_from(ctx.acceptance_target, "LINEAGE_SUPERSEDES_INTENT")
+        superseded = intent[0]["dst_record_id"] if intent else None
+
         ctx.store.insert_record(ctx.cur, consequence)
         ctx.emitted["consequences"].append(consequence_id)
         ctx.store.add_edge(ctx.cur, "REVIEW", consequence_id, review_id)
         ctx.store.add_edge(ctx.cur, "EVENT_SOURCE", consequence_id, orig_event)
+        if superseded:
+            ctx.store.add_edge(ctx.cur, "LINEAGE_SUPERSEDES", consequence_id, superseded)
+
+        # a queued structure assertion materializes its IdentityRecord at the
+        # reviewer's acceptance, from the ORIGINAL event's payload carrier (G1)
+        self._ensure_identity_record(orig_event)
 
         ctx.log("REVIEW_PROMOTION", "PROMOTE_ACCEPTED", refs=[review_id])
         ctx.final_outcome = "PROMOTE_ACCEPTED"
         ctx.in_force_category = category
         ctx.in_force_refs = [consequence_id]
         ctx.trigger_source = consequence_id
-        ctx.invalidation_sources = [consequence_id]
+        ctx.invalidation_sources = [superseded] if superseded else [consequence_id]
 
 
 class PromotionTraceWriter:

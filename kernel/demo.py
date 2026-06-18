@@ -6,11 +6,13 @@ obviously synthetic. No real person, holding, parcel, or document value
 appears anywhere in this module — real farm documents are evidence held
 farm-side only (AGENTS.md rule 1).
 
-Substrate records (parties, identities, grants, raw evidence, bindings) are
-bootstrapped directly: they are not authoritative-listed kinds, and pilot
-onboarding through structure-assertion commits is the M2 path. The product
-binding references real *public register* data (REGSR product 1646 "ACCOUNT")
-— public product authorisation data is not personal data.
+Substrate records (parties, grants, raw evidence, bindings) are bootstrapped
+directly: they are not authoritative-listed kinds. The domain IDENTITIES
+(Farm / Field / CropCycle / Equipment / AppliedResource), by contrast, are
+committed through the full gate chain as STRUCTURE_ASSERTIONs carrying typed
+identity payloads (M2 G1) — see onboard() — not bootstrapped directly. The
+product binding references real *public register* data (REGSR product 1646
+"ACCOUNT") — public product authorisation data is not personal data.
 """
 from __future__ import annotations
 
@@ -26,9 +28,13 @@ ADVISOR = "party:demo.advisor.one"
 INSPECTOR = "party:demo.inspector.one"
 AGENT = "party:demo.software.agent"
 SPRAYER = "equip:demo.sprayer.one"
+APPLIED_RESOURCE = "resource:demo.account"
 PRODUCT_BINDING = "binding:demo.product.account"
 CROP_BINDING = "binding:demo.crop.vine"
 PHOTO_EVIDENCE = "evidence:demo.spray.photo.1"
+# a generic registration document — the durable evidence backing the onboarding
+# structure assertions (fictional, format-true — no real document, no SI naming)
+ONBOARDING_EVIDENCE = "evidence:demo.registration.1"
 FARMER_GRANT = "grant:demo.farmer.one.full"
 WORKER_DELEGATION = "deleg:demo.worker.one.spray"
 INSPECTOR_SHARE = "share:demo.inspector.one.read"
@@ -69,21 +75,11 @@ def substrate_records() -> list[dict]:
          "partyClass": "SOFTWARE_AGENT", "displayName": "Demo Capture Agent (fictional)",
          "partyState": "ACTIVE", "recordedAt": t},
 
-        {"schemaVersion": "ofarm.identityrecord.v0.1", "identityRecordId": FARM,
-         "identityType": "FARM", "lifecycleState": "ACTIVE",
-         "createdAt": t, "recordedAt": t},
-        {"schemaVersion": "ofarm.identityrecord.v0.1", "identityRecordId": FIELD,
-         "identityType": "FIELD", "lifecycleState": "ACTIVE",
-         "createdAt": t, "recordedAt": t,
-         "anchorScopes": [farm_scope]},
-        {"schemaVersion": "ofarm.identityrecord.v0.1", "identityRecordId": SPRAYER,
-         "identityType": "EQUIPMENT", "lifecycleState": "ACTIVE",
-         "createdAt": t, "recordedAt": t,
-         "anchorScopes": [farm_scope]},
-        {"schemaVersion": "ofarm.identityrecord.v0.1", "identityRecordId": CYCLE,
-         "identityType": "CROP_CYCLE", "lifecycleState": "ACTIVE",
-         "createdAt": t, "recordedAt": t,
-         "anchorScopes": [farm_scope]},
+        # NOTE: the Farm / Field / CropCycle / Equipment / AppliedResource
+        # IdentityRecords are NO LONGER bootstrapped here — they are committed
+        # through the gate chain as STRUCTURE_ASSERTIONs carrying typed identity
+        # payloads (see onboard() below). Parties, grants, evidence, and code
+        # bindings remain substrate (not authoritative-listed kinds).
 
         {"schemaVersion": "ofarm.roleassignment.v0.1",
          "roleAssignmentId": "role:demo.farmer.one.holder",
@@ -162,6 +158,19 @@ def substrate_records() -> list[dict]:
          "evidenceState": "CAPTURED",
          "notes": "fictional demo photo evidence"},
 
+        {"schemaVersion": "ofarm.evidencerecord.v0.1",
+         "evidenceRecordId": ONBOARDING_EVIDENCE,
+         "evidenceClass": "REGISTRY_EXTRACT",
+         "capturedAt": VALID_FROM, "recordedAt": t,
+         "capturedByPartyRef": FARMER,
+         "anchorScopes": [farm_scope],
+         "rawAssetRef": "asset:demo.registration.0001",
+         "rawAssetDigest": "sha256:" + "cd" * 32,
+         "mediaType": "application/pdf",
+         "evidenceState": "CAPTURED",
+         "notes": "fictional registration document backing onboarding structure "
+                  "assertions (no real holding/parcel values)"},
+
         {"schemaVersion": "ofarm.agronomicidentitybinding.v0.1",
          "agronomicIdentityBindingId": PRODUCT_BINDING,
          "bindingRole": "CROP_PROTECTION_PRODUCT",
@@ -230,6 +239,135 @@ def substrate_records() -> list[dict]:
     ]
 
 
+# ---------------------------------------------------------------------------
+# typed identity payloads (M2 G1) — generic Core shapes, no SI scheme bindings
+# (KMG-MID / GERK / REGSR / FFS-NAPRAVE bindings are P4). Every value fictional
+# and format-true (privacy rule 1, D14). Each builder accepts an explicit
+# payload id so a revision can carry a NEW payload for the SAME identity.
+# ---------------------------------------------------------------------------
+
+def farm_identity_payload(payload_id: str = "farmpayload:demo.kmetija.a") -> dict:
+    return {
+        "schemaVersion": "ofarm.farmidentitypayload.v0.1",
+        "farmidentitypayloadId": payload_id,
+        "identityRecordRef": FARM,
+        "recordedAt": now_iso(),
+        "displayName": "Demo Kmetija A (fictional)",
+        "operatorPartyRef": FARMER,
+    }
+
+
+def field_identity_payload(payload_id: str = "fieldpayload:demo.kmetija.a.field-1",
+                           *, display_name: str = "Zgornja njiva (fictional demo field)",
+                           area_value: float = 1.42) -> dict:
+    return {
+        "schemaVersion": "ofarm.fieldidentitypayload.v0.1",
+        "fieldidentitypayloadId": payload_id,
+        "identityRecordRef": FIELD,
+        "recordedAt": now_iso(),
+        "displayName": display_name,
+        "parentFarmIdentityRef": FARM,
+        "declaredArea": {"value": area_value, "unitCode": "har"},
+    }
+
+
+def cropcycle_identity_payload(payload_id: str = "cyclepayload:demo.kmetija.a.vine-2026",
+                               *, auto_created: bool = True) -> dict:
+    return {
+        "schemaVersion": "ofarm.cropcycleidentitypayload.v0.1",
+        "cropcycleidentitypayloadId": payload_id,
+        "identityRecordRef": CYCLE,
+        "recordedAt": now_iso(),
+        "parentScopeRefs": [FIELD],
+        "seasonLabel": "2026 (fictional demo season)",
+        "cycleState": "ACTIVE",
+        "autoCreated": auto_created,
+    }
+
+
+def equipment_identity_payload(payload_id: str = "equippayload:demo.sprayer.one") -> dict:
+    return {
+        "schemaVersion": "ofarm.equipmentidentitypayload.v0.1",
+        "equipmentidentitypayloadId": payload_id,
+        "identityRecordRef": SPRAYER,
+        "recordedAt": now_iso(),
+        "displayName": "Demo nahrbtna skropilnica (fictional sprayer)",
+        "equipmentClass": "SPRAYER",
+    }
+
+
+def appliedresource_identity_payload(
+        payload_id: str = "resourcepayload:demo.account") -> dict:
+    return {
+        "schemaVersion": "ofarm.appliedresourceidentitypayload.v0.1",
+        "appliedresourceidentitypayloadId": payload_id,
+        "identityRecordRef": APPLIED_RESOURCE,
+        "recordedAt": now_iso(),
+        "displayName": "ACCOUNT (fictional demo product identity)",
+        "resourceClass": "PLANT_PROTECTION_PRODUCT",
+    }
+
+
+def structure_submission(payload: dict, *, idem_key: str,
+                         actor_ref: str = FARMER, confirm: bool = True,
+                         supersedes: str | None = None,
+                         event_time: str = "2026-01-05T09:00:00Z",
+                         evidence_refs: list[str] | None = None) -> dict:
+    """A STRUCTURE_ASSERTION submission carrying a typed identity payload.
+
+    Subject = the farm scope: the structural fact is anchored on the farm, and
+    the precise identity (identityRecordRef) + attributes live in the carried
+    payload. Generic over identity type — no scheme logic.
+    """
+    sub = {
+        "commitClass": "STRUCTURE_ASSERTION",
+        "ingressChannel": "MANUAL_UI",
+        "actingPartyRef": actor_ref,
+        "farmRef": FARM,
+        "subjectType": "FARM",
+        "subjectRef": FARM,
+        "idempotencyKey": idem_key,
+        "eventTime": event_time,
+        "capturedAt": event_time,
+        "payload": payload,
+        "evidenceRefs": evidence_refs if evidence_refs is not None
+                        else [ONBOARDING_EVIDENCE],
+        "requestedPromotionTarget": "ACCEPTED_STRUCTURAL_STATE",
+        "confirmAccept": confirm,
+    }
+    if supersedes:
+        sub["supersedesConsequenceRef"] = supersedes
+    return sub
+
+
+def onboard(store) -> None:
+    """Commit the demo farm's domain identities through the full gate chain as
+    STRUCTURE_ASSERTIONs (M2 G1) — the IdentityRecords are created on
+    acceptance, never bootstrapped. Idempotent and RESUMABLE: each missing
+    identity is committed independently, so a partial prior run is completed
+    rather than skipped. Order Farm -> Field -> CropCycle -> Equipment ->
+    AppliedResource (a child's parent identity must already exist)."""
+    plan = [
+        (farm_identity_payload(), "onboard:demo:farm"),
+        (field_identity_payload(), "onboard:demo:field"),
+        (cropcycle_identity_payload(), "onboard:demo:cropcycle"),
+        (equipment_identity_payload(), "onboard:demo:equipment"),
+        (appliedresource_identity_payload(), "onboard:demo:appliedresource"),
+    ]
+    if all(store.record_exists(p["identityRecordRef"]) for p, _ in plan):
+        return   # fully onboarded already
+    from .gates import GatePipeline   # lazy import: avoids any module-load cycle
+    pipe = GatePipeline(store)
+    for payload, key in plan:
+        if store.record_exists(payload["identityRecordRef"]):
+            continue   # resume: this identity is already committed
+        result = pipe.commit(structure_submission(payload, idem_key=key))
+        if result["decisionOutcome"] != "PROMOTE_ACCEPTED":
+            raise RuntimeError(
+                f"demo onboarding failed at {key}: {result['decisionOutcome']} "
+                f"{result.get('problems')}")
+
+
 def bootstrap(store) -> None:
     for payload in substrate_records():
         contract = store.registry.get(payload["schemaVersion"])
@@ -237,6 +375,7 @@ def bootstrap(store) -> None:
             continue
         with store.tx() as cur:
             store.insert_record(cur, payload)
+    onboard(store)
 
 
 def spray_payload(erp_id: str = "erp:demo.spray.0001", *,

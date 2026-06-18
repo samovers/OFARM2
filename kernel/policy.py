@@ -98,6 +98,68 @@ SELF_ACCEPTABLE_ASSERTION_TYPES = frozenset({"OPERATION_CLAIM_ASSERTION"})
 CONSEQUENCE_SUBJECT_TYPES = frozenset({
     "FARM", "SITE", "FIELD", "ZONE", "CROP_CYCLE", "LOT", "FACILITY", "OPERATION"})
 
+# Which typed identity-payload contract introduces which IdentityRecord type
+# (M2 G1). Generic Core structural data — the durable identity types are
+# Constitution vocabulary (RC2.1 §7), NOT jurisdiction schemes (KMG-MID/GERK
+# are SI bindings, P4). A structure-assertion commit carries one of these
+# payloads; the promotion emitter creates/locates the IdentityRecord of the
+# mapped type, and the identity registry materializes the current payload per
+# identity. Adding an identity type here is the ONLY change needed to support
+# committing it — the gate chain stays generic (no per-type branches).
+STRUCTURE_PAYLOAD_IDENTITY_TYPE = {
+    "ofarm.farmidentitypayload.v0.1": "FARM",
+    "ofarm.fieldidentitypayload.v0.1": "FIELD",
+    "ofarm.cropcycleidentitypayload.v0.1": "CROP_CYCLE",
+    "ofarm.equipmentidentitypayload.v0.1": "EQUIPMENT",
+    "ofarm.appliedresourceidentitypayload.v0.1": "APPLIED_RESOURCE",
+}
+
+# Payload-internal references the structure semantic validator governs (D17):
+# because a structure assertion's subject is always the farm, the payload's own
+# refs are where cross-farm / dangling / wrong-kind injection would hide, so
+# each is checked. Declarative per kind: (fieldName, category, isList). Generic
+# data, no per-type procedural branch.
+#   PARENT_FARM   -> must be the authorized farm itself
+#   PARENT_SCOPE  -> must resolve to a farm-contained IdentityRecord
+#   PARTY/EVIDENCE/BINDING/REFERENCE_SNAPSHOT -> must resolve to that kind
+STRUCTURE_PAYLOAD_REF_FIELDS = {
+    "ofarm.farmidentitypayload.v0.1": [
+        ("operatorPartyRef", "PARTY", False)],
+    "ofarm.fieldidentitypayload.v0.1": [
+        ("parentFarmIdentityRef", "PARENT_FARM", False),
+        ("geometryEvidenceRef", "EVIDENCE", False)],
+    "ofarm.cropcycleidentitypayload.v0.1": [
+        ("parentScopeRefs", "PARENT_SCOPE", True),
+        ("cropBindingRefs", "BINDING", True)],
+    "ofarm.equipmentidentitypayload.v0.1": [
+        ("ownerPartyRef", "PARTY", False),
+        ("inspectionEvidenceRefs", "EVIDENCE", True),
+        ("identityBindingRefs", "BINDING", True)],
+    "ofarm.appliedresourceidentitypayload.v0.1": [
+        ("identityBindingRefs", "BINDING", True),
+        ("referenceSnapshotRefs", "REFERENCE_SNAPSHOT", True)],
+}
+
+# ref category -> the record kind a resolvable ref of that category must be
+STRUCTURE_REF_CATEGORY_KIND = {
+    "PARTY": "ofarm.party.v0.1",
+    "EVIDENCE": "ofarm.evidencerecord.v0.1",
+    "BINDING": "ofarm.agronomicidentitybinding.v0.1",
+    "REFERENCE_SNAPSHOT": "ofarm.referencesnapshot.v0.1",
+}
+
+
+def structure_self_acceptable(payload_kind: str) -> bool:
+    """D17 (bounded self-acceptance): a STRUCTURE_ASSERTION may take the
+    self-review (confirm-accept) promotion path ONLY when it carries one of the
+    recognized G1 farm-owned identity payloads. Anything else (a future
+    structure payload kind, etc.) must route to queued review with a distinct
+    reviewer — never "all STRUCTURE_ASSERTIONs self-review". The actor's
+    ASSERT_STRUCTURE + REVIEW_ACCEPT authority, the semantic validation, and the
+    explicit-supersession rule (D18) are enforced by the gates; this function is
+    the named bounded-class gate the review stage consults."""
+    return payload_kind in STRUCTURE_PAYLOAD_IDENTITY_TYPE
+
 # scope types that are never commitable claim targets on the farm-anchored
 # commit path (hostile review: no tenant/deployment escape hatch)
 NON_COMMITABLE_SCOPE_TYPES = frozenset({"TENANT", "DEPLOYMENT"})

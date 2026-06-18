@@ -85,6 +85,7 @@ class GateContext:
     # stage products
     authz_decision: Any = None
     erp_id: str | None = None
+    structure_payload_id: str | None = None   # typed identity-payload carrier (G1)
     attribution_ref: str | None = None
     case_payload: dict | None = None
     invalidation_sources: list[str] = field(default_factory=list)
@@ -301,6 +302,18 @@ class EnvelopePersist:
             ctx.store.insert_record(ctx.cur, claim_record)
             ctx.store.add_edge(ctx.cur, "COMPLIANCE_CLAIM", ctx.event_id,
                                claim_record["complianceClaimId"])
+        elif ctx.commit_class == "STRUCTURE_ASSERTION" and ctx.structure_payload_id:
+            # the validated typed identity payload becomes a durable carrier
+            # record linked to the event (generic over identity type — the
+            # payload IS its own contract). Stored here like the ComplianceClaim
+            # carrier: a refused commit retains the captured carrier as history,
+            # but the IdentityRecord is created only at promotion, so a refused
+            # structure assertion never leaves a phantom identity. The identity
+            # registry reaches the payload via this edge: in-force structural
+            # consequence -> sourceEvent -> STRUCTURE_PAYLOAD edge -> payload.
+            ctx.store.insert_record(ctx.cur, ctx.sub["payload"])
+            ctx.store.add_edge(ctx.cur, "STRUCTURE_PAYLOAD", ctx.event_id,
+                               ctx.structure_payload_id)
         return GatePass()
 
 
@@ -418,6 +431,23 @@ class ReviewPromotionGate:
                 "self-review covers routine operation claims only (D8); a "
                 "compliance assertion requires a distinct reviewer and routes "
                 "to the advisor queue", severity="WARNING"))
+
+        # D17 bounded self-acceptance: a STRUCTURE_ASSERTION may take the
+        # self-review (confirm-accept) path ONLY when it carries a recognized
+        # farm-owned identity payload (StructureSelfAcceptancePolicy). Anything
+        # else routes to a distinct reviewer — never "all STRUCTURE_ASSERTIONs
+        # self-review". The actor's ASSERT_STRUCTURE (AuthorityGate) +
+        # REVIEW_ACCEPT (below) authority and semantic validation (ValidationGate)
+        # are the other D17 conditions, enforced by those gates.
+        if (ctx.commit_class == "STRUCTURE_ASSERTION" and sub.get("confirmAccept")
+                and sub.get("reviewerPartyRef", ctx.acting_party) == ctx.acting_party
+                and not policy.structure_self_acceptable(
+                    (sub.get("payload") or {}).get("schemaVersion", ""))):
+            ctx.review_route_reasons.append(runtime_problem(
+                "HUMAN_APPROVAL_REQUIRED", "Structure self-review out of bounded class",
+                "self-acceptance of structure assertions is limited to the farm's own "
+                "setup identities (D17); this assertion routes to a distinct reviewer",
+                severity="WARNING"))
 
         # A body-named DISTINCT reviewer is a forgeable review act: the claim
         # lands in the queue; the reviewer accepts under their OWN principal

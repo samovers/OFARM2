@@ -27,6 +27,11 @@ from psycopg.types.json import Jsonb
 
 MATERIALIZATION_POLICY_REF = "policy:si.ffs.materialization.v0_1"
 RESULT_SHAPE_FAMILY = "si.ffs.spray-register.v0_1"
+# the generic identity registry (G1): current typed payload per identity,
+# derived from in-force structural consequences. A distinct result-shape
+# family gives it its own MaterializationKey/derived row, separate from the
+# spray register, so the two never collide or inflate each other.
+IDENTITY_REGISTRY_SHAPE_FAMILY = "ofarm.identity-registry.v0_1"
 INVALIDATION_TRACE_KIND = ("ofarm.explainableCurrentStateEvidence."
                            "invalidationEvaluationTrace.v0.1-draft")
 
@@ -62,7 +67,8 @@ class Materializer:
     # ------------------------------------------------------------------ key --
 
     def build_key(self, farm_ref: str, *, twin: str, use_class: str,
-                  time_policy: dict, context_snapshot_ref: str) -> dict:
+                  time_policy: dict, context_snapshot_ref: str,
+                  result_shape_family: str = RESULT_SHAPE_FAMILY) -> dict:
         key_core = {
             "deploymentScope": {"scopeType": "TENANT", "scopeRef": config.TENANT_REF},
             "twin": twin,
@@ -71,7 +77,7 @@ class Materializer:
             "contextSnapshotRef": context_snapshot_ref,
             "materializationPolicyRef": MATERIALIZATION_POLICY_REF,
             "useClass": use_class,
-            "resultShapeFamily": RESULT_SHAPE_FAMILY,
+            "resultShapeFamily": result_shape_family,
             "policyVersionRef": MATERIALIZATION_POLICY_REF,
         }
         key_id = f"matkey:{_digest12(key_core)}"
@@ -322,6 +328,208 @@ class Materializer:
             "snapshotRef": snapshot_id,
             "contextSnapshotRef": ctx_ref,
             "freshness": "FRESH",
+            "currentState": current_state,
+            "freshnessVector": vector,
+        }
+
+    def materialize_identity_registry(self, cur, farm_ref: str, *,
+                                      twin: str = "COMPLIANCE",
+                                      use_class: str = "OPERATIONAL_DASHBOARD",
+                                      time_policy: dict | None = None) -> dict:
+        """The generic identity registry (G1): the CURRENT typed payload per
+        identity on a farm, derived from in-force structural consequences
+        (Kernel rule 5 — derived state with receipts). Generic over identity
+        type; no scheme logic.
+
+        A superseding structure assertion's consequence supersedes the prior,
+        so in_force_consequences yields exactly the current payload per identity
+        and the prior payload survives untouched (append-only). Basis-set
+        invalidation (D12): the registry's dependency index carries its
+        contributing structural consequences, so the commit-gate
+        invalidate_for_sources marks it STALE when any is superseded.
+        """
+        time_policy = time_policy or {"policyType": "NOW"}
+        ctx = self.context.assemble(cur, farm_ref, target_twin=twin,
+                                    evaluation_time_policy=time_policy)
+        ctx_ref = ctx["contextSnapshotId"]
+        reference_refs = ctx.get("referenceSnapshotRefs", [])
+        key = self.build_key(farm_ref, twin=twin, use_class=use_class,
+                             time_policy=time_policy, context_snapshot_ref=ctx_ref,
+                             result_shape_family=IDENTITY_REGISTRY_SHAPE_FAMILY)
+        key_id = key["materializationKeyId"]
+
+        as_of = (time_policy.get("asOfTime")
+                 if time_policy["policyType"] == "AS_OF" else None)
+        # group in-force structural consequences by the identity their carried
+        # payload targets (a structural identity consequence is one whose source
+        # event has a STRUCTURE_PAYLOAD edge). D18 guarantees at most one per
+        # identity at the commit gate; the registry NEVER silently picks a winner
+        # if more than one is ever in force — it surfaces a CONFLICT instead
+        # (PR #9 review, blocker 4).
+        candidates: dict[str, list] = {}
+        for row in self.store.in_force_consequences(farm_ref, as_of=as_of):
+            c = row["payload"]
+            event_ref = c["sourceEventRef"]
+            edges = self.store.edges_from(event_ref, "STRUCTURE_PAYLOAD")
+            if not edges:
+                continue
+            payload_ref = edges[0]["dst_record_id"]
+            payload = self.store.get_payload(payload_ref)
+            if payload is None:
+                continue
+            identity_ref = payload["identityRecordRef"]
+            assertion_refs = [
+                e["src_record_id"]
+                for e in self.store.edges_to(event_ref, "EVENT_SOURCE")
+                if (r := self.store.get_record(e["src_record_id"])) is not None
+                and r["record_kind"] == "ofarm.assertionrecord.v0.1"]
+            candidates.setdefault(identity_ref, []).append({
+                "consequenceRef": c["acceptedEventConsequenceId"],
+                "reviewDecisionRef": c["acceptedByReviewDecisionRef"],
+                "acceptedAt": c["acceptedAt"],
+                "payloadRef": payload_ref,
+                "payload": payload,
+                "identity": self.store.get_payload(identity_ref),
+                "assertionRefs": assertion_refs,
+            })
+
+        entries, identity_refs = [], []
+        cons_set, review_set, assertion_set = set(), set(), set()
+        conflict_count = 0
+        for identity_ref in sorted(candidates):
+            cands = candidates[identity_ref]
+            identity_refs.append(identity_ref)
+            for cand in cands:
+                cons_set.add(cand["consequenceRef"])
+                review_set.add(cand["reviewDecisionRef"])
+                assertion_set.update(cand["assertionRefs"])
+            kind = cands[0]["payload"]["schemaVersion"]
+            itype = (cands[0]["identity"] or {}).get("identityType") \
+                or policy.STRUCTURE_PAYLOAD_IDENTITY_TYPE.get(kind)
+            if len(cands) == 1:
+                cand = cands[0]
+                entries.append({
+                    "identityRecordRef": identity_ref,
+                    "identityType": itype,
+                    "lifecycleState": (cand["identity"] or {}).get("lifecycleState"),
+                    "currentPayloadRef": cand["payloadRef"],
+                    "sourceConsequenceRef": cand["consequenceRef"],
+                    "acceptedAt": cand["acceptedAt"],
+                    "currentPayload": cand["payload"],
+                })
+            else:
+                conflict_count += 1
+                entries.append({
+                    "identityRecordRef": identity_ref,
+                    "identityType": itype,
+                    "conflict": True,
+                    "conflictingConsequenceRefs":
+                        sorted(c["consequenceRef"] for c in cands),
+                })
+
+        consequence_refs = sorted(cons_set)
+        review_refs = sorted(review_set)
+        assertion_refs = sorted(assertion_set)
+
+        generated_at = now_iso()
+        current_state = {
+            "stateKind": IDENTITY_REGISTRY_SHAPE_FAMILY,
+            "derived": True,
+            "farmRef": farm_ref,
+            "targetTwin": twin,
+            "generatedAt": generated_at,
+            "identities": entries,
+            "identityCount": len(entries),
+            "conflictCount": conflict_count,
+        }
+
+        # ---- governed receipts (canonical records) ----
+        basis_id = _mint("matbasis")
+        basis = {
+            "schemaVersion": "ofarm.materializationbasis.v0.1",
+            "basisId": basis_id,
+            "twin": twin,
+            "anchorScopes": [{"scopeType": "FARM", "scopeRef": farm_ref}],
+            "contextSnapshotRefs": [ctx_ref],
+            "evaluationTimePolicy": time_policy,
+            "contributingAssertionRefs": assertion_refs,
+            "contributingAcceptedConsequenceRefs": consequence_refs,
+            "contributingReviewDecisionRefs": review_refs,
+        }
+        if identity_refs:
+            basis["identityBasisRefs"] = sorted(set(identity_refs))
+        self.store.insert_record(cur, basis)
+        for ref in (consequence_refs + assertion_refs + review_refs):
+            self.store.add_edge(cur, "MATERIALIZATION_BASIS", basis_id, ref)
+
+        # an unresolved structural conflict makes the current state untrustworthy:
+        # it is NOT fresh current state (Current-State RFC — INVALID is for a
+        # broken/unresolved basis). D18 should prevent conflicts from ever
+        # arising; if one does (e.g. the H1 concurrent-write race G2 serializes),
+        # the registry refuses to present it as fresh (PR #9 hostile-review H2).
+        freshness = "INVALID" if conflict_count else "FRESH"
+
+        mat_id = _mint("mat")
+        snapshot_id = _mint("matsnap")
+        snapshot = {
+            "schemaVersion": "ofarm.materializationsnapshot.v0.1",
+            "snapshotId": snapshot_id,
+            "generatedAt": generated_at,
+            "twin": twin,
+            "anchorScopes": [{"scopeType": "FARM", "scopeRef": farm_ref}],
+            "materializationBasisRef": basis_id,
+            "freshnessState": freshness,
+            "declaredUseClass": _USE_CLASS_MAP.get(use_class, "EXPLORATORY"),
+            "retentionReason": "derived identity registry retained with its receipts "
+                               "(Kernel rule 5)",
+            "materializedStateRef": f"derivedstate:{mat_id}",
+        }
+        self.store.insert_record(cur, snapshot)
+
+        # ---- draft-lane evidence (D16) ----
+        vector = self.build_freshness_vector(key, basis_id, ctx_ref, reference_refs)
+        if not self.store.runtime_trace_exists(key_id):
+            self.store.insert_runtime_trace(cur, key)
+        self.store.insert_runtime_trace(cur, vector)
+        dep_index = self._build_dependency_index(key_id, basis, ctx_ref,
+                                                  reference_refs, use_class)
+        self.store.insert_runtime_trace(cur, dep_index)
+
+        # ---- supersede the prior live registry for this key ----
+        cur.execute(
+            "SELECT materialization_id FROM derived_materialization "
+            "WHERE key_digest = %s AND superseded_by IS NULL", (key_id,))
+        for prior in cur.fetchall():
+            cur.execute(
+                "UPDATE derived_materialization SET superseded_by = %s "
+                "WHERE materialization_id = %s", (mat_id, prior["materialization_id"]))
+
+        cur.execute(
+            """
+            INSERT INTO derived_materialization
+              (materialization_id, key_digest, materialization_key, target_twin,
+               anchor_scope_ref, time_policy, use_class, freshness, current_state,
+               basis_record_id, snapshot_record_id, context_snapshot_ref, freshness_vector)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (mat_id, key_id, Jsonb(key), twin, farm_ref, Jsonb(time_policy), use_class,
+             freshness, Jsonb(current_state), basis_id, snapshot_id, ctx_ref, Jsonb(vector)))
+        for entry in dep_index["entries"]:
+            cur.execute(
+                "INSERT INTO derived_dependency_index "
+                "(dependency_source_ref, dependency_source_family, key_digest, entry) "
+                "VALUES (%s, %s, %s, %s)",
+                (entry["dependencySourceRef"], entry["dependencySourceFamily"],
+                 key_id, Jsonb(entry)))
+
+        return {
+            "materializationId": mat_id,
+            "materializationKey": key,
+            "keyDigest": key_id,
+            "basisRef": basis_id,
+            "snapshotRef": snapshot_id,
+            "contextSnapshotRef": ctx_ref,
+            "freshness": freshness,
             "currentState": current_state,
             "freshnessVector": vector,
         }
