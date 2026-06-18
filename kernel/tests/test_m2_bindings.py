@@ -22,18 +22,21 @@ def uid():
     return uuid.uuid4().hex[:10]
 
 
-def _import_fixture_snapshot(store, prefix):
+def _import_fixture_snapshot(store, prefix, *, effective="2026-05-01T00:00:00Z",
+                             until=None):
     """A dated fixture ReferenceSnapshot under `prefix`, via the G2 importer."""
-    sid = f"{prefix}.2026-05-01"
+    sid = f"{prefix}.{uid()}"
+    meta = {"referenceSnapshotId": sid, "referenceClass": "CODE_LIST",
+            "domain": "fixture reference source (test)",
+            "issuingAuthorityRef": "party:fixture.authority",
+            "jurisdictionRef": "jurisdiction:FIXTURE",
+            "canonicalVersionLabel": "fixture.parse.v1",
+            "effectiveFrom": effective,
+            "sourceArtifactRefs": ["surface:fixture.test.source"]}
+    if until:
+        meta["effectiveUntil"] = until
     result = ImportRunner(store).run_import(
-        ParseResult(ok=True, sourceDigest=f"sha256-{uid()}"),
-        {"referenceSnapshotId": sid, "referenceClass": "CODE_LIST",
-         "domain": "fixture reference source (test)",
-         "issuingAuthorityRef": "party:fixture.authority",
-         "jurisdictionRef": "jurisdiction:FIXTURE",
-         "canonicalVersionLabel": "fixture.parse.v1",
-         "effectiveFrom": "2026-05-01T00:00:00Z",
-         "sourceArtifactRefs": ["surface:fixture.test.source"]})
+        ParseResult(ok=True, sourceDigest=f"sha256-{uid()}"), meta)
     assert result["imported"]
     return sid
 
@@ -61,6 +64,12 @@ def _locator(sid, q):
 
 def _not_found(sid, q):
     return LookupResult(grade=NONE, candidate_count=0, status_observed="NOT_FOUND")
+
+
+def _identity_no_key(sid, q):
+    # claims identity-grade but carries NO stable key — must NOT confirm
+    return LookupResult(grade=IDENTITY, candidate_count=1, external_id=None,
+                        status_observed="UNKNOWN")
 
 
 # ---------------------------------------------------------------------------
@@ -103,6 +112,42 @@ def test_g3_not_found_routes_to_review(store):
     assert r["verdict"] == REVIEW and r["grade"] == NONE
     assert r["problem"]["reasonCode"] == "IDENTITY_UNRESOLVED"   # default
     assert r["trace"]["statusObserved"] == "NOT_FOUND"
+
+
+def test_g3_identity_grade_without_key_routes_to_review(store):
+    # PR #11 review: identity-grade REQUIRES a stable external key. A lookup that
+    # claims IDENTITY but carries none must route to review, never CONFIRM/PASS.
+    prefix = f"referencesnapshot:fixture.reg.{uid()}"
+    _import_fixture_snapshot(store, prefix)
+    r = _verify(store, prefix=prefix, query="claims-id-no-key", lookup=_identity_no_key)
+    assert r["verdict"] == REVIEW and r["grade"] == IDENTITY
+    assert r["problem"]["reasonCode"] == "IDENTITY_UNRESOLVED"
+    t = r["trace"]
+    assert t["finalOutcome"] == "REVIEW_REQUIRED"
+    assert t["highConsequenceUse"] != "ALLOWED_WHEN_PASS"
+    assert t["selectedExternalId"]["externalIdRole"] == "NONE"
+    assert "externalId" not in t["selectedExternalId"]
+
+
+def test_g3_future_effective_snapshot_is_not_current(store):
+    # PR #11 review: a future-effective snapshot is never "current" for NOW.
+    prefix = f"referencesnapshot:fixture.future.{uid()}"
+    _import_fixture_snapshot(store, prefix, effective="2099-01-01T00:00:00Z")
+    r = _verify(store, prefix=prefix, query="x", lookup=_identity)
+    assert r["verdict"] == REFUSE, "a future-effective snapshot must not be current for NOW"
+    # but AS_OF a time after it becomes effective, it IS in force
+    r2 = _verify(store, prefix=prefix, query="x", lookup=_identity,
+                 as_of="2099-06-01T00:00:00Z")
+    assert r2["verdict"] == CONFIRM
+
+
+def test_g3_expired_snapshot_is_not_current(store):
+    # PR #11 review: an expired snapshot (effectiveUntil <= now) is not in force.
+    prefix = f"referencesnapshot:fixture.expired.{uid()}"
+    _import_fixture_snapshot(store, prefix, effective="2020-01-01T00:00:00Z",
+                             until="2021-01-01T00:00:00Z")
+    r = _verify(store, prefix=prefix, query="x", lookup=_identity)
+    assert r["verdict"] == REFUSE, "an expired snapshot is no longer in force"
 
 
 def test_g3_missing_snapshot_refuses(store):

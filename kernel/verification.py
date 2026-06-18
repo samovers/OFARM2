@@ -85,7 +85,9 @@ class ReferenceResolver:
         Returns `{verdict, grade, trace, snapshotRef, problem}`. `verdict` is
         CONFIRM / REVIEW / REFUSE; `problem` is a registry-coded `RuntimeProblem`
         for REVIEW/REFUSE (None for CONFIRM) so the caller can route or refuse.
-        The trace is always built and stored — a refusal is traceable, not silent.
+        A trace is built and stored whenever a snapshot IS in force (CONFIRM and
+        REVIEW); the absent-snapshot REFUSE emits no trace (the trace contract
+        requires a real snapshot ref) — its refusal lives in the returned problem.
         """
         accessed = now_iso()
         snapshot = current_reference_snapshot(self.store, snapshot_prefix, as_of=as_of)
@@ -105,30 +107,33 @@ class ReferenceResolver:
         snapshot_id = snapshot["referenceSnapshotId"]
         result = lookup(snapshot_id, query_value)
 
-        if result.grade == IDENTITY:
+        # Identity-grade REQUIRES a stable external key. A lookup that claims
+        # grade IDENTITY but carries no externalId is not identity-grade — it
+        # must not CONFIRM/PASS (PR #11 review). It routes to review alongside
+        # locator-only and not-found: only a present stable key confirms.
+        has_key = bool(result.external_id and result.external_id.strip())
+
+        if result.grade == IDENTITY and has_key:
             verdict, final, downstream = CONFIRM, "PASS", "PASSPORTVIEW_ALLOWED"
-            selected = {"externalIdRole": external_id_role}
-            if result.external_id:
-                selected["externalId"] = result.external_id
+            selected = {"externalId": result.external_id, "externalIdRole": external_id_role}
             rationale = (f"identity-grade match: {scheme} {key_field} "
-                         f"{result.external_id or query_value!r} confirmed against {snapshot_id}")
+                         f"{result.external_id!r} confirmed against {snapshot_id}")
             discrepancies = result.discrepancies or []
             problem = None
             hcu = "ALLOWED_WHEN_PASS"
         else:
             verdict, final, downstream = REVIEW, "REVIEW_REQUIRED", "PASSPORTVIEW_REQUIRE_REVIEW"
             selected = {"externalIdRole": "NONE"}
-            locator = result.grade == LOCATOR
-            rationale = (
-                f"{scheme} candidate {query_value!r} "
-                + ("matched only by page locator (no stable key)" if locator
-                   else "was not found")
-                + f" against {snapshot_id}; routes to review — a locator is not identity (D9)")
+            if result.grade == IDENTITY:      # claimed identity-grade but no stable key
+                detail, disc_type = "claimed identity-grade but carried no stable key", "OTHER"
+            elif result.grade == LOCATOR:
+                detail, disc_type = "matched only by a page locator (no stable key)", "NAME_COLLISION"
+            else:
+                detail, disc_type = "was not found in the in-force snapshot", "OTHER"
+            rationale = (f"{scheme} candidate {query_value!r} {detail} against "
+                         f"{snapshot_id}; routes to review — not identity-grade (D9)")
             discrepancies = result.discrepancies or [{
-                "discrepancyType": "NAME_COLLISION" if locator else "OTHER",
-                "severity": "REVIEW_REQUIRED",
-                "note": "locator-only match — no stable key" if locator
-                        else "candidate not found in the in-force snapshot"}]
+                "discrepancyType": disc_type, "severity": "REVIEW_REQUIRED", "note": detail}]
             problem = runtime_problem(
                 review_reason_code, "Reference identity not confirmable", rationale,
                 severity="WARNING")
