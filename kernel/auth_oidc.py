@@ -21,22 +21,49 @@ import binascii
 import hashlib
 import hmac
 import json
+import math
+import re
 import time
 from dataclasses import dataclass
+
+# compact-JWS segments are UNPADDED base64url — strictly this alphabet, no "="
+# padding, no other characters. Enforcing canonical form before decode keeps the
+# verifier fail-closed: a non-canonical segment is rejected even if it would
+# otherwise decode (base64 decoders silently drop stray characters) and even if it
+# was signed over that exact mutated segment (PR #16 hostile B2).
+_B64URL_SEGMENT = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 class OidcError(Exception):
     """A token was absent, malformed, or failed verification — fail closed."""
 
 
+def _reject_json_constant(token: str):
+    # JSON has no NaN/Infinity; a JWT must not carry them (PR #16 hostile B1)
+    raise OidcError(f"non-finite JSON constant {token!r} is not allowed in a token")
+
+
 def _b64url_decode(segment: str) -> bytes:
-    if not isinstance(segment, str) or segment == "":
-        raise OidcError("empty token segment")
+    if not isinstance(segment, str) or not _B64URL_SEGMENT.match(segment):
+        raise OidcError("token segment is not canonical unpadded base64url")
     pad = "=" * (-len(segment) % 4)
     try:
         return base64.urlsafe_b64decode(segment + pad)
     except (binascii.Error, ValueError) as exc:
         raise OidcError(f"malformed base64url segment: {exc}")
+
+
+def _numeric_date(claims: dict, name: str, *, required: bool):
+    """A JWT NumericDate (epoch seconds): a FINITE, non-bool int/float. Rejects
+    missing (when required), bool, NaN/Infinity (PR #16 hostile B1)."""
+    value = claims.get(name)
+    if value is None:
+        if required:
+            raise OidcError(f"missing {name} claim")
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        raise OidcError(f"invalid {name} claim (must be a finite NumericDate)")
+    return int(value)
 
 
 def _b64url_encode(raw: bytes) -> str:
@@ -67,9 +94,10 @@ def _verify_hs256(token: str, *, secret: str, issuer: str, audience: str,
     header_b64, payload_b64, signature_b64 = parts
 
     try:
-        header = json.loads(_b64url_decode(header_b64))
-        claims = json.loads(_b64url_decode(payload_b64))
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        header = json.loads(_b64url_decode(header_b64), parse_constant=_reject_json_constant)
+        claims = json.loads(_b64url_decode(payload_b64), parse_constant=_reject_json_constant)
+    except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
+        # ValueError also covers a non-finite-constant rejection raised inside json
         raise OidcError(f"malformed token JSON: {exc}")
     if not isinstance(header, dict) or not isinstance(claims, dict):
         raise OidcError("token header/payload is not a JSON object")
@@ -96,17 +124,12 @@ def _verify_hs256(token: str, *, secret: str, issuer: str, audience: str,
     aud_ok = (aud == audience) or (isinstance(aud, list) and audience in aud)
     if not aud_ok:
         raise OidcError(f"audience {aud!r} does not include the configured audience {audience!r}")
-    exp = claims.get("exp")
-    if not isinstance(exp, (int, float)):
-        raise OidcError("missing/invalid exp claim")
-    if now > int(exp) + leeway_seconds:
+    exp = _numeric_date(claims, "exp", required=True)
+    if now > exp + leeway_seconds:
         raise OidcError("token has expired")
-    nbf = claims.get("nbf")
-    if nbf is not None:
-        if not isinstance(nbf, (int, float)):
-            raise OidcError("invalid nbf claim")
-        if now + leeway_seconds < int(nbf):
-            raise OidcError("token is not yet valid (nbf)")
+    nbf = _numeric_date(claims, "nbf", required=False)
+    if nbf is not None and now + leeway_seconds < nbf:
+        raise OidcError("token is not yet valid (nbf)")
     return claims
 
 

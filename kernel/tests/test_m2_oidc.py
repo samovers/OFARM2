@@ -12,9 +12,13 @@ fictional.
 from __future__ import annotations
 
 import base64
+import hashlib
+import hmac
 import json
 import time
 import uuid
+
+import pytest
 
 
 def uid():
@@ -177,6 +181,44 @@ def test_g4_verifier_returns_party_and_roles_separately(store):
     claims = _cfg().verify(_token(demo.FARMER, roles=["operator"]))
     assert claims["partyRef"] == demo.FARMER
     assert claims["roles"] == ["operator"]   # surfaced as RoleAssignment-level, never authority
+
+
+def test_g4_non_finite_numericdate_is_fail_closed_401(store):
+    # PR #16 hostile B1: NaN / Infinity exp or nbf must FAIL CLOSED (401), never
+    # crash int()/the endpoint into a 500. The verifier raises OidcError, not
+    # ValueError/OverflowError.
+    client = _client(store)
+    sub = demo.spray_submission(f"g4-nan:{uid()}", erp_id=f"erp:g4.nan.{uid()}", actor_ref=demo.FARMER)
+    now = int(time.time())
+    for bad in (float("nan"), float("inf"), float("-inf")):
+        tok = issue_dev_token({"sub": demo.FARMER, "iss": ISSUER, "aud": AUDIENCE,
+                               "iat": now, "exp": bad}, secret=SECRET)
+        assert client.post("/commit", json={"submission": sub}, headers=_bearer(tok)).status_code == 401, \
+            f"exp={bad} must fail closed (401), never 500"
+        with pytest.raises(OidcError):
+            _cfg().verify(tok)
+    nbf_nan = issue_dev_token({"sub": demo.FARMER, "iss": ISSUER, "aud": AUDIENCE,
+                               "exp": now + 3600, "nbf": float("nan")}, secret=SECRET)
+    assert client.post("/commit", json={"submission": sub}, headers=_bearer(nbf_nan)).status_code == 401
+
+
+def test_g4_noncanonical_base64url_segment_rejected_even_if_signed(store):
+    # PR #16 hostile B2: compact-JWS segments are UNPADDED base64url. A canonically-
+    # PADDED payload segment (non-canonical for JWS) decodes fine on a lenient
+    # verifier and, RE-SIGNED over that exact padded form with the real secret,
+    # would be accepted. The strict verifier rejects it on the alphabet check ('=').
+    header_b64, payload_b64, _ = _token(demo.FARMER).split(".")
+    padded = payload_b64 + ("=" * (-len(payload_b64) % 4) or "=")   # non-canonical '=' present
+    sig = base64.urlsafe_b64encode(
+        hmac.new(SECRET.encode(), f"{header_b64}.{padded}".encode(), hashlib.sha256).digest()
+    ).rstrip(b"=").decode()
+    forged = f"{header_b64}.{padded}.{sig}"
+    assert "=" in padded
+    with pytest.raises(OidcError):
+        _cfg().verify(forged)
+    sub = demo.spray_submission(f"g4-nc:{uid()}", erp_id=f"erp:g4.nc.{uid()}", actor_ref=demo.FARMER)
+    assert _client(store).post("/commit", json={"submission": sub},
+                               headers=_bearer(forged)).status_code == 401
 
 
 def test_g4_verifier_rejects_tampered_payload(store):
