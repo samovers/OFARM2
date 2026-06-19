@@ -163,13 +163,14 @@ Every ticket here is `profile_si_ffs` package/profile content riding a Phase-1 m
 
 ## P2 — GERK snapshot import
 
-- **Goal:** SI GERK adapter as package content: import the open national Blok/GERK layer (OPSI `.dbf`/shapefile) via `tooling/gerk_roundtrip/gerk_roundtrip.py` through G2 → dated GERK `ReferenceSnapshot`. The layer's minimal attributes (`GERK_PID, RABA_ID, AREA, OPIS_RABE`) supply existence, geometry, area, and use code — and the extent-carrier source for G7.
+- **Goal:** SI GERK adapter as package content: import the open national Blok/GERK layer (OPSI `.dbf`/shapefile) via `tooling/gerk_roundtrip/gerk_roundtrip.py` through G2 → dated GERK `ReferenceSnapshot`. The layer's minimal **attributes** (`GERK_PID, RABA_ID, AREA, OPIS_RABE`) supply existence, the raw `AREA` value, and use code. The raw area is the per-PID extent **source** a later G7 extent-carrier will consume; the zero-dependency tooling reads the attribute table, **not** coordinate geometry (geometry usability is implied by the shapefile).
 - **Serves:** M2b-2. **Depends on:** G2 (and G7 for the extent-carrier kind it feeds).
+- **Scope (closed by PR #13) / left OPEN:** this ticket closes GERK **attribute import + resolution only** — a PID resolves to its existence / raw `AREA` / use code, backing Field-identity existence (G1). **Left open** (do NOT treat as done): coordinate-geometry parsing, normalising `AREA` into an extent magnitude/unit, and the **G7 extent-carrier acceptance** mechanism that consumes the area source.
 - **Files likely touched:** SI GERK adapter config under the package; `kernel/tests/test_m2_si_gerk.py`.
 - **Files NOT to touch:** `kernel/adapters.py`; `tooling/gerk_roundtrip/gerk_roundtrip.py`; `contracts/**`.
 - **Read first:** `profile_si_ffs/PROFILE.md` (GERK row); `profile_si_ffs/M0_DESK_RESEARCH.md` §4/§4a; `tooling/gerk_roundtrip/gerk_roundtrip.py`; `profile_si_ffs/ONBOARDING_RKG_IZPIS.md` (the layer has no *domače ime*/BLOK/NUP — those come from the farmer/izpis).
-- **Exact behavior change:** the layer imports as a dated GERK snapshot via G2; per-PID geometry/area are available to back Field identities (G1) and partial-extent bounds (G7); failure → refusal trace.
-- **Required tests:** a small layer fixture imports as a GERK snapshot; a PID resolves to its geometry/area; missing PID handled governably. (Fixtures only.)
+- **Exact behavior change:** the layer imports as a dated GERK snapshot via G2; per-PID existence + raw `AREA` attribute + use code are available to back Field identities (G1) and to **source** (not close) the partial-extent bounds G7 will build; a malformed / no-vintage / no-PID-column / partial / conflicting-duplicate-PID layer → governed refusal trace (no snapshot/data).
+- **Required tests:** a small layer fixture imports as a GERK snapshot; a PID resolves to its `AREA`/use attributes; missing PID handled governably. (Fixtures only.)
 - **Folded-in from G2 review (H2):** as P1 — confirm context-key-drift invalidation suffices for the GERK reference family, or add an explicit broad-stale, before the real scheduled import ships.
 - **Acceptance:** SI specifics confined to the package adapter; self-check PASS.
 - **Non-goals:** per-farmer government export (open layer + farmer-confirmed PIDs only); personal KMG↔GERK linkage in-repo (D14).
