@@ -213,6 +213,117 @@ def test_p1_identical_reimport_is_idempotent(store):
 
 
 # ---------------------------------------------------------------------------
+# (7) a changed DETAIL page with an unchanged list-page digest REFUSES as a
+#     conflict — the import basis digests the whole artifact, never a silent
+#     ALREADY_IMPORTED replay that would leave stale identity data (hostile B1)
+# ---------------------------------------------------------------------------
+
+def test_p1_changed_detail_same_list_digest_refuses_as_conflict(store):
+    list_digest = f"sha256:{uid()}listpage"
+    d1 = f"U9{uid()[:4]}-50/26/8a"
+    d2 = f"U9{uid()[:4]}-50/26/8b"
+    a1 = _fixture_artifact(register_day="2099-02-01", decision=d1)
+    a1["inputs"] = [{"file": "list.html", "digest": list_digest},
+                    {"file": "detail-9001.html", "digest": f"sha256:{uid()}detA"}]
+    a2 = _fixture_artifact(register_day="2099-02-01", decision=d2)   # changed detail content
+    a2["inputs"] = [{"file": "list.html", "digest": list_digest},    # SAME list-page digest
+                    {"file": "detail-9001.html", "digest": f"sha256:{uid()}detB"}]
+    first = regsr.import_regsr_snapshot(store, a1)
+    assert first["imported"] is True and first["disposition"] == "IMPORTED"
+    second = regsr.import_regsr_snapshot(store, a2)
+    # the changed detail must NOT replay as ALREADY_IMPORTED — it conflicts
+    assert second["imported"] is False
+    assert second["disposition"] == "CONFLICT"
+    assert second["problem"]["reasonCode"] == "DUPLICATE_IMPORT_AMBIGUOUS"
+    # the original identity data is intact (not overwritten by the changed detail)
+    row = _data_row(store, first["snapshotRef"])
+    numbers = {dd["decisionNumber"] for d in row["payload"]["productDetails"]
+               for dd in d["decisions"]}
+    assert numbers == {d1}
+
+
+# ---------------------------------------------------------------------------
+# (8) D9 composite identity (decision number + validity dates): a duplicate
+#     decision number with DIFFERING validity is ambiguous -> REVIEW, never a
+#     collapsed PASS; the full composite query disambiguates -> CONFIRM; a true
+#     duplicate (same validity) stays one identity -> CONFIRM (hostile B2)
+# ---------------------------------------------------------------------------
+
+def _ambiguous_artifact(*, register_day, decision, issued_a="2024-01-01",
+                        until_a="2028-08-15", issued_b="2025-01-01", until_b="2030-08-15"):
+    """Two detail records sharing ONE decision number but DIFFERING validity
+    windows — an ambiguous D9 composite key (fictional, format-true)."""
+    art = _fixture_artifact(register_day=register_day, decision=decision)
+    art["products"] = [
+        {"regsrCode": "9201", "name": "FIKTIV DVA (fictional)", "registrationValidUntil": until_a},
+        {"regsrCode": "9202", "name": "FIKTIV TRI (fictional)", "registrationValidUntil": until_b}]
+    art["productCount"] = 2
+    art["productDetails"] = [
+        {"regsrCode": "9201", "name": "FIKTIV DVA (fictional)",
+         "decisions": [{"decisionType": "Registracija", "decisionNumber": decision,
+                        "issued": issued_a, "validUntil": until_a}]},
+        {"regsrCode": "9202", "name": "FIKTIV TRI (fictional)",
+         "decisions": [{"decisionType": "Registracija", "decisionNumber": decision,
+                        "issued": issued_b, "validUntil": until_b}]}]
+    return art
+
+
+def test_p1_ambiguous_decision_number_routes_to_review_not_pass(store):
+    decision = f"U9{uid()[:4]}-50/26/9"
+    regsr.import_regsr_snapshot(store, _ambiguous_artifact(register_day="2099-03-01", decision=decision))
+    pr = ProductRegister()
+    pr.load_from_store(store)
+    with store.serialized_tx() as cur:
+        r = regsr.verify_product_authorisation(store, cur, pr, decision,
+                                               as_of="2099-03-01T12:00:00Z")
+    assert r["verdict"] == REVIEW, "an ambiguous composite key must never CONFIRM/PASS"
+    assert r["problem"]["reasonCode"] == "PRODUCT_BINDING_UNRESOLVED"
+    t = r["trace"]
+    assert t["finalOutcome"] == "REVIEW_REQUIRED"
+    assert t["candidateCount"] == 2
+    assert t["statusObserved"] == "MULTIPLE_CANDIDATES"
+    assert t["selectedExternalId"]["externalIdRole"] == "NONE"
+    assert t["discrepancies"] and "ambiguous" in t["discrepancies"][0]["note"]
+
+
+def test_p1_composite_key_disambiguates_to_confirm(store):
+    decision = f"U9{uid()[:4]}-50/26/10"
+    regsr.import_regsr_snapshot(store, _ambiguous_artifact(register_day="2099-03-02", decision=decision))
+    pr = ProductRegister()
+    pr.load_from_store(store)
+    # the SAME ambiguous decision number, now with the full D9 composite key,
+    # resolves to exactly one identity -> CONFIRM the right validity window
+    with store.serialized_tx() as cur:
+        r = regsr.verify_product_authorisation(store, cur, pr, decision,
+                                               issued="2024-01-01", valid_until="2028-08-15",
+                                               as_of="2099-03-02T12:00:00Z")
+    assert r["verdict"] == CONFIRM
+    t = r["trace"]
+    assert t["finalOutcome"] == "PASS"
+    assert t["candidateCount"] == 1
+    assert t["selectedExternalId"] == {"externalId": decision, "externalIdRole": "AUTHORISATION_NUMBER"}
+    assert t["datesObserved"]["statusEffectiveUntil"] == "2028-08-15T00:00:00Z"
+    assert t["datesObserved"]["statusEffectiveFrom"] == "2024-01-01T00:00:00Z"
+
+
+def test_p1_true_duplicate_same_validity_is_one_identity_confirm(store):
+    # a decision number repeated with the SAME validity window is ONE identity,
+    # not an ambiguity — it must still CONFIRM (no over-flagging of duplicates)
+    decision = f"U9{uid()[:4]}-50/26/11"
+    regsr.import_regsr_snapshot(store, _ambiguous_artifact(
+        register_day="2099-03-03", decision=decision,
+        issued_a="2024-01-01", until_a="2028-08-15",
+        issued_b="2024-01-01", until_b="2028-08-15"))
+    pr = ProductRegister()
+    pr.load_from_store(store)
+    with store.serialized_tx() as cur:
+        r = regsr.verify_product_authorisation(store, cur, pr, decision,
+                                               as_of="2099-03-03T12:00:00Z")
+    assert r["verdict"] == CONFIRM, "a true duplicate (same validity) is one identity"
+    assert r["trace"]["candidateCount"] == 1
+
+
+# ---------------------------------------------------------------------------
 # lookup grading (unit) + cadence + parser reuse (no fork)
 # ---------------------------------------------------------------------------
 

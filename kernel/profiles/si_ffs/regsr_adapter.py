@@ -107,7 +107,13 @@ def import_regsr_snapshot(store, artifact, *, register_day=None,
             {"referenceSnapshotId": None}, data_family=REGSR_DATA_FAMILY)
         return {**result, "disposition": "NO_REGISTER_DAY", "registerDay": None}
     sid = f"{REGSR_SNAPSHOT_PREFIX}.{register_day}"
-    digest = (artifact.get("inputs") or [{}])[0].get("digest") or sha256_of(artifact)
+    # The import basis digests the WHOLE parsed artifact — list AND detail pages,
+    # parsed products and decisions — not just inputs[0] (the list page). Detail
+    # pages carry the decision-number identity evidence (D9), so a detail change
+    # under an unchanged list digest changes this digest, hence the snapshot
+    # payload: a conflicting re-import is then REFUSED, never a silent
+    # ALREADY_IMPORTED replay that leaves stale identity data (PR #12 hostile B1).
+    digest = sha256_of(artifact)
     meta = {
         "referenceSnapshotId": sid,
         "referenceClass": "CODE_LIST",
@@ -127,34 +133,67 @@ def import_regsr_snapshot(store, artifact, *, register_day=None,
     return {**result, "registerDay": register_day}
 
 
-def regsr_lookup(product_register):
-    """A G3 lookup callable bound to a REGSR `ProductRegister`: identity-grade by
-    decision number (Številka odločbe, D9). A decision found in the snapshot's
-    detail data confirms (a stable key); anything else is not identity on this
-    surface (regsrCode is a locator) and yields NONE -> the resolver routes to
-    review. Returns a closure of the G3 `lookup(snapshot_id, query_value)` shape."""
+def regsr_lookup(product_register, *, issued=None, valid_until=None):
+    """A G3 lookup callable bound to a REGSR `ProductRegister`, grading identity
+    by the D9 composite key — decision number (Številka odločbe) PLUS validity
+    dates (issued / validUntil), never the decision number alone (PR #12 hostile
+    B2). Per decision number:
+
+      * 0 matches             -> NONE / NOT_FOUND        (resolver -> review)
+      * 1 distinct identity   -> IDENTITY / AUTHORISED   (resolver -> CONFIRM)
+      * >1 differing validity -> NONE / MULTIPLE_CANDIDATES + discrepancy
+                                 (resolver -> review; never collapse one / PASS)
+
+    When `issued`/`valid_until` are supplied the candidates are first filtered to
+    that composite, so a caller who knows the full key disambiguates a number
+    that would otherwise be ambiguous. regsrCode stays a locator, never identity.
+    Returns a closure of the G3 `lookup(snapshot_id, query_value)` shape."""
     def lookup(snapshot_id, decision_number) -> LookupResult:
-        confirmed = product_register.lookup_by_decision(snapshot_id, decision_number)
-        if confirmed is None:
+        ids = product_register.identities_by_decision(snapshot_id, decision_number)
+        if issued or valid_until:
+            ids = [c for c in ids
+                   if (not issued or c.get("decision", {}).get("issued") == issued)
+                   and (not valid_until or c.get("decision", {}).get("validUntil") == valid_until)]
+        if not ids:
             return LookupResult(grade=NONE, candidate_count=0, status_observed="NOT_FOUND")
-        valid_until = (confirmed.get("decision", {}).get("validUntil")
-                       or confirmed.get("registrationValidUntil"))
-        dates = {"statusEffectiveUntil": f"{valid_until}T00:00:00Z"} if valid_until else None
+        if len(ids) > 1:
+            # D9 composite key is ambiguous on the decision number alone -> route
+            # to review with the ambiguity recorded; never collapse to one / PASS.
+            return LookupResult(
+                grade=NONE, candidate_count=len(ids),
+                status_observed="MULTIPLE_CANDIDATES",
+                discrepancies=[{"discrepancyType": "OTHER", "severity": "REVIEW_REQUIRED",
+                                "note": f"decision number {decision_number} matched "
+                                        f"{len(ids)} records with differing validity "
+                                        "dates; D9 identity is the composite key (number + "
+                                        "validity), so this is ambiguous, not identity — "
+                                        "supply issued/validUntil to disambiguate"}])
+        confirmed = ids[0]
+        decision = confirmed.get("decision", {})
+        dates = {}
+        if decision.get("issued"):
+            dates["statusEffectiveFrom"] = f"{decision['issued']}T00:00:00Z"
+        valid_u = decision.get("validUntil") or confirmed.get("registrationValidUntil")
+        if valid_u:
+            dates["statusEffectiveUntil"] = f"{valid_u}T00:00:00Z"
         return LookupResult(grade=IDENTITY, candidate_count=1,
                             external_id=decision_number, status_observed="AUTHORISED",
-                            dates_observed=dates)
+                            dates_observed=dates or None)
     return lookup
 
 
 def verify_product_authorisation(store, cur, product_register, decision_number, *,
+                                 issued=None, valid_until=None,
                                  as_of=None, created_by=None) -> dict:
     """Verify a product's authorisation identity by its REGSR decision number
     through the generic G3 resolver, recording an ExternalRegistryVerificationTrace.
-    Identity-grade where the decision number is confirmable; otherwise routes to
-    review (PRODUCT_BINDING_UNRESOLVED) — free text never becomes identity (D9)."""
+    Identity-grade only where the D9 composite key (decision number + validity)
+    resolves unambiguously; an ambiguous or absent key routes to review
+    (PRODUCT_BINDING_UNRESOLVED) — free text never becomes identity (D9). Pass
+    `issued`/`valid_until` to disambiguate an otherwise-ambiguous decision number."""
     return ReferenceResolver(store).verify(
         cur, query_value=decision_number, snapshot_prefix=REGSR_SNAPSHOT_PREFIX,
-        lookup=regsr_lookup(product_register),
+        lookup=regsr_lookup(product_register, issued=issued, valid_until=valid_until),
         profile_ref=REGSR_PROFILE_REF, authority_ref=REGSR_AUTHORITY_REF,
         jurisdiction_ref=REGSR_JURISDICTION_REF, scheme=REGSR_SCHEME,
         key_field=REGSR_KEY_FIELD, purpose="PRODUCT_AUTHORISATION_IDENTITY",

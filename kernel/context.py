@@ -140,13 +140,16 @@ class ProductRegister:
         # + validity dates; regsrCode is a page locator, never identity. The
         # public list surface carries no decision numbers — only detail pages
         # do — so identity-confirmable lookups exist only where detail data
-        # was parsed. That asymmetry is surfaced, never papered over.
-        by_decision = {}
+        # was parsed. That asymmetry is surfaced, never papered over. The
+        # decision number is NOT, on its own, a complete identity, so index a
+        # LIST per decision number; duplicates with differing validity are
+        # never silently collapsed (resolved at lookup time, PR #12 hostile B2).
+        by_decision: dict[str, list] = {}
         for d in artifact.get("productDetails", []):
             for decision in d.get("decisions", []):
                 number = decision.get("decisionNumber")
                 if number:
-                    by_decision[number] = {**d, "decision": decision}
+                    by_decision.setdefault(number, []).append({**d, "decision": decision})
         self._by_snapshot[snapshot_id] = {
             "products": products, "details": details, "byDecision": by_decision,
         }
@@ -174,14 +177,30 @@ class ProductRegister:
                     if path.exists():
                         self.register_artifact(sid, json.loads(path.read_text()))
 
-    def lookup_by_decision(self, snapshot_id: str, decision_number: str) -> dict | None:
-        """Identity-grade lookup (D9): by decision number, where the parsed
-        surface carries it. None means 'not confirmable on this surface',
-        which is NOT the same as 'withdrawn'."""
+    def identities_by_decision(self, snapshot_id: str, decision_number: str) -> list[dict]:
+        """The DISTINCT D9 identities for a decision number — one record per
+        distinct (issued, validUntil) validity window. True duplicates of one
+        authorisation count once; the same decision number with *differing*
+        validity yields more than one (the decision number alone is ambiguous,
+        which callers route to review). Empty when not confirmable on this
+        surface — which is NOT the same as 'withdrawn'."""
         data = self._by_snapshot.get(snapshot_id)
         if not data:
-            return None
-        return data["byDecision"].get(decision_number)
+            return []
+        distinct: dict[tuple, dict] = {}
+        for c in data["byDecision"].get(decision_number, []):
+            dec = c.get("decision", {})
+            distinct.setdefault((dec.get("issued"), dec.get("validUntil")), c)
+        return list(distinct.values())
+
+    def lookup_by_decision(self, snapshot_id: str, decision_number: str) -> dict | None:
+        """Identity-grade lookup (D9): the sole record for a decision number
+        ONLY when that number is an unambiguous identity — exactly one distinct
+        validity window. Zero matches OR an ambiguous decision number (multiple
+        differing validity windows) returns None: ambiguity is never collapsed
+        to a single record, it routes the caller to review."""
+        ids = self.identities_by_decision(snapshot_id, decision_number)
+        return ids[0] if len(ids) == 1 else None
 
     def lookup(self, snapshot_id: str, regsr_code: str) -> dict | None:
         """Locator-grade lookup: regsrCode finds the list row, but a row is
