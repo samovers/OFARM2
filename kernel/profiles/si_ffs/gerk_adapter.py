@@ -5,10 +5,17 @@ Wires the open GERK layer to the GENERIC mechanisms: it parses the OPSI
 `.dbf`/`.csv` attribute table (reusing tooling/gerk_roundtrip/gerk_roundtrip.py
 as a library — never forked), imports the parse as a dated GERK
 `ReferenceSnapshot` through the generic G2 `ImportRunner`, persists the parsed
-parcels store-backed, and resolves a GERK-PID to its layer attributes (area +
-use code) — the existence/area/use-code source that backs Field identities (G1)
-and partial-extent bounds (G7). ALL GERK specifics live HERE; kernel/adapters.py
-and the generic kernel stay scheme-agnostic.
+parcels store-backed, and resolves a GERK-PID to its layer attributes (the raw
+`area` value + use code). ALL GERK specifics live HERE; kernel/adapters.py and
+the generic kernel stay scheme-agnostic.
+
+Scope (PR #13 B3 — claim narrowed): this is the GERK ATTRIBUTE precursor. It
+provides parcel existence, the raw `area` attribute (the per-PID extent SOURCE),
+and use code, and backs Field-identity existence (G1). It does NOT parse
+coordinate geometry, nor normalise the area into an extent magnitude, nor build
+the G7 extent-carrier ACCEPTANCE mechanism — those remain OPEN (the G7 ticket).
+P2 closes the GERK import + attribute-resolution obligation only, NOT the
+geometry / G7 extent-carrier closure.
 
 Claim limits / posture: the open layer reflects GERK state at the last collective
 subsidy application; it carries existence, geometry (as a shapefile), area, and
@@ -73,6 +80,25 @@ def _parser():
 
 def _pick(header, candidates):
     return next((c for c in candidates if c in header), None)
+
+
+def _conflicting_pid(features):
+    """The first GERK-PID that appears across rows with DIFFERING attributes
+    (rabaId / area / opisRabe), or None. Exact-duplicate rows are not a conflict
+    (a GERK-PID is a unique parcel key); a PID carrying different attributes is
+    hidden last-wins truth and must be governed, never silently collapsed."""
+    seen: dict = {}
+    for f in features:
+        pid = f.get("gerkPid")
+        if not pid:
+            continue
+        key = (f.get("rabaId"), f.get("area"), f.get("opisRabe"))
+        if pid in seen:
+            if seen[pid] != key:
+                return pid
+        else:
+            seen[pid] = key
+    return None
 
 
 def parse_gerk_layer(path, *, layer_date=None, version_label=None) -> dict:
@@ -140,35 +166,51 @@ def import_gerk_snapshot(store, artifact, *, layer_date=None, version_label=None
     PID from the store. A parse with no datable vintage is REFUSED through the
     governed path (no snapshot, no data)."""
     layer_date = layer_date or artifact.get("layerDate")
+
+    def _refuse(error: str, disposition: str) -> dict:
+        # Every parse/fidelity failure goes through the GENERIC governed refusal
+        # path (ImportRunner) — a real RuntimeProblem AND a GOVERNED_IMPORT/REFUSED
+        # gate-log entry, no snapshot/data — never a hand-built mini problem that
+        # bypasses the audit trail (PR #12 review). No snapshot id to reference
+        # (the vintage dates it), so the refusal carries no related ref.
+        result = ImportRunner(store).run_import(
+            ParseResult(ok=False, error=error),
+            {"referenceSnapshotId": None}, data_family=GERK_DATA_FAMILY)
+        return {**result, "disposition": disposition, "layerDate": layer_date}
+
     if not layer_date:
-        # No datable layer vintage is a source-fidelity loss. Route through the
-        # GENERIC governed refusal path (ImportRunner) — a real RuntimeProblem AND
-        # a GOVERNED_IMPORT/REFUSED gate-log entry, no snapshot/data — never a
-        # hand-built mini problem that bypasses the audit trail (PR #12 review).
-        # There is no snapshot id to reference (the vintage dates it).
-        result = ImportRunner(store).run_import(
-            ParseResult(ok=False, error="GERK layer parse carries no vintage date; "
-                        "cannot date a snapshot"),
-            {"referenceSnapshotId": None}, data_family=GERK_DATA_FAMILY)
-        return {**result, "disposition": "NO_LAYER_DATE", "layerDate": None}
+        return _refuse("GERK layer parse carries no vintage date; cannot date a "
+                       "snapshot", "NO_LAYER_DATE")
     if not artifact.get("pidField"):
-        # the attribute table carries no recognizable GERK-PID column, so NO
-        # parcel is resolvable — a source-fidelity loss. Refuse through the same
-        # governed path (no snapshot, no data), never import an unusable layer.
-        result = ImportRunner(store).run_import(
-            ParseResult(ok=False, error="GERK layer parse found no GERK-PID column; "
-                        "no parcel is resolvable"),
-            {"referenceSnapshotId": None}, data_family=GERK_DATA_FAMILY)
-        return {**result, "disposition": "NO_PID_FIELD", "layerDate": layer_date}
+        # no recognizable GERK-PID column -> no parcel is resolvable
+        return _refuse("GERK layer parse found no GERK-PID column; no parcel is "
+                       "resolvable", "NO_PID_FIELD")
+    if artifact.get("rowProblems"):
+        # the parse SKIPPED malformed/ragged rows (recorded in rowProblems). A
+        # partial layer must not import: a dropped real PID would later resolve to
+        # None because the parser dropped it, not because the parcel is absent —
+        # a silent gap. Refuse the lossy layer; fix the source and re-import (no
+        # partial-import + skipped-row-ambiguity policy exists yet) (PR #13 B2).
+        return _refuse(
+            f"GERK layer parse skipped {len(artifact['rowProblems'])} malformed "
+            "row(s); a partial layer is a source-fidelity loss (a dropped PID would "
+            "later read as absent) — refuse rather than import an incomplete layer",
+            "PARTIAL_PARSE")
     if not artifact.get("features"):
-        # a PID column was found but the parse yielded NO parcels (empty file, or
-        # every row malformed/skipped) — nothing is resolvable, a fidelity loss.
-        # Refuse governably rather than import a useless empty layer.
-        result = ImportRunner(store).run_import(
-            ParseResult(ok=False, error="GERK layer parse yielded no parcels; "
-                        "nothing to import"),
-            {"referenceSnapshotId": None}, data_family=GERK_DATA_FAMILY)
-        return {**result, "disposition": "NO_PARCELS", "layerDate": layer_date}
+        # a PID column was found but the parse yielded NO parcels -> fidelity loss
+        return _refuse("GERK layer parse yielded no parcels; nothing to import",
+                       "NO_PARCELS")
+    conflict = _conflicting_pid(artifact["features"])
+    if conflict is not None:
+        # the layer carries one GERK-PID with DIFFERING area/use across rows. The
+        # PID is the parcel identity that backs Field existence/area and later G7
+        # extent bounds; collapsing it to a single last-wins parcel would be hidden
+        # truth selection. Refuse rather than pick a winner (PR #13 B1). Exact
+        # duplicates are not a conflict and import normally.
+        return _refuse(
+            f"GERK-PID {conflict} appears with conflicting attributes (area/use); "
+            "the layer cannot be reduced to one parcel per PID — refuse rather "
+            "than silently pick last-wins", "CONFLICTING_DUPLICATE_PID")
     sid = f"{GERK_SNAPSHOT_PREFIX}.{layer_date}"
     # Digest the WHOLE parsed artifact (every parcel + attribute), never just the
     # input file digest, so any content change re-imports as a CONFLICT and never
@@ -198,18 +240,32 @@ def import_gerk_snapshot(store, artifact, *, layer_date=None, version_label=None
 
 class GerkLayer:
     """Offline GERK parcel-layer lookup for the in-force GERK snapshots (package
-    content). Resolves a GERK-PID to its parsed layer attributes — existence,
-    area, use code (RABA_ID / OPIS_RABE) — within a dated layer vintage. Geometry
-    coordinates are not parsed (the tooling reads attributes; geometry usability
-    is implied by the shapefile). Backs Field identities (G1) and partial-extent
-    bounds (G7); a missing PID is surfaced as None, never a fabricated parcel."""
+    content). Resolves a GERK-PID to its parsed layer ATTRIBUTES — existence,
+    the raw `area` value, and use code (RABA_ID / OPIS_RABE) — within a dated
+    layer vintage; a missing PID is surfaced as None, never a fabricated parcel.
+
+    Scope (PR #13 B3): this is the GERK ATTRIBUTE precursor. It does NOT parse
+    coordinate geometry (the zero-dependency tooling reads the .dbf/.csv table;
+    geometry usability is implied by the shapefile) and it does NOT build the G7
+    extent-carrier. P2 supplies the raw `area` attribute as the per-PID extent
+    SOURCE; normalising it (unit, magnitude) and the G7 extent-carrier ACCEPTANCE
+    mechanism that consumes it remain OPEN (the G7 ticket). It also backs Field
+    identity existence (G1)."""
 
     def __init__(self):
         self._by_snapshot: dict[str, dict] = {}
 
     def register_artifact(self, snapshot_id: str, artifact: dict) -> None:
-        by_pid = {f["gerkPid"]: f for f in artifact.get("features", []) if f.get("gerkPid")}
-        self._by_snapshot[snapshot_id] = by_pid
+        features = artifact.get("features", [])
+        # defense-in-depth: import_gerk_snapshot already refuses a layer with a
+        # conflicting duplicate PID, so store-loaded data is conflict-free — but
+        # never build a silent last-wins lookup from a direct/raw call either.
+        conflict = _conflicting_pid(features)
+        if conflict is not None:
+            raise ValueError(
+                f"GERK-PID {conflict} carries conflicting attributes; refusing to "
+                "build a last-wins lookup (a governed import would have refused this)")
+        self._by_snapshot[snapshot_id] = {f["gerkPid"]: f for f in features if f.get("gerkPid")}
 
     def load_from_store(self, store) -> None:
         """Load store-backed GERK parcels persisted by a governed import (M2 P2),

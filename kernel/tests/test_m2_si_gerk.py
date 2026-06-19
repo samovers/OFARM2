@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import uuid
 
+import pytest
+
 from kernel.context import GERK_SNAPSHOT_PREFIX
 from kernel.profiles.si_ffs import gerk_adapter as gerk
 from kernel.profiles.si_ffs.gerk_adapter import GERK_DATA_FAMILY, GerkLayer
@@ -284,3 +286,73 @@ def test_p2_header_only_layer_refuses_no_parcels(store, tmp_path):
     after = _governed_import_refusals(store)
     assert len(after) == len(before) + 1
     assert store.get_record(f"{GERK_SNAPSHOT_PREFIX}.2099-06-20") is None
+
+
+# ---------------------------------------------------------------------------
+# (PR #13 B1) a duplicate GERK-PID with CONFLICTING attributes refuses import —
+# never silent last-wins; an EXACT duplicate is benign and imports as one parcel
+# ---------------------------------------------------------------------------
+
+def test_p2_conflicting_duplicate_pid_refuses_import(store):
+    before = _governed_import_refusals(store)
+    pid = pid7()
+    art = _fixture_layer(layer_date="2099-05-01", features=[
+        {"gerkPid": pid, "rabaId": "1300", "area": "0.5000", "opisRabe": "trajni travnik"},
+        {"gerkPid": pid, "rabaId": "1100", "area": "0.9999", "opisRabe": "njiva"}])  # SAME pid, DIFFERENT
+    result = gerk.import_gerk_snapshot(store, art)
+    assert result["imported"] is False
+    assert result["disposition"] == "CONFLICTING_DUPLICATE_PID"
+    assert result["problem"]["reasonCode"] == "SOURCE_FIDELITY_LOSS"
+    after = _governed_import_refusals(store)
+    assert len(after) == len(before) + 1
+    assert store.get_record(f"{GERK_SNAPSHOT_PREFIX}.2099-05-01") is None
+    assert _data_row(store, f"{GERK_SNAPSHOT_PREFIX}.2099-05-01") is None
+
+
+def test_p2_exact_duplicate_pid_imports_as_one_parcel(store):
+    pid = pid7()
+    feat = {"gerkPid": pid, "rabaId": "1300", "area": "0.5000", "opisRabe": "trajni travnik"}
+    art = _fixture_layer(layer_date="2099-05-02", features=[dict(feat), dict(feat)])  # EXACT dup
+    result = gerk.import_gerk_snapshot(store, art)
+    assert result["imported"] is True, "an exact duplicate is benign, not a conflict"
+    layer = GerkLayer()
+    layer.load_from_store(store)
+    parcel = layer.lookup(result["snapshotRef"], pid)
+    assert parcel is not None and parcel["area"] == "0.5000"
+
+
+def test_p2_register_artifact_refuses_conflicting_dup_loudly():
+    # defense-in-depth: building a lookup directly from conflicting data raises,
+    # never a silent last-wins (import would already have refused it)
+    pid = pid7()
+    art = _fixture_layer(layer_date="2099-05-03", features=[
+        {"gerkPid": pid, "rabaId": "1300", "area": "0.5", "opisRabe": "a"},
+        {"gerkPid": pid, "rabaId": "1300", "area": "0.6", "opisRabe": "a"}])
+    layer = GerkLayer()
+    with pytest.raises(ValueError):
+        layer.register_artifact(f"{GERK_SNAPSHOT_PREFIX}.2099-05-03", art)
+
+
+# ---------------------------------------------------------------------------
+# (PR #13 B2) a partial parse (skipped ragged rows) REFUSES at import — a dropped
+# real PID must not later read as 'absent'; refuse the lossy layer, fix the source
+# ---------------------------------------------------------------------------
+
+def test_p2_partial_parse_refuses_at_import(store, tmp_path):
+    before = _governed_import_refusals(store)
+    csv_path = tmp_path / "ragged-import.csv"
+    csv_path.write_text(
+        "GERK_PID,RABA_ID,AREA,OPIS_RABE\n"
+        "1000001,1300,1.2345,trajni travnik\n"
+        "1000002,1100\n",                       # short row -> rowProblems non-empty
+        encoding="utf-8")
+    art = gerk.parse_gerk_layer(csv_path, layer_date="2099-05-04")
+    assert art["rowProblems"], "the parse records the skipped ragged row"
+    result = gerk.import_gerk_snapshot(store, art)
+    assert result["imported"] is False
+    assert result["disposition"] == "PARTIAL_PARSE"
+    assert result["problem"]["reasonCode"] == "SOURCE_FIDELITY_LOSS"
+    after = _governed_import_refusals(store)
+    assert len(after) == len(before) + 1
+    assert store.get_record(f"{GERK_SNAPSHOT_PREFIX}.2099-05-04") is None
+    assert _data_row(store, f"{GERK_SNAPSHOT_PREFIX}.2099-05-04") is None
