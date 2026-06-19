@@ -71,28 +71,44 @@ def bootstrap(store) -> list[str]:
 
 def current_reference_snapshot(store, prefix: str,
                                as_of: str | None = None) -> dict | None:
-    """The in-force reference snapshot of a family = latest effectiveFrom.
+    """The in-force reference snapshot of a family = the latest `effectiveFrom`
+    that is actually IN FORCE at the selection bound.
 
-    With `as_of`, the latest snapshot whose effectiveFrom <= asOfTime — an
-    AS_OF answer must not silently apply a future register vintage to an
-    earlier state (hostile review: context must be as-of-aware too). None
-    means no snapshot of this family was in force at that moment."""
+    The bound is `as_of` (AS_OF) or the current time (NOW). A snapshot is in
+    force at the bound iff `effectiveFrom <= bound` AND (no `effectiveUntil`, or
+    `bound < effectiveUntil`). So a future-effective vintage is never selected
+    as current — for NOW or for an earlier AS_OF — and an expired snapshot is
+    never in force (PR #11 review). `prefix` is a FAMILY boundary, matched at the
+    family root or its '.' delimiter (not a bare string prefix), so a sibling
+    family that shares leading characters never collides. None means no snapshot
+    of this family was in force at that moment. An unparseable bound (junk
+    as_of) selects nothing (fail closed)."""
     rows = store.find_by_kind("ofarm.referencesnapshot.v0.1")
-    bound = parse_ts(as_of) if as_of else None
+    bound = parse_ts(as_of) if as_of else parse_ts(now_iso())
+    if bound is None:
+        return None   # unparseable as_of: refuse to guess
     candidates = []
     for r in rows:
         p = r["payload"]
-        if not p["referenceSnapshotId"].startswith(prefix):
+        sid = p["referenceSnapshotId"]
+        # family boundary (PR #11 review): a sibling family must not collide by
+        # shared leading characters — '...ffs-reg' must not match
+        # '...ffs-regression'. Match the family root exactly or up to its '.'
+        # delimiter, never as a bare string prefix.
+        if not (sid == prefix or sid.startswith(prefix + ".")):
             continue
         eff = parse_ts(p["effectiveFrom"])
-        if eff is None:
-            continue   # unparseable validity never selects (fail closed)
-        if bound is not None and eff > bound:
-            continue
-        candidates.append((eff, p))
+        if eff is None or eff > bound:
+            continue   # unparseable (fail closed) or not yet effective at the bound
+        until = parse_ts(p["effectiveUntil"]) if p.get("effectiveUntil") else None
+        if until is not None and bound >= until:
+            continue   # expired at the bound — no longer in force
+        candidates.append((eff, sid, p))
     if not candidates:
         return None
-    return max(candidates, key=lambda pair: pair[0])[1]
+    # latest effectiveFrom wins; ties break deterministically by snapshot id
+    # (content-stable — never dependent on row insertion order)
+    return max(candidates, key=lambda c: (c[0], c[1]))[2]
 
 
 class ProductRegister:

@@ -1923,10 +1923,13 @@ def test_97_review_driven_regressions(store, pipeline):
 # =========================================================================
 
 def test_98_stale_registry_snapshot_recheck(store, pipeline):
-    from datetime import datetime, timedelta, timezone
-    base = datetime.now(timezone.utc)
-    def ts(seconds):
-        return (base + timedelta(seconds=seconds)).isoformat().replace("+00:00", "Z")
+    # Each appended snapshot is effective at its own insert time (now) — they are
+    # inserted sequentially with a commit between, so their effectiveFrom values
+    # are monotonic and each is the newest IN-FORCE REGSR row at its commit
+    # (current_reference_snapshot now treats a snapshot as current only once
+    # effectiveFrom <= now — PR #11: a future vintage is never "current").
+    def ts(_seconds):
+        return context.now_iso()
     old_snapshot = demo.REGSR_SNAPSHOT
 
     # Branch A — identity confirmable by decision number (D9), authorisation
