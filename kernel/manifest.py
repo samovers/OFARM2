@@ -100,9 +100,14 @@ def build_manifest(store) -> dict:
                     {"surfaceType": "IMPORT_MAPPING",
                      "targetRef": "scheme:si.uvhvvr.ffs-reg.html-surface",
                      "direction": "IMPORT",
-                     # parser exists and produced the shipped snapshot;
-                     # scheduled adapter cadence is M2 — PARTIAL, not SUPPORTED
-                     "status": "PARTIAL"},
+                     # M2 P1: the scheduled REGSR snapshot-import adapter now
+                     # exists (kernel/profiles/si_ffs/regsr_adapter.py — parser
+                     # reuse + governed G2 import + declared weekly cadence +
+                     # G3 identity-grade verification). SUPPORTED covers the
+                     # governed snapshot-import mechanism ONLY; live HTTP fetch,
+                     # production currentness, and current-compliance are NOT
+                     # claimed (D9 unofficial-surface posture; cron wiring P-later).
+                     "status": "SUPPORTED"},
                     {"surfaceType": "EXPORT_MAPPING",
                      "targetRef": "view:si.ffs.inspection-register.documentassembly.v0_1",
                      "direction": "EXPORT",

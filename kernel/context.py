@@ -27,6 +27,11 @@ PROFILE_INSTANCE_FILES = [
 
 REGSR_SNAPSHOT_PREFIX = "referencesnapshot:si.uvhvvr.ffs-reg"
 GERK_SNAPSHOT_PREFIX = "referencesnapshot:si.mkgp.gerk-layer"
+# store-backed reference-data family for REGSR parsed product data (M2 P1): the
+# data_family a governed REGSR import tags its parsed data with, and the family
+# ProductRegister loads from the store. ProductRegister is already REGSR-shaped
+# (lookup_by_decision, D9), so this REGSR-specific constant lives with it.
+REGSR_DATA_FAMILY = "si.uvhvvr.ffs-reg"
 
 
 def now_iso() -> str:
@@ -147,9 +152,17 @@ class ProductRegister:
         }
 
     def load_from_store(self, store) -> None:
-        """Resolve register data for snapshots by their declared
-        sourceArtifactRefs — the snapshot record names its artifact; the
-        runtime never guesses."""
+        """Resolve register data for the REGSR snapshots.
+
+        Two sources, in order: (1) store-backed reference data persisted by a
+        governed import (M2 P1) — so a SCHEDULED-import snapshot's content is
+        resolvable from the store, not only from committed package files; then
+        (2) the committed package-file fallback for shipped snapshots, which
+        names its artifact in sourceArtifactRefs. The runtime never guesses."""
+        for row in store.reference_data(REGSR_DATA_FAMILY):
+            sid = row["snapshot_ref"]
+            if sid not in self._by_snapshot:
+                self.register_artifact(sid, row["payload"])
         for row in store.find_by_kind("ofarm.referencesnapshot.v0.1"):
             payload = row["payload"]
             sid = payload["referenceSnapshotId"]

@@ -146,6 +146,37 @@ class Store:
         )
         return trace_id
 
+    def insert_reference_data(self, cur, snapshot_ref: str, data_family: str,
+                              payload: dict, *, artifact_ref: str | None = None,
+                              source_digest: str | None = None,
+                              parser_label: str | None = None,
+                              record_count: int | None = None) -> None:
+        """Persist store-backed external reference-data for a snapshot (M2 P1) —
+        an index cache (NOT OFARM truth) so a scheme reader can resolve an
+        imported snapshot's content from the store. The payload is opaque here;
+        one row per (snapshot_ref, data_family)."""
+        cur.execute(
+            """
+            INSERT INTO reference_snapshot_data
+              (snapshot_ref, data_family, artifact_ref, source_digest,
+               parser_label, record_count, payload, payload_sha256)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (snapshot_ref, data_family, artifact_ref, source_digest, parser_label,
+             record_count, Jsonb(payload), sha256_of(payload)),
+        )
+
+    def reference_data(self, data_family: str) -> list[dict]:
+        """Store-backed reference-data rows of a family (snapshot_ref + payload),
+        for a scheme reader to load into its lookup index."""
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "SELECT snapshot_ref, payload FROM reference_snapshot_data "
+                "WHERE data_family = %s ORDER BY snapshot_ref",
+                (data_family,),
+            )
+            return cur.fetchall()
+
     def add_edge(self, cur, edge_type: str, src_record_id: str, dst_record_id: str) -> None:
         cur.execute(
             "INSERT INTO kernel_edge (edge_type, src_record_id, dst_record_id) VALUES (%s, %s, %s)",
