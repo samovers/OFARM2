@@ -31,8 +31,10 @@ import re
 from pathlib import Path
 
 from ...adapters import ImportRunner, ParseResult
+from ...authority import AuthorityEvaluator
 from ...context import now_iso
 from ...contracts import sha256_of
+from ...problems import runtime_problem
 
 # FFSNaprave scheme constants (SI-specific). Mirror the shipped example shape.
 FFSNAPRAVE_AUTHORITY_REF = "party:si.uvhvvr"
@@ -123,8 +125,15 @@ def parse_ffsnaprave_file(path, *, file_date=None, version_label=None) -> dict:
                                      f"ragged row: {len(row)} columns, header has {len(header)}"})
                 continue
             rec = {name: row[i].strip() for name, i in idx.items()}
-            if not rec.get(STICKER_FIELD):
-                continue                       # no sticker number — not keyable
+            if not rec.get(STICKER_FIELD) or not rec.get(VALIDITY_FIELD):
+                # the D9-style identity is the COMPOSITE key (sticker + validity).
+                # A row missing EITHER component cannot be a complete identity and
+                # must NOT be indexed as sticker-only — flag it so the import refuses
+                # (PARTIAL_PARSE), never a composite-key-collapsed capture (PR #14 B3).
+                row_problems.append({"row": n, "problem":
+                                     "missing composite key component "
+                                     "(StevilkaZnaka and/or VeljavnostZnaka)"})
+                continue
             inspections.append(rec)
     digest = hashlib.sha256(p.read_bytes()).hexdigest()
     return {
@@ -259,33 +268,57 @@ class FFSNapraveRegister:
 
 
 def attach_inspection_evidence(store, register, snapshot_id, sticker_number, *,
-                               captured_by, validity=None) -> str | None:
-    """Match a farm sprayer's inspection sticker against a dated FFSNaprave
-    snapshot and, on a match, CAPTURE a `REGISTRY_EXTRACT` `EvidenceRecord` (a
-    capture, not a commitment — Kernel rule 3) recording that the inspection
-    exists in the register. Returns the evidence id to place in the Equipment
-    identity's `inspectionEvidenceRefs` (G1 will validate it resolves to an
-    EvidenceRecord). NO match → None: the equipment is recorded WITHOUT inspection
-    evidence (advisory, never a silent pass-as-compliant). Idempotent: a second
-    call for the same (vintage, sticker, validity) returns the already-captured id."""
+                               captured_by, farm_ref, validity=None) -> dict:
+    """Match a farm sprayer's inspection sticker against a dated FFSNaprave snapshot
+    and, on an AUTHORISED match, CAPTURE a `REGISTRY_EXTRACT` `EvidenceRecord`
+    recording that the inspection exists in the register. Returns
+    `{attached, evidenceRef, disposition, problem}`:
+
+      * NO match                      -> attached False, NO_MATCH (advisory: the
+                                         equipment is recorded WITHOUT inspection
+                                         evidence, never a silent pass-as-compliant);
+      * `captured_by` is unknown / not
+        ACTIVE / lacks OBSERVE_ATTACH_
+        EVIDENCE on the farm scope     -> attached False, UNAUTHORIZED + a governed
+                                         problem (the authorization trace is recorded);
+      * authorised match              -> attached True, CAPTURED (or ALREADY_CAPTURED).
+
+    Capture is GOVERNED, not a raw side-channel insert (PR #14 hostile B1): the
+    GENERIC `AuthorityEvaluator` evaluates `OBSERVE_ATTACH_EVIDENCE` for
+    `captured_by` over the FARM scope (the same evaluator + action the gate uses),
+    the decision (request/trace/result) is recorded, and the EvidenceRecord anchors
+    to that farm scope. (The generic EVIDENCE_RECORD commit class has no emitter in
+    M1 — it retains as draft — so capture is gated here via the evaluator directly
+    rather than the commit pipeline; flagged as a kernel gap.) The evidence id is
+    SNAPSHOT-SCOPED (vintage + sticker + validity) so a later vintage never reuses an
+    older one's evidence (B1); the existence re-check is UNDER the single-writer lock
+    so concurrent captures are idempotent (B2)."""
     inspection = register.match(snapshot_id, sticker_number, validity)
     if inspection is None:
-        return None
+        return {"attached": False, "evidenceRef": None, "disposition": "NO_MATCH",
+                "problem": None}
+
+    scope = {"scopeType": "FARM", "scopeRef": farm_ref}
+    decision = AuthorityEvaluator(store).evaluate(
+        acting_party_ref=captured_by, action_class="OBSERVE_ATTACH_EVIDENCE",
+        action_stage="PROMOTION", scope=scope)
+
     v = inspection.get(VALIDITY_FIELD)
-    # the evidence id is SNAPSHOT-SCOPED — it carries the register vintage, not just
-    # the sticker/validity. The captured record is tied to ONE snapshot (capturedAt,
-    # rawAssetRef, provenance), so a LATER vintage with the same sticker/validity but
-    # different inspection detail must NOT reuse an older vintage's evidence (PR #14
-    # B1). (Same-vintage-different-detail cannot arise — import refuses a conflicting
-    # same-sid re-import.) The vintage is the dated tail of the snapshot id.
     vintage = snapshot_id.split(f"{FFSNAPRAVE_SNAPSHOT_PREFIX}.", 1)[-1]
     eid = f"evidence:si.ffs-naprave.{_safe(vintage)}.{_safe(sticker_number)}.{_safe(v)}"
-    # capturedAt = the register vintage this extract was taken from (the snapshot's
-    # effectiveFrom), NOT 'now' — the extract attests to the register as of that
-    # vintage; recordedAt is when we recorded the extract (mirrors the demo's
-    # REGISTRY_EXTRACT split). The snapshot exists (we matched against it).
-    snap = store.get_record(snapshot_id)
-    captured_at = (snap["payload"].get("effectiveFrom") if snap else None) or now_iso()
+    # capturedAt = the register vintage the extract was taken from (the snapshot's
+    # effectiveFrom); recordedAt = now (mirrors the demo's REGISTRY_EXTRACT split).
+    # the snapshot record exists: the register only matched because the import wrote
+    # the snapshot AND its reference data in one transaction.
+    snap_payload = store.get_record(snapshot_id)["payload"]
+    captured_at = snap_payload.get("effectiveFrom") or now_iso()
+    # rawAssetRef NAMES the snapshot, and rawAssetDigest verifies THAT asset — the
+    # snapshot payload — so an auditor recomputes it from rawAssetRef alone (PR #14
+    # hostile B2): sha256_of(get_record(rawAssetRef).payload) == rawAssetDigest. The
+    # specific inspection is pinned by the snapshot-scoped eid plus the snapshot's
+    # import-time conflict protection (same-sid-different-content is refused); the
+    # sticker/validity ride the notes. No inconsistent row-digest fallback.
+    raw_digest = sha256_of(snap_payload)
     evidence = {
         "schemaVersion": "ofarm.evidencerecord.v0.1",
         "evidenceRecordId": eid,
@@ -293,8 +326,9 @@ def attach_inspection_evidence(store, register, snapshot_id, sticker_number, *,
         "capturedAt": captured_at,
         "recordedAt": now_iso(),
         "capturedByPartyRef": captured_by,
+        "anchorScopes": [scope],
         "rawAssetRef": snapshot_id,
-        "rawAssetDigest": sha256_of(inspection),   # already "sha256:<64hex>"
+        "rawAssetDigest": raw_digest,
         "evidenceState": "CAPTURED",
         "provenanceRefs": [snapshot_id, FFSNAPRAVE_SOURCE_SURFACE],
         "notes": f"FFSNaprave inspection registry extract; sticker {sticker_number}, "
@@ -303,11 +337,21 @@ def attach_inspection_evidence(store, register, snapshot_id, sticker_number, *,
                  "inspection match in the dated register, not a current-compliance "
                  "claim (D7).",
     }
-    # capture INSIDE the single-writer transaction, re-checking existence UNDER the
-    # advisory lock: concurrent callers serialize, and the loser returns the winner's
-    # committed record idempotently instead of hitting a duplicate key (PR #14 B2).
     with store.serialized_tx() as cur:
+        # record the authorization decision (request/trace/result) regardless of
+        # outcome — a governed, auditable authority trace, exactly as the gate does.
+        store.insert_record(cur, decision.request_payload)
+        store.insert_record(cur, decision.trace_payload)
+        store.insert_record(cur, decision.result_payload)
+        if not decision.allowed:
+            problem = decision.problems[0] if decision.problems else runtime_problem(
+                "AUTHORITY_DENIED", "Evidence capture not authorised",
+                f"{captured_by} may not attach inspection evidence on {farm_ref}")
+            return {"attached": False, "evidenceRef": None,
+                    "disposition": "UNAUTHORIZED", "problem": problem}
+        # idempotent re-check UNDER the advisory lock (B2)
         if store.get_record(eid) is not None:
-            return eid
+            return {"attached": True, "evidenceRef": eid,
+                    "disposition": "ALREADY_CAPTURED", "problem": None}
         store.insert_record(cur, evidence)
-    return eid
+    return {"attached": True, "evidenceRef": eid, "disposition": "CAPTURED", "problem": None}

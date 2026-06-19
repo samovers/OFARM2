@@ -142,15 +142,21 @@ def test_p3_sticker_match_attaches_inspection_evidence_to_equipment(store, pipel
     sid = ffsn.import_ffsnaprave_snapshot(store, art)["snapshotRef"]
     reg = FFSNapraveRegister()
     reg.load_from_store(store)
-    eid = ffsn.attach_inspection_evidence(store, reg, sid, sticker, validity=validity,
-                                          captured_by=demo.FARMER)
-    assert eid is not None
+    r = ffsn.attach_inspection_evidence(store, reg, sid, sticker, validity=validity,
+                                        captured_by=demo.FARMER, farm_ref=demo.FARM)
+    assert r["attached"] is True and r["disposition"] == "CAPTURED"
+    eid = r["evidenceRef"]
     ev = store.get_record(eid)
     assert ev is not None and ev["record_kind"] == "ofarm.evidencerecord.v0.1"
     assert ev["payload"]["evidenceClass"] == "REGISTRY_EXTRACT"
     assert ev["payload"]["rawAssetRef"] == sid
     # capturedAt is the register vintage the extract was taken from, not 'now'
     assert ev["payload"]["capturedAt"] == "2099-09-01T00:00:00Z"
+    # evidence is scoped to the farm (HB1) and the digest verifies rawAssetRef (HB2)
+    assert ev["payload"]["anchorScopes"] == [{"scopeType": "FARM", "scopeRef": demo.FARM}]
+    from kernel.contracts import sha256_of
+    assert ev["payload"]["rawAssetDigest"] == sha256_of(store.get_record(
+        ev["payload"]["rawAssetRef"])["payload"]), "digest must recompute from rawAssetRef"
     # the Equipment identity commits through G1 carrying the inspection evidence
     s = uid()
     payload = _equipment_payload(f"equip:m2p3.{s}", f"equippayload:m2p3.{s}", inspection_refs=[eid])
@@ -178,13 +184,43 @@ def test_p3_no_match_equipment_recorded_without_inspection_evidence(store, pipel
     sid = ffsn.import_ffsnaprave_snapshot(store, art)["snapshotRef"]
     reg = FFSNapraveRegister()
     reg.load_from_store(store)
-    assert ffsn.attach_inspection_evidence(store, reg, sid, "0000000", validity="2027-12-31",
-                                           captured_by=demo.FARMER) is None
+    nm = ffsn.attach_inspection_evidence(store, reg, sid, "0000000", validity="2027-12-31",
+                                         captured_by=demo.FARMER, farm_ref=demo.FARM)
+    assert nm["attached"] is False and nm["disposition"] == "NO_MATCH" and nm["evidenceRef"] is None
     s = uid()
     payload = _equipment_payload(f"equip:m2p3n.{s}", f"equippayload:m2p3n.{s}")  # no inspection refs
     result = pipeline.commit(demo.structure_submission(payload, idem_key=f"m2p3-noev:{s}"))
     assert result["decisionOutcome"] == "PROMOTE_ACCEPTED", \
         "equipment without an inspection match is still recorded — advisory, not blocked"
+
+
+def test_p3_unauthorized_capture_refuses_no_evidence(store):
+    # PR #14 hostile B1: evidence capture is AUTHORITY-GATED. A party without
+    # OBSERVE_ATTACH_EVIDENCE on the farm (or a nonexistent party) is refused, and
+    # NO EvidenceRecord is created.
+    sticker, validity = sticker_num(), "2027-12-31"
+    art = _fixture_artifact(file_date="2099-06-01",
+                            inspections=[_inspection(sticker=sticker, validity=validity)])
+    sid = ffsn.import_ffsnaprave_snapshot(store, art)["snapshotRef"]
+    reg = FFSNapraveRegister()
+    reg.load_from_store(store)
+    vintage = sid.split(f"{ffsn.FFSNAPRAVE_SNAPSHOT_PREFIX}.", 1)[-1]
+    eid = f"evidence:si.ffs-naprave.{vintage}.{sticker}.{validity}"
+    # INSPECTOR is a recorded party but holds NO authority grant -> AUTHORITY_DENIED
+    r = ffsn.attach_inspection_evidence(store, reg, sid, sticker, validity=validity,
+                                        captured_by=demo.INSPECTOR, farm_ref=demo.FARM)
+    assert r["attached"] is False and r["disposition"] == "UNAUTHORIZED"
+    assert r["evidenceRef"] is None and r["problem"]["reasonCode"] == "AUTHORITY_DENIED"
+    assert store.get_record(eid) is None, "unauthorized capture must create no EvidenceRecord"
+    # a nonexistent acting party is likewise refused (unknown party), still no record
+    r2 = ffsn.attach_inspection_evidence(store, reg, sid, sticker, validity=validity,
+                                         captured_by="party:does.not.exist", farm_ref=demo.FARM)
+    assert r2["attached"] is False and r2["disposition"] == "UNAUTHORIZED"
+    assert store.get_record(eid) is None
+    # and the AUTHORISED holder can then capture it (proves the gate, not a blanket deny)
+    ok = ffsn.attach_inspection_evidence(store, reg, sid, sticker, validity=validity,
+                                         captured_by=demo.FARMER, farm_ref=demo.FARM)
+    assert ok["attached"] is True and store.get_record(ok["evidenceRef"]) is not None
 
 
 def test_p3_attach_inspection_evidence_is_idempotent(store):
@@ -194,10 +230,13 @@ def test_p3_attach_inspection_evidence_is_idempotent(store):
     sid = ffsn.import_ffsnaprave_snapshot(store, art)["snapshotRef"]
     reg = FFSNapraveRegister()
     reg.load_from_store(store)
-    a = ffsn.attach_inspection_evidence(store, reg, sid, sticker, validity=validity, captured_by=demo.FARMER)
-    b = ffsn.attach_inspection_evidence(store, reg, sid, sticker, validity=validity, captured_by=demo.FARMER)
-    assert a == b and a is not None
-    assert store.get_record(a) is not None  # exactly one EvidenceRecord, no PK conflict
+    a = ffsn.attach_inspection_evidence(store, reg, sid, sticker, validity=validity,
+                                        captured_by=demo.FARMER, farm_ref=demo.FARM)
+    b = ffsn.attach_inspection_evidence(store, reg, sid, sticker, validity=validity,
+                                        captured_by=demo.FARMER, farm_ref=demo.FARM)
+    assert a["evidenceRef"] == b["evidenceRef"] and a["evidenceRef"] is not None
+    assert a["disposition"] == "CAPTURED" and b["disposition"] == "ALREADY_CAPTURED"
+    assert store.get_record(a["evidenceRef"]) is not None  # exactly one EvidenceRecord, no PK conflict
 
 
 def test_p3_evidence_id_is_snapshot_scoped_no_cross_vintage_reuse(store):
@@ -213,8 +252,10 @@ def test_p3_evidence_id_is_snapshot_scoped_no_cross_vintage_reuse(store):
     sid_b = ffsn.import_ffsnaprave_snapshot(store, b)["snapshotRef"]
     reg = FFSNapraveRegister()
     reg.load_from_store(store)
-    eid_a = ffsn.attach_inspection_evidence(store, reg, sid_a, sticker, validity=validity, captured_by=demo.FARMER)
-    eid_b = ffsn.attach_inspection_evidence(store, reg, sid_b, sticker, validity=validity, captured_by=demo.FARMER)
+    eid_a = ffsn.attach_inspection_evidence(store, reg, sid_a, sticker, validity=validity,
+                                            captured_by=demo.FARMER, farm_ref=demo.FARM)["evidenceRef"]
+    eid_b = ffsn.attach_inspection_evidence(store, reg, sid_b, sticker, validity=validity,
+                                            captured_by=demo.FARMER, farm_ref=demo.FARM)["evidenceRef"]
     assert eid_a != eid_b, "evidence id must be snapshot-scoped — no cross-vintage reuse"
     # each evidence record points at ITS OWN snapshot vintage, not a stale one
     assert store.get_record(eid_a)["payload"]["rawAssetRef"] == sid_a
@@ -242,7 +283,8 @@ def test_p3_attach_inspection_evidence_is_race_safe(store):
             reg.load_from_store(s)
             barrier.wait(timeout=10)            # both contend on attach together
             results.append(ffsn.attach_inspection_evidence(
-                s, reg, sid, sticker, validity=validity, captured_by=demo.FARMER))
+                s, reg, sid, sticker, validity=validity,
+                captured_by=demo.FARMER, farm_ref=demo.FARM)["evidenceRef"])
         except Exception as exc:                # noqa: BLE001
             errors.append(repr(exc))
         finally:
@@ -412,6 +454,24 @@ def test_p3_parse_flags_misaligned_interior_drop_row(tmp_path):
     assert art["inspectionCount"] == 1, "only the well-formed row parses"
     assert art["inspections"][0]["StevilkaZnaka"] == "123456"
     assert len(art["rowProblems"]) == 1, "the misaligned interior-drop row is flagged, not mis-keyed"
+
+
+def test_p3_blank_validity_refuses_partial_parse(store, tmp_path):
+    # PR #14 hostile B3: the composite key is StevilkaZnaka + VeljavnostZnaka. A row
+    # with a blank VeljavnostZnaka must be flagged (rowProblems -> PARTIAL_PARSE),
+    # never indexed/captured as sticker-only evidence.
+    txt = tmp_path / "blank-validity.txt"
+    txt.write_text(
+        '"NapravaID";"StevilkaZnaka";"VeljavnostZnaka";"DatumPregleda";"SkladnostObPregledu"\n'
+        '"N100001";"123456";"";"2025-06-15";"DA"\n',     # blank VeljavnostZnaka
+        encoding="utf-8")
+    art = ffsn.parse_ffsnaprave_file(txt, file_date="2099-06-02")
+    assert art["inspectionCount"] == 0, "a row missing the validity component is not indexed"
+    assert len(art["rowProblems"]) == 1
+    result = ffsn.import_ffsnaprave_snapshot(store, art)
+    assert result["imported"] is False and result["disposition"] == "PARTIAL_PARSE"
+    assert result["problem"]["reasonCode"] == "SOURCE_FIDELITY_LOSS"
+    assert store.get_record(f"{ffsn.FFSNAPRAVE_SNAPSHOT_PREFIX}.2099-06-02") is None
 
 
 def test_p3_annual_cadence_is_declared(store):
