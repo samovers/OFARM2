@@ -518,6 +518,18 @@ class StructureSemanticsValidator:
                         return _refusal(ctx, "FAIL_REFERENCE_RESOLUTION", runtime_problem(
                             "EVIDENCE_REFERENCE_UNAVAILABLE", "Structure payload ref unresolved",
                             f"{field} ref {ref} does not resolve to a {expected}"))
+                    # An identity's OWN binding must bind THIS identity, never another
+                    # subject's binding attached to a different committed identity (PR #15
+                    # B1: G1 previously checked only that the ref resolved to a binding,
+                    # not that its subject matched). Scoped to identityBindingRefs;
+                    # cropBindingRefs bind a crop species, not the identity, so are exempt.
+                    if field == "identityBindingRefs":
+                        bound = (row["payload"].get("localSubject") or {}).get("subjectRef")
+                        if bound != identity_ref:
+                            return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
+                                "CORRECTION_REQUIRED", "Identity binding subject mismatch",
+                                f"{field} ref {ref} binds {bound!r}, not the committed identity "
+                                f"{identity_ref!r}; a binding must bind the identity it is attached to"))
 
         # D18: explicit supersession for an identity that already has state.
         # NOTE (PR #9 H1): this is read-before-write. In the single-writer pilot
