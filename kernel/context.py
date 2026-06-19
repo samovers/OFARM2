@@ -78,9 +78,11 @@ def current_reference_snapshot(store, prefix: str,
     force at the bound iff `effectiveFrom <= bound` AND (no `effectiveUntil`, or
     `bound < effectiveUntil`). So a future-effective vintage is never selected
     as current — for NOW or for an earlier AS_OF — and an expired snapshot is
-    never in force (PR #11 review). None means no snapshot of this family was in
-    force at that moment. An unparseable bound (junk as_of) selects nothing
-    (fail closed)."""
+    never in force (PR #11 review). `prefix` is a FAMILY boundary, matched at the
+    family root or its '.' delimiter (not a bare string prefix), so a sibling
+    family that shares leading characters never collides. None means no snapshot
+    of this family was in force at that moment. An unparseable bound (junk
+    as_of) selects nothing (fail closed)."""
     rows = store.find_by_kind("ofarm.referencesnapshot.v0.1")
     bound = parse_ts(as_of) if as_of else parse_ts(now_iso())
     if bound is None:
@@ -88,7 +90,12 @@ def current_reference_snapshot(store, prefix: str,
     candidates = []
     for r in rows:
         p = r["payload"]
-        if not p["referenceSnapshotId"].startswith(prefix):
+        sid = p["referenceSnapshotId"]
+        # family boundary (PR #11 review): a sibling family must not collide by
+        # shared leading characters — '...ffs-reg' must not match
+        # '...ffs-regression'. Match the family root exactly or up to its '.'
+        # delimiter, never as a bare string prefix.
+        if not (sid == prefix or sid.startswith(prefix + ".")):
             continue
         eff = parse_ts(p["effectiveFrom"])
         if eff is None or eff > bound:
@@ -96,10 +103,12 @@ def current_reference_snapshot(store, prefix: str,
         until = parse_ts(p["effectiveUntil"]) if p.get("effectiveUntil") else None
         if until is not None and bound >= until:
             continue   # expired at the bound — no longer in force
-        candidates.append((eff, p))
+        candidates.append((eff, sid, p))
     if not candidates:
         return None
-    return max(candidates, key=lambda pair: pair[0])[1]
+    # latest effectiveFrom wins; ties break deterministically by snapshot id
+    # (content-stable — never dependent on row insertion order)
+    return max(candidates, key=lambda c: (c[0], c[1]))[2]
 
 
 class ProductRegister:

@@ -150,6 +150,28 @@ def test_g3_expired_snapshot_is_not_current(store):
     assert r["verdict"] == REFUSE, "an expired snapshot is no longer in force"
 
 
+def test_g3_family_prefix_boundary_excludes_siblings(store):
+    # PR #11 hostile: prefix matching respects the FAMILY boundary — a sibling
+    # family that merely shares leading characters is never selected, even with a
+    # LATER effectiveFrom that would otherwise win the max().
+    u = uid()
+    fam = f"referencesnapshot:fixture.reg{u}"
+    in_fam = _import_fixture_snapshot(store, fam, effective="2026-05-01T00:00:00Z")
+    _import_fixture_snapshot(store, f"{fam}ression", effective="2026-09-01T00:00:00Z")
+    r = _verify(store, prefix=fam, query="x", lookup=_identity)
+    assert r["verdict"] == CONFIRM
+    assert r["snapshotRef"] == in_fam, "must resolve only the .reg family, not .regression"
+
+
+def test_g3_family_with_no_in_force_member_refuses_not_falls_through(store):
+    u = uid()
+    fam = f"referencesnapshot:fixture.reg{u}"
+    # only a SIBLING family exists -> the requested family has no in-force member
+    _import_fixture_snapshot(store, f"{fam}ression", effective="2026-09-01T00:00:00Z")
+    r = _verify(store, prefix=fam, query="x", lookup=_identity)
+    assert r["verdict"] == REFUSE, "no in-family member -> refuse, never fall through to a sibling"
+
+
 def test_g3_missing_snapshot_refuses(store):
     # a prefix with no in-force snapshot -> governed refusal. No trace is emitted:
     # an ExternalRegistryVerificationTrace is inherently a record AGAINST a

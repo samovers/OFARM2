@@ -52,6 +52,13 @@ class LookupResult:
 
     grade: IDENTITY (a stable key was found), LOCATOR (matched only by a page
     locator — no stable key), or NONE (not found in an available snapshot).
+
+    Trust boundary (PR #11 review): the injected lookup is responsible for
+    returning contract-valid enum values (`status_observed`, etc.) and a
+    non-negative `candidate_count`. A P4 wrapper must normalise/validate its
+    parser output here — it must NOT pass raw parser values straight through —
+    or the trace insert will raise a ContractViolation rather than a governed
+    refusal. This generic mechanism trusts the wrapper's output shape.
     """
     grade: str
     candidate_count: int = 0

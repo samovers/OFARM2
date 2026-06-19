@@ -194,6 +194,7 @@ Every ticket here is `profile_si_ffs` package/profile content riding a Phase-1 m
 - **Files NOT to touch:** `kernel/validators.py`/`sufficiency.py` generic resolution (use G3; no per-scheme branch); `contracts/**`.
 - **Read first:** `CORE.md` "code binding discipline"; `profile_si_ffs/PROFILE.md` scheme role map; `profile_si_ffs/OFARM_AgronomicCodeBindingProfile_si_ffs_v0_1.json`; `CAPTURE_MAPPING.md`; D6.
 - **Exact behavior change:** each scheme binds through the generic G3 resolution against the right snapshot; identity-grade where the snapshot carries a stable key (REGSR decision number), locator-only otherwise → review; unresolved → `UNRESOLVED` + advisory flag, claim still committable as a draft.
+- **Folded-in from G3 review (PR #11):** each SI lookup the wrapper injects into `verification.ReferenceResolver.verify` returns a `LookupResult`; the wrapper must **normalise/validate** the scheme-specific values into contract-valid enums (`status_observed`, `external_id_role`, non-negative `candidate_count`) — never pass raw parser values straight through, or the trace insert raises a `ContractViolation` instead of a governed refusal. The generic resolver trusts the wrapper's output shape.
 - **Required tests:** each scheme resolves identity-grade or routes correctly; an unknown product → `UNRESOLVED` + advisory, draft retained, promotion requires review.
 - **Acceptance:** no scheme-specific logic leaked into Phase-1 modules (boundary check); self-check PASS.
 - **Non-goals:** the evidence floor itself (P5); current-compliance.
