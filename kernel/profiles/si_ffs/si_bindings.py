@@ -33,7 +33,7 @@ from ...verification import (CONFIRM, LOCATOR, NONE, REVIEW, LookupResult,
                              ReferenceResolver)
 from . import regsr_adapter as regsr
 from .ffsnaprave_adapter import (FFSNAPRAVE_AUTHORITY_REF, FFSNAPRAVE_SCHEME,
-                                 FFSNAPRAVE_SNAPSHOT_PREFIX)
+                                 FFSNAPRAVE_SNAPSHOT_PREFIX, VALIDITY_FIELD)
 from .gerk_adapter import GERK_AUTHORITY_REF, GERK_SCHEME
 
 # the profile standardRefs (profile_si_ffs/OFARM_AgronomicCodeBindingProfile_si_ffs_v0_1.json)
@@ -155,11 +155,27 @@ def resolve_parcel(store, cur, gerk_layer, gerk_pid, subject_ref, *, created_by,
 # FFSNaprave — Equipment sticker (LOCATOR-only: inspection existence, not binding)
 # ---------------------------------------------------------------------------
 
+def _ffsnaprave_lookup(register, validity):
+    """A G3 lookup that resolves the D9-style COMPOSITE key StevilkaZnaka +
+    VeljavnostZnaka (never the sticker alone — same sticker, different validity is a
+    different inspection cycle, P3). On a hit it records the matched record's
+    VeljavnostZnaka in datesObserved.statusEffectiveUntil so the composite key is
+    explicit in the trace (PR #15 B2). Locator-only (existence, not owner-binding)."""
+    def lookup(snapshot_id, sticker) -> LookupResult:
+        rec = register.match(snapshot_id, sticker, validity)
+        if rec is None:
+            return LookupResult(grade=NONE, candidate_count=0, status_observed="NOT_FOUND")
+        v = rec.get(VALIDITY_FIELD)
+        return LookupResult(grade=LOCATOR, candidate_count=1, status_observed="UNKNOWN",
+                            dates_observed={"statusEffectiveUntil": f"{v}T00:00:00Z"} if v else None)
+    return lookup
+
+
 def resolve_equipment(store, cur, ffsnaprave_register, sticker_number, subject_ref, *,
                       created_by, evidence_ref, validity=None, as_of=None) -> dict:
     res = ReferenceResolver(store).verify(
         cur, query_value=sticker_number, snapshot_prefix=FFSNAPRAVE_SNAPSHOT_PREFIX,
-        lookup=_locator_lookup(lambda sid, st: ffsnaprave_register.match(sid, st, validity)),
+        lookup=_ffsnaprave_lookup(ffsnaprave_register, validity),
         profile_ref=config.CODE_BINDING_PROFILE_REF, authority_ref=FFSNAPRAVE_AUTHORITY_REF,
         jurisdiction_ref=SI_JURISDICTION_REF, scheme=FFSNAPRAVE_SCHEME,
         key_field="stevilka-znaka", purpose="OTHER", lookup_surface="OTHER",
@@ -167,17 +183,25 @@ def resolve_equipment(store, cur, ffsnaprave_register, sticker_number, subject_r
         as_of=as_of, created_by=created_by)
     found = res["grade"] == LOCATOR
     trace = res.get("trace")
+    # the RESOLVED validity (the matched record's VeljavnostZnaka) rides the trace's
+    # datesObserved; record the full composite key in the binding too (PR #15 B2) —
+    # never just the sticker number.
+    resolved_validity = ((trace or {}).get("datesObserved") or {}).get("statusEffectiveUntil")
     binding = _binding(
         role="OTHER", subject_type="OTHER", subject_ref=subject_ref,
         scheme_ref=FFSNAPRAVE_SCHEME_REF, scheme_name="UVHVVR sprayer-inspection register",
         scheme_role="CODE_BINDING", issuer=UVHVVR_REF, captured_label=sticker_number,
         state="PROVISIONAL", mapping="LOCAL_ONLY" if found else "UNRESOLVED",
-        value_extra={"code": sticker_number}, created_by=created_by,
+        value_extra={"code": sticker_number, "notes":
+                     f"D9-style composite key: StevilkaZnaka {sticker_number}" +
+                     (f" + VeljavnostZnaka {validity or resolved_validity}"
+                      if (validity or resolved_validity) else " (VeljavnostZnaka unresolved)")},
+        created_by=created_by,
         evidence_refs=([trace["externalRegistryVerificationTraceId"]] if trace else []) + [evidence_ref],
         snapshot_refs=[res["snapshotRef"]] if res.get("snapshotRef") else None,
         may_promote=False, hcu="REVIEW_REQUIRED")
     return {"verdict": res["verdict"], "grade": res["grade"], "binding": binding,
-            "trace": trace, "problem": res.get("problem"),
+            "trace": trace, "problem": res.get("problem"), "resolvedValidity": resolved_validity,
             "advisory": "sprayer-inspection existence is locator-only; the equipment<->"
                         "inspection binding is the farmer's sticker claim — review"}
 

@@ -148,6 +148,58 @@ def test_p4_ffsnaprave_equipment_is_locator_only_review(store):
     assert b["bindingState"] == "PROVISIONAL"
     assert b["bindingValue"]["mappingRelation"] == "LOCAL_ONLY"
     assert b["promotionBoundary"]["maySupportPromotion"] is False
+    # the composite key (StevilkaZnaka + VeljavnostZnaka) is explicit in binding + trace (B2)
+    assert validity in b["bindingValue"]["notes"]
+    assert r["trace"]["datesObserved"]["statusEffectiveUntil"] == f"{validity}T00:00:00Z"
+
+
+def test_p4_ffsnaprave_composite_key_validity_recorded_not_collapsed(store):
+    # PR #15 B2: same sticker, TWO validity windows (separate inspection cycles) is
+    # NOT collapsed — each resolves its own VeljavnostZnaka, recorded in trace + binding
+    sticker = str(uuid.uuid4().int)[:6]
+    art = {
+        "snapshotKind": "SI_UVHVVR_FFS_NAPRAVE_PARSE", "fileDate": "2099-04-08",
+        "canonicalVersionLabel": "ffsn-multi", "keyFieldsPresent": True,
+        "attributesAvailable": list(ffsn.RETAINED_FIELDS), "inspectionCount": 2, "rowProblems": [],
+        "inspections": [
+            {"NapravaID": f"N{uid()[:5]}", "StevilkaZnaka": sticker, "VeljavnostZnaka": "2025-12-31",
+             "DatumPregleda": "2023-06-15", "SkladnostObPregledu": "DA"},
+            {"NapravaID": f"N{uid()[:5]}", "StevilkaZnaka": sticker, "VeljavnostZnaka": "2027-12-31",
+             "DatumPregleda": "2025-06-15", "SkladnostObPregledu": "DA"}],
+        "inputs": [{"file": "f.txt", "digest": f"sha256:{uid()}cafe"}]}
+    sid = ffsn.import_ffsnaprave_snapshot(store, art)["snapshotRef"]
+    reg = FFSNapraveRegister()
+    reg.load_from_store(store)
+    with store.serialized_tx() as cur:
+        r1 = sib.resolve_equipment(store, cur, reg, sticker, "equip:e", created_by=demo.FARMER,
+                                   evidence_ref=demo.ONBOARDING_EVIDENCE, validity="2025-12-31",
+                                   as_of="2099-04-08T12:00:00Z")
+        r2 = sib.resolve_equipment(store, cur, reg, sticker, "equip:e", created_by=demo.FARMER,
+                                   evidence_ref=demo.ONBOARDING_EVIDENCE, validity="2027-12-31",
+                                   as_of="2099-04-08T12:00:00Z")
+    assert r1["resolvedValidity"] == "2025-12-31T00:00:00Z"
+    assert r2["resolvedValidity"] == "2027-12-31T00:00:00Z"
+    assert "2025-12-31" in r1["binding"]["bindingValue"]["notes"]
+    assert "2027-12-31" in r2["binding"]["bindingValue"]["notes"]
+    assert r1["trace"]["datesObserved"]["statusEffectiveUntil"] != \
+        r2["trace"]["datesObserved"]["statusEffectiveUntil"], "not collapsed to one validity"
+
+
+def test_p4_ffsnaprave_no_match_records_no_fabricated_validity(store):
+    # no match + no validity given -> the binding records no fabricated validity
+    # ("unresolved", never the literal "None"); UNRESOLVED, never identity
+    _ffsn_snapshot(store, "2099-04-09", str(uuid.uuid4().int)[:6], "2027-12-31")
+    reg = FFSNapraveRegister()
+    reg.load_from_store(store)
+    with store.serialized_tx() as cur:
+        r = sib.resolve_equipment(store, cur, reg, "0000000", "equip:none",
+                                  created_by=demo.FARMER, evidence_ref=demo.ONBOARDING_EVIDENCE,
+                                  as_of="2099-04-09T12:00:00Z")
+        store.insert_record(cur, r["binding"])
+    assert r["verdict"] == REVIEW and r["grade"] != "LOCATOR"
+    notes = r["binding"]["bindingValue"]["notes"]
+    assert "None" not in notes and "unresolved" in notes
+    assert r["binding"]["bindingValue"]["mappingRelation"] == "UNRESOLVED"
 
 
 # ---------------------------------------------------------------------------
@@ -194,29 +246,55 @@ def test_p4_resolved_binding_attaches_to_committed_appliedresource_identity(stor
     _regsr_snapshot(store, "2099-04-06", decision)
     pr = ProductRegister()
     pr.load_from_store(store)
+    s = uid()
+    ar_ref = f"resource:m2p4.{s}"   # the binding subject AND the committed identity are the SAME
     with store.serialized_tx() as cur:
-        r = sib.resolve_product_authorisation(store, cur, pr, decision, "input:m2p4.e",
+        r = sib.resolve_product_authorisation(store, cur, pr, decision, ar_ref,
                                               created_by=demo.FARMER,
                                               evidence_ref=demo.ONBOARDING_EVIDENCE,
                                               as_of="2099-04-06T12:00:00Z")
         store.insert_record(cur, r["binding"])
+    assert r["binding"]["localSubject"]["subjectRef"] == ar_ref
     bid = r["binding"]["agronomicIdentityBindingId"]
-    s = uid()
     payload = {
         "schemaVersion": "ofarm.appliedresourceidentitypayload.v0.1",
         "appliedresourceidentitypayloadId": f"resourcepayload:m2p4.{s}",
-        "identityRecordRef": f"input:m2p4.{s}",
+        "identityRecordRef": ar_ref,
         "recordedAt": demo.now_iso(),
         "displayName": "FIKTIV (fictional resource identity)",
         "resourceClass": "PLANT_PROTECTION_PRODUCT",
         "identityBindingRefs": [bid]}
     result = pipeline.commit(demo.structure_submission(payload, idem_key=f"m2p4-bind:{s}"))
     assert result["decisionOutcome"] == "PROMOTE_ACCEPTED"
-    s2 = uid()
-    bogus = {**payload, "appliedresourceidentitypayloadId": f"resourcepayload:m2p4b.{s2}",
-             "identityRecordRef": f"input:m2p4b.{s2}", "identityBindingRefs": ["binding:does-not-exist"]}
-    bad = pipeline.commit(demo.structure_submission(bogus, idem_key=f"m2p4-bad:{s2}"))
-    assert bad["decisionOutcome"] != "PROMOTE_ACCEPTED"
+
+
+def test_p4_binding_for_a_different_subject_does_not_promote(store, pipeline):
+    # PR #15 B1: a binding whose localSubject is NOT the committed identity must NOT
+    # attach and promote — G1 now checks each identityBindingRef's binding subject
+    # equals payload.identityRecordRef (was: only that the ref resolved to a binding).
+    decision = f"U9{uid()[:4]}-50/26/m"
+    _regsr_snapshot(store, "2099-04-07", decision)
+    pr = ProductRegister()
+    pr.load_from_store(store)
+    s = uid()
+    with store.serialized_tx() as cur:
+        r = sib.resolve_product_authorisation(store, cur, pr, decision, f"resource:OTHER.{s}",
+                                              created_by=demo.FARMER,
+                                              evidence_ref=demo.ONBOARDING_EVIDENCE,
+                                              as_of="2099-04-07T12:00:00Z")
+        store.insert_record(cur, r["binding"])     # binds resource:OTHER.<s>
+    bid = r["binding"]["agronomicIdentityBindingId"]
+    payload = {
+        "schemaVersion": "ofarm.appliedresourceidentitypayload.v0.1",
+        "appliedresourceidentitypayloadId": f"resourcepayload:m2p4mm.{s}",
+        "identityRecordRef": f"resource:m2p4mm.{s}",   # DIFFERENT from the binding's subject
+        "recordedAt": demo.now_iso(),
+        "displayName": "FIKTIV mismatch (fictional)",
+        "resourceClass": "PLANT_PROTECTION_PRODUCT",
+        "identityBindingRefs": [bid]}
+    result = pipeline.commit(demo.structure_submission(payload, idem_key=f"m2p4-mm:{s}"))
+    assert result["decisionOutcome"] != "PROMOTE_ACCEPTED", \
+        "a binding for another subject must not attach to a different committed identity"
 
 
 def test_p4_no_in_force_snapshot_yields_unresolved_committable_binding(store):
