@@ -94,10 +94,18 @@ def import_regsr_snapshot(store, artifact, *, register_day=None,
     parse is refused by the generic runner (no snapshot)."""
     register_day = register_day or artifact.get("registerDay")
     if not register_day:
-        return {"imported": False, "snapshotRef": None,
-                "problem": {"reasonCode": "SOURCE_FIDELITY_LOSS",
-                            "detail": "REGSR parse carries no register day; cannot date a snapshot"},
-                "disposition": "NO_REGISTER_DAY"}
+        # A parse with no datable register day is a source-fidelity loss. Route
+        # it through the GENERIC governed refusal path (ImportRunner) rather than
+        # hand-building a mini problem that bypasses the audit trail (PR #12
+        # review): this yields a real RuntimeProblem AND a GOVERNED_IMPORT/REFUSED
+        # gate-log entry, with no snapshot and no data row. There is no snapshot
+        # id to reference (the register day is what dates it), so the refusal
+        # carries no related ref — honest, not a fabricated sid.
+        result = ImportRunner(store).run_import(
+            ParseResult(ok=False, error="REGSR parse carries no register day; "
+                        "cannot date a snapshot"),
+            {"referenceSnapshotId": None}, data_family=REGSR_DATA_FAMILY)
+        return {**result, "disposition": "NO_REGISTER_DAY", "registerDay": None}
     sid = f"{REGSR_SNAPSHOT_PREFIX}.{register_day}"
     digest = (artifact.get("inputs") or [{}])[0].get("digest") or sha256_of(artifact)
     meta = {

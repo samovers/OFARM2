@@ -59,6 +59,16 @@ def _data_row(store, sid):
                  if r["snapshot_ref"] == sid), None)
 
 
+def _governed_import_refusals(store):
+    """Every GOVERNED_IMPORT/REFUSED gate-log row, oldest first — to prove a
+    refused import leaves a governed audit trace (not a silent hand-built one)."""
+    with store.conn.cursor() as cur:
+        cur.execute(
+            "SELECT outcome, reason_code, related_refs FROM kernel_gate_log "
+            "WHERE gate = 'GOVERNED_IMPORT' AND outcome = 'REFUSED' ORDER BY entry_id")
+        return cur.fetchall()
+
+
 # ---------------------------------------------------------------------------
 # (1) import writes a dated REGSR ReferenceSnapshot + a store-backed data row
 # ---------------------------------------------------------------------------
@@ -135,17 +145,36 @@ def test_p1_unknown_decision_routes_to_review(store):
 
 
 # ---------------------------------------------------------------------------
-# (4) failed import writes NO snapshot and NO data row
+# (4) failed import is a GOVERNED refusal: full RuntimeProblem + REFUSED gate
+#     log, no snapshot, no data row (PR #12 review — never a hand-built bypass)
 # ---------------------------------------------------------------------------
 
 def test_p1_import_with_no_register_day_refuses_no_snapshot_no_data(store):
+    before = _governed_import_refusals(store)
     art = _fixture_artifact(register_day="2099-01-12")
     art["registerDay"] = None
     result = regsr.import_regsr_snapshot(store, art)
     assert result["imported"] is False
-    assert result["problem"]["reasonCode"] == "SOURCE_FIDELITY_LOSS"
     assert result["snapshotRef"] is None
-    # no data row was written for any sid by this refused import
+    # the SI adapter's diagnostic envelope on top of the generic refusal is pinned
+    assert result["disposition"] == "NO_REGISTER_DAY"
+    assert result["registerDay"] is None
+    # the problem is a FULL RuntimeProblem (governed refusal path), not a
+    # hand-built mini dict missing schemaVersion/problemId/severity/title
+    p = result["problem"]
+    assert p["schemaVersion"] == "ofarm.runtimeproblem.v0.1"
+    assert p["problemId"].startswith("problem:")
+    assert p["severity"] == "ERROR"
+    assert p["reasonCode"] == "SOURCE_FIDELITY_LOSS"
+    assert p["title"] and p["detail"]
+    # exactly one new GOVERNED_IMPORT/REFUSED gate-log entry was written, with no
+    # fabricated snapshot id (there is none — the register day is what dates it)
+    after = _governed_import_refusals(store)
+    assert len(after) == len(before) + 1, "a refused import must leave a governed trace"
+    assert after[-1]["reason_code"] == "SOURCE_FIDELITY_LOSS"
+    assert after[-1]["related_refs"] is None
+    # no snapshot and no data row were written for any would-be sid
+    assert store.get_record(f"{REGSR_SNAPSHOT_PREFIX}.None") is None
     assert _data_row(store, f"{REGSR_SNAPSHOT_PREFIX}.None") is None
 
 
