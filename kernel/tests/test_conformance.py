@@ -1268,7 +1268,10 @@ def test_95_hostile_review_regressions(store, pipeline, materializer):
     client = TestClient(create_app(store))
     spoof = demo.spray_submission(f"hr:b1:{uid()}", erp_id=f"erp:hr.{uid()}")
     no_header = client.post("/commit", json={"submission": spoof})
-    assert no_header.status_code == 422, "missing principal header must refuse"
+    # M2 G4: an absent transport principal is an explicit default-deny (401), not a
+    # request-validation artifact (the principal is now derived by get_principal —
+    # the OIDC-verified Party when configured, else the X-Acting-Party dev shim)
+    assert no_header.status_code == 401, "missing transport principal must refuse (default deny)"
     mismatched = client.post("/commit", json={"submission": spoof},
                              headers={"x-acting-party": demo.WORKER})
     assert mismatched.status_code == 403

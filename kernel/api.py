@@ -9,15 +9,20 @@ from __future__ import annotations
 
 import json
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
-from . import context, manifest as manifest_mod
+from . import auth_oidc, config, context, manifest as manifest_mod
 from .contracts import ContractViolation
 from .problems import runtime_problem
 from .gates import GatePipeline
 from .store import Store
 from .views import OutputGenerator
+
+# create_app default: resolve the OIDC verifier from the environment (the uvicorn
+# --factory entrypoint takes no args). Pass oidc=None to FORCE the development/
+# conformance X-Acting-Party shim; pass an OidcConfig to verify tokens.
+_FROM_ENV = object()
 
 
 class CommitBody(BaseModel):
@@ -41,7 +46,7 @@ class ReviewAcceptBody(BaseModel):
     idempotencyKey: str | None = None
 
 
-def create_app(store: Store | None = None) -> FastAPI:
+def create_app(store: Store | None = None, *, oidc=_FROM_ENV) -> FastAPI:
     app = FastAPI(
         title="OFARM2 Kernel (M1)",
         description="Implementation and conformance packaging profile — not OFARM "
@@ -54,6 +59,37 @@ def create_app(store: Store | None = None) -> FastAPI:
     context.bootstrap(app.state.store)
     app.state.pipeline = GatePipeline(app.state.store)
     app.state.outputs = OutputGenerator(app.state.store)
+    app.state.oidc = config.oidc_config_from_env() if oidc is _FROM_ENV else oidc
+
+    def get_principal(authorization: str | None = Header(None),
+                      x_acting_party: str | None = Header(None)) -> str:
+        """The transport principal (a Party ref). With OIDC configured (M2 G4) it
+        comes ONLY from a verified bearer token; otherwise the development/
+        conformance X-Acting-Party header IS the principal (NOT production auth —
+        profile_si_ffs/UNSUPPORTED_SURFACES.md). Either way the binding contract is
+        identical, and an absent/invalid principal is a default-deny refusal."""
+        oidc_cfg = app.state.oidc
+        if oidc_cfg is None:
+            if not x_acting_party:
+                raise HTTPException(status_code=401, detail=runtime_problem(
+                    "AUTHORITY_DENIED", "No transport principal",
+                    "no X-Acting-Party principal presented; default deny",
+                    problem_id="problem:api-no-principal"))
+            return x_acting_party
+        if not authorization or not authorization.lower().startswith("bearer "):
+            raise HTTPException(status_code=401, detail=runtime_problem(
+                "AUTHORITY_DENIED", "No bearer token",
+                "no Authorization: Bearer token presented; default deny (the "
+                "X-Acting-Party header does not authenticate when OIDC is enabled)",
+                problem_id="problem:api-no-token"))
+        try:
+            return app.state.oidc.verify(authorization.split(" ", 1)[1].strip())["partyRef"]
+        except auth_oidc.OidcError as exc:
+            raise HTTPException(status_code=401, detail=runtime_problem(
+                "AUTHORITY_DENIED", "Token verification failed", str(exc),
+                problem_id="problem:api-token-invalid"))
+
+    app.state.get_principal = get_principal
 
     @app.get("/health")
     def health():
@@ -62,23 +98,22 @@ def create_app(store: Store | None = None) -> FastAPI:
                     app.state.store.unreachable_authoritative_records()}
 
     @app.post("/commit")
-    def commit(body: CommitBody, x_acting_party: str = Header(...)):
+    def commit(body: CommitBody, principal: str = Depends(get_principal)):
         # The transport principal binds to the submitted actor BEFORE the
-        # pipeline runs: a body-supplied actingPartyRef is never trusted on
-        # its own (hostile review blocker 1). In M1 the principal is the
-        # required X-Acting-Party header — a development principal pending
-        # OIDC (M2), declared in profile_si_ffs/UNSUPPORTED_SURFACES.md —
-        # but the binding contract is the same one OIDC will fill: the
-        # gate's actor is the transport's actor, or the commit is refused.
-        if body.submission.get("actingPartyRef") != x_acting_party:
+        # pipeline runs: a body-supplied actingPartyRef is never trusted on its
+        # own (hostile review blocker 1). The principal is the OIDC-verified Party
+        # when OIDC is configured (M2 G4), else the development/conformance
+        # X-Acting-Party header (UNSUPPORTED_SURFACES.md) — the binding contract is
+        # identical: the gate's actor is the transport's actor, or it is refused.
+        if body.submission.get("actingPartyRef") != principal:
             # full RuntimeProblem shape even at the transport edge; the fixed
             # problemId keeps these pre-pipeline refusals off the in-pipeline
             # problem counter
             raise HTTPException(status_code=403, detail=runtime_problem(
                 "ACTOR_BINDING_UNRESOLVED", "Transport principal mismatch",
                 "submission.actingPartyRef does not match the transport "
-                "principal (X-Acting-Party); body-level actor spoofing is "
-                "refused", problem_id="problem:api-principal-mismatch"))
+                "principal; body-level actor spoofing is refused",
+                problem_id="problem:api-principal-mismatch"))
         try:
             return app.state.pipeline.commit(body.submission)
         except (ContractViolation, KeyError) as exc:
@@ -125,7 +160,7 @@ def create_app(store: Store | None = None) -> FastAPI:
         return None
 
     @app.post("/review/accept")
-    def review_accept(body: ReviewAcceptBody, x_acting_party: str = Header(...)):
+    def review_accept(body: ReviewAcceptBody, principal: str = Depends(get_principal)):
         # the review act is the REVIEWER'S own governed commit: the reviewer
         # IS the transport principal — there is no body-named reviewer field
         # to forge (hostile review blocker 1, second pass)
@@ -134,7 +169,7 @@ def create_app(store: Store | None = None) -> FastAPI:
         submission = {
             "commitClass": "GOVERNANCE_DECISION",
             "ingressChannel": "MANUAL_UI",
-            "actingPartyRef": x_acting_party,
+            "actingPartyRef": principal,
             "farmRef": body.farmRef,
             "idempotencyKey": body.idempotencyKey
                               or f"review-accept:{_uuid.uuid4().hex[:16]}",
@@ -150,7 +185,7 @@ def create_app(store: Store | None = None) -> FastAPI:
             raise HTTPException(status_code=422, detail=str(exc))
 
     @app.get("/records/{record_id}")
-    def get_record(record_id: str, x_acting_party: str = Header(...)):
+    def get_record(record_id: str, principal: str = Depends(get_principal)):
         store = app.state.store
         row = store.get_record(record_id)
         if row is None:
@@ -167,7 +202,7 @@ def create_app(store: Store | None = None) -> FastAPI:
 
         if kind == "ofarm.party.v0.1":
             # a party record is readable by that party alone at this surface
-            if payload["partyId"] != x_acting_party:
+            if payload["partyId"] != principal:
                 deny()
         elif kind not in PUBLIC_ARTIFACT_KINDS:
             farm_scopes = _read_farm_scopes(store, row)
@@ -175,7 +210,7 @@ def create_app(store: Store | None = None) -> FastAPI:
                 deny()  # unresolvable scope never defaults open (Kernel rule 2)
             for farm_ref in farm_scopes:
                 access = app.state.outputs.authority.evaluate_read(
-                    requesting_party_ref=x_acting_party, farm_ref=farm_ref,
+                    requesting_party_ref=principal, farm_ref=farm_ref,
                     artifact_family="OTHER")
                 with store.tx() as cur:  # read decisions are recorded too
                     store.insert_record(cur, access.request_payload)
@@ -188,13 +223,13 @@ def create_app(store: Store | None = None) -> FastAPI:
                 "recordTime": row["record_time"].isoformat(), "payload": payload}
 
     @app.get("/views/passport/{farm_ref}")
-    def passport(farm_ref: str, x_acting_party: str = Header(...)):
-        return app.state.outputs.passport_view(farm_ref, x_acting_party)
+    def passport(farm_ref: str, principal: str = Depends(get_principal)):
+        return app.state.outputs.passport_view(farm_ref, principal)
 
     @app.post("/views/inspection-register/freeze")
-    def freeze(body: FreezeBody, x_acting_party: str = Header(...)):
+    def freeze(body: FreezeBody, principal: str = Depends(get_principal)):
         return app.state.outputs.freeze_inspection_register(
-            body.farmRef, x_acting_party, body.windowStart, body.windowEnd)
+            body.farmRef, principal, body.windowStart, body.windowEnd)
 
     @app.get("/manifest")
     def get_manifest():
