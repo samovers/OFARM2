@@ -4,7 +4,7 @@
   "status": "ACTIVE",
   "ofarmVersion": "RC2.1",
   "platformVersion": "ofarm2-kernel-m1.0",
-  "publishedAt": "2026-06-12T21:17:45.377127Z",
+  "publishedAt": "2026-06-19T04:31:27.238305Z",
   "deploymentScope": {
     "scopeType": "TENANT",
     "scopeRef": "tenant:si.ffs.pilot.demo"
@@ -145,7 +145,7 @@
           "surfaceType": "IMPORT_MAPPING",
           "targetRef": "scheme:si.uvhvvr.ffs-reg.html-surface",
           "direction": "IMPORT",
-          "status": "PARTIAL"
+          "status": "SUPPORTED"
         },
         {
           "surfaceType": "EXPORT_MAPPING",

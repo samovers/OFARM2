@@ -27,6 +27,11 @@ PROFILE_INSTANCE_FILES = [
 
 REGSR_SNAPSHOT_PREFIX = "referencesnapshot:si.uvhvvr.ffs-reg"
 GERK_SNAPSHOT_PREFIX = "referencesnapshot:si.mkgp.gerk-layer"
+# store-backed reference-data family for REGSR parsed product data (M2 P1): the
+# data_family a governed REGSR import tags its parsed data with, and the family
+# ProductRegister loads from the store. ProductRegister is already REGSR-shaped
+# (lookup_by_decision, D9), so this REGSR-specific constant lives with it.
+REGSR_DATA_FAMILY = "si.uvhvvr.ffs-reg"
 
 
 def now_iso() -> str:
@@ -135,21 +140,32 @@ class ProductRegister:
         # + validity dates; regsrCode is a page locator, never identity. The
         # public list surface carries no decision numbers — only detail pages
         # do — so identity-confirmable lookups exist only where detail data
-        # was parsed. That asymmetry is surfaced, never papered over.
-        by_decision = {}
+        # was parsed. That asymmetry is surfaced, never papered over. The
+        # decision number is NOT, on its own, a complete identity, so index a
+        # LIST per decision number; duplicates with differing validity are
+        # never silently collapsed (resolved at lookup time, PR #12 hostile B2).
+        by_decision: dict[str, list] = {}
         for d in artifact.get("productDetails", []):
             for decision in d.get("decisions", []):
                 number = decision.get("decisionNumber")
                 if number:
-                    by_decision[number] = {**d, "decision": decision}
+                    by_decision.setdefault(number, []).append({**d, "decision": decision})
         self._by_snapshot[snapshot_id] = {
             "products": products, "details": details, "byDecision": by_decision,
         }
 
     def load_from_store(self, store) -> None:
-        """Resolve register data for snapshots by their declared
-        sourceArtifactRefs — the snapshot record names its artifact; the
-        runtime never guesses."""
+        """Resolve register data for the REGSR snapshots.
+
+        Two sources, in order: (1) store-backed reference data persisted by a
+        governed import (M2 P1) — so a SCHEDULED-import snapshot's content is
+        resolvable from the store, not only from committed package files; then
+        (2) the committed package-file fallback for shipped snapshots, which
+        names its artifact in sourceArtifactRefs. The runtime never guesses."""
+        for row in store.reference_data(REGSR_DATA_FAMILY):
+            sid = row["snapshot_ref"]
+            if sid not in self._by_snapshot:
+                self.register_artifact(sid, row["payload"])
         for row in store.find_by_kind("ofarm.referencesnapshot.v0.1"):
             payload = row["payload"]
             sid = payload["referenceSnapshotId"]
@@ -161,14 +177,30 @@ class ProductRegister:
                     if path.exists():
                         self.register_artifact(sid, json.loads(path.read_text()))
 
-    def lookup_by_decision(self, snapshot_id: str, decision_number: str) -> dict | None:
-        """Identity-grade lookup (D9): by decision number, where the parsed
-        surface carries it. None means 'not confirmable on this surface',
-        which is NOT the same as 'withdrawn'."""
+    def identities_by_decision(self, snapshot_id: str, decision_number: str) -> list[dict]:
+        """The DISTINCT D9 identities for a decision number — one record per
+        distinct (issued, validUntil) validity window. True duplicates of one
+        authorisation count once; the same decision number with *differing*
+        validity yields more than one (the decision number alone is ambiguous,
+        which callers route to review). Empty when not confirmable on this
+        surface — which is NOT the same as 'withdrawn'."""
         data = self._by_snapshot.get(snapshot_id)
         if not data:
-            return None
-        return data["byDecision"].get(decision_number)
+            return []
+        distinct: dict[tuple, dict] = {}
+        for c in data["byDecision"].get(decision_number, []):
+            dec = c.get("decision", {})
+            distinct.setdefault((dec.get("issued"), dec.get("validUntil")), c)
+        return list(distinct.values())
+
+    def lookup_by_decision(self, snapshot_id: str, decision_number: str) -> dict | None:
+        """Identity-grade lookup (D9): the sole record for a decision number
+        ONLY when that number is an unambiguous identity — exactly one distinct
+        validity window. Zero matches OR an ambiguous decision number (multiple
+        differing validity windows) returns None: ambiguity is never collapsed
+        to a single record, it routes the caller to review."""
+        ids = self.identities_by_decision(snapshot_id, decision_number)
+        return ids[0] if len(ids) == 1 else None
 
     def lookup(self, snapshot_id: str, regsr_code: str) -> dict | None:
         """Locator-grade lookup: regsrCode finds the list row, but a row is

@@ -37,13 +37,18 @@ seed-treatment record rows are not implemented in pilot v1
 (`SI_RECORD_FIELDS.md` §D.1).
 
 **No live registry integration** (D9, PILOT_SI claim limits): the product
-register enters only as dated `ReferenceSnapshot`s from scripted HTML parses;
-the manifest's `IMPORT_MAPPING` surface is declared `PARTIAL` because the
-parser exists and produced the shipped snapshot while scheduled adapter
-cadence is M2. No current-compliance claim follows from any of this. Register
-re-verification is identity-grade only where the snapshot carries decision
-numbers (detail pages); list rows are locators, and locator-only
-re-verification routes to review instead of pretending.
+register enters only as dated `ReferenceSnapshot`s from scripted HTML parses.
+The manifest's `IMPORT_MAPPING` surface is `SUPPORTED` as of M2 P1 — the
+governed snapshot-import mechanism exists and the SI REGSR adapter rides it
+(parse → dated `ReferenceSnapshot` → store-backed reference data → identity
+verify), with the weekly/monthly-floor cadence declared (D19). `SUPPORTED`
+covers that snapshot-import mechanism ONLY: live HTTP fetch, scheduled cron
+execution, production currentness, and current-compliance are NOT claimed and
+remain out of scope (an official-feed switch is outreach-gated to 2027, D13).
+No current-compliance claim follows from any of this. Register re-verification
+is identity-grade only where the snapshot carries decision numbers (detail
+pages); list rows are locators, and locator-only re-verification routes to
+review instead of pretending.
 
 **API authentication posture (M1, declared):** the M1 HTTP surface is a
 **conformance/development surface, not a production-authenticated runtime**.

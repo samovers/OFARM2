@@ -61,12 +61,20 @@ class ImportRunner:
                                 related_refs=[snapshot_id] if snapshot_id else None)
         return {"imported": False, "snapshotRef": None, "problem": problem}
 
-    def run_import(self, parse_result: ParseResult, snapshot_meta: dict) -> dict:
+    def run_import(self, parse_result: ParseResult, snapshot_meta: dict,
+                   *, data_family: str | None = None) -> dict:
         """Import a parsed reference source as a dated `ReferenceSnapshot`.
 
         Returns `{imported, snapshotRef, disposition, problem}`. One serialized
         transaction; on any failure only a gate-log refusal is written and NO
         snapshot (refuse over pretend — the prior in-force snapshot stays current).
+
+        If `data_family` is given AND the parse carries `records`, the parsed
+        DATA is persisted as store-backed reference-data (an index cache, NOT
+        OFARM truth) keyed by (snapshot id, data_family), in the SAME serialized
+        transaction as the snapshot + gate-log entry — so a scheme reader can
+        later resolve the imported snapshot's content from the store. Generic:
+        `records`/`data_family` are opaque here; no scheme literals (M2 P1).
         """
         request_id = mint("import")
         snapshot_id = snapshot_meta.get("referenceSnapshotId")
@@ -135,6 +143,17 @@ class ImportRunner:
             # suffices or add an explicit broad-stale (invalidate_for_sources with
             # a farm/reference-family scope) — see the P1/P2 tickets.
             self.store.insert_record(cur, snapshot)
+            # store-backed reference DATA (index cache, not OFARM truth) so a
+            # scheme reader can resolve this snapshot's content from the store;
+            # same serialized transaction as the snapshot + gate-log (M2 P1).
+            # Opaque here — `records` and `data_family` are passed through.
+            if data_family and parse_result.records is not None:
+                self.store.insert_reference_data(
+                    cur, snapshot_id, data_family, parse_result.records,
+                    artifact_ref=parse_result.artifactRef,
+                    source_digest=parse_result.sourceDigest,
+                    parser_label=snapshot.get("canonicalVersionLabel"),
+                    record_count=parse_result.recordCount)
             self.store.log_gate(
                 cur, request_id, self.GATE, "IMPORTED",
                 rationale=f"{snapshot.get('referenceClass')} snapshot effective "
