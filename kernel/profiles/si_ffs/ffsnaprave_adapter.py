@@ -267,14 +267,19 @@ def attach_inspection_evidence(store, register, snapshot_id, sticker_number, *,
     identity's `inspectionEvidenceRefs` (G1 will validate it resolves to an
     EvidenceRecord). NO match → None: the equipment is recorded WITHOUT inspection
     evidence (advisory, never a silent pass-as-compliant). Idempotent: a second
-    call for the same (sticker, validity) returns the already-captured id."""
+    call for the same (vintage, sticker, validity) returns the already-captured id."""
     inspection = register.match(snapshot_id, sticker_number, validity)
     if inspection is None:
         return None
     v = inspection.get(VALIDITY_FIELD)
-    eid = f"evidence:si.ffs-naprave.{_safe(sticker_number)}.{_safe(v)}"
-    if store.get_record(eid) is not None:
-        return eid
+    # the evidence id is SNAPSHOT-SCOPED — it carries the register vintage, not just
+    # the sticker/validity. The captured record is tied to ONE snapshot (capturedAt,
+    # rawAssetRef, provenance), so a LATER vintage with the same sticker/validity but
+    # different inspection detail must NOT reuse an older vintage's evidence (PR #14
+    # B1). (Same-vintage-different-detail cannot arise — import refuses a conflicting
+    # same-sid re-import.) The vintage is the dated tail of the snapshot id.
+    vintage = snapshot_id.split(f"{FFSNAPRAVE_SNAPSHOT_PREFIX}.", 1)[-1]
+    eid = f"evidence:si.ffs-naprave.{_safe(vintage)}.{_safe(sticker_number)}.{_safe(v)}"
     # capturedAt = the register vintage this extract was taken from (the snapshot's
     # effectiveFrom), NOT 'now' — the extract attests to the register as of that
     # vintage; recordedAt is when we recorded the extract (mirrors the demo's
@@ -298,6 +303,11 @@ def attach_inspection_evidence(store, register, snapshot_id, sticker_number, *,
                  "inspection match in the dated register, not a current-compliance "
                  "claim (D7).",
     }
+    # capture INSIDE the single-writer transaction, re-checking existence UNDER the
+    # advisory lock: concurrent callers serialize, and the loser returns the winner's
+    # committed record idempotently instead of hitting a duplicate key (PR #14 B2).
     with store.serialized_tx() as cur:
+        if store.get_record(eid) is not None:
+            return eid
         store.insert_record(cur, evidence)
     return eid

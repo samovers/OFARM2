@@ -14,11 +14,13 @@ resolution. All sticker / machine / inspection values fictional and format-true 
 """
 from __future__ import annotations
 
+import threading
 import uuid
 
 from kernel import demo
 from kernel.profiles.si_ffs import ffsnaprave_adapter as ffsn
 from kernel.profiles.si_ffs.ffsnaprave_adapter import FFSNAPRAVE_DATA_FAMILY, FFSNapraveRegister
+from kernel.store import Store
 
 
 def uid():
@@ -196,6 +198,64 @@ def test_p3_attach_inspection_evidence_is_idempotent(store):
     b = ffsn.attach_inspection_evidence(store, reg, sid, sticker, validity=validity, captured_by=demo.FARMER)
     assert a == b and a is not None
     assert store.get_record(a) is not None  # exactly one EvidenceRecord, no PK conflict
+
+
+def test_p3_evidence_id_is_snapshot_scoped_no_cross_vintage_reuse(store):
+    # PR #14 B1: a LATER register vintage with the SAME sticker/validity but
+    # different inspection detail must NOT reuse the older vintage's evidence —
+    # the EvidenceRecord is snapshot-specific (capturedAt / rawAssetRef / provenance)
+    sticker, validity = sticker_num(), "2027-12-31"
+    a = _fixture_artifact(file_date="2099-07-10", inspections=[
+        _inspection(sticker=sticker, validity=validity, conformance="DA", DatumPregleda="2025-01-01")])
+    sid_a = ffsn.import_ffsnaprave_snapshot(store, a)["snapshotRef"]
+    b = _fixture_artifact(file_date="2099-07-20", inspections=[
+        _inspection(sticker=sticker, validity=validity, conformance="NE", DatumPregleda="2026-01-01")])
+    sid_b = ffsn.import_ffsnaprave_snapshot(store, b)["snapshotRef"]
+    reg = FFSNapraveRegister()
+    reg.load_from_store(store)
+    eid_a = ffsn.attach_inspection_evidence(store, reg, sid_a, sticker, validity=validity, captured_by=demo.FARMER)
+    eid_b = ffsn.attach_inspection_evidence(store, reg, sid_b, sticker, validity=validity, captured_by=demo.FARMER)
+    assert eid_a != eid_b, "evidence id must be snapshot-scoped — no cross-vintage reuse"
+    # each evidence record points at ITS OWN snapshot vintage, not a stale one
+    assert store.get_record(eid_a)["payload"]["rawAssetRef"] == sid_a
+    assert store.get_record(eid_b)["payload"]["rawAssetRef"] == sid_b
+    assert store.get_record(eid_a)["payload"]["capturedAt"] == "2099-07-10T00:00:00Z"
+    assert store.get_record(eid_b)["payload"]["capturedAt"] == "2099-07-20T00:00:00Z"
+
+
+def test_p3_attach_inspection_evidence_is_race_safe(store):
+    # PR #14 B2: the existence check is INSIDE the single-writer advisory-locked
+    # transaction, so two concurrent callers (separate connections) serialize and
+    # the loser returns the winner's committed record idempotently — never a
+    # duplicate-key error. With the broken pre-lock check this races and crashes.
+    sticker, validity = sticker_num(), "2027-12-31"
+    art = _fixture_artifact(file_date="2099-07-01",
+                            inspections=[_inspection(sticker=sticker, validity=validity)])
+    sid = ffsn.import_ffsnaprave_snapshot(store, art)["snapshotRef"]
+    barrier = threading.Barrier(2)
+    results, errors = [], []
+
+    def worker():
+        s = Store()
+        try:
+            reg = FFSNapraveRegister()
+            reg.load_from_store(s)
+            barrier.wait(timeout=10)            # both contend on attach together
+            results.append(ffsn.attach_inspection_evidence(
+                s, reg, sid, sticker, validity=validity, captured_by=demo.FARMER))
+        except Exception as exc:                # noqa: BLE001
+            errors.append(repr(exc))
+        finally:
+            s.close()
+
+    threads = [threading.Thread(target=worker) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=20)
+    assert not errors, f"idempotent attach must not raise under concurrency: {errors}"
+    assert len(results) == 2 and results[0] == results[1] and results[0] is not None
+    assert store.get_record(results[0]) is not None   # exactly one EvidenceRecord
 
 
 # ---------------------------------------------------------------------------
