@@ -29,6 +29,7 @@ from __future__ import annotations
 
 from ... import config
 from ...context import GERK_SNAPSHOT_PREFIX, mint, now_iso
+from ...problems import runtime_problem
 from ...verification import (CONFIRM, LOCATOR, NONE, REVIEW, LookupResult,
                              ReferenceResolver)
 from . import regsr_adapter as regsr
@@ -47,15 +48,46 @@ MKGP_REF = "party:si.mkgp"
 UVHVVR_REF = "party:si.uvhvvr"
 
 
+def _evidence_ok(store, ref) -> bool:
+    """The caller-supplied evidence ref must resolve to an actual EvidenceRecord —
+    a binding may not cite fabricated captured evidence (PR #15 hostile B2). A
+    generated verification-trace ref is separately trustworthy (G3 inserted it)."""
+    rec = store.get_record(ref)
+    return rec is not None and rec["record_kind"] == "ofarm.evidencerecord.v0.1"
+
+
+def _evidence_refused(scheme, evidence_ref) -> dict:
+    return {"verdict": "REFUSE", "grade": NONE, "binding": None, "trace": None,
+            "problem": runtime_problem(
+                "EVIDENCE_REFERENCE_UNAVAILABLE", "Binding evidence unresolved",
+                f"{scheme} binding evidence_ref {evidence_ref!r} is not an EvidenceRecord; "
+                "a binding may not cite fabricated captured evidence"),
+            "advisory": None}
+
+
+def _scheme_version(store, snapshot_ref):
+    """The reference-snapshot vintage a binding was resolved against — recorded as
+    externalScheme.schemeVersion (the profile requires it for high-consequence
+    bindings, PR #15 hostile B1). None when no snapshot is in force."""
+    if not snapshot_ref:
+        return None
+    rec = store.get_record(snapshot_ref)
+    return rec["payload"].get("canonicalVersionLabel") if rec else None
+
+
 def _binding(*, role, subject_type, subject_ref, scheme_ref, scheme_name, scheme_role,
              issuer, captured_label, state, mapping, evidence_refs, created_by,
-             value_extra=None, snapshot_refs=None, may_promote, hcu) -> dict:
+             value_extra=None, snapshot_refs=None, scheme_version=None, may_promote, hcu) -> dict:
     """Build a contract-valid `AgronomicIdentityBinding` reflecting a resolution
     outcome. `mustNotPromoteTo OFARM_CORE_MEANING` always — a profile binding never
     mutates Core meaning (D6, packs-constrain-bindings-only)."""
     binding_value = {"capturedLabel": captured_label, "mappingRelation": mapping}
     if value_extra:
         binding_value.update(value_extra)
+    external_scheme = {"schemeRef": scheme_ref, "schemeName": scheme_name,
+                       "schemeRole": scheme_role, "issuerRef": issuer, "jurisdiction": "SI"}
+    if scheme_version:
+        external_scheme["schemeVersion"] = scheme_version
     binding = {
         "schemaVersion": "ofarm.agronomicidentitybinding.v0.1",
         "agronomicIdentityBindingId": mint("binding"),
@@ -64,9 +96,7 @@ def _binding(*, role, subject_type, subject_ref, scheme_ref, scheme_name, scheme
         "createdAt": now_iso(),
         "createdByPartyRef": created_by,
         "localSubject": {"subjectType": subject_type, "subjectRef": subject_ref},
-        "externalScheme": {"schemeRef": scheme_ref, "schemeName": scheme_name,
-                           "schemeRole": scheme_role, "issuerRef": issuer,
-                           "jurisdiction": "SI"},
+        "externalScheme": external_scheme,
         "bindingValue": binding_value,
         "evidenceRefs": list(evidence_refs),
         "promotionBoundary": {"highConsequenceUse": hcu,
@@ -97,11 +127,14 @@ def _locator_lookup(find):
 def resolve_product_authorisation(store, cur, product_register, decision_number,
                                   subject_ref, *, created_by, evidence_ref, issued=None,
                                   valid_until=None, as_of=None) -> dict:
+    if not _evidence_ok(store, evidence_ref):
+        return _evidence_refused(REGSR_SCHEME_REF, evidence_ref)
     res = regsr.verify_product_authorisation(
         store, cur, product_register, decision_number, issued=issued,
         valid_until=valid_until, as_of=as_of, created_by=created_by)
     confirmed = res["verdict"] == CONFIRM
     trace = res.get("trace")
+    snapshot_ref = res.get("snapshotRef")
     # cite the verification trace when one was produced (CONFIRM / REVIEW), plus the
     # captured-identifier evidence — so a no-in-force-snapshot REFUSE still yields a
     # contract-valid UNRESOLVED binding (committable as draft), never an empty evidence set.
@@ -114,8 +147,8 @@ def resolve_product_authorisation(store, cur, product_register, decision_number,
         state="VERIFIED" if confirmed else "PROVISIONAL",
         mapping="EXACT" if confirmed else "UNRESOLVED",
         value_extra={"registrationRef": decision_number}, created_by=created_by,
-        evidence_refs=evidence_refs, snapshot_refs=[res["snapshotRef"]] if res.get("snapshotRef") else None,
-        may_promote=confirmed,
+        evidence_refs=evidence_refs, snapshot_refs=[snapshot_ref] if snapshot_ref else None,
+        scheme_version=_scheme_version(store, snapshot_ref), may_promote=confirmed,
         hcu="ALLOWED_WHEN_PROFILE_AND_EVIDENCE_PASS" if confirmed else "REVIEW_REQUIRED")
     return {"verdict": res["verdict"], "grade": res["grade"], "binding": binding,
             "trace": trace, "problem": res.get("problem"), "advisory": None}
@@ -127,6 +160,8 @@ def resolve_product_authorisation(store, cur, product_register, decision_number,
 
 def resolve_parcel(store, cur, gerk_layer, gerk_pid, subject_ref, *, created_by,
                    evidence_ref, as_of=None) -> dict:
+    if not _evidence_ok(store, evidence_ref):
+        return _evidence_refused(GERK_SCHEME_REF, evidence_ref)
     res = ReferenceResolver(store).verify(
         cur, query_value=gerk_pid, snapshot_prefix=GERK_SNAPSHOT_PREFIX,
         lookup=_locator_lookup(gerk_layer.lookup),
@@ -144,6 +179,7 @@ def resolve_parcel(store, cur, gerk_layer, gerk_pid, subject_ref, *, created_by,
         value_extra={"code": gerk_pid}, created_by=created_by,
         evidence_refs=([trace["externalRegistryVerificationTraceId"]] if trace else []) + [evidence_ref],
         snapshot_refs=[res["snapshotRef"]] if res.get("snapshotRef") else None,
+        scheme_version=_scheme_version(store, res.get("snapshotRef")),
         may_promote=False, hcu="REVIEW_REQUIRED")
     return {"verdict": res["verdict"], "grade": res["grade"], "binding": binding,
             "trace": trace, "problem": res.get("problem"),
@@ -163,16 +199,29 @@ def _ffsnaprave_lookup(register, validity):
     explicit in the trace (PR #15 B2). Locator-only (existence, not owner-binding)."""
     def lookup(snapshot_id, sticker) -> LookupResult:
         rec = register.match(snapshot_id, sticker, validity)
-        if rec is None:
-            return LookupResult(grade=NONE, candidate_count=0, status_observed="NOT_FOUND")
-        v = rec.get(VALIDITY_FIELD)
-        return LookupResult(grade=LOCATOR, candidate_count=1, status_observed="UNKNOWN",
-                            dates_observed={"statusEffectiveUntil": f"{v}T00:00:00Z"} if v else None)
+        if rec is not None:
+            v = rec.get(VALIDITY_FIELD)
+            return LookupResult(grade=LOCATOR, candidate_count=1, status_observed="UNKNOWN",
+                                dates_observed={"statusEffectiveUntil": f"{v}T00:00:00Z"} if v else None)
+        # no exact match: distinguish ABSENT from AMBIGUOUS (sticker present with
+        # multiple validity windows and no validity supplied to disambiguate) — the
+        # latter is "exists but supply VeljavnostZnaka", not "not in the snapshot"
+        # (PR #15 hostile B3).
+        windows = register.validity_windows(snapshot_id, sticker)
+        if validity is None and len(windows) > 1:
+            return LookupResult(
+                grade=NONE, candidate_count=len(windows), status_observed="MULTIPLE_CANDIDATES",
+                discrepancies=[{"discrepancyType": "OTHER", "severity": "REVIEW_REQUIRED",
+                                "note": f"sticker {sticker} has {len(windows)} validity windows; "
+                                        "supply VeljavnostZnaka to disambiguate the composite key"}])
+        return LookupResult(grade=NONE, candidate_count=0, status_observed="NOT_FOUND")
     return lookup
 
 
 def resolve_equipment(store, cur, ffsnaprave_register, sticker_number, subject_ref, *,
                       created_by, evidence_ref, validity=None, as_of=None) -> dict:
+    if not _evidence_ok(store, evidence_ref):
+        return _evidence_refused(FFSNAPRAVE_SCHEME_REF, evidence_ref)
     res = ReferenceResolver(store).verify(
         cur, query_value=sticker_number, snapshot_prefix=FFSNAPRAVE_SNAPSHOT_PREFIX,
         lookup=_ffsnaprave_lookup(ffsnaprave_register, validity),
@@ -199,6 +248,7 @@ def resolve_equipment(store, cur, ffsnaprave_register, sticker_number, subject_r
         created_by=created_by,
         evidence_refs=([trace["externalRegistryVerificationTraceId"]] if trace else []) + [evidence_ref],
         snapshot_refs=[res["snapshotRef"]] if res.get("snapshotRef") else None,
+        scheme_version=_scheme_version(store, res.get("snapshotRef")),
         may_promote=False, hcu="REVIEW_REQUIRED")
     return {"verdict": res["verdict"], "grade": res["grade"], "binding": binding,
             "trace": trace, "problem": res.get("problem"), "resolvedValidity": resolved_validity,
@@ -210,11 +260,15 @@ def resolve_equipment(store, cur, ffsnaprave_register, sticker_number, subject_r
 # KMG-MID (Farm holding) & FFS-IZKAZNICA (operator) — NO register: UNRESOLVED
 # ---------------------------------------------------------------------------
 
-def _unresolved(*, role_scheme_ref, scheme_name, issuer, subject_ref, captured_label,
-                evidence_ref, created_by, advisory) -> dict:
+def _unresolved(store, *, scheme, role_scheme_ref, scheme_name, issuer, subject_ref,
+                captured_label, evidence_ref, created_by, advisory) -> dict:
     """A captured identifier with NO lookup register: held as evidence, never
     verified identity (D6). UNRESOLVED + advisory; committable as draft, promotion
-    requires review."""
+    requires review. The captured evidence_ref MUST be a real EvidenceRecord — for
+    these schemes it is the ONLY evidence, so a fabricated ref must yield no binding
+    (PR #15 hostile B2)."""
+    if not _evidence_ok(store, evidence_ref):
+        return _evidence_refused(role_scheme_ref, evidence_ref)
     binding = _binding(
         role="OTHER", subject_type="OTHER", subject_ref=subject_ref,
         scheme_ref=role_scheme_ref, scheme_name=scheme_name,
@@ -226,23 +280,23 @@ def _unresolved(*, role_scheme_ref, scheme_name, issuer, subject_ref, captured_l
             "problem": None, "advisory": advisory}
 
 
-def resolve_holding(kmg_mid, subject_ref, *, evidence_ref, created_by) -> dict:
+def resolve_holding(store, kmg_mid, subject_ref, *, evidence_ref, created_by) -> dict:
     """Farm holding identifier (SI:KMG-MID). No public KMG-MID lookup register
     exists; the holding number is captured at onboarding as evidence (D6)."""
     return _unresolved(
-        role_scheme_ref=KMG_MID_SCHEME_REF, scheme_name="KMG-MID holding number",
-        issuer=MKGP_REF, subject_ref=subject_ref, captured_label=kmg_mid,
-        evidence_ref=evidence_ref, created_by=created_by,
+        store, scheme="KMG-MID", role_scheme_ref=KMG_MID_SCHEME_REF,
+        scheme_name="KMG-MID holding number", issuer=MKGP_REF, subject_ref=subject_ref,
+        captured_label=kmg_mid, evidence_ref=evidence_ref, created_by=created_by,
         advisory="no KMG-MID lookup register exists; the holding number is captured "
                  "evidence, not verified identity (D6) — UNRESOLVED, advisory")
 
 
-def resolve_operator(izkaznica_number, subject_ref, *, evidence_ref, created_by) -> dict:
+def resolve_operator(store, izkaznica_number, subject_ref, *, evidence_ref, created_by) -> dict:
     """Operator training-card identifier (SI:FFS-IZKAZNICA). No public lookup
     register; the card number + card photo are captured evidence (D6)."""
     return _unresolved(
-        role_scheme_ref=FFS_IZKAZNICA_SCHEME_REF, scheme_name="FFS training-card number",
-        issuer=UVHVVR_REF, subject_ref=subject_ref, captured_label=izkaznica_number,
-        evidence_ref=evidence_ref, created_by=created_by,
+        store, scheme="FFS-IZKAZNICA", role_scheme_ref=FFS_IZKAZNICA_SCHEME_REF,
+        scheme_name="FFS training-card number", issuer=UVHVVR_REF, subject_ref=subject_ref,
+        captured_label=izkaznica_number, evidence_ref=evidence_ref, created_by=created_by,
         advisory="no FFS-IZKAZNICA lookup register exists; the card number is captured "
                  "evidence, not verified identity (D6) — UNRESOLVED, advisory")

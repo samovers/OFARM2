@@ -207,7 +207,7 @@ def test_p4_ffsnaprave_no_match_records_no_fabricated_validity(store):
 # ---------------------------------------------------------------------------
 
 def test_p4_kmg_mid_holding_is_unresolved_advisory(store):
-    r = sib.resolve_holding("100000001", "farm:demo.kmetija.a",
+    r = sib.resolve_holding(store, "100000001", "farm:demo.kmetija.a",
                             evidence_ref=demo.ONBOARDING_EVIDENCE, created_by=demo.FARMER)
     assert r["verdict"] == "UNRESOLVED" and r["advisory"] and "no KMG-MID" in r["advisory"]
     b = r["binding"]
@@ -221,7 +221,7 @@ def test_p4_kmg_mid_holding_is_unresolved_advisory(store):
 
 
 def test_p4_ffs_izkaznica_operator_is_unresolved_advisory(store):
-    r = sib.resolve_operator("IZK-000123", "party:demo.farmer.one",
+    r = sib.resolve_operator(store, "IZK-000123", "party:demo.farmer.one",
                              evidence_ref=demo.ONBOARDING_EVIDENCE, created_by=demo.FARMER)
     assert r["verdict"] == "UNRESOLVED" and r["advisory"] and "FFS-IZKAZNICA" in r["advisory"]
     b = r["binding"]
@@ -329,10 +329,91 @@ def test_p4_only_identity_grade_confirm_yields_verified(store):
                                                       "input:x", created_by=demo.FARMER,
                                                       evidence_ref=demo.ONBOARDING_EVIDENCE,
                                                       as_of="2099-04-05T12:00:00Z")
-    holding = sib.resolve_holding("100000002", "farm:y", evidence_ref=demo.ONBOARDING_EVIDENCE,
+    holding = sib.resolve_holding(store, "100000002", "farm:y", evidence_ref=demo.ONBOARDING_EVIDENCE,
                                   created_by=demo.FARMER)
     assert confirmed["binding"]["bindingState"] == "VERIFIED"
     assert holding["binding"]["bindingState"] != "VERIFIED"
     # neither may mutate Core meaning
     for r in (confirmed, holding):
         assert r["binding"]["promotionBoundary"]["mustNotPromoteTo"] == ["OFARM_CORE_MEANING"]
+
+
+# ---------------------------------------------------------------------------
+# (5) hostile-review fixes: schemeVersion on VERIFIED bindings; fake evidence
+# refused; ambiguous sticker surfaced (not NOT_FOUND)
+# ---------------------------------------------------------------------------
+
+def test_p4_verified_regsr_binding_records_scheme_version(store):
+    # PR #15 hostile B1: a high-consequence VERIFIED binding must carry
+    # externalScheme.schemeVersion (the register vintage it was verified against).
+    decision = f"U9{uid()[:4]}-50/26/v"
+    _regsr_snapshot(store, "2099-04-10", decision)
+    pr = ProductRegister()
+    pr.load_from_store(store)
+    with store.serialized_tx() as cur:
+        r = sib.resolve_product_authorisation(store, cur, pr, decision, "resource:v",
+                                              created_by=demo.FARMER,
+                                              evidence_ref=demo.ONBOARDING_EVIDENCE,
+                                              as_of="2099-04-10T12:00:00Z")
+        store.insert_record(cur, r["binding"])
+    b = r["binding"]
+    assert b["bindingState"] == "VERIFIED" and b["promotionBoundary"]["maySupportPromotion"] is True
+    sv = b["externalScheme"].get("schemeVersion")
+    assert sv and "2099-04-10" in sv, "VERIFIED binding must record the register vintage as schemeVersion"
+
+
+def test_p4_fake_evidence_ref_produces_no_binding(store):
+    # PR #15 hostile B2: a binding may not cite fabricated captured evidence — a ref
+    # that does not resolve to an EvidenceRecord yields NO binding (nothing attachable).
+    decision = f"U9{uid()[:4]}-50/26/f"
+    _regsr_snapshot(store, "2099-04-11", decision)
+    pr = ProductRegister()
+    pr.load_from_store(store)
+    with store.serialized_tx() as cur:
+        r = sib.resolve_product_authorisation(store, cur, pr, decision, "resource:f",
+                                              created_by=demo.FARMER,
+                                              evidence_ref="evidence:does-not-exist",
+                                              as_of="2099-04-11T12:00:00Z")
+    assert r["binding"] is None and r["verdict"] == REFUSE
+    assert r["problem"]["reasonCode"] == "EVIDENCE_REFERENCE_UNAVAILABLE"
+    # KMG-MID: the captured identifier is the ONLY evidence -> fake -> no binding
+    h = sib.resolve_holding(store, "100000003", "farm:f", evidence_ref="evidence:nope",
+                            created_by=demo.FARMER)
+    assert h["binding"] is None and h["problem"]["reasonCode"] == "EVIDENCE_REFERENCE_UNAVAILABLE"
+    # a ref that resolves but is NOT an EvidenceRecord (a snapshot) is also rejected
+    sid = _regsr_snapshot(store, "2099-04-12", f"U9{uid()[:4]}-50/26/x")
+    h2 = sib.resolve_holding(store, "100000004", "farm:f2", evidence_ref=sid, created_by=demo.FARMER)
+    assert h2["binding"] is None
+
+
+def test_p4_ffsnaprave_ambiguous_sticker_surfaces_multiple_candidates(store):
+    # PR #15 hostile B3: a sticker with multiple validity windows resolved WITHOUT a
+    # validity surfaces ambiguity (MULTIPLE_CANDIDATES + review discrepancy), not NOT_FOUND.
+    sticker = str(uuid.uuid4().int)[:6]
+    art = {
+        "snapshotKind": "SI_UVHVVR_FFS_NAPRAVE_PARSE", "fileDate": "2099-04-13",
+        "canonicalVersionLabel": "ffsn-amb", "keyFieldsPresent": True,
+        "attributesAvailable": list(ffsn.RETAINED_FIELDS), "inspectionCount": 2, "rowProblems": [],
+        "inspections": [
+            {"NapravaID": f"N{uid()[:5]}", "StevilkaZnaka": sticker, "VeljavnostZnaka": "2025-12-31",
+             "DatumPregleda": "2023-06-15", "SkladnostObPregledu": "DA"},
+            {"NapravaID": f"N{uid()[:5]}", "StevilkaZnaka": sticker, "VeljavnostZnaka": "2027-12-31",
+             "DatumPregleda": "2025-06-15", "SkladnostObPregledu": "DA"}],
+        "inputs": [{"file": "f.txt", "digest": f"sha256:{uid()}cafe"}]}
+    ffsn.import_ffsnaprave_snapshot(store, art)
+    reg = FFSNapraveRegister()
+    reg.load_from_store(store)
+    with store.serialized_tx() as cur:
+        r = sib.resolve_equipment(store, cur, reg, sticker, "equip:amb", created_by=demo.FARMER,
+                                  evidence_ref=demo.ONBOARDING_EVIDENCE, validity=None,
+                                  as_of="2099-04-13T12:00:00Z")
+    t = r["trace"]
+    assert r["verdict"] == REVIEW
+    assert t["candidateCount"] == 2 and t["statusObserved"] == "MULTIPLE_CANDIDATES"
+    assert t["discrepancies"] and "disambiguate" in t["discrepancies"][0]["note"]
+    # contrast: a truly absent sticker is NOT_FOUND (candidateCount 0)
+    with store.serialized_tx() as cur:
+        r2 = sib.resolve_equipment(store, cur, reg, "0000000", "equip:absent", created_by=demo.FARMER,
+                                   evidence_ref=demo.ONBOARDING_EVIDENCE, validity=None,
+                                   as_of="2099-04-13T12:00:00Z")
+    assert r2["trace"]["candidateCount"] == 0 and r2["trace"]["statusObserved"] == "NOT_FOUND"

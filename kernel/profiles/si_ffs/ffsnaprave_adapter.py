@@ -252,6 +252,16 @@ class FFSNapraveRegister:
             if sid not in self._by_snapshot:
                 self.register_artifact(sid, row["payload"])
 
+    def validity_windows(self, snapshot_id: str, sticker_number: str) -> list:
+        """The distinct VeljavnostZnaka windows recorded for a sticker in a snapshot.
+        Empty = the sticker is absent; more than one = the composite key is ambiguous
+        without a supplied validity (a caller must disambiguate, never collapse)."""
+        data = self._by_snapshot.get(snapshot_id)
+        if not data:
+            return []
+        return sorted({r.get(VALIDITY_FIELD) for r in data["bySticker"].get(sticker_number, [])
+                       if r.get(VALIDITY_FIELD)})
+
     def match(self, snapshot_id: str, sticker_number: str, validity: str | None = None) -> dict | None:
         """The inspection record for a sticker in a dated snapshot. With `validity`
         the composite key resolves exactly; without it, a sticker that resolves to
