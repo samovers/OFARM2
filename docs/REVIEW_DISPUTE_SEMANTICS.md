@@ -95,6 +95,23 @@ the authoritative, contract-bound governance record is the emitted
 `ReviewDecision`. Adding `reviewAction` is therefore **not a contract change**,
 exactly as the existing review fields are not.
 
+**`reviewAction` is validated fail-closed (never a silent accept).** G5-2
+validates the field at ingress against the recognized set:
+
+| `reviewAction` | Disposition |
+|---|---|
+| absent | legacy `REVIEW_ACCEPT` (back-compat) |
+| `REVIEW_ACCEPT` | accept path |
+| `REVIEW_REJECT_OR_CONTEST` (+ reject outcome) | reject path |
+| present but **unrecognized/malformed** | **governed refusal** |
+
+A present-but-invalid value **never falls through to accept**. The refusal is
+principled default-deny (Kernel rule 2): an unrecognized verb resolves to **no
+authority action** in the reviewAction-keyed selector (§3.2), so no grant can
+authorize it — the AUTHORITY gate denies (`AUTHORITY_DENIED`, outcome
+`RETAIN_DRAFT`). `REVIEW_SUPERSEDE` / `REVIEW_REQUEST` are likewise not wired in
+G5 and so refuse the same way until a ticket implements them.
+
 ### 3.2 Authority (distinct action — REVIEW_REJECT_OR_CONTEST)
 
 REJECT is authorized by the **`REVIEW_REJECT_OR_CONTEST`** action class, a
@@ -153,7 +170,13 @@ that exist to make a *safe promotion* are irrelevant to it. Concretely:
   (`kernel/policy.py:231-234`, `NEEDS_EVIDENCE_CODES`) requires **new** durable
   evidence to overcome the insufficiency; declining requires only a reason. A
   reviewer rejecting *because* evidence is missing should not have to supply
-  evidence to say so.
+  evidence to say so. **But evidence that *is* supplied is validated exactly as
+  acceptance validates it** (`kernel/validators.py:336-342`): every
+  `reviewEvidenceRefs[]` member must resolve to a record of kind
+  `ofarm.evidencerecord.v0.1`; an unresolved or wrong-kind ref **refuses the
+  rejection** (`FAIL_REFERENCE_RESOLUTION`), and an `EVIDENCE` edge is emitted
+  **only** for a validated ref. Optional means "may be omitted," never
+  "accepted unchecked."
 - An **`EvidenceSufficiencyCase`** stored when the claim was queued (if it was
   routed for a `NEEDS_EVIDENCE` reason — `kernel/emission.py:_store_case`) is
   **left unchanged** (append-only); the rejection is recorded solely in the
@@ -231,6 +254,20 @@ unambiguous signal of a terminal decline is the `ReviewDecision`
 `finalOutcome` alone. The **target assertion's original queuing `PromotionTrace`**
 (`finalOutcome = "REQUIRE_REVIEW"`, written when it was queued) is unchanged —
 append-only; the REJECT is a separate commit with its own trace.
+
+**Reachability / receipt (D3 — every authoritative record reachable from exactly
+one `PromotionTrace`).** The rejection `ReviewDecision` is **not** a side record:
+it flows through the *same generic receipt machinery* acceptance uses. G5-2's
+`emit_queue_rejection` registers the decision in `ctx.emitted["reviews"]` (as
+acceptance does, `kernel/emission.py:263`); the generic `PromotionTraceWriter`
+(`kernel/emission.py:341-352`) then — with no rejection-specific code —
+(a) lists it in `PromotionTrace.emittedReviewDecisionRefs`, (b) adds its
+`PROMOTION_EMITS` reachability edge from the trace, and (c) returns it in the
+`CommitIngressResult` (whose `promotionTraceRef` points at that trace). A G5-2
+test must assert this path: the rejection `ReviewDecision` appears in the
+result's `emittedReviewDecisionRefs`, in the trace, and carries its
+`PROMOTION_EMITS` edge. (This is *why* the rejection must register in
+`ctx.emitted["reviews"]` and not be inserted out-of-band.)
 
 ### 3.7 Effect on materialization (none)
 
@@ -363,10 +400,18 @@ procedural branch, no scheme/profile literal):
   (`:229` generic AUTHORITY gate, `:500` ReviewPromotionGate check) instead of
   the hardcoded `REVIEW_ACCEPT`; in the ReviewPromotionGate, dispatch
   `reviewAction` → `emit_queue_acceptance` | `emit_queue_rejection`.
-- `kernel/validators.py` — apply the **target-validity** guards (§3.3) and the
-  non-empty `reviewRationale` check for the reject branch; do **not** apply the
-  acceptance-only promotion guards (`ACCEPTANCE_BY_ASSERTION_TYPE`, D18
-  structure-supersession).
+- `kernel/validators.py` — apply the **target-validity** guards (§3.3), the
+  non-empty `reviewRationale` check, and the **evidence-ref validation**
+  (every supplied `reviewEvidenceRefs[]` resolves to `ofarm.evidencerecord.v0.1`,
+  `:336-342`) for the reject branch; do **not** apply the acceptance-only
+  promotion guards (`ACCEPTANCE_BY_ASSERTION_TYPE`, D18 structure-supersession).
+- `kernel/stages.py` (IngressNormalizer) — **validate `reviewAction` fail-closed**
+  (§3.1): absent ⇒ `REVIEW_ACCEPT`; a present-but-unrecognized value is a
+  governed refusal (default-deny), never a silent accept.
+- receipt is **free**: because `emit_queue_rejection` registers the
+  `ReviewDecision` in `ctx.emitted["reviews"]`, the generic `PromotionTraceWriter`
+  already wires `emittedReviewDecisionRefs`, the `PROMOTION_EMITS` edge, and the
+  `CommitIngressResult` (§3.6) — no new machinery.
 - `kernel/api.py` — the review surface passes `reviewAction` (default
   `REVIEW_ACCEPT`).
 
@@ -380,7 +425,15 @@ procedural branch, no scheme/profile literal):
 3. Authority: a principal lacking `REVIEW_REJECT_OR_CONTEST` is denied even if it
    holds `REVIEW_ACCEPT` (distinct, non-inheriting action).
 4. A REJECT with an empty/missing rationale is refused; a non-existent,
-   wrong-kind, or cross-farm target is refused (validity guards).
+   wrong-kind, or cross-farm target is refused (validity guards); a supplied
+   `reviewEvidenceRefs` member that does not resolve to an `EvidenceRecord`
+   refuses the rejection, and an EVIDENCE edge is written only for a validated
+   ref.
+4a. A present-but-unrecognized `reviewAction` is refused (governed default-deny),
+   never silently treated as accept; an absent `reviewAction` still accepts.
+4b. The rejection `ReviewDecision` is reachable as a receipt: it appears in the
+   `CommitIngressResult.emittedReviewDecisionRefs`, in the `PromotionTrace`, and
+   carries its `PROMOTION_EMITS` edge (D3).
 5. A REJECT of a queued claim with **no acceptance path** (an `assertionType`
    outside `ACCEPTANCE_BY_ASSERTION_TYPE`) still succeeds — REJECT is not
    type-gated.
