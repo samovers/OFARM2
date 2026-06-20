@@ -163,6 +163,26 @@ def test_asof_incoherent_artifact_activation_pairing_refuses(fresh_env):
     assert r["problems"][0]["reasonCode"] == "MATERIALIZATION_INVALID"
 
 
+def test_asof_artifact_without_source_activation_refuses(fresh_env):
+    # an ActiveArtifactSet that records NO source PackActivationSet (empty list)
+    # cannot be reconciled with any in-force activation: refuse rather than pair
+    # on unverifiable provenance. The empty list is falsy and must not silently
+    # skip the source-inclusion check. Built coherent with g0 in every OTHER way
+    # (same packs/profiles, references g0's code-binding profile) so the refusal
+    # isolates the empty-source check, not a coincidental other mismatch.
+    store, _, _ = fresh_env
+    g0 = _generation(store, at="2025-02-01T00:00:00Z")
+    art = next(dict(r["payload"]) for r in store.find_by_kind("ofarm.activeartifactset.v0.1")
+               if r["payload"]["activeArtifactSetId"] == g0["artifact"])
+    art["activeArtifactSetId"] = f"{art['activeArtifactSetId']}.nosrc.{uid()}"
+    art["generatedAt"] = "2025-06-01T00:00:00Z"   # latest -> selected at 2025-07
+    art["sourcePackActivationSetRefs"] = []
+    with store.tx() as cur:
+        store.insert_record(cur, art)
+    with pytest.raises(ContextNotReconstructible, match="records no source"):
+        _asof(store, "2025-07-01T00:00:00Z")
+
+
 def test_asof_ambiguous_latest_vintage_refuses(fresh_env):
     # two activation vintages share the latest effective timestamp -> cannot pick
     # -> refuse. A coherent base generation keeps the other families in force, so

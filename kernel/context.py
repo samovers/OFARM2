@@ -335,10 +335,16 @@ class ContextAssembler:
         when = bound.isoformat()
         act_id = activation_set["packActivationSetId"]
         source = artifact_set.get("sourcePackActivationSetRefs")
-        if source and act_id not in source:
+        # The ActiveArtifactSet is derived FROM activation(s); the in-force one
+        # must record the in-force activation as a source. A missing or EMPTY
+        # source list records no lineage and so cannot be reconciled with any
+        # activation — refuse rather than pair on unverifiable provenance (an
+        # empty/None list is falsy and must NOT silently skip the inclusion test).
+        if not source or act_id not in source:
+            recorded = f"was generated from {source}" if source else "records no source PackActivationSet"
             raise ContextNotReconstructible(
-                f"AS_OF spine at {when} is incoherent: the in-force ActiveArtifactSet was generated "
-                f"from {source}, not the in-force PackActivationSet {act_id!r} — refusing to "
+                f"AS_OF spine at {when} is incoherent: the in-force ActiveArtifactSet {recorded}, "
+                f"so it cannot be paired with the in-force PackActivationSet {act_id!r} — refusing to "
                 "synthesize a pack/artifact context that never existed together")
         if set(artifact_set.get("activePackRefs", [])) != set(activation_set.get("activePackRefs", [])):
             raise ContextNotReconstructible(
