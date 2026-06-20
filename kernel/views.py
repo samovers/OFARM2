@@ -112,12 +112,30 @@ class OutputGenerator:
             # member (an unresolved dispute is on an in-force consequence)
             if self.store.edges_from(cid, "DISPUTE") and not self.store.is_superseded(cid):
                 statuses.add("OPEN_DISPUTE" if cid in presented else "DISPUTED_BASIS")
-            for e in self.store.edges_from(cid, "LINEAGE_SUPERSEDES"):
-                if self.store.edges_from(e["dst_record_id"], "DISPUTE"):
-                    statuses.add("CORRECTED")
+            if self._lineage_has_dispute(cid):
+                statuses.add("CORRECTED")
         if len(statuses) >= 2:
             return "MIXED"
         return statuses.pop() if statuses else "NONE"
+
+    def _lineage_has_dispute(self, cid: str) -> bool:
+        """True if ANY superseded predecessor in cid's `LINEAGE_SUPERSEDES` chain
+        carries a `DISPUTE` edge — walked TRANSITIVELY, because a correction may
+        itself be corrected (C1 disputed ← C2 ← C3: C3's current basis member
+        descends from C1's resolved dispute, two hops back). A visited set guards
+        against cycles."""
+        seen: set[str] = set()
+        stack = [e["dst_record_id"] for e in self.store.edges_from(cid, "LINEAGE_SUPERSEDES")]
+        while stack:
+            pred = stack.pop()
+            if pred in seen:
+                continue
+            seen.add(pred)
+            if self.store.edges_from(pred, "DISPUTE"):
+                return True
+            stack.extend(e["dst_record_id"]
+                         for e in self.store.edges_from(pred, "LINEAGE_SUPERSEDES"))
+        return False
 
     def _pending_claims(self, farm_ref: str) -> list[dict]:
         rows = self.store.find_by_kind("ofarm.assertionrecord.v0.1")

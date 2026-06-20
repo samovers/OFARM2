@@ -534,3 +534,30 @@ def test_contest_decision_is_reachable_as_a_receipt(store, pipeline):
     emits = [e["dst_record_id"]
              for e in store.edges_from(trace["promotionTraceId"], "PROMOTION_EMITS")]
     assert review_id in emits
+
+
+def test_contest_corrected_survives_a_multi_hop_correction_chain(fresh_env):
+    # PR #20 hostile: the CORRECTED lineage walk must be TRANSITIVE. C1 contested
+    # -> C2 supersedes C1 -> C3 supersedes C2. The current basis holds C3, whose
+    # immediate predecessor C2 has no DISPUTE edge; C1 (two hops back) does. A
+    # one-hop walk would wrongly read NONE and hide that C3 descends from a
+    # resolved dispute.
+    store, pipeline, outputs = fresh_env
+    client = _client(store)
+    c1 = _inforce_consequence(pipeline)
+    assert _contest(client, c1).json()["decisionOutcome"] == "RETAIN_DRAFT"
+
+    def _correct(target):
+        sub = demo.spray_submission(f"chain:{uid()}", erp_id=f"erp:chain.{uid()}", confirm=True)
+        sub["supersedesConsequenceRef"] = target
+        r = pipeline.commit(sub)
+        assert r["decisionOutcome"] == "PROMOTE_ACCEPTED"
+        return r["emittedAcceptedConsequenceRefs"][0]
+
+    c2 = _correct(c1)          # C2 supersedes the contested C1
+    c3 = _correct(c2)          # C3 supersedes C2 (a normal correction, no dispute)
+    assert store.is_superseded(c1) and store.is_superseded(c2)
+    # the current read (basis = C3) still derives CORRECTED via the transitive
+    # C3 -> C2 -> C1 lineage and C1's DISPUTE edge
+    after = outputs.passport_view(demo.FARM, demo.FARMER)
+    assert after["qualification"]["disputeStatus"] == "CORRECTED"

@@ -539,10 +539,13 @@ Per contributor:
 - `DISPUTED_BASIS` — no directly-presented record is disputed, but the result's
   `MaterializationBasis` (its `contributingAcceptedConsequenceRefs`) **includes**
   an unresolved disputed consequence;
-- `CORRECTED` — a **current** in-force basis member has a `LINEAGE_SUPERSEDES`
-  edge to a **predecessor that carries a `DISPUTE` edge**: a governed CORRECTION
-  resolved the dispute, and the current result reports the resolution by walking
-  that lineage (derived, not stored);
+- `CORRECTED` — a **current** in-force basis member has, **anywhere in its
+  `LINEAGE_SUPERSEDES` chain walked transitively** (with a visited-set guard), a
+  **predecessor that carries a `DISPUTE` edge**: a governed CORRECTION resolved
+  the dispute, and the current result reports the resolution by walking that
+  lineage (derived, not stored). The walk must be transitive, not one-hop — a
+  correction may itself be corrected (`C1` disputed ← `C2` ← `C3`: the current
+  member `C3` still descends from `C1`'s resolved dispute two hops back);
 - `SUPERSEDED` — a **historical / direct** surface still references the superseded
   disputed consequence itself (it left force; current materializations no longer
   carry it);
