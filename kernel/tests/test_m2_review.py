@@ -1,13 +1,16 @@
-"""M2 G5-2 — the REJECT review verb.
+"""M2 G5 — the REJECT (G5-2) and CONTEST (G5-4) review verbs.
 
 Engineering tests, NOT part of the named conformance suite. They pin the
-settled REJECT semantics (docs/REVIEW_DISPUTE_SEMANTICS.md, D20): a reviewer's
+settled review/dispute semantics (docs/REVIEW_DISPUTE_SEMANTICS.md, D20 + D21):
 REJECT of a queued assertion is the append-only mirror of acceptance minus the
-consequence — a ReviewDecision (REVIEW_REJECT_OR_CONTEST / REJECTED) + a REVIEW
-edge, no AcceptedEventConsequence, commit outcome RETAIN_DRAFT, terminal, no
-materialization touched, authorized by the DISTINCT REVIEW_REJECT_OR_CONTEST
-action. CONTEST (CONTESTED) is deferred to G5-3 and refuses fail-closed. All
-identifiers fictional and format-true (privacy rule 1).
+consequence (a ReviewDecision REVIEW_REJECT_OR_CONTEST / REJECTED + a REVIEW
+edge, no consequence, RETAIN_DRAFT, terminal, no materialization touched);
+CONTEST of an ALREADY IN-FORCE consequence appends a ReviewDecision (CONTESTED)
++ a DISPUTE edge, emits no consequence, stales dependent materializations (D12),
+qualifies disputeStatus, and refuses a high-consequence freeze — resolved only by
+a superseding CORRECTION. Both are authorized by the DISTINCT
+REVIEW_REJECT_OR_CONTEST action. All identifiers fictional and format-true
+(privacy rule 1).
 """
 from __future__ import annotations
 
@@ -212,15 +215,17 @@ def _governance(pipeline, target, *, action=None, outcome=None, party=demo.ADVIS
     return pipeline.commit(sub)
 
 
-def test_contest_outcome_is_refused_until_g5_3(store, pipeline):
+def test_contested_outcome_routes_to_contest_not_reject(store, pipeline):
+    # G5-4: a CONTESTED outcome no longer refuses-as-unsupported (that was the
+    # G5-2 forward guard) — it routes to the CONTEST branch, which targets a
+    # consequence; aiming it at a queued ASSERTION is a wrong-kind refusal (never
+    # silently handled as a reject).
     target = _queue_op(pipeline)
     r = _governance(pipeline, target,
                     action="REVIEW_REJECT_OR_CONTEST", outcome="CONTESTED")
     assert r["decisionOutcome"] == "RETAIN_DRAFT"
-    assert r["problems"][0]["reasonCode"] == "EVIDENCE_INSUFFICIENT"
-    assert "review decision" in r["problems"][0]["title"].lower()
-    # never silently downgraded to a reject: nothing decided
-    assert store.edges_from(target, "REVIEW") == []
+    assert r["problems"][0]["reasonCode"] == "EVIDENCE_REFERENCE_UNAVAILABLE"
+    assert store.edges_from(target, "REVIEW") == [] and store.edges_from(target, "DISPUTE") == []
 
 
 def test_mismatched_action_outcome_is_refused(store, pipeline):
@@ -380,3 +385,152 @@ def test_present_but_invalid_decision_outcome_never_accepts(store, pipeline):
     # ABSENT outcome (key omitted) is still the legacy accept default
     ok = pipeline.commit(dict(base, idempotencyKey=f"absout:{uid()}"))
     assert ok["decisionOutcome"] == "PROMOTE_ACCEPTED"
+
+
+# ---------------------------------------------------------------------------
+# M2 G5-4 — the CONTEST verb (dispute against an in-force consequence)
+# ---------------------------------------------------------------------------
+
+def _inforce_consequence(pipeline, *, idem=None):
+    """A self-accepted routine spray -> an in-force AcceptedEventConsequence."""
+    r = pipeline.commit(demo.spray_submission(
+        idem or f"contest-base:{uid()}", erp_id=f"erp:contest.{uid()}", confirm=True))
+    assert r["decisionOutcome"] == "PROMOTE_ACCEPTED"
+    return r["emittedAcceptedConsequenceRefs"][0]
+
+
+def _contest(client, consequence, *, party=demo.ADVISOR,
+             rationale="advisor disputes: the recorded application conflicts with "
+             "the field evidence", evidence=None, key=None):
+    body = {"farmRef": demo.FARM, "consequenceRef": consequence, "rationale": rationale}
+    if evidence is not None:
+        body["evidenceRefs"] = evidence
+    if key is not None:
+        body["idempotencyKey"] = key
+    return client.post("/review/contest", json=body, headers=_hdr(party))
+
+
+WINDOW = ("2026-01-01T00:00:00Z", "2026-12-31T23:59:59Z")
+
+
+def test_contest_flags_inforce_consequence_no_new_consequence(store, pipeline):
+    client = _client(store)
+    c1 = _inforce_consequence(pipeline)
+    before = len(store.find_by_kind("ofarm.acceptedeventconsequence.v0.1"))
+    r = _contest(client, c1)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["decisionOutcome"] == "RETAIN_DRAFT"
+    assert "emittedAcceptedConsequenceRefs" not in body, "a contest promotes nothing"
+    review = store.get_record(body["emittedReviewDecisionRefs"][0])["payload"]
+    assert review["reviewAction"] == "REVIEW_REJECT_OR_CONTEST"
+    assert review["decisionOutcomeState"] == "CONTESTED"
+    assert review["reviewedArtifactFamily"] == "ACCEPTED_EVENT_CONSEQUENCE"
+    assert review["reviewedArtifactRef"] == c1
+    assert review["notes"].startswith("dispute:")
+    # a DISPUTE edge marks the consequence; it is never edited and STAYS in force
+    disputes = [e["dst_record_id"] for e in store.edges_from(c1, "DISPUTE")]
+    assert disputes == [review["reviewDecisionId"]]
+    assert store.get_record(c1)["payload"]["inForceState"] == "IN_FORCE"
+    assert not store.is_superseded(c1)
+    assert len(store.find_by_kind("ofarm.acceptedeventconsequence.v0.1")) == before
+
+
+def test_contest_requires_distinct_reject_authority(store, pipeline):
+    client = _client(store)
+    c1 = _inforce_consequence(pipeline)
+    # the FARMER holds REVIEW_ACCEPT but NOT REVIEW_REJECT_OR_CONTEST
+    r = _contest(client, c1, party=demo.FARMER)
+    assert r.json()["decisionOutcome"] == "DENY"
+    assert r.json()["problems"][0]["reasonCode"] == "AUTHORITY_DENIED"
+    assert store.edges_from(c1, "DISPUTE") == []
+
+
+def test_contest_validity_guards(store, pipeline):
+    client = _client(store)
+    c1 = _inforce_consequence(pipeline)
+    # wrong-kind target: a queued assertion, not a consequence
+    queued = _queue_op(pipeline)
+    assert _contest(client, queued).json()["problems"][0]["reasonCode"] \
+        == "EVIDENCE_REFERENCE_UNAVAILABLE"
+    # empty rationale
+    assert _contest(client, c1, rationale="   ").json()["problems"][0]["reasonCode"] \
+        == "EVIDENCE_INSUFFICIENT"
+    # unresolved evidence ref
+    assert _contest(client, c1, evidence=["evidence:nope"]).json()["problems"][0]["reasonCode"] \
+        == "EVIDENCE_REFERENCE_UNAVAILABLE"
+    assert store.edges_from(c1, "DISPUTE") == [], "no refused attempt disputed anything"
+    # a successful contest, then a double-contest is refused
+    assert _contest(client, c1).json()["decisionOutcome"] == "RETAIN_DRAFT"
+    assert _contest(client, c1).json()["problems"][0]["reasonCode"] == "SUPERSEDED_RECORD_USED"
+
+
+def test_contest_stales_and_qualifies_passport_disputed_basis(fresh_env):
+    # fresh DB: a passport's disputeStatus is farm-GLOBAL, so this must not see
+    # disputes other tests opened on the shared session farm
+    store, pipeline, outputs = fresh_env
+    client = _client(store)
+    c1 = _inforce_consequence(pipeline)
+    # a clean farm reads disputeStatus NONE — computed, not assumed (M4 over-claim closed)
+    fresh = outputs.passport_view(demo.FARM, demo.FARMER)
+    assert fresh["body"]["freshness"] == "FRESH"
+    assert fresh["qualification"]["disputeStatus"] == "NONE"
+
+    assert _contest(client, c1).json()["decisionOutcome"] == "RETAIN_DRAFT"
+
+    # freshness axis: the dependent materialization was staled on contest
+    stale = outputs.passport_view(demo.FARM, demo.FARMER, allow_recompute=False)
+    assert stale["body"]["freshness"] != "FRESH"
+    # dispute axis: after recompute the read is FRESH again yet disputed. The
+    # register directly presents the disputed spray consequence as an entry, so
+    # it qualifies OPEN_DISPUTE (a basis-only dispute would be DISPUTED_BASIS).
+    after = outputs.passport_view(demo.FARM, demo.FARMER)
+    assert after["body"]["freshness"] == "FRESH"
+    assert after["qualification"]["disputeStatus"] == "OPEN_DISPUTE"
+    assert after["qualification"]["stalenessClass"] == "FRESH"
+
+
+def test_freeze_refuses_on_disputed_basis(fresh_env):
+    store, pipeline, outputs = fresh_env
+    client = _client(store)
+    c1 = _inforce_consequence(pipeline)
+    clean = outputs.freeze_inspection_register(demo.FARM, demo.FARMER, *WINDOW)
+    assert clean["refused"] is False, "a clean basis freezes"
+    assert _contest(client, c1).json()["decisionOutcome"] == "RETAIN_DRAFT"
+    # the freeze refuses on the DISPUTE axis even though it recomputes FRESH
+    disputed = outputs.freeze_inspection_register(demo.FARM, demo.FARMER, *WINDOW)
+    assert disputed["refused"] is True
+    assert disputed["problem"]["reasonCode"] == "DISPUTE_OPEN"
+
+
+def test_contest_resolution_by_correction_derives_corrected(fresh_env):
+    store, pipeline, outputs = fresh_env
+    client = _client(store)
+    c1 = _inforce_consequence(pipeline)
+    assert _contest(client, c1).json()["decisionOutcome"] == "RETAIN_DRAFT"
+    assert outputs.passport_view(demo.FARM, demo.FARMER)["qualification"]["disputeStatus"] \
+        == "OPEN_DISPUTE"
+    # a CORRECTION supersedes c1 -> c2 in force, c1 leaves force
+    corr = demo.spray_submission(f"contest-corr:{uid()}",
+                                 erp_id=f"erp:contest.corr.{uid()}", confirm=True)
+    corr["supersedesConsequenceRef"] = c1
+    cr = pipeline.commit(corr)
+    assert cr["decisionOutcome"] == "PROMOTE_ACCEPTED"
+    assert store.is_superseded(c1), "the corrected predecessor left force"
+    # the current read derives CORRECTED by walking c2 -> c1 lineage + c1's DISPUTE edge
+    after = outputs.passport_view(demo.FARM, demo.FARMER)
+    assert after["qualification"]["disputeStatus"] == "CORRECTED"
+    # and the freeze no longer refuses (the dispute is resolved)
+    assert outputs.freeze_inspection_register(demo.FARM, demo.FARMER, *WINDOW)["refused"] is False
+
+
+def test_contest_decision_is_reachable_as_a_receipt(store, pipeline):
+    client = _client(store)
+    c1 = _inforce_consequence(pipeline)
+    body = _contest(client, c1).json()
+    review_id = body["emittedReviewDecisionRefs"][0]
+    trace = store.get_record(body["promotionTraceRef"])["payload"]
+    assert review_id in trace["emittedReviewDecisionRefs"]
+    emits = [e["dst_record_id"]
+             for e in store.edges_from(trace["promotionTraceId"], "PROMOTION_EMITS")]
+    assert review_id in emits

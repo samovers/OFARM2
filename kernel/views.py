@@ -44,6 +44,7 @@ def _qualification(*, surface_class: str, staleness: str, sufficiency: str,
                    high_consequence_allowed: bool, trace_refs: list[str],
                    allowed: list[str], blocked: list[str],
                    safe_label: str, user_message: str,
+                   dispute: str = "NONE",
                    mat_result_ref: str | None = None) -> dict:
     env = {
         "schemaVersion": "ofarm.resultqualificationenvelope.v0.1",
@@ -55,7 +56,7 @@ def _qualification(*, surface_class: str, staleness: str, sufficiency: str,
         "truthPosture": "GOVERNED_MATERIALIZATION",
         "authorityLevel": "FULL",
         "candidateStatus": "NOT_CANDIDATE",
-        "disputeStatus": "NONE",
+        "disputeStatus": dispute,
         "stalenessClass": staleness,
         "evidenceSufficiency": sufficiency,
         "permissionClass": "FULL_DETAIL",
@@ -89,6 +90,34 @@ class OutputGenerator:
         self.materializer = Materializer(store)
 
     # ---------------------------------------------------------------- shared --
+
+    def _dispute_status(self, basis_record_id: str, presented_refs=()) -> str:
+        """Derive disputeStatus (spec §6.5) from a materialization's basis members.
+        A basis consequence with an open DISPUTE edge is OPEN_DISPUTE when it is
+        DIRECTLY PRESENTED as an entry of the result, else DISPUTED_BASIS (the
+        result only derives from it). A current member whose LINEAGE_SUPERSEDES
+        predecessor carried a DISPUTE edge is CORRECTED (walk the supersession
+        edge — the disputed predecessor has left force and is no longer in the
+        basis). Two or more distinct non-NONE statuses -> MIXED; else NONE.
+        (SUPERSEDED is for historical / AS_OF surfaces that reference an
+        out-of-force disputed consequence — not the current NOW surfaces here;
+        deferred to G6.)"""
+        basis = self.store.get_record(basis_record_id)
+        refs = (basis["payload"].get("contributingAcceptedConsequenceRefs", [])
+                if basis else [])
+        presented = set(presented_refs)
+        statuses = set()
+        for cid in refs:
+            # is_superseded guards a STALE basis that still lists a now-superseded
+            # member (an unresolved dispute is on an in-force consequence)
+            if self.store.edges_from(cid, "DISPUTE") and not self.store.is_superseded(cid):
+                statuses.add("OPEN_DISPUTE" if cid in presented else "DISPUTED_BASIS")
+            for e in self.store.edges_from(cid, "LINEAGE_SUPERSEDES"):
+                if self.store.edges_from(e["dst_record_id"], "DISPUTE"):
+                    statuses.add("CORRECTED")
+        if len(statuses) >= 2:
+            return "MIXED"
+        return statuses.pop() if statuses else "NONE"
 
     def _pending_claims(self, farm_ref: str) -> list[dict]:
         rows = self.store.find_by_kind("ofarm.assertionrecord.v0.1")
@@ -178,6 +207,13 @@ class OutputGenerator:
             stale = resolution["freshness"] != "FRESH"
             trace_refs = [mat["basis_record_id"], mat["snapshot_record_id"],
                           mat["context_snapshot_ref"], PASSPORT_QUERYSPEC, PASSPORT_QUERYPLAN]
+            # disputeStatus is DERIVED, never assumed NONE (spec §6.5, closes the
+            # latent M4 over-claim); the passport SHOWS a disputed basis
+            # (informational), never hides it (Kernel rule 7). The register
+            # directly presents per-consequence entries, so a disputed presented
+            # entry is OPEN_DISPUTE (not merely DISPUTED_BASIS).
+            presented = {e.get("consequenceRef") for e in mat["current_state"]["entries"]}
+            dispute = self._dispute_status(mat["basis_record_id"], presented)
             qualification = _qualification(
                 surface_class="PASSPORT_VIEW_PREVIEW",
                 staleness="FRESH" if not stale else "STALE_BLOCKING",
@@ -189,6 +225,7 @@ class OutputGenerator:
                          else ["HIGH_CONSEQUENCE_DECISION"]),
                 safe_label="Spray register (record-keeping view)",
                 user_message=CLAIM_STATEMENT,
+                dispute=dispute,
                 mat_result_ref=resolution["materializationResult"]["resultId"])
 
             metadata = {
@@ -331,6 +368,24 @@ class OutputGenerator:
                 publication_result("DENIED", [problem], "not demonstrably FRESH")
                 return _refusal_response(problem)
 
+            # the freeze refuses on the DISPUTE axis, INDEPENDENT of freshness
+            # (spec §6.6): the window materialization may be FRESH yet rest on a
+            # disputed basis, and a disputed truth is never frozen into a
+            # high-consequence output until corrected. NONE/CORRECTED pass; any
+            # unresolved dispute (OPEN_DISPUTE / DISPUTED_BASIS / MIXED) refuses.
+            window_presented = {e.get("consequenceRef")
+                                for e in mat["current_state"]["entries"]}
+            window_dispute = self._dispute_status(mat["basis_record_id"], window_presented)
+            if window_dispute not in ("NONE", "CORRECTED"):
+                problem = runtime_problem(
+                    "DISPUTE_OPEN", "Freeze refused — disputed basis",
+                    "the inspection register's window basis includes a disputed "
+                    "accepted consequence; a disputed truth is never frozen into a "
+                    "high-consequence output until the dispute is resolved by "
+                    "correction (docs/REVIEW_DISPUTE_SEMANTICS.md §6.6)")
+                publication_result("DENIED", [problem], "disputed basis")
+                return _refusal_response(problem)
+
             entries = mat["current_state"]["entries"]
             annex = self._pending_claims(farm_ref)
             gaps = [e["assertionRef"] for e in annex]
@@ -462,6 +517,7 @@ class OutputGenerator:
                 blocked=["HIGH_CONSEQUENCE_DECISION"],
                 safe_label="Frozen inspection register (record-keeping)",
                 user_message=CLAIM_STATEMENT,
+                dispute=window_dispute,   # NONE or CORRECTED here (any open dispute refused above)
                 mat_result_ref=resolution["materializationResult"]["resultId"])
 
             # the frozen output is persisted, not just returned: the metadata

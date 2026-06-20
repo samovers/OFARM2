@@ -62,7 +62,8 @@ CREATE TABLE IF NOT EXISTS kernel_edge (
                   'PROMOTION_EMITS',        -- PromotionTrace -> emitted record (reachability, D3)
                   'COMPLIANCE_CLAIM',       -- semantic event -> ComplianceClaim carrier record
                   'STRUCTURE_PAYLOAD',      -- semantic event -> typed identity-payload carrier (M2 G1)
-                  'LINEAGE_SUPERSEDES_INTENT' -- pending assertion -> consequence it will supersede on acceptance (M2 G1)
+                  'LINEAGE_SUPERSEDES_INTENT', -- pending assertion -> consequence it will supersede on acceptance (M2 G1)
+                  'DISPUTE'                 -- in-force consequence -> contest ReviewDecision (M2 G5-4)
                 )),
   src_record_id text NOT NULL,
   dst_record_id text NOT NULL,
@@ -75,7 +76,7 @@ ALTER TABLE kernel_edge ADD CONSTRAINT kernel_edge_edge_type_check CHECK (edge_t
   'AUTHORITY_BASIS', 'EVIDENCE', 'REVIEW', 'EVENT_SOURCE',
   'LINEAGE_SUPERSEDES', 'LINEAGE_REVISES', 'MATERIALIZATION_BASIS',
   'PROMOTION_EMITS', 'COMPLIANCE_CLAIM', 'STRUCTURE_PAYLOAD',
-  'LINEAGE_SUPERSEDES_INTENT'));
+  'LINEAGE_SUPERSEDES_INTENT', 'DISPUTE'));
 
 CREATE INDEX IF NOT EXISTS ix_kernel_edge_src ON kernel_edge (src_record_id, edge_type);
 CREATE INDEX IF NOT EXISTS ix_kernel_edge_dst ON kernel_edge (dst_record_id, edge_type);
