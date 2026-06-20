@@ -6,19 +6,19 @@ real vintage history, AS_OF selects the spine vintage in force at the as-of time
 PackActivationSet.evaluatedAt, AgronomicCodeBindingProfile.issuedAt); a future
 vintage is never applied to an earlier state; and AS_OF still REFUSES (refuse
 over pretend, Kernel rule 7) when no vintage is in force, when the latest is
-ambiguous, when the as-of time is unparseable, or when the in-force profile
-vintage is not ACTIVE. The same time bound governs a single record and many —
-a lone future vintage is excluded and refused, never used as-is just because it
-is the only record.
+ambiguous, when the as-of time is unparseable, when the in-force profile vintage
+is not ACTIVE, or when the independently time-selected families do NOT cohere
+into a deployment that actually existed together (steward hostile re-review:
+the ActiveArtifactSet is the derived artifact — it records the activation it was
+generated from and the code-binding profile it deployed, so pairing it with a
+different in-force activation/profile would synthesize a context that never was).
 
-The shipped pilot spine is single-of-each and effective only from mid-2026
-(activation 2026-06-11, profile 2026-06-12, artifact-set 2026-06-12T21:17).
-To test a family's vintage SELECTION in isolation, the family-selection tests
-lay an explicit early full-spine baseline (one ACTIVE vintage of the other two
-families) so those families stay in force across the window while we vary one
-family — otherwise a refusal/selection could be attributed to the wrong family.
-Each test runs on a fresh DB so session-accumulated spine records cannot pollute
-the selection. All identifiers fictional and format-true (privacy rule 1).
+The ActiveArtifactSet, PackActivationSet and AgronomicCodeBindingProfile move as
+one coherent deployment "generation", so the tests build generations with the
+`_generation` helper (artifact generated FROM the activation, deploying that
+code-binding profile) rather than mismatched copies. Each test runs on a fresh
+DB so session-accumulated spine records cannot pollute selection. All identifiers
+fictional and format-true (privacy rule 1).
 """
 from __future__ import annotations
 
@@ -35,41 +35,53 @@ def uid():
     return uuid.uuid4().hex[:8]
 
 
-def _vintage_copy(store, kind: str, id_field: str, **overrides) -> str:
-    """Append a vintage of a spine family — a copy of the shipped record with a
-    fresh id (suffix-appended so the id format is preserved) and the given field
-    overrides (e.g. the effective timestamp). Synthetic versioned history for
-    AS_OF selection."""
-    base = dict(store.find_by_kind(kind)[0]["payload"])
-    base[id_field] = f"{base[id_field]}.vintage.{uid()}"
-    base.update(overrides)
-    with store.tx() as cur:
-        store.insert_record(cur, base)
-    return base[id_field]
+def _shipped(store, kind):
+    return dict(store.find_by_kind(kind)[0]["payload"])
 
 
 def _activation_vintage(store, evaluated_at: str) -> str:
-    return _vintage_copy(store, "ofarm.packactivationset.v0.1",
-                         "packActivationSetId", evaluatedAt=evaluated_at)
+    """A bare PackActivationSet vintage (copy of the shipped one, fresh id + the
+    given evaluatedAt). Bare = no matching artifact set regenerated from it, used
+    to exercise ambiguity and incoherence."""
+    act = _shipped(store, "ofarm.packactivationset.v0.1")
+    act["packActivationSetId"] = f"{act['packActivationSetId']}.vintage.{uid()}"
+    act["evaluatedAt"] = evaluated_at
+    with store.tx() as cur:
+        store.insert_record(cur, act)
+    return act["packActivationSetId"]
 
 
-def _artifact_vintage(store, generated_at: str) -> str:
-    return _vintage_copy(store, "ofarm.activeartifactset.v0.1",
-                         "activeArtifactSetId", generatedAt=generated_at)
+def _generation(store, *, at: str, cb_state: str = "ACTIVE") -> dict:
+    """Create a coherent deployment generation effective at `at` and return its
+    ids. The ActiveArtifactSet is generated FROM this PackActivationSet
+    (sourcePackActivationSetRefs) and deploys this AgronomicCodeBindingProfile
+    (activeArtifactRefs), with matching activePackRefs/activeProfileRefs — so the
+    three pass G6's spine-coherence check as one real deployment."""
+    u = uid()
+    cb = _shipped(store, "ofarm.agronomiccodebindingprofile.v0.1")
+    cb_id = f"{cb['agronomicCodeBindingProfileId']}.gen.{u}"
+    cb["agronomicCodeBindingProfileId"] = cb_id
+    cb["issuedAt"] = at
+    cb["profileState"] = cb_state
 
+    act = _shipped(store, "ofarm.packactivationset.v0.1")
+    act_id = f"{act['packActivationSetId']}.gen.{u}"
+    act["packActivationSetId"] = act_id
+    act["evaluatedAt"] = at
 
-def _profile_vintage(store, issued_at: str, *, profile_state: str = "ACTIVE") -> str:
-    return _vintage_copy(store, "ofarm.agronomiccodebindingprofile.v0.1",
-                         "agronomicCodeBindingProfileId",
-                         issuedAt=issued_at, profileState=profile_state)
+    art = _shipped(store, "ofarm.activeartifactset.v0.1")
+    art_id = f"{art['activeArtifactSetId']}.gen.{u}"
+    art["activeArtifactSetId"] = art_id
+    art["generatedAt"] = at
+    art["sourcePackActivationSetRefs"] = [act_id]
+    art["activeArtifactRefs"] = [r for r in art["activeArtifactRefs"]
+                                 if not r.startswith("codebindingprofile:")] + [cb_id]
 
-
-def _baseline_other_families(store, at: str = "2025-01-01T00:00:00Z") -> None:
-    """Lay an early ACTIVE artifact-set and profile vintage so those two families
-    stay in force across the test window; the activation family is then varied in
-    isolation. (Not activation — the test controls that family explicitly.)"""
-    _artifact_vintage(store, at)
-    _profile_vintage(store, at)
+    with store.tx() as cur:
+        store.insert_record(cur, cb)
+        store.insert_record(cur, act)
+        store.insert_record(cur, art)
+    return {"activation": act_id, "artifact": art_id, "codebinding": cb_id}
 
 
 def _asof(store, as_of: str):
@@ -88,72 +100,75 @@ def _resolve_asof(store, as_of: str):
 
 
 # ---------------------------------------------------------------------------
-# reconstruction: AS_OF selects the in-force vintage; future vintages excluded
+# reconstruction: AS_OF selects the in-force generation; future ones excluded
 # ---------------------------------------------------------------------------
 
-def test_asof_reconstructs_the_in_force_activation_vintage(fresh_env):
-    # Early baseline keeps artifact-set + profile in force across the window, so
-    # what we observe is purely the activation family's vintage selection.
+def test_asof_reconstructs_the_in_force_generation(fresh_env):
     store, _, _ = fresh_env
-    _baseline_other_families(store, "2025-01-01T00:00:00Z")
-    a0 = _activation_vintage(store, "2025-02-01T00:00:00Z")
-    a1 = _activation_vintage(store, "2025-06-01T00:00:00Z")
-    a2 = _activation_vintage(store, "2025-09-01T00:00:00Z")
+    g0 = _generation(store, at="2025-02-01T00:00:00Z")
+    g1 = _generation(store, at="2025-06-01T00:00:00Z")
+    g2 = _generation(store, at="2025-09-01T00:00:00Z")
 
     def selected(as_of):
-        return _asof(store, as_of)["sourcePackActivationSetRefs"]
+        snap = _asof(store, as_of)
+        return (snap["activeArtifactSetRef"], snap["sourcePackActivationSetRefs"])
 
-    # only a0 is in force; a1/a2 (and the shipped 2026-06) are FUTURE -> excluded
-    assert selected("2025-03-01T00:00:00Z") == [a0]
-    # a0 + a1 in force -> the latest (a1) is selected
-    assert selected("2025-07-01T00:00:00Z") == [a1]
-    # a0 + a1 + a2 in force -> the latest (a2) is selected
-    assert selected("2025-10-01T00:00:00Z") == [a2]
+    # only g0 in force; g1/g2 (and the shipped 2026-06 generation) are FUTURE
+    assert selected("2025-03-01T00:00:00Z") == (g0["artifact"], [g0["activation"]])
+    # g0 + g1 in force -> the latest (g1) is selected, coherently
+    assert selected("2025-07-01T00:00:00Z") == (g1["artifact"], [g1["activation"]])
+    # g0 + g1 + g2 in force -> the latest (g2) is selected, coherently
+    assert selected("2025-10-01T00:00:00Z") == (g2["artifact"], [g2["activation"]])
 
 
 def test_asof_single_spine_in_force_reconstructs(fresh_env):
-    # the actual shipped single-of-each pilot spine (no added history), AS_OF
-    # AFTER it is in force (all three families effective by 2026-06-12T21:17):
-    # the single spine reconstructs unchanged.
+    # the actual shipped single-of-each pilot deployment (one coherent generation),
+    # AS_OF AFTER it is in force (all three families effective by 2026-06-12T21:17):
+    # it reconstructs unchanged.
     store, _, _ = fresh_env
     snap = _asof(store, "2026-12-01T00:00:00Z")
     assert snap["sourcePackActivationSetRefs"] and snap["activeArtifactSetRef"]
 
 
 # ---------------------------------------------------------------------------
-# refuse over pretend: not-in-force, ambiguous latest, unparseable, non-ACTIVE
+# refuse over pretend: not-in-force, incoherent, ambiguous, unparseable, non-ACTIVE
 # ---------------------------------------------------------------------------
 
-def test_asof_before_single_spine_effective_refuses(fresh_env):
-    # the shipped single-of-each spine, AS_OF BEFORE any family is effective
-    # (everything is 2026-06; 2025 predates it): a single FUTURE vintage is NOT
-    # privileged to skip the time bound — it is excluded and refused, never
-    # applied to an earlier state (rule 6). resolve_for_use governs this to
-    # REFUSE_USE without crashing.
+def test_asof_before_any_generation_refuses(fresh_env):
+    # the shipped deployment, AS_OF BEFORE any family is effective (everything is
+    # 2026-06; 2025 predates it): a single FUTURE vintage is NOT privileged to skip
+    # the time bound — it is excluded and refused, never applied to an earlier
+    # state (rule 6). resolve_for_use governs this to REFUSE_USE without crashing.
     store, _, _ = fresh_env
     r = _resolve_asof(store, "2025-01-01T00:00:00Z")
     assert r["decision"] == "REFUSE_USE"
     assert r["problems"][0]["reasonCode"] == "MATERIALIZATION_INVALID"
 
 
-def test_asof_no_in_force_activation_vintage_refuses(fresh_env):
-    # artifact-set + profile in force early (2025-01); the activation family's
-    # earliest vintage is the shipped 2026-06-11, so at 2025-06 the OTHER two
-    # families reconstruct but the activation family has NO vintage in force ->
-    # the per-family refusal is specifically the activation family (match=), not
-    # a coincidental out-of-force family.
+def test_asof_incoherent_artifact_activation_pairing_refuses(fresh_env):
+    # steward regression: artifact generated from activation A0 -> later activation
+    # A1 (bare, no artifact regenerated from it) -> AS_OF after A1 but before any
+    # artifact set generated from A1. The latest artifact (from A0) and the latest
+    # activation (A1) never formed a deployment together: refuse as not
+    # reconstructible, NOT artifact(A0) + activation(A1).
     store, _, _ = fresh_env
-    _baseline_other_families(store, "2025-01-01T00:00:00Z")
-    with pytest.raises(ContextNotReconstructible, match="PackActivationSet"):
-        _asof(store, "2025-06-01T00:00:00Z")
+    g0 = _generation(store, at="2025-02-01T00:00:00Z")
+    a1 = _activation_vintage(store, "2025-06-01T00:00:00Z")
+    assert a1 != g0["activation"]
+    with pytest.raises(ContextNotReconstructible, match="incoherent"):
+        _asof(store, "2025-07-01T00:00:00Z")
+    # and it is governed to MATERIALIZATION_INVALID, never an uncaught error
+    r = _resolve_asof(store, "2025-07-01T00:00:00Z")
+    assert r["decision"] == "REFUSE_USE"
+    assert r["problems"][0]["reasonCode"] == "MATERIALIZATION_INVALID"
 
 
 def test_asof_ambiguous_latest_vintage_refuses(fresh_env):
     # two activation vintages share the latest effective timestamp -> cannot pick
-    # -> refuse. Baseline keeps the other families in force so the refusal is the
-    # activation AMBIGUITY, not another family being out of force.
+    # -> refuse. A coherent base generation keeps the other families in force, so
+    # the refusal is the activation AMBIGUITY, not another family being out of force.
     store, _, _ = fresh_env
-    _baseline_other_families(store, "2025-01-01T00:00:00Z")
+    _generation(store, at="2025-02-01T00:00:00Z")
     _activation_vintage(store, "2025-06-01T00:00:00Z")
     _activation_vintage(store, "2025-06-01T00:00:00Z")
     r = _resolve_asof(store, "2025-07-01T00:00:00Z")
@@ -168,16 +183,13 @@ def test_asof_unparseable_time_refuses(fresh_env):
 
 
 def test_asof_non_active_profile_vintage_refuses(fresh_env):
-    # the profile vintage in force at as_of is non-ACTIVE (a DRAFT issued after
-    # the ACTIVE baseline): G6 selects it by issuedAt, then refuses rather than
-    # reconstructing a usable context from a non-ACTIVE profile -> governed
-    # REFUSE_USE / MATERIALIZATION_INVALID, NOT an uncaught 500. (NOW keeps the
-    # loud bootstrap RuntimeError; ERRATA E-007.)
+    # a COHERENT generation whose code-binding profile vintage is DRAFT (non-ACTIVE):
+    # the spine coheres, so the refusal is specifically the non-ACTIVE profile —
+    # G6 selects it by issuedAt, then refuses rather than reconstructing a usable
+    # context from a non-ACTIVE profile -> governed REFUSE_USE / MATERIALIZATION_INVALID,
+    # NOT an uncaught 500. (NOW keeps the loud bootstrap RuntimeError; ERRATA E-007.)
     store, _, _ = fresh_env
-    _artifact_vintage(store, "2025-01-01T00:00:00Z")
-    _activation_vintage(store, "2025-01-01T00:00:00Z")
-    _profile_vintage(store, "2025-01-01T00:00:00Z", profile_state="ACTIVE")
-    _profile_vintage(store, "2025-03-01T00:00:00Z", profile_state="DRAFT")  # latest <= bound
+    _generation(store, at="2025-02-01T00:00:00Z", cb_state="DRAFT")
     r = _resolve_asof(store, "2025-06-01T00:00:00Z")
     assert r["decision"] == "REFUSE_USE"
     assert r["problems"][0]["reasonCode"] == "MATERIALIZATION_INVALID"
@@ -188,15 +200,14 @@ def test_asof_non_active_profile_vintage_refuses(fresh_env):
 # ---------------------------------------------------------------------------
 
 def test_asof_reconstructs_via_resolve_for_use_recomputes(fresh_env):
-    # with a reconstructible history and recompute permitted, resolve_for_use
-    # reaches recompute() (which assembles the AS_OF spine a second time) and
-    # SUCCEEDS — it never crashes with an uncaught ContextNotReconstructible
-    # (the gating assemble already succeeded); it recomputes the in-force vintage.
+    # with a reconstructible (coherent) history and recompute permitted,
+    # resolve_for_use reaches recompute() (which assembles the AS_OF spine a second
+    # time) and SUCCEEDS — it never crashes with an uncaught ContextNotReconstructible
+    # (the gating assemble already succeeded); it recomputes the in-force generation.
     store, _, _ = fresh_env
-    _baseline_other_families(store, "2025-01-01T00:00:00Z")
-    _activation_vintage(store, "2025-06-01T00:00:00Z")
-    _activation_vintage(store, "2025-09-01T00:00:00Z")
-    r = _resolve_asof(store, "2025-10-01T00:00:00Z")
+    _generation(store, at="2025-02-01T00:00:00Z")
+    _generation(store, at="2025-06-01T00:00:00Z")
+    r = _resolve_asof(store, "2025-07-01T00:00:00Z")
     assert r["decision"] == "RECOMPUTE_REQUIRED"
     assert r["recomputed"] is True
     assert not any(p["reasonCode"] == "MATERIALIZATION_INVALID" for p in r["problems"])

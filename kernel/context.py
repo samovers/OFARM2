@@ -276,6 +276,15 @@ class ContextAssembler:
                 f"the AgronomicCodeBindingProfile vintage in force at {bound.isoformat()} is "
                 f"{profile['profileState']}, not ACTIVE — the historical context cannot be "
                 "reconstructed into a usable profile")
+        if as_of is not None:
+            # AS_OF selects the three families independently by their own
+            # timestamps, but they are NOT independent: the ActiveArtifactSet is
+            # the integrated, derived artifact — it records the activation it was
+            # generated from and the code-binding profile it deployed. Verify the
+            # independently time-selected activation/profile actually cohere with
+            # it, or refuse rather than synthesize a context that never existed
+            # together (steward hostile re-review; refuse over pretend, rule 7).
+            self._assert_coherent_spine(artifact_set, activation_set, profile, bound)
         return {
             "artifact_set": artifact_set,
             "activation_set": activation_set,
@@ -309,6 +318,44 @@ class ContextAssembler:
                 f"{len(in_force)} records share the latest {date_field} {latest.isoformat()} — "
                 "refusing rather than guessing which vintage was in force")
         return in_force[0]
+
+    @staticmethod
+    def _assert_coherent_spine(artifact_set: dict, activation_set: dict,
+                               profile: dict, bound) -> None:
+        """Refuse an AS_OF spine whose independently time-selected families never
+        formed a real deployment together (G6 steward hostile re-review). The
+        ActiveArtifactSet is the integrated, derived artifact: it carries the
+        PackActivationSet(s) it was generated from, the active pack/profile refs
+        it deployed, and the concrete artifacts (incl. the code-binding profile)
+        it shipped. So the in-force activation and code-binding profile selected
+        by their own timestamps must match the in-force artifact set, or the
+        context is a synthetic fiction (e.g. artifact-from-A0 + activation-A1
+        when no artifact set was ever generated from A1). ContextNotReconstructible
+        is governed to MATERIALIZATION_INVALID by resolve_for_use."""
+        when = bound.isoformat()
+        act_id = activation_set["packActivationSetId"]
+        source = artifact_set.get("sourcePackActivationSetRefs")
+        if source and act_id not in source:
+            raise ContextNotReconstructible(
+                f"AS_OF spine at {when} is incoherent: the in-force ActiveArtifactSet was generated "
+                f"from {source}, not the in-force PackActivationSet {act_id!r} — refusing to "
+                "synthesize a pack/artifact context that never existed together")
+        if set(artifact_set.get("activePackRefs", [])) != set(activation_set.get("activePackRefs", [])):
+            raise ContextNotReconstructible(
+                f"AS_OF spine at {when} is incoherent: ActiveArtifactSet activePackRefs "
+                f"{artifact_set.get('activePackRefs')} != PackActivationSet activePackRefs "
+                f"{activation_set.get('activePackRefs')} — refusing rather than synthesize a context")
+        if set(artifact_set.get("activeProfileRefs", [])) != set(activation_set.get("activeProfileRefs", [])):
+            raise ContextNotReconstructible(
+                f"AS_OF spine at {when} is incoherent: ActiveArtifactSet activeProfileRefs "
+                f"{artifact_set.get('activeProfileRefs')} != PackActivationSet activeProfileRefs "
+                f"{activation_set.get('activeProfileRefs')} — refusing rather than synthesize a context")
+        cb_id = profile["agronomicCodeBindingProfileId"]
+        if cb_id not in artifact_set.get("activeArtifactRefs", []):
+            raise ContextNotReconstructible(
+                f"AS_OF spine at {when} is incoherent: the in-force AgronomicCodeBindingProfile {cb_id!r} "
+                "is not among the in-force ActiveArtifactSet's deployed artifacts — refusing to pair a "
+                "code-binding profile vintage with an artifact set that did not deploy it")
 
     def assemble(self, cur, farm_ref: str, *, target_twin: str = "COMPLIANCE",
                  evaluation_time_policy: dict | None = None) -> dict:
