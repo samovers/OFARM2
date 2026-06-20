@@ -86,31 +86,50 @@ effects in this section are binding** regardless of which surface is chosen.
 **Ingress discriminator (no contract change).** The review verbs travel on
 **kernel-internal submission fields** read by the gate chain — today
 `reviewTargetAssertionRef`, `reviewRationale`, `reviewEvidenceRefs`,
-`confirmAccept` (`kernel/stages.py:213, 455`; `kernel/api.py:188-190`). G5-2 adds
-`reviewAction ∈ {REVIEW_ACCEPT, REVIEW_REJECT_OR_CONTEST}`, defaulting to
-`REVIEW_ACCEPT` when absent so existing accept submissions are unchanged. These
-are **not `CommitIngressRequest` properties** — that contract is closed
+`confirmAccept` (`kernel/stages.py:213, 455`; `kernel/api.py:188-190`). These are
+**not `CommitIngressRequest` properties** — that contract is closed
 (`additionalProperties: false`) and carries none of the review fields (verified);
 the authoritative, contract-bound governance record is the emitted
-`ReviewDecision`. Adding `reviewAction` is therefore **not a contract change**,
-exactly as the existing review fields are not.
+`ReviewDecision`. Adding review-decision input fields is therefore **not a
+contract change**, exactly as the existing review fields are not.
 
-**`reviewAction` is validated fail-closed (never a silent accept).** G5-2
-validates the field at ingress against the recognized set:
+**The normalized review-decision input is a *pair*, because REJECT and CONTEST
+share the `REVIEW_REJECT_OR_CONTEST` action and split on the outcome.** G5-2 adds
+two kernel-internal fields, each a value of the same enum it becomes on the
+emitted `ReviewDecision`:
 
-| `reviewAction` | Disposition |
-|---|---|
-| absent | legacy `REVIEW_ACCEPT` (back-compat) |
-| `REVIEW_ACCEPT` | accept path |
-| `REVIEW_REJECT_OR_CONTEST` (+ reject outcome) | reject path |
-| present but **unrecognized/malformed** | **governed refusal** |
+- **`reviewAction`** ∈ `ReviewDecision.reviewAction` — selects the **authority
+  action** (§3.2);
+- **`decisionOutcomeState`** ∈ `ReviewDecision.decisionOutcomeState` — selects
+  the **emission/outcome branch** within a shared action.
 
-A present-but-invalid value **never falls through to accept**. The refusal is
-principled default-deny (Kernel rule 2): an unrecognized verb resolves to **no
-authority action** in the reviewAction-keyed selector (§3.2), so no grant can
-authorize it — the AUTHORITY gate denies (`AUTHORITY_DENIED`, outcome
-`RETAIN_DRAFT`). `REVIEW_SUPERSEDE` / `REVIEW_REQUEST` are likewise not wired in
-G5 and so refuse the same way until a ticket implements them.
+The IngressNormalizer normalizes and validates this pair **fail-closed**; a
+present-but-invalid field **never falls through to accept**:
+
+| `reviewAction` | `decisionOutcomeState` | Disposition |
+|---|---|---|
+| absent | (ignored) | normalize to `REVIEW_ACCEPT` / `ACCEPTED` ⇒ **accept** (legacy back-compat) |
+| `REVIEW_ACCEPT` | absent or `ACCEPTED` | **accept** path |
+| `REVIEW_ACCEPT` | any other value | **governed refusal** (action/outcome mismatch) |
+| `REVIEW_REJECT_OR_CONTEST` | `REJECTED` | **reject** path (this ticket) |
+| `REVIEW_REJECT_OR_CONTEST` | `CONTESTED` | **governed refusal until G5-3** (the contest emission path does not exist yet — never silently downgraded to a reject or an accept) |
+| `REVIEW_REJECT_OR_CONTEST` | absent / any other | **governed refusal** (the shared action is ambiguous without a supported outcome) |
+| `REVIEW_SUPERSEDE`, `REVIEW_REQUEST`, or any unrecognized/malformed value | (any) | **governed refusal** (not wired in G5) |
+
+The refusal of an unrecognized/unwired **action** is principled default-deny
+(Kernel rule 2): the verb resolves to **no authority action** in the
+reviewAction-keyed selector (§3.2), so no grant can authorize it — the AUTHORITY
+gate denies (`AUTHORITY_DENIED`, outcome `RETAIN_DRAFT`). The refusal of a
+recognized-but-unimplemented or mismatched **outcome** (e.g. `CONTESTED`) is an
+emission-branch default-deny: no path exists to emit it, so the commit refuses
+rather than guess — never a silent accept or reject.
+
+**Endpoint normalization.** If G5-2 ships a dedicated `/review/reject` endpoint
+rather than a generic `/review`, the **endpoint itself supplies** the normalized
+pair (`reviewAction = REVIEW_REJECT_OR_CONTEST`, `decisionOutcomeState =
+REJECTED`) so clients never pass raw outcome values; a generic `/review` carries
+both fields explicitly and the same matrix governs. Either way the pipeline sees
+the normalized pair above.
 
 ### 3.2 Authority (distinct action — REVIEW_REJECT_OR_CONTEST)
 
@@ -376,7 +395,12 @@ basis-set staling on the dependent materializations), and how supersession
 resolves it. CONTEST reuses the same `REVIEW_REJECT_OR_CONTEST` action with
 `decisionOutcomeState = "CONTESTED"` and the `AssertionRecord.claimState =
 "CONTESTED"` lane that `kernel/views.py:105-107` already surfaces as `DISPUTED`.
-This section is a forward pointer only.
+Because REJECT and CONTEST share the action and split only on the
+`decisionOutcomeState` half of the normalized input pair (§3.1), G5-1 already
+pins the discriminator: until G5-3 wires the contest emission path, a
+`REVIEW_REJECT_OR_CONTEST` + `CONTESTED` input is a **governed refusal** (§3.1
+matrix), never silently handled as a reject. This section is a forward pointer
+only.
 
 ---
 
@@ -405,9 +429,12 @@ procedural branch, no scheme/profile literal):
   (every supplied `reviewEvidenceRefs[]` resolves to `ofarm.evidencerecord.v0.1`,
   `:336-342`) for the reject branch; do **not** apply the acceptance-only
   promotion guards (`ACCEPTANCE_BY_ASSERTION_TYPE`, D18 structure-supersession).
-- `kernel/stages.py` (IngressNormalizer) — **validate `reviewAction` fail-closed**
-  (§3.1): absent ⇒ `REVIEW_ACCEPT`; a present-but-unrecognized value is a
-  governed refusal (default-deny), never a silent accept.
+- `kernel/stages.py` (IngressNormalizer) — **normalize and validate the
+  `(reviewAction, decisionOutcomeState)` pair fail-closed** per the §3.1 matrix:
+  absent ⇒ `REVIEW_ACCEPT`/`ACCEPTED`; `REVIEW_REJECT_OR_CONTEST`+`REJECTED` ⇒
+  reject; `REVIEW_REJECT_OR_CONTEST`+`CONTESTED` ⇒ refuse until G5-3; any
+  mismatched / unrecognized action or outcome ⇒ governed refusal, never a silent
+  accept.
 - receipt is **free**: because `emit_queue_rejection` registers the
   `ReviewDecision` in `ctx.emitted["reviews"]`, the generic `PromotionTraceWriter`
   already wires `emittedReviewDecisionRefs`, the `PROMOTION_EMITS` edge, and the
@@ -429,8 +456,11 @@ procedural branch, no scheme/profile literal):
    `reviewEvidenceRefs` member that does not resolve to an `EvidenceRecord`
    refuses the rejection, and an EVIDENCE edge is written only for a validated
    ref.
-4a. A present-but-unrecognized `reviewAction` is refused (governed default-deny),
-   never silently treated as accept; an absent `reviewAction` still accepts.
+4a. The `(reviewAction, decisionOutcomeState)` pair is normalized fail-closed
+   (§3.1): an absent action still accepts; `REVIEW_REJECT_OR_CONTEST`+`REJECTED`
+   rejects; `REVIEW_REJECT_OR_CONTEST`+`CONTESTED` is refused until G5-3; any
+   mismatched / unrecognized action or outcome is a governed refusal, never a
+   silent accept.
 4b. The rejection `ReviewDecision` is reachable as a receipt: it appears in the
    `CommitIngressResult.emittedReviewDecisionRefs`, in the `PromotionTrace`, and
    carries its `PROMOTION_EMITS` edge (D3).
