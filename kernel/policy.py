@@ -109,14 +109,15 @@ REVIEW_ACTION_AUTHORITY = {
 def review_branch(review_action: str | None, decision_outcome: str | None) -> str | None:
     """The emission branch for a normalized review-decision pair, or None to
     refuse FAIL-CLOSED (docs/REVIEW_DISPUTE_SEMANTICS.md §3.1). Returns 'ACCEPT'
-    or 'REJECT'. An absent action defaults to REVIEW_ACCEPT/ACCEPTED (legacy
-    back-compat). CONTEST (decisionOutcomeState CONTESTED) is deferred to G5-3
-    and returns None here — never silently downgraded to a reject or an accept;
-    a mismatched action/outcome likewise returns None."""
-    action = review_action or "REVIEW_ACCEPT"
-    if action == "REVIEW_ACCEPT" and decision_outcome in (None, "ACCEPTED"):
+    or 'REJECT'. There is NO truthiness default here: an *absent* reviewAction is
+    normalized to 'REVIEW_ACCEPT' upstream (IngressNormalizer), so a value that
+    reaches this function is taken as-is — a present falsey / non-string /
+    unrecognized value matches neither arm and returns None (refuse), never
+    coerced to accept (PR #18 review B1). CONTEST (decisionOutcomeState
+    CONTESTED) is deferred to G5-3 and likewise returns None."""
+    if review_action == "REVIEW_ACCEPT" and decision_outcome in (None, "ACCEPTED"):
         return "ACCEPT"
-    if action == "REVIEW_REJECT_OR_CONTEST" and decision_outcome == "REJECTED":
+    if review_action == "REVIEW_REJECT_OR_CONTEST" and decision_outcome == "REJECTED":
         return "REJECT"
     return None
 

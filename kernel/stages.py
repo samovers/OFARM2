@@ -219,10 +219,14 @@ class IngressNormalizer:
                                  if ctx.commit_class == "GOVERNANCE_DECISION" else None)
         if ctx.commit_class == "GOVERNANCE_DECISION":
             # the review-decision verb is the (reviewAction, decisionOutcomeState)
-            # pair; absent action is legacy REVIEW_ACCEPT (G5-1 §3.1). The pair is
-            # validated fail-closed downstream (authority by verb; outcome/branch
-            # by the GovernanceAcceptanceValidator) — never silently accepted.
-            ctx.review_action = sub.get("reviewAction") or "REVIEW_ACCEPT"
+            # pair (G5-1 §3.1). ABSENT reviewAction is legacy REVIEW_ACCEPT; a
+            # PRESENT value is kept VERBATIM (even falsey / non-string) so the
+            # fail-closed matrix refuses it rather than truthiness-coercing it to
+            # accept (PR #18 review B1). The pair is validated downstream:
+            # authority by verb (AuthorityGate), outcome/branch by the
+            # GovernanceAcceptanceValidator — never silently accepted.
+            ctx.review_action = (sub["reviewAction"] if "reviewAction" in sub
+                                 else "REVIEW_ACCEPT")
             ctx.review_outcome = sub.get("decisionOutcomeState")
         ctx.store.insert_record(ctx.cur, ingress_request)
         ctx.log("INGRESS_NORMALIZATION", "NORMALIZED_DRAFT")
@@ -241,7 +245,12 @@ class AuthorityGate:
         # unrecognized/unwired verb maps to no action — default-deny (Kernel rule
         # 2), never a silent fall-through to accept.
         if ctx.commit_class == "GOVERNANCE_DECISION":
-            action_class = policy.REVIEW_ACTION_AUTHORITY.get(ctx.review_action)
+            # a present non-string verb (null / false / list / number) is
+            # unrecognized, not accept — isinstance keeps the lookup from
+            # raising on an unhashable value and routes it to default-deny (B1)
+            ra = ctx.review_action
+            action_class = (policy.REVIEW_ACTION_AUTHORITY.get(ra)
+                            if isinstance(ra, str) else None)
             if action_class is None:
                 problem = runtime_problem(
                     "AUTHORITY_DENIED", "Unrecognized review action",
@@ -364,7 +373,14 @@ class ProfileApplicabilityGate:
 
 class EvidenceSufficiencyGate:
     def run(self, ctx: GateContext) -> GatePass | GateRefusal:
-        if ctx.acceptance_target:
+        # The acceptance sufficiency case is an ACCEPT-only promotion guard: it
+        # demands NEW reviewer evidence to overcome a NEEDS_EVIDENCE routing and
+        # records a fresh acceptance-oriented case. A REJECT inherits neither
+        # (G5 §3.3): reviewer evidence is optional, declining for missing evidence
+        # needs no new evidence, and the decline is recorded solely in the
+        # ReviewDecision — any existing sufficiency case is left unchanged
+        # (PR #18 review B2). The branch was resolved by the prior ValidationGate.
+        if ctx.acceptance_target and ctx.review_branch == "ACCEPT":
             case = sufficiency.build_acceptance_case(
                 ctx.store, ctx.sub, ctx.farm_ref, ctx.acceptance_payload)
             if case["outcome"]["decision"] == "REFUSE":

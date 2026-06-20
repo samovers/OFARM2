@@ -284,3 +284,76 @@ def test_reject_of_queued_correction_abandons_supersession_intent(store, pipelin
     assert store.edges_to(c1, "LINEAGE_SUPERSEDES") == [], "no supersession applied"
     assert store.edges_from(correction, "LINEAGE_SUPERSEDES_INTENT"), \
         "the abandoned intent survives in history (append-only)"
+
+
+# ---------------------------------------------------------------------------
+# PR #18 review B1: a PRESENT-but-invalid reviewAction never falls through to
+# accept (only an ABSENT field is the legacy REVIEW_ACCEPT default)
+# ---------------------------------------------------------------------------
+
+def test_present_but_invalid_review_action_never_accepts(store, pipeline):
+    target = _queue_op(pipeline)
+    base = {
+        "commitClass": "GOVERNANCE_DECISION", "actingPartyRef": demo.ADVISOR,
+        "farmRef": demo.FARM, "decisionTime": context.now_iso(),
+        "reviewTargetAssertionRef": target,
+        "reviewRationale": "a stated rationale",
+    }
+    # present falsey / non-string / unrecognized values must all refuse (default
+    # deny), never be truthiness-coerced to accept
+    for bad in ("", None, False, 0, [], "review_accept", "GARBAGE", 123):
+        sub = dict(base, idempotencyKey=f"badact:{uid()}", reviewAction=bad)
+        # decisionOutcomeState absent -> would be the dangerous "accept" path if
+        # the verb were coerced; it must not be
+        r = pipeline.commit(sub)
+        assert r["decisionOutcome"] == "DENY", f"reviewAction={bad!r} must not accept"
+        assert r["problems"][0]["reasonCode"] == "AUTHORITY_DENIED"
+    # an absent reviewAction is still the legacy accept default (unchanged)
+    assert store.edges_from(target, "REVIEW") == [], "no invalid verb decided anything"
+    ok = pipeline.commit(dict(base, idempotencyKey=f"absent:{uid()}"))
+    assert ok["decisionOutcome"] == "PROMOTE_ACCEPTED"  # absent -> accept
+
+
+# ---------------------------------------------------------------------------
+# PR #18 review B2: REJECT does not inherit the acceptance evidence-overcome
+# guard — a NEEDS_EVIDENCE-routed claim is rejectable with no reviewer evidence,
+# emits the ReviewDecision only, inserts no acceptance sufficiency case, and
+# promotes nothing
+# ---------------------------------------------------------------------------
+
+CASE_KIND = "ofarm.evidencesufficiencycase.v0.2"
+CONSEQ_KIND = "ofarm.acceptedeventconsequence.v0.1"
+
+
+def test_reject_of_needs_evidence_claim_needs_no_reviewer_evidence(store, pipeline):
+    client = _client(store)
+    # a claim ROUTED for NEEDS_EVIDENCE (unverifiable actor attribution) — an
+    # 'approve anyway' accept without new evidence would refuse
+    stranger = f"party:rej.stranger.{uid()}"
+    with store.tx() as cur:
+        store.insert_record(cur, {
+            "schemaVersion": "ofarm.party.v0.1", "partyId": stranger,
+            "partyClass": "NATURAL_PERSON",
+            "displayName": "Reject Stranger (fictional)",
+            "partyState": "ACTIVE", "recordedAt": context.now_iso()})
+    routed = demo.spray_submission(f"rej-ne:{uid()}", erp_id=f"erp:rej.ne.{uid()}")
+    routed["payload"]["actor"]["actorPartyRef"] = stranger
+    res = pipeline.commit(routed)
+    assert res["decisionOutcome"] == "REQUIRE_REVIEW"
+    target = res["emittedAssertionRecordRefs"][0]
+
+    cases_before = len(store.find_by_kind(CASE_KIND))
+    conseq_before = len(store.find_by_kind(CONSEQ_KIND))
+
+    # the reviewer DECLINES with NO new evidence — this must SUCCEED
+    r = _reject(client, target,
+                rationale="the actor attribution cannot be verified; declined")
+    body = r.json()
+    assert body["decisionOutcome"] == "RETAIN_DRAFT"
+    review = store.get_record(body["emittedReviewDecisionRefs"][0])["payload"]
+    assert review["decisionOutcomeState"] == "REJECTED"
+    assert "evidenceRefs" not in review, "no reviewer evidence was required"
+    # no NEW acceptance sufficiency case inserted; the queue-time case is untouched
+    assert len(store.find_by_kind(CASE_KIND)) == cases_before
+    # nothing promoted -> no materialization basis member
+    assert len(store.find_by_kind(CONSEQ_KIND)) == conseq_before
