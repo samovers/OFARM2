@@ -34,6 +34,8 @@ resolved product binding (against a dated snapshot) · dose with valid UCUM unit
 
 **Advisory rule:** authorisation-mismatch and dose-range warnings are `advisory output` commit-class records (Advisory twin). They never block, never auto-create compliance facts, and are never silently dropped from farmer view.
 
+> **Implementation status (M2 P5, partial — ERRATA E-006):** P5 raises authorisation-mismatch and dose-range as **non-blocking `WARNING` warnings on the operation-claim commit result** (computed from this policy's `advisories` rules; never blocking, never a compliance fact, never an accepted consequence). The **durable** Advisory-twin *record* (a trace-safe `advisory output` surfaced in the passport `_advisory_flags`) is **not yet implemented** — emitting it inside the operation-claim commit needs a second `PromotionTrace` (the reachability invariant has no advisory slot) plus an advisory reason-code family. Durable advisory emission is a recorded follow-up.
+
 ## Shipped instances (validated by `../conformance/ofarm_pkg_contract_check.py`)
 
 - `OFARM_PackActivationSet_example_si_ffs_pilot_v0_1.json` — static single-profile activation (no overlap → no merge trace needed)

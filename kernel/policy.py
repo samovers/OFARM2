@@ -262,11 +262,12 @@ def is_resolved_ucum_unit(unit_ref: str | None) -> bool:
         return False
     return bool(unit_ref[len(UCUM_SCHEME_PREFIX):].strip())
 
-# the SI evidence floor for operation claims (policy:si.ffs.evidence-review.
-# v0_1): hard items refuse promotion outright; soft items route to the
-# advisor queue (unresolved-binding behavior per the code-binding profile)
-OPERATION_FLOOR_HARD_ITEMS = ("dose-unit", "operator", "event-time", "parcel")
-OPERATION_FLOOR_SOFT_ITEMS = ("product-binding", "crop-binding")
+# The SI evidence floor (which named checks are hard vs soft) MOVED to package
+# content in M2 P5: it is policy:si.ffs.evidence-review.v0_1, read generically by
+# kernel.profile_policy.operation_floor(). No SI-specific floor VALUE lives in the
+# generic kernel any more (mechanism-boundary stop rule); kernel/sufficiency.py
+# provides the generic, Core-payload-shaped check logic and reads the hard/soft
+# composition from the active profile.
 
 COMPLIANCE_ASSERTED_STATUSES = frozenset({
     "CLAIMED_COMPLIANT", "CLAIMED_NON_COMPLIANT", "CLAIMED_PARTIALLY_COMPLIANT"})

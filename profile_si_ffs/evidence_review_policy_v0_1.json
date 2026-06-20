@@ -1,0 +1,24 @@
+{
+  "policyId": "policy:si.ffs.evidence-review.v0_1",
+  "_note": "SI FFS PROFILE/PACKAGE policy content (M2 P5), NOT generic Core/Kernel law. The kernel reads this through a generic loader (kernel/profile_policy.py); changing this file changes runtime behavior without touching kernel/. Claim limit unchanged: record-keeping completeness only.",
+  "profileRef": "profile:si.ffs.recordkeeping.v0_1",
+  "operationFloor": {
+    "_note": "Which named floor checks are HARD (refuse promotion) vs SOFT (route to the advisor queue) for an OPERATION_CLAIM. The kernel provides the generic, Core-payload-shaped check logic for each name (kernel/sufficiency.py); this profile composes the floor. PROFILE.md 'Evidence and review policy'.",
+    "hardItems": ["dose-unit", "operator", "event-time", "parcel"],
+    "softItems": ["product-binding", "crop-binding"]
+  },
+  "advisories": {
+    "_note": "Advisory-twin warnings raised on an operation claim — visible, NEVER blocking, never a compliance fact, never an accepted consequence (PROFILE.md 'Advisory rule'; Kernel rule 4). The kernel computes them generically from these rules.",
+    "authorisationMismatch": {
+      "enabled": true,
+      "exactMappingRequired": true,
+      "_note": "Raise when a resolved CROP_PROTECTION_PRODUCT binding maps non-EXACTly (BROAD/NARROW/CLOSE) — the recorded product may not exactly match the authorised product."
+    },
+    "doseRange": {
+      "enabled": true,
+      "min": 0.0,
+      "max": 100.0,
+      "_note": "Raise when a DOSE/RATE parameter value falls outside this advisory plausibility range (units per the resolved UCUM unit). A sanity advisory only, not a per-product authorised-rate check."
+    }
+  }
+}
