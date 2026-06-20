@@ -532,6 +532,16 @@ class ReplayWriter:
         }
         ctx.store.insert_record(ctx.cur, trace)
 
+        problems = [problem]
+        if outcome == "REPLAY_REUSED_RESULT":
+            # a matching replay REUSES the earlier result, so carry forward that
+            # result's own problems as replayed context — never silently drop them.
+            # This matters especially for advisory WARNINGs (authorisation-mismatch
+            # / dose-range): the result warning is the only implemented advisory
+            # surface (durable Advisory-twin records are deferred, ERRATA E-006), so
+            # dropping them on replay would silently lose the advisory.
+            problems = [problem, *stored.get("problems", [])]
+
         result = {
             "schemaVersion": "ofarm.commitingressresult.v0.1",
             "resultId": mint("cires"),
@@ -544,7 +554,7 @@ class ReplayWriter:
             "idempotencyDisposition": disposition,
             "replayOfRequestId": prior["request_id"],
             "promotionTraceRef": trace_id,
-            "problems": [problem],
+            "problems": problems,
             "reasonSummary": trace["traceSummary"],
         }
         if outcome == "REPLAY_REUSED_RESULT":

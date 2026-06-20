@@ -27,6 +27,11 @@ PROFILE_REF = "profile:si.ffs.recordkeeping.v0_1"
 PACK_REF = "pack:si.ffs.pilot.v0_1"
 EVIDENCE_POLICY_REF = "policy:si.ffs.evidence-review.v0_1"
 CODE_BINDING_PROFILE_REF = "codebindingprofile:si.ffs.v0_1"
+# the active profile's evidence-review policy CONTENT (M2 P5): the SI evidence
+# floor (hard/soft items) and advisory rules live here as package content, read
+# by the generic kernel.profile_policy loader — NOT as kernel constants. This is
+# a profile-binding pointer (config's role), never a floor VALUE.
+EVIDENCE_POLICY_PATH = PROFILE_ROOT / "evidence_review_policy_v0_1.json"
 
 
 def database_dsn() -> str:

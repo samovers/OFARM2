@@ -8,7 +8,7 @@ first, demanded by the formal hostile re-review).
 """
 from __future__ import annotations
 
-from . import config, policy
+from . import config, policy, profile_policy
 from .context import mint as _mint, now_iso
 from .problems import runtime_problem
 
@@ -190,10 +190,78 @@ def build_floor_case(store, sub, commit_class, farm_ref, assertion_id,
         "event-time": bool(payload.get("effectiveTimeInterval", {}).get("start")),
     }
     evidence_refs = payload.get("evidenceRefs", []) or sub.get("evidenceRefs", [])
+    # the hard/soft floor COMPOSITION is package content (P5): read it from the
+    # active profile, never a kernel constant. `checks` is the kernel's generic
+    # floor-check vocabulary, so an unknown floor item fails closed at load
+    # (rather than KeyError below). A missing/malformed policy raises
+    # ProfilePolicyError -> the gate fails closed with a governed RuntimeProblem.
+    hard, soft = profile_policy.operation_floor(supported_checks=set(checks))
     return build_case_from_checks(
-        store, farm_ref, assertion_id, erp_id, checks,
-        policy.OPERATION_FLOOR_HARD_ITEMS, policy.OPERATION_FLOOR_SOFT_ITEMS,
-        evidence_refs)
+        store, farm_ref, assertion_id, erp_id, checks, hard, soft, evidence_refs)
+
+
+def operation_advisories(store, sub) -> list[dict]:
+    """Non-blocking advisory-twin warnings for an OPERATION_CLAIM (M2 P5),
+    computed from the active profile's advisory rules (policy:si.ffs.evidence-
+    review.v0_1 'advisories'): authorisation-mismatch (a resolved product binding
+    that maps non-EXACTly) and dose-range (a DOSE/RATE value outside the advisory
+    plausibility range). These are surfaced as WARNING-severity problems on the
+    commit result — visible, NEVER blocking, never routed to review, never a
+    compliance fact and never an accepted consequence (PROFILE.md 'Advisory rule';
+    Kernel rule 4). Reason codes reuse the closest registry family pending a
+    dedicated advisory family (ERRATA E-006); the advisory posture is in the title
+    and detail. Returns [] on a malformed policy (the floor path fails closed)."""
+    try:
+        rules = profile_policy.advisory_rules()
+    except profile_policy.ProfilePolicyError:
+        return []
+    payload = sub.get("payload") or {}
+    out: list[dict] = []
+
+    auth = rules.get("authorisationMismatch", {})
+    if auth.get("enabled") and auth.get("exactMappingRequired"):
+        for b in resolved_bindings(store, payload.get("agronomicIdentityBindingRefs", [])):
+            mapping = b.get("bindingValue", {}).get("mappingRelation")
+            # only a RESOLVED (VERIFIED) product binding that maps non-EXACTly: an
+            # unresolved/unverified binding is already a soft-floor route to the
+            # advisor (sufficiency floor), so it needs no separate advisory here
+            if (b.get("bindingRole") == "CROP_PROTECTION_PRODUCT"
+                    and b.get("bindingState") == "VERIFIED"
+                    and b.get("referenceSnapshotRefs")
+                    and mapping not in (None, "EXACT")):
+                bid = b.get("agronomicIdentityBindingId", "?")
+                out.append(runtime_problem(
+                    "PRODUCT_BINDING_UNRESOLVED", "Authorisation-mismatch advisory",
+                    f"ADVISORY (non-blocking): product binding {bid} resolves with a non-exact "
+                    f"mapping ({mapping}); the recorded product may not exactly "
+                    "match the authorised product. The operation outcome is UNCHANGED; this is "
+                    "advisory-twin material, not a compliance fact and not legal advice (no "
+                    "advisory reason-code family exists — ERRATA E-006).",
+                    severity="WARNING",
+                    related_refs=[r for r in [bid, *(b.get("referenceSnapshotRefs") or [])]
+                                  if r and r != "?"],
+                    problem_id="problem:advisory-authorisation-mismatch"))
+
+    dose = rules.get("doseRange", {})
+    if dose.get("enabled"):
+        lo, hi = dose.get("min"), dose.get("max")
+        for p in payload.get("actualQuantityParameters", []):
+            if p.get("parameterRole") not in ("DOSE", "RATE"):
+                continue
+            v = p.get("value")
+            if isinstance(v, bool) or not isinstance(v, (int, float)):
+                continue
+            if (lo is not None and v < lo) or (hi is not None and v > hi):
+                out.append(runtime_problem(
+                    "EVIDENCE_INSUFFICIENT", "Dose-range advisory",
+                    f"ADVISORY (non-blocking): dose {v} {p.get('unitRef', '')} is outside the "
+                    f"advisory plausibility range [{lo}, {hi}]. The operation outcome is "
+                    "UNCHANGED; this is advisory-twin material, not a compliance fact and not "
+                    "legal advice (implausible-value advisory; no dedicated dose-range code — "
+                    "ERRATA E-006, same gap class as E-001).",
+                    severity="WARNING",
+                    problem_id="problem:advisory-dose-range"))
+    return out
 
 
 def build_acceptance_case(store, sub, farm_ref, target) -> dict:

@@ -18,7 +18,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from . import policy, sufficiency
+from . import policy, profile_policy, sufficiency
 from .context import mint, parse_ts
 from .contracts import ContractViolation
 from .emission import PromotionEmitter, ReplayWriter, submission_evidence_refs
@@ -413,9 +413,22 @@ class EvidenceSufficiencyGate:
             return GatePass()
 
         if ctx.commit_class in ("OPERATION_CLAIM", "COMPLIANCE_ASSERTION"):
-            case, floor_failures = sufficiency.build_floor_case(
-                ctx.store, ctx.sub, ctx.commit_class, ctx.farm_ref,
-                ctx.assertion_id, ctx.erp_id)
+            try:
+                case, floor_failures = sufficiency.build_floor_case(
+                    ctx.store, ctx.sub, ctx.commit_class, ctx.farm_ref,
+                    ctx.assertion_id, ctx.erp_id)
+            except profile_policy.ProfilePolicyError as exc:
+                # P5: the floor composition is package content; a missing/malformed
+                # policy fails CLOSED with a governed RuntimeProblem (never a silent
+                # permissive default, never a crash)
+                ctx.log("EVIDENCE_SUFFICIENCY", "INSUFFICIENT",
+                        reason_code="PROFILE_NOT_ACTIVE", rationale=str(exc))
+                return GateRefusal(
+                    "EVIDENCE_SUFFICIENCY", "INSUFFICIENT", "RETAIN_DRAFT",
+                    [runtime_problem(
+                        "PROFILE_NOT_ACTIVE", "Evidence floor policy unavailable",
+                        f"the active profile's evidence-review floor policy could not be "
+                        f"loaded ({exc}); the claim stays a draft (fail closed)")])
             if case["outcome"]["decision"] == "REFUSE":
                 ctx.log("EVIDENCE_SUFFICIENCY", "INSUFFICIENT",
                         reason_code="EVIDENCE_INSUFFICIENT",
@@ -429,6 +442,12 @@ class EvidenceSufficiencyGate:
                         "resubmit; the claim stays a draft")])
             ctx.case_payload = case
             ctx.review_route_reasons.extend(floor_failures)
+            # P5 advisories: authorisation-mismatch / dose-range are NON-BLOCKING
+            # advisory-twin warnings — surfaced in the result (ctx.problems), never
+            # routed to review (not review_route_reasons) and never changing the
+            # outcome. A clean claim still promotes even when an advisory is raised.
+            if ctx.commit_class == "OPERATION_CLAIM":
+                ctx.problems.extend(sufficiency.operation_advisories(ctx.store, ctx.sub))
             ctx.log("EVIDENCE_SUFFICIENCY", "SATISFIED")
             return GatePass()
 
