@@ -521,27 +521,41 @@ unresolved `DISPUTE`:
 | `NONE` | no unresolved dispute touches the basis or the presented records (the honest default — *computed*, not assumed) |
 | `OPEN_DISPUTE` | the surface presents a disputed record directly (an open `DISPUTE` on a record in view) |
 | `DISPUTED_BASIS` | the surface presents a derived result whose `MaterializationBasis` includes an unresolved disputed consequence |
-| `CORRECTED` | the disputed consequence has been superseded by a governed CORRECTION (resolution; §6.7) |
-| `SUPERSEDED` | the disputed consequence left force by supersession but the result still references it historically |
-| `MIXED` | the result aggregates contributors with differing dispute statuses |
+| `CORRECTED` | a current basis member supersedes (via `LINEAGE_SUPERSEDES`) a disputed predecessor — the dispute was resolved by a governed CORRECTION (§6.7) |
+| `SUPERSEDED` | a historical/direct surface still references the superseded disputed consequence itself |
+| `MIXED` | the result's contributors carry two or more **distinct non-`NONE`** statuses |
 
 **Derivation (all from edges, no stored disputeStatus field).** An *unresolved*
 dispute is a `DISPUTE` edge whose target consequence is **not yet superseded**
-(`not is_superseded(consequence)`). Then, per result:
+(`not is_superseded(consequence)`); a *resolved* one has since been superseded.
+Because the current basis holds only **in-force** consequences, a resolved
+dispute is found by **walking `LINEAGE_SUPERSEDES`** from a current basis member
+to its superseded predecessor(s) — the disputed predecessor is no longer in the
+basis, only its corrected successor is, so the derivation **must follow the
+supersession edge, never look for the disputed member in the current basis**.
+Per contributor:
 - `OPEN_DISPUTE` — a record the surface presents **directly** carries an
   unresolved dispute;
 - `DISPUTED_BASIS` — no directly-presented record is disputed, but the result's
   `MaterializationBasis` (its `contributingAcceptedConsequenceRefs`) **includes**
   an unresolved disputed consequence;
-- `CORRECTED` — a contributor carries a `DISPUTE` edge **and** that consequence
-  is now **superseded** (a governed CORRECTION resolved it, §6.7) — derived, not
-  stored;
-- `SUPERSEDED` — the result references (historically) a disputed consequence that
-  has left force but no longer contributes to current state;
-- `MIXED` — the basis carries **more than one distinct** non-`NONE`/non-`CORRECTED`
-  status across contributors (e.g. one `OPEN_DISPUTE` member and one `CORRECTED`
-  member);
-- `NONE` — none of the above (computed, never assumed).
+- `CORRECTED` — a **current** in-force basis member has a `LINEAGE_SUPERSEDES`
+  edge to a **predecessor that carries a `DISPUTE` edge**: a governed CORRECTION
+  resolved the dispute, and the current result reports the resolution by walking
+  that lineage (derived, not stored);
+- `SUPERSEDED` — a **historical / direct** surface still references the superseded
+  disputed consequence itself (it left force; current materializations no longer
+  carry it);
+- `NONE` — no contributor is disputed or resolves a dispute (computed, never
+  assumed).
+
+**Aggregation to a single value.** Compute each contributor's status above. The
+result's `disputeStatus` is: that status when all non-`NONE` contributors agree;
+`NONE` when none is non-`NONE`; a **lone** non-`NONE` status when the remaining
+contributors are clean (a clean member never dilutes a dispute condition); and
+**`MIXED` only when two or more *distinct* non-`NONE` statuses are present** —
+e.g. one `OPEN_DISPUTE` contributor alongside one `CORRECTED` contributor — so
+the result honestly reports the blend rather than collapsing it.
 
 `dataAbsentReason = "DISPUTED"` is a **distinct** concern (data-absence, not
 dispute status) and is not set by CONTEST. **CONTEST targets consequences, not
@@ -594,11 +608,15 @@ and accepted, which emits a new in-force consequence with a `LINEAGE_SUPERSEDES`
 edge to the disputed one (`kernel/emission.py:294-302`). The disputed consequence
 then leaves force (`is_superseded` true), the dispute is **resolved by the edge
 fact** (no record edited), and the dependent materializations re-stale and
-recompute against the corrected consequence — their `disputeStatus` derives to
-`CORRECTED`. Resolution is **automatic and non-mutual**: the CORRECTION need not
-reference the `DISPUTE` edge or the contest `ReviewDecision` — once its acceptance
-writes `LINEAGE_SUPERSEDES` to the disputed consequence, the `is_superseded` fact
-alone flips the derivation (§6.5), so no follow-up act closes the dispute. This
+recompute against the corrected consequence. The recomputed current basis now
+holds the **corrected successor** (not the disputed predecessor), so the current
+read derives `disputeStatus = CORRECTED` by **walking `LINEAGE_SUPERSEDES` from
+that successor to its disputed predecessor** (§6.5) — never by looking for the
+disputed consequence in the current basis, where it no longer appears.
+Resolution is **automatic and non-mutual**: the CORRECTION need not reference the
+`DISPUTE` edge or the contest `ReviewDecision` — once its acceptance writes
+`LINEAGE_SUPERSEDES` to the disputed consequence, that edge alone drives the
+derivation, so no follow-up act closes the dispute. This
 reuses the existing supersession path entirely; G5-4 adds no new resolution
 mechanism. An open dispute that is never corrected stays **visibly open**
 (`OPEN_DISPUTE` / `DISPUTED_BASIS`) — honest, never silently cleared.
@@ -664,8 +682,10 @@ special case; a later dispute never rewrites an earlier historical answer.
 4. Validity: a target that is not an in-force consequence, is already superseded,
    is cross-farm, or is already disputed is refused; an empty rationale or
    unresolved evidence ref refuses.
-5. Resolution: a CORRECTION superseding the disputed consequence moves it out of
-   force and the dependent reads to `disputeStatus = CORRECTED`; no record edited.
+5. Resolution (lineage-derived): contested **C1** → an accepted CORRECTION **C2**
+   supersedes C1 → the recomputed current basis holds **C2** (not C1) → a current
+   read derives `disputeStatus = CORRECTED` by walking C2 → C1
+   `LINEAGE_SUPERSEDES` and finding C1's `DISPUTE` edge; no record edited.
 6. `disputeStatus = NONE` is now **computed** (a clean farm reads `NONE`; the
    over-claim is closed).
 7. The M1 suite stays green and `ofarm_pkg_contract_check.py` PASSes.
