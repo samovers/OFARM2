@@ -66,6 +66,22 @@ is identity-grade only where the snapshot carries decision numbers (detail
 pages); list rows are locators, and locator-only re-verification routes to
 review instead of pretending.
 
+**Three M2 import surfaces, grounded not asserted (P6):** the manifest now
+declares `IMPORT_MAPPING` surfaces for all three M2 adapters — REGSR
+(`scheme:si.uvhvvr.ffs-reg.html-surface`, P1), GERK (`scheme:si.gerk-pid`, P2),
+FFSNaprave (`scheme:si.ffs-naprave`, P3) — each grounded against a scheme the
+code-binding profile actually declares (`verify_grounding`). `SUPPORTED` covers
+the governed snapshot-import **mechanism** (parser reuse + G2 import + fixtures),
+never live fetch / cron / currentness. Asymmetry, by design: REGSR and GERK
+shipped real first `ReferenceSnapshot`s at M0/M1, so they appear in the
+ActiveArtifactSet and the ContextSnapshot spine; **FFSNaprave ships the import
+adapter + fixtures only — no real reference snapshot yet — and is equipment
+inspection evidence, not a context-spine reference** (the spine folds the REGSR
+product register + GERK parcel layer only), so it is correctly absent from the
+ActiveArtifactSet's reference snapshots and the ContextSnapshot's
+`referenceSnapshotRefs`. Its import surface is still declared (mechanism), and
+its evidence attaches to Equipment identities per the sticker composite key (P3).
+
 **API authentication posture (M2 G4, declared):** the HTTP surface remains a
 **conformance/development surface, not a production-authenticated runtime**.
 The transport principal is derived by `get_principal` and bound to the
