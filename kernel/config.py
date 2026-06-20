@@ -42,3 +42,25 @@ def database_dsn() -> str:
     dbname = os.environ.get("OFARM_PG_DBNAME", "ofarm_kernel")
     user = os.environ.get("OFARM_PG_USER", "ofarm")
     return f"host={socket_dir} port={port} dbname={dbname} user={user}"
+
+
+def oidc_config_from_env():
+    """The OIDC verifier config for the HTTP surface (M2 G4), or None when OIDC is
+    disabled — in which case the development/conformance X-Acting-Party principal
+    shim applies (NOT production auth; see profile_si_ffs/UNSUPPORTED_SURFACES.md).
+
+    Enabled only when OFARM_OIDC_ISSUER and OFARM_OIDC_AUDIENCE are set. The
+    algorithm defaults to HS256 (the only path implemented in this build); setting
+    OFARM_OIDC_ALG=RS256 selects the deliberate NotImplemented production path
+    (the verifier fails closed, never falling back to HS256)."""
+    issuer = os.environ.get("OFARM_OIDC_ISSUER")
+    audience = os.environ.get("OFARM_OIDC_AUDIENCE")
+    if not (issuer and audience):
+        return None
+    from .auth_oidc import OidcConfig
+    return OidcConfig(
+        issuer=issuer, audience=audience,
+        algorithm=os.environ.get("OFARM_OIDC_ALG", "HS256"),
+        hs256_secret=os.environ.get("OFARM_OIDC_HS256_SECRET"),
+        subject_claim=os.environ.get("OFARM_OIDC_SUBJECT_CLAIM", "sub"),
+        roles_claim=os.environ.get("OFARM_OIDC_ROLES_CLAIM") or None)
