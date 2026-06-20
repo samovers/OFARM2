@@ -351,6 +351,54 @@ class PromotionEmitter:
         ctx.log("REVIEW_PROMOTION", "RETAIN_DRAFT", refs=[review_id])
         ctx.final_outcome = "RETAIN_DRAFT"
 
+    def emit_queue_contest(self) -> None:
+        """Queue contest (M2 G5-4): a reviewer's append-only dispute against an
+        ALREADY IN-FORCE consequence. Appends a ReviewDecision (CONTESTED) + a
+        DISPUTE edge (consequence -> decision); emits NO consequence and NO
+        LINEAGE_SUPERSEDES — a contest promotes and retires nothing, so the
+        disputed consequence is never edited and STAYS in force, flagged. It then
+        stales every dependent materialization (D12) so the next read re-qualifies
+        disputeStatus. Resolution is later, by a CORRECTION that supersedes the
+        consequence (spec §6). Commit outcome RETAIN_DRAFT; the decision registers
+        in ctx.emitted['reviews'] for the generic PromotionTrace receipt (D3)."""
+        ctx, sub = self.ctx, self.ctx.sub
+        target = ctx.acceptance_target   # the in-force consequence
+        review_id = mint("review")
+        review = {
+            "schemaVersion": "ofarm.reviewdecision.v0.1",
+            "reviewDecisionId": review_id,
+            "reviewedArtifactFamily": "ACCEPTED_EVENT_CONSEQUENCE",
+            "reviewedArtifactRef": target,
+            "reviewAction": "REVIEW_REJECT_OR_CONTEST",
+            "anchorScopes": [{"scopeType": "FARM", "scopeRef": ctx.farm_ref}],
+            "decidedByPartyRef": ctx.acting_party,
+            "decidedAt": now_iso(),
+            "decisionOutcomeState": "CONTESTED",
+            "notes": "dispute: " + sub["reviewRationale"].strip(),
+        }
+        if sub.get("reviewEvidenceRefs"):
+            review["evidenceRefs"] = sub["reviewEvidenceRefs"]
+        ctx.store.insert_record(ctx.cur, review)
+        ctx.emitted["reviews"].append(review_id)
+        ctx.store.add_edge(ctx.cur, "DISPUTE", target, review_id)
+        for ev in sub.get("reviewEvidenceRefs") or []:
+            ctx.store.add_edge(ctx.cur, "EVIDENCE", review_id, ev)
+
+        # D12 basis-set staleness: the disputed consequence is a basis member
+        # whose truth state changed — stale dependent materializations so they
+        # recompute and re-qualify disputed on the next read (spec §6.6). The
+        # dispute is recorded authoritatively on the DISPUTE edge; this trace only
+        # propagates staleness (BASIS_ADVANCED family, dispute-specific reason).
+        ctx.materializer.invalidate_for_sources(
+            ctx.cur, [target],
+            trigger_family="BASIS_ADVANCED",
+            trigger_source_ref=review_id,
+            farm_scope_ref=ctx.farm_ref,
+            reason_code="TRUTH_BASIS_DISPUTED")
+
+        ctx.log("REVIEW_PROMOTION", "RETAIN_DRAFT", refs=[review_id])
+        ctx.final_outcome = "RETAIN_DRAFT"
+
 
 class PromotionTraceWriter:
     """One obvious home for reachability and emitted-ref accounting: the

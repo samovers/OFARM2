@@ -35,6 +35,15 @@ class FreezeBody(BaseModel):
     windowEnd: str
 
 
+class ReviewContestBody(BaseModel):
+    farmRef: str
+    # the in-force AcceptedEventConsequence being disputed (not an assertion)
+    consequenceRef: str
+    rationale: str
+    evidenceRefs: list[str] = []
+    idempotencyKey: str | None = None
+
+
 class ReviewAcceptBody(BaseModel):
     farmRef: str
     assertionRef: str
@@ -220,6 +229,36 @@ def create_app(store: Store | None = None, *, oidc=_FROM_ENV) -> FastAPI:
             "reviewRationale": body.rationale,
             "reviewEvidenceRefs": body.evidenceRefs,
             "dominantSemanticConsequence": "review rejection of a queued claim",
+        }
+        try:
+            return app.state.pipeline.commit(submission)
+        except (ContractViolation, KeyError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+
+    @app.post("/review/contest")
+    def review_contest(body: ReviewContestBody, principal: str = Depends(get_principal)):
+        # a CONTEST opens an append-only dispute against an ALREADY IN-FORCE
+        # consequence under the reviewer's own principal (M2 G5-4). The endpoint
+        # supplies the normalized pair (REVIEW_REJECT_OR_CONTEST / CONTESTED) and
+        # the target consequence ref; authority is the distinct
+        # REVIEW_REJECT_OR_CONTEST action; the consequence is flagged (DISPUTE
+        # edge) but never edited, and dependent materializations stale (spec §6).
+        import uuid as _uuid
+        from .context import now_iso as _now
+        submission = {
+            "commitClass": "GOVERNANCE_DECISION",
+            "ingressChannel": "MANUAL_UI",
+            "actingPartyRef": principal,
+            "farmRef": body.farmRef,
+            "idempotencyKey": body.idempotencyKey
+                              or f"review-contest:{_uuid.uuid4().hex[:16]}",
+            "decisionTime": _now(),
+            "reviewTargetConsequenceRef": body.consequenceRef,
+            "reviewAction": "REVIEW_REJECT_OR_CONTEST",
+            "decisionOutcomeState": "CONTESTED",
+            "reviewRationale": body.rationale,
+            "reviewEvidenceRefs": body.evidenceRefs,
+            "dominantSemanticConsequence": "dispute against an in-force consequence",
         }
         try:
             return app.state.pipeline.commit(submission)

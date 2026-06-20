@@ -124,15 +124,18 @@ def review_branch(review_action, decision_outcome) -> str | None:
     or 'REJECT'. There is NO truthiness default: an *absent* field arrives as the
     ABSENT sentinel (IngressNormalizer), distinct from present-null. So a present
     falsey / non-string / unrecognized reviewAction OR decisionOutcomeState
-    matches neither arm and returns None (refuse), never coerced to accept
+    matches no arm and returns None (refuse), never coerced to accept
     (PR #18 review B1 + decisionOutcomeState blocker). REVIEW_ACCEPT accepts only
     when the outcome is ABSENT or the exact string 'ACCEPTED'; present null / ''
-    / false / number / list / unsupported string refuse. CONTEST (CONTESTED) is
-    deferred to G5-3 and likewise returns None."""
+    / false / number / list / unsupported string refuse. REVIEW_REJECT_OR_CONTEST
+    splits on the outcome: 'REJECTED' -> 'REJECT' (G5-2), 'CONTESTED' -> 'CONTEST'
+    (G5-4)."""
     if review_action == "REVIEW_ACCEPT" and decision_outcome in (ABSENT, "ACCEPTED"):
         return "ACCEPT"
     if review_action == "REVIEW_REJECT_OR_CONTEST" and decision_outcome == "REJECTED":
         return "REJECT"
+    if review_action == "REVIEW_REJECT_OR_CONTEST" and decision_outcome == "CONTESTED":
+        return "CONTEST"
     return None
 
 # D8: self-acceptance from the review queue is lawful ONLY for routine

@@ -264,6 +264,10 @@ class GovernanceAcceptanceValidator:
                 f"{ctx.review_outcome!r} is not a supported review decision "
                 "(CONTEST is deferred to G5-3); refused rather than guessed"))
         ctx.review_branch = branch
+        if branch == "CONTEST":
+            # CONTEST targets an in-force CONSEQUENCE, not a queued assertion
+            # (G5-4 / spec §6.3) — wholly separate validity guards
+            return self._validate_contest(ctx)
         is_reject = branch == "REJECT"
         target_ref = ctx.sub.get("reviewTargetAssertionRef")
         if not target_ref:
@@ -362,6 +366,50 @@ class GovernanceAcceptanceValidator:
                     "EVIDENCE_REFERENCE_UNAVAILABLE", "Review evidence unresolved",
                     f"review evidence {ref} does not resolve to a durable "
                     "EvidenceRecord"))
+        ctx.log("VALIDATION", "PASS")
+        return None
+
+    def _validate_contest(self, ctx: GateContext) -> GateRefusal | None:
+        """A CONTEST names a real, in-force, farm-contained, not-already-disputed
+        AcceptedEventConsequence; the act carries its rationale and (optional)
+        validated evidence (spec §6.3). Inherits no acceptance promotion guard —
+        a dispute promotes and retires nothing."""
+        target_ref = ctx.acceptance_target   # the in-force consequence ref
+        if not target_ref:
+            return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
+                "EVIDENCE_INSUFFICIENT", "Contest without target",
+                "a contest requires reviewTargetConsequenceRef"))
+        row = ctx.store.get_record(target_ref)
+        if row is None or row["record_kind"] != "ofarm.acceptedeventconsequence.v0.1":
+            return _refusal(ctx, "FAIL_REFERENCE_RESOLUTION", runtime_problem(
+                "EVIDENCE_REFERENCE_UNAVAILABLE", "Contest target unresolved",
+                f"{target_ref} does not resolve to a stored AcceptedEventConsequence"))
+        conseq = row["payload"]
+        ctx.acceptance_payload = conseq   # fetched once; emission reuses it
+        if {"scopeType": "FARM", "scopeRef": ctx.farm_ref} not in conseq["anchorScopes"]:
+            return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
+                "SCOPE_NOT_AUTHORIZED", "Cross-farm contest refused",
+                f"{target_ref} is not anchored on {ctx.farm_ref}"))
+        if conseq.get("inForceState") != "IN_FORCE" or ctx.store.is_superseded(target_ref):
+            return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
+                "SUPERSEDED_RECORD_USED", "Contest target not in force",
+                f"{target_ref} is not an in-force consequence; only current state "
+                "can be disputed (a superseded/withdrawn record is already out of force)"))
+        if ctx.store.edges_from(target_ref, "DISPUTE"):
+            return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
+                "SUPERSEDED_RECORD_USED", "Target already disputed",
+                f"{target_ref} already carries an open dispute"))
+        rationale_text = ctx.sub.get("reviewRationale")
+        if not (isinstance(rationale_text, str) and rationale_text.strip()):
+            return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
+                "EVIDENCE_INSUFFICIENT", "Contest without rationale",
+                "a contest must state its dispute rationale"))
+        for ref in ctx.sub.get("reviewEvidenceRefs") or []:
+            ev_row = ctx.store.get_record(ref)
+            if ev_row is None or ev_row["record_kind"] != "ofarm.evidencerecord.v0.1":
+                return _refusal(ctx, "FAIL_REFERENCE_RESOLUTION", runtime_problem(
+                    "EVIDENCE_REFERENCE_UNAVAILABLE", "Contest evidence unresolved",
+                    f"contest evidence {ref} does not resolve to a durable EvidenceRecord"))
         ctx.log("VALIDATION", "PASS")
         return None
 

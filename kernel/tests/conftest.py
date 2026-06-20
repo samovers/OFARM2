@@ -71,6 +71,36 @@ def materializer(store):
     return Materializer(store)
 
 
+@pytest.fixture
+def fresh_env():
+    """A FUNCTION-scoped fresh DB + bootstrap, yielding (store, pipeline,
+    outputs). For tests that assert farm-GLOBAL derived state (e.g. a passport's
+    disputeStatus) and must not see — or leak — session-accumulated state."""
+    import uuid as _uuid
+    import psycopg.conninfo
+    from kernel.gates import GatePipeline
+    from kernel.views import OutputGenerator
+    base = os.environ.get("OFARM_PG_DBNAME", "ofarm_kernel_test")
+    dbname = f"{base[:40]}_iso_{_uuid.uuid4().hex[:8]}"
+    with psycopg.connect(_admin_dsn(), autocommit=True) as admin:
+        admin.execute(f'DROP DATABASE IF EXISTS "{dbname}"')
+        admin.execute(f'CREATE DATABASE "{dbname}"')
+    # Build the fresh-DB DSN from the admin DSN's connection params (correct
+    # host/port/user/password) with the fresh dbname — NEVER via
+    # config.database_dsn(), which returns a FIXED OFARM_PG_DSN verbatim in CI and
+    # would silently connect to the shared DB (no isolation).
+    params = psycopg.conninfo.conninfo_to_dict(_admin_dsn())
+    params["dbname"] = dbname
+    s = Store(dsn=psycopg.conninfo.make_conninfo(**params))
+    s.migrate()
+    context.bootstrap(s)
+    demo.bootstrap(s)
+    yield s, GatePipeline(s), OutputGenerator(s)
+    s.close()
+    with psycopg.connect(_admin_dsn(), autocommit=True) as admin:
+        admin.execute(f'DROP DATABASE IF EXISTS "{dbname}"')
+
+
 def pytest_runtest_logreport(report):
     # the evidence file claims the named conformance suite, so it carries
     # conformance results only; engineering tests (test_stages.py) run in

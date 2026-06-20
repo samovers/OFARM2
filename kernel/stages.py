@@ -215,8 +215,12 @@ class IngressNormalizer:
         ctx.requested_target = sub.get("requestedPromotionTarget")
         if ctx.requested_target:
             ingress_request["requestedPromotionTarget"] = ctx.requested_target
-        ctx.acceptance_target = (sub.get("reviewTargetAssertionRef")
-                                 if ctx.commit_class == "GOVERNANCE_DECISION" else None)
+        # the review-decision target ref: an assertion for accept/reject, an
+        # in-force consequence for contest (G5-4). One ctx field, the validator
+        # branch interprets it per the resolved review verb.
+        ctx.acceptance_target = (
+            (sub.get("reviewTargetAssertionRef") or sub.get("reviewTargetConsequenceRef"))
+            if ctx.commit_class == "GOVERNANCE_DECISION" else None)
         if ctx.commit_class == "GOVERNANCE_DECISION":
             # the review-decision verb is the (reviewAction, decisionOutcomeState)
             # pair (G5-1 §3.1). ABSENT reviewAction is legacy REVIEW_ACCEPT; a
@@ -520,6 +524,8 @@ class ReviewPromotionGate:
             # decline with none (G5; docs/REVIEW_DISPUTE_SEMANTICS.md §3).
             if ctx.review_branch == "REJECT":
                 emitter.emit_queue_rejection()
+            elif ctx.review_branch == "CONTEST":
+                emitter.emit_queue_contest()
             else:
                 emitter.emit_queue_acceptance()
             return GatePass()
