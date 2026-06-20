@@ -149,10 +149,11 @@ def test_m3_partial_extent_without_bound_stays_draft(pipeline):
 def test_m3_partial_extent_with_invalid_bound_ref_stays_draft(
         pipeline, ref_field, ref_value, why):
     # PR #6 re-reviews: a non-whole extent whose only "bound" is a ref that does
-    # not resolve to a recognized extent-bound carrier is a fake bound. M1 has
-    # no extent ingestion surface (policy.M1_ALLOWED_EXTENT_BOUND_KINDS empty),
-    # so both dangling AND wrong-kind existing refs must refuse — "resolves to
-    # something" is not "resolves to the right kind of thing".
+    # not resolve to a recognized extent-bound carrier is a fake bound. Even with
+    # the extent-carrier kind recognized (G7, policy.ALLOWED_EXTENT_BOUND_KINDS
+    # holds the PartialExtent), both dangling AND wrong-kind existing refs (Party
+    # / EvidenceRecord / Identity) must refuse — "resolves to something" is not
+    # "resolves to the right kind of thing".
     sub = demo.spray_submission(f"m3-bad:{uid()}", erp_id=f"erp:m3b.{uid()}")
     sub["payload"]["executionExtent"] = {
         "extentClass": "PARTIAL_TARGET_SCOPE",

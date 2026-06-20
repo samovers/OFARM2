@@ -709,12 +709,12 @@ class ExecutionExtentValidator:
     REAL. A PARTIAL_TARGET_SCOPE / FAILED_PASS / RETREATMENT_AREA / DISPUTED_AREA
     / EXTERNAL_GEOMETRY_REFERENCE claim must carry an inline `area` (value+unit)
     or an extent ref (geometryRef / extentRef / scopeExtentBasisRef) that
-    RESOLVES in the store. No bound at all, or a bound whose only ref is
-    dangling/fake, is an incomplete carrier — "size treated" is a required SI
-    record field — so the claim stays a draft, never silently materialized as
-    whole-scope (corrected and resubmitted, like a dose missing its unit).
-    M1 has no geometry/extent ingestion path, so a ref bound resolves only once
-    such a record exists; the inline `area` is the always-available bound."""
+    resolves to a recognized extent-carrier kind (policy.ALLOWED_EXTENT_BOUND_KINDS
+    — the PartialExtent, G7). No bound at all, or a bound whose only ref is
+    dangling or of the wrong kind, is an incomplete carrier — "size treated" is
+    a required SI record field — so the claim stays a draft, never silently
+    materialized as whole-scope (corrected and resubmitted, like a dose missing
+    its unit). The inline `area` remains an always-available bound."""
 
     def run(self, ctx: GateContext) -> GateRefusal | None:
         extent = ctx.sub["payload"].get("executionExtent", {})
@@ -734,13 +734,14 @@ class ExecutionExtentValidator:
                 rationale="non-whole extent carries no quantified bound")
         # a ref bound must resolve to a RECOGNIZED extent-bound carrier kind —
         # "resolves to something" is not "resolves to the right kind of thing".
-        # policy.M1_ALLOWED_EXTENT_BOUND_KINDS is empty in M1 (no extent
-        # ingestion surface), so both a dangling ref and a wrong-kind existing
-        # record are invalid bounds; inline `area` is the only M1 bound.
+        # policy.ALLOWED_EXTENT_BOUND_KINDS recognizes the generic extent-carrier
+        # (PartialExtent, G7), so a ref resolving to one is a real bound; a
+        # dangling ref or a wrong-kind existing record is still invalid; inline
+        # `area` remains an always-available bound.
         invalid = []
         for ref in present_refs:
             row = ctx.store.get_record(ref)
-            if row is None or row["record_kind"] not in policy.M1_ALLOWED_EXTENT_BOUND_KINDS:
+            if row is None or row["record_kind"] not in policy.ALLOWED_EXTENT_BOUND_KINDS:
                 invalid.append(ref)
         if invalid:
             return _refusal(ctx, "FAIL_REFERENCE_RESOLUTION", runtime_problem(
