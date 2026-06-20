@@ -237,29 +237,131 @@ class ContextAssembler:
         profiles = self.store.find_by_kind("ofarm.agronomiccodebindingprofile.v0.1")
         if not (artifact_sets and activation_sets and profiles):
             raise RuntimeError("context spine not bootstrapped — call context.bootstrap(store)")
-        if as_of is not None and (len(artifact_sets) > 1 or len(activation_sets) > 1
-                                  or len(profiles) > 1):
-            # the single-profile M1 pilot has no versioned activation history
-            # to select from — with multiple activation/profile/artifact-set
-            # records, silently using the latest would apply a possibly-future
-            # pack/profile context to an earlier state. Refuse instead
-            # (hostile re-review finding 4).
-            raise ContextNotReconstructible(
-                "multiple activation/profile/artifact-set records exist; the "
-                "historical pack/profile context for AS_OF cannot be "
-                "reconstructed in this runtime — refusing rather than silently "
-                "using the latest")
-        # latest of each (single-profile pilot: exactly one of each is shipped)
-        artifact_set = artifact_sets[-1]["payload"]
-        activation_set = activation_sets[-1]["payload"]
-        profile = profiles[-1]["payload"]
+        if as_of is None:
+            # NOW: the latest of each (single-profile pilot ships exactly one)
+            artifact_set = artifact_sets[-1]["payload"]
+            activation_set = activation_sets[-1]["payload"]
+            profile = profiles[-1]["payload"]
+        else:
+            # AS_OF: reconstruct the vintage in force at as_of by each family's
+            # effective timestamp (G6). Each family selects the latest effective
+            # <= as_of; a future vintage is never applied to an earlier state,
+            # whether it is one of several or the only record (a single record is
+            # not privileged to skip the time bound). The whole spine must be in
+            # force: if ANY family has no vintage in force at as_of, the context
+            # is not reconstructible. Refuse over pretend (Kernel rule 7) when no
+            # vintage is in force or the latest is ambiguous (identical timestamps
+            # -> cannot pick deterministically).
+            bound = parse_ts(as_of)
+            if bound is None:
+                raise ContextNotReconstructible(
+                    f"AS_OF time {as_of!r} is unparseable — refusing to guess a vintage")
+            artifact_set = self._vintage(artifact_sets, "generatedAt", bound, "ActiveArtifactSet")
+            activation_set = self._vintage(activation_sets, "evaluatedAt", bound, "PackActivationSet")
+            profile = self._vintage(profiles, "issuedAt", bound, "AgronomicCodeBindingProfile")
         if profile["profileState"] != "ACTIVE":
-            raise RuntimeError(f"code-binding profile state is {profile['profileState']}, not ACTIVE")
+            if as_of is None:
+                # NOW: a non-ACTIVE current profile is a bootstrap/configuration
+                # error — fail loud, do not serve from it.
+                raise RuntimeError(f"code-binding profile state is {profile['profileState']}, not ACTIVE")
+            # AS_OF: G6 selects the profile vintage in force by issuedAt; if that
+            # vintage is not ACTIVE the historical context cannot be reconstructed
+            # into a usable profile, so refuse over pretend (rule 7) — a governed
+            # MATERIALIZATION_INVALID via resolve_for_use, never an uncaught 500.
+            # NOTE: whether a non-ACTIVE in-force vintage should instead be SKIPPED
+            # in favour of the latest ACTIVE one is a profile-lifecycle decision
+            # (supersession/draft semantics) deferred beyond G6's timestamp-based
+            # selection — recorded as ERRATA E-007.
+            raise ContextNotReconstructible(
+                f"the AgronomicCodeBindingProfile vintage in force at {bound.isoformat()} is "
+                f"{profile['profileState']}, not ACTIVE — the historical context cannot be "
+                "reconstructed into a usable profile")
+        if as_of is not None:
+            # AS_OF selects the three families independently by their own
+            # timestamps, but they are NOT independent: the ActiveArtifactSet is
+            # the integrated, derived artifact — it records the activation it was
+            # generated from and the code-binding profile it deployed. Verify the
+            # independently time-selected activation/profile actually cohere with
+            # it, or refuse rather than synthesize a context that never existed
+            # together (steward hostile re-review; refuse over pretend, rule 7).
+            self._assert_coherent_spine(artifact_set, activation_set, profile, bound)
         return {
             "artifact_set": artifact_set,
             "activation_set": activation_set,
             "profile": profile,
         }
+
+    @staticmethod
+    def _vintage(records: list[dict], date_field: str, bound, label: str) -> dict:
+        """The spine-family vintage in force at `bound` (AS_OF, G6): the latest
+        `date_field` that is <= bound. The same rule governs one record or many —
+        a single record is NOT privileged to skip the time bound: a future vintage
+        (effective > bound) is excluded whether or not it is the only one, never
+        applied to an earlier state (Kernel rule 6). Refuse (ContextNotReconstructible)
+        when none is in force (none datable <= bound), or when two share the latest
+        timestamp and the choice is ambiguous — refuse over pretend (rule 7), never
+        silently use the latest."""
+        dated = []
+        for r in records:
+            eff = parse_ts(r["payload"].get(date_field))
+            if eff is not None and eff <= bound:
+                dated.append((eff, r["payload"]))
+        if not dated:
+            raise ContextNotReconstructible(
+                f"no {label} vintage was in force at {bound.isoformat()} (by {date_field}); "
+                "the historical context cannot be reconstructed")
+        latest = max(eff for eff, _ in dated)
+        in_force = [p for eff, p in dated if eff == latest]
+        if len(in_force) > 1:
+            raise ContextNotReconstructible(
+                f"{label} history is ambiguous at {bound.isoformat()}: "
+                f"{len(in_force)} records share the latest {date_field} {latest.isoformat()} — "
+                "refusing rather than guessing which vintage was in force")
+        return in_force[0]
+
+    @staticmethod
+    def _assert_coherent_spine(artifact_set: dict, activation_set: dict,
+                               profile: dict, bound) -> None:
+        """Refuse an AS_OF spine whose independently time-selected families never
+        formed a real deployment together (G6 steward hostile re-review). The
+        ActiveArtifactSet is the integrated, derived artifact: it carries the
+        PackActivationSet(s) it was generated from, the active pack/profile refs
+        it deployed, and the concrete artifacts (incl. the code-binding profile)
+        it shipped. So the in-force activation and code-binding profile selected
+        by their own timestamps must match the in-force artifact set, or the
+        context is a synthetic fiction (e.g. artifact-from-A0 + activation-A1
+        when no artifact set was ever generated from A1). ContextNotReconstructible
+        is governed to MATERIALIZATION_INVALID by resolve_for_use."""
+        when = bound.isoformat()
+        act_id = activation_set["packActivationSetId"]
+        source = artifact_set.get("sourcePackActivationSetRefs")
+        # The ActiveArtifactSet is derived FROM activation(s); the in-force one
+        # must record the in-force activation as a source. A missing or EMPTY
+        # source list records no lineage and so cannot be reconciled with any
+        # activation — refuse rather than pair on unverifiable provenance (an
+        # empty/None list is falsy and must NOT silently skip the inclusion test).
+        if not source or act_id not in source:
+            recorded = f"was generated from {source}" if source else "records no source PackActivationSet"
+            raise ContextNotReconstructible(
+                f"AS_OF spine at {when} is incoherent: the in-force ActiveArtifactSet {recorded}, "
+                f"so it cannot be paired with the in-force PackActivationSet {act_id!r} — refusing to "
+                "synthesize a pack/artifact context that never existed together")
+        if set(artifact_set.get("activePackRefs", [])) != set(activation_set.get("activePackRefs", [])):
+            raise ContextNotReconstructible(
+                f"AS_OF spine at {when} is incoherent: ActiveArtifactSet activePackRefs "
+                f"{artifact_set.get('activePackRefs')} != PackActivationSet activePackRefs "
+                f"{activation_set.get('activePackRefs')} — refusing rather than synthesize a context")
+        if set(artifact_set.get("activeProfileRefs", [])) != set(activation_set.get("activeProfileRefs", [])):
+            raise ContextNotReconstructible(
+                f"AS_OF spine at {when} is incoherent: ActiveArtifactSet activeProfileRefs "
+                f"{artifact_set.get('activeProfileRefs')} != PackActivationSet activeProfileRefs "
+                f"{activation_set.get('activeProfileRefs')} — refusing rather than synthesize a context")
+        cb_id = profile["agronomicCodeBindingProfileId"]
+        if cb_id not in artifact_set.get("activeArtifactRefs", []):
+            raise ContextNotReconstructible(
+                f"AS_OF spine at {when} is incoherent: the in-force AgronomicCodeBindingProfile {cb_id!r} "
+                "is not among the in-force ActiveArtifactSet's deployed artifacts — refusing to pair a "
+                "code-binding profile vintage with an artifact set that did not deploy it")
 
     def assemble(self, cur, farm_ref: str, *, target_twin: str = "COMPLIANCE",
                  evaluation_time_policy: dict | None = None) -> dict:
