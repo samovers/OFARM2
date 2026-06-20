@@ -117,12 +117,19 @@ def substrate_records() -> list[dict]:
          "grantedByPartyRef": FARMER,
          "grantTarget": {"targetKind": "PARTY", "targetRef": ADVISOR},
          "targetScope": farm_scope,
-         "authorityActionClasses": ["REVIEW_ACCEPT", "RECEIVE_READ_DATA"],
+         # REVIEW_REJECT_OR_CONTEST is a SEPARATE govern/decide action from
+         # REVIEW_ACCEPT (Authority Action Matrix; NO_INHERIT). The distinct
+         # reviewer holds both — accept and decline; the holding farmer holds
+         # only REVIEW_ACCEPT, so a farmer-initiated reject is default-denied
+         # (G5; docs/REVIEW_DISPUTE_SEMANTICS.md §3.2).
+         "authorityActionClasses": ["REVIEW_ACCEPT", "REVIEW_REJECT_OR_CONTEST",
+                                    "RECEIVE_READ_DATA"],
          "validFrom": VALID_FROM,
          "inheritanceMode": "NO_INHERIT",
          "grantState": "ACTIVE",
-         "purpose": "advisor reviews queue exceptions and non-routine claims "
-                    "(D8: self-review covers routine operation claims only)"},
+         "purpose": "advisor reviews queue exceptions and non-routine claims — "
+                    "accepts or rejects (D8: self-review covers routine operation "
+                    "claims only)"},
 
         {"schemaVersion": "ofarm.delegationgrant.v0.1",
          "delegationGrantId": WORKER_DELEGATION,

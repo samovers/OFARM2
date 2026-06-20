@@ -135,7 +135,8 @@
         "OUTPUT_APPROVE_DOCUMENT_ASSEMBLY",
         "OUTPUT_FILE_SUBMISSION_ASSEMBLY",
         "RECEIVE_READ_DATA",
-        "REVIEW_ACCEPT"
+        "REVIEW_ACCEPT",
+        "REVIEW_REJECT_OR_CONTEST"
       ],
       "supportsHumanOnlyRestrictions": true
     },
