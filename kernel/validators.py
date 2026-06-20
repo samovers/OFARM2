@@ -252,6 +252,19 @@ class GovernanceAcceptanceValidator:
     def run(self, ctx: GateContext) -> GateRefusal | None:
         if ctx.commit_class != "GOVERNANCE_DECISION":
             return None
+        # Resolve the review-decision verb fail-closed (G5 §3.1): the
+        # (reviewAction, decisionOutcomeState) pair must name a supported branch.
+        # CONTESTED (deferred to G5-3), a mismatched outcome, or any unsupported
+        # combination refuses here — never silently treated as accept or reject.
+        branch = policy.review_branch(ctx.review_action, ctx.review_outcome)
+        if branch is None:
+            return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
+                "EVIDENCE_INSUFFICIENT", "Unsupported review decision",
+                f"reviewAction {ctx.review_action!r} with decisionOutcomeState "
+                f"{ctx.review_outcome!r} is not a supported review decision "
+                "(CONTEST is deferred to G5-3); refused rather than guessed"))
+        ctx.review_branch = branch
+        is_reject = branch == "REJECT"
         target_ref = ctx.sub.get("reviewTargetAssertionRef")
         if not target_ref:
             return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
@@ -277,61 +290,71 @@ class GovernanceAcceptanceValidator:
             return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
                 "SUPERSEDED_RECORD_USED", "Target already reviewed",
                 f"{target_ref} already carries a review decision"))
-        if target["assertionType"] not in policy.ACCEPTANCE_BY_ASSERTION_TYPE:
+        # the acceptance-path type gate is a PROMOTION guard — a reject promotes
+        # nothing, so REJECT is NOT type-gated (G5 §3.3): a reviewer may decline a
+        # queued claim of any kind, including one with no acceptance path.
+        if not is_reject \
+                and target["assertionType"] not in policy.ACCEPTANCE_BY_ASSERTION_TYPE:
             return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
                 "IDENTITY_UNRESOLVED", "Assertion type not acceptable",
                 f"{target['assertionType']} has no acceptance path"))
-        # D8 holds at the queue door too: self-acceptance covers ROUTINE
-        # OPERATION CLAIMS only
+        # D8 holds at the queue door for BOTH verbs: a party self-deciding its
+        # own queued claim (accept OR reject) covers ROUTINE OPERATION CLAIMS only
+        # (G5 §3.2 reuses the distinct-reviewer bound for reject)
         if (target["assertedByPartyRef"] == ctx.acting_party
                 and target["assertionType"]
                 not in policy.SELF_ACCEPTABLE_ASSERTION_TYPES):
             return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
-                "HUMAN_APPROVAL_REQUIRED", "Self-acceptance out of scope",
+                "HUMAN_APPROVAL_REQUIRED", "Self-review out of scope",
                 f"self-review covers routine operation claims only (D8); "
-                f"{target['assertionType']} asserted by the accepting party "
-                "requires a DISTINCT reviewer principal"))
+                f"{target['assertionType']} asserted by the acting party requires a "
+                "DISTINCT reviewer principal — for either acceptance or rejection"))
         # Acceptance-time re-validation (TOCTOU): the world can change between a
         # claim being queued and a reviewer accepting it, so supersession/D18 is
         # re-checked against CURRENT in-force state, not the state at submission
         # (PR #9 re-review blockers). The queued correction's supersession target
-        # is the LINEAGE_SUPERSEDES_INTENT edge recorded at queue time.
-        intent_edges = ctx.store.edges_from(target_ref, "LINEAGE_SUPERSEDES_INTENT")
-        intent = intent_edges[0]["dst_record_id"] if intent_edges else None
-        if target["assertionType"] == "STRUCTURE_ASSERTION":
-            identity_ref = _structure_target_identity(ctx, target_ref)
-            in_force = (_in_force_structural_consequences_for(ctx, identity_ref)
-                        if identity_ref else [])
-            if len(in_force) > 1:
+        # is the LINEAGE_SUPERSEDES_INTENT edge recorded at queue time. This is a
+        # PROMOTION guard: a reject retires nothing (the prior consequence stays
+        # in force, the supersession intent is abandoned — G5 §3.4), so REJECT
+        # skips it entirely.
+        if not is_reject:
+            intent_edges = ctx.store.edges_from(target_ref, "LINEAGE_SUPERSEDES_INTENT")
+            intent = intent_edges[0]["dst_record_id"] if intent_edges else None
+            if target["assertionType"] == "STRUCTURE_ASSERTION":
+                identity_ref = _structure_target_identity(ctx, target_ref)
+                in_force = (_in_force_structural_consequences_for(ctx, identity_ref)
+                            if identity_ref else [])
+                if len(in_force) > 1:
+                    return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
+                        "CORRECTION_REQUIRED", "Ambiguous structural state",
+                        f"{identity_ref} has multiple in-force structural consequences "
+                        f"{in_force}; refusing rather than silently choosing one"))
+                if in_force and not intent:
+                    return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
+                        "CORRECTION_REQUIRED", "Existing identity requires supersession",
+                        f"{identity_ref} now has current structural state ({in_force[0]}) that "
+                        "was not in force when this was queued; it must explicitly supersede "
+                        "that consequence (D18) — resubmit as a revision or a new identity"))
+                if intent and intent not in in_force:
+                    return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
+                        "SUPERSEDED_RECORD_USED", "Queued supersession target not current",
+                        f"the consequence this queued correction would supersede ({intent}) is "
+                        f"no longer {identity_ref}'s current structural state; resubmit against "
+                        "the current consequence"))
+            elif intent and ctx.store.is_superseded(intent):
+                # a non-structure queued correction whose target was superseded since
+                # it was queued must not silently re-supersede it
                 return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
-                    "CORRECTION_REQUIRED", "Ambiguous structural state",
-                    f"{identity_ref} has multiple in-force structural consequences "
-                    f"{in_force}; refusing rather than silently choosing one"))
-            if in_force and not intent:
-                return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
-                    "CORRECTION_REQUIRED", "Existing identity requires supersession",
-                    f"{identity_ref} now has current structural state ({in_force[0]}) that "
-                    "was not in force when this was queued; it must explicitly supersede "
-                    "that consequence (D18) — resubmit as a revision or a new identity"))
-            if intent and intent not in in_force:
-                return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
-                    "SUPERSEDED_RECORD_USED", "Queued supersession target not current",
-                    f"the consequence this queued correction would supersede ({intent}) is "
-                    f"no longer {identity_ref}'s current structural state; resubmit against "
-                    "the current consequence"))
-        elif intent and ctx.store.is_superseded(intent):
-            # a non-structure queued correction whose target was superseded since
-            # it was queued must not silently re-supersede it
-            return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
-                "SUPERSEDED_RECORD_USED", "Queued supersession target already superseded",
-                f"the consequence this queued correction would supersede ({intent}) has "
-                "itself been superseded since it was queued; resubmit against current state"))
-        # a review act is governed, never a bare pointer
+                    "SUPERSEDED_RECORD_USED", "Queued supersession target already superseded",
+                    f"the consequence this queued correction would supersede ({intent}) has "
+                    "itself been superseded since it was queued; resubmit against current state"))
+        # a review decision (accept OR reject) is governed, never a bare pointer:
+        # both must state a non-empty rationale (G5 §3.3; Kernel rule 7)
         rationale_text = ctx.sub.get("reviewRationale")
         if not (isinstance(rationale_text, str) and rationale_text.strip()):
             return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
-                "EVIDENCE_INSUFFICIENT", "Acceptance without rationale",
-                "a review acceptance must state its resolution rationale"))
+                "EVIDENCE_INSUFFICIENT", "Review decision without rationale",
+                "a review decision must state its rationale"))
         for ref in ctx.sub.get("reviewEvidenceRefs") or []:
             ev_row = ctx.store.get_record(ref)
             if ev_row is None or ev_row["record_kind"] != "ofarm.evidencerecord.v0.1":

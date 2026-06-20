@@ -312,6 +312,45 @@ class PromotionEmitter:
         ctx.trigger_source = consequence_id
         ctx.invalidation_sources = [superseded] if superseded else [consequence_id]
 
+    def emit_queue_rejection(self) -> None:
+        """Queue rejection (M2 G5-2): the reviewer's OWN governed decline. The
+        append-only mirror of emit_queue_acceptance MINUS the consequence —
+        appends a ReviewDecision (REVIEW_REJECT_OR_CONTEST / REJECTED) + a REVIEW
+        edge, and emits NO AcceptedEventConsequence and resolves NO supersession:
+        a declined claim promotes nothing and retires nothing, so the prior
+        in-force consequence (if the rejected claim was a correction) stays in
+        force and its supersession intent is abandoned (docs/REVIEW_DISPUTE_
+        SEMANTICS.md §3). The decision registers in ctx.emitted['reviews'] so the
+        generic PromotionTraceWriter carries it as a receipt (D3); the queued
+        assertion is never edited — its terminal REJECTED disposition is derived
+        from this REVIEW edge. Commit outcome is RETAIN_DRAFT (nothing promoted)."""
+        ctx, sub = self.ctx, self.ctx.sub
+        review_id = mint("review")
+        review = {
+            "schemaVersion": "ofarm.reviewdecision.v0.1",
+            "reviewDecisionId": review_id,
+            "reviewedArtifactFamily": "ASSERTION_RECORD",
+            "reviewedArtifactRef": ctx.acceptance_target,
+            "reviewAction": "REVIEW_REJECT_OR_CONTEST",
+            "anchorScopes": [{"scopeType": "FARM", "scopeRef": ctx.farm_ref}],
+            "decidedByPartyRef": ctx.acting_party,
+            "decidedAt": now_iso(),
+            "decisionOutcomeState": "REJECTED",
+            # the decline carries its own rationale — validated non-empty at the
+            # validation gate; no resultingAcceptedConsequenceRefs (nothing promoted)
+            "notes": "rejection: " + sub["reviewRationale"].strip(),
+        }
+        if sub.get("reviewEvidenceRefs"):
+            review["evidenceRefs"] = sub["reviewEvidenceRefs"]
+        ctx.store.insert_record(ctx.cur, review)
+        ctx.emitted["reviews"].append(review_id)
+        ctx.store.add_edge(ctx.cur, "REVIEW", ctx.acceptance_target, review_id)
+        for ev in sub.get("reviewEvidenceRefs") or []:
+            ctx.store.add_edge(ctx.cur, "EVIDENCE", review_id, ev)
+
+        ctx.log("REVIEW_PROMOTION", "RETAIN_DRAFT", refs=[review_id])
+        ctx.final_outcome = "RETAIN_DRAFT"
+
 
 class PromotionTraceWriter:
     """One obvious home for reachability and emitted-ref accounting: the

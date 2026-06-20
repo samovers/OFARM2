@@ -195,6 +195,37 @@ def create_app(store: Store | None = None, *, oidc=_FROM_ENV) -> FastAPI:
         except (ContractViolation, KeyError) as exc:
             raise HTTPException(status_code=422, detail=str(exc))
 
+    @app.post("/review/reject")
+    def review_reject(body: ReviewAcceptBody, principal: str = Depends(get_principal)):
+        # the reject act is the REVIEWER'S own governed decline under their own
+        # transport principal (M2 G5-2). The endpoint supplies the normalized
+        # review-decision pair (REVIEW_REJECT_OR_CONTEST / REJECTED) so the client
+        # never passes raw outcome values (docs/REVIEW_DISPUTE_SEMANTICS.md §3.1).
+        # Authority is the DISTINCT REVIEW_REJECT_OR_CONTEST action — a principal
+        # holding only REVIEW_ACCEPT is denied. The rationale is mandatory;
+        # supplied evidence is validated like acceptance's.
+        import uuid as _uuid
+        from .context import now_iso as _now
+        submission = {
+            "commitClass": "GOVERNANCE_DECISION",
+            "ingressChannel": "MANUAL_UI",
+            "actingPartyRef": principal,
+            "farmRef": body.farmRef,
+            "idempotencyKey": body.idempotencyKey
+                              or f"review-reject:{_uuid.uuid4().hex[:16]}",
+            "decisionTime": _now(),
+            "reviewTargetAssertionRef": body.assertionRef,
+            "reviewAction": "REVIEW_REJECT_OR_CONTEST",
+            "decisionOutcomeState": "REJECTED",
+            "reviewRationale": body.rationale,
+            "reviewEvidenceRefs": body.evidenceRefs,
+            "dominantSemanticConsequence": "review rejection of a queued claim",
+        }
+        try:
+            return app.state.pipeline.commit(submission)
+        except (ContractViolation, KeyError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+
     @app.get("/records/{record_id}")
     def get_record(record_id: str, principal: str = Depends(get_principal)):
         store = app.state.store

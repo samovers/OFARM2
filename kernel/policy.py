@@ -41,6 +41,9 @@ COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS = {
     "OPERATION_CLAIM": "ASSERT_OPERATION_CLAIM",
     "EVIDENCE_RECORD": "OBSERVE_ATTACH_EVIDENCE",
     "COMPLIANCE_ASSERTION": "ASSERT_COMPLIANCE",
+    # GOVERNANCE_DECISION's effective authority action is selected per-commit by
+    # the review verb (REVIEW_ACTION_AUTHORITY, G5) at the AuthorityGate; this
+    # entry is the table-closure default + manifest/grounding anchor for the class.
     "GOVERNANCE_DECISION": "REVIEW_ACCEPT",
     "ADVISORY_OUTPUT": "OBSERVE_CREATE_OBSERVATION",
 }
@@ -84,10 +87,53 @@ ACCEPTANCE_BY_ASSERTION_TYPE = {
 # evaluate() call sites themselves are the things these ground.)
 NON_COMMIT_ACTION_CLASSES = frozenset({
     "REVIEW_ACCEPT",
+    "REVIEW_REJECT_OR_CONTEST",
     "OUTPUT_APPROVE_DOCUMENT_ASSEMBLY",
     "OUTPUT_FILE_SUBMISSION_ASSEMBLY",
     "RECEIVE_READ_DATA",
 })
+
+# A review decision (M2 G5) is the normalized (reviewAction, decisionOutcomeState)
+# pair (D20 / docs/REVIEW_DISPUTE_SEMANTICS.md §3.1). reviewAction selects the
+# AUTHORITY action — REJECT/CONTEST share REVIEW_REJECT_OR_CONTEST, distinct from
+# REVIEW_ACCEPT (Authority Action Matrix; NO_INHERIT, so holding one never confers
+# the other). An unrecognized verb maps to no action and the AuthorityGate
+# default-denies (Kernel rule 2). REVIEW_SUPERSEDE / REVIEW_REQUEST are not wired
+# in G5 and so are absent here (they refuse the same way).
+REVIEW_ACTION_AUTHORITY = {
+    "REVIEW_ACCEPT": "REVIEW_ACCEPT",
+    "REVIEW_REJECT_OR_CONTEST": "REVIEW_REJECT_OR_CONTEST",
+}
+
+
+class _Absent:
+    """Sentinel: a review-decision field was NOT present in the submission, as
+    distinct from present-but-null. Absence carries the legacy default; a present
+    value (even null) is taken verbatim and the fail-closed matrix judges it."""
+    __slots__ = ()
+    def __repr__(self):  # noqa: E301 - clean repr for refusal detail text
+        return "<absent>"
+
+
+ABSENT = _Absent()
+
+
+def review_branch(review_action, decision_outcome) -> str | None:
+    """The emission branch for a normalized review-decision pair, or None to
+    refuse FAIL-CLOSED (docs/REVIEW_DISPUTE_SEMANTICS.md §3.1). Returns 'ACCEPT'
+    or 'REJECT'. There is NO truthiness default: an *absent* field arrives as the
+    ABSENT sentinel (IngressNormalizer), distinct from present-null. So a present
+    falsey / non-string / unrecognized reviewAction OR decisionOutcomeState
+    matches neither arm and returns None (refuse), never coerced to accept
+    (PR #18 review B1 + decisionOutcomeState blocker). REVIEW_ACCEPT accepts only
+    when the outcome is ABSENT or the exact string 'ACCEPTED'; present null / ''
+    / false / number / list / unsupported string refuse. CONTEST (CONTESTED) is
+    deferred to G5-3 and likewise returns None."""
+    if review_action == "REVIEW_ACCEPT" and decision_outcome in (ABSENT, "ACCEPTED"):
+        return "ACCEPT"
+    if review_action == "REVIEW_REJECT_OR_CONTEST" and decision_outcome == "REJECTED":
+        return "REJECT"
+    return None
 
 # D8: self-acceptance from the review queue is lawful ONLY for routine
 # operation claims; everything else needs a distinct reviewer principal

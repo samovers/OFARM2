@@ -82,6 +82,11 @@ class GateContext:
     requested_target: str | None = None
     acceptance_target: str | None = None
     acceptance_payload: dict | None = None   # the target assertion, fetched once
+    # the normalized review-decision verb (M2 G5): reviewAction selects the
+    # authority action, decisionOutcomeState selects the emission branch
+    review_action: Any = "REVIEW_ACCEPT"     # kept verbatim from the submission
+    review_outcome: Any = None               # value, or policy.ABSENT if omitted
+    review_branch: str = "ACCEPT"            # resolved by policy.review_branch
     # stage products
     authz_decision: Any = None
     erp_id: str | None = None
@@ -212,6 +217,22 @@ class IngressNormalizer:
             ingress_request["requestedPromotionTarget"] = ctx.requested_target
         ctx.acceptance_target = (sub.get("reviewTargetAssertionRef")
                                  if ctx.commit_class == "GOVERNANCE_DECISION" else None)
+        if ctx.commit_class == "GOVERNANCE_DECISION":
+            # the review-decision verb is the (reviewAction, decisionOutcomeState)
+            # pair (G5-1 §3.1). ABSENT reviewAction is legacy REVIEW_ACCEPT; a
+            # PRESENT value is kept VERBATIM (even falsey / non-string) so the
+            # fail-closed matrix refuses it rather than truthiness-coercing it to
+            # accept (PR #18 review B1). The pair is validated downstream:
+            # authority by verb (AuthorityGate), outcome/branch by the
+            # GovernanceAcceptanceValidator — never silently accepted.
+            ctx.review_action = (sub["reviewAction"] if "reviewAction" in sub
+                                 else "REVIEW_ACCEPT")
+            # decisionOutcomeState gets the same absent-vs-present treatment: a
+            # present null must NOT read as absent and route to legacy accept —
+            # ABSENT (sentinel) is the only outcome that defaults to accept
+            # (PR #18 decisionOutcomeState blocker)
+            ctx.review_outcome = (sub["decisionOutcomeState"]
+                                  if "decisionOutcomeState" in sub else policy.ABSENT)
         ctx.store.insert_record(ctx.cur, ingress_request)
         ctx.log("INGRESS_NORMALIZATION", "NORMALIZED_DRAFT")
         return GatePass()
@@ -224,9 +245,31 @@ class IngressNormalizer:
 class AuthorityGate:
     def run(self, ctx: GateContext) -> GatePass | GateRefusal:
         sub = ctx.sub
+        # A GOVERNANCE_DECISION's authority action is selected by the review verb
+        # (G5): REVIEW_ACCEPT vs the distinct REVIEW_REJECT_OR_CONTEST. An
+        # unrecognized/unwired verb maps to no action — default-deny (Kernel rule
+        # 2), never a silent fall-through to accept.
+        if ctx.commit_class == "GOVERNANCE_DECISION":
+            # a present non-string verb (null / false / list / number) is
+            # unrecognized, not accept — isinstance keeps the lookup from
+            # raising on an unhashable value and routes it to default-deny (B1)
+            ra = ctx.review_action
+            action_class = (policy.REVIEW_ACTION_AUTHORITY.get(ra)
+                            if isinstance(ra, str) else None)
+            if action_class is None:
+                problem = runtime_problem(
+                    "AUTHORITY_DENIED", "Unrecognized review action",
+                    f"reviewAction {ctx.review_action!r} resolves to no authority "
+                    "action; default deny", problem_id="problem:review-action-unknown")
+                ctx.log("AUTHORITY", "DENY", reason_code="AUTHORITY_DENIED",
+                        rationale="unrecognized review verb resolves to no action")
+                ctx.final_outcome = "DENY"
+                return GateRefusal("AUTHORITY", "DENY", "DENY", [problem])
+        else:
+            action_class = policy.COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS[ctx.commit_class]
         decision = ctx.authority.evaluate(
             acting_party_ref=ctx.acting_party,
-            action_class=policy.COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS[ctx.commit_class],
+            action_class=action_class,
             action_stage="PROMOTION",
             scope={"scopeType": "FARM", "scopeRef": ctx.farm_ref},
             acting_agent_ref=sub.get("actingAgentRef"),
@@ -335,7 +378,14 @@ class ProfileApplicabilityGate:
 
 class EvidenceSufficiencyGate:
     def run(self, ctx: GateContext) -> GatePass | GateRefusal:
-        if ctx.acceptance_target:
+        # The acceptance sufficiency case is an ACCEPT-only promotion guard: it
+        # demands NEW reviewer evidence to overcome a NEEDS_EVIDENCE routing and
+        # records a fresh acceptance-oriented case. A REJECT inherits neither
+        # (G5 §3.3): reviewer evidence is optional, declining for missing evidence
+        # needs no new evidence, and the decline is recorded solely in the
+        # ReviewDecision — any existing sufficiency case is left unchanged
+        # (PR #18 review B2). The branch was resolved by the prior ValidationGate.
+        if ctx.acceptance_target and ctx.review_branch == "ACCEPT":
             case = sufficiency.build_acceptance_case(
                 ctx.store, ctx.sub, ctx.farm_ref, ctx.acceptance_payload)
             if case["outcome"]["decision"] == "REFUSE":
@@ -464,7 +514,14 @@ class ReviewPromotionGate:
         promotes = ctx.commit_class in policy.COMMIT_CLASS_TO_PROMOTION_TARGET
 
         if ctx.acceptance_target:
-            emitter.emit_queue_acceptance()
+            # the GovernanceAcceptanceValidator already resolved + validated the
+            # (reviewAction, decisionOutcomeState) pair fail-closed and stashed the
+            # branch; accept promotes a consequence, reject appends a terminal
+            # decline with none (G5; docs/REVIEW_DISPUTE_SEMANTICS.md §3).
+            if ctx.review_branch == "REJECT":
+                emitter.emit_queue_rejection()
+            else:
+                emitter.emit_queue_acceptance()
             return GatePass()
 
         if not promotes:
