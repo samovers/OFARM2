@@ -84,8 +84,8 @@ class GateContext:
     acceptance_payload: dict | None = None   # the target assertion, fetched once
     # the normalized review-decision verb (M2 G5): reviewAction selects the
     # authority action, decisionOutcomeState selects the emission branch
-    review_action: str = "REVIEW_ACCEPT"
-    review_outcome: str | None = None
+    review_action: Any = "REVIEW_ACCEPT"     # kept verbatim from the submission
+    review_outcome: Any = None               # value, or policy.ABSENT if omitted
     review_branch: str = "ACCEPT"            # resolved by policy.review_branch
     # stage products
     authz_decision: Any = None
@@ -227,7 +227,12 @@ class IngressNormalizer:
             # GovernanceAcceptanceValidator — never silently accepted.
             ctx.review_action = (sub["reviewAction"] if "reviewAction" in sub
                                  else "REVIEW_ACCEPT")
-            ctx.review_outcome = sub.get("decisionOutcomeState")
+            # decisionOutcomeState gets the same absent-vs-present treatment: a
+            # present null must NOT read as absent and route to legacy accept —
+            # ABSENT (sentinel) is the only outcome that defaults to accept
+            # (PR #18 decisionOutcomeState blocker)
+            ctx.review_outcome = (sub["decisionOutcomeState"]
+                                  if "decisionOutcomeState" in sub else policy.ABSENT)
         ctx.store.insert_record(ctx.cur, ingress_request)
         ctx.log("INGRESS_NORMALIZATION", "NORMALIZED_DRAFT")
         return GatePass()

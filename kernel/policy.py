@@ -106,16 +106,30 @@ REVIEW_ACTION_AUTHORITY = {
 }
 
 
-def review_branch(review_action: str | None, decision_outcome: str | None) -> str | None:
+class _Absent:
+    """Sentinel: a review-decision field was NOT present in the submission, as
+    distinct from present-but-null. Absence carries the legacy default; a present
+    value (even null) is taken verbatim and the fail-closed matrix judges it."""
+    __slots__ = ()
+    def __repr__(self):  # noqa: E301 - clean repr for refusal detail text
+        return "<absent>"
+
+
+ABSENT = _Absent()
+
+
+def review_branch(review_action, decision_outcome) -> str | None:
     """The emission branch for a normalized review-decision pair, or None to
     refuse FAIL-CLOSED (docs/REVIEW_DISPUTE_SEMANTICS.md §3.1). Returns 'ACCEPT'
-    or 'REJECT'. There is NO truthiness default here: an *absent* reviewAction is
-    normalized to 'REVIEW_ACCEPT' upstream (IngressNormalizer), so a value that
-    reaches this function is taken as-is — a present falsey / non-string /
-    unrecognized value matches neither arm and returns None (refuse), never
-    coerced to accept (PR #18 review B1). CONTEST (decisionOutcomeState
-    CONTESTED) is deferred to G5-3 and likewise returns None."""
-    if review_action == "REVIEW_ACCEPT" and decision_outcome in (None, "ACCEPTED"):
+    or 'REJECT'. There is NO truthiness default: an *absent* field arrives as the
+    ABSENT sentinel (IngressNormalizer), distinct from present-null. So a present
+    falsey / non-string / unrecognized reviewAction OR decisionOutcomeState
+    matches neither arm and returns None (refuse), never coerced to accept
+    (PR #18 review B1 + decisionOutcomeState blocker). REVIEW_ACCEPT accepts only
+    when the outcome is ABSENT or the exact string 'ACCEPTED'; present null / ''
+    / false / number / list / unsupported string refuse. CONTEST (CONTESTED) is
+    deferred to G5-3 and likewise returns None."""
+    if review_action == "REVIEW_ACCEPT" and decision_outcome in (ABSENT, "ACCEPTED"):
         return "ACCEPT"
     if review_action == "REVIEW_REJECT_OR_CONTEST" and decision_outcome == "REJECTED":
         return "REJECT"

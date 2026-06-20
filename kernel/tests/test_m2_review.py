@@ -357,3 +357,26 @@ def test_reject_of_needs_evidence_claim_needs_no_reviewer_evidence(store, pipeli
     assert len(store.find_by_kind(CASE_KIND)) == cases_before
     # nothing promoted -> no materialization basis member
     assert len(store.find_by_kind(CONSEQ_KIND)) == conseq_before
+
+
+def test_present_but_invalid_decision_outcome_never_accepts(store, pipeline):
+    # PR #18 re-review: the accept verb with a PRESENT-but-invalid
+    # decisionOutcomeState (incl. explicit null) must refuse, never route as a
+    # legacy accept — only an ABSENT outcome is the accept default.
+    target = _queue_op(pipeline)
+    base = {
+        "commitClass": "GOVERNANCE_DECISION", "actingPartyRef": demo.ADVISOR,
+        "farmRef": demo.FARM, "decisionTime": context.now_iso(),
+        "reviewTargetAssertionRef": target, "reviewRationale": "a stated rationale",
+        "reviewAction": "REVIEW_ACCEPT",
+    }
+    for bad in (None, "", False, 0, [], "ACCEPT", "accepted", "REJECTED"):
+        sub = dict(base, idempotencyKey=f"badout:{uid()}", decisionOutcomeState=bad)
+        r = pipeline.commit(sub)
+        assert r["decisionOutcome"] == "RETAIN_DRAFT", \
+            f"decisionOutcomeState={bad!r} must not accept"
+        assert r["problems"][0]["reasonCode"] == "EVIDENCE_INSUFFICIENT"
+    assert store.edges_from(target, "REVIEW") == [], "no invalid outcome decided anything"
+    # ABSENT outcome (key omitted) is still the legacy accept default
+    ok = pipeline.commit(dict(base, idempotencyKey=f"absout:{uid()}"))
+    assert ok["decisionOutcome"] == "PROMOTE_ACCEPTED"
