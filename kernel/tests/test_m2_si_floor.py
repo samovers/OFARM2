@@ -226,5 +226,22 @@ def test_malformed_policy_variants_fail_closed(store, pipeline, monkeypatch, tmp
     assert r["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
 
 
+def test_advisory_warning_survives_idempotency_replay(store, pipeline):
+    # the result warning is the ONLY implemented advisory surface (durable records
+    # deferred, E-006), so a matching replay must carry the advisory forward — not
+    # silently drop it for just the replay-info note
+    sub = demo.spray_submission(f"p5-replay:{uid()}", erp_id=f"erp:p5.replay.{uid()}",
+                                confirm=True, dose_value=250.0)
+    first = pipeline.commit(sub)
+    assert first["decisionOutcome"] == "PROMOTE_ACCEPTED"
+    assert "Dose-range advisory" in _problem_titles(first)
+    # the SAME submission (same idempotency key + payload digest) -> matching replay
+    replay = pipeline.commit(sub)
+    assert replay["decisionOutcome"] == "REPLAY_REUSED_RESULT"
+    titles = _problem_titles(replay)
+    assert "Replay reused earlier result" in titles, "the replay-info note is preserved"
+    assert "Dose-range advisory" in titles, "the original advisory survives the replay"
+
+
 # Durable Advisory-Twin record (PassportView _advisory_flags) is DEFERRED — see
 # the module docstring + ERRATA E-006. No passport-durability test here by design.
