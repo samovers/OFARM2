@@ -20,17 +20,33 @@ already-active governance boundaries apply in full if any is ever exposed):
 - sustainability-charter claim features
 - livestock semantics
 
-**Partial-extent ref bounds (M1, declared):** a non-whole `executionExtent`
+**Partial-extent geometry ingestion (SI source, declared):** the extent-carrier
+acceptance *mechanism* now exists (M2 G7). A non-whole `executionExtent`
 (`PARTIAL_TARGET_SCOPE` / `FAILED_PASS` / `RETREATMENT_AREA` / `DISPUTED_AREA`
-/ `EXTERNAL_GEOMETRY_REFERENCE`) must carry an inline `area` (value + unit) in
-M1. The `geometryRef` / `extentRef` / `scopeExtentBasisRef` ref bounds are
-**not accepted**: `ExecutionExtentValidator` resolves them against
-`policy.M1_ALLOWED_EXTENT_BOUND_KINDS`, which is **empty** because M1 has no
-geometry / extent ingestion surface — so no record (dangling or wrong-kind)
-can serve as a real bound. An unquantified non-whole extent refuses
-(`EVIDENCE_INSUFFICIENT`, ERRATA E-004); a ref bound refuses
-(`EVIDENCE_REFERENCE_UNAVAILABLE`); both stay RETAIN_DRAFT. M2 populates the
-allowed-kinds table when an extent carrier is ingested.
+/ `EXTERNAL_GEOMETRY_REFERENCE`) may carry either an inline `area` (value + unit)
+or a `geometryRef` / `extentRef` / `scopeExtentBasisRef` that **resolves to a
+recognized extent-carrier kind** — the generic `PartialExtent`
+(`ofarm.partialextent.v0.1`), now in `policy.ALLOWED_EXTENT_BOUND_KINDS`.
+`ExecutionExtentValidator` still refuses a dangling or wrong-kind ref
+(`EVIDENCE_REFERENCE_UNAVAILABLE`) and an unquantified non-whole extent
+(`EVIDENCE_INSUFFICIENT`, ERRATA E-004); it also refuses a carrier that resolves
+to the right kind but does **not declare itself usable** as a bound — its
+`extentState` is not `ACCEPTED_FOR_DECLARED_USE`, or its own `promotionBoundary`
+forbids the promotion (`mayDriveMaterialization=false`, or `mustNotPromoteTo`
+names a target this accepted operation drives/feeds: `ACCEPTED_EXECUTION` /
+`WHOLE_FIELD_TRUTH` / `CURRENT_STATE_DIRECTLY` / `PASSPORT_VIEW_DEFAULT`) —
+honoring the carrier's declared boundary (Kernel rule 4/7). `COMPLIANCE_FACT` and
+`DURABLE_IDENTITY` are excluded by decision (the claim drives neither). All
+not-usable cases stay RETAIN_DRAFT. **Deliberately deferred
+(beyond G7 kind-recognition):** *scope-containment* of the carrier — whether the
+carrier's `anchorScope`/`parentScope` must be the `executionExtent.targetScope`
+or contained within it — is a coherence relation left for a follow-up (steward's
+call). **Still unsupported in this SI pilot:** the *ingestion* that populates
+PartialExtent carriers from real geometry — the GERK layer supplies per-PID
+existence + raw `AREA` only (attribute import), not coordinate geometry parsed
+into extent magnitudes/carriers (P2). Until that source ships, SI partial-extent
+claims rely on the inline `area` bound; the ref-bound mechanism is exercised by
+generic fixtures, not SI geometry literals.
 
 **Use types beyond surface-areas** (Reg. 2023/564 Annex): closed-space and
 seed-treatment record rows are not implemented in pilot v1

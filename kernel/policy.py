@@ -221,13 +221,38 @@ NON_WHOLE_EXTENT_CLASSES = frozenset({
     "DISPUTED_AREA", "EXTERNAL_GEOMETRY_REFERENCE"})
 
 # record kinds an extent ref (geometryRef / extentRef / scopeExtentBasisRef)
-# may resolve to as a real bound. EMPTY in M1: there is no geometry / extent /
-# scope-extent-basis ingestion surface, so NO record can be a valid ref bound
-# and the only accepted M1 bound is an inline `area` (value+unit). "Resolves to
-# something" is not "resolves to the right kind of thing" — an existing record
-# of the wrong kind is not an extent bound. M2 populates this when an extent
-# carrier is ingested. (Declared in profile_si_ffs/UNSUPPORTED_SURFACES.md.)
-M1_ALLOWED_EXTENT_BOUND_KINDS = frozenset()
+# may resolve to as a real bound. "Resolves to something" is not "resolves to
+# the right kind of thing" — an existing record of the wrong kind is not an
+# extent bound, and a dangling ref is no bound at all. M2 (G7) introduces the
+# generic extent-carrier kind: the PartialExtent (`ofarm.partialextent.v0.1`),
+# the minimal event-bound carrier for treatment/failed-pass/replant/damage/
+# disputed geometries — a ref resolving to one is an acceptable bound alongside
+# an inline `area`. The SI geometry that *populates* such carriers is package
+# content (P2/GERK), never literals here. (profile_si_ffs/UNSUPPORTED_SURFACES.md.)
+ALLOWED_EXTENT_BOUND_KINDS = frozenset({"ofarm.partialextent.v0.1"})
+
+# resolving to the right KIND is not the same as being a USABLE bound: an
+# extent carrier is acceptable as the bound of a promoting operation-claim only
+# if it declares ITSELF usable for an accepted, materializing execution. Refuse
+# over pretend (Kernel rule 4/7) rather than bound an accepted execution on a
+# draft / disputed / superseded carrier, or one whose own promotionBoundary
+# forbids it. (G7 hostile-review guard; honors the carrier's declared boundary,
+# never overrides it.) The carrier states usable as such a bound:
+EXTENT_CARRIER_USABLE_STATES = frozenset({"ACCEPTED_FOR_DECLARED_USE"})
+# promotionBoundary.mustNotPromoteTo targets that an accepted operation-claim
+# actually drives or directly feeds — a carrier forbidding ANY of these is not a
+# usable bound here. The accepted claim emits an AcceptedEventConsequence
+# (ACCEPTED_EXECUTION), materializes the extent (WHOLE_FIELD_TRUTH) which IS the
+# derived current state (CURRENT_STATE_DIRECTLY), and that current state backs the
+# spray-register PassportView (PASSPORT_VIEW_DEFAULT). EXCLUDED by decision
+# (G7 hostile re-review): COMPLIANCE_FACT and DURABLE_IDENTITY — an operation
+# claim records an accepted execution, never a compliance fact (pilot claim-limit:
+# record-keeping completeness, never current-compliance; ComplianceClaim is a
+# distinct commit class) and mints no durable identity from an event-bound extent,
+# so a carrier forbidding ONLY those is still a usable bound for this path.
+EXTENT_CARRIER_DRIVEN_PROMOTIONS = frozenset({
+    "ACCEPTED_EXECUTION", "WHOLE_FIELD_TRUTH",
+    "CURRENT_STATE_DIRECTLY", "PASSPORT_VIEW_DEFAULT"})
 
 # why a non-promoting commit class retains its draft at REVIEW_PROMOTION —
 # wording pinned by the inherited gate-sequencing fixtures
