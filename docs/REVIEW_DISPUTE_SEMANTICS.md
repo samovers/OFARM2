@@ -582,14 +582,20 @@ They move independently, and a CONTEST acts on both in two distinct steps:
    invalidation so the next read recomputes against current state.
 2. **Fresh-plus-disputed after recompute (dispute axis).** On recompute the
    result is **`FRESH` again** on the freshness axis (it is current), yet it
-   still carries **`disputeStatus = DISPUTED_BASIS`** because its basis includes
-   an unresolved disputed consequence. Freshness and dispute are not the same
-   signal: a current result can be honestly fresh *and* disputed.
+   carries a non-`NONE` `disputeStatus` because a contributor is disputed — the
+   precise value follows §6.5: **`OPEN_DISPUTE`** when the surface *directly
+   presents* the disputed consequence (the spray register lists per-consequence
+   entries, so this is the usual passport case), or `DISPUTED_BASIS` when a
+   basis-only contributor of a *derived* result is disputed. Freshness and
+   dispute are not the same signal: a current result can be honestly fresh *and*
+   disputed.
 
 Then, per surface:
 - **PassportView** (informational) recomputes (`stalenessClass = FRESH`) and
-  qualifies `disputeStatus = DISPUTED_BASIS` — the dispute is **shown, never
-  hidden** (Kernel rule 7).
+  qualifies `disputeStatus = OPEN_DISPUTE` — the spray register *directly
+  presents* the disputed consequence as an entry, so it is `OPEN_DISPUTE` (not
+  merely `DISPUTED_BASIS`, which is reserved for a basis-only derived surface).
+  The dispute is **shown, never hidden** (Kernel rule 7).
 - **DocumentAssembly freeze** (high-consequence) **refuses on the dispute axis**:
   a `DENY`/refusal outcome carrying `DISPUTE_OPEN` (the registered,
   until-now-unused code — "data exists but is disputed") **because the basis is
@@ -673,8 +679,9 @@ special case; a later dispute never rewrites an earlier historical answer.
 2. **Freshness axis:** a CONTEST stales every dependent materialization
    (`invalidate_for_sources`), proven by a stale-on-contest test.
 2a. **Dispute axis:** after recompute the result is `stalenessClass = FRESH`
-   yet `disputeStatus = DISPUTED_BASIS` (a fresh-plus-disputed test) — the two
-   axes are independent.
+   yet `disputeStatus = OPEN_DISPUTE` (the passport directly presents the
+   disputed consequence; a fresh-plus-disputed test) — the two axes are
+   independent.
 2b. **Output refusal:** a DocumentAssembly freeze from a disputed basis refuses
    `DENY` / `DISPUTE_OPEN` **because the basis is disputed, not because it is
    stale** (the result may be `FRESH`).
