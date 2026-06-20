@@ -108,6 +108,25 @@ def build_manifest(store) -> dict:
                      # production currentness, and current-compliance are NOT
                      # claimed (D9 unofficial-surface posture; cron wiring P-later).
                      "status": "SUPPORTED"},
+                    {"surfaceType": "IMPORT_MAPPING",
+                     "targetRef": "scheme:si.gerk-pid",
+                     "direction": "IMPORT",
+                     # M2 P2: GERK open-data parcel-layer import via the generic G2
+                     # mechanism (kernel/profiles/si_ffs/gerk_adapter.py). SUPPORTED
+                     # covers the governed ATTRIBUTE import only — per-PID existence,
+                     # raw AREA, use code → dated GERK ReferenceSnapshot; coordinate
+                     # geometry parsed into extent magnitudes is NOT claimed (P2 scope,
+                     # UNSUPPORTED_SURFACES.md). targetRef is the profile's GERK scheme.
+                     "status": "SUPPORTED"},
+                    {"surfaceType": "IMPORT_MAPPING",
+                     "targetRef": "scheme:si.ffs-naprave",
+                     "direction": "IMPORT",
+                     # M2 P3: FFSNaprave sprayer-inspection register import via the
+                     # generic G2 mechanism (kernel/profiles/si_ffs/ffsnaprave_adapter.py)
+                     # — the one strong-currentness surface (official yearly downloads,
+                     # D7). SUPPORTED covers the governed snapshot-import + composite-key
+                     # inspection-evidence capture; no live fetch / scheduled cron here.
+                     "status": "SUPPORTED"},
                     {"surfaceType": "EXPORT_MAPPING",
                      "targetRef": "view:si.ffs.inspection-register.documentassembly.v0_1",
                      "direction": "EXPORT",
@@ -151,8 +170,10 @@ def build_manifest(store) -> dict:
 
 
 def build_artifact_set() -> dict:
-    """Regenerated ActiveArtifactSet referencing the real M1 artifacts
-    (the shipped instance's notes call for exactly this regeneration)."""
+    """Regenerated ActiveArtifactSet referencing the real M2 artifacts (M2 P6:
+    re-cut against the M2 surfaces — the PartialExtent extent-carrier now active
+    (G7), the REGSR/GERK/FFSNaprave import adapters, the SI bindings, and the
+    evidence-review floor policy; the manifest declares the matching surfaces)."""
     return {
         "schemaVersion": "ofarm.activeartifactset.v0.1",
         "activeArtifactSetId": "activeartifactset:si.ffs.pilot.v0_1",
@@ -168,6 +189,7 @@ def build_artifact_set() -> dict:
             "contract:ofarm.reviewdecision.v0.1",
             "contract:ofarm.acceptedeventconsequence.v0.1",
             "contract:ofarm.executionrecordpayload.v0.1",
+            "contract:ofarm.partialextent.v0.1",
             "contract:ofarm.complianceclaim.v0.1",
             "contract:ofarm.agronomicidentitybinding.v0.1",
             "contract:ofarm.referencesnapshot.v0.1",
@@ -181,11 +203,15 @@ def build_artifact_set() -> dict:
             MANIFEST_ID,
         ],
         "sourcePackActivationSetRefs": ["packactivationset:si.ffs.pilot.v0_1"],
-        "notes": "Regenerated at M1 against real artifacts: the four authored "
-                 "QuerySpecification/QueryPlanIR view artifacts, the Capability "
-                 "Manifest, both shipped ReferenceSnapshots, and the cut SI "
-                 "code-binding profile. Unsupported-surface posture: see "
-                 "UNSUPPORTED_SURFACES.md (manifest contract carries no free text).",
+        "notes": "Regenerated at M2 against real artifacts: the operation/record "
+                 "contracts (incl. the PartialExtent extent-carrier now active for "
+                 "partial-extent bounds, G7), the four authored QuerySpecification/"
+                 "QueryPlanIR view artifacts, the Capability Manifest (which declares "
+                 "the REGSR/GERK/FFSNaprave import surfaces and inspection-register "
+                 "export), the evidence-review floor policy, both shipped "
+                 "ReferenceSnapshots, and the cut SI code-binding profile. "
+                 "Unsupported-surface posture: see UNSUPPORTED_SURFACES.md (manifest "
+                 "contract carries no free text).",
     }
 
 
@@ -230,7 +256,39 @@ def verify_grounding(store, manifest: dict, artifact_set: dict) -> list[str]:
         failures.append(f"action-class claims drift from runtime: {claimed_actions ^ evaluated}")
     if "OUTPUT_ATTEST_DOCUMENT_ASSEMBLY" in claimed_actions:
         failures.append("portable attestation claimed while disabled")
+    # every declared IMPORT_MAPPING surface must ground in a real scheme the
+    # code-binding profile actually declares (a standardRef) — a manifest must
+    # not claim an import surface for a scheme the profile does not bind (M2 P6:
+    # the GERK / FFSNaprave / REGSR import surfaces are grounded, not asserted).
+    import_targets = [s["targetRef"] for s in manifest["capabilitySections"]
+                      ["importExportSupport"]["declaredSurfaces"]
+                      if s["surfaceType"] == "IMPORT_MAPPING"]
+    profile = store.get_payload(config.CODE_BINDING_PROFILE_REF)
+    if profile is None:
+        failures.append("code-binding profile not loaded; cannot ground import surfaces")
+    else:
+        scheme_refs = _standard_refs(profile)
+        for target in import_targets:
+            if target not in scheme_refs:
+                failures.append(f"import surface {target} is not a scheme the code-binding "
+                                "profile declares (ungrounded import-surface claim)")
     return failures
+
+
+def _standard_refs(obj) -> set[str]:
+    """Every standardRef value anywhere in the code-binding profile (the scheme
+    identifiers it actually declares), for grounding manifest import surfaces."""
+    found: set[str] = set()
+    if isinstance(obj, dict):
+        ref = obj.get("standardRef")
+        if isinstance(ref, str):
+            found.add(ref)
+        for value in obj.values():
+            found |= _standard_refs(value)
+    elif isinstance(obj, list):
+        for item in obj:
+            found |= _standard_refs(item)
+    return found
 
 
 def write_artifacts(store) -> tuple[dict, dict]:

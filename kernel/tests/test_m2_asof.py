@@ -123,8 +123,9 @@ def test_asof_reconstructs_the_in_force_generation(fresh_env):
 
 def test_asof_single_spine_in_force_reconstructs(fresh_env):
     # the actual shipped single-of-each pilot deployment (one coherent generation),
-    # AS_OF AFTER it is in force (all three families effective by 2026-06-12T21:17):
-    # it reconstructs unchanged.
+    # AS_OF well AFTER it is in force (the shipped spine is effective in mid-2026 —
+    # the exact artifact-set generatedAt moves on each P6 regeneration): it
+    # reconstructs unchanged.
     store, _, _ = fresh_env
     snap = _asof(store, "2026-12-01T00:00:00Z")
     assert snap["sourcePackActivationSetRefs"] and snap["activeArtifactSetRef"]

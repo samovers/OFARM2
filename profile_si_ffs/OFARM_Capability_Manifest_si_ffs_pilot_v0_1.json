@@ -4,7 +4,7 @@
   "status": "ACTIVE",
   "ofarmVersion": "RC2.1",
   "platformVersion": "ofarm2-kernel-m1.0",
-  "publishedAt": "2026-06-19T04:31:27.238305Z",
+  "publishedAt": "2026-06-20T19:44:26.234364Z",
   "deploymentScope": {
     "scopeType": "TENANT",
     "scopeRef": "tenant:si.ffs.pilot.demo"
@@ -145,6 +145,18 @@
         {
           "surfaceType": "IMPORT_MAPPING",
           "targetRef": "scheme:si.uvhvvr.ffs-reg.html-surface",
+          "direction": "IMPORT",
+          "status": "SUPPORTED"
+        },
+        {
+          "surfaceType": "IMPORT_MAPPING",
+          "targetRef": "scheme:si.gerk-pid",
+          "direction": "IMPORT",
+          "status": "SUPPORTED"
+        },
+        {
+          "surfaceType": "IMPORT_MAPPING",
+          "targetRef": "scheme:si.ffs-naprave",
           "direction": "IMPORT",
           "status": "SUPPORTED"
         },
