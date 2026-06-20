@@ -32,9 +32,12 @@ recognized extent-carrier kind** — the generic `PartialExtent`
 (`EVIDENCE_INSUFFICIENT`, ERRATA E-004); it also refuses a carrier that resolves
 to the right kind but does **not declare itself usable** as a bound — its
 `extentState` is not `ACCEPTED_FOR_DECLARED_USE`, or its own `promotionBoundary`
-forbids the promotion (`mayDriveMaterialization=false` / `mustNotPromoteTo` names
-`ACCEPTED_EXECUTION`/`WHOLE_FIELD_TRUTH`) — honoring the carrier's declared
-boundary (Kernel rule 4/7). All stay RETAIN_DRAFT. **Deliberately deferred
+forbids the promotion (`mayDriveMaterialization=false`, or `mustNotPromoteTo`
+names a target this accepted operation drives/feeds: `ACCEPTED_EXECUTION` /
+`WHOLE_FIELD_TRUTH` / `CURRENT_STATE_DIRECTLY` / `PASSPORT_VIEW_DEFAULT`) —
+honoring the carrier's declared boundary (Kernel rule 4/7). `COMPLIANCE_FACT` and
+`DURABLE_IDENTITY` are excluded by decision (the claim drives neither). All
+not-usable cases stay RETAIN_DRAFT. **Deliberately deferred
 (beyond G7 kind-recognition):** *scope-containment* of the carrier — whether the
 carrier's `anchorScope`/`parentScope` must be the `executionExtent.targetScope`
 or contained within it — is a coherence relation left for a follow-up (steward's

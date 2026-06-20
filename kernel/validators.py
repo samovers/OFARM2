@@ -142,9 +142,11 @@ def _carrier_admits_bound(payload: dict) -> bool:
     boundary (Kernel rule 4), never overrides it: the carrier must be in a usable
     state (policy.EXTENT_CARRIER_USABLE_STATES) and its promotionBoundary must
     permit driving a materialized accepted execution — not have
-    mayDriveMaterialization false, and not name a driven promotion target
-    (policy.EXTENT_CARRIER_DRIVEN_PROMOTIONS) in mustNotPromoteTo. A draft /
-    disputed / superseded or self-forbidding carrier is not a bound (G7 review)."""
+    mayDriveMaterialization false, and not name in mustNotPromoteTo any promotion
+    target this commit path actually drives or feeds
+    (policy.EXTENT_CARRIER_DRIVEN_PROMOTIONS: the accepted consequence, the
+    materialized extent, the derived current state, and the PassportView it backs).
+    A draft / disputed / superseded or self-forbidding carrier is not a bound."""
     if payload.get("extentState") not in policy.EXTENT_CARRIER_USABLE_STATES:
         return False
     boundary = payload.get("promotionBoundary", {})
@@ -783,9 +785,11 @@ class ExecutionExtentValidator:
                 "PartialExtent but do not admit being a bound for an accepted, "
                 "materializing execution — the carrier's own extentState is not "
                 "ACCEPTED_FOR_DECLARED_USE, or its promotionBoundary forbids it "
-                "(mayDriveMaterialization=false / mustNotPromoteTo names ACCEPTED_EXECUTION "
-                "or WHOLE_FIELD_TRUTH); the claim stays a draft rather than bound an "
-                "accepted execution on a non-accepted or self-forbidding carrier"),
+                "(mayDriveMaterialization=false, or mustNotPromoteTo names a target this "
+                "accepted operation drives/feeds: ACCEPTED_EXECUTION / WHOLE_FIELD_TRUTH / "
+                "CURRENT_STATE_DIRECTLY / PASSPORT_VIEW_DEFAULT); the claim stays a draft "
+                "rather than bound an accepted execution on a non-accepted or self-"
+                "forbidding carrier"),
                 rationale=f"extent carriers not usable as a bound: {unusable}")
         return None
 

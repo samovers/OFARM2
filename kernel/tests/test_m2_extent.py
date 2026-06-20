@@ -95,6 +95,18 @@ def test_partial_extent_ref_to_carrier_promotes(store, pipeline, ref_field):
     assert r.get("emittedAcceptedConsequenceRefs")
 
 
+@pytest.mark.parametrize("forbid", ["COMPLIANCE_FACT", "DURABLE_IDENTITY"])
+def test_partial_extent_forbidding_undriven_promotion_still_promotes(store, pipeline, forbid):
+    # documented exclusion (G7 review): an operation claim records an accepted
+    # execution, never a COMPLIANCE_FACT (pilot claim-limit: record-keeping
+    # completeness, not current-compliance) and mints no DURABLE_IDENTITY from an
+    # event-bound extent. A carrier forbidding ONLY one of those does not forbid
+    # THIS path, so it remains a usable bound and the claim promotes.
+    pe_id = _partial_extent(store, f"partialextent:exc.{uid()}", must_not_promote=[forbid])
+    r = pipeline.commit(_partial_spray("extentRef", pe_id))
+    assert r["decisionOutcome"] == "PROMOTE_ACCEPTED", forbid
+
+
 def test_partial_extent_inline_area_still_promotes(store, pipeline):
     # regression: the always-available inline `area` bound is unchanged by G7.
     r = pipeline.commit(_partial_spray(
@@ -130,6 +142,10 @@ def test_partial_extent_dangling_ref_refused(store, pipeline):
     ({"may_drive": False}, "carrier's promotionBoundary forbids driving materialization"),
     ({"must_not_promote": ["ACCEPTED_EXECUTION"]}, "carrier forbids promotion to ACCEPTED_EXECUTION"),
     ({"must_not_promote": ["WHOLE_FIELD_TRUTH"]}, "carrier forbids promotion to WHOLE_FIELD_TRUTH"),
+    # the accepted claim drives current-state materialization and the PassportView
+    # reads from it, so a carrier forbidding either is not a usable bound (G7 review)
+    ({"must_not_promote": ["CURRENT_STATE_DIRECTLY"]}, "carrier forbids CURRENT_STATE_DIRECTLY"),
+    ({"must_not_promote": ["PASSPORT_VIEW_DEFAULT"]}, "carrier forbids PASSPORT_VIEW_DEFAULT"),
 ])
 def test_partial_extent_carrier_not_usable_refused(store, pipeline, kwargs, why):
     # the ref resolves to a PartialExtent of the RIGHT KIND, but the carrier's own

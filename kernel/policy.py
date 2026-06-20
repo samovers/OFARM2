@@ -239,9 +239,20 @@ ALLOWED_EXTENT_BOUND_KINDS = frozenset({"ofarm.partialextent.v0.1"})
 # forbids it. (G7 hostile-review guard; honors the carrier's declared boundary,
 # never overrides it.) The carrier states usable as such a bound:
 EXTENT_CARRIER_USABLE_STATES = frozenset({"ACCEPTED_FOR_DECLARED_USE"})
-# promotionBoundary.mustNotPromoteTo targets that an accepted, materialized
-# operation-claim would drive — a carrier forbidding any of these is not a bound:
-EXTENT_CARRIER_DRIVEN_PROMOTIONS = frozenset({"ACCEPTED_EXECUTION", "WHOLE_FIELD_TRUTH"})
+# promotionBoundary.mustNotPromoteTo targets that an accepted operation-claim
+# actually drives or directly feeds — a carrier forbidding ANY of these is not a
+# usable bound here. The accepted claim emits an AcceptedEventConsequence
+# (ACCEPTED_EXECUTION), materializes the extent (WHOLE_FIELD_TRUTH) which IS the
+# derived current state (CURRENT_STATE_DIRECTLY), and that current state backs the
+# spray-register PassportView (PASSPORT_VIEW_DEFAULT). EXCLUDED by decision
+# (G7 hostile re-review): COMPLIANCE_FACT and DURABLE_IDENTITY — an operation
+# claim records an accepted execution, never a compliance fact (pilot claim-limit:
+# record-keeping completeness, never current-compliance; ComplianceClaim is a
+# distinct commit class) and mints no durable identity from an event-bound extent,
+# so a carrier forbidding ONLY those is still a usable bound for this path.
+EXTENT_CARRIER_DRIVEN_PROMOTIONS = frozenset({
+    "ACCEPTED_EXECUTION", "WHOLE_FIELD_TRUTH",
+    "CURRENT_STATE_DIRECTLY", "PASSPORT_VIEW_DEFAULT"})
 
 # why a non-promoting commit class retains its draft at REVIEW_PROMOTION —
 # wording pinned by the inherited gate-sequencing fixtures
