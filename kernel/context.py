@@ -260,7 +260,22 @@ class ContextAssembler:
             activation_set = self._vintage(activation_sets, "evaluatedAt", bound, "PackActivationSet")
             profile = self._vintage(profiles, "issuedAt", bound, "AgronomicCodeBindingProfile")
         if profile["profileState"] != "ACTIVE":
-            raise RuntimeError(f"code-binding profile state is {profile['profileState']}, not ACTIVE")
+            if as_of is None:
+                # NOW: a non-ACTIVE current profile is a bootstrap/configuration
+                # error — fail loud, do not serve from it.
+                raise RuntimeError(f"code-binding profile state is {profile['profileState']}, not ACTIVE")
+            # AS_OF: G6 selects the profile vintage in force by issuedAt; if that
+            # vintage is not ACTIVE the historical context cannot be reconstructed
+            # into a usable profile, so refuse over pretend (rule 7) — a governed
+            # MATERIALIZATION_INVALID via resolve_for_use, never an uncaught 500.
+            # NOTE: whether a non-ACTIVE in-force vintage should instead be SKIPPED
+            # in favour of the latest ACTIVE one is a profile-lifecycle decision
+            # (supersession/draft semantics) deferred beyond G6's timestamp-based
+            # selection — recorded as ERRATA E-007.
+            raise ContextNotReconstructible(
+                f"the AgronomicCodeBindingProfile vintage in force at {bound.isoformat()} is "
+                f"{profile['profileState']}, not ACTIVE — the historical context cannot be "
+                "reconstructed into a usable profile")
         return {
             "artifact_set": artifact_set,
             "activation_set": activation_set,
