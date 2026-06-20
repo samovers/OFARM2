@@ -1,6 +1,6 @@
 # Review / dispute state-transition semantics
 
-**Status:** G5-1 (REJECT) settled · G5-3 (CONTEST) deferred — see §6.
+**Status:** G5-1 (REJECT) settled · G5-3 (CONTEST) settled — see §6.
 **Scope:** generic Core/Platform review-verb semantics only. No Slovenia
 specifics (those ride a profile through the generic mechanism — M2 brief
 mechanism-boundary rule). **This is a candidate package decision (DECISIONS.md
@@ -112,7 +112,7 @@ present-but-invalid field **never falls through to accept**:
 | `REVIEW_ACCEPT` | absent or `ACCEPTED` | **accept** path |
 | `REVIEW_ACCEPT` | any other value | **governed refusal** (action/outcome mismatch) |
 | `REVIEW_REJECT_OR_CONTEST` | `REJECTED` | **reject** path (this ticket) |
-| `REVIEW_REJECT_OR_CONTEST` | `CONTESTED` | **governed refusal until G5-3** (the contest emission path does not exist yet — never silently downgraded to a reject or an accept) |
+| `REVIEW_REJECT_OR_CONTEST` | `CONTESTED` | **governed refusal until G5-4** (CONTEST is specified at §6 but the emission branch is not wired until G5-4 — never silently downgraded to a reject or an accept) |
 | `REVIEW_REJECT_OR_CONTEST` | absent / any other | **governed refusal** (the shared action is ambiguous without a supported outcome) |
 | `REVIEW_SUPERSEDE`, `REVIEW_REQUEST`, or any unrecognized/malformed value | (any) | **governed refusal** (not wired in G5) |
 
@@ -385,22 +385,310 @@ reversal path; not introduced by G5-2.
 
 ---
 
-## 6. CONTEST / dispute — DEFERRED to G5-3
+## 6. CONTEST / dispute semantics (G5-3, settled — G5-4 implements)
 
-**Do not implement CONTEST under this spec.** G5-3 specifies it: which
-`recordClass` is emitted, what becomes `disputeStatus`-flagged, which
-materializations stale (the key REJECT/CONTEST difference — CONTEST disputes an
-**already in-force** consequence, so unlike REJECT it **does** trigger D12
-basis-set staling on the dependent materializations), and how supersession
-resolves it. CONTEST reuses the same `REVIEW_REJECT_OR_CONTEST` action with
-`decisionOutcomeState = "CONTESTED"` and the `AssertionRecord.claimState =
-"CONTESTED"` lane that `kernel/views.py:105-107` already surfaces as `DISPUTED`.
-Because REJECT and CONTEST share the action and split only on the
-`decisionOutcomeState` half of the normalized input pair (§3.1), G5-1 already
-pins the discriminator: until G5-3 wires the contest emission path, a
-`REVIEW_REJECT_OR_CONTEST` + `CONTESTED` input is a **governed refusal** (§3.1
-matrix), never silently handled as a reject. This section is a forward pointer
+**Status:** G5-3 settles this section; G5-4 implements it. CONTEST reuses the
+shared `REVIEW_REJECT_OR_CONTEST` action with `decisionOutcomeState = "CONTESTED"`
+(the discriminator G5-1 §3.1 already pins — until G5-4 wires the contest branch,
+`REVIEW_REJECT_OR_CONTEST` + `CONTESTED` is a governed refusal). Like REJECT it is
+append-only, no contract changes, no invented vocabulary, record-keeping claim
 only.
+
+### 6.0 What CONTEST is, and how it differs from REJECT
+
+A CONTEST **opens a dispute against an already in-force `AcceptedEventConsequence`**
+— a record that was accepted and is current. It does not delete or edit it;
+it **flags it disputed**, append-only, and **qualifies every read that depends on
+it**. Resolution is by the ordinary correction-is-supersession path, never an
+edit. This is the structural opposite of REJECT, which declines a *queued* claim
+that was never in force.
+
+| | REJECT (§3) | CONTEST (§6) |
+|---|---|---|
+| Target | a `PENDING_REVIEW` `AssertionRecord` (queued) | an in-force `AcceptedEventConsequence` |
+| `reviewedArtifactFamily` | `ASSERTION_RECORD` | `ACCEPTED_EVENT_CONSEQUENCE` |
+| `decisionOutcomeState` | `REJECTED` | `CONTESTED` |
+| In-force effect | none (was never in force) | the consequence **stays in force**, flagged disputed |
+| Materialization | untouched | **stales** dependent materializations (D12); a disputed basis **blocks** high-consequence freeze |
+| Read qualification | n/a | `disputeStatus` flips off the hardcoded `NONE` (closes the M4 over-claim) |
+| Resolution | a new capture (the queued claim is terminal) | a **supersession** (a governed CORRECTION) → `CORRECTED` |
+
+### 6.1 Trigger and surface
+
+A CONTEST is a `GOVERNANCE_DECISION` commit naming the in-force consequence as
+its target and carrying the contest half of the normalized verb pair
+(`reviewAction = REVIEW_REJECT_OR_CONTEST`, `decisionOutcomeState = CONTESTED`,
+§3.1). G5-4 wires the `CONTESTED` branch in `policy.review_branch` (a third
+branch `"CONTEST"`) and the `ReviewPromotionGate` dispatch. **Recommended
+surface:** a `/review/contest` endpoint (symmetric with `/review/reject`)
+supplying the normalized pair and the target consequence ref; the state effects
+below are binding regardless of surface.
+
+### 6.2 Authority
+
+Same **distinct `REVIEW_REJECT_OR_CONTEST`** action as REJECT (the shared verb,
+NO_INHERIT; §3.2). A principal lacking it is default-denied. The same
+self-decision treatment as REJECT applies (a party may contest a record under the
+classes it may self-review; otherwise a distinct reviewer) — contesting is a step
+*toward* correction, never a self-promotion, so it is no more privileged than a
+decline.
+
+### 6.3 Validation (in-force consequence target)
+
+The CONTEST analog of §3.3's validity guards, retargeted to a consequence:
+
+- the target must **resolve to a record of kind `ofarm.acceptedeventconsequence.v0.1`**
+  (a non-existent or wrong-kind ref → gate outcome `FAIL_REFERENCE_RESOLUTION`,
+  reason code `EVIDENCE_REFERENCE_UNAVAILABLE` — the exact pair the acceptance
+  validator uses for an unresolved target, `kernel/validators.py:260-264`);
+- it must be **in force** — `inForceState = "IN_FORCE"` **and** not
+  `store.is_superseded(...)` (you cannot contest a record already out of force;
+  else `SUPERSEDED_RECORD_USED`). A consequence that has a *pending* correction
+  (a `LINEAGE_SUPERSEDES_INTENT` edge from a queued claim, not yet accepted) is
+  still in force and **may be contested** — the pending correction, if later
+  accepted, resolves the dispute by supersession (§6.7); the two are compatible;
+- it must be **farm-contained** (its `anchorScopes` include the acting farm; else
+  `SCOPE_NOT_AUTHORIZED`);
+- it must **not already carry an open `DISPUTE`** (no double-contest — a second
+  contest of an already-disputed consequence, i.e. `edges_from(consequence,
+  "DISPUTE")` non-empty and unresolved, is refused `SUPERSEDED_RECORD_USED`
+  "already disputed", mirroring the double-decide guard);
+- a **non-empty rationale** is required (`reviewRationale`, gate-validated; the
+  decision is governed, never a bare pointer — Kernel rule 7);
+- **evidence is optional but validated if supplied** (every `reviewEvidenceRefs[]`
+  resolves to `ofarm.evidencerecord.v0.1`, else `FAIL_REFERENCE_RESOLUTION`) —
+  exactly as REJECT (§3.3).
+
+### 6.4 Emission (append-only; the consequence is never edited)
+
+The CONTEST commit appends one authoritative governance record plus its marker
+edge:
+
+```jsonc
+{
+  "schemaVersion": "ofarm.reviewdecision.v0.1",
+  "reviewDecisionId": "review:<minted>",
+  "reviewedArtifactFamily": "ACCEPTED_EVENT_CONSEQUENCE",
+  "reviewedArtifactRef": "<the in-force consequence>",
+  "reviewAction": "REVIEW_REJECT_OR_CONTEST",
+  "decisionOutcomeState": "CONTESTED",
+  "anchorScopes": [{ "scopeType": "FARM", "scopeRef": "<farm>" }],
+  "decidedByPartyRef": "<reviewer>", "decidedAt": "<now>",
+  "notes": "dispute: <non-empty rationale>"
+  // optional "evidenceRefs"; NO resultingAcceptedConsequenceRefs (nothing promoted)
+}
+```
+
+- a **`DISPUTE` edge** `consequence → reviewDecision` marks the consequence
+  disputed. This is the authoritative dispute flag — "is this consequence
+  disputed?" is `bool(edges_from(consequence, "DISPUTE"))` with the dispute
+  unresolved (the consequence not yet superseded). G5-4 adds `DISPUTE` to the
+  `kernel_edge` `edge_type` CHECK. (A dedicated edge, not the `REVIEW` edge an
+  acceptance already wrote on the consequence, keeps the dispute query clean and
+  append-only.)
+- one `EVIDENCE` edge per validated optional evidence ref (as REJECT);
+- **no `AcceptedEventConsequence`** and **no `LINEAGE_SUPERSEDES`** — a contest
+  promotes nothing and retires nothing. The disputed consequence **stays
+  `IN_FORCE`** (its `inForceState` enum has no `DISPUTED` value, and
+  `is_superseded` reads only `LINEAGE_SUPERSEDES`, so it remains current until a
+  correction supersedes it). The originating assertion is likewise untouched.
+- the ReviewDecision registers in `ctx.emitted["reviews"]` so the generic
+  `PromotionTraceWriter` carries it as a receipt (D3), exactly as REJECT (§3.6).
+
+**Decision — CONTEST is governance-only in G5-4 (no `recordClass = DISPUTE`
+payload).** The `recordClass` enum carries a `DISPUTE` value (the CORE.md
+"dispute = new payload + supersession" carrier, the factual mirror of
+`CORRECTION`), but **G5-4 emits and accepts none**. A CONTEST is purely a
+governance act: `ReviewDecision (CONTESTED) + DISPUTE edge`, nothing more. An
+`ExecutionRecordPayload(recordClass = "DISPUTE")` — a substrate carrier asserting
+the disputed *facts* — is **deferred to a later factual-dispute-carrier ticket**
+that would specify its required fields, linkage to the contest, validation, and
+tests. Until then a contest states its objection in the `ReviewDecision.notes`
+rationale (and optional validated evidence), and the factual correction arrives
+through the ordinary `recordClass = "CORRECTION"` resolution path (§6.7).
+
+### 6.5 `disputeStatus` derivation — closes the latent M4 over-claim
+
+Today the single qualification builder hardcodes `"disputeStatus": "NONE"`
+(`kernel/views.py:58`), so both shipped surfaces (PassportView,
+DocumentAssembly) **claim "no dispute" unconditionally** — the M4 over-claim
+(WORKLOG 2026-06-14; M2_BRIEF). G5-4 makes `disputeStatus` **derived** from
+whether the result's basis (and the records it directly presents) carry an
+unresolved `DISPUTE`:
+
+| `disputeStatus` | When |
+|---|---|
+| `NONE` | no unresolved dispute touches the basis or the presented records (the honest default — *computed*, not assumed) |
+| `OPEN_DISPUTE` | the surface presents a disputed record directly (an open `DISPUTE` on a record in view) |
+| `DISPUTED_BASIS` | the surface presents a derived result whose `MaterializationBasis` includes an unresolved disputed consequence |
+| `CORRECTED` | a current basis member supersedes (via `LINEAGE_SUPERSEDES`) a disputed predecessor — the dispute was resolved by a governed CORRECTION (§6.7) |
+| `SUPERSEDED` | a historical/direct surface still references the superseded disputed consequence itself |
+| `MIXED` | the result's contributors carry two or more **distinct non-`NONE`** statuses |
+
+**Derivation (all from edges, no stored disputeStatus field).** An *unresolved*
+dispute is a `DISPUTE` edge whose target consequence is **not yet superseded**
+(`not is_superseded(consequence)`); a *resolved* one has since been superseded.
+Because the current basis holds only **in-force** consequences, a resolved
+dispute is found by **walking `LINEAGE_SUPERSEDES`** from a current basis member
+to its superseded predecessor(s) — the disputed predecessor is no longer in the
+basis, only its corrected successor is, so the derivation **must follow the
+supersession edge, never look for the disputed member in the current basis**.
+Per contributor:
+- `OPEN_DISPUTE` — a record the surface presents **directly** carries an
+  unresolved dispute;
+- `DISPUTED_BASIS` — no directly-presented record is disputed, but the result's
+  `MaterializationBasis` (its `contributingAcceptedConsequenceRefs`) **includes**
+  an unresolved disputed consequence;
+- `CORRECTED` — a **current** in-force basis member has a `LINEAGE_SUPERSEDES`
+  edge to a **predecessor that carries a `DISPUTE` edge**: a governed CORRECTION
+  resolved the dispute, and the current result reports the resolution by walking
+  that lineage (derived, not stored);
+- `SUPERSEDED` — a **historical / direct** surface still references the superseded
+  disputed consequence itself (it left force; current materializations no longer
+  carry it);
+- `NONE` — no contributor is disputed or resolves a dispute (computed, never
+  assumed).
+
+**Aggregation to a single value.** Compute each contributor's status above. The
+result's `disputeStatus` is: that status when all non-`NONE` contributors agree;
+`NONE` when none is non-`NONE`; a **lone** non-`NONE` status when the remaining
+contributors are clean (a clean member never dilutes a dispute condition); and
+**`MIXED` only when two or more *distinct* non-`NONE` statuses are present** —
+e.g. one `OPEN_DISPUTE` contributor alongside one `CORRECTED` contributor — so
+the result honestly reports the blend rather than collapsing it.
+
+`dataAbsentReason = "DISPUTED"` is a **distinct** concern (data-absence, not
+dispute status) and is not set by CONTEST. **CONTEST targets consequences, not
+assertions:** G5-4 sets no assertion's `claimState` to `CONTESTED` (the
+originating assertion is never mutated — append-only). The
+`claimState = "CONTESTED"` view lane (`kernel/views.py:105-107`) is a *surfacing
+channel* (and a reserved hook for a future direct-assertion-dispute path), not a
+record mutation; a disputed claim is surfaced by deriving from the consequence's
+`DISPUTE` edge (tracing consequence → originating assertion).
+
+### 6.6 Materialization staling (D12) and high-consequence blocking
+
+**Two orthogonal axes — freshness vs dispute.** `stalenessClass` describes
+**freshness only** (is the materialization current with respect to its basis);
+`disputeStatus` carries the **dispute condition** (is a basis member disputed).
+They move independently, and a CONTEST acts on both in two distinct steps:
+
+1. **Stale-on-contest (freshness axis).** A CONTEST is a basis-set staleness
+   trigger (D12): the disputed consequence is a `MaterializationBasis` member
+   whose state changed. G5-4 calls the existing
+   `Materializer.invalidate_for_sources([contested_consequence])`
+   (`kernel/materializer.py:590`) in the contest commit's transaction, marking
+   every materialization whose basis includes it **STALE** — a one-time
+   invalidation so the next read recomputes against current state.
+2. **Fresh-plus-disputed after recompute (dispute axis).** On recompute the
+   result is **`FRESH` again** on the freshness axis (it is current), yet it
+   still carries **`disputeStatus = DISPUTED_BASIS`** because its basis includes
+   an unresolved disputed consequence. Freshness and dispute are not the same
+   signal: a current result can be honestly fresh *and* disputed.
+
+Then, per surface:
+- **PassportView** (informational) recomputes (`stalenessClass = FRESH`) and
+  qualifies `disputeStatus = DISPUTED_BASIS` — the dispute is **shown, never
+  hidden** (Kernel rule 7).
+- **DocumentAssembly freeze** (high-consequence) **refuses on the dispute axis**:
+  a `DENY`/refusal outcome carrying `DISPUTE_OPEN` (the registered,
+  until-now-unused code — "data exists but is disputed") **because the basis is
+  disputed, not because the recomputed result is stale**. A disputed truth is
+  never frozen into an output even when the materialization is `FRESH`.
+
+This is the key REJECT/CONTEST difference: REJECT touches no materialization
+(§3.7); CONTEST stales the dependent ones (freshness axis) and blocks
+high-consequence reliance (dispute axis).
+
+### 6.7 Resolution — by supersession, never by edit
+
+A dispute resolves the way every correction does: a governed **CORRECTION** — a
+new claim carrying `supersedesConsequenceRef = <disputed consequence>` — committed
+and accepted, which emits a new in-force consequence with a `LINEAGE_SUPERSEDES`
+edge to the disputed one (`kernel/emission.py:294-302`). The disputed consequence
+then leaves force (`is_superseded` true), the dispute is **resolved by the edge
+fact** (no record edited), and the dependent materializations re-stale and
+recompute against the corrected consequence. The recomputed current basis now
+holds the **corrected successor** (not the disputed predecessor), so the current
+read derives `disputeStatus = CORRECTED` by **walking `LINEAGE_SUPERSEDES` from
+that successor to its disputed predecessor** (§6.5) — never by looking for the
+disputed consequence in the current basis, where it no longer appears.
+Resolution is **automatic and non-mutual**: the CORRECTION need not reference the
+`DISPUTE` edge or the contest `ReviewDecision` — once its acceptance writes
+`LINEAGE_SUPERSEDES` to the disputed consequence, that edge alone drives the
+derivation, so no follow-up act closes the dispute. This
+reuses the existing supersession path entirely; G5-4 adds no new resolution
+mechanism. An open dispute that is never corrected stays **visibly open**
+(`OPEN_DISPUTE` / `DISPUTED_BASIS`) — honest, never silently cleared.
+
+### 6.8 Commit outcome
+
+A CONTEST promotes no new consequence, so its commit outcome is **`RETAIN_DRAFT`**
+(no consequence promoted) — the same convention and the same caveat as REJECT
+(§3.6 / ERRATA E-005): the authoritative dispute is carried by the `ReviewDecision`
+(`CONTESTED`), the `DISPUTE` edge, and the staled materializations, never by
+`finalOutcome` alone.
+
+### 6.9 Explicit non-effects and out of scope for G5-4
+
+A CONTEST does **not**: edit, delete, or remove from force the disputed
+consequence (it stays `IN_FORCE`, flagged); emit an `AcceptedEventConsequence` or
+`LINEAGE_SUPERSEDES`; mutate the originating assertion's `claimState`; or resolve
+the dispute (only a CORRECTION does). **Out of scope (deferred):** dismissing an
+*unfounded* contest (a `REVIEW_SUPERSEDE` on the contest `ReviewDecision`) — until
+then an unfounded dispute simply stays visibly open until corrected; and SI
+advisory specifics (P5).
+
+**Temporal (AS_OF) consistency.** A dispute is an append-only fact with a
+`record_time`; an `AS_OF` historical read reconstructs dispute state on the **same
+single time axis** as in-force selection (`store.in_force_consequences(as_of=…)`
+already reconstructs supersession by `record_time`). So a dispute opened at time T
+is **invisible** to an `AS_OF` read of an earlier moment and visible from T onward
+— exactly as a supersession is. The G6 AS_OF reconstruction inherits this with no
+special case; a later dispute never rewrites an earlier historical answer.
+
+### 6.10 G5-4 build list and acceptance checklist
+
+- `kernel/schema.sql` — add `DISPUTE` to the `kernel_edge` `edge_type` CHECK.
+- `kernel/policy.py` — `review_branch` returns a third branch `"CONTEST"` for
+  `REVIEW_REJECT_OR_CONTEST` + `CONTESTED`.
+- `kernel/validators.py` — the contest branch validates an in-force consequence
+  target (§6.3): kind, in-force/not-superseded, farm-contained, no open dispute,
+  non-empty rationale, validated optional evidence.
+- `kernel/emission.py` — `emit_queue_contest()`: append the `ReviewDecision`
+  (`CONTESTED`) + the `DISPUTE` edge (no consequence, no supersession); register
+  in `ctx.emitted["reviews"]`; `final_outcome = "RETAIN_DRAFT"`; call
+  `invalidate_for_sources([target])` in the same transaction.
+- `kernel/views.py` — derive `disputeStatus` (§6.5) instead of the hardcoded
+  `NONE`; DocumentAssembly freeze refuses a disputed basis with `DISPUTE_OPEN`.
+- `kernel/api.py` — `/review/contest` supplies the normalized pair.
+- `kernel/demo.py` / tests — `kernel/tests/test_m2_review.py`.
+
+**Acceptance checklist:**
+
+1. A CONTEST of an in-force consequence emits a `ReviewDecision`
+   (`REVIEW_REJECT_OR_CONTEST` / `CONTESTED`, non-empty rationale) + a `DISPUTE`
+   edge, **no consequence**, outcome `RETAIN_DRAFT`; the consequence is unedited
+   and **stays in force**.
+2. **Freshness axis:** a CONTEST stales every dependent materialization
+   (`invalidate_for_sources`), proven by a stale-on-contest test.
+2a. **Dispute axis:** after recompute the result is `stalenessClass = FRESH`
+   yet `disputeStatus = DISPUTED_BASIS` (a fresh-plus-disputed test) — the two
+   axes are independent.
+2b. **Output refusal:** a DocumentAssembly freeze from a disputed basis refuses
+   `DENY` / `DISPUTE_OPEN` **because the basis is disputed, not because it is
+   stale** (the result may be `FRESH`).
+3. Authority: a principal lacking `REVIEW_REJECT_OR_CONTEST` is denied.
+4. Validity: a target that is not an in-force consequence, is already superseded,
+   is cross-farm, or is already disputed is refused; an empty rationale or
+   unresolved evidence ref refuses.
+5. Resolution (lineage-derived): contested **C1** → an accepted CORRECTION **C2**
+   supersedes C1 → the recomputed current basis holds **C2** (not C1) → a current
+   read derives `disputeStatus = CORRECTED` by walking C2 → C1
+   `LINEAGE_SUPERSEDES` and finding C1's `DISPUTE` edge; no record edited.
+6. `disputeStatus = NONE` is now **computed** (a clean farm reads `NONE`; the
+   over-claim is closed).
+7. The M1 suite stays green and `ofarm_pkg_contract_check.py` PASSes.
 
 ---
 
@@ -432,7 +720,7 @@ procedural branch, no scheme/profile literal):
 - `kernel/stages.py` (IngressNormalizer) — **normalize and validate the
   `(reviewAction, decisionOutcomeState)` pair fail-closed** per the §3.1 matrix:
   absent ⇒ `REVIEW_ACCEPT`/`ACCEPTED`; `REVIEW_REJECT_OR_CONTEST`+`REJECTED` ⇒
-  reject; `REVIEW_REJECT_OR_CONTEST`+`CONTESTED` ⇒ refuse until G5-3; any
+  reject; `REVIEW_REJECT_OR_CONTEST`+`CONTESTED` ⇒ refuse until G5-4; any
   mismatched / unrecognized action or outcome ⇒ governed refusal, never a silent
   accept.
 - receipt is **free**: because `emit_queue_rejection` registers the
@@ -458,7 +746,7 @@ procedural branch, no scheme/profile literal):
    ref.
 4a. The `(reviewAction, decisionOutcomeState)` pair is normalized fail-closed
    (§3.1): an absent action still accepts; `REVIEW_REJECT_OR_CONTEST`+`REJECTED`
-   rejects; `REVIEW_REJECT_OR_CONTEST`+`CONTESTED` is refused until G5-3; any
+   rejects; `REVIEW_REJECT_OR_CONTEST`+`CONTESTED` is refused until G5-4; any
    mismatched / unrecognized action or outcome is a governed refusal, never a
    silent accept.
 4b. The rejection `ReviewDecision` is reachable as a receipt: it appears in the
