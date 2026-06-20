@@ -102,6 +102,15 @@ def _verify_hs256(token: str, *, secret: str, issuer: str, audience: str,
     if not isinstance(header, dict) or not isinstance(claims, dict):
         raise OidcError("token header/payload is not a JSON object")
 
+    # This minimal verifier understands NO critical JOSE header extensions, so any
+    # `crit` (RFC 7515 §4.1.11) must be rejected, and `b64` (RFC 7797 — unencoded
+    # payload, which would change the signing input) is unsupported. Fail closed
+    # rather than ignore them (PR #16 hostile B1), e.g. {"b64": false, "crit": ["b64"]}.
+    if "crit" in header:
+        raise OidcError("unsupported critical JOSE header(s) 'crit' — rejected (no extensions understood)")
+    if "b64" in header:
+        raise OidcError("unsupported JOSE 'b64' header (RFC 7797) — rejected")
+
     alg = header.get("alg")
     if alg == "none":
         raise OidcError("alg=none is rejected (unsigned tokens are never accepted)")

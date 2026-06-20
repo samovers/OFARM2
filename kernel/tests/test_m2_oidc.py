@@ -67,6 +67,16 @@ def _raw_token(header: dict, payload: dict, signature: str = "x") -> str:
     return f"{enc(header)}.{enc(payload)}.{signature}"
 
 
+def _signed(header: dict, payload: dict, secret: str = SECRET) -> str:
+    """A correctly HS256-SIGNED token with a CUSTOM header (e.g. carrying crit/b64)."""
+    enc = lambda d: base64.urlsafe_b64encode(
+        json.dumps(d, separators=(",", ":")).encode()).rstrip(b"=").decode()
+    h, p = enc(header), enc(payload)
+    sig = base64.urlsafe_b64encode(
+        hmac.new(secret.encode(), f"{h}.{p}".encode(), hashlib.sha256).digest()).rstrip(b"=").decode()
+    return f"{h}.{p}.{sig}"
+
+
 # ---------------------------------------------------------------------------
 # the principal-binding contract over a verified token
 # ---------------------------------------------------------------------------
@@ -233,3 +243,63 @@ def test_g4_verifier_rejects_tampered_payload(store):
         assert False, "tampered payload must fail signature verification"
     except OidcError as exc:
         assert "signature" in str(exc).lower()
+
+
+# ---------------------------------------------------------------------------
+# hostile re-review (PR #16): crit/b64 headers; env-config determinism;
+# unrecorded token subject is not a principal
+# ---------------------------------------------------------------------------
+
+def test_g4_critical_jose_headers_rejected_even_if_signed(store):
+    # PR #16 hostile B1: this minimal verifier understands NO critical JOSE header
+    # extensions, so crit / b64 must be rejected even when correctly HS256-signed.
+    client = _client(store)
+    sub = demo.spray_submission(f"g4-crit:{uid()}", erp_id=f"erp:g4.crit.{uid()}", actor_ref=demo.FARMER)
+    now = int(time.time())
+    claims = {"sub": demo.FARMER, "iss": ISSUER, "aud": AUDIENCE, "iat": now, "exp": now + 3600}
+    for header in ({"alg": "HS256", "crit": ["exp"]},
+                   {"alg": "HS256", "b64": False},
+                   {"alg": "HS256", "b64": False, "crit": ["b64"]}):
+        tok = _signed(header, claims)
+        assert client.post("/commit", json={"submission": sub}, headers=_bearer(tok)).status_code == 401, \
+            f"critical/unsupported header {header} must be rejected"
+        with pytest.raises(OidcError):
+            _cfg().verify(tok)
+
+
+def test_g4_from_env_default_reads_oidc_config_deterministically(store, monkeypatch):
+    # PR #16 hostile B2: create_app(store) (default _FROM_ENV) reads OIDC from the
+    # environment — with OFARM_OIDC_* set it enables OIDC, cleared it is the shim.
+    # (Conformance shim tests force oidc=None, so they are deterministic regardless.)
+    monkeypatch.setenv("OFARM_OIDC_ISSUER", ISSUER)
+    monkeypatch.setenv("OFARM_OIDC_AUDIENCE", AUDIENCE)
+    monkeypatch.setenv("OFARM_OIDC_HS256_SECRET", SECRET)
+    monkeypatch.setenv("OFARM_OIDC_ROLES_CLAIM", "roles")
+    enabled = TestClient(create_app(store))   # _FROM_ENV -> OIDC enabled
+    sub = demo.spray_submission(f"g4-env:{uid()}", erp_id=f"erp:g4.env.{uid()}", actor_ref=demo.FARMER)
+    assert enabled.post("/commit", json={"submission": sub},
+                        headers={"x-acting-party": demo.FARMER}).status_code == 401  # header != auth
+    assert enabled.post("/commit", json={"submission": sub},
+                        headers=_bearer(_token(demo.FARMER))).status_code == 200
+    monkeypatch.delenv("OFARM_OIDC_ISSUER")
+    monkeypatch.delenv("OFARM_OIDC_AUDIENCE")
+    shim = TestClient(create_app(store))      # _FROM_ENV -> no issuer/aud -> shim
+    sub2 = demo.spray_submission(f"g4-env2:{uid()}", erp_id=f"erp:g4.env2.{uid()}", actor_ref=demo.FARMER)
+    assert shim.post("/commit", json={"submission": sub2},
+                     headers={"x-acting-party": demo.FARMER}).status_code == 200
+
+
+def test_g4_unrecorded_token_subject_is_not_a_principal(store):
+    # PR #16 hostile B3: a valid token from the configured issuer whose sub is NOT a
+    # recorded active Party must NOT become a principal — it cannot read even public
+    # artifacts (the principal check fires before the read).
+    client = _client(store)
+    rec_id = "referencesnapshot:si.uvhvvr.ffs-reg.public-test"   # a public-artifact kind id
+    bad = client.get(f"/records/{rec_id}", headers=_bearer(_token("party:not.in.store")))
+    assert bad.status_code == 401 and bad.json()["detail"]["reasonCode"] == "AUTHORITY_DENIED"
+    # a recorded active party with a valid token passes the principal check (not 401)
+    ok = client.get(f"/records/{rec_id}", headers=_bearer(_token(demo.FARMER)))
+    assert ok.status_code != 401, "a recorded active party is a valid principal"
+    # and an inactive/unknown party in shim mode is likewise not a principal
+    shim = TestClient(create_app(store, oidc=None))
+    assert shim.get(f"/records/{rec_id}", headers={"x-acting-party": "party:ghost"}).status_code == 401

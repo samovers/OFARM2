@@ -61,33 +61,44 @@ def create_app(store: Store | None = None, *, oidc=_FROM_ENV) -> FastAPI:
     app.state.outputs = OutputGenerator(app.state.store)
     app.state.oidc = config.oidc_config_from_env() if oidc is _FROM_ENV else oidc
 
+    def _deny(title: str, detail: str, pid: str):
+        raise HTTPException(status_code=401, detail=runtime_problem(
+            "AUTHORITY_DENIED", title, detail, problem_id=pid))
+
     def get_principal(authorization: str | None = Header(None),
                       x_acting_party: str | None = Header(None)) -> str:
-        """The transport principal (a Party ref). With OIDC configured (M2 G4) it
-        comes ONLY from a verified bearer token; otherwise the development/
-        conformance X-Acting-Party header IS the principal (NOT production auth —
-        profile_si_ffs/UNSUPPORTED_SURFACES.md). Either way the binding contract is
-        identical, and an absent/invalid principal is a default-deny refusal."""
+        """The transport principal (a recorded, ACTIVE Party ref). With OIDC
+        configured (M2 G4) it comes ONLY from a verified bearer token; otherwise the
+        development/conformance X-Acting-Party header IS the principal (NOT production
+        auth — profile_si_ffs/UNSUPPORTED_SURFACES.md). Either way the binding
+        contract is identical, an absent/invalid principal is a default-deny refusal,
+        and the principal must resolve to a recorded active Party — an issuer subject
+        that is not a known active party never becomes a principal (no public-artifact
+        read by an arbitrary token subject, PR #16 hostile B3)."""
         oidc_cfg = app.state.oidc
         if oidc_cfg is None:
             if not x_acting_party:
-                raise HTTPException(status_code=401, detail=runtime_problem(
-                    "AUTHORITY_DENIED", "No transport principal",
-                    "no X-Acting-Party principal presented; default deny",
-                    problem_id="problem:api-no-principal"))
-            return x_acting_party
-        if not authorization or not authorization.lower().startswith("bearer "):
-            raise HTTPException(status_code=401, detail=runtime_problem(
-                "AUTHORITY_DENIED", "No bearer token",
-                "no Authorization: Bearer token presented; default deny (the "
-                "X-Acting-Party header does not authenticate when OIDC is enabled)",
-                problem_id="problem:api-no-token"))
-        try:
-            return app.state.oidc.verify(authorization.split(" ", 1)[1].strip())["partyRef"]
-        except auth_oidc.OidcError as exc:
-            raise HTTPException(status_code=401, detail=runtime_problem(
-                "AUTHORITY_DENIED", "Token verification failed", str(exc),
-                problem_id="problem:api-token-invalid"))
+                _deny("No transport principal",
+                      "no X-Acting-Party principal presented; default deny",
+                      "problem:api-no-principal")
+            principal = x_acting_party
+        else:
+            if not authorization or not authorization.lower().startswith("bearer "):
+                _deny("No bearer token",
+                      "no Authorization: Bearer token presented; default deny (the "
+                      "X-Acting-Party header does not authenticate when OIDC is enabled)",
+                      "problem:api-no-token")
+            try:
+                principal = app.state.oidc.verify(authorization.split(" ", 1)[1].strip())["partyRef"]
+            except auth_oidc.OidcError as exc:
+                _deny("Token verification failed", str(exc), "problem:api-token-invalid")
+        rec = app.state.store.get_record(principal)
+        if (rec is None or rec["record_kind"] != "ofarm.party.v0.1"
+                or rec["payload"].get("partyState") != "ACTIVE"):
+            _deny("Principal is not an active Party",
+                  f"the transport principal {principal} is not a recorded active Party; "
+                  "default deny", "problem:api-principal-not-party")
+        return principal
 
     app.state.get_principal = get_principal
 
