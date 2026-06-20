@@ -495,13 +495,17 @@ edge:
 - the ReviewDecision registers in `ctx.emitted["reviews"]` so the generic
   `PromotionTraceWriter` carries it as a receipt (D3), exactly as REJECT (§3.6).
 
-**Optional substrate carrier.** When the dispute is about the execution *facts*
-(not merely a governance objection), the contest may accompany an
-`ExecutionRecordPayload` with `recordClass = "DISPUTE"` (the CORE.md
-"dispute = new payload + supersession" carrier), mirroring how a correction
-carries `recordClass = "CORRECTION"`. The authoritative governance record is
-still the `ReviewDecision`; the `DISPUTE` payload is evidence of the disputed
-facts. G5-4's minimal path is the ReviewDecision + the `DISPUTE` edge.
+**Decision — CONTEST is governance-only in G5-4 (no `recordClass = DISPUTE`
+payload).** The `recordClass` enum carries a `DISPUTE` value (the CORE.md
+"dispute = new payload + supersession" carrier, the factual mirror of
+`CORRECTION`), but **G5-4 emits and accepts none**. A CONTEST is purely a
+governance act: `ReviewDecision (CONTESTED) + DISPUTE edge`, nothing more. An
+`ExecutionRecordPayload(recordClass = "DISPUTE")` — a substrate carrier asserting
+the disputed *facts* — is **deferred to a later factual-dispute-carrier ticket**
+that would specify its required fields, linkage to the contest, validation, and
+tests. Until then a contest states its objection in the `ReviewDecision.notes`
+rationale (and optional validated evidence), and the factual correction arrives
+through the ordinary `recordClass = "CORRECTION"` resolution path (§6.7).
 
 ### 6.5 `disputeStatus` derivation — closes the latent M4 over-claim
 
@@ -550,23 +554,37 @@ record mutation; a disputed claim is surfaced by deriving from the consequence's
 
 ### 6.6 Materialization staling (D12) and high-consequence blocking
 
-A CONTEST is a **basis-set staleness trigger** (D12): the disputed consequence is
-a `MaterializationBasis` member whose state changed to disputed. G5-4 calls the
-existing `Materializer.invalidate_for_sources([contested_consequence])`
-(`kernel/materializer.py:590`) in the contest commit's transaction, marking every
-materialization whose basis includes it **STALE**. On the next read:
+**Two orthogonal axes — freshness vs dispute.** `stalenessClass` describes
+**freshness only** (is the materialization current with respect to its basis);
+`disputeStatus` carries the **dispute condition** (is a basis member disputed).
+They move independently, and a CONTEST acts on both in two distinct steps:
 
-- **PassportView** (informational) recomputes and qualifies `disputeStatus =
-  DISPUTED_BASIS` with `stalenessClass` reflecting the dispute — the dispute is
-  **shown, never hidden** (Kernel rule 7).
-- **DocumentAssembly freeze** (high-consequence) **refuses** from a disputed
-  basis — a `DENY`/refusal outcome carrying the reason code `DISPUTE_OPEN` (the
-  registered, until-now-unused code — "data exists but is disputed"), exactly as
-  it refuses a non-FRESH basis: a disputed truth is never frozen into an output.
-  (`stalenessClass` → blocking.)
+1. **Stale-on-contest (freshness axis).** A CONTEST is a basis-set staleness
+   trigger (D12): the disputed consequence is a `MaterializationBasis` member
+   whose state changed. G5-4 calls the existing
+   `Materializer.invalidate_for_sources([contested_consequence])`
+   (`kernel/materializer.py:590`) in the contest commit's transaction, marking
+   every materialization whose basis includes it **STALE** — a one-time
+   invalidation so the next read recomputes against current state.
+2. **Fresh-plus-disputed after recompute (dispute axis).** On recompute the
+   result is **`FRESH` again** on the freshness axis (it is current), yet it
+   still carries **`disputeStatus = DISPUTED_BASIS`** because its basis includes
+   an unresolved disputed consequence. Freshness and dispute are not the same
+   signal: a current result can be honestly fresh *and* disputed.
+
+Then, per surface:
+- **PassportView** (informational) recomputes (`stalenessClass = FRESH`) and
+  qualifies `disputeStatus = DISPUTED_BASIS` — the dispute is **shown, never
+  hidden** (Kernel rule 7).
+- **DocumentAssembly freeze** (high-consequence) **refuses on the dispute axis**:
+  a `DENY`/refusal outcome carrying `DISPUTE_OPEN` (the registered,
+  until-now-unused code — "data exists but is disputed") **because the basis is
+  disputed, not because the recomputed result is stale**. A disputed truth is
+  never frozen into an output even when the materialization is `FRESH`.
 
 This is the key REJECT/CONTEST difference: REJECT touches no materialization
-(§3.7); CONTEST stales the dependent ones and blocks high-consequence reliance.
+(§3.7); CONTEST stales the dependent ones (freshness axis) and blocks
+high-consequence reliance (dispute axis).
 
 ### 6.7 Resolution — by supersession, never by edit
 
@@ -634,9 +652,14 @@ special case; a later dispute never rewrites an earlier historical answer.
    (`REVIEW_REJECT_OR_CONTEST` / `CONTESTED`, non-empty rationale) + a `DISPUTE`
    edge, **no consequence**, outcome `RETAIN_DRAFT`; the consequence is unedited
    and **stays in force**.
-2. Dependent materializations are staled; a re-read carries `disputeStatus =
-   DISPUTED_BASIS`; a DocumentAssembly freeze from a disputed basis **refuses**
-   (`DISPUTE_OPEN`).
+2. **Freshness axis:** a CONTEST stales every dependent materialization
+   (`invalidate_for_sources`), proven by a stale-on-contest test.
+2a. **Dispute axis:** after recompute the result is `stalenessClass = FRESH`
+   yet `disputeStatus = DISPUTED_BASIS` (a fresh-plus-disputed test) — the two
+   axes are independent.
+2b. **Output refusal:** a DocumentAssembly freeze from a disputed basis refuses
+   `DENY` / `DISPUTE_OPEN` **because the basis is disputed, not because it is
+   stale** (the result may be `FRESH`).
 3. Authority: a principal lacking `REVIEW_REJECT_OR_CONTEST` is denied.
 4. Validity: a target that is not an in-force consequence, is already superseded,
    is cross-farm, or is already disputed is refused; an empty rationale or
@@ -677,7 +700,7 @@ procedural branch, no scheme/profile literal):
 - `kernel/stages.py` (IngressNormalizer) — **normalize and validate the
   `(reviewAction, decisionOutcomeState)` pair fail-closed** per the §3.1 matrix:
   absent ⇒ `REVIEW_ACCEPT`/`ACCEPTED`; `REVIEW_REJECT_OR_CONTEST`+`REJECTED` ⇒
-  reject; `REVIEW_REJECT_OR_CONTEST`+`CONTESTED` ⇒ refuse until G5-3; any
+  reject; `REVIEW_REJECT_OR_CONTEST`+`CONTESTED` ⇒ refuse until G5-4; any
   mismatched / unrecognized action or outcome ⇒ governed refusal, never a silent
   accept.
 - receipt is **free**: because `emit_queue_rejection` registers the
@@ -703,7 +726,7 @@ procedural branch, no scheme/profile literal):
    ref.
 4a. The `(reviewAction, decisionOutcomeState)` pair is normalized fail-closed
    (§3.1): an absent action still accepts; `REVIEW_REJECT_OR_CONTEST`+`REJECTED`
-   rejects; `REVIEW_REJECT_OR_CONTEST`+`CONTESTED` is refused until G5-3; any
+   rejects; `REVIEW_REJECT_OR_CONTEST`+`CONTESTED` is refused until G5-4; any
    mismatched / unrecognized action or outcome is a governed refusal, never a
    silent accept.
 4b. The rejection `ReviewDecision` is reachable as a receipt: it appears in the
