@@ -27,14 +27,17 @@ def uid():
     return uuid.uuid4().hex[:8]
 
 
-def _partial_extent(store, pe_id: str) -> str:
+def _partial_extent(store, pe_id: str, *, extent_state: str = "ACCEPTED_FOR_DECLARED_USE",
+                    may_drive: bool = True, must_not_promote: list | None = None) -> str:
     """Insert a minimal, schema-valid generic PartialExtent (the extent-carrier
-    kind) and return its id. No SI geometry literals — a format-true fixture."""
+    kind) and return its id. Defaults to a usable carrier (ACCEPTED, drives
+    materialization, forbids nothing); the kwargs flip it to a non-usable one.
+    No SI geometry literals — a format-true fixture."""
     pe = {
         "schemaVersion": "ofarm.partialextent.v0.1",
         "partialExtentId": pe_id,
         "extentRole": "TREATMENT_AREA",
-        "extentState": "ACCEPTED_FOR_DECLARED_USE",
+        "extentState": extent_state,
         "createdAt": now_iso(),
         "anchorScope": {"scopeType": "FIELD", "scopeRef": demo.FIELD},
         "parentScope": {"scopeType": "FIELD", "scopeRef": demo.FIELD},
@@ -55,8 +58,8 @@ def _partial_extent(store, pe_id: str) -> str:
         "evidenceRefs": [demo.PHOTO_EVIDENCE],
         "promotionBoundary": {
             "highConsequenceUse": "USE_ALLOWED_FOR_DECLARED_PURPOSE",
-            "mayDriveMaterialization": True,
-            "mustNotPromoteTo": []},
+            "mayDriveMaterialization": may_drive,
+            "mustNotPromoteTo": must_not_promote or []},
     }
     with store.tx() as cur:
         store.insert_record(cur, pe)
@@ -118,6 +121,27 @@ def test_partial_extent_dangling_ref_refused(store, pipeline):
     assert r["decisionOutcome"] == "RETAIN_DRAFT"
     assert any(p["reasonCode"] == "EVIDENCE_REFERENCE_UNAVAILABLE" for p in r["problems"])
     assert not r.get("emittedAcceptedConsequenceRefs")
+
+
+@pytest.mark.parametrize("kwargs, why", [
+    ({"extent_state": "DRAFT"}, "carrier is a DRAFT, not accepted for use"),
+    ({"extent_state": "DISPUTED"}, "carrier is DISPUTED"),
+    ({"extent_state": "SUPERSEDED"}, "carrier is SUPERSEDED"),
+    ({"may_drive": False}, "carrier's promotionBoundary forbids driving materialization"),
+    ({"must_not_promote": ["ACCEPTED_EXECUTION"]}, "carrier forbids promotion to ACCEPTED_EXECUTION"),
+    ({"must_not_promote": ["WHOLE_FIELD_TRUTH"]}, "carrier forbids promotion to WHOLE_FIELD_TRUTH"),
+])
+def test_partial_extent_carrier_not_usable_refused(store, pipeline, kwargs, why):
+    # the ref resolves to a PartialExtent of the RIGHT KIND, but the carrier's own
+    # state / promotionBoundary says it must not bound a promoting accepted
+    # execution. "Right kind" is not "usable as a bound": refuse over pretend
+    # (rule 4/7) rather than silently materialize on a non-accepted / self-
+    # forbidding carrier. Honors the carrier's declared boundary, never overrides.
+    pe_id = _partial_extent(store, f"partialextent:bad.{uid()}", **kwargs)
+    r = pipeline.commit(_partial_spray("extentRef", pe_id))
+    assert r["decisionOutcome"] == "RETAIN_DRAFT", why
+    assert any(p["reasonCode"] == "EVIDENCE_REFERENCE_UNAVAILABLE" for p in r["problems"]), why
+    assert not r.get("emittedAcceptedConsequenceRefs"), why
 
 
 def test_partial_extent_no_bound_refused(store, pipeline):

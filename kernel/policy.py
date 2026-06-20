@@ -231,6 +231,18 @@ NON_WHOLE_EXTENT_CLASSES = frozenset({
 # content (P2/GERK), never literals here. (profile_si_ffs/UNSUPPORTED_SURFACES.md.)
 ALLOWED_EXTENT_BOUND_KINDS = frozenset({"ofarm.partialextent.v0.1"})
 
+# resolving to the right KIND is not the same as being a USABLE bound: an
+# extent carrier is acceptable as the bound of a promoting operation-claim only
+# if it declares ITSELF usable for an accepted, materializing execution. Refuse
+# over pretend (Kernel rule 4/7) rather than bound an accepted execution on a
+# draft / disputed / superseded carrier, or one whose own promotionBoundary
+# forbids it. (G7 hostile-review guard; honors the carrier's declared boundary,
+# never overrides it.) The carrier states usable as such a bound:
+EXTENT_CARRIER_USABLE_STATES = frozenset({"ACCEPTED_FOR_DECLARED_USE"})
+# promotionBoundary.mustNotPromoteTo targets that an accepted, materialized
+# operation-claim would drive — a carrier forbidding any of these is not a bound:
+EXTENT_CARRIER_DRIVEN_PROMOTIONS = frozenset({"ACCEPTED_EXECUTION", "WHOLE_FIELD_TRUTH"})
+
 # why a non-promoting commit class retains its draft at REVIEW_PROMOTION —
 # wording pinned by the inherited gate-sequencing fixtures
 NON_PROMOTING_RETAIN_REASONS = {

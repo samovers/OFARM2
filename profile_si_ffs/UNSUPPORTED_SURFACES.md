@@ -29,13 +29,21 @@ recognized extent-carrier kind** — the generic `PartialExtent`
 (`ofarm.partialextent.v0.1`), now in `policy.ALLOWED_EXTENT_BOUND_KINDS`.
 `ExecutionExtentValidator` still refuses a dangling or wrong-kind ref
 (`EVIDENCE_REFERENCE_UNAVAILABLE`) and an unquantified non-whole extent
-(`EVIDENCE_INSUFFICIENT`, ERRATA E-004); both stay RETAIN_DRAFT. **Still
-unsupported in this SI pilot:** the *ingestion* that populates PartialExtent
-carriers from real geometry — the GERK layer supplies per-PID existence + raw
-`AREA` only (attribute import), not coordinate geometry parsed into extent
-magnitudes/carriers (P2). Until that source ships, SI partial-extent claims rely
-on the inline `area` bound; the ref-bound mechanism is exercised by generic
-fixtures, not SI geometry literals.
+(`EVIDENCE_INSUFFICIENT`, ERRATA E-004); it also refuses a carrier that resolves
+to the right kind but does **not declare itself usable** as a bound — its
+`extentState` is not `ACCEPTED_FOR_DECLARED_USE`, or its own `promotionBoundary`
+forbids the promotion (`mayDriveMaterialization=false` / `mustNotPromoteTo` names
+`ACCEPTED_EXECUTION`/`WHOLE_FIELD_TRUTH`) — honoring the carrier's declared
+boundary (Kernel rule 4/7). All stay RETAIN_DRAFT. **Deliberately deferred
+(beyond G7 kind-recognition):** *scope-containment* of the carrier — whether the
+carrier's `anchorScope`/`parentScope` must be the `executionExtent.targetScope`
+or contained within it — is a coherence relation left for a follow-up (steward's
+call). **Still unsupported in this SI pilot:** the *ingestion* that populates
+PartialExtent carriers from real geometry — the GERK layer supplies per-PID
+existence + raw `AREA` only (attribute import), not coordinate geometry parsed
+into extent magnitudes/carriers (P2). Until that source ships, SI partial-extent
+claims rely on the inline `area` bound; the ref-bound mechanism is exercised by
+generic fixtures, not SI geometry literals.
 
 **Use types beyond surface-areas** (Reg. 2023/564 Annex): closed-space and
 seed-treatment record rows are not implemented in pilot v1

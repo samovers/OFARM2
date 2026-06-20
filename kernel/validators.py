@@ -136,6 +136,25 @@ def _verified_product_binding(ctx: GateContext) -> dict | None:
     return product_bindings[0] if product_bindings else None
 
 
+def _carrier_admits_bound(payload: dict) -> bool:
+    """Whether a resolved extent-carrier (PartialExtent) admits being the bound of
+    a promoting, materializing operation-claim. Honors the carrier's OWN declared
+    boundary (Kernel rule 4), never overrides it: the carrier must be in a usable
+    state (policy.EXTENT_CARRIER_USABLE_STATES) and its promotionBoundary must
+    permit driving a materialized accepted execution — not have
+    mayDriveMaterialization false, and not name a driven promotion target
+    (policy.EXTENT_CARRIER_DRIVEN_PROMOTIONS) in mustNotPromoteTo. A draft /
+    disputed / superseded or self-forbidding carrier is not a bound (G7 review)."""
+    if payload.get("extentState") not in policy.EXTENT_CARRIER_USABLE_STATES:
+        return False
+    boundary = payload.get("promotionBoundary", {})
+    if not boundary.get("mayDriveMaterialization", False):
+        return False
+    if set(boundary.get("mustNotPromoteTo", [])) & policy.EXTENT_CARRIER_DRIVEN_PROMOTIONS:
+        return False
+    return True
+
+
 # ---------------------------------------------------------------------------
 # the named validators, in law-pinned order
 # ---------------------------------------------------------------------------
@@ -710,11 +729,13 @@ class ExecutionExtentValidator:
     / EXTERNAL_GEOMETRY_REFERENCE claim must carry an inline `area` (value+unit)
     or an extent ref (geometryRef / extentRef / scopeExtentBasisRef) that
     resolves to a recognized extent-carrier kind (policy.ALLOWED_EXTENT_BOUND_KINDS
-    — the PartialExtent, G7). No bound at all, or a bound whose only ref is
-    dangling or of the wrong kind, is an incomplete carrier — "size treated" is
-    a required SI record field — so the claim stays a draft, never silently
-    materialized as whole-scope (corrected and resubmitted, like a dose missing
-    its unit). The inline `area` remains an always-available bound."""
+    — the PartialExtent, G7) AND whose carrier declares itself usable as such a
+    bound (see _carrier_admits_bound). No bound at all, a bound whose only ref is
+    dangling or of the wrong kind, or a carrier that does not admit the promotion,
+    is an incomplete or impermissible bound — "size treated" is a required SI
+    record field — so the claim stays a draft, never silently materialized as
+    whole-scope (corrected and resubmitted, like a dose missing its unit). The
+    inline `area` remains an always-available bound."""
 
     def run(self, ctx: GateContext) -> GateRefusal | None:
         extent = ctx.sub["payload"].get("executionExtent", {})
@@ -735,22 +756,37 @@ class ExecutionExtentValidator:
         # a ref bound must resolve to a RECOGNIZED extent-bound carrier kind —
         # "resolves to something" is not "resolves to the right kind of thing".
         # policy.ALLOWED_EXTENT_BOUND_KINDS recognizes the generic extent-carrier
-        # (PartialExtent, G7), so a ref resolving to one is a real bound; a
-        # dangling ref or a wrong-kind existing record is still invalid; inline
-        # `area` remains an always-available bound.
-        invalid = []
+        # (PartialExtent, G7); a dangling ref or a wrong-kind existing record is
+        # no bound. Then "right kind" is not "usable as a bound": the carrier must
+        # declare ITSELF usable for a promoting accepted execution, or refuse over
+        # pretend (rule 4/7). The inline `area` remains an always-available bound.
+        invalid, unusable = [], []
         for ref in present_refs:
             row = ctx.store.get_record(ref)
             if row is None or row["record_kind"] not in policy.ALLOWED_EXTENT_BOUND_KINDS:
                 invalid.append(ref)
+            elif not _carrier_admits_bound(row["payload"]):
+                unusable.append(ref)
         if invalid:
             return _refusal(ctx, "FAIL_REFERENCE_RESOLUTION", runtime_problem(
                 "EVIDENCE_REFERENCE_UNAVAILABLE", "Partial extent bound unresolved",
-                f"executionExtent names extent bound(s) {invalid} that do not "
-                "resolve to a recognized extent-bound carrier; M1 accepts only an "
-                "inline `area` bound (ref bounds need an extent ingestion surface — "
-                "M2; see UNSUPPORTED_SURFACES.md), so the claim stays a draft"),
+                f"executionExtent names extent bound(s) {invalid} that do not resolve "
+                "to a recognized extent-bound carrier (the recognized kind is the "
+                "PartialExtent, policy.ALLOWED_EXTENT_BOUND_KINDS): a dangling ref or a "
+                "wrong-kind record is no bound, so the claim stays a draft (inline "
+                "`area` is the always-available bound)"),
                 rationale=f"unrecognized extent bound refs: {invalid}")
+        if unusable:
+            return _refusal(ctx, "FAIL_REFERENCE_RESOLUTION", runtime_problem(
+                "EVIDENCE_REFERENCE_UNAVAILABLE", "Partial extent bound not usable",
+                f"executionExtent names extent carrier(s) {unusable} that resolve to a "
+                "PartialExtent but do not admit being a bound for an accepted, "
+                "materializing execution — the carrier's own extentState is not "
+                "ACCEPTED_FOR_DECLARED_USE, or its promotionBoundary forbids it "
+                "(mayDriveMaterialization=false / mustNotPromoteTo names ACCEPTED_EXECUTION "
+                "or WHOLE_FIELD_TRUTH); the claim stays a draft rather than bound an "
+                "accepted execution on a non-accepted or self-forbidding carrier"),
+                rationale=f"extent carriers not usable as a bound: {unusable}")
         return None
 
 
