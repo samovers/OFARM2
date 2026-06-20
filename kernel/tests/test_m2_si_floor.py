@@ -203,5 +203,28 @@ def test_malformed_advisories_fails_closed(store, pipeline, monkeypatch, tmp_pat
     assert r["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
 
 
+@pytest.mark.parametrize("policy_doc", [
+    {"operationFloor": {"hardItems": ["banana"], "softItems": []}},
+    {"operationFloor": {"hardItems": ["dose-unit"], "softItems": ["dose-unit"]}},
+    {"operationFloor": {"hardItems": [42], "softItems": []}},
+    {"operationFloor": {"hardItems": ["dose-unit"], "softItems": []},
+     "advisories": {"authorisationMismatch": None}},
+    {"operationFloor": {"hardItems": ["dose-unit"], "softItems": []},
+     "advisories": {"doseRange": {"min": "x"}}},
+    {"operationFloor": {"hardItems": ["dose-unit"], "softItems": []},
+     "advisories": {"doseRange": {"min": 100, "max": 1}}},
+], ids=["unknown-item", "hard-soft-overlap", "non-string-item",
+        "null-advisory-block", "non-numeric-dose", "unordered-dose"])
+def test_malformed_policy_variants_fail_closed(store, pipeline, monkeypatch, tmp_path, policy_doc):
+    # every malformed shape the kernel later indexes/compares fails CLOSED at load
+    # (governed PROFILE_NOT_ACTIVE), never a raw KeyError / AttributeError / compare
+    bad = tmp_path / "bad.json"
+    bad.write_text(json.dumps(policy_doc))
+    monkeypatch.setattr(config, "EVIDENCE_POLICY_PATH", bad)
+    r = _spray(pipeline, confirm=True)
+    assert r["decisionOutcome"] == "RETAIN_DRAFT"
+    assert r["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+
+
 # Durable Advisory-Twin record (PassportView _advisory_flags) is DEFERRED — see
 # the module docstring + ERRATA E-006. No passport-durability test here by design.

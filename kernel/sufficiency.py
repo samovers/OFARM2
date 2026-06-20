@@ -191,9 +191,11 @@ def build_floor_case(store, sub, commit_class, farm_ref, assertion_id,
     }
     evidence_refs = payload.get("evidenceRefs", []) or sub.get("evidenceRefs", [])
     # the hard/soft floor COMPOSITION is package content (P5): read it from the
-    # active profile, never a kernel constant. A missing/malformed policy raises
+    # active profile, never a kernel constant. `checks` is the kernel's generic
+    # floor-check vocabulary, so an unknown floor item fails closed at load
+    # (rather than KeyError below). A missing/malformed policy raises
     # ProfilePolicyError -> the gate fails closed with a governed RuntimeProblem.
-    hard, soft = profile_policy.operation_floor()
+    hard, soft = profile_policy.operation_floor(supported_checks=set(checks))
     return build_case_from_checks(
         store, farm_ref, assertion_id, erp_id, checks, hard, soft, evidence_refs)
 
