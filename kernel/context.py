@@ -237,22 +237,28 @@ class ContextAssembler:
         profiles = self.store.find_by_kind("ofarm.agronomiccodebindingprofile.v0.1")
         if not (artifact_sets and activation_sets and profiles):
             raise RuntimeError("context spine not bootstrapped — call context.bootstrap(store)")
-        if as_of is not None and (len(artifact_sets) > 1 or len(activation_sets) > 1
-                                  or len(profiles) > 1):
-            # the single-profile M1 pilot has no versioned activation history
-            # to select from — with multiple activation/profile/artifact-set
-            # records, silently using the latest would apply a possibly-future
-            # pack/profile context to an earlier state. Refuse instead
-            # (hostile re-review finding 4).
-            raise ContextNotReconstructible(
-                "multiple activation/profile/artifact-set records exist; the "
-                "historical pack/profile context for AS_OF cannot be "
-                "reconstructed in this runtime — refusing rather than silently "
-                "using the latest")
-        # latest of each (single-profile pilot: exactly one of each is shipped)
-        artifact_set = artifact_sets[-1]["payload"]
-        activation_set = activation_sets[-1]["payload"]
-        profile = profiles[-1]["payload"]
+        if as_of is None:
+            # NOW: the latest of each (single-profile pilot ships exactly one)
+            artifact_set = artifact_sets[-1]["payload"]
+            activation_set = activation_sets[-1]["payload"]
+            profile = profiles[-1]["payload"]
+        else:
+            # AS_OF: reconstruct the vintage in force at as_of by each family's
+            # effective timestamp (G6). Each family selects the latest effective
+            # <= as_of; a future vintage is never applied to an earlier state,
+            # whether it is one of several or the only record (a single record is
+            # not privileged to skip the time bound). The whole spine must be in
+            # force: if ANY family has no vintage in force at as_of, the context
+            # is not reconstructible. Refuse over pretend (Kernel rule 7) when no
+            # vintage is in force or the latest is ambiguous (identical timestamps
+            # -> cannot pick deterministically).
+            bound = parse_ts(as_of)
+            if bound is None:
+                raise ContextNotReconstructible(
+                    f"AS_OF time {as_of!r} is unparseable — refusing to guess a vintage")
+            artifact_set = self._vintage(artifact_sets, "generatedAt", bound, "ActiveArtifactSet")
+            activation_set = self._vintage(activation_sets, "evaluatedAt", bound, "PackActivationSet")
+            profile = self._vintage(profiles, "issuedAt", bound, "AgronomicCodeBindingProfile")
         if profile["profileState"] != "ACTIVE":
             raise RuntimeError(f"code-binding profile state is {profile['profileState']}, not ACTIVE")
         return {
@@ -260,6 +266,34 @@ class ContextAssembler:
             "activation_set": activation_set,
             "profile": profile,
         }
+
+    @staticmethod
+    def _vintage(records: list[dict], date_field: str, bound, label: str) -> dict:
+        """The spine-family vintage in force at `bound` (AS_OF, G6): the latest
+        `date_field` that is <= bound. The same rule governs one record or many —
+        a single record is NOT privileged to skip the time bound: a future vintage
+        (effective > bound) is excluded whether or not it is the only one, never
+        applied to an earlier state (Kernel rule 6). Refuse (ContextNotReconstructible)
+        when none is in force (none datable <= bound), or when two share the latest
+        timestamp and the choice is ambiguous — refuse over pretend (rule 7), never
+        silently use the latest."""
+        dated = []
+        for r in records:
+            eff = parse_ts(r["payload"].get(date_field))
+            if eff is not None and eff <= bound:
+                dated.append((eff, r["payload"]))
+        if not dated:
+            raise ContextNotReconstructible(
+                f"no {label} vintage was in force at {bound.isoformat()} (by {date_field}); "
+                "the historical context cannot be reconstructed")
+        latest = max(eff for eff, _ in dated)
+        in_force = [p for eff, p in dated if eff == latest]
+        if len(in_force) > 1:
+            raise ContextNotReconstructible(
+                f"{label} history is ambiguous at {bound.isoformat()}: "
+                f"{len(in_force)} records share the latest {date_field} {latest.isoformat()} — "
+                "refusing rather than guessing which vintage was in force")
+        return in_force[0]
 
     def assemble(self, cur, farm_ref: str, *, target_twin: str = "COMPLIANCE",
                  evaluation_time_policy: dict | None = None) -> dict:
