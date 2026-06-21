@@ -10,6 +10,13 @@ python3 conformance/ofarm_pkg_contract_check.py
 
 Verifies: every JSON parses · extracted files match manifest sha256 digests · authored profile instances validate against their schemas (zero-dependency subset validator; fails loudly on unsupported schema keywords).
 
+## Profile-slice design cases
+
+`profile_nl_go_glmc7_2026/conformance/nl_glmc7_2026_cases.md` lists the design
+cases for the Netherlands GO + GLMC 7 2026 profile slice. These are profile
+inventory cases, not executed platform evidence and not part of the M1 platform
+MVP suite.
+
 ## Inherited fixtures
 
 `fixtures/gate_sequencing/` — extracted verbatim from the canonical suite (digests in `contracts/CONTRACTS_MANIFEST.json`):

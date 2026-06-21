@@ -1,0 +1,260 @@
+{
+  "packageName": "profile_nl_go_glmc7_2026",
+  "profileRef": "profile:nl.go-glmc7.2026.v0_1",
+  "releasePosture": "NL_GO_GLMC7_2026_CONFORMANCE_READY_AMENDMENT_CHAIN",
+  "ledgerCheckedAt": "2026-06-21",
+  "status": "authored profile-local source index; parse-only; not canonical reference law",
+  "sourceStandard": "official amendment-chain reconstruction accepted for this narrow conformance-ready slice; direct Wettenbank/Wetten.nl consolidated capture is audit-hardening only",
+  "receiptPolicy": "No local source copies are stored in this patch, so no local sha256 receipts are claimed. URLs, checked dates, publication/effective dates, and operative paraphrases are recorded for profile review; a later immutable source packet should add local captured extracts and hashes.",
+  "sources": [
+    {
+      "sourceRef": "source:nl.stcrt.2026.3657.go",
+      "title": "Stcrt 2026, 3657 - Regeling Landbouwtelling en Gecombineerde opgave 2026",
+      "url": "https://zoek.officielebekendmakingen.nl/stcrt-2026-3657.html",
+      "sourceRole": "primary law",
+      "legalForceOrStatus": "ministerial regulation",
+      "publicationDate": "2026-02-17",
+      "effectiveDateOrWindow": "2026 claim-year GO filing window: 2026-03-01 through 2026-05-18; parcel/crop peildatum: 2026-05-15",
+      "checkedAt": "2026-06 source packet",
+      "claimYearRelevance": "2026 GO filing basis, electronic filing, filing window, and 15 May peildatum",
+      "operativeExtraction": "The 2026 GO is the official annual filing instrument, must be filed electronically through Mijn RVO, runs from 1 March through 18 May 2026, and uses 15 May 2026 as the relevant peildatum for parcel and crop facts.",
+      "knownLimits": "No local verbatim source copy or hash is stored in this profile patch.",
+      "sourceReceipt": {
+        "localCopyStored": false,
+        "sha256": null,
+        "receiptNote": "URL and operative paraphrase only; immutable local extract deferred."
+      },
+      "wettenbankConsolidatedCapture": {
+        "neededForThisReleasePosture": false,
+        "auditHardeningTodo": false
+      }
+    },
+    {
+      "sourceRef": "source:nl.stcrt.2026.1855.uglb-amendment",
+      "title": "Stcrt 2026, 1855 - January 2026 amendment to Uitvoeringsregeling GLB 2023",
+      "url": "https://zoek.officielebekendmakingen.nl/stcrt-2026-1855.html",
+      "sourceRole": "amendment-chain law",
+      "legalForceOrStatus": "ministerial amending regulation",
+      "publicationDate": "2026-01-20",
+      "effectiveDateOrWindow": "formal entry into force 2026-01-21; most effects retroactive to 2026-01-01; Article 32 route retroactive to 2025-01-01 per source packet",
+      "checkedAt": "2026-06 source packet",
+      "claimYearRelevance": "Article 32 organic/in-conversion route and GLMC 7 amendment-chain reconstruction for 2026",
+      "operativeExtraction": "Adds the Article 32 organic/in-conversion deemed-compliance route for listed GLMC standards including GLMC 7, and removes the prior biological clause from the GLMC 7 annex text.",
+      "knownLimits": "Direct Wettenbank consolidated Article 32 and Annex 4 GLMC 7 text remains uncaptured.",
+      "sourceReceipt": {
+        "localCopyStored": false,
+        "sha256": null,
+        "receiptNote": "Amendment-chain URL and operative paraphrase only; immutable local extract deferred."
+      },
+      "wettenbankConsolidatedCapture": {
+        "neededForThisReleasePosture": false,
+        "auditHardeningTodo": true
+      }
+    },
+    {
+      "sourceRef": "source:nl.rvo.glmc7.2026",
+      "title": "RVO - Gewassen op bouwland roteren GLMC 7 GLB 2026",
+      "url": "https://www.rvo.nl/onderwerpen/glb-2026/gewassen-op-bouwland-roteren-glmc-7",
+      "sourceRole": "official operational guidance",
+      "legalForceOrStatus": "guidance, not primary law",
+      "publicationDate": null,
+      "effectiveDateOrWindow": "2026 GLB guidance",
+      "checkedAt": "2026-02-20 source packet",
+      "claimYearRelevance": "Operational statement of the annual one-third, once-in-four-years parcel, exemption, and crop-code routing rules",
+      "operativeExtraction": "Describes GLMC 7 for arable land as crop rotation on bouwland, with annual one-third rotation, once-in-four-years parcel crop change, and routing through the Gewascodelijst for crop species and exemptions.",
+      "knownLimits": "Guidance must not be represented as primary law; deterministic calculation contract details are not cut in this profile patch.",
+      "sourceReceipt": {
+        "localCopyStored": false,
+        "sha256": null,
+        "receiptNote": "URL and source-packet checked date only."
+      },
+      "wettenbankConsolidatedCapture": {
+        "neededForThisReleasePosture": false,
+        "auditHardeningTodo": false
+      }
+    },
+    {
+      "sourceRef": "source:nl.rvo.conditionaliteiten.2026",
+      "title": "RVO - Conditionaliteiten GLB 2026",
+      "url": "https://www.rvo.nl/onderwerpen/glb-2026/conditionaliteiten",
+      "sourceRole": "official operational guidance",
+      "legalForceOrStatus": "guidance, not primary law",
+      "publicationDate": null,
+      "effectiveDateOrWindow": "2026 GLB guidance",
+      "checkedAt": "2026-06-11 source packet",
+      "claimYearRelevance": "Conditionality guidance, sanctions/control simplifications, and related Wettenbank links",
+      "operativeExtraction": "Provides conditionality context and identifies under-10-hectare content as a control/sanction simplification, not as a removal of the underlying GLMC 7 duty.",
+      "knownLimits": "No 30-hectare carve-out is encoded; guidance must not be represented as primary law.",
+      "sourceReceipt": {
+        "localCopyStored": false,
+        "sha256": null,
+        "receiptNote": "URL and source-packet checked date only."
+      },
+      "wettenbankConsolidatedCapture": {
+        "neededForThisReleasePosture": false,
+        "auditHardeningTodo": false
+      }
+    },
+    {
+      "sourceRef": "source:nl.rvo.gecombineerde-opgave.2026",
+      "title": "RVO - Gecombineerde Opgave",
+      "url": "https://www.rvo.nl/onderwerpen/gecombineerde-opgave",
+      "sourceRole": "official operational guidance",
+      "legalForceOrStatus": "guidance, not primary law",
+      "publicationDate": null,
+      "effectiveDateOrWindow": "2026 GO filing workflow",
+      "checkedAt": "2026-05-19 source packet",
+      "claimYearRelevance": "GO workflow, filing, corrections, and submission artefact context",
+      "operativeExtraction": "Explains annual digital filing and operational GO workflow; profile uses it only as guidance tied back to Stcrt 2026, 3657 for the legal filing basis.",
+      "knownLimits": "Guidance must be tied back to the GO regulation for legal filing basis.",
+      "sourceReceipt": {
+        "localCopyStored": false,
+        "sha256": null,
+        "receiptNote": "URL and source-packet checked date only."
+      },
+      "wettenbankConsolidatedCapture": {
+        "neededForThisReleasePosture": false,
+        "auditHardeningTodo": false
+      }
+    },
+    {
+      "sourceRef": "source:nl.rvo.gewascodelijst.2026",
+      "title": "RVO - Gewascodelijst",
+      "url": "https://www.rvo.nl/onderwerpen/gewascodelijst",
+      "sourceRole": "official reference data",
+      "legalForceOrStatus": "official operational reference list for filing and scheme use",
+      "publicationDate": null,
+      "effectiveDateOrWindow": "2026 claim-year crop-code reference",
+      "checkedAt": "2025-12-29 source packet",
+      "claimYearRelevance": "2026 crop-code and GLMC 7/rustgewas classification reference",
+      "operativeExtraction": "Year-selectable crop-code list used for filing and scheme classifications; the 2026 used list or used-code subset must be snapshotted before high-consequence use.",
+      "knownLimits": "The used 2026 list or subset must be snapshotted before high-consequence use.",
+      "sourceReceipt": {
+        "localCopyStored": false,
+        "sha256": null,
+        "receiptNote": "URL and source-packet checked date only; no local crop-code snapshot in this patch."
+      },
+      "wettenbankConsolidatedCapture": {
+        "neededForThisReleasePosture": false,
+        "auditHardeningTodo": false
+      }
+    },
+    {
+      "sourceRef": "source:nl.rvo.rustgewassen.2026",
+      "title": "RVO - Rustgewassen",
+      "url": "https://www.rvo.nl/onderwerpen/mest/rustgewassen",
+      "sourceRole": "official operational guidance",
+      "legalForceOrStatus": "guidance, not primary law",
+      "publicationDate": null,
+      "effectiveDateOrWindow": "2026 rustgewas guidance",
+      "checkedAt": "2026-05-20 source packet",
+      "claimYearRelevance": "Rustgewas classification and reporting guidance for the sand/loess rule",
+      "operativeExtraction": "Provides operational rustgewas guidance and reporting context; profile requires rustgewas proof where the sand/loess GLMC 7 route is asserted.",
+      "knownLimits": "Must be used with the claim-year crop-code snapshot.",
+      "sourceReceipt": {
+        "localCopyStored": false,
+        "sha256": null,
+        "receiptNote": "URL and source-packet checked date only."
+      },
+      "wettenbankConsolidatedCapture": {
+        "neededForThisReleasePosture": false,
+        "auditHardeningTodo": false
+      }
+    },
+    {
+      "sourceRef": "source:nl.rvo.landbouwareaal.2026",
+      "title": "RVO - Landbouwareaal GLB 2026",
+      "url": "https://www.rvo.nl/onderwerpen/glb-2026/landbouwareaal-glb-2026",
+      "sourceRole": "official operational guidance",
+      "legalForceOrStatus": "guidance, not primary law",
+      "publicationDate": null,
+      "effectiveDateOrWindow": "2026 GLB land-area guidance",
+      "checkedAt": "2026-02-06 source packet",
+      "claimYearRelevance": "Operational bouwland and land-at-disposal context for the 15 May peildatum",
+      "operativeExtraction": "Provides operational agricultural-area and land-at-disposal context; profile uses this as guidance for scoping bouwland and 15 May possession evidence.",
+      "knownLimits": "Parcel facts must still be source-preserved as claim-year evidence.",
+      "sourceReceipt": {
+        "localCopyStored": false,
+        "sha256": null,
+        "receiptNote": "URL and source-packet checked date only."
+      },
+      "wettenbankConsolidatedCapture": {
+        "neededForThisReleasePosture": false,
+        "auditHardeningTodo": false
+      }
+    },
+    {
+      "sourceRef": "source:nl.rvo.bezwaar",
+      "title": "RVO - Bezwaar maken",
+      "url": "https://www.rvo.nl/onderwerpen/contact/juridische-zaken/bezwaar-maken",
+      "sourceRole": "official operational guidance",
+      "legalForceOrStatus": "guidance for administrative objection route",
+      "publicationDate": null,
+      "effectiveDateOrWindow": "current RVO juridical-affairs objection route",
+      "checkedAt": "2026-06-21 live URL check; former /onderwerpen/bezwaar-maken redirects here",
+      "claimYearRelevance": "RVO objection route after an adverse decision",
+      "operativeExtraction": "Provides the RVO bezwaar route used to preserve review state after an adverse RVO decision.",
+      "knownLimits": "Used only to preserve review state; not a GLMC 7 rule source.",
+      "sourceReceipt": {
+        "localCopyStored": false,
+        "sha256": null,
+        "receiptNote": "HTTP 301 from /onderwerpen/bezwaar-maken to this canonical juridical-affairs path, then HTTP 200, checked 2026-06-21."
+      },
+      "wettenbankConsolidatedCapture": {
+        "neededForThisReleasePosture": false,
+        "auditHardeningTodo": false
+      }
+    },
+    {
+      "sourceRef": "source:nl.rechtspraak.cbb",
+      "title": "Rechtspraak / College van Beroep voor het bedrijfsleven appeal-route pages",
+      "url": "https://www.rechtspraak.nl/Organisatie-en-contact/Organisatie/College-van-Beroep-voor-het-bedrijfsleven",
+      "sourceRole": "official operational guidance",
+      "legalForceOrStatus": "court information page",
+      "publicationDate": null,
+      "effectiveDateOrWindow": "current court appeal-route information",
+      "checkedAt": "2026-06 source packet",
+      "claimYearRelevance": "CBb appeal-route preservation after RVO objection decision",
+      "operativeExtraction": "Identifies CBb as the appeal route after the administrative objection decision for this subsidy-decision context.",
+      "knownLimits": "Used only to preserve review state; not a GLMC 7 rule source.",
+      "sourceReceipt": {
+        "localCopyStored": false,
+        "sha256": null,
+        "receiptNote": "URL and source-packet checked month only."
+      },
+      "wettenbankConsolidatedCapture": {
+        "neededForThisReleasePosture": false,
+        "auditHardeningTodo": false
+      }
+    },
+    {
+      "sourceRef": "source:nl.implementation-inference.go-glmc7",
+      "title": "OFARM implementation inference for GO + GLMC 7 evidence/currentness",
+      "url": null,
+      "sourceRole": "implementation inference",
+      "legalForceOrStatus": "not law; derived profile policy from source structure and OFARM truth rules",
+      "publicationDate": null,
+      "effectiveDateOrWindow": "profile-local policy for this 2026 slice",
+      "checkedAt": "2026-06-21",
+      "claimYearRelevance": "Public current-state data is corroborative only; source-preserved filed GO and historical facts are required for promotion.",
+      "operativeExtraction": "High-consequence promotion must be based on filed GO and source-preserved historical evidence; public/current-state data is corroborative only.",
+      "knownLimits": "Must not be cited as primary law or official guidance.",
+      "sourceReceipt": {
+        "localCopyStored": false,
+        "sha256": null,
+        "receiptNote": "Profile-local inference, not an external source."
+      },
+      "wettenbankConsolidatedCapture": {
+        "neededForThisReleasePosture": false,
+        "auditHardeningTodo": false
+      }
+    }
+  ],
+  "knownLimits": [
+    "Direct Wettenbank/Wetten.nl consolidated Article 32 capture remains an audit-hardening TODO.",
+    "Direct Wettenbank/Wetten.nl consolidated Annex 4 GLMC 7 capture remains an audit-hardening TODO.",
+    "RVO guidance is official operational guidance, not primary law.",
+    "No official support was found for a 30-hectare GLMC 7 carve-out; it is not encoded.",
+    "This patch does not cut a deterministic GLMC 7 calculation contract for follow-on crop route, denominator/rounding, crop-code change handling, parcel split/merge math, or exemption precedence."
+  ]
+}

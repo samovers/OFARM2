@@ -28,3 +28,11 @@ This is the **OFARM2 implementation repository**: the working surface for buildi
 6. **Claim limits:** this project claims record-keeping completeness for the pilot — never current-compliance, certification, production readiness, or legal advice. Do not generate text that claims more.
 7. **Honest reporting:** failing tests are reported as failing; design fixtures are never presented as executed evidence; skipped steps are named.
 8. **Commit style:** imperative subject, body explains what and why, reference the M1 brief task where applicable.
+
+## Review guard - Netherlands GO + GLMC 7 slice
+
+For `profile_nl_go_glmc7_2026/`, treat these as blocking review issues: country
+law leaking into Core, Kernel, Platform, runtime adapters, or the SI profile; a
+whole-Netherlands production claim; an automated 30-hectare GLMC 7 carve-out;
+BAS, Ctgb, Bijlage Aa, manure-register, GLMC 4, or GLMC 10 scope creep; or any
+promotion path that accepts public/current-state data alone as historical truth.
