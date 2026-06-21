@@ -17,6 +17,7 @@ This PR does not move files, change runtime behavior, update contracts, update m
 - `si_migration_map.md` classifies each finding as move, generic rewording, keep-with-example-removed, manual review, or do-not-touch.
 - `core_neutral_rewording_candidates.md` proposes neutral replacement wording for later PRs.
 - `followup_pr_plan.md` splits follow-up work into a move-focused PR B and a neutrality-hardening PR C.
+- `manual_review_backlog_plan.md` expands the ambiguous/manual-review backlog into future design lanes, required preconditions, stop conditions, and validation expectations.
 
 ## Classification Vocabulary
 
@@ -29,4 +30,3 @@ This PR does not move files, change runtime behavior, update contracts, update m
 ## Validation Intent
 
 Run the package checks and diff hygiene checks after changes. The manual `rg` audit is an inventory input: hits are expected and should be reviewed against the tables here, not treated as automatic failures.
-
