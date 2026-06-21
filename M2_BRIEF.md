@@ -41,7 +41,7 @@ M2 introduces scheduled adapter writers (REGSR, GERK, FFSNaprave) that the M1 bu
 
 7. **AS_OF over real history.** Once activation / profile / artifact-set history exists, make `AS_OF` reconstruct the historical pack/profile context by `timeContext` instead of refusing (`MATERIALIZATION_INVALID` guard in M1). Extend `kernel/context.py` snapshot selection; **keep the guard** until the history is genuinely reconstructible — refuse over pretend (Kernel rule 7).
 
-8. **Extent carrier ingestion.** Populate `policy.M1_ALLOWED_EXTENT_BOUND_KINDS` (empty in M1) once GERK geometry provides a real extent carrier, so `geometryRef` / `extentRef` / `scopeExtentBasisRef` partial-extent bounds become acceptable — not just inline `area`. Update `profile_si_ffs/UNSUPPORTED_SURFACES.md` to match.
+8. **Extent carrier acceptance / allowed-kinds table.** Populate `policy.M1_ALLOWED_EXTENT_BOUND_KINDS` (empty in M1) with the generic recognized extent-carrier kind once a package supplies an extent carrier, so `geometryRef` / `extentRef` / `scopeExtentBasisRef` partial-extent bounds become acceptable — not just inline `area`. Update `profile_si_ffs/UNSUPPORTED_SURFACES.md` to match.
 
 ## Status
 
@@ -60,7 +60,7 @@ certification, legal, production, or current-compliance readiness is claimed.
 | 5 — OIDC onto Party/RoleAssignment/AuthorityGrant | DONE / G4 for the conformance/development OIDC binding; production authentication is not claimed |
 | 6 — Review queue REJECT/CONTEST + dispute handling | DONE / G5-1 through G5-4 |
 | 7 — AS_OF reconstruction over real history | DONE / G6, with non-reconstructible profile lifecycle cases still refused per E-007 |
-| 8 — Extent carrier ingestion (allowed-kinds table) | DONE / G7 |
+| 8 — Extent carrier acceptance / allowed-kinds table | DONE / G7 |
 
 ### Remaining follow-up: E-006 durable advisory output
 
