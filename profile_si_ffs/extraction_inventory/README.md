@@ -18,6 +18,7 @@ This PR does not move files, change runtime behavior, update contracts, update m
 - `core_neutral_rewording_candidates.md` proposes neutral replacement wording for later PRs.
 - `followup_pr_plan.md` splits follow-up work into a move-focused PR B and a neutrality-hardening PR C.
 - `manual_review_backlog_plan.md` expands the ambiguous/manual-review backlog into future design lanes, required preconditions, stop conditions, and validation expectations.
+- `active_profile_loader_design.md` records the PR D1 active-profile loader boundary needed before context/config SI runtime bootstrap can be refactored.
 
 ## Classification Vocabulary
 
