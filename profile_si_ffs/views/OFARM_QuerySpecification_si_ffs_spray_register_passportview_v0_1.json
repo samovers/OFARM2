@@ -1,7 +1,7 @@
 {
   "schemaVersion": "ofarm.queryspec.v0.1",
-  "queryId": "queryspec:si.ffs.inspection-register.documentassembly.v0_1",
-  "queryName": "SI FFS inspection register (frozen DocumentAssembly). Anchor scope farm:ANCHOR-PARAMETER and the AS_OF/WINDOW bounds are substituted with the requesting farm and requested period at freeze time; the shipped window is a representative full-season example per views/VIEWS.md.",
+  "queryId": "queryspec:si.ffs.spray-register.passportview.v0_1",
+  "queryName": "SI FFS spray register (live PassportView). Anchor scope farm:ANCHOR-PARAMETER is substituted with the requesting farm at execution; one farm per execution per profile_si_ffs/views/VIEWS.md.",
   "status": "APPROVED",
   "target": {
     "twin": "COMPLIANCE",
@@ -12,14 +12,11 @@
       }
     ],
     "evaluationTimePolicy": {
-      "policyType": "WINDOW",
-      "windowStart": "2026-01-01T00:00:00Z",
-      "windowEnd": "2026-12-31T23:59:59Z"
+      "policyType": "NOW"
     },
     "authorityContext": {
-      "usePurpose": "frozen exportable inspection register the farmer hands over; gaps are content, annex never promotes",
+      "usePurpose": "live spray register for farmer and advisor; read-only inspector via SharingGrant",
       "requiredAuthorityFamilies": [
-        "ATTEST_SIGN",
         "RECEIVE_USE"
       ]
     }
@@ -43,15 +40,15 @@
         "requiredPresence": "MUST"
       },
       {
-        "var": "annexClaim",
+        "var": "pendingClaim",
         "conceptRef": "ofarm:AssertionRecord",
         "stateFacet": "STATE",
         "requiredPresence": "MAY"
       },
       {
-        "var": "sufficiencyCase",
-        "conceptRef": "ofarm:EvidenceSufficiencyCase",
-        "requiredPresence": "MUST"
+        "var": "advisoryFlag",
+        "conceptRef": "ofarm:SemanticEventEnvelope",
+        "requiredPresence": "MAY"
       }
     ],
     "relations": [
@@ -66,7 +63,7 @@
         "toVar": "execution"
       },
       {
-        "fromVar": "annexClaim",
+        "fromVar": "pendingClaim",
         "predicateRef": "ofarm:eventSource",
         "toVar": "event",
         "optional": true
@@ -90,23 +87,23 @@
         }
       },
       {
-        "kind": "TEMPORAL",
-        "operator": "DURING",
+        "kind": "COMPARE",
         "left": {
           "kind": "PROPERTY",
-          "varRef": "consequence",
-          "propertyRef": "effectiveFrom"
+          "varRef": "execution",
+          "propertyRef": "actualAction.interventionKind"
         },
+        "operator": "=",
         "right": {
-          "kind": "SYSTEM",
-          "propertyRef": "CURRENT_TIME"
+          "kind": "LITERAL",
+          "value": "CROP_PROTECTION"
         }
       }
     ]
   },
   "selection": [
     {
-      "alias": "acceptedEntry",
+      "alias": "entry",
       "source": {
         "kind": "BINDING",
         "varRef": "consequence"
@@ -121,36 +118,57 @@
       }
     },
     {
-      "alias": "executionDetail",
+      "alias": "productBinding",
       "source": {
-        "kind": "BINDING",
-        "varRef": "execution"
+        "kind": "PROPERTY",
+        "varRef": "execution",
+        "propertyRef": "agronomicIdentityBindingRefs"
       }
     },
     {
-      "alias": "annexClaims",
+      "alias": "dose",
       "source": {
-        "kind": "BINDING",
-        "varRef": "annexClaim"
+        "kind": "PROPERTY",
+        "varRef": "execution",
+        "propertyRef": "actualQuantityParameters"
       }
     },
     {
-      "alias": "sufficiency",
+      "alias": "parcel",
       "source": {
-        "kind": "BINDING",
-        "varRef": "sufficiencyCase"
+        "kind": "PROPERTY",
+        "varRef": "execution",
+        "propertyRef": "executionExtent.targetScope"
       }
     },
     {
-      "alias": "acceptedCount",
+      "alias": "operator",
       "source": {
-        "kind": "AGGREGATE",
-        "function": "COUNT",
-        "source": {
-          "kind": "PROPERTY",
-          "varRef": "consequence",
-          "propertyRef": "acceptedEventConsequenceId"
-        }
+        "kind": "PROPERTY",
+        "varRef": "execution",
+        "propertyRef": "actor"
+      }
+    },
+    {
+      "alias": "equipment",
+      "source": {
+        "kind": "PROPERTY",
+        "varRef": "execution",
+        "propertyRef": "equipment"
+      }
+    },
+    {
+      "alias": "pendingClaims",
+      "source": {
+        "kind": "BINDING",
+        "varRef": "pendingClaim"
+      }
+    },
+    {
+      "alias": "advisoryFlags",
+      "source": {
+        "kind": "BINDING",
+        "varRef": "advisoryFlag"
       }
     }
   ],
@@ -159,11 +177,11 @@
       "by": {
         "selectionAlias": "eventTime"
       },
-      "direction": "ASC"
+      "direction": "DESC"
     }
   ],
   "resultProfile": {
-    "mode": "DOCUMENT_ASSEMBLY_INPUT",
+    "mode": "PASSPORT_INPUT",
     "allowPartial": false
   }
 }

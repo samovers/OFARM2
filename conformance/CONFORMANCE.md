@@ -44,8 +44,8 @@ MVP suite.
 | 6 | Stale registry snapshot recheck: binding captured offline against snapshot N, synced when snapshot N+1 changes the authorisation → discrepancy recorded → review, not silent accept | F7 / sync rule 2 |
 | 7 | Revoked delegation recheck: worker's offline record synced after revocation → review/deny, never silent accept | inherited fixture, live |
 | 8 | Materialization basis trace: every current-state answer resolves to a complete `MaterializationBasis` + `ContextSnapshot`; basis-set change flips freshness to STALE | Kernel rule 5; PLATFORM invalidation |
-| 9 | PassportView refusal/disclosure: unresolved/disputed render as exceptions; STALE bars export; missing basis refuses | `views/VIEWS.md` |
-| 10 | DocumentAssembly freeze/trace: frozen doc carries snapshot/basis/context/sufficiency refs; annex never promotes | `views/VIEWS.md` |
+| 9 | PassportView refusal/disclosure: unresolved/disputed render as exceptions; STALE bars export; missing basis refuses | `profile_si_ffs/views/VIEWS.md` |
+| 10 | DocumentAssembly freeze/trace: frozen doc carries snapshot/basis/context/sufficiency refs; annex never promotes | `profile_si_ffs/views/VIEWS.md` |
 | 11 | Inspector read-only: `SharingGrant` grants read, never write/review; revocation cuts access on next request | Kernel rule family 4 |
 | 12 | Temporal conformance: delayed entry preserves distinct event/record/effective times end to end | Kernel rule 6 |
 | 13 | Reference resolution: package-local refs in any authoritative record resolve; dangling refs are conformance failures | reference-resolution sub-gate |

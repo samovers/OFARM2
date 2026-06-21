@@ -146,9 +146,9 @@ INSTANCE_BINDINGS = {
     # kernel/tests/test_conformance.py with a complete 2020-12 validator.
     "profile_si_ffs/OFARM_Capability_Manifest_si_ffs_pilot_v0_1.json":
         "contracts/platform/OFARM_Capability_Manifest_schema_v0_1.json",
-    "views/OFARM_QueryPlanIR_si_ffs_spray_register_passportview_v0_1.json":
+    "profile_si_ffs/views/OFARM_QueryPlanIR_si_ffs_spray_register_passportview_v0_1.json":
         "contracts/platform/OFARM_QueryPlanIR_schema_v0_1.json",
-    "views/OFARM_QueryPlanIR_si_ffs_inspection_register_documentassembly_v0_1.json":
+    "profile_si_ffs/views/OFARM_QueryPlanIR_si_ffs_inspection_register_documentassembly_v0_1.json":
         "contracts/platform/OFARM_QueryPlanIR_schema_v0_1.json",
 }
 

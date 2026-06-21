@@ -813,13 +813,13 @@ def test_15_manifest_grounding(store):
     pairs = [
         (m.MANIFEST_PATH, "contracts/platform/OFARM_Capability_Manifest_schema_v0_1.json"),
         (m.ARTIFACT_SET_PATH, "contracts/platform/OFARM_ActiveArtifactSet_schema_v0_1.json"),
-        (config.PACKAGE_ROOT / "views/OFARM_QuerySpecification_si_ffs_spray_register_passportview_v0_1.json",
+        (config.PROFILE_ROOT / "views/OFARM_QuerySpecification_si_ffs_spray_register_passportview_v0_1.json",
          "contracts/platform/OFARM_QuerySpecification_schema_v0_1.json"),
-        (config.PACKAGE_ROOT / "views/OFARM_QueryPlanIR_si_ffs_spray_register_passportview_v0_1.json",
+        (config.PROFILE_ROOT / "views/OFARM_QueryPlanIR_si_ffs_spray_register_passportview_v0_1.json",
          "contracts/platform/OFARM_QueryPlanIR_schema_v0_1.json"),
-        (config.PACKAGE_ROOT / "views/OFARM_QuerySpecification_si_ffs_inspection_register_documentassembly_v0_1.json",
+        (config.PROFILE_ROOT / "views/OFARM_QuerySpecification_si_ffs_inspection_register_documentassembly_v0_1.json",
          "contracts/platform/OFARM_QuerySpecification_schema_v0_1.json"),
-        (config.PACKAGE_ROOT / "views/OFARM_QueryPlanIR_si_ffs_inspection_register_documentassembly_v0_1.json",
+        (config.PROFILE_ROOT / "views/OFARM_QueryPlanIR_si_ffs_inspection_register_documentassembly_v0_1.json",
          "contracts/platform/OFARM_QueryPlanIR_schema_v0_1.json"),
     ]
     for inst_path, schema_rel in pairs:
