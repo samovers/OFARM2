@@ -46,6 +46,29 @@ def test_grounding_rejects_ungrounded_import_surface(store):
     assert any("scheme:si.not-a-real-scheme" in f for f in failures)
 
 
+def test_grounding_rejects_profile_scheme_without_supported_adapter(store):
+    # scheme:si.kmg-mid IS a standardRef the code-binding profile declares, but it
+    # has NO import adapter (it is captured-identifier vocabulary, not an import
+    # surface). Declaring it a SUPPORTED IMPORT_MAPPING must fail grounding — a
+    # profile-declared scheme is not importable without a real adapter behind it.
+    m = manifest.build_manifest(store)
+    a = manifest.build_artifact_set()
+    assert "scheme:si.kmg-mid" not in manifest.SUPPORTED_IMPORT_SURFACES
+    m["capabilitySections"]["importExportSupport"]["declaredSurfaces"].append(
+        {"surfaceType": "IMPORT_MAPPING", "targetRef": "scheme:si.kmg-mid",
+         "direction": "IMPORT", "status": "SUPPORTED"})
+    failures = manifest.verify_grounding(store, m, a)
+    assert any("scheme:si.kmg-mid" in f and "adapter" in f for f in failures)
+
+
+def test_supported_import_surfaces_drive_the_declared_surfaces(store):
+    # the IMPORT_MAPPING surfaces are derived from the single-homed map (not hand-listed)
+    m = manifest.build_manifest(store)
+    declared = {s["targetRef"] for s in m["capabilitySections"]["importExportSupport"]
+                ["declaredSurfaces"] if s["surfaceType"] == "IMPORT_MAPPING"}
+    assert declared == set(manifest.SUPPORTED_IMPORT_SURFACES)
+
+
 def test_manifest_does_not_overclaim_conformance(store):
     # the only grounded level without benchmark evidence is NONE (RFC §11.4)
     m = manifest.build_manifest(store)
