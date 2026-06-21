@@ -41,24 +41,44 @@ M2 introduces scheduled adapter writers (REGSR, GERK, FFSNaprave) that the M1 bu
 
 7. **AS_OF over real history.** Once activation / profile / artifact-set history exists, make `AS_OF` reconstruct the historical pack/profile context by `timeContext` instead of refusing (`MATERIALIZATION_INVALID` guard in M1). Extend `kernel/context.py` snapshot selection; **keep the guard** until the history is genuinely reconstructible — refuse over pretend (Kernel rule 7).
 
-8. **Extent carrier ingestion.** Populate `policy.M1_ALLOWED_EXTENT_BOUND_KINDS` (empty in M1) once GERK geometry provides a real extent carrier, so `geometryRef` / `extentRef` / `scopeExtentBasisRef` partial-extent bounds become acceptable — not just inline `area`. Update `profile_si_ffs/UNSUPPORTED_SURFACES.md` to match.
+8. **Extent carrier acceptance / allowed-kinds table.** Populate `policy.M1_ALLOWED_EXTENT_BOUND_KINDS` (empty in M1) with the generic recognized extent-carrier kind once a package supplies an extent carrier, so `geometryRef` / `extentRef` / `scopeExtentBasisRef` partial-extent bounds become acceptable — not just inline `area`. Update `profile_si_ffs/UNSUPPORTED_SURFACES.md` to match.
 
 ## Status
 
+Current main is merged through **P6** (PR #24). The table below is a
+repo-currentness view of that merged state, not a production-readiness or
+current-compliance claim. The package still claims record-keeping completeness
+only, the Capability Manifest conformance level remains `NONE`, and no
+certification, legal, production, or current-compliance readiness is claimed.
+
 | Brief task | Status |
 |---|---|
-| 1 — Registry adapter scheduling + detail-page identity verification | NOT STARTED |
-| 2 — GERK importer + parcel onboarding | NOT STARTED |
-| 3 — Identities through the gate chain (incl. FFSNaprave) | NOT STARTED |
-| 4 — Code bindings enforced against real snapshots; regenerate artifacts | NOT STARTED |
-| 5 — OIDC onto Party/RoleAssignment/AuthorityGrant | NOT STARTED |
-| 6 — Review queue REJECT/CONTEST + dispute handling | NOT STARTED |
-| 7 — AS_OF reconstruction over real history | NOT STARTED |
-| 8 — Extent carrier ingestion (allowed-kinds table) | NOT STARTED |
+| 1 — Registry adapter scheduling + detail-page identity verification | DONE / P1 (on G2+G3) |
+| 2 — GERK importer + parcel onboarding | DONE / P2 for the implemented attribute-import scope; G7 supplies the generic extent-carrier acceptance mechanism |
+| 3 — Identities through the gate chain (incl. FFSNaprave) | DONE / G1 + P3 |
+| 4 — Code bindings enforced against real snapshots; regenerate artifacts | DONE / G3 + P4 + P6 |
+| 5 — OIDC onto Party/RoleAssignment/AuthorityGrant | DONE / G4 for the conformance/development OIDC binding; production authentication is not claimed |
+| 6 — Review queue REJECT/CONTEST + dispute handling | DONE / G5-1 through G5-4 |
+| 7 — AS_OF reconstruction over real history | DONE / G6, with non-reconstructible profile lifecycle cases still refused per E-007 |
+| 8 — Extent carrier acceptance / allowed-kinds table | DONE / G7 |
 
-## Build order (controlled slices)
+### Remaining follow-up: E-006 durable advisory output
 
-M2 is too broad to land as one change; build and merge it as controlled slices, each green against `conformance/` before the next begins:
+P5 implemented authorisation-mismatch and dose-range advisories as
+non-blocking `WARNING` result problems sourced from the SI package policy. The
+durable Advisory Twin record is still deferred: no trace-safe `ADVISORY_OUTPUT`
+emission into PassportView `_advisory_flags` exists yet.
+
+That follow-up must be treated as advisory infrastructure, not a Compliance
+Twin shortcut. Advisory material must not enter Compliance materialization, and
+any durable advisory emission needs its own trace-safe emission path,
+appropriate reason-code/result channel, and reachability-compatible linkage
+before it can be stored or surfaced as a record.
+
+## Build order (completed slice map)
+
+M2 was built and merged as controlled slices, each kept green against
+`conformance/` before the next began:
 
 1. **M2a — governed structure identities.** Farm, Field, CropCycle, Equipment, AppliedResource committed through `STRUCTURE_ASSERTION`; drop the demo/bootstrap dependence only after tests prove the committed path (task 3).
 2. **M2b — reference-snapshot adapters** (tasks 1, 2). Each adapter lands alone, under the adapter discipline (parser version, source digest, effective date, import + failure traces):
@@ -74,7 +94,14 @@ M2 is too broad to land as one change; build and merge it as controlled slices, 
    - **M2e-4** — implement CONTEST / dispute materialization.
 6. **M2f — AS_OF and extent carriers.** Only after artifact/profile/snapshot history and GERK geometry carrier records exist (tasks 7, 8).
 
-Each M2 slice must be opened as one or more **narrow implementation tickets** before coding starts. Every ticket declares: goal · likely-touched files · forbidden files (the explicit "do not touch" list) · contracts/docs to read first · exact behavior change · required tests · acceptance criteria · non-goals. No slice proceeds until the previous slice is green against the M1 suite **plus** its own new M2 tests. This is what keeps an agent from mixing SI package-specifics into generic Core/Platform code, or implementing review/dispute behavior before its semantics are settled.
+Each M2 slice was opened as one or more **narrow implementation tickets** before
+coding started. Every ticket declared: goal · likely-touched files · forbidden
+files (the explicit "do not touch" list) · contracts/docs to read first · exact
+behavior change · required tests · acceptance criteria · non-goals. No slice
+proceeded until the previous slice was green against the M1 suite **plus** its
+own new M2 tests. This is what kept agents from mixing SI package-specifics
+into generic Core/Platform code, or implementing review/dispute behavior before
+its semantics were settled.
 
 ### Ticket order: generic mechanism before package content (binding)
 
@@ -83,7 +110,7 @@ Cut tickets in two phases, never interleaved:
 1. **Phase 1 — generic Core/Platform mechanism tickets only:** governed structure-identity commit path · governed adapter/import mechanism · reference-resolution / verification-trace support · OIDC principal binding · review/dispute state-transition semantics · AS_OF reconstruction · extent-carrier acceptance. No Slovenia specifics.
 2. **Phase 2 — SI-package tickets that exercise those mechanisms:** REGSR / GERK / FFSNaprave scheduled imports · KMG-MID / GERK / REGSR / FFSNaprave bindings · the SI evidence floor and advisory behavior · `ActiveArtifactSet` / `ContextSnapshot` regeneration.
 
-**Mechanism-boundary stop rule.** No ticket may implement a Slovenia-specific register, cadence, identifier, or evidence rule directly as Core or Platform law. If an SI ticket cannot be expressed as `profile_si_ffs` package/profile content loaded through a generic mechanism, **stop and fix the mechanism boundary before coding**. This keeps Core generic farming semantics, Platform generic runtime enforcement, and `profile_si_ffs` the first installed profile rather than hidden universal law. The fully specified tickets live in `M2_TICKETS.md`.
+**Mechanism-boundary stop rule.** No ticket may implement a Slovenia-specific register, cadence, identifier, or evidence rule directly as Core or Platform law. If an SI ticket cannot be expressed as `profile_si_ffs` package/profile content loaded through a generic mechanism, **stop and fix the mechanism boundary before coding**. This keeps Core generic farming semantics, Platform generic runtime enforcement, and `profile_si_ffs` the first installed profile rather than hidden universal law. The completed ticket plan lives in `M2_TICKETS.md`.
 
 ## Deferred M1 review items folded into M2 housekeeping
 
@@ -91,7 +118,12 @@ Each was deferred with a recorded rationale (WORKLOG 2026-06-14): H2 profile-pin
 
 ## Definition of done (PILOT_SI M2)
 
-Identities, registry snapshots, GERK onboarding, and code bindings enforced; `ActiveArtifactSet` regenerated against real artifacts. Concretely: a fresh agent can onboard the fictional, format-true farm by committing its structure assertions through the gate chain; the scheduled REGSR adapter produces a dated snapshot and the detail-page fetch lets a bound product re-verify at decision-number grade instead of routing to review; a spray claim binds product/crop/parcel/operator against the real snapshots and self-reviews to accepted; an authorisation mismatch raises an advisory without blocking; a worker authenticates via OIDC and a delegation revoked while offline denies on sync; the inspection register exports and refuses when it should. The M1 suite stays green, `ofarm_pkg_contract_check.py` PASSes, and benchmark evidence is captured per the explainable-evidence RFC before any Capability Manifest level above `NONE` is claimed.
+Identities, registry snapshots, GERK onboarding, and code bindings enforced; `ActiveArtifactSet` regenerated against real artifacts. Concretely: a fresh agent can onboard the fictional, format-true farm by committing its structure assertions through the gate chain; the scheduled REGSR adapter produces a dated snapshot and the detail-page fetch lets a bound product re-verify at decision-number grade instead of routing to review; a spray claim binds product/crop/parcel/operator against the real snapshots and self-reviews to accepted; an authorisation mismatch raises a non-blocking warning advisory; a worker authenticates via OIDC and a delegation revoked while offline denies on sync; the inspection register exports and refuses when it should. The M1 suite stays green, `ofarm_pkg_contract_check.py` PASSes, and benchmark evidence is captured per the explainable-evidence RFC before any Capability Manifest level above `NONE` is claimed.
+
+M2 is closed for repo-facing currentness after P6, subject to the explicit
+E-006 durable-advisory follow-up above. That follow-up does not weaken the claim
+limits: no current-compliance, certification, production-readiness, or
+Capability Manifest level above `NONE` is claimed.
 
 ## Out of scope for M2 (do not drift)
 

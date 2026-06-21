@@ -1,5 +1,10 @@
 # M2 kickoff prompt (paste into a fresh thread)
 
+> Historical note (2026-06-21): M2 has now merged through P6 on `main`
+> (PR #24). This prompt is retained as execution provenance, not as the current
+> instruction to start G1 again. See `M2_BRIEF.md` for the current status and
+> E-006 durable-advisory follow-up.
+
 > Copy everything below the line into a new thread to start M2 implementation.
 
 ---
