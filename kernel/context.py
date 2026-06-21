@@ -16,22 +16,19 @@ from datetime import datetime, timezone
 from . import config
 from .contracts import canonical_json
 
-PROFILE_INSTANCE_FILES = [
-    "OFARM_AgronomicCodeBindingProfile_si_ffs_v0_1.json",
-    "OFARM_PackActivationSet_example_si_ffs_pilot_v0_1.json",
-    "OFARM_ActiveArtifactSet_example_si_ffs_pilot_v0_1.json",
-    "OFARM_ContextSnapshot_example_si_ffs_pilot_compliance_v0_1.json",
-    "OFARM_ReferenceSnapshot_example_si_uvhvvr_ffs_reg_2026-06-11.json",
-    "OFARM_ReferenceSnapshot_example_si_gerk_layer_2025-06-30.json",
-]
+PROFILE_INSTANCE_FILES = list(config.ACTIVE_PROFILE.profile_instance_files)
 
-REGSR_SNAPSHOT_PREFIX = "referencesnapshot:si.uvhvvr.ffs-reg"
-GERK_SNAPSHOT_PREFIX = "referencesnapshot:si.mkgp.gerk-layer"
+_REGSR_FAMILY = config.ACTIVE_PROFILE.reference_family("si.uvhvvr.ffs-reg")
+_GERK_FAMILY = config.ACTIVE_PROFILE.reference_family("si.mkgp.gerk-layer")
+REGSR_SNAPSHOT_PREFIX = _REGSR_FAMILY.snapshot_prefix
+GERK_SNAPSHOT_PREFIX = _GERK_FAMILY.snapshot_prefix
+if _REGSR_FAMILY.data_family is None:
+    raise RuntimeError("active SI profile descriptor must name the REGSR data family")
 # store-backed reference-data family for REGSR parsed product data (M2 P1): the
 # data_family a governed REGSR import tags its parsed data with, and the family
 # ProductRegister loads from the store. ProductRegister is already REGSR-shaped
 # (lookup_by_decision, D9), so this REGSR-specific constant lives with it.
-REGSR_DATA_FAMILY = "si.uvhvvr.ffs-reg"
+REGSR_DATA_FAMILY = _REGSR_FAMILY.data_family
 
 
 def now_iso() -> str:
@@ -114,6 +111,28 @@ def current_reference_snapshot(store, prefix: str,
     # latest effectiveFrom wins; ties break deterministically by snapshot id
     # (content-stable — never dependent on row insertion order)
     return max(candidates, key=lambda c: (c[0], c[1]))[2]
+
+
+def context_reference_snapshots(store, as_of: str | None = None) -> list[dict]:
+    """Reference snapshots required by the active profile descriptor.
+
+    Missing spine vintages are handled in ContextAssembler._spine. Missing
+    reference families are separate: the descriptor decides whether absence means
+    omission from context or refusal for NOW/AS_OF.
+    """
+    snapshots = []
+    as_of_mode = as_of is not None
+    for family in config.ACTIVE_PROFILE.reference_families:
+        snapshot = current_reference_snapshot(store, family.snapshot_prefix, as_of=as_of)
+        if snapshot:
+            snapshots.append(snapshot)
+            continue
+        if family.missing_behavior(as_of=as_of_mode) == "REFUSE_CONTEXT":
+            bound = f"AS_OF {as_of!r}" if as_of_mode else "NOW"
+            raise ContextNotReconstructible(
+                f"required reference family {family.family_id!r} has no in-force "
+                f"snapshot for {bound} context")
+    return snapshots
 
 
 class ProductRegister:
@@ -374,9 +393,8 @@ class ContextAssembler:
         # materialization key — distinct from the NOW answer
         as_of = policy.get("asOfTime") if policy.get("policyType") == "AS_OF" else None
         spine = self._spine(as_of=as_of)
-        regsr = current_reference_snapshot(self.store, REGSR_SNAPSHOT_PREFIX, as_of=as_of)
-        gerk = current_reference_snapshot(self.store, GERK_SNAPSHOT_PREFIX, as_of=as_of)
-        reference_refs = [p["referenceSnapshotId"] for p in (regsr, gerk) if p]
+        reference_snapshots = context_reference_snapshots(self.store, as_of=as_of)
+        reference_refs = [p["referenceSnapshotId"] for p in reference_snapshots]
 
         material_basis = {
             "targetTwin": target_twin,
@@ -390,7 +408,10 @@ class ContextAssembler:
             "evidencePolicyRefs": [config.EVIDENCE_POLICY_REF],
         }
         digest = hashlib.sha256(canonical_json(material_basis).encode()).hexdigest()[:12]
-        snapshot_id = f"contextsnapshot:si.ffs.{_local(farm_ref)}.{target_twin.lower()}.{digest}"
+        snapshot_id = (
+            f"{config.ACTIVE_PROFILE.context_snapshot_id_prefix}."
+            f"{_local(farm_ref)}.{target_twin.lower()}.{digest}"
+        )
 
         existing = self.store.get_payload(snapshot_id)
         if existing:
