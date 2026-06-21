@@ -14,6 +14,7 @@ itself simply never claims those surfaces.
 """
 from __future__ import annotations
 
+import importlib
 import json
 
 from . import config
@@ -31,6 +32,25 @@ VIEW_ARTIFACTS = [
     "queryspec:si.ffs.inspection-register.documentassembly.v0_1",
     "queryplan:si.ffs.inspection-register.documentassembly.v0_1",
 ]
+
+# the SINGLE-HOMED source of truth for which import targets actually have a
+# SUPPORTED import adapter riding the generic G2 mechanism: import-target scheme
+# -> the adapter module behind it. build_manifest derives the IMPORT_MAPPING
+# surfaces FROM this map, and verify_grounding requires every declared import
+# surface to be BOTH a scheme the code-binding profile declares AND a key here
+# whose adapter actually imports — so a scheme the profile merely names in its
+# vocabulary (EPPO, KMG-MID, …) can never be declared a SUPPORTED import surface
+# without a real adapter behind it. "SUPPORTED" covers the governed snapshot-import
+# MECHANISM only (parser reuse + G2 import + fixtures); never live fetch / cron /
+# currentness / current-compliance (D9; UNSUPPORTED_SURFACES.md). Per-target scope:
+#  - REGSR (P1): unofficial HTML surface, decision-number identity, weekly cadence.
+#  - GERK  (P2): ATTRIBUTE import only (existence / raw AREA / use code); geometry P2.
+#  - FFSNaprave (P3): official yearly downloads (D7) + composite-key inspection evidence.
+SUPPORTED_IMPORT_SURFACES = {
+    "scheme:si.uvhvvr.ffs-reg.html-surface": "kernel.profiles.si_ffs.regsr_adapter",
+    "scheme:si.gerk-pid": "kernel.profiles.si_ffs.gerk_adapter",
+    "scheme:si.ffs-naprave": "kernel.profiles.si_ffs.ffsnaprave_adapter",
+}
 
 
 def build_manifest(store) -> dict:
@@ -96,18 +116,14 @@ def build_manifest(store) -> dict:
                 "supportsHumanOnlyRestrictions": True,
             },
             "importExportSupport": {
+                # the IMPORT_MAPPING surfaces are DERIVED from SUPPORTED_IMPORT_SURFACES
+                # (single-homed) — a surface cannot be declared SUPPORTED unless a real
+                # adapter rides it; per-target scope is documented on the map.
                 "declaredSurfaces": [
-                    {"surfaceType": "IMPORT_MAPPING",
-                     "targetRef": "scheme:si.uvhvvr.ffs-reg.html-surface",
-                     "direction": "IMPORT",
-                     # M2 P1: the scheduled REGSR snapshot-import adapter now
-                     # exists (kernel/profiles/si_ffs/regsr_adapter.py — parser
-                     # reuse + governed G2 import + declared weekly cadence +
-                     # G3 identity-grade verification). SUPPORTED covers the
-                     # governed snapshot-import mechanism ONLY; live HTTP fetch,
-                     # production currentness, and current-compliance are NOT
-                     # claimed (D9 unofficial-surface posture; cron wiring P-later).
-                     "status": "SUPPORTED"},
+                    {"surfaceType": "IMPORT_MAPPING", "targetRef": target,
+                     "direction": "IMPORT", "status": "SUPPORTED"}
+                    for target in SUPPORTED_IMPORT_SURFACES
+                ] + [
                     {"surfaceType": "EXPORT_MAPPING",
                      "targetRef": "view:si.ffs.inspection-register.documentassembly.v0_1",
                      "direction": "EXPORT",
@@ -151,8 +167,10 @@ def build_manifest(store) -> dict:
 
 
 def build_artifact_set() -> dict:
-    """Regenerated ActiveArtifactSet referencing the real M1 artifacts
-    (the shipped instance's notes call for exactly this regeneration)."""
+    """Regenerated ActiveArtifactSet referencing the real M2 artifacts (M2 P6:
+    re-cut against the M2 surfaces — the PartialExtent extent-carrier now active
+    (G7), the REGSR/GERK/FFSNaprave import adapters, the SI bindings, and the
+    evidence-review floor policy; the manifest declares the matching surfaces)."""
     return {
         "schemaVersion": "ofarm.activeartifactset.v0.1",
         "activeArtifactSetId": "activeartifactset:si.ffs.pilot.v0_1",
@@ -168,6 +186,7 @@ def build_artifact_set() -> dict:
             "contract:ofarm.reviewdecision.v0.1",
             "contract:ofarm.acceptedeventconsequence.v0.1",
             "contract:ofarm.executionrecordpayload.v0.1",
+            "contract:ofarm.partialextent.v0.1",
             "contract:ofarm.complianceclaim.v0.1",
             "contract:ofarm.agronomicidentitybinding.v0.1",
             "contract:ofarm.referencesnapshot.v0.1",
@@ -181,11 +200,15 @@ def build_artifact_set() -> dict:
             MANIFEST_ID,
         ],
         "sourcePackActivationSetRefs": ["packactivationset:si.ffs.pilot.v0_1"],
-        "notes": "Regenerated at M1 against real artifacts: the four authored "
-                 "QuerySpecification/QueryPlanIR view artifacts, the Capability "
-                 "Manifest, both shipped ReferenceSnapshots, and the cut SI "
-                 "code-binding profile. Unsupported-surface posture: see "
-                 "UNSUPPORTED_SURFACES.md (manifest contract carries no free text).",
+        "notes": "Regenerated at M2 against real artifacts: the operation/record "
+                 "contracts (incl. the PartialExtent extent-carrier now active for "
+                 "partial-extent bounds, G7), the four authored QuerySpecification/"
+                 "QueryPlanIR view artifacts, the Capability Manifest (which declares "
+                 "the REGSR/GERK/FFSNaprave import surfaces and inspection-register "
+                 "export), the evidence-review floor policy, both shipped "
+                 "ReferenceSnapshots, and the cut SI code-binding profile. "
+                 "Unsupported-surface posture: see UNSUPPORTED_SURFACES.md (manifest "
+                 "contract carries no free text).",
     }
 
 
@@ -230,7 +253,51 @@ def verify_grounding(store, manifest: dict, artifact_set: dict) -> list[str]:
         failures.append(f"action-class claims drift from runtime: {claimed_actions ^ evaluated}")
     if "OUTPUT_ATTEST_DOCUMENT_ASSEMBLY" in claimed_actions:
         failures.append("portable attestation claimed while disabled")
+    # every declared IMPORT_MAPPING surface must ground TWICE: in a scheme the
+    # code-binding profile actually declares (a standardRef — the manifest must not
+    # claim an import for a scheme the profile does not bind), AND in a real
+    # SUPPORTED import adapter (a SUPPORTED_IMPORT_SURFACES key whose adapter module
+    # imports) — so the SUPPORTED claim is grounded in actual import support, not
+    # just profile vocabulary (M2 P6 steward re-review).
+    import_targets = [s["targetRef"] for s in manifest["capabilitySections"]
+                      ["importExportSupport"]["declaredSurfaces"]
+                      if s["surfaceType"] == "IMPORT_MAPPING"]
+    profile = store.get_payload(config.CODE_BINDING_PROFILE_REF)
+    scheme_refs = _standard_refs(profile) if profile is not None else None
+    if scheme_refs is None:
+        failures.append("code-binding profile not loaded; cannot ground import surfaces")
+    for target in import_targets:
+        if scheme_refs is not None and target not in scheme_refs:
+            failures.append(f"import surface {target} is not a scheme the code-binding "
+                            "profile declares (ungrounded import-surface claim)")
+        adapter = SUPPORTED_IMPORT_SURFACES.get(target)
+        if adapter is None:
+            failures.append(f"import surface {target} has no supported import adapter "
+                            "(absent from SUPPORTED_IMPORT_SURFACES) — a profile-declared "
+                            "scheme without an adapter cannot be a SUPPORTED import surface")
+        else:
+            try:
+                importlib.import_module(adapter)
+            except Exception as exc:  # the adapter the map names must actually load
+                failures.append(f"import surface {target} names adapter {adapter!r} that "
+                                f"does not import ({exc}) — SUPPORTED claim ungrounded")
     return failures
+
+
+def _standard_refs(obj) -> set[str]:
+    """Every standardRef value anywhere in the code-binding profile (the scheme
+    identifiers it actually declares), for grounding manifest import surfaces."""
+    found: set[str] = set()
+    if isinstance(obj, dict):
+        ref = obj.get("standardRef")
+        if isinstance(ref, str):
+            found.add(ref)
+        for value in obj.values():
+            found |= _standard_refs(value)
+    elif isinstance(obj, list):
+        for item in obj:
+            found |= _standard_refs(item)
+    return found
 
 
 def write_artifacts(store) -> tuple[dict, dict]:

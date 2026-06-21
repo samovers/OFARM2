@@ -1,7 +1,7 @@
 {
   "schemaVersion": "ofarm.activeartifactset.v0.1",
   "activeArtifactSetId": "activeartifactset:si.ffs.pilot.v0_1",
-  "generatedAt": "2026-06-12T21:17:45.377266Z",
+  "generatedAt": "2026-06-20T19:44:26.234549Z",
   "deploymentScope": {
     "scopeType": "TENANT",
     "scopeRef": "tenant:si.ffs.pilot.demo"
@@ -20,6 +20,7 @@
     "contract:ofarm.reviewdecision.v0.1",
     "contract:ofarm.acceptedeventconsequence.v0.1",
     "contract:ofarm.executionrecordpayload.v0.1",
+    "contract:ofarm.partialextent.v0.1",
     "contract:ofarm.complianceclaim.v0.1",
     "contract:ofarm.agronomicidentitybinding.v0.1",
     "contract:ofarm.referencesnapshot.v0.1",
@@ -38,5 +39,5 @@
   "sourcePackActivationSetRefs": [
     "packactivationset:si.ffs.pilot.v0_1"
   ],
-  "notes": "Regenerated at M1 against real artifacts: the four authored QuerySpecification/QueryPlanIR view artifacts, the Capability Manifest, both shipped ReferenceSnapshots, and the cut SI code-binding profile. Unsupported-surface posture: see UNSUPPORTED_SURFACES.md (manifest contract carries no free text)."
+  "notes": "Regenerated at M2 against real artifacts: the operation/record contracts (incl. the PartialExtent extent-carrier now active for partial-extent bounds, G7), the four authored QuerySpecification/QueryPlanIR view artifacts, the Capability Manifest (which declares the REGSR/GERK/FFSNaprave import surfaces and inspection-register export), the evidence-review floor policy, both shipped ReferenceSnapshots, and the cut SI code-binding profile. Unsupported-surface posture: see UNSUPPORTED_SURFACES.md (manifest contract carries no free text)."
 }
