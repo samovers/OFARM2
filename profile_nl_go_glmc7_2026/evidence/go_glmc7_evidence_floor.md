@@ -19,7 +19,7 @@ evidence bundle contains the source-preserved artefacts needed to evaluate the
 | Sand/loess source | When any parcel may be on sand or loess | Yes for affected parcels. The rustgewas rule cannot be scoped. |
 | Rustgewas proof | When sand/loess rustgewas compliance or exemption is asserted | Yes. The 2023-2026 rustgewas window cannot be proven. |
 | Exemption proof | When any GLMC 7 exemption is claimed | Yes. Unsupported exemptions do not promote. |
-| Skal or equivalent organic/in-conversion proof | When Article 32 organic or in-conversion route is claimed | Yes. The deemed-compliance route is unproven. |
+| Skal certification/registration or explicit RVO-accepted organic/in-conversion evidence | When Article 32 organic or in-conversion route is claimed | Yes. The deemed-compliance route is unproven. |
 | Delegation or `machtiging` proof | When a delegate files or asserts the claim | Yes. The filer authority path is unresolved. |
 | RVO decision, `bezwaar`, or `beroep` artefacts | When review state is asserted | Yes for finality claims. Review status cannot be closed silently. |
 
@@ -33,4 +33,3 @@ profile slice.
 Evidence must preserve source identity, capture time, claim year, and enough
 parcel lineage to explain why the 2026 parcel and crop facts belong to the same
 GLMC 7 evaluation history.
-

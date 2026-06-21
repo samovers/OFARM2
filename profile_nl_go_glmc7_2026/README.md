@@ -5,15 +5,15 @@ change OFARM Core, Kernel, Platform, runtime adapters, generated manifests, or
 the Slovenia profile.
 
 Release posture:
-`NL_GO_GLMC7_2026_PRODUCTION_GRADE_SLICE_READY_AMENDMENT_CHAIN`
+`NL_GO_GLMC7_2026_CONFORMANCE_READY_AMENDMENT_CHAIN`
 
-> This package is a production-grade narrow profile slice under the official amendment-chain source standard. It is not a whole-Netherlands production profile, not runtime production readiness, and not an external standard-readiness claim.
+> This package is a conformance-ready narrow profile slice under the official amendment-chain source standard. It is not a whole-Netherlands production profile, not runtime production readiness, and not an external standard-readiness claim.
 
 ## Slice Boundary
 
 This profile covers only the 2026 `Gecombineerde Opgave` plus GLMC 7 crop
 rotation compliance for Dutch arable land (`bouwland`). It does not claim that
-the whole Netherlands profile is production-grade, that this repository is
+the whole Netherlands profile is production-ready, that this repository is
 runtime-production-ready, or that any external standard is production-ready.
 
 The accepted legal source standard for this slice is official amendment-chain
@@ -60,4 +60,3 @@ Public current state may never silently replace filed GO history.
 | `source:nl.rvo.landbouwareaal.2026` | RVO agricultural-area guidance |
 | `source:nl.rvo.bezwaar` | RVO objection-route guidance |
 | `source:nl.rechtspraak.cbb` | Rechtspraak / CBb appeal-route guidance |
-

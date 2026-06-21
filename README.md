@@ -10,7 +10,7 @@
 
 No production readiness of any kind is claimed: not software-delivery, model-deployment, certification, legal/security/compliance advice, external-standard readiness, live-registry integration, autonomous anything, or current/default schema promotion. The pilot claims **record-keeping completeness** only — explicitly **not** current-compliance against the authorisation register (see `PILOT_SI.md`).
 
-`profile_nl_go_glmc7_2026/` is a narrow legal-source profile slice for 2026 Netherlands GO + GLMC 7 under its own release posture. That posture is limited to the profile/source standard and does not change the repository's runtime, platform, external-standard, or whole-country claim limits.
+`profile_nl_go_glmc7_2026/` is a narrow legal-source/conformance-ready profile slice for 2026 Netherlands GO + GLMC 7 under its own release posture. That posture is limited to the profile/source standard and does not change the repository's runtime, platform, external-standard, or whole-country claim limits.
 
 ## Read order
 

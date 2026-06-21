@@ -32,3 +32,8 @@ modify Kernel promotion logic. It describes a Netherlands profile-layer
 assertion that a later runtime implementation may map onto existing governed
 commit and review mechanisms.
 
+This profile does not yet cut a deterministic calculation contract for follow-on
+crop routes, denominator and rounding rules, crop-code changes between years,
+parcel split/merge lineage math, or parcel-level versus holding-level exemption
+precedence. Those details are required before any future rule-engine readiness
+claim.
