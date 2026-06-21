@@ -22,7 +22,7 @@ MVP suite.
 For PRs touching Core-facing material, run a profile-leakage audit such as:
 
 ```
-rg -n "KMG-MID|GERK|Dutch GO|GLMC 7|Gecombineerde Opgave|Slovenia|Slovenian|\bSI\b" CORE.md README.md AGENTS.md conformance/CONFORMANCE.md || true
+rg -n "KMG-MID|GERK|Dutch GO|GLMC 7|Gecombineerde Opgave|Slovenia|Slovenian|\bSI\b" CORE.md PLATFORM.md KERNEL.md contracts kernel views conformance README.md AGENTS.md || true
 ```
 
 Matches are acceptable only as explicit profile-layer references, review-guard
