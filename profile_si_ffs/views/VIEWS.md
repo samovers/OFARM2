@@ -2,7 +2,7 @@
 
 Status: binding view specifications. Platform v1 exposes **no** general QuerySpecification authoring/compiler surface — it ships these two predefined, versioned views. The query **law** is not deferred: both outputs carry full QuerySpecification/QueryPlanIR references, context snapshot, materialization basis, and qualification envelopes, exactly as `PassportViewMetadata` and `DocumentAssemblyMetadata` require.
 
-**Deliberate deferral:** the concrete `QuerySpecification` + `QueryPlanIR` JSON artifacts are **M1 deliverables**, authored against these specifications once the store exists. Authoring graph patterns against a store that does not yet exist would be speculative; this file is their normative source, and M1 authoring against it is mechanical. (Required schema blocks: QuerySpecification — `target`, `graphPattern`, `selection`, `resultProfile`; QueryPlanIR — `sourceQuerySpecificationId`, `normalizedTarget`, `resolvedPathAliases`, `executionSteps`, `materializationPolicy`, `outputAssembly`.)
+The concrete `QuerySpecification` + `QueryPlanIR` JSON artifacts are shipped alongside this file. This file remains the human-readable SI profile view specification; the JSON artifacts carry the executable QuerySpecification/QueryPlanIR references used by conformance. (Required schema blocks: QuerySpecification — `target`, `graphPattern`, `selection`, `resultProfile`; QueryPlanIR — `sourceQuerySpecificationId`, `normalizedTarget`, `resolvedPathAliases`, `executionSteps`, `materializationPolicy`, `outputAssembly`.)
 
 ---
 
