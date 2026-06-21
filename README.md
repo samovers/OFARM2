@@ -32,6 +32,7 @@ contracts/   kernel/ (23 extracted + 3 candidate)  core/ (11 extracted + 5 candi
              platform/ (10 extracted)              CONTRACTS_MANIFEST.json (digests + provenance)
 profile_si_ffs/   PROFILE.md + 7 validated instances (activation set, artifact set, context snapshot,
                   code-binding profile, 2 reference snapshots, Capability Manifest) + UNSUPPORTED_SURFACES.md
+                  + extraction_inventory/ (documentation-only extraction inventory)
 profile_nl_go_glmc7_2026/  narrow Netherlands GO + GLMC 7 2026 profile/source slice
 views/            VIEWS.md + the 4 authored QuerySpec/QueryPlanIR artifacts (M1)
 kernel/           the M1 implementation: store, gates, materializer, views, manifest, API, conformance tests
