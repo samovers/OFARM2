@@ -17,6 +17,19 @@ cases for the Netherlands GO + GLMC 7 2026 profile slice. These are profile
 inventory cases, not executed platform evidence and not part of the M1 platform
 MVP suite.
 
+## Country-profile leakage audit
+
+For PRs touching Core-facing material, run a profile-leakage audit such as:
+
+```
+rg -n "KMG-MID|GERK|Dutch GO|GLMC 7|Gecombineerde Opgave|Slovenia|Slovenian|\bSI\b" CORE.md README.md AGENTS.md conformance/CONFORMANCE.md || true
+```
+
+Matches are acceptable only as explicit profile-layer references, review-guard
+examples of what not to place in Core, or root navigation pointers. They are not
+acceptable as Core contracts, Core semantics, runtime adapters, or default
+conformance assumptions.
+
 ## Inherited fixtures
 
 `fixtures/gate_sequencing/` — extracted verbatim from the canonical suite (digests in `contracts/CONTRACTS_MANIFEST.json`):
