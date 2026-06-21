@@ -1,0 +1,158 @@
+{
+  "packageName": "profile_nl_go_glmc7_2026",
+  "profileRef": "profile:nl.go-glmc7.2026.v0_1",
+  "releasePosture": "NL_GO_GLMC7_2026_PRODUCTION_GRADE_SLICE_READY_AMENDMENT_CHAIN",
+  "status": "authored profile-local source index; parse-only; not canonical reference law",
+  "sourceStandard": "official amendment-chain reconstruction accepted for this narrow slice; direct Wettenbank/Wetten.nl consolidated capture is audit-hardening only",
+  "sources": [
+    {
+      "sourceRef": "source:nl.stcrt.2026.3657.go",
+      "title": "Stcrt 2026, 3657 - Regeling Landbouwtelling en Gecombineerde opgave 2026",
+      "url": "https://zoek.officielebekendmakingen.nl/stcrt-2026-3657.html",
+      "sourceRole": "primary law",
+      "legalForceOrStatus": "ministerial regulation",
+      "claimYearRelevance": "2026 GO filing basis, electronic filing, filing window, and 15 May peildatum",
+      "knownLimits": "None for the narrow GO filing basis identified in the source packet.",
+      "wettenbankConsolidatedCapture": {
+        "neededForThisReleasePosture": false,
+        "auditHardeningTodo": false
+      }
+    },
+    {
+      "sourceRef": "source:nl.stcrt.2026.1855.uglb-amendment",
+      "title": "Stcrt 2026, 1855 - January 2026 amendment to Uitvoeringsregeling GLB 2023",
+      "url": "https://zoek.officielebekendmakingen.nl/stcrt-2026-1855.html",
+      "sourceRole": "amendment-chain law",
+      "legalForceOrStatus": "ministerial amending regulation",
+      "claimYearRelevance": "Article 32 organic/in-conversion route and GLMC 7 amendment-chain reconstruction for 2026",
+      "knownLimits": "Direct Wettenbank consolidated Article 32 and Annex 4 GLMC 7 text remains uncaptured.",
+      "wettenbankConsolidatedCapture": {
+        "neededForThisReleasePosture": false,
+        "auditHardeningTodo": true
+      }
+    },
+    {
+      "sourceRef": "source:nl.rvo.glmc7.2026",
+      "title": "RVO - Gewassen op bouwland roteren GLMC 7 GLB 2026",
+      "url": "https://www.rvo.nl/onderwerpen/glb-2026/gewassen-op-bouwland-roteren-glmc-7",
+      "sourceRole": "official operational guidance",
+      "legalForceOrStatus": "guidance, not primary law",
+      "claimYearRelevance": "Operational statement of the annual one-third, four-year parcel, exemption, and crop-code routing rules",
+      "knownLimits": "Must not be represented as primary law.",
+      "wettenbankConsolidatedCapture": {
+        "neededForThisReleasePosture": false,
+        "auditHardeningTodo": false
+      }
+    },
+    {
+      "sourceRef": "source:nl.rvo.conditionaliteiten.2026",
+      "title": "RVO - Conditionaliteiten GLB 2026",
+      "url": "https://www.rvo.nl/onderwerpen/glb-2026/conditionaliteiten",
+      "sourceRole": "official operational guidance",
+      "legalForceOrStatus": "guidance, not primary law",
+      "claimYearRelevance": "Conditionality guidance, sanctions/control simplifications, and related Wettenbank links",
+      "knownLimits": "Under-10-hectare content is treated as control/sanction simplification only; no 30-hectare carve-out is encoded.",
+      "wettenbankConsolidatedCapture": {
+        "neededForThisReleasePosture": false,
+        "auditHardeningTodo": false
+      }
+    },
+    {
+      "sourceRef": "source:nl.rvo.gecombineerde-opgave.2026",
+      "title": "RVO - Gecombineerde Opgave",
+      "url": "https://www.rvo.nl/onderwerpen/gecombineerde-opgave",
+      "sourceRole": "official operational guidance",
+      "legalForceOrStatus": "guidance, not primary law",
+      "claimYearRelevance": "GO workflow, filing, corrections, and submission artefact context",
+      "knownLimits": "Guidance must be tied back to the GO regulation for legal filing basis.",
+      "wettenbankConsolidatedCapture": {
+        "neededForThisReleasePosture": false,
+        "auditHardeningTodo": false
+      }
+    },
+    {
+      "sourceRef": "source:nl.rvo.gewascodelijst.2026",
+      "title": "RVO - Gewascodelijst",
+      "url": "https://www.rvo.nl/onderwerpen/gewascodelijst",
+      "sourceRole": "official reference data",
+      "legalForceOrStatus": "official operational reference list for filing and scheme use",
+      "claimYearRelevance": "2026 crop-code and GLMC 7/rustgewas classification reference",
+      "knownLimits": "The used 2026 list or subset must be snapshotted before high-consequence use.",
+      "wettenbankConsolidatedCapture": {
+        "neededForThisReleasePosture": false,
+        "auditHardeningTodo": false
+      }
+    },
+    {
+      "sourceRef": "source:nl.rvo.rustgewassen.2026",
+      "title": "RVO - Rustgewassen",
+      "url": "https://www.rvo.nl/onderwerpen/mest/rustgewassen",
+      "sourceRole": "official operational guidance",
+      "legalForceOrStatus": "guidance, not primary law",
+      "claimYearRelevance": "Rustgewas classification and reporting guidance for the sand/loess rule",
+      "knownLimits": "Must be used with the claim-year crop-code snapshot.",
+      "wettenbankConsolidatedCapture": {
+        "neededForThisReleasePosture": false,
+        "auditHardeningTodo": false
+      }
+    },
+    {
+      "sourceRef": "source:nl.rvo.landbouwareaal.2026",
+      "title": "RVO - Landbouwareaal GLB 2026",
+      "url": "https://www.rvo.nl/onderwerpen/glb-2026/landbouwareaal-glb-2026",
+      "sourceRole": "official operational guidance",
+      "legalForceOrStatus": "guidance, not primary law",
+      "claimYearRelevance": "Operational bouwland and land-at-disposal context for the 15 May peildatum",
+      "knownLimits": "Parcel facts must still be source-preserved as claim-year evidence.",
+      "wettenbankConsolidatedCapture": {
+        "neededForThisReleasePosture": false,
+        "auditHardeningTodo": false
+      }
+    },
+    {
+      "sourceRef": "source:nl.rvo.bezwaar",
+      "title": "RVO - Bezwaar maken",
+      "url": "https://www.rvo.nl/onderwerpen/bezwaar-maken",
+      "sourceRole": "official operational guidance",
+      "legalForceOrStatus": "guidance for administrative objection route",
+      "claimYearRelevance": "RVO objection route after an adverse decision",
+      "knownLimits": "Used only to preserve review state; not a GLMC 7 rule source.",
+      "wettenbankConsolidatedCapture": {
+        "neededForThisReleasePosture": false,
+        "auditHardeningTodo": false
+      }
+    },
+    {
+      "sourceRef": "source:nl.rechtspraak.cbb",
+      "title": "Rechtspraak / College van Beroep voor het bedrijfsleven appeal-route pages",
+      "url": "https://www.rechtspraak.nl/Organisatie-en-contact/Organisatie/College-van-Beroep-voor-het-bedrijfsleven",
+      "sourceRole": "official operational guidance",
+      "legalForceOrStatus": "court information page",
+      "claimYearRelevance": "CBb appeal-route preservation after RVO objection decision",
+      "knownLimits": "Used only to preserve review state; not a GLMC 7 rule source.",
+      "wettenbankConsolidatedCapture": {
+        "neededForThisReleasePosture": false,
+        "auditHardeningTodo": false
+      }
+    },
+    {
+      "sourceRef": "source:nl.implementation-inference.go-glmc7",
+      "title": "OFARM implementation inference for GO + GLMC 7 evidence/currentness",
+      "url": null,
+      "sourceRole": "implementation inference",
+      "legalForceOrStatus": "not law; derived profile policy from source structure and OFARM truth rules",
+      "claimYearRelevance": "Public current-state data is corroborative only; source-preserved filed GO and historical facts are required for promotion.",
+      "knownLimits": "Must not be cited as primary law or official guidance.",
+      "wettenbankConsolidatedCapture": {
+        "neededForThisReleasePosture": false,
+        "auditHardeningTodo": false
+      }
+    }
+  ],
+  "knownLimits": [
+    "Direct Wettenbank/Wetten.nl consolidated Article 32 capture remains an audit-hardening TODO.",
+    "Direct Wettenbank/Wetten.nl consolidated Annex 4 GLMC 7 capture remains an audit-hardening TODO.",
+    "RVO guidance is official operational guidance, not primary law.",
+    "No official support was found for a 30-hectare GLMC 7 carve-out; it is not encoded."
+  ]
+}

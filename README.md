@@ -10,6 +10,8 @@
 
 No production readiness of any kind is claimed: not software-delivery, model-deployment, certification, legal/security/compliance advice, external-standard readiness, live-registry integration, autonomous anything, or current/default schema promotion. The pilot claims **record-keeping completeness** only — explicitly **not** current-compliance against the authorisation register (see `PILOT_SI.md`).
 
+`profile_nl_go_glmc7_2026/` is a narrow legal-source profile slice for 2026 Netherlands GO + GLMC 7 under its own release posture. That posture is limited to the profile/source standard and does not change the repository's runtime, platform, external-standard, or whole-country claim limits.
+
 ## Read order
 
 1. `KERNEL.md` — the truth machine: 12 record families, 7 rules, the reachability invariant, conformance definition
@@ -18,8 +20,9 @@ No production readiness of any kind is claimed: not software-delivery, model-dep
 4. `PILOT_SI.md` — Slovenia pilot: claim scope, review policy, milestones M0–M4, success/kill criteria
 5. `CAPTURE_MAPPING.md` — the five things a farmer touches; everything else auto-populated
 6. `profile_si_ffs/PROFILE.md` — scheme roles, currentness posture, evidence/review policy, shipped + deferred instances
-7. `views/VIEWS.md` — the two governed outputs, specified; JSON artifacts due M1
-8. `conformance/CONFORMANCE.md` — package self-check + the 15-test platform MVP suite
+7. `profile_nl_go_glmc7_2026/README.md` - narrow Netherlands GO + GLMC 7 2026 profile slice
+8. `views/VIEWS.md` — the two governed outputs, specified; JSON artifacts due M1
+9. `conformance/CONFORMANCE.md` — package self-check + the 15-test platform MVP suite
 
 ## Layout
 
@@ -29,6 +32,7 @@ contracts/   kernel/ (23 extracted + 3 candidate)  core/ (11 extracted + 5 candi
              platform/ (10 extracted)              CONTRACTS_MANIFEST.json (digests + provenance)
 profile_si_ffs/   PROFILE.md + 7 validated instances (activation set, artifact set, context snapshot,
                   code-binding profile, 2 reference snapshots, Capability Manifest) + UNSUPPORTED_SURFACES.md
+profile_nl_go_glmc7_2026/  narrow Netherlands GO + GLMC 7 2026 profile/source slice
 views/            VIEWS.md + the 4 authored QuerySpec/QueryPlanIR artifacts (M1)
 kernel/           the M1 implementation: store, gates, materializer, views, manifest, API, conformance tests
 conformance/      ofarm_pkg_contract_check.py + CONFORMANCE.md + fixtures/gate_sequencing/ (9 inherited)
