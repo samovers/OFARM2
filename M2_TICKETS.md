@@ -2,6 +2,14 @@
 
 Companion to `M2_BRIEF.md`. Each ticket is a narrow, self-contained unit of work sized for a single coding agent and a single PR. Read `M2_BRIEF.md` first — its **Generic mechanism vs the SI package**, **Adapter discipline**, **Build order**, and **Ticket order** sections are binding here.
 
+**Currentness note (2026-06-21):** this file is now the completed M2 execution
+plan. `main` is merged through P6 (PR #24). Keep using the ticket text as
+provenance for what was built and why; do not read the open verbs below as proof
+that M2 is still untouched. Claim limits remain unchanged: record-keeping
+completeness only, no current-compliance claim, no certification claim, no
+production-readiness claim, and no Capability Manifest conformance level above
+`NONE`.
+
 Tickets are cut in two phases (brief, *Ticket order*): **Phase 1 = generic Core/Platform mechanism** (G1–G7), **Phase 2 = SI-package content that exercises the mechanisms** (P1–P6). The mechanism-boundary stop rule applies to every Phase-2 ticket: if an SI specific cannot be expressed as `profile_si_ffs` package/profile content loaded through a generic mechanism, stop and fix the mechanism boundary first.
 
 Claim limits are unchanged: record-keeping completeness only — never current-compliance, certification, or production readiness (AGENTS.md rule 6, D7). No personal data anywhere; fictional, format-true values only (AGENTS.md rule 1, D14).
@@ -203,6 +211,7 @@ Every ticket here is `profile_si_ffs` package/profile content riding a Phase-1 m
 ## P5 — SI evidence floor & advisory behavior
 
 - **Goal:** express `policy:si.ffs.evidence-review.v0_1` as **package/profile content** consumed by the generic sufficiency mechanism: the hard floor (dose-unit, operator, event-time, parcel), soft items (product/crop binding → advisor route), and the authorisation-mismatch + dose-range **advisories** (advisory twin — visible, never blocking, never auto-creating a compliance fact).
+- **Current status:** MERGED / P5. Non-blocking advisory warnings are implemented as result problems from package policy. The durable `ADVISORY_OUTPUT` record in PassportView `_advisory_flags` is deferred to E-006 because it needs trace-safe advisory emission, an appropriate reason-code/result channel, and reachability-compatible linkage.
 - **Serves:** slices M2c/M2e. **Depends on:** G3 (bindings), G5 (advisory/route interplay).
 - **Mechanism-boundary note (read this first):** the floor currently lives as constants in `kernel/policy.py` (`OPERATION_FLOOR_HARD_ITEMS`, `OPERATION_FLOOR_SOFT_ITEMS`, and the UCUM allow-list hardening). Per the stop rule, **move the SI floor to profile/package content and have `kernel/sufficiency.py` read it from the active profile generically** — that boundary fix is part of this ticket, done before wiring SI values.
 - **Files likely touched:** the SI policy instance under `profile_si_ffs/`; `kernel/sufficiency.py` (read floor from the active profile); `kernel/policy.py` (replace the SI-specific floor constant with a generic default/loader, single-homed); `kernel/tests/test_m2_si_floor.py`.
@@ -243,3 +252,12 @@ Every ticket here is `profile_si_ffs` package/profile content riding a Phase-1 m
 `G1` → `G2` → `G3` → `P1, P2, P3` → `P4` → `G4` → `G5-1 → G5-2 → G5-3 → G5-4` → `P5` → `G6, G7` → `P6`.
 
 Each arrow is a hard gate: the upstream ticket must be green against the M1 suite plus its own new tests before the downstream ticket starts (brief *Build order*).
+
+## Post-M2 follow-up
+
+- **E-006 durable advisory output:** keep the implemented P5 warning advisories
+  as warnings. Do not let advisory material enter Compliance materialization
+  without a governed bridge. A future durable advisory ticket must define a
+  trace-safe `ADVISORY_OUTPUT` emission path, reason-code/result channel, and
+  reachability-compatible record linkage before surfacing durable advisory
+  records in PassportView flags.

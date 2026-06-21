@@ -1,5 +1,11 @@
 # Worklog
 
+## 2026-06-21 — Issue #25: M2 repo-currentness cleanup (branch `main`)
+
+- **Done:** refreshed the repo-facing M2 docs after PR #24/P6: `M2_BRIEF.md` no longer reports every M2 task as `NOT STARTED`; `M2_TICKETS.md` is marked as the completed M2 execution plan; `M2_KICKOFF_PROMPT.md` is marked historical. Claim limits stay explicit: record-keeping completeness only, no current-compliance, no certification, no production readiness, and no Capability Manifest level above `NONE`.
+- **Red / follow-up:** E-006 remains the advisory follow-up: result warnings are implemented, but durable `ADVISORY_OUTPUT` records in PassportView flags are deferred until there is trace-safe advisory emission, an appropriate reason-code/result channel, and reachability-compatible linkage. This is not a Compliance Twin shortcut and advisory material must not enter Compliance materialization without a governed bridge.
+- **Next:** run the package self-check and review the doc-only diff before handoff.
+
 ## 2026-06-20 — P5: SI evidence floor → package content + advisories (branch `m2/p5-si-evidence-floor`)
 
 - **Done:** moved the SI operation-claim evidence floor out of `kernel/policy.py` constants into package content (`profile_si_ffs/evidence_review_policy_v0_1.json`), read generically by a new loader (`kernel/profile_policy.py`, config-pointed, fail-closed → governed `PROFILE_NOT_ACTIVE`). `kernel/` now carries no SI floor value. Raised authorisation-mismatch (non-EXACT product binding) + dose-range advisories as **non-blocking `WARNING` result problems** computed from the policy's advisory rules — never block, never a consequence/compliance fact, never routed to review.
