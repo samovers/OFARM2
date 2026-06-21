@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import copy
 import json
+import shutil
 from dataclasses import replace
+import uuid
 
 import pytest
 
@@ -32,6 +34,73 @@ def _load_modified(tmp_path, mutate):
     path = tmp_path / "runtime_profile_descriptor.json"
     path.write_text(json.dumps(doc), encoding="utf-8")
     return load_profile_runtime_descriptor(config.PROFILE_ROOT, descriptor_path=path)
+
+
+def _copied_profile_root(tmp_path):
+    root = tmp_path / f"profile_si_ffs_{_uid()}"
+    root.mkdir()
+    doc = _base_doc()
+    (root / "runtime_profile_descriptor.json").write_text(
+        json.dumps(doc), encoding="utf-8")
+    for rel in [doc["evidencePolicyPath"], *doc["profileInstanceFiles"]]:
+        shutil.copy2(config.PROFILE_ROOT / rel, root / rel)
+    return root, doc
+
+
+def _uid():
+    return uuid.uuid4().hex[:8]
+
+
+def _payload(store, kind: str, record_id: str, id_field: str) -> dict:
+    for row in store.find_by_kind(kind):
+        payload = dict(row["payload"])
+        if payload.get(id_field) == record_id:
+            return payload
+    raise AssertionError(f"missing {kind} {record_id}")
+
+
+def _insert_decoy_spine(store) -> dict:
+    """Insert a coherent but non-descriptor active spine after bootstrap.
+
+    The former NOW selection path (`[-1]`) would have picked this generation by
+    store order. Descriptor-backed NOW selection must ignore it.
+    """
+    suffix = _uid()
+    profile = _payload(
+        store, "ofarm.agronomiccodebindingprofile.v0.1",
+        config.ACTIVE_PROFILE.code_binding_profile_ref,
+        "agronomicCodeBindingProfileId")
+    profile_id = f"codebindingprofile:si.ffs.decoy.{suffix}"
+    profile["agronomicCodeBindingProfileId"] = profile_id
+    profile["issuedAt"] = context.now_iso()
+    profile["profileState"] = "ACTIVE"
+
+    activation = _payload(
+        store, "ofarm.packactivationset.v0.1",
+        config.ACTIVE_PROFILE.pack_activation_set_ref,
+        "packActivationSetId")
+    activation_id = f"packactivationset:si.ffs.decoy.{suffix}"
+    activation["packActivationSetId"] = activation_id
+    activation["evaluatedAt"] = context.now_iso()
+
+    artifact = _payload(
+        store, "ofarm.activeartifactset.v0.1",
+        config.ACTIVE_PROFILE.active_artifact_set_ref,
+        "activeArtifactSetId")
+    artifact_id = f"activeartifactset:si.ffs.decoy.{suffix}"
+    artifact["activeArtifactSetId"] = artifact_id
+    artifact["generatedAt"] = context.now_iso()
+    artifact["sourcePackActivationSetRefs"] = [activation_id]
+    artifact["activeArtifactRefs"] = [
+        ref for ref in artifact["activeArtifactRefs"]
+        if not ref.startswith("codebindingprofile:")
+    ] + [profile_id]
+
+    with store.tx() as cur:
+        store.insert_record(cur, profile)
+        store.insert_record(cur, activation)
+        store.insert_record(cur, artifact)
+    return {"profile": profile_id, "activation": activation_id, "artifact": artifact_id}
 
 
 def test_descriptor_drives_existing_si_config_without_tenant_binding():
@@ -89,8 +158,32 @@ def test_descriptor_rejects_malformed_refs(tmp_path):
 
 
 def test_descriptor_rejects_incoherent_active_spine(tmp_path):
-    with pytest.raises(ProfileRuntimeError, match="packRef is not active"):
+    with pytest.raises(ProfileRuntimeError, match="exactly one active pack"):
         _load_modified(tmp_path, lambda doc: doc.__setitem__("packRef", "pack:si.ffs.other"))
+
+
+def test_descriptor_rejects_multiple_active_packs_or_profiles(tmp_path):
+    root, doc = _copied_profile_root(tmp_path)
+    activation_name = "OFARM_PackActivationSet_example_si_ffs_pilot_v0_1.json"
+    activation_path = root / activation_name
+    activation = json.loads(activation_path.read_text())
+    activation["activePackRefs"] = [doc["packRef"], "pack:si.ffs.second.v0_1"]
+    activation_path.write_text(json.dumps(activation), encoding="utf-8")
+
+    with pytest.raises(ProfileRuntimeError, match="exactly one active pack"):
+        load_profile_runtime_descriptor(root)
+
+    root, doc = _copied_profile_root(tmp_path)
+    activation_path = root / activation_name
+    activation = json.loads(activation_path.read_text())
+    activation["activeProfileRefs"] = [
+        doc["profileRef"],
+        "profile:si.ffs.second.v0_1",
+    ]
+    activation_path.write_text(json.dumps(activation), encoding="utf-8")
+
+    with pytest.raises(ProfileRuntimeError, match="exactly one active profile"):
+        load_profile_runtime_descriptor(root)
 
 
 def test_descriptor_rejects_missing_active_spine_ref(tmp_path):
@@ -170,3 +263,18 @@ def test_required_missing_reference_family_refuses_context(fresh_env, monkeypatc
     with pytest.raises(context.ContextNotReconstructible, match="required reference family"):
         with store.tx() as cur:
             context.ContextAssembler(store).assemble(cur, demo.FARM)
+
+
+def test_now_context_uses_descriptor_spine_not_later_store_rows(fresh_env):
+    store, _, _ = fresh_env
+    decoy = _insert_decoy_spine(store)
+
+    with store.tx() as cur:
+        snap = context.ContextAssembler(store).assemble(cur, demo.FARM)
+
+    assert snap["activeArtifactSetRef"] == config.ACTIVE_PROFILE.active_artifact_set_ref
+    assert snap["sourcePackActivationSetRefs"] == [
+        config.ACTIVE_PROFILE.pack_activation_set_ref
+    ]
+    assert decoy["artifact"] != snap["activeArtifactSetRef"]
+    assert decoy["activation"] not in snap["sourcePackActivationSetRefs"]

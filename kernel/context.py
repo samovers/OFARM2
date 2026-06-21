@@ -59,8 +59,8 @@ def bootstrap(store) -> list[str]:
     verbatim — never edited (AGENTS.md rule 4).
     """
     inserted = []
-    for name in PROFILE_INSTANCE_FILES:
-        payload = json.loads((config.PROFILE_ROOT / name).read_text())
+    for path in config.ACTIVE_PROFILE.profile_instance_paths:
+        payload = json.loads(path.read_text())
         contract = store.registry.get(payload["schemaVersion"])
         record_id = payload[contract.id_field]
         if store.record_exists(record_id):
@@ -257,10 +257,17 @@ class ContextAssembler:
         if not (artifact_sets and activation_sets and profiles):
             raise RuntimeError("context spine not bootstrapped — call context.bootstrap(store)")
         if as_of is None:
-            # NOW: the latest of each (single-profile pilot ships exactly one)
-            artifact_set = artifact_sets[-1]["payload"]
-            activation_set = activation_sets[-1]["payload"]
-            profile = profiles[-1]["payload"]
+            # NOW: select the descriptor-declared active SI pilot spine, never
+            # whichever row happens to sort last in the store.
+            artifact_set = self._declared_spine_record(
+                artifact_sets, "activeArtifactSetId",
+                config.ACTIVE_PROFILE.active_artifact_set_ref, "ActiveArtifactSet")
+            activation_set = self._declared_spine_record(
+                activation_sets, "packActivationSetId",
+                config.ACTIVE_PROFILE.pack_activation_set_ref, "PackActivationSet")
+            profile = self._declared_spine_record(
+                profiles, "agronomicCodeBindingProfileId",
+                config.ACTIVE_PROFILE.code_binding_profile_ref, "AgronomicCodeBindingProfile")
         else:
             # AS_OF: reconstruct the vintage in force at as_of by each family's
             # effective timestamp (G6). Each family selects the latest effective
@@ -280,9 +287,9 @@ class ContextAssembler:
             profile = self._vintage(profiles, "issuedAt", bound, "AgronomicCodeBindingProfile")
         if profile["profileState"] != "ACTIVE":
             if as_of is None:
-                # NOW: a non-ACTIVE current profile is a bootstrap/configuration
-                # error — fail loud, do not serve from it.
-                raise RuntimeError(f"code-binding profile state is {profile['profileState']}, not ACTIVE")
+                raise ContextNotReconstructible(
+                    f"the descriptor-declared AgronomicCodeBindingProfile is "
+                    f"{profile['profileState']}, not ACTIVE — refusing NOW context")
             # AS_OF: G6 selects the profile vintage in force by issuedAt; if that
             # vintage is not ACTIVE the historical context cannot be reconstructed
             # into a usable profile, so refuse over pretend (rule 7) — a governed
@@ -295,20 +302,26 @@ class ContextAssembler:
                 f"the AgronomicCodeBindingProfile vintage in force at {bound.isoformat()} is "
                 f"{profile['profileState']}, not ACTIVE — the historical context cannot be "
                 "reconstructed into a usable profile")
-        if as_of is not None:
-            # AS_OF selects the three families independently by their own
-            # timestamps, but they are NOT independent: the ActiveArtifactSet is
-            # the integrated, derived artifact — it records the activation it was
-            # generated from and the code-binding profile it deployed. Verify the
-            # independently time-selected activation/profile actually cohere with
-            # it, or refuse rather than synthesize a context that never existed
-            # together (steward hostile re-review; refuse over pretend, rule 7).
-            self._assert_coherent_spine(artifact_set, activation_set, profile, bound)
+        # AS_OF selects the three families independently by their own timestamps;
+        # NOW selects the descriptor-declared active spine. In both cases, verify
+        # the selected records cohere before creating a ContextSnapshot.
+        self._assert_coherent_spine(artifact_set, activation_set, profile,
+                                    bound if as_of is not None else None)
         return {
             "artifact_set": artifact_set,
             "activation_set": activation_set,
             "profile": profile,
         }
+
+    @staticmethod
+    def _declared_spine_record(records: list[dict], id_field: str,
+                               expected_ref: str, label: str) -> dict:
+        matches = [r["payload"] for r in records if r["payload"].get(id_field) == expected_ref]
+        if len(matches) != 1:
+            raise ContextNotReconstructible(
+                f"descriptor-declared {label} {expected_ref!r} matched {len(matches)} "
+                "in-force store records; refusing rather than selecting by store order")
+        return matches[0]
 
     @staticmethod
     def _vintage(records: list[dict], date_field: str, bound, label: str) -> dict:
@@ -341,17 +354,16 @@ class ContextAssembler:
     @staticmethod
     def _assert_coherent_spine(artifact_set: dict, activation_set: dict,
                                profile: dict, bound) -> None:
-        """Refuse an AS_OF spine whose independently time-selected families never
-        formed a real deployment together (G6 steward hostile re-review). The
-        ActiveArtifactSet is the integrated, derived artifact: it carries the
-        PackActivationSet(s) it was generated from, the active pack/profile refs
-        it deployed, and the concrete artifacts (incl. the code-binding profile)
-        it shipped. So the in-force activation and code-binding profile selected
-        by their own timestamps must match the in-force artifact set, or the
-        context is a synthetic fiction (e.g. artifact-from-A0 + activation-A1
-        when no artifact set was ever generated from A1). ContextNotReconstructible
-        is governed to MATERIALIZATION_INVALID by resolve_for_use."""
-        when = bound.isoformat()
+        """Refuse a spine whose selected records never formed a real deployment.
+
+        The ActiveArtifactSet is the integrated, derived artifact: it carries
+        the PackActivationSet(s) it was generated from, the active pack/profile
+        refs it deployed, and the concrete artifacts (incl. the code-binding
+        profile) it shipped. For AS_OF, independently time-selected families must
+        cohere. For NOW, descriptor-declared records must cohere. Otherwise the
+        context is a synthetic fiction. ContextNotReconstructible is governed to
+        MATERIALIZATION_INVALID by resolve_for_use."""
+        when = bound.isoformat() if bound is not None else "NOW"
         act_id = activation_set["packActivationSetId"]
         source = artifact_set.get("sourcePackActivationSetRefs")
         # The ActiveArtifactSet is derived FROM activation(s); the in-force one
@@ -362,23 +374,23 @@ class ContextAssembler:
         if not source or act_id not in source:
             recorded = f"was generated from {source}" if source else "records no source PackActivationSet"
             raise ContextNotReconstructible(
-                f"AS_OF spine at {when} is incoherent: the in-force ActiveArtifactSet {recorded}, "
+                f"context spine at {when} is incoherent: the selected ActiveArtifactSet {recorded}, "
                 f"so it cannot be paired with the in-force PackActivationSet {act_id!r} — refusing to "
                 "synthesize a pack/artifact context that never existed together")
         if set(artifact_set.get("activePackRefs", [])) != set(activation_set.get("activePackRefs", [])):
             raise ContextNotReconstructible(
-                f"AS_OF spine at {when} is incoherent: ActiveArtifactSet activePackRefs "
+                f"context spine at {when} is incoherent: ActiveArtifactSet activePackRefs "
                 f"{artifact_set.get('activePackRefs')} != PackActivationSet activePackRefs "
                 f"{activation_set.get('activePackRefs')} — refusing rather than synthesize a context")
         if set(artifact_set.get("activeProfileRefs", [])) != set(activation_set.get("activeProfileRefs", [])):
             raise ContextNotReconstructible(
-                f"AS_OF spine at {when} is incoherent: ActiveArtifactSet activeProfileRefs "
+                f"context spine at {when} is incoherent: ActiveArtifactSet activeProfileRefs "
                 f"{artifact_set.get('activeProfileRefs')} != PackActivationSet activeProfileRefs "
                 f"{activation_set.get('activeProfileRefs')} — refusing rather than synthesize a context")
         cb_id = profile["agronomicCodeBindingProfileId"]
         if cb_id not in artifact_set.get("activeArtifactRefs", []):
             raise ContextNotReconstructible(
-                f"AS_OF spine at {when} is incoherent: the in-force AgronomicCodeBindingProfile {cb_id!r} "
+                f"context spine at {when} is incoherent: the selected AgronomicCodeBindingProfile {cb_id!r} "
                 "is not among the in-force ActiveArtifactSet's deployed artifacts — refusing to pair a "
                 "code-binding profile vintage with an artifact set that did not deploy it")
 

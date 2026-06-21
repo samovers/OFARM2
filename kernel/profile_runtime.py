@@ -306,6 +306,18 @@ def _validate_active_spine(doc: dict[str, Any], payloads: list[dict[str, Any]]) 
     profile = _payload_by_id(payloads, "agronomicCodeBindingProfileId",
                              doc["codeBindingProfileRef"])
 
+    if activation.get("activePackRefs") != [doc["packRef"]]:
+        raise ProfileRuntimeError(
+            "PackActivationSet must declare exactly one active pack matching packRef")
+    if activation.get("activeProfileRefs") != [doc["profileRef"]]:
+        raise ProfileRuntimeError(
+            "PackActivationSet must declare exactly one active profile matching profileRef")
+    if artifact.get("activePackRefs") != [doc["packRef"]]:
+        raise ProfileRuntimeError(
+            "ActiveArtifactSet must declare exactly one active pack matching packRef")
+    if artifact.get("activeProfileRefs") != [doc["profileRef"]]:
+        raise ProfileRuntimeError(
+            "ActiveArtifactSet must declare exactly one active profile matching profileRef")
     if doc["packRef"] not in activation.get("activePackRefs", []):
         raise ProfileRuntimeError("packRef is not active in the PackActivationSet")
     if doc["profileRef"] not in activation.get("activeProfileRefs", []):
