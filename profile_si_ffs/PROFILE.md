@@ -45,6 +45,7 @@ resolved product binding (against a dated snapshot) · dose with valid UCUM unit
 - `OFARM_ReferenceSnapshot_example_si_uvhvvr_ffs_reg_2026-06-11.json` — first real REGSR snapshot (623 products parsed)
 - `OFARM_ReferenceSnapshot_example_si_gerk_layer_2025-06-30.json` — national GERK open-data layer vintage
 - `OFARM_Capability_Manifest_si_ffs_pilot_v0_1.json` (`manifest:si.ffs.pilot.v0_1`) — generated at M1 from the actual runtime surfaces; conformance level deliberately `NONE`; unsupported-surface posture in `UNSUPPORTED_SURFACES.md`
+- `views/` — SI pilot view specification plus the four authored QuerySpecification/QueryPlanIR artifacts
 
 ## Deferred instances
 

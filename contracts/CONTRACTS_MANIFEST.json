@@ -565,13 +565,13 @@
       "status": "GENERATED_AT_M1"
     },
     {
-      "packagePath": "views/OFARM_QueryPlanIR_si_ffs_spray_register_passportview_v0_1.json",
+      "packagePath": "profile_si_ffs/views/OFARM_QueryPlanIR_si_ffs_spray_register_passportview_v0_1.json",
       "status": "AUTHORED_VIEW_ARTIFACT_M1"
     },
     {
-      "packagePath": "views/OFARM_QueryPlanIR_si_ffs_inspection_register_documentassembly_v0_1.json",
+      "packagePath": "profile_si_ffs/views/OFARM_QueryPlanIR_si_ffs_inspection_register_documentassembly_v0_1.json",
       "status": "AUTHORED_VIEW_ARTIFACT_M1"
     }
   ],
-  "profileInstancesNote": "Inventory of authored/generated instances schema-validated by conformance/ofarm_pkg_contract_check.py (INSTANCE_BINDINGS). The two authored QuerySpecification artifacts in views/ are deliberately NOT bound there (their schema uses keywords outside the self-check's declared validator subset) and are fully validated by kernel/tests/test_conformance.py test 15 instead."
+  "profileInstancesNote": "Inventory of authored/generated instances schema-validated by conformance/ofarm_pkg_contract_check.py (INSTANCE_BINDINGS). The two authored QuerySpecification artifacts in profile_si_ffs/views/ are deliberately NOT bound there (their schema uses keywords outside the self-check's declared validator subset) and are fully validated by kernel/tests/test_conformance.py test 15 instead."
 }

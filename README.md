@@ -21,7 +21,7 @@ No production readiness of any kind is claimed: not software-delivery, model-dep
 5. `CAPTURE_MAPPING.md` — the five things a farmer touches; everything else auto-populated
 6. `profile_si_ffs/PROFILE.md` — scheme roles, currentness posture, evidence/review policy, shipped + deferred instances
 7. `profile_nl_go_glmc7_2026/README.md` - narrow Netherlands GO + GLMC 7 2026 profile slice
-8. `views/VIEWS.md` — the two governed outputs, specified; JSON artifacts due M1
+8. `profile_si_ffs/views/VIEWS.md` — the two SI pilot governed outputs, specified
 9. `conformance/CONFORMANCE.md` — package self-check + the 15-test platform MVP suite
 
 ## Layout
@@ -32,9 +32,9 @@ contracts/   kernel/ (23 extracted + 3 candidate)  core/ (11 extracted + 5 candi
              platform/ (10 extracted)              CONTRACTS_MANIFEST.json (digests + provenance)
 profile_si_ffs/   PROFILE.md + 7 validated instances (activation set, artifact set, context snapshot,
                   code-binding profile, 2 reference snapshots, Capability Manifest) + UNSUPPORTED_SURFACES.md
-                  + extraction_inventory/ (documentation-only extraction inventory)
+                  + views/ (SI view specs/artifacts) + extraction_inventory/ (documentation-only inventory)
 profile_nl_go_glmc7_2026/  narrow Netherlands GO + GLMC 7 2026 profile/source slice
-views/            VIEWS.md + the 4 authored QuerySpec/QueryPlanIR artifacts (M1)
+views/            VIEWS.md pointer to profile-local SI view material
 kernel/           the M1 implementation: store, gates, materializer, views, manifest, API, conformance tests
 conformance/      ofarm_pkg_contract_check.py + CONFORMANCE.md + fixtures/gate_sequencing/ (9 inherited)
                   + evidence/ (executed platform-MVP suite results)
