@@ -54,6 +54,9 @@ resolved product binding (against a dated snapshot) · dose with valid UCUM unit
 - `test_fixtures/demo_refs.py` — profile-local compatibility mirror for current
   `kernel.demo` fixture refs; this starts the D2 fixture lane without moving
   `kernel/demo.py` or changing payload behavior.
+- `test_fixtures/demo_records.py` — profile-local builder for SI-shaped demo
+  substrate records; `kernel.demo.substrate_records()` remains the compatibility
+  facade.
 
 ## Shipped instances (validated by `../conformance/ofarm_pkg_contract_check.py`)
 
