@@ -59,6 +59,7 @@ is a complete `ExecutionRecordPayload` per `contracts/core/`.
 |---|---|
 | `schema.sql` | DDL: append-only record/edge/gate-log tables (statement-level mutation triggers), reachability constraint trigger (deferred, same-transaction — D3), derived materialization tables, draft-lane `runtime_trace` |
 | `contracts.py` | contract registry: every write validated against `contracts/` (canonical lane) or `contracts/drafts_reference/` (draft lane, D16) |
+| `profile_runtime.py` | active profile runtime descriptor loader: validates profile-local runtime inputs fail-closed while keeping tenant/demo binding outside the descriptor |
 | `store.py` | the append-only truth store; edges, gate log, idempotency, in-force queries, reachability check |
 | `problems.py` | `RuntimeProblem` factory; reason codes verbatim from the registry RFC — unknown codes refuse loudly |
 | `config.py` | deployment constants: tenant/profile/pack/policy refs, runtime version, database DSN assembly |
