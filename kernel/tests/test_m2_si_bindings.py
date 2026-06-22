@@ -15,56 +15,18 @@ from __future__ import annotations
 import uuid
 
 from kernel import demo
-from kernel.profiles.si_ffs import regsr_adapter as regsr
-from kernel.profiles.si_ffs import gerk_adapter as gerk
 from kernel.profiles.si_ffs import ffsnaprave_adapter as ffsn
 from kernel.profiles.si_ffs import si_bindings as sib
-from kernel.profiles.si_ffs.gerk_adapter import GerkLayer
-from kernel.profiles.si_ffs.ffsnaprave_adapter import FFSNapraveRegister
 from kernel.context import ProductRegister
+from kernel.profiles.si_ffs.ffsnaprave_adapter import FFSNapraveRegister
+from kernel.profiles.si_ffs.gerk_adapter import GerkLayer
 from kernel.verification import CONFIRM, REFUSE, REVIEW
-
-
-def uid():
-    return uuid.uuid4().hex[:8]
-
-
-def _regsr_snapshot(store, register_day, decision):
-    art = {
-        "snapshotKind": "SI_UVHVVR_FFS_REG_HTML_PARSE", "registerDay": register_day,
-        "sourceUrl": regsr.REGSR_SOURCE_URL, "productCount": 1,
-        "products": [{"regsrCode": "9001", "name": "FIKTIV (fictional)",
-                      "registrationValidUntil": "2028-08-15"}],
-        "productDetails": [{"name": "FIKTIV (fictional)", "decisions": [
-            {"decisionType": "Registracija", "decisionNumber": decision,
-             "issued": "2026-01-01", "validUntil": "2028-08-15"}]}],
-        "rowProblems": [], "inputs": [{"file": "f.html", "digest": f"sha256:{uid()}cafe"}]}
-    return regsr.import_regsr_snapshot(store, art)["snapshotRef"]
-
-
-def _gerk_snapshot(store, layer_date, pid):
-    art = {
-        "snapshotKind": "SI_MKGP_GERK_LAYER_PARSE", "layerDate": layer_date,
-        "canonicalVersionLabel": f"gerk-{layer_date}", "pidField": "GERK_PID",
-        "attributesAvailable": ["GERK_PID", "RABA_ID", "AREA", "OPIS_RABE"],
-        "featureCount": 1, "rowProblems": [],
-        "features": [{"gerkPid": pid, "rabaId": "1300", "area": "0.5",
-                      "opisRabe": "trajni travnik (fictional)"}],
-        "inputs": [{"file": "f.csv", "digest": f"sha256:{uid()}cafe"}]}
-    return gerk.import_gerk_snapshot(store, art)["snapshotRef"]
-
-
-def _ffsn_snapshot(store, file_date, sticker, validity):
-    art = {
-        "snapshotKind": "SI_UVHVVR_FFS_NAPRAVE_PARSE", "fileDate": file_date,
-        "canonicalVersionLabel": f"ffsn-{file_date}", "keyFieldsPresent": True,
-        "attributesAvailable": list(ffsn.RETAINED_FIELDS), "inspectionCount": 1,
-        "rowProblems": [],
-        "inspections": [{"NapravaID": f"N{uid()[:5]}", "StevilkaZnaka": sticker,
-                         "VeljavnostZnaka": validity, "DatumPregleda": "2025-06-15",
-                         "SkladnostObPregledu": "DA"}],
-        "inputs": [{"file": "f.txt", "digest": f"sha256:{uid()}cafe"}]}
-    return ffsn.import_ffsnaprave_snapshot(store, art)["snapshotRef"]
+from profile_si_ffs.tests.m2_si_binding_fixtures import (
+    import_ffsnaprave_snapshot,
+    import_gerk_snapshot,
+    import_regsr_snapshot,
+    uid,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -73,7 +35,7 @@ def _ffsn_snapshot(store, file_date, sticker, validity):
 
 def test_p4_regsr_product_authorisation_is_identity_grade(store):
     decision = f"U9{uid()[:4]}-50/26/1"
-    _regsr_snapshot(store, "2099-04-01", decision)
+    import_regsr_snapshot(store, "2099-04-01", decision)
     pr = ProductRegister()
     pr.load_from_store(store)
     with store.serialized_tx() as cur:
@@ -94,7 +56,7 @@ def test_p4_regsr_product_authorisation_is_identity_grade(store):
 
 
 def test_p4_regsr_unknown_product_routes_to_review_unresolved(store):
-    _regsr_snapshot(store, "2099-04-02", f"U9{uid()[:4]}-50/26/known")
+    import_regsr_snapshot(store, "2099-04-02", f"U9{uid()[:4]}-50/26/known")
     pr = ProductRegister()
     pr.load_from_store(store)
     with store.serialized_tx() as cur:
@@ -117,7 +79,7 @@ def test_p4_regsr_unknown_product_routes_to_review_unresolved(store):
 
 def test_p4_gerk_parcel_is_locator_only_review(store):
     pid = str(uuid.uuid4().int)[:7]
-    _gerk_snapshot(store, "2099-04-03", pid)
+    import_gerk_snapshot(store, "2099-04-03", pid)
     layer = GerkLayer()
     layer.load_from_store(store)
     with store.serialized_tx() as cur:
@@ -135,7 +97,7 @@ def test_p4_gerk_parcel_is_locator_only_review(store):
 
 def test_p4_ffsnaprave_equipment_is_locator_only_review(store):
     sticker, validity = str(uuid.uuid4().int)[:6], "2027-12-31"
-    _ffsn_snapshot(store, "2099-04-04", sticker, validity)
+    import_ffsnaprave_snapshot(store, "2099-04-04", sticker, validity)
     reg = FFSNapraveRegister()
     reg.load_from_store(store)
     with store.serialized_tx() as cur:
@@ -188,7 +150,8 @@ def test_p4_ffsnaprave_composite_key_validity_recorded_not_collapsed(store):
 def test_p4_ffsnaprave_no_match_records_no_fabricated_validity(store):
     # no match + no validity given -> the binding records no fabricated validity
     # ("unresolved", never the literal "None"); UNRESOLVED, never identity
-    _ffsn_snapshot(store, "2099-04-09", str(uuid.uuid4().int)[:6], "2027-12-31")
+    import_ffsnaprave_snapshot(
+        store, "2099-04-09", str(uuid.uuid4().int)[:6], "2027-12-31")
     reg = FFSNapraveRegister()
     reg.load_from_store(store)
     with store.serialized_tx() as cur:
@@ -243,7 +206,7 @@ def test_p4_resolved_binding_attaches_to_committed_appliedresource_identity(stor
     # validates the ref resolves to an AgronomicIdentityBinding); a fabricated ref
     # does NOT accept (control: proves the ref is validated, not a no-op field).
     decision = f"U9{uid()[:4]}-50/26/e"
-    _regsr_snapshot(store, "2099-04-06", decision)
+    import_regsr_snapshot(store, "2099-04-06", decision)
     pr = ProductRegister()
     pr.load_from_store(store)
     s = uid()
@@ -273,7 +236,7 @@ def test_p4_binding_for_a_different_subject_does_not_promote(store, pipeline):
     # attach and promote — G1 now checks each identityBindingRef's binding subject
     # equals payload.identityRecordRef (was: only that the ref resolved to a binding).
     decision = f"U9{uid()[:4]}-50/26/m"
-    _regsr_snapshot(store, "2099-04-07", decision)
+    import_regsr_snapshot(store, "2099-04-07", decision)
     pr = ProductRegister()
     pr.load_from_store(store)
     s = uid()
@@ -321,7 +284,7 @@ def test_p4_only_identity_grade_confirm_yields_verified(store):
     # the binding-state ladder: ONLY an identity-grade G3 CONFIRM (REGSR) yields
     # VERIFIED + maySupportPromotion; everything else is PROVISIONAL and review-bound
     decision = f"U9{uid()[:4]}-50/26/9"
-    _regsr_snapshot(store, "2099-04-05", decision)
+    import_regsr_snapshot(store, "2099-04-05", decision)
     pr = ProductRegister()
     pr.load_from_store(store)
     with store.serialized_tx() as cur:
@@ -347,7 +310,7 @@ def test_p4_verified_regsr_binding_records_scheme_version(store):
     # PR #15 hostile B1: a high-consequence VERIFIED binding must carry
     # externalScheme.schemeVersion (the register vintage it was verified against).
     decision = f"U9{uid()[:4]}-50/26/v"
-    _regsr_snapshot(store, "2099-04-10", decision)
+    import_regsr_snapshot(store, "2099-04-10", decision)
     pr = ProductRegister()
     pr.load_from_store(store)
     with store.serialized_tx() as cur:
@@ -366,7 +329,7 @@ def test_p4_fake_evidence_ref_produces_no_binding(store):
     # PR #15 hostile B2: a binding may not cite fabricated captured evidence — a ref
     # that does not resolve to an EvidenceRecord yields NO binding (nothing attachable).
     decision = f"U9{uid()[:4]}-50/26/f"
-    _regsr_snapshot(store, "2099-04-11", decision)
+    import_regsr_snapshot(store, "2099-04-11", decision)
     pr = ProductRegister()
     pr.load_from_store(store)
     with store.serialized_tx() as cur:
@@ -381,7 +344,7 @@ def test_p4_fake_evidence_ref_produces_no_binding(store):
                             created_by=demo.FARMER)
     assert h["binding"] is None and h["problem"]["reasonCode"] == "EVIDENCE_REFERENCE_UNAVAILABLE"
     # a ref that resolves but is NOT an EvidenceRecord (a snapshot) is also rejected
-    sid = _regsr_snapshot(store, "2099-04-12", f"U9{uid()[:4]}-50/26/x")
+    sid = import_regsr_snapshot(store, "2099-04-12", f"U9{uid()[:4]}-50/26/x")
     h2 = sib.resolve_holding(store, "100000004", "farm:f2", evidence_ref=sid, created_by=demo.FARMER)
     assert h2["binding"] is None
 
