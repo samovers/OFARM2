@@ -60,6 +60,9 @@ resolved product binding (against a dated snapshot) · dose with valid UCUM unit
 - `test_fixtures/demo_payloads.py` — profile-local builder for SI demo typed
   identity and operation payloads; `kernel.demo` public functions remain the
   compatibility facade.
+- `test_fixtures/demo.py` — profile-local fixture facade used by moved SI
+  profile tests; it is test/demo support only and does not replace the public
+  `kernel.demo` compatibility facade.
 
 ## Shipped instances (validated by `../conformance/ofarm_pkg_contract_check.py`)
 

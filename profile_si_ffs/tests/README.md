@@ -33,6 +33,9 @@ until a later profile pytest command exists.
 - D2c moves SI demo payload builders behind
   `profile_si_ffs/test_fixtures/demo_payloads.py` while keeping `kernel.demo`
   public functions as the compatibility facade.
+- D2d updates moved SI profile tests to import the profile-local
+  `profile_si_ffs.test_fixtures.demo` facade directly while root collection
+  bridges keep the default pytest command working.
 - No profile test is presented as platform MVP conformance evidence.
 - No profile-local evidence writer exists.
 

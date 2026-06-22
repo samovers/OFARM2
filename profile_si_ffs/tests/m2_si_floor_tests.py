@@ -21,7 +21,8 @@ import uuid
 
 import pytest
 
-from kernel import config, demo, policy, profile_policy
+from kernel import config, policy, profile_policy
+from profile_si_ffs.test_fixtures import demo
 
 
 OPERATION_FLOOR_CHECKS = {

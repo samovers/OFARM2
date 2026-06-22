@@ -17,10 +17,10 @@ from __future__ import annotations
 import threading
 import uuid
 
-from kernel import demo
 from kernel.profiles.si_ffs import ffsnaprave_adapter as ffsn
 from kernel.profiles.si_ffs.ffsnaprave_adapter import FFSNAPRAVE_DATA_FAMILY, FFSNapraveRegister
 from kernel.store import Store
+from profile_si_ffs.test_fixtures import demo
 
 
 def uid():

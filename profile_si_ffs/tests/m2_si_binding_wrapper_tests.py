@@ -8,13 +8,13 @@ from __future__ import annotations
 
 import uuid
 
-from kernel import demo
 from kernel.context import ProductRegister
 from kernel.profiles.si_ffs import ffsnaprave_adapter as ffsn
 from kernel.profiles.si_ffs import si_bindings as sib
 from kernel.profiles.si_ffs.ffsnaprave_adapter import FFSNapraveRegister
 from kernel.profiles.si_ffs.gerk_adapter import GerkLayer
 from kernel.verification import CONFIRM, REFUSE, REVIEW
+from profile_si_ffs.test_fixtures import demo
 from profile_si_ffs.tests.m2_si_binding_fixtures import (
     import_ffsnaprave_snapshot,
     import_gerk_snapshot,

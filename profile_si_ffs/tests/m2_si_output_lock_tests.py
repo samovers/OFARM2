@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import threading
 
-from kernel import demo
 from kernel.store import Store
 from kernel.views import OutputGenerator
+from profile_si_ffs.test_fixtures import demo
 
 
 __all__ = [

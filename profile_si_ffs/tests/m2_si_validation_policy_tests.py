@@ -9,7 +9,8 @@ from __future__ import annotations
 import json
 import uuid
 
-from kernel import config, demo, profile_policy
+from kernel import config, profile_policy
+from profile_si_ffs.test_fixtures import demo
 
 
 def uid():
