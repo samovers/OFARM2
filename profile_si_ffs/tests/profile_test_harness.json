@@ -1,0 +1,16 @@
+{
+  "artifactKind": "profile_test_harness_scaffold",
+  "schemaVersion": "profile_test_harness_v0_1",
+  "profilePackage": "profile_si_ffs",
+  "engineeringTestsOnly": true,
+  "platformConformance": false,
+  "executedEvidence": false,
+  "evidenceWriter": null,
+  "rootBridge": "kernel/tests/profile_harness_bridge.py",
+  "testModules": [],
+  "notes": [
+    "D6a scaffold only; no existing tests are moved.",
+    "Profile engineering tests must not be presented as platform MVP conformance evidence.",
+    "The root pytest command and conformance evidence writer remain unchanged."
+  ]
+}

@@ -1,0 +1,53 @@
+"""Regression tests for the D6a profile test-harness bridge."""
+from __future__ import annotations
+
+import json
+
+import pytest
+
+from kernel.tests.profile_harness_bridge import (
+    DEFAULT_DESCRIPTOR,
+    ProfileHarnessBridgeError,
+    load_profile_harness_descriptor,
+)
+
+
+def _descriptor_doc() -> dict:
+    return json.loads(DEFAULT_DESCRIPTOR.read_text(encoding="utf-8"))
+
+
+def _write_descriptor(tmp_path, doc: dict):
+    path = tmp_path / "profile_test_harness.json"
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    return path
+
+
+def test_profile_harness_descriptor_loads_with_strict_shape():
+    harness = load_profile_harness_descriptor()
+
+    assert harness.profile_package == "profile_si_ffs"
+    assert harness.test_modules == ()
+
+
+def test_profile_harness_descriptor_rejects_wrong_schema_version(tmp_path):
+    doc = _descriptor_doc()
+    doc["schemaVersion"] = "profile_test_harness_v9_9"
+
+    with pytest.raises(ProfileHarnessBridgeError, match="schemaVersion"):
+        load_profile_harness_descriptor(_write_descriptor(tmp_path, doc))
+
+
+def test_profile_harness_descriptor_rejects_wrong_root_bridge(tmp_path):
+    doc = _descriptor_doc()
+    doc["rootBridge"] = "profile_si_ffs/tests/conftest.py"
+
+    with pytest.raises(ProfileHarnessBridgeError, match="rootBridge"):
+        load_profile_harness_descriptor(_write_descriptor(tmp_path, doc))
+
+
+def test_profile_harness_descriptor_rejects_unknown_top_level_key(tmp_path):
+    doc = _descriptor_doc()
+    doc["silentEvidenceMode"] = True
+
+    with pytest.raises(ProfileHarnessBridgeError, match="unknown top-level"):
+        load_profile_harness_descriptor(_write_descriptor(tmp_path, doc))
