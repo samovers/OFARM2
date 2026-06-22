@@ -18,6 +18,8 @@ until a later profile pytest command exists.
   stubs keep `python -m pytest kernel/tests/ -q` working.
 - D6c moves SI policy metadata engineering assertions here under the same
   root-bridge pattern.
+- D6d moves SI binding-wrapper engineering assertions here. Generic binding and
+  resolver tests remain root-owned.
 - No profile test is presented as platform MVP conformance evidence.
 - No profile-local evidence writer exists.
 
