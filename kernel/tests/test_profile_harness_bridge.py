@@ -1,4 +1,4 @@
-"""Regression tests for the D6a profile test-harness bridge."""
+"""Regression tests for the profile test-harness bridge."""
 from __future__ import annotations
 
 import json
@@ -17,6 +17,8 @@ EXPECTED_PROFILE_MODULES = (
     "profile_si_ffs.tests.m2_si_regsr_tests",
     "profile_si_ffs.tests.m2_si_gerk_tests",
     "profile_si_ffs.tests.m2_si_ffsnaprave_tests",
+    "profile_si_ffs.tests.m2_si_floor_tests",
+    "profile_si_ffs.tests.m2_si_validation_policy_tests",
 )
 
 

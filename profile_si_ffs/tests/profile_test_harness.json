@@ -10,10 +10,13 @@
   "testModules": [
     "profile_si_ffs.tests.m2_si_regsr_tests",
     "profile_si_ffs.tests.m2_si_gerk_tests",
-    "profile_si_ffs.tests.m2_si_ffsnaprave_tests"
+    "profile_si_ffs.tests.m2_si_ffsnaprave_tests",
+    "profile_si_ffs.tests.m2_si_floor_tests",
+    "profile_si_ffs.tests.m2_si_validation_policy_tests"
   ],
   "notes": [
     "D6b moves SI adapter/import engineering assertions into profile-local modules.",
+    "D6c moves SI policy metadata engineering assertions into profile-local modules.",
     "Profile engineering tests must not be presented as platform MVP conformance evidence.",
     "Root bridge stubs preserve the root pytest command and conformance evidence writer behavior."
   ]
