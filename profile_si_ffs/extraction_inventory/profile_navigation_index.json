@@ -1,0 +1,112 @@
+{
+  "artifactKind": "profile_navigation_index",
+  "schemaVersion": "profile_navigation_index_v0_1",
+  "profilePackage": "profile_si_ffs",
+  "navigationOnly": true,
+  "capabilityClaim": false,
+  "runtimeSupport": false,
+  "machineVisibleBoundary": {
+    "label": "navigation-only non-capability index",
+    "mayBeUsedFor": [
+      "human navigation",
+      "profile-local planning document discovery",
+      "review orientation"
+    ],
+    "mustNotBeUsedFor": [
+      "activeProfileRefs",
+      "active artifact sets",
+      "runtime import or export claims",
+      "view or query capability claims",
+      "platform MVP conformance claims",
+      "generated manifest outputs",
+      "production readiness claims"
+    ]
+  },
+  "proseBoundary": "This index is profile-local navigation only. It is not a manifest, not a generated output, not runtime support, and not evidence of active capability.",
+  "entries": [
+    {
+      "id": "si_extraction_inventory_readme",
+      "path": "profile_si_ffs/extraction_inventory/README.md",
+      "kind": "navigation",
+      "status": "profile-local inventory overview"
+    },
+    {
+      "id": "si_core_leakage_inventory",
+      "path": "profile_si_ffs/extraction_inventory/si_core_leakage_inventory.md",
+      "kind": "inventory",
+      "status": "docs-only extraction finding list"
+    },
+    {
+      "id": "si_migration_map",
+      "path": "profile_si_ffs/extraction_inventory/si_migration_map.md",
+      "kind": "classification",
+      "status": "docs-only migration classification"
+    },
+    {
+      "id": "core_neutral_rewording_candidates",
+      "path": "profile_si_ffs/extraction_inventory/core_neutral_rewording_candidates.md",
+      "kind": "rewording candidates",
+      "status": "docs-only neutral wording candidates"
+    },
+    {
+      "id": "followup_pr_plan",
+      "path": "profile_si_ffs/extraction_inventory/followup_pr_plan.md",
+      "kind": "planning",
+      "status": "docs-only follow-up split"
+    },
+    {
+      "id": "manual_review_backlog_plan",
+      "path": "profile_si_ffs/extraction_inventory/manual_review_backlog_plan.md",
+      "kind": "planning",
+      "status": "docs-only manual-review backlog"
+    },
+    {
+      "id": "active_profile_loader_design",
+      "path": "profile_si_ffs/extraction_inventory/active_profile_loader_design.md",
+      "kind": "design memo",
+      "status": "docs-only active-profile loader boundary"
+    },
+    {
+      "id": "evidence_policy_metadata_display_design",
+      "path": "profile_si_ffs/extraction_inventory/evidence_policy_metadata_display_design.md",
+      "kind": "design memo",
+      "status": "docs-only evidence metadata/display boundary"
+    },
+    {
+      "id": "validator_policy_hook_design",
+      "path": "profile_si_ffs/extraction_inventory/validator_policy_hook_design.md",
+      "kind": "design memo",
+      "status": "docs-only validation-policy hook boundary"
+    },
+    {
+      "id": "test_harness_split_plan",
+      "path": "profile_si_ffs/extraction_inventory/test_harness_split_plan.md",
+      "kind": "planning",
+      "status": "docs-only profile test-harness boundary"
+    },
+    {
+      "id": "conformance_lane_split_plan",
+      "path": "profile_si_ffs/extraction_inventory/conformance_lane_split_plan.md",
+      "kind": "planning",
+      "status": "docs-only conformance lane boundary"
+    },
+    {
+      "id": "demo_fixture_migration_plan",
+      "path": "profile_si_ffs/extraction_inventory/demo_fixture_migration_plan.md",
+      "kind": "planning",
+      "status": "docs-only demo fixture migration boundary"
+    },
+    {
+      "id": "multi_profile_manifest_design",
+      "path": "profile_si_ffs/extraction_inventory/multi_profile_manifest_design.md",
+      "kind": "design memo",
+      "status": "docs-only manifest boundary memo"
+    },
+    {
+      "id": "manifest_implementation_checklist",
+      "path": "profile_si_ffs/extraction_inventory/manifest_implementation_checklist.md",
+      "kind": "planning checklist",
+      "status": "docs-only manifest implementation checklist"
+    }
+  ]
+}
