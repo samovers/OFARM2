@@ -12,7 +12,7 @@ touching generated manifest behavior or manifest tests.
 
 | Term | Meaning | Claim boundary |
 | --- | --- | --- |
-| `active runtime manifest` | Generated or authored manifest that describes what the current runtime can execute now. | May claim only grounded active runtime capability. |
+| `active runtime manifest` | Approved generated or generator-verified manifest that describes what the current runtime can execute now. | Must not be hand-claimed; may claim only grounded active runtime capability. |
 | `active profile manifest` | Future per-profile manifest for a profile with an active descriptor, adapters, tests, and evidence lane. | May exist only after profile runtime support is real and tested. |
 | `root aggregate manifest` | Future package-level index of active runtime manifests and package-wide Kernel capability. | Must not upgrade design-only slices into runtime support. |
 | `profile navigation index` | Navigation-only package index for profile docs or slices. | Must be labeled navigation-only and non-capability in machine-visible metadata and prose. |
@@ -37,7 +37,8 @@ the following before adding a profile to active manifest outputs:
 Before implementation starts, reviewers should confirm:
 
 - the PR states whether it is docs-only, generated-output, or runtime behavior;
-- generated manifests are produced by the approved generator, not hand-edited;
+- active runtime capability manifests are approved generated or
+  generator-verified, never hand-claimed or hand-edited;
 - any schema or contract change has explicit approval and migration notes;
 - `minimumConformanceLevel` is not strengthened without accepted evidence;
 - SI active-pilot behavior remains unchanged unless the PR explicitly targets it;
