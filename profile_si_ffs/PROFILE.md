@@ -45,9 +45,9 @@ resolved product binding (against a dated snapshot) · dose with valid UCUM unit
 ## Test harness
 
 - `tests/profile_test_harness.json` — profile-local engineering-test harness.
-  It now owns the SI adapter/import, policy metadata, and binding-wrapper test
-  modules through root collection bridges, writes no evidence, and is not
-  platform MVP conformance.
+  It now owns the SI adapter/import and policy metadata test modules through
+  root collection bridges, writes no evidence, and is not platform MVP
+  conformance.
 
 ## Shipped instances (validated by `../conformance/ofarm_pkg_contract_check.py`)
 
