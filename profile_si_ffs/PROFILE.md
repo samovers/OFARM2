@@ -57,6 +57,9 @@ resolved product binding (against a dated snapshot) · dose with valid UCUM unit
 - `test_fixtures/demo_records.py` — profile-local builder for SI-shaped demo
   substrate records; `kernel.demo.substrate_records()` remains the compatibility
   facade.
+- `test_fixtures/demo_payloads.py` — profile-local builder for SI demo typed
+  identity and operation payloads; `kernel.demo` public functions remain the
+  compatibility facade.
 
 ## Shipped instances (validated by `../conformance/ofarm_pkg_contract_check.py`)
 

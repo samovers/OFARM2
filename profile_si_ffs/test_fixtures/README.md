@@ -13,6 +13,11 @@ currentness, or materialization behavior change.
 public compatibility facade and delegates to this helper without changing record
 ids, payload fields, bootstrap behavior, or evidence grounding.
 
+`demo_payloads.py` is the D2c typed identity and operation payload builder.
+`kernel.demo` remains the public compatibility facade and delegates to this
+helper without changing payload ids, field names, defaults, or decision
+outcomes.
+
 Later D2 steps may move fixture construction behind profile-local helpers while
 keeping `kernel.demo` as the compatibility facade until root callers are safely
 migrated.

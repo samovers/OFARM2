@@ -30,6 +30,9 @@ until a later profile pytest command exists.
 - D2b moves SI substrate record construction behind
   `profile_si_ffs/test_fixtures/demo_records.py` while keeping
   `kernel.demo.substrate_records()` as the compatibility facade.
+- D2c moves SI demo payload builders behind
+  `profile_si_ffs/test_fixtures/demo_payloads.py` while keeping `kernel.demo`
+  public functions as the compatibility facade.
 - No profile test is presented as platform MVP conformance evidence.
 - No profile-local evidence writer exists.
 
