@@ -18,9 +18,9 @@ until a later profile pytest command exists.
   stubs keep `python -m pytest kernel/tests/ -q` working.
 - D6c moves SI policy metadata engineering assertions here under the same
   root-bridge pattern.
-- D6d-prep keeps SI binding assertions root-owned, but places shared fictional
-  SI binding snapshot builders in `m2_si_binding_fixtures.py` as profile-local
-  fixture support.
+- D6d keeps active-runtime SI binding integration checks root-owned, but moves
+  SI binding wrapper assertions into `m2_si_binding_wrapper_tests.py` and shared
+  fictional snapshot builders into `m2_si_binding_fixtures.py`.
 - No profile test is presented as platform MVP conformance evidence.
 - No profile-local evidence writer exists.
 
