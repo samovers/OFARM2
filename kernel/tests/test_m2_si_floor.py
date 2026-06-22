@@ -24,6 +24,16 @@ import pytest
 from kernel import config, demo, policy, profile_policy
 
 
+OPERATION_FLOOR_CHECKS = {
+    "product-binding",
+    "dose-unit",
+    "parcel",
+    "crop-binding",
+    "operator",
+    "event-time",
+}
+
+
 def uid():
     return uuid.uuid4().hex[:8]
 
@@ -35,6 +45,47 @@ def _spray(pipeline, **kw):
 
 def _problem_titles(result):
     return [p.get("title", "") for p in result.get("problems", [])]
+
+
+def _case_for_result(store, result):
+    trace = store.get_payload(result["promotionTraceRef"])
+    return store.get_payload(trace["evidenceSufficiencyCaseRef"])
+
+
+def _valid_display(items):
+    prefix = "rule:test.floor"
+    floor_items = {}
+    for item in items:
+        floor_items[item] = {
+            "ruleRef": f"{prefix}.{item}",
+            "label": item.replace("-", " "),
+        }
+    if "product-binding" in floor_items:
+        floor_items["product-binding"]["insufficiencyReasonCode"] = \
+            "AMBIGUOUS_PRODUCT_ID"
+        floor_items["product-binding"]["reviewReasonCode"] = \
+            "PRODUCT_BINDING_UNRESOLVED"
+    if "crop-binding" in floor_items:
+        floor_items["crop-binding"]["reviewReasonCode"] = "IDENTITY_UNRESOLVED"
+    return {
+        "ruleRefPrefix": prefix,
+        "operationFloorClaimStatement": "test profile operation floor statement",
+        "operationFloorAllowRationale": "test profile floor satisfied",
+        "hardMissingRationaleTemplate": "test hard missing: {missing}",
+        "softMissingRationaleTemplate": "test soft missing: {missing}",
+        "durableProofBundleLabel": "test durable proof bundle",
+        "floorItems": floor_items,
+    }
+
+
+def _policy_doc(hard, soft, *, advisories=None, display=None):
+    return {
+        "policyId": "policy:test.floor",
+        "profileRef": "profile:test.floor",
+        "operationFloor": {"hardItems": hard, "softItems": soft},
+        "display": display or _valid_display([*hard, *soft]),
+        "advisories": advisories or {},
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -51,6 +102,16 @@ def test_floor_is_sourced_from_package_content():
     assert "dose-unit" in hard and "product-binding" in soft
 
 
+def test_floor_display_metadata_is_sourced_from_package_content():
+    display = profile_policy.operation_floor_display(
+        supported_checks=OPERATION_FLOOR_CHECKS)
+    doc = json.loads(config.EVIDENCE_POLICY_PATH.read_text())
+    assert display == doc["display"]
+    assert display["ruleRefPrefix"] == "rule:si.ffs.floor"
+    assert profile_policy.floor_item_rule_ref(
+        display, "product-binding") == "rule:si.ffs.floor.product-binding"
+
+
 def test_kernel_carries_no_si_floor_constants():
     # acceptance: kernel/ holds no SI-specific floor values after the move
     assert not hasattr(policy, "OPERATION_FLOOR_HARD_ITEMS")
@@ -60,6 +121,22 @@ def test_kernel_carries_no_si_floor_constants():
 def test_clean_operation_claim_still_promotes(store, pipeline):
     # existing promotion behavior is unchanged for a clean claim
     assert _spray(pipeline, confirm=True)["decisionOutcome"] == "PROMOTE_ACCEPTED"
+
+
+def test_clean_operation_claim_uses_profile_display_metadata(store, pipeline):
+    display = profile_policy.operation_floor_display(
+        supported_checks=OPERATION_FLOOR_CHECKS)
+    r = _spray(pipeline, confirm=True)
+    assert r["decisionOutcome"] == "PROMOTE_ACCEPTED"
+    case = _case_for_result(store, r)
+    assert case["claims"][0]["statement"] == \
+        display["operationFloorClaimStatement"]
+    assert case["outcome"]["rationale"] == \
+        display["operationFloorAllowRationale"]
+    refs = {a["ruleRef"] for a in case["arguments"]}
+    assert "rule:si.ffs.floor.product-binding" in refs
+    assert refs == {profile_policy.floor_item_rule_ref(display, item)
+                    for item in OPERATION_FLOOR_CHECKS}
 
 
 def test_missing_policy_fails_closed(store, pipeline, monkeypatch, tmp_path):
@@ -74,6 +151,74 @@ def test_missing_policy_fails_closed(store, pipeline, monkeypatch, tmp_path):
 def test_malformed_policy_fails_closed(store, pipeline, monkeypatch, tmp_path):
     bad = tmp_path / "bad.json"
     bad.write_text("{ not valid json")
+    monkeypatch.setattr(config, "EVIDENCE_POLICY_PATH", bad)
+    r = _spray(pipeline, confirm=True)
+    assert r["decisionOutcome"] == "RETAIN_DRAFT"
+    assert r["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+
+
+def test_missing_display_metadata_fails_closed(store, pipeline, monkeypatch, tmp_path):
+    bad = tmp_path / "missing_display.json"
+    bad.write_text(json.dumps({
+        "policyId": "policy:test.missing-display",
+        "operationFloor": {"hardItems": ["dose-unit"], "softItems": []},
+        "advisories": {}}))
+    monkeypatch.setattr(config, "EVIDENCE_POLICY_PATH", bad)
+    r = _spray(pipeline, confirm=True)
+    assert r["decisionOutcome"] == "RETAIN_DRAFT"
+    assert r["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+
+
+@pytest.mark.parametrize("variant", [
+    "bad-template-field",
+    "missing-floor-item",
+    "extra-floor-item",
+    "bad-prefix-grammar",
+    "bad-rule-ref-scope",
+    "bad-rule-ref-grammar",
+    "bad-insufficiency-code",
+    "bad-review-code",
+], ids=[
+    "bad-template-field",
+    "missing-floor-item",
+    "extra-floor-item",
+    "bad-prefix-grammar",
+    "bad-rule-ref-scope",
+    "bad-rule-ref-grammar",
+    "bad-insufficiency-code",
+    "bad-review-code",
+])
+def test_malformed_display_metadata_fails_closed(
+        store, pipeline, monkeypatch, tmp_path, variant):
+    hard = ["dose-unit", "operator", "event-time", "parcel"]
+    soft = ["product-binding", "crop-binding"]
+    doc = _policy_doc(hard, soft)
+    display = doc["display"]
+    if variant == "bad-template-field":
+        display["hardMissingRationaleTemplate"] = "missing {unknown}"
+    elif variant == "missing-floor-item":
+        display["floorItems"].pop("dose-unit")
+    elif variant == "extra-floor-item":
+        display["floorItems"]["banana"] = {
+            "ruleRef": "rule:test.floor.banana",
+            "label": "banana",
+        }
+    elif variant == "bad-prefix-grammar":
+        display["ruleRefPrefix"] = "rule:test floor"
+        for item, block in display["floorItems"].items():
+            block["ruleRef"] = f"rule:test floor.{item}"
+    elif variant == "bad-rule-ref-scope":
+        display["floorItems"]["dose-unit"]["ruleRef"] = "rule:other.floor.dose-unit"
+    elif variant == "bad-rule-ref-grammar":
+        display["floorItems"]["dose-unit"]["ruleRef"] = "rule:test.floor.bad ref"
+    elif variant == "bad-insufficiency-code":
+        display["floorItems"]["product-binding"]["insufficiencyReasonCode"] = \
+            "NOT_A_CASE_CODE"
+    elif variant == "bad-review-code":
+        display["floorItems"]["product-binding"]["reviewReasonCode"] = \
+            "NOT_A_RUNTIME_CODE"
+    bad = tmp_path / "bad_display.json"
+    bad.write_text(json.dumps(doc))
     monkeypatch.setattr(config, "EVIDENCE_POLICY_PATH", bad)
     r = _spray(pipeline, confirm=True)
     assert r["decisionOutcome"] == "RETAIN_DRAFT"
@@ -97,15 +242,93 @@ def test_floor_composition_from_package_changes_behavior(store, pipeline, monkey
     harder = tmp_path / "crop_hard_policy.json"
     harder.write_text(json.dumps({
         "policyId": "policy:test.crop-hard",
+        "profileRef": "profile:test.crop-hard",
         "operationFloor": {
             "hardItems": ["dose-unit", "operator", "event-time", "parcel", "crop-binding"],
             "softItems": ["product-binding"]},
+        "display": _valid_display(["dose-unit", "operator", "event-time", "parcel",
+                                   "crop-binding", "product-binding"]),
         "advisories": {}}))
     monkeypatch.setattr(config, "EVIDENCE_POLICY_PATH", harder)
     refused = pipeline.commit(_no_crop_binding())
     assert refused["decisionOutcome"] == "RETAIN_DRAFT", \
         "crop-binding HARD in the package policy -> refuse, not route"
     assert refused["problems"][0]["reasonCode"] == "EVIDENCE_INSUFFICIENT"
+
+
+def test_display_metadata_changes_case_text_without_changing_decision(
+        store, pipeline, monkeypatch, tmp_path):
+    hard = ["dose-unit", "operator", "event-time", "parcel"]
+    soft = ["product-binding", "crop-binding"]
+    display = _valid_display([*hard, *soft])
+    display["operationFloorClaimStatement"] = "custom profile-owned floor statement"
+    display["operationFloorAllowRationale"] = "custom profile-owned allow rationale"
+    doc = _policy_doc(hard, soft, display=display)
+    path = tmp_path / "custom_display.json"
+    path.write_text(json.dumps(doc))
+    monkeypatch.setattr(config, "EVIDENCE_POLICY_PATH", path)
+
+    r = _spray(pipeline, confirm=True)
+    assert r["decisionOutcome"] == "PROMOTE_ACCEPTED"
+    case = _case_for_result(store, r)
+    assert case["claims"][0]["statement"] == "custom profile-owned floor statement"
+    assert case["outcome"]["rationale"] == "custom profile-owned allow rationale"
+    assert {a["ruleRef"] for a in case["arguments"]} == {
+        profile_policy.floor_item_rule_ref(display, item)
+        for item in OPERATION_FLOOR_CHECKS}
+
+
+def test_compliance_assertion_fallback_rule_refs_remain_unchanged(store, pipeline):
+    statement = "fictional demo: compliance fallback trace regression"
+    r = pipeline.commit({
+        "commitClass": "COMPLIANCE_ASSERTION",
+        "actingPartyRef": demo.FARMER,
+        "farmRef": demo.FARM,
+        "idempotencyKey": f"p5-compliance-fallback:{uid()}",
+        "eventTime": "2026-06-10T09:00:00Z",
+        "evidenceRefs": [demo.PHOTO_EVIDENCE],
+        "payload": {"complianceClaim": {
+            "statement": statement,
+            "assertedStatus": "CLAIMED_COMPLIANT",
+            "governingRuleRefs": [config.EVIDENCE_POLICY_REF],
+            "subjectScopeRef": demo.FARM}},
+        "confirmAccept": True,
+    })
+    assert r["decisionOutcome"] == "REQUIRE_REVIEW"
+    case = _case_for_result(store, r)
+    assert case["claims"][0]["statement"] == statement
+    assert {a["ruleRef"] for a in case["arguments"]} == {
+        "rule:si.ffs.floor.claim-statement",
+        "rule:si.ffs.floor.asserted-status",
+        "rule:si.ffs.floor.governing-rules",
+        "rule:si.ffs.floor.subject-resolves",
+        "rule:si.ffs.floor.evidence-bundle",
+    }
+
+
+def test_queue_acceptance_fallback_outputs_remain_unchanged(store, pipeline):
+    queued = pipeline.commit(demo.spray_submission(
+        f"p5-acceptance-fallback:{uid()}", erp_id=f"erp:p5.accept.{uid()}",
+        confirm=False))
+    assert queued["decisionOutcome"] == "RETAIN_DRAFT"
+    accepted = pipeline.commit({
+        "commitClass": "GOVERNANCE_DECISION",
+        "actingPartyRef": demo.FARMER,
+        "farmRef": demo.FARM,
+        "idempotencyKey": f"p5-acceptance-review:{uid()}",
+        "decisionTime": "2026-06-10T10:00:00Z",
+        "reviewTargetAssertionRef": queued["emittedAssertionRecordRefs"][0],
+        "reviewRationale": "self-review of a routine operation claim meeting the floor",
+    })
+    assert accepted["decisionOutcome"] == "PROMOTE_ACCEPTED"
+    case = _case_for_result(store, accepted)
+    assert case["claims"][0]["statement"] == \
+        "this operation claim meets the SI record-keeping evidence floor"
+    assert case["outcome"]["rationale"] == "all SI evidence-floor items satisfied"
+    assert {a["ruleRef"] for a in case["arguments"]} == {
+        "rule:si.ffs.floor.durable-evidence",
+        "rule:si.ffs.floor.route-reasons-resolved",
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -195,7 +418,9 @@ def test_malformed_advisories_fails_closed(store, pipeline, monkeypatch, tmp_pat
     bad = tmp_path / "null_advisories.json"
     bad.write_text(json.dumps({
         "policyId": "policy:test.bad-advisories",
+        "profileRef": "profile:test.bad-advisories",
         "operationFloor": {"hardItems": ["dose-unit"], "softItems": []},
+        "display": _valid_display(["dose-unit"]),
         "advisories": None}))
     monkeypatch.setattr(config, "EVIDENCE_POLICY_PATH", bad)
     r = _spray(pipeline, confirm=True)
@@ -207,12 +432,9 @@ def test_malformed_advisories_fails_closed(store, pipeline, monkeypatch, tmp_pat
     {"operationFloor": {"hardItems": ["banana"], "softItems": []}},
     {"operationFloor": {"hardItems": ["dose-unit"], "softItems": ["dose-unit"]}},
     {"operationFloor": {"hardItems": [42], "softItems": []}},
-    {"operationFloor": {"hardItems": ["dose-unit"], "softItems": []},
-     "advisories": {"authorisationMismatch": None}},
-    {"operationFloor": {"hardItems": ["dose-unit"], "softItems": []},
-     "advisories": {"doseRange": {"min": "x"}}},
-    {"operationFloor": {"hardItems": ["dose-unit"], "softItems": []},
-     "advisories": {"doseRange": {"min": 100, "max": 1}}},
+    _policy_doc(["dose-unit"], [], advisories={"authorisationMismatch": None}),
+    _policy_doc(["dose-unit"], [], advisories={"doseRange": {"min": "x"}}),
+    _policy_doc(["dose-unit"], [], advisories={"doseRange": {"min": 100, "max": 1}}),
 ], ids=["unknown-item", "hard-soft-overlap", "non-string-item",
         "null-advisory-block", "non-numeric-dose", "unordered-dose"])
 def test_malformed_policy_variants_fail_closed(store, pipeline, monkeypatch, tmp_path, policy_doc):

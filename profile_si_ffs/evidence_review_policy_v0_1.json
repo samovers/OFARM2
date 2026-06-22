@@ -7,6 +7,44 @@
     "hardItems": ["dose-unit", "operator", "event-time", "parcel"],
     "softItems": ["product-binding", "crop-binding"]
   },
+  "display": {
+    "_note": "Profile-owned display and trace metadata for operation-floor sufficiency cases. These strings and rule refs are SI profile/package content; they do not change promotion decisions, evidence requirements, authority, correction, review, or currentness behavior.",
+    "ruleRefPrefix": "rule:si.ffs.floor",
+    "operationFloorClaimStatement": "this operation claim meets the SI record-keeping evidence floor",
+    "operationFloorAllowRationale": "all SI evidence-floor items satisfied",
+    "hardMissingRationaleTemplate": "evidence floor unmet: missing {missing}; the claim lacks the required durable proof for governed promotion",
+    "softMissingRationaleTemplate": "floor items need review: {missing}",
+    "durableProofBundleLabel": "durable proof bundle",
+    "floorItems": {
+      "dose-unit": {
+        "ruleRef": "rule:si.ffs.floor.dose-unit",
+        "label": "resolved dose/rate unit"
+      },
+      "operator": {
+        "ruleRef": "rule:si.ffs.floor.operator",
+        "label": "operator attribution"
+      },
+      "event-time": {
+        "ruleRef": "rule:si.ffs.floor.event-time",
+        "label": "event start time"
+      },
+      "parcel": {
+        "ruleRef": "rule:si.ffs.floor.parcel",
+        "label": "field or zone target"
+      },
+      "product-binding": {
+        "ruleRef": "rule:si.ffs.floor.product-binding",
+        "label": "resolved product binding",
+        "insufficiencyReasonCode": "AMBIGUOUS_PRODUCT_ID",
+        "reviewReasonCode": "PRODUCT_BINDING_UNRESOLVED"
+      },
+      "crop-binding": {
+        "ruleRef": "rule:si.ffs.floor.crop-binding",
+        "label": "crop species binding",
+        "reviewReasonCode": "IDENTITY_UNRESOLVED"
+      }
+    }
+  },
   "advisories": {
     "_note": "Advisory-twin warnings raised on an operation claim — visible, NEVER blocking, never a compliance fact, never an accepted consequence (PROFILE.md 'Advisory rule'; Kernel rule 4). The kernel computes them generically from these rules.",
     "authorisationMismatch": {

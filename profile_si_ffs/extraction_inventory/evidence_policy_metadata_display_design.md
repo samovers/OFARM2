@@ -1,8 +1,9 @@
 # Evidence Policy Metadata Display Design Memo
 
-Status: design memo only. This document does not move code, change runtime
-behavior, update contracts or manifests, alter tests, or change Core, Kernel, or
-Platform semantics.
+Status: implemented design memo. The metadata boundary described here is now
+implemented by `profile_si_ffs/evidence_review_policy_v0_1.json` plus generic
+loader/use code in Kernel. This document remains the design rationale and does
+not itself define OFARM law.
 
 This is the PR D3 follow-up from `manual_review_backlog_plan.md`. It records the
 profile policy metadata needed before `kernel/sufficiency.py` and
@@ -36,8 +37,8 @@ profile-owned policy metadata while preserving current behavior exactly.
 
 ## Proposed Policy Metadata
 
-A later implementation may add a profile-local metadata block to
-`evidence_review_policy_v0_1.json`. This memo does not add it.
+The D3 implementation adds a profile-local metadata block to
+`evidence_review_policy_v0_1.json`.
 
 The metadata should be package content, not a canonical contract and not OFARM
 Core law. It should describe display and trace identifiers only; it must not
@@ -151,9 +152,9 @@ Stop and re-plan if the implementation would require:
 - broad multi-profile abstraction;
 - any Slovenia production-readiness claim.
 
-## Suggested Future PR
+## Implemented D3 Scope
 
-PR D3 implementation should be limited to:
+The implementation scope is limited to:
 
 - adding display metadata to `profile_si_ffs/evidence_review_policy_v0_1.json`;
 - extending `kernel/profile_policy.py` validation/helpers;
