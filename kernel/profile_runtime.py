@@ -145,7 +145,10 @@ def load_profile_runtime_descriptor(
 
     families = _reference_families(doc["referenceFamilies"])
     _validate_policy_ref(evidence_policy_path, doc["evidencePolicyRef"])
-    payloads = [json.loads(path.read_text()) for path in profile_instance_paths]
+    payloads = _load_profile_instance_payloads(
+        profile_instance_files,
+        profile_instance_paths,
+    )
     _validate_active_spine(doc, payloads)
     _validate_shipped_reference_refs(families, payloads)
 
@@ -298,6 +301,25 @@ def _validate_policy_ref(path: Path, expected_ref: str) -> None:
     if not isinstance(policy, dict) or policy.get("policyId") != expected_ref:
         raise ProfileRuntimeError(
             f"evidence policy {path} does not declare policyId {expected_ref!r}")
+
+
+def _load_profile_instance_payloads(
+    profile_instance_files: list[str],
+    profile_instance_paths: tuple[Path, ...],
+) -> list[dict[str, Any]]:
+    payloads: list[dict[str, Any]] = []
+    for rel, path in zip(profile_instance_files, profile_instance_paths):
+        try:
+            payload = json.loads(path.read_text())
+        except (OSError, ValueError) as exc:
+            raise ProfileRuntimeError(
+                f"profile instance file {rel!r} unreadable or malformed: {exc}"
+            ) from exc
+        if not isinstance(payload, dict):
+            raise ProfileRuntimeError(
+                f"profile instance file {rel!r} must be a JSON object")
+        payloads.append(payload)
+    return payloads
 
 
 def _validate_active_spine(doc: dict[str, Any], payloads: list[dict[str, Any]]) -> None:

@@ -126,6 +126,32 @@ def test_wrong_kind_binding_ref_review_disposition_fails_closed(
     assert "wrongKindRef.disposition must be REFUSE" in problem["detail"]
 
 
+def test_product_binding_role_must_stay_product_specific(
+        pipeline, monkeypatch, tmp_path):
+    doc = _policy_doc()
+    doc["validation"]["bindings"]["product"]["bindingRole"] = "CROP_SPECIES"
+    _use_policy(monkeypatch, tmp_path, doc)
+
+    r = _spray(pipeline, confirm=True)
+    problem = r["problems"][0]
+    assert r["decisionOutcome"] == "RETAIN_DRAFT"
+    assert problem["reasonCode"] == "PROFILE_NOT_ACTIVE"
+    assert "product.bindingRole must be CROP_PROTECTION_PRODUCT" in problem["detail"]
+
+
+def test_crop_binding_role_must_stay_crop_specific(
+        pipeline, monkeypatch, tmp_path):
+    doc = _policy_doc()
+    doc["validation"]["bindings"]["crop"]["bindingRole"] = "CROP_PROTECTION_PRODUCT"
+    _use_policy(monkeypatch, tmp_path, doc)
+
+    r = _spray(pipeline, confirm=True)
+    problem = r["problems"][0]
+    assert r["decisionOutcome"] == "RETAIN_DRAFT"
+    assert problem["reasonCode"] == "PROFILE_NOT_ACTIVE"
+    assert "crop.bindingRole must be CROP_SPECIES" in problem["detail"]
+
+
 def test_unknown_validation_policy_key_fails_closed(
         pipeline, monkeypatch, tmp_path):
     doc = _policy_doc()

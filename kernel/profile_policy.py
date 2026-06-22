@@ -52,7 +52,8 @@ DISPLAY_TEXT_FIELDS = (
 DISPLAY_TEMPLATE_FIELDS = frozenset({"missing"})
 RULE_REF_RE = re.compile(r"^[A-Za-z0-9._:-]+$")
 VALIDATION_DISPOSITIONS = frozenset({"REFUSE", "REVIEW"})
-VALIDATION_BINDING_ROLES = frozenset({"CROP_PROTECTION_PRODUCT", "CROP_SPECIES"})
+PRODUCT_VALIDATION_BINDING_ROLE = "CROP_PROTECTION_PRODUCT"
+CROP_VALIDATION_BINDING_ROLE = "CROP_SPECIES"
 
 
 class ProfilePolicyError(Exception):
@@ -267,8 +268,10 @@ def _validate_validation_policy(doc: dict) -> None:
         "detailTemplate",
     }, "validation.bindings.product")
     role = _require_text(product, "bindingRole", "validation.bindings.product")
-    if role not in VALIDATION_BINDING_ROLES:
-        raise ProfilePolicyError("validation.bindings.product.bindingRole is unsupported")
+    if role != PRODUCT_VALIDATION_BINDING_ROLE:
+        raise ProfilePolicyError(
+            "validation.bindings.product.bindingRole must be "
+            f"{PRODUCT_VALIDATION_BINDING_ROLE}")
     _require_disposition(product, "missingOrUnverifiedDisposition",
                          "validation.bindings.product")
     _require_reason_code(product, "reasonCode", "validation.bindings.product")
@@ -287,8 +290,10 @@ def _validate_validation_policy(doc: dict) -> None:
         "detail",
     }, "validation.bindings.crop")
     role = _require_text(crop, "bindingRole", "validation.bindings.crop")
-    if role not in VALIDATION_BINDING_ROLES:
-        raise ProfilePolicyError("validation.bindings.crop.bindingRole is unsupported")
+    if role != CROP_VALIDATION_BINDING_ROLE:
+        raise ProfilePolicyError(
+            "validation.bindings.crop.bindingRole must be "
+            f"{CROP_VALIDATION_BINDING_ROLE}")
     _require_disposition(crop, "missingDisposition", "validation.bindings.crop")
     _require_reason_code(crop, "reasonCode", "validation.bindings.crop")
     _require_text(crop, "title", "validation.bindings.crop")

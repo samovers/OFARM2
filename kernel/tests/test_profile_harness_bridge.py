@@ -44,7 +44,7 @@ def _root_star_import_bridges() -> dict[str, list[str]]:
     bridges: dict[str, list[str]] = {}
     for test_file in ROOT_TESTS_DIR.glob("test_*.py"):
         tree = ast.parse(test_file.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
+        for node in tree.body:
             if not isinstance(node, ast.ImportFrom) or node.module is None:
                 continue
             if not node.module.startswith("profile_si_ffs.tests."):
@@ -81,6 +81,25 @@ def test_profile_harness_declared_modules_have_root_collection_bridges():
         "descriptor module(s) missing root collection bridge: " +
         ", ".join(missing)
     )
+
+
+def test_root_bridge_detection_requires_top_level_star_import(monkeypatch, tmp_path):
+    nested = tmp_path / "test_nested.py"
+    nested.write_text(
+        "if False:\n"
+        "    from profile_si_ffs.tests.m2_si_regsr_tests import *\n",
+        encoding="utf-8",
+    )
+    top_level = tmp_path / "test_top_level.py"
+    top_level.write_text(
+        "from profile_si_ffs.tests.m2_si_floor_tests import *\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setitem(globals(), "ROOT_TESTS_DIR", tmp_path)
+
+    assert _root_star_import_bridges() == {
+        "profile_si_ffs.tests.m2_si_floor_tests": ["test_top_level.py"],
+    }
 
 
 def test_profile_harness_descriptor_rejects_wrong_schema_version(tmp_path):
