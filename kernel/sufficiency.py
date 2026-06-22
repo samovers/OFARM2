@@ -70,14 +70,18 @@ def route_reasons_for(store, assertion_ref: str) -> list[dict]:
 
 def build_case_from_checks(store, farm_ref, assertion_id, erp_id,
                            checks, hard, soft, evidence_refs, *,
-                           claim_statement: str | None = None) -> tuple[dict, list[dict]]:
+                           claim_statement: str | None = None,
+                           display: dict | None = None) -> tuple[dict, list[dict]]:
     arguments = []
     for name, ok in checks.items():
+        rule_ref = (profile_policy.floor_item_rule_ref(display, name)
+                    if display else
+                    f"rule:{config.EVIDENCE_POLICY_REF.removeprefix('policy:')}.floor.{name}")
         arguments.append({
             "argumentId": f"arg:{assertion_id.split(':')[-1]}:{name}",
             "supportsClaimIds": ["claim:floor"],
             "policyRef": config.EVIDENCE_POLICY_REF,
-            "ruleRef": f"rule:si.ffs.floor.{name}",
+            "ruleRef": rule_ref,
             "conclusion": "SUPPORTED" if ok else (
                 "REVIEW_REQUIRED" if name in soft else "UNSUPPORTED"),
         })
@@ -86,14 +90,22 @@ def build_case_from_checks(store, farm_ref, assertion_id, erp_id,
     durable = durable_evidence(store, evidence_refs)
     if hard_missing or not durable:
         decision = "REFUSE"
-        rationale = (f"evidence floor unmet: missing {hard_missing or ['durable proof bundle']}; "
-                     "the claim lacks the required durable proof for governed promotion")
+        missing = hard_missing or [
+            display["durableProofBundleLabel"] if display else "durable proof bundle"]
+        rationale = (profile_policy.format_display_template(
+            display, "hardMissingRationaleTemplate", missing=missing)
+            if display else
+            f"evidence floor unmet: missing {missing}; the claim lacks the required "
+            "durable proof for governed promotion")
     elif soft_missing:
         decision = "REQUIRE_REVIEW"
-        rationale = f"floor items need review: {soft_missing}"
+        rationale = (profile_policy.format_display_template(
+            display, "softMissingRationaleTemplate", missing=soft_missing)
+            if display else f"floor items need review: {soft_missing}")
     else:
         decision = "ALLOW"
-        rationale = "all SI evidence-floor items satisfied"
+        rationale = (display["operationFloorAllowRationale"] if display else
+                     "all evidence-floor items satisfied")
 
     case = {
         "schemaVersion": "ofarm.evidencesufficiencycase.v0.2",
@@ -109,7 +121,8 @@ def build_case_from_checks(store, farm_ref, assertion_id, erp_id,
             "claimType": "COMPLIANCE_CLAIM",
             "claimRef": assertion_id,
             "statement": claim_statement or
-                "this operation claim meets the SI record-keeping evidence floor",
+                (display["operationFloorClaimStatement"] if display else
+                 "this claim meets the evidence floor"),
         }],
         "arguments": arguments,
         "evidenceBundles": [{
@@ -129,16 +142,29 @@ def build_case_from_checks(store, farm_ref, assertion_id, erp_id,
         },
     }
     if decision != "ALLOW":
+        insufficiency_codes = ["MISSING_REQUIRED_EVIDENCE"]
+        if not durable:
+            insufficiency_codes.append("MISSING_PROVENANCE_LINK")
+        if display:
+            for name in soft_missing:
+                code = profile_policy.floor_item_insufficiency_reason_code(display, name)
+                if code and code not in insufficiency_codes:
+                    insufficiency_codes.append(code)
         case["outcome"]["insufficiencyReasonCodes"] = (
-            ["MISSING_REQUIRED_EVIDENCE"] +
-            (["MISSING_PROVENANCE_LINK"] if not durable else []) +
-            (["AMBIGUOUS_PRODUCT_ID"] if "product-binding" in soft_missing else []))
+            insufficiency_codes)
 
-    failures = [runtime_problem(
-        "PRODUCT_BINDING_UNRESOLVED" if "product-binding" in soft_missing
-        else "IDENTITY_UNRESOLVED",
-        "Floor item requires review", rationale, severity="WARNING")
-    ] if decision == "REQUIRE_REVIEW" else []
+    failures = []
+    if decision == "REQUIRE_REVIEW":
+        reason_code = "IDENTITY_UNRESOLVED"
+        if display:
+            for name in soft_missing:
+                reason_code = (
+                    profile_policy.floor_item_review_reason_code(display, name)
+                    or reason_code)
+                if reason_code != "IDENTITY_UNRESOLVED":
+                    break
+        failures = [runtime_problem(
+            reason_code, "Floor item requires review", rationale, severity="WARNING")]
     return case, failures
 
 
@@ -195,9 +221,11 @@ def build_floor_case(store, sub, commit_class, farm_ref, assertion_id,
     # floor-check vocabulary, so an unknown floor item fails closed at load
     # (rather than KeyError below). A missing/malformed policy raises
     # ProfilePolicyError -> the gate fails closed with a governed RuntimeProblem.
-    hard, soft = profile_policy.operation_floor(supported_checks=set(checks))
+    hard, soft, display = profile_policy.operation_floor_with_display(
+        supported_checks=set(checks))
     return build_case_from_checks(
-        store, farm_ref, assertion_id, erp_id, checks, hard, soft, evidence_refs)
+        store, farm_ref, assertion_id, erp_id, checks, hard, soft, evidence_refs,
+        display=display)
 
 
 def operation_advisories(store, sub) -> list[dict]:

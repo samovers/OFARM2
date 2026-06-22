@@ -1,0 +1,519 @@
+{
+  "suite": "conformance:ofarm2.platform-mvp.tests-1-15.v0_1",
+  "executed": true,
+  "executedAt": "2026-06-22T06:51:02.392384Z",
+  "runtimeVersion": "ofarm2-kernel-m1.0",
+  "exitStatus": 0,
+  "allPassed": true,
+  "results": [
+    {
+      "test": "kernel/tests/test_conformance.py::test_01_append_only",
+      "outcome": "passed",
+      "durationSeconds": 0.02
+    },
+    {
+      "test": "kernel/tests/test_conformance.py::test_02_default_deny",
+      "outcome": "passed",
+      "durationSeconds": 0.002
+    },
+    {
+      "test": "kernel/tests/test_conformance.py::test_03_offline_sync_idempotency",
+      "outcome": "passed",
+      "durationSeconds": 0.011
+    },
+    {
+      "test": "kernel/tests/test_conformance.py::test_04_gate_sequencing_fixtures_live",
+      "outcome": "passed",
+      "durationSeconds": 0.064
+    },
+    {
+      "test": "kernel/tests/test_conformance.py::test_05_free_text_product_refusal",
+      "outcome": "passed",
+      "durationSeconds": 0.009
+    },
+    {
+      "test": "kernel/tests/test_conformance.py::test_07_revoked_delegation_recheck",
+      "outcome": "passed",
+      "durationSeconds": 0.002
+    },
+    {
+      "test": "kernel/tests/test_conformance.py::test_08_materialization_basis_and_staleness",
+      "outcome": "passed",
+      "durationSeconds": 0.027
+    },
+    {
+      "test": "kernel/tests/test_conformance.py::test_08b_advisory_never_enters_compliance_materialization",
+      "outcome": "passed",
+      "durationSeconds": 0.017
+    },
+    {
+      "test": "kernel/tests/test_conformance.py::test_09_passport_view_refusal_disclosure",
+      "outcome": "passed",
+      "durationSeconds": 0.023
+    },
+    {
+      "test": "kernel/tests/test_conformance.py::test_10_document_assembly_freeze_trace",
+      "outcome": "passed",
+      "durationSeconds": 0.03
+    },
+    {
+      "test": "kernel/tests/test_conformance.py::test_11_inspector_read_only",
+      "outcome": "passed",
+      "durationSeconds": 0.006
+    },
+    {
+      "test": "kernel/tests/test_conformance.py::test_12_temporal_conformance",
+      "outcome": "passed",
+      "durationSeconds": 0.014
+    },
+    {
+      "test": "kernel/tests/test_conformance.py::test_13_reference_resolution",
+      "outcome": "passed",
+      "durationSeconds": 0.018
+    },
+    {
+      "test": "kernel/tests/test_conformance.py::test_14_reachability",
+      "outcome": "passed",
+      "durationSeconds": 0.017
+    },
+    {
+      "test": "kernel/tests/test_conformance.py::test_15_manifest_grounding",
+      "outcome": "passed",
+      "durationSeconds": 0.006
+    },
+    {
+      "test": "kernel/tests/test_conformance.py::test_93_governed_acceptance_semantics",
+      "outcome": "passed",
+      "durationSeconds": 0.113
+    },
+    {
+      "test": "kernel/tests/test_conformance.py::test_94_second_hostile_regressions",
+      "outcome": "passed",
+      "durationSeconds": 0.096
+    },
+    {
+      "test": "kernel/tests/test_conformance.py::test_95_hostile_review_regressions",
+      "outcome": "passed",
+      "durationSeconds": 0.177
+    },
+    {
+      "test": "kernel/tests/test_conformance.py::test_96_identity_context_invalidation_and_freshness_modes",
+      "outcome": "passed",
+      "durationSeconds": 0.135
+    },
+    {
+      "test": "kernel/tests/test_conformance.py::test_97_review_driven_regressions",
+      "outcome": "passed",
+      "durationSeconds": 0.092
+    },
+    {
+      "test": "kernel/tests/test_conformance.py::test_98_stale_registry_snapshot_recheck",
+      "outcome": "passed",
+      "durationSeconds": 0.012
+    },
+    {
+      "test": "kernel/tests/test_conformance.py::test_98z_as_of_spine_guard",
+      "outcome": "passed",
+      "durationSeconds": 0.024
+    },
+    {
+      "test": "kernel/tests/test_conformance.py::test_99_global_invariants_hold",
+      "outcome": "passed",
+      "durationSeconds": 0.003
+    }
+  ],
+  "details": {
+    "test_01": {
+      "mutationsBlocked": [
+        "UPDATE kernel_record SET tenant_ref = 'x'",
+        "DELETE FROM kernel_record",
+        "UPDATE kernel_edge SET edge_type = 'EVIDENCE'",
+        "DELETE FROM kernel_edge",
+        "UPDATE kernel_gate_log SET outcome = 'x'",
+        "DELETE FROM kernel_gate_log",
+        "DELETE FROM kernel_idempotency",
+        "DELETE FROM runtime_trace"
+      ],
+      "supersededConsequence": "conseq:29720cbb96a645d9",
+      "correctionConsequence": "conseq:b79b1fa9bf814ef2"
+    },
+    "test_02": {
+      "denyTraceId": "authztrace:912299cac5714926"
+    },
+    "test_03": {
+      "idempotencyKey": "device-demo-2:q-447c1b2af8",
+      "eventTime": "2026-06-10T07:30:00Z",
+      "recordTime": "2026-06-22T06:50:54.935561Z"
+    },
+    "test_04": {
+      "fixturesReplayed": {
+        "ai-assisted-submission-requires-human": {
+          "terminal": "REQUIRE_HUMAN_APPROVAL",
+          "liveGates": [
+            [
+              "AUTHORITY",
+              "REQUIRE_HUMAN_APPROVAL"
+            ]
+          ],
+          "replayScope": "authority-evaluator only; ingress step exercised by commit-fixture replays, not simulated here"
+        },
+        "capture-advisory-output-no-hard-truth-shortcut": {
+          "terminal": "RETAIN_DRAFT",
+          "liveGates": [
+            [
+              "INGRESS_NORMALIZATION",
+              "NORMALIZED_DRAFT"
+            ],
+            [
+              "AUTHORITY",
+              "ALLOW"
+            ],
+            [
+              "VALIDATION",
+              "PASS"
+            ],
+            [
+              "PACK_PROFILE_APPLICABILITY",
+              "APPLICABLE"
+            ],
+            [
+              "EVIDENCE_SUFFICIENCY",
+              "NOT_REQUIRED"
+            ],
+            [
+              "REVIEW_PROMOTION",
+              "RETAIN_DRAFT"
+            ]
+          ]
+        },
+        "capture-note-no-compliance-shortcut": {
+          "terminal": "RETAIN_DRAFT",
+          "liveGates": [
+            [
+              "INGRESS_NORMALIZATION",
+              "NORMALIZED_DRAFT"
+            ],
+            [
+              "AUTHORITY",
+              "ALLOW"
+            ],
+            [
+              "VALIDATION",
+              "PASS"
+            ],
+            [
+              "PACK_PROFILE_APPLICABILITY",
+              "APPLICABLE"
+            ],
+            [
+              "EVIDENCE_SUFFICIENCY",
+              "NOT_REQUIRED"
+            ],
+            [
+              "REVIEW_PROMOTION",
+              "RETAIN_DRAFT"
+            ]
+          ]
+        },
+        "compliance-assertion-reviewed-accept-promotes": {
+          "terminal": "PROMOTE_ACCEPTED",
+          "liveGates": [
+            [
+              "INGRESS_NORMALIZATION",
+              "NORMALIZED_DRAFT"
+            ],
+            [
+              "AUTHORITY",
+              "ALLOW"
+            ],
+            [
+              "VALIDATION",
+              "PASS"
+            ],
+            [
+              "PACK_PROFILE_APPLICABILITY",
+              "APPLICABLE"
+            ],
+            [
+              "EVIDENCE_SUFFICIENCY",
+              "SATISFIED"
+            ],
+            [
+              "REVIEW_PROMOTION",
+              "PROMOTE_ACCEPTED"
+            ],
+            [
+              "CURRENT_STATE_MATERIALIZATION",
+              "UPDATED"
+            ]
+          ]
+        },
+        "operation-claim-missing-evidence-stays-draft": {
+          "terminal": "RETAIN_DRAFT",
+          "liveGates": [
+            [
+              "INGRESS_NORMALIZATION",
+              "NORMALIZED_DRAFT"
+            ],
+            [
+              "AUTHORITY",
+              "ALLOW"
+            ],
+            [
+              "VALIDATION",
+              "PASS"
+            ],
+            [
+              "PACK_PROFILE_APPLICABILITY",
+              "APPLICABLE"
+            ],
+            [
+              "EVIDENCE_SUFFICIENCY",
+              "INSUFFICIENT"
+            ]
+          ]
+        },
+        "operation-claim-reviewed-accept-promotes": {
+          "terminal": "PROMOTE_ACCEPTED",
+          "liveGates": [
+            [
+              "INGRESS_NORMALIZATION",
+              "NORMALIZED_DRAFT"
+            ],
+            [
+              "AUTHORITY",
+              "ALLOW"
+            ],
+            [
+              "VALIDATION",
+              "PASS"
+            ],
+            [
+              "PACK_PROFILE_APPLICABILITY",
+              "APPLICABLE"
+            ],
+            [
+              "EVIDENCE_SUFFICIENCY",
+              "SATISFIED"
+            ],
+            [
+              "REVIEW_PROMOTION",
+              "PROMOTE_ACCEPTED"
+            ],
+            [
+              "CURRENT_STATE_MATERIALIZATION",
+              "UPDATED"
+            ]
+          ]
+        },
+        "revoked-submission-promotion-recheck-denies": {
+          "terminal": "DENY",
+          "liveGates": [
+            [
+              "AUTHORITY",
+              "DENY"
+            ]
+          ],
+          "replayScope": "authority-evaluator only; ingress step exercised by commit-fixture replays, not simulated here"
+        },
+        "submission-filing-full-gate-chain-allow": {
+          "terminal": "FILED",
+          "liveGates": {
+            "INGRESS_NORMALIZATION": "NORMALIZED_DRAFT",
+            "AUTHORITY": "ALLOW",
+            "VALIDATION": "PASS",
+            "PACK_PROFILE_APPLICABILITY": "APPLICABLE",
+            "EVIDENCE_SUFFICIENCY": "SATISFIED",
+            "REVIEW_PROMOTION": "PROMOTE_ACCEPTED",
+            "CURRENT_STATE_MATERIALIZATION": "ALLOW_REUSE",
+            "PUBLICATION_EXPORT_TRACEABILITY": "FILED"
+          },
+          "replayScope": "all 8 fixture gates asserted from live publication artifacts (mapping documented in the test source)"
+        }
+      }
+    },
+    "test_05": {
+      "noBinding": "REQUIRE_REVIEW",
+      "unresolvedBinding": "REQUIRE_REVIEW",
+      "reasonCodes": [
+        "PRODUCT_BINDING_UNRESOLVED"
+      ]
+    },
+    "test_07": {
+      "outcome": "REQUIRE_REVIEW",
+      "reasonCodes": [
+        "DELEGATION_REVOKED"
+      ]
+    },
+    "test_08": {
+      "basisMembers": 16,
+      "keyInvalidationTraces": 12,
+      "fanout": {
+        "unaffected": 1,
+        "markedStale": 1,
+        "markedInvalid": 0,
+        "keysConsidered": 2,
+        "maximumScopeExpansion": "farm-scope broadening applied for 1 trigger(s) with no dependency entry (uncertain boundary)",
+        "markedRecomputeRequired": 0
+      }
+    },
+    "test_08b": {
+      "advisoryOutcome": "RETAIN_DRAFT",
+      "registerRows": 7
+    },
+    "test_09": {
+      "exceptionRows": 3,
+      "staleProducedBy": "shipped invalidation routine fired for REFERENCE_CHANGED via the real dependency-index entry (registry-adapter integration point; the adapter's scheduler is M2)",
+      "staleExportBarred": true,
+      "missingBasisRefused": true
+    },
+    "test_10": {
+      "durableArtifactRef": "document:si.ffs.inspection-register.8c686af94724",
+      "digestVerified": true,
+      "annexedGaps": 4
+    },
+    "test_11": {
+      "readAllowed": true,
+      "writeDenied": true,
+      "revocationCutsAccess": true
+    },
+    "test_12": {
+      "eventTime": "2026-06-08T06:00:00Z",
+      "recordTime": "2026-06-22T06:50:55.126802Z",
+      "acceptedAt": "2026-06-22T06:50:55.130976Z"
+    },
+    "test_13": {
+      "danglingRefused": true,
+      "chainRefsResolved": 4
+    },
+    "test_14": {
+      "unreachable": [],
+      "atLeastOneEnforced": true,
+      "exactlyOneEnforced": true
+    },
+    "test_15": {
+      "groundingFailures": [],
+      "artifactsValidated": [
+        "OFARM_Capability_Manifest_si_ffs_pilot_v0_1.json",
+        "OFARM_ActiveArtifactSet_example_si_ffs_pilot_v0_1.json",
+        "OFARM_QuerySpecification_si_ffs_spray_register_passportview_v0_1.json",
+        "OFARM_QueryPlanIR_si_ffs_spray_register_passportview_v0_1.json",
+        "OFARM_QuerySpecification_si_ffs_inspection_register_documentassembly_v0_1.json",
+        "OFARM_QueryPlanIR_si_ffs_inspection_register_documentassembly_v0_1.json"
+      ]
+    },
+    "test_93": {
+      "closedFindings": {
+        "a-d8-queue-door": "HUMAN_APPROVAL_REQUIRED",
+        "b-routine-self-acceptance": "PROMOTE_ACCEPTED",
+        "c-rationale-required": "EVIDENCE_INSUFFICIENT",
+        "d-resolution-requires-evidence": {
+          "thinRefused": "RETAIN_DRAFT",
+          "resolvedPromotes": "PROMOTE_ACCEPTED"
+        },
+        "e-attribution-trace-linked": {
+          "authorityEdges": 2
+        }
+      }
+    },
+    "test_94": {
+      "closedFindings": {
+        "1-reviewer-principal-bound": "PROMOTE_ACCEPTED",
+        "2-actor-attribution": {
+          "unverified": "REQUIRE_REVIEW",
+          "delegated": "PROMOTE_ACCEPTED"
+        },
+        "3-containment-hardened": {
+          "tenant-target": "SCOPE_NOT_AUTHORIZED",
+          "missing-zone": "IDENTITY_UNRESOLVED",
+          "non-identity-ref": "IDENTITY_UNRESOLVED",
+          "foreign-facility": "SCOPE_NOT_AUTHORIZED"
+        },
+        "4-as-of-context": {
+          "asOfKeeps": "referencesnapshot:si.uvhvvr.ffs-reg.2026-06-11",
+          "nowUses": "referencesnapshot:si.uvhvvr.ffs-reg.hr2-newer-5b9d29e694"
+        },
+        "5-inactive-sharing-denied": true,
+        "6-invalid-window-refused": "HIGH_CONSEQUENCE_BLOCKED",
+        "7-trace-payload-consistency": true
+      }
+    },
+    "test_95": {
+      "closedFindings": {
+        "b1-actor-spoofing-denied": "ACTOR_BINDING_UNRESOLVED",
+        "b2-forged-digest-blocked": "CONFLICTING_REPLAY_BLOCKED",
+        "b3-delegation-source-bounded": [
+          "revoked-source",
+          "missing-source",
+          "wrong-action",
+          "widened-scope"
+        ],
+        "b4-cross-farm-payload-refused": "SCOPE_NOT_AUTHORIZED",
+        "b5-fake-trace-edge-rejected": true,
+        "f6-as-of-reconstruction": {
+          "asOfExcludesLater": true,
+          "asOfSurvivesLaterSupersession": true
+        },
+        "f7-inactive-party-denied": "DENY",
+        "f8-honest-stale-reason": "reused STALE materialization under ALLOW_STALE_EXPLORATORY; high-consequence use barred"
+      }
+    },
+    "test_96": {
+      "indexResolvedFlips": {
+        "field-revision": 1,
+        "crop-cycle-replant": 1,
+        "context-activation-change": 1
+      },
+      "partialBatchBroadening": "explicit",
+      "freshnessModes": {
+        "REQUIRE_FRESH": "REFUSE_USE",
+        "ALLOW_STALE_EXPLORATORY": "ALLOW_REUSE",
+        "ALLOW_STALE_EXPLORATORY+highConsequence": "REFUSE_USE",
+        "NO_CURRENT_STATE_DEPENDENCY": "ALLOW_REUSE",
+        "NO_CURRENT_STATE_DEPENDENCY+noBasis": "REFUSE_USE"
+      }
+    },
+    "test_97": {
+      "closedFindings": {
+        "compliance-self-review-routes": "REQUIRE_REVIEW",
+        "unstructured-compliance-refused": "EVIDENCE_INSUFFICIENT",
+        "non-identity-compliance-subject-refused": "IDENTITY_UNRESOLVED",
+        "durable-compliance-claim-record": "compclaim",
+        "dangling-supersession-refused": "EVIDENCE_REFERENCE_UNAVAILABLE",
+        "cross-farm-supersession-refused": "SCOPE_NOT_AUTHORIZED",
+        "unlawful-target-refused": "HIGH_CONSEQUENCE_BLOCKED",
+        "carrier-id-conflict-refused": "RETRY_CONFLICT",
+        "self-declared-acceptance-refused": "HIGH_CONSEQUENCE_BLOCKED",
+        "unpromotable-subject-refused": "IDENTITY_UNRESOLVED",
+        "trace-read-default-denied": "PERMISSION_REDACTED"
+      }
+    },
+    "test_06": {
+      "capturedAgainst": "referencesnapshot:si.uvhvvr.ffs-reg.2026-06-11",
+      "branchA": {
+        "currentAtSync": "referencesnapshot:si.uvhvvr.ffs-reg.2026-06-12-synthetic-test",
+        "outcome": "REQUIRE_REVIEW",
+        "reasonCodes": [
+          "SUPERSEDED_RECORD_USED"
+        ],
+        "identity": "confirmed by decision number; validity ended"
+      },
+      "branchB": {
+        "currentAtSync": "referencesnapshot:si.uvhvvr.ffs-reg.2026-06-12-locator-only-test",
+        "outcome": "REQUIRE_REVIEW",
+        "reasonCodes": [
+          "PRODUCT_BINDING_UNRESOLVED"
+        ],
+        "identity": "not confirmable: list surface carries no decision numbers"
+      }
+    },
+    "test_98z": {
+      "asOfRefused": "MATERIALIZATION_INVALID",
+      "nowUnaffected": "RECOMPUTE_REQUIRED"
+    },
+    "test_99": {
+      "silentAcceptances": 0
+    }
+  },
+  "honestyNote": "This file records an actual executed run against the live PostgreSQL store. Design fixtures are never presented as executed evidence (AGENTS.md rule 7). All test data is fictional and format-true (privacy rule 1)."
+}
