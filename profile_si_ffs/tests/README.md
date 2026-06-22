@@ -1,12 +1,12 @@
-# SI Profile Test Harness Scaffold
+# SI Profile Test Harness
 
-Status: scaffold only. This directory does not move existing tests, change
+Status: profile engineering-test harness. This directory does not change
 runtime behavior, alter the root pytest command, write evidence, update
 contracts, regenerate manifests, or claim Slovenia production readiness.
 
-The active root test suite remains `python -m pytest kernel/tests/ -q`. This
-directory only creates a profile-local landing zone for later SI engineering
-tests after the D6/D7 boundaries are ready.
+The active root test suite remains `python -m pytest kernel/tests/ -q`. Root
+collection stubs keep these profile-local engineering assertions discoverable
+until a later profile pytest command exists.
 
 ## Current Boundary
 
@@ -14,9 +14,11 @@ tests after the D6/D7 boundaries are ready.
   scaffold.
 - `kernel/tests/profile_harness_bridge.py` is the root-owned bridge helper that
   can validate and enumerate this descriptor.
-- No tests are moved here in D6a.
+- D6b moves SI adapter/import engineering assertions here while root collection
+  stubs keep `python -m pytest kernel/tests/ -q` working.
 - No profile test is presented as platform MVP conformance evidence.
-- No profile-local evidence writer exists in D6a.
+- No profile-local evidence writer exists.
 
-Later PRs may add test modules to the descriptor only if the root command still
-discovers the intended coverage without changing evidence-writer semantics.
+Later PRs may add more test modules to the descriptor only if the root command
+still discovers the intended coverage without changing evidence-writer
+semantics.

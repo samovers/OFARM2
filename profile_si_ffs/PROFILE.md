@@ -42,11 +42,11 @@ resolved product binding (against a dated snapshot) · dose with valid UCUM unit
   by `kernel.profile_runtime`; not a canonical contract, not OFARM Core law, and
   not tenant or deployment binding.
 
-## Test harness scaffold
+## Test harness
 
-- `tests/profile_test_harness.json` — D6a profile-local engineering-test
-  scaffold. It moves no tests, writes no evidence, and is not platform MVP
-  conformance.
+- `tests/profile_test_harness.json` — profile-local engineering-test harness.
+  It now owns the SI adapter/import test modules through root collection
+  bridges, writes no evidence, and is not platform MVP conformance.
 
 ## Shipped instances (validated by `../conformance/ofarm_pkg_contract_check.py`)
 
