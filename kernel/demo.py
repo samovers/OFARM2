@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from . import config
 from .context import now_iso
+from profile_si_ffs.test_fixtures import demo_records as si_demo_records
 
 FARM = "farm:demo.kmetija.a"
 FIELD = "field:demo.kmetija.a.gerk-1000001"
@@ -51,199 +52,33 @@ ACTION_CLASSES = [
 ]
 
 
+def _substrate_demo_refs() -> si_demo_records.DemoRefs:
+    return si_demo_records.DemoRefs(
+        farm=FARM,
+        farmer=FARMER,
+        worker=WORKER,
+        advisor=ADVISOR,
+        inspector=INSPECTOR,
+        agent=AGENT,
+        product_binding=PRODUCT_BINDING,
+        crop_binding=CROP_BINDING,
+        photo_evidence=PHOTO_EVIDENCE,
+        onboarding_evidence=ONBOARDING_EVIDENCE,
+        farmer_grant=FARMER_GRANT,
+        worker_delegation=WORKER_DELEGATION,
+        inspector_share=INSPECTOR_SHARE,
+        regsr_snapshot=REGSR_SNAPSHOT,
+        valid_from=VALID_FROM,
+        action_classes=ACTION_CLASSES,
+    )
+
+
 def substrate_records() -> list[dict]:
-    t = now_iso()
-    farm_scope = {"scopeType": "FARM", "scopeRef": FARM}
-    return [
-        {"schemaVersion": "ofarm.party.v0.1", "partyId": FARMER,
-         "partyClass": "NATURAL_PERSON", "displayName": "Demo Farmer One (fictional)",
-         "registeredIdentifiers": [
-             {"scheme": "SI:KMG-MID", "value": "100000001"},
-             {"scheme": "SI:FFS-IZKAZNICA", "value": "FFS-000001"}],
-         "partyState": "ACTIVE", "recordedAt": t},
-        {"schemaVersion": "ofarm.party.v0.1", "partyId": WORKER,
-         "partyClass": "NATURAL_PERSON", "displayName": "Demo Family Worker (fictional)",
-         "registeredIdentifiers": [{"scheme": "SI:FFS-IZKAZNICA", "value": "FFS-000002"}],
-         "partyState": "ACTIVE", "recordedAt": t},
-        {"schemaVersion": "ofarm.party.v0.1", "partyId": ADVISOR,
-         "partyClass": "NATURAL_PERSON", "displayName": "Demo Advisor (fictional)",
-         "partyState": "ACTIVE", "recordedAt": t},
-        {"schemaVersion": "ofarm.party.v0.1", "partyId": INSPECTOR,
-         "partyClass": "PUBLIC_BODY", "displayName": "Demo Inspectorate (fictional)",
-         "partyState": "ACTIVE", "recordedAt": t},
-        {"schemaVersion": "ofarm.party.v0.1", "partyId": AGENT,
-         "partyClass": "SOFTWARE_AGENT", "displayName": "Demo Capture Agent (fictional)",
-         "partyState": "ACTIVE", "recordedAt": t},
-
-        # NOTE: the Farm / Field / CropCycle / Equipment / AppliedResource
-        # IdentityRecords are NO LONGER bootstrapped here — they are committed
-        # through the gate chain as STRUCTURE_ASSERTIONs carrying typed identity
-        # payloads (see onboard() below). Parties, grants, evidence, and code
-        # bindings remain substrate (not authoritative-listed kinds).
-
-        {"schemaVersion": "ofarm.roleassignment.v0.1",
-         "roleAssignmentId": "role:demo.farmer.one.holder",
-         "partyRef": FARMER, "roleType": "FARMER",
-         "anchorScopes": [farm_scope], "validFrom": VALID_FROM},
-
-        {"schemaVersion": "ofarm.authoritygrant.v0.1",
-         "authorityGrantId": FARMER_GRANT,
-         "grantedByPartyRef": FARMER,
-         "grantTarget": {"targetKind": "PARTY", "targetRef": FARMER},
-         "targetScope": farm_scope,
-         "authorityActionClasses": ACTION_CLASSES,
-         "validFrom": VALID_FROM,
-         "inheritanceMode": "DESCENDANT_SCOPES",
-         "grantState": "ACTIVE",
-         "purpose": "holding farmer: pilot action set on own farm, accepted "
-                    "Action Matrix vocabulary"},
-
-        # REVIEW_ACCEPT is a separate grant per the matrix's posture for
-        # govern/decide actions (NO_INHERIT default, not delegable) — the
-        # D8 self-review act on the farmer's own farm, exact scope only
-        {"schemaVersion": "ofarm.authoritygrant.v0.1",
-         "authorityGrantId": "grant:demo.farmer.one.review",
-         "grantedByPartyRef": FARMER,
-         "grantTarget": {"targetKind": "PARTY", "targetRef": FARMER},
-         "targetScope": farm_scope,
-         "authorityActionClasses": ["REVIEW_ACCEPT"],
-         "validFrom": VALID_FROM,
-         "inheritanceMode": "NO_INHERIT",
-         "grantState": "ACTIVE",
-         "purpose": "self-review of routine operation claims on own farm (D8)"},
-
-        {"schemaVersion": "ofarm.authoritygrant.v0.1",
-         "authorityGrantId": "grant:demo.advisor.one.review",
-         "grantedByPartyRef": FARMER,
-         "grantTarget": {"targetKind": "PARTY", "targetRef": ADVISOR},
-         "targetScope": farm_scope,
-         # REVIEW_REJECT_OR_CONTEST is a SEPARATE govern/decide action from
-         # REVIEW_ACCEPT (Authority Action Matrix; NO_INHERIT). The distinct
-         # reviewer holds both — accept and decline; the holding farmer holds
-         # only REVIEW_ACCEPT, so a farmer-initiated reject is default-denied
-         # (G5; docs/REVIEW_DISPUTE_SEMANTICS.md §3.2).
-         "authorityActionClasses": ["REVIEW_ACCEPT", "REVIEW_REJECT_OR_CONTEST",
-                                    "RECEIVE_READ_DATA"],
-         "validFrom": VALID_FROM,
-         "inheritanceMode": "NO_INHERIT",
-         "grantState": "ACTIVE",
-         "purpose": "advisor reviews queue exceptions and non-routine claims — "
-                    "accepts or rejects (D8: self-review covers routine operation "
-                    "claims only)"},
-
-        {"schemaVersion": "ofarm.delegationgrant.v0.1",
-         "delegationGrantId": WORKER_DELEGATION,
-         "delegatingPartyRef": FARMER, "delegatePartyRef": WORKER,
-         "sourceAuthorityGrantRefs": [FARMER_GRANT],
-         "targetScope": farm_scope,
-         "authorityActionClasses": ["ASSERT_OPERATION_CLAIM", "OBSERVE_ATTACH_EVIDENCE"],
-         "validFrom": VALID_FROM,
-         "inheritanceMode": "DESCENDANT_SCOPES",
-         "delegationState": "ACTIVE",
-         "purpose": "family worker sprays under delegation (D4)"},
-
-        {"schemaVersion": "ofarm.sharinggrant.v0.1",
-         "sharingGrantId": INSPECTOR_SHARE,
-         "grantorPartyRef": FARMER, "granteePartyRef": INSPECTOR,
-         "sharedArtifactFamily": "PASSPORT_VIEW",
-         "sharedArtifactRef": "view:si.ffs.spray-register.passportview.v0_1",
-         "targetScope": farm_scope,
-         "validFrom": VALID_FROM,
-         "deliveryMode": "VIEW_ONLY",
-         "sharingState": "ACTIVE",
-         "purpose": "read-only inspector access (optional path)"},
-
-        {"schemaVersion": "ofarm.evidencerecord.v0.1",
-         "evidenceRecordId": PHOTO_EVIDENCE,
-         "evidenceClass": "PHOTO",
-         "capturedAt": "2026-06-10T07:40:00Z", "recordedAt": t,
-         "capturedByPartyRef": FARMER,
-         "anchorScopes": [farm_scope],
-         "rawAssetRef": "asset:demo.photo.0001",
-         "rawAssetDigest": "sha256:" + "ab" * 32,
-         "mediaType": "image/jpeg",
-         "evidenceState": "CAPTURED",
-         "notes": "fictional demo photo evidence"},
-
-        {"schemaVersion": "ofarm.evidencerecord.v0.1",
-         "evidenceRecordId": ONBOARDING_EVIDENCE,
-         "evidenceClass": "REGISTRY_EXTRACT",
-         "capturedAt": VALID_FROM, "recordedAt": t,
-         "capturedByPartyRef": FARMER,
-         "anchorScopes": [farm_scope],
-         "rawAssetRef": "asset:demo.registration.0001",
-         "rawAssetDigest": "sha256:" + "cd" * 32,
-         "mediaType": "application/pdf",
-         "evidenceState": "CAPTURED",
-         "notes": "fictional registration document backing onboarding structure "
-                  "assertions (no real holding/parcel values)"},
-
-        {"schemaVersion": "ofarm.agronomicidentitybinding.v0.1",
-         "agronomicIdentityBindingId": PRODUCT_BINDING,
-         "bindingRole": "CROP_PROTECTION_PRODUCT",
-         "bindingState": "VERIFIED",
-         "createdAt": t, "createdByPartyRef": FARMER,
-         "localSubject": {"subjectType": "PRODUCT_OR_INPUT",
-                          "subjectRef": "input:demo.account"},
-         "externalScheme": {"schemeRef": "scheme:si.uvhvvr.ffs-reg",
-                            "schemeRole": "CODE_BINDING",
-                            "issuerRef": "party:si.uvhvvr",
-                            "jurisdiction": "SI",
-                            "schemeVersion": "register-day-2026-06-11"},
-         "bindingValue": {"capturedLabel": "ACCOUNT",
-                          "code": "1646",
-                          "registrationRef": "U34330-50/23/16",
-                          "mappingRelation": "EXACT"},
-         "evidenceRefs": ["trace:demo.regver.account"],
-         "referenceSnapshotRefs": [REGSR_SNAPSHOT],
-         "promotionBoundary": {
-             "highConsequenceUse": "ALLOWED_WHEN_PROFILE_AND_EVIDENCE_PASS",
-             "maySupportPromotion": True,
-             "mustNotPromoteTo": ["OFARM_CORE_MEANING"]}},
-
-        {"schemaVersion": "ofarm.externalregistryverificationtrace.v0.1",
-         "externalRegistryVerificationTraceId": "trace:demo.regver.account",
-         "profileRef": config.CODE_BINDING_PROFILE_REF,
-         "verificationPurpose": "PRODUCT_AUTHORISATION_IDENTITY",
-         "createdAt": t,
-         "traceAuthorityRef": "party:si.uvhvvr",
-         "traceJurisdictionRef": "jurisdiction:SI",
-         "lookupSurface": "OTHER",
-         "queryInputs": {"freeTextInput": "ACCOUNT",
-                         "sourceQueryRef": "surface:spletni2.furs.gov.si.FFS.REGSR"},
-         "candidateCount": 1,
-         "selectedExternalId": {"externalId": "U34330-50/23/16",
-                                "externalIdRole": "AUTHORISATION_NUMBER"},
-         "selectionRationale": "single exact trade-name match in the cached snapshot; "
-                               "primary key = stevilka odlocbe + validity dates (D9)",
-         "statusObserved": "AUTHORISED",
-         "datesObserved": {"accessedAt": t,
-                           "statusEffectiveUntil": "2027-08-15T00:00:00Z"},
-         "snapshotRefs": [REGSR_SNAPSHOT],
-         "registryAvailability": "AVAILABLE",
-         "discrepancies": [],
-         "finalOutcome": "PASS",
-         "highConsequenceUse": "ALLOWED_WHEN_PASS",
-         "downstreamOutputDisposition": "PASSPORTVIEW_ALLOWED"},
-
-        {"schemaVersion": "ofarm.agronomicidentitybinding.v0.1",
-         "agronomicIdentityBindingId": CROP_BINDING,
-         "bindingRole": "CROP_SPECIES",
-         "bindingState": "VERIFIED",
-         "createdAt": t, "createdByPartyRef": FARMER,
-         "localSubject": {"subjectType": "CROP", "subjectRef": "crop:demo.vine"},
-         "externalScheme": {"schemeRef": "scheme:eppo",
-                            "schemeRole": "CODE_BINDING",
-                            "issuerRef": "party:eppo"},
-         "bindingValue": {"capturedLabel": "vinska trta (fictional demo cycle)",
-                          "code": "VITVI",
-                          "mappingRelation": "EXACT"},
-         "evidenceRefs": [PHOTO_EVIDENCE],
-         "promotionBoundary": {
-             "highConsequenceUse": "ALLOWED_WHEN_PROFILE_AND_EVIDENCE_PASS",
-             "maySupportPromotion": True,
-             "mustNotPromoteTo": ["OFARM_CORE_MEANING"]}},
-    ]
+    return si_demo_records.substrate_records(
+        recorded_at=now_iso(),
+        refs=_substrate_demo_refs(),
+        code_binding_profile_ref=config.CODE_BINDING_PROFILE_REF,
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -15,7 +15,8 @@
     "profile_si_ffs.tests.m2_si_validation_policy_tests",
     "profile_si_ffs.tests.m2_si_binding_wrapper_tests",
     "profile_si_ffs.tests.m2_si_output_lock_tests",
-    "profile_si_ffs.tests.d2_demo_fixture_refs_tests"
+    "profile_si_ffs.tests.d2_demo_fixture_refs_tests",
+    "profile_si_ffs.tests.d2_demo_fixture_records_tests"
   ],
   "notes": [
     "D6b moves SI adapter/import engineering assertions into profile-local modules.",
@@ -23,6 +24,7 @@
     "D6d moves SI binding wrapper assertions into a profile-local module while root keeps active-runtime binding integration checks.",
     "D6d moves active SI output lock assertions into a profile-local module while root keeps generic adapter/import lock tests.",
     "D2a adds profile-local demo fixture ref mirrors while kernel.demo remains the public compatibility source.",
+    "D2b moves SI substrate record construction behind profile-local helpers while kernel.demo remains the public facade.",
     "Profile engineering tests must not be presented as platform MVP conformance evidence.",
     "Root bridge stubs preserve the root pytest command and conformance evidence writer behavior."
   ]

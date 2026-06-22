@@ -27,6 +27,9 @@ until a later profile pytest command exists.
 - D2a adds profile-local demo fixture ref mirrors in
   `profile_si_ffs/test_fixtures/demo_refs.py` while keeping `kernel.demo` as the
   compatibility source.
+- D2b moves SI substrate record construction behind
+  `profile_si_ffs/test_fixtures/demo_records.py` while keeping
+  `kernel.demo.substrate_records()` as the compatibility facade.
 - No profile test is presented as platform MVP conformance evidence.
 - No profile-local evidence writer exists.
 
