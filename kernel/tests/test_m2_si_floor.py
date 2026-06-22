@@ -78,12 +78,59 @@ def _valid_display(items):
     }
 
 
-def _policy_doc(hard, soft, *, advisories=None, display=None):
+def _valid_validation():
+    return {
+        "quantityAndUnit": {
+            "requireQuantityKindAndUnitCode": True,
+            "unresolvedReasonCode": "UNIT_UNRESOLVED",
+            "unresolvedTitle": "Dose unit unresolved",
+            "unresolvedDetail": "the SI profile requires a UCUM unit code and quantity kind on every dose; unresolved units block promotion (BLOCK_PROMOTION)",
+            "unresolvedRationale": "dose without resolved UCUM unit code",
+            "implausibleDoseReviewReasonCode": "EVIDENCE_INSUFFICIENT",
+            "implausibleDoseTitle": "Implausible dose",
+            "implausibleDoseDetailTemplate": "dose value {value} is implausible; advisory flag raised and routed to advisor review, never a silent block",
+        },
+        "recordFields": {
+            "nonWholeExtentBound": {
+                "requiredLabel": "size treated",
+                "missingReasonCode": "EVIDENCE_INSUFFICIENT",
+                "missingTitle": "Partial extent unquantified",
+                "missingDetailTemplate": "executionExtent.extentClass is {extentClass} but the carrier states no area, geometryRef, extentRef, or scopeExtentBasisRef; '{requiredLabel}' is a required SI record field, so the claim stays a draft rather than silently materializing as whole-scope (the reason-code registry has no extent-completeness code — see ERRATA E-004)",
+                "missingRationale": "non-whole extent carries no quantified bound",
+            }
+        },
+        "bindings": {
+            "wrongKindRef": {
+                "disposition": "REFUSE",
+                "reasonCode": "PRODUCT_BINDING_UNRESOLVED",
+                "title": "Binding ref is not a binding",
+                "detailTemplate": "agronomicIdentityBindingRefs names {refs}, which do not resolve to AgronomicIdentityBinding records; a binding ref must be a governed binding, never another record kind",
+            },
+            "product": {
+                "bindingRole": "CROP_PROTECTION_PRODUCT",
+                "missingOrUnverifiedDisposition": "REVIEW",
+                "reasonCode": "PRODUCT_BINDING_UNRESOLVED",
+                "title": "Product binding unresolved",
+                "detailTemplate": "product binding state is {state}; the record stays committable as a claim, promotion requires review (UNRESOLVED is explicit, never silent)",
+            },
+            "crop": {
+                "bindingRole": "CROP_SPECIES",
+                "missingDisposition": "REVIEW",
+                "reasonCode": "IDENTITY_UNRESOLVED",
+                "title": "Crop binding missing",
+                "detail": "no EPPO crop binding is linked; the SI profile routes this to review",
+            },
+        },
+    }
+
+
+def _policy_doc(hard, soft, *, advisories=None, display=None, validation=None):
     return {
         "policyId": "policy:test.floor",
         "profileRef": "profile:test.floor",
         "operationFloor": {"hardItems": hard, "softItems": soft},
         "display": display or _valid_display([*hard, *soft]),
+        "validation": validation or _valid_validation(),
         "advisories": advisories or {},
     }
 
@@ -248,6 +295,7 @@ def test_floor_composition_from_package_changes_behavior(store, pipeline, monkey
             "softItems": ["product-binding"]},
         "display": _valid_display(["dose-unit", "operator", "event-time", "parcel",
                                    "crop-binding", "product-binding"]),
+        "validation": _valid_validation(),
         "advisories": {}}))
     monkeypatch.setattr(config, "EVIDENCE_POLICY_PATH", harder)
     refused = pipeline.commit(_no_crop_binding())
@@ -421,6 +469,7 @@ def test_malformed_advisories_fails_closed(store, pipeline, monkeypatch, tmp_pat
         "profileRef": "profile:test.bad-advisories",
         "operationFloor": {"hardItems": ["dose-unit"], "softItems": []},
         "display": _valid_display(["dose-unit"]),
+        "validation": _valid_validation(),
         "advisories": None}))
     monkeypatch.setattr(config, "EVIDENCE_POLICY_PATH", bad)
     r = _spray(pipeline, confirm=True)

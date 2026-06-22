@@ -4,15 +4,15 @@ exceptions, and returns a GateRefusal (already logged) to stop the chain or
 None to pass. The ValidationGate runs them in the law-pinned order; the
 sequence IS the policy and reads as one list.
 
-Refusal vs review-route is each validator's declared posture, mirroring the
-SI profile's unresolved-binding behaviors: hard floor breaks refuse
-(RETAIN_DRAFT), exceptions route to the advisor queue.
+Refusal vs review-route is each validator's declared posture, with
+profile-owned validation policy supplying the active SI pilot values and text:
+hard floor breaks refuse (RETAIN_DRAFT), exceptions route to the advisor queue.
 """
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from . import config, policy, sufficiency
+from . import config, policy, profile_policy, sufficiency
 from .context import REGSR_SNAPSHOT_PREFIX, current_reference_snapshot, parse_ts
 from .contracts import ContractViolation, UnknownContract, sha256_of
 from .problems import runtime_problem
@@ -29,6 +29,17 @@ def _refusal(ctx: GateContext, outcome: str, problem: dict,
     ctx.log("VALIDATION", outcome, reason_code=problem["reasonCode"],
             rationale=rationale or problem["detail"])
     return GateRefusal("VALIDATION", outcome, final, [problem])
+
+
+def _validation_policy_or_refusal(ctx: GateContext) -> tuple[dict | None,
+                                                             GateRefusal | None]:
+    try:
+        return profile_policy.validation_policy(), None
+    except profile_policy.ProfilePolicyError as exc:
+        return None, _refusal(ctx, "FAIL_PROFILE_POLICY", runtime_problem(
+            "PROFILE_NOT_ACTIVE", "Validation policy unavailable",
+            f"the active profile's validation policy could not be loaded ({exc}); "
+            "the claim stays a draft (fail closed)"))
 
 
 def _assert_contained(ctx: GateContext, scope_type: str, scope_ref: str,
@@ -699,28 +710,30 @@ class CarrierSemanticsValidator:
 
     def run(self, ctx: GateContext) -> GateRefusal | None:
         payload = ctx.sub["payload"]
-        # latest profile instance: the single-profile pilot ships exactly one
-        # (the spine guard in context.py refuses ambiguous AS_OF histories)
-        profile = ctx.store.find_by_kind(
-            "ofarm.agronomiccodebindingprofile.v0.1")[-1]["payload"]
+        validation, refusal = _validation_policy_or_refusal(ctx)
+        if refusal:
+            return refusal
+        quantity_policy = validation["quantityAndUnit"]
         params = payload.get("actualQuantityParameters", [])
         dose_params = [p for p in params if p["parameterRole"] in ("DOSE", "RATE")]
-        if profile["quantityAndUnitPolicy"]["requireQuantityKindAndUnitCode"]:
+        if quantity_policy["requireQuantityKindAndUnitCode"]:
             bad_units = [p for p in dose_params
                          if not policy.is_resolved_ucum_unit(p.get("unitRef"))
                          or not p.get("quantityKindRef")]
             if not dose_params or bad_units:
                 return _refusal(ctx, "FAIL_CARRIER", runtime_problem(
-                    "UNIT_UNRESOLVED", "Dose unit unresolved",
-                    "the SI profile requires a UCUM unit code and quantity kind on "
-                    "every dose; unresolved units block promotion (BLOCK_PROMOTION)"),
-                    rationale="dose without resolved UCUM unit code")
+                    quantity_policy["unresolvedReasonCode"],
+                    quantity_policy["unresolvedTitle"],
+                    quantity_policy["unresolvedDetail"]),
+                    rationale=quantity_policy["unresolvedRationale"])
         for p in dose_params:
             if not (0 < p["value"] <= policy.DOSE_SANITY_MAX):
                 ctx.review_route_reasons.append(runtime_problem(
-                    "EVIDENCE_INSUFFICIENT", "Implausible dose",
-                    f"dose value {p['value']} is implausible; advisory flag raised "
-                    "and routed to advisor review, never a silent block",
+                    quantity_policy["implausibleDoseReviewReasonCode"],
+                    quantity_policy["implausibleDoseTitle"],
+                    profile_policy.format_validation_template(
+                        quantity_policy["implausibleDoseDetailTemplate"],
+                        value=p["value"]),
                     severity="WARNING"))
         return None
 
@@ -740,6 +753,10 @@ class ExecutionExtentValidator:
     inline `area` remains an always-available bound."""
 
     def run(self, ctx: GateContext) -> GateRefusal | None:
+        validation, refusal = _validation_policy_or_refusal(ctx)
+        if refusal:
+            return refusal
+        extent_policy = validation["recordFields"]["nonWholeExtentBound"]
         extent = ctx.sub["payload"].get("executionExtent", {})
         if extent.get("extentClass") not in policy.NON_WHOLE_EXTENT_CLASSES:
             return None
@@ -748,13 +765,13 @@ class ExecutionExtentValidator:
                                     extent.get("scopeExtentBasisRef")) if r]
         if not extent.get("area") and not present_refs:
             return _refusal(ctx, "FAIL_CARRIER", runtime_problem(
-                "EVIDENCE_INSUFFICIENT", "Partial extent unquantified",
-                f"executionExtent.extentClass is {extent.get('extentClass')} but the "
-                "carrier states no area, geometryRef, extentRef, or scopeExtentBasisRef; "
-                "'size treated' is a required SI record field, so the claim stays a "
-                "draft rather than silently materializing as whole-scope (the reason-"
-                "code registry has no extent-completeness code — see ERRATA E-004)"),
-                rationale="non-whole extent carries no quantified bound")
+                extent_policy["missingReasonCode"],
+                extent_policy["missingTitle"],
+                profile_policy.format_validation_template(
+                    extent_policy["missingDetailTemplate"],
+                    extentClass=extent.get("extentClass"),
+                    requiredLabel=extent_policy["requiredLabel"])),
+                rationale=extent_policy["missingRationale"])
         # a ref bound must resolve to a RECOGNIZED extent-bound carrier kind —
         # "resolves to something" is not "resolves to the right kind of thing".
         # policy.ALLOWED_EXTENT_BOUND_KINDS recognizes the generic extent-carrier
@@ -865,6 +882,10 @@ class CodeBindingValidator:
     silently becomes compliance identity."""
 
     def run(self, ctx: GateContext) -> GateRefusal | None:
+        validation, refusal = _validation_policy_or_refusal(ctx)
+        if refusal:
+            return refusal
+        binding_policy = validation["bindings"]
         payload = ctx.sub["payload"]
         refs = payload.get("agronomicIdentityBindingRefs", [])
         # A binding ref must name a governed AgronomicIdentityBinding. A ref to
@@ -876,26 +897,42 @@ class CodeBindingValidator:
                       if (row := ctx.store.get_record(r)) is not None
                       and row["record_kind"] != sufficiency.BINDING_KIND]
         if wrong_kind:
+            wrong_policy = binding_policy["wrongKindRef"]
             return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
-                "PRODUCT_BINDING_UNRESOLVED", "Binding ref is not a binding",
-                f"agronomicIdentityBindingRefs names {wrong_kind}, which do not "
-                "resolve to AgronomicIdentityBinding records; a binding ref must "
-                "be a governed binding, never another record kind"))
+                wrong_policy["reasonCode"], wrong_policy["title"],
+                profile_policy.format_validation_template(
+                    wrong_policy["detailTemplate"], refs=wrong_kind)))
         bindings = sufficiency.resolved_bindings(ctx.store, refs)
-        crop_bindings = [b for b in bindings if b.get("bindingRole") == "CROP_SPECIES"]
-        product_binding = _verified_product_binding(ctx)
+        product_policy = binding_policy["product"]
+        crop_policy = binding_policy["crop"]
+        crop_bindings = [b for b in bindings
+                         if b.get("bindingRole") == crop_policy["bindingRole"]]
+        product_bindings = [b for b in bindings
+                            if b.get("bindingRole") == product_policy["bindingRole"]]
+        product_binding = product_bindings[0] if product_bindings else None
         if product_binding is None or product_binding["bindingState"] != "VERIFIED":
             state = product_binding["bindingState"] if product_binding else "MISSING"
-            ctx.review_route_reasons.append(runtime_problem(
-                "PRODUCT_BINDING_UNRESOLVED", "Product binding unresolved",
-                f"product binding state is {state}; the record stays committable as "
-                "a claim, promotion requires review (UNRESOLVED is explicit, never "
-                "silent)", severity="WARNING"))
+            problem = runtime_problem(
+                product_policy["reasonCode"], product_policy["title"],
+                profile_policy.format_validation_template(
+                    product_policy["detailTemplate"], state=state),
+                severity="WARNING"
+                if product_policy["missingOrUnverifiedDisposition"] == "REVIEW"
+                else "ERROR")
+            if product_policy["missingOrUnverifiedDisposition"] == "REVIEW":
+                ctx.review_route_reasons.append(problem)
+            else:
+                return _refusal(ctx, "FAIL_SEMANTIC", problem)
         if not crop_bindings:
-            ctx.review_route_reasons.append(runtime_problem(
-                "IDENTITY_UNRESOLVED", "Crop binding missing",
-                "no EPPO crop binding is linked; the SI profile routes this to review",
-                severity="WARNING"))
+            problem = runtime_problem(
+                crop_policy["reasonCode"], crop_policy["title"],
+                crop_policy["detail"],
+                severity="WARNING"
+                if crop_policy["missingDisposition"] == "REVIEW" else "ERROR")
+            if crop_policy["missingDisposition"] == "REVIEW":
+                ctx.review_route_reasons.append(problem)
+            else:
+                return _refusal(ctx, "FAIL_SEMANTIC", problem)
         return None
 
 
