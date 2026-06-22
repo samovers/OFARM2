@@ -17,8 +17,8 @@ co-located in root test files:
 - Kernel-generic behavior tests that stay root-owned;
 - active SI pilot runtime support tests that remain root-owned where they guard
   the current shipped runtime path;
-- profile-specific SI adapter, policy, descriptor, output-lock, and fixture
-  engineering tests that now live under `profile_si_ffs/` while remaining
+- profile-specific SI adapter, policy, output-lock, and fixture engineering
+  tests that now live under `profile_si_ffs/` while remaining
   discoverable by the root test command.
 
 This implemented boundary preserves current active SI pilot behavior and does
