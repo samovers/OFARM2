@@ -45,6 +45,50 @@
       }
     }
   },
+  "validation": {
+    "_note": "Profile-owned validation policy metadata for SI operation-claim validator posture. Kernel owns validator mechanics and gate order; this block owns SI profile values, text, and current review/refusal posture.",
+    "quantityAndUnit": {
+      "requireQuantityKindAndUnitCode": true,
+      "unresolvedReasonCode": "UNIT_UNRESOLVED",
+      "unresolvedTitle": "Dose unit unresolved",
+      "unresolvedDetail": "the SI profile requires a UCUM unit code and quantity kind on every dose; unresolved units block promotion (BLOCK_PROMOTION)",
+      "unresolvedRationale": "dose without resolved UCUM unit code",
+      "implausibleDoseReviewReasonCode": "EVIDENCE_INSUFFICIENT",
+      "implausibleDoseTitle": "Implausible dose",
+      "implausibleDoseDetailTemplate": "dose value {value} is implausible; advisory flag raised and routed to advisor review, never a silent block"
+    },
+    "recordFields": {
+      "nonWholeExtentBound": {
+        "requiredLabel": "size treated",
+        "missingReasonCode": "EVIDENCE_INSUFFICIENT",
+        "missingTitle": "Partial extent unquantified",
+        "missingDetailTemplate": "executionExtent.extentClass is {extentClass} but the carrier states no area, geometryRef, extentRef, or scopeExtentBasisRef; '{requiredLabel}' is a required SI record field, so the claim stays a draft rather than silently materializing as whole-scope (the reason-code registry has no extent-completeness code — see ERRATA E-004)",
+        "missingRationale": "non-whole extent carries no quantified bound"
+      }
+    },
+    "bindings": {
+      "wrongKindRef": {
+        "disposition": "REFUSE",
+        "reasonCode": "PRODUCT_BINDING_UNRESOLVED",
+        "title": "Binding ref is not a binding",
+        "detailTemplate": "agronomicIdentityBindingRefs names {refs}, which do not resolve to AgronomicIdentityBinding records; a binding ref must be a governed binding, never another record kind"
+      },
+      "product": {
+        "bindingRole": "CROP_PROTECTION_PRODUCT",
+        "missingOrUnverifiedDisposition": "REVIEW",
+        "reasonCode": "PRODUCT_BINDING_UNRESOLVED",
+        "title": "Product binding unresolved",
+        "detailTemplate": "product binding state is {state}; the record stays committable as a claim, promotion requires review (UNRESOLVED is explicit, never silent)"
+      },
+      "crop": {
+        "bindingRole": "CROP_SPECIES",
+        "missingDisposition": "REVIEW",
+        "reasonCode": "IDENTITY_UNRESOLVED",
+        "title": "Crop binding missing",
+        "detail": "no EPPO crop binding is linked; the SI profile routes this to review"
+      }
+    }
+  },
   "advisories": {
     "_note": "Advisory-twin warnings raised on an operation claim — visible, NEVER blocking, never a compliance fact, never an accepted consequence (PROFILE.md 'Advisory rule'; Kernel rule 4). The kernel computes them generically from these rules.",
     "authorisationMismatch": {

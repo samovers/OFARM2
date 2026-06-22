@@ -51,6 +51,8 @@ DISPLAY_TEXT_FIELDS = (
 )
 DISPLAY_TEMPLATE_FIELDS = frozenset({"missing"})
 RULE_REF_RE = re.compile(r"^[A-Za-z0-9._:-]+$")
+VALIDATION_DISPOSITIONS = frozenset({"REFUSE", "REVIEW"})
+VALIDATION_BINDING_ROLES = frozenset({"CROP_PROTECTION_PRODUCT", "CROP_SPECIES"})
 
 
 class ProfilePolicyError(Exception):
@@ -65,16 +67,17 @@ def _require_text(obj: dict, key: str, where: str) -> str:
     return val
 
 
-def _validate_template(label: str, template: str) -> None:
+def _validate_template(label: str, template: str, *,
+                       allowed_fields: set[str] = DISPLAY_TEMPLATE_FIELDS) -> None:
     try:
         parsed = list(string.Formatter().parse(template))
     except ValueError as exc:
-        raise ProfilePolicyError(f"display.{label} has malformed template braces") from exc
+        raise ProfilePolicyError(f"{label} has malformed template braces") from exc
     fields = {field for _, field, _, _ in parsed if field}
-    unknown = fields - DISPLAY_TEMPLATE_FIELDS
+    unknown = fields - allowed_fields
     if unknown:
         raise ProfilePolicyError(
-            f"display.{label} uses unsupported template field(s) {sorted(unknown)}")
+            f"{label} uses unsupported template field(s) {sorted(unknown)}")
 
 
 def _validate_rule_ref(value: str, where: str) -> None:
@@ -82,6 +85,35 @@ def _validate_rule_ref(value: str, where: str) -> None:
         raise ProfilePolicyError(
             f"{where} must match EvidenceSufficiencyCase ruleRef grammar "
             "^[A-Za-z0-9._:-]+$")
+
+
+def _require_bool(obj: dict, key: str, where: str) -> bool:
+    val = obj.get(key)
+    if not isinstance(val, bool):
+        raise ProfilePolicyError(f"{where}.{key} must be a boolean")
+    return val
+
+
+def _require_reason_code(obj: dict, key: str, where: str) -> str:
+    val = _require_text(obj, key, where)
+    if val not in REGISTERED_REASON_CODES:
+        raise ProfilePolicyError(f"{where}.{key} is not a registered reason code")
+    return val
+
+
+def _require_disposition(obj: dict, key: str, where: str) -> str:
+    val = _require_text(obj, key, where)
+    if val not in VALIDATION_DISPOSITIONS:
+        raise ProfilePolicyError(
+            f"{where}.{key} must be one of {sorted(VALIDATION_DISPOSITIONS)}")
+    return val
+
+
+def _require_object(obj: dict, key: str, where: str) -> dict:
+    val = obj.get(key)
+    if not isinstance(val, dict):
+        raise ProfilePolicyError(f"{where}.{key} must be a JSON object")
+    return val
 
 
 def _validate_display(doc: dict, floor_items: set[str]) -> None:
@@ -138,6 +170,79 @@ def _validate_display(doc: dict, floor_items: set[str]) -> None:
                     f"display.floorItems.{name}.{key} is not a registered code")
 
 
+def _validate_validation_policy(doc: dict) -> None:
+    validation = doc.get("validation")
+    if not isinstance(validation, dict):
+        raise ProfilePolicyError(
+            "evidence-review policy lacks a validation metadata object")
+
+    quantity = _require_object(validation, "quantityAndUnit", "validation")
+    _require_bool(quantity, "requireQuantityKindAndUnitCode",
+                  "validation.quantityAndUnit")
+    _require_reason_code(quantity, "unresolvedReasonCode",
+                         "validation.quantityAndUnit")
+    _require_text(quantity, "unresolvedTitle", "validation.quantityAndUnit")
+    _require_text(quantity, "unresolvedDetail", "validation.quantityAndUnit")
+    _require_text(quantity, "unresolvedRationale", "validation.quantityAndUnit")
+    _require_reason_code(quantity, "implausibleDoseReviewReasonCode",
+                         "validation.quantityAndUnit")
+    _require_text(quantity, "implausibleDoseTitle", "validation.quantityAndUnit")
+    _validate_template(
+        "validation.quantityAndUnit.implausibleDoseDetailTemplate",
+        _require_text(quantity, "implausibleDoseDetailTemplate",
+                      "validation.quantityAndUnit"),
+        allowed_fields={"value"})
+
+    record_fields = _require_object(validation, "recordFields", "validation")
+    extent = _require_object(record_fields, "nonWholeExtentBound",
+                             "validation.recordFields")
+    _require_text(extent, "requiredLabel",
+                  "validation.recordFields.nonWholeExtentBound")
+    _require_reason_code(extent, "missingReasonCode",
+                         "validation.recordFields.nonWholeExtentBound")
+    _require_text(extent, "missingTitle",
+                  "validation.recordFields.nonWholeExtentBound")
+    _validate_template(
+        "validation.recordFields.nonWholeExtentBound.missingDetailTemplate",
+        _require_text(extent, "missingDetailTemplate",
+                      "validation.recordFields.nonWholeExtentBound"),
+        allowed_fields={"extentClass", "requiredLabel"})
+    _require_text(extent, "missingRationale",
+                  "validation.recordFields.nonWholeExtentBound")
+
+    bindings = _require_object(validation, "bindings", "validation")
+    wrong = _require_object(bindings, "wrongKindRef", "validation.bindings")
+    _require_disposition(wrong, "disposition", "validation.bindings.wrongKindRef")
+    _require_reason_code(wrong, "reasonCode", "validation.bindings.wrongKindRef")
+    _require_text(wrong, "title", "validation.bindings.wrongKindRef")
+    _validate_template(
+        "validation.bindings.wrongKindRef.detailTemplate",
+        _require_text(wrong, "detailTemplate", "validation.bindings.wrongKindRef"),
+        allowed_fields={"refs"})
+
+    product = _require_object(bindings, "product", "validation.bindings")
+    role = _require_text(product, "bindingRole", "validation.bindings.product")
+    if role not in VALIDATION_BINDING_ROLES:
+        raise ProfilePolicyError("validation.bindings.product.bindingRole is unsupported")
+    _require_disposition(product, "missingOrUnverifiedDisposition",
+                         "validation.bindings.product")
+    _require_reason_code(product, "reasonCode", "validation.bindings.product")
+    _require_text(product, "title", "validation.bindings.product")
+    _validate_template(
+        "validation.bindings.product.detailTemplate",
+        _require_text(product, "detailTemplate", "validation.bindings.product"),
+        allowed_fields={"state"})
+
+    crop = _require_object(bindings, "crop", "validation.bindings")
+    role = _require_text(crop, "bindingRole", "validation.bindings.crop")
+    if role not in VALIDATION_BINDING_ROLES:
+        raise ProfilePolicyError("validation.bindings.crop.bindingRole is unsupported")
+    _require_disposition(crop, "missingDisposition", "validation.bindings.crop")
+    _require_reason_code(crop, "reasonCode", "validation.bindings.crop")
+    _require_text(crop, "title", "validation.bindings.crop")
+    _require_text(crop, "detail", "validation.bindings.crop")
+
+
 def load_evidence_review_policy(supported_checks=None) -> dict:
     """The active profile's evidence-review policy document, FULLY validated, or
     raise ProfilePolicyError. Validation is exhaustive on purpose: every shape the
@@ -174,6 +279,7 @@ def load_evidence_review_policy(supported_checks=None) -> dict:
                 f"operationFloor names unsupported floor item(s) {sorted(unknown)}; "
                 f"the kernel supports {sorted(supported_checks)}")
     _validate_display(doc, set(hard) | set(soft))
+    _validate_validation_policy(doc)
 
     # a PRESENT-but-non-dict advisories block (incl. JSON null) is malformed; each
     # named rule block must also be a dict, and doseRange bounds numeric + ordered
@@ -239,6 +345,16 @@ def floor_item_review_reason_code(display: dict, item: str) -> str | None:
 def format_display_template(display: dict, template_key: str, *, missing: list[str]) -> str:
     """Render a validated profile display template."""
     return display[template_key].format(missing=missing)
+
+
+def validation_policy() -> dict:
+    """Profile-owned validation metadata for active operation-claim validators."""
+    return load_evidence_review_policy()["validation"]
+
+
+def format_validation_template(template: str, **kwargs) -> str:
+    """Render a validated profile validation template."""
+    return template.format(**kwargs)
 
 
 def advisory_rules() -> dict:

@@ -1,8 +1,9 @@
 # Validator Policy Hook Design Memo
 
-Status: design memo only. This document does not move code, change runtime
-behavior, update contracts or manifests, alter tests, or change Core, Kernel, or
-Platform semantics.
+Status: implemented design memo. The metadata boundary described here is now
+implemented by `profile_si_ffs/evidence_review_policy_v0_1.json` plus generic
+loader/use code in Kernel. This document remains the design rationale and does
+not itself define OFARM law.
 
 This is the PR D4 follow-up from `manual_review_backlog_plan.md`. It records the
 profile validation hook boundary needed before SI-specific validation posture in
@@ -10,13 +11,14 @@ profile validation hook boundary needed before SI-specific validation posture in
 
 ## Goal
 
-Define the smallest profile-owned policy surface for validator behavior that is
-currently SI-specific but executed by generic Kernel validator units.
+Define the smallest profile-owned policy surface for validator behavior that was
+SI-specific in Kernel text/posture values but remains executed by generic Kernel
+validator units.
 
-The future implementation should keep the Kernel as the gate orchestrator and
-validator mechanism owner. The SI profile should own the profile policy values,
-operator-facing validation text, and unresolved-binding review/refusal posture
-where those values are country/profile-specific.
+The implementation keeps the Kernel as the gate orchestrator and validator
+mechanism owner. The SI profile owns the profile policy values, operator-facing
+validation text, and unresolved-binding review/refusal posture where those
+values are country/profile-specific.
 
 This memo is not an authorization to move validators or invent a universal
 country abstraction layer.
@@ -25,20 +27,18 @@ country abstraction layer.
 
 | Area | Current responsibility | D4 treatment |
 | --- | --- | --- |
-| `kernel/validators.py` module docstring | Names SI unresolved-binding behavior directly. | Later wording can be neutral once the active profile policy owns the named behavior. |
+| `kernel/validators.py` module docstring | Previously named SI unresolved-binding behavior directly. | Now points to active profile validation policy while keeping the active SI pilot context visible. |
 | `CarrierSemanticsValidator` | Enforces the SI quantity/unit policy: dose/rate parameters need UCUM unit code and quantity kind; implausible values route to review. | Keep validator mechanics in Kernel; move required quantity policy and messages into active profile validation policy. |
 | `ExecutionExtentValidator` | Treats "size treated" as an SI required record field for non-whole extents. | Keep extent-bound mechanics in Kernel; move required record-field label/text into active profile validation policy. |
 | `CodeBindingValidator` | Routes missing/unverified product binding and missing crop binding according to SI unresolved-binding posture. | Keep binding kind checks in Kernel; move binding-role posture, reason titles/text, and review/refusal disposition into profile validation policy. |
 | `RegistryReverificationValidator` | Uses active SI REGSR snapshot semantics and decision-number reverification language. | Leave unchanged in D4 unless a later profile hook covers registry-family reverification policy. |
-| `profile_si_ffs/evidence_review_policy_v0_1.json` | Already owns sufficiency floor composition, display metadata, and advisory rules. | Future implementation may extend this file or add a sibling validation policy file; no change in this design PR. |
+| `profile_si_ffs/evidence_review_policy_v0_1.json` | Already owned sufficiency floor composition, display metadata, and advisory rules. | D4 extends this file with validation policy metadata. |
 
 ## Proposed Policy Boundary
 
-A later implementation should introduce profile-owned validation policy metadata.
-The exact file shape can be chosen in that PR, but the preferred smallest path is
-to add a `validation` block to `profile_si_ffs/evidence_review_policy_v0_1.json`
-or a sibling `validation_policy_v0_1.json` referenced by
-`runtime_profile_descriptor.json`.
+The D4 implementation introduces profile-owned validation policy metadata by
+adding a `validation` block to
+`profile_si_ffs/evidence_review_policy_v0_1.json`.
 
 The policy should describe profile values only:
 
@@ -102,12 +102,12 @@ the same boundary and fail-closed guarantees.
 
 ## Validation Rules
 
-The future loader must fail closed with `ProfilePolicyError` when validation
-policy metadata is malformed. At minimum it should validate:
+The loader fails closed with `ProfilePolicyError` when validation policy
+metadata is malformed. At minimum it validates:
 
 - validation metadata is a JSON object when enabled;
-- dispositions are from a small closed set, such as `REFUSE`, `REVIEW`, and
-  `PASS`;
+- dispositions are from the small closed set implemented in D4: `REFUSE` and
+  `REVIEW`;
 - reason codes are registered runtime reason codes;
 - required titles, rationales, and templates are non-empty strings;
 - binding roles are from the Kernel-supported binding-role vocabulary used by
@@ -121,7 +121,7 @@ policy metadata is malformed. At minimum it should validate:
 
 ## Runtime Use
 
-A later implementation should keep the runtime behavior unchanged at first:
+The implementation keeps the runtime behavior unchanged at first:
 
 1. `ValidationGate` continues to run the same validators in the same order.
 2. Each validator continues to return `GateRefusal`, append review-route
@@ -176,13 +176,12 @@ Stop and re-plan if implementation would require:
 - weakening refusal-over-pretending behavior;
 - any Slovenia production-readiness claim.
 
-## Suggested Future PR
+## Implemented D4 Scope
 
-PR D4 implementation should be limited to:
+The implementation scope is limited to:
 
 - adding active SI validation policy metadata to profile-owned policy content;
-- extending the existing profile policy loader or adding a sibling loader with
-  fail-closed validation;
+- extending the existing profile policy loader with fail-closed validation;
 - replacing SI-specific validator text/posture values with profile-policy reads;
 - adding focused tests proving behavior is unchanged and malformed policy fails
   closed.
