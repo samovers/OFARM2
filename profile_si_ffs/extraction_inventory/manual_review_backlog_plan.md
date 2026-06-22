@@ -49,7 +49,7 @@ refusal, and authority rules.
 1. PR D1: active-profile loader design for context/config/profile instance loading.
 2. PR D3: profile policy metadata/display design for sufficiency text and rule refs.
 3. PR D4: profile validation hook design for validator-owned SI policy behavior.
-4. PR D6: profile test-harness split plan.
+4. PR D6: profile test-harness split plan, captured in `test_harness_split_plan.md`.
 5. PR D7: conformance lane split plan.
 6. PR D2: move demo payloads only after the harness plan exists.
 7. PR D5: multi-profile manifest design only if the active runtime needs more than the SI pilot.
