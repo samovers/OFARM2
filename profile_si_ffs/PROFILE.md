@@ -48,6 +48,9 @@ resolved product binding (against a dated snapshot) · dose with valid UCUM unit
   It now owns the SI adapter/import and policy metadata test modules through
   root collection bridges, writes no evidence, and is not platform MVP
   conformance.
+- `tests/m2_si_binding_fixtures.py` — profile-local fictional fixture builders
+  used by the root-owned SI binding tests; this is fixture support, not a moved
+  test module or conformance evidence.
 
 ## Shipped instances (validated by `../conformance/ofarm_pkg_contract_check.py`)
 
