@@ -7,10 +7,14 @@
   "executedEvidence": false,
   "evidenceWriter": null,
   "rootBridge": "kernel/tests/profile_harness_bridge.py",
-  "testModules": [],
+  "testModules": [
+    "profile_si_ffs.tests.m2_si_regsr_tests",
+    "profile_si_ffs.tests.m2_si_gerk_tests",
+    "profile_si_ffs.tests.m2_si_ffsnaprave_tests"
+  ],
   "notes": [
-    "D6a scaffold only; no existing tests are moved.",
+    "D6b moves SI adapter/import engineering assertions into profile-local modules.",
     "Profile engineering tests must not be presented as platform MVP conformance evidence.",
-    "The root pytest command and conformance evidence writer remain unchanged."
+    "Root bridge stubs preserve the root pytest command and conformance evidence writer behavior."
   ]
 }

@@ -8,7 +8,15 @@ import pytest
 from kernel.tests.profile_harness_bridge import (
     DEFAULT_DESCRIPTOR,
     ProfileHarnessBridgeError,
+    iter_profile_test_modules,
     load_profile_harness_descriptor,
+)
+
+
+EXPECTED_PROFILE_MODULES = (
+    "profile_si_ffs.tests.m2_si_regsr_tests",
+    "profile_si_ffs.tests.m2_si_gerk_tests",
+    "profile_si_ffs.tests.m2_si_ffsnaprave_tests",
 )
 
 
@@ -26,7 +34,13 @@ def test_profile_harness_descriptor_loads_with_strict_shape():
     harness = load_profile_harness_descriptor()
 
     assert harness.profile_package == "profile_si_ffs"
-    assert harness.test_modules == ()
+    assert harness.test_modules == EXPECTED_PROFILE_MODULES
+
+
+def test_profile_harness_declared_modules_import():
+    module_names = [module.__name__ for module in iter_profile_test_modules()]
+
+    assert module_names == list(EXPECTED_PROFILE_MODULES)
 
 
 def test_profile_harness_descriptor_rejects_wrong_schema_version(tmp_path):

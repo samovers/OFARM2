@@ -1,6 +1,6 @@
-"""SI profile engineering test harness scaffold.
+"""SI profile engineering test harness.
 
-This package is a future landing zone for profile-local engineering tests. It
-does not define OFARM law, runtime behavior, conformance evidence, or platform
-capability.
+This package contains profile-local engineering assertions run through root
+collection bridges. It does not define OFARM law, runtime behavior, conformance
+evidence, or platform capability.
 """
