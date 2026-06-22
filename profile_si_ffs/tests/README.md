@@ -21,6 +21,8 @@ until a later profile pytest command exists.
 - D6d keeps active-runtime SI binding integration checks root-owned, but moves
   SI binding wrapper assertions into `m2_si_binding_wrapper_tests.py` and shared
   fictional snapshot builders into `m2_si_binding_fixtures.py`.
+- D6d also keeps generic adapter/import lock mechanics root-owned, but moves
+  active SI output lock assertions into `m2_si_output_lock_tests.py`.
 - No profile test is presented as platform MVP conformance evidence.
 - No profile-local evidence writer exists.
 
