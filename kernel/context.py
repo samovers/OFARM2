@@ -364,6 +364,32 @@ class ContextAssembler:
         context is a synthetic fiction. ContextNotReconstructible is governed to
         MATERIALIZATION_INVALID by resolve_for_use."""
         when = bound.isoformat() if bound is not None else "NOW"
+        expected_pack = [config.ACTIVE_PROFILE.pack_ref]
+        expected_profile = [config.ACTIVE_PROFILE.profile_ref]
+        if activation_set.get("activePackRefs") != expected_pack:
+            raise ContextNotReconstructible(
+                f"context spine at {when} is incoherent: PackActivationSet activePackRefs "
+                f"{activation_set.get('activePackRefs')} do not match descriptor packRef "
+                f"{expected_pack}")
+        if activation_set.get("activeProfileRefs") != expected_profile:
+            raise ContextNotReconstructible(
+                f"context spine at {when} is incoherent: PackActivationSet activeProfileRefs "
+                f"{activation_set.get('activeProfileRefs')} do not match descriptor profileRef "
+                f"{expected_profile}")
+        if artifact_set.get("activePackRefs") != expected_pack:
+            raise ContextNotReconstructible(
+                f"context spine at {when} is incoherent: ActiveArtifactSet activePackRefs "
+                f"{artifact_set.get('activePackRefs')} do not match descriptor packRef "
+                f"{expected_pack}")
+        if artifact_set.get("activeProfileRefs") != expected_profile:
+            raise ContextNotReconstructible(
+                f"context spine at {when} is incoherent: ActiveArtifactSet activeProfileRefs "
+                f"{artifact_set.get('activeProfileRefs')} do not match descriptor profileRef "
+                f"{expected_profile}")
+        if config.ACTIVE_PROFILE.evidence_policy_ref not in artifact_set.get("activeArtifactRefs", []):
+            raise ContextNotReconstructible(
+                f"context spine at {when} is incoherent: ActiveArtifactSet does not deploy "
+                f"descriptor evidence policy {config.ACTIVE_PROFILE.evidence_policy_ref!r}")
         act_id = activation_set["packActivationSetId"]
         source = artifact_set.get("sourcePackActivationSetRefs")
         # The ActiveArtifactSet is derived FROM activation(s); the in-force one

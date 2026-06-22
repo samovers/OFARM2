@@ -8,10 +8,14 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import shutil
+from contextlib import contextmanager
 from dataclasses import replace
 import uuid
 
+import psycopg
+import psycopg.conninfo
 import pytest
 
 from kernel import config, context, demo
@@ -22,6 +26,7 @@ from kernel.profile_runtime import (
     ReferenceFamily,
     load_profile_runtime_descriptor,
 )
+from kernel.store import Store
 
 
 def _base_doc() -> dict:
@@ -49,6 +54,16 @@ def _copied_profile_root(tmp_path):
 
 def _uid():
     return uuid.uuid4().hex[:8]
+
+
+def _admin_dsn() -> str:
+    explicit = os.environ.get("OFARM_PG_ADMIN_DSN")
+    if explicit:
+        return explicit
+    socket_dir = os.environ.get("OFARM_PG_SOCKET_DIR", str(config.PACKAGE_ROOT / ".pgrun"))
+    port = os.environ.get("OFARM_PG_PORT", "54317")
+    user = os.environ.get("OFARM_PG_USER", "ofarm")
+    return f"host={socket_dir} port={port} dbname=postgres user={user}"
 
 
 def _payload(store, kind: str, record_id: str, id_field: str) -> dict:
@@ -101,6 +116,48 @@ def _insert_decoy_spine(store) -> dict:
         store.insert_record(cur, activation)
         store.insert_record(cur, artifact)
     return {"profile": profile_id, "activation": activation_id, "artifact": artifact_id}
+
+
+def _profile_instance_payload(id_field: str, expected: str) -> dict:
+    for path in config.ACTIVE_PROFILE.profile_instance_paths:
+        payload = json.loads(path.read_text())
+        if payload.get(id_field) == expected:
+            return payload
+    raise AssertionError(f"missing profile instance {id_field}={expected}")
+
+
+@contextmanager
+def _preseeded_dirty_spine_store(mutate):
+    """Fresh store where descriptor-id spine records exist before bootstrap."""
+    dbname = f"ofarm_dirty_spine_{_uid()}"
+    with psycopg.connect(_admin_dsn(), autocommit=True) as admin:
+        admin.execute(f'DROP DATABASE IF EXISTS "{dbname}"')
+        admin.execute(f'CREATE DATABASE "{dbname}"')
+    params = psycopg.conninfo.conninfo_to_dict(_admin_dsn())
+    params["dbname"] = dbname
+    store = Store(dsn=psycopg.conninfo.make_conninfo(**params))
+    try:
+        store.migrate()
+        profile = _profile_instance_payload(
+            "agronomicCodeBindingProfileId",
+            config.ACTIVE_PROFILE.code_binding_profile_ref)
+        activation = _profile_instance_payload(
+            "packActivationSetId",
+            config.ACTIVE_PROFILE.pack_activation_set_ref)
+        artifact = _profile_instance_payload(
+            "activeArtifactSetId",
+            config.ACTIVE_PROFILE.active_artifact_set_ref)
+        mutate(profile, activation, artifact)
+        with store.tx() as cur:
+            store.insert_record(cur, profile)
+            store.insert_record(cur, activation)
+            store.insert_record(cur, artifact)
+        context.bootstrap(store)
+        yield store
+    finally:
+        store.close()
+        with psycopg.connect(_admin_dsn(), autocommit=True) as admin:
+            admin.execute(f'DROP DATABASE IF EXISTS "{dbname}"')
 
 
 def test_descriptor_drives_existing_si_config_without_tenant_binding():
@@ -278,3 +335,32 @@ def test_now_context_uses_descriptor_spine_not_later_store_rows(fresh_env):
     ]
     assert decoy["artifact"] != snap["activeArtifactSetRef"]
     assert decoy["activation"] not in snap["sourcePackActivationSetRefs"]
+
+
+def test_now_context_refuses_descriptor_id_spine_with_wrong_pack_profile():
+    bad_pack = "pack:si.ffs.dirty.v0_1"
+    bad_profile = "profile:si.ffs.dirty.v0_1"
+
+    def mutate(_profile, activation, artifact):
+        activation["activePackRefs"] = [bad_pack]
+        activation["activeProfileRefs"] = [bad_profile]
+        artifact["activePackRefs"] = [bad_pack]
+        artifact["activeProfileRefs"] = [bad_profile]
+
+    with _preseeded_dirty_spine_store(mutate) as store:
+        with pytest.raises(context.ContextNotReconstructible, match="descriptor packRef"):
+            with store.tx() as cur:
+                context.ContextAssembler(store).assemble(cur, demo.FARM)
+
+
+def test_now_context_refuses_descriptor_id_spine_missing_evidence_policy():
+    def mutate(_profile, _activation, artifact):
+        artifact["activeArtifactRefs"] = [
+            ref for ref in artifact["activeArtifactRefs"]
+            if ref != config.ACTIVE_PROFILE.evidence_policy_ref
+        ]
+
+    with _preseeded_dirty_spine_store(mutate) as store:
+        with pytest.raises(context.ContextNotReconstructible, match="evidence policy"):
+            with store.tx() as cur:
+                context.ContextAssembler(store).assemble(cur, demo.FARM)

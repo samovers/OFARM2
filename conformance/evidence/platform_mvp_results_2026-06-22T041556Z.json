@@ -1,7 +1,7 @@
 {
   "suite": "conformance:ofarm2.platform-mvp.tests-1-15.v0_1",
   "executed": true,
-  "executedAt": "2026-06-21T16:29:27.502573Z",
+  "executedAt": "2026-06-22T04:15:56.518542Z",
   "runtimeVersion": "ofarm2-kernel-m1.0",
   "exitStatus": 0,
   "allPassed": true,
@@ -9,7 +9,7 @@
     {
       "test": "kernel/tests/test_conformance.py::test_01_append_only",
       "outcome": "passed",
-      "durationSeconds": 0.024
+      "durationSeconds": 0.02
     },
     {
       "test": "kernel/tests/test_conformance.py::test_02_default_deny",
@@ -19,17 +19,17 @@
     {
       "test": "kernel/tests/test_conformance.py::test_03_offline_sync_idempotency",
       "outcome": "passed",
-      "durationSeconds": 0.011
+      "durationSeconds": 0.01
     },
     {
       "test": "kernel/tests/test_conformance.py::test_04_gate_sequencing_fixtures_live",
       "outcome": "passed",
-      "durationSeconds": 0.057
+      "durationSeconds": 0.051
     },
     {
       "test": "kernel/tests/test_conformance.py::test_05_free_text_product_refusal",
       "outcome": "passed",
-      "durationSeconds": 0.009
+      "durationSeconds": 0.008
     },
     {
       "test": "kernel/tests/test_conformance.py::test_07_revoked_delegation_recheck",
@@ -39,42 +39,42 @@
     {
       "test": "kernel/tests/test_conformance.py::test_08_materialization_basis_and_staleness",
       "outcome": "passed",
-      "durationSeconds": 0.027
+      "durationSeconds": 0.025
     },
     {
       "test": "kernel/tests/test_conformance.py::test_08b_advisory_never_enters_compliance_materialization",
       "outcome": "passed",
-      "durationSeconds": 0.018
+      "durationSeconds": 0.015
     },
     {
       "test": "kernel/tests/test_conformance.py::test_09_passport_view_refusal_disclosure",
       "outcome": "passed",
-      "durationSeconds": 0.024
+      "durationSeconds": 0.021
     },
     {
       "test": "kernel/tests/test_conformance.py::test_10_document_assembly_freeze_trace",
       "outcome": "passed",
-      "durationSeconds": 0.031
+      "durationSeconds": 0.028
     },
     {
       "test": "kernel/tests/test_conformance.py::test_11_inspector_read_only",
       "outcome": "passed",
-      "durationSeconds": 0.006
+      "durationSeconds": 0.005
     },
     {
       "test": "kernel/tests/test_conformance.py::test_12_temporal_conformance",
       "outcome": "passed",
-      "durationSeconds": 0.017
+      "durationSeconds": 0.014
     },
     {
       "test": "kernel/tests/test_conformance.py::test_13_reference_resolution",
       "outcome": "passed",
-      "durationSeconds": 0.018
+      "durationSeconds": 0.017
     },
     {
       "test": "kernel/tests/test_conformance.py::test_14_reachability",
       "outcome": "passed",
-      "durationSeconds": 0.019
+      "durationSeconds": 0.017
     },
     {
       "test": "kernel/tests/test_conformance.py::test_15_manifest_grounding",
@@ -84,42 +84,42 @@
     {
       "test": "kernel/tests/test_conformance.py::test_93_governed_acceptance_semantics",
       "outcome": "passed",
-      "durationSeconds": 0.123
+      "durationSeconds": 0.111
     },
     {
       "test": "kernel/tests/test_conformance.py::test_94_second_hostile_regressions",
       "outcome": "passed",
-      "durationSeconds": 0.111
+      "durationSeconds": 0.101
     },
     {
       "test": "kernel/tests/test_conformance.py::test_95_hostile_review_regressions",
       "outcome": "passed",
-      "durationSeconds": 0.198
+      "durationSeconds": 0.186
     },
     {
       "test": "kernel/tests/test_conformance.py::test_96_identity_context_invalidation_and_freshness_modes",
       "outcome": "passed",
-      "durationSeconds": 0.125
+      "durationSeconds": 0.128
     },
     {
       "test": "kernel/tests/test_conformance.py::test_97_review_driven_regressions",
       "outcome": "passed",
-      "durationSeconds": 0.097
+      "durationSeconds": 0.111
     },
     {
       "test": "kernel/tests/test_conformance.py::test_98_stale_registry_snapshot_recheck",
       "outcome": "passed",
-      "durationSeconds": 0.014
+      "durationSeconds": 0.019
     },
     {
       "test": "kernel/tests/test_conformance.py::test_98z_as_of_spine_guard",
       "outcome": "passed",
-      "durationSeconds": 0.029
+      "durationSeconds": 0.053
     },
     {
       "test": "kernel/tests/test_conformance.py::test_99_global_invariants_hold",
       "outcome": "passed",
-      "durationSeconds": 0.003
+      "durationSeconds": 0.005
     }
   ],
   "details": {
@@ -134,16 +134,16 @@
         "DELETE FROM kernel_idempotency",
         "DELETE FROM runtime_trace"
       ],
-      "supersededConsequence": "conseq:b8c9c18ceb6c4dab",
-      "correctionConsequence": "conseq:285f33cb48664d38"
+      "supersededConsequence": "conseq:652d698763f04674",
+      "correctionConsequence": "conseq:c6b33d1fbe144f6f"
     },
     "test_02": {
-      "denyTraceId": "authztrace:95058a7cd743475a"
+      "denyTraceId": "authztrace:ef4fedbe372b4668"
     },
     "test_03": {
-      "idempotencyKey": "device-demo-2:q-a925883e5a",
+      "idempotencyKey": "device-demo-2:q-535f292451",
       "eventTime": "2026-06-10T07:30:00Z",
-      "recordTime": "2026-06-21T16:29:20.174767Z"
+      "recordTime": "2026-06-22T04:15:49.003042Z"
     },
     "test_04": {
       "fixturesReplayed": {
@@ -368,7 +368,7 @@
       "missingBasisRefused": true
     },
     "test_10": {
-      "durableArtifactRef": "document:si.ffs.inspection-register.c00e310dd78b",
+      "durableArtifactRef": "document:si.ffs.inspection-register.e8b6069f3966",
       "digestVerified": true,
       "annexedGaps": 4
     },
@@ -379,8 +379,8 @@
     },
     "test_12": {
       "eventTime": "2026-06-08T06:00:00Z",
-      "recordTime": "2026-06-21T16:29:20.364302Z",
-      "acceptedAt": "2026-06-21T16:29:20.370215Z"
+      "recordTime": "2026-06-22T04:15:49.172051Z",
+      "acceptedAt": "2026-06-22T04:15:49.176038Z"
     },
     "test_13": {
       "danglingRefused": true,
@@ -431,7 +431,7 @@
         },
         "4-as-of-context": {
           "asOfKeeps": "referencesnapshot:si.uvhvvr.ffs-reg.2026-06-11",
-          "nowUses": "referencesnapshot:si.uvhvvr.ffs-reg.hr2-newer-3491785bf1"
+          "nowUses": "referencesnapshot:si.uvhvvr.ffs-reg.hr2-newer-47ae7cd1b5"
         },
         "5-inactive-sharing-denied": true,
         "6-invalid-window-refused": "HIGH_CONSEQUENCE_BLOCKED",
