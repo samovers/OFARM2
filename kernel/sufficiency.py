@@ -75,8 +75,7 @@ def build_case_from_checks(store, farm_ref, assertion_id, erp_id,
     arguments = []
     for name, ok in checks.items():
         rule_ref = (profile_policy.floor_item_rule_ref(display, name)
-                    if display else
-                    f"rule:{config.EVIDENCE_POLICY_REF.removeprefix('policy:')}.floor.{name}")
+                    if display else f"rule:si.ffs.floor.{name}")
         arguments.append({
             "argumentId": f"arg:{assertion_id.split(':')[-1]}:{name}",
             "supportsClaimIds": ["claim:floor"],
@@ -105,7 +104,7 @@ def build_case_from_checks(store, farm_ref, assertion_id, erp_id,
     else:
         decision = "ALLOW"
         rationale = (display["operationFloorAllowRationale"] if display else
-                     "all evidence-floor items satisfied")
+                     "all SI evidence-floor items satisfied")
 
     case = {
         "schemaVersion": "ofarm.evidencesufficiencycase.v0.2",
@@ -122,7 +121,7 @@ def build_case_from_checks(store, farm_ref, assertion_id, erp_id,
             "claimRef": assertion_id,
             "statement": claim_statement or
                 (display["operationFloorClaimStatement"] if display else
-                 "this claim meets the evidence floor"),
+                 "this operation claim meets the SI record-keeping evidence floor"),
         }],
         "arguments": arguments,
         "evidenceBundles": [{
@@ -150,12 +149,15 @@ def build_case_from_checks(store, farm_ref, assertion_id, erp_id,
                 code = profile_policy.floor_item_insufficiency_reason_code(display, name)
                 if code and code not in insufficiency_codes:
                     insufficiency_codes.append(code)
+        elif "product-binding" in soft_missing:
+            insufficiency_codes.append("AMBIGUOUS_PRODUCT_ID")
         case["outcome"]["insufficiencyReasonCodes"] = (
             insufficiency_codes)
 
     failures = []
     if decision == "REQUIRE_REVIEW":
-        reason_code = "IDENTITY_UNRESOLVED"
+        reason_code = ("PRODUCT_BINDING_UNRESOLVED" if "product-binding" in soft_missing
+                       else "IDENTITY_UNRESOLVED")
         if display:
             for name in soft_missing:
                 reason_code = (

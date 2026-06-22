@@ -278,6 +278,59 @@ def test_display_metadata_changes_case_text_without_changing_decision(
         for item in OPERATION_FLOOR_CHECKS}
 
 
+def test_compliance_assertion_fallback_rule_refs_remain_unchanged(store, pipeline):
+    statement = "fictional demo: compliance fallback trace regression"
+    r = pipeline.commit({
+        "commitClass": "COMPLIANCE_ASSERTION",
+        "actingPartyRef": demo.FARMER,
+        "farmRef": demo.FARM,
+        "idempotencyKey": f"p5-compliance-fallback:{uid()}",
+        "eventTime": "2026-06-10T09:00:00Z",
+        "evidenceRefs": [demo.PHOTO_EVIDENCE],
+        "payload": {"complianceClaim": {
+            "statement": statement,
+            "assertedStatus": "CLAIMED_COMPLIANT",
+            "governingRuleRefs": [config.EVIDENCE_POLICY_REF],
+            "subjectScopeRef": demo.FARM}},
+        "confirmAccept": True,
+    })
+    assert r["decisionOutcome"] == "REQUIRE_REVIEW"
+    case = _case_for_result(store, r)
+    assert case["claims"][0]["statement"] == statement
+    assert {a["ruleRef"] for a in case["arguments"]} == {
+        "rule:si.ffs.floor.claim-statement",
+        "rule:si.ffs.floor.asserted-status",
+        "rule:si.ffs.floor.governing-rules",
+        "rule:si.ffs.floor.subject-resolves",
+        "rule:si.ffs.floor.evidence-bundle",
+    }
+
+
+def test_queue_acceptance_fallback_outputs_remain_unchanged(store, pipeline):
+    queued = pipeline.commit(demo.spray_submission(
+        f"p5-acceptance-fallback:{uid()}", erp_id=f"erp:p5.accept.{uid()}",
+        confirm=False))
+    assert queued["decisionOutcome"] == "RETAIN_DRAFT"
+    accepted = pipeline.commit({
+        "commitClass": "GOVERNANCE_DECISION",
+        "actingPartyRef": demo.FARMER,
+        "farmRef": demo.FARM,
+        "idempotencyKey": f"p5-acceptance-review:{uid()}",
+        "decisionTime": "2026-06-10T10:00:00Z",
+        "reviewTargetAssertionRef": queued["emittedAssertionRecordRefs"][0],
+        "reviewRationale": "self-review of a routine operation claim meeting the floor",
+    })
+    assert accepted["decisionOutcome"] == "PROMOTE_ACCEPTED"
+    case = _case_for_result(store, accepted)
+    assert case["claims"][0]["statement"] == \
+        "this operation claim meets the SI record-keeping evidence floor"
+    assert case["outcome"]["rationale"] == "all SI evidence-floor items satisfied"
+    assert {a["ruleRef"] for a in case["arguments"]} == {
+        "rule:si.ffs.floor.durable-evidence",
+        "rule:si.ffs.floor.route-reasons-resolved",
+    }
+
+
 # ---------------------------------------------------------------------------
 # Part B — non-blocking advisory-twin warnings (Step 3; durable record deferred)
 # ---------------------------------------------------------------------------
