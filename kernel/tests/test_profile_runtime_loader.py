@@ -12,6 +12,7 @@ import os
 import shutil
 from contextlib import contextmanager
 from dataclasses import replace
+from pathlib import Path
 import uuid
 
 import psycopg
@@ -207,6 +208,32 @@ def test_descriptor_rejects_bad_profile_instance_path(tmp_path):
 
     with pytest.raises(ProfileRuntimeError, match=r"\.\."):
         _load_modified(tmp_path, mutate)
+
+
+def test_descriptor_wraps_malformed_profile_instance_json(tmp_path):
+    root, doc = _copied_profile_root(tmp_path)
+    bad_rel = doc["profileInstanceFiles"][0]
+    (root / bad_rel).write_text("{not valid json", encoding="utf-8")
+
+    with pytest.raises(ProfileRuntimeError, match=bad_rel):
+        load_profile_runtime_descriptor(root)
+
+
+def test_descriptor_wraps_unreadable_profile_instance_json(tmp_path, monkeypatch):
+    root, doc = _copied_profile_root(tmp_path)
+    bad_rel = doc["profileInstanceFiles"][0]
+    bad_path = (root / bad_rel).resolve()
+    original_read_text = Path.read_text
+
+    def fail_profile_instance_read(self, *args, **kwargs):
+        if self.resolve() == bad_path:
+            raise OSError("permission denied by test")
+        return original_read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", fail_profile_instance_read)
+
+    with pytest.raises(ProfileRuntimeError, match=bad_rel):
+        load_profile_runtime_descriptor(root)
 
 
 def test_descriptor_rejects_malformed_refs(tmp_path):
