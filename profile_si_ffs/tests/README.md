@@ -16,6 +16,8 @@ until a later profile pytest command exists.
   can validate and enumerate this descriptor.
 - D6b moves SI adapter/import engineering assertions here while root collection
   stubs keep `python -m pytest kernel/tests/ -q` working.
+- D6c moves SI policy metadata engineering assertions here under the same
+  root-bridge pattern.
 - No profile test is presented as platform MVP conformance evidence.
 - No profile-local evidence writer exists.
 
