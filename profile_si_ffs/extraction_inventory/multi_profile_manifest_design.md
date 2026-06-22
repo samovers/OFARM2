@@ -71,6 +71,12 @@ A future multi-profile manifest design may use one of these approaches:
 The smallest safe future path is likely separate profile manifests plus a root
 index that only lists manifests for active runtime profiles.
 
+## Navigation-Only Naming Guard
+
+D5b may add a `profile navigation index`, not a profile manifest. Any such
+artifact must be labeled as navigation-only and non-capability in both
+machine-visible metadata and prose.
+
 ## Grounding Rules
 
 Any future implementation must prove:
@@ -122,7 +128,7 @@ Stop and re-plan if implementation would require:
 | Future PR | Scope | Stop condition |
 | --- | --- | --- |
 | D5a | Add a manifest design-to-implementation checklist and root/profile manifest terminology, still docs-only. | Stop if maintainers ask for implementation instead. |
-| D5b | Add a non-runtime profile manifest index only if it is explicitly labeled as navigation, not capability. | Stop if it could be read as runtime support. |
+| D5b | Add a profile navigation index only if machine-visible metadata and prose label it as navigation-only and non-capability. | Stop if it could be read as runtime support or capability. |
 | D5c | Add profile-manifest generation hooks after multiple active runtime profiles exist. | Stop unless active descriptors, tests, and evidence lanes exist. |
 | D5d | Split manifest tests after D6 harness support exists. | Stop if root conformance test 15 changes meaning. |
 
