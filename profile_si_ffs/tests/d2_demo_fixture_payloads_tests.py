@@ -1,19 +1,22 @@
-"""D2c — SI demo payload builders are profile-local behind `kernel.demo`.
+"""D2c/D2d — SI demo payload builders are profile-local behind `kernel.demo`.
 
 Engineering tests only. They compare the compatibility facade with the
 profile-local payload helper for representative identity, structure, operation,
-and submission payloads.
+and submission payloads, and pin the D2d profile-local test facade against the
+public `kernel.demo` compatibility facade.
 """
 from __future__ import annotations
 
 from kernel import config, demo
-from profile_si_ffs.test_fixtures import demo_payloads
+from profile_si_ffs.test_fixtures import demo as profile_demo
+from profile_si_ffs.test_fixtures import demo_payloads, demo_refs
 
 
 __all__ = [
     "test_d2_identity_payload_facades_match_profile_helpers",
     "test_d2_structure_submission_facade_matches_profile_helper",
     "test_d2_spray_payload_and_submission_facades_match_profile_helpers",
+    "test_d2d_profile_demo_facade_matches_kernel_demo",
 ]
 
 
@@ -112,4 +115,81 @@ def test_d2_spray_payload_and_submission_facades_match_profile_helpers():
         erp_id="erp:submission",
         channel="API",
         payload_kwargs=kwargs,
+    )
+
+
+def test_d2d_profile_demo_facade_matches_kernel_demo(monkeypatch):
+    monkeypatch.setattr(demo, "now_iso", lambda: FIXED_NOW)
+    monkeypatch.setattr(profile_demo, "now_iso", lambda: FIXED_NOW)
+
+    for name in demo_refs.DEMO_REF_NAMES:
+        assert name in profile_demo.__all__
+        assert getattr(profile_demo, name) == getattr(demo, name)
+
+    assert profile_demo.substrate_records() == demo.substrate_records()
+
+    assert profile_demo.farm_identity_payload("farm-payload:d2d") == \
+        demo.farm_identity_payload("farm-payload:d2d")
+    assert profile_demo.field_identity_payload(
+        "field-payload:d2d", display_name="D2d Field", area_value=3.2) == \
+        demo.field_identity_payload(
+            "field-payload:d2d", display_name="D2d Field", area_value=3.2)
+    assert profile_demo.cropcycle_identity_payload(
+        "cycle-payload:d2d", auto_created=False) == \
+        demo.cropcycle_identity_payload("cycle-payload:d2d", auto_created=False)
+    assert profile_demo.equipment_identity_payload("equipment-payload:d2d") == \
+        demo.equipment_identity_payload("equipment-payload:d2d")
+    assert profile_demo.appliedresource_identity_payload("resource-payload:d2d") == \
+        demo.appliedresource_identity_payload("resource-payload:d2d")
+
+    payload = demo.farm_identity_payload("farm-payload:d2d-structure")
+    assert profile_demo.structure_submission(
+        payload,
+        idem_key="idem:d2d-structure",
+        actor_ref=demo.ADVISOR,
+        confirm=False,
+        supersedes="consequence:d2d-old",
+        event_time="2099-05-01T00:00:00Z",
+        evidence_refs=["evidence:d2d-custom"],
+    ) == demo.structure_submission(
+        payload,
+        idem_key="idem:d2d-structure",
+        actor_ref=demo.ADVISOR,
+        confirm=False,
+        supersedes="consequence:d2d-old",
+        event_time="2099-05-01T00:00:00Z",
+        evidence_refs=["evidence:d2d-custom"],
+    )
+
+    kwargs = {
+        "event_start": "2099-06-01T06:00:00Z",
+        "event_end": "2099-06-01T07:00:00Z",
+        "binding_refs": [demo.PRODUCT_BINDING],
+        "evidence_refs": [demo.PHOTO_EVIDENCE],
+        "dose_value": 1.1,
+        "unit_ref": "scheme:ucum:mL/har",
+    }
+    assert profile_demo.spray_payload(
+        "erp:d2d-payload",
+        actor_ref=demo.WORKER,
+        **kwargs,
+    ) == demo.spray_payload(
+        "erp:d2d-payload",
+        actor_ref=demo.WORKER,
+        **kwargs,
+    )
+    assert profile_demo.spray_submission(
+        "idem:d2d-spray",
+        actor_ref=demo.WORKER,
+        confirm=False,
+        erp_id="erp:d2d-submission",
+        channel="API",
+        **kwargs,
+    ) == demo.spray_submission(
+        "idem:d2d-spray",
+        actor_ref=demo.WORKER,
+        confirm=False,
+        erp_id="erp:d2d-submission",
+        channel="API",
+        **kwargs,
     )
