@@ -173,14 +173,18 @@ def test_missing_display_metadata_fails_closed(store, pipeline, monkeypatch, tmp
     "bad-template-field",
     "missing-floor-item",
     "extra-floor-item",
+    "bad-prefix-grammar",
     "bad-rule-ref-scope",
+    "bad-rule-ref-grammar",
     "bad-insufficiency-code",
     "bad-review-code",
 ], ids=[
     "bad-template-field",
     "missing-floor-item",
     "extra-floor-item",
+    "bad-prefix-grammar",
     "bad-rule-ref-scope",
+    "bad-rule-ref-grammar",
     "bad-insufficiency-code",
     "bad-review-code",
 ])
@@ -199,8 +203,14 @@ def test_malformed_display_metadata_fails_closed(
             "ruleRef": "rule:test.floor.banana",
             "label": "banana",
         }
+    elif variant == "bad-prefix-grammar":
+        display["ruleRefPrefix"] = "rule:test floor"
+        for item, block in display["floorItems"].items():
+            block["ruleRef"] = f"rule:test floor.{item}"
     elif variant == "bad-rule-ref-scope":
         display["floorItems"]["dose-unit"]["ruleRef"] = "rule:other.floor.dose-unit"
+    elif variant == "bad-rule-ref-grammar":
+        display["floorItems"]["dose-unit"]["ruleRef"] = "rule:test.floor.bad ref"
     elif variant == "bad-insufficiency-code":
         display["floorItems"]["product-binding"]["insufficiencyReasonCode"] = \
             "NOT_A_CASE_CODE"

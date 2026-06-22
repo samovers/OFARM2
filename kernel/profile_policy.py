@@ -16,6 +16,7 @@ file is authoritative — changing it changes behavior without touching kernel/.
 from __future__ import annotations
 
 import json
+import re
 import string
 
 from . import config
@@ -49,6 +50,7 @@ DISPLAY_TEXT_FIELDS = (
     "durableProofBundleLabel",
 )
 DISPLAY_TEMPLATE_FIELDS = frozenset({"missing"})
+RULE_REF_RE = re.compile(r"^[A-Za-z0-9._:-]+$")
 
 
 class ProfilePolicyError(Exception):
@@ -75,6 +77,13 @@ def _validate_template(label: str, template: str) -> None:
             f"display.{label} uses unsupported template field(s) {sorted(unknown)}")
 
 
+def _validate_rule_ref(value: str, where: str) -> None:
+    if not RULE_REF_RE.fullmatch(value):
+        raise ProfilePolicyError(
+            f"{where} must match EvidenceSufficiencyCase ruleRef grammar "
+            "^[A-Za-z0-9._:-]+$")
+
+
 def _validate_display(doc: dict, floor_items: set[str]) -> None:
     display = doc.get("display")
     if not isinstance(display, dict):
@@ -88,6 +97,7 @@ def _validate_display(doc: dict, floor_items: set[str]) -> None:
         raise ProfilePolicyError("display.ruleRefPrefix must start with 'rule:'")
     if prefix.endswith("."):
         raise ProfilePolicyError("display.ruleRefPrefix must not end with '.'")
+    _validate_rule_ref(prefix, "display.ruleRefPrefix")
     _validate_template("hardMissingRationaleTemplate",
                        display["hardMissingRationaleTemplate"])
     _validate_template("softMissingRationaleTemplate",
@@ -114,6 +124,7 @@ def _validate_display(doc: dict, floor_items: set[str]) -> None:
             if not isinstance(rule_ref, str) or not rule_ref.strip():
                 raise ProfilePolicyError(
                     f"display.floorItems.{name}.ruleRef must be a non-empty string")
+            _validate_rule_ref(rule_ref, f"display.floorItems.{name}.ruleRef")
             if not rule_ref.startswith(prefix + "."):
                 raise ProfilePolicyError(
                     f"display.floorItems.{name}.ruleRef must be under {prefix!r}")
