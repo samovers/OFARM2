@@ -335,6 +335,9 @@ def _validate_active_spine(doc: dict[str, Any], payloads: list[dict[str, Any]]) 
         raise ProfileRuntimeError("ActiveArtifactSet does not deploy the evidence policy")
     if profile.get("profileState") != "ACTIVE":
         raise ProfileRuntimeError("code-binding profile is not ACTIVE")
+    if (profile.get("profileScope") or {}).get("packRefs") != [doc["packRef"]]:
+        raise ProfileRuntimeError(
+            "code-binding profile profileScope.packRefs must match descriptor packRef")
 
 
 def _payload_by_id(payloads: list[dict[str, Any]], id_field: str, expected: str) -> dict[str, Any]:

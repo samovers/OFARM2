@@ -390,6 +390,11 @@ class ContextAssembler:
             raise ContextNotReconstructible(
                 f"context spine at {when} is incoherent: ActiveArtifactSet does not deploy "
                 f"descriptor evidence policy {config.ACTIVE_PROFILE.evidence_policy_ref!r}")
+        if (profile.get("profileScope") or {}).get("packRefs") != expected_pack:
+            raise ContextNotReconstructible(
+                f"context spine at {when} is incoherent: AgronomicCodeBindingProfile "
+                f"profileScope.packRefs {(profile.get('profileScope') or {}).get('packRefs')} "
+                f"do not match descriptor packRef {expected_pack}")
         act_id = activation_set["packActivationSetId"]
         source = artifact_set.get("sourcePackActivationSetRefs")
         # The ActiveArtifactSet is derived FROM activation(s); the in-force one

@@ -243,6 +243,18 @@ def test_descriptor_rejects_multiple_active_packs_or_profiles(tmp_path):
         load_profile_runtime_descriptor(root)
 
 
+def test_descriptor_rejects_code_binding_profile_wrong_pack_scope(tmp_path):
+    root, doc = _copied_profile_root(tmp_path)
+    profile_name = "OFARM_AgronomicCodeBindingProfile_si_ffs_v0_1.json"
+    profile_path = root / profile_name
+    profile = json.loads(profile_path.read_text())
+    profile["profileScope"]["packRefs"] = ["pack:si.ffs.wrong.v0_1"]
+    profile_path.write_text(json.dumps(profile), encoding="utf-8")
+
+    with pytest.raises(ProfileRuntimeError, match="profileScope.packRefs"):
+        load_profile_runtime_descriptor(root)
+
+
 def test_descriptor_rejects_missing_active_spine_ref(tmp_path):
     with pytest.raises(ProfileRuntimeError, match="expected exactly one"):
         _load_modified(
@@ -362,5 +374,15 @@ def test_now_context_refuses_descriptor_id_spine_missing_evidence_policy():
 
     with _preseeded_dirty_spine_store(mutate) as store:
         with pytest.raises(context.ContextNotReconstructible, match="evidence policy"):
+            with store.tx() as cur:
+                context.ContextAssembler(store).assemble(cur, demo.FARM)
+
+
+def test_now_context_refuses_descriptor_id_profile_wrong_pack_scope():
+    def mutate(profile, _activation, _artifact):
+        profile["profileScope"]["packRefs"] = ["pack:si.ffs.dirty.v0_1"]
+
+    with _preseeded_dirty_spine_store(mutate) as store:
+        with pytest.raises(context.ContextNotReconstructible, match="profileScope.packRefs"):
             with store.tx() as cur:
                 context.ContextAssembler(store).assemble(cur, demo.FARM)

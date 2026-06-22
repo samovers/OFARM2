@@ -1,7 +1,7 @@
 {
   "suite": "conformance:ofarm2.platform-mvp.tests-1-15.v0_1",
   "executed": true,
-  "executedAt": "2026-06-22T04:15:56.518542Z",
+  "executedAt": "2026-06-22T04:37:38.284480Z",
   "runtimeVersion": "ofarm2-kernel-m1.0",
   "exitStatus": 0,
   "allPassed": true,
@@ -9,7 +9,7 @@
     {
       "test": "kernel/tests/test_conformance.py::test_01_append_only",
       "outcome": "passed",
-      "durationSeconds": 0.02
+      "durationSeconds": 0.021
     },
     {
       "test": "kernel/tests/test_conformance.py::test_02_default_deny",
@@ -19,12 +19,12 @@
     {
       "test": "kernel/tests/test_conformance.py::test_03_offline_sync_idempotency",
       "outcome": "passed",
-      "durationSeconds": 0.01
+      "durationSeconds": 0.012
     },
     {
       "test": "kernel/tests/test_conformance.py::test_04_gate_sequencing_fixtures_live",
       "outcome": "passed",
-      "durationSeconds": 0.051
+      "durationSeconds": 0.055
     },
     {
       "test": "kernel/tests/test_conformance.py::test_05_free_text_product_refusal",
@@ -39,42 +39,42 @@
     {
       "test": "kernel/tests/test_conformance.py::test_08_materialization_basis_and_staleness",
       "outcome": "passed",
-      "durationSeconds": 0.025
+      "durationSeconds": 0.026
     },
     {
       "test": "kernel/tests/test_conformance.py::test_08b_advisory_never_enters_compliance_materialization",
       "outcome": "passed",
-      "durationSeconds": 0.015
+      "durationSeconds": 0.016
     },
     {
       "test": "kernel/tests/test_conformance.py::test_09_passport_view_refusal_disclosure",
       "outcome": "passed",
-      "durationSeconds": 0.021
+      "durationSeconds": 0.022
     },
     {
       "test": "kernel/tests/test_conformance.py::test_10_document_assembly_freeze_trace",
       "outcome": "passed",
-      "durationSeconds": 0.028
+      "durationSeconds": 0.029
     },
     {
       "test": "kernel/tests/test_conformance.py::test_11_inspector_read_only",
       "outcome": "passed",
-      "durationSeconds": 0.005
+      "durationSeconds": 0.006
     },
     {
       "test": "kernel/tests/test_conformance.py::test_12_temporal_conformance",
       "outcome": "passed",
-      "durationSeconds": 0.014
+      "durationSeconds": 0.015
     },
     {
       "test": "kernel/tests/test_conformance.py::test_13_reference_resolution",
       "outcome": "passed",
-      "durationSeconds": 0.017
+      "durationSeconds": 0.019
     },
     {
       "test": "kernel/tests/test_conformance.py::test_14_reachability",
       "outcome": "passed",
-      "durationSeconds": 0.017
+      "durationSeconds": 0.019
     },
     {
       "test": "kernel/tests/test_conformance.py::test_15_manifest_grounding",
@@ -84,42 +84,42 @@
     {
       "test": "kernel/tests/test_conformance.py::test_93_governed_acceptance_semantics",
       "outcome": "passed",
-      "durationSeconds": 0.111
+      "durationSeconds": 0.112
     },
     {
       "test": "kernel/tests/test_conformance.py::test_94_second_hostile_regressions",
       "outcome": "passed",
-      "durationSeconds": 0.101
+      "durationSeconds": 0.099
     },
     {
       "test": "kernel/tests/test_conformance.py::test_95_hostile_review_regressions",
       "outcome": "passed",
-      "durationSeconds": 0.186
+      "durationSeconds": 0.182
     },
     {
       "test": "kernel/tests/test_conformance.py::test_96_identity_context_invalidation_and_freshness_modes",
       "outcome": "passed",
-      "durationSeconds": 0.128
+      "durationSeconds": 0.127
     },
     {
       "test": "kernel/tests/test_conformance.py::test_97_review_driven_regressions",
       "outcome": "passed",
-      "durationSeconds": 0.111
+      "durationSeconds": 0.089
     },
     {
       "test": "kernel/tests/test_conformance.py::test_98_stale_registry_snapshot_recheck",
       "outcome": "passed",
-      "durationSeconds": 0.019
+      "durationSeconds": 0.017
     },
     {
       "test": "kernel/tests/test_conformance.py::test_98z_as_of_spine_guard",
       "outcome": "passed",
-      "durationSeconds": 0.053
+      "durationSeconds": 0.029
     },
     {
       "test": "kernel/tests/test_conformance.py::test_99_global_invariants_hold",
       "outcome": "passed",
-      "durationSeconds": 0.005
+      "durationSeconds": 0.003
     }
   ],
   "details": {
@@ -134,16 +134,16 @@
         "DELETE FROM kernel_idempotency",
         "DELETE FROM runtime_trace"
       ],
-      "supersededConsequence": "conseq:652d698763f04674",
-      "correctionConsequence": "conseq:c6b33d1fbe144f6f"
+      "supersededConsequence": "conseq:413d3843c8894eee",
+      "correctionConsequence": "conseq:75fa89a9c8e94f18"
     },
     "test_02": {
-      "denyTraceId": "authztrace:ef4fedbe372b4668"
+      "denyTraceId": "authztrace:54e5f6378cdf426a"
     },
     "test_03": {
-      "idempotencyKey": "device-demo-2:q-535f292451",
+      "idempotencyKey": "device-demo-2:q-c0edfc0657",
       "eventTime": "2026-06-10T07:30:00Z",
-      "recordTime": "2026-06-22T04:15:49.003042Z"
+      "recordTime": "2026-06-22T04:37:31.010750Z"
     },
     "test_04": {
       "fixturesReplayed": {
@@ -368,7 +368,7 @@
       "missingBasisRefused": true
     },
     "test_10": {
-      "durableArtifactRef": "document:si.ffs.inspection-register.e8b6069f3966",
+      "durableArtifactRef": "document:si.ffs.inspection-register.199d191a2a98",
       "digestVerified": true,
       "annexedGaps": 4
     },
@@ -379,8 +379,8 @@
     },
     "test_12": {
       "eventTime": "2026-06-08T06:00:00Z",
-      "recordTime": "2026-06-22T04:15:49.172051Z",
-      "acceptedAt": "2026-06-22T04:15:49.176038Z"
+      "recordTime": "2026-06-22T04:37:31.186870Z",
+      "acceptedAt": "2026-06-22T04:37:31.191019Z"
     },
     "test_13": {
       "danglingRefused": true,
@@ -431,7 +431,7 @@
         },
         "4-as-of-context": {
           "asOfKeeps": "referencesnapshot:si.uvhvvr.ffs-reg.2026-06-11",
-          "nowUses": "referencesnapshot:si.uvhvvr.ffs-reg.hr2-newer-47ae7cd1b5"
+          "nowUses": "referencesnapshot:si.uvhvvr.ffs-reg.hr2-newer-2a79b2db43"
         },
         "5-inactive-sharing-denied": true,
         "6-invalid-window-refused": "HIGH_CONSEQUENCE_BLOCKED",
