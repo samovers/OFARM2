@@ -22,6 +22,7 @@ This PR does not move files, change runtime behavior, update contracts, update m
 - `evidence_policy_metadata_display_design.md` records the PR D3 metadata/display boundary needed before sufficiency rule refs and SI-facing text can move into profile policy content.
 - `validator_policy_hook_design.md` records the PR D4 validation-policy hook boundary needed before SI-specific validator posture can move into profile policy content.
 - `test_harness_split_plan.md` records the PR D6 test-harness boundary needed before SI-specific tests and demo fixtures can move under the profile package.
+- `conformance_lane_split_plan.md` records the PR D7 boundary between root conformance, executed evidence, profile engineering tests, and profile design cases.
 
 ## Classification Vocabulary
 
