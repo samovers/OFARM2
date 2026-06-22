@@ -23,6 +23,5 @@ engineering tests. It keeps the same `demo.*` call shape for tests while
 leaving `kernel.demo` as the public compatibility facade for root callers and
 examples.
 
-Later D2 steps may move fixture construction behind profile-local helpers while
-keeping `kernel.demo` as the compatibility facade until root callers are safely
-migrated.
+Later D2e-style cleanup may shrink `kernel.demo` only after root callers are
+safely migrated and facade compatibility is proven unchanged.
