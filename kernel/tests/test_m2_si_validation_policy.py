@@ -113,6 +113,32 @@ def test_wrong_kind_binding_ref_uses_profile_validation_policy(
     assert "evidence:demo.spray.photo.1" in problem["detail"]
 
 
+def test_wrong_kind_binding_ref_review_disposition_fails_closed(
+        pipeline, monkeypatch, tmp_path):
+    doc = _policy_doc()
+    doc["validation"]["bindings"]["wrongKindRef"]["disposition"] = "REVIEW"
+    _use_policy(monkeypatch, tmp_path, doc)
+
+    r = _spray(pipeline, confirm=True, binding_refs=[demo.PHOTO_EVIDENCE])
+    assert r["decisionOutcome"] == "RETAIN_DRAFT"
+    problem = r["problems"][0]
+    assert problem["reasonCode"] == "PROFILE_NOT_ACTIVE"
+    assert "wrongKindRef.disposition must be REFUSE" in problem["detail"]
+
+
+def test_unknown_validation_policy_key_fails_closed(
+        pipeline, monkeypatch, tmp_path):
+    doc = _policy_doc()
+    doc["validation"]["quantityAndUnit"]["extraSofteningKey"] = True
+    _use_policy(monkeypatch, tmp_path, doc)
+
+    r = _spray(pipeline, confirm=True)
+    assert r["decisionOutcome"] == "RETAIN_DRAFT"
+    problem = r["problems"][0]
+    assert problem["reasonCode"] == "PROFILE_NOT_ACTIVE"
+    assert "unsupported key" in problem["detail"]
+
+
 def test_malformed_validation_policy_fails_closed(pipeline, monkeypatch, tmp_path):
     doc = _policy_doc()
     doc["validation"]["quantityAndUnit"]["unresolvedReasonCode"] = \

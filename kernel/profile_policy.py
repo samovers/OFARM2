@@ -116,6 +116,13 @@ def _require_object(obj: dict, key: str, where: str) -> dict:
     return val
 
 
+def _reject_unknown_keys(obj: dict, allowed: set[str], where: str) -> None:
+    unknown = set(obj) - allowed
+    if unknown:
+        raise ProfilePolicyError(
+            f"{where} contains unsupported key(s) {sorted(unknown)}")
+
+
 def _validate_display(doc: dict, floor_items: set[str]) -> None:
     display = doc.get("display")
     if not isinstance(display, dict):
@@ -175,8 +182,21 @@ def _validate_validation_policy(doc: dict) -> None:
     if not isinstance(validation, dict):
         raise ProfilePolicyError(
             "evidence-review policy lacks a validation metadata object")
+    _reject_unknown_keys(validation,
+                         {"_note", "quantityAndUnit", "recordFields", "bindings"},
+                         "validation")
 
     quantity = _require_object(validation, "quantityAndUnit", "validation")
+    _reject_unknown_keys(quantity, {
+        "requireQuantityKindAndUnitCode",
+        "unresolvedReasonCode",
+        "unresolvedTitle",
+        "unresolvedDetail",
+        "unresolvedRationale",
+        "implausibleDoseReviewReasonCode",
+        "implausibleDoseTitle",
+        "implausibleDoseDetailTemplate",
+    }, "validation.quantityAndUnit")
     _require_bool(quantity, "requireQuantityKindAndUnitCode",
                   "validation.quantityAndUnit")
     _require_reason_code(quantity, "unresolvedReasonCode",
@@ -194,8 +214,17 @@ def _validate_validation_policy(doc: dict) -> None:
         allowed_fields={"value"})
 
     record_fields = _require_object(validation, "recordFields", "validation")
+    _reject_unknown_keys(record_fields, {"nonWholeExtentBound"},
+                         "validation.recordFields")
     extent = _require_object(record_fields, "nonWholeExtentBound",
                              "validation.recordFields")
+    _reject_unknown_keys(extent, {
+        "requiredLabel",
+        "missingReasonCode",
+        "missingTitle",
+        "missingDetailTemplate",
+        "missingRationale",
+    }, "validation.recordFields.nonWholeExtentBound")
     _require_text(extent, "requiredLabel",
                   "validation.recordFields.nonWholeExtentBound")
     _require_reason_code(extent, "missingReasonCode",
@@ -211,8 +240,17 @@ def _validate_validation_policy(doc: dict) -> None:
                   "validation.recordFields.nonWholeExtentBound")
 
     bindings = _require_object(validation, "bindings", "validation")
+    _reject_unknown_keys(bindings, {"wrongKindRef", "product", "crop"},
+                         "validation.bindings")
     wrong = _require_object(bindings, "wrongKindRef", "validation.bindings")
-    _require_disposition(wrong, "disposition", "validation.bindings.wrongKindRef")
+    _reject_unknown_keys(wrong, {"disposition", "reasonCode", "title",
+                                 "detailTemplate"},
+                         "validation.bindings.wrongKindRef")
+    wrong_disposition = _require_disposition(
+        wrong, "disposition", "validation.bindings.wrongKindRef")
+    if wrong_disposition != "REFUSE":
+        raise ProfilePolicyError(
+            "validation.bindings.wrongKindRef.disposition must be REFUSE")
     _require_reason_code(wrong, "reasonCode", "validation.bindings.wrongKindRef")
     _require_text(wrong, "title", "validation.bindings.wrongKindRef")
     _validate_template(
@@ -221,6 +259,13 @@ def _validate_validation_policy(doc: dict) -> None:
         allowed_fields={"refs"})
 
     product = _require_object(bindings, "product", "validation.bindings")
+    _reject_unknown_keys(product, {
+        "bindingRole",
+        "missingOrUnverifiedDisposition",
+        "reasonCode",
+        "title",
+        "detailTemplate",
+    }, "validation.bindings.product")
     role = _require_text(product, "bindingRole", "validation.bindings.product")
     if role not in VALIDATION_BINDING_ROLES:
         raise ProfilePolicyError("validation.bindings.product.bindingRole is unsupported")
@@ -234,6 +279,13 @@ def _validate_validation_policy(doc: dict) -> None:
         allowed_fields={"state"})
 
     crop = _require_object(bindings, "crop", "validation.bindings")
+    _reject_unknown_keys(crop, {
+        "bindingRole",
+        "missingDisposition",
+        "reasonCode",
+        "title",
+        "detail",
+    }, "validation.bindings.crop")
     role = _require_text(crop, "bindingRole", "validation.bindings.crop")
     if role not in VALIDATION_BINDING_ROLES:
         raise ProfilePolicyError("validation.bindings.crop.bindingRole is unsupported")

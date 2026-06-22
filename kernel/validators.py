@@ -898,14 +898,6 @@ class CodeBindingValidator:
                       and row["record_kind"] != sufficiency.BINDING_KIND]
         if wrong_kind:
             wrong_policy = binding_policy["wrongKindRef"]
-            problem = runtime_problem(
-                wrong_policy["reasonCode"], wrong_policy["title"],
-                profile_policy.format_validation_template(
-                    wrong_policy["detailTemplate"], refs=wrong_kind),
-                severity="WARNING" if wrong_policy["disposition"] == "REVIEW" else "ERROR")
-            if wrong_policy["disposition"] == "REVIEW":
-                ctx.review_route_reasons.append(problem)
-                return None
             return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
                 wrong_policy["reasonCode"], wrong_policy["title"],
                 profile_policy.format_validation_template(

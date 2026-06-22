@@ -108,6 +108,9 @@ metadata is malformed. At minimum it validates:
 - validation metadata is a JSON object when enabled;
 - dispositions are from the small closed set implemented in D4: `REFUSE` and
   `REVIEW`;
+- wrong-kind binding references are always fixed to `REFUSE` because a field
+  that names agronomic identity bindings must not point to another record kind
+  and continue as review-routed input;
 - reason codes are registered runtime reason codes;
 - required titles, rationales, and templates are non-empty strings;
 - binding roles are from the Kernel-supported binding-role vocabulary used by
@@ -115,7 +118,8 @@ metadata is malformed. At minimum it validates:
 - any rule refs or policy refs match the same ref grammar used by the relevant
   contracts;
 - numeric ranges, if declared for dose sanity, are numbers and ordered;
-- unknown policy keys either fail closed or are explicitly namespaced as notes;
+- unknown validation-policy keys fail closed; the only note/extension key
+  currently allowed in the validation block is top-level `_note`;
 - missing policy required by the active profile never falls back to permissive
   generic behavior.
 
