@@ -51,6 +51,9 @@ resolved product binding (against a dated snapshot) · dose with valid UCUM unit
 - `tests/m2_si_binding_fixtures.py` — profile-local fictional fixture builders
   used by the root-owned SI binding tests; this is fixture support, not a moved
   test module or conformance evidence.
+- `test_fixtures/demo_refs.py` — profile-local compatibility mirror for current
+  `kernel.demo` fixture refs; this starts the D2 fixture lane without moving
+  `kernel/demo.py` or changing payload behavior.
 
 ## Shipped instances (validated by `../conformance/ofarm_pkg_contract_check.py`)
 
