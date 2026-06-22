@@ -47,7 +47,9 @@ engineering tests.
 | Inherited gate fixtures | `conformance/fixtures/gate_sequencing/**` | Canonical input fixtures replayed by platform tests. | Yes, protected root fixtures. |
 | NL profile design cases | `profile_nl_go_glmc7_2026/conformance/nl_glmc7_2026_cases.md` | Profile-slice design cases, not executed platform evidence. | Yes, profile-local design lane. |
 | SI extraction planning | `profile_si_ffs/extraction_inventory/**` | Planning/inventory docs for SI extraction work. | Yes, profile-local planning lane. |
-| SI engineering tests | `kernel/tests/test_m2_si_*.py` and related mixed tests | Active SI pilot engineering coverage. | Root-owned until D6 harness exists. |
+| SI profile engineering modules | `profile_si_ffs/tests/**` | Profile-owned engineering test bodies for SI adapters, policy metadata, binding wrappers, output locks, and demo fixture helpers. They are not platform MVP executed evidence. | Yes, profile-owned engineering coverage. |
+| Root collection bridges for SI profile tests | `kernel/tests/test_profile_*.py` and bridge imports in selected root `kernel/tests/test_*.py` files | Root pytest discovery support for profile engineering modules. These bridges preserve the default root command but do not make profile tests platform MVP evidence. | Yes, root-owned discovery support. |
+| Root active-runtime SI integration checks | Selected mixed/root tests such as `kernel/tests/test_m2_si_bindings.py` | Remaining active SI pilot integration coverage whose assertions have not been moved or split into profile-only modules. | Yes, root-owned until a later explicit split. |
 
 ## Future Lane Definitions
 
