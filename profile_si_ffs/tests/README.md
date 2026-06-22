@@ -24,6 +24,9 @@ until a later profile pytest command exists.
   fictional snapshot builders into `m2_si_binding_fixtures.py`.
 - D6d also keeps generic adapter/import lock mechanics root-owned, but moves
   active SI output lock assertions into `m2_si_output_lock_tests.py`.
+- D2a adds profile-local demo fixture ref mirrors in
+  `profile_si_ffs/test_fixtures/demo_refs.py` while keeping `kernel.demo` as the
+  compatibility source.
 - No profile test is presented as platform MVP conformance evidence.
 - No profile-local evidence writer exists.
 

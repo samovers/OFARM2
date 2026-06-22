@@ -23,6 +23,7 @@ EXPECTED_PROFILE_MODULES = (
     "profile_si_ffs.tests.m2_si_validation_policy_tests",
     "profile_si_ffs.tests.m2_si_binding_wrapper_tests",
     "profile_si_ffs.tests.m2_si_output_lock_tests",
+    "profile_si_ffs.tests.d2_demo_fixture_refs_tests",
 )
 ROOT_TESTS_DIR = Path(__file__).resolve().parent
 
