@@ -26,6 +26,7 @@ This PR does not move files, change runtime behavior, update contracts, update m
 - `demo_fixture_migration_plan.md` records the PR D2 boundary for moving SI-shaped demo payloads and fixture builders after profile harness support exists.
 - `multi_profile_manifest_design.md` records the PR D5 manifest boundary needed before any multi-profile runtime capability claims.
 - `manifest_implementation_checklist.md` records the D5a checklist and terminology for future manifest implementation work.
+- `profile_navigation_index.json` is a machine-labeled navigation-only, non-capability index for these profile-local planning documents.
 
 ## Classification Vocabulary
 
