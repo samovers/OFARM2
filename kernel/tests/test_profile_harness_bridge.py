@@ -19,6 +19,7 @@ EXPECTED_PROFILE_MODULES = (
     "profile_si_ffs.tests.m2_si_ffsnaprave_tests",
     "profile_si_ffs.tests.m2_si_floor_tests",
     "profile_si_ffs.tests.m2_si_validation_policy_tests",
+    "profile_si_ffs.tests.m2_si_binding_wrapper_tests",
 )
 
 
