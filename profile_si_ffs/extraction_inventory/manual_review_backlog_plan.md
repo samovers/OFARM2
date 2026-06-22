@@ -52,7 +52,7 @@ refusal, and authority rules.
 4. PR D6: profile test-harness split plan, captured in `test_harness_split_plan.md`.
 5. PR D7: conformance lane split plan, captured in `conformance_lane_split_plan.md`.
 6. PR D2: demo fixture migration plan, captured in `demo_fixture_migration_plan.md`.
-7. PR D5: multi-profile manifest design only if the active runtime needs more than the SI pilot.
+7. PR D5: multi-profile manifest design, captured in `multi_profile_manifest_design.md`.
 8. Comment-only rewording PRs after runtime-sensitive decisions are complete.
 
 ## Stop Conditions
