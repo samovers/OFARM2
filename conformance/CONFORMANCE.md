@@ -85,7 +85,7 @@ conformance assumptions.
 | 14 | Reachability: every authoritative record reachable from exactly one `PromotionTrace` | Kernel reachability invariant |
 | 15 | Manifest grounding: Capability Manifest claims match the `ActiveArtifactSet` it references (adapt canonical manifest-grounding runners) | PLATFORM capability posture |
 
-Result reporting follows the canonical runner style: one JSON results file per run, checked into the pilot evidence lane — design fixtures must never be presented as executed evidence (readiness-gate condition 4).
+Result reporting follows the canonical runner style: one JSON results file per run, checked into `PLATFORM_MVP_EXECUTED_EVIDENCE` — design fixtures must never be presented as executed evidence (readiness-gate condition 4).
 
 Profile-local engineering tests may be collected by root bridge files, but they
 remain engineering coverage unless a future D7 implementation deliberately
