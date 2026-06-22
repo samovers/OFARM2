@@ -2,6 +2,26 @@
 
 Two layers: **package self-check** (runs now) and the **platform MVP suite** (runs against the M1+ implementation).
 
+## Conformance lanes
+
+These lanes keep root conformance, profile design material, and profile
+engineering tests from being read as the same kind of evidence:
+
+| Lane | Owner | Current artifact(s) | Meaning |
+|---|---|---|---|
+| `PACKAGE_SELF_CHECK` | Root `conformance/` | `conformance/ofarm_pkg_contract_check.py` | Repository/package parse, digest, and authored-instance validation. |
+| `PLATFORM_MVP_EXECUTED_EVIDENCE` | Root `conformance/evidence/` | `platform_mvp_results_*.json` | Timestamped output from the named platform MVP suite only. |
+| `PLATFORM_MVP_FIXTURES` | Root `conformance/fixtures/` | Gate-sequencing fixtures | Canonical fixtures executed by root platform tests. |
+| `PROFILE_DESIGN_CASES` | Profile packages | NL GO + GLMC 7 design cases | Profile design inventories, not executed evidence. |
+| `PROFILE_ENGINEERING_TESTS` | Profile packages with root bridges | SI profile pytest modules | Engineering coverage discovered by root pytest, not platform MVP evidence. |
+| `EXTRACTION_PLANNING` | `profile_si_ffs/extraction_inventory/` | SI extraction plans and inventories | Planning material, not runtime behavior or evidence. |
+
+The detailed D7 lane design lives in
+`profile_si_ffs/extraction_inventory/conformance_lane_split_plan.md`. This root
+document is only the navigation and guard surface. It does not rename the
+platform MVP suite, move evidence, change pytest collection, or create a
+profile-local evidence writer.
+
 ## Package self-check (now)
 
 ```
@@ -66,3 +86,7 @@ conformance assumptions.
 | 15 | Manifest grounding: Capability Manifest claims match the `ActiveArtifactSet` it references (adapt canonical manifest-grounding runners) | PLATFORM capability posture |
 
 Result reporting follows the canonical runner style: one JSON results file per run, checked into the pilot evidence lane — design fixtures must never be presented as executed evidence (readiness-gate condition 4).
+
+Profile-local engineering tests may be collected by root bridge files, but they
+remain engineering coverage unless a future D7 implementation deliberately
+creates a distinct profile executed-evidence lane and writer.
