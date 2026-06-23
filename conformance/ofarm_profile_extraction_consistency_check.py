@@ -225,10 +225,10 @@ def check_certification_plan_not_stale(failures: list[str]) -> None:
         )
     else:
         contracts_lane = normalized(contracts_row[1])
-        if contracts_lane == "`CONTRACT_COMMENT_REVIEW`":
+        if "CONTRACT_COMMENT_REVIEW" in contracts_lane:
             failures.append(
                 "core_country_neutrality_certification_plan.md treats "
-                "`contracts/**` as current `CONTRACT_COMMENT_REVIEW`"
+                "`contracts/**` as current or mixed `CONTRACT_COMMENT_REVIEW`"
             )
         if "APPARENTLY_NEUTRAL_PENDING_AUDIT" not in contracts_lane:
             failures.append(
