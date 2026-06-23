@@ -14,7 +14,7 @@ These documents do not move files, change runtime behavior, update contracts, up
 ## Files
 
 - `si_core_leakage_inventory.md` records the initial Slovenian-specific Core-facing leakage snapshot for traceability.
-- `si_migration_map.md` classifies each finding as move, generic rewording, keep-with-example-removed, manual review, or do-not-touch.
+- `si_migration_map.md` records the initial migration classification for each finding.
 - `core_neutral_rewording_candidates.md` records the initial neutral wording candidates for traceability.
 - `followup_pr_plan.md` records the original move-focused PR B and neutrality-hardening PR C split for traceability.
 - `manual_review_backlog_plan.md` records the SI manual-review backlog status, implemented D-lane follow-ups, remaining guarded work, stop conditions, and validation expectations.

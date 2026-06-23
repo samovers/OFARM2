@@ -34,13 +34,13 @@
       "id": "si_core_leakage_inventory",
       "path": "profile_si_ffs/extraction_inventory/si_core_leakage_inventory.md",
       "kind": "inventory",
-      "status": "docs-only extraction finding list"
+      "status": "docs-only initial extraction finding list"
     },
     {
       "id": "si_migration_map",
       "path": "profile_si_ffs/extraction_inventory/si_migration_map.md",
       "kind": "classification",
-      "status": "docs-only migration classification"
+      "status": "docs-only initial migration classification"
     },
     {
       "id": "core_neutral_rewording_candidates",
