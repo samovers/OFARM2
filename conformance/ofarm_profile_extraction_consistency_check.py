@@ -46,6 +46,27 @@ def section_text(text: str, heading: str) -> str:
     return match.group("body") if match else ""
 
 
+def table_rows(text: str, heading: str) -> list[list[str]]:
+    """Parse simple pipe-table rows from a markdown section."""
+    rows: list[list[str]] = []
+    for line in section_text(text, heading).splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("|") or not stripped.endswith("|"):
+            continue
+        cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+        if all(re.fullmatch(r":?-{3,}:?", cell) for cell in cells):
+            continue
+        rows.append(cells)
+    return rows
+
+
+def table_row_by_first_cell(text: str, heading: str, first_cell: str) -> list[str] | None:
+    for row in table_rows(text, heading):
+        if row and normalized(row[0]) == normalized(first_cell):
+            return row
+    return None
+
+
 def require_phrase(
     failures: list[str],
     *,
@@ -191,20 +212,66 @@ def check_contract_core_seed_terms(failures: list[str]) -> None:
 
 def check_certification_plan_not_stale(failures: list[str]) -> None:
     text = read(CERT_PLAN)
-    stale_snippets = (
-        "Contract comments mentioning KMG-MID/GERK | SI examples may remain",
-        "`contracts/**` | `CONTRACT_COMMENT_REVIEW`",
-    )
-    for snippet in stale_snippets:
-        if snippet in text:
+    contracts_row = table_row_by_first_cell(text, "Surfaces To Certify", "`contracts/**`")
+    if contracts_row is None:
+        failures.append(
+            "core_country_neutrality_certification_plan.md missing "
+            "`contracts/**` row in Surfaces To Certify"
+        )
+    elif len(contracts_row) < 2:
+        failures.append(
+            "core_country_neutrality_certification_plan.md malformed "
+            "`contracts/**` row in Surfaces To Certify"
+        )
+    else:
+        contracts_lane = normalized(contracts_row[1])
+        if contracts_lane == "`CONTRACT_COMMENT_REVIEW`":
             failures.append(
-                "core_country_neutrality_certification_plan.md retains stale "
-                f"blocker text: {snippet}"
+                "core_country_neutrality_certification_plan.md treats "
+                "`contracts/**` as current `CONTRACT_COMMENT_REVIEW`"
+            )
+        if "APPARENTLY_NEUTRAL_PENDING_AUDIT" not in contracts_lane:
+            failures.append(
+                "core_country_neutrality_certification_plan.md `contracts/**` "
+                "row does not show the current apparently-neutral lane"
+            )
+
+    current_blocker_row = table_row_by_first_cell(
+        text,
+        "Likely Remaining Blockers",
+        "Contract comments mentioning KMG-MID/GERK",
+    )
+    if current_blocker_row is not None:
+        failures.append(
+            "core_country_neutrality_certification_plan.md still lists "
+            "contract comments mentioning KMG-MID/GERK as a likely blocker"
+        )
+
+    historical_row = table_row_by_first_cell(
+        text,
+        "Closed Or Historical Blockers",
+        "Core contract comments mentioning KMG-MID/GERK",
+    )
+    if historical_row is None:
+        failures.append(
+            "core_country_neutrality_certification_plan.md missing closed "
+            "historical contract-comment blocker row"
+        )
+    elif len(historical_row) < 3:
+        failures.append(
+            "core_country_neutrality_certification_plan.md malformed closed "
+            "historical contract-comment blocker row"
+        )
+    else:
+        historical_text = normalized(" ".join(historical_row[1:]))
+        if "Closed by profile-neutral comment wording" not in historical_text:
+            failures.append(
+                "core_country_neutrality_certification_plan.md historical "
+                "contract-comment row does not record the closed resolution"
             )
 
     required_snippets = (
         "Closed Or Historical Blockers",
-        "former KMG-MID/GERK comments were neutralized",
     )
     for snippet in required_snippets:
         if snippet not in text:
