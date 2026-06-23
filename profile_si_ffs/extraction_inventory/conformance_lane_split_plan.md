@@ -31,7 +31,8 @@ The first D7 documentation boundary is now present in root conformance docs:
   to this plan.
 - `conformance/evidence/README.md` labels `platform_mvp_results_*.json` as
   `PLATFORM_MVP_EXECUTED_EVIDENCE`, not package self-check output, profile
-  design cases, profile engineering tests, or extraction-planning material.
+  design cases, profile engineering tests, or extraction inventory/status
+  material.
 
 This implemented boundary does not create a profile-local executed-evidence
 lane, evidence writer, pytest command, or platform conformance claim for profile
