@@ -527,6 +527,7 @@ def check_country_term_review_records(failures: list[str]) -> None:
                 f"{phrase!r}"
             )
 
+    seed_scan_terms: list[str] = []
     seed_scan = payload.get("seedScan")
     if not isinstance(seed_scan, dict):
         failures.append(f"{rel(REVIEW_RECORDS)} seedScan must be an object")
