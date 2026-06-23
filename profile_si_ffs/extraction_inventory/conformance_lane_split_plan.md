@@ -6,8 +6,8 @@ move conformance files, change test execution, regenerate evidence, update
 contracts or manifests, alter Core, Kernel, or Platform semantics, or claim
 Slovenia production readiness.
 
-This is the PR D7 follow-up from `manual_review_backlog_plan.md`. It defines the
-future boundary between package-wide conformance, active SI pilot executed
+This began as the PR D7 follow-up from `manual_review_backlog_plan.md`. It
+records the boundary between package-wide conformance, active SI pilot executed
 evidence, profile-local engineering tests, and profile design cases.
 
 ## Goal
@@ -59,7 +59,7 @@ engineering tests.
 | `PLATFORM_MVP_EXECUTED_EVIDENCE` | Root `conformance/evidence/` | Actual executed platform MVP result JSON from the named root suite. | Design inventories, dry-run notes, or profile-only test output. |
 | `PLATFORM_MVP_FIXTURES` | Root `conformance/fixtures/` | Canonical or inherited fixtures that root platform tests execute. | Profile-local law or profile-specific fixture catalogs unless explicitly bridged. |
 | `PROFILE_DESIGN_CASES` | Profile package directories | Design case inventories like the NL GLMC 7 slice cases. | Claims that the cases executed as platform evidence. |
-| `PROFILE_ENGINEERING_TESTS` | Future profile harness from D6 | Profile-local pytest coverage for SI adapters, policy metadata, and fixture helpers. | Platform MVP evidence labels unless explicitly run and recorded by a defined evidence writer. |
+| `PROFILE_ENGINEERING_TESTS` | Profile harness from D6 | Profile-local pytest coverage for SI adapters, policy metadata, and fixture helpers. | Platform MVP evidence labels unless explicitly run and recorded by a defined evidence writer. |
 | `PROFILE_EXECUTED_EVIDENCE` | Future profile-local evidence lane | Clearly labeled executed profile test outputs, if a future harness creates them. | Root platform MVP evidence or package self-check output. |
 | `EXTRACTION_PLANNING` | `profile_si_ffs/extraction_inventory/` | Plans, inventories, migration maps, and stop conditions. | Runtime behavior, manifests, contracts, or executed evidence. |
 
@@ -99,14 +99,15 @@ Design cases must not claim:
 
 ## Relationship To D6
 
-D6 defines where SI tests may move after a profile harness exists. D7 defines how
-evidence and conformance labels should be kept honest when that happens.
+D6 records the implemented profile test harness, moved SI engineering-test
+modules, and root discovery bridges. D7 defines how evidence and conformance
+labels should stay honest around that harness.
 
 The order should be:
 
 1. Keep current root conformance unchanged.
-2. Add a D6 profile test harness scaffold without evidence changes.
-3. Move SI engineering tests only when root CI still discovers them.
+2. Keep the implemented D6 profile test harness scaffold evidence-neutral.
+3. Keep moved SI engineering tests discoverable from the root test command.
 4. Add profile-local executed evidence only after this D7 lane has an approved
    writer shape.
 5. Keep root conformance documentation limited to the implemented lane map until
@@ -129,7 +130,7 @@ approved implementation design:
 
 ## Validation Expectations
 
-For this planning PR, run:
+For documentation-only status updates to this file, run:
 
 ```sh
 python3 conformance/ofarm_pkg_contract_check.py

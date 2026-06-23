@@ -21,7 +21,7 @@ This PR does not move files, change runtime behavior, update contracts, update m
 - `active_profile_loader_design.md` records the implemented D1 active-profile loader boundary for the current SI runtime descriptor.
 - `evidence_policy_metadata_display_design.md` records the implemented D3 metadata/display boundary for SI sufficiency rule refs and profile-owned text.
 - `validator_policy_hook_design.md` records the implemented D4 validation-policy boundary for SI-specific validator values and text.
-- `test_harness_split_plan.md` records the PR D6 test-harness boundary needed before SI-specific tests and demo fixtures can move under the profile package.
+- `test_harness_split_plan.md` records the implemented D6 test-harness boundary for profile-local SI engineering tests, demo fixtures, and root discovery bridges.
 - `conformance_lane_split_plan.md` records the PR D7 boundary between root conformance, executed evidence, profile engineering tests, and profile design cases.
 - `demo_fixture_migration_plan.md` records the implemented D2a-D2d demo fixture boundary and remaining D2e facade guardrails.
 - `multi_profile_manifest_design.md` records the D5 manifest boundary and D5b navigation-only, non-capability index status.
