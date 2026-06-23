@@ -1,6 +1,9 @@
 # Core-Neutral Rewording Candidates
 
-These are candidate wording replacements for a later neutrality-hardening PR. They are not applied in this PR.
+Status: initial PR A neutral wording candidate list retained for traceability.
+Some candidates were applied by PR #30; remaining candidates are not automatic
+instructions and must still follow the current manual-review and D-lane status
+boundaries.
 
 | Current wording pattern | Candidate profile-neutral wording | Notes |
 | --- | --- | --- |
@@ -24,4 +27,3 @@ These are candidate wording replacements for a later neutrality-hardening PR. Th
 - Evidence floor: "Promotion requires the evidence floor declared by the active profile and captured as transaction-time evidence."
 - Currentness: "Mutable public data may corroborate a claim, but it is not sufficient by itself for high-consequence promotion unless captured under the active profile currentness policy."
 - Source systems: "Profile adapters may bind to profile-specific evidence sources, registers, or reference datasets without making those sources Core law."
-
