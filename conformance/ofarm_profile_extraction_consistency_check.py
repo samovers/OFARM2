@@ -67,6 +67,26 @@ def table_row_by_first_cell(text: str, heading: str, first_cell: str) -> list[st
     return None
 
 
+def require_table_width(
+    failures: list[str],
+    *,
+    path_label: str,
+    text: str,
+    heading: str,
+    expected_cells: int,
+) -> None:
+    rows = table_rows(text, heading)
+    if not rows:
+        failures.append(f"{path_label} missing table in ## {heading} section")
+        return
+    for row in rows:
+        if len(row) != expected_cells:
+            failures.append(
+                f"{path_label} ## {heading} table row starting {row[0]!r} "
+                f"has {len(row)} cells, expected {expected_cells}"
+            )
+
+
 def require_phrase(
     failures: list[str],
     *,
@@ -212,15 +232,32 @@ def check_contract_core_seed_terms(failures: list[str]) -> None:
 
 def check_certification_plan_not_stale(failures: list[str]) -> None:
     text = read(CERT_PLAN)
+    require_table_width(
+        failures,
+        path_label="core_country_neutrality_certification_plan.md",
+        text=text,
+        heading="Surfaces To Certify",
+        expected_cells=3,
+    )
+    require_table_width(
+        failures,
+        path_label="core_country_neutrality_certification_plan.md",
+        text=text,
+        heading="Likely Remaining Blockers",
+        expected_cells=4,
+    )
+    require_table_width(
+        failures,
+        path_label="core_country_neutrality_certification_plan.md",
+        text=text,
+        heading="Closed Or Historical Blockers",
+        expected_cells=3,
+    )
+
     contracts_row = table_row_by_first_cell(text, "Surfaces To Certify", "`contracts/**`")
     if contracts_row is None:
         failures.append(
             "core_country_neutrality_certification_plan.md missing "
-            "`contracts/**` row in Surfaces To Certify"
-        )
-    elif len(contracts_row) < 2:
-        failures.append(
-            "core_country_neutrality_certification_plan.md malformed "
             "`contracts/**` row in Surfaces To Certify"
         )
     else:
@@ -255,11 +292,6 @@ def check_certification_plan_not_stale(failures: list[str]) -> None:
     if historical_row is None:
         failures.append(
             "core_country_neutrality_certification_plan.md missing closed "
-            "historical contract-comment blocker row"
-        )
-    elif len(historical_row) < 3:
-        failures.append(
-            "core_country_neutrality_certification_plan.md malformed closed "
             "historical contract-comment blocker row"
         )
     else:
