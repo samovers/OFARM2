@@ -119,6 +119,12 @@
       "path": "profile_si_ffs/extraction_inventory/core_country_term_audit_allowlist_plan.md",
       "kind": "audit planning",
       "status": "docs-only country-term audit allowlist plan"
+    },
+    {
+      "id": "core_country_term_audit_initial_review",
+      "path": "profile_si_ffs/extraction_inventory/core_country_term_audit_initial_review.md",
+      "kind": "audit review snapshot",
+      "status": "docs-only initial country-term audit review"
     }
   ]
 }

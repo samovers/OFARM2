@@ -28,6 +28,7 @@ These documents do not move files, change runtime behavior, update contracts, up
 - `manifest_implementation_checklist.md` records the D5a checklist and terminology for future manifest implementation work.
 - `core_country_neutrality_certification_plan.md` records the planned certification track for proving Core-facing country/profile neutrality without claiming it is complete yet.
 - `core_country_term_audit_allowlist_plan.md` records the planned review layer for a future country-term scan allowlist and L5 machine guard.
+- `core_country_term_audit_initial_review.md` records the initial file-level review snapshot for the country-term audit hits.
 - `profile_navigation_index.json` is a machine-labeled navigation-only, non-capability index for these profile-local inventory and status documents.
 
 ## Initial Classification Vocabulary
