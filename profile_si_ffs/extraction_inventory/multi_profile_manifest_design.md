@@ -1,9 +1,9 @@
 # Multi-Profile Manifest Design Status
 
-Status: design memo plus navigation-index status. This file does not change
-`kernel/manifest.py`, regenerate manifests, update contracts, move runtime
-adapters, change tests, or alter Core, Kernel, Platform, or active SI pilot
-semantics.
+Status: documentation-only D5 status memo. This file records the manifest
+boundary and navigation-index status, but does not change `kernel/manifest.py`,
+regenerate manifests, update contracts, move runtime adapters, change tests, or
+alter Core, Kernel, Platform, or active SI pilot semantics.
 
 This began as the PR D5 follow-up from `manual_review_backlog_plan.md`. It
 records the design boundary needed before the current active SI pilot manifest
@@ -159,7 +159,7 @@ sets, or manifest tests, also run:
 .venv/bin/python -m pytest kernel/tests/ -q
 ```
 
-If a docs-only design PR accidentally creates
+If a docs-only status PR accidentally creates
 `conformance/evidence/platform_mvp_results_*.json`, remove that new generated
 evidence before commit unless the PR intentionally changes executable evidence
 grounding.
