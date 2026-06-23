@@ -132,7 +132,7 @@ For implementation PRs that touch demo fixture code, also run:
 .venv/bin/python -m pytest kernel/tests/ -q
 ```
 
-If a docs-only planning PR accidentally creates
+If a documentation-only PR accidentally creates
 `conformance/evidence/platform_mvp_results_*.json`, remove that new generated
 evidence before commit unless the PR intentionally changes executable evidence
 grounding.

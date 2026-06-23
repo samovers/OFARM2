@@ -142,7 +142,7 @@ For implementation PRs that touch harness, fixture, or bridge code, also run:
 .venv/bin/python -m pytest kernel/tests/ -q
 ```
 
-If a future docs-only planning PR accidentally runs pytest and creates
+If a future documentation-only PR accidentally runs pytest and creates
 `conformance/evidence/platform_mvp_results_*.json`, remove that new generated
 evidence before commit unless the PR intentionally changes executable
 conformance grounding.
