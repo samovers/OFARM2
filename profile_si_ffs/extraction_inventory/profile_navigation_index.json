@@ -125,6 +125,12 @@
       "path": "profile_si_ffs/extraction_inventory/core_country_term_audit_initial_review.md",
       "kind": "audit review snapshot",
       "status": "docs-only initial country-term audit review"
+    },
+    {
+      "id": "core_contract_comment_review_plan",
+      "path": "profile_si_ffs/extraction_inventory/core_contract_comment_review_plan.md",
+      "kind": "contract comment review planning",
+      "status": "docs-only Core contract comment review plan"
     }
   ]
 }
