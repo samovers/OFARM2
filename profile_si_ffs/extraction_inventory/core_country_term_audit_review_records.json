@@ -28,6 +28,7 @@
     ]
   },
   "requiredRecordFields": [
+    "id",
     "path",
     "term",
     "category",

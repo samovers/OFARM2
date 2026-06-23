@@ -32,6 +32,7 @@ ABBREVIATED_BACKTICKED_SHA_RE = re.compile(r"`[0-9a-f]{7,39}`")
 # "## Files" inventory section.
 NAV_INDEX_ONLY_PATHS = {"profile_si_ffs/extraction_inventory/README.md"}
 REVIEW_RECORD_REQUIRED_FIELDS = {
+    "id",
     "path",
     "term",
     "category",
@@ -470,11 +471,36 @@ def check_country_term_review_records(failures: list[str]) -> None:
             f"{rel(REVIEW_RECORDS)} must not claim line-level review is implemented"
         )
 
+    declared_fields = payload.get("requiredRecordFields")
+    if (
+        not isinstance(declared_fields, list)
+        or any(not isinstance(item, str) for item in declared_fields)
+        or len(declared_fields) != len(set(declared_fields))
+        or set(declared_fields) != REVIEW_RECORD_REQUIRED_FIELDS
+    ):
+        failures.append(
+            f"{rel(REVIEW_RECORDS)} requiredRecordFields must equal "
+            f"{sorted(REVIEW_RECORD_REQUIRED_FIELDS)!r}"
+        )
+
+    declared_categories = payload.get("allowedCategories")
+    if (
+        not isinstance(declared_categories, list)
+        or any(not isinstance(item, str) for item in declared_categories)
+        or len(declared_categories) != len(set(declared_categories))
+        or set(declared_categories) != REVIEW_RECORD_ALLOWED_CATEGORIES
+    ):
+        failures.append(
+            f"{rel(REVIEW_RECORDS)} allowedCategories must equal "
+            f"{sorted(REVIEW_RECORD_ALLOWED_CATEGORIES)!r}"
+        )
+
     records = payload.get("records")
     if not isinstance(records, list) or not records:
         failures.append(f"{rel(REVIEW_RECORDS)} must contain non-empty records")
         return
 
+    seen_ids: set[str] = set()
     for idx, record in enumerate(records):
         if not isinstance(record, dict):
             failures.append(f"{rel(REVIEW_RECORDS)} records[{idx}] is not an object")
@@ -492,10 +518,25 @@ def check_country_term_review_records(failures: list[str]) -> None:
                 f"{category!r}"
             )
         for key in REVIEW_RECORD_REQUIRED_FIELDS:
-            if key in record and not isinstance(record[key], str):
+            if key not in record:
+                continue
+            value = record[key]
+            if not isinstance(value, str):
                 failures.append(
                     f"{rel(REVIEW_RECORDS)} records[{idx}].{key} must be a string"
                 )
+                continue
+            if not value.strip():
+                failures.append(
+                    f"{rel(REVIEW_RECORDS)} records[{idx}].{key} must be non-empty"
+                )
+        record_id = record.get("id")
+        if isinstance(record_id, str) and record_id.strip():
+            if record_id in seen_ids:
+                failures.append(
+                    f"{rel(REVIEW_RECORDS)} record id {record_id!r} is duplicated"
+                )
+            seen_ids.add(record_id)
 
 
 def main() -> int:
