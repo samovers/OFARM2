@@ -139,6 +139,12 @@
       "status": "docs-only file-or-glob-level country-term audit review records"
     },
     {
+      "id": "si_extraction_practical_closeout",
+      "path": "profile_si_ffs/extraction_inventory/si_extraction_practical_closeout.md",
+      "kind": "closeout decision",
+      "status": "docs-only SI extraction practical closeout decision"
+    },
+    {
       "id": "core_contract_comment_review_plan",
       "path": "profile_si_ffs/extraction_inventory/core_contract_comment_review_plan.md",
       "kind": "contract comment review planning",
