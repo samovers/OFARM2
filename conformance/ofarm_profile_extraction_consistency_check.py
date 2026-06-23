@@ -22,6 +22,11 @@ CERT_PLAN = EXTRACTION_DIR / "core_country_neutrality_certification_plan.md"
 ALLOWLIST_PLAN = EXTRACTION_DIR / "core_country_term_audit_allowlist_plan.md"
 INITIAL_REVIEW = EXTRACTION_DIR / "core_country_term_audit_initial_review.md"
 
+# The README is the profile-local navigation overview. It is intentionally
+# indexed for navigation, but it does not need to list itself in its own
+# "## Files" inventory section.
+NAV_INDEX_ONLY_PATHS = {"profile_si_ffs/extraction_inventory/README.md"}
+
 
 def rel(path: Path) -> str:
     return str(path.relative_to(PKG))
@@ -102,7 +107,11 @@ def markdown_files_listed_in_readme() -> set[str]:
 def check_readme_and_navigation_index(failures: list[str]) -> None:
     index = json.loads(read(NAV_INDEX))
     entries = index.get("entries", [])
-    entry_paths = {entry.get("path") for entry in entries}
+    entry_paths = {
+        entry.get("path")
+        for entry in entries
+        if isinstance(entry.get("path"), str)
+    }
 
     readme_paths = markdown_files_listed_in_readme()
     missing_from_index = sorted(readme_paths - entry_paths)
@@ -110,6 +119,13 @@ def check_readme_and_navigation_index(failures: list[str]) -> None:
         failures.append(
             "README files missing from profile_navigation_index.json: "
             + ", ".join(missing_from_index)
+        )
+
+    extra_index_paths = sorted(entry_paths - readme_paths - NAV_INDEX_ONLY_PATHS)
+    if extra_index_paths:
+        failures.append(
+            "profile_navigation_index.json paths missing from README Files "
+            "section: " + ", ".join(extra_index_paths)
         )
 
     for entry in entries:
