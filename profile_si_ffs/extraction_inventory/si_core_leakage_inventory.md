@@ -1,6 +1,15 @@
 # SI Core Leakage Inventory
 
-This inventory records Slovenian-specific terms, assumptions, examples, and fixtures currently visible in Core-facing areas. It is not a migration itself. No row authorizes moving a file, changing runtime behavior, or changing contract semantics without a later PR.
+Status: initial PR A inventory snapshot retained for traceability. Some rows
+describe surfaces that later PRs moved, neutralized, or reclassified; current
+remaining work is tracked by `si_migration_map.md`,
+`manual_review_backlog_plan.md`, and the D-lane status records in this
+directory.
+
+This inventory records Slovenian-specific terms, assumptions, examples, and
+fixtures that were visible in Core-facing areas during the initial audit. It is
+not a migration itself. No row authorizes moving a file, changing runtime
+behavior, or changing contract semantics without a later PR.
 
 The initial audit command was:
 
