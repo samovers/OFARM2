@@ -57,8 +57,9 @@ rg -n "KMG-MID|GERK|REGSR|FFSNaprave|Slovenia|Slovenian|\bSI\b|Dutch GO|GLMC 7|G
 
 ## Candidate Future Actions
 
-1. Convert this file-level snapshot into a line-level review record only after
-   the review record shape is approved.
+1. Extend the initial file/glob-level record in
+   `core_country_term_audit_review_records.json` into a line-level review record
+   only after the review record shape is approved for enforcement.
 2. Keep active SI runtime support visible until profile-loader, harness, and
    generated-output designs make a move safe.
 3. Add an enforcing check only after every seed-term hit is removed,

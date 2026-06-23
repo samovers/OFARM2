@@ -1,0 +1,240 @@
+{
+  "artifactKind": "core_country_term_audit_review_records",
+  "schemaVersion": "core_country_term_audit_review_records_v0_1",
+  "profilePackage": "profile_si_ffs",
+  "status": "documentation-only file-or-glob-level review record",
+  "reviewGranularity": "file_or_glob_level_initial_record",
+  "lineLevelReviewStatus": "future_work_not_implemented",
+  "navigationOnly": false,
+  "capabilityClaim": false,
+  "runtimeSupport": false,
+  "certifiesCore": false,
+  "enforcingGuard": false,
+  "notL5MachineGuard": true,
+  "proseBoundary": "This record classifies current country-term audit surfaces at file or glob level. It is not a line-level allowlist, not an enforcing machine guard, not runtime support, not a manifest, and not proof of Core country/profile neutrality certification.",
+  "seedScan": {
+    "command": "rg -n \"KMG-MID|GERK|REGSR|FFSNaprave|Slovenia|Slovenian|\\bSI\\b|Dutch GO|GLMC 7|Gecombineerde Opgave\" CORE.md PLATFORM.md KERNEL.md contracts kernel views conformance README.md AGENTS.md",
+    "terms": [
+      "KMG-MID",
+      "GERK",
+      "REGSR",
+      "FFSNaprave",
+      "Slovenia",
+      "Slovenian",
+      "SI",
+      "Dutch GO",
+      "GLMC 7",
+      "Gecombineerde Opgave"
+    ]
+  },
+  "requiredRecordFields": [
+    "path",
+    "term",
+    "category",
+    "reason",
+    "owner",
+    "expiresWhen",
+    "forbiddenUse"
+  ],
+  "allowedCategories": [
+    "PROFILE_LOCAL_POINTER",
+    "ACTIVE_RUNTIME_SI_SUPPORT",
+    "PROFILE_LOCAL_CONTENT",
+    "CONTRACT_COMMENT_REVIEW",
+    "CONFORMANCE_EVIDENCE_HISTORY",
+    "REVIEW_GUARD_OR_NON_CLAIM",
+    "APPARENTLY_NEUTRAL_PENDING_AUDIT"
+  ],
+  "records": [
+    {
+      "id": "core-md-no-seed-hits",
+      "path": "CORE.md",
+      "term": "seed_terms_absent",
+      "category": "APPARENTLY_NEUTRAL_PENDING_AUDIT",
+      "reason": "Current seed scan has no country/profile seed-term hits in Core law prose.",
+      "owner": "core-country-neutrality-certification",
+      "expiresWhen": "Any future seed-term hit appears in CORE.md or the seed term set changes.",
+      "forbiddenUse": "Do not treat absence of current seed-term hits as whole-Core certification."
+    },
+    {
+      "id": "kernel-md-no-seed-hits",
+      "path": "KERNEL.md",
+      "term": "seed_terms_absent",
+      "category": "APPARENTLY_NEUTRAL_PENDING_AUDIT",
+      "reason": "Current seed scan has no country/profile seed-term hits in Kernel law prose.",
+      "owner": "core-country-neutrality-certification",
+      "expiresWhen": "Any future seed-term hit appears in KERNEL.md or the seed term set changes.",
+      "forbiddenUse": "Do not treat absence of current seed-term hits as Kernel certification or multi-profile runtime readiness."
+    },
+    {
+      "id": "platform-md-no-seed-hits",
+      "path": "PLATFORM.md",
+      "term": "seed_terms_absent",
+      "category": "APPARENTLY_NEUTRAL_PENDING_AUDIT",
+      "reason": "Current seed scan has no country/profile seed-term hits after Platform wording neutralization.",
+      "owner": "core-country-neutrality-certification",
+      "expiresWhen": "Any future seed-term hit appears in PLATFORM.md or Platform posture wording changes.",
+      "forbiddenUse": "Do not treat this as platform production readiness or runtime capability expansion."
+    },
+    {
+      "id": "contracts-core-identity-no-seed-hits",
+      "path": "contracts/core/*IdentityPayload*",
+      "term": "KMG-MID|GERK",
+      "category": "APPARENTLY_NEUTRAL_PENDING_AUDIT",
+      "reason": "Former Core contract comment hits were neutralized and now remain only in profile-local review records.",
+      "owner": "core-contract-comment-review",
+      "expiresWhen": "Any KMG-MID or GERK hit reappears in contracts/core or contract comments change.",
+      "forbiddenUse": "Do not reclassify contract examples as Core law or change schema semantics through this record."
+    },
+    {
+      "id": "root-readme-profile-pointers",
+      "path": "README.md",
+      "term": "Slovenia|SI|Dutch GO|GLMC 7|Gecombineerde Opgave",
+      "category": "PROFILE_LOCAL_POINTER",
+      "reason": "Root README carries navigation pointers to profile-local SI and NL material without restating profile law as Core law.",
+      "owner": "root-navigation-review",
+      "expiresWhen": "Root README begins making runtime readiness, whole-country, or Core certification claims.",
+      "forbiddenUse": "Do not use root navigation pointers as capability, production, or external-standard readiness claims."
+    },
+    {
+      "id": "agents-review-guards",
+      "path": "AGENTS.md",
+      "term": "KMG-MID|GERK|Slovenia|SI|GLMC 7",
+      "category": "REVIEW_GUARD_OR_NON_CLAIM",
+      "reason": "Repository instructions use seed terms in privacy and Netherlands scope guards.",
+      "owner": "repository-review-guards",
+      "expiresWhen": "Guard text starts encoding country law or profile evidence requirements as Core instructions.",
+      "forbiddenUse": "Do not turn review-guard examples into implemented profile rules or Core semantics."
+    },
+    {
+      "id": "views-pointer",
+      "path": "views/VIEWS.md",
+      "term": "SI",
+      "category": "PROFILE_LOCAL_POINTER",
+      "reason": "Root view pointer directs readers to profile-local SI view artifacts.",
+      "owner": "view-navigation-review",
+      "expiresWhen": "Root view docs begin restating profile view rules or claiming active capability beyond profile-local artifacts.",
+      "forbiddenUse": "Do not treat pointer text as universal Core or Platform view law."
+    },
+    {
+      "id": "root-conformance-lane-map",
+      "path": "conformance/CONFORMANCE.md",
+      "term": "SI|Dutch GO|GLMC 7|Gecombineerde Opgave",
+      "category": "PROFILE_LOCAL_POINTER",
+      "reason": "Root conformance docs distinguish profile design cases, profile engineering tests, and root evidence lanes.",
+      "owner": "conformance-lane-review",
+      "expiresWhen": "Conformance docs relabel profile design cases or engineering tests as platform executed evidence.",
+      "forbiddenUse": "Do not present profile-local design inventories as executed platform evidence."
+    },
+    {
+      "id": "si-profile-adapter-content",
+      "path": "kernel/profiles/si_ffs/**",
+      "term": "KMG-MID|GERK|REGSR|FFSNaprave|SI",
+      "category": "PROFILE_LOCAL_CONTENT",
+      "reason": "SI adapter and binding content is already under the SI profile runtime adapter package.",
+      "owner": "si-profile-runtime-adapter-review",
+      "expiresWhen": "SI profile adapter content is imported into Core law or generalized as non-profile runtime capability.",
+      "forbiddenUse": "Do not use profile-local adapter content as Core law or broad country abstraction."
+    },
+    {
+      "id": "kernel-context-active-si-support",
+      "path": "kernel/context.py",
+      "term": "REGSR|GERK|SI",
+      "category": "ACTIVE_RUNTIME_SI_SUPPORT",
+      "reason": "Kernel context still assembles the active SI pilot spine and reference families through descriptor-backed runtime support.",
+      "owner": "active-runtime-si-support-review",
+      "expiresWhen": "A multi-profile context loader externalizes this support and preserves regression coverage.",
+      "forbiddenUse": "Do not hide active SI behavior behind generic wording or claim multi-profile runtime readiness."
+    },
+    {
+      "id": "kernel-config-active-si-support",
+      "path": "kernel/config.py",
+      "term": "REGSR|SI",
+      "category": "ACTIVE_RUNTIME_SI_SUPPORT",
+      "reason": "Runtime config still exposes active SI pilot descriptor-backed snapshot and policy bindings.",
+      "owner": "active-runtime-si-support-review",
+      "expiresWhen": "A broader active-profile configuration design replaces SI-specific runtime binding safely.",
+      "forbiddenUse": "Do not present current SI pilot binding as dynamic profile selection."
+    },
+    {
+      "id": "kernel-manifest-active-si-support",
+      "path": "kernel/manifest.py",
+      "term": "KMG-MID|REGSR|GERK|FFSNaprave|SI",
+      "category": "ACTIVE_RUNTIME_SI_SUPPORT",
+      "reason": "Manifest grounding remains the generated active SI pilot runtime manifest path.",
+      "owner": "manifest-boundary-review",
+      "expiresWhen": "A separate multi-profile generated manifest design is implemented and evidenced.",
+      "forbiddenUse": "Do not hand-claim generated runtime capability or design-only profile support."
+    },
+    {
+      "id": "kernel-demo-active-si-support",
+      "path": "kernel/demo.py",
+      "term": "KMG-MID|GERK|REGSR|SI",
+      "category": "ACTIVE_RUNTIME_SI_SUPPORT",
+      "reason": "Demo facade still exposes fictional SI-shaped payloads for current root callers.",
+      "owner": "demo-fixture-boundary-review",
+      "expiresWhen": "A future D2e cleanup proves root callers and API examples can migrate safely.",
+      "forbiddenUse": "Do not commit real personal data or treat fictional fixtures as profile law."
+    },
+    {
+      "id": "kernel-policy-loaders-active-si-support",
+      "path": "kernel/sufficiency.py|kernel/validators.py|kernel/profile_policy.py",
+      "term": "REGSR|Slovenia|SI",
+      "category": "ACTIVE_RUNTIME_SI_SUPPORT",
+      "reason": "Kernel mechanisms read active profile-owned policy and still document active SI policy context.",
+      "owner": "profile-policy-boundary-review",
+      "expiresWhen": "Profile-loader and policy-display boundaries are further generalized without behavior loss.",
+      "forbiddenUse": "Do not move profile policy values into Core or weaken fail-closed evidence and validation behavior."
+    },
+    {
+      "id": "kernel-comment-guards",
+      "path": "kernel/adapters.py|kernel/verification.py|kernel/policy.py",
+      "term": "KMG-MID|GERK|REGSR|FFSNaprave|SI",
+      "category": "REVIEW_GUARD_OR_NON_CLAIM",
+      "reason": "Generic mechanisms use SI terms as negative examples, boundary comments, or current active-pilot explanations.",
+      "owner": "kernel-comment-neutrality-review",
+      "expiresWhen": "Comments begin encoding SI evidence sources or identifiers as generic mechanism requirements.",
+      "forbiddenUse": "Do not hide active SI support or turn comment examples into Core law."
+    },
+    {
+      "id": "si-profile-test-bridges",
+      "path": "kernel/tests/test_m2_si_*|kernel/tests/test_profile_si_demo_*",
+      "term": "SI|REGSR|GERK|FFSNaprave",
+      "category": "PROFILE_LOCAL_POINTER",
+      "reason": "Root tests are collection bridges or active SI profile engineering-test discovery support.",
+      "owner": "profile-test-harness-review",
+      "expiresWhen": "Root collection no longer needs bridge files or profile tests move to a separate approved harness.",
+      "forbiddenUse": "Do not relabel profile engineering tests as platform MVP executed evidence."
+    },
+    {
+      "id": "root-active-runtime-tests",
+      "path": "kernel/tests/test_profile_runtime_loader.py|kernel/tests/test_m2_manifest.py|kernel/tests/test_conformance.py",
+      "term": "SI|REGSR|GERK|FFSNaprave",
+      "category": "ACTIVE_RUNTIME_SI_SUPPORT",
+      "reason": "Root tests pin active profile loader, manifest grounding, and active-pilot conformance behavior.",
+      "owner": "active-runtime-test-review",
+      "expiresWhen": "A multi-profile harness and evidence-lane design preserves coverage without root active-pilot assumptions.",
+      "forbiddenUse": "Do not treat active SI pilot tests as generic multi-profile runtime support."
+    },
+    {
+      "id": "generic-root-test-guards",
+      "path": "kernel/tests/test_m2_adapters.py|kernel/tests/test_m2_bindings.py|kernel/tests/test_m2_extent.py|kernel/tests/test_m2_identities.py|kernel/tests/test_review_fixes.py",
+      "term": "REGSR|GERK|FFSNaprave|SI",
+      "category": "REVIEW_GUARD_OR_NON_CLAIM",
+      "reason": "Generic root tests use SI terms in negative examples, fixture-boundary comments, or no-SI assertions.",
+      "owner": "root-test-neutrality-review",
+      "expiresWhen": "A test starts requiring SI profile facts to prove generic Core or Kernel behavior.",
+      "forbiddenUse": "Do not make SI fixture terminology a generic test requirement."
+    },
+    {
+      "id": "extraction-inventory-self-references",
+      "path": "conformance/ofarm_profile_extraction_consistency_check.py",
+      "term": "KMG-MID|GERK|SI",
+      "category": "REVIEW_GUARD_OR_NON_CLAIM",
+      "reason": "The manual consistency check names seed terms and closed-blocker strings to detect drift.",
+      "owner": "extraction-consistency-check-review",
+      "expiresWhen": "The checker starts enforcing L5 certification or consuming profile navigation as runtime input.",
+      "forbiddenUse": "Do not treat this manual check as the future L5 country-term allowlist."
+    }
+  ]
+}
