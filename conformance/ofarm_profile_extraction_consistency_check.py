@@ -50,6 +50,29 @@ REVIEW_RECORD_ALLOWED_CATEGORIES = {
     "REVIEW_GUARD_OR_NON_CLAIM",
     "APPARENTLY_NEUTRAL_PENDING_AUDIT",
 }
+REVIEW_RECORD_EXPECTED_IDENTITY = {
+    "artifactKind": "core_country_term_audit_review_records",
+    "schemaVersion": "core_country_term_audit_review_records_v0_1",
+    "profilePackage": "profile_si_ffs",
+}
+REVIEW_RECORD_PROSE_BOUNDARY_PHRASES = {
+    "not a line-level allowlist",
+    "not an enforcing machine guard",
+    "not runtime support",
+    "not a manifest",
+    "not proof of Core country/profile neutrality certification",
+}
+REVIEW_RECORD_SEED_SCAN_ROOTS = {
+    "AGENTS.md",
+    "CORE.md",
+    "KERNEL.md",
+    "PLATFORM.md",
+    "README.md",
+    "conformance",
+    "contracts",
+    "kernel",
+    "views",
+}
 
 
 def rel(path: Path) -> str:
@@ -447,6 +470,13 @@ def check_country_term_review_records(failures: list[str]) -> None:
         failures.append(f"{rel(REVIEW_RECORDS)} does not parse as JSON: {exc}")
         return
 
+    for key, expected in REVIEW_RECORD_EXPECTED_IDENTITY.items():
+        if payload.get(key) != expected:
+            failures.append(
+                f"{rel(REVIEW_RECORDS)} {key} is {payload.get(key)!r}, "
+                f"expected {expected!r}"
+            )
+
     expected_flags = {
         "capabilityClaim": False,
         "runtimeSupport": False,
@@ -470,6 +500,33 @@ def check_country_term_review_records(failures: list[str]) -> None:
         failures.append(
             f"{rel(REVIEW_RECORDS)} must not claim line-level review is implemented"
         )
+
+    prose_boundary = payload.get("proseBoundary")
+    if not isinstance(prose_boundary, str):
+        failures.append(f"{rel(REVIEW_RECORDS)} proseBoundary must be a string")
+        prose_boundary = ""
+    normalized_boundary = normalized(prose_boundary)
+    for phrase in sorted(REVIEW_RECORD_PROSE_BOUNDARY_PHRASES):
+        if normalized(phrase) not in normalized_boundary:
+            failures.append(
+                f"{rel(REVIEW_RECORDS)} proseBoundary missing non-claim phrase: "
+                f"{phrase!r}"
+            )
+
+    seed_scan = payload.get("seedScan")
+    if not isinstance(seed_scan, dict):
+        failures.append(f"{rel(REVIEW_RECORDS)} seedScan must be an object")
+        seed_scan_command = ""
+    else:
+        seed_scan_command = seed_scan.get("command")
+        if not isinstance(seed_scan_command, str):
+            failures.append(f"{rel(REVIEW_RECORDS)} seedScan.command must be a string")
+            seed_scan_command = ""
+    for root in sorted(REVIEW_RECORD_SEED_SCAN_ROOTS):
+        if root not in seed_scan_command:
+            failures.append(
+                f"{rel(REVIEW_RECORDS)} seedScan.command missing scan root {root!r}"
+            )
 
     declared_fields = payload.get("requiredRecordFields")
     if (
@@ -517,6 +574,10 @@ def check_country_term_review_records(failures: list[str]) -> None:
                 f"{rel(REVIEW_RECORDS)} records[{idx}] has unknown category "
                 f"{category!r}"
             )
+        path_expr = record.get("path")
+        if isinstance(path_expr, str) and path_expr.strip():
+            for path_atom in path_expr.split("|"):
+                check_review_record_path_atom(failures, idx, path_atom.strip())
         for key in REVIEW_RECORD_REQUIRED_FIELDS:
             if key not in record:
                 continue
@@ -537,6 +598,45 @@ def check_country_term_review_records(failures: list[str]) -> None:
                     f"{rel(REVIEW_RECORDS)} record id {record_id!r} is duplicated"
                 )
             seen_ids.add(record_id)
+
+
+def check_review_record_path_atom(
+    failures: list[str], record_idx: int, path_atom: str
+) -> None:
+    if not path_atom:
+        failures.append(
+            f"{rel(REVIEW_RECORDS)} records[{record_idx}].path contains an empty path"
+        )
+        return
+    path = Path(path_atom)
+    if path.is_absolute() or ".." in path.parts:
+        failures.append(
+            f"{rel(REVIEW_RECORDS)} records[{record_idx}].path has unsafe path "
+            f"{path_atom!r}"
+        )
+        return
+
+    if not any(
+        path_atom == root or path_atom.startswith(f"{root}/")
+        for root in REVIEW_RECORD_SEED_SCAN_ROOTS
+    ):
+        failures.append(
+            f"{rel(REVIEW_RECORDS)} records[{record_idx}].path {path_atom!r} is "
+            "outside the seed scan roots"
+        )
+
+    if re.search(r"[*?[]", path_atom):
+        matches = list(PKG.glob(path_atom))
+        if not matches:
+            failures.append(
+                f"{rel(REVIEW_RECORDS)} records[{record_idx}].path glob "
+                f"{path_atom!r} matches no repository paths"
+            )
+    elif not (PKG / path_atom).exists():
+        failures.append(
+            f"{rel(REVIEW_RECORDS)} records[{record_idx}].path {path_atom!r} "
+            "does not exist"
+        )
 
 
 def main() -> int:
