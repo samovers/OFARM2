@@ -26,7 +26,7 @@ rg -n "KMG-MID|GERK|REGSR|FFSNaprave|Slovenia|Slovenian|\bSI\b|Dutch GO|GLMC 7|G
 | `KERNEL.md` | No seed-term hits in this scan. | `APPARENTLY_NEUTRAL_PENDING_AUDIT` |
 | Root `README.md` | Profile navigation, profile slice pointers, and package cut-date text. | `PROFILE_LOCAL_POINTER` plus `REVIEW_GUARD_OR_NON_CLAIM` |
 | `AGENTS.md` | Repository description, privacy guard examples, and Netherlands review guard text. | `REVIEW_GUARD_OR_NON_CLAIM` |
-| `PLATFORM.md` | Current active SI pilot flow wording. | `ACTIVE_RUNTIME_SI_SUPPORT` |
+| `PLATFORM.md` | No seed-term hits after Platform wording neutralization. | `APPARENTLY_NEUTRAL_PENDING_AUDIT` for the current scan |
 | `views/VIEWS.md` | Pointer to profile-local SI view artifacts. | `PROFILE_LOCAL_POINTER` |
 | `conformance/CONFORMANCE.md` | Conformance lane labels, profile design-case pointers, and manual audit command. | `PROFILE_LOCAL_POINTER` plus `REVIEW_GUARD_OR_NON_CLAIM` |
 | `contracts/core/*IdentityPayload*` | No seed-term hits after the contract-comment neutralization recorded in `core_contract_comment_review_plan.md`. | `APPARENTLY_NEUTRAL_PENDING_AUDIT` for the current scan |
@@ -44,6 +44,8 @@ rg -n "KMG-MID|GERK|REGSR|FFSNaprave|Slovenia|Slovenian|\bSI\b|Dutch GO|GLMC 7|G
 - The scan did not find seed terms in `CORE.md` or `KERNEL.md`.
 - The former Core contract comment hits have been neutralized and now remain
   only in the profile-local review record.
+- The former `PLATFORM.md` seed-term hits have been neutralized to
+  active-profile wording without changing Platform semantics.
 - The remaining hits are expected for the current repository state and are
   mostly root navigation, review guards, active SI pilot runtime support,
   profile-local SI adapter content, or profile engineering test bridges.

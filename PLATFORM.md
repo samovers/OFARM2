@@ -8,7 +8,7 @@ Status: implementation and conformance packaging profile — not OFARM law. One 
 2. **Gate pipeline** — the EnforcementChain as a transaction-scoped orchestration chain. Every authoritative write crosses it; every refusal emits a `RuntimeProblem` with a registry reason code.
 3. **Materializer** — deterministic: in-force records in → current state + `MaterializationBasis` + freshness out.
 4. **Mobile capture app** — offline-first (local draft queue; drafts are drafts until the server commits). Photos as `EvidenceRecord`s. Target: spray record entered in the field in ≤ 90 seconds (see `CAPTURE_MAPPING.md`).
-5. **Registry adapter** — imports the product register into `ReferenceSnapshot`s on the cadence the SI profile declares; generates `ExternalRegistryVerificationTrace`s at binding time. Snapshot-based; no live-integration claim.
+5. **Registry adapter** — imports the product register into `ReferenceSnapshot`s on the cadence the active profile declares; generates `ExternalRegistryVerificationTrace`s at binding time. Snapshot-based; no live-integration claim.
 6. **Offline registry cache** — the device carries the current product-register snapshot (with its `ReferenceSnapshot` id) and the farm's parcel list, so offline bindings reference the exact snapshot they were made against. At sync, ingress re-verifies bindings against the then-current snapshot; discrepancies route to review, never silent acceptance.
 7. **Output generator** — one PassportView (live register view with freshness and gaps visible) and one DocumentAssembly (frozen, exportable inspection register). Both carry `ResultQualificationEnvelope`s; both refuse or disclose per `views/VIEWS.md`.
 8. **Auth** — ordinary OIDC (e.g. Keycloak) mapped onto Party / RoleAssignment / AuthorityGrant. Roles: farmer, family worker / contractor (via `DelegationGrant`), advisor, read-only inspector (via `SharingGrant`).
@@ -23,9 +23,9 @@ ingress normalization
                               schema validation · semantic/carrier validation ·
                               reference-resolution · temporal-conformance ·
                               code-binding / currentness · external-registry verification
-→ profile applicability      (static SI activation; ContextSnapshot assembly)
+→ profile applicability      (static active-profile activation; ContextSnapshot assembly)
 → evidence sufficiency       (auto-generated EvidenceSufficiencyCase where policy requires)
-→ review / promotion         (per SI self-review policy; exceptions to advisor queue)
+→ review / promotion         (per active-profile self-review policy; exceptions to advisor queue)
 → materialization            sub-gate: dispute/correction/supersession handling
 → publication / export       sub-gates: reconstruction policy+trace ·
                               output disposition / result qualification ·
