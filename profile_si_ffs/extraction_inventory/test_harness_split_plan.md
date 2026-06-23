@@ -134,7 +134,7 @@ itself, a fresh validation run.
 
 | Evidence type | Reference |
 | --- | --- |
-| Implementation/status commits | `b5f54c0` added the SI harness split plan; `63e6430`, `45b3a50`, `3c98188`, `a21fed8`, and `f82820c` refreshed harness status and descriptor wording. |
+| Implementation/status commits | PR #38 (`b5f54c0e18fb8c5ac0d6ac8ad49f7aeed9f81dd4`) added the SI harness split plan; PR #63 (`63e6430bb00cdc29ded1de30ef8ca5ef168bd944`), PR #64 (`45b3a50ffb1254b4ed2e6748517f62008beb4124`), PR #75 (`3c98188a02df3ab0de458afd2c7039768cce7c55`), PR #77 (`a21fed807dfcab67ffc605bd7d8a2d2e431a1bd0`), and PR #83 (`f82820c0141c5dae8655f546d72acb8ee11e7c25`) refreshed harness status and descriptor wording. |
 | Root harness guard | `kernel/tests/test_profile_harness_bridge.py` |
 | Harness descriptor | `profile_si_ffs/tests/profile_test_harness.json` |
 | Root discovery bridges | `kernel/tests/test_profile_*.py` and selected bridge imports in root `kernel/tests/test_*.py` files |

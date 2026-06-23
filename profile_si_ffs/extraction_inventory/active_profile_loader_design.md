@@ -208,7 +208,7 @@ itself, a fresh validation run.
 
 | Evidence type | Reference |
 | --- | --- |
-| Implementation/status commits | `d0a2d50` added the active profile loader design memo; `1c85b22` tightened the loader memo; `a79bf53` refreshed D1 loader design status. |
+| Implementation/status commits | PR #32 (`d0a2d50057462a8fb291fd4f72f2750533df9240`) added the active profile loader design memo; PR #32 (`1c85b226d77207eb0c3097cf40a36ae71b21fba1`) tightened the loader memo; PR #66 (`a79bf53aeae594352a541000108b7931fb108fe3`) refreshed D1 loader design status. |
 | Root test entrypoint | `kernel/tests/test_profile_runtime_loader.py` |
 | Implementation validation command | `.venv/bin/python -m pytest kernel/tests/ -q` |
 | Package validation command | `python3 conformance/ofarm_pkg_contract_check.py` |

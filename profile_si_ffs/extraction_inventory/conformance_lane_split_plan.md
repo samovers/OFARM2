@@ -121,7 +121,7 @@ itself, a fresh validation run.
 
 | Evidence type | Reference |
 | --- | --- |
-| Implementation/status commits | `1cc0383` added the conformance lane split plan; `01eee6b`, `9e3e5cc`, and `556ce39` refreshed D7 status; `5759b46` reverted the evidence-label excursion; `5e88394`, `8ff6d53`, and `f82820c` refreshed extraction and cleanup labels. |
+| Implementation/status commits | PR #39 (`1cc0383d36349c3037f683a99cd3eb74ab43900e`) added the conformance lane split plan; PR #62 (`01eee6bf5dbd4dcffcc5c96034b1fd0aa9ac9c63`), PR #62 (`9e3e5cc40e4cc84eac2549d9060f15e504eb6f65`), and PR #70 (`556ce395ed88d8abe294fdd3e39d107f26ca4e8a`) refreshed D7 status; PR #74 (`5759b463483eed8ee5618babeeb0a7a450e79ffc`) reverted the evidence-label excursion; PR #82 (`5e8839414d91aec7c138717bce46e5a97eea4403`), PR #81 (`8ff6d53b158e5320146cc948720f0852d9e50b7f`), and PR #83 (`f82820c0141c5dae8655f546d72acb8ee11e7c25`) refreshed extraction and cleanup labels. |
 | Root conformance lane map | `conformance/CONFORMANCE.md` |
 | Evidence-lane README | `conformance/evidence/README.md` |
 | Root platform MVP evidence | `conformance/evidence/platform_mvp_results_*.json` |
