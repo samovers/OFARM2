@@ -114,7 +114,7 @@ itself, a fresh validation run.
 
 | Evidence type | Reference |
 | --- | --- |
-| Implementation commits | `5518f55` moved SI validator policy values into profile policy; `6390093` kept wrong-kind binding refs as hard refusals; `34413c6` refreshed D4 validation-policy status. |
+| Implementation commits | PR #37 (`5518f55cfb3145ae81ae36df7442c984bcd582d5`) moved SI validator policy values into profile policy; PR #37 (`6390093c69875c556c5da546939e584854f7c190`) kept wrong-kind binding refs as hard refusals; PR #68 (`34413c68f5a13a55cf7ab72e8b6438101e10cf49`) refreshed D4 validation-policy status. |
 | Root test entrypoint | `kernel/tests/test_m2_si_validation_policy.py` |
 | Profile engineering-test module | `profile_si_ffs.tests.m2_si_validation_policy_tests` |
 | Implementation validation command | `.venv/bin/python -m pytest kernel/tests/ -q` |

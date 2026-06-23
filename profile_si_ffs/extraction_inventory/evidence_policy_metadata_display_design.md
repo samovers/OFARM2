@@ -109,7 +109,7 @@ itself, a fresh validation run.
 
 | Evidence type | Reference |
 | --- | --- |
-| Implementation/status commits | `c8d93c5` added the SI evidence policy display design memo; `e9acd20` moved SI sufficiency display metadata into profile policy; `3dbf543` refreshed D3 policy display status. |
+| Implementation/status commits | PR #34 (`c8d93c5c59518dd4e069d7823f86d2ace405d84a`) added the SI evidence policy display design memo; PR #35 (`e9acd206ccbb2c9bd7a532b64df8292ef92dc3b7`) moved SI sufficiency display metadata into profile policy; PR #67 (`3dbf543f3b7a6fb86d362efc586b8ef08a282d26`) refreshed D3 policy display status. |
 | Root test entrypoint | `kernel/tests/test_m2_si_floor.py` |
 | Profile engineering-test module | `profile_si_ffs.tests.m2_si_floor_tests` |
 | Implementation validation command | `.venv/bin/python -m pytest kernel/tests/ -q` |
