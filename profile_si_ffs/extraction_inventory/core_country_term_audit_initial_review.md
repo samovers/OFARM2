@@ -54,6 +54,10 @@ rg -n "KMG-MID|GERK|REGSR|FFSNaprave|Slovenia|Slovenian|\bSI\b|Dutch GO|GLMC 7|G
 - The contract-comment review is no longer a current Core contract seed-term
   blocker, but the full audit remains below L5 until every remaining hit is
   reviewed and an enforcing guard exists.
+- `core_country_term_audit_review_records.json` now carries stable ids and is
+  manually checked for file/glob-level path coverage, seed-term vocabulary,
+  seed-scan command alignment, and `seed_terms_absent` drift. This remains
+  coarse review-record hygiene, not a line-level allowlist or L5 guard.
 
 ## Candidate Future Actions
 
