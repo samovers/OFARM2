@@ -1,12 +1,16 @@
-# Multi-Profile Manifest Design Memo
+# Multi-Profile Manifest Design Status
 
-Status: design memo only. This file does not change `kernel/manifest.py`,
-regenerate manifests, update contracts, move runtime adapters, change tests, or
-alter Core, Kernel, Platform, or active SI pilot semantics.
+Status: design memo plus navigation-index status. This file does not change
+`kernel/manifest.py`, regenerate manifests, update contracts, move runtime
+adapters, change tests, or alter Core, Kernel, Platform, or active SI pilot
+semantics.
 
-This is the PR D5 follow-up from `manual_review_backlog_plan.md`. It records the
-design boundary needed before the current active SI pilot manifest generation
-could support more than one profile without over-claiming runtime capability.
+This began as the PR D5 follow-up from `manual_review_backlog_plan.md`. It
+records the design boundary needed before the current active SI pilot manifest
+generation could support more than one profile without over-claiming runtime
+capability. It also records that D5a/D5b documentation-only guardrails now
+exist: `manifest_implementation_checklist.md` and
+`profile_navigation_index.json`.
 
 ## Goal
 
@@ -73,9 +77,16 @@ index that only lists manifests for active runtime profiles.
 
 ## Navigation-Only Naming Guard
 
-D5b may add a `profile navigation index`, not a profile manifest. Any such
-artifact must be labeled as navigation-only and non-capability in both
-machine-visible metadata and prose.
+D5b added `profile_navigation_index.json`, a profile navigation index, not a
+profile manifest. It is labeled as navigation-only and non-capability in both
+machine-visible metadata and prose:
+
+- `artifactKind: "profile_navigation_index"`;
+- `navigationOnly: true`;
+- `capabilityClaim: false`;
+- `runtimeSupport: false`;
+- prose states that the index is not a manifest, not generated output, not
+  runtime support, and not evidence of active capability.
 
 ## Grounding Rules
 
@@ -123,18 +134,18 @@ Stop and re-plan if implementation would require:
 - changing platform MVP conformance behavior;
 - claiming Slovenia production readiness or whole-Netherlands runtime readiness.
 
-## Suggested Future PRs
+## Implemented And Future PR Lanes
 
-| Future PR | Scope | Stop condition |
+| PR lane | Status | Stop condition |
 | --- | --- | --- |
-| D5a | Add a manifest design-to-implementation checklist and root/profile manifest terminology, still docs-only. | Stop if maintainers ask for implementation instead. |
-| D5b | Add a profile navigation index only if machine-visible metadata and prose label it as navigation-only and non-capability. | Stop if it could be read as runtime support or capability. |
-| D5c | Add profile-manifest generation hooks after multiple active runtime profiles exist. | Stop unless active descriptors, tests, and evidence lanes exist. |
-| D5d | Split manifest tests after D6 harness support exists. | Stop if root conformance test 15 changes meaning. |
+| D5a | Implemented as `manifest_implementation_checklist.md`. | Stop if checklist language could allow hand-claimed active runtime capability manifests. |
+| D5b | Implemented as `profile_navigation_index.json`. | Stop if the navigation artifact could be read as runtime support, generated manifest output, or capability. |
+| D5c | Future: add profile-manifest generation hooks after multiple active runtime profiles exist. | Stop unless active descriptors, tests, and evidence lanes exist. |
+| D5d | Future: split manifest tests after manifest and harness boundaries are explicit. | Stop if root conformance test 15 changes meaning. |
 
 ## Validation Expectations
 
-For this design PR, run:
+For documentation-only status updates to this file, run:
 
 ```sh
 python3 conformance/ofarm_pkg_contract_check.py
