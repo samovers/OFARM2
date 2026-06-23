@@ -21,6 +21,7 @@ NAV_INDEX = EXTRACTION_DIR / "profile_navigation_index.json"
 CERT_PLAN = EXTRACTION_DIR / "core_country_neutrality_certification_plan.md"
 ALLOWLIST_PLAN = EXTRACTION_DIR / "core_country_term_audit_allowlist_plan.md"
 INITIAL_REVIEW = EXTRACTION_DIR / "core_country_term_audit_initial_review.md"
+REVIEW_RECORDS = EXTRACTION_DIR / "core_country_term_audit_review_records.json"
 # Full 40-character commit SHAs are allowed. Backticked 7-39 character hex
 # strings are treated as abbreviated commit references in extraction evidence
 # docs and should be replaced with a PR number plus full SHA.
@@ -30,6 +31,25 @@ ABBREVIATED_BACKTICKED_SHA_RE = re.compile(r"`[0-9a-f]{7,39}`")
 # indexed for navigation, but it does not need to list itself in its own
 # "## Files" inventory section.
 NAV_INDEX_ONLY_PATHS = {"profile_si_ffs/extraction_inventory/README.md"}
+REVIEW_RECORD_REQUIRED_FIELDS = {
+    "id",
+    "path",
+    "term",
+    "category",
+    "reason",
+    "owner",
+    "expiresWhen",
+    "forbiddenUse",
+}
+REVIEW_RECORD_ALLOWED_CATEGORIES = {
+    "PROFILE_LOCAL_POINTER",
+    "ACTIVE_RUNTIME_SI_SUPPORT",
+    "PROFILE_LOCAL_CONTENT",
+    "CONTRACT_COMMENT_REVIEW",
+    "CONFORMANCE_EVIDENCE_HISTORY",
+    "REVIEW_GUARD_OR_NON_CLAIM",
+    "APPARENTLY_NEUTRAL_PENDING_AUDIT",
+}
 
 
 def rel(path: Path) -> str:
@@ -420,6 +440,105 @@ def check_extraction_inventory_uses_full_commit_refs(failures: list[str]) -> Non
                 )
 
 
+def check_country_term_review_records(failures: list[str]) -> None:
+    try:
+        payload = json.loads(read(REVIEW_RECORDS))
+    except json.JSONDecodeError as exc:
+        failures.append(f"{rel(REVIEW_RECORDS)} does not parse as JSON: {exc}")
+        return
+
+    expected_flags = {
+        "capabilityClaim": False,
+        "runtimeSupport": False,
+        "certifiesCore": False,
+        "enforcingGuard": False,
+        "notL5MachineGuard": True,
+    }
+    for key, expected in expected_flags.items():
+        if payload.get(key) is not expected:
+            failures.append(
+                f"{rel(REVIEW_RECORDS)} {key} is {payload.get(key)!r}, "
+                f"expected {expected!r}"
+            )
+
+    if payload.get("reviewGranularity") != "file_or_glob_level_initial_record":
+        failures.append(
+            f"{rel(REVIEW_RECORDS)} must remain file/glob-level until a "
+            "line-level review record is approved"
+        )
+    if payload.get("lineLevelReviewStatus") != "future_work_not_implemented":
+        failures.append(
+            f"{rel(REVIEW_RECORDS)} must not claim line-level review is implemented"
+        )
+
+    declared_fields = payload.get("requiredRecordFields")
+    if (
+        not isinstance(declared_fields, list)
+        or any(not isinstance(item, str) for item in declared_fields)
+        or len(declared_fields) != len(set(declared_fields))
+        or set(declared_fields) != REVIEW_RECORD_REQUIRED_FIELDS
+    ):
+        failures.append(
+            f"{rel(REVIEW_RECORDS)} requiredRecordFields must equal "
+            f"{sorted(REVIEW_RECORD_REQUIRED_FIELDS)!r}"
+        )
+
+    declared_categories = payload.get("allowedCategories")
+    if (
+        not isinstance(declared_categories, list)
+        or any(not isinstance(item, str) for item in declared_categories)
+        or len(declared_categories) != len(set(declared_categories))
+        or set(declared_categories) != REVIEW_RECORD_ALLOWED_CATEGORIES
+    ):
+        failures.append(
+            f"{rel(REVIEW_RECORDS)} allowedCategories must equal "
+            f"{sorted(REVIEW_RECORD_ALLOWED_CATEGORIES)!r}"
+        )
+
+    records = payload.get("records")
+    if not isinstance(records, list) or not records:
+        failures.append(f"{rel(REVIEW_RECORDS)} must contain non-empty records")
+        return
+
+    seen_ids: set[str] = set()
+    for idx, record in enumerate(records):
+        if not isinstance(record, dict):
+            failures.append(f"{rel(REVIEW_RECORDS)} records[{idx}] is not an object")
+            continue
+        missing = sorted(REVIEW_RECORD_REQUIRED_FIELDS - record.keys())
+        if missing:
+            failures.append(
+                f"{rel(REVIEW_RECORDS)} records[{idx}] missing fields: "
+                + ", ".join(missing)
+            )
+        category = record.get("category")
+        if category not in REVIEW_RECORD_ALLOWED_CATEGORIES:
+            failures.append(
+                f"{rel(REVIEW_RECORDS)} records[{idx}] has unknown category "
+                f"{category!r}"
+            )
+        for key in REVIEW_RECORD_REQUIRED_FIELDS:
+            if key not in record:
+                continue
+            value = record[key]
+            if not isinstance(value, str):
+                failures.append(
+                    f"{rel(REVIEW_RECORDS)} records[{idx}].{key} must be a string"
+                )
+                continue
+            if not value.strip():
+                failures.append(
+                    f"{rel(REVIEW_RECORDS)} records[{idx}].{key} must be non-empty"
+                )
+        record_id = record.get("id")
+        if isinstance(record_id, str) and record_id.strip():
+            if record_id in seen_ids:
+                failures.append(
+                    f"{rel(REVIEW_RECORDS)} record id {record_id!r} is duplicated"
+                )
+            seen_ids.add(record_id)
+
+
 def main() -> int:
     failures: list[str] = []
 
@@ -440,6 +559,9 @@ def main() -> int:
 
     check_extraction_inventory_uses_full_commit_refs(failures)
     print("extraction evidence commit-reference check done")
+
+    check_country_term_review_records(failures)
+    print("country-term review records check done")
 
     for failure in failures:
         print(f"FAIL {failure}")

@@ -77,6 +77,12 @@ at least:
 The future record must be a guardrail, not a capability declaration. It must not
 be named, described, or consumed as a runtime manifest.
 
+An initial file/glob-level review record now lives in
+`core_country_term_audit_review_records.json`. It is intentionally not
+line-level, not enforcing, and not an L5 machine guard. A later certification PR
+must still convert the reviewed hits into an approved line-level record before
+any certification claim.
+
 ## Review Flow
 
 1. Run the seed scan.

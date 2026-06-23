@@ -29,6 +29,7 @@ These documents do not move files, change runtime behavior, update contracts, up
 - `core_country_neutrality_certification_plan.md` records the planned certification track for proving Core-facing country/profile neutrality without claiming it is complete yet.
 - `core_country_term_audit_allowlist_plan.md` records the planned review layer for a future country-term scan allowlist and L5 machine guard.
 - `core_country_term_audit_initial_review.md` records the initial file-level review snapshot for the country-term audit hits.
+- `core_country_term_audit_review_records.json` is an initial machine-readable file/glob-level review record for the seed country-term scan. It is not a line-level allowlist and not an enforcing L5 machine guard.
 - `core_contract_comment_review_plan.md` records the docs-only review plan for neutralizing Core contract comment country-term hits without changing schema semantics.
 - `profile_navigation_index.json` is a machine-labeled navigation-only, non-capability index for these profile-local inventory and status documents.
 
