@@ -107,6 +107,12 @@
       "path": "profile_si_ffs/extraction_inventory/manifest_implementation_checklist.md",
       "kind": "planning checklist",
       "status": "docs-only manifest implementation checklist"
+    },
+    {
+      "id": "core_country_neutrality_certification_plan",
+      "path": "profile_si_ffs/extraction_inventory/core_country_neutrality_certification_plan.md",
+      "kind": "certification planning",
+      "status": "docs-only Core country/profile neutrality certification plan"
     }
   ]
 }

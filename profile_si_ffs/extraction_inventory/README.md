@@ -26,6 +26,7 @@ These documents do not move files, change runtime behavior, update contracts, up
 - `demo_fixture_migration_plan.md` records the implemented D2a-D2d demo fixture boundary and remaining D2e facade guardrails.
 - `multi_profile_manifest_design.md` records the D5 manifest boundary and D5b navigation-only, non-capability index status.
 - `manifest_implementation_checklist.md` records the D5a checklist and terminology for future manifest implementation work.
+- `core_country_neutrality_certification_plan.md` records the planned certification track for proving Core-facing country/profile neutrality without claiming it is complete yet.
 - `profile_navigation_index.json` is a machine-labeled navigation-only, non-capability index for these profile-local inventory and status documents.
 
 ## Initial Classification Vocabulary
