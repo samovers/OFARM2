@@ -9,14 +9,37 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from .profile_runtime import load_profile_runtime_descriptor
+from .profile_runtime import ProfileRuntimeError, load_active_profile_selection
 
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent
 
 CONTRACTS_ROOT = PACKAGE_ROOT / "contracts"
 DRAFTS_ROOT = CONTRACTS_ROOT / "drafts_reference" / "explainable_current_state_evidence"
-PROFILE_ROOT = PACKAGE_ROOT / "profile_si_ffs"
-ACTIVE_PROFILE = load_profile_runtime_descriptor(PROFILE_ROOT)
+DEFAULT_ACTIVE_PROFILE_PACKAGE_NAMES = ("profile_si_ffs",)
+ALLOWED_ACTIVE_PROFILE_PACKAGE_NAMES = DEFAULT_ACTIVE_PROFILE_PACKAGE_NAMES
+ACTIVE_PROFILE_PACKAGE_NAMES_ENV = "OFARM_ACTIVE_PROFILE_PACKAGES"
+
+
+def active_profile_package_names_from_env() -> tuple[str, ...]:
+    raw = os.environ.get(ACTIVE_PROFILE_PACKAGE_NAMES_ENV)
+    if raw is None:
+        return DEFAULT_ACTIVE_PROFILE_PACKAGE_NAMES
+    names = tuple(part.strip() for part in raw.split(","))
+    if any(not name for name in names):
+        raise ProfileRuntimeError(
+            f"{ACTIVE_PROFILE_PACKAGE_NAMES_ENV} contains blank profile package token")
+    return names
+
+
+ACTIVE_PROFILE_PACKAGE_NAMES = active_profile_package_names_from_env()
+ACTIVE_PROFILE_SELECTION = load_active_profile_selection(
+    PACKAGE_ROOT,
+    ACTIVE_PROFILE_PACKAGE_NAMES,
+    allowed_profile_package_names=ALLOWED_ACTIVE_PROFILE_PACKAGE_NAMES,
+)
+ACTIVE_PROFILE = ACTIVE_PROFILE_SELECTION.active_profile
+ACTIVE_PROFILE_ROOTS = ACTIVE_PROFILE_SELECTION.profile_roots
+PROFILE_ROOT = ACTIVE_PROFILE.profile_root
 
 # Active deployment/demo binding. This is deliberately separate from the
 # profile-local runtime descriptor: tenant identity is not inherent package
