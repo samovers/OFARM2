@@ -7,7 +7,7 @@ records in this directory.
 
 ## Original PR B: Move Profile-Owned Authored Artifacts
 
-Goal: move clearly SI-owned authored artifacts from Core-facing locations into `profile_si_ffs/` while preserving behavior and references.
+Original goal: move clearly SI-owned authored artifacts from Core-facing locations into `profile_si_ffs/` while preserving behavior and references.
 
 Original candidate work:
 
@@ -26,7 +26,7 @@ Original out of scope for PR B:
 
 ## Original PR C: Neutrality Hardening In Core-Facing Wording
 
-Goal: remove unnecessary Slovenian examples from generic Core-facing explanations while preserving the same architecture and claim limits.
+Original goal: remove unnecessary Slovenian examples from generic Core-facing explanations while preserving the same architecture and claim limits.
 
 Original candidate work:
 
