@@ -29,7 +29,7 @@ rg -n "KMG-MID|GERK|REGSR|FFSNaprave|Slovenia|Slovenian|\bSI\b|Dutch GO|GLMC 7|G
 | `PLATFORM.md` | Current active SI pilot flow wording. | `ACTIVE_RUNTIME_SI_SUPPORT` |
 | `views/VIEWS.md` | Pointer to profile-local SI view artifacts. | `PROFILE_LOCAL_POINTER` |
 | `conformance/CONFORMANCE.md` | Conformance lane labels, profile design-case pointers, and manual audit command. | `PROFILE_LOCAL_POINTER` plus `REVIEW_GUARD_OR_NON_CLAIM` |
-| `contracts/core/*IdentityPayload*` | Country/profile examples in contract comments. | `CONTRACT_COMMENT_REVIEW` |
+| `contracts/core/*IdentityPayload*` | No seed-term hits after the contract-comment neutralization recorded in `core_contract_comment_review_plan.md`. | `APPARENTLY_NEUTRAL_PENDING_AUDIT` for the current scan |
 | `kernel/profiles/si_ffs/**` | SI profile adapter and binding content. | `PROFILE_LOCAL_CONTENT` |
 | `kernel/context.py`, `kernel/config.py`, `kernel/manifest.py` | Active SI runtime spine, shipped snapshot refs, and generated active-pilot artifact grounding. | `ACTIVE_RUNTIME_SI_SUPPORT` |
 | `kernel/demo.py` | Public compatibility facade for fictional SI-shaped demo payloads. | `ACTIVE_RUNTIME_SI_SUPPORT` pending future harness work |
@@ -42,23 +42,24 @@ rg -n "KMG-MID|GERK|REGSR|FFSNaprave|Slovenia|Slovenian|\bSI\b|Dutch GO|GLMC 7|G
 ## Initial Findings
 
 - The scan did not find seed terms in `CORE.md` or `KERNEL.md`.
+- The former Core contract comment hits have been neutralized and now remain
+  only in the profile-local review record.
 - The remaining hits are expected for the current repository state and are
   mostly root navigation, review guards, active SI pilot runtime support,
-  profile-local SI adapter content, profile engineering test bridges, or
-  contract comments queued for review.
+  profile-local SI adapter content, or profile engineering test bridges.
 - No hit in this snapshot should be treated as proof of Core certification.
 - No hit in this snapshot should be promoted into a runtime capability claim.
-- The contract-comment hits remain deliberately unresolved until a future
-  contract-comment review proves any wording change is non-semantic.
+- The contract-comment review is no longer a current Core contract seed-term
+  blocker, but the full audit remains below L5 until every remaining hit is
+  reviewed and an enforcing guard exists.
 
 ## Candidate Future Actions
 
 1. Convert this file-level snapshot into a line-level review record only after
    the review record shape is approved.
-2. Review contract comments separately before changing schema prose.
-3. Keep active SI runtime support visible until profile-loader, harness, and
+2. Keep active SI runtime support visible until profile-loader, harness, and
    generated-output designs make a move safe.
-4. Add an enforcing check only after every seed-term hit is removed,
+3. Add an enforcing check only after every seed-term hit is removed,
    profile-local, or assigned to an approved category.
 
 ## Stop Conditions
