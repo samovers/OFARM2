@@ -21,6 +21,10 @@ NAV_INDEX = EXTRACTION_DIR / "profile_navigation_index.json"
 CERT_PLAN = EXTRACTION_DIR / "core_country_neutrality_certification_plan.md"
 ALLOWLIST_PLAN = EXTRACTION_DIR / "core_country_term_audit_allowlist_plan.md"
 INITIAL_REVIEW = EXTRACTION_DIR / "core_country_term_audit_initial_review.md"
+# Full 40-character commit SHAs are allowed. Backticked 7-39 character hex
+# strings are treated as abbreviated commit references in extraction evidence
+# docs and should be replaced with a PR number plus full SHA.
+ABBREVIATED_BACKTICKED_SHA_RE = re.compile(r"`[0-9a-f]{7,39}`")
 
 # The README is the profile-local navigation overview. It is intentionally
 # indexed for navigation, but it does not need to list itself in its own
@@ -406,6 +410,16 @@ def check_audit_docs_keep_nonclaim_language(failures: list[str]) -> None:
     )
 
 
+def check_extraction_inventory_uses_full_commit_refs(failures: list[str]) -> None:
+    for path in sorted(EXTRACTION_DIR.glob("*.md")):
+        for line_no, line in enumerate(read(path).splitlines(), start=1):
+            if ABBREVIATED_BACKTICKED_SHA_RE.search(line):
+                failures.append(
+                    f"{rel(path)}:{line_no} uses a short backticked commit "
+                    "hash; cite the PR number plus full 40-character SHA"
+                )
+
+
 def main() -> int:
     failures: list[str] = []
 
@@ -423,6 +437,9 @@ def main() -> int:
 
     check_audit_docs_keep_nonclaim_language(failures)
     print("audit non-claim wording check done")
+
+    check_extraction_inventory_uses_full_commit_refs(failures)
+    print("extraction evidence commit-reference check done")
 
     for failure in failures:
         print(f"FAIL {failure}")
