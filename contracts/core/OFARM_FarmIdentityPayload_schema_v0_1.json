@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://ofarm.dev/schema/farmidentitypayload/v0.1",
   "title": "OFARM FarmIdentityPayload v0.1 (candidate)",
-  "$comment": "NEW_CANDIDATE structure-assertion payload for the Farm durable identity (Constitution RC2.1 section 7.24). National holding identifiers such as KMG-MID are profile-governed scheme bindings, never universal core law (section 3.4).",
+  "$comment": "NEW_CANDIDATE structure-assertion payload for the Farm durable identity (Constitution RC2.1 section 7.24). Profile-specific holding identifiers are profile-governed scheme bindings, never universal core law (section 3.4).",
   "type": "object",
   "additionalProperties": false,
   "required": [

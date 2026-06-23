@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://ofarm.dev/schema/fieldidentitypayload/v0.1",
   "title": "OFARM FieldIdentityPayload v0.1 (candidate)",
-  "$comment": "NEW_CANDIDATE structure-assertion payload for the Field durable identity (Constitution RC2.1 sections 7.19, 7.24). Parcel identifiers such as GERK are profile-governed scheme bindings with reference-snapshot support, never universal core law.",
+  "$comment": "NEW_CANDIDATE structure-assertion payload for the Field durable identity (Constitution RC2.1 sections 7.19, 7.24). Profile-specific parcel identifiers are profile-governed scheme bindings with reference-snapshot support, never universal core law.",
   "type": "object",
   "additionalProperties": false,
   "required": [
