@@ -2,6 +2,10 @@
 
 This map translates the inventory findings into follow-up decisions. It is intentionally conservative: ambiguous runtime, test, contract, and manifest surfaces stay out of move-ready buckets.
 
+Status: initial classification map retained for traceability. Some original
+PR B/PR C lanes have landed; current remaining work is tracked by
+`manual_review_backlog_plan.md` and the D-lane status records in this directory.
+
 ## Classification Map
 
 | Inventory ID | Current path or area | Classification | Candidate destination or action | Follow-up lane |
@@ -31,9 +35,11 @@ This map translates the inventory findings into follow-up decisions. It is inten
 
 ## Move-Ready Boundary
 
-Only `MOVE_TO_SI_PROFILE` items are candidates for PR B. Even there, PR B must update references and tests only as needed to preserve behavior. Anything marked `AMBIGUOUS_MANUAL_REVIEW` is not move-ready.
+In the original PR A split, only `MOVE_TO_SI_PROFILE` items were candidates for
+PR B. Even there, any move had to update references and tests only as needed to
+preserve behavior. Anything marked `AMBIGUOUS_MANUAL_REVIEW` remains not
+move-ready unless a later status document says otherwise.
 
 ## Protected Surfaces
 
 This map does not authorize changes to contracts, generated manifests, `kernel/manifest.py` outputs, active runtime configuration, or the current SI runtime adapter behavior.
-
