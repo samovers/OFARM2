@@ -715,7 +715,8 @@ def check_seed_scan_hit_paths_have_review_records(
             atom.strip() for atom in path_expr.split("|") if atom.strip()
         )
 
-    for hit_path in country_term_seed_scan_hit_paths(failures, seed_re):
+    hit_paths = country_term_seed_scan_hit_paths(failures, seed_re)
+    for hit_path in hit_paths:
         if not any(
             review_record_path_atom_matches(atom, hit_path)
             for atom in record_path_atoms
@@ -723,6 +724,34 @@ def check_seed_scan_hit_paths_have_review_records(
             failures.append(
                 f"{rel(REVIEW_RECORDS)} has no file/glob-level review record "
                 f"covering current seed-scan hit path {hit_path!r}"
+            )
+    check_seed_terms_absent_records_have_no_hits(failures, records, hit_paths)
+
+
+def check_seed_terms_absent_records_have_no_hits(
+    failures: list[str], records: list[object], hit_paths: list[str]
+) -> None:
+    """Keep no-hit review records honest without adding line-level enforcement."""
+    for idx, record in enumerate(records):
+        if not isinstance(record, dict) or record.get("term") != "seed_terms_absent":
+            continue
+        path_expr = record.get("path")
+        if not isinstance(path_expr, str):
+            continue
+        path_atoms = [atom.strip() for atom in path_expr.split("|") if atom.strip()]
+        matching_hits = [
+            hit_path
+            for hit_path in hit_paths
+            if any(
+                review_record_path_atom_matches(atom, hit_path)
+                for atom in path_atoms
+            )
+        ]
+        if matching_hits:
+            failures.append(
+                f"{rel(REVIEW_RECORDS)} records[{idx}] says seed terms are "
+                f"absent for {path_expr!r}, but current seed-scan hits include "
+                f"{', '.join(matching_hits)}"
             )
 
 
