@@ -602,6 +602,11 @@ def check_country_term_review_records(failures: list[str]) -> None:
                 f"{rel(REVIEW_RECORDS)} records[{idx}] has unknown category "
                 f"{category!r}"
             )
+        record_term = record.get("term")
+        if isinstance(record_term, str) and record_term.strip():
+            check_review_record_term_vocabulary(
+                failures, idx, record_term, seed_scan_terms
+            )
         path_expr = record.get("path")
         if isinstance(path_expr, str) and path_expr.strip():
             for path_atom in path_expr.split("|"):
@@ -649,6 +654,29 @@ def check_seed_scan_command_terms(
         failures.append(
             f"{rel(REVIEW_RECORDS)} seedScan.command term regex must match "
             "seedScan.terms expanded through REVIEW_RECORD_SEED_TERM_PATTERNS"
+        )
+
+
+def check_review_record_term_vocabulary(
+    failures: list[str], record_idx: int, record_term: str, seed_scan_terms: list[str]
+) -> None:
+    if not seed_scan_terms or record_term == "seed_terms_absent":
+        return
+    terms = record_term.split("|")
+    if any(not term.strip() for term in terms):
+        failures.append(
+            f"{rel(REVIEW_RECORDS)} records[{record_idx}].term contains an empty term"
+        )
+        return
+    if len(terms) != len(set(terms)):
+        failures.append(
+            f"{rel(REVIEW_RECORDS)} records[{record_idx}].term contains duplicates"
+        )
+    unknown_terms = sorted(set(terms) - set(seed_scan_terms))
+    if unknown_terms:
+        failures.append(
+            f"{rel(REVIEW_RECORDS)} records[{record_idx}].term contains terms "
+            f"outside seedScan.terms: {', '.join(unknown_terms)}"
         )
 
 
