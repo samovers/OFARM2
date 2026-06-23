@@ -13,7 +13,7 @@ These documents do not move files, change runtime behavior, update contracts, up
 
 ## Files
 
-- `si_core_leakage_inventory.md` lists observed Slovenian-specific material visible from Core-facing areas.
+- `si_core_leakage_inventory.md` records the initial Slovenian-specific Core-facing leakage snapshot for traceability.
 - `si_migration_map.md` classifies each finding as move, generic rewording, keep-with-example-removed, manual review, or do-not-touch.
 - `core_neutral_rewording_candidates.md` proposes neutral replacement wording for later PRs.
 - `followup_pr_plan.md` records the original move-focused PR B and neutrality-hardening PR C split for traceability.
