@@ -19,7 +19,7 @@ rg -n "KMG-MID|GERK|KMG|Slovenia|Slovenian|\bSI\b|Sloven" CORE.md PLATFORM.md KE
 
 ## Findings
 
-| ID | Current surface | Observed material | Profile-boundary concern | Initial disposition |
+| ID | Surface at initial audit | Observed material | Profile-boundary concern | Initial disposition |
 | --- | --- | --- | --- | --- |
 | SI-CORE-001 | `CORE.md` farm identity table | `KMG-MID` described as a Slovenia profile binding | Core identity language should describe profile-specific holding identifiers generically. | `REWORD_CORE_GENERICALLY` |
 | SI-CORE-002 | `CORE.md` field identity table | `GERK` described as a Slovenia profile binding | Core field identity language should describe profile-specific parcel identifiers generically. | `REWORD_CORE_GENERICALLY` |
