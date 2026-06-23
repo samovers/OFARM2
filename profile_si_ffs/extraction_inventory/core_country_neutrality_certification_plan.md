@@ -33,7 +33,7 @@ support, and is not presented as Core law or general OFARM behavior.
 
 | Lane | Meaning |
 | --- | --- |
-| `ALREADY_NEUTRAL` | The surface is currently profile-neutral and needs only audit confirmation. |
+| `APPARENTLY_NEUTRAL_PENDING_AUDIT` | The surface appears profile-neutral but is not certified until the audit and allowlist review are complete. |
 | `PROFILE_LOCAL` | The material already lives under a profile package or is only a profile-local pointer. |
 | `ACTIVE_RUNTIME_SI_SUPPORT` | The surface still carries SI-specific runtime content because the active pilot is SI-specific. It must stay explicit and must not be generalized by implication. |
 | `NEEDS_PROFILE_LOADER_OR_HARNESS` | Future movement depends on loader, fixture, test, or evidence-harness support that does not exist yet. |
@@ -57,9 +57,9 @@ support, and is not presented as Core law or general OFARM behavior.
 
 | Surface | Certification lane | Certification question |
 | --- | --- | --- |
-| `CORE.md` | `ALREADY_NEUTRAL` | Does it define OFARM law and invariants without country identifiers, authorities, or evidence sources except neutral examples? |
+| `CORE.md` | `APPARENTLY_NEUTRAL_PENDING_AUDIT` | Does it define OFARM law and invariants without country identifiers, authorities, or evidence sources except neutral examples? |
 | `PLATFORM.md` | `COMMENT_ONLY_NEUTRALIZATION` plus `ACTIVE_RUNTIME_SI_SUPPORT` where needed | Are any country references limited to active-runtime pilot explanation or neutralized pointers? |
-| `KERNEL.md` | `ALREADY_NEUTRAL` or `COMMENT_ONLY_NEUTRALIZATION` | Does it describe Kernel mechanisms without making SI fixtures or refs sound generic? |
+| `KERNEL.md` | `APPARENTLY_NEUTRAL_PENDING_AUDIT` or `COMMENT_ONLY_NEUTRALIZATION` | Does it describe Kernel mechanisms without making SI fixtures or refs sound generic? |
 | `contracts/**` | `CONTRACT_COMMENT_REVIEW` | Do schemas or comments still mention KMG-MID/GERK as examples, and can they be neutralized without changing contract semantics? |
 | `kernel/**` | Mixed: see blocker table | Are SI references either profile-loaded values, profile-local adapters, explicit active-runtime SI support, or comments queued for neutralization? |
 | `views/**` | `PROFILE_LOCAL` for moved SI artifacts; root pointer review | Are root view docs limited to navigation and not active capability overclaims? |
