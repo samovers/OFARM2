@@ -30,16 +30,18 @@ as executed platform evidence, or weaken root-owned conformance evidence rules.
 Current profile-local harness support is:
 
 - `profile_si_ffs/tests/profile_test_harness.json` declares profile-local
-  engineering-test modules. It is explicitly engineering-test-only:
+  engineering-test modules as a harness descriptor. It is explicitly
+  engineering-test-only:
   `platformConformance` is false, `executedEvidence` is false, and
   `evidenceWriter` is null.
-- `kernel/tests/profile_harness_bridge.py` loads and validates that descriptor.
+- `kernel/tests/profile_harness_bridge.py` loads and validates that harness
+  descriptor.
 - Root bridge test files import the profile-local test modules so
   `.venv/bin/python -m pytest kernel/tests/ -q` still discovers the moved
   coverage.
-- `kernel/tests/test_profile_harness_bridge.py` verifies descriptor shape,
-  importability, and top-level root bridge reachability for every
-  descriptor-listed module.
+- `kernel/tests/test_profile_harness_bridge.py` verifies harness descriptor
+  shape, importability, and top-level root bridge reachability for every
+  harness-descriptor-listed module.
 - `profile_si_ffs/test_fixtures/` contains profile-local SI demo fixture helpers
   introduced by D2a-D2d.
 - `kernel/demo.py` remains the public compatibility facade for root callers and
