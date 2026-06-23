@@ -128,6 +128,16 @@
       "forbiddenUse": "Do not present profile-local design inventories as executed platform evidence."
     },
     {
+      "id": "kernel-readme-active-si-support",
+      "path": "kernel/README.md",
+      "term": "SI|GERK",
+      "category": "ACTIVE_RUNTIME_SI_SUPPORT",
+      "reason": "Kernel README describes current active SI pilot bootstrap and shipped adapter surfaces for developer navigation.",
+      "owner": "kernel-docs-active-runtime-review",
+      "expiresWhen": "Kernel README begins presenting SI pilot bootstrapping as generic multi-profile runtime readiness or the active runtime support is externalized.",
+      "forbiddenUse": "Do not use Kernel README navigation text as Core law, generated capability expansion, or multi-profile runtime support."
+    },
+    {
       "id": "si-profile-adapter-content",
       "path": "kernel/profiles/si_ffs/**",
       "term": "KMG-MID|GERK|REGSR|FFSNaprave|SI",
