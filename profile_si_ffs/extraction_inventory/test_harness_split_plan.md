@@ -21,7 +21,7 @@ co-located in root test files:
   tests that now live under `profile_si_ffs/` while remaining
   discoverable by the root test command.
 
-This implemented boundary preserves current active SI pilot behavior and does
+This recorded boundary preserves current active SI pilot behavior and does
 not create a universal country abstraction layer, reclassify engineering tests
 as executed platform evidence, or weaken root-owned conformance evidence rules.
 
@@ -126,6 +126,21 @@ Current boundaries remain:
 | D2e or later | Remaining optional cleanup. | Stop if shrinking `kernel/demo.py` would break root tests, API examples, or facade compatibility. |
 | D7 | Documented separately. | Stop if profile engineering tests or design cases would be mislabeled as `PLATFORM_MVP_EXECUTED_EVIDENCE`. |
 | Future multi-profile harness | Not started. | Stop if SI-specific bridge behavior would be treated as a general profile-discovery or capability mechanism. |
+
+## Evidence References
+
+This status record points to prior implementation evidence. It is not, by
+itself, a fresh validation run.
+
+| Evidence type | Reference |
+| --- | --- |
+| Implementation/status commits | `b5f54c0` added the SI harness split plan; `63e6430`, `45b3a50`, `3c98188`, `a21fed8`, and `f82820c` refreshed harness status and descriptor wording. |
+| Root harness guard | `kernel/tests/test_profile_harness_bridge.py` |
+| Harness descriptor | `profile_si_ffs/tests/profile_test_harness.json` |
+| Root discovery bridges | `kernel/tests/test_profile_*.py` and selected bridge imports in root `kernel/tests/test_*.py` files |
+| Profile engineering-test modules | `profile_si_ffs/tests/**` |
+| Implementation validation command | `.venv/bin/python -m pytest kernel/tests/ -q` |
+| Package validation command | `python3 conformance/ofarm_pkg_contract_check.py` |
 
 ## Validation Expectations
 

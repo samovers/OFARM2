@@ -1,10 +1,10 @@
-# SI Conformance Lane Split Plan
+# SI Conformance Lane Split Status
 
-Status: implemented boundary memo plus future-lane plan. The root navigation
-pointer and evidence-lane README are now implemented, but this file does not
-move conformance files, change test execution, regenerate evidence, update
-contracts or manifests, alter Core, Kernel, or Platform semantics, or claim
-Slovenia production readiness.
+Status: prior implementation status record plus future-lane plan. The root
+navigation pointer and evidence-lane README boundary are recorded here, but this
+file does not move conformance files, change test execution, regenerate
+evidence, update contracts or manifests, alter Core, Kernel, or Platform
+semantics, or claim Slovenia production readiness.
 
 This began as the PR D7 follow-up from `manual_review_backlog_plan.md`. It
 records the boundary between package-wide conformance, active SI pilot executed
@@ -62,7 +62,7 @@ engineering tests.
 | `PROFILE_DESIGN_CASES` | Profile package directories | Design case inventories like the NL GLMC 7 slice cases. | Claims that the cases executed as platform evidence. |
 | `PROFILE_ENGINEERING_TESTS` | Profile harness from D6 | Profile-local pytest coverage for SI adapters, policy metadata, and fixture helpers. | Platform MVP evidence labels unless explicitly run and recorded by a defined evidence writer. |
 | `PROFILE_EXECUTED_EVIDENCE` | Future profile-local evidence lane | Clearly labeled executed profile test outputs, if a future harness creates them. | Root platform MVP evidence or package self-check output. |
-| `EXTRACTION_PLANNING` | `profile_si_ffs/extraction_inventory/` | Plans, inventories, migration maps, and stop conditions. | Runtime behavior, manifests, contracts, or executed evidence. |
+| `EXTRACTION_INVENTORY_STATUS` | `profile_si_ffs/extraction_inventory/` | Plans, inventories, status records, migration maps, and stop conditions. | Runtime behavior, manifests, contracts, or executed evidence. |
 
 ## Evidence Writer Rules
 
@@ -113,6 +113,20 @@ The order should be:
    writer shape.
 5. Keep root conformance documentation limited to the implemented lane map until
    a future PR deliberately changes evidence writing or profile evidence lanes.
+
+## Evidence References
+
+This status record points to prior implementation evidence. It is not, by
+itself, a fresh validation run.
+
+| Evidence type | Reference |
+| --- | --- |
+| Implementation/status commits | `1cc0383` added the conformance lane split plan; `01eee6b`, `9e3e5cc`, and `556ce39` refreshed D7 status; `5759b46` reverted the evidence-label excursion; `5e88394`, `8ff6d53`, and `f82820c` refreshed extraction and cleanup labels. |
+| Root conformance lane map | `conformance/CONFORMANCE.md` |
+| Evidence-lane README | `conformance/evidence/README.md` |
+| Root platform MVP evidence | `conformance/evidence/platform_mvp_results_*.json` |
+| Root executed-suite tests | `kernel/tests/test_conformance.py`, `kernel/tests/conftest.py` |
+| Package validation command | `python3 conformance/ofarm_pkg_contract_check.py` |
 
 ## Stop Conditions
 

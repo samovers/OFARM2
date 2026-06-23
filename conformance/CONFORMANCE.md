@@ -14,7 +14,7 @@ engineering tests from being read as the same kind of evidence:
 | `PLATFORM_MVP_FIXTURES` | Root `conformance/fixtures/` | Gate-sequencing fixtures | Canonical fixtures executed by root platform tests. |
 | `PROFILE_DESIGN_CASES` | Profile packages | NL GO + GLMC 7 design cases | Profile design inventories, not executed evidence. |
 | `PROFILE_ENGINEERING_TESTS` | Profile packages with root bridges | SI profile pytest modules | Engineering coverage discovered by root pytest, not platform MVP evidence. |
-| `EXTRACTION_PLANNING` | `profile_si_ffs/extraction_inventory/` | SI extraction plans and inventories | Planning material, not runtime behavior or evidence. |
+| `EXTRACTION_INVENTORY_STATUS` | `profile_si_ffs/extraction_inventory/` | SI extraction plans, inventories, and status records | Inventory/status material, not runtime behavior or evidence. |
 
 The detailed D7 lane design lives in
 `profile_si_ffs/extraction_inventory/conformance_lane_split_plan.md`. This root
@@ -49,6 +49,16 @@ Matches are acceptable only as explicit profile-layer references, review-guard
 examples of what not to place in Core, or root navigation pointers. They are not
 acceptable as Core contracts, Core semantics, runtime adapters, or default
 conformance assumptions.
+
+For extraction-inventory consistency changes, also run:
+
+```
+python3 conformance/ofarm_profile_extraction_consistency_check.py
+```
+
+This manual consistency check keeps the SI extraction README, navigation-only
+index, closed contract-comment blocker state, and certification non-claim
+language aligned. It is not an L5 country-term allowlist.
 
 ## Inherited fixtures
 

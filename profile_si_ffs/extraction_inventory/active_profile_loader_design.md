@@ -1,9 +1,9 @@
 # Active Profile Loader Status
 
-Status: implemented boundary memo. The active SI runtime descriptor and loader
-described here are present, but this file does not move files, change runtime
-behavior, update contracts or generated manifests, alter tests, or change Core,
-Kernel, or Platform semantics.
+Status: prior implementation status record. The active SI runtime descriptor
+and loader described here are recorded as present, but this file does not move
+files, change runtime behavior, update contracts or generated manifests, alter
+tests, or change Core, Kernel, or Platform semantics.
 
 This began as the PR D1 follow-up from `manual_review_backlog_plan.md`. It now
 records the implemented boundary that moved active SI runtime bootstrap inputs
@@ -201,6 +201,18 @@ implementation design and tests:
 - Dropped test coverage or reclassified executed evidence as design evidence.
 - A generic country abstraction that absorbs profile law into Kernel.
 
+## Evidence References
+
+This status record points to prior implementation evidence. It is not, by
+itself, a fresh validation run.
+
+| Evidence type | Reference |
+| --- | --- |
+| Implementation/status commits | `d0a2d50` added the active profile loader design memo; `1c85b22` tightened the loader memo; `a79bf53` refreshed D1 loader design status. |
+| Root test entrypoint | `kernel/tests/test_profile_runtime_loader.py` |
+| Implementation validation command | `.venv/bin/python -m pytest kernel/tests/ -q` |
+| Package validation command | `python3 conformance/ofarm_pkg_contract_check.py` |
+
 ## Validation Expectations
 
 For documentation-only status updates to this file, run:
@@ -217,7 +229,7 @@ spine selection, or reference-family currentness, also run:
 .venv/bin/python -m pytest kernel/tests/ -q
 ```
 
-Implementation validation should continue to prove:
+Implementation validation should continue to cover:
 
 - `context.bootstrap(store)` inserts the same shipped profile instance records.
 - NOW context assembly selects the descriptor-pinned active artifact set,
