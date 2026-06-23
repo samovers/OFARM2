@@ -1,6 +1,6 @@
 # OFARM2 Platform (pilot runtime)
 
-Status: implementation and conformance packaging profile — not OFARM law. One small, boring system that enforces Kernel and Core law. Storage layout is explicitly optimizable under Platform RC2.1 §1.3; semantic law is not.
+Status: implementation and conformance packaging posture — not OFARM law. One small, boring system that enforces Kernel and Core law. Storage layout is explicitly optimizable under Platform RC2.1 §1.3; semantic law is not.
 
 ## Components
 

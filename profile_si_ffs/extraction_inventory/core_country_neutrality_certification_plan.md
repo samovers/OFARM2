@@ -38,7 +38,7 @@ support, and is not presented as Core law or general OFARM behavior.
 | `ACTIVE_RUNTIME_SI_SUPPORT` | The surface still carries SI-specific runtime content because the active pilot is SI-specific. It must stay explicit and must not be generalized by implication. |
 | `NEEDS_PROFILE_LOADER_OR_HARNESS` | Future movement depends on loader, fixture, test, or evidence-harness support that does not exist yet. |
 | `COMMENT_ONLY_NEUTRALIZATION` | Only explanatory comments or docs appear to need neutral wording; no behavior change is intended. |
-| `CONTRACT_COMMENT_REVIEW` | Contract text or comments mention SI terms and require careful review before any neutral wording change. |
+| `CONTRACT_COMMENT_REVIEW` | Historical or future lane for contract comment hits that require careful non-semantic review. The former Core `KMG-MID`/`GERK` contract-comment hits are closed and retained only in `core_contract_comment_review_plan.md`. |
 | `DO_NOT_TOUCH` | The surface is protected, already correctly placed, or outside the certification move. |
 
 ## Mechanism And Content Boundary
@@ -60,7 +60,7 @@ support, and is not presented as Core law or general OFARM behavior.
 | `CORE.md` | `APPARENTLY_NEUTRAL_PENDING_AUDIT` | Does it define OFARM law and invariants without country identifiers, authorities, or evidence sources except neutral examples? |
 | `PLATFORM.md` | `COMMENT_ONLY_NEUTRALIZATION` plus `ACTIVE_RUNTIME_SI_SUPPORT` where needed | Are any country references limited to active-runtime pilot explanation or neutralized pointers? |
 | `KERNEL.md` | `APPARENTLY_NEUTRAL_PENDING_AUDIT` or `COMMENT_ONLY_NEUTRALIZATION` | Does it describe Kernel mechanisms without making SI fixtures or refs sound generic? |
-| `contracts/**` | `CONTRACT_COMMENT_REVIEW` | Do schemas or comments still mention KMG-MID/GERK as examples, and can they be neutralized without changing contract semantics? |
+| `contracts/**` | `APPARENTLY_NEUTRAL_PENDING_AUDIT` after completed contract-comment review | Do schemas and comments remain profile-neutral after the former KMG-MID/GERK comments were neutralized without changing contract semantics? |
 | `kernel/**` | Mixed: see blocker table | Are SI references either profile-loaded values, profile-local adapters, explicit active-runtime SI support, or comments queued for neutralization? |
 | `views/**` | `PROFILE_LOCAL` for moved SI artifacts; root pointer review | Are root view docs limited to navigation and not active capability overclaims? |
 | `conformance/**` | `ACTIVE_RUNTIME_SI_SUPPORT` and `NEEDS_PROFILE_LOADER_OR_HARNESS` | Are root checks/evidence still package-wide or active SI pilot support, with profile design cases clearly separated from executed platform evidence? |
@@ -77,8 +77,13 @@ support, and is not presented as Core law or general OFARM behavior.
 | `kernel/tests/**` | Mix of generic mechanism tests, root bridges, and active SI pilot tests. | `NEEDS_PROFILE_LOADER_OR_HARNESS` | Machine check that profile-local tests are reachable from root collection, and no loss of current regression coverage. |
 | `conformance/evidence/**` | Executed platform evidence is root-owned and currently active-pilot grounded. | `ACTIVE_RUNTIME_SI_SUPPORT` | Approved profile evidence writer and suite id before any profile-local executed evidence lane. |
 | Root platform evidence writer | Produces root platform evidence, not profile-local evidence. | `ACTIVE_RUNTIME_SI_SUPPORT` | Profile evidence-lane design that avoids relabeling existing evidence. |
-| Contract comments mentioning KMG-MID/GERK | SI examples may remain in Core contract comments. | `CONTRACT_COMMENT_REVIEW` | Contract review that proves wording changes are non-semantic and do not update schemas or manifests. |
 | Active SI pilot runtime assumptions | Current runtime remains the SI pilot. | `ACTIVE_RUNTIME_SI_SUPPORT` | A later runtime plan must externalize profile content without hiding current active behavior. |
+
+## Closed Or Historical Blockers
+
+| Former surface | Resolution | Remaining certification note |
+| --- | --- | --- |
+| Core contract comments mentioning KMG-MID/GERK | Closed by profile-neutral comment wording. The review record remains in `core_contract_comment_review_plan.md`. | Keep as historical review evidence only; do not reopen as a current blocker unless new seed-term hits appear in `contracts/core/**`. |
 
 ## Certification Levels
 
@@ -109,7 +114,8 @@ Allowed hits must be classified as one of:
 
 - profile-local pointers;
 - explicit active-runtime SI support;
-- contract comments under review;
+- historical contract-comment review records that are profile-local or
+  explicitly marked closed;
 - conformance evidence history;
 - root navigation or review guards;
 - country-neutral wording that happens to mention the term as a prohibited or

@@ -1,10 +1,11 @@
 # Validator Policy Hook Status
 
-Status: implemented boundary memo. The validation-policy boundary described
-here is implemented by `profile_si_ffs/evidence_review_policy_v0_1.json` plus
-generic loader/use code in Kernel. This file does not change runtime behavior,
-define OFARM law, update contracts or generated manifests, alter tests,
-regenerate evidence, or claim Slovenia production readiness.
+Status: prior implementation status record. The validation-policy boundary
+described here is recorded as implemented by
+`profile_si_ffs/evidence_review_policy_v0_1.json` plus generic loader/use code
+in Kernel. This file does not change runtime behavior, define OFARM law, update
+contracts or generated manifests, alter tests, regenerate evidence, or claim
+Slovenia production readiness.
 
 This began as the PR D4 follow-up from `manual_review_backlog_plan.md`. It now
 records the implemented profile validation-policy boundary for SI-specific
@@ -34,7 +35,7 @@ country abstraction layer.
 | `CodeBindingValidator` | Routes missing/unverified product binding, missing crop binding, and wrong-kind binding refs. | Reads binding-role posture, reason titles/text, and review/refusal disposition from active profile validation policy. |
 | `RegistryReverificationValidator` | Uses active SI REGSR snapshot semantics and decision-number reverification language. | Remains unchanged by D4; any registry-family reverification policy hook belongs to a later lane. |
 | `profile_si_ffs/evidence_review_policy_v0_1.json` | Owns sufficiency floor composition, display metadata, advisory rules, and validation policy metadata. | Contains the active SI `validation` block. |
-| `profile_si_ffs.tests.m2_si_validation_policy_tests` | Profile-local engineering tests for validation policy behavior. | Proves values are sourced from package content, existing decisions are unchanged, and malformed policy fails closed. |
+| `profile_si_ffs.tests.m2_si_validation_policy_tests` | Profile-local engineering tests for validation policy behavior. | Records coverage that values are sourced from package content, existing decisions are unchanged, and malformed policy fails closed. |
 
 ## Implemented Policy Boundary
 
@@ -106,9 +107,22 @@ The implementation keeps runtime decisions unchanged:
 - No Netherlands profile, contracts, manifests, generated outputs, or runtime
   adapters are in scope.
 
-## Implemented Test Coverage
+## Evidence References
 
-D4 coverage proves:
+This status record points to prior implementation evidence. It is not, by
+itself, a fresh validation run.
+
+| Evidence type | Reference |
+| --- | --- |
+| Implementation commits | `5518f55` moved SI validator policy values into profile policy; `6390093` kept wrong-kind binding refs as hard refusals; `34413c6` refreshed D4 validation-policy status. |
+| Root test entrypoint | `kernel/tests/test_m2_si_validation_policy.py` |
+| Profile engineering-test module | `profile_si_ffs.tests.m2_si_validation_policy_tests` |
+| Implementation validation command | `.venv/bin/python -m pytest kernel/tests/ -q` |
+| Package validation command | `python3 conformance/ofarm_pkg_contract_check.py` |
+
+## Recorded Test Coverage
+
+D4 coverage is expected to cover:
 
 - validation policy values are sourced from profile package content;
 - unresolved dose/unit failures use profile validation policy text and reason

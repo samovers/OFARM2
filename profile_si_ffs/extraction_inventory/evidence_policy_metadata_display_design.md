@@ -1,10 +1,11 @@
 # Evidence Policy Metadata Display Status
 
-Status: implemented boundary memo. The metadata boundary described here is
-implemented by `profile_si_ffs/evidence_review_policy_v0_1.json` plus generic
-loader/use code in Kernel. This file does not change runtime behavior, define
-OFARM law, update contracts or generated manifests, alter tests, regenerate
-evidence, or claim Slovenia production readiness.
+Status: prior implementation status record. The metadata boundary described
+here is recorded as implemented by
+`profile_si_ffs/evidence_review_policy_v0_1.json` plus generic loader/use code
+in Kernel. This file does not change runtime behavior, define OFARM law, update
+contracts or generated manifests, alter tests, regenerate evidence, or claim
+Slovenia production readiness.
 
 This began as the PR D3 follow-up from `manual_review_backlog_plan.md`. It now
 records the implemented profile policy metadata/display boundary for SI
@@ -31,7 +32,7 @@ through `kernel/profile_policy.py`.
 | `profile_si_ffs/evidence_review_policy_v0_1.json` | Owns the active SI hard/soft floor composition, advisory rule values, and display metadata. | Contains `display` metadata for rule refs, claim statements, rationale templates, durable-proof label, floor item labels, and floor item reason-code mappings. |
 | `kernel/profile_policy.py` | Loads and validates the active profile policy. | Validates display metadata fail-closed and exposes typed helpers such as `operation_floor_display`, `floor_item_rule_ref`, and `format_display_template`. |
 | `kernel/sufficiency.py` | Builds `EvidenceSufficiencyCase` records. | Reads rule refs, claim statements, rationale strings, durable-proof label, and selected reason codes from active profile display metadata. |
-| `profile_si_ffs.tests.m2_si_floor_tests` | Profile-local engineering tests for SI floor policy behavior. | Proves display metadata is sourced from package content, malformed metadata fails closed, and clean operation claims keep the same decisions. |
+| `profile_si_ffs.tests.m2_si_floor_tests` | Profile-local engineering tests for SI floor policy behavior. | Records coverage that display metadata is sourced from package content, malformed metadata fails closed, and clean operation claims keep the same decisions. |
 
 ## Implemented Policy Metadata
 
@@ -101,9 +102,22 @@ The Kernel remains the generic case builder:
 - RVO/NL profile content, SI runtime adapters, manifests, and contracts are out
   of scope.
 
-## Implemented Test Coverage
+## Evidence References
 
-D3 coverage proves:
+This status record points to prior implementation evidence. It is not, by
+itself, a fresh validation run.
+
+| Evidence type | Reference |
+| --- | --- |
+| Implementation/status commits | `c8d93c5` added the SI evidence policy display design memo; `e9acd20` moved SI sufficiency display metadata into profile policy; `3dbf543` refreshed D3 policy display status. |
+| Root test entrypoint | `kernel/tests/test_m2_si_floor.py` |
+| Profile engineering-test module | `profile_si_ffs.tests.m2_si_floor_tests` |
+| Implementation validation command | `.venv/bin/python -m pytest kernel/tests/ -q` |
+| Package validation command | `python3 conformance/ofarm_pkg_contract_check.py` |
+
+## Recorded Test Coverage
+
+D3 coverage is expected to cover:
 
 - current SI floor cases emit the same decisions with metadata in place;
 - rule refs are loaded from metadata;

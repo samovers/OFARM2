@@ -25,15 +25,32 @@ rules.
 
 ## Follow-Up Status
 
-| Lane | Current status | Remaining boundary |
+These rows are status records for prior D-lane work. They are not fresh
+validation evidence by themselves; the backing references below identify the
+files, tests, and commits that should be checked when a future PR relies on an
+implemented-status claim.
+
+| Lane | Current status record | Remaining boundary |
 | --- | --- | --- |
-| D1 active-profile loader | Implemented and recorded in `active_profile_loader_design.md`. The active SI runtime descriptor and loader exist. | No multi-profile activation or broad country abstraction. Root context assembly remains Kernel-owned. |
-| D2 demo fixtures | D2a-D2d implemented and recorded in `demo_fixture_migration_plan.md`. Profile-local fixture refs, records, payload builders, and facade exist. | `kernel/demo.py` remains the public compatibility facade until any D2e-style cleanup proves root callers can migrate safely. |
-| D3 evidence display metadata | Implemented and recorded in `evidence_policy_metadata_display_design.md`. SI sufficiency display metadata is profile-owned. | Kernel sufficiency mechanics remain generic and root-owned. |
-| D4 validation policy metadata | Implemented and recorded in `validator_policy_hook_design.md`. SI validator values and text are profile-owned. | Validator order and mechanics remain Kernel-owned; registry-family reverification policy is not moved. |
+| D1 active-profile loader | Prior implemented boundary recorded in `active_profile_loader_design.md`. The active SI runtime descriptor and loader exist. | No multi-profile activation or broad country abstraction. Root context assembly remains Kernel-owned. |
+| D2 demo fixtures | Prior D2a-D2d boundary recorded in `demo_fixture_migration_plan.md`. Profile-local fixture refs, records, payload builders, and facade exist. | `kernel/demo.py` remains the public compatibility facade until any D2e-style cleanup proves root callers can migrate safely. |
+| D3 evidence display metadata | Prior implemented boundary recorded in `evidence_policy_metadata_display_design.md`. SI sufficiency display metadata is profile-owned. | Kernel sufficiency mechanics remain generic and root-owned. |
+| D4 validation policy metadata | Prior implemented boundary recorded in `validator_policy_hook_design.md`. SI validator values and text are profile-owned. | Validator order and mechanics remain Kernel-owned; registry-family reverification policy is not moved. |
 | D5 manifest boundary | D5 design, D5a checklist, and D5b navigation index are recorded in `multi_profile_manifest_design.md`, `manifest_implementation_checklist.md`, and `profile_navigation_index.json`. | No generated manifest change, profile manifest generation, or runtime capability claim for design-only slices. |
-| D6 test harness | Implemented and recorded in `test_harness_split_plan.md`. Profile-local SI engineering test modules and root discovery bridges exist. | Root evidence writer and remaining root active-runtime tests stay root-owned. |
-| D7 conformance lanes | Root lane map and evidence README are implemented and recorded in `conformance_lane_split_plan.md`. | No profile-local executed evidence writer or profile conformance evidence lane yet. |
+| D6 test harness | Prior implemented boundary recorded in `test_harness_split_plan.md`. Profile-local SI engineering test modules and root discovery bridges exist. | Root evidence writer and remaining root active-runtime tests stay root-owned. |
+| D7 conformance lanes | Root lane map and evidence README boundary recorded in `conformance_lane_split_plan.md`. | No profile-local executed evidence writer or profile conformance evidence lane yet. |
+
+## Evidence Backing For Status Records
+
+| Lane | Primary status document | Evidence references |
+| --- | --- | --- |
+| D1 active-profile loader | `active_profile_loader_design.md` | `kernel/tests/test_profile_runtime_loader.py`; implementation PR validation should include `.venv/bin/python -m pytest kernel/tests/ -q`. |
+| D2 demo fixtures | `demo_fixture_migration_plan.md` | `kernel/tests/test_profile_si_demo_refs.py`, `kernel/tests/test_profile_si_demo_records.py`, `kernel/tests/test_profile_si_demo_payloads.py`; profile modules under `profile_si_ffs.tests.d2_demo_fixture_*`. |
+| D3 evidence display metadata | `evidence_policy_metadata_display_design.md` | `kernel/tests/test_m2_si_floor.py`; profile module `profile_si_ffs.tests.m2_si_floor_tests`; implementation PR validation should include `.venv/bin/python -m pytest kernel/tests/ -q`. |
+| D4 validation policy metadata | `validator_policy_hook_design.md` | Commits `5518f55`, `6390093`, `34413c6`; `kernel/tests/test_m2_si_validation_policy.py`; profile module `profile_si_ffs.tests.m2_si_validation_policy_tests`. |
+| D5 manifest boundary | `multi_profile_manifest_design.md`, `manifest_implementation_checklist.md`, `profile_navigation_index.json` | Navigation-only/status design record. No generated manifest or runtime capability implementation is claimed by D5b. |
+| D6 test harness | `test_harness_split_plan.md` | Commits `b5f54c0`, `63e6430`, `45b3a50`, `3c98188`, `a21fed8`, `f82820c`; `kernel/tests/test_profile_harness_bridge.py`; root bridge files in `kernel/tests/`. |
+| D7 conformance lanes | `conformance_lane_split_plan.md` | Commits `1cc0383`, `01eee6b`, `9e3e5cc`, `556ce39`, `5759b46`, `5e88394`, `8ff6d53`, `f82820c`; `conformance/CONFORMANCE.md`; `conformance/evidence/README.md`; `conformance/evidence/platform_mvp_results_*.json`. |
 
 ## Manual-Review Areas
 

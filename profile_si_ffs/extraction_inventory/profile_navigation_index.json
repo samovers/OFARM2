@@ -31,6 +31,12 @@
       "status": "profile-local inventory overview"
     },
     {
+      "id": "profile_navigation_index",
+      "path": "profile_si_ffs/extraction_inventory/profile_navigation_index.json",
+      "kind": "navigation",
+      "status": "navigation-only non-capability profile-local document index"
+    },
+    {
       "id": "si_core_leakage_inventory",
       "path": "profile_si_ffs/extraction_inventory/si_core_leakage_inventory.md",
       "kind": "inventory",
