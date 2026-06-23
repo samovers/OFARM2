@@ -56,9 +56,9 @@ For extraction-inventory consistency changes, also run:
 python3 conformance/ofarm_profile_extraction_consistency_check.py
 ```
 
-This check keeps the SI extraction README, navigation-only index, closed
-contract-comment blocker state, and certification non-claim language aligned. It
-is a consistency guard, not an L5 country-term allowlist.
+This manual consistency check keeps the SI extraction README, navigation-only
+index, closed contract-comment blocker state, and certification non-claim
+language aligned. It is not an L5 country-term allowlist.
 
 ## Inherited fixtures
 

@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Consistency guard for SI profile extraction inventory/status docs.
+"""Manual consistency check for SI profile extraction inventory/status docs.
 
 This is repository tooling, not OFARM law, not a runtime profile loader, and
-not the future L5 country-term allowlist. It catches drift between the
-profile-local extraction README, the navigation-only index, the current
-contract-comment audit state, and the certification non-claim language.
+not the future L5 country-term allowlist. It is a manual check that catches
+drift between the profile-local extraction README, the navigation-only index,
+the current contract-comment audit state, and the certification non-claim
+language.
 """
 from __future__ import annotations
 
@@ -28,6 +29,50 @@ def rel(path: Path) -> str:
 
 def read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
+
+
+def normalized(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def section_text(text: str, heading: str) -> str:
+    pattern = rf"^## {re.escape(heading)}\n(?P<body>.*?)(?=^## |\Z)"
+    match = re.search(pattern, text, flags=re.MULTILINE | re.DOTALL)
+    return match.group("body") if match else ""
+
+
+def require_phrase(
+    failures: list[str],
+    *,
+    path_label: str,
+    text: str,
+    phrase: str,
+    description: str,
+) -> None:
+    if normalized(phrase) not in normalized(text):
+        failures.append(f"{path_label} missing {description}: {phrase}")
+
+
+def require_section_phrase(
+    failures: list[str],
+    *,
+    path_label: str,
+    text: str,
+    heading: str,
+    phrase: str,
+    description: str,
+) -> None:
+    body = section_text(text, heading)
+    if not body:
+        failures.append(f"{path_label} missing ## {heading} section")
+        return
+    require_phrase(
+        failures,
+        path_label=f"{path_label} ## {heading}",
+        text=body,
+        phrase=phrase,
+        description=description,
+    )
 
 
 def markdown_files_listed_in_readme() -> set[str]:
@@ -142,9 +187,6 @@ def check_certification_plan_not_stale(failures: list[str]) -> None:
             )
 
     required_snippets = (
-        "Current status is below L5",
-        "not proof that the end state has been reached",
-        "whole-Core country/profile neutrality is already certified",
         "Closed Or Historical Blockers",
         "former KMG-MID/GERK comments were neutralized",
     )
@@ -152,38 +194,101 @@ def check_certification_plan_not_stale(failures: list[str]) -> None:
         if snippet not in text:
             failures.append(
                 "core_country_neutrality_certification_plan.md missing "
-                f"required non-claim or closed-blocker wording: {snippet}"
+                f"required closed-blocker wording: {snippet}"
             )
+
+    require_phrase(
+        failures,
+        path_label="core_country_neutrality_certification_plan.md",
+        text=text,
+        phrase=(
+            "Current status is below L5. This file is a planning artifact for "
+            "reaching that end state, not proof that the end state has been "
+            "reached."
+        ),
+        description="full below-L5 planning non-claim sentence",
+    )
+    require_section_phrase(
+        failures,
+        path_label="core_country_neutrality_certification_plan.md",
+        text=text,
+        heading="Non-Claims",
+        phrase="This plan must not be read as claiming:",
+        description="Non-Claims section framing sentence",
+    )
+    require_section_phrase(
+        failures,
+        path_label="core_country_neutrality_certification_plan.md",
+        text=text,
+        heading="Non-Claims",
+        phrase="- whole-Core country/profile neutrality is already certified;",
+        description="whole-Core certification non-claim bullet",
+    )
 
 
 def check_audit_docs_keep_nonclaim_language(failures: list[str]) -> None:
     allowlist_text = read(ALLOWLIST_PLAN)
     initial_text = read(INITIAL_REVIEW)
 
-    allowlist_required = (
-        "does not implement a\nmachine guard",
-        "scan remains informational",
-        "enforcing L5 machine guard",
+    require_phrase(
+        failures,
+        path_label="core_country_term_audit_allowlist_plan.md",
+        text=allowlist_text,
+        phrase=(
+            "This file does not implement a machine guard, certify Core, "
+            "change runtime behavior"
+        ),
+        description="status-sentence machine-guard non-claim",
     )
-    for snippet in allowlist_required:
-        if snippet not in allowlist_text:
-            failures.append(
-                "core_country_term_audit_allowlist_plan.md missing "
-                f"non-claim wording: {snippet}"
-            )
+    require_phrase(
+        failures,
+        path_label="core_country_term_audit_allowlist_plan.md",
+        text=allowlist_text,
+        phrase="Until this review layer is implemented, the scan remains informational.",
+        description="informational-scan limitation",
+    )
+    require_phrase(
+        failures,
+        path_label="core_country_term_audit_allowlist_plan.md",
+        text=allowlist_text,
+        phrase=(
+            "the future review layer needed before the proposed country-term "
+            "scan can become an enforcing L5 machine guard"
+        ),
+        description="future-L5 framing",
+    )
 
-    initial_required = (
-        "This is not the L5 machine guard",
-        "not a line-level allowlist",
-        "proof of Core certification",
-        "below L5 until every remaining hit is\n  reviewed",
+    require_phrase(
+        failures,
+        path_label="core_country_term_audit_initial_review.md",
+        text=initial_text,
+        phrase=(
+            "This is not the L5 machine guard. It is not a line-level "
+            "allowlist. It is a coarse review input."
+        ),
+        description="snapshot non-guard sentence",
     )
-    for snippet in initial_required:
-        if snippet not in initial_text:
-            failures.append(
-                "core_country_term_audit_initial_review.md missing "
-                f"non-claim wording: {snippet}"
-            )
+    require_phrase(
+        failures,
+        path_label="core_country_term_audit_initial_review.md",
+        text=initial_text,
+        phrase=(
+            "No hit in this snapshot should be treated as proof of Core "
+            "certification."
+        ),
+        description="snapshot proof non-claim sentence",
+    )
+    require_phrase(
+        failures,
+        path_label="core_country_term_audit_initial_review.md",
+        text=initial_text,
+        phrase=(
+            "The contract-comment review is no longer a current Core contract "
+            "seed-term blocker, but the full audit remains below L5 until "
+            "every remaining hit is reviewed and an enforcing guard exists."
+        ),
+        description="below-L5 snapshot limitation",
+    )
 
 
 def main() -> int:
