@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from .profile_runtime import load_active_profile_selection
+from .profile_runtime import ProfileRuntimeError, load_active_profile_selection
 
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent
 
@@ -24,7 +24,11 @@ def active_profile_package_names_from_env() -> tuple[str, ...]:
     raw = os.environ.get(ACTIVE_PROFILE_PACKAGE_NAMES_ENV)
     if raw is None:
         return DEFAULT_ACTIVE_PROFILE_PACKAGE_NAMES
-    return tuple(part.strip() for part in raw.split(",") if part.strip())
+    names = tuple(part.strip() for part in raw.split(","))
+    if any(not name for name in names):
+        raise ProfileRuntimeError(
+            f"{ACTIVE_PROFILE_PACKAGE_NAMES_ENV} contains blank profile package token")
+    return names
 
 
 ACTIVE_PROFILE_PACKAGE_NAMES = active_profile_package_names_from_env()

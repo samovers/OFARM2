@@ -10,6 +10,8 @@ import copy
 import json
 import os
 import shutil
+import subprocess
+import sys
 from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
@@ -201,6 +203,42 @@ def test_config_declares_explicit_single_active_profile_selection(monkeypatch):
         " profile_si_ffs ",
     )
     assert config.active_profile_package_names_from_env() == ("profile_si_ffs",)
+
+
+@pytest.mark.parametrize("raw", [
+    "",
+    "profile_si_ffs,",
+    ",profile_si_ffs",
+    "profile_si_ffs,,profile_si_ffs",
+])
+def test_active_profile_env_rejects_blank_tokens(monkeypatch, raw):
+    monkeypatch.setenv(config.ACTIVE_PROFILE_PACKAGE_NAMES_ENV, raw)
+
+    with pytest.raises(ProfileRuntimeError, match="blank profile package token"):
+        config.active_profile_package_names_from_env()
+
+
+@pytest.mark.parametrize("raw", [
+    "",
+    "profile_si_ffs,",
+    ",profile_si_ffs",
+    "profile_si_ffs,,profile_si_ffs",
+])
+def test_active_profile_env_import_fails_closed_for_blank_tokens(raw):
+    env = os.environ.copy()
+    env[config.ACTIVE_PROFILE_PACKAGE_NAMES_ENV] = raw
+
+    proc = subprocess.run(
+        [sys.executable, "-c", "import kernel.config"],
+        cwd=config.PACKAGE_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert proc.returncode != 0
+    assert "blank profile package token" in proc.stderr
 
 
 def test_active_profile_selection_rejects_multiple_profiles_in_mp1():
