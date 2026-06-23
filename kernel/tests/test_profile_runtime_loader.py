@@ -25,6 +25,7 @@ from kernel.profile_runtime import (
     REFUSE_CONTEXT,
     ProfileRuntimeError,
     ReferenceFamily,
+    load_active_profile_selection,
     load_profile_runtime_descriptor,
 )
 from kernel.store import Store
@@ -181,6 +182,62 @@ def test_descriptor_drives_existing_si_config_without_tenant_binding():
         "si.mkgp.gerk-layer").snapshot_prefix
     assert config.SHIPPED_REGSR_SNAPSHOT_REF == active.reference_family(
         "si.uvhvvr.ffs-reg").shipped_snapshot_ref
+
+
+def test_config_declares_explicit_single_active_profile_selection(monkeypatch):
+    assert config.DEFAULT_ACTIVE_PROFILE_PACKAGE_NAMES == ("profile_si_ffs",)
+    assert config.ALLOWED_ACTIVE_PROFILE_PACKAGE_NAMES == ("profile_si_ffs",)
+    assert config.ACTIVE_PROFILE_PACKAGE_NAMES == ("profile_si_ffs",)
+    assert config.ACTIVE_PROFILE_SELECTION.profile_package_names == ("profile_si_ffs",)
+    assert config.ACTIVE_PROFILE_SELECTION.active_profile is config.ACTIVE_PROFILE
+    assert config.ACTIVE_PROFILE_ROOTS == (config.PROFILE_ROOT,)
+    assert config.PROFILE_ROOT.name == "profile_si_ffs"
+    assert config.ACTIVE_PROFILE.profile_root == config.PROFILE_ROOT
+
+    monkeypatch.delenv(config.ACTIVE_PROFILE_PACKAGE_NAMES_ENV, raising=False)
+    assert config.active_profile_package_names_from_env() == ("profile_si_ffs",)
+    monkeypatch.setenv(
+        config.ACTIVE_PROFILE_PACKAGE_NAMES_ENV,
+        " profile_si_ffs ",
+    )
+    assert config.active_profile_package_names_from_env() == ("profile_si_ffs",)
+
+
+def test_active_profile_selection_rejects_multiple_profiles_in_mp1():
+    with pytest.raises(ProfileRuntimeError, match="exactly one active profile package"):
+        load_active_profile_selection(
+            config.PACKAGE_ROOT,
+            ("profile_si_ffs", "profile_nl_go_glmc7_2026"),
+        )
+
+
+def test_active_profile_selection_rejects_design_only_profile_slice():
+    with pytest.raises(ProfileRuntimeError, match="design-only profile slices"):
+        load_active_profile_selection(
+            config.PACKAGE_ROOT,
+            ("profile_nl_go_glmc7_2026",),
+        )
+
+
+def test_active_profile_selection_rejects_profile_not_enabled_for_mp1():
+    with pytest.raises(ProfileRuntimeError, match="not enabled for this runtime"):
+        load_active_profile_selection(
+            config.PACKAGE_ROOT,
+            ("profile_nl_go_glmc7_2026",),
+            allowed_profile_package_names=config.ALLOWED_ACTIVE_PROFILE_PACKAGE_NAMES,
+        )
+
+
+@pytest.mark.parametrize("selection,match", [
+    ((), "must not be empty"),
+    ("profile_si_ffs", "must be a sequence"),
+    (("../profile_si_ffs",), "simple repository-local"),
+    (("profile_si_ffs/runtime_profile_descriptor.json",), "simple repository-local"),
+    (("contracts",), "profile_"),
+])
+def test_active_profile_selection_rejects_unsafe_or_non_profile_names(selection, match):
+    with pytest.raises(ProfileRuntimeError, match=match):
+        load_active_profile_selection(config.PACKAGE_ROOT, selection)
 
 
 @pytest.mark.parametrize("field,value", [

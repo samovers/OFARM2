@@ -1,4 +1,4 @@
-"""Active profile runtime descriptor loader.
+"""Active profile runtime selection and descriptor loading.
 
 This is configuration resolution only. The descriptor is profile/package
 content, not a canonical contract and not OFARM Core law. Tenant or demo binding
@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -100,6 +101,62 @@ class ProfileRuntimeDescriptor:
         raise ProfileRuntimeError(f"active profile lacks reference family {family_id!r}")
 
 
+@dataclass(frozen=True)
+class ActiveProfileSelection:
+    package_root: Path
+    profile_package_names: tuple[str, ...]
+    profile_roots: tuple[Path, ...]
+    descriptors: tuple[ProfileRuntimeDescriptor, ...]
+
+    @property
+    def active_profile(self) -> ProfileRuntimeDescriptor:
+        if len(self.descriptors) != 1:
+            raise ProfileRuntimeError(
+                "MP1 active profile selection supports exactly one active "
+                f"profile package; got {len(self.descriptors)}")
+        return self.descriptors[0]
+
+
+def load_active_profile_selection(
+    package_root: Path,
+    profile_package_names: Sequence[str],
+    *,
+    allowed_profile_package_names: Sequence[str] | None = None,
+) -> ActiveProfileSelection:
+    """Resolve the configured active profile package selection, failing closed.
+
+    MP1 makes active-profile selection explicit while preserving the current
+    single-active-profile runtime. Multiple active profiles are a later loader,
+    harness, evidence, and manifest problem, so this selector rejects them
+    rather than pretending the rest of the runtime is multi-profile-ready.
+    """
+    root = package_root.resolve()
+    if not root.is_dir():
+        raise ProfileRuntimeError(f"package root is not a directory: {package_root}")
+    names = _profile_package_names(profile_package_names)
+    if allowed_profile_package_names is not None:
+        allowed = set(_profile_package_names(allowed_profile_package_names))
+        rejected = sorted(name for name in names if name not in allowed)
+        if rejected:
+            raise ProfileRuntimeError(
+                "active profile package selection includes package(s) not "
+                f"enabled for this runtime: {rejected}")
+    if len(names) != 1:
+        raise ProfileRuntimeError(
+            "MP1 active profile selection supports exactly one active profile "
+            f"package; got {list(names)!r}")
+
+    profile_roots = tuple(_active_profile_root(root, name) for name in names)
+    descriptors = tuple(load_profile_runtime_descriptor(profile_root)
+                        for profile_root in profile_roots)
+    return ActiveProfileSelection(
+        package_root=root,
+        profile_package_names=names,
+        profile_roots=profile_roots,
+        descriptors=descriptors,
+    )
+
+
 def load_profile_runtime_descriptor(
     profile_root: Path,
     descriptor_path: Path | None = None,
@@ -168,6 +225,49 @@ def load_profile_runtime_descriptor(
         reference_families=families,
         context_snapshot_id_prefix=doc["contextSnapshotIdPrefix"],
     )
+
+
+def _profile_package_names(profile_package_names: Sequence[str]) -> tuple[str, ...]:
+    if isinstance(profile_package_names, str):
+        raise ProfileRuntimeError("active profile package selection must be a sequence")
+    names = tuple(profile_package_names)
+    if not names:
+        raise ProfileRuntimeError("active profile package selection must not be empty")
+    if not all(isinstance(name, str) for name in names):
+        raise ProfileRuntimeError("active profile package names must be strings")
+    if len(names) != len(set(names)):
+        raise ProfileRuntimeError("active profile package selection contains duplicates")
+    return names
+
+
+def _active_profile_root(package_root: Path, package_name: str) -> Path:
+    if not package_name:
+        raise ProfileRuntimeError("active profile package name must not be empty")
+    path = Path(package_name)
+    if path.is_absolute() or ".." in path.parts or len(path.parts) != 1:
+        raise ProfileRuntimeError(
+            "active profile package names must be simple repository-local "
+            f"directory names: {package_name!r}")
+    if not package_name.startswith("profile_"):
+        raise ProfileRuntimeError(
+            f"active profile package must be a profile_* directory: {package_name!r}")
+    target = package_root / path
+    try:
+        resolved = target.resolve()
+        resolved.relative_to(package_root)
+    except (OSError, ValueError) as exc:
+        raise ProfileRuntimeError(
+            f"active profile package escapes the package root: {package_name!r}") from exc
+    if not resolved.is_dir():
+        raise ProfileRuntimeError(
+            f"active profile package is not a directory: {package_name!r}")
+    descriptor = resolved / DESCRIPTOR_FILENAME
+    if not descriptor.is_file():
+        raise ProfileRuntimeError(
+            f"active profile package {package_name!r} has no "
+            f"{DESCRIPTOR_FILENAME}; design-only profile slices are not active "
+            "runtime profiles")
+    return resolved
 
 
 def _reject_unknown(doc: dict[str, Any], allowed: set[str], label: str) -> None:

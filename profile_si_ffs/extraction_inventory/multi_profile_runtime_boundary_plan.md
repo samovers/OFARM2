@@ -85,6 +85,30 @@ MP7 must not be used to activate the Netherlands GO + GLMC 7 design slice unless
 that slice has first become an implemented runtime profile through separate,
 reviewed work.
 
+## MP1 Implementation Status
+
+MP1 is implemented as explicit single-active-profile selection in
+`kernel/config.py` and `kernel/profile_runtime.py`.
+
+The runtime now exposes:
+
+- `ALLOWED_ACTIVE_PROFILE_PACKAGE_NAMES`;
+- `ACTIVE_PROFILE_PACKAGE_NAMES`;
+- `ACTIVE_PROFILE_SELECTION`;
+- `ACTIVE_PROFILE_ROOTS`;
+- `ACTIVE_PROFILE`;
+- `PROFILE_ROOT`.
+
+The default and only enabled package remains `profile_si_ffs`. The selector
+fails closed if selection is empty, unsafe, duplicated, names more than one
+active package, names a package that is not enabled for this runtime, or points
+to a profile directory without `runtime_profile_descriptor.json`.
+
+This is still not multi-profile runtime readiness. MP1 does not activate a
+second profile, does not add the Netherlands GO + GLMC 7 design slice to runtime
+claims, does not change manifests, does not create profile-local executed
+evidence, and does not change current SI pilot behavior.
+
 ## Preconditions Before Any Runtime PR
 
 A runtime implementation PR must state which stage it targets and prove:
