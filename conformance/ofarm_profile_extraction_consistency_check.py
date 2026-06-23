@@ -415,8 +415,8 @@ def check_extraction_inventory_uses_full_commit_refs(failures: list[str]) -> Non
         for line_no, line in enumerate(read(path).splitlines(), start=1):
             if ABBREVIATED_BACKTICKED_SHA_RE.search(line):
                 failures.append(
-                    f"{rel(path)}:{line_no} uses a short backticked commit "
-                    "hash; cite the PR number plus full 40-character SHA"
+                    f"{rel(path)}:{line_no} uses an abbreviated backticked "
+                    "commit hash; cite the PR number plus full 40-character SHA"
                 )
 
 
