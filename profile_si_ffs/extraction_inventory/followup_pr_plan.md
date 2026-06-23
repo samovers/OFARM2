@@ -11,7 +11,7 @@ Goal: move clearly SI-owned authored artifacts from Core-facing locations into `
 
 Original candidate work:
 
-- Move SI view/query artifacts currently under `views/` to a profile-local destination such as `profile_si_ffs/views/`.
+- Move SI view/query artifacts that were initially under `views/` to a profile-local destination such as `profile_si_ffs/views/`.
 - Update only the references required to find those artifacts after the move.
 - Keep the change documentation-only or artifact-location-only; do not change view semantics, gate behavior, runtime adapters, contracts, or manifests.
 - Treat any test or loader dependency discovered during the move as a stop condition unless the same PR can preserve behavior with a narrow path update.
