@@ -57,50 +57,50 @@
     {
       "id": "manual_review_backlog_plan",
       "path": "profile_si_ffs/extraction_inventory/manual_review_backlog_plan.md",
-      "kind": "planning",
-      "status": "docs-only manual-review backlog"
+      "kind": "status record",
+      "status": "docs-only manual-review backlog status"
     },
     {
       "id": "active_profile_loader_design",
       "path": "profile_si_ffs/extraction_inventory/active_profile_loader_design.md",
-      "kind": "design memo",
-      "status": "docs-only active-profile loader boundary"
+      "kind": "status memo",
+      "status": "docs-only implemented D1 active-profile loader boundary"
     },
     {
       "id": "evidence_policy_metadata_display_design",
       "path": "profile_si_ffs/extraction_inventory/evidence_policy_metadata_display_design.md",
-      "kind": "design memo",
-      "status": "docs-only evidence metadata/display boundary"
+      "kind": "status memo",
+      "status": "docs-only implemented D3 evidence metadata/display boundary"
     },
     {
       "id": "validator_policy_hook_design",
       "path": "profile_si_ffs/extraction_inventory/validator_policy_hook_design.md",
-      "kind": "design memo",
-      "status": "docs-only validation-policy hook boundary"
+      "kind": "status memo",
+      "status": "docs-only implemented D4 validation-policy boundary"
     },
     {
       "id": "test_harness_split_plan",
       "path": "profile_si_ffs/extraction_inventory/test_harness_split_plan.md",
-      "kind": "planning",
-      "status": "docs-only profile test-harness boundary"
+      "kind": "status record",
+      "status": "docs-only implemented D6 profile test-harness boundary"
     },
     {
       "id": "conformance_lane_split_plan",
       "path": "profile_si_ffs/extraction_inventory/conformance_lane_split_plan.md",
-      "kind": "planning",
-      "status": "docs-only conformance lane boundary"
+      "kind": "status memo",
+      "status": "docs-only D7 conformance lane boundary"
     },
     {
       "id": "demo_fixture_migration_plan",
       "path": "profile_si_ffs/extraction_inventory/demo_fixture_migration_plan.md",
-      "kind": "planning",
-      "status": "docs-only demo fixture migration boundary"
+      "kind": "status record",
+      "status": "docs-only implemented D2 demo fixture boundary"
     },
     {
       "id": "multi_profile_manifest_design",
       "path": "profile_si_ffs/extraction_inventory/multi_profile_manifest_design.md",
-      "kind": "design memo",
-      "status": "docs-only manifest boundary memo"
+      "kind": "status memo",
+      "status": "docs-only D5 manifest boundary and navigation-index status"
     },
     {
       "id": "manifest_implementation_checklist",

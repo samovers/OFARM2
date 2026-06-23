@@ -1,8 +1,8 @@
 # SI Extraction Inventory
 
-This directory is a documentation-only inventory for future work that moves Slovenian profile material out of Core-facing surfaces or rewrites Core-facing text so it is profile-neutral.
+This directory is a documentation-only inventory and status area for work that moves Slovenian profile material out of Core-facing surfaces or rewrites Core-facing text so it is profile-neutral.
 
-This PR does not move files, change runtime behavior, update contracts, update manifests, regenerate kernel outputs, or change Core, Kernel, or Platform semantics. It records what is visible today and separates safe follow-up work from items that need manual review.
+These documents do not move files, change runtime behavior, update contracts, update manifests, regenerate kernel outputs, or change Core, Kernel, or Platform semantics. They record what is visible today, what has already landed, and which follow-up work still needs manual review.
 
 ## Scope
 
