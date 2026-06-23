@@ -8,7 +8,7 @@ PR B/PR C lanes have landed; current remaining work is tracked by
 
 ## Classification Map
 
-| Inventory ID | Current path or area | Classification | Candidate destination or action | Follow-up lane |
+| Inventory ID | Path or area at classification | Classification | Candidate destination or action | Follow-up lane |
 | --- | --- | --- | --- | --- |
 | SI-CORE-001 | `CORE.md` | `REWORD_CORE_GENERICALLY` | Replace KMG-MID example with `profile-specific holding identifier`; keep SI detail in `profile_si_ffs/`. | PR C |
 | SI-CORE-002 | `CORE.md` | `REWORD_CORE_GENERICALLY` | Replace GERK example with `profile-specific parcel identifier`; keep SI detail in `profile_si_ffs/`. | PR C |
@@ -18,7 +18,7 @@ PR B/PR C lanes have landed; current remaining work is tracked by
 | SI-PLATFORM-002 | `PLATFORM.md` | `AMBIGUOUS_MANUAL_REVIEW` | Review pilot-specific activation wording before any neutral rewrite. | Manual review |
 | SI-ROOT-001 | `README.md` | `DO_NOT_TOUCH` | Preserve current implementation-package claim limits unless a broader repo repositioning is approved. | None |
 | SI-ROOT-002 | `AGENTS.md` | `AMBIGUOUS_MANUAL_REVIEW` | Preserve privacy and review guards; only reword if a future instruction update asks for it. | Manual review |
-| SI-VIEWS-001 | `views/OFARM_QuerySpecification_si_ffs_*` | `MOVE_TO_SI_PROFILE` | Candidate destination: `profile_si_ffs/views/` with any doc references updated in the same PR. | PR B |
+| SI-VIEWS-001 | `views/OFARM_QuerySpecification_si_ffs_*` | `MOVE_TO_SI_PROFILE` | Landed by PR #29: profile-local artifacts live in `profile_si_ffs/views/` with the root `views/VIEWS.md` pointer retained. | PR B |
 | SI-KERNEL-001 | `kernel/adapters.py` | `KEEP_IN_CORE_AS_GENERIC_WITH_EXAMPLE_REMOVED` | Keep generic adapter discipline; remove or move Slovenian examples if comments are touched later. | PR C |
 | SI-KERNEL-002 | `kernel/profile_policy.py` | `REWORD_CORE_GENERICALLY` | Use active-profile evidence-floor wording. | PR C |
 | SI-KERNEL-003 | `kernel/sufficiency.py` | `AMBIGUOUS_MANUAL_REVIEW` | Do not move until tests and user-visible rationale strings are reviewed. | Manual review |
