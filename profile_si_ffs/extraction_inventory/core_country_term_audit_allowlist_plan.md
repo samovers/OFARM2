@@ -66,6 +66,7 @@ at least:
 
 | Field | Purpose |
 | --- | --- |
+| `id` | Stable review-record identity for diffs and follow-up references. |
 | `path` | File or glob where the hit is allowed. |
 | `term` | Exact term or term group. |
 | `category` | One of the allowlist categories above. |
@@ -82,6 +83,13 @@ An initial file/glob-level review record now lives in
 line-level, not enforcing, and not an L5 machine guard. A later certification PR
 must still convert the reviewed hits into an approved line-level record before
 any certification claim.
+
+The current manual consistency check validates this initial record's boundary
+flags, stable ids, required-field and category vocabularies, seed term
+vocabulary, seed-scan command alignment, file/glob path coverage, and
+`seed_terms_absent` no-hit records. Those checks are file/glob-level review
+guards only. They are not a line-level allowlist and not an enforcing L5 machine
+guard.
 
 ## Review Flow
 
