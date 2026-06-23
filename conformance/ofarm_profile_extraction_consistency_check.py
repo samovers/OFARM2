@@ -554,6 +554,7 @@ def check_country_term_review_records(failures: list[str]) -> None:
             failures.append(
                 f"{rel(REVIEW_RECORDS)} seedScan.command missing scan root {root!r}"
             )
+    check_seed_scan_command_terms(failures, seed_scan_command, seed_scan_terms)
 
     declared_fields = payload.get("requiredRecordFields")
     if (
@@ -627,6 +628,28 @@ def check_country_term_review_records(failures: list[str]) -> None:
             seen_ids.add(record_id)
 
     check_seed_scan_hit_paths_have_review_records(failures, records, seed_scan_terms)
+
+
+def check_seed_scan_command_terms(
+    failures: list[str], seed_scan_command: str, seed_scan_terms: list[str]
+) -> None:
+    if not seed_scan_terms:
+        return
+    match = re.search(r'rg -n "(?P<term_regex>[^"]+)"', seed_scan_command)
+    if not match:
+        failures.append(
+            f"{rel(REVIEW_RECORDS)} seedScan.command must include the quoted "
+            "rg term expression"
+        )
+        return
+    expected_regex = "|".join(
+        REVIEW_RECORD_SEED_TERM_PATTERNS[term] for term in seed_scan_terms
+    )
+    if match.group("term_regex") != expected_regex:
+        failures.append(
+            f"{rel(REVIEW_RECORDS)} seedScan.command term regex must match "
+            "seedScan.terms expanded through REVIEW_RECORD_SEED_TERM_PATTERNS"
+        )
 
 
 def check_review_record_path_atom(
@@ -706,6 +729,7 @@ def check_seed_scan_hit_paths_have_review_records(
 def country_term_seed_scan_hit_paths(
     failures: list[str], seed_re: re.Pattern[str]
 ) -> list[str]:
+    # Repository tooling only: this is not runtime profile discovery.
     cmd = ["git", "ls-files", *sorted(REVIEW_RECORD_SEED_SCAN_ROOTS)]
     proc = subprocess.run(cmd, cwd=PKG, capture_output=True, text=True, check=False)
     if proc.returncode != 0:
