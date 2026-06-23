@@ -20,7 +20,7 @@ This PR does not move files, change runtime behavior, update contracts, update m
 - `manual_review_backlog_plan.md` expands the ambiguous/manual-review backlog into future design lanes, required preconditions, stop conditions, and validation expectations.
 - `active_profile_loader_design.md` records the implemented D1 active-profile loader boundary for the current SI runtime descriptor.
 - `evidence_policy_metadata_display_design.md` records the implemented D3 metadata/display boundary for SI sufficiency rule refs and profile-owned text.
-- `validator_policy_hook_design.md` records the PR D4 validation-policy hook boundary needed before SI-specific validator posture can move into profile policy content.
+- `validator_policy_hook_design.md` records the implemented D4 validation-policy boundary for SI-specific validator values and text.
 - `test_harness_split_plan.md` records the PR D6 test-harness boundary needed before SI-specific tests and demo fixtures can move under the profile package.
 - `conformance_lane_split_plan.md` records the PR D7 boundary between root conformance, executed evidence, profile engineering tests, and profile design cases.
 - `demo_fixture_migration_plan.md` records the implemented D2a-D2d demo fixture boundary and remaining D2e facade guardrails.
