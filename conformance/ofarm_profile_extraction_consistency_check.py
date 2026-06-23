@@ -9,8 +9,10 @@ language.
 """
 from __future__ import annotations
 
+import fnmatch
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -72,6 +74,18 @@ REVIEW_RECORD_SEED_SCAN_ROOTS = {
     "contracts",
     "kernel",
     "views",
+}
+REVIEW_RECORD_SEED_TERM_PATTERNS = {
+    "KMG-MID": r"KMG-MID",
+    "GERK": r"GERK",
+    "REGSR": r"REGSR",
+    "FFSNaprave": r"FFSNaprave",
+    "Slovenia": r"Slovenia",
+    "Slovenian": r"Slovenian",
+    "SI": r"\bSI\b",
+    "Dutch GO": r"Dutch GO",
+    "GLMC 7": r"GLMC 7",
+    "Gecombineerde Opgave": r"Gecombineerde Opgave",
 }
 
 
@@ -513,6 +527,7 @@ def check_country_term_review_records(failures: list[str]) -> None:
                 f"{phrase!r}"
             )
 
+    seed_scan_terms: list[str] = []
     seed_scan = payload.get("seedScan")
     if not isinstance(seed_scan, dict):
         failures.append(f"{rel(REVIEW_RECORDS)} seedScan must be an object")
@@ -522,6 +537,18 @@ def check_country_term_review_records(failures: list[str]) -> None:
         if not isinstance(seed_scan_command, str):
             failures.append(f"{rel(REVIEW_RECORDS)} seedScan.command must be a string")
             seed_scan_command = ""
+        seed_scan_terms = seed_scan.get("terms")
+        if (
+            not isinstance(seed_scan_terms, list)
+            or any(not isinstance(item, str) for item in seed_scan_terms)
+            or len(seed_scan_terms) != len(set(seed_scan_terms))
+            or set(seed_scan_terms) != set(REVIEW_RECORD_SEED_TERM_PATTERNS)
+        ):
+            failures.append(
+                f"{rel(REVIEW_RECORDS)} seedScan.terms must equal "
+                f"{sorted(REVIEW_RECORD_SEED_TERM_PATTERNS)!r}"
+            )
+            seed_scan_terms = []
     for root in sorted(REVIEW_RECORD_SEED_SCAN_ROOTS):
         if root not in seed_scan_command:
             failures.append(
@@ -599,6 +626,8 @@ def check_country_term_review_records(failures: list[str]) -> None:
                 )
             seen_ids.add(record_id)
 
+    check_seed_scan_hit_paths_have_review_records(failures, records, seed_scan_terms)
+
 
 def check_review_record_path_atom(
     failures: list[str], record_idx: int, path_atom: str
@@ -637,6 +666,72 @@ def check_review_record_path_atom(
             f"{rel(REVIEW_RECORDS)} records[{record_idx}].path {path_atom!r} "
             "does not exist"
         )
+
+
+def check_seed_scan_hit_paths_have_review_records(
+    failures: list[str], records: list[object], seed_scan_terms: list[str]
+) -> None:
+    """Ensure the file/glob record covers every current seed-scan hit path."""
+    if not seed_scan_terms:
+        return
+
+    seed_re = re.compile(
+        "|".join(
+            f"(?:{REVIEW_RECORD_SEED_TERM_PATTERNS[term]})"
+            for term in seed_scan_terms
+        )
+    )
+    record_path_atoms: list[str] = []
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        path_expr = record.get("path")
+        if not isinstance(path_expr, str):
+            continue
+        record_path_atoms.extend(
+            atom.strip() for atom in path_expr.split("|") if atom.strip()
+        )
+
+    for hit_path in country_term_seed_scan_hit_paths(failures, seed_re):
+        if not any(
+            review_record_path_atom_matches(atom, hit_path)
+            for atom in record_path_atoms
+        ):
+            failures.append(
+                f"{rel(REVIEW_RECORDS)} has no file/glob-level review record "
+                f"covering current seed-scan hit path {hit_path!r}"
+            )
+
+
+def country_term_seed_scan_hit_paths(
+    failures: list[str], seed_re: re.Pattern[str]
+) -> list[str]:
+    cmd = ["git", "ls-files", *sorted(REVIEW_RECORD_SEED_SCAN_ROOTS)]
+    proc = subprocess.run(cmd, cwd=PKG, capture_output=True, text=True, check=False)
+    if proc.returncode != 0:
+        failures.append(
+            f"{rel(REVIEW_RECORDS)} could not list seed-scan files: {proc.stderr.strip()}"
+        )
+        return []
+
+    hit_paths: list[str] = []
+    for path_text in proc.stdout.splitlines():
+        path = PKG / path_text
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        if seed_re.search(text):
+            hit_paths.append(path_text)
+    return hit_paths
+
+
+def review_record_path_atom_matches(path_atom: str, hit_path: str) -> bool:
+    if re.search(r"[*?[]", path_atom):
+        return fnmatch.fnmatchcase(hit_path, path_atom)
+    path = PKG / path_atom
+    if path.is_dir():
+        return hit_path == path_atom or hit_path.startswith(f"{path_atom}/")
+    return hit_path == path_atom
 
 
 def main() -> int:
