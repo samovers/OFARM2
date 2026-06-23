@@ -1,15 +1,14 @@
 # SI Conformance Lane Split Plan
 
 Status: implemented boundary memo plus future-lane plan. The root navigation
-pointer and `PLATFORM_MVP_EXECUTED_EVIDENCE` README are now implemented, but
-this file does not move conformance files, change test execution, regenerate
-evidence, update contracts or manifests, alter Core, Kernel, or Platform
-semantics, or claim Slovenia production readiness.
+pointer and evidence-lane README are now implemented, but this file does not
+move conformance files, change test execution, regenerate evidence, update
+contracts or manifests, alter Core, Kernel, or Platform semantics, or claim
+Slovenia production readiness.
 
 This began as the PR D7 follow-up from `manual_review_backlog_plan.md`. It
-records the boundary between package-wide conformance,
-`PLATFORM_MVP_EXECUTED_EVIDENCE`, profile-local engineering tests, and profile
-design cases.
+records the boundary between package-wide conformance, active SI pilot executed
+evidence, profile-local engineering tests, and profile design cases.
 
 ## Goal
 
@@ -44,7 +43,7 @@ engineering tests.
 | --- | --- | --- | --- |
 | Package self-check | `conformance/ofarm_pkg_contract_check.py` | Parse, digest, and schema-instance validation for authored package artifacts. | Yes, root-owned. |
 | Platform MVP executed suite | `kernel/tests/test_conformance.py` plus `kernel/tests/conftest.py` evidence writer | Named executed conformance suite against the live store. | Yes, root-owned. |
-| Platform MVP evidence | `conformance/evidence/platform_mvp_results_*.json` | Timestamped results of actual platform MVP test runs. | Yes, root-owned `PLATFORM_MVP_EXECUTED_EVIDENCE`. |
+| Platform MVP evidence | `conformance/evidence/platform_mvp_results_*.json` | Timestamped results of actual platform MVP test runs. | Yes, root-owned evidence lane. |
 | Inherited gate fixtures | `conformance/fixtures/gate_sequencing/**` | Canonical input fixtures replayed by platform tests. | Yes, protected root fixtures. |
 | NL profile design cases | `profile_nl_go_glmc7_2026/conformance/nl_glmc7_2026_cases.md` | Profile-slice design cases, not executed platform evidence. | Yes, profile-local design lane. |
 | SI extraction planning | `profile_si_ffs/extraction_inventory/**` | Planning/inventory docs for SI extraction work. | Yes, profile-local planning lane. |
