@@ -113,6 +113,12 @@
       "path": "profile_si_ffs/extraction_inventory/core_country_neutrality_certification_plan.md",
       "kind": "certification planning",
       "status": "docs-only Core country/profile neutrality certification plan"
+    },
+    {
+      "id": "core_country_term_audit_allowlist_plan",
+      "path": "profile_si_ffs/extraction_inventory/core_country_term_audit_allowlist_plan.md",
+      "kind": "audit planning",
+      "status": "docs-only country-term audit allowlist plan"
     }
   ]
 }
