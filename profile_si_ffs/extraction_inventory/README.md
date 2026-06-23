@@ -2,7 +2,7 @@
 
 This directory is a documentation-only inventory and status area for work that moves Slovenian profile material out of Core-facing surfaces or rewrites Core-facing text so it is profile-neutral.
 
-These documents do not move files, change runtime behavior, update contracts, update manifests, regenerate kernel outputs, or change Core, Kernel, or Platform semantics. They record what is visible today, what has already landed, and which follow-up work still needs manual review.
+These documents do not move files, change runtime behavior, update contracts, update manifests, regenerate kernel outputs, or change Core, Kernel, or Platform semantics. They preserve initial inventory findings, record what has already landed, and identify which follow-up work still needs manual review.
 
 ## Scope
 
@@ -26,7 +26,7 @@ These documents do not move files, change runtime behavior, update contracts, up
 - `demo_fixture_migration_plan.md` records the implemented D2a-D2d demo fixture boundary and remaining D2e facade guardrails.
 - `multi_profile_manifest_design.md` records the D5 manifest boundary and D5b navigation-only, non-capability index status.
 - `manifest_implementation_checklist.md` records the D5a checklist and terminology for future manifest implementation work.
-- `profile_navigation_index.json` is a machine-labeled navigation-only, non-capability index for these profile-local planning documents.
+- `profile_navigation_index.json` is a machine-labeled navigation-only, non-capability index for these profile-local inventory and status documents.
 
 ## Classification Vocabulary
 
