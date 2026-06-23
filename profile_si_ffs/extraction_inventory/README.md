@@ -17,7 +17,7 @@ This PR does not move files, change runtime behavior, update contracts, update m
 - `si_migration_map.md` classifies each finding as move, generic rewording, keep-with-example-removed, manual review, or do-not-touch.
 - `core_neutral_rewording_candidates.md` proposes neutral replacement wording for later PRs.
 - `followup_pr_plan.md` splits follow-up work into a move-focused PR B and a neutrality-hardening PR C.
-- `manual_review_backlog_plan.md` expands the ambiguous/manual-review backlog into future design lanes, required preconditions, stop conditions, and validation expectations.
+- `manual_review_backlog_plan.md` records the SI manual-review backlog status, implemented D-lane follow-ups, remaining guarded work, stop conditions, and validation expectations.
 - `active_profile_loader_design.md` records the implemented D1 active-profile loader boundary for the current SI runtime descriptor.
 - `evidence_policy_metadata_display_design.md` records the implemented D3 metadata/display boundary for SI sufficiency rule refs and profile-owned text.
 - `validator_policy_hook_design.md` records the implemented D4 validation-policy boundary for SI-specific validator values and text.

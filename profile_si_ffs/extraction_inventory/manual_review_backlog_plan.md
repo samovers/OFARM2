@@ -1,59 +1,70 @@
-# SI Manual-Review Backlog Plan
+# SI Manual-Review Backlog Status
 
-Status: plan-only backlog document. This file does not move code, change runtime
-behavior, update contracts or manifests, alter tests, or change Core, Kernel, or
-Platform semantics.
+Status: documentation-only backlog status record. This file does not move code,
+change runtime behavior, update contracts or generated manifests, alter tests,
+or change Core, Kernel, or Platform semantics.
 
-This plan covers the ambiguous SI extraction surfaces left after the inventory,
-the SI view artifact move, and Core-neutrality hardening. It is a guide for
-future PRs only. Any future implementation must preserve assertion/history-first
-truth, governed materialization, evidence, review, correction, freshness,
-refusal, and authority rules.
+This began as the manual-review backlog for ambiguous SI extraction surfaces
+left after the inventory, the SI view artifact move, and Core-neutrality
+hardening. It now records which D-lane follow-ups have landed and which
+runtime-sensitive areas remain intentionally root-owned or future-scoped.
+
+Any future implementation must preserve assertion/history-first truth, governed
+materialization, evidence, review, correction, freshness, refusal, and authority
+rules.
 
 ## Classification Legend
 
 | Classification | Meaning |
 | --- | --- |
 | `KEEP_AS_ACTIVE_RUNTIME_SI_SUPPORT` | Keep in the current runtime because the active implementation is still the SI pilot and moving it would change behavior or generated claims. |
-| `PROFILE_LOADER_DESIGN_REQUIRED` | Do not move until there is an explicit active-profile loader or hook design that preserves current behavior. |
-| `MOVE_TO_PROFILE_AFTER_HARNESS_EXISTS` | Candidate for profile-local relocation only after tests, fixtures, or conformance harnesses can follow without coverage loss. |
+| `PROFILE_LOADER_DESIGN_REQUIRED` | Do not move until there is an explicit active-profile loader or hook design that preserves current behavior. Some D1 preconditions are now implemented, but this remains relevant for broader multi-profile or loader-generalization work. |
+| `MOVE_TO_PROFILE_AFTER_HARNESS_EXISTS` | Candidate for profile-local relocation only after tests, fixtures, or conformance harnesses can follow without coverage loss. D2/D6 implemented parts of this, while some root facades and bridges remain. |
 | `REWORD_ONLY_LATER` | Candidate for comment or documentation neutralization only; no structural move is currently justified. |
 | `DO_NOT_TOUCH` | Already correctly placed, protected, or not part of the extraction problem. |
 
+## Follow-Up Status
+
+| Lane | Current status | Remaining boundary |
+| --- | --- | --- |
+| D1 active-profile loader | Implemented and recorded in `active_profile_loader_design.md`. The active SI runtime descriptor and loader exist. | No multi-profile activation or broad country abstraction. Root context assembly remains Kernel-owned. |
+| D2 demo fixtures | D2a-D2d implemented and recorded in `demo_fixture_migration_plan.md`. Profile-local fixture refs, records, payload builders, and facade exist. | `kernel/demo.py` remains the public compatibility facade until any D2e-style cleanup proves root callers can migrate safely. |
+| D3 evidence display metadata | Implemented and recorded in `evidence_policy_metadata_display_design.md`. SI sufficiency display metadata is profile-owned. | Kernel sufficiency mechanics remain generic and root-owned. |
+| D4 validation policy metadata | Implemented and recorded in `validator_policy_hook_design.md`. SI validator values and text are profile-owned. | Validator order and mechanics remain Kernel-owned; registry-family reverification policy is not moved. |
+| D5 manifest boundary | D5 design, D5a checklist, and D5b navigation index are recorded in `multi_profile_manifest_design.md`, `manifest_implementation_checklist.md`, and `profile_navigation_index.json`. | No generated manifest change, profile manifest generation, or runtime capability claim for design-only slices. |
+| D6 test harness | Implemented and recorded in `test_harness_split_plan.md`. Profile-local SI engineering test modules and root discovery bridges exist. | Root evidence writer and remaining root active-runtime tests stay root-owned. |
+| D7 conformance lanes | Root lane map and evidence README are implemented and recorded in `conformance_lane_split_plan.md`. | No profile-local executed evidence writer or profile conformance evidence lane yet. |
+
 ## Manual-Review Areas
 
-| Area | Current SI-specific responsibility | Why not safe in PR B or PR C | Likely classification | Required preconditions | Validation or review risks | Suggested future PR lane |
-| --- | --- | --- | --- | --- | --- | --- |
-| `kernel/context.py` | Active SI context spine, shipped SI profile instance bootstrap, REGSR/GERK snapshot family constants, and per-farm `ContextSnapshot` assembly. | It is executable runtime support for the current active pilot; moving it would affect bootstrap, AS_OF reconstruction, reference snapshot selection, and materialization basis behavior. | `PROFILE_LOADER_DESIGN_REQUIRED` | Design an active-profile loader contract for profile instance discovery, reference snapshot family registration, context assembly, and AS_OF vintage selection. | High risk of breaking freshness, context closure, and refusal-over-pretending behavior. | PR D1: active-profile loader design memo, then a separate implementation PR. |
-| `kernel/demo.py` | Fictional SI-format demo payloads, SI scheme examples, demo product/register refs, and bootstrap data used by runtime examples and tests. | Demo data is coupled to tests and API examples; moving it without a fixture harness would break current validation coverage. | `MOVE_TO_PROFILE_AFTER_HARNESS_EXISTS` | Create a profile fixture/demo harness and update tests to consume profile-local demo data without changing expected behavior. | Medium/high risk of silently changing test semantics or losing privacy-safe format-true examples. | PR D2: profile fixture harness plan; later move demo payloads. |
-| `kernel/sufficiency.py` | Generic sufficiency generation that reads profile policy, but emits SI floor rule refs and SI-facing rationale text. | The mechanism is mixed: some behavior is generic, while displayed policy names and rule refs are SI-specific. | `PROFILE_LOADER_DESIGN_REQUIRED` | Define profile policy metadata for rule-ref prefixes, display labels, and claim statements before neutralizing emitted text. | High risk of changing review/refusal reasons or evidence sufficiency case meaning. | PR D3: evidence policy metadata/display design. |
-| `kernel/validators.py` | Validation units include SI unresolved-binding posture, quantity/unit policy text, required SI record fields, and SI crop-binding review behavior. | These validators are executable gate behavior; moving policy out requires explicit profile validation hooks and fixture coverage. | `PROFILE_LOADER_DESIGN_REQUIRED` | Design profile validation hooks for quantity policy, required record fields, crop-binding posture, and unresolved-binding outcomes. | High risk of weakening refusal/review routing or changing promotion behavior. | PR D4: profile validation hook design, then implementation with tests. |
-| `kernel/manifest.py` | Builds and verifies the active SI pilot Capability Manifest and ActiveArtifactSet, including REGSR/GERK/FFSNaprave import surfaces. | Generated manifest behavior is protected; moving or generalizing it would alter declared runtime surfaces and grounding checks. | `KEEP_AS_ACTIVE_RUNTIME_SI_SUPPORT` | Define multi-profile manifest generation and grounding rules before any extraction. | High risk of over-claiming support, breaking manifest grounding, or changing active runtime claims. | PR D5: multi-profile manifest design only, if needed. |
-| `kernel/tests/**` | Contains active SI pilot engineering tests for imports, bindings, sufficiency, manifest grounding, context AS_OF behavior, and platform conformance. | Tests preserve current behavior; moving them before a profile test harness exists would reduce or confuse validation coverage. | `MOVE_TO_PROFILE_AFTER_HARNESS_EXISTS` | Establish a profile test-harness convention and decide which tests remain kernel-generic versus profile-specific. | High risk of losing regression coverage or presenting profile tests as generic platform conformance. | PR D6: test-harness split plan. |
-| `conformance/**` | Contains package-wide conformance docs/checks plus executed SI pilot evidence files and profile-local artifact validation bindings. | Some conformance is package-wide, some is active SI pilot evidence, and some validates profile-local artifacts; split boundaries are not yet explicit. | `MOVE_TO_PROFILE_AFTER_HARNESS_EXISTS` | Define conformance lanes for package self-checks, platform MVP evidence, profile design cases, and profile-local executed evidence. | Medium/high risk of mislabeling design cases as executed evidence or dropping evidence-lane history. | PR D7: conformance lane split plan. |
+| Area | Current SI-specific responsibility | Current status | Remaining classification | Preconditions before future change | Validation or review risks |
+| --- | --- | --- | --- | --- | --- |
+| `kernel/context.py` | Active SI context spine, shipped SI profile instance bootstrap, REGSR/GERK snapshot family metadata, and per-farm `ContextSnapshot` assembly. | D1 moved active runtime inputs into `profile_si_ffs/runtime_profile_descriptor.json`; context assembly remains Kernel-owned and descriptor-backed. | `KEEP_AS_ACTIVE_RUNTIME_SI_SUPPORT` plus future `PROFILE_LOADER_DESIGN_REQUIRED` for broader loader work. | Any future move needs explicit multi-profile loader design, AS_OF equivalence tests, and context-spine coherence tests. | High risk of breaking freshness, context closure, and refusal-over-pretending behavior. |
+| `kernel/demo.py` | Public compatibility facade for fictional SI-format demo payloads, SI scheme examples, demo product/register refs, bootstrap, and onboarding. | D2a-D2d moved fixture construction behind `profile_si_ffs/test_fixtures/**`; `kernel.demo` still delegates and remains public. | `MOVE_TO_PROFILE_AFTER_HARNESS_EXISTS` for optional D2e facade shrink only. | Root callers and API examples must be migrated or proven unaffected before shrinking the facade. | Medium/high risk of silently changing test semantics or losing privacy-safe format-true examples. |
+| `kernel/sufficiency.py` | Generic sufficiency generation that reads profile policy and builds `EvidenceSufficiencyCase` records. | D3 moved SI display strings, rule refs, labels, and selected reason-code mappings into profile policy metadata. | `KEEP_AS_ACTIVE_RUNTIME_SI_SUPPORT` for Kernel mechanics; `REWORD_ONLY_LATER` for comments only if needed. | Any future change must preserve decisions and governed fail-closed behavior. | High risk of changing review/refusal reasons or evidence sufficiency case meaning. |
+| `kernel/validators.py` | Generic validator units for quantity/unit policy, record-field completeness, binding posture, and active SI validation text. | D4 moved SI validator values and text into profile validation metadata; validator order and mechanics remain Kernel-owned. | `KEEP_AS_ACTIVE_RUNTIME_SI_SUPPORT` for validator mechanics; registry-family reverification remains future-scoped. | Any future hook must preserve validation order, refusal/review outcomes, and fail-closed policy loading. | High risk of weakening refusal/review routing or changing promotion behavior. |
+| `kernel/manifest.py` | Builds and verifies the active SI pilot Capability Manifest and ActiveArtifactSet, including REGSR/GERK/FFSNaprave import surfaces. | D5/D5a/D5b documented the manifest boundary and navigation-only index. Runtime manifest generation remains active SI pilot support. | `KEEP_AS_ACTIVE_RUNTIME_SI_SUPPORT`. | Multi-profile manifest generation design, active descriptors, tests, and evidence lanes before any generation change. | High risk of over-claiming support, breaking manifest grounding, or changing active runtime claims. |
+| `kernel/tests/**` | Root tests plus root bridge files for active SI pilot engineering tests, profile-local SI modules, manifest grounding, context AS_OF behavior, and platform conformance. | D6 moved several SI engineering test bodies into `profile_si_ffs/tests/**` while root bridges preserve default discovery. | `MOVE_TO_PROFILE_AFTER_HARNESS_EXISTS` only for future splits that keep coverage intact; root generic tests stay root-owned. | Any future move must preserve root collection, test meaning, and evidence writer semantics. | High risk of losing regression coverage or presenting profile tests as generic platform conformance. |
+| `conformance/**` | Package-wide conformance docs/checks plus executed platform MVP evidence files and inherited fixtures. | D7 documented root lanes and evidence labels. No evidence writer or profile evidence lane moved. | `KEEP_AS_ACTIVE_RUNTIME_SI_SUPPORT` for root platform MVP evidence; future profile evidence needs explicit design. | Define a profile evidence writer and suite id before any profile-local executed evidence. | Medium/high risk of mislabeling design cases as executed evidence or dropping evidence-lane history. |
 
 ## Related Surfaces
 
-| Area | Current role | Classification | Required precondition before change | Suggested lane |
-| --- | --- | --- | --- | --- |
-| `kernel/config.py` | Holds active SI profile, pack, policy, code-binding, and snapshot refs as runtime configuration. | `PROFILE_LOADER_DESIGN_REQUIRED` | Active-profile configuration source and override semantics. | Pair with PR D1. |
-| `kernel/profile_policy.py` | Generic loader for SI evidence-review policy content, with docstrings still naming the SI floor. | `REWORD_ONLY_LATER` | Complete policy metadata/display design so wording can be neutral without hiding active SI policy content. | Pair with PR D3. |
-| `kernel/README.md` | Documents current active SI runtime bootstrap, context spine, and import surfaces. | `REWORD_ONLY_LATER` | Runtime design decisions for active-profile loader and test harness. | Update after PR D1/D6 decisions. |
-| `kernel/profiles/si_ffs/**` | Already profile-specific SI runtime adapters and binding wrappers. | `DO_NOT_TOUCH` | None; this is already the profile-specific runtime location. | None. |
-| `kernel/adapters.py` | Generic adapter mechanism with explanatory SI examples. | `REWORD_ONLY_LATER` | Confirm examples are not needed to explain current active SI adapter behavior. | Comment-only cleanup after runtime-sensitive lanes settle. |
-| `kernel/verification.py` | Generic verification mechanism with explanatory SI binding references. | `REWORD_ONLY_LATER` | Confirm wording can be neutralized without obscuring the active SI wrapper role. | Comment-only cleanup after runtime-sensitive lanes settle. |
-| `kernel/policy.py` | Core policy constants with comments that point out SI bindings are not Core law. | `REWORD_ONLY_LATER` | Confirm neutral wording still protects the country/profile separation. | Comment-only cleanup after runtime-sensitive lanes settle. |
+| Area | Current role | Current status | Suggested lane |
+| --- | --- | --- | --- |
+| `kernel/config.py` | Holds active SI profile root and active deployment/demo binding. | D1 made active profile refs descriptor-backed while tenant binding remains separate runtime config. | Keep as active runtime SI support unless broader loader work is explicitly scoped. |
+| `kernel/profile_policy.py` | Generic loader for profile-owned evidence-review and validation policy content. | D3/D4 made display and validation metadata fail-closed profile content. | Keep generic loader root-owned; reword comments only if useful. |
+| `kernel/README.md` | Documents current active SI runtime bootstrap, context spine, and import surfaces. | Still a possible docs cleanup surface. | `REWORD_ONLY_LATER`. |
+| `kernel/profiles/si_ffs/**` | Already profile-specific SI runtime adapters and binding wrappers. | Already correctly placed. | `DO_NOT_TOUCH`. |
+| `kernel/adapters.py` | Generic adapter mechanism with explanatory SI examples. | Comment-only neutralization remains optional. | `REWORD_ONLY_LATER`. |
+| `kernel/verification.py` | Generic verification mechanism with explanatory SI binding references. | Comment-only neutralization remains optional. | `REWORD_ONLY_LATER`. |
+| `kernel/policy.py` | Core policy constants with comments that point out SI bindings are not Core law. | Comment-only neutralization remains optional and must preserve the country/profile separation. | `REWORD_ONLY_LATER`. |
 
-## Future Work Order
+## Remaining Work Order
 
-1. PR D1: active-profile loader design for context/config/profile instance loading.
-2. PR D3: profile policy metadata/display design for sufficiency text and rule refs.
-3. PR D4: profile validation hook design for validator-owned SI policy behavior.
-4. PR D6: profile test-harness split plan, captured in `test_harness_split_plan.md`.
-5. PR D7: conformance lane split plan, captured in `conformance_lane_split_plan.md`.
-6. PR D2: demo fixture migration plan, captured in `demo_fixture_migration_plan.md`.
-7. PR D5: multi-profile manifest design, captured in `multi_profile_manifest_design.md`.
-8. Comment-only rewording PRs after runtime-sensitive decisions are complete.
+1. Optional D2e: shrink `kernel/demo.py` only after root callers and API examples are proven safe.
+2. Optional D5c/D5d: design real profile-manifest generation hooks or split manifest tests only after multiple active runtime profiles and evidence lanes exist.
+3. Optional D7 future: add profile-local executed evidence only after an approved profile evidence writer and suite id exist.
+4. Optional comment-only rewording: neutralize explanatory SI examples in Kernel docs/comments when doing so will not hide active SI pilot behavior.
 
 ## Stop Conditions
 
@@ -70,7 +81,7 @@ approved design first:
   materialization, evidence, review, correction, freshness, refusal, or
   authority rules.
 
-## Validation For This Planning PR
+## Validation For Documentation-Only Status Updates
 
 Run:
 
@@ -79,7 +90,7 @@ python3 conformance/ofarm_pkg_contract_check.py
 git diff --check
 ```
 
-Run the manual audit:
+Run the manual audit when a future PR changes Core-facing wording:
 
 ```sh
 rg -n "KMG-MID|GERK|Dutch GO|GLMC 7|Gecombineerde Opgave|Slovenia|Slovenian|\bSI\b" CORE.md PLATFORM.md KERNEL.md contracts kernel views conformance README.md AGENTS.md || true
@@ -87,6 +98,6 @@ rg -n "KMG-MID|GERK|Dutch GO|GLMC 7|Gecombineerde Opgave|Slovenia|Slovenian|\bSI
 
 The audit is informational. Remaining matches should be explained by existing
 profile-local material, review guards, root navigation, or this manual-review
-plan. This PR should not run pytest unless needed; if pytest creates a
+backlog. This PR should not run pytest unless needed; if pytest creates a
 timestamped `conformance/evidence/platform_mvp_results_*.json`, remove it
 before commit because this PR is documentation-only.
