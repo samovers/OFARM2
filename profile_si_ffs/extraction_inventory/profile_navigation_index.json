@@ -9,7 +9,7 @@
     "label": "navigation-only non-capability index",
     "mayBeUsedFor": [
       "human navigation",
-      "profile-local planning document discovery",
+      "profile-local inventory and status document discovery",
       "review orientation"
     ],
     "mustNotBeUsedFor": [
