@@ -28,11 +28,11 @@ These documents do not move files, change runtime behavior, update contracts, up
 - `manifest_implementation_checklist.md` records the D5a checklist and terminology for future manifest implementation work.
 - `profile_navigation_index.json` is a machine-labeled navigation-only, non-capability index for these profile-local inventory and status documents.
 
-## Classification Vocabulary
+## Initial Classification Vocabulary
 
-- `MOVE_TO_SI_PROFILE`: candidate for relocation into `profile_si_ffs/` in a later PR.
-- `REWORD_CORE_GENERICALLY`: candidate for neutral Core-facing wording without moving code or data.
-- `KEEP_IN_CORE_AS_GENERIC_WITH_EXAMPLE_REMOVED`: Core-facing concept can stay, but Slovenian examples should be removed or moved.
+- `MOVE_TO_SI_PROFILE`: initial candidate for relocation into `profile_si_ffs/`.
+- `REWORD_CORE_GENERICALLY`: initial candidate for neutral Core-facing wording without moving code or data.
+- `KEEP_IN_CORE_AS_GENERIC_WITH_EXAMPLE_REMOVED`: initial finding where the Core-facing concept could stay, but Slovenian examples should be removed or moved.
 - `AMBIGUOUS_MANUAL_REVIEW`: may affect tests, manifests, runtime bootstrapping, or intended pilot behavior; do not move blindly.
 - `DO_NOT_TOUCH`: already correctly placed, protected by prior governance, or outside the intended extraction.
 
