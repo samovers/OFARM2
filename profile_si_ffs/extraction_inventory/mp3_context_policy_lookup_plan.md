@@ -79,6 +79,17 @@ explicitly profile-keyed, but it must not move SI adapters, create a universal
 country abstraction layer, or pretend those SI families are Core-generic
 defaults.
 
+## MP3a Implementation Status
+
+MP3a implements explicit profile-policy input helpers only. It does not change
+context assembly, active profile selection, descriptor registry behavior,
+manifest generation, executed evidence, runtime adapters, active SI behavior, or
+second-profile activation.
+
+The MP3a helpers let future internals load policy content through an explicit
+policy path or active profile descriptor while preserving the current
+config-backed compatibility wrappers for the single-active-SI runtime.
+
 ## Assertion-Equivalence Requirements
 
 Future MP3 implementation must preserve assertion-equivalence for unchanged SI
