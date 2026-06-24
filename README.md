@@ -2,7 +2,7 @@
 
 **What this is:** the self-contained working surface for implementing OFARM2 — a Kernel/Core/Platform implementation and conformance packaging profile plus the Slovenia plant-protection record-keeping pilot definition. Designed to be lifted into its own repository unchanged.
 
-**For agents and new contributors:** start with `AGENTS.md` (binding working rules), `DECISIONS.md` (settled decisions), and `M1_BRIEF.md` (the current work order: build the Kernel). M0 — verification and grounding — is CLOSED as of 2026-06-12; see `profile_si_ffs/M0_DESK_RESEARCH.md` for the ledger.
+**For agents and new contributors:** start with `AGENTS.md` (binding working rules), `DECISIONS.md` (settled decisions), and `M1_BRIEF.md` (historical M1 kernel-build brief and scope anchor). M0 — verification and grounding — is CLOSED as of 2026-06-12; see `profile_si_ffs/M0_DESK_RESEARCH.md` for the ledger.
 
 **What this is not:** OFARM law. This package is a derived implementation/conformance artifact under `PROJECT_AUTHORITY.md` (carried verbatim in `reference/law/`). It creates no new authority, overrides nothing, and promotes nothing. New schemas here are **candidate artifacts** (Constitution RC2.1 §6.16) pending post-pilot governance.
 
@@ -30,8 +30,9 @@ No production readiness of any kind is claimed: not software-delivery, model-dep
 KERNEL.md CORE.md PLATFORM.md PILOT_SI.md CAPTURE_MAPPING.md ERRATA.md
 contracts/   kernel/ (23 extracted + 3 candidate)  core/ (11 extracted + 5 candidate)
              platform/ (10 extracted)              CONTRACTS_MANIFEST.json (digests + provenance)
-profile_si_ffs/   PROFILE.md + 7 validated instances (activation set, artifact set, context snapshot,
-                  code-binding profile, 2 reference snapshots, Capability Manifest) + UNSUPPORTED_SURFACES.md
+profile_si_ffs/   PROFILE.md + 6 descriptor-bootstrapped validated instances (activation set,
+                  artifact set, context snapshot, code-binding profile, 2 reference snapshots)
+                  + generated/verified Capability Manifest + UNSUPPORTED_SURFACES.md
                   + views/ (SI view specs/artifacts) + extraction_inventory/ (documentation-only inventory)
 profile_nl_go_glmc7_2026/  narrow Netherlands GO + GLMC 7 2026 profile/source slice
 views/            VIEWS.md pointer to profile-local SI view material
