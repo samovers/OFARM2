@@ -14,6 +14,14 @@ from .problems import runtime_problem
 
 
 BINDING_KIND = "ofarm.agronomicidentitybinding.v0.1"
+OPERATION_FLOOR_CHECKS = frozenset({
+    "product-binding",
+    "dose-unit",
+    "parcel",
+    "crop-binding",
+    "operator",
+    "event-time",
+})
 
 
 def durable_evidence(store, refs: list[str]) -> list[str]:
@@ -70,6 +78,7 @@ def route_reasons_for(store, assertion_ref: str) -> list[dict]:
 
 def build_case_from_checks(store, farm_ref, assertion_id, erp_id,
                            checks, hard, soft, evidence_refs, *,
+                           policy_ref: str,
                            claim_statement: str | None = None,
                            display: dict | None = None) -> tuple[dict, list[dict]]:
     arguments = []
@@ -79,7 +88,7 @@ def build_case_from_checks(store, farm_ref, assertion_id, erp_id,
         arguments.append({
             "argumentId": f"arg:{assertion_id.split(':')[-1]}:{name}",
             "supportsClaimIds": ["claim:floor"],
-            "policyRef": config.EVIDENCE_POLICY_REF,
+            "policyRef": policy_ref,
             "ruleRef": rule_ref,
             "conclusion": "SUPPORTED" if ok else (
                 "REVIEW_REQUIRED" if name in soft else "UNSUPPORTED"),
@@ -114,7 +123,7 @@ def build_case_from_checks(store, farm_ref, assertion_id, erp_id,
         "targetTwin": "COMPLIANCE",
         "anchorScopes": [{"scopeType": "FARM", "scopeRef": farm_ref}],
         "subject": {"subjectType": "ASSERTION_RECORD", "subjectRef": assertion_id},
-        "governingPolicyRefs": [config.EVIDENCE_POLICY_REF],
+        "governingPolicyRefs": [policy_ref],
         "claims": [{
             "claimId": "claim:floor",
             "claimType": "COMPLIANCE_CLAIM",
@@ -173,6 +182,32 @@ def build_case_from_checks(store, farm_ref, assertion_id, erp_id,
 def build_floor_case(store, sub, commit_class, farm_ref, assertion_id,
                      erp_id) -> tuple[dict, list[dict]]:
     """Floor case for an OPERATION_CLAIM or COMPLIANCE_ASSERTION commit."""
+    evidence_policy = profile_policy.load_evidence_review_policy(
+        supported_checks=OPERATION_FLOOR_CHECKS if commit_class == "OPERATION_CLAIM"
+        else None)
+    return build_floor_case_with_policy(
+        store, sub, commit_class, farm_ref, assertion_id, erp_id,
+        evidence_policy=evidence_policy,
+        policy_ref=config.EVIDENCE_POLICY_REF,
+        recognized_rule_refs={
+            config.EVIDENCE_POLICY_REF, config.PROFILE_REF,
+            config.PACK_REF, config.CODE_BINDING_PROFILE_REF,
+        })
+
+
+def build_floor_case_with_policy(
+    store,
+    sub,
+    commit_class,
+    farm_ref,
+    assertion_id,
+    erp_id,
+    *,
+    evidence_policy,
+    policy_ref,
+    recognized_rule_refs=None,
+) -> tuple[dict, list[dict]]:
+    """Floor case using an explicit evidence-review policy document."""
     payload = sub.get("payload") or {}
 
     if commit_class == "COMPLIANCE_ASSERTION":
@@ -180,8 +215,8 @@ def build_floor_case(store, sub, commit_class, farm_ref, assertion_id,
         # not mere presence of a durable evidence record
         claim = payload.get("complianceClaim") or {}
         evidence_refs = sub.get("evidenceRefs", [])
-        recognized = {config.EVIDENCE_POLICY_REF, config.PROFILE_REF,
-                      config.PACK_REF, config.CODE_BINDING_PROFILE_REF}
+        recognized = set(recognized_rule_refs) if recognized_rule_refs is not None \
+            else {policy_ref}
         checks = {
             "claim-statement": bool(isinstance(claim.get("statement"), str)
                                     and claim.get("statement", "").strip()),
@@ -196,7 +231,7 @@ def build_floor_case(store, sub, commit_class, farm_ref, assertion_id,
         }
         return build_case_from_checks(
             store, farm_ref, assertion_id, erp_id, checks, tuple(checks),
-            (), evidence_refs,
+            (), evidence_refs, policy_ref=policy_ref,
             claim_statement=claim.get("statement")
             or "compliance assertion (no statement supplied)")
 
@@ -223,11 +258,15 @@ def build_floor_case(store, sub, commit_class, farm_ref, assertion_id,
     # floor-check vocabulary, so an unknown floor item fails closed at load
     # (rather than KeyError below). A missing/malformed policy raises
     # ProfilePolicyError -> the gate fails closed with a governed RuntimeProblem.
-    hard, soft, display = profile_policy.operation_floor_with_display(
-        supported_checks=set(checks))
+    floor = evidence_policy["operationFloor"]
+    hard, soft, display = (
+        tuple(floor["hardItems"]),
+        tuple(floor["softItems"]),
+        evidence_policy["display"],
+    )
     return build_case_from_checks(
         store, farm_ref, assertion_id, erp_id, checks, hard, soft, evidence_refs,
-        display=display)
+        policy_ref=policy_ref, display=display)
 
 
 def operation_advisories(store, sub) -> list[dict]:
@@ -242,9 +281,15 @@ def operation_advisories(store, sub) -> list[dict]:
     dedicated advisory family (ERRATA E-006); the advisory posture is in the title
     and detail. Returns [] on a malformed policy (the floor path fails closed)."""
     try:
-        rules = profile_policy.advisory_rules()
+        evidence_policy = profile_policy.load_evidence_review_policy()
     except profile_policy.ProfilePolicyError:
         return []
+    return operation_advisories_with_policy(store, sub, evidence_policy)
+
+
+def operation_advisories_with_policy(store, sub, evidence_policy) -> list[dict]:
+    """Non-blocking advisory warnings using an explicit evidence-review policy."""
+    rules = evidence_policy.get("advisories", {}) if isinstance(evidence_policy, dict) else {}
     payload = sub.get("payload") or {}
     out: list[dict] = []
 
@@ -324,7 +369,8 @@ def build_acceptance_case(store, sub, farm_ref, target) -> dict:
     erp_ref = (target.get("executionRecordPayloadRefs") or [None])[0]
     case, _ = build_case_from_checks(
         store, farm_ref, target_id, erp_ref, checks, tuple(checks), (),
-        evidence_refs, claim_statement=claim_statement)
+        evidence_refs, policy_ref=config.EVIDENCE_POLICY_REF,
+        claim_statement=claim_statement)
     return case
 
 

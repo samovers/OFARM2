@@ -19,6 +19,9 @@ from .problems import runtime_problem
 from .stages import GateContext, GatePass, GateRefusal
 
 
+_CONFIG_BACKED_POLICY = object()
+
+
 def _refusal(ctx: GateContext, outcome: str, problem: dict,
              final: str = "RETAIN_DRAFT",
              rationale: str | None = None) -> GateRefusal:
@@ -31,15 +34,42 @@ def _refusal(ctx: GateContext, outcome: str, problem: dict,
     return GateRefusal("VALIDATION", outcome, final, [problem])
 
 
-def _validation_policy_or_refusal(ctx: GateContext) -> tuple[dict | None,
-                                                             GateRefusal | None]:
-    try:
-        return profile_policy.validation_policy(), None
-    except profile_policy.ProfilePolicyError as exc:
-        return None, _refusal(ctx, "FAIL_PROFILE_POLICY", runtime_problem(
-            "PROFILE_NOT_ACTIVE", "Validation policy unavailable",
-            f"the active profile's validation policy could not be loaded ({exc}); "
-            "the claim stays a draft (fail closed)"))
+def _validation_policy_refusal(ctx: GateContext, detail) -> GateRefusal:
+    return _refusal(ctx, "FAIL_PROFILE_POLICY", runtime_problem(
+        "PROFILE_NOT_ACTIVE", "Validation policy unavailable",
+        f"the active profile's validation policy could not be loaded ({detail}); "
+        "the claim stays a draft (fail closed)"))
+
+
+def _validation_policy_or_refusal(
+    ctx: GateContext,
+    validation_policy=_CONFIG_BACKED_POLICY,
+    *,
+    required_path: tuple[str, ...] = (),
+) -> tuple[dict | None, GateRefusal | None]:
+    if validation_policy is _CONFIG_BACKED_POLICY:
+        try:
+            validation = profile_policy.validation_policy()
+        except profile_policy.ProfilePolicyError as exc:
+            return None, _validation_policy_refusal(ctx, exc)
+    elif isinstance(validation_policy, dict):
+        validation = validation_policy
+    else:
+        return None, _validation_policy_refusal(
+            ctx, "explicit validation policy must be a JSON object")
+
+    cursor = validation
+    for key in required_path:
+        if not isinstance(cursor, dict) or key not in cursor:
+            dotted = ".".join(required_path)
+            return None, _validation_policy_refusal(
+                ctx, f"validation policy lacks required section {dotted}")
+        cursor = cursor[key]
+    if required_path and not isinstance(cursor, dict):
+        dotted = ".".join(required_path)
+        return None, _validation_policy_refusal(
+            ctx, f"validation policy section {dotted} must be a JSON object")
+    return validation, None
 
 
 def _assert_contained(ctx: GateContext, scope_type: str, scope_ref: str,
@@ -455,6 +485,12 @@ class ComplianceClaimValidator:
         config.EVIDENCE_POLICY_REF, config.PROFILE_REF,
         config.PACK_REF, config.CODE_BINDING_PROFILE_REF})
 
+    def __init__(self, recognized_rule_refs=None):
+        self.recognized_rule_refs = (
+            self.RECOGNIZED_RULE_REFS if recognized_rule_refs is None
+            else frozenset(recognized_rule_refs)
+        )
+
     def run(self, ctx: GateContext) -> GateRefusal | None:
         if ctx.commit_class != "COMPLIANCE_ASSERTION":
             return None
@@ -488,7 +524,7 @@ class ComplianceClaimValidator:
                 "complianceClaim.governingRuleRefs must be a list of governed "
                 "rule/policy refs"))
         unknown_rules = [r for r in rule_refs
-                         if r not in self.RECOGNIZED_RULE_REFS
+                         if r not in self.recognized_rule_refs
                          and not ctx.store.record_exists(r)]
         if not rule_refs or unknown_rules:
             return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
@@ -708,31 +744,45 @@ class CarrierSemanticsValidator:
     quantity kind (BLOCK_PROMOTION when unresolved); implausible doses route
     to the advisor, never silently block."""
 
+    def __init__(self, validation_policy=_CONFIG_BACKED_POLICY):
+        self.validation_policy = validation_policy
+
     def run(self, ctx: GateContext) -> GateRefusal | None:
         payload = ctx.sub["payload"]
-        validation, refusal = _validation_policy_or_refusal(ctx)
+        validation, refusal = _validation_policy_or_refusal(
+            ctx, self.validation_policy, required_path=("quantityAndUnit",))
         if refusal:
             return refusal
         quantity_policy = validation["quantityAndUnit"]
+        try:
+            require_quantity = quantity_policy["requireQuantityKindAndUnitCode"]
+            unresolved_reason = quantity_policy["unresolvedReasonCode"]
+            unresolved_title = quantity_policy["unresolvedTitle"]
+            unresolved_detail = quantity_policy["unresolvedDetail"]
+            unresolved_rationale = quantity_policy["unresolvedRationale"]
+            implausible_reason = quantity_policy["implausibleDoseReviewReasonCode"]
+            implausible_title = quantity_policy["implausibleDoseTitle"]
+            implausible_template = quantity_policy["implausibleDoseDetailTemplate"]
+        except (KeyError, TypeError) as exc:
+            return _validation_policy_refusal(
+                ctx, f"validation policy malformed: {exc}")
         params = payload.get("actualQuantityParameters", [])
         dose_params = [p for p in params if p["parameterRole"] in ("DOSE", "RATE")]
-        if quantity_policy["requireQuantityKindAndUnitCode"]:
+        if require_quantity:
             bad_units = [p for p in dose_params
                          if not policy.is_resolved_ucum_unit(p.get("unitRef"))
                          or not p.get("quantityKindRef")]
             if not dose_params or bad_units:
                 return _refusal(ctx, "FAIL_CARRIER", runtime_problem(
-                    quantity_policy["unresolvedReasonCode"],
-                    quantity_policy["unresolvedTitle"],
-                    quantity_policy["unresolvedDetail"]),
-                    rationale=quantity_policy["unresolvedRationale"])
+                    unresolved_reason, unresolved_title, unresolved_detail),
+                    rationale=unresolved_rationale)
         for p in dose_params:
             if not (0 < p["value"] <= policy.DOSE_SANITY_MAX):
                 ctx.review_route_reasons.append(runtime_problem(
-                    quantity_policy["implausibleDoseReviewReasonCode"],
-                    quantity_policy["implausibleDoseTitle"],
+                    implausible_reason,
+                    implausible_title,
                     profile_policy.format_validation_template(
-                        quantity_policy["implausibleDoseDetailTemplate"],
+                        implausible_template,
                         value=p["value"]),
                     severity="WARNING"))
         return None
@@ -752,11 +802,25 @@ class ExecutionExtentValidator:
     whole-scope (corrected and resubmitted, like a dose missing its unit). The
     inline `area` remains an always-available bound."""
 
+    def __init__(self, validation_policy=_CONFIG_BACKED_POLICY):
+        self.validation_policy = validation_policy
+
     def run(self, ctx: GateContext) -> GateRefusal | None:
-        validation, refusal = _validation_policy_or_refusal(ctx)
+        validation, refusal = _validation_policy_or_refusal(
+            ctx, self.validation_policy,
+            required_path=("recordFields", "nonWholeExtentBound"))
         if refusal:
             return refusal
         extent_policy = validation["recordFields"]["nonWholeExtentBound"]
+        try:
+            required_label = extent_policy["requiredLabel"]
+            missing_reason = extent_policy["missingReasonCode"]
+            missing_title = extent_policy["missingTitle"]
+            missing_template = extent_policy["missingDetailTemplate"]
+            missing_rationale = extent_policy["missingRationale"]
+        except (KeyError, TypeError) as exc:
+            return _validation_policy_refusal(
+                ctx, f"validation policy malformed: {exc}")
         extent = ctx.sub["payload"].get("executionExtent", {})
         if extent.get("extentClass") not in policy.NON_WHOLE_EXTENT_CLASSES:
             return None
@@ -765,13 +829,13 @@ class ExecutionExtentValidator:
                                     extent.get("scopeExtentBasisRef")) if r]
         if not extent.get("area") and not present_refs:
             return _refusal(ctx, "FAIL_CARRIER", runtime_problem(
-                extent_policy["missingReasonCode"],
-                extent_policy["missingTitle"],
+                missing_reason,
+                missing_title,
                 profile_policy.format_validation_template(
-                    extent_policy["missingDetailTemplate"],
+                    missing_template,
                     extentClass=extent.get("extentClass"),
-                    requiredLabel=extent_policy["requiredLabel"])),
-                rationale=extent_policy["missingRationale"])
+                    requiredLabel=required_label)),
+                rationale=missing_rationale)
         # a ref bound must resolve to a RECOGNIZED extent-bound carrier kind —
         # "resolves to something" is not "resolves to the right kind of thing".
         # policy.ALLOWED_EXTENT_BOUND_KINDS recognizes the generic extent-carrier
@@ -881,11 +945,35 @@ class CodeBindingValidator:
     crop bindings are explicit and route to review — free text never
     silently becomes compliance identity."""
 
+    def __init__(self, validation_policy=_CONFIG_BACKED_POLICY):
+        self.validation_policy = validation_policy
+
     def run(self, ctx: GateContext) -> GateRefusal | None:
-        validation, refusal = _validation_policy_or_refusal(ctx)
+        validation, refusal = _validation_policy_or_refusal(
+            ctx, self.validation_policy, required_path=("bindings",))
         if refusal:
             return refusal
         binding_policy = validation["bindings"]
+        try:
+            wrong_policy = binding_policy["wrongKindRef"]
+            wrong_reason = wrong_policy["reasonCode"]
+            wrong_title = wrong_policy["title"]
+            wrong_template = wrong_policy["detailTemplate"]
+            product_policy = binding_policy["product"]
+            product_role = product_policy["bindingRole"]
+            product_disposition = product_policy["missingOrUnverifiedDisposition"]
+            product_reason = product_policy["reasonCode"]
+            product_title = product_policy["title"]
+            product_template = product_policy["detailTemplate"]
+            crop_policy = binding_policy["crop"]
+            crop_role = crop_policy["bindingRole"]
+            crop_disposition = crop_policy["missingDisposition"]
+            crop_reason = crop_policy["reasonCode"]
+            crop_title = crop_policy["title"]
+            crop_detail = crop_policy["detail"]
+        except (KeyError, TypeError) as exc:
+            return _validation_policy_refusal(
+                ctx, f"validation policy malformed: {exc}")
         payload = ctx.sub["payload"]
         refs = payload.get("agronomicIdentityBindingRefs", [])
         # A binding ref must name a governed AgronomicIdentityBinding. A ref to
@@ -897,39 +985,35 @@ class CodeBindingValidator:
                       if (row := ctx.store.get_record(r)) is not None
                       and row["record_kind"] != sufficiency.BINDING_KIND]
         if wrong_kind:
-            wrong_policy = binding_policy["wrongKindRef"]
             return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
-                wrong_policy["reasonCode"], wrong_policy["title"],
+                wrong_reason, wrong_title,
                 profile_policy.format_validation_template(
-                    wrong_policy["detailTemplate"], refs=wrong_kind)))
+                    wrong_template, refs=wrong_kind)))
         bindings = sufficiency.resolved_bindings(ctx.store, refs)
-        product_policy = binding_policy["product"]
-        crop_policy = binding_policy["crop"]
         crop_bindings = [b for b in bindings
-                         if b.get("bindingRole") == crop_policy["bindingRole"]]
+                         if b.get("bindingRole") == crop_role]
         product_bindings = [b for b in bindings
-                            if b.get("bindingRole") == product_policy["bindingRole"]]
+                            if b.get("bindingRole") == product_role]
         product_binding = product_bindings[0] if product_bindings else None
         if product_binding is None or product_binding["bindingState"] != "VERIFIED":
             state = product_binding["bindingState"] if product_binding else "MISSING"
             problem = runtime_problem(
-                product_policy["reasonCode"], product_policy["title"],
+                product_reason, product_title,
                 profile_policy.format_validation_template(
-                    product_policy["detailTemplate"], state=state),
+                    product_template, state=state),
                 severity="WARNING"
-                if product_policy["missingOrUnverifiedDisposition"] == "REVIEW"
+                if product_disposition == "REVIEW"
                 else "ERROR")
-            if product_policy["missingOrUnverifiedDisposition"] == "REVIEW":
+            if product_disposition == "REVIEW":
                 ctx.review_route_reasons.append(problem)
             else:
                 return _refusal(ctx, "FAIL_SEMANTIC", problem)
         if not crop_bindings:
             problem = runtime_problem(
-                crop_policy["reasonCode"], crop_policy["title"],
-                crop_policy["detail"],
+                crop_reason, crop_title, crop_detail,
                 severity="WARNING"
-                if crop_policy["missingDisposition"] == "REVIEW" else "ERROR")
-            if crop_policy["missingDisposition"] == "REVIEW":
+                if crop_disposition == "REVIEW" else "ERROR")
+            if crop_disposition == "REVIEW":
                 ctx.review_route_reasons.append(problem)
             else:
                 return _refusal(ctx, "FAIL_SEMANTIC", problem)
