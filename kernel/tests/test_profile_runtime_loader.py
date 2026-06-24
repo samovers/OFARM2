@@ -245,6 +245,16 @@ def _expected_profile_instance_ids(store, active_profile) -> list[str]:
     return expected
 
 
+def _bootstrap_demo_substrate_only(store) -> None:
+    for payload in demo.substrate_records():
+        contract = store.registry.get(payload["schemaVersion"])
+        record_id = payload[contract.id_field]
+        if store.record_exists(record_id):
+            continue
+        with store.tx() as cur:
+            store.insert_record(cur, payload)
+
+
 def _trace_payload(store, result: dict) -> dict:
     return store.get_payload(result["promotionTraceRef"])
 
@@ -1385,6 +1395,33 @@ def test_profile_applicability_required_reference_family_is_governed_refusal(
 
     trace = _assert_profile_applicability_refusal(store, result)
     assert "required reference family" in trace["gateSequence"][-1]["rationale"]
+
+
+def test_profile_applicability_missing_context_spine_is_governed_refusal():
+    with _fresh_unbootstrapped_store() as store:
+        _bootstrap_demo_substrate_only(store)
+
+        result = GatePipeline(store).commit(_note_submission(
+            f"issue137-missing-spine:{_uid()}"))
+
+        trace = _assert_profile_applicability_refusal(store, result)
+        assert "context spine not bootstrapped" in \
+            trace["gateSequence"][-1]["rationale"]
+        assert result["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+
+
+def test_materializer_missing_context_spine_refuses_use_governably():
+    with _fresh_unbootstrapped_store() as store:
+        materializer = Materializer(store)
+
+        with store.tx() as cur:
+            result = materializer.resolve_for_use(cur, demo.FARM)
+
+        assert result["decision"] == "REFUSE_USE"
+        assert result["freshness"] == "INVALID"
+        assert result["contextSnapshotRef"] == "contextsnapshot:not-reconstructible"
+        assert result["problems"][0]["reasonCode"] == "MATERIALIZATION_INVALID"
+        assert "context spine not bootstrapped" in result["problems"][0]["detail"]
 
 
 def test_api_commit_returns_governed_profile_applicability_refusal_not_500():
