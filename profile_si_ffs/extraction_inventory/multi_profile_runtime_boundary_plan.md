@@ -113,6 +113,11 @@ MP2 descriptor registry status is recorded in
 `mp2_descriptor_registry_plan.md`. MP2 does not activate a second profile or
 create multi-profile runtime readiness.
 
+MP3 context and policy lookup planning is recorded in
+`mp3_context_policy_lookup_plan.md`. That plan is documentation-only and does
+not change context assembly, profile policy loading, active profile selection,
+active SI behavior, or active runtime claims.
+
 ## Preconditions Before Any Runtime PR
 
 A runtime implementation PR must state which stage it targets and prove:
