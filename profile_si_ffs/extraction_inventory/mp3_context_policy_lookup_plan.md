@@ -93,6 +93,18 @@ The MP3a helpers let future internals load policy content through an explicit
 policy path or active profile descriptor while preserving the current
 config-backed compatibility wrappers for the single-active-SI runtime.
 
+## MP3b Implementation Status
+
+MP3b implements explicit active-profile descriptor inputs for context bootstrap,
+reference snapshot selection, and context assembly. It does not change active
+profile selection, descriptor registry behavior, manifest generation, executed
+evidence, runtime adapters, ProductRegister behavior, active SI behavior, or
+second-profile activation.
+
+The MP3b helpers let future internals assemble context from an explicit active
+profile descriptor while preserving the current config-backed compatibility
+wrappers for the single-active-SI runtime.
+
 ## Assertion-Equivalence Requirements
 
 Future MP3 implementation must preserve assertion-equivalence for unchanged SI
