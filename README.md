@@ -1,4 +1,4 @@
-# OFARM2 Implementation Package (pre-implementation baseline)
+# OFARM2 Implementation Package
 
 **What this is:** the self-contained working surface for implementing OFARM2 — a Kernel/Core/Platform implementation and conformance packaging profile plus the Slovenia plant-protection record-keeping pilot definition. Designed to be lifted into its own repository unchanged.
 
@@ -22,7 +22,7 @@ No production readiness of any kind is claimed: not software-delivery, model-dep
 6. `profile_si_ffs/PROFILE.md` — scheme roles, currentness posture, evidence/review policy, shipped + deferred instances
 7. `profile_nl_go_glmc7_2026/README.md` - narrow Netherlands GO + GLMC 7 2026 profile slice
 8. `profile_si_ffs/views/VIEWS.md` — the two SI pilot governed outputs, specified
-9. `conformance/CONFORMANCE.md` — package self-check + the 15-test platform MVP suite
+9. `conformance/CONFORMANCE.md` — package self-check + platform MVP plus root conformance regression suite
 
 ## Layout
 

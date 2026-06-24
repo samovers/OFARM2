@@ -130,7 +130,7 @@ def discover_profile_harness_descriptors(
         if not profile_dir.is_dir() or not profile_dir.name.startswith("profile_"):
             continue
         descriptor = profile_dir / "tests" / HARNESS_DESCRIPTOR_FILENAME
-        if not descriptor.exists():
+        if not descriptor.exists() and not descriptor.is_symlink():
             continue
         harness = load_profile_harness_descriptor(
             descriptor,
