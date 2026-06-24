@@ -3,8 +3,15 @@
 Status: root-owned executed evidence lane.
 
 Files named `platform_mvp_results_*.json` are timestamped outputs from the named
-platform MVP suite. They are not package self-check output, profile design cases,
-profile engineering test descriptors, or extraction inventory/status material.
+root platform MVP plus root conformance regression executed suite. They are not
+package self-check output, profile design cases, profile engineering test
+descriptors, or extraction inventory/status material.
+
+Historical `platform_mvp_results_*.json` files had their `suite` field corrected
+from `conformance:ofarm2.platform-mvp.tests-1-15.v0_1` to
+`conformance:ofarm2.platform-mvp.tests-1-15-plus-regressions.v0_2` under issue
+#126. Result records, outcomes, durations, timestamps, and details were not
+changed.
 
 This directory must not be used for profile-local design inventories or
 profile-only engineering test dry runs. A future profile executed-evidence lane

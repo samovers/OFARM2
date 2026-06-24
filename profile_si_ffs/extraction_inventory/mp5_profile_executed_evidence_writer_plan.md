@@ -74,7 +74,7 @@ were merely discoverable but not executed.
 A future profile evidence writer must:
 
 - use a suite id distinct from
-  `conformance:ofarm2.platform-mvp.tests-1-15.v0_1`;
+  `conformance:ofarm2.platform-mvp.tests-1-15-plus-regressions.v0_2`;
 - write only to a clearly profile-local evidence path;
 - record only actual executed profile engineering tests;
 - include an honesty note distinguishing profile engineering evidence from root

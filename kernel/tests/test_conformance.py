@@ -1,6 +1,8 @@
-"""Platform MVP conformance suite — tests 1-15 from conformance/CONFORMANCE.md,
-executed against the live store, plus the 8 inherited gate-sequencing fixtures
-replayed live (test 4).
+"""Platform MVP plus root conformance regression suite.
+
+Tests 1-15 from conformance/CONFORMANCE.md execute against the live store, plus
+the 8 inherited gate-sequencing fixtures replayed live (test 4). Higher-numbered
+tests are root conformance regressions, not profile engineering evidence.
 
 Never weakened to pass: a wrong-seeming expectation goes to ERRATA.md instead
 (AGENTS.md). Fixture vocabulary note (not a weakening): the inherited fixtures

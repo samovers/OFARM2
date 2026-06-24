@@ -39,6 +39,11 @@ jobs:
           OFARM_PG_DSN: "host=localhost port=5432 dbname=ofarm_kernel_test user=ofarm password=ofarm"
           OFARM_PG_ADMIN_DSN: "host=localhost port=5432 dbname=postgres user=ofarm password=ofarm"
         run: python -m pytest kernel/tests/ -q
+      - name: Verify generated manifest artifacts
+        env:
+          OFARM_PG_DSN: "host=localhost port=5432 dbname=ofarm_kernel_test user=ofarm password=ofarm"
+          OFARM_PG_ADMIN_DSN: "host=localhost port=5432 dbname=postgres user=ofarm password=ofarm"
+        run: python3 -m kernel.manifest --verify-generated
       - name: Upload executed evidence
         if: always()
         uses: actions/upload-artifact@v6

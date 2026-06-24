@@ -16,13 +16,14 @@ import pytest
 
 os.environ.setdefault("OFARM_PG_DBNAME", "ofarm_kernel_test")
 
-from kernel import config, context, demo  # noqa: E402
+from kernel import config, context, demo, manifest  # noqa: E402
 from kernel.gates import GatePipeline  # noqa: E402
 from kernel.materializer import Materializer  # noqa: E402
 from kernel.store import Store  # noqa: E402
 from kernel.views import OutputGenerator  # noqa: E402
 
 EVIDENCE_DIR = config.PACKAGE_ROOT / "conformance" / "evidence"
+PLATFORM_MVP_EVIDENCE_SUITE = manifest.PLATFORM_MVP_TEST_SUITE_REF
 _RESULTS: list[dict] = []
 _DETAILS: dict[str, dict] = {}
 
@@ -101,11 +102,18 @@ def fresh_env():
         admin.execute(f'DROP DATABASE IF EXISTS "{dbname}"')
 
 
+def is_platform_mvp_evidence_report(report) -> bool:
+    """Only root conformance calls may enter PLATFORM_MVP_EXECUTED_EVIDENCE."""
+    node_path = report.nodeid.split("::", 1)[0].replace("\\", "/")
+    return report.when == "call" and node_path.endswith("kernel/tests/test_conformance.py")
+
+
 def pytest_runtest_logreport(report):
-    # the evidence file claims the named conformance suite, so it carries
-    # conformance results only; engineering tests (test_stages.py) run in
-    # the same session but never masquerade as suite evidence
-    if report.when == "call" and "test_conformance.py" in report.nodeid:
+    # The evidence file claims the root platform MVP + root conformance
+    # regression suite, so it carries root conformance results only. Profile
+    # bridge/profile-local engineering tests can run in the same session, but
+    # they never masquerade as platform executed evidence.
+    if is_platform_mvp_evidence_report(report):
         _RESULTS.append({
             "test": report.nodeid,
             "outcome": report.outcome,
@@ -119,7 +127,7 @@ def pytest_sessionfinish(session, exitstatus):
     EVIDENCE_DIR.mkdir(exist_ok=True)
     ts = datetime.now(timezone.utc)
     payload = {
-        "suite": "conformance:ofarm2.platform-mvp.tests-1-15.v0_1",
+        "suite": PLATFORM_MVP_EVIDENCE_SUITE,
         "executed": True,
         "executedAt": ts.isoformat().replace("+00:00", "Z"),
         "runtimeVersion": config.RUNTIME_VERSION,

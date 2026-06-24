@@ -1,5 +1,5 @@
 {
-  "suite": "conformance:ofarm2.platform-mvp.tests-1-15.v0_1",
+  "suite": "conformance:ofarm2.platform-mvp.tests-1-15-plus-regressions.v0_2",
   "executed": true,
   "executedAt": "2026-06-14T19:39:23.069669Z",
   "runtimeVersion": "ofarm2-kernel-m1.0",

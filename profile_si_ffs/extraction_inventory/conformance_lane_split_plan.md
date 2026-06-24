@@ -21,7 +21,10 @@ Prevent three different artifacts from being confused:
 
 D7 remains a boundary lane. It must not rename the current suite, change pytest
 collection, move evidence files, or alter the `conformance/` runner unless a
-future implementation PR explicitly designs that change.
+future implementation PR explicitly designs that change. Issue #126 is such an
+implementation correction: it renamed the root suite id to
+`conformance:ofarm2.platform-mvp.tests-1-15-plus-regressions.v0_2` without
+changing result records or admitting profile engineering tests.
 
 ## Implemented Boundary
 
@@ -43,7 +46,7 @@ engineering tests.
 | Lane | Current location | Current meaning | Keep for now |
 | --- | --- | --- | --- |
 | Package self-check | `conformance/ofarm_pkg_contract_check.py` | Parse, digest, and schema-instance validation for authored package artifacts. | Yes, root-owned. |
-| Platform MVP executed suite | `kernel/tests/test_conformance.py` plus `kernel/tests/conftest.py` evidence writer | Named executed conformance suite against the live store. | Yes, root-owned. |
+| Platform MVP plus root regression executed suite | `kernel/tests/test_conformance.py` plus `kernel/tests/conftest.py` evidence writer | Named executed root conformance suite against the live store. | Yes, root-owned. |
 | Platform MVP evidence | `conformance/evidence/platform_mvp_results_*.json` | Timestamped results of actual platform MVP test runs. | Yes, root-owned evidence lane. |
 | Inherited gate fixtures | `conformance/fixtures/gate_sequencing/**` | Canonical input fixtures replayed by platform tests. | Yes, protected root fixtures. |
 | NL profile design cases | `profile_nl_go_glmc7_2026/conformance/nl_glmc7_2026_cases.md` | Profile-slice design cases, not executed platform evidence. | Yes, profile-local design lane. |
@@ -57,7 +60,7 @@ engineering tests.
 | Future lane | Intended owner | What belongs there | What must not belong there |
 | --- | --- | --- | --- |
 | `PACKAGE_SELF_CHECK` | Root `conformance/` | Repository/package validation scripts and their documentation. | Profile design cases, runtime claims, or generated evidence. |
-| `PLATFORM_MVP_EXECUTED_EVIDENCE` | Root `conformance/evidence/` | Actual executed platform MVP result JSON from the named root suite. | Design inventories, dry-run notes, or profile-only test output. |
+| `PLATFORM_MVP_EXECUTED_EVIDENCE` | Root `conformance/evidence/` | Actual executed platform MVP plus root conformance regression JSON from the named root suite. | Design inventories, dry-run notes, or profile-only test output. |
 | `PLATFORM_MVP_FIXTURES` | Root `conformance/fixtures/` | Canonical or inherited fixtures that root platform tests execute. | Profile-local law or profile-specific fixture catalogs unless explicitly bridged. |
 | `PROFILE_DESIGN_CASES` | Profile package directories | Design case inventories like the NL GLMC 7 slice cases. | Claims that the cases executed as platform evidence. |
 | `PROFILE_ENGINEERING_TESTS` | Profile harness from D6 | Profile-local pytest coverage for SI adapters, policy metadata, and fixture helpers. | Platform MVP evidence labels unless explicitly run and recorded by a defined evidence writer. |
@@ -71,7 +74,8 @@ a future implementation PR changes it deliberately.
 
 Any future profile evidence writer must:
 
-- use a distinct suite id from `conformance:ofarm2.platform-mvp.tests-1-15.v0_1`;
+- use a distinct suite id from
+  `conformance:ofarm2.platform-mvp.tests-1-15-plus-regressions.v0_2`;
 - write to a clearly profile-labeled path;
 - record only tests that actually executed;
 - include an honesty note that distinguishes design fixtures from executed
@@ -133,7 +137,7 @@ itself, a fresh validation run.
 Stop and re-plan if a future PR would require any of the following without an
 approved implementation design:
 
-- renaming the platform MVP suite id;
+- renaming the platform MVP suite id without an explicit evidence-lane PR;
 - moving or deleting historical `conformance/evidence/` files;
 - changing `kernel/tests/conftest.py` evidence writer semantics;
 - presenting design cases as executed evidence;

@@ -14,8 +14,14 @@ itself simply never claims those surfaces.
 """
 from __future__ import annotations
 
+import argparse
+import copy
+import difflib
 import importlib
 import json
+import sys
+
+import jsonschema
 
 from . import config
 from .context import now_iso
@@ -25,6 +31,9 @@ from .policy import (COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS,
 MANIFEST_ID = "manifest:si.ffs.pilot.v0_1"
 MANIFEST_PATH = config.PROFILE_ROOT / "OFARM_Capability_Manifest_si_ffs_pilot_v0_1.json"
 ARTIFACT_SET_PATH = config.PROFILE_ROOT / "OFARM_ActiveArtifactSet_example_si_ffs_pilot_v0_1.json"
+PLATFORM_MVP_TEST_SUITE_REF = (
+    "conformance:ofarm2.platform-mvp.tests-1-15-plus-regressions.v0_2"
+)
 
 VIEW_ARTIFACTS = [
     "queryspec:si.ffs.spray-register.passportview.v0_1",
@@ -156,11 +165,12 @@ def build_manifest(store) -> dict:
         "conformance": {
             # NONE, deliberately: the only available definition of BASELINE is
             # canonical Platform law's, which is far broader than the executed
-            # 15-test pilot suite — claiming it would be ungrounded (RFC §11.4:
-            # no evidence level beyond what evidence supports). The executed
-            # suite is declared as a test-suite ref, not a level claim.
+            # platform MVP + root conformance regression suite — claiming it
+            # would be ungrounded (RFC §11.4: no evidence level beyond what
+            # evidence supports). The executed suite is declared as a test-suite
+            # ref, not a level claim.
             "minimumConformanceLevel": "NONE",
-            "testSuiteRefs": ["conformance:ofarm2.platform-mvp.tests-1-15.v0_1"],
+            "testSuiteRefs": [PLATFORM_MVP_TEST_SUITE_REF],
             "declaredProfileRefs": [config.PROFILE_REF],
         },
     }
@@ -306,3 +316,162 @@ def write_artifacts(store) -> tuple[dict, dict]:
     MANIFEST_PATH.write_text(json.dumps(manifest, indent=2) + "\n")
     ARTIFACT_SET_PATH.write_text(json.dumps(artifact_set, indent=2) + "\n")
     return manifest, artifact_set
+
+
+def _normalized_for_generated_compare(payload: dict,
+                                      volatile_paths: tuple[tuple[str, ...], ...]) -> dict:
+    normalized = copy.deepcopy(payload)
+    for path in volatile_paths:
+        cursor = normalized
+        for part in path[:-1]:
+            if not isinstance(cursor, dict):
+                break
+            cursor = cursor.get(part)
+        else:
+            if isinstance(cursor, dict) and path[-1] in cursor:
+                cursor[path[-1]] = "<normalized-generated-timestamp>"
+    return normalized
+
+
+def _stable_json_lines(payload: dict) -> list[str]:
+    return (json.dumps(payload, indent=2, sort_keys=True) + "\n").splitlines(keepends=True)
+
+
+def _diff_generated_payload(label: str, committed: dict, generated: dict,
+                            volatile_paths: tuple[tuple[str, ...], ...]) -> str | None:
+    committed_cmp = _normalized_for_generated_compare(committed, volatile_paths)
+    generated_cmp = _normalized_for_generated_compare(generated, volatile_paths)
+    if committed_cmp == generated_cmp:
+        return None
+    diff = difflib.unified_diff(
+        _stable_json_lines(committed_cmp),
+        _stable_json_lines(generated_cmp),
+        fromfile=f"committed {label}",
+        tofile=f"generated {label}",
+    )
+    return f"{label} differs from generated output:\n{''.join(diff)}"
+
+
+def _schema_validation_failures(label: str, payload: dict, schema_path) -> list[str]:
+    schema = json.loads(schema_path.read_text())
+    validator = jsonschema.Draft202012Validator(
+        schema, format_checker=jsonschema.FormatChecker())
+    errors = sorted(validator.iter_errors(payload), key=lambda e: list(e.absolute_path))
+    failures = []
+    for error in errors:
+        location = "/".join(str(part) for part in error.absolute_path) or "<root>"
+        failures.append(
+            f"{label} violates {schema_path.relative_to(config.PACKAGE_ROOT)} "
+            f"at {location}: {error.message}"
+        )
+    return failures
+
+
+def _load_committed_json(path, label: str) -> tuple[dict | None, list[str]]:
+    try:
+        payload = json.loads(path.read_text())
+    except (OSError, ValueError) as exc:
+        return None, [f"{label} could not be read as JSON at {path}: {exc}"]
+    if not isinstance(payload, dict):
+        return None, [f"{label} at {path} must be a JSON object"]
+    return payload, []
+
+
+def verify_generated_artifacts(store) -> list[str]:
+    """Verify committed generated artifacts equal generator output.
+
+    This is intentionally read-only for the working tree: it builds artifacts in
+    memory, normalizes approved volatile timestamp fields, and reports drift.
+    """
+    failures: list[str] = []
+    generated_manifest = build_manifest(store)
+    generated_artifact_set = build_artifact_set()
+
+    committed_manifest, load_failures = _load_committed_json(
+        MANIFEST_PATH, "committed capability manifest")
+    failures.extend(load_failures)
+    committed_artifact_set, load_failures = _load_committed_json(
+        ARTIFACT_SET_PATH, "committed active artifact set")
+    failures.extend(load_failures)
+    if committed_manifest is None or committed_artifact_set is None:
+        return failures
+
+    manifest_schema = (
+        config.CONTRACTS_ROOT / "platform" / "OFARM_Capability_Manifest_schema_v0_1.json"
+    )
+    artifact_set_schema = (
+        config.CONTRACTS_ROOT / "platform" / "OFARM_ActiveArtifactSet_schema_v0_1.json"
+    )
+    failures.extend(_schema_validation_failures(
+        "committed capability manifest", committed_manifest, manifest_schema))
+    failures.extend(_schema_validation_failures(
+        "generated capability manifest", generated_manifest, manifest_schema))
+    failures.extend(_schema_validation_failures(
+        "committed active artifact set", committed_artifact_set, artifact_set_schema))
+    failures.extend(_schema_validation_failures(
+        "generated active artifact set", generated_artifact_set, artifact_set_schema))
+
+    manifest_diff = _diff_generated_payload(
+        "capability manifest",
+        committed_manifest,
+        generated_manifest,
+        (("publishedAt",),),
+    )
+    if manifest_diff is not None:
+        failures.append(manifest_diff)
+    artifact_set_diff = _diff_generated_payload(
+        "active artifact set",
+        committed_artifact_set,
+        generated_artifact_set,
+        (("generatedAt",),),
+    )
+    if artifact_set_diff is not None:
+        failures.append(artifact_set_diff)
+
+    for failure in verify_grounding(store, committed_manifest, committed_artifact_set):
+        failures.append(f"committed manifest grounding failure: {failure}")
+    for failure in verify_grounding(store, generated_manifest, generated_artifact_set):
+        failures.append(f"generated manifest grounding failure: {failure}")
+    return failures
+
+
+def _bootstrapped_store_for_verify():
+    from . import context
+    from .store import Store
+
+    store = Store()
+    store.migrate()
+    context.bootstrap(store)
+    return store
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Verify OFARM generated manifest artifacts.")
+    parser.add_argument(
+        "--verify-generated",
+        action="store_true",
+        help="verify committed manifest JSON against generated output without writing files",
+    )
+    args = parser.parse_args(argv)
+    if not args.verify_generated:
+        parser.print_help()
+        return 0
+
+    store = _bootstrapped_store_for_verify()
+    try:
+        failures = verify_generated_artifacts(store)
+    finally:
+        store.close()
+
+    if failures:
+        for failure in failures:
+            print(failure)
+        print(f"RESULT: FAIL ({len(failures)} failures)")
+        return 1
+    print("RESULT: PASS (generated manifest artifacts match committed JSON)")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

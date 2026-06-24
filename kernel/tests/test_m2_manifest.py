@@ -9,7 +9,11 @@ the NONE conformance level. All identifiers fictional and format-true.
 """
 from __future__ import annotations
 
+import json
+from types import SimpleNamespace
+
 from kernel import manifest
+from kernel.tests import conftest as evidence_conftest
 
 
 def test_manifest_declares_all_m2_import_surfaces(store):
@@ -32,6 +36,50 @@ def test_grounding_passes_for_regenerated_artifacts(store):
     m = manifest.build_manifest(store)
     a = manifest.build_artifact_set()
     assert manifest.verify_grounding(store, m, a) == []
+
+
+def test_generated_artifacts_match_committed_json_after_timestamp_normalization(store):
+    assert manifest.verify_generated_artifacts(store) == []
+
+
+def test_generated_artifact_diff_reports_drift(store):
+    generated = manifest.build_manifest(store)
+    committed = json.loads(json.dumps(generated))
+    committed["manifestId"] = "manifest:drifted.by.test"
+    diff = manifest._diff_generated_payload(
+        "capability manifest",
+        committed,
+        generated,
+        (("publishedAt",),),
+    )
+    assert diff is not None
+    assert "manifest:drifted.by.test" in diff
+    assert "manifestId" in diff
+
+
+def test_manifest_suite_ref_matches_evidence_writer(store):
+    m = manifest.build_manifest(store)
+    assert m["conformance"]["testSuiteRefs"] == [manifest.PLATFORM_MVP_TEST_SUITE_REF]
+    assert evidence_conftest.PLATFORM_MVP_EVIDENCE_SUITE == manifest.PLATFORM_MVP_TEST_SUITE_REF
+
+
+def test_platform_evidence_writer_excludes_profile_engineering_tests():
+    assert evidence_conftest.is_platform_mvp_evidence_report(SimpleNamespace(
+        when="call",
+        nodeid="kernel/tests/test_conformance.py::test_01_append_only",
+    ))
+    assert not evidence_conftest.is_platform_mvp_evidence_report(SimpleNamespace(
+        when="call",
+        nodeid="kernel/tests/test_profile_harness_bridge.py::test_profile_bridge",
+    ))
+    assert not evidence_conftest.is_platform_mvp_evidence_report(SimpleNamespace(
+        when="call",
+        nodeid="profile_si_ffs/tests/m2_si_floor_tests.py::test_floor",
+    ))
+    assert not evidence_conftest.is_platform_mvp_evidence_report(SimpleNamespace(
+        when="setup",
+        nodeid="kernel/tests/test_conformance.py::test_01_append_only",
+    ))
 
 
 def test_grounding_rejects_ungrounded_import_surface(store):
