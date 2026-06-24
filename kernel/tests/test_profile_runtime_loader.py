@@ -15,6 +15,7 @@ import sys
 from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 import uuid
 
 import psycopg
@@ -259,6 +260,85 @@ def _policy_dimension(vector: dict) -> dict:
     raise AssertionError("missing RULE_EVIDENCE_POLICY dimension")
 
 
+def _regsr_artifact(*, decision: str) -> dict:
+    return {
+        "products": [
+            {
+                "regsrCode": "9001",
+                "name": "FIKTIV CUSTOM (fictional)",
+                "registrationValidUntil": "2030-12-31",
+            }
+        ],
+        "productDetails": [
+            {
+                "regsrCode": "9001",
+                "name": "FIKTIV CUSTOM (fictional)",
+                "decisions": [
+                    {
+                        "decisionType": "Registracija",
+                        "decisionNumber": decision,
+                        "issued": "2026-01-01",
+                        "validUntil": "2030-12-31",
+                    }
+                ],
+            }
+        ],
+    }
+
+
+def _custom_si_descriptor_with_regsr_artifact(tmp_path):
+    root = tmp_path / f"profile_si_ffs_custom_{_uid()}"
+    examples = root / "examples"
+    examples.mkdir(parents=True)
+    decision = f"U9{_uid()[:4]}-50/26/b"
+    artifact_name = "custom_regsr_snapshot.json"
+    artifact_path = examples / artifact_name
+    artifact_path.write_text(json.dumps(_regsr_artifact(decision=decision)),
+                             encoding="utf-8")
+
+    regsr_prefix = f"referencesnapshot:si.custom.ffs-reg.{_uid()}"
+    regsr_ref = f"{regsr_prefix}.2026-06-11"
+    snapshot_path = root / "OFARM_ReferenceSnapshot_custom_regsr.json"
+    snapshot_path.write_text(json.dumps({
+        "schemaVersion": "ofarm.referencesnapshot.v0.1",
+        "referenceSnapshotId": regsr_ref,
+        "issuedAt": "2026-06-11T00:00:00Z",
+        "effectiveFrom": "2026-06-11T00:00:00Z",
+        "effectiveUntil": None,
+        "sourceArtifactRefs": [f"artifact:{artifact_name}"],
+        "issuingAuthorityRef": "party:si.uvhvvr",
+    }), encoding="utf-8")
+
+    regsr_family = ReferenceFamily(
+        family_id="si.uvhvvr.ffs-reg",
+        snapshot_prefix=regsr_prefix,
+        data_family=f"si.custom.ffs-reg.{_uid()}",
+        required_for_now_context=False,
+        required_for_as_of_context=False,
+        missing_family_behavior_now=OMIT_FROM_CONTEXT,
+        missing_family_behavior_as_of=OMIT_FROM_CONTEXT,
+        shipped_snapshot_ref=regsr_ref,
+    )
+    gerk_family = ReferenceFamily(
+        family_id="si.mkgp.gerk-layer",
+        snapshot_prefix=f"referencesnapshot:si.custom.gerk-layer.{_uid()}",
+        data_family=f"si.custom.gerk-layer.{_uid()}",
+        required_for_now_context=False,
+        required_for_as_of_context=False,
+        missing_family_behavior_now=OMIT_FROM_CONTEXT,
+        missing_family_behavior_as_of=OMIT_FROM_CONTEXT,
+        shipped_snapshot_ref=f"referencesnapshot:si.custom.gerk-layer.{_uid()}.2025-06-30",
+    )
+    descriptor = replace(
+        config.ACTIVE_PROFILE,
+        profile_root=root,
+        profile_instance_files=(snapshot_path.name,),
+        profile_instance_paths=(snapshot_path,),
+        reference_families=(regsr_family, gerk_family),
+    )
+    return descriptor, artifact_path.resolve(), decision
+
+
 def _assert_profile_applicability_refusal(store, result: dict) -> dict:
     assert result["decisionOutcome"] == "RETAIN_DRAFT"
     assert result["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
@@ -346,6 +426,43 @@ def test_descriptor_drives_existing_si_config_without_tenant_binding():
         "si.mkgp.gerk-layer").snapshot_prefix
     assert config.SHIPPED_REGSR_SNAPSHOT_REF == active.reference_family(
         "si.uvhvvr.ffs-reg").shipped_snapshot_ref
+
+
+def test_si_reference_bindings_are_descriptor_derived():
+    active = config.ACTIVE_PROFILE
+    bindings = context.SIReferenceBindings.from_descriptor(active)
+    regsr = active.reference_family("si.uvhvvr.ffs-reg")
+    gerk = active.reference_family("si.mkgp.gerk-layer")
+    shipped_snapshot = _profile_instance_payload(
+        "referenceSnapshotId",
+        regsr.shipped_snapshot_ref,
+    )
+    artifact_refs = [
+        ref.split(":", 1)[1]
+        for ref in shipped_snapshot["sourceArtifactRefs"]
+        if ref.startswith("artifact:")
+    ]
+    assert len(artifact_refs) == 1
+
+    assert bindings.si_profile_root == active.profile_root.resolve()
+    assert bindings.regsr_snapshot_prefix == regsr.snapshot_prefix
+    assert bindings.regsr_data_family == regsr.data_family
+    assert bindings.regsr_shipped_snapshot_ref == regsr.shipped_snapshot_ref
+    assert bindings.regsr_shipped_artifact_path == (
+        active.profile_root / "examples" / artifact_refs[0]
+    ).resolve()
+    assert bindings.gerk_snapshot_prefix == gerk.snapshot_prefix
+    assert bindings.gerk_data_family == gerk.data_family
+    assert bindings.gerk_shipped_snapshot_ref == gerk.shipped_snapshot_ref
+
+
+def test_si_reference_binding_compatibility_aliases_are_binding_backed():
+    bindings = context.SI_REFERENCE_BINDINGS
+
+    assert bindings == context.SIReferenceBindings.from_descriptor(config.ACTIVE_PROFILE)
+    assert context.REGSR_SNAPSHOT_PREFIX == bindings.regsr_snapshot_prefix
+    assert context.GERK_SNAPSHOT_PREFIX == bindings.gerk_snapshot_prefix
+    assert context.REGSR_DATA_FAMILY == bindings.regsr_data_family
 
 
 def test_config_declares_explicit_single_active_profile_selection(monkeypatch):
@@ -1298,12 +1415,160 @@ def test_product_register_boundary_remains_single_active_si_runtime():
     assert config.ACTIVE_PROFILE_PACKAGE_NAMES == ("profile_si_ffs",)
     assert config.ALLOWED_ACTIVE_PROFILE_PACKAGE_NAMES == ("profile_si_ffs",)
     assert config.ACTIVE_PROFILE_SELECTION.profile_package_names == ("profile_si_ffs",)
+    assert context.SI_REFERENCE_BINDINGS == context.SIReferenceBindings.from_descriptor(
+        config.ACTIVE_PROFILE)
     assert context.REGSR_SNAPSHOT_PREFIX == config.ACTIVE_PROFILE.reference_family(
         "si.uvhvvr.ffs-reg").snapshot_prefix
     assert context.REGSR_DATA_FAMILY == config.ACTIVE_PROFILE.reference_family(
         "si.uvhvvr.ffs-reg").data_family
     assert config.SHIPPED_REGSR_SNAPSHOT_REF == config.ACTIVE_PROFILE.reference_family(
         "si.uvhvvr.ffs-reg").shipped_snapshot_ref
+
+
+def test_product_register_uses_explicit_si_reference_bindings(tmp_path):
+    descriptor, artifact_path, decision = _custom_si_descriptor_with_regsr_artifact(
+        tmp_path)
+    bindings = context.SIReferenceBindings.from_descriptor(descriptor)
+    register = context.ProductRegister(bindings)
+
+    assert bindings.regsr_shipped_artifact_path == artifact_path
+    assert register.bindings == bindings
+    assert register.lookup_by_decision(
+        bindings.regsr_shipped_snapshot_ref,
+        decision,
+    ) is not None
+    assert register.has_snapshot(bindings.regsr_shipped_snapshot_ref)
+    assert not register.has_snapshot(config.SHIPPED_REGSR_SNAPSHOT_REF)
+
+
+def test_product_register_load_from_store_uses_bindings_and_family_boundary(
+        tmp_path):
+    descriptor, _, _decision = _custom_si_descriptor_with_regsr_artifact(tmp_path)
+    bindings = context.SIReferenceBindings.from_descriptor(descriptor)
+    file_decision = f"U9{_uid()[:4]}-50/26/f"
+    file_artifact = bindings.si_profile_root / "examples" / "store_file_regsr.json"
+    file_artifact.write_text(json.dumps(_regsr_artifact(decision=file_decision)),
+                             encoding="utf-8")
+    store_decision = f"U9{_uid()[:4]}-50/26/s"
+
+    class FakeStore:
+        requested_families: list[str] = []
+
+        def reference_data(self, family):
+            self.requested_families.append(family)
+            return [{
+                "snapshot_ref": f"{bindings.regsr_snapshot_prefix}.store",
+                "payload": _regsr_artifact(decision=store_decision),
+            }]
+
+        def find_by_kind(self, kind):
+            assert kind == "ofarm.referencesnapshot.v0.1"
+            return [
+                {
+                    "payload": {
+                        "referenceSnapshotId": f"{bindings.regsr_snapshot_prefix}extra",
+                        "sourceArtifactRefs": [f"artifact:{file_artifact.name}"],
+                    }
+                },
+                {
+                    "payload": {
+                        "referenceSnapshotId": f"{bindings.regsr_snapshot_prefix}.file",
+                        "sourceArtifactRefs": [f"artifact:{file_artifact.name}"],
+                    }
+                },
+            ]
+
+    store = FakeStore()
+    register = context.ProductRegister(bindings)
+    register.load_from_store(store)
+
+    assert store.requested_families == [bindings.regsr_data_family]
+    assert register.lookup_by_decision(
+        f"{bindings.regsr_snapshot_prefix}.store",
+        store_decision,
+    ) is not None
+    assert register.lookup_by_decision(
+        f"{bindings.regsr_snapshot_prefix}.file",
+        file_decision,
+    ) is not None
+    assert not register.has_snapshot(f"{bindings.regsr_snapshot_prefix}extra")
+
+
+def test_gate_pipeline_threads_si_reference_bindings(fresh_env):
+    _store, pipeline, _ = fresh_env
+    sub = demo.spray_submission(
+        f"issue127b-binding-context:{_uid()}",
+        erp_id=f"erp:issue127b.binding.{_uid()}",
+        confirm=True,
+    )
+
+    ctx = pipeline._new_context(None, sub)
+
+    assert pipeline.products.bindings is pipeline.si_reference_bindings
+    assert ctx.si_reference_bindings is pipeline.si_reference_bindings
+
+
+def test_gate_pipeline_omits_si_reference_bindings_when_descriptor_changes(
+        fresh_env):
+    _store, pipeline, _ = fresh_env
+    pipeline.active_profile = replace(
+        config.ACTIVE_PROFILE,
+        profile_ref="profile:si.ffs.changed-binding-context.v0_1",
+    )
+    sub = demo.spray_submission(
+        f"issue127b-binding-context-mutated:{_uid()}",
+        erp_id=f"erp:issue127b.binding.mutated.{_uid()}",
+        confirm=True,
+    )
+
+    ctx = pipeline._new_context(None, sub)
+
+    assert ctx.si_reference_bindings is None
+
+
+def test_registry_reverification_prefers_context_si_reference_bindings(
+        monkeypatch):
+    seen_prefixes = []
+
+    def fake_current_reference_snapshot(_store, prefix):
+        seen_prefixes.append(prefix)
+        return None
+
+    monkeypatch.setattr(
+        validators,
+        "current_reference_snapshot",
+        fake_current_reference_snapshot,
+    )
+
+    binding_payload = {
+        "bindingRole": "CROP_PROTECTION_PRODUCT",
+        "bindingState": "VERIFIED",
+        "bindingValue": {"registrationRef": "U99999-50/26/context"},
+        "referenceSnapshotRefs": ["referencesnapshot:old"],
+    }
+
+    class FakeStore:
+        def get_record(self, ref):
+            if ref == "binding:regsr":
+                return {
+                    "record_kind": sufficiency.BINDING_KIND,
+                    "payload": binding_payload,
+                }
+            return None
+
+    ctx = SimpleNamespace(
+        store=FakeStore(),
+        sub={"payload": {"agronomicIdentityBindingRefs": ["binding:regsr"]}},
+        si_reference_bindings=SimpleNamespace(
+            regsr_snapshot_prefix="referencesnapshot:si.custom.regsr"),
+    )
+
+    assert validators.RegistryReverificationValidator().run(ctx) is None
+    assert seen_prefixes == ["referencesnapshot:si.custom.regsr"]
+
+    ctx.si_reference_bindings = None
+    assert validators.RegistryReverificationValidator().run(ctx) is None
+    assert seen_prefixes[-1] == context.REGSR_SNAPSHOT_PREFIX
 
 
 def test_materializer_uses_active_descriptor_for_context_and_policy_freshness(

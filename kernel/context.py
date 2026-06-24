@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 
 from . import config
 from .contracts import UnknownContract, canonical_json
@@ -19,17 +21,143 @@ from .profile_runtime import ProfileRuntimeError, resolve_active_descriptor
 
 PROFILE_INSTANCE_FILES = list(config.ACTIVE_PROFILE.profile_instance_files)
 
-_REGSR_FAMILY = config.ACTIVE_PROFILE.reference_family("si.uvhvvr.ffs-reg")
-_GERK_FAMILY = config.ACTIVE_PROFILE.reference_family("si.mkgp.gerk-layer")
-REGSR_SNAPSHOT_PREFIX = _REGSR_FAMILY.snapshot_prefix
-GERK_SNAPSHOT_PREFIX = _GERK_FAMILY.snapshot_prefix
-if _REGSR_FAMILY.data_family is None:
-    raise RuntimeError("active SI profile descriptor must name the REGSR data family")
+SI_REGSR_FAMILY_ID = "si.uvhvvr.ffs-reg"
+SI_GERK_FAMILY_ID = "si.mkgp.gerk-layer"
+
+
+@dataclass(frozen=True)
+class SIReferenceBindings:
+    """Active SI REGSR/GERK runtime bindings.
+
+    This is deliberately SI-shaped. It makes the current active runtime's
+    country/profile reference seams explicit without introducing a generic
+    country abstraction.
+    """
+    si_profile_root: Path
+    regsr_snapshot_prefix: str
+    regsr_data_family: str
+    regsr_shipped_snapshot_ref: str
+    regsr_shipped_artifact_path: Path
+    gerk_snapshot_prefix: str
+    gerk_data_family: str
+    gerk_shipped_snapshot_ref: str
+
+    @classmethod
+    def from_descriptor(cls, descriptor) -> "SIReferenceBindings":
+        try:
+            si_profile_root = Path(descriptor.profile_root).resolve(strict=True)
+        except (OSError, TypeError) as exc:
+            raise ProfileRuntimeError(
+                "active SI profile root is unavailable or unreadable") from exc
+
+        regsr_family = descriptor.reference_family(SI_REGSR_FAMILY_ID)
+        gerk_family = descriptor.reference_family(SI_GERK_FAMILY_ID)
+
+        regsr_data_family = _required_binding_value(
+            regsr_family.data_family, "REGSR data family")
+        regsr_shipped_snapshot_ref = _required_binding_value(
+            regsr_family.shipped_snapshot_ref, "REGSR shipped snapshot ref")
+        gerk_data_family = _required_binding_value(
+            gerk_family.data_family, "GERK data family")
+        gerk_shipped_snapshot_ref = _required_binding_value(
+            gerk_family.shipped_snapshot_ref, "GERK shipped snapshot ref")
+        regsr_artifact_path = _regsr_shipped_artifact_path(
+            descriptor, si_profile_root, regsr_shipped_snapshot_ref)
+
+        return cls(
+            si_profile_root=si_profile_root,
+            regsr_snapshot_prefix=regsr_family.snapshot_prefix,
+            regsr_data_family=regsr_data_family,
+            regsr_shipped_snapshot_ref=regsr_shipped_snapshot_ref,
+            regsr_shipped_artifact_path=regsr_artifact_path,
+            gerk_snapshot_prefix=gerk_family.snapshot_prefix,
+            gerk_data_family=gerk_data_family,
+            gerk_shipped_snapshot_ref=gerk_shipped_snapshot_ref,
+        )
+
+
+def _required_binding_value(value, label: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise ProfileRuntimeError(
+            f"active SI profile descriptor must name the {label}")
+    return value
+
+
+def _regsr_shipped_artifact_path(
+    descriptor,
+    si_profile_root: Path,
+    shipped_snapshot_ref: str,
+) -> Path:
+    matches = []
+    for path in descriptor.profile_instance_paths:
+        try:
+            payload = json.loads(Path(path).read_text())
+        except (OSError, ValueError) as exc:
+            raise ProfileRuntimeError(
+                f"active SI profile instance unreadable or malformed at {path}: {exc}"
+            ) from exc
+        if not isinstance(payload, dict):
+            continue
+        if payload.get("referenceSnapshotId") == shipped_snapshot_ref:
+            matches.append((Path(path), payload))
+    if len(matches) != 1:
+        raise ProfileRuntimeError(
+            f"active SI shipped REGSR snapshot {shipped_snapshot_ref!r} matched "
+            f"{len(matches)} profile instance payloads")
+
+    source_refs = matches[0][1].get("sourceArtifactRefs", [])
+    artifact_refs = [
+        ref.split(":", 1)[1]
+        for ref in source_refs
+        if isinstance(ref, str) and ref.startswith("artifact:")
+    ]
+    if len(artifact_refs) != 1 or not artifact_refs[0]:
+        raise ProfileRuntimeError(
+            f"active SI shipped REGSR snapshot {shipped_snapshot_ref!r} must "
+            "name exactly one artifact: source ref")
+    return _resolve_profile_example_artifact(
+        si_profile_root,
+        artifact_refs[0],
+        required=True,
+        label=f"active SI shipped REGSR artifact for {shipped_snapshot_ref!r}",
+    )
+
+
+def _resolve_profile_example_artifact(
+    profile_root: Path,
+    artifact_name: str,
+    *,
+    required: bool,
+    label: str,
+) -> Path | None:
+    try:
+        examples_root = (profile_root / "examples").resolve(strict=True)
+        candidate = (examples_root / artifact_name).resolve(strict=True)
+        candidate.relative_to(examples_root)
+    except (OSError, ValueError) as exc:
+        if required:
+            raise ProfileRuntimeError(f"{label} is absent or escapes profile examples") from exc
+        return None
+    if not candidate.is_file():
+        if required:
+            raise ProfileRuntimeError(f"{label} is not a file")
+        return None
+    return candidate
+
+
+def _snapshot_matches_family(snapshot_id: str, prefix: str) -> bool:
+    return snapshot_id == prefix or snapshot_id.startswith(prefix + ".")
+
+
+SI_REFERENCE_BINDINGS = SIReferenceBindings.from_descriptor(config.ACTIVE_PROFILE)
+REGSR_SNAPSHOT_PREFIX = SI_REFERENCE_BINDINGS.regsr_snapshot_prefix
+GERK_SNAPSHOT_PREFIX = SI_REFERENCE_BINDINGS.gerk_snapshot_prefix
 # store-backed reference-data family for REGSR parsed product data (M2 P1): the
 # data_family a governed REGSR import tags its parsed data with, and the family
 # ProductRegister loads from the store. ProductRegister is already REGSR-shaped
-# (lookup_by_decision, D9), so this REGSR-specific constant lives with it.
-REGSR_DATA_FAMILY = _REGSR_FAMILY.data_family
+# (lookup_by_decision, D9), so this REGSR-specific alias remains compatibility
+# surface over the explicit SI binding object.
+REGSR_DATA_FAMILY = SI_REFERENCE_BINDINGS.regsr_data_family
 
 _ACTIVE_PROFILE_REQUIRED_FIELDS = (
     "profile_ref",
@@ -203,13 +331,16 @@ class ProductRegister:
     the same path; the runtime itself only ever reads registered artifacts.
     """
 
-    def __init__(self):
+    def __init__(self, bindings: SIReferenceBindings | None = None):
+        self.bindings = bindings or SI_REFERENCE_BINDINGS
         self._by_snapshot: dict[str, dict] = {}
         # the shipped real parse (623 products, fictional-free: public register data)
-        shipped = config.PROFILE_ROOT / "examples" / "regsr_snapshot_2026-06-12.json"
+        shipped = self.bindings.regsr_shipped_artifact_path
         if shipped.exists():
-            self.register_artifact(config.SHIPPED_REGSR_SNAPSHOT_REF,
-                                   json.loads(shipped.read_text()))
+            self.register_artifact(
+                self.bindings.regsr_shipped_snapshot_ref,
+                json.loads(shipped.read_text()),
+            )
 
     def register_artifact(self, snapshot_id: str, artifact: dict) -> None:
         products = {p["regsrCode"]: p for p in artifact.get("products", [])}
@@ -240,19 +371,25 @@ class ProductRegister:
         resolvable from the store, not only from committed package files; then
         (2) the committed package-file fallback for shipped snapshots, which
         names its artifact in sourceArtifactRefs. The runtime never guesses."""
-        for row in store.reference_data(REGSR_DATA_FAMILY):
+        for row in store.reference_data(self.bindings.regsr_data_family):
             sid = row["snapshot_ref"]
             if sid not in self._by_snapshot:
                 self.register_artifact(sid, row["payload"])
         for row in store.find_by_kind("ofarm.referencesnapshot.v0.1"):
             payload = row["payload"]
             sid = payload["referenceSnapshotId"]
-            if not sid.startswith(REGSR_SNAPSHOT_PREFIX) or sid in self._by_snapshot:
+            if not _snapshot_matches_family(sid, self.bindings.regsr_snapshot_prefix) \
+                    or sid in self._by_snapshot:
                 continue
             for ref in payload.get("sourceArtifactRefs", []):
-                if ref.startswith("artifact:"):
-                    path = config.PROFILE_ROOT / "examples" / ref.split(":", 1)[1]
-                    if path.exists():
+                if isinstance(ref, str) and ref.startswith("artifact:"):
+                    path = _resolve_profile_example_artifact(
+                        self.bindings.si_profile_root,
+                        ref.split(":", 1)[1],
+                        required=False,
+                        label=f"REGSR source artifact for {sid!r}",
+                    )
+                    if path is not None:
                         self.register_artifact(sid, json.loads(path.read_text()))
 
     def identities_by_decision(self, snapshot_id: str, decision_number: str) -> list[dict]:

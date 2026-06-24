@@ -69,6 +69,7 @@ class GateContext:
     source_digest: str
     active_profile: Any = None
     policy_provider: Any = None
+    si_reference_bindings: Any = None
     commit_class: str = ""
     family: str = ""
     farm_ref: str = ""

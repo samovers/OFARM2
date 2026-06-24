@@ -1042,7 +1042,12 @@ class RegistryReverificationValidator:
         product_binding = _verified_product_binding(ctx)
         if not (product_binding and product_binding["bindingState"] == "VERIFIED"):
             return None
-        current = current_reference_snapshot(ctx.store, REGSR_SNAPSHOT_PREFIX)
+        regsr_snapshot_prefix = (
+            ctx.si_reference_bindings.regsr_snapshot_prefix
+            if ctx.si_reference_bindings is not None
+            else REGSR_SNAPSHOT_PREFIX
+        )
+        current = current_reference_snapshot(ctx.store, regsr_snapshot_prefix)
         current_id = current["referenceSnapshotId"] if current else None
         captured_against = ctx.sub.get("capturedAgainstSnapshotRef") \
             or (product_binding.get("referenceSnapshotRefs") or [None])[0]

@@ -28,7 +28,7 @@ import psycopg
 
 from . import profile_policy
 from .authority import AuthorityEvaluator
-from .context import ContextAssembler, ProductRegister, mint, now_iso
+from .context import ContextAssembler, ProductRegister, SIReferenceBindings, mint, now_iso
 from .contracts import sha256_of
 from .emission import PromotionTraceWriter, ReplayWriter
 from .materializer import Materializer
@@ -73,10 +73,13 @@ class GatePipeline:
         )
         self.policy_provider = profile_policy.DescriptorPolicyProvider(
             self.active_profile)
+        self.si_reference_bindings = SIReferenceBindings.from_descriptor(
+            self.active_profile)
+        self.si_reference_bindings_descriptor = self.active_profile
         self.authority = AuthorityEvaluator(store)
         self.context = ContextAssembler(store, active_descriptor=self.active_profile)
         self.materializer = Materializer(store, active_descriptor=self.active_profile)
-        self.products = product_register or ProductRegister()
+        self.products = product_register or ProductRegister(self.si_reference_bindings)
         self.products.load_from_store(store)
 
     # ======================================================================
@@ -117,11 +120,18 @@ class GatePipeline:
             if self.active_profile == self.policy_provider.descriptor
             else None
         )
+        si_reference_bindings = (
+            self.si_reference_bindings
+            if self.active_profile == self.si_reference_bindings_descriptor
+            else None
+        )
         return GateContext(
             cur=cur, store=self.store, authority=self.authority,
             context_assembler=self.context, materializer=self.materializer,
             products=self.products, active_profile=self.active_profile,
-            policy_provider=policy_provider, sub=sub,
+            policy_provider=policy_provider,
+            si_reference_bindings=si_reference_bindings,
+            sub=sub,
             request_id=mint("cir"), ingested_at=now_iso(),
             source_digest=self._source_digest(sub),
             commit_class=sub["commitClass"], farm_ref=sub["farmRef"],
