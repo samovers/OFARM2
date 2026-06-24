@@ -25,9 +25,11 @@ from kernel import config, context, demo
 from kernel.profile_runtime import (
     OMIT_FROM_CONTEXT,
     REFUSE_CONTEXT,
+    DESCRIPTOR_FILENAME,
     ProfileRuntimeError,
     ReferenceFamily,
     load_active_profile_selection,
+    load_profile_descriptor_registry,
     load_profile_runtime_descriptor,
 )
 from kernel.store import Store
@@ -54,6 +56,88 @@ def _copied_profile_root(tmp_path):
     for rel in [doc["evidencePolicyPath"], *doc["profileInstanceFiles"]]:
         shutil.copy2(config.PROFILE_ROOT / rel, root / rel)
     return root, doc
+
+
+def _copied_package_root(tmp_path):
+    root = tmp_path / f"package_root_{_uid()}"
+    root.mkdir()
+    shutil.copytree(config.PROFILE_ROOT, root / "profile_si_ffs")
+    nl_root = root / "profile_nl_go_glmc7_2026"
+    nl_root.mkdir()
+    (nl_root / "README.md").write_text("design-only profile slice\n", encoding="utf-8")
+    return root
+
+
+def _copied_si_package(package_root: Path, package_name: str) -> tuple[Path, dict]:
+    target = package_root / package_name
+    shutil.copytree(config.PROFILE_ROOT, target)
+    doc_path = target / DESCRIPTOR_FILENAME
+    return target, json.loads(doc_path.read_text())
+
+
+def _profile_file_by_id(profile_root: Path, doc: dict, id_field: str, expected: str):
+    for rel in doc["profileInstanceFiles"]:
+        path = profile_root / rel
+        payload = json.loads(path.read_text())
+        if payload.get(id_field) == expected:
+            return path, payload
+    raise AssertionError(f"missing profile instance {id_field}={expected}")
+
+
+def _make_second_descriptor_unique(
+    profile_root: Path,
+    doc: dict,
+    *,
+    duplicate_field: str,
+) -> None:
+    base = copy.deepcopy(doc)
+    unique = {
+        "profileRef": "profile:second.runtime.v0_1",
+        "packRef": "pack:second.runtime.v0_1",
+        "packActivationSetRef": "packactivationset:second.runtime.v0_1",
+        "activeArtifactSetRef": "activeartifactset:second.runtime.v0_1",
+        "codeBindingProfileRef": "codebindingprofile:second.runtime.v0_1",
+        "evidencePolicyRef": "policy:second.runtime.evidence-review.v0_1",
+        "contextSnapshotIdPrefix": "contextsnapshot:second.runtime",
+    }
+    for field, value in unique.items():
+        if field != duplicate_field:
+            doc[field] = value
+
+    policy_path = profile_root / doc["evidencePolicyPath"]
+    policy = json.loads(policy_path.read_text())
+    policy["policyId"] = doc["evidencePolicyRef"]
+    policy_path.write_text(json.dumps(policy), encoding="utf-8")
+
+    profile_path, profile = _profile_file_by_id(
+        profile_root, base, "agronomicCodeBindingProfileId",
+        base["codeBindingProfileRef"])
+    profile["agronomicCodeBindingProfileId"] = doc["codeBindingProfileRef"]
+    profile["profileScope"]["packRefs"] = [doc["packRef"]]
+    profile_path.write_text(json.dumps(profile), encoding="utf-8")
+
+    activation_path, activation = _profile_file_by_id(
+        profile_root, base, "packActivationSetId",
+        base["packActivationSetRef"])
+    activation["packActivationSetId"] = doc["packActivationSetRef"]
+    activation["activePackRefs"] = [doc["packRef"]]
+    activation["activeProfileRefs"] = [doc["profileRef"]]
+    activation_path.write_text(json.dumps(activation), encoding="utf-8")
+
+    artifact_path, artifact = _profile_file_by_id(
+        profile_root, base, "activeArtifactSetId",
+        base["activeArtifactSetRef"])
+    artifact["activeArtifactSetId"] = doc["activeArtifactSetRef"]
+    artifact["sourcePackActivationSetRefs"] = [doc["packActivationSetRef"]]
+    artifact["activePackRefs"] = [doc["packRef"]]
+    artifact["activeProfileRefs"] = [doc["profileRef"]]
+    artifact["activeArtifactRefs"] = [
+        ref for ref in artifact["activeArtifactRefs"]
+        if ref not in {base["codeBindingProfileRef"], base["evidencePolicyRef"]}
+    ] + [doc["codeBindingProfileRef"], doc["evidencePolicyRef"]]
+    artifact_path.write_text(json.dumps(artifact), encoding="utf-8")
+
+    (profile_root / DESCRIPTOR_FILENAME).write_text(json.dumps(doc), encoding="utf-8")
 
 
 def _uid():
@@ -241,6 +325,45 @@ def test_active_profile_env_import_fails_closed_for_blank_tokens(raw):
     assert "blank profile package token" in proc.stderr
 
 
+def test_descriptor_registry_discovers_si_candidate_and_nl_design_only_package():
+    registry = load_profile_descriptor_registry(
+        config.PACKAGE_ROOT,
+        allowed_profile_package_names=config.ALLOWED_ACTIVE_PROFILE_PACKAGE_NAMES,
+    )
+
+    assert "profile_si_ffs" in registry.discoverable_package_names
+    assert "profile_nl_go_glmc7_2026" in registry.discoverable_package_names
+    assert registry.enabled_package_names == ("profile_si_ffs",)
+    candidate_names = {candidate.package_name for candidate in registry.descriptor_candidates}
+    assert candidate_names == {"profile_si_ffs"}
+
+    candidate = registry.candidate_for("profile_si_ffs")
+    assert candidate is not None
+    assert candidate.enabled is True
+    assert candidate.descriptor == config.ACTIVE_PROFILE
+    assert candidate.descriptor_path == config.PROFILE_ROOT / DESCRIPTOR_FILENAME
+    assert registry.candidate_for("profile_nl_go_glmc7_2026") is None
+
+
+def test_descriptor_registry_marks_unenabled_candidate_without_activating_it():
+    registry = load_profile_descriptor_registry(
+        config.PACKAGE_ROOT,
+        allowed_profile_package_names=("profile_other_runtime",),
+    )
+    candidate = registry.candidate_for("profile_si_ffs")
+
+    assert candidate is not None
+    assert candidate.enabled is False
+
+
+def test_descriptor_registry_rejects_unsafe_enabled_package_name():
+    with pytest.raises(ProfileRuntimeError, match="profile_"):
+        load_profile_descriptor_registry(
+            config.PACKAGE_ROOT,
+            allowed_profile_package_names=("contracts",),
+        )
+
+
 def test_active_profile_selection_rejects_multiple_profiles_in_mp1():
     with pytest.raises(ProfileRuntimeError, match="exactly one active profile package"):
         load_active_profile_selection(
@@ -266,6 +389,19 @@ def test_active_profile_selection_rejects_profile_not_enabled_for_mp1():
         )
 
 
+def test_active_profile_selection_uses_registry_and_preserves_si_activation():
+    selected = load_active_profile_selection(
+        config.PACKAGE_ROOT,
+        ("profile_si_ffs",),
+        allowed_profile_package_names=config.ALLOWED_ACTIVE_PROFILE_PACKAGE_NAMES,
+    )
+
+    assert selected.profile_package_names == ("profile_si_ffs",)
+    assert selected.profile_roots == (config.PROFILE_ROOT,)
+    assert selected.active_profile.profile_ref == config.ACTIVE_PROFILE.profile_ref
+    assert selected.active_profile.pack_ref == config.ACTIVE_PROFILE.pack_ref
+
+
 @pytest.mark.parametrize("selection,match", [
     ((), "must not be empty"),
     ("profile_si_ffs", "must be a sequence"),
@@ -276,6 +412,50 @@ def test_active_profile_selection_rejects_profile_not_enabled_for_mp1():
 def test_active_profile_selection_rejects_unsafe_or_non_profile_names(selection, match):
     with pytest.raises(ProfileRuntimeError, match=match):
         load_active_profile_selection(config.PACKAGE_ROOT, selection)
+
+
+def test_descriptor_registry_rejects_malformed_descriptor_candidate(tmp_path):
+    root = _copied_package_root(tmp_path)
+    descriptor = root / "profile_si_ffs" / DESCRIPTOR_FILENAME
+    descriptor.write_text("{not json", encoding="utf-8")
+
+    with pytest.raises(ProfileRuntimeError, match="descriptor unreadable"):
+        load_profile_descriptor_registry(root)
+
+
+def test_descriptor_registry_rejects_descriptor_file_escape(tmp_path):
+    root = _copied_package_root(tmp_path)
+    descriptor = root / "profile_si_ffs" / DESCRIPTOR_FILENAME
+    doc = json.loads(descriptor.read_text())
+    doc["evidencePolicyPath"] = "../outside.json"
+    descriptor.write_text(json.dumps(doc), encoding="utf-8")
+
+    with pytest.raises(ProfileRuntimeError, match=r"\.\."):
+        load_profile_descriptor_registry(root)
+
+
+@pytest.mark.parametrize("field,match", [
+    ("profileRef", "duplicate profile_ref"),
+    ("packRef", "duplicate pack_ref"),
+    ("packActivationSetRef", "duplicate pack_activation_set_ref"),
+    ("activeArtifactSetRef", "duplicate active_artifact_set_ref"),
+    ("contextSnapshotIdPrefix", "duplicate context_snapshot_id_prefix"),
+    ("codeBindingProfileRef", "duplicate code_binding_profile_ref"),
+    ("evidencePolicyRef", "duplicate evidence_policy_ref"),
+])
+def test_descriptor_registry_rejects_duplicate_descriptor_refs(tmp_path, field, match):
+    root = tmp_path / "package_root"
+    root.mkdir()
+    _copied_si_package(root, "profile_si_ffs")
+    second_root, second_doc = _copied_si_package(root, "profile_second_runtime")
+    _make_second_descriptor_unique(
+        second_root,
+        second_doc,
+        duplicate_field=field,
+    )
+
+    with pytest.raises(ProfileRuntimeError, match=match):
+        load_profile_descriptor_registry(root)
 
 
 @pytest.mark.parametrize("field,value", [

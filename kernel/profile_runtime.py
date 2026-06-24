@@ -102,6 +102,29 @@ class ProfileRuntimeDescriptor:
 
 
 @dataclass(frozen=True)
+class ProfileDescriptorCandidate:
+    package_name: str
+    profile_root: Path
+    descriptor_path: Path
+    descriptor: ProfileRuntimeDescriptor
+    enabled: bool
+
+
+@dataclass(frozen=True)
+class ProfileDescriptorRegistry:
+    package_root: Path
+    discoverable_package_names: tuple[str, ...]
+    descriptor_candidates: tuple[ProfileDescriptorCandidate, ...]
+    enabled_package_names: tuple[str, ...]
+
+    def candidate_for(self, package_name: str) -> ProfileDescriptorCandidate | None:
+        for candidate in self.descriptor_candidates:
+            if candidate.package_name == package_name:
+                return candidate
+        return None
+
+
+@dataclass(frozen=True)
 class ActiveProfileSelection:
     package_root: Path
     profile_package_names: tuple[str, ...]
@@ -130,13 +153,13 @@ def load_active_profile_selection(
     harness, evidence, and manifest problem, so this selector rejects them
     rather than pretending the rest of the runtime is multi-profile-ready.
     """
-    root = package_root.resolve()
-    if not root.is_dir():
-        raise ProfileRuntimeError(f"package root is not a directory: {package_root}")
+    registry = load_profile_descriptor_registry(
+        package_root,
+        allowed_profile_package_names=allowed_profile_package_names,
+    )
     names = _profile_package_names(profile_package_names)
-    if allowed_profile_package_names is not None:
-        allowed = set(_profile_package_names(allowed_profile_package_names))
-        rejected = sorted(name for name in names if name not in allowed)
+    if registry.enabled_package_names:
+        rejected = sorted(name for name in names if name not in registry.enabled_package_names)
         if rejected:
             raise ProfileRuntimeError(
                 "active profile package selection includes package(s) not "
@@ -146,14 +169,55 @@ def load_active_profile_selection(
             "MP1 active profile selection supports exactly one active profile "
             f"package; got {list(names)!r}")
 
-    profile_roots = tuple(_active_profile_root(root, name) for name in names)
-    descriptors = tuple(load_profile_runtime_descriptor(profile_root)
-                        for profile_root in profile_roots)
+    candidates = []
+    for name in names:
+        _validate_profile_package_name(name)
+        candidate = registry.candidate_for(name)
+        if candidate is None:
+            raise ProfileRuntimeError(
+                f"active profile package {name!r} has no {DESCRIPTOR_FILENAME}; "
+                "design-only profile slices are not active runtime profiles")
+        candidates.append(candidate)
+
     return ActiveProfileSelection(
-        package_root=root,
+        package_root=registry.package_root,
         profile_package_names=names,
-        profile_roots=profile_roots,
-        descriptors=descriptors,
+        profile_roots=tuple(candidate.profile_root for candidate in candidates),
+        descriptors=tuple(candidate.descriptor for candidate in candidates),
+    )
+
+
+def load_profile_descriptor_registry(
+    package_root: Path,
+    allowed_profile_package_names: Sequence[str] | None = None,
+) -> ProfileDescriptorRegistry:
+    """Discover descriptor-bearing profile packages without activating them."""
+    root = package_root.resolve()
+    if not root.is_dir():
+        raise ProfileRuntimeError(f"package root is not a directory: {package_root}")
+
+    allowed = (_profile_package_names(allowed_profile_package_names)
+               if allowed_profile_package_names is not None else ())
+    discoverable = _discoverable_profile_packages(root)
+    candidates = []
+    for package_name, profile_root in discoverable:
+        descriptor_path = profile_root / DESCRIPTOR_FILENAME
+        if not descriptor_path.is_file():
+            continue
+        descriptor = load_profile_runtime_descriptor(profile_root)
+        candidates.append(ProfileDescriptorCandidate(
+            package_name=package_name,
+            profile_root=profile_root,
+            descriptor_path=descriptor_path,
+            descriptor=descriptor,
+            enabled=(not allowed or package_name in allowed),
+        ))
+    _reject_duplicate_descriptor_refs(tuple(candidates))
+    return ProfileDescriptorRegistry(
+        package_root=root,
+        discoverable_package_names=tuple(name for name, _ in discoverable),
+        descriptor_candidates=tuple(candidates),
+        enabled_package_names=allowed,
     )
 
 
@@ -227,6 +291,32 @@ def load_profile_runtime_descriptor(
     )
 
 
+def _discoverable_profile_packages(package_root: Path) -> tuple[tuple[str, Path], ...]:
+    packages = []
+    seen_names: set[str] = set()
+    seen_roots: set[Path] = set()
+    for child in sorted(package_root.iterdir(), key=lambda path: path.name):
+        if not child.is_dir():
+            continue
+        name = child.name
+        if not name.startswith("profile_"):
+            continue
+        _validate_profile_package_name(name)
+        try:
+            resolved = child.resolve()
+            resolved.relative_to(package_root)
+        except (OSError, ValueError) as exc:
+            raise ProfileRuntimeError(
+                f"discoverable profile package escapes the package root: {name!r}") from exc
+        if name in seen_names or resolved in seen_roots:
+            raise ProfileRuntimeError(
+                f"duplicate discoverable profile package after normalization: {name!r}")
+        seen_names.add(name)
+        seen_roots.add(resolved)
+        packages.append((name, resolved))
+    return tuple(packages)
+
+
 def _profile_package_names(profile_package_names: Sequence[str]) -> tuple[str, ...]:
     if isinstance(profile_package_names, str):
         raise ProfileRuntimeError("active profile package selection must be a sequence")
@@ -237,10 +327,12 @@ def _profile_package_names(profile_package_names: Sequence[str]) -> tuple[str, .
         raise ProfileRuntimeError("active profile package names must be strings")
     if len(names) != len(set(names)):
         raise ProfileRuntimeError("active profile package selection contains duplicates")
+    for name in names:
+        _validate_profile_package_name(name)
     return names
 
 
-def _active_profile_root(package_root: Path, package_name: str) -> Path:
+def _validate_profile_package_name(package_name: str) -> None:
     if not package_name:
         raise ProfileRuntimeError("active profile package name must not be empty")
     path = Path(package_name)
@@ -251,23 +343,29 @@ def _active_profile_root(package_root: Path, package_name: str) -> Path:
     if not package_name.startswith("profile_"):
         raise ProfileRuntimeError(
             f"active profile package must be a profile_* directory: {package_name!r}")
-    target = package_root / path
-    try:
-        resolved = target.resolve()
-        resolved.relative_to(package_root)
-    except (OSError, ValueError) as exc:
-        raise ProfileRuntimeError(
-            f"active profile package escapes the package root: {package_name!r}") from exc
-    if not resolved.is_dir():
-        raise ProfileRuntimeError(
-            f"active profile package is not a directory: {package_name!r}")
-    descriptor = resolved / DESCRIPTOR_FILENAME
-    if not descriptor.is_file():
-        raise ProfileRuntimeError(
-            f"active profile package {package_name!r} has no "
-            f"{DESCRIPTOR_FILENAME}; design-only profile slices are not active "
-            "runtime profiles")
-    return resolved
+
+
+def _reject_duplicate_descriptor_refs(
+    candidates: tuple[ProfileDescriptorCandidate, ...],
+) -> None:
+    fields = (
+        "profile_ref",
+        "pack_ref",
+        "pack_activation_set_ref",
+        "active_artifact_set_ref",
+        "context_snapshot_id_prefix",
+        "code_binding_profile_ref",
+        "evidence_policy_ref",
+    )
+    for field in fields:
+        seen: dict[str, str] = {}
+        for candidate in candidates:
+            value = getattr(candidate.descriptor, field)
+            if value in seen:
+                raise ProfileRuntimeError(
+                    f"duplicate {field} {value!r} in descriptor candidates "
+                    f"{seen[value]!r} and {candidate.package_name!r}")
+            seen[value] = candidate.package_name
 
 
 def _reject_unknown(doc: dict[str, Any], allowed: set[str], label: str) -> None:
