@@ -109,6 +109,10 @@ second profile, does not add the Netherlands GO + GLMC 7 design slice to runtime
 claims, does not change manifests, does not create profile-local executed
 evidence, and does not change current SI pilot behavior.
 
+MP2 is planned in `mp2_descriptor_registry_plan.md`. That plan is
+documentation-only and does not implement descriptor registry loading or activate
+a second profile.
+
 ## Preconditions Before Any Runtime PR
 
 A runtime implementation PR must state which stage it targets and prove:
