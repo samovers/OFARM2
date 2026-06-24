@@ -116,6 +116,19 @@ The MP3c helpers let future internals evaluate sufficiency and validation from
 explicit policy data while preserving the current config-backed compatibility
 wrappers for the single-active-SI runtime.
 
+## MP3d Implementation Status
+
+MP3d wires the current single active profile descriptor through the gate
+pipeline, validation, sufficiency, advisories, and materializer policy
+freshness. It does not change active profile selection, descriptor registry
+behavior, context snapshot semantics, manifest generation, executed evidence,
+runtime adapters, ProductRegister behavior, Netherlands runtime support, or
+second-profile activation.
+
+The MP3d wiring preserves the current single-active-SI runtime while removing
+hidden config-backed policy reads from descriptor-backed validation and
+sufficiency paths.
+
 ## Assertion-Equivalence Requirements
 
 Future MP3 implementation must preserve assertion-equivalence for unchanged SI

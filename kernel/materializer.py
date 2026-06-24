@@ -60,9 +60,10 @@ def _digest12(obj) -> str:
 
 
 class Materializer:
-    def __init__(self, store):
+    def __init__(self, store, *, active_profile=None):
         self.store = store
-        self.context = ContextAssembler(store)
+        self.active_profile = active_profile or config.ACTIVE_PROFILE
+        self.context = ContextAssembler(store, active_profile=self.active_profile)
 
     # ------------------------------------------------------------------ key --
 
@@ -120,8 +121,8 @@ class Materializer:
              "sourceRef": context_snapshot_ref,
              "observedVersionRef": context_snapshot_ref},
             {"dimensionFamily": "RULE_EVIDENCE_POLICY",
-             "sourceRef": config.EVIDENCE_POLICY_REF,
-             "observedVersionRef": config.EVIDENCE_POLICY_REF},
+             "sourceRef": self.active_profile.evidence_policy_ref,
+             "observedVersionRef": self.active_profile.evidence_policy_ref},
             {"dimensionFamily": "QUERY_PLAN_OR_MATERIALIZATION_POLICY",
              "sourceRef": MATERIALIZATION_POLICY_REF,
              "observedVersionRef": MATERIALIZATION_POLICY_REF},

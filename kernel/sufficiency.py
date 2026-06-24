@@ -339,7 +339,14 @@ def operation_advisories_with_policy(store, sub, evidence_policy) -> list[dict]:
     return out
 
 
-def build_acceptance_case(store, sub, farm_ref, target) -> dict:
+def build_acceptance_case(
+    store,
+    sub,
+    farm_ref,
+    target,
+    *,
+    policy_ref: str = config.EVIDENCE_POLICY_REF,
+) -> dict:
     """Case for a queue acceptance: evaluates the TARGET assertion's durable
     evidence (and, for compliance claims, the claim captured with its event)
     AND the resolution of the original route-to-review reasons — acceptance
@@ -369,7 +376,7 @@ def build_acceptance_case(store, sub, farm_ref, target) -> dict:
     erp_ref = (target.get("executionRecordPayloadRefs") or [None])[0]
     case, _ = build_case_from_checks(
         store, farm_ref, target_id, erp_ref, checks, tuple(checks), (),
-        evidence_refs, policy_ref=config.EVIDENCE_POLICY_REF,
+        evidence_refs, policy_ref=policy_ref,
         claim_statement=claim_statement)
     return case
 

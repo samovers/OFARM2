@@ -21,7 +21,9 @@ import psycopg
 import psycopg.conninfo
 import pytest
 
-from kernel import config, context, demo
+from kernel import config, context, demo, profile_policy, sufficiency, validators
+from kernel.gates import GatePipeline
+from kernel.materializer import Materializer
 from kernel.profile_runtime import (
     OMIT_FROM_CONTEXT,
     REFUSE_CONTEXT,
@@ -239,6 +241,21 @@ def _expected_profile_instance_ids(store, active_profile) -> list[str]:
         contract = store.registry.get(payload["schemaVersion"])
         expected.append(payload[contract.id_field])
     return expected
+
+
+def _trace_payload(store, result: dict) -> dict:
+    return store.get_payload(result["promotionTraceRef"])
+
+
+def _case_payload(store, result: dict) -> dict:
+    return store.get_payload(_trace_payload(store, result)["evidenceSufficiencyCaseRef"])
+
+
+def _policy_dimension(vector: dict) -> dict:
+    for dimension in vector["versionDimensions"]:
+        if dimension["dimensionFamily"] == "RULE_EVIDENCE_POLICY":
+            return dimension
+    raise AssertionError("missing RULE_EVIDENCE_POLICY dimension")
 
 
 @contextmanager
@@ -900,3 +917,182 @@ def test_now_context_refuses_descriptor_id_profile_wrong_pack_scope():
         with pytest.raises(context.ContextNotReconstructible, match="profileScope.packRefs"):
             with store.tx() as cur:
                 context.ContextAssembler(store).assemble(cur, demo.FARM)
+
+
+def test_gate_pipeline_explicit_active_profile_matches_default_for_clean_operation(
+        fresh_env):
+    store, default_pipeline, _ = fresh_env
+    explicit_pipeline = GatePipeline(store, active_profile=config.ACTIVE_PROFILE)
+
+    default = default_pipeline.commit(demo.spray_submission(
+        f"mp3d-default:{_uid()}",
+        erp_id=f"erp:mp3d.default.{_uid()}",
+        confirm=True,
+    ))
+    explicit = explicit_pipeline.commit(demo.spray_submission(
+        f"mp3d-explicit:{_uid()}",
+        erp_id=f"erp:mp3d.explicit.{_uid()}",
+        confirm=True,
+    ))
+
+    assert default["decisionOutcome"] == explicit["decisionOutcome"] == \
+        "PROMOTE_ACCEPTED"
+    assert default.get("problems", []) == explicit.get("problems", []) == []
+
+
+def test_descriptor_backed_pipeline_avoids_config_policy_wrappers(
+        fresh_env, monkeypatch):
+    store, _, _ = fresh_env
+
+    def fail_config_policy(*_args, **_kwargs):
+        raise AssertionError("config-backed policy path was called")
+
+    monkeypatch.setattr(profile_policy, "load_evidence_review_policy",
+                        fail_config_policy)
+    monkeypatch.setattr(profile_policy, "validation_policy", fail_config_policy)
+    monkeypatch.setattr(profile_policy, "operation_floor_with_display",
+                        fail_config_policy)
+    monkeypatch.setattr(profile_policy, "operation_floor_display",
+                        fail_config_policy)
+    monkeypatch.setattr(profile_policy, "advisory_rules", fail_config_policy)
+    monkeypatch.setattr(sufficiency, "build_floor_case", fail_config_policy)
+    monkeypatch.setattr(sufficiency, "operation_advisories", fail_config_policy)
+
+    result = GatePipeline(store).commit(demo.spray_submission(
+        f"mp3d-no-config:{_uid()}",
+        erp_id=f"erp:mp3d.no-config.{_uid()}",
+        confirm=True,
+    ))
+
+    assert result["decisionOutcome"] == "PROMOTE_ACCEPTED"
+
+
+def test_acceptance_sufficiency_uses_descriptor_policy_ref_without_policy_body(
+        fresh_env, monkeypatch):
+    store, pipeline, _ = fresh_env
+    queued = pipeline.commit(demo.spray_submission(
+        f"mp3d-accept-queued:{_uid()}",
+        erp_id=f"erp:mp3d.accept.queued.{_uid()}",
+        confirm=False,
+    ))
+    assert queued["decisionOutcome"] == "RETAIN_DRAFT"
+
+    def fail_descriptor_policy(*_args, **_kwargs):
+        raise AssertionError("acceptance path loaded the full descriptor policy")
+
+    monkeypatch.setattr(profile_policy, "load_evidence_review_policy_for_descriptor",
+                        fail_descriptor_policy)
+
+    accepted = pipeline.commit({
+        "commitClass": "GOVERNANCE_DECISION",
+        "actingPartyRef": demo.FARMER,
+        "farmRef": demo.FARM,
+        "idempotencyKey": f"mp3d-accept:{_uid()}",
+        "decisionTime": "2026-06-10T10:00:00Z",
+        "reviewTargetAssertionRef": queued["emittedAssertionRecordRefs"][0],
+        "reviewRationale": "self-review of a routine operation claim meeting the floor",
+    })
+
+    assert accepted["decisionOutcome"] == "PROMOTE_ACCEPTED"
+    case = _case_payload(store, accepted)
+    assert case["governingPolicyRefs"] == [config.ACTIVE_PROFILE.evidence_policy_ref]
+    assert {arg["policyRef"] for arg in case["arguments"]} == {
+        config.ACTIVE_PROFILE.evidence_policy_ref}
+
+
+def test_descriptor_validation_policy_failure_stops_at_validation(
+        fresh_env, monkeypatch):
+    store, _, _ = fresh_env
+
+    def fail_validation_policy(*_args, **_kwargs):
+        raise profile_policy.ProfilePolicyError("descriptor validation unavailable")
+
+    monkeypatch.setattr(profile_policy, "validation_policy_for_descriptor",
+                        fail_validation_policy)
+
+    result = GatePipeline(store).commit(demo.spray_submission(
+        f"mp3d-validation-fail:{_uid()}",
+        erp_id=f"erp:mp3d.validation.fail.{_uid()}",
+        confirm=True,
+    ))
+
+    assert result["decisionOutcome"] == "RETAIN_DRAFT"
+    assert result["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+    trace = _trace_payload(store, result)
+    assert [entry["gate"] for entry in trace["gateSequence"]] == [
+        "INGRESS_NORMALIZATION",
+        "AUTHORITY",
+        "VALIDATION",
+    ]
+    assert trace["gateSequence"][-1]["outcome"] == "FAIL_PROFILE_POLICY"
+    assert "evidenceSufficiencyCaseRef" not in trace
+
+
+def test_descriptor_sufficiency_policy_failure_happens_after_validation(
+        fresh_env, monkeypatch):
+    store, _, _ = fresh_env
+    validation = profile_policy.validation_policy_for_descriptor(config.ACTIVE_PROFILE)
+
+    monkeypatch.setattr(
+        profile_policy,
+        "validation_policy_for_descriptor",
+        lambda *_args, **_kwargs: validation,
+    )
+
+    def fail_evidence_policy(*_args, **_kwargs):
+        raise profile_policy.ProfilePolicyError("descriptor floor unavailable")
+
+    monkeypatch.setattr(profile_policy, "load_evidence_review_policy_for_descriptor",
+                        fail_evidence_policy)
+
+    result = GatePipeline(store).commit(demo.spray_submission(
+        f"mp3d-sufficiency-fail:{_uid()}",
+        erp_id=f"erp:mp3d.sufficiency.fail.{_uid()}",
+        confirm=True,
+    ))
+
+    assert result["decisionOutcome"] == "RETAIN_DRAFT"
+    assert result["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+    trace = _trace_payload(store, result)
+    assert [entry["gate"] for entry in trace["gateSequence"]] == [
+        "INGRESS_NORMALIZATION",
+        "AUTHORITY",
+        "VALIDATION",
+        "PACK_PROFILE_APPLICABILITY",
+        "EVIDENCE_SUFFICIENCY",
+    ]
+    assert trace["gateSequence"][2]["outcome"] == "PASS"
+    assert trace["gateSequence"][-1]["outcome"] == "INSUFFICIENT"
+
+
+def test_descriptor_compliance_recognized_refs_are_exact():
+    assert validators._descriptor_recognized_rule_refs(config.ACTIVE_PROFILE) == \
+        frozenset({
+            config.ACTIVE_PROFILE.evidence_policy_ref,
+            config.ACTIVE_PROFILE.profile_ref,
+            config.ACTIVE_PROFILE.pack_ref,
+            config.ACTIVE_PROFILE.code_binding_profile_ref,
+        })
+
+
+def test_materializer_uses_active_descriptor_for_context_and_policy_freshness(
+        fresh_env):
+    store, pipeline, _ = fresh_env
+
+    assert pipeline.materializer.active_profile is config.ACTIVE_PROFILE
+    assert pipeline.materializer.context.active_profile is config.ACTIVE_PROFILE
+
+    explicit = Materializer(store, active_profile=config.ACTIVE_PROFILE)
+    vector = explicit.build_freshness_vector(
+        {"materializationKeyId": "matkey:mp3d.policy"},
+        "matbasis:mp3d.policy",
+        "contextsnapshot:mp3d.policy",
+        [],
+    )
+
+    assert explicit.context.active_profile is config.ACTIVE_PROFILE
+    assert _policy_dimension(vector) == {
+        "dimensionFamily": "RULE_EVIDENCE_POLICY",
+        "sourceRef": config.ACTIVE_PROFILE.evidence_policy_ref,
+        "observedVersionRef": config.ACTIVE_PROFILE.evidence_policy_ref,
+    }

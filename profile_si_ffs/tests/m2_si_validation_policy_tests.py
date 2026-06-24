@@ -30,8 +30,17 @@ def _use_policy(monkeypatch, tmp_path, doc):
 
 
 def _spray(pipeline, **kw):
-    return pipeline.commit(demo.spray_submission(
+    return _commit_compat(pipeline, demo.spray_submission(
         f"d4:{uid()}", erp_id=f"erp:d4.{uid()}", **kw))
+
+
+def _commit_compat(pipeline, sub):
+    active_profile = pipeline.active_profile
+    try:
+        pipeline.active_profile = None
+        return pipeline.commit(sub)
+    finally:
+        pipeline.active_profile = active_profile
 
 
 def _use_explicit_operation_validation(monkeypatch, validation):
@@ -212,7 +221,7 @@ def test_explicit_validator_policy_injection_uses_supplied_subdocument(
         "targetScope": {"scopeType": "FIELD", "scopeRef": demo.FIELD},
         "extentBasisStatus": "OPERATOR_SKETCH",
     }
-    extent = pipeline.commit(partial)
+    extent = _commit_compat(pipeline, partial)
     assert extent["decisionOutcome"] == "RETAIN_DRAFT"
     assert extent["problems"][0]["title"] == "Explicit extent bound missing"
     assert "explicit treated area" in extent["problems"][0]["detail"]
@@ -267,7 +276,7 @@ def test_non_whole_extent_missing_bound_uses_profile_validation_policy(
         "targetScope": {"scopeType": "FIELD", "scopeRef": demo.FIELD},
         "extentBasisStatus": "OPERATOR_SKETCH",
     }
-    r = pipeline.commit(sub)
+    r = _commit_compat(pipeline, sub)
     assert r["decisionOutcome"] == "RETAIN_DRAFT"
     problem = r["problems"][0]
     assert problem["reasonCode"] == "EVIDENCE_INSUFFICIENT"
