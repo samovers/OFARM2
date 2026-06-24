@@ -1115,6 +1115,27 @@ OPERATION_SEQUENCE = (
 )
 
 
+def _descriptor_recognized_rule_refs(active_profile) -> frozenset[str]:
+    return frozenset({
+        active_profile.evidence_policy_ref,
+        active_profile.profile_ref,
+        active_profile.pack_ref,
+        active_profile.code_binding_profile_ref,
+    })
+
+
+def _operation_sequence_for_validation_policy(validation_policy: dict) -> tuple:
+    return (
+        CarrierSchemaValidator(),
+        CarrierSemanticsValidator(validation_policy=validation_policy),
+        ExecutionExtentValidator(validation_policy=validation_policy),
+        ReferenceResolutionValidator(),
+        ActorAttributionValidator(),
+        CodeBindingValidator(validation_policy=validation_policy),
+        RegistryReverificationValidator(),
+    )
+
+
 class ValidationGate:
     """Runs the named validators in law-pinned order; first refusal stops
     the chain (already logged); review-route reasons accumulate on the
@@ -1135,7 +1156,11 @@ class ValidationGate:
         if ctx.commit_class == "GOVERNANCE_DECISION":
             return GovernanceAcceptanceValidator().run(ctx) or GatePass()
         if ctx.commit_class == "COMPLIANCE_ASSERTION":
-            return ComplianceClaimValidator().run(ctx) or GatePass()
+            recognized_refs = (
+                _descriptor_recognized_rule_refs(ctx.active_profile)
+                if ctx.active_profile is not None else None)
+            return ComplianceClaimValidator(
+                recognized_rule_refs=recognized_refs).run(ctx) or GatePass()
         if ctx.commit_class == "STRUCTURE_ASSERTION":
             refusal = StructureCarrierValidator().run(ctx)
             if refusal:
@@ -1145,7 +1170,18 @@ class ValidationGate:
             ctx.log("VALIDATION", "PASS")
             return GatePass()
 
-        for validator in OPERATION_SEQUENCE:
+        if ctx.active_profile is None:
+            operation_sequence = OPERATION_SEQUENCE
+        else:
+            try:
+                validation_policy = profile_policy.validation_policy_for_descriptor(
+                    ctx.active_profile)
+            except profile_policy.ProfilePolicyError as exc:
+                return _validation_policy_refusal(ctx, exc)
+            operation_sequence = _operation_sequence_for_validation_policy(
+                validation_policy)
+
+        for validator in operation_sequence:
             refusal = validator.run(ctx)
             if refusal:
                 return refusal

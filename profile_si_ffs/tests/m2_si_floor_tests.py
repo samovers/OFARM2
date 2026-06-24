@@ -40,8 +40,17 @@ def uid():
 
 
 def _spray(pipeline, **kw):
-    return pipeline.commit(demo.spray_submission(
+    return _commit_compat(pipeline, demo.spray_submission(
         f"p5:{uid()}", erp_id=f"erp:p5.{uid()}", **kw))
+
+
+def _commit_compat(pipeline, sub):
+    active_profile = pipeline.active_profile
+    try:
+        pipeline.active_profile = None
+        return pipeline.commit(sub)
+    finally:
+        pipeline.active_profile = active_profile
 
 
 def _problem_titles(result):
@@ -374,7 +383,7 @@ def test_floor_composition_from_package_changes_behavior(store, pipeline, monkey
             f"p5-nocrop:{uid()}", erp_id=f"erp:p5.nocrop.{uid()}",
             confirm=True, binding_refs=[demo.PRODUCT_BINDING])   # crop binding omitted
 
-    default = pipeline.commit(_no_crop_binding())
+    default = _commit_compat(pipeline, _no_crop_binding())
     assert default["decisionOutcome"] == "REQUIRE_REVIEW", \
         "crop-binding SOFT by default -> route to review"
 
@@ -390,7 +399,7 @@ def test_floor_composition_from_package_changes_behavior(store, pipeline, monkey
         "validation": _valid_validation(),
         "advisories": {}}))
     monkeypatch.setattr(config, "EVIDENCE_POLICY_PATH", harder)
-    refused = pipeline.commit(_no_crop_binding())
+    refused = _commit_compat(pipeline, _no_crop_binding())
     assert refused["decisionOutcome"] == "RETAIN_DRAFT", \
         "crop-binding HARD in the package policy -> refuse, not route"
     assert refused["problems"][0]["reasonCode"] == "EVIDENCE_INSUFFICIENT"

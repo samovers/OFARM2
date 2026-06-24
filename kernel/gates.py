@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import psycopg
 
+from . import config
 from .authority import AuthorityEvaluator
 from .context import ContextAssembler, ProductRegister, mint, now_iso
 from .contracts import sha256_of
@@ -52,11 +53,18 @@ CHAIN = (
 
 
 class GatePipeline:
-    def __init__(self, store, product_register: ProductRegister | None = None):
+    def __init__(
+        self,
+        store,
+        product_register: ProductRegister | None = None,
+        *,
+        active_profile=None,
+    ):
         self.store = store
+        self.active_profile = active_profile or config.ACTIVE_PROFILE
         self.authority = AuthorityEvaluator(store)
-        self.context = ContextAssembler(store)
-        self.materializer = Materializer(store)
+        self.context = ContextAssembler(store, active_profile=self.active_profile)
+        self.materializer = Materializer(store, active_profile=self.active_profile)
         self.products = product_register or ProductRegister()
         self.products.load_from_store(store)
 
@@ -96,7 +104,7 @@ class GatePipeline:
         return GateContext(
             cur=cur, store=self.store, authority=self.authority,
             context_assembler=self.context, materializer=self.materializer,
-            products=self.products, sub=sub,
+            products=self.products, active_profile=self.active_profile, sub=sub,
             request_id=mint("cir"), ingested_at=now_iso(),
             source_digest=self._source_digest(sub),
             commit_class=sub["commitClass"], farm_ref=sub["farmRef"],

@@ -67,6 +67,7 @@ class GateContext:
     request_id: str
     ingested_at: str
     source_digest: str
+    active_profile: Any = None
     commit_class: str = ""
     family: str = ""
     farm_ref: str = ""
@@ -390,8 +391,12 @@ class EvidenceSufficiencyGate:
         # ReviewDecision — any existing sufficiency case is left unchanged
         # (PR #18 review B2). The branch was resolved by the prior ValidationGate.
         if ctx.acceptance_target and ctx.review_branch == "ACCEPT":
+            kwargs = {}
+            if ctx.active_profile is not None:
+                kwargs["policy_ref"] = ctx.active_profile.evidence_policy_ref
             case = sufficiency.build_acceptance_case(
-                ctx.store, ctx.sub, ctx.farm_ref, ctx.acceptance_payload)
+                ctx.store, ctx.sub, ctx.farm_ref, ctx.acceptance_payload,
+                **kwargs)
             if case["outcome"]["decision"] == "REFUSE":
                 ctx.log("EVIDENCE_SUFFICIENCY", "INSUFFICIENT",
                         reason_code="EVIDENCE_INSUFFICIENT",
@@ -414,9 +419,31 @@ class EvidenceSufficiencyGate:
 
         if ctx.commit_class in ("OPERATION_CLAIM", "COMPLIANCE_ASSERTION"):
             try:
-                case, floor_failures = sufficiency.build_floor_case(
-                    ctx.store, ctx.sub, ctx.commit_class, ctx.farm_ref,
-                    ctx.assertion_id, ctx.erp_id)
+                if ctx.active_profile is None:
+                    case, floor_failures = sufficiency.build_floor_case(
+                        ctx.store, ctx.sub, ctx.commit_class, ctx.farm_ref,
+                        ctx.assertion_id, ctx.erp_id)
+                    evidence_policy = None
+                else:
+                    evidence_policy = profile_policy.load_evidence_review_policy_for_descriptor(
+                        ctx.active_profile,
+                        supported_checks=(
+                            sufficiency.OPERATION_FLOOR_CHECKS
+                            if ctx.commit_class == "OPERATION_CLAIM"
+                            else None),
+                    )
+                    recognized_refs = {
+                        ctx.active_profile.evidence_policy_ref,
+                        ctx.active_profile.profile_ref,
+                        ctx.active_profile.pack_ref,
+                        ctx.active_profile.code_binding_profile_ref,
+                    }
+                    case, floor_failures = sufficiency.build_floor_case_with_policy(
+                        ctx.store, ctx.sub, ctx.commit_class, ctx.farm_ref,
+                        ctx.assertion_id, ctx.erp_id,
+                        evidence_policy=evidence_policy,
+                        policy_ref=ctx.active_profile.evidence_policy_ref,
+                        recognized_rule_refs=recognized_refs)
             except profile_policy.ProfilePolicyError as exc:
                 # P5: the floor composition is package content; a missing/malformed
                 # policy fails CLOSED with a governed RuntimeProblem (never a silent
@@ -447,7 +474,12 @@ class EvidenceSufficiencyGate:
             # routed to review (not review_route_reasons) and never changing the
             # outcome. A clean claim still promotes even when an advisory is raised.
             if ctx.commit_class == "OPERATION_CLAIM":
-                ctx.problems.extend(sufficiency.operation_advisories(ctx.store, ctx.sub))
+                if ctx.active_profile is None:
+                    advisories = sufficiency.operation_advisories(ctx.store, ctx.sub)
+                else:
+                    advisories = sufficiency.operation_advisories_with_policy(
+                        ctx.store, ctx.sub, evidence_policy)
+                ctx.problems.extend(advisories)
             ctx.log("EVIDENCE_SUFFICIENCY", "SATISFIED")
             return GatePass()
 
