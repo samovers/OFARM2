@@ -118,6 +118,11 @@ MP3 context and policy lookup planning is recorded in
 not change context assembly, profile policy loading, active profile selection,
 active SI behavior, or active runtime claims.
 
+MP4 generalizes profile engineering-test harness discovery. The only currently
+discovered harness remains `profile_si_ffs/tests/profile_test_harness.json`.
+This does not activate any runtime profile, create executed profile evidence,
+or change root pytest collection mechanics.
+
 ## Preconditions Before Any Runtime PR
 
 A runtime implementation PR must state which stage it targets and prove:

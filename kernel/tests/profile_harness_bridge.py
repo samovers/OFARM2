@@ -15,11 +15,13 @@ from typing import Iterable
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
+HARNESS_DESCRIPTOR_FILENAME = "profile_test_harness.json"
+DEFAULT_PROFILE_PACKAGE = "profile_si_ffs"
 DEFAULT_DESCRIPTOR = (
     PACKAGE_ROOT
-    / "profile_si_ffs"
+    / DEFAULT_PROFILE_PACKAGE
     / "tests"
-    / "profile_test_harness.json"
+    / HARNESS_DESCRIPTOR_FILENAME
 )
 EXPECTED_SCHEMA_VERSION = "profile_test_harness_v0_1"
 EXPECTED_ROOT_BRIDGE = "kernel/tests/profile_harness_bridge.py"
@@ -50,10 +52,19 @@ class ProfileTestHarness:
 
 def load_profile_harness_descriptor(
     descriptor_path: Path = DEFAULT_DESCRIPTOR,
+    *,
+    package_root: Path = PACKAGE_ROOT,
 ) -> ProfileTestHarness:
     """Load and validate a profile-local engineering-test descriptor."""
-    path = descriptor_path.resolve()
-    doc = json.loads(path.read_text(encoding="utf-8"))
+    path, profile_package = _resolve_descriptor_path(
+        descriptor_path,
+        package_root=package_root,
+    )
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise ProfileHarnessBridgeError(
+            f"harness descriptor unreadable at {path}: {exc}") from exc
 
     _expect(isinstance(doc, dict), "descriptor must be a JSON object")
     keys = set(doc)
@@ -65,8 +76,8 @@ def load_profile_harness_descriptor(
             "artifactKind must be profile_test_harness_scaffold")
     _expect(doc.get("schemaVersion") == EXPECTED_SCHEMA_VERSION,
             f"schemaVersion must be {EXPECTED_SCHEMA_VERSION}")
-    _expect(doc.get("profilePackage") == "profile_si_ffs",
-            "profilePackage must be profile_si_ffs")
+    _expect(doc.get("profilePackage") == profile_package,
+            f"profilePackage must be {profile_package}")
     _expect(doc.get("engineeringTestsOnly") is True,
             "engineeringTestsOnly must be true")
     _expect(doc.get("platformConformance") is False,
@@ -80,11 +91,15 @@ def load_profile_harness_descriptor(
 
     modules = doc.get("testModules")
     _expect(isinstance(modules, list), "testModules must be a list")
+    seen_modules: set[str] = set()
     for module_name in modules:
         _expect(isinstance(module_name, str) and module_name,
                 "test module names must be non-empty strings")
-        _expect(module_name.startswith("profile_si_ffs.tests."),
-                "test modules must stay under profile_si_ffs.tests")
+        _expect(module_name.startswith(f"{profile_package}.tests."),
+                f"test modules must stay under {profile_package}.tests")
+        _expect(module_name not in seen_modules,
+                f"duplicate test module {module_name}")
+        seen_modules.add(module_name)
 
     notes = doc.get("notes")
     _expect(isinstance(notes, list), "notes must be a list")
@@ -99,6 +114,40 @@ def load_profile_harness_descriptor(
     )
 
 
+def discover_profile_harness_descriptors(
+    package_root: Path = PACKAGE_ROOT,
+) -> tuple[ProfileTestHarness, ...]:
+    """Discover profile-local engineering-test harness descriptors.
+
+    Discovery is deliberately narrow: immediate `profile_*` children only, with
+    descriptorless packages omitted. A descriptor-bearing package must validate
+    fail-closed, so a malformed harness cannot disappear silently.
+    """
+    root = _resolve_package_root(package_root)
+    harnesses: list[ProfileTestHarness] = []
+    seen_modules: dict[str, str] = {}
+    for profile_dir in sorted(root.iterdir(), key=lambda p: p.name):
+        if not profile_dir.is_dir() or not profile_dir.name.startswith("profile_"):
+            continue
+        descriptor = profile_dir / "tests" / HARNESS_DESCRIPTOR_FILENAME
+        if not descriptor.exists():
+            continue
+        harness = load_profile_harness_descriptor(
+            descriptor,
+            package_root=root,
+        )
+        for module_name in harness.test_modules:
+            prior_package = seen_modules.get(module_name)
+            _expect(
+                prior_package is None,
+                f"duplicate test module {module_name} across "
+                f"{prior_package} and {harness.profile_package}",
+            )
+            seen_modules[module_name] = harness.profile_package
+        harnesses.append(harness)
+    return tuple(harnesses)
+
+
 def iter_profile_test_modules(
     harness: ProfileTestHarness | None = None,
 ) -> Iterable[ModuleType]:
@@ -111,3 +160,49 @@ def iter_profile_test_modules(
 def _expect(condition: bool, message: str) -> None:
     if not condition:
         raise ProfileHarnessBridgeError(message)
+
+
+def _resolve_package_root(package_root: Path) -> Path:
+    try:
+        return Path(package_root).resolve(strict=True)
+    except OSError as exc:
+        raise ProfileHarnessBridgeError(
+            f"package root {package_root} is unavailable: {exc}") from exc
+
+
+def _resolve_descriptor_path(
+    descriptor_path: Path,
+    *,
+    package_root: Path,
+) -> tuple[Path, str]:
+    raw_path = Path(descriptor_path)
+    _expect(
+        raw_path.name == HARNESS_DESCRIPTOR_FILENAME,
+        f"descriptor file name must be {HARNESS_DESCRIPTOR_FILENAME}",
+    )
+    _expect(
+        raw_path.parent.name == "tests",
+        "descriptor parent directory must be tests",
+    )
+    profile_dir = raw_path.parent.parent
+    _expect(
+        profile_dir.name.startswith("profile_"),
+        "profile directory must start with profile_",
+    )
+    root = _resolve_package_root(package_root)
+    try:
+        resolved_profile_dir = profile_dir.resolve(strict=True)
+        resolved_descriptor = raw_path.resolve(strict=True)
+    except OSError as exc:
+        raise ProfileHarnessBridgeError(
+            f"harness descriptor path unavailable: {exc}") from exc
+    _expect(
+        resolved_profile_dir.parent == root,
+        "profile directory must be an immediate child of package root",
+    )
+    try:
+        resolved_descriptor.relative_to(resolved_profile_dir)
+    except ValueError as exc:
+        raise ProfileHarnessBridgeError(
+            "harness descriptor escapes the profile directory") from exc
+    return resolved_descriptor, resolved_profile_dir.name
