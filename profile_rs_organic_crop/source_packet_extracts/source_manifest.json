@@ -1,0 +1,96 @@
+{
+  "packageName": "profile_rs_organic_crop",
+  "profileRef": "profile:rs.organic-crop.farm-reg-cert.v0_1",
+  "releasePosture": "RS_ORGANIC_CROP_FARM_REG_CERT_IMPLEMENTATION_CANDIDATE_PRODUCTION_HOLD",
+  "status": "authored profile-local source posture manifest; parse-only; not canonical reference law",
+  "receiptPolicy": "No official local source copies are stored in this profile patch, so no local sha256 receipts are claimed. The manifest records research-summary posture, required source roles, known limits, and production blockers only.",
+  "sources": [
+    {
+      "sourceRef": "source:rs.organic-law.2025-109.research-summary",
+      "owner": "Serbian official legal publication / Ministry context",
+      "sourceRole": "legal_basis_summary",
+      "legalForceOrStatus": "research-summary posture only; official packet not committed",
+      "packetStatus": "not_committed_research_summary_only",
+      "claimRelevance": "Primary organic-law basis for Ministry-led organic-subject register and certificate concept; applies from 1 June 2026 per research summary.",
+      "knownLimits": "Official packeted legal source and downstream bylaw/certificate-form artefacts are still required.",
+      "productionBlocker": true
+    },
+    {
+      "sourceRef": "source:rs.ministry.authorised-control-bodies.2026",
+      "owner": "Serbian Ministry of Agriculture",
+      "sourceRole": "certifier_authorisation_gate",
+      "legalForceOrStatus": "annual official authority list required, not committed",
+      "packetStatus": "missing_production_blocker",
+      "claimRelevance": "Required to prove issuing control body was Ministry-authorised for the relevant year.",
+      "knownLimits": "Exact official 2026 authorised organic control-body roster is not packeted.",
+      "productionBlocker": true
+    },
+    {
+      "sourceRef": "source:rs.ats.certifier-accreditation",
+      "owner": "Accreditation Body of Serbia",
+      "sourceRole": "certifier_accreditation_gate",
+      "legalForceOrStatus": "body-specific accreditation records required, not committed",
+      "packetStatus": "body_specific_records_missing_production_blocker",
+      "claimRelevance": "Required to prove EN ISO/IEC 17065 accreditation status and relevant organic certification scope for the issuing body/date.",
+      "knownLimits": "Named ATS body records for 2026 authorised organic bodies are not packeted.",
+      "productionBlocker": true
+    },
+    {
+      "sourceRef": "source:rs.erpg.transaction-status",
+      "owner": "eAgrar / eRPG / UAP",
+      "sourceRole": "farm_registration_status_gate",
+      "legalForceOrStatus": "transaction-time official artefact required, not committed",
+      "packetStatus": "transaction_time_official_artefact_missing_production_blocker",
+      "claimRelevance": "Required to prove holding registration, active/passive status, submission, or renewal state for the relevant date/year.",
+      "knownLimits": "Durable transaction-date active/passive proof artefact is not fully closed.",
+      "productionBlocker": true
+    },
+    {
+      "sourceRef": "source:rs.organic-certificate-form.post-2025",
+      "owner": "Serbian Ministry of Agriculture",
+      "sourceRole": "certificate_form_gate",
+      "legalForceOrStatus": "minister-prescribed form expected, not committed",
+      "packetStatus": "missing_production_blocker",
+      "claimRelevance": "Required before production certificate field and form validation can be claimed.",
+      "knownLimits": "Post-2025 minister-prescribed organic certificate form is not packeted.",
+      "productionBlocker": true
+    },
+    {
+      "sourceRef": "source:rs.organic-certificate.adverse-status",
+      "owner": "Serbian Ministry / inspection / authorised control-body context",
+      "sourceRole": "suspended_withdrawn_certificate_gate",
+      "legalForceOrStatus": "official adverse-status artefact required, not committed",
+      "packetStatus": "missing_production_blocker",
+      "claimRelevance": "Required to prove a certificate has not been suspended or withdrawn for high-consequence promotion.",
+      "knownLimits": "Official suspended/withdrawn certificate artefact source is not packeted.",
+      "productionBlocker": true
+    },
+    {
+      "sourceRef": "source:rs.review.certificate-refusal-withdrawal-route",
+      "owner": "Serbian Ministry / control-body / Administrative Court context",
+      "sourceRole": "review_route_gate",
+      "legalForceOrStatus": "review-route source packet required, not committed",
+      "packetStatus": "missing_production_blocker",
+      "claimRelevance": "Required to close direct farmer-side review route against certificate refusal, withdrawal, or related adverse acts.",
+      "knownLimits": "Direct farmer-side review route is not fully pinned.",
+      "productionBlocker": true
+    },
+    {
+      "sourceRef": "source:rs.implementation-inference.farm-reg-cert",
+      "owner": "OFARM profile-local implementation inference",
+      "sourceRole": "implementation_inference",
+      "legalForceOrStatus": "not law; derived profile policy from source posture and OFARM truth rules",
+      "packetStatus": "profile_local_inference_only",
+      "claimRelevance": "Public/current registers are corroborative only; eID/ConsentID authentication is not delegation; Ministry plus ATS plus adverse-status gates are required for organic certificate promotion.",
+      "knownLimits": "Must not be cited as primary law or official guidance.",
+      "productionBlocker": false
+    }
+  ],
+  "knownLimits": [
+    "This profile is an implementation candidate under production hold.",
+    "No official local source copies or hashes are included.",
+    "No live registry integration is claimed.",
+    "No real farm, person, company, or document identifiers are included.",
+    "Production closure remains a later source-packet task."
+  ]
+}
