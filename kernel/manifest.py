@@ -177,10 +177,10 @@ def build_manifest(store) -> dict:
 
 
 def build_artifact_set() -> dict:
-    """Regenerated ActiveArtifactSet referencing the real M2 artifacts (M2 P6:
-    re-cut against the M2 surfaces — the PartialExtent extent-carrier now active
-    (G7), the REGSR/GERK/FFSNaprave import adapters, the SI bindings, and the
-    evidence-review floor policy; the manifest declares the matching surfaces)."""
+    """Current active SI ActiveArtifactSet generated/verified from the runtime
+    surfaces: the PartialExtent extent-carrier now active (G7), the REGSR/GERK/
+    FFSNaprave import adapters, the SI bindings, and the evidence-review floor
+    policy; the manifest declares the matching surfaces."""
     return {
         "schemaVersion": "ofarm.activeartifactset.v0.1",
         "activeArtifactSetId": "activeartifactset:si.ffs.pilot.v0_1",
@@ -210,13 +210,14 @@ def build_artifact_set() -> dict:
             MANIFEST_ID,
         ],
         "sourcePackActivationSetRefs": ["packactivationset:si.ffs.pilot.v0_1"],
-        "notes": "Regenerated at M2 against real artifacts: the operation/record "
-                 "contracts (incl. the PartialExtent extent-carrier now active for "
-                 "partial-extent bounds, G7), the four authored QuerySpecification/"
-                 "QueryPlanIR view artifacts, the Capability Manifest (which declares "
-                 "the REGSR/GERK/FFSNaprave import surfaces and inspection-register "
-                 "export), the evidence-review floor policy, both shipped "
-                 "ReferenceSnapshots, and the cut SI code-binding profile. "
+        "notes": "Current active SI artifact set generated/verified from runtime "
+                 "surfaces: the operation/record contracts (incl. the PartialExtent "
+                 "extent-carrier now active for partial-extent bounds, G7), the four "
+                 "authored QuerySpecification/QueryPlanIR view artifacts, the "
+                 "Capability Manifest (which declares the REGSR/GERK/FFSNaprave "
+                 "import surfaces and inspection-register export), the evidence-review "
+                 "floor policy, both shipped ReferenceSnapshots, and the cut SI "
+                 "code-binding profile. "
                  "Unsupported-surface posture: see UNSUPPORTED_SURFACES.md (manifest "
                  "contract carries no free text).",
     }
