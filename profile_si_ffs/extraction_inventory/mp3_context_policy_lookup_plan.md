@@ -1,14 +1,17 @@
 # MP3 Context And Policy Lookup Plan
 
-## Status / Non-Implementation Boundary
+## Status / Boundary
 
-This is a documentation-only MP3 plan. It does not change runtime code, tests,
-contracts, schemas, manifests, evidence files, generated outputs, active
-artifact sets, adapters, profile substance, active SI behavior, context snapshot
-behavior, policy decisions, validation routing, or sufficiency outcomes.
+This file began as a documentation-only MP3 plan. That original planning PR did
+not change runtime code, tests, contracts, schemas, manifests, evidence files,
+generated outputs, active artifact sets, adapters, profile substance, active SI
+behavior, context snapshot behavior, policy decisions, validation routing, or
+sufficiency outcomes.
 
-MP3 records a future implementation boundary for profile-keyed context and
-policy lookup. It does not implement that boundary in this PR.
+The MP3a status section below records a later narrow runtime-helper
+implementation for explicit profile-policy inputs. That status note does not
+broaden MP3 into context assembly, active profile selection, descriptor registry,
+manifest, evidence, adapter, second-profile, or Netherlands runtime work.
 
 ## Baseline And Stop Condition
 
