@@ -35,7 +35,9 @@ Current profile-local harness support is:
   `platformConformance` is false, `executedEvidence` is false, and
   `evidenceWriter` is null.
 - `kernel/tests/profile_harness_bridge.py` loads and validates that harness
-  descriptor.
+  descriptor. MP4 generalizes descriptor discovery to immediate `profile_*`
+  packages while the only currently discovered harness remains the SI profile
+  harness.
 - Root bridge test files import the profile-local test modules so
   `.venv/bin/python -m pytest kernel/tests/ -q` still discovers the moved
   coverage.
@@ -50,6 +52,10 @@ Current profile-local harness support is:
 The harness is execution support only. It does not define OFARM law, modify
 contracts, generate manifests, emit accepted records, write evidence, or become
 a hidden truth store.
+
+MP4 does not change root pytest collection mechanics: root bridge files still
+make `.venv/bin/python -m pytest kernel/tests/ -q` discover the profile-local
+engineering tests, and no profile-local executed evidence writer exists.
 
 ## Current Test Areas
 
