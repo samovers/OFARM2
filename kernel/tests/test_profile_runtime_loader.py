@@ -33,6 +33,7 @@ from kernel.profile_runtime import (
     load_active_profile_selection,
     load_profile_descriptor_registry,
     load_profile_runtime_descriptor,
+    resolve_active_descriptor,
 )
 from kernel.store import Store
 
@@ -364,6 +365,79 @@ def test_config_declares_explicit_single_active_profile_selection(monkeypatch):
         " profile_si_ffs ",
     )
     assert config.active_profile_package_names_from_env() == ("profile_si_ffs",)
+
+
+def test_resolve_active_descriptor_requires_explicit_without_config_default():
+    with pytest.raises(ProfileRuntimeError, match="active runtime descriptor is required"):
+        resolve_active_descriptor(None, allow_config_default=False)
+
+
+def test_resolve_active_descriptor_explicit_does_not_import_config(monkeypatch):
+    import builtins
+
+    original_import = builtins.__import__
+
+    def guard_import(name, *args, **kwargs):
+        if name == "kernel" and "config" in (kwargs.get("fromlist") or ()):
+            raise AssertionError("config fallback was imported")
+        if name == "kernel.config":
+            raise AssertionError("config fallback was imported")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", guard_import)
+    assert resolve_active_descriptor(
+        config.ACTIVE_PROFILE,
+        allow_config_default=False,
+    ) is config.ACTIVE_PROFILE
+
+
+def test_descriptor_constructor_alias_conflict_fails_closed():
+    conflict = replace(
+        config.ACTIVE_PROFILE,
+        profile_ref="profile:si.ffs.alias-conflict.v0_1",
+    )
+    with pytest.raises(ProfileRuntimeError, match="active_descriptor and active_profile"):
+        GatePipeline(
+            object(),
+            active_descriptor=config.ACTIVE_PROFILE,
+            active_profile=conflict,
+        )
+    with pytest.raises(ProfileRuntimeError, match="active_descriptor and active_profile"):
+        context.ContextAssembler(
+            object(),
+            active_descriptor=config.ACTIVE_PROFILE,
+            active_profile=conflict,
+        )
+    with pytest.raises(ProfileRuntimeError, match="active_descriptor and active_profile"):
+        Materializer(
+            object(),
+            active_descriptor=config.ACTIVE_PROFILE,
+            active_profile=conflict,
+        )
+
+
+def test_descriptor_policy_provider_recognized_rule_refs_are_descriptor_derived():
+    provider = profile_policy.DescriptorPolicyProvider(config.ACTIVE_PROFILE)
+    assert provider.policy_ref == config.ACTIVE_PROFILE.evidence_policy_ref
+    assert provider.recognized_rule_refs == frozenset({
+        config.ACTIVE_PROFILE.evidence_policy_ref,
+        config.ACTIVE_PROFILE.profile_ref,
+        config.ACTIVE_PROFILE.pack_ref,
+        config.ACTIVE_PROFILE.code_binding_profile_ref,
+    })
+
+
+def test_descriptor_policy_provider_evidence_policy_does_not_call_config_wrapper(
+        monkeypatch):
+    def fail_config_policy(*_args, **_kwargs):
+        raise AssertionError("config-backed policy wrapper was called")
+
+    monkeypatch.setattr(profile_policy, "load_evidence_review_policy",
+                        fail_config_policy)
+    provider = profile_policy.DescriptorPolicyProvider(config.ACTIVE_PROFILE)
+    doc = provider.evidence_policy(supported_checks=sufficiency.OPERATION_FLOOR_CHECKS)
+
+    assert doc["policyId"] == config.ACTIVE_PROFILE.evidence_policy_ref
 
 
 @pytest.mark.parametrize("raw", [
@@ -973,16 +1047,33 @@ def test_gate_pipeline_explicit_active_profile_matches_default_for_clean_operati
     assert default.get("problems", []) == explicit.get("problems", []) == []
 
 
-def test_descriptor_backed_pipeline_avoids_config_policy_wrappers(
+def test_descriptor_backed_validation_uses_provider_without_config_wrapper(
         fresh_env, monkeypatch):
     store, _, _ = fresh_env
 
     def fail_config_policy(*_args, **_kwargs):
-        raise AssertionError("config-backed policy path was called")
+        raise AssertionError("config-backed validation policy path was called")
+
+    monkeypatch.setattr(profile_policy, "validation_policy", fail_config_policy)
+
+    result = GatePipeline(store).commit(demo.spray_submission(
+        f"mp3d-validation-provider:{_uid()}",
+        erp_id=f"erp:mp3d.validation.provider.{_uid()}",
+        confirm=True,
+    ))
+
+    assert result["decisionOutcome"] == "PROMOTE_ACCEPTED"
+
+
+def test_descriptor_backed_sufficiency_uses_provider_without_config_wrappers(
+        fresh_env, monkeypatch):
+    store, _, _ = fresh_env
+
+    def fail_config_policy(*_args, **_kwargs):
+        raise AssertionError("config-backed sufficiency policy path was called")
 
     monkeypatch.setattr(profile_policy, "load_evidence_review_policy",
                         fail_config_policy)
-    monkeypatch.setattr(profile_policy, "validation_policy", fail_config_policy)
     monkeypatch.setattr(profile_policy, "operation_floor_with_display",
                         fail_config_policy)
     monkeypatch.setattr(profile_policy, "operation_floor_display",
@@ -992,12 +1083,27 @@ def test_descriptor_backed_pipeline_avoids_config_policy_wrappers(
     monkeypatch.setattr(sufficiency, "operation_advisories", fail_config_policy)
 
     result = GatePipeline(store).commit(demo.spray_submission(
-        f"mp3d-no-config:{_uid()}",
-        erp_id=f"erp:mp3d.no-config.{_uid()}",
+        f"mp3d-sufficiency-provider:{_uid()}",
+        erp_id=f"erp:mp3d.sufficiency.provider.{_uid()}",
         confirm=True,
     ))
 
     assert result["decisionOutcome"] == "PROMOTE_ACCEPTED"
+
+
+def test_global_operation_sequence_uses_named_compatibility_constructors():
+    assert validators.OPERATION_SEQUENCE[1].validation_policy is \
+        validators._CONFIG_BACKED_POLICY
+    assert validators.OPERATION_SEQUENCE[2].validation_policy is \
+        validators._CONFIG_BACKED_POLICY
+    assert validators.OPERATION_SEQUENCE[5].validation_policy is \
+        validators._CONFIG_BACKED_POLICY
+    with pytest.raises(TypeError):
+        validators.CarrierSemanticsValidator()
+    with pytest.raises(TypeError):
+        validators.ExecutionExtentValidator()
+    with pytest.raises(TypeError):
+        validators.CodeBindingValidator()
 
 
 def test_acceptance_sufficiency_uses_descriptor_policy_ref_without_policy_body(
@@ -1037,10 +1143,10 @@ def test_descriptor_validation_policy_failure_stops_at_validation(
         fresh_env, monkeypatch):
     store, _, _ = fresh_env
 
-    def fail_validation_policy(*_args, **_kwargs):
+    def fail_validation_policy(_provider):
         raise profile_policy.ProfilePolicyError("descriptor validation unavailable")
 
-    monkeypatch.setattr(profile_policy, "validation_policy_for_descriptor",
+    monkeypatch.setattr(profile_policy.DescriptorPolicyProvider, "validation_policy",
                         fail_validation_policy)
 
     result = GatePipeline(store).commit(demo.spray_submission(
@@ -1066,16 +1172,13 @@ def test_descriptor_sufficiency_policy_failure_happens_after_validation(
     store, _, _ = fresh_env
     validation = profile_policy.validation_policy_for_descriptor(config.ACTIVE_PROFILE)
 
-    monkeypatch.setattr(
-        profile_policy,
-        "validation_policy_for_descriptor",
-        lambda *_args, **_kwargs: validation,
-    )
+    monkeypatch.setattr(profile_policy.DescriptorPolicyProvider, "validation_policy",
+                        lambda _provider: validation)
 
-    def fail_evidence_policy(*_args, **_kwargs):
+    def fail_evidence_policy(_provider, *_args, **_kwargs):
         raise profile_policy.ProfilePolicyError("descriptor floor unavailable")
 
-    monkeypatch.setattr(profile_policy, "load_evidence_review_policy_for_descriptor",
+    monkeypatch.setattr(profile_policy.DescriptorPolicyProvider, "evidence_policy",
                         fail_evidence_policy)
 
     result = GatePipeline(store).commit(demo.spray_submission(

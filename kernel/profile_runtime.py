@@ -140,6 +140,24 @@ class ActiveProfileSelection:
         return self.descriptors[0]
 
 
+def resolve_active_descriptor(
+    active_descriptor=None,
+    *,
+    allow_config_default: bool,
+) -> ProfileRuntimeDescriptor:
+    """Resolve an active runtime descriptor with an explicit config fallback.
+
+    `profile_runtime` is imported by `kernel.config`, so config must be imported
+    lazily only when the compatibility fallback is deliberately requested.
+    """
+    if active_descriptor is not None:
+        return active_descriptor
+    if not allow_config_default:
+        raise ProfileRuntimeError("active runtime descriptor is required")
+    from . import config
+    return config.ACTIVE_PROFILE
+
+
 def load_active_profile_selection(
     package_root: Path,
     profile_package_names: Sequence[str],

@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 
 from . import config
 from .contracts import UnknownContract, canonical_json
+from .profile_runtime import ProfileRuntimeError, resolve_active_descriptor
 
 PROFILE_INSTANCE_FILES = list(config.ACTIVE_PROFILE.profile_instance_files)
 
@@ -305,10 +306,17 @@ class ContextNotReconstructible(Exception):
 class ContextAssembler:
     """Assembles (and reuses) per-farm Compliance-twin ContextSnapshots."""
 
-    def __init__(self, store, *, active_profile=None):
+    def __init__(self, store, *, active_descriptor=None, active_profile=None):
         self.store = store
+        if (active_descriptor is not None and active_profile is not None
+                and active_descriptor != active_profile):
+            raise ProfileRuntimeError(
+                "active_descriptor and active_profile refer to different descriptors")
         self.active_profile = _require_active_profile(
-            active_profile or config.ACTIVE_PROFILE)
+            resolve_active_descriptor(
+                active_descriptor if active_descriptor is not None else active_profile,
+                allow_config_default=True,
+            ))
 
     def _spine(self, as_of: str | None = None) -> dict:
         artifact_sets = self.store.find_by_kind("ofarm.activeartifactset.v0.1")

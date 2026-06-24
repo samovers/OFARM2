@@ -26,12 +26,13 @@ from __future__ import annotations
 
 import psycopg
 
-from . import config
+from . import profile_policy
 from .authority import AuthorityEvaluator
 from .context import ContextAssembler, ProductRegister, mint, now_iso
 from .contracts import sha256_of
 from .emission import PromotionTraceWriter, ReplayWriter
 from .materializer import Materializer
+from .profile_runtime import ProfileRuntimeError, resolve_active_descriptor
 from .stages import (AuthorityGate, EnvelopePersist, EvidenceSufficiencyGate,
                      GateContext, GateRefusal, GateReplay, IngressNormalizer,
                      MaterializationGate, ProfileApplicabilityGate,
@@ -58,13 +59,23 @@ class GatePipeline:
         store,
         product_register: ProductRegister | None = None,
         *,
+        active_descriptor=None,
         active_profile=None,
     ):
         self.store = store
-        self.active_profile = active_profile or config.ACTIVE_PROFILE
+        if (active_descriptor is not None and active_profile is not None
+                and active_descriptor != active_profile):
+            raise ProfileRuntimeError(
+                "active_descriptor and active_profile refer to different descriptors")
+        self.active_profile = resolve_active_descriptor(
+            active_descriptor if active_descriptor is not None else active_profile,
+            allow_config_default=True,
+        )
+        self.policy_provider = profile_policy.DescriptorPolicyProvider(
+            self.active_profile)
         self.authority = AuthorityEvaluator(store)
-        self.context = ContextAssembler(store, active_profile=self.active_profile)
-        self.materializer = Materializer(store, active_profile=self.active_profile)
+        self.context = ContextAssembler(store, active_descriptor=self.active_profile)
+        self.materializer = Materializer(store, active_descriptor=self.active_profile)
         self.products = product_register or ProductRegister()
         self.products.load_from_store(store)
 
@@ -101,10 +112,16 @@ class GatePipeline:
             {k: v for k, v in sub.items() if k != "sourcePayloadDigest"})
 
     def _new_context(self, cur, sub: dict) -> GateContext:
+        policy_provider = (
+            self.policy_provider
+            if self.active_profile == self.policy_provider.descriptor
+            else None
+        )
         return GateContext(
             cur=cur, store=self.store, authority=self.authority,
             context_assembler=self.context, materializer=self.materializer,
-            products=self.products, active_profile=self.active_profile, sub=sub,
+            products=self.products, active_profile=self.active_profile,
+            policy_provider=policy_provider, sub=sub,
             request_id=mint("cir"), ingested_at=now_iso(),
             source_digest=self._source_digest(sub),
             commit_class=sub["commitClass"], farm_ref=sub["farmRef"],
