@@ -215,6 +215,33 @@ def _profile_instance_payload(id_field: str, expected: str) -> dict:
 
 
 @contextmanager
+def _fresh_unbootstrapped_store():
+    dbname = f"ofarm_context_explicit_{_uid()}"
+    with psycopg.connect(_admin_dsn(), autocommit=True) as admin:
+        admin.execute(f'DROP DATABASE IF EXISTS "{dbname}"')
+        admin.execute(f'CREATE DATABASE "{dbname}"')
+    params = psycopg.conninfo.conninfo_to_dict(_admin_dsn())
+    params["dbname"] = dbname
+    store = Store(dsn=psycopg.conninfo.make_conninfo(**params))
+    try:
+        store.migrate()
+        yield store
+    finally:
+        store.close()
+        with psycopg.connect(_admin_dsn(), autocommit=True) as admin:
+            admin.execute(f'DROP DATABASE IF EXISTS "{dbname}"')
+
+
+def _expected_profile_instance_ids(store, active_profile) -> list[str]:
+    expected = []
+    for path in active_profile.profile_instance_paths:
+        payload = json.loads(path.read_text())
+        contract = store.registry.get(payload["schemaVersion"])
+        expected.append(payload[contract.id_field])
+    return expected
+
+
+@contextmanager
 def _preseeded_dirty_spine_store(mutate):
     """Fresh store where descriptor-id spine records exist before bootstrap."""
     dbname = f"ofarm_dirty_spine_{_uid()}"
@@ -675,6 +702,117 @@ def test_required_missing_reference_family_refuses_context(fresh_env, monkeypatc
             context.ContextAssembler(store).assemble(cur, demo.FARM)
 
 
+def test_explicit_descriptor_bootstrap_inserts_expected_profile_instances():
+    with _fresh_unbootstrapped_store() as store:
+        expected = _expected_profile_instance_ids(store, config.ACTIVE_PROFILE)
+        inserted = context.bootstrap_for_descriptor(store, config.ACTIVE_PROFILE)
+
+        assert inserted == expected
+        assert all(store.record_exists(record_id) for record_id in expected)
+
+
+def test_explicit_descriptor_bootstrap_matches_compatibility_wrapper():
+    with _fresh_unbootstrapped_store() as implicit_store:
+        expected = _expected_profile_instance_ids(
+            implicit_store,
+            config.ACTIVE_PROFILE,
+        )
+        implicit = context.bootstrap(implicit_store)
+
+    with _fresh_unbootstrapped_store() as explicit_store:
+        explicit = context.bootstrap_for_descriptor(
+            explicit_store,
+            config.ACTIVE_PROFILE,
+        )
+
+    assert implicit == explicit == expected
+
+
+def test_explicit_descriptor_reference_snapshots_match_wrapper(fresh_env):
+    store, _, _ = fresh_env
+
+    explicit = context.context_reference_snapshots_for_descriptor(
+        store,
+        config.ACTIVE_PROFILE,
+    )
+    implicit = context.context_reference_snapshots(store)
+
+    assert explicit == implicit
+
+
+def test_explicit_descriptor_context_assembly_matches_wrapper(fresh_env):
+    store, _, _ = fresh_env
+
+    with store.tx() as cur:
+        implicit = context.ContextAssembler(store).assemble(cur, demo.FARM)
+    with store.tx() as cur:
+        explicit = context.ContextAssembler(
+            store,
+            active_profile=config.ACTIVE_PROFILE,
+        ).assemble(cur, demo.FARM)
+
+    assert explicit == implicit
+
+
+def test_explicit_descriptor_asof_context_matches_wrapper(fresh_env):
+    store, _, _ = fresh_env
+    policy = {"policyType": "AS_OF", "asOfTime": "2026-12-01T00:00:00Z"}
+
+    with store.tx() as cur:
+        implicit = context.ContextAssembler(store).assemble(
+            cur,
+            demo.FARM,
+            evaluation_time_policy=policy,
+        )
+    with store.tx() as cur:
+        explicit = context.ContextAssembler(
+            store,
+            active_profile=config.ACTIVE_PROFILE,
+        ).assemble(
+            cur,
+            demo.FARM,
+            evaluation_time_policy=policy,
+        )
+
+    assert explicit == implicit
+
+
+def test_explicit_descriptor_optional_missing_reference_family_is_omitted(fresh_env):
+    store, _, _ = fresh_env
+    active = replace(
+        config.ACTIVE_PROFILE,
+        reference_families=config.ACTIVE_PROFILE.reference_families
+        + (_missing_family(required=False),),
+    )
+
+    with store.tx() as cur:
+        snap = context.ContextAssembler(
+            store,
+            active_profile=active,
+        ).assemble(cur, demo.FARM)
+
+    assert not any(
+        ref.startswith("referencesnapshot:test.missing-family")
+        for ref in snap["referenceSnapshotRefs"]
+    )
+
+
+def test_explicit_descriptor_required_missing_reference_family_refuses(fresh_env):
+    store, _, _ = fresh_env
+    active = replace(
+        config.ACTIVE_PROFILE,
+        reference_families=config.ACTIVE_PROFILE.reference_families
+        + (_missing_family(required=True),),
+    )
+
+    with pytest.raises(context.ContextNotReconstructible, match="required reference family"):
+        with store.tx() as cur:
+            context.ContextAssembler(
+                store,
+                active_profile=active,
+            ).assemble(cur, demo.FARM)
+
+
 def test_now_context_uses_descriptor_spine_not_later_store_rows(fresh_env):
     store, _, _ = fresh_env
     decoy = _insert_decoy_spine(store)
@@ -688,6 +826,41 @@ def test_now_context_uses_descriptor_spine_not_later_store_rows(fresh_env):
     ]
     assert decoy["artifact"] != snap["activeArtifactSetRef"]
     assert decoy["activation"] not in snap["sourcePackActivationSetRefs"]
+
+
+def test_explicit_descriptor_now_context_uses_descriptor_spine_not_later_store_rows(
+        fresh_env):
+    store, _, _ = fresh_env
+    decoy = _insert_decoy_spine(store)
+
+    with store.tx() as cur:
+        snap = context.ContextAssembler(
+            store,
+            active_profile=config.ACTIVE_PROFILE,
+        ).assemble(cur, demo.FARM)
+
+    assert snap["activeArtifactSetRef"] == config.ACTIVE_PROFILE.active_artifact_set_ref
+    assert snap["sourcePackActivationSetRefs"] == [
+        config.ACTIVE_PROFILE.pack_activation_set_ref
+    ]
+    assert decoy["artifact"] != snap["activeArtifactSetRef"]
+    assert decoy["activation"] not in snap["sourcePackActivationSetRefs"]
+
+
+def test_explicit_descriptor_mismatched_spine_ref_fails_without_config_fallback(
+        fresh_env):
+    store, _, _ = fresh_env
+    active = replace(
+        config.ACTIVE_PROFILE,
+        active_artifact_set_ref="activeartifactset:si.ffs.not-selected.v0_1",
+    )
+
+    with pytest.raises(context.ContextNotReconstructible, match="matched 0"):
+        with store.tx() as cur:
+            context.ContextAssembler(
+                store,
+                active_profile=active,
+            ).assemble(cur, demo.FARM)
 
 
 def test_now_context_refuses_descriptor_id_spine_with_wrong_pack_profile():
