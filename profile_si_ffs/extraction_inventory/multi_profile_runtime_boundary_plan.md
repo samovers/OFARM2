@@ -140,6 +140,12 @@ not implement routing, widen active profile selection, enable a second profile,
 activate design-only packages, write profile evidence, regenerate manifests, or
 create multi-profile runtime readiness.
 
+MP7 implementation sequencing is recorded in `mp7_implementation_roadmap.md`.
+That roadmap is documentation-only. It names MP7.1 route record and resolver
+seams as the first safe runtime slice, but does not implement routing, activate
+a second profile, update manifests, write profile evidence, or promote
+design-only packages.
+
 ## Preconditions Before Any Runtime PR
 
 A runtime implementation PR must state which stage it targets and prove:
