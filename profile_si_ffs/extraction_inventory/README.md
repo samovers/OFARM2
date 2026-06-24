@@ -33,6 +33,7 @@ These documents do not move files, change runtime behavior, update contracts, up
 - `si_extraction_practical_closeout.md` records the practical closeout decision for the SI extraction track under the current single-active-SI-runtime architecture.
 - `multi_profile_runtime_boundary_plan.md` records the future multi-profile runtime boundary plan without activating a second profile or changing runtime behavior.
 - `mp2_descriptor_registry_plan.md` records the docs-only MP2 descriptor registry plan for future multi-descriptor loading without activating a second profile.
+- `mp3_context_policy_lookup_plan.md` records the docs-only MP3 context and policy lookup plan without changing runtime behavior, active SI behavior, or activating a second profile.
 - `core_contract_comment_review_plan.md` records the docs-only review plan for neutralizing Core contract comment country-term hits without changing schema semantics.
 - `profile_navigation_index.json` is a machine-labeled navigation-only, non-capability index for these profile-local inventory and status documents.
 

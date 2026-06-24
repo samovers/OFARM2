@@ -157,6 +157,12 @@
       "status": "docs-only MP2 descriptor registry plan"
     },
     {
+      "id": "mp3_context_policy_lookup_plan",
+      "path": "profile_si_ffs/extraction_inventory/mp3_context_policy_lookup_plan.md",
+      "kind": "future runtime planning",
+      "status": "docs-only MP3 context and policy lookup plan; non-runtime, non-capability"
+    },
+    {
       "id": "core_contract_comment_review_plan",
       "path": "profile_si_ffs/extraction_inventory/core_contract_comment_review_plan.md",
       "kind": "contract comment review planning",
