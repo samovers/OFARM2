@@ -400,6 +400,11 @@ This plan also does not claim:
 
 ## Implementation Split For Later PRs
 
+The fixed implementation roadmap is recorded in
+`mp7_implementation_roadmap.md`. That roadmap names MP7.1 route record and
+resolver seams as the first safe runtime slice and keeps this design-gate file
+separate from implementation sequencing.
+
 A later implementation sequence should be split rather than bundled:
 
 1. route data model and resolver contract;
