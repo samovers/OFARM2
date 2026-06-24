@@ -69,6 +69,10 @@ equivalent test id, module, outcome, duration if available, and bounded failure
 metadata when applicable. The writer must not fabricate records for tests that
 were merely discoverable but not executed.
 
+Before any future MP5 implementation writes profile evidence artifacts, it must
+define a machine-checkable `PROFILE_EXECUTED_EVIDENCE` shape, such as a JSON
+schema, contract-like validator, or equivalent check.
+
 ## Writer Boundary
 
 A future profile evidence writer must:

@@ -225,6 +225,16 @@ def test_profile_harness_descriptor_rejects_symlink_escape(tmp_path):
         load_profile_harness_descriptor(link, package_root=root)
 
 
+def test_profile_harness_discovery_rejects_broken_symlink_descriptor(tmp_path):
+    root = tmp_path / "package_root"
+    link = root / "profile_si_ffs" / "tests" / "profile_test_harness.json"
+    link.parent.mkdir(parents=True, exist_ok=True)
+    link.symlink_to(tmp_path / "missing_profile_test_harness.json")
+
+    with pytest.raises(ProfileHarnessBridgeError, match="unavailable"):
+        discover_profile_harness_descriptors(root)
+
+
 def test_profile_harness_discovery_rejects_malformed_descriptor_json(tmp_path):
     root = tmp_path / "package_root"
     path = root / "profile_bad" / "tests" / "profile_test_harness.json"
