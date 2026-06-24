@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import re
 import string
+from pathlib import Path
 
 from . import config
 from .problems import REGISTERED_REASON_CODES
@@ -300,6 +301,52 @@ def _validate_validation_policy(doc: dict) -> None:
     _require_text(crop, "detail", "validation.bindings.crop")
 
 
+def load_evidence_review_policy_from_path(
+    policy_path,
+    supported_checks=None,
+    *,
+    expected_policy_ref=None,
+    profile_root=None,
+) -> dict:
+    """Load a fully validated evidence-review policy from an explicit path.
+
+    When `profile_root` is supplied, the policy path is resolved strictly and
+    must remain inside that profile root. When `expected_policy_ref` is supplied,
+    the loaded policy id must match it. Failures use ProfilePolicyError, matching
+    the existing config-backed loader failure mode.
+    """
+    path = Path(policy_path)
+    if profile_root is not None:
+        try:
+            resolved_root = Path(profile_root).resolve(strict=True)
+            path = path.resolve(strict=True)
+            path.relative_to(resolved_root)
+        except (OSError, ValueError) as exc:
+            raise ProfilePolicyError(
+                f"evidence-review policy path {policy_path} escapes "
+                "the active profile root") from exc
+    try:
+        doc = json.loads(path.read_text())
+    except (OSError, ValueError) as exc:
+        raise ProfilePolicyError(
+            f"evidence-review policy unreadable at {path}: {exc}") from exc
+    return _validated_evidence_review_policy(
+        doc,
+        supported_checks=supported_checks,
+        expected_policy_ref=expected_policy_ref,
+    )
+
+
+def load_evidence_review_policy_for_descriptor(descriptor, supported_checks=None) -> dict:
+    """Load policy content explicitly bound to a profile runtime descriptor."""
+    return load_evidence_review_policy_from_path(
+        descriptor.evidence_policy_path,
+        supported_checks=supported_checks,
+        expected_policy_ref=descriptor.evidence_policy_ref,
+        profile_root=descriptor.profile_root,
+    )
+
+
 def load_evidence_review_policy(supported_checks=None) -> dict:
     """The active profile's evidence-review policy document, FULLY validated, or
     raise ProfilePolicyError. Validation is exhaustive on purpose: every shape the
@@ -308,14 +355,24 @@ def load_evidence_review_policy(supported_checks=None) -> dict:
     `supported_checks` (the kernel's generic floor-check vocabulary) is given,
     every floor item must be one of them — an unknown item like "banana" cannot
     silently pass and KeyError in the sufficiency builder."""
-    path = config.EVIDENCE_POLICY_PATH
-    try:
-        doc = json.loads(path.read_text())
-    except (OSError, ValueError) as exc:
-        raise ProfilePolicyError(
-            f"evidence-review policy unreadable at {path}: {exc}") from exc
+    return load_evidence_review_policy_from_path(
+        config.EVIDENCE_POLICY_PATH,
+        supported_checks=supported_checks,
+    )
+
+
+def _validated_evidence_review_policy(
+    doc: dict,
+    *,
+    supported_checks=None,
+    expected_policy_ref=None,
+) -> dict:
     if not isinstance(doc, dict):
         raise ProfilePolicyError("evidence-review policy is not a JSON object")
+    if expected_policy_ref is not None and doc.get("policyId") != expected_policy_ref:
+        raise ProfilePolicyError(
+            f"evidence-review policy id {doc.get('policyId')!r} does not match "
+            f"expected policy ref {expected_policy_ref!r}")
 
     floor = doc.get("operationFloor")
     if not isinstance(floor, dict):
@@ -368,6 +425,18 @@ def operation_floor(supported_checks=None) -> tuple[tuple[str, ...], tuple[str, 
     return tuple(floor["hardItems"]), tuple(floor["softItems"])
 
 
+def operation_floor_for_descriptor(
+    descriptor,
+    supported_checks=None,
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Descriptor-bound OPERATION_CLAIM evidence floor."""
+    floor = load_evidence_review_policy_for_descriptor(
+        descriptor,
+        supported_checks=supported_checks,
+    )["operationFloor"]
+    return tuple(floor["hardItems"]), tuple(floor["softItems"])
+
+
 def operation_floor_with_display(supported_checks=None) -> tuple[tuple[str, ...],
                                                                  tuple[str, ...], dict]:
     """The active profile's OPERATION_CLAIM floor plus its display metadata.
@@ -378,9 +447,30 @@ def operation_floor_with_display(supported_checks=None) -> tuple[tuple[str, ...]
     return tuple(floor["hardItems"]), tuple(floor["softItems"]), doc["display"]
 
 
+def operation_floor_with_display_for_descriptor(
+    descriptor,
+    supported_checks=None,
+) -> tuple[tuple[str, ...], tuple[str, ...], dict]:
+    """Descriptor-bound OPERATION_CLAIM floor plus display metadata."""
+    doc = load_evidence_review_policy_for_descriptor(
+        descriptor,
+        supported_checks=supported_checks,
+    )
+    floor = doc["operationFloor"]
+    return tuple(floor["hardItems"]), tuple(floor["softItems"]), doc["display"]
+
+
 def operation_floor_display(supported_checks=None) -> dict:
     """Profile-owned display metadata for OPERATION_CLAIM sufficiency cases."""
     return load_evidence_review_policy(supported_checks)["display"]
+
+
+def operation_floor_display_for_descriptor(descriptor, supported_checks=None) -> dict:
+    """Descriptor-bound display metadata for OPERATION_CLAIM sufficiency cases."""
+    return load_evidence_review_policy_for_descriptor(
+        descriptor,
+        supported_checks=supported_checks,
+    )["display"]
 
 
 def floor_item_rule_ref(display: dict, item: str) -> str:
@@ -409,6 +499,11 @@ def validation_policy() -> dict:
     return load_evidence_review_policy()["validation"]
 
 
+def validation_policy_for_descriptor(descriptor) -> dict:
+    """Descriptor-bound validation metadata for operation-claim validators."""
+    return load_evidence_review_policy_for_descriptor(descriptor)["validation"]
+
+
 def format_validation_template(template: str, **kwargs) -> str:
     """Render a validated profile validation template."""
     return template.format(**kwargs)
@@ -418,3 +513,9 @@ def advisory_rules() -> dict:
     """The active profile's advisory rules (authorisationMismatch, doseRange).
     Empty mapping when the policy declares none."""
     return load_evidence_review_policy().get("advisories", {})
+
+
+def advisory_rules_for_descriptor(descriptor) -> dict:
+    """Descriptor-bound advisory rules. Empty mapping when policy declares none."""
+    return load_evidence_review_policy_for_descriptor(
+        descriptor).get("advisories", {})

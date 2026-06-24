@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from dataclasses import replace
 
 from kernel import config, profile_policy
 from profile_si_ffs.test_fixtures import demo
@@ -40,6 +41,92 @@ def test_validation_policy_is_sourced_from_package_content():
     assert validation["quantityAndUnit"]["unresolvedReasonCode"] == "UNIT_UNRESOLVED"
     assert validation["bindings"]["product"]["bindingRole"] == \
         "CROP_PROTECTION_PRODUCT"
+
+
+def test_explicit_descriptor_policy_loader_matches_config_wrapper():
+    explicit = profile_policy.load_evidence_review_policy_for_descriptor(
+        config.ACTIVE_PROFILE)
+    implicit = profile_policy.load_evidence_review_policy()
+
+    assert explicit == implicit == _policy_doc()
+
+
+def test_descriptor_backed_policy_helpers_match_config_wrappers():
+    active = config.ACTIVE_PROFILE
+
+    assert profile_policy.validation_policy_for_descriptor(active) == \
+        profile_policy.validation_policy()
+    assert profile_policy.operation_floor_for_descriptor(active) == \
+        profile_policy.operation_floor()
+    assert profile_policy.operation_floor_with_display_for_descriptor(active) == \
+        profile_policy.operation_floor_with_display()
+    assert profile_policy.operation_floor_display_for_descriptor(active) == \
+        profile_policy.operation_floor_display()
+    assert profile_policy.advisory_rules_for_descriptor(active) == \
+        profile_policy.advisory_rules()
+
+
+def test_explicit_policy_path_rejects_symlink_escape(tmp_path):
+    profile_root = tmp_path / "profile_si_ffs"
+    profile_root.mkdir()
+    outside_policy = tmp_path / "outside_policy.json"
+    outside_policy.write_text(json.dumps(_policy_doc()))
+    link = profile_root / "policy_link.json"
+    link.symlink_to(outside_policy)
+
+    try:
+        profile_policy.load_evidence_review_policy_from_path(
+            link,
+            profile_root=profile_root,
+        )
+    except profile_policy.ProfilePolicyError as exc:
+        assert "escapes the active profile root" in str(exc)
+    else:
+        raise AssertionError("symlinked policy escape was accepted")
+
+
+def test_descriptor_policy_loader_rejects_policy_id_mismatch(tmp_path):
+    doc = _policy_doc()
+    doc["policyId"] = "policy:test.mismatched"
+    path = tmp_path / "evidence_review_policy_v0_1.json"
+    path.write_text(json.dumps(doc))
+    descriptor = replace(
+        config.ACTIVE_PROFILE,
+        profile_root=tmp_path,
+        evidence_policy_path=path,
+    )
+
+    try:
+        profile_policy.load_evidence_review_policy_for_descriptor(descriptor)
+    except profile_policy.ProfilePolicyError as exc:
+        assert "does not match expected policy ref" in str(exc)
+    else:
+        raise AssertionError("mismatched descriptor policy id was accepted")
+
+
+def test_explicit_policy_path_preserves_unsupported_floor_item_validation(tmp_path):
+    doc = _policy_doc()
+    doc["operationFloor"]["hardItems"] = [
+        *doc["operationFloor"]["hardItems"],
+        "unsupported-floor-item",
+    ]
+    display_items = doc["display"]["floorItems"]
+    display_items["unsupported-floor-item"] = {
+        "label": "Unsupported floor item",
+        "ruleRef": "rule:si.ffs.floor.unsupported-floor-item",
+    }
+    path = tmp_path / "unsupported_floor_item.json"
+    path.write_text(json.dumps(doc))
+
+    try:
+        profile_policy.load_evidence_review_policy_from_path(
+            path,
+            supported_checks={"dose-unit"},
+        )
+    except profile_policy.ProfilePolicyError as exc:
+        assert "unsupported floor item" in str(exc)
+    else:
+        raise AssertionError("unsupported floor item was accepted")
 
 
 def test_unresolved_dose_unit_uses_profile_validation_policy(
