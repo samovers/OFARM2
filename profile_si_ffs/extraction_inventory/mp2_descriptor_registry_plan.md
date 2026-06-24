@@ -12,7 +12,8 @@ MP2 does not:
 - change Core, Kernel, Platform, Netherlands profile, or Slovenia profile
   semantics;
 - change contracts, schemas, generated manifests, active artifact sets,
-  adapters, tests, evidence files, generated outputs, or profile substance;
+  adapters, test harness discovery, evidence/conformance labels, evidence
+  files, generated outputs, or profile substance;
 - create a generated manifest, executed evidence, conformance, production, or
   multi-profile runtime readiness claim.
 
