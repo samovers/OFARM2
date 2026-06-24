@@ -744,8 +744,12 @@ class CarrierSemanticsValidator:
     quantity kind (BLOCK_PROMOTION when unresolved); implausible doses route
     to the advisor, never silently block."""
 
-    def __init__(self, validation_policy=_CONFIG_BACKED_POLICY):
+    def __init__(self, validation_policy):
         self.validation_policy = validation_policy
+
+    @classmethod
+    def from_config_for_legacy_tests(cls):
+        return cls(_CONFIG_BACKED_POLICY)
 
     def run(self, ctx: GateContext) -> GateRefusal | None:
         payload = ctx.sub["payload"]
@@ -802,8 +806,12 @@ class ExecutionExtentValidator:
     whole-scope (corrected and resubmitted, like a dose missing its unit). The
     inline `area` remains an always-available bound."""
 
-    def __init__(self, validation_policy=_CONFIG_BACKED_POLICY):
+    def __init__(self, validation_policy):
         self.validation_policy = validation_policy
+
+    @classmethod
+    def from_config_for_legacy_tests(cls):
+        return cls(_CONFIG_BACKED_POLICY)
 
     def run(self, ctx: GateContext) -> GateRefusal | None:
         validation, refusal = _validation_policy_or_refusal(
@@ -945,8 +953,12 @@ class CodeBindingValidator:
     crop bindings are explicit and route to review — free text never
     silently becomes compliance identity."""
 
-    def __init__(self, validation_policy=_CONFIG_BACKED_POLICY):
+    def __init__(self, validation_policy):
         self.validation_policy = validation_policy
+
+    @classmethod
+    def from_config_for_legacy_tests(cls):
+        return cls(_CONFIG_BACKED_POLICY)
 
     def run(self, ctx: GateContext) -> GateRefusal | None:
         validation, refusal = _validation_policy_or_refusal(
@@ -1106,11 +1118,11 @@ COMMON_SEQUENCE = (
 # trace — the validation checks passed, the storage step refused)
 OPERATION_SEQUENCE = (
     CarrierSchemaValidator(),
-    CarrierSemanticsValidator(),
-    ExecutionExtentValidator(),
+    CarrierSemanticsValidator.from_config_for_legacy_tests(),
+    ExecutionExtentValidator.from_config_for_legacy_tests(),
     ReferenceResolutionValidator(),
     ActorAttributionValidator(),
-    CodeBindingValidator(),
+    CodeBindingValidator.from_config_for_legacy_tests(),
     RegistryReverificationValidator(),
 )
 
@@ -1127,11 +1139,11 @@ def _descriptor_recognized_rule_refs(active_profile) -> frozenset[str]:
 def _operation_sequence_for_validation_policy(validation_policy: dict) -> tuple:
     return (
         CarrierSchemaValidator(),
-        CarrierSemanticsValidator(validation_policy=validation_policy),
-        ExecutionExtentValidator(validation_policy=validation_policy),
+        CarrierSemanticsValidator(validation_policy),
+        ExecutionExtentValidator(validation_policy),
         ReferenceResolutionValidator(),
         ActorAttributionValidator(),
-        CodeBindingValidator(validation_policy=validation_policy),
+        CodeBindingValidator(validation_policy),
         RegistryReverificationValidator(),
     )
 
@@ -1156,9 +1168,12 @@ class ValidationGate:
         if ctx.commit_class == "GOVERNANCE_DECISION":
             return GovernanceAcceptanceValidator().run(ctx) or GatePass()
         if ctx.commit_class == "COMPLIANCE_ASSERTION":
-            recognized_refs = (
-                _descriptor_recognized_rule_refs(ctx.active_profile)
-                if ctx.active_profile is not None else None)
+            if ctx.policy_provider is not None:
+                recognized_refs = ctx.policy_provider.recognized_rule_refs
+            else:
+                recognized_refs = (
+                    _descriptor_recognized_rule_refs(ctx.active_profile)
+                    if ctx.active_profile is not None else None)
             return ComplianceClaimValidator(
                 recognized_rule_refs=recognized_refs).run(ctx) or GatePass()
         if ctx.commit_class == "STRUCTURE_ASSERTION":
@@ -1170,12 +1185,11 @@ class ValidationGate:
             ctx.log("VALIDATION", "PASS")
             return GatePass()
 
-        if ctx.active_profile is None:
+        if ctx.policy_provider is None:
             operation_sequence = OPERATION_SEQUENCE
         else:
             try:
-                validation_policy = profile_policy.validation_policy_for_descriptor(
-                    ctx.active_profile)
+                validation_policy = ctx.policy_provider.validation_policy()
             except profile_policy.ProfilePolicyError as exc:
                 return _validation_policy_refusal(ctx, exc)
             operation_sequence = _operation_sequence_for_validation_policy(

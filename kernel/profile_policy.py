@@ -361,6 +361,44 @@ def load_evidence_review_policy(supported_checks=None) -> dict:
     )
 
 
+class DescriptorPolicyProvider:
+    """Descriptor-scoped policy access for the active runtime pipeline.
+
+    The provider is a runtime seam: descriptor-backed gates use it instead of
+    config-backed wrappers, while policy validation semantics remain owned by
+    the existing full evidence-review policy loader.
+    """
+
+    def __init__(self, descriptor):
+        self.descriptor = descriptor
+        self.policy_ref = descriptor.evidence_policy_ref
+        self.recognized_rule_refs = frozenset({
+            descriptor.evidence_policy_ref,
+            descriptor.profile_ref,
+            descriptor.pack_ref,
+            descriptor.code_binding_profile_ref,
+        })
+        self._evidence_policy_cache: dict[tuple[str, ...] | None, dict] = {}
+
+    @staticmethod
+    def _supported_checks_key(supported_checks) -> tuple[str, ...] | None:
+        if supported_checks is None:
+            return None
+        return tuple(supported_checks)
+
+    def evidence_policy(self, supported_checks=None) -> dict:
+        key = self._supported_checks_key(supported_checks)
+        if key not in self._evidence_policy_cache:
+            self._evidence_policy_cache[key] = load_evidence_review_policy_for_descriptor(
+                self.descriptor,
+                supported_checks=key,
+            )
+        return self._evidence_policy_cache[key]
+
+    def validation_policy(self) -> dict:
+        return self.evidence_policy()["validation"]
+
+
 def _validated_evidence_review_policy(
     doc: dict,
     *,

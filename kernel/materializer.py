@@ -23,6 +23,7 @@ from . import config, policy
 from .context import (ContextAssembler, ContextNotReconstructible,
                       mint as _mint, now_iso, parse_ts)
 from .contracts import canonical_json
+from .profile_runtime import ProfileRuntimeError, resolve_active_descriptor
 from psycopg.types.json import Jsonb
 
 MATERIALIZATION_POLICY_REF = "policy:si.ffs.materialization.v0_1"
@@ -60,10 +61,17 @@ def _digest12(obj) -> str:
 
 
 class Materializer:
-    def __init__(self, store, *, active_profile=None):
+    def __init__(self, store, *, active_descriptor=None, active_profile=None):
         self.store = store
-        self.active_profile = active_profile or config.ACTIVE_PROFILE
-        self.context = ContextAssembler(store, active_profile=self.active_profile)
+        if (active_descriptor is not None and active_profile is not None
+                and active_descriptor != active_profile):
+            raise ProfileRuntimeError(
+                "active_descriptor and active_profile refer to different descriptors")
+        self.active_profile = resolve_active_descriptor(
+            active_descriptor if active_descriptor is not None else active_profile,
+            allow_config_default=True,
+        )
+        self.context = ContextAssembler(store, active_descriptor=self.active_profile)
 
     # ------------------------------------------------------------------ key --
 
