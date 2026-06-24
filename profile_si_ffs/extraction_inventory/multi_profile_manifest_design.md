@@ -30,6 +30,11 @@ Capability Manifest and ActiveArtifactSet are grounded in:
 D5 does not authorize changing any of that. It only records what a later
 multi-profile design would need to prove before implementation.
 
+MP6 follow-on planning is recorded in
+`mp6_manifest_generation_plan.md`. That plan extends this manifest boundary for
+future generated or generator-verified active-profile manifests without changing
+the current SI manifest outputs.
+
 ## Current Manifest Surfaces
 
 | Surface | Current role | D5 treatment |

@@ -128,6 +128,11 @@ MP5 profile executed-evidence writer planning is recorded in
 and does not write profile evidence, relabel platform MVP evidence, change root
 pytest collection, or create multi-profile runtime readiness.
 
+MP6 manifest-generation planning is recorded in `mp6_manifest_generation_plan.md`.
+That plan is documentation-only and does not regenerate manifests, update active
+artifact sets, expand capability claims, activate a second profile, or create
+multi-profile runtime readiness.
+
 ## Preconditions Before Any Runtime PR
 
 A runtime implementation PR must state which stage it targets and prove:
