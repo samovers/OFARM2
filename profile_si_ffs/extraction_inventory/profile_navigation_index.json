@@ -175,6 +175,12 @@
       "status": "docs-only MP6 manifest-generation plan; non-runtime, non-capability"
     },
     {
+      "id": "mp7_multi_profile_runtime_readiness_plan",
+      "path": "profile_si_ffs/extraction_inventory/mp7_multi_profile_runtime_readiness_plan.md",
+      "kind": "future runtime planning",
+      "status": "docs-only MP7 multi-profile runtime readiness design gate; non-runtime, non-capability"
+    },
+    {
       "id": "core_contract_comment_review_plan",
       "path": "profile_si_ffs/extraction_inventory/core_contract_comment_review_plan.md",
       "kind": "contract comment review planning",
