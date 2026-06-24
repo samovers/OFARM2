@@ -79,11 +79,11 @@ stage whose preconditions are not met.
 | MP4 | Generalize test harness discovery. | Profile engineering tests remain discoverable without becoming platform MVP evidence. |
 | MP5 | Define profile executed-evidence writer. | Profile evidence has a distinct suite id, path, and honesty note. |
 | MP6 | Generalize manifest generation. | Only active profiles with real descriptors, adapters, tests, evidence, and artifact grounding receive generated or generator-verified capability claims. |
-| MP7 | Activate a second runtime profile. | The second profile has real runtime surfaces and passes the same grounding checks as SI. |
+| MP7 | Design gate for multi-profile runtime readiness. | Routing model and activation preconditions are accepted without code changes, runtime changes, manifest changes, or second-profile activation. |
 
-MP7 must not be used to activate the Netherlands GO + GLMC 7 design slice unless
-that slice has first become an implemented runtime profile through separate,
-reviewed work.
+MP7 must not be used to activate a second runtime profile. A later implementation
+PR must not activate the Netherlands GO + GLMC 7 design slice unless that slice
+has first become an implemented runtime profile through separate, reviewed work.
 
 ## MP1 Implementation Status
 
@@ -132,6 +132,13 @@ MP6 manifest-generation planning is recorded in `mp6_manifest_generation_plan.md
 That plan is documentation-only and does not regenerate manifests, update active
 artifact sets, expand capability claims, activate a second profile, or create
 multi-profile runtime readiness.
+
+MP7 multi-profile runtime readiness planning is recorded in
+`mp7_multi_profile_runtime_readiness_plan.md`. That plan is a documentation-only
+design gate for tenant/farm-scoped routing and activation preconditions. It does
+not implement routing, widen active profile selection, enable a second profile,
+activate design-only packages, write profile evidence, regenerate manifests, or
+create multi-profile runtime readiness.
 
 ## Preconditions Before Any Runtime PR
 
