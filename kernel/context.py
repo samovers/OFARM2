@@ -460,7 +460,8 @@ class ContextAssembler:
         activation_sets = self.store.find_by_kind("ofarm.packactivationset.v0.1")
         profiles = self.store.find_by_kind("ofarm.agronomiccodebindingprofile.v0.1")
         if not (artifact_sets and activation_sets and profiles):
-            raise RuntimeError("context spine not bootstrapped — call context.bootstrap(store)")
+            raise ContextNotReconstructible(
+                "context spine not bootstrapped — call context.bootstrap(store)")
         if as_of is None:
             # NOW: select the descriptor-declared active SI pilot spine, never
             # whichever row happens to sort last in the store.
