@@ -153,6 +153,10 @@ def load_active_profile_selection(
     harness, evidence, and manifest problem, so this selector rejects them
     rather than pretending the rest of the runtime is multi-profile-ready.
     """
+    if allowed_profile_package_names is None:
+        raise ProfileRuntimeError(
+            "active profile package selection requires an explicit enabled "
+            "profile package allow-list")
     registry = load_profile_descriptor_registry(
         package_root,
         allowed_profile_package_names=allowed_profile_package_names,
@@ -202,15 +206,28 @@ def load_profile_descriptor_registry(
     candidates = []
     for package_name, profile_root in discoverable:
         descriptor_path = profile_root / DESCRIPTOR_FILENAME
-        if not descriptor_path.is_file():
+        if not descriptor_path.exists() and not descriptor_path.is_symlink():
             continue
-        descriptor = load_profile_runtime_descriptor(profile_root)
+        try:
+            resolved_descriptor_path = descriptor_path.resolve(strict=True)
+            resolved_descriptor_path.relative_to(profile_root)
+        except (OSError, ValueError) as exc:
+            raise ProfileRuntimeError(
+                f"profile runtime descriptor for {package_name!r} escapes "
+                "the profile root") from exc
+        if not resolved_descriptor_path.is_file():
+            raise ProfileRuntimeError(
+                f"profile runtime descriptor for {package_name!r} is not a file")
+        descriptor = load_profile_runtime_descriptor(
+            profile_root,
+            descriptor_path=resolved_descriptor_path,
+        )
         candidates.append(ProfileDescriptorCandidate(
             package_name=package_name,
             profile_root=profile_root,
-            descriptor_path=descriptor_path,
+            descriptor_path=resolved_descriptor_path,
             descriptor=descriptor,
-            enabled=(not allowed or package_name in allowed),
+            enabled=(package_name in allowed),
         ))
     _reject_duplicate_descriptor_refs(tuple(candidates))
     return ProfileDescriptorRegistry(

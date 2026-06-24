@@ -356,6 +356,15 @@ def test_descriptor_registry_marks_unenabled_candidate_without_activating_it():
     assert candidate.enabled is False
 
 
+def test_descriptor_registry_without_allow_list_does_not_enable_candidates():
+    registry = load_profile_descriptor_registry(config.PACKAGE_ROOT)
+    candidate = registry.candidate_for("profile_si_ffs")
+
+    assert registry.enabled_package_names == ()
+    assert candidate is not None
+    assert candidate.enabled is False
+
+
 def test_descriptor_registry_rejects_unsafe_enabled_package_name():
     with pytest.raises(ProfileRuntimeError, match="profile_"):
         load_profile_descriptor_registry(
@@ -369,6 +378,10 @@ def test_active_profile_selection_rejects_multiple_profiles_in_mp1():
         load_active_profile_selection(
             config.PACKAGE_ROOT,
             ("profile_si_ffs", "profile_nl_go_glmc7_2026"),
+            allowed_profile_package_names=(
+                "profile_si_ffs",
+                "profile_nl_go_glmc7_2026",
+            ),
         )
 
 
@@ -377,6 +390,7 @@ def test_active_profile_selection_rejects_design_only_profile_slice():
         load_active_profile_selection(
             config.PACKAGE_ROOT,
             ("profile_nl_go_glmc7_2026",),
+            allowed_profile_package_names=("profile_nl_go_glmc7_2026",),
         )
 
 
@@ -386,6 +400,14 @@ def test_active_profile_selection_rejects_profile_not_enabled_for_mp1():
             config.PACKAGE_ROOT,
             ("profile_nl_go_glmc7_2026",),
             allowed_profile_package_names=config.ALLOWED_ACTIVE_PROFILE_PACKAGE_NAMES,
+        )
+
+
+def test_active_profile_selection_requires_explicit_enabled_allow_list():
+    with pytest.raises(ProfileRuntimeError, match="explicit enabled profile package allow-list"):
+        load_active_profile_selection(
+            config.PACKAGE_ROOT,
+            ("profile_si_ffs",),
         )
 
 
@@ -411,7 +433,11 @@ def test_active_profile_selection_uses_registry_and_preserves_si_activation():
 ])
 def test_active_profile_selection_rejects_unsafe_or_non_profile_names(selection, match):
     with pytest.raises(ProfileRuntimeError, match=match):
-        load_active_profile_selection(config.PACKAGE_ROOT, selection)
+        load_active_profile_selection(
+            config.PACKAGE_ROOT,
+            selection,
+            allowed_profile_package_names=config.ALLOWED_ACTIVE_PROFILE_PACKAGE_NAMES,
+        )
 
 
 def test_descriptor_registry_rejects_malformed_descriptor_candidate(tmp_path):
@@ -431,6 +457,19 @@ def test_descriptor_registry_rejects_descriptor_file_escape(tmp_path):
     descriptor.write_text(json.dumps(doc), encoding="utf-8")
 
     with pytest.raises(ProfileRuntimeError, match=r"\.\."):
+        load_profile_descriptor_registry(root)
+
+
+def test_descriptor_registry_rejects_descriptor_symlink_escape(tmp_path):
+    root = _copied_package_root(tmp_path)
+    profile_root = root / "profile_si_ffs"
+    descriptor = profile_root / DESCRIPTOR_FILENAME
+    outside_descriptor = tmp_path / f"outside_descriptor_{_uid()}.json"
+    outside_descriptor.write_text(descriptor.read_text(), encoding="utf-8")
+    descriptor.unlink()
+    descriptor.symlink_to(outside_descriptor)
+
+    with pytest.raises(ProfileRuntimeError, match="escapes the profile root"):
         load_profile_descriptor_registry(root)
 
 
