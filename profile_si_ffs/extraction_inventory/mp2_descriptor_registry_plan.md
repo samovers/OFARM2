@@ -2,17 +2,18 @@
 
 ## Status
 
-This is a documentation-only MP2 plan for a later descriptor-registry
-implementation PR.
+This file records the MP2 descriptor-registry plan and implementation status.
+MP2 changes descriptor-loading internals while preserving the current
+single-active-profile runtime behavior.
 
-This plan does not:
+MP2 does not:
 
-- change runtime behavior;
 - activate a second profile;
 - change Core, Kernel, Platform, Netherlands profile, or Slovenia profile
   semantics;
 - change contracts, schemas, generated manifests, active artifact sets,
-  adapters, tests, evidence files, generated outputs, or profile substance;
+  adapters, test harness discovery, evidence/conformance labels, evidence
+  files, generated outputs, or profile substance;
 - create a generated manifest, executed evidence, conformance, production, or
   multi-profile runtime readiness claim.
 
@@ -36,6 +37,25 @@ concepts:
 MP2 must preserve current SI behavior unless a later, separately reviewed
 runtime implementation PR explicitly changes it.
 
+## MP2 Implementation Status
+
+MP2 is implemented in `kernel/profile_runtime.py` as descriptor registry
+loading behind the MP1 active-profile selection API.
+
+The implementation adds:
+
+- `ProfileDescriptorCandidate`;
+- `ProfileDescriptorRegistry`;
+- `load_profile_descriptor_registry(package_root, allowed_profile_package_names=None)`.
+
+`load_active_profile_selection()` now uses the registry internally while still
+returning exactly one active profile. The default and only enabled active
+runtime package remains `profile_si_ffs`.
+
+`profile_nl_go_glmc7_2026` is discoverable as a profile package but remains a
+descriptorless design-only / legal-source slice. It is not a descriptor
+candidate and is not active runtime support.
+
 ## Vocabulary
 
 | Term | Meaning | Boundary |
@@ -53,7 +73,7 @@ the registry without being enabled or selected for activation.
 
 ## Registry Source Rule
 
-A later MP2 registry implementation must scan only immediate child directories of
+The MP2 registry implementation scans only immediate child directories of
 repository `PACKAGE_ROOT`.
 
 The registry must consider only simple repository-local directory names beginning
@@ -103,7 +123,7 @@ loading outside the descriptor's profile root or bypass active-spine checks.
 
 ## Fail-Closed Conditions
 
-The later MP2 implementation must fail closed for at least the following
+The MP2 implementation must fail closed for at least the following
 conditions:
 
 - unsafe path;
@@ -133,20 +153,19 @@ The duplicate-ref checks are registry-level collision checks. They do not make
 non-selected descriptor candidates active, and they do not create manifest,
 evidence, context, policy, or adapter claims.
 
-## Future Implementation Shape
+## Implementation Shape
 
-A later MP2 implementation PR should add registry-level types in
-`kernel/profile_runtime.py`, likely:
+MP2 adds registry-level types in `kernel/profile_runtime.py`:
 
 - `ProfileDescriptorCandidate`;
 - `ProfileDescriptorRegistry`;
 - `load_profile_descriptor_registry(package_root, allowed_profile_package_names=None)`.
 
-That implementation should make the current MP1 `load_active_profile_selection()`
-use the registry internally. It must still return exactly one active profile
-until MP3 or a later deliberately scoped stage expands active runtime behavior.
+The current MP1 `load_active_profile_selection()` uses the registry internally.
+It still returns exactly one active profile until MP3 or a later deliberately
+scoped stage expands active runtime behavior.
 
-The registry should expose enough structured information for tests to prove that
+The registry exposes enough structured information for tests to prove that
 SI is a descriptor candidate, descriptorless design-only packages remain
 non-candidates, selected packages are explicit, enabled packages are explicitly
 allowed, and loaded active descriptors are the only descriptors used by MP1
@@ -168,9 +187,9 @@ This PR and plan do not claim or create:
 - multi-profile runtime readiness;
 - L5 Core country/profile neutrality certification.
 
-## Future Implementation Test Plan
+## Implementation Test Plan
 
-A later MP2 implementation PR should include tests proving:
+The MP2 implementation tests prove:
 
 - the SI descriptor is discovered as a runtime descriptor candidate;
 - the Netherlands GO + GLMC 7 package is discoverable as a package but not a
@@ -185,7 +204,7 @@ A later MP2 implementation PR should include tests proving:
 - descriptor root or file escape fails closed;
 - full `kernel/tests/` still passes.
 
-## Validation For This Docs-Only PR
+## Validation
 
 Run from repository root:
 
@@ -194,9 +213,10 @@ python3 conformance/ofarm_profile_extraction_consistency_check.py
 python3 conformance/ofarm_pkg_contract_check.py
 git diff --check
 git diff --cached --check
+.venv/bin/python -m pytest kernel/tests/test_profile_runtime_loader.py -q
+.venv/bin/python -m pytest kernel/tests/ -q
 ```
 
-Do not run pytest for this documentation-only PR unless a reviewer asks. If
-pytest is accidentally run and creates
-`conformance/evidence/platform_mvp_results_*.json`, remove the generated evidence
-file before commit.
+If pytest creates `conformance/evidence/platform_mvp_results_*.json`, remove the
+generated evidence file before commit unless the PR intentionally changes
+executed evidence grounding.
