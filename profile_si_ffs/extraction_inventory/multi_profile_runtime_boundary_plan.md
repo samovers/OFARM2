@@ -123,6 +123,11 @@ discovered harness remains `profile_si_ffs/tests/profile_test_harness.json`.
 This does not activate any runtime profile, create executed profile evidence,
 or change root pytest collection mechanics.
 
+MP5 profile executed-evidence writer planning is recorded in
+`mp5_profile_executed_evidence_writer_plan.md`. That plan is documentation-only
+and does not write profile evidence, relabel platform MVP evidence, change root
+pytest collection, or create multi-profile runtime readiness.
+
 ## Preconditions Before Any Runtime PR
 
 A runtime implementation PR must state which stage it targets and prove:
