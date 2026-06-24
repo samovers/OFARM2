@@ -551,7 +551,8 @@ class Materializer:
                 "derivationSource": "MATERIALIZATION_POLICY",
             }
         entries = [entry(ctx_ref, "CONTEXT_SNAPSHOT", "CONTEXT_CHANGED", "STALE"),
-                   entry(config.EVIDENCE_POLICY_REF, "RULE_EVIDENCE_POLICY", "POLICY_CHANGED", "STALE"),
+                   entry(self.active_profile.evidence_policy_ref,
+                         "RULE_EVIDENCE_POLICY", "POLICY_CHANGED", "STALE"),
                    entry(basis["anchorScopes"][0]["scopeRef"], "IDENTITY_LIFECYCLE",
                          "IDENTITY_CHANGED", "STALE")]
         # every identity the basis names is an invalidation dependency — a

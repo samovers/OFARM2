@@ -258,6 +258,32 @@ def _policy_dimension(vector: dict) -> dict:
     raise AssertionError("missing RULE_EVIDENCE_POLICY dimension")
 
 
+def _assert_profile_applicability_refusal(store, result: dict) -> dict:
+    assert result["decisionOutcome"] == "RETAIN_DRAFT"
+    assert result["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+    trace = _trace_payload(store, result)
+    assert [entry["gate"] for entry in trace["gateSequence"]] == [
+        "INGRESS_NORMALIZATION",
+        "AUTHORITY",
+        "VALIDATION",
+        "PACK_PROFILE_APPLICABILITY",
+    ]
+    assert trace["gateSequence"][-1]["outcome"] == "NOT_APPLICABLE"
+    assert "evidenceSufficiencyCaseRef" not in trace
+    return trace
+
+
+def _note_submission(idem_key: str) -> dict:
+    return {
+        "commitClass": "NOTE",
+        "actingPartyRef": demo.FARMER,
+        "farmRef": demo.FARM,
+        "idempotencyKey": idem_key,
+        "noteText": "issue #125 profile applicability probe",
+        "eventTime": "2026-06-10T09:00:00Z",
+    }
+
+
 @contextmanager
 def _preseeded_dirty_spine_store(mutate):
     """Fresh store where descriptor-id spine records exist before bootstrap."""
@@ -285,6 +311,13 @@ def _preseeded_dirty_spine_store(mutate):
             store.insert_record(cur, activation)
             store.insert_record(cur, artifact)
         context.bootstrap(store)
+        for payload in demo.substrate_records():
+            contract = store.registry.get(payload["schemaVersion"])
+            record_id = payload[contract.id_field]
+            if store.record_exists(record_id):
+                continue
+            with store.tx() as cur:
+                store.insert_record(cur, payload)
         yield store
     finally:
         store.close()
@@ -1075,6 +1108,101 @@ def test_descriptor_compliance_recognized_refs_are_exact():
         })
 
 
+def test_profile_applicability_wrong_pack_profile_is_governed_refusal():
+    def mutate(_profile, activation, artifact):
+        activation["activePackRefs"] = ["pack:si.ffs.dirty.v0_1"]
+        activation["activeProfileRefs"] = ["profile:si.ffs.dirty.v0_1"]
+        artifact["activePackRefs"] = ["pack:si.ffs.dirty.v0_1"]
+        artifact["activeProfileRefs"] = ["profile:si.ffs.dirty.v0_1"]
+
+    with _preseeded_dirty_spine_store(mutate) as store:
+        result = GatePipeline(store).commit(_note_submission(
+            f"issue125-pack-profile:{_uid()}"))
+        trace = _assert_profile_applicability_refusal(store, result)
+        assert "descriptor packRef" in trace["gateSequence"][-1]["rationale"]
+
+
+def test_profile_applicability_missing_evidence_policy_is_governed_refusal():
+    def mutate(_profile, _activation, artifact):
+        artifact["activeArtifactRefs"] = [
+            ref for ref in artifact["activeArtifactRefs"]
+            if ref != config.ACTIVE_PROFILE.evidence_policy_ref
+        ]
+
+    with _preseeded_dirty_spine_store(mutate) as store:
+        result = GatePipeline(store).commit(_note_submission(
+            f"issue125-policy-missing:{_uid()}"))
+        trace = _assert_profile_applicability_refusal(store, result)
+        assert "evidence policy" in trace["gateSequence"][-1]["rationale"]
+
+
+def test_profile_applicability_missing_descriptor_artifact_is_governed_refusal(
+        fresh_env):
+    store, _, _ = fresh_env
+    active = replace(
+        config.ACTIVE_PROFILE,
+        active_artifact_set_ref="activeartifactset:si.ffs.issue125.missing.v0_1",
+    )
+
+    result = GatePipeline(store, active_profile=active).commit(_note_submission(
+        f"issue125-artifact-missing:{_uid()}"))
+
+    trace = _assert_profile_applicability_refusal(store, result)
+    assert "matched 0" in trace["gateSequence"][-1]["rationale"]
+
+
+def test_profile_applicability_required_reference_family_is_governed_refusal(
+        fresh_env):
+    store, _, _ = fresh_env
+    active = replace(
+        config.ACTIVE_PROFILE,
+        reference_families=config.ACTIVE_PROFILE.reference_families
+        + (_missing_family(required=True),),
+    )
+
+    result = GatePipeline(store, active_profile=active).commit(_note_submission(
+        f"issue125-ref-family:{_uid()}"))
+
+    trace = _assert_profile_applicability_refusal(store, result)
+    assert "required reference family" in trace["gateSequence"][-1]["rationale"]
+
+
+def test_api_commit_returns_governed_profile_applicability_refusal_not_500():
+    def mutate(_profile, _activation, artifact):
+        artifact["activeArtifactRefs"] = [
+            ref for ref in artifact["activeArtifactRefs"]
+            if ref != config.ACTIVE_PROFILE.evidence_policy_ref
+        ]
+
+    with _preseeded_dirty_spine_store(mutate) as store:
+        from fastapi.testclient import TestClient
+        from kernel.api import create_app
+
+        client = TestClient(create_app(store, oidc=None))
+        sub = _note_submission(f"issue125-api:{_uid()}")
+        response = client.post(
+            "/commit",
+            json={"submission": sub},
+            headers={"x-acting-party": demo.FARMER},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        _assert_profile_applicability_refusal(store, payload)
+
+
+def test_product_register_boundary_remains_single_active_si_runtime():
+    assert config.ACTIVE_PROFILE_PACKAGE_NAMES == ("profile_si_ffs",)
+    assert config.ALLOWED_ACTIVE_PROFILE_PACKAGE_NAMES == ("profile_si_ffs",)
+    assert config.ACTIVE_PROFILE_SELECTION.profile_package_names == ("profile_si_ffs",)
+    assert context.REGSR_SNAPSHOT_PREFIX == config.ACTIVE_PROFILE.reference_family(
+        "si.uvhvvr.ffs-reg").snapshot_prefix
+    assert context.REGSR_DATA_FAMILY == config.ACTIVE_PROFILE.reference_family(
+        "si.uvhvvr.ffs-reg").data_family
+    assert config.SHIPPED_REGSR_SNAPSHOT_REF == config.ACTIVE_PROFILE.reference_family(
+        "si.uvhvvr.ffs-reg").shipped_snapshot_ref
+
+
 def test_materializer_uses_active_descriptor_for_context_and_policy_freshness(
         fresh_env):
     store, pipeline, _ = fresh_env
@@ -1096,3 +1224,57 @@ def test_materializer_uses_active_descriptor_for_context_and_policy_freshness(
         "sourceRef": config.ACTIVE_PROFILE.evidence_policy_ref,
         "observedVersionRef": config.ACTIVE_PROFILE.evidence_policy_ref,
     }
+
+
+def test_materializer_dependency_index_uses_descriptor_policy_ref_and_invalidates():
+    policy_ref = f"policy:si.ffs.issue125.{_uid()}"
+
+    def mutate(_profile, _activation, artifact):
+        artifact["activeArtifactRefs"] = [
+            ref for ref in artifact["activeArtifactRefs"]
+            if ref != config.ACTIVE_PROFILE.evidence_policy_ref
+        ] + [policy_ref]
+
+    with _preseeded_dirty_spine_store(mutate) as store:
+        active = replace(config.ACTIVE_PROFILE, evidence_policy_ref=policy_ref)
+        materializer = Materializer(store, active_profile=active)
+
+        with store.tx() as cur:
+            materialized = materializer.recompute(cur, demo.FARM)
+        key_digest = materialized["materializationKey"]["materializationKeyId"]
+
+        with store.conn.cursor() as cur:
+            cur.execute(
+                "SELECT dependency_source_ref FROM derived_dependency_index "
+                "WHERE key_digest = %s "
+                "AND dependency_source_family = 'RULE_EVIDENCE_POLICY'",
+                (key_digest,),
+            )
+            policy_dependencies = {row["dependency_source_ref"] for row in cur.fetchall()}
+            cur.execute(
+                "SELECT freshness FROM derived_materialization "
+                "WHERE key_digest = %s AND superseded_by IS NULL",
+                (key_digest,),
+            )
+            assert cur.fetchone()["freshness"] == "FRESH"
+
+        assert policy_dependencies == {policy_ref}
+
+        with store.tx() as cur:
+            marked = materializer.invalidate_for_sources(
+                cur,
+                [policy_ref],
+                trigger_family="POLICY_CHANGED",
+                trigger_source_ref=policy_ref,
+                farm_scope_ref=demo.FARM,
+                reason_code="POLICY_CHANGED",
+            )
+
+        assert marked == 1
+        with store.conn.cursor() as cur:
+            cur.execute(
+                "SELECT freshness FROM derived_materialization "
+                "WHERE key_digest = %s AND superseded_by IS NULL",
+                (key_digest,),
+            )
+            assert cur.fetchone()["freshness"] == "STALE"

@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from . import policy, profile_policy, sufficiency
-from .context import mint, parse_ts
+from .context import ContextNotReconstructible, mint, parse_ts
 from .contracts import ContractViolation
 from .emission import PromotionEmitter, ReplayWriter, submission_evidence_refs
 from .problems import runtime_problem
@@ -370,8 +370,20 @@ class EnvelopePersist:
 # ---------------------------------------------------------------------------
 
 class ProfileApplicabilityGate:
-    def run(self, ctx: GateContext) -> GatePass:
-        snapshot = ctx.context_assembler.assemble(ctx.cur, ctx.farm_ref)
+    def run(self, ctx: GateContext) -> GatePass | GateRefusal:
+        try:
+            snapshot = ctx.context_assembler.assemble(ctx.cur, ctx.farm_ref)
+        except ContextNotReconstructible as exc:
+            ctx.log("PACK_PROFILE_APPLICABILITY", "NOT_APPLICABLE",
+                    reason_code="PROFILE_NOT_ACTIVE", rationale=str(exc))
+            return GateRefusal(
+                "PACK_PROFILE_APPLICABILITY", "NOT_APPLICABLE", "RETAIN_DRAFT",
+                [runtime_problem(
+                    "PROFILE_NOT_ACTIVE", "Active profile context unavailable",
+                    "the active profile context could not be assembled "
+                    f"({exc}); the claim stays a draft (fail closed)",
+                    suggested_remediation="restore the active profile spine and "
+                    "required reference snapshots before resubmitting")])
         ctx.log("PACK_PROFILE_APPLICABILITY", "APPLICABLE",
                 refs=[snapshot["contextSnapshotId"]])
         return GatePass()
