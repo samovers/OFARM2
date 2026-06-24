@@ -21,7 +21,7 @@ import uuid
 
 import pytest
 
-from kernel import config, policy, profile_policy
+from kernel import config, policy, profile_policy, sufficiency
 from profile_si_ffs.test_fixtures import demo
 
 
@@ -158,6 +158,97 @@ def test_floor_display_metadata_is_sourced_from_package_content():
     assert display["ruleRefPrefix"] == "rule:si.ffs.floor"
     assert profile_policy.floor_item_rule_ref(
         display, "product-binding") == "rule:si.ffs.floor.product-binding"
+
+
+def test_explicit_build_case_from_checks_uses_supplied_policy_ref(store):
+    display = _valid_display(["dose-unit"])
+
+    case, _ = sufficiency.build_case_from_checks(
+        store,
+        demo.FARM,
+        "assertion:p5.explicit.policy",
+        "erp:p5.explicit.policy",
+        {"dose-unit": True},
+        ("dose-unit",),
+        (),
+        [demo.PHOTO_EVIDENCE],
+        policy_ref="policy:test.explicit",
+        display=display,
+    )
+
+    assert case["governingPolicyRefs"] == ["policy:test.explicit"]
+    assert {arg["policyRef"] for arg in case["arguments"]} == {
+        "policy:test.explicit"}
+
+
+def test_explicit_floor_case_with_policy_does_not_read_config_floor(
+        store, monkeypatch):
+    def fail_config_floor(*_args, **_kwargs):
+        raise AssertionError("config-backed floor loader was called")
+
+    monkeypatch.setattr(
+        profile_policy, "operation_floor_with_display", fail_config_floor)
+    display = _valid_display(OPERATION_FLOOR_CHECKS)
+    display["operationFloorClaimStatement"] = "explicit supplied floor statement"
+    display["operationFloorAllowRationale"] = "explicit supplied floor allow"
+    evidence_policy = _policy_doc(
+        ["dose-unit", "operator", "event-time", "parcel"],
+        ["product-binding", "crop-binding"],
+        display=display,
+    )
+    sub = demo.spray_submission(
+        f"p5-explicit-floor:{uid()}",
+        erp_id=f"erp:p5.explicit.floor.{uid()}",
+        confirm=True,
+    )
+
+    case, failures = sufficiency.build_floor_case_with_policy(
+        store,
+        sub,
+        "OPERATION_CLAIM",
+        demo.FARM,
+        "assertion:p5.explicit.floor",
+        "erp:p5.explicit.floor",
+        evidence_policy=evidence_policy,
+        policy_ref="policy:test.explicit-floor",
+    )
+
+    assert failures == []
+    assert case["governingPolicyRefs"] == ["policy:test.explicit-floor"]
+    assert {arg["policyRef"] for arg in case["arguments"]} == {
+        "policy:test.explicit-floor"}
+    assert case["claims"][0]["statement"] == "explicit supplied floor statement"
+    assert case["outcome"]["rationale"] == "explicit supplied floor allow"
+
+
+def test_explicit_compliance_floor_omitted_rule_refs_use_policy_ref_only(store):
+    evidence_policy = _policy_doc([], [])
+    sub = {
+        "evidenceRefs": [demo.PHOTO_EVIDENCE],
+        "payload": {"complianceClaim": {
+            "statement": "fictional explicit compliance rule-ref test",
+            "assertedStatus": "CLAIMED_COMPLIANT",
+            "governingRuleRefs": [config.EVIDENCE_POLICY_REF],
+            "subjectScopeRef": demo.FARM}},
+    }
+
+    case, _ = sufficiency.build_floor_case_with_policy(
+        store,
+        sub,
+        "COMPLIANCE_ASSERTION",
+        demo.FARM,
+        "assertion:p5.explicit.compliance",
+        None,
+        evidence_policy=evidence_policy,
+        policy_ref="policy:test.explicit-only",
+    )
+
+    governing = [
+        arg for arg in case["arguments"]
+        if arg["argumentId"].endswith(":governing-rules")
+    ][0]
+    assert governing["conclusion"] == "UNSUPPORTED"
+    assert case["outcome"]["decision"] == "REFUSE"
 
 
 def test_kernel_carries_no_si_floor_constants():
@@ -413,6 +504,37 @@ def _broad_product_binding(store, state="VERIFIED"):
                 "maySupportPromotion": True,
                 "mustNotPromoteTo": ["OFARM_CORE_MEANING"]}})
     return bid
+
+
+def test_explicit_operation_advisories_with_policy_does_not_read_config(
+        store, monkeypatch):
+    def fail_config_advisories():
+        raise AssertionError("config-backed advisory loader was called")
+
+    monkeypatch.setattr(profile_policy, "advisory_rules", fail_config_advisories)
+    broad = _broad_product_binding(store)
+    sub = demo.spray_submission(
+        f"p5-explicit-advisory:{uid()}",
+        erp_id=f"erp:p5.explicit.advisory.{uid()}",
+        confirm=True,
+        binding_refs=[broad, demo.CROP_BINDING],
+    )
+    evidence_policy = _policy_doc(
+        ["dose-unit", "operator", "event-time", "parcel"],
+        ["product-binding", "crop-binding"],
+        advisories={
+            "authorisationMismatch": {
+                "enabled": True,
+                "exactMappingRequired": True,
+            }
+        },
+    )
+
+    problems = sufficiency.operation_advisories_with_policy(
+        store, sub, evidence_policy)
+
+    assert any(p["title"] == "Authorisation-mismatch advisory"
+               for p in problems)
 
 
 def test_clean_claim_raises_no_advisory(store, pipeline):

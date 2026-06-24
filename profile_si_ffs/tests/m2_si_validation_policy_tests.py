@@ -10,7 +10,7 @@ import json
 import uuid
 from dataclasses import replace
 
-from kernel import config, profile_policy
+from kernel import config, profile_policy, validators
 from profile_si_ffs.test_fixtures import demo
 
 
@@ -32,6 +32,36 @@ def _use_policy(monkeypatch, tmp_path, doc):
 def _spray(pipeline, **kw):
     return pipeline.commit(demo.spray_submission(
         f"d4:{uid()}", erp_id=f"erp:d4.{uid()}", **kw))
+
+
+def _use_explicit_operation_validation(monkeypatch, validation):
+    monkeypatch.setattr(validators, "OPERATION_SEQUENCE", (
+        validators.CarrierSchemaValidator(),
+        validators.CarrierSemanticsValidator(validation_policy=validation),
+        validators.ExecutionExtentValidator(validation_policy=validation),
+        validators.ReferenceResolutionValidator(),
+        validators.ActorAttributionValidator(),
+        validators.CodeBindingValidator(validation_policy=validation),
+        validators.RegistryReverificationValidator(),
+    ))
+
+
+class _FakeValidationContext:
+    def __init__(self, store, sub, commit_class="COMPLIANCE_ASSERTION"):
+        self.store = store
+        self.sub = sub
+        self.commit_class = commit_class
+        self.farm_ref = demo.FARM
+        self.gate_sequence = []
+
+    def log(self, gate, outcome, *, reason_code=None, rationale=None, refs=None):
+        self.gate_sequence.append({
+            "gate": gate,
+            "outcome": outcome,
+            "reasonCode": reason_code,
+            "rationale": rationale,
+            "relatedArtifactRefs": refs,
+        })
 
 
 def test_validation_policy_is_sourced_from_package_content():
@@ -146,6 +176,82 @@ def test_unresolved_dose_unit_uses_profile_validation_policy(
     assert problem["detail"] == "custom unresolved dose detail"
 
 
+def test_explicit_validator_policy_injection_uses_supplied_subdocument(
+        pipeline, monkeypatch):
+    validation = _policy_doc()["validation"]
+    validation["quantityAndUnit"]["unresolvedTitle"] = \
+        "Explicit dose unit unresolved"
+    validation["quantityAndUnit"]["unresolvedDetail"] = \
+        "explicit unresolved dose detail"
+    validation["recordFields"]["nonWholeExtentBound"]["missingTitle"] = \
+        "Explicit extent bound missing"
+    validation["recordFields"]["nonWholeExtentBound"]["requiredLabel"] = \
+        "explicit treated area"
+    validation["bindings"]["product"]["title"] = \
+        "Explicit product binding review"
+    validation["bindings"]["product"]["detailTemplate"] = \
+        "explicit product state: {state}"
+    _use_explicit_operation_validation(monkeypatch, validation)
+
+    def fail_config_policy():
+        raise profile_policy.ProfilePolicyError(
+            "config-backed validation policy was called")
+
+    monkeypatch.setattr(profile_policy, "validation_policy", fail_config_policy)
+
+    bad_unit = _spray(pipeline, confirm=True, unit_ref="scheme:bad:L")
+    assert bad_unit["decisionOutcome"] == "RETAIN_DRAFT"
+    assert bad_unit["problems"][0]["title"] == "Explicit dose unit unresolved"
+
+    partial = demo.spray_submission(
+        f"d4-explicit-extent:{uid()}",
+        erp_id=f"erp:d4.explicit.extent.{uid()}",
+    )
+    partial["payload"]["executionExtent"] = {
+        "extentClass": "PARTIAL_TARGET_SCOPE",
+        "targetScope": {"scopeType": "FIELD", "scopeRef": demo.FIELD},
+        "extentBasisStatus": "OPERATOR_SKETCH",
+    }
+    extent = pipeline.commit(partial)
+    assert extent["decisionOutcome"] == "RETAIN_DRAFT"
+    assert extent["problems"][0]["title"] == "Explicit extent bound missing"
+    assert "explicit treated area" in extent["problems"][0]["detail"]
+
+    missing_product = _spray(
+        pipeline,
+        confirm=True,
+        binding_refs=[demo.CROP_BINDING],
+    )
+    assert missing_product["decisionOutcome"] == "REQUIRE_REVIEW"
+    assert any(p["title"] == "Explicit product binding review"
+               and p["detail"] == "explicit product state: MISSING"
+               for p in missing_product["problems"])
+
+
+def test_malformed_explicit_validator_policy_fails_closed(
+        pipeline, monkeypatch):
+    _use_explicit_operation_validation(monkeypatch, None)
+
+    r = _spray(pipeline, confirm=True)
+
+    assert r["decisionOutcome"] == "RETAIN_DRAFT"
+    problem = r["problems"][0]
+    assert problem["reasonCode"] == "PROFILE_NOT_ACTIVE"
+    assert "explicit validation policy must be a JSON object" in problem["detail"]
+
+
+def test_full_evidence_policy_doc_as_validator_policy_fails_closed(
+        pipeline, monkeypatch):
+    _use_explicit_operation_validation(monkeypatch, _policy_doc())
+
+    r = _spray(pipeline, confirm=True)
+
+    assert r["decisionOutcome"] == "RETAIN_DRAFT"
+    problem = r["problems"][0]
+    assert problem["reasonCode"] == "PROFILE_NOT_ACTIVE"
+    assert "quantityAndUnit" in problem["detail"]
+
+
 def test_non_whole_extent_missing_bound_uses_profile_validation_policy(
         pipeline, monkeypatch, tmp_path):
     doc = _policy_doc()
@@ -167,6 +273,23 @@ def test_non_whole_extent_missing_bound_uses_profile_validation_policy(
     assert problem["reasonCode"] == "EVIDENCE_INSUFFICIENT"
     assert problem["title"] == "Custom extent bound missing"
     assert "custom treated area" in problem["detail"]
+
+
+def test_compliance_validator_empty_recognized_refs_does_not_fallback(store):
+    sub = {"payload": {"complianceClaim": {
+        "statement": "fictional explicit empty recognized-rule set test",
+        "assertedStatus": "CLAIMED_COMPLIANT",
+        "governingRuleRefs": [config.EVIDENCE_POLICY_REF],
+        "subjectScopeRef": demo.FARM,
+    }}}
+    ctx = _FakeValidationContext(store, sub)
+
+    refusal = validators.ComplianceClaimValidator(
+        recognized_rule_refs=set()).run(ctx)
+
+    assert refusal is not None
+    assert refusal.problems[0]["reasonCode"] == "EVIDENCE_INSUFFICIENT"
+    assert "unknown" in refusal.problems[0]["detail"]
 
 
 def test_product_binding_review_uses_profile_validation_policy(

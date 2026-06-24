@@ -105,6 +105,17 @@ The MP3b helpers let future internals assemble context from an explicit active
 profile descriptor while preserving the current config-backed compatibility
 wrappers for the single-active-SI runtime.
 
+## MP3c Implementation Status
+
+MP3c implements explicit sufficiency and validator policy inputs only. It does
+not change context assembly, active profile selection, descriptor registry
+behavior, manifest generation, executed evidence, runtime adapters,
+ProductRegister behavior, active SI behavior, or second-profile activation.
+
+The MP3c helpers let future internals evaluate sufficiency and validation from
+explicit policy data while preserving the current config-backed compatibility
+wrappers for the single-active-SI runtime.
+
 ## Assertion-Equivalence Requirements
 
 Future MP3 implementation must preserve assertion-equivalence for unchanged SI
