@@ -74,8 +74,16 @@ For any future implementation touching `kernel/manifest.py`, active artifact
 sets, generated manifest outputs, or manifest tests, also run:
 
 ```sh
+python3 -m kernel.manifest --verify-generated
 .venv/bin/python -m pytest kernel/tests/ -q
 ```
+
+The manifest verification command is mandatory for generated-output or
+manifest-grounding changes. It must build the Capability Manifest and
+ActiveArtifactSet in memory, compare them to committed JSON, validate both
+schemas, run grounding checks, and fail on drift. The only approved volatile
+fields for comparison normalization are `publishedAt` on the manifest and
+`generatedAt` on the active artifact set.
 
 If a documentation-only PR accidentally creates
 `conformance/evidence/platform_mvp_results_*.json`, remove that new generated

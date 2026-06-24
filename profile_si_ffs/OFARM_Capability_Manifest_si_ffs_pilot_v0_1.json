@@ -200,7 +200,7 @@
   "conformance": {
     "minimumConformanceLevel": "NONE",
     "testSuiteRefs": [
-      "conformance:ofarm2.platform-mvp.tests-1-15.v0_1"
+      "conformance:ofarm2.platform-mvp.tests-1-15-plus-regressions.v0_2"
     ],
     "declaredProfileRefs": [
       "profile:si.ffs.recordkeeping.v0_1"

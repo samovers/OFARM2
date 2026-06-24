@@ -161,8 +161,14 @@ For any future implementation touching `kernel/manifest.py`, active artifact
 sets, or manifest tests, also run:
 
 ```sh
+python3 -m kernel.manifest --verify-generated
 .venv/bin/python -m pytest kernel/tests/ -q
 ```
+
+The generated-artifact verification command is non-writing. It verifies the
+committed Capability Manifest and ActiveArtifactSet against generator output
+after normalizing only `publishedAt` and `generatedAt`; any non-volatile drift is
+a stop condition unless the PR explicitly scopes a generated-output update.
 
 If a docs-only status PR accidentally creates
 `conformance/evidence/platform_mvp_results_*.json`, remove that new generated

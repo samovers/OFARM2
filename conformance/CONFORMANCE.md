@@ -1,6 +1,7 @@
 # Pilot conformance plan
 
-Two layers: **package self-check** (runs now) and the **platform MVP suite** (runs against the M1+ implementation).
+Two layers: **package self-check** (runs now) and the **platform MVP plus root
+conformance regression suite** (runs against the M1+ implementation).
 
 ## Conformance lanes
 
@@ -10,7 +11,7 @@ engineering tests from being read as the same kind of evidence:
 | Lane | Owner | Current artifact(s) | Meaning |
 |---|---|---|---|
 | `PACKAGE_SELF_CHECK` | Root `conformance/` | `conformance/ofarm_pkg_contract_check.py` | Repository/package parse, digest, and authored-instance validation. |
-| `PLATFORM_MVP_EXECUTED_EVIDENCE` | Root `conformance/evidence/` | `platform_mvp_results_*.json` | Timestamped output from the named platform MVP suite only. |
+| `PLATFORM_MVP_EXECUTED_EVIDENCE` | Root `conformance/evidence/` | `platform_mvp_results_*.json` | Timestamped output from the named root platform MVP plus root conformance regression suite only. |
 | `PLATFORM_MVP_FIXTURES` | Root `conformance/fixtures/` | Gate-sequencing fixtures | Canonical fixtures executed by root platform tests. |
 | `PROFILE_DESIGN_CASES` | Profile packages | NL GO + GLMC 7 design cases | Profile design inventories, not executed evidence. |
 | `PROFILE_ENGINEERING_TESTS` | Profile packages with root bridges | SI profile pytest modules | Engineering coverage discovered by root pytest, not platform MVP evidence. |
@@ -18,9 +19,8 @@ engineering tests from being read as the same kind of evidence:
 
 The detailed D7 lane design lives in
 `profile_si_ffs/extraction_inventory/conformance_lane_split_plan.md`. This root
-document is only the navigation and guard surface. It does not rename the
-platform MVP suite, move evidence, change pytest collection, or create a
-profile-local evidence writer.
+document is only the navigation and guard surface. It does not move evidence,
+change pytest collection, or create a profile-local evidence writer.
 
 ## Package self-check (now)
 
@@ -75,7 +75,13 @@ language aligned. It is not an L5 country-term allowlist.
 | `ai_assisted_submission_requires_human` | AI assistance never substitutes for the accountable human |
 | `submission_filing_full_gate_chain_allow` | The full chain allows when everything is satisfied |
 
-## Platform MVP suite (M1–M3 definition of done)
+## Platform MVP Plus Root Regression Suite
+
+The executed evidence suite id is
+`conformance:ofarm2.platform-mvp.tests-1-15-plus-regressions.v0_2`. It covers
+the M1-M3 platform MVP tests below plus root conformance regressions in
+`kernel/tests/test_conformance.py`. It does not include profile-local
+engineering tests, and it does not strengthen `minimumConformanceLevel`.
 
 | # | Test | Source |
 |---|------|--------|

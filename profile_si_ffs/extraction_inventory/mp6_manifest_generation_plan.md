@@ -83,6 +83,9 @@ A later implementation PR must:
 
 - state whether it changes runtime behavior, generated outputs, schema, tests,
   or evidence;
+- run `python3 -m kernel.manifest --verify-generated`, or an explicitly
+  approved equivalent, for any change touching manifest generation, committed
+  generated manifest JSON, active artifact sets, or manifest grounding tests;
 - keep the current SI manifest behavior assertion-equivalent unless the PR
   explicitly scopes an SI manifest change;
 - keep design-only slices, including `profile_nl_go_glmc7_2026`, out of active
@@ -136,6 +139,17 @@ python3 conformance/ofarm_pkg_contract_check.py
 git diff --check
 git diff --cached --check
 ```
+
+For future implementation PRs touching `kernel/manifest.py`, generated manifest
+JSON, active artifact sets, or manifest grounding tests, also run:
+
+```sh
+python3 -m kernel.manifest --verify-generated
+```
+
+The command must be non-writing by default and may normalize only `publishedAt`
+on the Capability Manifest and `generatedAt` on the ActiveArtifactSet. It must
+fail if committed generated artifacts differ from generator output.
 
 Do not run pytest unless a reviewer asks. If pytest is accidentally run and
 creates `conformance/evidence/platform_mvp_results_*.json`, remove that new

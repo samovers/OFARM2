@@ -21,10 +21,10 @@ PGBIN=$(dirname "$(which initdb)")        # e.g. /opt/homebrew/opt/postgresql@17
 # 3. the API (migrates + bootstraps the SI context spine on startup)
 .venv/bin/uvicorn --factory kernel.api:create_app --port 8800
 
-# 4. the test suites: conformance (tests 1-15 + the 8 fixtures replayed
-#    live; uses its own database ofarm_kernel_test, recreated per run;
-#    writes a JSON evidence file under conformance/evidence/) plus the
-#    stage-contract tests (policy tables, validator dispositions)
+# 4. the test suites: root conformance (tests 1-15 + regressions + the
+#    8 fixtures replayed live; uses its own database ofarm_kernel_test,
+#    recreated per run; writes a JSON evidence file under conformance/evidence/)
+#    plus the stage-contract tests (policy tables, validator dispositions)
 .venv/bin/python -m pytest kernel/tests/ -q
 
 # 5. the package self-check (before every commit — AGENTS.md rule 3)

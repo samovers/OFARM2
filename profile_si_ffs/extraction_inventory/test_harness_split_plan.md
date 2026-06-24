@@ -112,8 +112,8 @@ binding remains deployment or fixture binding, consistent with
 D6 did not split conformance evidence. D7 documented that lane separately.
 Current boundaries remain:
 
-- `kernel/tests/test_conformance.py` remains the named platform MVP executed
-  conformance suite;
+- `kernel/tests/test_conformance.py` remains the named platform MVP plus root
+  conformance regression executed suite;
 - `conformance/evidence/platform_mvp_results_*.json` remains root evidence;
 - profile-local design cases remain design cases unless later scoped work runs
   them and writes clearly labeled profile evidence;
