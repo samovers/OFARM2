@@ -65,6 +65,14 @@ MP7.1 must not:
 - change generated manifests or active artifact sets;
 - introduce a generic country abstraction layer.
 
+## MP7.1 Implementation Status
+
+MP7.1 is implemented as an explicit profile route record and resolver seam. The
+resolver still resolves only explicitly supplied route records against the
+current descriptor registry and selection inputs. It is not wired into
+`GatePipeline`, active-profile selection, manifests, evidence, adapters, or
+design-only profile packages.
+
 ## Fixed Implementation Sequence
 
 The MP7 runtime work should stop at this fixed sequence unless a reviewer finds
@@ -73,8 +81,8 @@ a blocker that directly affects one of these slices.
 | Slice | Purpose | Allowed change | Required proof | Stop condition |
 | --- | --- | --- | --- | --- |
 | MP7.1 | Route record and resolver seam. | Add route model/resolver in single-SI compatibility mode. | Existing SI route resolves to `profile_si_ffs`; non-SI or descriptorless routes fail closed. | Stop if the slice enables a second profile, uses navigation docs as route input, or changes manifest/evidence claims. |
-| MP7.2 | Route handoff into runtime gates. | Pass the resolved descriptor into pipeline, context, policy, validation, sufficiency, materialization, and output paths where a descriptor is already expected. | Default routed SI behavior is assertion-equivalent to current behavior. | Stop if any stage falls back to hidden global profile state after a route has been resolved. |
-| MP7.3 | Route isolation tests. | Add focused tests proving two route records cannot govern the same tenant/farm context and that design-only packages fail closed. | Ambiguous, missing, disabled, and descriptorless routes refuse governably. | Stop if tests rely on Netherlands or Serbia profile packages becoming runtime profiles. |
+| MP7.2 | Route handoff into runtime gates. | Pass the resolved descriptor into pipeline, context, policy, validation, sufficiency, advisory, materialization, output, and profile-sensitive adapter paths where a descriptor is already expected. | Default routed SI behavior is assertion-equivalent to current behavior. | Stop if any stage falls back to hidden global profile state after a route has been resolved. |
+| MP7.3 | Route isolation tests. | Add focused tests proving two active, overlapping route records cannot govern the same tenant/farm/effective-time context and that design-only packages fail closed. | Ambiguous, missing, disabled, and descriptorless routes refuse governably. | Stop if tests rely on Netherlands or Serbia profile packages becoming runtime profiles. |
 | MP7.4 | Candidate second-profile runtime preconditions. | Define, in executable checks, what a second profile must provide before activation: descriptor, policy, adapters, tests, evidence lane, and manifest grounding. | Candidate profile without every required surface remains inactive. | Stop if missing adapters, missing evidence, or missing manifest grounding are treated as warnings. |
 | MP7.5 | Manifest and evidence readiness gate. | Extend generator verification and evidence-lane checks only after a real candidate runtime profile exists. | Capability claims are generated or generator-verified from actual runtime surfaces. | Stop if profile engineering tests or design docs are relabeled as executed evidence. |
 | MP7.6 | Deliberate second-profile activation. | Activate a second runtime profile only behind explicit selection, enablement, and tenant/farm route records. | SI assertion-equivalence plus second-profile isolation and fail-closed route behavior. | Stop if same-farm multi-profile merge semantics are needed; that is outside MP7. |

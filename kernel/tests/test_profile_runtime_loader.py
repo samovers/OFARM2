@@ -14,6 +14,7 @@ import subprocess
 import sys
 from contextlib import contextmanager
 from dataclasses import replace
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 import uuid
@@ -30,10 +31,13 @@ from kernel.profile_runtime import (
     REFUSE_CONTEXT,
     DESCRIPTOR_FILENAME,
     ProfileRuntimeError,
+    ProfileRouteRecord,
     ReferenceFamily,
     load_active_profile_selection,
     load_profile_descriptor_registry,
     load_profile_runtime_descriptor,
+    profile_runtime_descriptor_identity,
+    resolve_profile_route,
     resolve_active_descriptor,
 )
 from kernel.store import Store
@@ -146,6 +150,22 @@ def _make_second_descriptor_unique(
 
 def _uid():
     return uuid.uuid4().hex[:8]
+
+
+def _si_route(**overrides) -> ProfileRouteRecord:
+    values = {
+        "route_id": f"profileroute:test.si.{_uid()}",
+        "tenant_ref": config.TENANT_REF,
+        "farm_ref": demo.FARM,
+        "profile_package_name": "profile_si_ffs",
+        "profile_ref": config.ACTIVE_PROFILE.profile_ref,
+        "pack_ref": config.ACTIVE_PROFILE.pack_ref,
+        "pack_activation_set_ref": config.ACTIVE_PROFILE.pack_activation_set_ref,
+        "active_artifact_set_ref": config.ACTIVE_PROFILE.active_artifact_set_ref,
+        "descriptor_identity": profile_runtime_descriptor_identity(config.ACTIVE_PROFILE),
+    }
+    values.update(overrides)
+    return ProfileRouteRecord(**values)
 
 
 def _admin_dsn() -> str:
@@ -700,6 +720,261 @@ def test_active_profile_selection_uses_registry_and_preserves_si_activation():
     assert selected.profile_roots == (config.PROFILE_ROOT,)
     assert selected.active_profile.profile_ref == config.ACTIVE_PROFILE.profile_ref
     assert selected.active_profile.pack_ref == config.ACTIVE_PROFILE.pack_ref
+
+
+def test_profile_route_resolves_current_si_descriptor():
+    registry = load_profile_descriptor_registry(
+        config.PACKAGE_ROOT,
+        allowed_profile_package_names=config.ALLOWED_ACTIVE_PROFILE_PACKAGE_NAMES,
+    )
+    route = _si_route()
+
+    resolution = resolve_profile_route(
+        registry,
+        config.ACTIVE_PROFILE_PACKAGE_NAMES,
+        [route],
+        tenant_ref=config.TENANT_REF,
+        farm_ref=demo.FARM,
+    )
+
+    assert resolution.route == route
+    assert resolution.candidate.package_name == "profile_si_ffs"
+    assert resolution.descriptor == config.ACTIVE_PROFILE
+    assert resolution.effective_time is None
+
+
+@pytest.mark.parametrize("package_name", [
+    "profile_nl_go_glmc7_2026",
+    "profile_rs_organic_crop",
+])
+def test_profile_route_rejects_design_only_descriptorless_packages(package_name):
+    if not (config.PACKAGE_ROOT / package_name).exists():
+        pytest.skip(f"{package_name} is not present in this checkout")
+    registry = load_profile_descriptor_registry(
+        config.PACKAGE_ROOT,
+        allowed_profile_package_names=("profile_si_ffs", package_name),
+    )
+    route = _si_route(profile_package_name=package_name)
+
+    with pytest.raises(ProfileRuntimeError):
+        resolve_profile_route(
+            registry,
+            ("profile_si_ffs", package_name),
+            [route],
+            tenant_ref=config.TENANT_REF,
+            farm_ref=demo.FARM,
+        )
+
+
+def test_profile_route_rejects_package_not_enabled():
+    registry = load_profile_descriptor_registry(
+        config.PACKAGE_ROOT,
+        allowed_profile_package_names=("profile_other_runtime",),
+    )
+
+    with pytest.raises(ProfileRuntimeError, match="not enabled"):
+        resolve_profile_route(
+            registry,
+            ("profile_si_ffs",),
+            [_si_route()],
+            tenant_ref=config.TENANT_REF,
+            farm_ref=demo.FARM,
+        )
+
+
+def test_profile_route_rejects_package_not_selected():
+    registry = load_profile_descriptor_registry(
+        config.PACKAGE_ROOT,
+        allowed_profile_package_names=config.ALLOWED_ACTIVE_PROFILE_PACKAGE_NAMES,
+    )
+
+    with pytest.raises(ProfileRuntimeError, match="not selected"):
+        resolve_profile_route(
+            registry,
+            ("profile_other_runtime",),
+            [_si_route()],
+            tenant_ref=config.TENANT_REF,
+            farm_ref=demo.FARM,
+        )
+
+
+@pytest.mark.parametrize("field,value,match", [
+    ("profile_ref", "profile:si.ffs.route-mismatch.v0_1", "profile_ref"),
+    ("pack_ref", "pack:si.ffs.route-mismatch.v0_1", "pack_ref"),
+    (
+        "pack_activation_set_ref",
+        "packactivationset:si.ffs.route-mismatch.v0_1",
+        "pack_activation_set_ref",
+    ),
+    (
+        "active_artifact_set_ref",
+        "activeartifactset:si.ffs.route-mismatch.v0_1",
+        "active_artifact_set_ref",
+    ),
+])
+def test_profile_route_rejects_descriptor_ref_mismatch(field, value, match):
+    registry = load_profile_descriptor_registry(
+        config.PACKAGE_ROOT,
+        allowed_profile_package_names=config.ALLOWED_ACTIVE_PROFILE_PACKAGE_NAMES,
+    )
+    route = replace(_si_route(), **{field: value})
+
+    with pytest.raises(ProfileRuntimeError, match=match):
+        resolve_profile_route(
+            registry,
+            config.ACTIVE_PROFILE_PACKAGE_NAMES,
+            [route],
+            tenant_ref=config.TENANT_REF,
+            farm_ref=demo.FARM,
+        )
+
+
+def test_profile_route_rejects_descriptor_identity_mismatch():
+    registry = load_profile_descriptor_registry(
+        config.PACKAGE_ROOT,
+        allowed_profile_package_names=config.ALLOWED_ACTIVE_PROFILE_PACKAGE_NAMES,
+    )
+    route = _si_route(descriptor_identity="profile_si_ffs/runtime_profile_descriptor.json#bad")
+
+    with pytest.raises(ProfileRuntimeError, match="descriptor identity"):
+        resolve_profile_route(
+            registry,
+            config.ACTIVE_PROFILE_PACKAGE_NAMES,
+            [route],
+            tenant_ref=config.TENANT_REF,
+            farm_ref=demo.FARM,
+        )
+
+
+def test_profile_route_requires_one_active_matching_route():
+    registry = load_profile_descriptor_registry(
+        config.PACKAGE_ROOT,
+        allowed_profile_package_names=config.ALLOWED_ACTIVE_PROFILE_PACKAGE_NAMES,
+    )
+
+    with pytest.raises(ProfileRuntimeError, match="no active profile route"):
+        resolve_profile_route(
+            registry,
+            config.ACTIVE_PROFILE_PACKAGE_NAMES,
+            [],
+            tenant_ref=config.TENANT_REF,
+            farm_ref=demo.FARM,
+        )
+    with pytest.raises(ProfileRuntimeError, match="multiple active overlapping"):
+        resolve_profile_route(
+            registry,
+            config.ACTIVE_PROFILE_PACKAGE_NAMES,
+            [_si_route(), _si_route()],
+            tenant_ref=config.TENANT_REF,
+            farm_ref=demo.FARM,
+        )
+
+
+@pytest.mark.parametrize("status", ["DRAFT", "RETIRED", "REVOKED"])
+def test_profile_route_inactive_records_do_not_count_as_matches(status):
+    registry = load_profile_descriptor_registry(
+        config.PACKAGE_ROOT,
+        allowed_profile_package_names=config.ALLOWED_ACTIVE_PROFILE_PACKAGE_NAMES,
+    )
+
+    with pytest.raises(ProfileRuntimeError, match="no active profile route"):
+        resolve_profile_route(
+            registry,
+            config.ACTIVE_PROFILE_PACKAGE_NAMES,
+            [_si_route(status=status)],
+            tenant_ref=config.TENANT_REF,
+            farm_ref=demo.FARM,
+        )
+
+
+def test_profile_route_validates_inactive_record_structure():
+    registry = load_profile_descriptor_registry(
+        config.PACKAGE_ROOT,
+        allowed_profile_package_names=config.ALLOWED_ACTIVE_PROFILE_PACKAGE_NAMES,
+    )
+
+    with pytest.raises(ProfileRuntimeError, match="route.route_id"):
+        resolve_profile_route(
+            registry,
+            config.ACTIVE_PROFILE_PACKAGE_NAMES,
+            [_si_route(route_id="not-a-ref", status="DRAFT")],
+            tenant_ref=config.TENANT_REF,
+            farm_ref=demo.FARM,
+        )
+
+
+def test_profile_route_effective_time_uses_half_open_intervals():
+    registry = load_profile_descriptor_registry(
+        config.PACKAGE_ROOT,
+        allowed_profile_package_names=config.ALLOWED_ACTIVE_PROFILE_PACKAGE_NAMES,
+    )
+    t0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    t1 = datetime(2026, 6, 1, tzinfo=timezone.utc)
+    t2 = datetime(2027, 1, 1, tzinfo=timezone.utc)
+    first = _si_route(
+        route_id=f"profileroute:test.si.first.{_uid()}",
+        effective_from=t0,
+        effective_until=t1,
+    )
+    second = _si_route(
+        route_id=f"profileroute:test.si.second.{_uid()}",
+        effective_from=t1,
+        effective_until=t2,
+    )
+
+    at_start = resolve_profile_route(
+        registry,
+        config.ACTIVE_PROFILE_PACKAGE_NAMES,
+        [first, second],
+        tenant_ref=config.TENANT_REF,
+        farm_ref=demo.FARM,
+        effective_time=t0,
+    )
+    at_boundary = resolve_profile_route(
+        registry,
+        config.ACTIVE_PROFILE_PACKAGE_NAMES,
+        [first, second],
+        tenant_ref=config.TENANT_REF,
+        farm_ref=demo.FARM,
+        effective_time=t1,
+    )
+
+    assert at_start.route == first
+    assert at_boundary.route == second
+    with pytest.raises(ProfileRuntimeError, match="no active profile route"):
+        resolve_profile_route(
+            registry,
+            config.ACTIVE_PROFILE_PACKAGE_NAMES,
+            [first, second],
+            tenant_ref=config.TENANT_REF,
+            farm_ref=demo.FARM,
+        )
+
+
+def test_profile_route_rejects_malformed_time_values():
+    registry = load_profile_descriptor_registry(
+        config.PACKAGE_ROOT,
+        allowed_profile_package_names=config.ALLOWED_ACTIVE_PROFILE_PACKAGE_NAMES,
+    )
+    aware = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    naive = datetime(2026, 1, 1)
+
+    with pytest.raises(ProfileRuntimeError, match="timezone-aware"):
+        resolve_profile_route(
+            registry,
+            config.ACTIVE_PROFILE_PACKAGE_NAMES,
+            [_si_route(effective_from=naive)],
+            tenant_ref=config.TENANT_REF,
+            farm_ref=demo.FARM,
+        )
+    with pytest.raises(ProfileRuntimeError, match="earlier than effective_until"):
+        resolve_profile_route(
+            registry,
+            config.ACTIVE_PROFILE_PACKAGE_NAMES,
+            [_si_route(effective_from=aware, effective_until=aware)],
+            tenant_ref=config.TENANT_REF,
+            farm_ref=demo.FARM,
+        )
 
 
 @pytest.mark.parametrize("selection,match", [
