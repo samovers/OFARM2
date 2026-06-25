@@ -6,10 +6,12 @@ stays outside the required descriptor.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -37,6 +39,17 @@ _DESCRIPTOR_KEYS = {
     "contextSnapshotIdPrefix",
 }
 _DESCRIPTOR_REQUIRED = _DESCRIPTOR_KEYS
+
+ROUTE_STATUS_ACTIVE = "ACTIVE"
+ROUTE_STATUS_DRAFT = "DRAFT"
+ROUTE_STATUS_RETIRED = "RETIRED"
+ROUTE_STATUS_REVOKED = "REVOKED"
+_ROUTE_STATUSES = {
+    ROUTE_STATUS_ACTIVE,
+    ROUTE_STATUS_DRAFT,
+    ROUTE_STATUS_RETIRED,
+    ROUTE_STATUS_REVOKED,
+}
 
 _REFERENCE_FAMILY_KEYS = {
     "familyId",
@@ -140,6 +153,30 @@ class ActiveProfileSelection:
         return self.descriptors[0]
 
 
+@dataclass(frozen=True)
+class ProfileRouteRecord:
+    route_id: str
+    tenant_ref: str
+    farm_ref: str
+    profile_package_name: str
+    profile_ref: str
+    pack_ref: str
+    pack_activation_set_ref: str
+    active_artifact_set_ref: str
+    descriptor_identity: str | None = None
+    effective_from: datetime | None = None
+    effective_until: datetime | None = None
+    status: str = ROUTE_STATUS_ACTIVE
+
+
+@dataclass(frozen=True)
+class ProfileRouteResolution:
+    route: ProfileRouteRecord
+    candidate: ProfileDescriptorCandidate
+    descriptor: ProfileRuntimeDescriptor
+    effective_time: datetime | None
+
+
 def resolve_active_descriptor(
     active_descriptor=None,
     *,
@@ -156,6 +193,91 @@ def resolve_active_descriptor(
         raise ProfileRuntimeError("active runtime descriptor is required")
     from . import config
     return config.ACTIVE_PROFILE
+
+
+def profile_runtime_descriptor_identity(
+    descriptor: ProfileRuntimeDescriptor,
+) -> str:
+    """Deterministic identity for route-to-descriptor pinning.
+
+    The identity intentionally combines the descriptor's profile-local path and
+    its current bytes. Package names and refs remain necessary route fields, but
+    the digest prevents a route from silently tracking changed descriptor
+    content when the route chose to pin an identity.
+    """
+    try:
+        profile_root = descriptor.profile_root.resolve()
+        descriptor_path = descriptor.descriptor_path.resolve(strict=True)
+        rel = descriptor_path.relative_to(profile_root)
+        digest = hashlib.sha256(descriptor_path.read_bytes()).hexdigest()
+    except (AttributeError, OSError, ValueError) as exc:
+        raise ProfileRuntimeError("profile runtime descriptor identity is unavailable") from exc
+    return f"{descriptor.profile_root.name}/{rel.as_posix()}#{digest}"
+
+
+def resolve_profile_route(
+    registry: ProfileDescriptorRegistry,
+    selected_profile_package_names: Sequence[str],
+    route_records: Sequence[ProfileRouteRecord],
+    *,
+    tenant_ref: str,
+    farm_ref: str,
+    effective_time: datetime | None = None,
+) -> ProfileRouteResolution:
+    """Resolve one active route for a governed tenant/farm context.
+
+    MP7.1 deliberately keeps all inputs explicit. This function does not read
+    environment variables, `kernel.config`, or navigation/design artifacts.
+    """
+    if not isinstance(registry, ProfileDescriptorRegistry):
+        raise ProfileRuntimeError("profile route resolution requires a descriptor registry")
+    selected = set(_profile_package_names(selected_profile_package_names))
+    routes = _profile_route_records(route_records)
+    _validate_ref(tenant_ref, "tenant_ref")
+    _validate_ref(farm_ref, "farm_ref")
+    _validate_route_time(effective_time, "effective_time")
+
+    matches = [
+        route for route in routes
+        if _route_matches_context(
+            route,
+            tenant_ref=tenant_ref,
+            farm_ref=farm_ref,
+            effective_time=effective_time,
+        )
+    ]
+    if not matches:
+        raise ProfileRuntimeError(
+            "no active profile route for tenant/farm/effective-time context")
+    if len(matches) != 1:
+        raise ProfileRuntimeError(
+            "multiple active overlapping profile routes for "
+            "tenant/farm/effective-time context")
+
+    route = matches[0]
+    candidate = registry.candidate_for(route.profile_package_name)
+    if candidate is None:
+        raise ProfileRuntimeError(
+            f"profile route {route.route_id!r} targets package "
+            f"{route.profile_package_name!r} with no {DESCRIPTOR_FILENAME}; "
+            "design-only profile slices are not active runtime profiles")
+    if not candidate.enabled:
+        raise ProfileRuntimeError(
+            f"profile route {route.route_id!r} targets package "
+            f"{route.profile_package_name!r} that is not enabled for this runtime")
+    if route.profile_package_name not in selected:
+        raise ProfileRuntimeError(
+            f"profile route {route.route_id!r} targets package "
+            f"{route.profile_package_name!r} that is not selected for this runtime")
+
+    descriptor = candidate.descriptor
+    _assert_route_matches_descriptor(route, descriptor)
+    return ProfileRouteResolution(
+        route=route,
+        candidate=candidate,
+        descriptor=descriptor,
+        effective_time=effective_time,
+    )
 
 
 def load_active_profile_selection(
@@ -365,6 +487,94 @@ def _profile_package_names(profile_package_names: Sequence[str]) -> tuple[str, .
     for name in names:
         _validate_profile_package_name(name)
     return names
+
+
+def _profile_route_records(
+    route_records: Sequence[ProfileRouteRecord],
+) -> tuple[ProfileRouteRecord, ...]:
+    if route_records is None or isinstance(route_records, (str, bytes)):
+        raise ProfileRuntimeError("profile route records must be a sequence")
+    routes = tuple(route_records)
+    for route in routes:
+        _validate_profile_route_record(route)
+    return routes
+
+
+def _validate_profile_route_record(route: ProfileRouteRecord) -> None:
+    if not isinstance(route, ProfileRouteRecord):
+        raise ProfileRuntimeError("profile route records must be ProfileRouteRecord values")
+    _validate_ref(route.route_id, "route.route_id")
+    _validate_ref(route.tenant_ref, "route.tenant_ref")
+    _validate_ref(route.farm_ref, "route.farm_ref")
+    _validate_profile_package_name(route.profile_package_name)
+    _validate_ref(route.profile_ref, "route.profile_ref")
+    _validate_ref(route.pack_ref, "route.pack_ref")
+    _validate_ref(route.pack_activation_set_ref, "route.pack_activation_set_ref")
+    _validate_ref(route.active_artifact_set_ref, "route.active_artifact_set_ref")
+    if route.descriptor_identity is not None:
+        if not isinstance(route.descriptor_identity, str) or not route.descriptor_identity:
+            raise ProfileRuntimeError("route.descriptor_identity must be a non-empty string")
+    if route.status not in _ROUTE_STATUSES:
+        raise ProfileRuntimeError(
+            f"profile route status must be one of {sorted(_ROUTE_STATUSES)}")
+    _validate_route_time(route.effective_from, "route.effective_from")
+    _validate_route_time(route.effective_until, "route.effective_until")
+    if (route.effective_from is not None and route.effective_until is not None
+            and route.effective_from >= route.effective_until):
+        raise ProfileRuntimeError(
+            "profile route effective_from must be earlier than effective_until")
+
+
+def _validate_route_time(value: datetime | None, field: str) -> None:
+    if value is None:
+        return
+    if not isinstance(value, datetime):
+        raise ProfileRuntimeError(f"{field} must be a datetime or None")
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ProfileRuntimeError(f"{field} must be timezone-aware")
+
+
+def _route_matches_context(
+    route: ProfileRouteRecord,
+    *,
+    tenant_ref: str,
+    farm_ref: str,
+    effective_time: datetime | None,
+) -> bool:
+    if route.status != ROUTE_STATUS_ACTIVE:
+        return False
+    if route.tenant_ref != tenant_ref or route.farm_ref != farm_ref:
+        return False
+    if effective_time is None:
+        return route.effective_from is None and route.effective_until is None
+    if route.effective_from is not None and route.effective_from > effective_time:
+        return False
+    if route.effective_until is not None and effective_time >= route.effective_until:
+        return False
+    return True
+
+
+def _assert_route_matches_descriptor(
+    route: ProfileRouteRecord,
+    descriptor: ProfileRuntimeDescriptor,
+) -> None:
+    expected = {
+        "profile_ref": descriptor.profile_ref,
+        "pack_ref": descriptor.pack_ref,
+        "pack_activation_set_ref": descriptor.pack_activation_set_ref,
+        "active_artifact_set_ref": descriptor.active_artifact_set_ref,
+    }
+    for field, value in expected.items():
+        if getattr(route, field) != value:
+            raise ProfileRuntimeError(
+                f"profile route {route.route_id!r} {field} does not match "
+                "the routed descriptor")
+    if route.descriptor_identity is not None:
+        actual = profile_runtime_descriptor_identity(descriptor)
+        if route.descriptor_identity != actual:
+            raise ProfileRuntimeError(
+                f"profile route {route.route_id!r} descriptor identity does "
+                "not match the routed descriptor")
 
 
 def _validate_profile_package_name(package_name: str) -> None:
