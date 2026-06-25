@@ -192,6 +192,18 @@ def _route_pipeline(store, *, routes=None, registry=None, selected=None, tenant=
     )
 
 
+def _assert_profile_route_refusal(store, result: dict) -> dict:
+    assert result["decisionOutcome"] == "RETAIN_DRAFT"
+    assert result["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+    trace = _trace_payload(store, result)
+    assert [entry["gate"] for entry in trace["gateSequence"]] == [
+        "INGRESS_NORMALIZATION",
+        "PACK_PROFILE_APPLICABILITY",
+    ]
+    assert trace["gateSequence"][-1]["outcome"] == "PROFILE_ROUTE_REFUSE"
+    return trace
+
+
 def _admin_dsn() -> str:
     explicit = os.environ.get("OFARM_PG_ADMIN_DSN")
     if explicit:
@@ -927,6 +939,22 @@ def test_profile_route_validates_inactive_record_structure():
         )
 
 
+def test_profile_route_rejects_scalar_route_records():
+    registry = load_profile_descriptor_registry(
+        config.PACKAGE_ROOT,
+        allowed_profile_package_names=config.ALLOWED_ACTIVE_PROFILE_PACKAGE_NAMES,
+    )
+
+    with pytest.raises(ProfileRuntimeError, match="must be a sequence"):
+        resolve_profile_route(
+            registry,
+            config.ACTIVE_PROFILE_PACKAGE_NAMES,
+            123,
+            tenant_ref=config.TENANT_REF,
+            farm_ref=demo.FARM,
+        )
+
+
 @pytest.mark.parametrize("route,match", [
     (_si_route(profile_package_name="contracts"), "profile_"),
     (_si_route(status="PAUSED"), "status"),
@@ -1540,6 +1568,23 @@ def test_gate_pipeline_default_sequence_remains_unrouted(fresh_env):
     assert gates[:2] == ["INGRESS_NORMALIZATION", "AUTHORITY"]
 
 
+def test_gate_pipeline_default_missing_farm_ref_still_fails_before_route(
+        fresh_env):
+    store, pipeline, _ = fresh_env
+    sub = demo.spray_submission(
+        f"mp7-default-missing-farm:{_uid()}",
+        erp_id=f"erp:mp7.default.missing-farm.{_uid()}",
+        confirm=True,
+    )
+    del sub["farmRef"]
+    before = len(store.find_by_kind("ofarm.promotiontrace.v0.1"))
+
+    with pytest.raises(KeyError, match="farmRef"):
+        pipeline.commit(sub)
+
+    assert len(store.find_by_kind("ofarm.promotiontrace.v0.1")) == before
+
+
 @pytest.mark.parametrize("kwargs", [
     {"profile_route_records": [_si_route()]},
     {"profile_route_registry": _route_registry()},
@@ -1607,12 +1652,7 @@ def test_route_backed_gate_pipeline_refuses_route_resolution_failures(
     assert result["decisionOutcome"] == "RETAIN_DRAFT"
     assert result["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
     assert match in result["problems"][0]["detail"]
-    trace = _trace_payload(store, result)
-    assert [entry["gate"] for entry in trace["gateSequence"]] == [
-        "INGRESS_NORMALIZATION",
-        "PACK_PROFILE_APPLICABILITY",
-    ]
-    assert trace["gateSequence"][-1]["outcome"] == "PROFILE_ROUTE_REFUSE"
+    _assert_profile_route_refusal(store, result)
 
 
 def test_route_backed_gate_pipeline_refuses_missing_farm_context(fresh_env):
@@ -1627,14 +1667,168 @@ def test_route_backed_gate_pipeline_refuses_missing_farm_context(fresh_env):
 
     result = pipeline.commit(sub)
 
-    assert result["decisionOutcome"] == "RETAIN_DRAFT"
-    assert result["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
-    trace = _trace_payload(store, result)
-    assert [entry["gate"] for entry in trace["gateSequence"]] == [
-        "INGRESS_NORMALIZATION",
-        "PACK_PROFILE_APPLICABILITY",
-    ]
-    assert trace["gateSequence"][-1]["outcome"] == "PROFILE_ROUTE_REFUSE"
+    _assert_profile_route_refusal(store, result)
+
+
+def test_route_backed_gate_pipeline_refuses_farm_ref_scope_mismatch(fresh_env):
+    store, _, _ = fresh_env
+    pipeline = _route_pipeline(store)
+    sub = demo.spray_submission(
+        f"mp7-route-farm-mismatch:{_uid()}",
+        erp_id=f"erp:mp7.route.farm-mismatch.{_uid()}",
+        confirm=True,
+    )
+    sub["farmRef"] = "farm:demo.other"
+    sub["targetScopes"] = [{"scopeType": "FARM", "scopeRef": demo.FARM}]
+
+    result = pipeline.commit(sub)
+
+    assert "must match the top-level submission farmRef" in \
+        result["problems"][0]["detail"]
+    _assert_profile_route_refusal(store, result)
+
+
+@pytest.mark.parametrize("scopes", [
+    [
+        {"scopeType": "FARM", "scopeRef": demo.FARM},
+        {"scopeType": "FARM", "scopeRef": demo.FARM},
+    ],
+    [
+        {"scopeType": "FARM", "scopeRef": demo.FARM},
+        {"scopeType": "FARM", "scopeRef": "farm:demo.other"},
+    ],
+])
+def test_route_backed_gate_pipeline_refuses_multiple_farm_scope_entries(
+        fresh_env, scopes):
+    store, _, _ = fresh_env
+    pipeline = _route_pipeline(store)
+    sub = demo.spray_submission(
+        f"mp7-route-multiple-farm:{_uid()}",
+        erp_id=f"erp:mp7.route.multiple-farm.{_uid()}",
+        confirm=True,
+    )
+    sub["targetScopes"] = scopes
+
+    result = pipeline.commit(sub)
+
+    assert "exactly one FARM anchor scope entry" in result["problems"][0]["detail"]
+    _assert_profile_route_refusal(store, result)
+
+
+@pytest.mark.parametrize("malformed_farm_scope", [
+    {"scopeType": "FARM"},
+    {"scopeType": "FARM", "scopeRef": ""},
+])
+def test_route_backed_gate_pipeline_counts_malformed_farm_scope_entries(
+        fresh_env, malformed_farm_scope):
+    store, _, _ = fresh_env
+    pipeline = _route_pipeline(store)
+    sub = demo.spray_submission(
+        f"mp7-route-malformed-farm:{_uid()}",
+        erp_id=f"erp:mp7.route.malformed-farm.{_uid()}",
+        confirm=True,
+    )
+
+    with store.tx() as cur:
+        ctx = pipeline._new_context(cur, sub)
+        ctx.envelope = {
+            "anchorScopes": [
+                {"scopeType": "FARM", "scopeRef": demo.FARM},
+                malformed_farm_scope,
+            ],
+        }
+        outcome = pipeline._resolve_profile_route(ctx)
+
+    assert outcome.final_outcome == "RETAIN_DRAFT"
+    assert outcome.problems[0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+    assert "exactly one FARM anchor scope entry" in outcome.problems[0]["detail"]
+    assert ctx.gate_sequence[-1]["gate"] == "PACK_PROFILE_APPLICABILITY"
+    assert ctx.gate_sequence[-1]["outcome"] == "PROFILE_ROUTE_REFUSE"
+
+
+def test_route_backed_gate_pipeline_refuses_same_context_time_bounded_route(
+        fresh_env):
+    store, _, _ = fresh_env
+    t0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    pipeline = _route_pipeline(
+        store,
+        routes=[
+            _si_route(effective_from=t0),
+            _si_route(route_id=f"profileroute:test.si.timeless.{_uid()}"),
+        ],
+    )
+
+    result = pipeline.commit(demo.spray_submission(
+        f"mp7-route-time-bound:{_uid()}",
+        erp_id=f"erp:mp7.route.time-bound.{_uid()}",
+        confirm=True,
+    ))
+
+    assert "time-bounded profile routes" in result["problems"][0]["detail"]
+    _assert_profile_route_refusal(store, result)
+
+
+def test_route_backed_gate_pipeline_ignores_other_farm_time_bounded_route(
+        fresh_env):
+    store, _, _ = fresh_env
+    t0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    pipeline = _route_pipeline(
+        store,
+        routes=[
+            _si_route(farm_ref="farm:demo.other", effective_from=t0),
+            _si_route(route_id=f"profileroute:test.si.timeless.{_uid()}"),
+        ],
+    )
+
+    result = pipeline.commit(demo.spray_submission(
+        f"mp7-route-other-farm-time:{_uid()}",
+        erp_id=f"erp:mp7.route.other-farm-time.{_uid()}",
+        confirm=True,
+    ))
+
+    assert result["decisionOutcome"] == "PROMOTE_ACCEPTED"
+
+
+def test_route_backed_gate_pipeline_ignores_other_tenant_time_bounded_route(
+        fresh_env):
+    store, _, _ = fresh_env
+    t0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    pipeline = _route_pipeline(
+        store,
+        routes=[
+            _si_route(tenant_ref="tenant:demo.other", effective_from=t0),
+            _si_route(route_id=f"profileroute:test.si.timeless.{_uid()}"),
+        ],
+    )
+
+    result = pipeline.commit(demo.spray_submission(
+        f"mp7-route-other-tenant-time:{_uid()}",
+        erp_id=f"erp:mp7.route.other-tenant-time.{_uid()}",
+        confirm=True,
+    ))
+
+    assert result["decisionOutcome"] == "PROMOTE_ACCEPTED"
+
+
+def test_route_backed_gate_pipeline_ignores_inactive_time_bounded_route(
+        fresh_env):
+    store, _, _ = fresh_env
+    t0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    pipeline = _route_pipeline(
+        store,
+        routes=[
+            _si_route(status="DRAFT", effective_from=t0),
+            _si_route(route_id=f"profileroute:test.si.timeless.{_uid()}"),
+        ],
+    )
+
+    result = pipeline.commit(demo.spray_submission(
+        f"mp7-route-inactive-time:{_uid()}",
+        erp_id=f"erp:mp7.route.inactive-time.{_uid()}",
+        confirm=True,
+    ))
+
+    assert result["decisionOutcome"] == "PROMOTE_ACCEPTED"
 
 
 @pytest.mark.parametrize("package_name", [

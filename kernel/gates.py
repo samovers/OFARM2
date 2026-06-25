@@ -33,8 +33,9 @@ from .contracts import sha256_of
 from .emission import PromotionTraceWriter, ReplayWriter
 from .materializer import Materializer
 from .problems import runtime_problem
-from .profile_runtime import (ProfileRuntimeError, resolve_active_descriptor,
-                              resolve_profile_route)
+from .profile_runtime import (ProfileRuntimeError,
+                              active_time_bounded_profile_routes,
+                              resolve_active_descriptor, resolve_profile_route)
 from .stages import (AuthorityGate, EnvelopePersist, EvidenceSufficiencyGate,
                      GateContext, GateRefusal, GateReplay, IngressNormalizer,
                      MaterializationGate, ProfileApplicabilityGate,
@@ -163,17 +164,36 @@ class GatePipeline:
     @staticmethod
     def _route_farm_ref(ctx: GateContext) -> str:
         scopes = ((ctx.envelope or {}).get("anchorScopes") or [])
-        farm_refs = [
-            scope.get("scopeRef") for scope in scopes
+        farm_scopes = [
+            scope for scope in scopes
             if isinstance(scope, dict) and scope.get("scopeType") == "FARM"
-            and scope.get("scopeRef")
         ]
-        unique = tuple(dict.fromkeys(farm_refs))
-        if len(unique) != 1:
+        if len(farm_scopes) != 1:
             raise ProfileRuntimeError(
-                "profile route resolution requires exactly one governed farm "
-                "scope in the normalized submission envelope")
-        return unique[0]
+                "profile route resolution requires exactly one FARM anchor "
+                "scope entry in the normalized submission envelope")
+        farm_ref = farm_scopes[0].get("scopeRef")
+        if not farm_ref:
+            raise ProfileRuntimeError(
+                "profile route FARM anchor scope must include scopeRef")
+        if farm_ref != ctx.farm_ref:
+            raise ProfileRuntimeError(
+                "profile route FARM anchor scope must match the top-level "
+                "submission farmRef")
+        return farm_ref
+
+    def _assert_timeless_route_runtime(self, farm_ref: str) -> None:
+        unsupported = active_time_bounded_profile_routes(
+            self.profile_route_records,
+            tenant_ref=self.tenant_ref,
+            farm_ref=farm_ref,
+        )
+        if unsupported:
+            route_ids = ", ".join(route.route_id for route in unsupported)
+            raise ProfileRuntimeError(
+                "route-backed runtime does not support active time-bounded "
+                "profile routes before an accepted route-evaluation time "
+                f"policy exists: {route_ids}")
 
     def _bind_route_resolution(self, ctx: GateContext, resolution) -> None:
         descriptor = resolution.descriptor
@@ -194,6 +214,7 @@ class GatePipeline:
     def _resolve_profile_route(self, ctx: GateContext):
         try:
             farm_ref = self._route_farm_ref(ctx)
+            self._assert_timeless_route_runtime(farm_ref)
             resolution = resolve_profile_route(
                 self.profile_route_registry,
                 self.selected_profile_package_names,
