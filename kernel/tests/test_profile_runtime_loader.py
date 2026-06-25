@@ -31,8 +31,10 @@ from kernel.profile_runtime import (
     REFUSE_CONTEXT,
     DESCRIPTOR_FILENAME,
     ProfileRuntimeError,
+    ProfileRuntimeSurfaceInventory,
     ProfileRouteRecord,
     ReferenceFamily,
+    evaluate_profile_runtime_preconditions,
     load_active_profile_selection,
     load_profile_descriptor_registry,
     load_profile_runtime_descriptor,
@@ -177,6 +179,16 @@ def _route_registry(*, enabled=None):
             config.ALLOWED_ACTIVE_PROFILE_PACKAGE_NAMES
             if enabled is None else enabled
         ),
+    )
+
+
+def _surface_inventory(*package_names: str) -> ProfileRuntimeSurfaceInventory:
+    packages = frozenset(package_names)
+    return ProfileRuntimeSurfaceInventory(
+        adapter_supported_package_names=packages,
+        harness_covered_package_names=packages,
+        profile_executed_evidence_lane_package_names=packages,
+        generated_or_verified_manifest_grounding_package_names=packages,
     )
 
 
@@ -766,6 +778,192 @@ def test_active_profile_selection_uses_registry_and_preserves_si_activation():
     assert selected.profile_roots == (config.PROFILE_ROOT,)
     assert selected.active_profile.profile_ref == config.ACTIVE_PROFILE.profile_ref
     assert selected.active_profile.pack_ref == config.ACTIVE_PROFILE.pack_ref
+
+
+def test_profile_runtime_preconditions_return_invalid_package_blocker():
+    result = evaluate_profile_runtime_preconditions(
+        _route_registry(),
+        "../profile_si_ffs",
+        config.ACTIVE_PROFILE_PACKAGE_NAMES,
+        _surface_inventory("profile_si_ffs"),
+    )
+
+    assert result.package_name == "../profile_si_ffs"
+    assert result.preconditions_satisfied is False
+    assert result.blocking_reason_codes == ("INVALID_PACKAGE_NAME",)
+
+
+@pytest.mark.parametrize("package_name", [
+    "profile_nl_go_glmc7_2026",
+    "profile_rs_organic_crop",
+])
+def test_profile_runtime_preconditions_block_descriptorless_design_packages(
+        package_name):
+    if not (config.PACKAGE_ROOT / package_name).exists():
+        pytest.skip(f"{package_name} is not present in this checkout")
+    result = evaluate_profile_runtime_preconditions(
+        _route_registry(enabled=("profile_si_ffs", package_name)),
+        package_name,
+        ("profile_si_ffs", package_name),
+        _surface_inventory(package_name),
+    )
+
+    assert result.preconditions_satisfied is False
+    assert result.blocking_reason_codes == ("NO_DESCRIPTOR_CANDIDATE",)
+
+
+def test_profile_runtime_preconditions_block_candidate_not_enabled():
+    result = evaluate_profile_runtime_preconditions(
+        _route_registry(enabled=("profile_other_runtime",)),
+        "profile_si_ffs",
+        ("profile_si_ffs",),
+        _surface_inventory("profile_si_ffs"),
+    )
+
+    assert result.preconditions_satisfied is False
+    assert result.blocking_reason_codes == ("PACKAGE_NOT_ENABLED",)
+
+
+def test_profile_runtime_preconditions_allow_empty_selection_as_not_selected():
+    result = evaluate_profile_runtime_preconditions(
+        _route_registry(),
+        "profile_si_ffs",
+        (),
+        _surface_inventory("profile_si_ffs"),
+    )
+
+    assert result.preconditions_satisfied is False
+    assert result.blocking_reason_codes == ("PACKAGE_NOT_SELECTED",)
+
+
+def test_profile_runtime_preconditions_reject_malformed_inventory_shape():
+    with pytest.raises(ProfileRuntimeError, match="surface_inventory"):
+        evaluate_profile_runtime_preconditions(
+            _route_registry(),
+            "profile_si_ffs",
+            config.ACTIVE_PROFILE_PACKAGE_NAMES,
+            object(),
+        )
+
+
+@pytest.mark.parametrize("value", [
+    "profile_si_ffs",
+    ["profile_si_ffs", 123],
+])
+def test_profile_runtime_surface_inventory_rejects_malformed_collections(value):
+    with pytest.raises(ProfileRuntimeError):
+        ProfileRuntimeSurfaceInventory(
+            adapter_supported_package_names=value,
+        )
+
+
+def test_profile_runtime_surface_inventory_rejects_invalid_package_names():
+    with pytest.raises(ProfileRuntimeError, match="profile_"):
+        ProfileRuntimeSurfaceInventory(
+            adapter_supported_package_names={"contracts"},
+        )
+
+
+def test_profile_runtime_preconditions_block_bad_descriptor_policy(tmp_path):
+    package_root = _copied_package_root(tmp_path)
+    policy_path = package_root / "profile_si_ffs" / _base_doc()["evidencePolicyPath"]
+    policy = json.loads(policy_path.read_text())
+    policy.pop("validation")
+    policy_path.write_text(json.dumps(policy), encoding="utf-8")
+    registry = load_profile_descriptor_registry(
+        package_root,
+        allowed_profile_package_names=("profile_si_ffs",),
+    )
+
+    result = evaluate_profile_runtime_preconditions(
+        registry,
+        "profile_si_ffs",
+        ("profile_si_ffs",),
+        _surface_inventory("profile_si_ffs"),
+    )
+
+    assert result.preconditions_satisfied is False
+    assert result.blocking_reason_codes == ("POLICY_NOT_LOADABLE",)
+
+
+def test_profile_runtime_preconditions_accumulate_missing_surface_blockers():
+    result = evaluate_profile_runtime_preconditions(
+        _route_registry(),
+        "profile_si_ffs",
+        config.ACTIVE_PROFILE_PACKAGE_NAMES,
+        ProfileRuntimeSurfaceInventory(),
+    )
+
+    assert result.preconditions_satisfied is False
+    assert result.blocking_reason_codes == (
+        "MISSING_RUNTIME_ADAPTER_SUPPORT",
+        "MISSING_PROFILE_HARNESS_COVERAGE",
+        "MISSING_PROFILE_EXECUTED_EVIDENCE_LANE",
+        "MISSING_MANIFEST_GROUNDING",
+    )
+
+
+def test_profile_runtime_preconditions_pass_with_explicit_inventory_only():
+    result = evaluate_profile_runtime_preconditions(
+        _route_registry(),
+        "profile_si_ffs",
+        config.ACTIVE_PROFILE_PACKAGE_NAMES,
+        _surface_inventory("profile_si_ffs"),
+    )
+
+    assert result.preconditions_satisfied is True
+    assert result.blocking_reason_codes == ()
+
+
+def test_profile_runtime_preconditions_are_passive_for_active_runtime(fresh_env):
+    store, pipeline, _ = fresh_env
+    before_profile = config.ACTIVE_PROFILE
+    before_selected = config.ACTIVE_PROFILE_PACKAGE_NAMES
+    evidence_dir = config.PACKAGE_ROOT / "conformance" / "evidence"
+    before_evidence = {
+        path.name for path in evidence_dir.glob("platform_mvp_results_*.json")
+    }
+    manifest_path = (
+        config.PROFILE_ROOT
+        / "OFARM_Capability_Manifest_si_ffs_pilot_v0_1.json"
+    )
+    artifact_set_path = (
+        config.PROFILE_ROOT
+        / "OFARM_ActiveArtifactSet_example_si_ffs_pilot_v0_1.json"
+    )
+    before_manifest = manifest_path.read_bytes()
+    before_artifact_set = artifact_set_path.read_bytes()
+
+    result = evaluate_profile_runtime_preconditions(
+        _route_registry(),
+        "profile_si_ffs",
+        config.ACTIVE_PROFILE_PACKAGE_NAMES,
+        _surface_inventory("profile_si_ffs"),
+    )
+
+    assert result.preconditions_satisfied is True
+    assert config.ACTIVE_PROFILE is before_profile
+    assert config.ACTIVE_PROFILE_PACKAGE_NAMES == before_selected
+    assert before_evidence == {
+        path.name for path in evidence_dir.glob("platform_mvp_results_*.json")
+    }
+    assert manifest_path.read_bytes() == before_manifest
+    assert artifact_set_path.read_bytes() == before_artifact_set
+
+    commit = pipeline.commit(demo.spray_submission(
+        f"mp7-5-passive:{_uid()}",
+        erp_id=f"erp:mp7.5.passive.{_uid()}",
+        confirm=True,
+    ))
+    trace = _trace_payload(store, commit)
+    assert [entry["gate"] for entry in trace["gateSequence"]][:2] == [
+        "INGRESS_NORMALIZATION",
+        "AUTHORITY",
+    ]
+    assert all(
+        entry["outcome"] not in {"PROFILE_ROUTE_PASS", "PROFILE_ROUTE_REFUSE"}
+        for entry in trace["gateSequence"]
+    )
 
 
 def test_profile_route_resolves_current_si_descriptor():

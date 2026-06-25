@@ -177,6 +177,66 @@ class ProfileRouteResolution:
     effective_time: datetime | None
 
 
+PRECONDITION_INVALID_PACKAGE_NAME = "INVALID_PACKAGE_NAME"
+PRECONDITION_NO_DESCRIPTOR_CANDIDATE = "NO_DESCRIPTOR_CANDIDATE"
+PRECONDITION_PACKAGE_NOT_ENABLED = "PACKAGE_NOT_ENABLED"
+PRECONDITION_PACKAGE_NOT_SELECTED = "PACKAGE_NOT_SELECTED"
+PRECONDITION_POLICY_NOT_LOADABLE = "POLICY_NOT_LOADABLE"
+PRECONDITION_MISSING_RUNTIME_ADAPTER_SUPPORT = "MISSING_RUNTIME_ADAPTER_SUPPORT"
+PRECONDITION_MISSING_PROFILE_HARNESS_COVERAGE = "MISSING_PROFILE_HARNESS_COVERAGE"
+PRECONDITION_MISSING_PROFILE_EXECUTED_EVIDENCE_LANE = (
+    "MISSING_PROFILE_EXECUTED_EVIDENCE_LANE"
+)
+PRECONDITION_MISSING_MANIFEST_GROUNDING = "MISSING_MANIFEST_GROUNDING"
+_PRECONDITION_BLOCKER_ORDER = (
+    PRECONDITION_INVALID_PACKAGE_NAME,
+    PRECONDITION_NO_DESCRIPTOR_CANDIDATE,
+    PRECONDITION_PACKAGE_NOT_ENABLED,
+    PRECONDITION_PACKAGE_NOT_SELECTED,
+    PRECONDITION_POLICY_NOT_LOADABLE,
+    PRECONDITION_MISSING_RUNTIME_ADAPTER_SUPPORT,
+    PRECONDITION_MISSING_PROFILE_HARNESS_COVERAGE,
+    PRECONDITION_MISSING_PROFILE_EXECUTED_EVIDENCE_LANE,
+    PRECONDITION_MISSING_MANIFEST_GROUNDING,
+)
+
+
+@dataclass(frozen=True)
+class ProfileRuntimeSurfaceInventory:
+    """Explicit, non-discovering surface facts for MP7.5 precondition checks.
+
+    The sets are checker inputs only. They are not evidence, manifest grounding,
+    or runtime discovery by themselves.
+    """
+
+    adapter_supported_package_names: frozenset[str] = frozenset()
+    harness_covered_package_names: frozenset[str] = frozenset()
+    profile_executed_evidence_lane_package_names: frozenset[str] = frozenset()
+    generated_or_verified_manifest_grounding_package_names: frozenset[str] = (
+        frozenset()
+    )
+
+    def __post_init__(self) -> None:
+        for field_name in (
+            "adapter_supported_package_names",
+            "harness_covered_package_names",
+            "profile_executed_evidence_lane_package_names",
+            "generated_or_verified_manifest_grounding_package_names",
+        ):
+            object.__setattr__(
+                self,
+                field_name,
+                _inventory_package_name_set(getattr(self, field_name), field_name),
+            )
+
+
+@dataclass(frozen=True)
+class ProfileRuntimePreconditionResult:
+    package_name: str
+    preconditions_satisfied: bool
+    blocking_reason_codes: tuple[str, ...]
+
+
 def resolve_active_descriptor(
     active_descriptor=None,
     *,
@@ -213,6 +273,73 @@ def profile_runtime_descriptor_identity(
     except (AttributeError, OSError, ValueError) as exc:
         raise ProfileRuntimeError("profile runtime descriptor identity is unavailable") from exc
     return f"{descriptor.profile_root.name}/{rel.as_posix()}#{digest}"
+
+
+def evaluate_profile_runtime_preconditions(
+    registry: ProfileDescriptorRegistry,
+    package_name: str,
+    selected_package_names: Sequence[str],
+    surface_inventory: ProfileRuntimeSurfaceInventory,
+) -> ProfileRuntimePreconditionResult:
+    """Evaluate explicit MP7.5 candidate-runtime preconditions.
+
+    This is a passive checker over an already-loaded descriptor registry and
+    caller-supplied surface inventory. A satisfied result is checker-relative
+    only: it does not activate the package, write evidence, generate manifests,
+    or create a capability claim.
+    """
+    if not isinstance(registry, ProfileDescriptorRegistry):
+        raise ProfileRuntimeError(
+            "profile runtime preconditions require a descriptor registry")
+    if not isinstance(surface_inventory, ProfileRuntimeSurfaceInventory):
+        raise ProfileRuntimeError(
+            "surface_inventory must be a ProfileRuntimeSurfaceInventory")
+
+    result_name = package_name if isinstance(package_name, str) else repr(package_name)
+    try:
+        _validate_profile_package_name(package_name)
+    except ProfileRuntimeError:
+        return _precondition_result(
+            result_name,
+            [PRECONDITION_INVALID_PACKAGE_NAME],
+        )
+
+    selected = _profile_package_names_allow_empty(selected_package_names)
+    candidate = registry.candidate_for(package_name)
+    if candidate is None:
+        return _precondition_result(
+            package_name,
+            [PRECONDITION_NO_DESCRIPTOR_CANDIDATE],
+        )
+
+    blockers: list[str] = []
+    if not candidate.enabled:
+        blockers.append(PRECONDITION_PACKAGE_NOT_ENABLED)
+    if package_name not in selected:
+        blockers.append(PRECONDITION_PACKAGE_NOT_SELECTED)
+
+    try:
+        from . import profile_policy
+        profile_policy.DescriptorPolicyProvider(
+            candidate.descriptor,
+        ).evidence_policy()
+    except profile_policy.ProfilePolicyError:
+        blockers.append(PRECONDITION_POLICY_NOT_LOADABLE)
+
+    if package_name not in surface_inventory.adapter_supported_package_names:
+        blockers.append(PRECONDITION_MISSING_RUNTIME_ADAPTER_SUPPORT)
+    if package_name not in surface_inventory.harness_covered_package_names:
+        blockers.append(PRECONDITION_MISSING_PROFILE_HARNESS_COVERAGE)
+    if package_name not in (
+        surface_inventory.profile_executed_evidence_lane_package_names
+    ):
+        blockers.append(PRECONDITION_MISSING_PROFILE_EXECUTED_EVIDENCE_LANE)
+    if package_name not in (
+        surface_inventory.generated_or_verified_manifest_grounding_package_names
+    ):
+        blockers.append(PRECONDITION_MISSING_MANIFEST_GROUNDING)
+
+    return _precondition_result(package_name, blockers)
 
 
 def resolve_profile_route(
@@ -489,6 +616,57 @@ def _profile_package_names(profile_package_names: Sequence[str]) -> tuple[str, .
     return names
 
 
+def _profile_package_names_allow_empty(
+    profile_package_names: Sequence[str],
+) -> frozenset[str]:
+    if profile_package_names is None or isinstance(profile_package_names, str):
+        raise ProfileRuntimeError("profile package names must be a sequence")
+    try:
+        names = tuple(profile_package_names)
+    except TypeError as exc:
+        raise ProfileRuntimeError("profile package names must be a sequence") from exc
+    if not all(isinstance(name, str) for name in names):
+        raise ProfileRuntimeError("profile package names must be strings")
+    if len(names) != len(set(names)):
+        raise ProfileRuntimeError("profile package names contain duplicates")
+    for name in names:
+        _validate_profile_package_name(name)
+    return frozenset(names)
+
+
+def _inventory_package_name_set(value: Any, field: str) -> frozenset[str]:
+    if isinstance(value, (str, bytes)) or not isinstance(
+        value,
+        (set, frozenset, tuple, list),
+    ):
+        raise ProfileRuntimeError(
+            f"{field} must be a set, frozenset, tuple, or list of package names")
+    names = tuple(value)
+    if not all(isinstance(name, str) for name in names):
+        raise ProfileRuntimeError(f"{field} must contain only strings")
+    if len(names) != len(set(names)):
+        raise ProfileRuntimeError(f"{field} contains duplicate package names")
+    for name in names:
+        _validate_profile_package_name(name)
+    return frozenset(names)
+
+
+def _precondition_result(
+    package_name: str,
+    blockers: Sequence[str],
+) -> ProfileRuntimePreconditionResult:
+    blocker_set = set(blockers)
+    ordered = tuple(
+        blocker for blocker in _PRECONDITION_BLOCKER_ORDER
+        if blocker in blocker_set
+    )
+    return ProfileRuntimePreconditionResult(
+        package_name=package_name,
+        preconditions_satisfied=not ordered,
+        blocking_reason_codes=ordered,
+    )
+
+
 def _profile_route_records(
     route_records: Sequence[ProfileRouteRecord],
 ) -> tuple[ProfileRouteRecord, ...]:
@@ -581,7 +759,7 @@ def _assert_route_matches_descriptor(
 
 
 def _validate_profile_package_name(package_name: str) -> None:
-    if not package_name:
+    if not isinstance(package_name, str) or not package_name:
         raise ProfileRuntimeError("active profile package name must not be empty")
     path = Path(package_name)
     if path.is_absolute() or ".." in path.parts or len(path.parts) != 1:

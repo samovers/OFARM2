@@ -104,6 +104,19 @@ captured time, record time, ingestion time, or wall-clock time. MP7.4 does not
 activate a second profile, widen descriptor discovery, update manifests, write
 evidence, or change active-profile selection.
 
+## MP7.5 Implementation Status
+
+MP7.5 adds a passive runtime-precondition evaluator for descriptor-bearing
+candidate profile packages. The evaluator consumes explicit surface-inventory
+inputs and reports checker-relative blocker codes for missing descriptor,
+enablement, selection, descriptor-backed policy loading, adapter support,
+harness coverage, profile executed-evidence lane, and generated or
+generator-verified manifest grounding. It does not discover those surfaces,
+activate a second profile, write evidence, generate manifests, alter route
+behavior, or create a runtime capability claim. MP7.6 remains responsible for
+real manifest/evidence readiness checks, and MP7.7 remains the first slice that
+may deliberately activate a second runtime profile.
+
 ## Fixed Implementation Sequence
 
 The MP7 runtime work should stop at this fixed sequence unless a reviewer finds
