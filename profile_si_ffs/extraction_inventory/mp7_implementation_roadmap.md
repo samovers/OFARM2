@@ -90,12 +90,19 @@ promote design-only packages.
 
 MP7.3 hardens route isolation and ambiguity handling. Route-backed runtime
 requires exactly one FARM anchor scope entry in the normalized envelope, and
-that FARM scope must match the top-level submission `farmRef`. Route-backed
-runtime remains timeless-only: active time-bounded route records for the routed
-tenant/farm refuse governably until a later slice defines an accepted
-route-evaluation time policy. Unrelated time-bounded planning routes do not
-poison the current route, and default unrouted `GatePipeline(store)` behavior is
-unchanged.
+that FARM scope must match the top-level submission `farmRef`. MP7.3 kept
+runtime route handoff timeless-only until MP7.4 defined the route-evaluation
+time policy. Unrelated time-bounded planning routes do not poison the current
+route, and default unrouted `GatePipeline(store)` behavior is unchanged.
+
+## MP7.4 Implementation Status
+
+MP7.4 defines route-evaluation time policy for opt-in route-backed runtime.
+`GatePipeline` derives a claim-time route timestamp from an explicit commit-class
+source map, passes it into `resolve_profile_route(...)`, and never falls back to
+captured time, record time, ingestion time, or wall-clock time. MP7.4 does not
+activate a second profile, widen descriptor discovery, update manifests, write
+evidence, or change active-profile selection.
 
 ## Fixed Implementation Sequence
 
@@ -107,19 +114,20 @@ a blocker that directly affects one of these slices.
 | MP7.1 | Route record and resolver seam. | Add route model/resolver in single-SI compatibility mode. | Existing SI route resolves to `profile_si_ffs`; non-SI or descriptorless routes fail closed. | Stop if the slice enables a second profile, uses navigation docs as route input, or changes manifest/evidence claims. |
 | MP7.2 | Route handoff into runtime gates. | Pass the resolved descriptor into pipeline, context, policy, validation, sufficiency, advisory, materialization, output, and profile-sensitive adapter paths where a descriptor is already expected. | Default routed SI behavior is assertion-equivalent to current behavior. | Stop if any stage falls back to hidden global profile state after a route has been resolved. |
 | MP7.3 | Route isolation tests. | Add focused tests proving two active, overlapping route records cannot govern the same tenant/farm/effective-time context and that design-only packages fail closed. | Ambiguous, missing, disabled, and descriptorless routes refuse governably. | Stop if tests rely on Netherlands or Serbia profile packages becoming runtime profiles. |
-| MP7.4 | Candidate second-profile runtime preconditions. | Define, in executable checks, what a second profile must provide before activation: descriptor, policy, adapters, tests, evidence lane, and manifest grounding. | Candidate profile without every required surface remains inactive. | Stop if missing adapters, missing evidence, or missing manifest grounding are treated as warnings. |
-| MP7.5 | Manifest and evidence readiness gate. | Extend generator verification and evidence-lane checks only after a real candidate runtime profile exists. | Capability claims are generated or generator-verified from actual runtime surfaces. | Stop if profile engineering tests or design docs are relabeled as executed evidence. |
-| MP7.6 | Deliberate second-profile activation. | Activate a second runtime profile only behind explicit selection, enablement, and tenant/farm route records. | SI assertion-equivalence plus second-profile isolation and fail-closed route behavior. | Stop if same-farm multi-profile merge semantics are needed; that is outside MP7. |
+| MP7.4 | Route-evaluation time policy. | Pass an explicit claim-time route timestamp into route resolution for opt-in route-backed runtime. | Time-bounded routes resolve by governed claim time; missing or invalid claim time refuses governably. | Stop if captured time, record time, ingestion time, or wall-clock time become route inputs. |
+| MP7.5 | Candidate second-profile runtime preconditions. | Define, in executable checks, what a second profile must provide before activation: descriptor, policy, adapters, tests, evidence lane, and manifest grounding. | Candidate profile without every required surface remains inactive. | Stop if missing adapters, missing evidence, or missing manifest grounding are treated as warnings. |
+| MP7.6 | Manifest and evidence readiness gate. | Extend generator verification and evidence-lane checks only after a real candidate runtime profile exists. | Capability claims are generated or generator-verified from actual runtime surfaces. | Stop if profile engineering tests or design docs are relabeled as executed evidence. |
+| MP7.7 | Deliberate second-profile activation. | Activate a second runtime profile only behind explicit selection, enablement, and tenant/farm route records. | SI assertion-equivalence plus second-profile isolation and fail-closed route behavior. | Stop if same-farm multi-profile merge semantics are needed; that is outside MP7. |
 
-MP7.1 through MP7.5 may be completed without activating a second runtime profile.
-MP7.6 is the first slice that may deliberately activate one, and only if every
+MP7.1 through MP7.6 may be completed without activating a second runtime profile.
+MP7.7 is the first slice that may deliberately activate one, and only if every
 earlier precondition is satisfied.
 
 ## Stop Conditions For The Whole Track
 
 Stop and re-plan if a future PR would:
 
-- activate a second profile before MP7.6;
+- activate a second profile before MP7.7;
 - enable or select a descriptorless package;
 - route to a design-only package;
 - treat descriptor discovery as enablement;
@@ -162,7 +170,7 @@ This roadmap and PR do not claim or create:
 This roadmap is done when:
 
 - MP7.1 is named as the first safe runtime slice;
-- future MP7 work is split into the fixed MP7.1-MP7.6 sequence above;
+- future MP7 work is split into the fixed MP7.1-MP7.7 sequence above;
 - every slice has a purpose, allowed change, proof, and stop condition;
 - design-only package activation remains explicitly forbidden;
 - manifest expansion and evidence relabeling remain explicitly forbidden;

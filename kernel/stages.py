@@ -172,6 +172,9 @@ class IngressNormalizer:
         if parse_ts(captured_at) is None:
             captured_at = ctx.ingested_at
         ctx.event_time, ctx.captured_at = event_time, captured_at
+        decision_time = sub.get("decisionTime")
+        if decision_time is not None and parse_ts(decision_time) is None:
+            decision_time = None
 
         scopes = sub.get("targetScopes") or [
             {"scopeType": "FARM", "scopeRef": ctx.farm_ref}]
@@ -189,7 +192,7 @@ class IngressNormalizer:
             "timeSemantics": {k: v for k, v in {
                 "eventTime": event_time,
                 "observationTime": sub.get("observationTime"),
-                "decisionTime": sub.get("decisionTime"),
+                "decisionTime": decision_time,
                 "recordTime": ctx.ingested_at}.items() if v},
         }
         if not any(k in envelope["timeSemantics"]

@@ -28,14 +28,14 @@ import psycopg
 
 from . import profile_policy
 from .authority import AuthorityEvaluator
-from .context import ContextAssembler, ProductRegister, SIReferenceBindings, mint, now_iso
+from .context import (ContextAssembler, ProductRegister, SIReferenceBindings,
+                      mint, now_iso, parse_ts)
 from .contracts import sha256_of
 from .emission import PromotionTraceWriter, ReplayWriter
 from .materializer import Materializer
 from .problems import runtime_problem
-from .profile_runtime import (ProfileRuntimeError,
-                              active_time_bounded_profile_routes,
-                              resolve_active_descriptor, resolve_profile_route)
+from .profile_runtime import (ProfileRuntimeError, resolve_active_descriptor,
+                              resolve_profile_route)
 from .stages import (AuthorityGate, EnvelopePersist, EvidenceSufficiencyGate,
                      GateContext, GateRefusal, GateReplay, IngressNormalizer,
                      MaterializationGate, ProfileApplicabilityGate,
@@ -182,18 +182,33 @@ class GatePipeline:
                 "submission farmRef")
         return farm_ref
 
-    def _assert_timeless_route_runtime(self, farm_ref: str) -> None:
-        unsupported = active_time_bounded_profile_routes(
-            self.profile_route_records,
-            tenant_ref=self.tenant_ref,
-            farm_ref=farm_ref,
-        )
-        if unsupported:
-            route_ids = ", ".join(route.route_id for route in unsupported)
+    @staticmethod
+    def _route_effective_time(ctx: GateContext):
+        if ctx.commit_class == "GOVERNANCE_DECISION":
+            raw = ctx.sub.get("decisionTime")
+            field = "decisionTime"
+        elif ctx.commit_class in {
+            "OPERATION_CLAIM",
+            "COMPLIANCE_ASSERTION",
+            "STRUCTURE_ASSERTION",
+        }:
+            if ctx.temporal_problem:
+                raise ProfileRuntimeError(
+                    "profile route eventTime is unparseable")
+            raw = ctx.event_time
+            field = "eventTime"
+        else:
             raise ProfileRuntimeError(
-                "route-backed runtime does not support active time-bounded "
-                "profile routes before an accepted route-evaluation time "
-                f"policy exists: {route_ids}")
+                f"profile route time source is unsupported for "
+                f"{ctx.commit_class!r}")
+        if not raw:
+            raise ProfileRuntimeError(
+                f"profile route requires normalized claim-time field {field}")
+        parsed = parse_ts(raw)
+        if parsed is None:
+            raise ProfileRuntimeError(
+                f"profile route claim-time field {field} is not parseable")
+        return parsed
 
     def _bind_route_resolution(self, ctx: GateContext, resolution) -> None:
         descriptor = resolution.descriptor
@@ -214,13 +229,14 @@ class GatePipeline:
     def _resolve_profile_route(self, ctx: GateContext):
         try:
             farm_ref = self._route_farm_ref(ctx)
-            self._assert_timeless_route_runtime(farm_ref)
+            effective_time = self._route_effective_time(ctx)
             resolution = resolve_profile_route(
                 self.profile_route_registry,
                 self.selected_profile_package_names,
                 self.profile_route_records,
                 tenant_ref=self.tenant_ref,
                 farm_ref=farm_ref,
+                effective_time=effective_time,
             )
         except ProfileRuntimeError as exc:
             ctx.log("PACK_PROFILE_APPLICABILITY", "PROFILE_ROUTE_REFUSE",
