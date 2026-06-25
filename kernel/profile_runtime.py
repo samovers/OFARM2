@@ -280,6 +280,30 @@ def resolve_profile_route(
     )
 
 
+def active_time_bounded_profile_routes(
+    route_records: Sequence[ProfileRouteRecord],
+    *,
+    tenant_ref: str,
+    farm_ref: str,
+) -> tuple[ProfileRouteRecord, ...]:
+    """Validated active time-bounded routes for one tenant/farm context.
+
+    MP7.3 keeps runtime route handoff timeless until a later slice defines an
+    accepted route-evaluation time policy. This helper lets callers reject that
+    unsupported case without bypassing route-record validation.
+    """
+    routes = _profile_route_records(route_records)
+    _validate_ref(tenant_ref, "tenant_ref")
+    _validate_ref(farm_ref, "farm_ref")
+    return tuple(
+        route for route in routes
+        if route.status == ROUTE_STATUS_ACTIVE
+        and route.tenant_ref == tenant_ref
+        and route.farm_ref == farm_ref
+        and (route.effective_from is not None or route.effective_until is not None)
+    )
+
+
 def load_active_profile_selection(
     package_root: Path,
     profile_package_names: Sequence[str],
@@ -494,7 +518,10 @@ def _profile_route_records(
 ) -> tuple[ProfileRouteRecord, ...]:
     if route_records is None or isinstance(route_records, (str, bytes)):
         raise ProfileRuntimeError("profile route records must be a sequence")
-    routes = tuple(route_records)
+    try:
+        routes = tuple(route_records)
+    except TypeError as exc:
+        raise ProfileRuntimeError("profile route records must be a sequence") from exc
     for route in routes:
         _validate_profile_route_record(route)
     return routes

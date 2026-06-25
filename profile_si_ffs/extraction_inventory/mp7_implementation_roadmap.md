@@ -86,6 +86,17 @@ materialization, output, and SI adapter seams. MP7.2 does not activate a second
 profile, widen active selection, update manifests, write profile evidence, or
 promote design-only packages.
 
+## MP7.3 Implementation Status
+
+MP7.3 hardens route isolation and ambiguity handling. Route-backed runtime
+requires exactly one FARM anchor scope entry in the normalized envelope, and
+that FARM scope must match the top-level submission `farmRef`. Route-backed
+runtime remains timeless-only: active time-bounded route records for the routed
+tenant/farm refuse governably until a later slice defines an accepted
+route-evaluation time policy. Unrelated time-bounded planning routes do not
+poison the current route, and default unrouted `GatePipeline(store)` behavior is
+unchanged.
+
 ## Fixed Implementation Sequence
 
 The MP7 runtime work should stop at this fixed sequence unless a reviewer finds
