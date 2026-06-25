@@ -68,6 +68,7 @@ class GateContext:
     ingested_at: str
     source_digest: str
     active_profile: Any = None
+    profile_route_resolution: Any = None
     policy_provider: Any = None
     si_reference_bindings: Any = None
     commit_class: str = ""

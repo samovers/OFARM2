@@ -73,6 +73,19 @@ current descriptor registry and selection inputs. It is not wired into
 `GatePipeline`, active-profile selection, manifests, evidence, adapters, or
 design-only profile packages.
 
+## MP7.2 Implementation Status
+
+MP7.2 is implemented as opt-in route handoff into `GatePipeline`. Route-backed
+mode requires explicit route records, descriptor registry, selected package
+names, and tenant ref; default `GatePipeline(store)` behavior remains unchanged.
+The route handoff resolves before authority and is recorded as a
+profile-applicability route precheck so the existing PromotionTrace contract is
+not expanded in this PR. On success it binds the resolved descriptor into the
+existing context, policy, validation, sufficiency, advisory,
+materialization, output, and SI adapter seams. MP7.2 does not activate a second
+profile, widen active selection, update manifests, write profile evidence, or
+promote design-only packages.
+
 ## Fixed Implementation Sequence
 
 The MP7 runtime work should stop at this fixed sequence unless a reviewer finds
