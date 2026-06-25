@@ -192,6 +192,16 @@ def _route_pipeline(store, *, routes=None, registry=None, selected=None, tenant=
     )
 
 
+def _route_interval(month: str, *, route_id: str | None = None) -> ProfileRouteRecord:
+    start = datetime.fromisoformat(f"2026-{month}-01T00:00:00+00:00")
+    end = datetime.fromisoformat(f"2026-{int(month) + 1:02d}-01T00:00:00+00:00")
+    return _si_route(
+        route_id=route_id or f"profileroute:test.si.{month}.{_uid()}",
+        effective_from=start,
+        effective_until=end,
+    )
+
+
 def _assert_profile_route_refusal(store, result: dict) -> dict:
     assert result["decisionOutcome"] == "RETAIN_DRAFT"
     assert result["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
@@ -1749,11 +1759,10 @@ def test_route_backed_gate_pipeline_counts_malformed_farm_scope_entries(
 def test_route_backed_gate_pipeline_refuses_same_context_time_bounded_route(
         fresh_env):
     store, _, _ = fresh_env
-    t0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
     pipeline = _route_pipeline(
         store,
         routes=[
-            _si_route(effective_from=t0),
+            _route_interval("06"),
             _si_route(route_id=f"profileroute:test.si.timeless.{_uid()}"),
         ],
     )
@@ -1764,8 +1773,134 @@ def test_route_backed_gate_pipeline_refuses_same_context_time_bounded_route(
         confirm=True,
     ))
 
-    assert "time-bounded profile routes" in result["problems"][0]["detail"]
+    assert "multiple active overlapping" in result["problems"][0]["detail"]
     _assert_profile_route_refusal(store, result)
+
+
+def test_route_backed_gate_pipeline_accepts_time_bounded_operation_route(
+        fresh_env):
+    store, _, _ = fresh_env
+    route = _route_interval("06")
+    pipeline = _route_pipeline(store, routes=[route])
+
+    result = pipeline.commit(demo.spray_submission(
+        f"mp7-route-june:{_uid()}",
+        erp_id=f"erp:mp7.route.june.{_uid()}",
+        confirm=True,
+    ))
+
+    assert result["decisionOutcome"] == "PROMOTE_ACCEPTED"
+    trace = _trace_payload(store, result)
+    assert trace["gateSequence"][1]["outcome"] == "PROFILE_ROUTE_PASS"
+    assert route.route_id in trace["gateSequence"][1]["relatedArtifactRefs"]
+
+
+def test_route_backed_gate_pipeline_refuses_operation_outside_route_interval(
+        fresh_env):
+    store, _, _ = fresh_env
+    pipeline = _route_pipeline(store, routes=[_route_interval("05")])
+
+    result = pipeline.commit(demo.spray_submission(
+        f"mp7-route-outside:{_uid()}",
+        erp_id=f"erp:mp7.route.outside.{_uid()}",
+        confirm=True,
+    ))
+
+    assert "no active profile route" in result["problems"][0]["detail"]
+    _assert_profile_route_refusal(store, result)
+
+
+def test_route_backed_gate_pipeline_refuses_missing_event_time_no_captured_fallback(
+        fresh_env):
+    store, _, _ = fresh_env
+    pipeline = _route_pipeline(store, routes=[_route_interval("06")])
+    sub = demo.spray_submission(
+        f"mp7-route-no-event:{_uid()}",
+        erp_id=f"erp:mp7.route.no-event.{_uid()}",
+        confirm=True,
+    )
+    del sub["eventTime"]
+    sub["capturedAt"] = "2026-06-10T07:45:00Z"
+
+    result = pipeline.commit(sub)
+
+    assert "eventTime" in result["problems"][0]["detail"]
+    _assert_profile_route_refusal(store, result)
+
+
+def test_route_backed_gate_pipeline_refuses_unparseable_event_time_no_fallback(
+        fresh_env):
+    store, _, _ = fresh_env
+    pipeline = _route_pipeline(store, routes=[_route_interval("06")])
+    sub = demo.spray_submission(
+        f"mp7-route-bad-event:{_uid()}",
+        erp_id=f"erp:mp7.route.bad-event.{_uid()}",
+        confirm=True,
+    )
+    sub["eventTime"] = "not-a-time"
+
+    result = pipeline.commit(sub)
+
+    assert "eventTime is unparseable" in result["problems"][0]["detail"]
+    _assert_profile_route_refusal(store, result)
+
+
+def test_route_backed_gate_pipeline_refuses_operation_decision_time_fallback(
+        fresh_env):
+    store, _, _ = fresh_env
+    pipeline = _route_pipeline(store, routes=[_route_interval("06")])
+    sub = demo.spray_submission(
+        f"mp7-route-no-decision-fallback:{_uid()}",
+        erp_id=f"erp:mp7.route.no-decision-fallback.{_uid()}",
+        confirm=True,
+    )
+    del sub["eventTime"]
+    sub["decisionTime"] = "2026-06-10T10:00:00Z"
+
+    result = pipeline.commit(sub)
+
+    assert "eventTime" in result["problems"][0]["detail"]
+    _assert_profile_route_refusal(store, result)
+
+
+def test_route_backed_gate_pipeline_refuses_unsupported_route_time_source(
+        fresh_env):
+    store, _, _ = fresh_env
+    pipeline = _route_pipeline(store, routes=[_route_interval("06")])
+
+    result = pipeline.commit(_note_submission(
+        f"mp7-route-note-unsupported:{_uid()}"))
+
+    assert "unsupported" in result["problems"][0]["detail"]
+    _assert_profile_route_refusal(store, result)
+
+
+def test_route_backed_gate_pipeline_operation_event_time_selects_half_open_route(
+        fresh_env):
+    store, _, _ = fresh_env
+    may = _route_interval("05", route_id=f"profileroute:test.si.may.{_uid()}")
+    june = _route_interval("06", route_id=f"profileroute:test.si.june.{_uid()}")
+    pipeline = _route_pipeline(store, routes=[may, june])
+
+    may_result = pipeline.commit(demo.spray_submission(
+        f"mp7-route-may:{_uid()}",
+        erp_id=f"erp:mp7.route.may.{_uid()}",
+        confirm=True,
+        event_start="2026-05-15T07:30:00Z",
+        event_end="2026-05-15T08:15:00Z",
+    ))
+    june_result = pipeline.commit(demo.spray_submission(
+        f"mp7-route-june-boundary:{_uid()}",
+        erp_id=f"erp:mp7.route.june-boundary.{_uid()}",
+        confirm=True,
+        event_start="2026-06-01T00:00:00Z",
+        event_end="2026-06-01T01:00:00Z",
+    ))
+
+    assert may.route_id in _trace_payload(store, may_result)["gateSequence"][1][
+        "relatedArtifactRefs"]
+    assert june.route_id in _trace_payload(store, june_result)["gateSequence"][1][
+        "relatedArtifactRefs"]
 
 
 def test_route_backed_gate_pipeline_ignores_other_farm_time_bounded_route(
@@ -1829,6 +1964,78 @@ def test_route_backed_gate_pipeline_ignores_inactive_time_bounded_route(
     ))
 
     assert result["decisionOutcome"] == "PROMOTE_ACCEPTED"
+
+
+def _governance_submission(idem_key: str, *, decision_time=None,
+                           event_time=None, target="assert:demo.pending") -> dict:
+    sub = {
+        "commitClass": "GOVERNANCE_DECISION",
+        "actingPartyRef": demo.FARMER,
+        "farmRef": demo.FARM,
+        "idempotencyKey": idem_key,
+        "reviewTargetAssertionRef": target,
+        "reviewRationale": "route-time policy probe",
+    }
+    if decision_time is not None:
+        sub["decisionTime"] = decision_time
+    if event_time is not None:
+        sub["eventTime"] = event_time
+    return sub
+
+
+def test_route_backed_gate_pipeline_governance_uses_decision_time(fresh_env):
+    store, default_pipeline, _ = fresh_env
+    queued = default_pipeline.commit(demo.spray_submission(
+        f"mp7-governance-queued:{_uid()}",
+        erp_id=f"erp:mp7.governance.queued.{_uid()}",
+        confirm=False,
+    ))
+    pipeline = _route_pipeline(store, routes=[_route_interval("06")])
+
+    result = pipeline.commit(_governance_submission(
+        f"mp7-governance-accept:{_uid()}",
+        decision_time="2026-06-10T10:00:00Z",
+        event_time="2026-05-10T10:00:00Z",
+        target=queued["emittedAssertionRecordRefs"][0],
+    ))
+
+    assert result["decisionOutcome"] == "PROMOTE_ACCEPTED"
+    trace = _trace_payload(store, result)
+    assert trace["gateSequence"][1]["outcome"] == "PROFILE_ROUTE_PASS"
+
+
+@pytest.mark.parametrize("decision_time,match", [
+    (None, "decisionTime"),
+    ("not-a-time", "decisionTime"),
+])
+def test_route_backed_gate_pipeline_governance_requires_decision_time(
+        fresh_env, decision_time, match):
+    store, _, _ = fresh_env
+    pipeline = _route_pipeline(store, routes=[_route_interval("06")])
+
+    result = pipeline.commit(_governance_submission(
+        f"mp7-governance-no-decision:{_uid()}",
+        decision_time=decision_time,
+        event_time="2026-06-10T10:00:00Z",
+    ))
+
+    assert match in result["problems"][0]["detail"]
+    _assert_profile_route_refusal(store, result)
+
+
+def test_route_backed_gate_pipeline_governance_does_not_use_event_time_fallback(
+        fresh_env):
+    store, _, _ = fresh_env
+    pipeline = _route_pipeline(store, routes=[_route_interval("06")])
+
+    result = pipeline.commit(_governance_submission(
+        f"mp7-governance-event-fallback:{_uid()}",
+        decision_time="2026-05-10T10:00:00Z",
+        event_time="2026-06-10T10:00:00Z",
+    ))
+
+    assert "no active profile route" in result["problems"][0]["detail"]
+    _assert_profile_route_refusal(store, result)
 
 
 @pytest.mark.parametrize("package_name", [
