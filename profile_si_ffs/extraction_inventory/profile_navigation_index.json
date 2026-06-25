@@ -187,6 +187,12 @@
       "status": "docs-only MP7 implementation roadmap; non-runtime, non-capability"
     },
     {
+      "id": "mp7_profile_extension_boundary_decision",
+      "path": "profile_si_ffs/extraction_inventory/mp7_profile_extension_boundary_decision.md",
+      "kind": "future runtime planning",
+      "status": "docs-only MP7 profile-extension boundary decision; non-runtime, non-capability"
+    },
+    {
       "id": "core_contract_comment_review_plan",
       "path": "profile_si_ffs/extraction_inventory/core_contract_comment_review_plan.md",
       "kind": "contract comment review planning",

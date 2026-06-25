@@ -38,6 +38,7 @@ These documents do not move files, change runtime behavior, update contracts, up
 - `mp6_manifest_generation_plan.md` records the docs-only MP6 manifest-generation plan without regenerating manifests, changing active artifact sets, or expanding capability claims.
 - `mp7_multi_profile_runtime_readiness_plan.md` records the docs-only MP7 design gate for tenant/farm-scoped multi-profile routing and second-profile activation preconditions without activating a second profile or changing runtime capability.
 - `mp7_implementation_roadmap.md` records the docs-only MP7 implementation roadmap, including the first safe runtime slice and fixed stop conditions without implementing routing or activating a second profile.
+- `mp7_profile_extension_boundary_decision.md` records the docs-only boundary between standalone second-profile activation and same-farm profile extension/composition, using organic-on-top-of-SI as the motivating case.
 - `core_contract_comment_review_plan.md` records the docs-only review plan for neutralizing Core contract comment country-term hits without changing schema semantics.
 - `profile_navigation_index.json` is a machine-labeled navigation-only, non-capability index for these profile-local inventory and status documents.
 

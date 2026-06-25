@@ -125,6 +125,15 @@ profile is ready and no readiness overclaim was detected. The command does not
 activate a second profile, create evidence, generate manifests, alter routes,
 or expand runtime capability claims.
 
+## Profile Extension Boundary Status
+
+The profile-extension boundary decision is recorded in
+`mp7_profile_extension_boundary_decision.md`. Same-farm base-plus-program
+composition, such as Slovenian base farm rules plus an organic governed program,
+is not MP7.7 standalone second-profile activation. If a candidate runtime
+surface needs to be merged with `profile_si_ffs` for the same tenant/farm claim,
+MP7.7 must stop and a separate profile-extension design track is required.
+
 ## Fixed Implementation Sequence
 
 The MP7 runtime work should stop at this fixed sequence unless a reviewer finds
@@ -138,7 +147,7 @@ a blocker that directly affects one of these slices.
 | MP7.4 | Route-evaluation time policy. | Pass an explicit claim-time route timestamp into route resolution for opt-in route-backed runtime. | Time-bounded routes resolve by governed claim time; missing or invalid claim time refuses governably. | Stop if captured time, record time, ingestion time, or wall-clock time become route inputs. |
 | MP7.5 | Candidate second-profile runtime preconditions. | Define, in executable checks, what a second profile must provide before activation: descriptor, policy, adapters, tests, evidence lane, and manifest grounding. | Candidate profile without every required surface remains inactive. | Stop if missing adapters, missing evidence, or missing manifest grounding are treated as warnings. |
 | MP7.6 | Manifest and evidence readiness gate. | Extend generator verification and evidence-lane checks only after a real candidate runtime profile exists. | Capability claims are generated or generator-verified from actual runtime surfaces. | Stop if profile engineering tests or design docs are relabeled as executed evidence. |
-| MP7.7 | Deliberate second-profile activation. | Activate a second runtime profile only behind explicit selection, enablement, and tenant/farm route records. | SI assertion-equivalence plus second-profile isolation and fail-closed route behavior. | Stop if same-farm multi-profile merge semantics are needed; that is outside MP7. |
+| MP7.7 | Deliberate standalone second-profile activation. | Activate a second runtime profile only behind explicit selection, enablement, and tenant/farm route records when that profile can govern the routed submission by itself. | SI assertion-equivalence plus second-profile isolation and fail-closed route behavior. | Stop if same-farm base-plus-extension or multi-profile merge semantics are needed; that is outside MP7. |
 
 MP7.1 through MP7.6 may be completed without activating a second runtime profile.
 MP7.7 is the first slice that may deliberately activate one, and only if every
@@ -157,6 +166,8 @@ Stop and re-plan if a future PR would:
 - add Netherlands or Serbia runtime support without a real descriptor, adapters,
   tests, evidence lane, and manifest grounding;
 - add same-farm multi-profile merge behavior;
+- add same-farm base-plus-extension behavior such as organic-on-top-of-SI
+  composition;
 - expand generated manifest capability claims without generator verification;
 - write profile executed evidence without a machine-checkable
   `PROFILE_EXECUTED_EVIDENCE` shape;
