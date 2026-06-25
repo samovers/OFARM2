@@ -156,7 +156,7 @@ class GatePipeline:
             sub=sub,
             request_id=mint("cir"), ingested_at=now_iso(),
             source_digest=self._source_digest(sub),
-            commit_class=sub["commitClass"], farm_ref=sub.get("farmRef", ""),
+            commit_class=sub["commitClass"], farm_ref=sub["farmRef"],
             acting_party=sub["actingPartyRef"], idem_key=sub["idempotencyKey"],
             event_id=mint("event"), assertion_id=mint("assert"))
 
