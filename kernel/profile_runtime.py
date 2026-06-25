@@ -280,6 +280,8 @@ def evaluate_profile_runtime_preconditions(
     package_name: str,
     selected_package_names: Sequence[str],
     surface_inventory: ProfileRuntimeSurfaceInventory,
+    *,
+    policy_supported_checks: Sequence[str] | None = None,
 ) -> ProfileRuntimePreconditionResult:
     """Evaluate explicit MP7.5 candidate-runtime preconditions.
 
@@ -322,7 +324,7 @@ def evaluate_profile_runtime_preconditions(
         from . import profile_policy
         profile_policy.DescriptorPolicyProvider(
             candidate.descriptor,
-        ).evidence_policy()
+        ).evidence_policy(supported_checks=policy_supported_checks)
     except profile_policy.ProfilePolicyError:
         blockers.append(PRECONDITION_POLICY_NOT_LOADABLE)
 

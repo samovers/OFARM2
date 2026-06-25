@@ -117,6 +117,14 @@ behavior, or create a runtime capability claim. MP7.6 remains responsible for
 real manifest/evidence readiness checks, and MP7.7 remains the first slice that
 may deliberately activate a second runtime profile.
 
+## MP7.6 Implementation Status
+
+MP7.6 adds a non-writing readiness check command that machine-checks readiness
+inputs and overclaim drift. A passing MP7.6 check may mean only that no second
+profile is ready and no readiness overclaim was detected. The command does not
+activate a second profile, create evidence, generate manifests, alter routes,
+or expand runtime capability claims.
+
 ## Fixed Implementation Sequence
 
 The MP7 runtime work should stop at this fixed sequence unless a reviewer finds
