@@ -164,20 +164,23 @@ class GatePipeline:
     @staticmethod
     def _route_farm_ref(ctx: GateContext) -> str:
         scopes = ((ctx.envelope or {}).get("anchorScopes") or [])
-        farm_refs = [
-            scope.get("scopeRef") for scope in scopes
+        farm_scopes = [
+            scope for scope in scopes
             if isinstance(scope, dict) and scope.get("scopeType") == "FARM"
-            and scope.get("scopeRef")
         ]
-        if len(farm_refs) != 1:
+        if len(farm_scopes) != 1:
             raise ProfileRuntimeError(
                 "profile route resolution requires exactly one FARM anchor "
                 "scope entry in the normalized submission envelope")
-        if farm_refs[0] != ctx.farm_ref:
+        farm_ref = farm_scopes[0].get("scopeRef")
+        if not farm_ref:
+            raise ProfileRuntimeError(
+                "profile route FARM anchor scope must include scopeRef")
+        if farm_ref != ctx.farm_ref:
             raise ProfileRuntimeError(
                 "profile route FARM anchor scope must match the top-level "
                 "submission farmRef")
-        return farm_refs[0]
+        return farm_ref
 
     def _assert_timeless_route_runtime(self, farm_ref: str) -> None:
         unsupported = active_time_bounded_profile_routes(

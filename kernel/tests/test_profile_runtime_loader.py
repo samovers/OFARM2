@@ -1715,6 +1715,37 @@ def test_route_backed_gate_pipeline_refuses_multiple_farm_scope_entries(
     _assert_profile_route_refusal(store, result)
 
 
+@pytest.mark.parametrize("malformed_farm_scope", [
+    {"scopeType": "FARM"},
+    {"scopeType": "FARM", "scopeRef": ""},
+])
+def test_route_backed_gate_pipeline_counts_malformed_farm_scope_entries(
+        fresh_env, malformed_farm_scope):
+    store, _, _ = fresh_env
+    pipeline = _route_pipeline(store)
+    sub = demo.spray_submission(
+        f"mp7-route-malformed-farm:{_uid()}",
+        erp_id=f"erp:mp7.route.malformed-farm.{_uid()}",
+        confirm=True,
+    )
+
+    with store.tx() as cur:
+        ctx = pipeline._new_context(cur, sub)
+        ctx.envelope = {
+            "anchorScopes": [
+                {"scopeType": "FARM", "scopeRef": demo.FARM},
+                malformed_farm_scope,
+            ],
+        }
+        outcome = pipeline._resolve_profile_route(ctx)
+
+    assert outcome.final_outcome == "RETAIN_DRAFT"
+    assert outcome.problems[0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+    assert "exactly one FARM anchor scope entry" in outcome.problems[0]["detail"]
+    assert ctx.gate_sequence[-1]["gate"] == "PACK_PROFILE_APPLICABILITY"
+    assert ctx.gate_sequence[-1]["outcome"] == "PROFILE_ROUTE_REFUSE"
+
+
 def test_route_backed_gate_pipeline_refuses_same_context_time_bounded_route(
         fresh_env):
     store, _, _ = fresh_env
