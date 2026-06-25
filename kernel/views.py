@@ -25,6 +25,7 @@ from .contracts import canonical_json
 from .materializer import Materializer
 from .problems import runtime_problem
 from .context import mint as _mint, now_iso, parse_ts
+from .profile_runtime import ProfileRuntimeError, resolve_active_descriptor
 
 PASSPORT_VIEW_REF = "view:si.ffs.spray-register.passportview.v0_1"
 DOCASM_VIEW_REF = "view:si.ffs.inspection-register.documentassembly.v0_1"
@@ -84,10 +85,18 @@ def _refusal_response(problem: dict, qualification: dict | None = None) -> dict:
 
 
 class OutputGenerator:
-    def __init__(self, store):
+    def __init__(self, store, *, active_descriptor=None, active_profile=None):
         self.store = store
+        if (active_descriptor is not None and active_profile is not None
+                and active_descriptor != active_profile):
+            raise ProfileRuntimeError(
+                "active_descriptor and active_profile refer to different descriptors")
+        self.active_profile = resolve_active_descriptor(
+            active_descriptor if active_descriptor is not None else active_profile,
+            allow_config_default=True,
+        )
         self.authority = AuthorityEvaluator(store)
-        self.materializer = Materializer(store)
+        self.materializer = Materializer(store, active_descriptor=self.active_profile)
 
     # ---------------------------------------------------------------- shared --
 
@@ -260,7 +269,7 @@ class OutputGenerator:
                 "materializationResultRef": resolution["materializationResult"]["resultId"],
                 "representationModes": ["HUMAN_READABLE", "MACHINE_READABLE"],
                 "publicationState": "SERVABLE",
-                "profileRefs": [config.PROFILE_REF],
+                "profileRefs": [self.active_profile.profile_ref],
                 "recipientPartyRef": requesting_party_ref,
             }
 

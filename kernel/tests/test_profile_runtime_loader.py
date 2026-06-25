@@ -40,7 +40,9 @@ from kernel.profile_runtime import (
     resolve_profile_route,
     resolve_active_descriptor,
 )
+from kernel.stages import IngressNormalizer
 from kernel.store import Store
+from kernel.views import OutputGenerator
 
 
 def _base_doc() -> dict:
@@ -166,6 +168,28 @@ def _si_route(**overrides) -> ProfileRouteRecord:
     }
     values.update(overrides)
     return ProfileRouteRecord(**values)
+
+
+def _route_registry(*, enabled=None):
+    return load_profile_descriptor_registry(
+        config.PACKAGE_ROOT,
+        allowed_profile_package_names=(
+            config.ALLOWED_ACTIVE_PROFILE_PACKAGE_NAMES
+            if enabled is None else enabled
+        ),
+    )
+
+
+def _route_pipeline(store, *, routes=None, registry=None, selected=None, tenant=None):
+    return GatePipeline(
+        store,
+        profile_route_records=([_si_route()] if routes is None else routes),
+        profile_route_registry=registry or _route_registry(),
+        selected_profile_package_names=(
+            config.ACTIVE_PROFILE_PACKAGE_NAMES if selected is None else selected
+        ),
+        tenant_ref=config.TENANT_REF if tenant is None else tenant,
+    )
 
 
 def _admin_dsn() -> str:
@@ -1498,6 +1522,214 @@ def test_gate_pipeline_explicit_active_profile_matches_default_for_clean_operati
     assert default["decisionOutcome"] == explicit["decisionOutcome"] == \
         "PROMOTE_ACCEPTED"
     assert default.get("problems", []) == explicit.get("problems", []) == []
+
+
+def test_gate_pipeline_default_sequence_remains_unrouted(fresh_env):
+    store, pipeline, _ = fresh_env
+
+    result = pipeline.commit(demo.spray_submission(
+        f"mp7-default:{_uid()}",
+        erp_id=f"erp:mp7.default.{_uid()}",
+        confirm=True,
+    ))
+
+    assert result["decisionOutcome"] == "PROMOTE_ACCEPTED"
+    trace = _trace_payload(store, result)
+    gates = [entry["gate"] for entry in trace["gateSequence"]]
+    assert "PROFILE_ROUTE" not in gates
+    assert gates[:2] == ["INGRESS_NORMALIZATION", "AUTHORITY"]
+
+
+@pytest.mark.parametrize("kwargs", [
+    {"profile_route_records": [_si_route()]},
+    {"profile_route_registry": _route_registry()},
+    {"selected_profile_package_names": config.ACTIVE_PROFILE_PACKAGE_NAMES},
+    {"tenant_ref": config.TENANT_REF},
+    {
+        "profile_route_records": [_si_route()],
+        "profile_route_registry": _route_registry(),
+        "selected_profile_package_names": config.ACTIVE_PROFILE_PACKAGE_NAMES,
+    },
+])
+def test_gate_pipeline_partial_route_config_fails_closed(kwargs):
+    with pytest.raises(ProfileRuntimeError, match="route-backed GatePipeline requires"):
+        GatePipeline(object(), **kwargs)
+
+
+def test_route_backed_gate_pipeline_accepts_clean_si_operation(fresh_env):
+    store, default_pipeline, _ = fresh_env
+    routed_pipeline = _route_pipeline(store)
+
+    default = default_pipeline.commit(demo.spray_submission(
+        f"mp7-default-clean:{_uid()}",
+        erp_id=f"erp:mp7.default.clean.{_uid()}",
+        confirm=True,
+    ))
+    routed = routed_pipeline.commit(demo.spray_submission(
+        f"mp7-routed-clean:{_uid()}",
+        erp_id=f"erp:mp7.routed.clean.{_uid()}",
+        confirm=True,
+    ))
+
+    assert default["decisionOutcome"] == routed["decisionOutcome"] == \
+        "PROMOTE_ACCEPTED"
+    assert default.get("problems", []) == routed.get("problems", []) == []
+    trace = _trace_payload(store, routed)
+    assert [entry["gate"] for entry in trace["gateSequence"]][:3] == [
+        "INGRESS_NORMALIZATION",
+        "PACK_PROFILE_APPLICABILITY",
+        "AUTHORITY",
+    ]
+    assert trace["gateSequence"][1]["outcome"] == "PROFILE_ROUTE_PASS"
+
+
+@pytest.mark.parametrize("routes,match", [
+    ([], "no active profile route"),
+    ([_si_route(), _si_route()], "multiple active overlapping"),
+    (
+        [_si_route(
+            descriptor_identity="profile_si_ffs/runtime_profile_descriptor.json#bad",
+        )],
+        "descriptor identity",
+    ),
+])
+def test_route_backed_gate_pipeline_refuses_route_resolution_failures(
+        fresh_env, routes, match):
+    store, _, _ = fresh_env
+    pipeline = _route_pipeline(store, routes=routes)
+
+    result = pipeline.commit(demo.spray_submission(
+        f"mp7-route-fail:{_uid()}",
+        erp_id=f"erp:mp7.route.fail.{_uid()}",
+        confirm=True,
+    ))
+
+    assert result["decisionOutcome"] == "RETAIN_DRAFT"
+    assert result["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+    assert match in result["problems"][0]["detail"]
+    trace = _trace_payload(store, result)
+    assert [entry["gate"] for entry in trace["gateSequence"]] == [
+        "INGRESS_NORMALIZATION",
+        "PACK_PROFILE_APPLICABILITY",
+    ]
+    assert trace["gateSequence"][-1]["outcome"] == "PROFILE_ROUTE_REFUSE"
+
+
+def test_route_backed_gate_pipeline_refuses_missing_farm_context(fresh_env):
+    store, _, _ = fresh_env
+    pipeline = _route_pipeline(store)
+    sub = demo.spray_submission(
+        f"mp7-route-no-farm:{_uid()}",
+        erp_id=f"erp:mp7.route.no-farm.{_uid()}",
+        confirm=True,
+    )
+    sub["targetScopes"] = [{"scopeType": "FIELD", "scopeRef": "field:demo.no-farm"}]
+
+    result = pipeline.commit(sub)
+
+    assert result["decisionOutcome"] == "RETAIN_DRAFT"
+    assert result["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+    trace = _trace_payload(store, result)
+    assert [entry["gate"] for entry in trace["gateSequence"]] == [
+        "INGRESS_NORMALIZATION",
+        "PACK_PROFILE_APPLICABILITY",
+    ]
+    assert trace["gateSequence"][-1]["outcome"] == "PROFILE_ROUTE_REFUSE"
+
+
+@pytest.mark.parametrize("package_name", [
+    "profile_nl_go_glmc7_2026",
+    "profile_rs_organic_crop",
+])
+def test_route_backed_gate_pipeline_refuses_design_only_route_target(
+        fresh_env, package_name):
+    if not (config.PACKAGE_ROOT / package_name).exists():
+        pytest.skip(f"{package_name} is not present in this checkout")
+    store, _, _ = fresh_env
+    pipeline = _route_pipeline(
+        store,
+        routes=[_si_route(profile_package_name=package_name)],
+        registry=_route_registry(enabled=("profile_si_ffs", package_name)),
+        selected=("profile_si_ffs", package_name),
+    )
+
+    result = pipeline.commit(demo.spray_submission(
+        f"mp7-route-design-only:{_uid()}",
+        erp_id=f"erp:mp7.route.design-only.{_uid()}",
+        confirm=True,
+    ))
+
+    assert result["decisionOutcome"] == "RETAIN_DRAFT"
+    assert result["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+    trace = _trace_payload(store, result)
+    assert trace["gateSequence"][-1]["gate"] == "PACK_PROFILE_APPLICABILITY"
+    assert trace["gateSequence"][-1]["outcome"] == "PROFILE_ROUTE_REFUSE"
+
+
+def test_route_backed_gate_pipeline_uses_descriptor_backed_policy_paths(
+        fresh_env, monkeypatch):
+    store, _, _ = fresh_env
+
+    def fail_config_policy(*_args, **_kwargs):
+        raise AssertionError("config-backed policy path was called")
+
+    monkeypatch.setattr(profile_policy, "validation_policy", fail_config_policy)
+    monkeypatch.setattr(profile_policy, "load_evidence_review_policy",
+                        fail_config_policy)
+    monkeypatch.setattr(profile_policy, "operation_floor_with_display",
+                        fail_config_policy)
+    monkeypatch.setattr(profile_policy, "operation_floor_display",
+                        fail_config_policy)
+    monkeypatch.setattr(profile_policy, "advisory_rules", fail_config_policy)
+    monkeypatch.setattr(sufficiency, "build_floor_case", fail_config_policy)
+    monkeypatch.setattr(sufficiency, "operation_advisories", fail_config_policy)
+
+    result = _route_pipeline(store).commit(demo.spray_submission(
+        f"mp7-route-provider:{_uid()}",
+        erp_id=f"erp:mp7.route.provider.{_uid()}",
+        confirm=True,
+    ))
+
+    assert result["decisionOutcome"] == "PROMOTE_ACCEPTED"
+
+
+def test_route_backed_handoff_binds_materializer_to_resolved_descriptor(fresh_env):
+    store, _, _ = fresh_env
+    pipeline = _route_pipeline(store)
+    sub = demo.spray_submission(
+        f"mp7-route-bind:{_uid()}",
+        erp_id=f"erp:mp7.route.bind.{_uid()}",
+        confirm=True,
+    )
+
+    with store.tx() as cur:
+        ctx = pipeline._new_context(cur, sub)
+        ingress = IngressNormalizer().run(ctx)
+        assert not hasattr(ingress, "result")
+        assert pipeline._resolve_profile_route(ctx) is None
+
+    assert ctx.profile_route_resolution.descriptor == config.ACTIVE_PROFILE
+    assert ctx.active_profile == ctx.profile_route_resolution.descriptor
+    assert ctx.materializer.active_profile == ctx.profile_route_resolution.descriptor
+    assert ctx.materializer.context.active_profile == ctx.profile_route_resolution.descriptor
+    assert ctx.context_assembler.active_profile == ctx.profile_route_resolution.descriptor
+    assert ctx.policy_provider.descriptor == ctx.profile_route_resolution.descriptor
+    assert ctx.si_reference_bindings.regsr_shipped_snapshot_ref == \
+        context.SI_REFERENCE_BINDINGS.regsr_shipped_snapshot_ref
+
+
+def test_output_generator_explicit_descriptor_matches_default_profile_refs(fresh_env):
+    store, _, outputs = fresh_env
+    explicit = OutputGenerator(store, active_descriptor=config.ACTIVE_PROFILE)
+
+    default_view = outputs.passport_view(demo.FARM, demo.FARMER)
+    explicit_view = explicit.passport_view(demo.FARM, demo.FARMER)
+
+    assert default_view["refused"] is False
+    assert explicit_view["refused"] is False
+    assert default_view["metadata"]["profileRefs"] == \
+        explicit_view["metadata"]["profileRefs"] == [config.ACTIVE_PROFILE.profile_ref]
+    assert explicit.materializer.active_profile == config.ACTIVE_PROFILE
 
 
 def test_descriptor_backed_validation_uses_provider_without_config_wrapper(

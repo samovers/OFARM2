@@ -32,7 +32,9 @@ from .context import ContextAssembler, ProductRegister, SIReferenceBindings, min
 from .contracts import sha256_of
 from .emission import PromotionTraceWriter, ReplayWriter
 from .materializer import Materializer
-from .profile_runtime import ProfileRuntimeError, resolve_active_descriptor
+from .problems import runtime_problem
+from .profile_runtime import (ProfileRuntimeError, resolve_active_descriptor,
+                              resolve_profile_route)
 from .stages import (AuthorityGate, EnvelopePersist, EvidenceSufficiencyGate,
                      GateContext, GateRefusal, GateReplay, IngressNormalizer,
                      MaterializationGate, ProfileApplicabilityGate,
@@ -61,8 +63,28 @@ class GatePipeline:
         *,
         active_descriptor=None,
         active_profile=None,
+        profile_route_records=None,
+        profile_route_registry=None,
+        selected_profile_package_names=None,
+        tenant_ref=None,
     ):
         self.store = store
+        route_inputs = (
+            profile_route_records,
+            profile_route_registry,
+            selected_profile_package_names,
+            tenant_ref,
+        )
+        self.route_backed = any(value is not None for value in route_inputs)
+        if self.route_backed and any(value is None for value in route_inputs):
+            raise ProfileRuntimeError(
+                "route-backed GatePipeline requires profile_route_records, "
+                "profile_route_registry, selected_profile_package_names, and "
+                "tenant_ref")
+        self.profile_route_records = profile_route_records
+        self.profile_route_registry = profile_route_registry
+        self.selected_profile_package_names = selected_profile_package_names
+        self.tenant_ref = tenant_ref
         if (active_descriptor is not None and active_profile is not None
                 and active_descriptor != active_profile):
             raise ProfileRuntimeError(
@@ -138,12 +160,81 @@ class GatePipeline:
             acting_party=sub["actingPartyRef"], idem_key=sub["idempotencyKey"],
             event_id=mint("event"), assertion_id=mint("assert"))
 
+    @staticmethod
+    def _route_farm_ref(ctx: GateContext) -> str:
+        scopes = ((ctx.envelope or {}).get("anchorScopes") or [])
+        farm_refs = [
+            scope.get("scopeRef") for scope in scopes
+            if isinstance(scope, dict) and scope.get("scopeType") == "FARM"
+            and scope.get("scopeRef")
+        ]
+        unique = tuple(dict.fromkeys(farm_refs))
+        if len(unique) != 1:
+            raise ProfileRuntimeError(
+                "profile route resolution requires exactly one governed farm "
+                "scope in the normalized submission envelope")
+        return unique[0]
+
+    def _bind_route_resolution(self, ctx: GateContext, resolution) -> None:
+        descriptor = resolution.descriptor
+        bindings = SIReferenceBindings.from_descriptor(descriptor)
+        products = ProductRegister(bindings)
+        products.load_from_store(ctx.store)
+        ctx.profile_route_resolution = resolution
+        ctx.active_profile = descriptor
+        ctx.policy_provider = profile_policy.DescriptorPolicyProvider(descriptor)
+        ctx.context_assembler = ContextAssembler(
+            ctx.store,
+            active_descriptor=descriptor,
+        )
+        ctx.materializer = Materializer(ctx.store, active_descriptor=descriptor)
+        ctx.products = products
+        ctx.si_reference_bindings = bindings
+
+    def _resolve_profile_route(self, ctx: GateContext):
+        try:
+            farm_ref = self._route_farm_ref(ctx)
+            resolution = resolve_profile_route(
+                self.profile_route_registry,
+                self.selected_profile_package_names,
+                self.profile_route_records,
+                tenant_ref=self.tenant_ref,
+                farm_ref=farm_ref,
+            )
+        except ProfileRuntimeError as exc:
+            ctx.log("PACK_PROFILE_APPLICABILITY", "PROFILE_ROUTE_REFUSE",
+                    reason_code="PROFILE_NOT_ACTIVE",
+                    rationale=f"PROFILE_ROUTE: {exc}")
+            return GateRefusal(
+                "PACK_PROFILE_APPLICABILITY", "PROFILE_ROUTE_REFUSE",
+                "RETAIN_DRAFT",
+                [runtime_problem(
+                    "PROFILE_NOT_ACTIVE", "Profile route unavailable",
+                    "the active profile route could not be resolved "
+                    f"({exc}); the claim stays a draft (fail closed)",
+                    suggested_remediation="restore an explicit active "
+                    "tenant/farm profile route before resubmitting")])
+        ctx.farm_ref = farm_ref
+        self._bind_route_resolution(ctx, resolution)
+        ctx.log("PACK_PROFILE_APPLICABILITY", "PROFILE_ROUTE_PASS",
+                rationale="PROFILE_ROUTE: resolved active profile route",
+                refs=[resolution.route.route_id, resolution.descriptor.profile_ref])
+        return None
+
     def _commit_in_tx(self, cur, sub: dict) -> dict:
         ctx = self._new_context(cur, sub)
 
         ingress = IngressNormalizer().run(ctx)
         if isinstance(ingress, GateReplay):
             return ingress.result
+
+        if self.route_backed:
+            route_outcome = self._resolve_profile_route(ctx)
+            if isinstance(route_outcome, GateRefusal):
+                ctx.problems.extend(route_outcome.problems)
+                ctx.final_outcome = route_outcome.final_outcome
+                ctx.ensure_envelope_stored()
+                return PromotionTraceWriter().write(ctx)
 
         for stage in CHAIN:
             outcome = stage.run(ctx)
