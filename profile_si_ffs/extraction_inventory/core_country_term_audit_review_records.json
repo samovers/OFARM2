@@ -246,6 +246,16 @@
       "owner": "extraction-consistency-check-review",
       "expiresWhen": "The checker starts enforcing L5 certification or consuming profile navigation as runtime input.",
       "forbiddenUse": "Do not treat this manual check as the future L5 country-term allowlist."
+    },
+    {
+      "id": "profile-runtime-readiness-check-active-si-boundary",
+      "path": "conformance/ofarm_profile_runtime_readiness_check.py",
+      "term": "SI",
+      "category": "ACTIVE_RUNTIME_SI_SUPPORT",
+      "reason": "The MP7.6 readiness command names the current SI active runtime seam while checking that candidate profiles are not overclaimed as ready.",
+      "owner": "profile-runtime-readiness-review",
+      "expiresWhen": "The readiness command starts claiming second-profile runtime readiness or stops treating SI as the only current active runtime profile.",
+      "forbiddenUse": "Do not treat this command output as profile activation, generated capability expansion, or L5 country/profile neutrality certification."
     }
   ]
 }
