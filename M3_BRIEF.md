@@ -158,7 +158,7 @@ Each slice should be a narrow PR with: goal, touched files, forbidden files, beh
 
 Allowed change:
 
-- Add `M3_BRIEF.md` and optionally `M3_TICKETS.md`.
+- Add `M3_BRIEF.md` and `M3_TICKETS.md`.
 - Record the current M2/MP7/E-006 boundaries.
 - Run the baseline checks and record whether they pass.
 
@@ -418,7 +418,7 @@ Title: `M3.0 — Add platform MVP brief and ticket map`
 Goal:
 
 - Add this brief as `M3_BRIEF.md`.
-- Add `M3_TICKETS.md` with the ordered M3.1–M3.8 ticket stubs.
+- Add `M3_TICKETS.md` with the ordered M3.0–M3.8 ticket stubs.
 - Record the E-006 default posture: M3 displays warning result problems only; durable Advisory Twin output remains deferred unless a separate implementation slice resolves it.
 
 Validation:
