@@ -903,6 +903,26 @@ def test_profile_route_validates_inactive_record_structure():
         )
 
 
+@pytest.mark.parametrize("route,match", [
+    (_si_route(profile_package_name="contracts"), "profile_"),
+    (_si_route(status="PAUSED"), "status"),
+])
+def test_profile_route_rejects_malformed_route_values(route, match):
+    registry = load_profile_descriptor_registry(
+        config.PACKAGE_ROOT,
+        allowed_profile_package_names=config.ALLOWED_ACTIVE_PROFILE_PACKAGE_NAMES,
+    )
+
+    with pytest.raises(ProfileRuntimeError, match=match):
+        resolve_profile_route(
+            registry,
+            config.ACTIVE_PROFILE_PACKAGE_NAMES,
+            [route],
+            tenant_ref=config.TENANT_REF,
+            farm_ref=demo.FARM,
+        )
+
+
 def test_profile_route_effective_time_uses_half_open_intervals():
     registry = load_profile_descriptor_registry(
         config.PACKAGE_ROOT,
@@ -948,6 +968,37 @@ def test_profile_route_effective_time_uses_half_open_intervals():
             [first, second],
             tenant_ref=config.TENANT_REF,
             farm_ref=demo.FARM,
+        )
+
+
+def test_profile_route_rejects_overlapping_time_bounded_active_routes():
+    registry = load_profile_descriptor_registry(
+        config.PACKAGE_ROOT,
+        allowed_profile_package_names=config.ALLOWED_ACTIVE_PROFILE_PACKAGE_NAMES,
+    )
+    t0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    t1 = datetime(2026, 6, 1, tzinfo=timezone.utc)
+    t2 = datetime(2026, 9, 1, tzinfo=timezone.utc)
+    t3 = datetime(2027, 1, 1, tzinfo=timezone.utc)
+    first = _si_route(
+        route_id=f"profileroute:test.si.overlap.first.{_uid()}",
+        effective_from=t0,
+        effective_until=t2,
+    )
+    second = _si_route(
+        route_id=f"profileroute:test.si.overlap.second.{_uid()}",
+        effective_from=t1,
+        effective_until=t3,
+    )
+
+    with pytest.raises(ProfileRuntimeError, match="multiple active overlapping"):
+        resolve_profile_route(
+            registry,
+            config.ACTIVE_PROFILE_PACKAGE_NAMES,
+            [first, second],
+            tenant_ref=config.TENANT_REF,
+            farm_ref=demo.FARM,
+            effective_time=t1,
         )
 
 
