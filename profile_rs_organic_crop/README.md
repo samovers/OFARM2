@@ -67,6 +67,8 @@ rather than promote.
   conformance case inventory.
 - `source_packet_extracts/source_manifest.json` - parse-only source posture
   manifest; no official local source packets are claimed.
+- `adapter_boundary/serbian_database_copy_adapter_boundary_plan.md` - docs-only
+  boundary for private Serbian database-copy adapter rehearsal.
 
 ## Reserved Identifiers
 
