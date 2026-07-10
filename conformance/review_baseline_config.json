@@ -1,0 +1,64 @@
+{
+  "schemaVersion": "ofarm.review-baseline-config.v1",
+  "knownGreenBaseline": {
+    "gitSha": "fc800d5a1be35c95a8f348fda9d8453b06e37018",
+    "githubActionsRunId": "28176813292",
+    "observedInRun": {
+      "pythonVersion": "3.12.13",
+      "postgresqlVersion": "17.10",
+      "postgresqlImageDigest": "sha256:5f050f770b427fbd477edee6c3968a72e5c6be97e050a7e368b2b74a9494a285",
+      "runner": "ubuntu-24.04",
+      "runnerImageVersion": "20260622.220.1",
+      "actions": {
+        "actions/checkout@v5": "93cb6efe18208431cddfb8368fd83d5badbf9bfd",
+        "actions/setup-python@v6": "ece7cb06caefa5fff74198d8649806c4678c61a1",
+        "actions/upload-artifact@v6": "b7c566a772e6b6bfb58ed0dc250532a479d7789f"
+      },
+      "testSummary": {
+        "collected": 491,
+        "passed": 491,
+        "skipped": 0,
+        "deselected": 0,
+        "unavailable": 0,
+        "warnings": 1
+      },
+      "warning": {
+        "category": "StarletteDeprecationWarning",
+        "message": "Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead."
+      }
+    },
+    "chosenForFirstLockedRerun": {
+      "pipVersion": "26.1",
+      "reason": "The historical run did not print pip --version. Version 26.1 is a new explicit pin; the first locked rerun records and verifies the exact observed package-manager version."
+    }
+  },
+  "requiredEnvironment": {
+    "operatingSystem": "Linux",
+    "machine": "x86_64",
+    "pythonImplementation": "CPython",
+    "pythonVersion": "3.12.13",
+    "postgresqlVersion": "17.10",
+    "pipVersion": "26.1",
+    "runner": "ubuntu-24.04",
+    "locale": "C.UTF-8",
+    "timezone": "UTC",
+    "pythonHashSeed": "0"
+  },
+  "paths": {
+    "dependencyLock": "requirements-review-baseline.lock",
+    "packageManagerLock": "requirements-review-pip.lock",
+    "schema": "kernel/schema.sql",
+    "testRoot": "kernel/tests"
+  },
+  "canonicalCommand": [
+    "python",
+    "conformance/run_review_baseline.py",
+    "run",
+    "--output-dir",
+    ".artifacts/review-baseline/run"
+  ],
+  "verifiedArtifacts": [
+    "profile_si_ffs/OFARM_Capability_Manifest_si_ffs_pilot_v0_1.json",
+    "profile_si_ffs/OFARM_ActiveArtifactSet_example_si_ffs_pilot_v0_1.json"
+  ]
+}

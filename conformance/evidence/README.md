@@ -21,3 +21,9 @@ profile-local test output could be represented as executed evidence.
 Do not rename, overwrite, or delete historical evidence files in a profile
 extraction PR unless that PR explicitly changes the evidence lane and explains
 the migration.
+
+The issue #168 deterministic all-test baseline is not written here. It lives in
+the ignored `.artifacts/review-baseline/` directory and is uploaded from that
+exact current-run directory in CI. The legacy writer is redirected to
+`.artifacts/platform-evidence/` in CI so the upload does not include this
+historical directory.

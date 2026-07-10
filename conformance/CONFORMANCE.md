@@ -3,6 +3,10 @@
 Two layers: **package self-check** (runs now) and the **platform MVP plus root
 conformance regression suite** (runs against the M1+ implementation).
 
+The deterministic, complete Kernel review baseline, exact environment pins,
+all-test evidence envelope, and clean-run comparison are documented in
+`conformance/REVIEW_BASELINE.md`.
+
 ## Conformance lanes
 
 These lanes keep root conformance, profile design material, and profile
@@ -11,6 +15,7 @@ engineering tests from being read as the same kind of evidence:
 | Lane | Owner | Current artifact(s) | Meaning |
 |---|---|---|---|
 | `PACKAGE_SELF_CHECK` | Root `conformance/` | `conformance/ofarm_pkg_contract_check.py` | Repository/package parse, digest, and authored-instance validation. |
+| `REVIEW_BASELINE` | Root `conformance/` | CI artifact `review-baseline` | Deterministic inventory and outcomes for every test collected from `kernel/tests`, plus exact environment and input digests. |
 | `PLATFORM_MVP_EXECUTED_EVIDENCE` | Root `conformance/evidence/` | `platform_mvp_results_*.json` | Timestamped output from the named root platform MVP plus root conformance regression suite only. |
 | `PLATFORM_MVP_FIXTURES` | Root `conformance/fixtures/` | Gate-sequencing fixtures | Canonical fixtures executed by root platform tests. |
 | `PROFILE_DESIGN_CASES` | Profile packages | NL GO + GLMC 7 design cases | Profile design inventories, not executed evidence. |

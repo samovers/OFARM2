@@ -124,7 +124,23 @@ def pytest_runtest_logreport(report):
 def pytest_sessionfinish(session, exitstatus):
     if not _RESULTS:
         return  # no conformance tests ran (e.g. -k filter); nothing to attest
-    EVIDENCE_DIR.mkdir(exist_ok=True)
+    if os.environ.get("OFARM_DISABLE_PLATFORM_MVP_EVIDENCE") == "1":
+        return  # complete review baseline has its own all-test evidence writer
+    # The reproducible review-baseline runner redirects this legacy,
+    # duration-bearing evidence file into its ignored artifact directory.  A
+    # normal pytest invocation retains the historical repository-local path.
+    evidence_dir = EVIDENCE_DIR
+    configured_dir = os.environ.get("OFARM_PLATFORM_MVP_EVIDENCE_DIR")
+    if configured_dir:
+        evidence_dir = config.PACKAGE_ROOT / configured_dir
+        evidence_dir = evidence_dir.resolve()
+        try:
+            evidence_dir.relative_to(config.PACKAGE_ROOT.resolve())
+        except ValueError as exc:
+            raise pytest.UsageError(
+                "OFARM_PLATFORM_MVP_EVIDENCE_DIR must stay inside the package root"
+            ) from exc
+    evidence_dir.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(timezone.utc)
     payload = {
         "suite": PLATFORM_MVP_EVIDENCE_SUITE,
@@ -140,5 +156,5 @@ def pytest_sessionfinish(session, exitstatus):
                        "executed evidence (AGENTS.md rule 7). All test data is "
                        "fictional and format-true (privacy rule 1).",
     }
-    path = EVIDENCE_DIR / f"platform_mvp_results_{ts.strftime('%Y-%m-%dT%H%M%SZ')}.json"
+    path = evidence_dir / f"platform_mvp_results_{ts.strftime('%Y-%m-%dT%H%M%SZ')}.json"
     path.write_text(json.dumps(payload, indent=2) + "\n")

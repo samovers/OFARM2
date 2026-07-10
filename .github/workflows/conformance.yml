@@ -1,6 +1,5 @@
-# CI backing for the conformance evidence (steward review, PR #2 finding 5):
-# the package self-check and the platform-MVP suite run on every push/PR so
-# committed evidence is independently reproducible, not self-reported only.
+# Deterministic review baseline for issue #168. Runtime behavior and claims
+# are outside this workflow's scope.
 name: conformance
 
 on:
@@ -10,10 +9,13 @@ on:
 
 jobs:
   conformance:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     services:
       postgres:
-        image: postgres:17
+        # Immutable last-green PostgreSQL 17.10 artifact; the baseline also
+        # verifies the SQL-observed server version before running tests.
+        image: postgres@sha256:5f050f770b427fbd477edee6c3968a72e5c6be97e050a7e368b2b74a9494a285
         env:
           POSTGRES_USER: ofarm
           POSTGRES_PASSWORD: ofarm
@@ -21,32 +23,63 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U ofarm"
+          --health-cmd "pg_isready -U ofarm -d ofarm_kernel"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
-          python-version: "3.12"
-      - name: Install dependencies
-        run: pip install fastapi uvicorn pytest "psycopg[binary]" jsonschema rfc3339-validator httpx
-      - name: Package self-check (must PASS before anything else)
-        run: python3 conformance/ofarm_pkg_contract_check.py
-      - name: Platform MVP conformance suite + stage-contract tests
+          python-version: "3.12.13"
+          architecture: x64
+      - name: Create isolated locked environment
+        run: |
+          python -m venv .review-venv
+          .review-venv/bin/python -m pip install --require-hashes --only-binary=:all: --no-deps --requirement requirements-review-pip.lock
+          .review-venv/bin/python -m pip install --require-hashes --only-binary=:all: --no-deps --requirement requirements-review-baseline.lock
+          .review-venv/bin/python -m pip check
+      - name: Complete Kernel baseline run 1
         env:
           OFARM_PG_DSN: "host=localhost port=5432 dbname=ofarm_kernel_test user=ofarm password=ofarm"
           OFARM_PG_ADMIN_DSN: "host=localhost port=5432 dbname=postgres user=ofarm password=ofarm"
-        run: python -m pytest kernel/tests/ -q
-      - name: Verify generated manifest artifacts
+        run: .review-venv/bin/python conformance/run_review_baseline.py run --output-dir .artifacts/review-baseline/run-1
+      - name: Complete Kernel baseline run 2
         env:
           OFARM_PG_DSN: "host=localhost port=5432 dbname=ofarm_kernel_test user=ofarm password=ofarm"
           OFARM_PG_ADMIN_DSN: "host=localhost port=5432 dbname=postgres user=ofarm password=ofarm"
-        run: python3 -m kernel.manifest --verify-generated
-      - name: Upload executed evidence
+        run: .review-venv/bin/python conformance/run_review_baseline.py run --output-dir .artifacts/review-baseline/run-2
+      - name: Prove clean-run equivalence
+        run: >-
+          .review-venv/bin/python conformance/run_review_baseline.py compare
+          .artifacts/review-baseline/run-1/review-baseline-evidence.json
+          .artifacts/review-baseline/run-2/review-baseline-evidence.json
+          --output .artifacts/review-baseline/equivalence.json
+      - name: Preserve root platform MVP evidence lane
+        env:
+          OFARM_PG_DSN: "host=localhost port=5432 dbname=ofarm_kernel_test user=ofarm password=ofarm"
+          OFARM_PG_ADMIN_DSN: "host=localhost port=5432 dbname=postgres user=ofarm password=ofarm"
+          OFARM_PLATFORM_MVP_EVIDENCE_DIR: .artifacts/platform-evidence
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+          PYTHONDONTWRITEBYTECODE: "1"
+          PYTHONHASHSEED: "0"
+          TZ: UTC
+          LANG: C.UTF-8
+          LC_ALL: C.UTF-8
+        run: .review-venv/bin/python -m pytest kernel/tests/test_conformance.py -q -p no:cacheprovider
+      - name: Upload deterministic review baseline
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: conformance-evidence
-          path: conformance/evidence/
+          name: review-baseline
+          path: .artifacts/review-baseline/
+          include-hidden-files: true
+          if-no-files-found: error
+      - name: Upload root platform MVP evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: platform-mvp-evidence
+          path: .artifacts/platform-evidence/
+          include-hidden-files: true
+          if-no-files-found: error
