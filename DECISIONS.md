@@ -2,6 +2,10 @@
 
 Settled during pre-implementation review (2026-06). A fresh agent does not re-litigate these; a genuinely blocking problem with one of them goes to `ERRATA.md` with evidence.
 
+Implementation architecture ADRs are kept separately from OFARM law and extracted
+contracts. [ADR 0002](docs/adr/0002-valid-time-and-knowledge-time.md) defines
+valid-time and tenant knowledge-time semantics for issue #170.
+
 | # | Decision | Why |
 |---|----------|-----|
 | D1 | Kernel / Core / Platform is an **implementation & conformance packaging profile**, not new OFARM authority. | Freeze-compatible; Constitution stays the law. |
