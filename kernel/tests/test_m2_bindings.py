@@ -11,7 +11,11 @@ from __future__ import annotations
 
 import uuid
 
+from kernel import context
 from kernel.adapters import ImportRunner, ParseResult
+from kernel.contracts import sha256_of
+from kernel.context import REGSR_DATA_FAMILY, REGSR_SNAPSHOT_PREFIX
+from kernel.store import Store
 from kernel.verification import (CONFIRM, IDENTITY, LOCATOR, NONE, REFUSE,
                                  REVIEW, LookupResult, ReferenceResolver)
 
@@ -22,7 +26,7 @@ def uid():
     return uuid.uuid4().hex[:10]
 
 
-def _import_fixture_snapshot(store, prefix, *, effective="2026-05-01T00:00:00Z",
+def _import_fixture_snapshot(store, prefix, *, effective="2026-07-01T00:00:00Z",
                              until=None):
     """A dated fixture ReferenceSnapshot under `prefix`, via the G2 importer."""
     sid = f"{prefix}.{uid()}"
@@ -35,21 +39,41 @@ def _import_fixture_snapshot(store, prefix, *, effective="2026-05-01T00:00:00Z",
             "sourceArtifactRefs": ["surface:fixture.test.source"]}
     if until:
         meta["effectiveUntil"] = until
+    artifact = {
+        "fixtureSnapshotRef": sid,
+        "records": [{"fixtureKey": f"fixture-{uid()}"}],
+    }
     result = ImportRunner(store).run_import(
-        ParseResult(ok=True, sourceDigest=f"sha256-{uid()}"), meta)
+        ParseResult(
+            ok=True,
+            sourceDigest=sha256_of(artifact),
+            recordCount=1,
+            records=artifact,
+        ),
+        meta,
+        data_family=REGSR_DATA_FAMILY,
+    )
     assert result["imported"]
     return sid
 
 
 def _verify(store, *, prefix, query, lookup, scheme="fixture-register",
             key_field="fixture-key", **kw):
-    resolver = ReferenceResolver(store)
-    with store.serialized_tx() as cur:
-        return resolver.verify(
-            cur, query_value=query, snapshot_prefix=prefix, lookup=lookup,
-            profile_ref="profile:fixture", authority_ref="party:fixture.authority",
-            jurisdiction_ref="jurisdiction:FIXTURE", scheme=scheme,
-            key_field=key_field, **kw)
+    # Imports after startup become visible only in a new immutable bundle.
+    runtime = Store(dsn=store.dsn)
+    try:
+        context.bootstrap(runtime)
+        resolver = ReferenceResolver(runtime)
+        with runtime.serialized_tx() as cur:
+            return resolver.verify(
+                cur, query_value=query, snapshot_prefix=prefix, lookup=lookup,
+                profile_ref="profile:fixture", authority_ref="party:fixture.authority",
+                jurisdiction_ref="jurisdiction:FIXTURE", scheme=scheme,
+                key_field=key_field,
+                lookup_runtime_bundle=runtime.runtime_bundle,
+                **kw)
+    finally:
+        runtime.close()
 
 
 def _identity(sid, q):
@@ -75,7 +99,7 @@ def _identity_no_key(sid, q):
 # ---------------------------------------------------------------------------
 
 def test_g3_identity_grade_confirms(store):
-    prefix = f"referencesnapshot:fixture.reg.{uid()}"
+    prefix = f"{REGSR_SNAPSHOT_PREFIX}.fixture.reg.{uid()}"
     sid = _import_fixture_snapshot(store, prefix)
     r = _verify(store, prefix=prefix, query="ACME-42", lookup=_identity,
                 external_id_role="OTHER")
@@ -92,7 +116,7 @@ def test_g3_identity_grade_confirms(store):
 
 
 def test_g3_locator_only_routes_to_review(store):
-    prefix = f"referencesnapshot:fixture.reg.{uid()}"
+    prefix = f"{REGSR_SNAPSHOT_PREFIX}.fixture.reg.{uid()}"
     _import_fixture_snapshot(store, prefix)
     r = _verify(store, prefix=prefix, query="ambiguous-name", lookup=_locator,
                 review_reason_code="PRODUCT_BINDING_UNRESOLVED")
@@ -106,7 +130,7 @@ def test_g3_locator_only_routes_to_review(store):
 
 
 def test_g3_not_found_routes_to_review(store):
-    prefix = f"referencesnapshot:fixture.reg.{uid()}"
+    prefix = f"{REGSR_SNAPSHOT_PREFIX}.fixture.reg.{uid()}"
     _import_fixture_snapshot(store, prefix)
     r = _verify(store, prefix=prefix, query="nope", lookup=_not_found)
     assert r["verdict"] == REVIEW and r["grade"] == NONE
@@ -117,7 +141,7 @@ def test_g3_not_found_routes_to_review(store):
 def test_g3_identity_grade_without_key_routes_to_review(store):
     # PR #11 review: identity-grade REQUIRES a stable external key. A lookup that
     # claims IDENTITY but carries none must route to review, never CONFIRM/PASS.
-    prefix = f"referencesnapshot:fixture.reg.{uid()}"
+    prefix = f"{REGSR_SNAPSHOT_PREFIX}.fixture.reg.{uid()}"
     _import_fixture_snapshot(store, prefix)
     r = _verify(store, prefix=prefix, query="claims-id-no-key", lookup=_identity_no_key)
     assert r["verdict"] == REVIEW and r["grade"] == IDENTITY
@@ -131,7 +155,7 @@ def test_g3_identity_grade_without_key_routes_to_review(store):
 
 def test_g3_future_effective_snapshot_is_not_current(store):
     # PR #11 review: a future-effective snapshot is never "current" for NOW.
-    prefix = f"referencesnapshot:fixture.future.{uid()}"
+    prefix = f"{REGSR_SNAPSHOT_PREFIX}.fixture.future.{uid()}"
     _import_fixture_snapshot(store, prefix, effective="2099-01-01T00:00:00Z")
     r = _verify(store, prefix=prefix, query="x", lookup=_identity)
     assert r["verdict"] == REFUSE, "a future-effective snapshot must not be current for NOW"
@@ -143,7 +167,7 @@ def test_g3_future_effective_snapshot_is_not_current(store):
 
 def test_g3_expired_snapshot_is_not_current(store):
     # PR #11 review: an expired snapshot (effectiveUntil <= now) is not in force.
-    prefix = f"referencesnapshot:fixture.expired.{uid()}"
+    prefix = f"{REGSR_SNAPSHOT_PREFIX}.fixture.expired.{uid()}"
     _import_fixture_snapshot(store, prefix, effective="2020-01-01T00:00:00Z",
                              until="2021-01-01T00:00:00Z")
     r = _verify(store, prefix=prefix, query="x", lookup=_identity)
@@ -155,7 +179,7 @@ def test_g3_family_prefix_boundary_excludes_siblings(store):
     # family that merely shares leading characters is never selected, even with a
     # LATER effectiveFrom that would otherwise win the max().
     u = uid()
-    fam = f"referencesnapshot:fixture.reg{u}"
+    fam = f"{REGSR_SNAPSHOT_PREFIX}.fixture.reg{u}"
     in_fam = _import_fixture_snapshot(store, fam, effective="2026-05-01T00:00:00Z")
     _import_fixture_snapshot(store, f"{fam}ression", effective="2026-09-01T00:00:00Z")
     r = _verify(store, prefix=fam, query="x", lookup=_identity)
@@ -165,7 +189,7 @@ def test_g3_family_prefix_boundary_excludes_siblings(store):
 
 def test_g3_family_with_no_in_force_member_refuses_not_falls_through(store):
     u = uid()
-    fam = f"referencesnapshot:fixture.reg{u}"
+    fam = f"{REGSR_SNAPSHOT_PREFIX}.fixture.reg{u}"
     # only a SIBLING family exists -> the requested family has no in-force member
     _import_fixture_snapshot(store, f"{fam}ression", effective="2026-09-01T00:00:00Z")
     r = _verify(store, prefix=fam, query="x", lookup=_identity)
@@ -177,14 +201,14 @@ def test_g3_missing_snapshot_refuses(store):
     # an ExternalRegistryVerificationTrace is inherently a record AGAINST a
     # snapshot (snapshotRefs required non-empty), so the refusal is the
     # RuntimeProblem the caller records — never a fabricated trace.
-    prefix = f"referencesnapshot:fixture.absent.{uid()}"
+    prefix = f"{REGSR_SNAPSHOT_PREFIX}.fixture.absent.{uid()}"
     r = _verify(store, prefix=prefix, query="ACME-42", lookup=_identity)
     assert r["verdict"] == REFUSE and r["snapshotRef"] is None and r["trace"] is None
     assert r["problem"]["reasonCode"] == "EVIDENCE_REFERENCE_UNAVAILABLE"
 
 
 def test_g3_trace_carries_all_required_fields(store):
-    prefix = f"referencesnapshot:fixture.reg.{uid()}"
+    prefix = f"{REGSR_SNAPSHOT_PREFIX}.fixture.reg.{uid()}"
     _import_fixture_snapshot(store, prefix)
     r = _verify(store, prefix=prefix, query="ACME-7", lookup=_identity)
     required = store.registry.get(TRACE_KIND).schema["required"]
@@ -198,8 +222,8 @@ def test_g3_mechanism_is_generic_over_scheme(store):
     # Each trace RECORDS its caller-supplied scheme as audit provenance (the
     # trace's purpose, like the shipped demo trace's rationale) — that is the
     # caller's value flowing through a generic template, never a hardcoded literal.
-    pa = f"referencesnapshot:fixture.alpha.{uid()}"
-    pb = f"referencesnapshot:fixture.beta.{uid()}"
+    pa = f"{REGSR_SNAPSHOT_PREFIX}.fixture.alpha.{uid()}"
+    pb = f"{REGSR_SNAPSHOT_PREFIX}.fixture.beta.{uid()}"
     _import_fixture_snapshot(store, pa)
     _import_fixture_snapshot(store, pb)
     ra = _verify(store, prefix=pa, query="x", lookup=_identity,
@@ -217,7 +241,7 @@ def test_g3_mechanism_is_generic_over_scheme(store):
 def test_g3_as_of_selects_vintage_in_force_at_that_time(store):
     # an AS_OF before the snapshot's effectiveFrom sees no in-force snapshot ->
     # refusal (the resolver is as-of-aware; it never applies a future vintage)
-    prefix = f"referencesnapshot:fixture.reg.{uid()}"
+    prefix = f"{REGSR_SNAPSHOT_PREFIX}.fixture.reg.{uid()}"
     _import_fixture_snapshot(store, prefix)   # effectiveFrom 2026-05-01
     r = _verify(store, prefix=prefix, query="ACME-42", lookup=_identity,
                 as_of="2026-01-01T00:00:00Z")

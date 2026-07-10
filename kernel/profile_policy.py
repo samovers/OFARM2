@@ -15,12 +15,14 @@ file is authoritative — changing it changes behavior without touching kernel/.
 """
 from __future__ import annotations
 
+import copy
 import json
 import re
 import string
 from pathlib import Path
 
 from . import config
+from .contracts import canonical_json
 from .problems import REGISTERED_REASON_CODES
 
 
@@ -369,8 +371,12 @@ class DescriptorPolicyProvider:
     the existing full evidence-review policy loader.
     """
 
-    def __init__(self, descriptor):
+    def __init__(self, descriptor, *, runtime_bundle):
         self.descriptor = descriptor
+        self.runtime_bundle = runtime_bundle
+        if runtime_bundle.descriptor != descriptor:
+            raise ProfilePolicyError(
+                "policy descriptor and RuntimeBundle do not match exactly")
         self.policy_ref = descriptor.evidence_policy_ref
         self.recognized_rule_refs = frozenset({
             descriptor.evidence_policy_ref,
@@ -378,7 +384,7 @@ class DescriptorPolicyProvider:
             descriptor.pack_ref,
             descriptor.code_binding_profile_ref,
         })
-        self._evidence_policy_cache: dict[tuple[str, ...] | None, dict] = {}
+        self._evidence_policy_cache: dict[tuple[str, ...] | None, bytes] = {}
 
     @staticmethod
     def _supported_checks_key(supported_checks) -> tuple[str, ...] | None:
@@ -389,11 +395,15 @@ class DescriptorPolicyProvider:
     def evidence_policy(self, supported_checks=None) -> dict:
         key = self._supported_checks_key(supported_checks)
         if key not in self._evidence_policy_cache:
-            self._evidence_policy_cache[key] = load_evidence_review_policy_for_descriptor(
-                self.descriptor,
+            validated = _validated_evidence_review_policy(
+                self.runtime_bundle.policy_document(),
                 supported_checks=key,
+                expected_policy_ref=self.policy_ref,
             )
-        return self._evidence_policy_cache[key]
+            self._evidence_policy_cache[key] = canonical_json(validated).encode("utf-8")
+        # The cached bytes are immutable. Callers receive a fresh object and can
+        # never mutate policy for a later decision in the same bundle lifetime.
+        return copy.deepcopy(json.loads(self._evidence_policy_cache[key]))
 
     def validation_policy(self) -> dict:
         return self.evidence_policy()["validation"]

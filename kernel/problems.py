@@ -34,6 +34,7 @@ REGISTERED_REASON_CODES = {
     "HIGH_CONSEQUENCE_BLOCKED",
     "PUBLICATION_BASIS_INCOMPLETE",
     # pack/profile
+    "PACK_CONFLICT",
     "PROFILE_NOT_ACTIVE",
     # retry/idempotency
     "RETRY_CONFLICT",
@@ -83,4 +84,3 @@ def runtime_problem(
     if suggested_remediation:
         problem["suggestedRemediation"] = suggested_remediation
     return problem
-

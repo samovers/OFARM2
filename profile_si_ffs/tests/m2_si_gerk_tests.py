@@ -37,6 +37,7 @@ def _fixture_layer(*, layer_date, features=None):
          "opisRabe": "trajni travnik (fictional)"}]
     return {
         "snapshotKind": "SI_MKGP_GERK_LAYER_PARSE",
+        "parserCodeDigest": gerk.parser_code_digest(),
         "layerDate": layer_date,
         "canonicalVersionLabel": f"gerk-fixture-{layer_date}",
         "pidField": "GERK_PID",

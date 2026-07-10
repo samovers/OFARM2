@@ -30,7 +30,7 @@ from __future__ import annotations
 from ... import config
 from ...context import GERK_SNAPSHOT_PREFIX, mint, now_iso
 from ...problems import runtime_problem
-from ...verification import (CONFIRM, LOCATOR, NONE, REVIEW, LookupResult,
+from ...verification import (CONFIRM, LOCATOR, NONE, LookupResult,
                              ReferenceResolver)
 from . import regsr_adapter as regsr
 from .ffsnaprave_adapter import (FFSNAPRAVE_AUTHORITY_REF, FFSNAPRAVE_SCHEME,
@@ -168,7 +168,8 @@ def resolve_parcel(store, cur, gerk_layer, gerk_pid, subject_ref, *, created_by,
         profile_ref=config.CODE_BINDING_PROFILE_REF, authority_ref=GERK_AUTHORITY_REF,
         jurisdiction_ref=SI_JURISDICTION_REF, scheme=GERK_SCHEME, key_field="gerk-pid",
         purpose="OTHER", lookup_surface="OTHER", external_id_role="OTHER",
-        review_reason_code="IDENTITY_UNRESOLVED", as_of=as_of, created_by=created_by)
+        review_reason_code="IDENTITY_UNRESOLVED", as_of=as_of, created_by=created_by,
+        lookup_runtime_bundle=gerk_layer.runtime_bundle)
     found = res["grade"] == LOCATOR
     trace = res.get("trace")
     binding = _binding(
@@ -229,7 +230,8 @@ def resolve_equipment(store, cur, ffsnaprave_register, sticker_number, subject_r
         jurisdiction_ref=SI_JURISDICTION_REF, scheme=FFSNAPRAVE_SCHEME,
         key_field="stevilka-znaka", purpose="OTHER", lookup_surface="OTHER",
         external_id_role="OTHER", review_reason_code="IDENTITY_UNRESOLVED",
-        as_of=as_of, created_by=created_by)
+        as_of=as_of, created_by=created_by,
+        lookup_runtime_bundle=ffsnaprave_register.runtime_bundle)
     found = res["grade"] == LOCATOR
     trace = res.get("trace")
     # the RESOLVED validity (the matched record's VeljavnostZnaka) rides the trace's

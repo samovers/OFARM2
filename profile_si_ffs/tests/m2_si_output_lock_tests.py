@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import threading
 
+from kernel import context
 from kernel.store import Store
 from kernel.views import OutputGenerator
 from profile_si_ffs.test_fixtures import demo
@@ -22,7 +23,8 @@ __all__ = [
 def test_g2_output_render_serializes_under_lock(store):
     # While connection A holds serialized_tx, a passport render on connection B
     # must block until A releases, not interleave with the write lock.
-    a, b = Store(), Store()
+    a, b = Store(dsn=store.dsn), Store(dsn=store.dsn)
+    context.bootstrap(b)
     done = threading.Event()
     box = {}
 
@@ -53,7 +55,8 @@ def test_g2_output_render_serializes_under_lock(store):
 def test_g2_freeze_serializes_under_lock(store):
     # While connection A holds serialized_tx, an inspection-register freeze on
     # connection B must block until A releases.
-    a, b = Store(), Store()
+    a, b = Store(dsn=store.dsn), Store(dsn=store.dsn)
+    context.bootstrap(b)
     done = threading.Event()
     box = {}
 

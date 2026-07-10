@@ -17,13 +17,15 @@ makes no current-compliance or production-currentness claim.
 """
 from __future__ import annotations
 
-import importlib.util
 from pathlib import Path
+from types import ModuleType
 
 from ... import config
 from ...adapters import ImportRunner, ParseResult
 from ...context import REGSR_DATA_FAMILY, REGSR_SNAPSHOT_PREFIX, now_iso
 from ...contracts import sha256_of
+from ...runtime_bundle import (RuntimeBundleError, require_store_runtime_bundle,
+                               sha256_bytes)
 from ...verification import IDENTITY, NONE, LookupResult, ReferenceResolver
 
 # REGSR scheme constants (SI-specific — D9). Identity = Številka odločbe
@@ -39,6 +41,7 @@ REGSR_DOMAIN = ("SI crop-protection product authorisation register "
 REGSR_SOURCE_URL = "https://spletni2.furs.gov.si/FFS/REGSR/FFS_RegSezn.asp?top=1"
 REGSR_SOURCE_SURFACE = "surface:spletni2.furs.gov.si.FFS.REGSR"
 REGSR_PARSER_REF = "tooling/regsr_snapshot/parse_regsr.py"
+REGSR_PARSER_COMPONENT_REF = f"python:{REGSR_PARSER_REF}"
 # the trace lookup-surface enum has no SI-specific value; the precise surface is
 # recorded on the imported snapshot's sourceArtifactRefs and in the trace's
 # queryInputs/snapshotRefs (the trace's own lookupSurface stays OTHER)
@@ -56,19 +59,41 @@ REGSR_CADENCE = {
 
 
 def _parser():
-    """Load tooling/regsr_snapshot/parse_regsr.py as a library (reuse, no fork)."""
+    """Compile one exact parser byte string (no live-file/pyc split)."""
     path = config.PACKAGE_ROOT / "tooling" / "regsr_snapshot" / "parse_regsr.py"
-    spec = importlib.util.spec_from_file_location("ofarm_regsr_parser", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    source = path.read_bytes()
+    module = ModuleType("ofarm_regsr_parser")
+    module.__file__ = str(path)
+    exec(compile(source, str(path), "exec"), module.__dict__)
+    return module, sha256_bytes(source)
+
+
+def parser_code_digest() -> str:
+    path = config.PACKAGE_ROOT / REGSR_PARSER_REF
+    return sha256_bytes(path.read_bytes())
+
+
+def _require_pinned_parser(store, artifact) -> None:
+    bundle = store.runtime_bundle
+    require_store_runtime_bundle(store, bundle, "REGSR parser verification")
+    component = bundle.component("PARSER_CODE", REGSR_PARSER_COMPONENT_REF)
+    path = config.PACKAGE_ROOT / REGSR_PARSER_REF
+    try:
+        live_bytes = path.read_bytes()
+    except OSError as exc:
+        raise RuntimeBundleError("REGSR parser bytes are unavailable") from exc
+    if (live_bytes != component.canonical_bytes
+            or artifact.get("parserCodeDigest") != component.content_digest):
+        raise RuntimeBundleError(
+            "REGSR parsed artifact is not attested to the exact parser bytes "
+            "selected by this RuntimeBundle")
 
 
 def parse_regsr_html(list_path, detail_paths=()) -> dict:
     """Parse saved REGSR HTML (list + optional detail pages) into a register
     artifact, reusing the tooling parser. No live HTTP. Returns the artifact
     (products, productDetails, registerDay, input digests) the importer wraps."""
-    pr = _parser()
+    pr, parser_digest = _parser()
     listing = pr.parse_list(Path(list_path))
     details = [pr.parse_detail(Path(p)) for p in detail_paths]
     register_day = listing["registerDay"] or (details[0]["registerDay"] if details else None)
@@ -82,6 +107,7 @@ def parse_regsr_html(list_path, detail_paths=()) -> dict:
         "products": listing["products"],
         "productDetails": details,
         "rowProblems": listing["rowProblems"],
+        "parserCodeDigest": parser_digest,
         "inputs": inputs,
     }
 
@@ -92,6 +118,14 @@ def import_regsr_snapshot(store, artifact, *, register_day=None,
     generic G2 ImportRunner. The effective date is the register day; the source
     digest and surface ride the snapshot's sourceArtifactRefs. A malformed/partial
     parse is refused by the generic runner (no snapshot)."""
+    try:
+        _require_pinned_parser(store, artifact)
+    except RuntimeBundleError as exc:
+        result = ImportRunner(store).run_import(
+            ParseResult(ok=False, error=str(exc)),
+            {"referenceSnapshotId": None}, data_family=REGSR_DATA_FAMILY)
+        return {**result, "disposition": "PARSER_BUNDLE_MISMATCH",
+                "registerDay": None}
     register_day = register_day or artifact.get("registerDay")
     if not register_day:
         # A parse with no datable register day is a source-fidelity loss. Route
@@ -198,4 +232,5 @@ def verify_product_authorisation(store, cur, product_register, decision_number, 
         jurisdiction_ref=REGSR_JURISDICTION_REF, scheme=REGSR_SCHEME,
         key_field=REGSR_KEY_FIELD, purpose="PRODUCT_AUTHORISATION_IDENTITY",
         lookup_surface=REGSR_LOOKUP_SURFACE, external_id_role="AUTHORISATION_NUMBER",
-        review_reason_code="PRODUCT_BINDING_UNRESOLVED", as_of=as_of, created_by=created_by)
+        review_reason_code="PRODUCT_BINDING_UNRESOLVED", as_of=as_of,
+        created_by=created_by, lookup_runtime_bundle=product_register.runtime_bundle)

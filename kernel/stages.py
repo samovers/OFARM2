@@ -67,6 +67,7 @@ class GateContext:
     request_id: str
     ingested_at: str
     source_digest: str
+    runtime_bundle: Any = None
     active_profile: Any = None
     profile_route_resolution: Any = None
     policy_provider: Any = None

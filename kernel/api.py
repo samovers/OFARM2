@@ -7,12 +7,10 @@ per request — there is no unauthenticated path to farm-scoped truth.
 """
 from __future__ import annotations
 
-import json
-
 from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
-from . import auth_oidc, config, context, manifest as manifest_mod
+from . import auth_oidc, config, context
 from .contracts import ContractViolation
 from .problems import runtime_problem
 from .gates import GatePipeline
@@ -192,7 +190,7 @@ def create_app(store: Store | None = None, *, oidc=_FROM_ENV) -> FastAPI:
             "actingPartyRef": principal,
             "farmRef": body.farmRef,
             "idempotencyKey": body.idempotencyKey
-                              or f"review-accept:{_uuid.uuid4().hex[:16]}",
+                              or f"review-accept:{_uuid.uuid4().hex}",
             "decisionTime": _now(),
             "reviewTargetAssertionRef": body.assertionRef,
             "reviewRationale": body.rationale,
@@ -221,7 +219,7 @@ def create_app(store: Store | None = None, *, oidc=_FROM_ENV) -> FastAPI:
             "actingPartyRef": principal,
             "farmRef": body.farmRef,
             "idempotencyKey": body.idempotencyKey
-                              or f"review-reject:{_uuid.uuid4().hex[:16]}",
+                              or f"review-reject:{_uuid.uuid4().hex}",
             "decisionTime": _now(),
             "reviewTargetAssertionRef": body.assertionRef,
             "reviewAction": "REVIEW_REJECT_OR_CONTEST",
@@ -251,7 +249,7 @@ def create_app(store: Store | None = None, *, oidc=_FROM_ENV) -> FastAPI:
             "actingPartyRef": principal,
             "farmRef": body.farmRef,
             "idempotencyKey": body.idempotencyKey
-                              or f"review-contest:{_uuid.uuid4().hex[:16]}",
+                              or f"review-contest:{_uuid.uuid4().hex}",
             "decisionTime": _now(),
             "reviewTargetConsequenceRef": body.consequenceRef,
             "reviewAction": "REVIEW_REJECT_OR_CONTEST",
@@ -301,6 +299,7 @@ def create_app(store: Store | None = None, *, oidc=_FROM_ENV) -> FastAPI:
                     deny()
         return {"recordId": row["record_id"], "recordKind": row["record_kind"],
                 "schemaHash": row["schema_hash"], "payloadSha256": row["payload_sha256"],
+                "runtimeBundleDigest": row["runtime_bundle_digest"],
                 "recordTime": row["record_time"].isoformat(), "payload": payload}
 
     @app.get("/views/passport/{farm_ref}")
@@ -314,8 +313,15 @@ def create_app(store: Store | None = None, *, oidc=_FROM_ENV) -> FastAPI:
 
     @app.get("/manifest")
     def get_manifest():
-        if manifest_mod.MANIFEST_PATH.exists():
-            return json.loads(manifest_mod.MANIFEST_PATH.read_text())
-        return manifest_mod.build_manifest(app.state.store)
+        manifests = [component for component in
+                     app.state.store.runtime_bundle.components
+                     if component.role == "ACTIVE_MANIFEST"]
+        if len(manifests) != 1:
+            raise HTTPException(
+                status_code=503,
+                detail="RuntimeBundle does not contain exactly one active manifest",
+            )
+        return app.state.store.runtime_bundle.json_component(
+            "ACTIVE_MANIFEST", manifests[0].logical_ref)
 
     return app

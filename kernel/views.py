@@ -26,6 +26,7 @@ from .materializer import Materializer
 from .problems import runtime_problem
 from .context import mint as _mint, now_iso, parse_ts
 from .profile_runtime import ProfileRuntimeError, resolve_active_descriptor
+from .runtime_bundle import require_store_runtime_bundle, sha256_bytes
 
 PASSPORT_VIEW_REF = "view:si.ffs.spray-register.passportview.v0_1"
 DOCASM_VIEW_REF = "view:si.ffs.inspection-register.documentassembly.v0_1"
@@ -80,12 +81,9 @@ def _qualification(*, surface_class: str, staleness: str, sufficiency: str,
     return env
 
 
-def _refusal_response(problem: dict, qualification: dict | None = None) -> dict:
-    return {"refused": True, "problem": problem, "qualification": qualification}
-
-
 class OutputGenerator:
-    def __init__(self, store, *, active_descriptor=None, active_profile=None):
+    def __init__(self, store, *, active_descriptor=None, active_profile=None,
+                 runtime_bundle=None):
         self.store = store
         if (active_descriptor is not None and active_profile is not None
                 and active_descriptor != active_profile):
@@ -95,8 +93,34 @@ class OutputGenerator:
             active_descriptor if active_descriptor is not None else active_profile,
             allow_config_default=True,
         )
+        self.runtime_bundle = runtime_bundle or store.runtime_bundle
+        require_store_runtime_bundle(store, self.runtime_bundle, "OutputGenerator")
+        if self.runtime_bundle.descriptor != self.active_profile:
+            raise ProfileRuntimeError(
+                "OutputGenerator descriptor and RuntimeBundle do not match exactly")
         self.authority = AuthorityEvaluator(store)
-        self.materializer = Materializer(store, active_descriptor=self.active_profile)
+        self.materializer = Materializer(
+            store, active_descriptor=self.active_profile,
+            runtime_bundle=self.runtime_bundle)
+
+    def _runtime_receipt(self, **payloads) -> dict:
+        return {
+            "runtimeBundleDigest": self.runtime_bundle.digest,
+            "payloadDigests": {
+                name: sha256_bytes(canonical_json(payload).encode("utf-8"))
+                for name, payload in sorted(payloads.items())
+            },
+        }
+
+    def _refusal_response(
+            self, problem: dict, qualification: dict | None = None) -> dict:
+        return {
+            "refused": True,
+            "problem": problem,
+            "qualification": qualification,
+            "runtimeReceipt": self._runtime_receipt(
+                problem=problem, qualification=qualification),
+        }
 
     # ---------------------------------------------------------------- shared --
 
@@ -211,7 +235,7 @@ class OutputGenerator:
             self.store.insert_record(cur, access.trace_payload)
             self.store.insert_record(cur, access.result_payload)
             if not access.allowed:
-                return _refusal_response(
+                return self._refusal_response(
                     access.problems[0] if access.problems else runtime_problem(
                         "AUTHORITY_DENIED", "Read denied", "no read path to this farm"))
 
@@ -226,7 +250,7 @@ class OutputGenerator:
                 recompute_if_needed=allow_recompute)
             mat = resolution["materialization"]
             if mat is None:
-                return _refusal_response(runtime_problem(
+                return self._refusal_response(runtime_problem(
                     "MATERIALIZATION_BASIS_MISSING", "View refuses",
                     "the materialization basis cannot be produced; the view refuses "
                     "rather than rendering unreceipted state (views/VIEWS.md)"))
@@ -288,7 +312,9 @@ class OutputGenerator:
             self.store.registry.validate(metadata)
             self.store.registry.validate(qualification)
             return {"refused": False, "metadata": metadata, "body": body,
-                    "qualification": qualification}
+                    "qualification": qualification,
+                    "runtimeReceipt": self._runtime_receipt(
+                        metadata=metadata, body=body, qualification=qualification)}
 
     # ------------------------------------------------------- DocumentAssembly --
 
@@ -362,7 +388,7 @@ class OutputGenerator:
                 problem = decision.problems[0] if decision.problems else runtime_problem(
                     "AUTHORITY_DENIED", "Export denied", "no export authority")
                 publication_result("DENIED", [problem], "export authority denied")
-                return _refusal_response(problem)
+                return self._refusal_response(problem)
 
             # an invalid window must never freeze a valid-looking empty
             # register: refuse before any materialization, with no durable
@@ -375,7 +401,7 @@ class OutputGenerator:
                     "inverted; a frozen register over an invalid period would be a "
                     "valid-looking lie (no temporal reason code exists — ERRATA E-001)")
                 publication_result("DENIED", [problem], "invalid window")
-                return _refusal_response(problem)
+                return self._refusal_response(problem)
 
             # high-consequence: freeze only from a demonstrably FRESH window
             # materialization — recompute, refuse, or review; never silently
@@ -393,7 +419,7 @@ class OutputGenerator:
                     "window; generation refuses rather than emitting a degraded "
                     "document silently (views/VIEWS.md)")
                 publication_result("DENIED", [problem], "not demonstrably FRESH")
-                return _refusal_response(problem)
+                return self._refusal_response(problem)
 
             # the freeze refuses on the DISPUTE axis, INDEPENDENT of freshness
             # (spec §6.6): the window materialization may be FRESH yet rest on a
@@ -411,7 +437,7 @@ class OutputGenerator:
                     "high-consequence output until the dispute is resolved by "
                     "correction (docs/REVIEW_DISPUTE_SEMANTICS.md §6.6)")
                 publication_result("DENIED", [problem], "disputed basis")
-                return _refusal_response(problem)
+                return self._refusal_response(problem)
 
             entries = mat["current_state"]["entries"]
             annex = self._pending_claims(farm_ref)
@@ -500,12 +526,13 @@ class OutputGenerator:
                     "referenceSnapshotRefs": (self.store.get_payload(
                         mat["context_snapshot_ref"]) or {}).get("referenceSnapshotRefs", []),
                     "evidenceSufficiencyCaseRef": case_id,
+                    "runtimeBundleDigest": self.runtime_bundle.digest,
                 },
                 "frozenAt": frozen_at,
             }
             digest = "sha256:" + hashlib.sha256(
                 canonical_json(document).encode()).hexdigest()
-            durable_ref = f"document:si.ffs.inspection-register.{digest[7:19]}"
+            durable_ref = f"document:si.ffs.inspection-register.{digest}"
             version_label = f"si.ffs.inspection-register.{window_start[:10]}.{window_end[:10]}"
 
             metadata = {
@@ -554,9 +581,21 @@ class OutputGenerator:
             self.store.insert_record(cur, metadata)
             self.store.registry.validate(qualification)
             cur.execute(
-                "INSERT INTO export_artifact (artifact_ref, digest, metadata_record_id, document) "
-                "VALUES (%s, %s, %s, %s)",
-                (durable_ref, digest, doc_id, Jsonb(document)))
+                "SELECT digest, metadata_record_id, document, runtime_bundle_digest "
+                "FROM export_artifact WHERE artifact_ref = %s", (durable_ref,))
+            prior_artifact = cur.fetchone()
+            if prior_artifact is None:
+                cur.execute(
+                    "INSERT INTO export_artifact "
+                    "(artifact_ref, digest, metadata_record_id, document, "
+                    "runtime_bundle_digest) VALUES (%s, %s, %s, %s, %s)",
+                    (durable_ref, digest, doc_id, Jsonb(document),
+                     self.runtime_bundle.digest))
+            elif (prior_artifact["digest"] != digest
+                  or canonical_json(prior_artifact["document"]) != canonical_json(document)
+                  or prior_artifact["runtime_bundle_digest"] != self.runtime_bundle.digest):
+                raise RuntimeError(
+                    "frozen output content identity was reused for unequal canonical bytes")
 
             publication_result(final_outcome, [],
                                (f"filed locally as {durable_ref}; the state registry "
@@ -564,4 +603,7 @@ class OutputGenerator:
                                 "transmission is claimed" if as_submission else
                                 f"frozen as {durable_ref} ({version_label})"), case_id)
             return {"refused": False, "metadata": metadata, "document": document,
-                    "digest": digest, "qualification": qualification}
+                    "digest": digest, "qualification": qualification,
+                    "runtimeReceipt": self._runtime_receipt(
+                        metadata=metadata, document=document,
+                        qualification=qualification)}

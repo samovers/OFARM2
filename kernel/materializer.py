@@ -17,13 +17,12 @@ an undeterminable dependency boundary broadens invalidation, never narrows it.
 """
 from __future__ import annotations
 
-import hashlib
-
 from . import config, policy
 from .context import (ContextAssembler, ContextNotReconstructible,
                       mint as _mint, now_iso, parse_ts)
 from .contracts import canonical_json
 from .profile_runtime import ProfileRuntimeError, resolve_active_descriptor
+from .runtime_bundle import require_store_runtime_bundle, sha256_bytes
 from psycopg.types.json import Jsonb
 
 MATERIALIZATION_POLICY_REF = "policy:si.ffs.materialization.v0_1"
@@ -56,12 +55,13 @@ RUNTIME_VERSION = config.RUNTIME_VERSION
 _USE_CLASS_MAP = policy.USE_CLASS_TO_CANONICAL
 
 
-def _digest12(obj) -> str:
-    return hashlib.sha256(canonical_json(obj).encode()).hexdigest()[:12]
+def _full_digest(obj) -> str:
+    return sha256_bytes(canonical_json(obj).encode("utf-8"))
 
 
 class Materializer:
-    def __init__(self, store, *, active_descriptor=None, active_profile=None):
+    def __init__(self, store, *, active_descriptor=None, active_profile=None,
+                 runtime_bundle=None):
         self.store = store
         if (active_descriptor is not None and active_profile is not None
                 and active_descriptor != active_profile):
@@ -71,7 +71,14 @@ class Materializer:
             active_descriptor if active_descriptor is not None else active_profile,
             allow_config_default=True,
         )
-        self.context = ContextAssembler(store, active_descriptor=self.active_profile)
+        self.runtime_bundle = runtime_bundle or store.runtime_bundle
+        require_store_runtime_bundle(store, self.runtime_bundle, "Materializer")
+        if self.runtime_bundle.descriptor != self.active_profile:
+            raise ProfileRuntimeError(
+                "Materializer descriptor and RuntimeBundle do not match exactly")
+        self.context = ContextAssembler(
+            store, active_descriptor=self.active_profile,
+            runtime_bundle=self.runtime_bundle)
 
     # ------------------------------------------------------------------ key --
 
@@ -89,7 +96,8 @@ class Materializer:
             "resultShapeFamily": result_shape_family,
             "policyVersionRef": MATERIALIZATION_POLICY_REF,
         }
-        key_id = f"matkey:{_digest12(key_core)}"
+        key_identity = {**key_core, "runtimeBundleDigest": self.runtime_bundle.digest}
+        key_id = f"matkey:{_full_digest(key_identity)}"
         return {
             "schemaVersion": "ofarm.explainableCurrentStateEvidence.materializationKey.v0.1-draft",
             "artifactType": "MaterializationKey",
@@ -298,6 +306,15 @@ class Materializer:
         vector = self.build_freshness_vector(key, basis_id, ctx_ref, reference_refs)
         if not self.store.runtime_trace_exists(key_id):
             self.store.insert_runtime_trace(cur, key)  # key id is content-stable
+        else:
+            cur.execute(
+                "SELECT payload, runtime_bundle_digest FROM runtime_trace "
+                "WHERE trace_id = %s", (key_id,))
+            prior_key = cur.fetchone()
+            if (prior_key["runtime_bundle_digest"] != self.runtime_bundle.digest
+                    or canonical_json(prior_key["payload"]) != canonical_json(key)):
+                raise ValueError(
+                    "MaterializationKey identity was reused for unequal canonical bytes")
         self.store.insert_runtime_trace(cur, vector)
         dep_index = self._build_dependency_index(key_id, basis, ctx_ref, reference_refs, use_class)
         self.store.insert_runtime_trace(cur, dep_index)
@@ -305,7 +322,8 @@ class Materializer:
         # ---- supersede prior live materialization for this key ----
         cur.execute(
             "SELECT materialization_id FROM derived_materialization "
-            "WHERE key_digest = %s AND superseded_by IS NULL", (key_id,))
+            "WHERE key_digest = %s AND runtime_bundle_digest = %s "
+            "AND superseded_by IS NULL", (key_id, self.runtime_bundle.digest))
         for prior in cur.fetchall():
             cur.execute(
                 "UPDATE derived_materialization SET superseded_by = %s "
@@ -316,19 +334,21 @@ class Materializer:
             INSERT INTO derived_materialization
               (materialization_id, key_digest, materialization_key, target_twin,
                anchor_scope_ref, time_policy, use_class, freshness, current_state,
-               basis_record_id, snapshot_record_id, context_snapshot_ref, freshness_vector)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, 'FRESH', %s, %s, %s, %s, %s)
+               basis_record_id, snapshot_record_id, context_snapshot_ref,
+               freshness_vector, runtime_bundle_digest)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, 'FRESH', %s, %s, %s, %s, %s, %s)
             """,
             (mat_id, key_id, Jsonb(key), twin, farm_ref, Jsonb(time_policy), use_class,
-             Jsonb(current_state), basis_id, snapshot_id, ctx_ref, Jsonb(vector)))
+             Jsonb(current_state), basis_id, snapshot_id, ctx_ref, Jsonb(vector),
+             self.runtime_bundle.digest))
         # fast-lookup rows mirroring the dependency-index entries (derived only)
         for entry in dep_index["entries"]:
             cur.execute(
                 "INSERT INTO derived_dependency_index "
-                "(dependency_source_ref, dependency_source_family, key_digest, entry) "
-                "VALUES (%s, %s, %s, %s)",
+                "(dependency_source_ref, dependency_source_family, key_digest, entry, "
+                "runtime_bundle_digest) VALUES (%s, %s, %s, %s, %s)",
                 (entry["dependencySourceRef"], entry["dependencySourceFamily"],
-                 key_id, Jsonb(entry)))
+                 key_id, Jsonb(entry), self.runtime_bundle.digest))
 
         return {
             "materializationId": mat_id,
@@ -499,6 +519,15 @@ class Materializer:
         vector = self.build_freshness_vector(key, basis_id, ctx_ref, reference_refs)
         if not self.store.runtime_trace_exists(key_id):
             self.store.insert_runtime_trace(cur, key)
+        else:
+            cur.execute(
+                "SELECT payload, runtime_bundle_digest FROM runtime_trace "
+                "WHERE trace_id = %s", (key_id,))
+            prior_key = cur.fetchone()
+            if (prior_key["runtime_bundle_digest"] != self.runtime_bundle.digest
+                    or canonical_json(prior_key["payload"]) != canonical_json(key)):
+                raise ValueError(
+                    "MaterializationKey identity was reused for unequal canonical bytes")
         self.store.insert_runtime_trace(cur, vector)
         dep_index = self._build_dependency_index(key_id, basis, ctx_ref,
                                                   reference_refs, use_class)
@@ -507,7 +536,8 @@ class Materializer:
         # ---- supersede the prior live registry for this key ----
         cur.execute(
             "SELECT materialization_id FROM derived_materialization "
-            "WHERE key_digest = %s AND superseded_by IS NULL", (key_id,))
+            "WHERE key_digest = %s AND runtime_bundle_digest = %s "
+            "AND superseded_by IS NULL", (key_id, self.runtime_bundle.digest))
         for prior in cur.fetchall():
             cur.execute(
                 "UPDATE derived_materialization SET superseded_by = %s "
@@ -518,18 +548,20 @@ class Materializer:
             INSERT INTO derived_materialization
               (materialization_id, key_digest, materialization_key, target_twin,
                anchor_scope_ref, time_policy, use_class, freshness, current_state,
-               basis_record_id, snapshot_record_id, context_snapshot_ref, freshness_vector)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+               basis_record_id, snapshot_record_id, context_snapshot_ref,
+               freshness_vector, runtime_bundle_digest)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (mat_id, key_id, Jsonb(key), twin, farm_ref, Jsonb(time_policy), use_class,
-             freshness, Jsonb(current_state), basis_id, snapshot_id, ctx_ref, Jsonb(vector)))
+             freshness, Jsonb(current_state), basis_id, snapshot_id, ctx_ref, Jsonb(vector),
+             self.runtime_bundle.digest))
         for entry in dep_index["entries"]:
             cur.execute(
                 "INSERT INTO derived_dependency_index "
-                "(dependency_source_ref, dependency_source_family, key_digest, entry) "
-                "VALUES (%s, %s, %s, %s)",
+                "(dependency_source_ref, dependency_source_family, key_digest, entry, "
+                "runtime_bundle_digest) VALUES (%s, %s, %s, %s, %s)",
                 (entry["dependencySourceRef"], entry["dependencySourceFamily"],
-                 key_id, Jsonb(entry)))
+                 key_id, Jsonb(entry), self.runtime_bundle.digest))
 
         return {
             "materializationId": mat_id,
@@ -611,7 +643,8 @@ class Materializer:
         """
         cur.execute(
             "SELECT dependency_source_ref, key_digest FROM derived_dependency_index "
-            "WHERE dependency_source_ref = ANY(%s)", (source_refs,))
+            "WHERE dependency_source_ref = ANY(%s) AND runtime_bundle_digest = %s",
+            (source_refs, self.runtime_bundle.digest))
         rows = cur.fetchall()
         key_ids = sorted({r["key_digest"] for r in rows})
         resolved_sources = {r["dependency_source_ref"] for r in rows}
@@ -623,20 +656,25 @@ class Materializer:
             # not under-invalidate just because some triggers resolved
             cur.execute(
                 "SELECT DISTINCT key_digest FROM derived_materialization "
-                "WHERE anchor_scope_ref = %s AND superseded_by IS NULL", (farm_scope_ref,))
+                "WHERE anchor_scope_ref = %s AND runtime_bundle_digest = %s "
+                "AND superseded_by IS NULL",
+                (farm_scope_ref, self.runtime_bundle.digest))
             key_ids = sorted(set(key_ids) | {r["key_digest"] for r in cur.fetchall()})
             broadened = (f"farm-scope broadening applied for {len(unresolved)} "
                          "trigger(s) with no dependency entry (uncertain boundary)")
 
         cur.execute(
-            "SELECT count(*) AS n FROM derived_materialization WHERE superseded_by IS NULL")
+            "SELECT count(*) AS n FROM derived_materialization "
+            "WHERE runtime_bundle_digest = %s AND superseded_by IS NULL",
+            (self.runtime_bundle.digest,))
         considered = cur.fetchone()["n"]
         marked = 0
         for key_id in key_ids:
             cur.execute(
                 "UPDATE derived_materialization SET freshness = 'STALE' "
-                "WHERE key_digest = %s AND superseded_by IS NULL AND freshness = 'FRESH' "
-                "RETURNING materialization_id", (key_id,))
+                "WHERE key_digest = %s AND runtime_bundle_digest = %s "
+                "AND superseded_by IS NULL AND freshness = 'FRESH' "
+                "RETURNING materialization_id", (key_id, self.runtime_bundle.digest))
             changed = cur.fetchall()
             if not changed:
                 continue
@@ -763,8 +801,10 @@ class Materializer:
                              context_snapshot_ref=ctx["contextSnapshotId"])
         cur.execute(
             "SELECT * FROM derived_materialization "
-            "WHERE key_digest = %s AND superseded_by IS NULL "
-            "ORDER BY generated_at DESC LIMIT 1", (key["materializationKeyId"],))
+            "WHERE key_digest = %s AND runtime_bundle_digest = %s "
+            "AND superseded_by IS NULL "
+            "ORDER BY generated_at DESC LIMIT 1",
+            (key["materializationKeyId"], self.runtime_bundle.digest))
         live = cur.fetchone()
 
         # Freshness is purpose-sensitive (Current-State RFC §6.4 — the RFC

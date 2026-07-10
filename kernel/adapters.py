@@ -22,11 +22,14 @@ contract is out of scope for G2.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from .context import mint
 from .contracts import ContractViolation, UnknownContract, sha256_of
 from .problems import runtime_problem
+
+_FULL_SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
 @dataclass
@@ -88,6 +91,56 @@ class ImportRunner:
                 remediation="fix the source/parse and re-run; the prior in-force "
                 "snapshot remains current"), "disposition": "PARSE_FAILED"}
 
+        matching_families = [
+            family for family in self.store.runtime_bundle.descriptor.reference_families
+            if isinstance(snapshot_id, str)
+            and (snapshot_id == family.snapshot_prefix
+                 or snapshot_id.startswith(family.snapshot_prefix + "."))
+        ]
+        if (len(matching_families) > 1
+                or (len(matching_families) == 1
+                    and data_family != matching_families[0].data_family)):
+            return {**self._refuse(
+                request_id, snapshot_id, "SOURCE_FIDELITY_LOSS",
+                "Import data family does not match runtime selection",
+                "the snapshot identity maps to a RuntimeBundle reference family "
+                "with a different exact data family; no restart-unsafe snapshot "
+                "was written"), "disposition": "WRONG_DATA_FAMILY"}
+
+        # A successful import must be restart-safe. This build retains the
+        # canonical parsed data bytes, not arbitrary raw archives. Therefore a
+        # source digest is acceptable only when it is a full SHA-256 of those
+        # exact retained bytes. An `artifact:` ref without supplied/retained raw
+        # bytes would be provenance theatre and would poison the next bundle.
+        metadata_artifact_refs = [
+            ref for ref in snapshot_meta.get("sourceArtifactRefs", [])
+            if isinstance(ref, str) and ref.startswith("artifact:")
+        ]
+        expected_digest_ref = f"digest:{parse_result.sourceDigest}"
+        metadata_digest_refs = [
+            ref for ref in snapshot_meta.get("sourceArtifactRefs", [])
+            if isinstance(ref, str) and ref.startswith("digest:")
+        ]
+        if (not _FULL_SHA256.fullmatch(parse_result.sourceDigest)
+                or (parse_result.artifactRef is not None
+                    and (not isinstance(parse_result.artifactRef, str)
+                         or not parse_result.artifactRef
+                         or parse_result.artifactRef.startswith(
+                             ("artifact:", "digest:"))))
+                or metadata_artifact_refs
+                or any(ref != expected_digest_ref for ref in metadata_digest_refs)
+                or not data_family
+                or parse_result.records is None
+                or sha256_of(parse_result.records) != parse_result.sourceDigest):
+            return {**self._refuse(
+                request_id, snapshot_id, "SOURCE_FIDELITY_LOSS",
+                "Import source bytes are not retained",
+                "the import does not provide a full SHA-256 over exact retained "
+                "canonical data bytes, or names an artifact whose raw bytes are "
+                "not retained; no restart-unsafe snapshot was written",
+                remediation="retain exact source/data bytes with their full digest "
+                "and retry"), "disposition": "SOURCE_NOT_RETAINED"}
+
         # 2. assemble the ReferenceSnapshot (the governed import record): the
         #    source digest + retained-artifact ref ride sourceArtifactRefs
         snapshot = dict(snapshot_meta)
@@ -114,7 +167,80 @@ class ImportRunner:
         with self.store.serialized_tx() as cur:
             existing = self.store.get_record(snapshot_id)
             if existing is not None:
-                if existing["payload_sha256"] == sha256_of(snapshot):
+                snapshot_contract = self.store.registry.get(
+                    "ofarm.referencesnapshot.v0.1")
+                expected_snapshot_digest = sha256_of(snapshot)
+                exact_snapshot = (
+                    existing["record_kind"] == "ofarm.referencesnapshot.v0.1"
+                    and existing["schema_hash"] == snapshot_contract.schema_hash
+                    and existing["payload_sha256"] == expected_snapshot_digest
+                    and sha256_of(existing["payload"]) == expected_snapshot_digest
+                    and existing["payload"] == snapshot
+                )
+                if exact_snapshot:
+                    # The parsed-data table is recomputable, but it is part of a
+                    # restartable bundle. Exact-verify it before calling this a
+                    # replay; restore a missing row from the supplied retained
+                    # bytes, and refuse an unequal identity reuse.
+                    cur.execute(
+                        "SELECT data_family, artifact_ref, source_digest, "
+                        "parser_label, record_count, payload, payload_sha256 "
+                        "FROM reference_snapshot_data WHERE snapshot_ref = %s",
+                        (snapshot_id,),
+                    )
+                    data_rows = cur.fetchall()
+                    data_row = next((row for row in data_rows
+                                     if row["data_family"] == data_family), None)
+                    expected_data = (
+                        parse_result.artifactRef,
+                        parse_result.sourceDigest,
+                        snapshot.get("canonicalVersionLabel"),
+                        parse_result.recordCount,
+                        parse_result.records,
+                        sha256_of(parse_result.records),
+                    )
+                    if any(row["data_family"] != data_family for row in data_rows):
+                        problem = runtime_problem(
+                            "DUPLICATE_IMPORT_AMBIGUOUS",
+                            "Conflicting retained reference-data family",
+                            f"reference data for {snapshot_id} already exists under "
+                            "a different data family")
+                        self.store.log_gate(
+                            cur, request_id, self.GATE, "REFUSED",
+                            reason_code="DUPLICATE_IMPORT_AMBIGUOUS",
+                            rationale=problem["detail"], related_refs=[snapshot_id])
+                        return {
+                            "imported": False, "snapshotRef": None,
+                            "disposition": "CONFLICT", "problem": problem,
+                        }
+                    if data_row is None:
+                        self.store.insert_reference_data(
+                            cur, snapshot_id, data_family, parse_result.records,
+                            artifact_ref=parse_result.artifactRef,
+                            source_digest=parse_result.sourceDigest,
+                            parser_label=snapshot.get("canonicalVersionLabel"),
+                            record_count=parse_result.recordCount)
+                    else:
+                        actual_data = (
+                            data_row["artifact_ref"], data_row["source_digest"],
+                            data_row["parser_label"], data_row["record_count"],
+                            data_row["payload"], data_row["payload_sha256"],
+                        )
+                        if actual_data != expected_data:
+                            problem = runtime_problem(
+                                "DUPLICATE_IMPORT_AMBIGUOUS",
+                                "Conflicting retained reference data",
+                                f"reference data for {snapshot_id} already uses the "
+                                "same identity with unequal bytes or provenance")
+                            self.store.log_gate(
+                                cur, request_id, self.GATE, "REFUSED",
+                                reason_code="DUPLICATE_IMPORT_AMBIGUOUS",
+                                rationale=problem["detail"],
+                                related_refs=[snapshot_id])
+                            return {
+                                "imported": False, "snapshotRef": None,
+                                "disposition": "CONFLICT", "problem": problem,
+                            }
                     # idempotent re-import of identical content: a governed no-op
                     self.store.log_gate(cur, request_id, self.GATE, "REPLAY_REUSED",
                                         rationale="identical snapshot already imported",

@@ -34,6 +34,7 @@ from .contracts import sha256_of
 from .emission import PromotionTraceWriter, ReplayWriter
 from .materializer import Materializer
 from .problems import runtime_problem
+from .runtime_bundle import require_store_runtime_bundle
 from .profile_runtime import (ProfileRuntimeError, resolve_active_descriptor,
                               resolve_profile_route)
 from .stages import (AuthorityGate, EnvelopePersist, EvidenceSufficiencyGate,
@@ -68,6 +69,7 @@ class GatePipeline:
         profile_route_registry=None,
         selected_profile_package_names=None,
         tenant_ref=None,
+        runtime_bundle=None,
     ):
         self.store = store
         route_inputs = (
@@ -94,16 +96,35 @@ class GatePipeline:
             active_descriptor if active_descriptor is not None else active_profile,
             allow_config_default=True,
         )
+        self.runtime_bundle = runtime_bundle or store.runtime_bundle
+        require_store_runtime_bundle(store, self.runtime_bundle, "GatePipeline")
+        if self.runtime_bundle.descriptor != self.active_profile:
+            raise ProfileRuntimeError(
+                "GatePipeline descriptor and RuntimeBundle do not match exactly")
         self.policy_provider = profile_policy.DescriptorPolicyProvider(
-            self.active_profile)
+            self.active_profile, runtime_bundle=self.runtime_bundle)
         self.si_reference_bindings = SIReferenceBindings.from_descriptor(
-            self.active_profile)
+            self.active_profile, runtime_bundle=self.runtime_bundle)
         self.si_reference_bindings_descriptor = self.active_profile
         self.authority = AuthorityEvaluator(store)
-        self.context = ContextAssembler(store, active_descriptor=self.active_profile)
-        self.materializer = Materializer(store, active_descriptor=self.active_profile)
-        self.products = product_register or ProductRegister(self.si_reference_bindings)
+        self.context = ContextAssembler(
+            store, active_descriptor=self.active_profile,
+            runtime_bundle=self.runtime_bundle)
+        self.materializer = Materializer(
+            store, active_descriptor=self.active_profile,
+            runtime_bundle=self.runtime_bundle)
+        if product_register is not None:
+            if (product_register.runtime_bundle is not self.runtime_bundle
+                    or product_register.bindings != self.si_reference_bindings):
+                raise ProfileRuntimeError(
+                    "ProductRegister and GatePipeline must share one RuntimeBundle "
+                    "and exact runtime reference bindings")
+            self.products = product_register
+        else:
+            self.products = ProductRegister(
+                self.si_reference_bindings, runtime_bundle=self.runtime_bundle)
         self.products.load_from_store(store)
+        self.products.freeze()
 
     # ======================================================================
     # the governed front door
@@ -152,6 +173,7 @@ class GatePipeline:
             cur=cur, store=self.store, authority=self.authority,
             context_assembler=self.context, materializer=self.materializer,
             products=self.products, active_profile=self.active_profile,
+            runtime_bundle=self.runtime_bundle,
             policy_provider=policy_provider,
             si_reference_bindings=si_reference_bindings,
             sub=sub,
@@ -212,19 +234,18 @@ class GatePipeline:
 
     def _bind_route_resolution(self, ctx: GateContext, resolution) -> None:
         descriptor = resolution.descriptor
-        bindings = SIReferenceBindings.from_descriptor(descriptor)
-        products = ProductRegister(bindings)
-        products.load_from_store(ctx.store)
+        if descriptor != self.runtime_bundle.descriptor:
+            raise ProfileRuntimeError(
+                "profile route targets a descriptor outside the prebuilt RuntimeBundle; "
+                "hot bundle construction is forbidden")
         ctx.profile_route_resolution = resolution
         ctx.active_profile = descriptor
-        ctx.policy_provider = profile_policy.DescriptorPolicyProvider(descriptor)
-        ctx.context_assembler = ContextAssembler(
-            ctx.store,
-            active_descriptor=descriptor,
-        )
-        ctx.materializer = Materializer(ctx.store, active_descriptor=descriptor)
-        ctx.products = products
-        ctx.si_reference_bindings = bindings
+        ctx.runtime_bundle = self.runtime_bundle
+        ctx.policy_provider = self.policy_provider
+        ctx.context_assembler = self.context
+        ctx.materializer = self.materializer
+        ctx.products = self.products
+        ctx.si_reference_bindings = self.si_reference_bindings
 
     def _resolve_profile_route(self, ctx: GateContext):
         try:
@@ -237,6 +258,7 @@ class GatePipeline:
                 tenant_ref=self.tenant_ref,
                 farm_ref=farm_ref,
                 effective_time=effective_time,
+                runtime_bundle_digest=self.runtime_bundle.digest,
             )
         except ProfileRuntimeError as exc:
             ctx.log("PACK_PROFILE_APPLICABILITY", "PROFILE_ROUTE_REFUSE",

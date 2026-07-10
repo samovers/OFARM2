@@ -9,7 +9,7 @@ is minted on basis drift (new reference snapshot version, policy change …).
 """
 from __future__ import annotations
 
-import hashlib
+import copy
 import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -18,6 +18,8 @@ from pathlib import Path
 from . import config
 from .contracts import UnknownContract, canonical_json
 from .profile_runtime import ProfileRuntimeError, resolve_active_descriptor
+from .runtime_bundle import (RuntimeBundleError, build_runtime_bundle,
+                             require_store_runtime_bundle, sha256_bytes)
 
 PROFILE_INSTANCE_FILES = list(config.ACTIVE_PROFILE.profile_instance_files)
 
@@ -43,9 +45,13 @@ class SIReferenceBindings:
     gerk_shipped_snapshot_ref: str
 
     @classmethod
-    def from_descriptor(cls, descriptor) -> "SIReferenceBindings":
+    def from_descriptor(cls, descriptor, *, runtime_bundle=None) -> "SIReferenceBindings":
+        if runtime_bundle is not None and runtime_bundle.descriptor != descriptor:
+            raise ProfileRuntimeError(
+                "SI reference bindings descriptor does not exactly match RuntimeBundle")
         try:
-            si_profile_root = Path(descriptor.profile_root).resolve(strict=True)
+            si_profile_root = Path(descriptor.profile_root).resolve(
+                strict=runtime_bundle is None)
         except (OSError, TypeError) as exc:
             raise ProfileRuntimeError(
                 "active SI profile root is unavailable or unreadable") from exc
@@ -61,8 +67,23 @@ class SIReferenceBindings:
             gerk_family.data_family, "GERK data family")
         gerk_shipped_snapshot_ref = _required_binding_value(
             gerk_family.shipped_snapshot_ref, "GERK shipped snapshot ref")
-        regsr_artifact_path = _regsr_shipped_artifact_path(
-            descriptor, si_profile_root, regsr_shipped_snapshot_ref)
+        if runtime_bundle is not None:
+            snapshot = runtime_bundle.reference_payload(regsr_shipped_snapshot_ref)
+            artifact_refs = [
+                ref.split(":", 1)[1]
+                for ref in snapshot.get("sourceArtifactRefs", [])
+                if isinstance(ref, str) and ref.startswith("artifact:")
+            ]
+            if len(artifact_refs) != 1 or not artifact_refs[0]:
+                raise ProfileRuntimeError(
+                    "bundled SI shipped REGSR snapshot must name one source artifact")
+            # The path is an identity/display aid only. Bundle-backed consumers
+            # use its name to address retained REFERENCE_SOURCE bytes and never
+            # open this filesystem location.
+            regsr_artifact_path = si_profile_root / "examples" / artifact_refs[0]
+        else:
+            regsr_artifact_path = _regsr_shipped_artifact_path(
+                descriptor, si_profile_root, regsr_shipped_snapshot_ref)
 
         return cls(
             si_profile_root=si_profile_root,
@@ -179,7 +200,7 @@ def now_iso() -> str:
 def mint(prefix: str) -> str:
     """The kernel's single id-minting helper (id-safe, pattern-conformant)."""
     import uuid
-    return f"{prefix}:{uuid.uuid4().hex[:16]}"
+    return f"{prefix}:{uuid.uuid4().hex}"
 
 
 def parse_ts(value) -> datetime | None:
@@ -206,32 +227,235 @@ def _require_active_profile(active_profile):
     return active_profile
 
 
-def bootstrap_for_descriptor(store, active_profile) -> list[str]:
-    """Load an explicit profile descriptor's shipped instances into the store."""
-    active_profile = _require_active_profile(active_profile)
-    inserted = []
+def _profile_payloads_from_bundle(store, active_profile, bundle):
+    """Read the shipped spine exactly once, from verified bundle bytes."""
+    package_root = Path(active_profile.profile_root).resolve().parent
+    payloads = []
     for path in active_profile.profile_instance_paths:
         try:
-            payload = json.loads(path.read_text())
-        except (OSError, ValueError) as exc:
+            relative = Path(path).resolve().relative_to(package_root).as_posix()
+        except ValueError as exc:
             raise ContextNotReconstructible(
-                f"active profile instance unreadable or malformed at {path}: {exc}"
-            ) from exc
-        if not isinstance(payload, dict):
+                f"profile instance escapes the bound package root: {path}") from exc
+        matches = [component for component in bundle.components
+                   if component.repository_path == relative
+                   and component.role in {"PROFILE_INSTANCE", "REFERENCE_SNAPSHOT"}]
+        if len(matches) != 1:
             raise ContextNotReconstructible(
-                f"active profile instance at {path} must be a JSON object")
+                f"RuntimeBundle does not contain profile instance {relative!r}")
         try:
+            payload = json.loads(matches[0].canonical_bytes)
             contract = store.registry.get(payload["schemaVersion"])
             record_id = payload[contract.id_field]
-        except (KeyError, TypeError, UnknownContract) as exc:
+        except (KeyError, TypeError, ValueError, UnknownContract) as exc:
             raise ContextNotReconstructible(
-                f"active profile instance malformed at {path}: {exc}"
-            ) from exc
-        if store.record_exists(record_id):
-            continue
-        with store.tx() as cur:
-            store.insert_record(cur, payload)
-        inserted.append(record_id)
+                f"bundled profile instance {relative!r} is malformed: {exc}") from exc
+        payloads.append((record_id, contract.kind, payload, matches[0].content_digest))
+    return payloads
+
+
+def bootstrap_for_descriptor(store, active_profile) -> list[str]:
+    """Atomically install one verified bundle and its shipped profile instances.
+
+    Reusing an identifier is permitted only for canonically equal content. A
+    conflict aborts the whole bootstrap; no prefix of the profile spine lands.
+    """
+    active_profile = _require_active_profile(active_profile)
+    bound_bundle = getattr(store, "_runtime_bundle", None)
+    if bound_bundle is not None:
+        if bound_bundle.descriptor != active_profile:
+            raise ContextNotReconstructible(
+                "the Store is already bound to a different RuntimeBundle descriptor")
+        for record_id, kind, payload, expected_digest in _profile_payloads_from_bundle(
+                store, active_profile, bound_bundle):
+            existing = store.get_record(record_id)
+            if (existing is None or existing["record_kind"] != kind
+                    or existing["payload_sha256"] != expected_digest
+                    or canonical_json(existing["payload"]) != canonical_json(payload)):
+                raise ContextNotReconstructible(
+                    f"bound profile instance {record_id!r} is absent or byte-mismatched")
+        return []
+
+    inserted = []
+    bundle = None
+    try:
+        with store.serialized_tx() as cur:
+            # Selection, content verification, persistence, and spine insertion
+            # share the import/commit advisory lock. A governed import cannot
+            # commit between selection and bundle installation.
+            cur.execute(
+                "SELECT payload, payload_sha256, runtime_bundle_digest "
+                "FROM kernel_record "
+                "WHERE record_kind = 'ofarm.referencesnapshot.v0.1' "
+                "AND tenant_ref = %s ORDER BY record_time, record_id",
+                (config.TENANT_REF,))
+            family_prefixes = tuple(
+                family.snapshot_prefix for family in active_profile.reference_families)
+            additional_reference_rows = [
+                row for row in cur.fetchall()
+                if isinstance(row["payload"], dict)
+                and isinstance(row["payload"].get("referenceSnapshotId"), str)
+                and any(
+                    row["payload"]["referenceSnapshotId"] == prefix
+                    or row["payload"]["referenceSnapshotId"].startswith(prefix + ".")
+                    for prefix in family_prefixes)
+            ]
+            for row in additional_reference_rows:
+                contract = store.registry.validate(row["payload"])
+                if contract.kind != "ofarm.referencesnapshot.v0.1":
+                    raise ContextNotReconstructible(
+                        "stored ReferenceSnapshot row resolves to the wrong contract")
+                if sha256_bytes(canonical_json(row["payload"]).encode("utf-8")) \
+                        != row["payload_sha256"]:
+                    raise ContextNotReconstructible(
+                        "stored ReferenceSnapshot payload digest does not match its bytes")
+            additional_references = [
+                row["payload"] for row in additional_reference_rows]
+            cur.execute(
+                "SELECT payload, payload_sha256, runtime_bundle_digest "
+                "FROM kernel_record WHERE record_kind = ANY(%s) "
+                "AND tenant_ref = %s ORDER BY record_time, record_id",
+                ([
+                    "ofarm.activeartifactset.v0.1",
+                    "ofarm.packactivationset.v0.1",
+                    "ofarm.agronomiccodebindingprofile.v0.1",
+                ], config.TENANT_REF),
+            )
+            raw_profile_rows = cur.fetchall()
+            expected_scope = {
+                "scopeType": "TENANT", "scopeRef": config.TENANT_REF}
+
+            def relevant_deployment(payload, scope_field):
+                return (isinstance(payload, dict)
+                        and payload.get("activePackRefs") == [active_profile.pack_ref]
+                        and payload.get("activeProfileRefs") == [active_profile.profile_ref]
+                        and payload.get(scope_field) == expected_scope)
+
+            relevant_artifact_rows = [
+                row for row in raw_profile_rows
+                if isinstance(row["payload"], dict)
+                and row["payload"].get("schemaVersion") ==
+                "ofarm.activeartifactset.v0.1"
+                and relevant_deployment(row["payload"], "deploymentScope")
+            ]
+            deployed_code_bindings = {active_profile.code_binding_profile_ref}
+            for row in relevant_artifact_rows:
+                active_refs = row["payload"].get("activeArtifactRefs")
+                if not isinstance(active_refs, list):
+                    continue
+                deployed_code_bindings.update(
+                    ref for ref in active_refs
+                    if isinstance(ref, str)
+                    and ref.startswith("codebindingprofile:"))
+            additional_profile_rows = []
+            for row in raw_profile_rows:
+                payload = row["payload"]
+                if not isinstance(payload, dict):
+                    continue
+                kind = payload.get("schemaVersion")
+                if kind == "ofarm.activeartifactset.v0.1":
+                    selected = relevant_deployment(payload, "deploymentScope")
+                elif kind == "ofarm.packactivationset.v0.1":
+                    selected = relevant_deployment(payload, "targetScope")
+                elif kind == "ofarm.agronomiccodebindingprofile.v0.1":
+                    profile_scope = payload.get("profileScope")
+                    pack_refs = (profile_scope.get("packRefs")
+                                 if isinstance(profile_scope, dict) else None)
+                    selected = (
+                        isinstance(pack_refs, list)
+                        and all(isinstance(ref, str) for ref in pack_refs)
+                        and active_profile.pack_ref in pack_refs
+                        and payload.get("agronomicCodeBindingProfileId")
+                        in deployed_code_bindings)
+                else:
+                    selected = False
+                if selected:
+                    additional_profile_rows.append(row)
+            for row in additional_profile_rows:
+                contract = store.registry.validate(row["payload"])
+                if contract.kind not in {
+                    "ofarm.activeartifactset.v0.1",
+                    "ofarm.packactivationset.v0.1",
+                    "ofarm.agronomiccodebindingprofile.v0.1",
+                }:
+                    raise ContextNotReconstructible(
+                        "stored profile spine row resolves to the wrong contract")
+                if sha256_bytes(canonical_json(row["payload"]).encode("utf-8")) \
+                        != row["payload_sha256"]:
+                    raise ContextNotReconstructible(
+                        "stored profile spine payload digest does not match its bytes")
+            origin_cache = {}
+            profile_origin_bundles = {}
+            for row in additional_profile_rows:
+                payload = row["payload"]
+                if payload.get("schemaVersion") != "ofarm.activeartifactset.v0.1":
+                    continue
+                if (payload.get("activePackRefs") != [active_profile.pack_ref]
+                        or payload.get("activeProfileRefs") != [active_profile.profile_ref]
+                        or payload.get("deploymentScope") != {
+                            "scopeType": "TENANT", "scopeRef": config.TENANT_REF}):
+                    # Out-of-lineage rows are deliberately not runtime inputs and
+                    # therefore must not make startup depend on their origin bundle.
+                    continue
+                origin_digest = row["runtime_bundle_digest"]
+                if origin_digest not in origin_cache:
+                    origin_cache[origin_digest] = store.cold_load_runtime_bundle(
+                        None, origin_digest)
+                profile_origin_bundles[payload["activeArtifactSetId"]] = \
+                    origin_cache[origin_digest]
+            data_families = [family.data_family for family in
+                             active_profile.reference_families if family.data_family]
+            if data_families:
+                cur.execute(
+                    "SELECT snapshot_ref, data_family, artifact_ref, source_digest, "
+                    "parser_label, record_count, payload, payload_sha256, "
+                    "runtime_bundle_digest FROM reference_snapshot_data "
+                    "WHERE data_family = ANY(%s) ORDER BY snapshot_ref, data_family",
+                    (data_families,),
+                )
+                reference_data = cur.fetchall()
+            else:
+                reference_data = []
+            bundle = build_runtime_bundle(
+                active_profile,
+                additional_profile_payloads=[
+                    row["payload"] for row in additional_profile_rows],
+                profile_origin_bundles=profile_origin_bundles,
+                additional_reference_payloads=additional_references,
+                reference_data=reference_data,
+                tenant_ref=config.TENANT_REF,
+            )
+            payloads = _profile_payloads_from_bundle(
+                store, active_profile, bundle)
+            store.install_runtime_bundle(cur, bundle)
+            store.assert_runtime_bundle_compatible(bundle)
+            with store.bootstrap_bundle_writes(bundle):
+                for record_id, kind, payload, expected_digest in payloads:
+                    cur.execute(
+                        "SELECT record_kind, payload, payload_sha256 FROM kernel_record "
+                        "WHERE record_id = %s",
+                        (record_id,),
+                    )
+                    existing = cur.fetchone()
+                    if existing is not None:
+                        if (existing["record_kind"] != kind
+                                or existing["payload_sha256"] != expected_digest
+                                or canonical_json(existing["payload"]) != canonical_json(payload)):
+                            raise ContextNotReconstructible(
+                                f"profile instance identifier {record_id!r} is already "
+                                "bound to different canonical content")
+                        continue
+                    store.insert_record(
+                        cur, payload, runtime_bundle_digest=bundle.digest)
+                    inserted.append(record_id)
+    except (ContextNotReconstructible, RuntimeBundleError) as exc:
+        if isinstance(exc, RuntimeBundleError):
+            raise ContextNotReconstructible(
+                f"RuntimeBundle cannot be constructed: {exc}") from exc
+        raise
+    except Exception as exc:
+        raise ContextNotReconstructible(f"atomic RuntimeBundle bootstrap failed: {exc}") from exc
+    store.bind_runtime_bundle(bundle)
     return inserted
 
 
@@ -258,7 +482,10 @@ def current_reference_snapshot(store, prefix: str,
     family that shares leading characters never collides. None means no snapshot
     of this family was in force at that moment. An unparseable bound (junk
     as_of) selects nothing (fail closed)."""
-    rows = store.find_by_kind("ofarm.referencesnapshot.v0.1")
+    # A runtime never reselects mutable store state. New imports become visible
+    # only in a newly constructed RuntimeBundle (normally a restart).
+    rows = [{"payload": payload} for payload in
+            store.runtime_bundle.reference_payloads.values()]
     bound = parse_ts(as_of) if as_of else parse_ts(now_iso())
     if bound is None:
         return None   # unparseable as_of: refuse to guess
@@ -301,6 +528,8 @@ def context_reference_snapshots_for_descriptor(
     snapshots = []
     as_of_mode = as_of is not None
     for family in active_profile.reference_families:
+        if not family.include_in_context:
+            continue
         snapshot = current_reference_snapshot(store, family.snapshot_prefix, as_of=as_of)
         if snapshot:
             snapshots.append(snapshot)
@@ -331,18 +560,32 @@ class ProductRegister:
     the same path; the runtime itself only ever reads registered artifacts.
     """
 
-    def __init__(self, bindings: SIReferenceBindings | None = None):
+    def __init__(self, bindings: SIReferenceBindings | None = None, *,
+                 runtime_bundle=None):
         self.bindings = bindings or SI_REFERENCE_BINDINGS
+        self.runtime_bundle = runtime_bundle
         self._by_snapshot: dict[str, dict] = {}
+        self._frozen = False
         # the shipped real parse (623 products, fictional-free: public register data)
         shipped = self.bindings.regsr_shipped_artifact_path
-        if shipped.exists():
+        if runtime_bundle is not None:
+            artifact_ref = f"artifact:{shipped.name}"
+            component = runtime_bundle.component("REFERENCE_SOURCE", artifact_ref)
+            self.register_artifact(
+                self.bindings.regsr_shipped_snapshot_ref,
+                json.loads(component.canonical_bytes),
+            )
+        elif shipped.exists():
+            # Construction-only seam for focused parser tests. Governed runtime
+            # construction always supplies a RuntimeBundle.
             self.register_artifact(
                 self.bindings.regsr_shipped_snapshot_ref,
                 json.loads(shipped.read_text()),
             )
 
     def register_artifact(self, snapshot_id: str, artifact: dict) -> None:
+        if self._frozen:
+            raise RuntimeError("ProductRegister is immutable for the RuntimeBundle lifetime")
         products = {p["regsrCode"]: p for p in artifact.get("products", [])}
         details = {d.get("regsrCode"): d for d in artifact.get("productDetails", [])}
         # D9: the binding identity is the decision number (stevilka odlocbe)
@@ -371,6 +614,37 @@ class ProductRegister:
         resolvable from the store, not only from committed package files; then
         (2) the committed package-file fallback for shipped snapshots, which
         names its artifact in sourceArtifactRefs. The runtime never guesses."""
+        if self.runtime_bundle is not None:
+            require_store_runtime_bundle(
+                store, self.runtime_bundle, "ProductRegister load")
+            # Bundle-backed runtime never consults the mutable store cache or
+            # filesystem after construction. It consumes only canonical bytes
+            # retained in the RuntimeBundle.
+            for reference in self.runtime_bundle.selected_references:
+                sid = reference.snapshot_ref
+                if sid in self._by_snapshot or not _snapshot_matches_family(
+                        sid, self.bindings.regsr_snapshot_prefix):
+                    continue
+                if reference.data_family == self.bindings.regsr_data_family:
+                    self.register_artifact(
+                        sid,
+                        self.runtime_bundle.reference_data_payload(
+                            sid, self.bindings.regsr_data_family),
+                    )
+                    continue
+                snapshot = self.runtime_bundle.reference_payload(sid)
+                artifact_refs = [ref for ref in snapshot.get("sourceArtifactRefs", [])
+                                 if isinstance(ref, str) and ref.startswith("artifact:")]
+                if not artifact_refs:
+                    continue
+                if len(artifact_refs) != 1:
+                    raise RuntimeError(
+                        f"selected REGSR snapshot {sid!r} has ambiguous source artifacts")
+                component = self.runtime_bundle.component(
+                    "REFERENCE_SOURCE", artifact_refs[0])
+                self.register_artifact(sid, json.loads(component.canonical_bytes))
+            self.freeze()
+            return
         for row in store.reference_data(self.bindings.regsr_data_family):
             sid = row["snapshot_ref"]
             if sid not in self._by_snapshot:
@@ -392,6 +666,10 @@ class ProductRegister:
                     if path is not None:
                         self.register_artifact(sid, json.loads(path.read_text()))
 
+    def freeze(self) -> None:
+        """End construction; later selection/cache mutation is forbidden."""
+        self._frozen = True
+
     def identities_by_decision(self, snapshot_id: str, decision_number: str) -> list[dict]:
         """The DISTINCT D9 identities for a decision number — one record per
         distinct (issued, validUntil) validity window. True duplicates of one
@@ -406,7 +684,7 @@ class ProductRegister:
         for c in data["byDecision"].get(decision_number, []):
             dec = c.get("decision", {})
             distinct.setdefault((dec.get("issued"), dec.get("validUntil")), c)
-        return list(distinct.values())
+        return copy.deepcopy(list(distinct.values()))
 
     def lookup_by_decision(self, snapshot_id: str, decision_number: str) -> dict | None:
         """Identity-grade lookup (D9): the sole record for a decision number
@@ -424,13 +702,13 @@ class ProductRegister:
         data = self._by_snapshot.get(snapshot_id)
         if not data:
             return None
-        return data["products"].get(regsr_code)
+        return copy.deepcopy(data["products"].get(regsr_code))
 
     def detail(self, snapshot_id: str, regsr_code: str) -> dict | None:
         data = self._by_snapshot.get(snapshot_id)
         if not data:
             return None
-        return data["details"].get(regsr_code)
+        return copy.deepcopy(data["details"].get(regsr_code))
 
     def has_snapshot(self, snapshot_id: str) -> bool:
         return snapshot_id in self._by_snapshot
@@ -443,7 +721,8 @@ class ContextNotReconstructible(Exception):
 class ContextAssembler:
     """Assembles (and reuses) per-farm Compliance-twin ContextSnapshots."""
 
-    def __init__(self, store, *, active_descriptor=None, active_profile=None):
+    def __init__(self, store, *, active_descriptor=None, active_profile=None,
+                 runtime_bundle=None):
         self.store = store
         if (active_descriptor is not None and active_profile is not None
                 and active_descriptor != active_profile):
@@ -454,11 +733,31 @@ class ContextAssembler:
                 active_descriptor if active_descriptor is not None else active_profile,
                 allow_config_default=True,
             ))
+        self.runtime_bundle = runtime_bundle or store.runtime_bundle
+        require_store_runtime_bundle(store, self.runtime_bundle, "ContextAssembler")
+        if self.runtime_bundle.descriptor != self.active_profile:
+            raise ProfileRuntimeError(
+                "ContextAssembler descriptor and RuntimeBundle do not match exactly")
 
     def _spine(self, as_of: str | None = None) -> dict:
-        artifact_sets = self.store.find_by_kind("ofarm.activeartifactset.v0.1")
-        activation_sets = self.store.find_by_kind("ofarm.packactivationset.v0.1")
-        profiles = self.store.find_by_kind("ofarm.agronomiccodebindingprofile.v0.1")
+        # Spine selection is over immutable bundle bytes, never live rows that
+        # may have appeared after startup. Store rows are bootstrap copies; the
+        # bundle is the selected content authority for this runtime lifetime.
+        instance_payloads = [
+            self.runtime_bundle.json_component(
+                component.role, component.logical_ref)
+            for component in self.runtime_bundle.components
+            if component.role in {"PROFILE_INSTANCE", "REFERENCE_SNAPSHOT"}
+        ]
+        artifact_sets = [{"payload": payload} for payload in instance_payloads
+                         if payload.get("schemaVersion") ==
+                         "ofarm.activeartifactset.v0.1"]
+        activation_sets = [{"payload": payload} for payload in instance_payloads
+                           if payload.get("schemaVersion") ==
+                           "ofarm.packactivationset.v0.1"]
+        profiles = [{"payload": payload} for payload in instance_payloads
+                    if payload.get("schemaVersion") ==
+                    "ofarm.agronomiccodebindingprofile.v0.1"]
         if not (artifact_sets and activation_sets and profiles):
             raise ContextNotReconstructible(
                 "context spine not bootstrapped — call context.bootstrap(store)")
@@ -655,16 +954,34 @@ class ContextAssembler:
             "activeProfileRefs": spine["activation_set"]["activeProfileRefs"],
             "referenceSnapshotRefs": reference_refs,
             "evidencePolicyRefs": [self.active_profile.evidence_policy_ref],
+            "runtimeBundleDigest": self.runtime_bundle.digest,
         }
-        digest = hashlib.sha256(canonical_json(material_basis).encode()).hexdigest()[:12]
+        digest = sha256_bytes(canonical_json(material_basis).encode("utf-8"))
         snapshot_id = (
             f"{self.active_profile.context_snapshot_id_prefix}."
             f"{_local(farm_ref)}.{target_twin.lower()}.{digest}"
         )
 
-        existing = self.store.get_payload(snapshot_id)
-        if existing:
-            return existing  # basis-preserving reuse (ContextSnapshot Closure RFC §2.4)
+        existing_row = self.store.get_record(snapshot_id)
+        if existing_row:
+            existing = existing_row["payload"]
+            projected = {
+                "targetTwin": existing["targetTwin"],
+                "farm": existing["anchorScopes"][0]["scopeRef"],
+                "policy": existing["evaluationTimePolicy"],
+                "activeArtifactSetRef": existing["activeArtifactSetRef"],
+                "sourcePackActivationSetRefs": existing["sourcePackActivationSetRefs"],
+                "activePackRefs": existing["activePackRefs"],
+                "activeProfileRefs": existing["activeProfileRefs"],
+                "referenceSnapshotRefs": existing.get("referenceSnapshotRefs", []),
+                "evidencePolicyRefs": existing.get("evidencePolicyRefs", []),
+                "runtimeBundleDigest": existing_row["runtime_bundle_digest"],
+            }
+            if (existing_row["runtime_bundle_digest"] != self.runtime_bundle.digest
+                    or canonical_json(projected) != canonical_json(material_basis)):
+                raise ContextNotReconstructible(
+                    "ContextSnapshot content identity was reused for unequal basis bytes")
+            return existing
 
         payload = {
             "schemaVersion": "ofarm.contextsnapshot.v0.1",

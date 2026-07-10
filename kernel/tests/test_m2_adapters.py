@@ -17,6 +17,7 @@ import uuid
 
 from kernel.adapters import ImportRunner, ParseResult
 from kernel.context import now_iso
+from kernel.contracts import sha256_of
 from kernel.store import Store, _SINGLE_WRITER_LOCK_KEY
 from profile_si_ffs.tests.m2_si_output_lock_tests import *  # noqa: F401,F403
 
@@ -49,19 +50,30 @@ def _import_log(store, snapshot_id):
         return cur.fetchall()
 
 
+def _parse(label, *, count=1, artifact_ref=None):
+    records = {"fixtureSource": label}
+    return ParseResult(
+        ok=True,
+        sourceDigest=sha256_of(records),
+        artifactRef=artifact_ref,
+        recordCount=count,
+        records=records,
+    )
+
+
 def test_g2_import_success_writes_dated_snapshot(store):
     sid = f"referencesnapshot:fixture.demo.{uid()}"
     result = ImportRunner(store).run_import(
-        ParseResult(ok=True, sourceDigest="sha256-fixturecafe",
-                    artifactRef="artifact:fixture.demo.json", recordCount=42),
-        _meta(sid))
+        _parse("fixture-success", count=42), _meta(sid),
+        data_family="fixture.test.data")
     assert result["imported"] is True and result["snapshotRef"] == sid
     row = store.get_record(sid)
     assert row is not None and row["record_kind"] == "ofarm.referencesnapshot.v0.1"
     p = row["payload"]
     assert p["effectiveFrom"] == "2026-05-01T00:00:00Z"
-    assert "digest:sha256-fixturecafe" in p["sourceArtifactRefs"]
-    assert "artifact:fixture.demo.json" in p["sourceArtifactRefs"]
+    assert f"digest:{sha256_of({'fixtureSource': 'fixture-success'})}" in \
+        p["sourceArtifactRefs"]
+    assert not any(ref.startswith("artifact:") for ref in p["sourceArtifactRefs"])
     log = _import_log(store, sid)
     assert log and log[-1]["outcome"] == "IMPORTED"
 
@@ -81,12 +93,14 @@ def test_g2_parse_failure_writes_no_snapshot(store):
 def test_g2_conflicting_reimport_refused(store):
     sid = f"referencesnapshot:fixture.conf.{uid()}"
     runner = ImportRunner(store)
-    first = runner.run_import(ParseResult(ok=True, sourceDigest="sha256-aaa"), _meta(sid))
+    first = runner.run_import(
+        _parse("conflict-a"), _meta(sid), data_family="fixture.test.data")
     assert first["imported"] is True
     original = store.get_record(sid)["payload_sha256"]
     conflict = runner.run_import(
-        ParseResult(ok=True, sourceDigest="sha256-bbb"),
-        _meta(sid, effective="2026-09-09T00:00:00Z"))
+        _parse("conflict-b"),
+        _meta(sid, effective="2026-09-09T00:00:00Z"),
+        data_family="fixture.test.data")
     assert conflict["imported"] is False
     assert conflict["problem"]["reasonCode"] == "DUPLICATE_IMPORT_AMBIGUOUS"
     assert store.get_record(sid)["payload_sha256"] == original, "append-only: unchanged"
@@ -95,11 +109,23 @@ def test_g2_conflicting_reimport_refused(store):
 def test_g2_idempotent_reimport_reused(store):
     sid = f"referencesnapshot:fixture.idem.{uid()}"
     runner = ImportRunner(store)
-    a = runner.run_import(ParseResult(ok=True, sourceDigest="sha256-ccc"), _meta(sid))
-    b = runner.run_import(ParseResult(ok=True, sourceDigest="sha256-ccc"), _meta(sid))
+    a = runner.run_import(
+        _parse("idempotent"), _meta(sid), data_family="fixture.test.data")
+    b = runner.run_import(
+        _parse("idempotent"), _meta(sid), data_family="fixture.test.data")
     assert a["imported"] is True and b["imported"] is True
     assert b["disposition"] == "ALREADY_IMPORTED"
     assert store.get_record(sid) is not None
+
+
+def test_g2_unretained_artifact_ref_refuses_without_poisoning_restart(store):
+    sid = f"referencesnapshot:fixture.unretained.{uid()}"
+    result = ImportRunner(store).run_import(
+        _parse("unretained", artifact_ref="artifact:fixture.raw.json"),
+        _meta(sid), data_family="fixture.test.data")
+    assert result["imported"] is False
+    assert result["disposition"] == "SOURCE_NOT_RETAINED"
+    assert store.get_record(sid) is None
 
 
 def test_g2_single_writer_lock_is_mutually_exclusive(store):
@@ -134,6 +160,8 @@ def test_g2_concurrent_first_structure_assertions_one_governed_winner(store):
     def worker(i):
         s = Store()
         try:
+            from kernel import context
+            context.bootstrap(s)
             pipe = GatePipeline(s)
             sub = demo.structure_submission(
                 {"schemaVersion": "ofarm.fieldidentitypayload.v0.1",

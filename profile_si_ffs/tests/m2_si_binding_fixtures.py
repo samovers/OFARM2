@@ -7,19 +7,59 @@ assertions out of the root suite.
 from __future__ import annotations
 
 import uuid
+from contextlib import contextmanager
 
+from kernel import context
+from kernel.context import ProductRegister, SIReferenceBindings
 from kernel.profiles.si_ffs import ffsnaprave_adapter as ffsn
 from kernel.profiles.si_ffs import gerk_adapter as gerk
 from kernel.profiles.si_ffs import regsr_adapter as regsr
+from kernel.profiles.si_ffs.ffsnaprave_adapter import FFSNapraveRegister
+from kernel.profiles.si_ffs.gerk_adapter import GerkLayer
+from kernel.store import Store
 
 
 def uid():
     return uuid.uuid4().hex[:8]
 
 
+@contextmanager
+def selected_runtime(store):
+    """Start bundle B after imports; never hot-switch the caller's runtime A."""
+    runtime = Store(dsn=store.dsn)
+    try:
+        context.bootstrap(runtime)
+        yield runtime
+    finally:
+        runtime.close()
+
+
+def bundled_product_register(runtime):
+    bindings = SIReferenceBindings.from_descriptor(
+        runtime.runtime_bundle.descriptor,
+        runtime_bundle=runtime.runtime_bundle,
+    )
+    register = ProductRegister(bindings, runtime_bundle=runtime.runtime_bundle)
+    register.load_from_store(runtime)
+    return register
+
+
+def bundled_gerk_layer(runtime):
+    layer = GerkLayer(runtime_bundle=runtime.runtime_bundle)
+    layer.load_from_store(runtime)
+    return layer
+
+
+def bundled_ffsnaprave_register(runtime):
+    register = FFSNapraveRegister(runtime_bundle=runtime.runtime_bundle)
+    register.load_from_store(runtime)
+    return register
+
+
 def import_regsr_snapshot(store, register_day, decision):
     art = {
         "snapshotKind": "SI_UVHVVR_FFS_REG_HTML_PARSE",
+        "parserCodeDigest": regsr.parser_code_digest(),
         "registerDay": register_day,
         "sourceUrl": regsr.REGSR_SOURCE_URL,
         "productCount": 1,
@@ -52,6 +92,7 @@ def import_regsr_snapshot(store, register_day, decision):
 def import_gerk_snapshot(store, layer_date, pid):
     art = {
         "snapshotKind": "SI_MKGP_GERK_LAYER_PARSE",
+        "parserCodeDigest": gerk.parser_code_digest(),
         "layerDate": layer_date,
         "canonicalVersionLabel": f"gerk-{layer_date}",
         "pidField": "GERK_PID",

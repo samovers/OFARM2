@@ -1,7 +1,7 @@
 """SI GERK adapter (M2 P2) — package content for the national GERK parcel layer
 (Identifikacijski sistem za zemljišča Blok/GERK, MKGP open data; scheme SI:GERK).
 
-Wires the open GERK layer to the GENERIC mechanisms: it parses the OPSI
+Provides an import/parser seam for a separately retained GERK layer. It parses the OPSI
 `.dbf`/`.csv` attribute table (reusing tooling/gerk_roundtrip/gerk_roundtrip.py
 as a library — never forked), imports the parse as a dated GERK
 `ReferenceSnapshot` through the generic G2 `ImportRunner`, persists the parsed
@@ -17,7 +17,12 @@ the G7 extent-carrier ACCEPTANCE mechanism — those remain OPEN (the G7 ticket)
 P2 closes the GERK import + attribute-resolution obligation only, NOT the
 geometry / G7 extent-carrier closure.
 
-Claim limits / posture: the open layer reflects GERK state at the last collective
+The shipped RuntimeBundle contains GERK ReferenceSnapshot provenance metadata
+only: it retains neither the archive nor parsed parcel data, so it exposes no
+shipped GERK lookup. Resolution becomes available only in a future bundle that
+selects governed retained data bytes with their full digest.
+
+Claim limits / posture: an imported open layer reflects GERK state at the last collective
 subsidy application; it carries existence, geometry (as a shapefile), area, and
 use code only — NO domače ime, BLOK-ID, or NUP (those come from the farmer/izpis,
 ONBOARDING_RKG_IZPIS.md). The zero-dependency tooling reads `.dbf`/`.csv`
@@ -28,14 +33,17 @@ claim (D7). Scheduled-import invalidation rides context-key drift (D19), as P1.
 """
 from __future__ import annotations
 
+import copy
 import hashlib
-import importlib.util
 from pathlib import Path
+from types import ModuleType
 
 from ... import config
 from ...adapters import ImportRunner, ParseResult
 from ...context import GERK_SNAPSHOT_PREFIX
 from ...contracts import sha256_of
+from ...runtime_bundle import (RuntimeBundleError, require_store_runtime_bundle,
+                               sha256_bytes)
 
 # GERK scheme constants (SI-specific). The parcel identity is the GERK-PID; the
 # layer supplies area + use code (RABA_ID / OPIS_RABE). Values mirror the shipped
@@ -48,6 +56,7 @@ GERK_DOMAIN = ("SI national GERK parcel layer (Identifikacijski sistem za "
                "zemljisca Blok/GERK, open data)")
 GERK_SOURCE_SURFACE = "surface:podatki.gov.si.blok-gerk-dataset"
 GERK_PARSER_REF = "tooling/gerk_roundtrip/gerk_roundtrip.py"
+GERK_PARSER_COMPONENT_REF = f"python:{GERK_PARSER_REF}"
 # store-backed reference-data family for the parsed GERK layer (M2 P2). GERK is
 # package content (GerkLayer below) and no generic kernel consumes it, so this
 # constant lives WITH the adapter — unlike REGSR_DATA_FAMILY, which sits in
@@ -70,12 +79,34 @@ GERK_OPIS_FIELDS = ("OPIS_RABE", "OPIS")
 
 
 def _parser():
-    """Load tooling/gerk_roundtrip/gerk_roundtrip.py as a library (reuse, no fork)."""
+    """Compile one exact parser byte string (no live-file/pyc split)."""
     path = config.PACKAGE_ROOT / "tooling" / "gerk_roundtrip" / "gerk_roundtrip.py"
-    spec = importlib.util.spec_from_file_location("ofarm_gerk_parser", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    source = path.read_bytes()
+    module = ModuleType("ofarm_gerk_parser")
+    module.__file__ = str(path)
+    exec(compile(source, str(path), "exec"), module.__dict__)
+    return module, sha256_bytes(source)
+
+
+def parser_code_digest() -> str:
+    path = config.PACKAGE_ROOT / GERK_PARSER_REF
+    return sha256_bytes(path.read_bytes())
+
+
+def _require_pinned_parser(store, artifact) -> None:
+    bundle = store.runtime_bundle
+    require_store_runtime_bundle(store, bundle, "GERK parser verification")
+    component = bundle.component("PARSER_CODE", GERK_PARSER_COMPONENT_REF)
+    path = config.PACKAGE_ROOT / GERK_PARSER_REF
+    try:
+        live_bytes = path.read_bytes()
+    except OSError as exc:
+        raise RuntimeBundleError("GERK parser bytes are unavailable") from exc
+    if (live_bytes != component.canonical_bytes
+            or artifact.get("parserCodeDigest") != component.content_digest):
+        raise RuntimeBundleError(
+            "GERK parsed artifact is not attested to the exact parser bytes "
+            "selected by this RuntimeBundle")
 
 
 def _pick(header, candidates):
@@ -110,7 +141,7 @@ def parse_gerk_layer(path, *, layer_date=None, version_label=None) -> dict:
     refused at import). Returns the artifact (per-parcel attributes + input
     digest) the importer wraps."""
     p = Path(path)
-    parser = _parser()
+    parser, parser_digest = _parser()
     rows = parser.iter_dbf(p) if p.suffix.lower() == ".dbf" else parser.iter_csv(p)
     try:
         header = next(rows)
@@ -153,6 +184,7 @@ def parse_gerk_layer(path, *, layer_date=None, version_label=None) -> dict:
         "featureCount": len(features),
         "features": features,
         "rowProblems": row_problems,
+        "parserCodeDigest": parser_digest,
         "inputs": [{"file": p.name, "digest": f"sha256:{digest}"}],
     }
 
@@ -165,6 +197,14 @@ def import_gerk_snapshot(store, artifact, *, layer_date=None, version_label=None
     store-backed (an index cache, NOT OFARM truth) so `GerkLayer` can resolve a
     PID from the store. A parse with no datable vintage is REFUSED through the
     governed path (no snapshot, no data)."""
+    try:
+        _require_pinned_parser(store, artifact)
+    except RuntimeBundleError as exc:
+        result = ImportRunner(store).run_import(
+            ParseResult(ok=False, error=str(exc)),
+            {"referenceSnapshotId": None}, data_family=GERK_DATA_FAMILY)
+        return {**result, "disposition": "PARSER_BUNDLE_MISMATCH",
+                "layerDate": None}
     layer_date = layer_date or artifact.get("layerDate")
 
     def _refuse(error: str, disposition: str) -> dict:
@@ -239,8 +279,12 @@ def import_gerk_snapshot(store, artifact, *, layer_date=None, version_label=None
 
 
 class GerkLayer:
-    """Offline GERK parcel-layer lookup for the in-force GERK snapshots (package
-    content). Resolves a GERK-PID to its parsed layer ATTRIBUTES — existence,
+    """Resolver for GERK data explicitly retained in a RuntimeBundle.
+
+    The shipped GERK snapshot is metadata-only and lookup against it raises
+    ``RuntimeBundleError``; it is not a package-content parcel database. A
+    future governed import may supply retained, digest-pinned parsed attributes.
+    For such selected bytes, this resolves a GERK-PID to layer ATTRIBUTES — existence,
     the raw `area` value, and use code (RABA_ID / OPIS_RABE) — within a dated
     layer vintage; a missing PID is surfaced as None, never a fabricated parcel.
 
@@ -252,10 +296,15 @@ class GerkLayer:
     mechanism that consumes it remain OPEN (the G7 ticket). It also backs Field
     identity existence (G1)."""
 
-    def __init__(self):
+    def __init__(self, *, runtime_bundle=None):
+        self.runtime_bundle = runtime_bundle
         self._by_snapshot: dict[str, dict] = {}
+        self._unavailable_snapshot_refs: set[str] = set()
+        self._frozen = False
 
     def register_artifact(self, snapshot_id: str, artifact: dict) -> None:
+        if self._frozen:
+            raise RuntimeError("GerkLayer is immutable for the RuntimeBundle lifetime")
         features = artifact.get("features", [])
         # defense-in-depth: import_gerk_snapshot already refuses a layer with a
         # conflicting duplicate PID, so store-loaded data is conflict-free — but
@@ -271,6 +320,26 @@ class GerkLayer:
         """Load store-backed GERK parcels persisted by a governed import (M2 P2),
         so a scheduled-import layer's parcels are resolvable from the store, not
         only from committed package files. The runtime never guesses."""
+        if self.runtime_bundle is not None:
+            require_store_runtime_bundle(store, self.runtime_bundle, "GERK layer load")
+            # A bundle-backed resolver consumes only retained canonical bytes.
+            # The shipped GERK ReferenceSnapshot is intentionally metadata-only:
+            # its locator remains provenance, but it exposes no lookup surface.
+            for reference in self.runtime_bundle.selected_references:
+                sid = reference.snapshot_ref
+                if not (sid == GERK_SNAPSHOT_PREFIX
+                        or sid.startswith(GERK_SNAPSHOT_PREFIX + ".")):
+                    continue
+                if reference.data_family != GERK_DATA_FAMILY:
+                    self._unavailable_snapshot_refs.add(sid)
+                    continue
+                self.register_artifact(
+                    sid,
+                    self.runtime_bundle.reference_data_payload(
+                        sid, GERK_DATA_FAMILY),
+                )
+            self._frozen = True
+            return
         for row in store.reference_data(GERK_DATA_FAMILY):
             sid = row["snapshot_ref"]
             if sid not in self._by_snapshot:
@@ -280,4 +349,11 @@ class GerkLayer:
         """The parcel record (gerkPid / rabaId / area / opisRabe) for a GERK-PID
         in a layer vintage, or None when the PID is absent from that layer — which
         is NOT 'not a parcel' (the layer vintage may lag the farmer's izpis)."""
-        return self._by_snapshot.get(snapshot_id, {}).get(gerk_pid)
+        if self.runtime_bundle is not None and snapshot_id not in self._by_snapshot:
+            if snapshot_id in self._unavailable_snapshot_refs:
+                raise RuntimeBundleError(
+                    f"selected GERK snapshot {snapshot_id!r} is metadata-only; "
+                    "governed retained source/data bytes are unavailable")
+            raise RuntimeBundleError(
+                f"GERK snapshot {snapshot_id!r} is not selected in this RuntimeBundle")
+        return copy.deepcopy(self._by_snapshot.get(snapshot_id, {}).get(gerk_pid))

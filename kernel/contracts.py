@@ -53,6 +53,7 @@ class Contract:
     path: Path
     schema: dict
     schema_hash: str         # sha256 of the contract file bytes as shipped
+    schema_bytes: bytes      # exact bytes named by schema_hash / RuntimeBundle
     id_field: str | None     # payload property holding the record's own id;
                              # None for authored-artifact contracts (views,
                              # manifests) that never land in the record table
@@ -127,6 +128,7 @@ class ContractRegistry:
                     path=path,
                     schema=schema,
                     schema_hash="sha256:" + hashlib.sha256(raw).hexdigest(),
+                    schema_bytes=raw,
                     id_field=id_field,
                 )
 

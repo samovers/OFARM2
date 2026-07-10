@@ -19,6 +19,53 @@ END
 $$ LANGUAGE plpgsql;
 
 -- ---------------------------------------------------------------------------
+-- Immutable content-addressed RuntimeBundles (issue #171). These are
+-- implementation receipts, not promoted OFARM machine contracts. Exact bytes
+-- are retained so historical bundle reconstruction never depends on mutable
+-- filesystem paths or derived caches.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS runtime_content_blob (
+  content_digest  text PRIMARY KEY CHECK (content_digest ~ '^sha256:[0-9a-f]{64}$'),
+  canonicalization text NOT NULL,
+  canonical_bytes bytea NOT NULL,
+  byte_length bigint NOT NULL CHECK (byte_length >= 0)
+);
+
+CREATE TABLE IF NOT EXISTS runtime_bundle (
+  bundle_digest   text PRIMARY KEY CHECK (bundle_digest ~ '^sha256:[0-9a-f]{64}$'),
+  bundle_ref      text NOT NULL UNIQUE,
+  canonical_document jsonb NOT NULL,
+  canonical_bytes bytea NOT NULL,
+  byte_length bigint NOT NULL CHECK (byte_length >= 0),
+  record_time timestamptz NOT NULL DEFAULT now(),
+  CHECK (bundle_ref = 'runtimebundle:' || bundle_digest)
+);
+
+CREATE TABLE IF NOT EXISTS runtime_bundle_component (
+  bundle_digest text NOT NULL REFERENCES runtime_bundle(bundle_digest),
+  component_role text NOT NULL,
+  logical_ref text NOT NULL,
+  repository_path text NOT NULL,
+  canonicalization text NOT NULL,
+  content_digest text NOT NULL REFERENCES runtime_content_blob(content_digest),
+  byte_length bigint NOT NULL CHECK (byte_length >= 0),
+  PRIMARY KEY (bundle_digest, component_role, logical_ref)
+);
+
+DROP TRIGGER IF EXISTS trg_runtime_content_blob_append_only ON runtime_content_blob;
+CREATE TRIGGER trg_runtime_content_blob_append_only
+  BEFORE UPDATE OR DELETE ON runtime_content_blob
+  FOR EACH STATEMENT EXECUTE FUNCTION kernel_forbid_mutation();
+DROP TRIGGER IF EXISTS trg_runtime_bundle_append_only ON runtime_bundle;
+CREATE TRIGGER trg_runtime_bundle_append_only
+  BEFORE UPDATE OR DELETE ON runtime_bundle
+  FOR EACH STATEMENT EXECUTE FUNCTION kernel_forbid_mutation();
+DROP TRIGGER IF EXISTS trg_runtime_bundle_component_append_only ON runtime_bundle_component;
+CREATE TRIGGER trg_runtime_bundle_component_append_only
+  BEFORE UPDATE OR DELETE ON runtime_bundle_component
+  FOR EACH STATEMENT EXECUTE FUNCTION kernel_forbid_mutation();
+
+-- ---------------------------------------------------------------------------
 -- kernel_record: one row per governed contract record. JSONB payload is
 -- validated against the package contracts on write (application layer);
 -- payload_sha256 is the digest of the canonical JSON serialization;
@@ -36,7 +83,8 @@ CREATE TABLE IF NOT EXISTS kernel_record (
   payload        jsonb NOT NULL,
   payload_sha256 text NOT NULL,
   record_time    timestamptz NOT NULL DEFAULT now(),
-  tenant_ref     text NOT NULL DEFAULT 'tenant:si.ffs.pilot.demo'
+  tenant_ref     text NOT NULL DEFAULT 'tenant:si.ffs.pilot.demo',
+  runtime_bundle_digest text NOT NULL REFERENCES runtime_bundle(bundle_digest)
 );
 CREATE INDEX IF NOT EXISTS ix_kernel_record_kind ON kernel_record (record_kind);
 
@@ -67,7 +115,8 @@ CREATE TABLE IF NOT EXISTS kernel_edge (
                 )),
   src_record_id text NOT NULL,
   dst_record_id text NOT NULL,
-  record_time   timestamptz NOT NULL DEFAULT now()
+  record_time   timestamptz NOT NULL DEFAULT now(),
+  runtime_bundle_digest text NOT NULL REFERENCES runtime_bundle(bundle_digest)
 );
 -- CREATE TABLE IF NOT EXISTS never updates an existing CHECK: refresh the
 -- edge vocabulary idempotently so pre-existing databases pick up new types
@@ -180,7 +229,8 @@ CREATE TABLE IF NOT EXISTS kernel_gate_log (
   reason_code  text,
   rationale    text,
   related_refs jsonb,
-  record_time  timestamptz NOT NULL DEFAULT now()
+  record_time  timestamptz NOT NULL DEFAULT now(),
+  runtime_bundle_digest text NOT NULL REFERENCES runtime_bundle(bundle_digest)
 );
 CREATE INDEX IF NOT EXISTS ix_kernel_gate_log_request ON kernel_gate_log (request_id);
 
@@ -199,7 +249,8 @@ CREATE TABLE IF NOT EXISTS kernel_idempotency (
   request_id            text NOT NULL,
   source_payload_digest text,
   result_record_id      text NOT NULL,
-  record_time           timestamptz NOT NULL DEFAULT now()
+  record_time           timestamptz NOT NULL DEFAULT now(),
+  runtime_bundle_digest text NOT NULL REFERENCES runtime_bundle(bundle_digest)
 );
 
 DROP TRIGGER IF EXISTS trg_kernel_idempotency_append_only ON kernel_idempotency;
@@ -233,7 +284,8 @@ CREATE TABLE IF NOT EXISTS derived_materialization (
   context_snapshot_ref text NOT NULL,
   freshness_vector     jsonb NOT NULL,       -- draft MaterializationFreshnessVector (D16)
   generated_at         timestamptz NOT NULL DEFAULT now(),
-  superseded_by        text
+  superseded_by        text,
+  runtime_bundle_digest text NOT NULL REFERENCES runtime_bundle(bundle_digest)
 );
 CREATE INDEX IF NOT EXISTS ix_derived_mat_key ON derived_materialization (key_digest);
 
@@ -246,7 +298,8 @@ CREATE TABLE IF NOT EXISTS derived_dependency_index (
   dependency_source_family text NOT NULL,
   key_digest               text NOT NULL,
   entry                    jsonb NOT NULL,
-  generated_at             timestamptz NOT NULL DEFAULT now()
+  generated_at             timestamptz NOT NULL DEFAULT now(),
+  runtime_bundle_digest    text NOT NULL REFERENCES runtime_bundle(bundle_digest)
 );
 CREATE INDEX IF NOT EXISTS ix_derived_dep_source ON derived_dependency_index (dependency_source_ref);
 CREATE INDEX IF NOT EXISTS ix_derived_dep_key ON derived_dependency_index (key_digest);
@@ -273,6 +326,7 @@ CREATE TABLE IF NOT EXISTS reference_snapshot_data (
   payload        jsonb NOT NULL,
   payload_sha256 text NOT NULL,
   record_time    timestamptz NOT NULL DEFAULT now(),
+  runtime_bundle_digest text NOT NULL REFERENCES runtime_bundle(bundle_digest),
   PRIMARY KEY (snapshot_ref, data_family)
 );
 CREATE INDEX IF NOT EXISTS ix_reference_snapshot_data_family ON reference_snapshot_data (data_family);
@@ -287,7 +341,8 @@ CREATE TABLE IF NOT EXISTS runtime_trace (
   schema_hash    text NOT NULL,
   payload        jsonb NOT NULL,
   payload_sha256 text NOT NULL,
-  record_time    timestamptz NOT NULL DEFAULT now()
+  record_time    timestamptz NOT NULL DEFAULT now(),
+  runtime_bundle_digest text NOT NULL REFERENCES runtime_bundle(bundle_digest)
 );
 
 DROP TRIGGER IF EXISTS trg_runtime_trace_append_only ON runtime_trace;
@@ -303,7 +358,8 @@ CREATE TABLE IF NOT EXISTS export_artifact (
   digest             text NOT NULL,
   metadata_record_id text NOT NULL,
   document           jsonb NOT NULL,
-  record_time        timestamptz NOT NULL DEFAULT now()
+  record_time        timestamptz NOT NULL DEFAULT now(),
+  runtime_bundle_digest text NOT NULL REFERENCES runtime_bundle(bundle_digest)
 );
 
 DROP TRIGGER IF EXISTS trg_export_artifact_append_only ON export_artifact;

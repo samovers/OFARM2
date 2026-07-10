@@ -24,16 +24,17 @@ cached (not needed for the match; privacy-conservative, D14).
 """
 from __future__ import annotations
 
+import copy
 import csv
 import hashlib
-import re
 
 from pathlib import Path
 
 from ...adapters import ImportRunner, ParseResult
 from ...authority import AuthorityEvaluator
 from ...context import now_iso
-from ...contracts import sha256_of
+from ...runtime_bundle import RuntimeBundleError, require_store_runtime_bundle
+from ...contracts import canonical_json, sha256_of
 from ...problems import runtime_problem
 
 # FFSNaprave scheme constants (SI-specific). Mirror the shipped example shape.
@@ -66,13 +67,6 @@ RETAINED_FIELDS = (
     "VeljavnostZnaka", "ZadnjiPregled", "VrstaNaprave", "Izdelovalec",
     "LetoIzdelave", "TipNaprave", "SerijskaStevilka", "LetoNakupa", "PregledID",
     "LetoPregleda", "DatumPregleda", "StevilkaZnaka", "SkladnostObPregledu")
-
-_SAFE = re.compile(r"[^A-Za-z0-9._-]")
-
-
-def _safe(s) -> str:
-    return _SAFE.sub("_", str(s or ""))
-
 
 def _conflicting_inspection(inspections):
     """The first (StevilkaZnaka, VeljavnostZnaka) composite that appears with
@@ -222,10 +216,15 @@ class FFSNapraveRegister:
     machine — the composite key `StevilkaZnaka` + `VeljavnostZnaka`. A missing or
     ambiguous match is surfaced as None, never a fabricated inspection."""
 
-    def __init__(self):
+    def __init__(self, *, runtime_bundle=None):
+        self.runtime_bundle = runtime_bundle
         self._by_snapshot: dict[str, dict] = {}
+        self._frozen = False
 
     def register_artifact(self, snapshot_id: str, artifact: dict) -> None:
+        if self._frozen:
+            raise RuntimeError(
+                "FFSNapraveRegister is immutable for the RuntimeBundle lifetime")
         inspections = artifact.get("inspections", [])
         # defense-in-depth: import already refuses a conflicting composite key, so
         # store-loaded data is conflict-free — but never build a last-wins index
@@ -247,6 +246,19 @@ class FFSNapraveRegister:
     def load_from_store(self, store) -> None:
         """Load store-backed inspections persisted by a governed import (M2 P3),
         so a scheduled-import file's inspections resolve from the store."""
+        if self.runtime_bundle is not None:
+            require_store_runtime_bundle(
+                store, self.runtime_bundle, "FFSNaprave register load")
+            for reference in self.runtime_bundle.selected_references:
+                if reference.data_family != FFSNAPRAVE_DATA_FAMILY:
+                    continue
+                self.register_artifact(
+                    reference.snapshot_ref,
+                    self.runtime_bundle.reference_data_payload(
+                        reference.snapshot_ref, FFSNAPRAVE_DATA_FAMILY),
+                )
+            self._frozen = True
+            return
         for row in store.reference_data(FFSNAPRAVE_DATA_FAMILY):
             sid = row["snapshot_ref"]
             if sid not in self._by_snapshot:
@@ -257,6 +269,10 @@ class FFSNapraveRegister:
         Empty = the sticker is absent; more than one = the composite key is ambiguous
         without a supplied validity (a caller must disambiguate, never collapse)."""
         data = self._by_snapshot.get(snapshot_id)
+        if self.runtime_bundle is not None and data is None:
+            raise RuntimeBundleError(
+                f"FFSNaprave snapshot {snapshot_id!r} is not selected with retained "
+                "bytes in this RuntimeBundle")
         if not data:
             return []
         return sorted({r.get(VALIDITY_FIELD) for r in data["bySticker"].get(sticker_number, [])
@@ -268,13 +284,18 @@ class FFSNapraveRegister:
         ONE validity window matches, but multiple windows are ambiguous → None (the
         farmer reads both off the sticker; the runtime never guesses which)."""
         data = self._by_snapshot.get(snapshot_id)
+        if self.runtime_bundle is not None and data is None:
+            raise RuntimeBundleError(
+                f"FFSNaprave snapshot {snapshot_id!r} is not selected with retained "
+                "bytes in this RuntimeBundle")
         if not data:
             return None
         if validity is not None:
-            return data["byKey"].get((sticker_number, validity))
+            return copy.deepcopy(data["byKey"].get((sticker_number, validity)))
         candidates = data["bySticker"].get(sticker_number, [])
         distinct = {r.get(VALIDITY_FIELD): r for r in candidates}
-        return next(iter(distinct.values())) if len(distinct) == 1 else None
+        return copy.deepcopy(
+            next(iter(distinct.values())) if len(distinct) == 1 else None)
 
 
 def attach_inspection_evidence(store, register, snapshot_id, sticker_number, *,
@@ -303,6 +324,8 @@ def attach_inspection_evidence(store, register, snapshot_id, sticker_number, *,
     SNAPSHOT-SCOPED (vintage + sticker + validity) so a later vintage never reuses an
     older one's evidence (B1); the existence re-check is UNDER the single-writer lock
     so concurrent captures are idempotent (B2)."""
+    require_store_runtime_bundle(
+        store, register.runtime_bundle, "FFSNaprave evidence attachment")
     inspection = register.match(snapshot_id, sticker_number, validity)
     if inspection is None:
         return {"attached": False, "evidenceRef": None, "disposition": "NO_MATCH",
@@ -314,8 +337,18 @@ def attach_inspection_evidence(store, register, snapshot_id, sticker_number, *,
         action_stage="PROMOTION", scope=scope)
 
     v = inspection.get(VALIDITY_FIELD)
-    vintage = snapshot_id.split(f"{FFSNAPRAVE_SNAPSHOT_PREFIX}.", 1)[-1]
-    eid = f"evidence:si.ffs-naprave.{_safe(vintage)}.{_safe(sticker_number)}.{_safe(v)}"
+    identity_basis = {
+        "identityVersion": "ofarm.ffs-naprave-evidence-identity.local.v1",
+        "runtimeBundleDigest": store.runtime_bundle_digest,
+        "snapshotRef": snapshot_id,
+        "stickerNumber": sticker_number,
+        "validity": v,
+        "inspectionDigest": sha256_of(inspection),
+        "capturedByPartyRef": captured_by,
+        "farmRef": farm_ref,
+    }
+    identity_digest = sha256_of(identity_basis).split(":", 1)[1]
+    eid = f"evidence:si.ffs-naprave.sha256.{identity_digest}"
     # capturedAt = the register vintage the extract was taken from (the snapshot's
     # effectiveFrom); recordedAt = now (mirrors the demo's REGISTRY_EXTRACT split).
     # the snapshot record exists: the register only matched because the import wrote
@@ -360,7 +393,26 @@ def attach_inspection_evidence(store, register, snapshot_id, sticker_number, *,
             return {"attached": False, "evidenceRef": None,
                     "disposition": "UNAUTHORIZED", "problem": problem}
         # idempotent re-check UNDER the advisory lock (B2)
-        if store.get_record(eid) is not None:
+        existing = store.get_record(eid)
+        if existing is not None:
+            existing_payload = existing["payload"]
+            stable_existing = {
+                key: value for key, value in existing_payload.items()
+                if key != "recordedAt"
+            }
+            stable_expected = {
+                key: value for key, value in evidence.items()
+                if key != "recordedAt"
+            }
+            contract = store.registry.get("ofarm.evidencerecord.v0.1")
+            if (existing["record_kind"] != "ofarm.evidencerecord.v0.1"
+                    or existing["schema_hash"] != contract.schema_hash
+                    or existing["payload_sha256"] != sha256_of(existing_payload)
+                    or existing["runtime_bundle_digest"] != store.runtime_bundle_digest
+                    or canonical_json(stable_existing) != canonical_json(stable_expected)):
+                raise RuntimeBundleError(
+                    f"inspection evidence identity {eid!r} was reused for unequal "
+                    "content or a different RuntimeBundle")
             return {"attached": True, "evidenceRef": eid,
                     "disposition": "ALREADY_CAPTURED", "problem": None}
         store.insert_record(cur, evidence)

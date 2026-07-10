@@ -23,12 +23,14 @@ fictional and format-true (privacy rule 1).
 from __future__ import annotations
 
 import uuid
+from contextlib import contextmanager
 
 import pytest
 
-from kernel import demo
+from kernel import config, context, demo
 from kernel.context import ContextAssembler, ContextNotReconstructible
 from kernel.materializer import Materializer
+from kernel.store import Store
 
 
 def uid():
@@ -51,7 +53,8 @@ def _activation_vintage(store, evaluated_at: str) -> str:
     return act["packActivationSetId"]
 
 
-def _generation(store, *, at: str, cb_state: str = "ACTIVE") -> dict:
+def _generation(store, *, at: str, cb_state: str = "ACTIVE",
+                tenant_ref: str = config.TENANT_REF) -> dict:
     """Create a coherent deployment generation effective at `at` and return its
     ids. The ActiveArtifactSet is generated FROM this PackActivationSet
     (sourcePackActivationSetRefs) and deploys this AgronomicCodeBindingProfile
@@ -68,35 +71,51 @@ def _generation(store, *, at: str, cb_state: str = "ACTIVE") -> dict:
     act_id = f"{act['packActivationSetId']}.gen.{u}"
     act["packActivationSetId"] = act_id
     act["evaluatedAt"] = at
+    act["targetScope"] = {"scopeType": "TENANT", "scopeRef": tenant_ref}
 
     art = _shipped(store, "ofarm.activeartifactset.v0.1")
     art_id = f"{art['activeArtifactSetId']}.gen.{u}"
     art["activeArtifactSetId"] = art_id
     art["generatedAt"] = at
+    art["deploymentScope"] = {"scopeType": "TENANT", "scopeRef": tenant_ref}
     art["sourcePackActivationSetRefs"] = [act_id]
     art["activeArtifactRefs"] = [r for r in art["activeArtifactRefs"]
                                  if not r.startswith("codebindingprofile:")] + [cb_id]
 
     with store.tx() as cur:
-        store.insert_record(cur, cb)
-        store.insert_record(cur, act)
-        store.insert_record(cur, art)
+        store.insert_record(cur, cb, tenant_ref=tenant_ref)
+        store.insert_record(cur, act, tenant_ref=tenant_ref)
+        store.insert_record(cur, art, tenant_ref=tenant_ref)
     return {"activation": act_id, "artifact": art_id, "codebinding": cb_id}
 
 
+@contextmanager
+def _rebundled(store):
+    """Start a new runtime so newly appended historical rows are selected."""
+    runtime = Store(dsn=store.dsn)
+    try:
+        context.bootstrap(runtime)
+        yield runtime
+    finally:
+        runtime.close()
+
+
 def _asof(store, as_of: str):
-    ca = ContextAssembler(store)
-    with store.tx() as cur:
-        return ca.assemble(cur, demo.FARM,
-                           evaluation_time_policy={"policyType": "AS_OF", "asOfTime": as_of})
+    with _rebundled(store) as runtime:
+        ca = ContextAssembler(runtime)
+        with runtime.tx() as cur:
+            return ca.assemble(
+                cur, demo.FARM,
+                evaluation_time_policy={"policyType": "AS_OF", "asOfTime": as_of})
 
 
 def _resolve_asof(store, as_of: str):
-    with store.tx() as cur:
-        return Materializer(store).resolve_for_use(
-            cur, demo.FARM,
-            time_policy={"policyType": "AS_OF", "asOfTime": as_of},
-            recompute_if_needed=True)
+    with _rebundled(store) as runtime:
+        with runtime.tx() as cur:
+            return Materializer(runtime).resolve_for_use(
+                cur, demo.FARM,
+                time_policy={"policyType": "AS_OF", "asOfTime": as_of},
+                recompute_if_needed=True)
 
 
 # ---------------------------------------------------------------------------
@@ -119,6 +138,67 @@ def test_asof_reconstructs_the_in_force_generation(fresh_env):
     assert selected("2025-07-01T00:00:00Z") == (g1["artifact"], [g1["activation"]])
     # g0 + g1 + g2 in force -> the latest (g2) is selected, coherently
     assert selected("2025-10-01T00:00:00Z") == (g2["artifact"], [g2["activation"]])
+
+
+def test_asof_ignores_newer_unrelated_profile_spine(fresh_env):
+    store, _, _ = fresh_env
+    g0 = _generation(store, at="2025-02-01T00:00:00Z")
+    other_pack = "pack:test.unrelated.v0_1"
+    other_profile = "profile:test.unrelated.v0_1"
+    cb = _shipped(store, "ofarm.agronomiccodebindingprofile.v0.1")
+    cb["agronomicCodeBindingProfileId"] = f"codebindingprofile:test.unrelated.{uid()}"
+    cb["issuedAt"] = "2025-12-01T00:00:00Z"
+    cb["profileScope"]["packRefs"] = [other_pack]
+    act = _shipped(store, "ofarm.packactivationset.v0.1")
+    act["packActivationSetId"] = f"packactivationset:test.unrelated.{uid()}"
+    act["evaluatedAt"] = "2025-12-01T00:00:00Z"
+    act["activePackRefs"] = [other_pack]
+    act["activeProfileRefs"] = [other_profile]
+    art = _shipped(store, "ofarm.activeartifactset.v0.1")
+    art["activeArtifactSetId"] = f"activeartifactset:test.unrelated.{uid()}"
+    art["generatedAt"] = "2025-12-01T00:00:00Z"
+    art["activePackRefs"] = [other_pack]
+    art["activeProfileRefs"] = [other_profile]
+    art["sourcePackActivationSetRefs"] = [act["packActivationSetId"]]
+    art["activeArtifactRefs"] = [
+        ref for ref in art["activeArtifactRefs"]
+        if not ref.startswith("codebindingprofile:")
+    ] + [cb["agronomicCodeBindingProfileId"]]
+    with store.tx() as cur:
+        store.insert_record(cur, cb)
+        store.insert_record(cur, act)
+        store.insert_record(cur, art)
+
+    snap = _asof(store, "2026-01-01T00:00:00Z")
+    assert snap["activeArtifactSetRef"] == g0["artifact"]
+    assert snap["sourcePackActivationSetRefs"] == [g0["activation"]]
+
+
+def test_asof_ignores_same_pack_profile_generation_from_other_tenant(fresh_env):
+    store, _, _ = fresh_env
+    g0 = _generation(store, at="2025-02-01T00:00:00Z")
+    _generation(
+        store, at="2025-12-01T00:00:00Z",
+        tenant_ref="tenant:issue171.other")
+
+    snap = _asof(store, "2026-01-01T00:00:00Z")
+    assert snap["activeArtifactSetRef"] == g0["artifact"]
+    assert snap["sourcePackActivationSetRefs"] == [g0["activation"]]
+
+
+def test_asof_ignores_same_pack_codebinding_never_deployed_by_artifact_set(fresh_env):
+    store, _, _ = fresh_env
+    g0 = _generation(store, at="2025-02-01T00:00:00Z")
+    sibling = _shipped(store, "ofarm.agronomiccodebindingprofile.v0.1")
+    sibling["agronomicCodeBindingProfileId"] = (
+        f"codebindingprofile:si.ffs.undeployed.{uid()}")
+    sibling["issuedAt"] = "2025-12-01T00:00:00Z"
+    with store.tx() as cur:
+        store.insert_record(cur, sibling)
+
+    snap = _asof(store, "2026-01-01T00:00:00Z")
+    assert snap["activeArtifactSetRef"] == g0["artifact"]
+    assert snap["sourcePackActivationSetRefs"] == [g0["activation"]]
 
 
 def test_asof_single_spine_in_force_reconstructs(fresh_env):
@@ -180,7 +260,26 @@ def test_asof_artifact_without_source_activation_refuses(fresh_env):
     art["sourcePackActivationSetRefs"] = []
     with store.tx() as cur:
         store.insert_record(cur, art)
-    with pytest.raises(ContextNotReconstructible, match="records no source"):
+    with pytest.raises(
+            ContextNotReconstructible,
+            match="has no retained source activation set"):
+        _asof(store, "2025-07-01T00:00:00Z")
+
+
+def test_asof_historical_artifact_with_unknown_active_ref_refuses_startup(fresh_env):
+    store, _, _ = fresh_env
+    g0 = _generation(store, at="2025-02-01T00:00:00Z")
+    art = next(dict(row["payload"]) for row in store.find_by_kind(
+        "ofarm.activeartifactset.v0.1")
+        if row["payload"]["activeArtifactSetId"] == g0["artifact"])
+    art["activeArtifactSetId"] = f"{art['activeArtifactSetId']}.unknown.{uid()}"
+    art["generatedAt"] = "2025-06-01T00:00:00Z"
+    art["activeArtifactRefs"].append("queryplan:test.unknown.v0_1")
+    with store.tx() as cur:
+        store.insert_record(cur, art)
+    with pytest.raises(
+            ContextNotReconstructible,
+            match="does not resolve to byte-identical components"):
         _asof(store, "2025-07-01T00:00:00Z")
 
 

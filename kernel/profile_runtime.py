@@ -6,7 +6,6 @@ stays outside the required descriptor.
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 from collections.abc import Sequence
@@ -60,6 +59,7 @@ _REFERENCE_FAMILY_KEYS = {
     "missingFamilyBehaviorNow",
     "missingFamilyBehaviorAsOf",
     "shippedSnapshotRef",
+    "includeInContext",
 }
 _REFERENCE_FAMILY_REQUIRED = {
     "familyId",
@@ -85,6 +85,7 @@ class ReferenceFamily:
     missing_family_behavior_now: str
     missing_family_behavior_as_of: str
     shipped_snapshot_ref: str | None
+    include_in_context: bool = True
 
     def missing_behavior(self, *, as_of: bool) -> str:
         return self.missing_family_behavior_as_of if as_of else self.missing_family_behavior_now
@@ -163,7 +164,7 @@ class ProfileRouteRecord:
     pack_ref: str
     pack_activation_set_ref: str
     active_artifact_set_ref: str
-    descriptor_identity: str | None = None
+    runtime_bundle_digest: str
     effective_from: datetime | None = None
     effective_until: datetime | None = None
     status: str = ROUTE_STATUS_ACTIVE
@@ -255,26 +256,6 @@ def resolve_active_descriptor(
     return config.ACTIVE_PROFILE
 
 
-def profile_runtime_descriptor_identity(
-    descriptor: ProfileRuntimeDescriptor,
-) -> str:
-    """Deterministic identity for route-to-descriptor pinning.
-
-    The identity intentionally combines the descriptor's profile-local path and
-    its current bytes. Package names and refs remain necessary route fields, but
-    the digest prevents a route from silently tracking changed descriptor
-    content when the route chose to pin an identity.
-    """
-    try:
-        profile_root = descriptor.profile_root.resolve()
-        descriptor_path = descriptor.descriptor_path.resolve(strict=True)
-        rel = descriptor_path.relative_to(profile_root)
-        digest = hashlib.sha256(descriptor_path.read_bytes()).hexdigest()
-    except (AttributeError, OSError, ValueError) as exc:
-        raise ProfileRuntimeError("profile runtime descriptor identity is unavailable") from exc
-    return f"{descriptor.profile_root.name}/{rel.as_posix()}#{digest}"
-
-
 def evaluate_profile_runtime_preconditions(
     registry: ProfileDescriptorRegistry,
     package_name: str,
@@ -322,9 +303,10 @@ def evaluate_profile_runtime_preconditions(
 
     try:
         from . import profile_policy
-        profile_policy.DescriptorPolicyProvider(
+        profile_policy.load_evidence_review_policy_for_descriptor(
             candidate.descriptor,
-        ).evidence_policy(supported_checks=policy_supported_checks)
+            supported_checks=policy_supported_checks,
+        )
     except profile_policy.ProfilePolicyError:
         blockers.append(PRECONDITION_POLICY_NOT_LOADABLE)
 
@@ -352,6 +334,7 @@ def resolve_profile_route(
     tenant_ref: str,
     farm_ref: str,
     effective_time: datetime | None = None,
+    runtime_bundle_digest: str,
 ) -> ProfileRouteResolution:
     """Resolve one active route for a governed tenant/farm context.
 
@@ -365,6 +348,7 @@ def resolve_profile_route(
     _validate_ref(tenant_ref, "tenant_ref")
     _validate_ref(farm_ref, "farm_ref")
     _validate_route_time(effective_time, "effective_time")
+    _validate_bundle_digest(runtime_bundle_digest, "runtime_bundle_digest")
 
     matches = [
         route for route in routes
@@ -401,6 +385,10 @@ def resolve_profile_route(
 
     descriptor = candidate.descriptor
     _assert_route_matches_descriptor(route, descriptor)
+    if route.runtime_bundle_digest != runtime_bundle_digest:
+        raise ProfileRuntimeError(
+            f"profile route {route.route_id!r} RuntimeBundle digest does not match "
+            "the prebuilt runtime selection")
     return ProfileRouteResolution(
         route=route,
         candidate=candidate,
@@ -694,9 +682,7 @@ def _validate_profile_route_record(route: ProfileRouteRecord) -> None:
     _validate_ref(route.pack_ref, "route.pack_ref")
     _validate_ref(route.pack_activation_set_ref, "route.pack_activation_set_ref")
     _validate_ref(route.active_artifact_set_ref, "route.active_artifact_set_ref")
-    if route.descriptor_identity is not None:
-        if not isinstance(route.descriptor_identity, str) or not route.descriptor_identity:
-            raise ProfileRuntimeError("route.descriptor_identity must be a non-empty string")
+    _validate_bundle_digest(route.runtime_bundle_digest, "route.runtime_bundle_digest")
     if route.status not in _ROUTE_STATUSES:
         raise ProfileRuntimeError(
             f"profile route status must be one of {sorted(_ROUTE_STATUSES)}")
@@ -752,12 +738,13 @@ def _assert_route_matches_descriptor(
             raise ProfileRuntimeError(
                 f"profile route {route.route_id!r} {field} does not match "
                 "the routed descriptor")
-    if route.descriptor_identity is not None:
-        actual = profile_runtime_descriptor_identity(descriptor)
-        if route.descriptor_identity != actual:
-            raise ProfileRuntimeError(
-                f"profile route {route.route_id!r} descriptor identity does "
-                "not match the routed descriptor")
+
+
+def _validate_bundle_digest(value: Any, field: str) -> str:
+    if (not isinstance(value, str)
+            or not re.fullmatch(r"sha256:[0-9a-f]{64}", value)):
+        raise ProfileRuntimeError(f"{field} must be a full SHA-256 digest")
+    return value
 
 
 def _validate_profile_package_name(package_name: str) -> None:
@@ -882,6 +869,15 @@ def _reference_families(value: Any) -> tuple[ReferenceFamily, ...]:
             if not _matches_family(shipped, prefix):
                 raise ProfileRuntimeError(
                     f"{label}.shippedSnapshotRef {shipped!r} does not match prefix {prefix!r}")
+        include_in_context = _bool(
+            item.get("includeInContext", True), f"{label}.includeInContext")
+        if not include_in_context and (
+                required_now or required_as_of
+                or behavior_now != OMIT_FROM_CONTEXT
+                or behavior_as_of != OMIT_FROM_CONTEXT):
+            raise ProfileRuntimeError(
+                f"{label} with includeInContext false must be optional and use "
+                "OMIT_FROM_CONTEXT for NOW and AS_OF")
         families.append(ReferenceFamily(
             family_id=family_id,
             snapshot_prefix=prefix,
@@ -891,6 +887,7 @@ def _reference_families(value: Any) -> tuple[ReferenceFamily, ...]:
             missing_family_behavior_now=behavior_now,
             missing_family_behavior_as_of=behavior_as_of,
             shipped_snapshot_ref=shipped,
+            include_in_context=include_in_context,
         ))
     return tuple(families)
 

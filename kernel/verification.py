@@ -32,6 +32,7 @@ from dataclasses import dataclass
 
 from .context import current_reference_snapshot, mint, now_iso
 from .problems import runtime_problem
+from .runtime_bundle import require_store_runtime_bundle
 
 # verdicts (the caller routes/refuses on these; not contract enums)
 CONFIRM = "CONFIRM"   # identity-grade match — the binding is confirmable
@@ -85,7 +86,8 @@ class ReferenceResolver:
                review_reason_code: str = "IDENTITY_UNRESOLVED",
                high_consequence_use: str = "REQUIRE_REVIEW",
                as_of: str | None = None,
-               created_by: str | None = None) -> dict:
+               created_by: str | None = None,
+               lookup_runtime_bundle=None) -> dict:
         """Resolve `query_value` against the in-force snapshot of `snapshot_prefix`
         using the injected `lookup(snapshot_id, query_value) -> LookupResult`.
 
@@ -96,6 +98,8 @@ class ReferenceResolver:
         REVIEW); the absent-snapshot REFUSE emits no trace (the trace contract
         requires a real snapshot ref) — its refusal lives in the returned problem.
         """
+        require_store_runtime_bundle(
+            self.store, lookup_runtime_bundle, "ReferenceResolver lookup")
         accessed = now_iso()
         snapshot = current_reference_snapshot(self.store, snapshot_prefix, as_of=as_of)
 
@@ -112,6 +116,20 @@ class ReferenceResolver:
                         f"{query_value!r}; refusing rather than pretending to verify")}
 
         snapshot_id = snapshot["referenceSnapshotId"]
+        selected_reference = self.store.runtime_bundle.selected_reference(snapshot_id)
+        if selected_reference.source_byte_status != "LOCKED":
+            return {
+                "verdict": REFUSE,
+                "grade": NONE,
+                "trace": None,
+                "snapshotRef": snapshot_id,
+                "problem": runtime_problem(
+                    "EVIDENCE_REFERENCE_UNAVAILABLE",
+                    "Reference source bytes unavailable",
+                    f"{scheme} snapshot {snapshot_id} is provenance metadata only; "
+                    f"retained source/data bytes are unavailable, so {key_field} "
+                    f"{query_value!r} cannot be resolved"),
+            }
         result = lookup(snapshot_id, query_value)
 
         # Identity-grade REQUIRES a stable external key. A lookup that claims

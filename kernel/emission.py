@@ -477,7 +477,10 @@ class ReplayWriter:
 
     def write(self, ctx: GateContext, prior: dict) -> dict:
         stored = ctx.store.get_payload(prior["result_record_id"])
-        conflicting = (prior["source_payload_digest"] or "") != (ctx.source_digest or "")
+        conflicting = (
+            (prior["source_payload_digest"] or "") != (ctx.source_digest or "")
+            or prior["runtime_bundle_digest"] != ctx.runtime_bundle.digest
+        )
         event_ref = stored["semanticEventRef"]
 
         replay_request = {

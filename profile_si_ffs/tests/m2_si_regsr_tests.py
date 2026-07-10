@@ -26,9 +26,13 @@ from __future__ import annotations
 import uuid
 
 from kernel.context import (ProductRegister, REGSR_DATA_FAMILY,
-                            REGSR_SNAPSHOT_PREFIX, current_reference_snapshot)
+                            REGSR_SNAPSHOT_PREFIX)
 from kernel.profiles.si_ffs import regsr_adapter as regsr
 from kernel.verification import CONFIRM, IDENTITY, NONE, REVIEW
+from profile_si_ffs.tests.m2_si_binding_fixtures import (
+    bundled_product_register,
+    selected_runtime,
+)
 
 
 def uid():
@@ -39,6 +43,7 @@ def _fixture_artifact(*, register_day, decision="U99999-50/26/1"):
     """A small, fictional REGSR parse artifact (the parser's output shape)."""
     return {
         "snapshotKind": "SI_UVHVVR_FFS_REG_HTML_PARSE",
+        "parserCodeDigest": regsr.parser_code_digest(),
         "registerDay": register_day,
         "sourceUrl": regsr.REGSR_SOURCE_URL,
         "productCount": 1,
@@ -76,7 +81,7 @@ def _governed_import_refusals(store):
 def test_p1_import_writes_snapshot_and_store_backed_data(store):
     decision = f"U9{uid()[:4]}-50/26/1"
     art = _fixture_artifact(register_day="2099-01-16", decision=decision)
-    result = regsr.import_regsr_snapshot(store, art, source_artifact_ref="artifact:fixture.regsr")
+    result = regsr.import_regsr_snapshot(store, art)
     assert result["imported"] is True
     sid = result["snapshotRef"]
     assert sid == f"{REGSR_SNAPSHOT_PREFIX}.2099-01-16"
@@ -120,11 +125,12 @@ def test_p1_import_load_verify_confirms_end_to_end(store):
     # is effective, where it is the deterministic max of the REGSR family
     art = _fixture_artifact(register_day="2099-06-17", decision=decision)
     sid = regsr.import_regsr_snapshot(store, art)["snapshotRef"]
-    pr = ProductRegister()
-    pr.load_from_store(store)
-    with store.serialized_tx() as cur:
-        r = regsr.verify_product_authorisation(store, cur, pr, decision,
-                                               as_of="2099-06-17T12:00:00Z")
+    with selected_runtime(store) as runtime:
+        pr = bundled_product_register(runtime)
+        with runtime.serialized_tx() as cur:
+            r = regsr.verify_product_authorisation(
+                runtime, cur, pr, decision,
+                as_of="2099-06-17T12:00:00Z")
     assert r["snapshotRef"] == sid, "verify must resolve the imported snapshot"
     assert r["verdict"] == CONFIRM
     t = r["trace"]
@@ -135,10 +141,11 @@ def test_p1_import_load_verify_confirms_end_to_end(store):
 
 
 def test_p1_unknown_decision_routes_to_review(store):
-    pr = ProductRegister()
-    pr.load_from_store(store)
-    with store.serialized_tx() as cur:
-        r = regsr.verify_product_authorisation(store, cur, pr, "U00000-00/00/0")
+    with selected_runtime(store) as runtime:
+        pr = bundled_product_register(runtime)
+        with runtime.serialized_tx() as cur:
+            r = regsr.verify_product_authorisation(
+                runtime, cur, pr, "U00000-00/00/0")
     assert r["verdict"] == REVIEW, "an unconfirmable decision routes to review, never confirms"
     assert r["problem"]["reasonCode"] == "PRODUCT_BINDING_UNRESOLVED"
     assert r["trace"]["finalOutcome"] == "REVIEW_REQUIRED"
@@ -212,6 +219,23 @@ def test_p1_identical_reimport_is_idempotent(store):
     assert len(rows) == 1
 
 
+def test_p1_identical_reimport_repairs_missing_data_then_restarts(store):
+    decision = f"U9{uid()[:4]}-50/26/repair"
+    art = _fixture_artifact(register_day="2099-01-17", decision=decision)
+    first = regsr.import_regsr_snapshot(store, art)
+    sid = first["snapshotRef"]
+    with store.serialized_tx() as cur:
+        cur.execute(
+            "DELETE FROM reference_snapshot_data WHERE snapshot_ref = %s "
+            "AND data_family = %s", (sid, REGSR_DATA_FAMILY))
+    replay = regsr.import_regsr_snapshot(store, art)
+    assert replay["imported"] is True
+    assert replay["disposition"] == "ALREADY_IMPORTED"
+    with selected_runtime(store) as runtime:
+        register = bundled_product_register(runtime)
+        assert register.lookup_by_decision(sid, decision) is not None
+
+
 # ---------------------------------------------------------------------------
 # (7) a changed DETAIL page with an unchanged list-page digest REFUSES as a
 #     conflict — the import basis digests the whole artifact, never a silent
@@ -271,11 +295,12 @@ def _ambiguous_artifact(*, register_day, decision, issued_a="2024-01-01",
 def test_p1_ambiguous_decision_number_routes_to_review_not_pass(store):
     decision = f"U9{uid()[:4]}-50/26/9"
     regsr.import_regsr_snapshot(store, _ambiguous_artifact(register_day="2099-03-01", decision=decision))
-    pr = ProductRegister()
-    pr.load_from_store(store)
-    with store.serialized_tx() as cur:
-        r = regsr.verify_product_authorisation(store, cur, pr, decision,
-                                               as_of="2099-03-01T12:00:00Z")
+    with selected_runtime(store) as runtime:
+        pr = bundled_product_register(runtime)
+        with runtime.serialized_tx() as cur:
+            r = regsr.verify_product_authorisation(
+                runtime, cur, pr, decision,
+                as_of="2099-03-01T12:00:00Z")
     assert r["verdict"] == REVIEW, "an ambiguous composite key must never CONFIRM/PASS"
     assert r["problem"]["reasonCode"] == "PRODUCT_BINDING_UNRESOLVED"
     t = r["trace"]
@@ -289,14 +314,15 @@ def test_p1_ambiguous_decision_number_routes_to_review_not_pass(store):
 def test_p1_composite_key_disambiguates_to_confirm(store):
     decision = f"U9{uid()[:4]}-50/26/10"
     regsr.import_regsr_snapshot(store, _ambiguous_artifact(register_day="2099-03-02", decision=decision))
-    pr = ProductRegister()
-    pr.load_from_store(store)
     # the SAME ambiguous decision number, now with the full D9 composite key,
     # resolves to exactly one identity -> CONFIRM the right validity window
-    with store.serialized_tx() as cur:
-        r = regsr.verify_product_authorisation(store, cur, pr, decision,
-                                               issued="2024-01-01", valid_until="2028-08-15",
-                                               as_of="2099-03-02T12:00:00Z")
+    with selected_runtime(store) as runtime:
+        pr = bundled_product_register(runtime)
+        with runtime.serialized_tx() as cur:
+            r = regsr.verify_product_authorisation(
+                runtime, cur, pr, decision,
+                issued="2024-01-01", valid_until="2028-08-15",
+                as_of="2099-03-02T12:00:00Z")
     assert r["verdict"] == CONFIRM
     t = r["trace"]
     assert t["finalOutcome"] == "PASS"
@@ -314,11 +340,12 @@ def test_p1_true_duplicate_same_validity_is_one_identity_confirm(store):
         register_day="2099-03-03", decision=decision,
         issued_a="2024-01-01", until_a="2028-08-15",
         issued_b="2024-01-01", until_b="2028-08-15"))
-    pr = ProductRegister()
-    pr.load_from_store(store)
-    with store.serialized_tx() as cur:
-        r = regsr.verify_product_authorisation(store, cur, pr, decision,
-                                               as_of="2099-03-03T12:00:00Z")
+    with selected_runtime(store) as runtime:
+        pr = bundled_product_register(runtime)
+        with runtime.serialized_tx() as cur:
+            r = regsr.verify_product_authorisation(
+                runtime, cur, pr, decision,
+                as_of="2099-03-03T12:00:00Z")
     assert r["verdict"] == CONFIRM, "a true duplicate (same validity) is one identity"
     assert r["trace"]["candidateCount"] == 1
 

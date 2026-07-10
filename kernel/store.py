@@ -16,6 +16,7 @@ enforces the storage posture:
 from __future__ import annotations
 
 import hashlib
+import json
 from contextlib import contextmanager
 
 import psycopg
@@ -41,7 +42,9 @@ AUTHORITATIVE_KINDS = (
     "ofarm.acceptedeventconsequence.v0.1",
 )
 
-_SCHEMA_SQL = (config.PACKAGE_ROOT / "kernel" / "schema.sql").read_text()
+_SCHEMA_PATH = config.PACKAGE_ROOT / "kernel" / "schema.sql"
+_SCHEMA_BYTES = _SCHEMA_PATH.read_bytes()
+_SCHEMA_SQL = _SCHEMA_BYTES.decode("utf-8")
 
 
 class Store:
@@ -49,6 +52,8 @@ class Store:
         self.dsn = dsn or config.database_dsn()
         self.registry = registry or ContractRegistry()
         self._conn: psycopg.Connection | None = None
+        self._runtime_bundle = None
+        self._bootstrap_bundle_digest: str | None = None
 
     # -- connection / lifecycle ------------------------------------------------
 
@@ -59,12 +64,264 @@ class Store:
         return self._conn
 
     def migrate(self) -> None:
+        if _SCHEMA_PATH.read_bytes() != _SCHEMA_BYTES:
+            raise RuntimeError(
+                "kernel schema bytes changed after process startup; refusing to "
+                "migrate under an unreceipted schema")
         with self.conn.cursor() as cur:
             cur.execute(_SCHEMA_SQL)
 
     def close(self) -> None:
         if self._conn is not None and not self._conn.closed:
             self._conn.close()
+
+    @property
+    def runtime_bundle(self):
+        if self._runtime_bundle is None:
+            raise RuntimeError("Store has no verified RuntimeBundle; bootstrap first")
+        return self._runtime_bundle
+
+    @property
+    def runtime_bundle_digest(self) -> str:
+        return self.runtime_bundle.digest
+
+    def bind_runtime_bundle(self, bundle) -> None:
+        """Bind this Store instance to exactly one immutable bundle lifetime."""
+        if bundle.construction_mode != "LIVE_CURRENT":
+            raise RuntimeError(
+                "persisted-audit RuntimeBundles cannot be bound for live decisions")
+        from .runtime_bundle import require_current_runtime_catalog
+        require_current_runtime_catalog(bundle, config.PACKAGE_ROOT)
+        if self._runtime_bundle is not None and self._runtime_bundle.digest != bundle.digest:
+            raise RuntimeError(
+                "RuntimeBundle hot switching is forbidden; create a new runtime instance")
+        self.assert_runtime_bundle_compatible(bundle)
+        cold = self.cold_load_runtime_bundle(bundle.descriptor, bundle.digest)
+        if (cold.canonical_document_bytes != bundle.canonical_document_bytes
+                or cold.components != bundle.components
+                or cold.selected_references != bundle.selected_references):
+            raise RuntimeError(
+                "cannot bind an incomplete or byte-mismatched persisted RuntimeBundle")
+        self._runtime_bundle = bundle
+
+    def assert_runtime_bundle_compatible(self, bundle) -> None:
+        """Check process-local registry/runtime compatibility before commit."""
+        schema_component = bundle.component(
+            "RUNTIME_SCHEMA", "sql:kernel/schema.sql")
+        if schema_component.canonical_bytes != _SCHEMA_BYTES:
+            raise RuntimeError(
+                "RuntimeBundle schema bytes differ from the schema executed by Store")
+        contract_components = {
+            component.logical_ref: component for component in bundle.components
+            if component.role == "CONTRACT_SCHEMA"
+        }
+        expected_contract_refs = {
+            f"contract:{kind}" for kind in self.registry.kinds()
+        }
+        if set(contract_components) != expected_contract_refs:
+            raise RuntimeError(
+                "RuntimeBundle contract inventory does not equal ContractRegistry")
+        for kind in self.registry.kinds():
+            contract = self.registry.get(kind)
+            component = contract_components[f"contract:{kind}"]
+            if (component.canonicalization != "EXACT_BYTES_V1"
+                    or component.content_digest != contract.schema_hash
+                    or component.canonical_bytes != contract.schema_bytes):
+                raise RuntimeError(
+                    f"RuntimeBundle contract bytes do not match registry for {kind!r}")
+
+    def _bundle_digest(self, explicit: str | None = None) -> str:
+        if explicit is not None:
+            if self._runtime_bundle is not None and explicit != self._runtime_bundle.digest:
+                raise RuntimeError(
+                    "a bound Store cannot write under a different RuntimeBundle")
+            if (self._runtime_bundle is None
+                    and explicit != self._bootstrap_bundle_digest):
+                raise RuntimeError(
+                    "an unbound Store cannot attribute writes to a RuntimeBundle "
+                    "outside verified atomic bootstrap")
+            return explicit
+        return self.runtime_bundle_digest
+
+    @contextmanager
+    def bootstrap_bundle_writes(self, bundle):
+        """Narrow pre-bind write authority to one verified bootstrap bundle."""
+        if self._runtime_bundle is not None:
+            raise RuntimeError("bootstrap bundle writes require an unbound Store")
+        if self._bootstrap_bundle_digest is not None:
+            raise RuntimeError("nested RuntimeBundle bootstrap write scopes are forbidden")
+        self.assert_runtime_bundle_compatible(bundle)
+        self._bootstrap_bundle_digest = bundle.digest
+        try:
+            yield
+        finally:
+            self._bootstrap_bundle_digest = None
+
+    def install_runtime_bundle(self, cur, bundle) -> None:
+        """Persist exact bundle/component bytes, verifying every identity reuse."""
+        for component in bundle.components:
+            cur.execute(
+                "SELECT canonicalization, canonical_bytes, byte_length "
+                "FROM runtime_content_blob WHERE content_digest = %s",
+                (component.content_digest,),
+            )
+            prior = cur.fetchone()
+            if prior is None:
+                cur.execute(
+                    "INSERT INTO runtime_content_blob "
+                    "(content_digest, canonicalization, canonical_bytes, byte_length) "
+                    "VALUES (%s, %s, %s, %s)",
+                    (component.content_digest, component.canonicalization,
+                     component.canonical_bytes, len(component.canonical_bytes)),
+                )
+            elif (prior["canonicalization"] != component.canonicalization
+                  or bytes(prior["canonical_bytes"]) != component.canonical_bytes
+                  or prior["byte_length"] != len(component.canonical_bytes)):
+                raise RuntimeError(
+                    f"content digest {component.content_digest} was reused for unequal bytes")
+
+        cur.execute(
+            "SELECT bundle_ref, canonical_document, canonical_bytes, byte_length "
+            "FROM runtime_bundle "
+            "WHERE bundle_digest = %s",
+            (bundle.digest,),
+        )
+        prior_bundle = cur.fetchone()
+        document = json.loads(bundle.canonical_document_bytes)
+        if prior_bundle is None:
+            cur.execute(
+                "INSERT INTO runtime_bundle "
+                "(bundle_digest, bundle_ref, canonical_document, canonical_bytes, byte_length) "
+                "VALUES (%s, %s, %s, %s, %s)",
+                (bundle.digest, bundle.bundle_ref, Jsonb(document),
+                 bundle.canonical_document_bytes, len(bundle.canonical_document_bytes)),
+            )
+        elif (prior_bundle["bundle_ref"] != bundle.bundle_ref
+              or prior_bundle["canonical_document"] != document
+              or bytes(prior_bundle["canonical_bytes"]) != bundle.canonical_document_bytes
+              or prior_bundle["byte_length"] != len(bundle.canonical_document_bytes)):
+            raise RuntimeError(
+                f"RuntimeBundle digest {bundle.digest} was reused for unequal bytes")
+
+        for component in bundle.components:
+            cur.execute(
+                "SELECT repository_path, canonicalization, content_digest, byte_length "
+                "FROM runtime_bundle_component WHERE bundle_digest = %s "
+                "AND component_role = %s AND logical_ref = %s",
+                (bundle.digest, component.role, component.logical_ref),
+            )
+            prior = cur.fetchone()
+            expected = (
+                component.repository_path, component.canonicalization,
+                component.content_digest, len(component.canonical_bytes),
+            )
+            if prior is None:
+                cur.execute(
+                    "INSERT INTO runtime_bundle_component "
+                    "(bundle_digest, component_role, logical_ref, repository_path, "
+                    "canonicalization, content_digest, byte_length) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                    (bundle.digest, component.role, component.logical_ref, *expected),
+                )
+            elif (
+                prior["repository_path"], prior["canonicalization"],
+                prior["content_digest"], prior["byte_length"],
+            ) != expected:
+                raise RuntimeError(
+                    f"RuntimeBundle component identity was reused with drift: "
+                    f"{component.role}/{component.logical_ref}")
+
+        cur.execute(
+            "SELECT component_role, logical_ref FROM runtime_bundle_component "
+            "WHERE bundle_digest = %s",
+            (bundle.digest,),
+        )
+        persisted_identities = {
+            (row["component_role"], row["logical_ref"]) for row in cur.fetchall()
+        }
+        expected_identities = {
+            (component.role, component.logical_ref) for component in bundle.components
+        }
+        if persisted_identities != expected_identities:
+            raise RuntimeError(
+                f"RuntimeBundle {bundle.digest} persisted component set is not exact; "
+                f"missing={sorted(expected_identities - persisted_identities)}, "
+                f"extra={sorted(persisted_identities - expected_identities)}")
+
+    def persisted_runtime_bundle(self, digest: str) -> dict | None:
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "SELECT bundle_digest, bundle_ref, canonical_document, "
+                "canonical_bytes, byte_length FROM runtime_bundle "
+                "WHERE bundle_digest = %s",
+                (digest,),
+            )
+            bundle = cur.fetchone()
+            if bundle is None:
+                return None
+            cur.execute(
+                "SELECT c.component_role, c.logical_ref, c.repository_path, "
+                "c.canonicalization, c.content_digest, c.byte_length, "
+                "b.canonicalization AS blob_canonicalization, "
+                "b.byte_length AS blob_byte_length, b.canonical_bytes "
+                "FROM runtime_bundle_component c JOIN runtime_content_blob b "
+                "ON b.content_digest = c.content_digest "
+                "WHERE c.bundle_digest = %s ORDER BY c.component_role, c.logical_ref",
+                (digest,),
+            )
+            components = cur.fetchall()
+        return {
+            "bundle_digest": bundle["bundle_digest"],
+            "bundle_ref": bundle["bundle_ref"],
+            "canonical_document": bundle["canonical_document"],
+            "canonical_document_bytes": bytes(bundle["canonical_bytes"]),
+            "byte_length": bundle["byte_length"],
+            "components": components,
+        }
+
+    def cold_load_runtime_bundle(self, descriptor, digest: str):
+        """Reconstruct and verify a bundle using only immutable persisted bytes."""
+        from .runtime_bundle import RuntimeComponent, runtime_bundle_from_persisted
+        persisted = self.persisted_runtime_bundle(digest)
+        if persisted is None:
+            raise RuntimeError(f"no persisted RuntimeBundle {digest}")
+        canonical_document_bytes = persisted["canonical_document_bytes"]
+        if persisted["bundle_digest"] != digest:
+            raise RuntimeError("persisted RuntimeBundle key does not match requested digest")
+        if persisted["bundle_ref"] != f"runtimebundle:{digest}":
+            raise RuntimeError("persisted RuntimeBundle ref does not match requested digest")
+        if persisted["byte_length"] != len(canonical_document_bytes):
+            raise RuntimeError("persisted RuntimeBundle document length mismatch")
+        try:
+            canonical_document = json.loads(canonical_document_bytes)
+        except (UnicodeDecodeError, ValueError) as exc:
+            raise RuntimeError("persisted RuntimeBundle document bytes are malformed") from exc
+        if canonical_document != persisted["canonical_document"]:
+            raise RuntimeError(
+                "persisted RuntimeBundle canonical JSON and exact bytes disagree")
+        components = []
+        for row in persisted["components"]:
+            canonical = bytes(row["canonical_bytes"])
+            if (row["byte_length"] != len(canonical)
+                    or row["blob_byte_length"] != len(canonical)
+                    or row["blob_canonicalization"] != row["canonicalization"]):
+                raise RuntimeError(
+                    "persisted RuntimeBundle component/blob metadata mismatch")
+            components.append(RuntimeComponent(
+                role=row["component_role"],
+                logical_ref=row["logical_ref"],
+                repository_path=row["repository_path"],
+                canonicalization=row["canonicalization"],
+                content_digest=row["content_digest"],
+                canonical_bytes=canonical,
+            ))
+        return runtime_bundle_from_persisted(
+            descriptor,
+            expected_digest=digest,
+            canonical_document_bytes=canonical_document_bytes,
+            components=components,
+            package_root=config.PACKAGE_ROOT,
+        )
 
     @contextmanager
     def tx(self):
@@ -100,7 +357,8 @@ class Store:
 
     # -- canonical record writes ----------------------------------------------
 
-    def insert_record(self, cur, payload: dict, *, tenant_ref: str = config.TENANT_REF) -> str:
+    def insert_record(self, cur, payload: dict, *, tenant_ref: str = config.TENANT_REF,
+                      runtime_bundle_digest: str | None = None) -> str:
         """Validate against the package contract and append. Returns record id."""
         contract = self.registry.validate(payload)
         if contract.lane != "canonical":
@@ -116,11 +374,12 @@ class Store:
         cur.execute(
             """
             INSERT INTO kernel_record
-              (record_id, record_kind, lane, schema_hash, payload, payload_sha256, tenant_ref)
-            VALUES (%s, %s, 'canonical', %s, %s, %s, %s)
+              (record_id, record_kind, lane, schema_hash, payload, payload_sha256,
+               tenant_ref, runtime_bundle_digest)
+            VALUES (%s, %s, 'canonical', %s, %s, %s, %s, %s)
             """,
             (record_id, contract.kind, contract.schema_hash, Jsonb(payload),
-             sha256_of(payload), tenant_ref),
+             sha256_of(payload), tenant_ref, self._bundle_digest(runtime_bundle_digest)),
         )
         return record_id
 
@@ -129,7 +388,8 @@ class Store:
             cur.execute("SELECT 1 FROM runtime_trace WHERE trace_id = %s", (trace_id,))
             return cur.fetchone() is not None
 
-    def insert_runtime_trace(self, cur, payload: dict) -> str:
+    def insert_runtime_trace(self, cur, payload: dict, *,
+                             runtime_bundle_digest: str | None = None) -> str:
         """Append a draft-lane runtime evidence record (D16)."""
         contract = self.registry.validate(payload)
         if contract.lane != "draft":
@@ -139,10 +399,13 @@ class Store:
         trace_id = payload[contract.id_field]
         cur.execute(
             """
-            INSERT INTO runtime_trace (trace_id, trace_kind, schema_hash, payload, payload_sha256)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO runtime_trace
+              (trace_id, trace_kind, schema_hash, payload, payload_sha256,
+               runtime_bundle_digest)
+            VALUES (%s, %s, %s, %s, %s, %s)
             """,
-            (trace_id, contract.kind, contract.schema_hash, Jsonb(payload), sha256_of(payload)),
+            (trace_id, contract.kind, contract.schema_hash, Jsonb(payload), sha256_of(payload),
+             self._bundle_digest(runtime_bundle_digest)),
         )
         return trace_id
 
@@ -150,7 +413,8 @@ class Store:
                               payload: dict, *, artifact_ref: str | None = None,
                               source_digest: str | None = None,
                               parser_label: str | None = None,
-                              record_count: int | None = None) -> None:
+                              record_count: int | None = None,
+                              runtime_bundle_digest: str | None = None) -> None:
         """Persist store-backed external reference-data for a snapshot (M2 P1) —
         an index cache (NOT OFARM truth) so a scheme reader can resolve an
         imported snapshot's content from the store. The payload is opaque here;
@@ -159,11 +423,13 @@ class Store:
             """
             INSERT INTO reference_snapshot_data
               (snapshot_ref, data_family, artifact_ref, source_digest,
-               parser_label, record_count, payload, payload_sha256)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+               parser_label, record_count, payload, payload_sha256,
+               runtime_bundle_digest)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (snapshot_ref, data_family, artifact_ref, source_digest, parser_label,
-             record_count, Jsonb(payload), sha256_of(payload)),
+             record_count, Jsonb(payload), sha256_of(payload),
+             self._bundle_digest(runtime_bundle_digest)),
         )
 
     def reference_data(self, data_family: str) -> list[dict]:
@@ -171,30 +437,39 @@ class Store:
         for a scheme reader to load into its lookup index."""
         with self.conn.cursor() as cur:
             cur.execute(
-                "SELECT snapshot_ref, payload FROM reference_snapshot_data "
+                "SELECT snapshot_ref, data_family, artifact_ref, source_digest, "
+                "parser_label, record_count, payload, payload_sha256, "
+                "runtime_bundle_digest FROM reference_snapshot_data "
                 "WHERE data_family = %s ORDER BY snapshot_ref",
                 (data_family,),
             )
             return cur.fetchall()
 
-    def add_edge(self, cur, edge_type: str, src_record_id: str, dst_record_id: str) -> None:
+    def add_edge(self, cur, edge_type: str, src_record_id: str, dst_record_id: str,
+                 *, runtime_bundle_digest: str | None = None) -> None:
         cur.execute(
-            "INSERT INTO kernel_edge (edge_type, src_record_id, dst_record_id) VALUES (%s, %s, %s)",
-            (edge_type, src_record_id, dst_record_id),
+            "INSERT INTO kernel_edge (edge_type, src_record_id, dst_record_id, "
+            "runtime_bundle_digest) VALUES (%s, %s, %s, %s)",
+            (edge_type, src_record_id, dst_record_id,
+             self._bundle_digest(runtime_bundle_digest)),
         )
 
     def log_gate(
         self, cur, request_id: str, gate: str, outcome: str,
         *, reason_code: str | None = None, rationale: str | None = None,
         related_refs: list[str] | None = None,
+        runtime_bundle_digest: str | None = None,
     ) -> None:
         cur.execute(
             """
-            INSERT INTO kernel_gate_log (request_id, gate, outcome, reason_code, rationale, related_refs)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO kernel_gate_log
+              (request_id, gate, outcome, reason_code, rationale, related_refs,
+               runtime_bundle_digest)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             """,
             (request_id, gate, outcome, reason_code, rationale,
-             Jsonb(related_refs) if related_refs is not None else None),
+             Jsonb(related_refs) if related_refs is not None else None,
+             self._bundle_digest(runtime_bundle_digest)),
         )
 
     # -- idempotency (ingress boundary RFC §2.4) -------------------------------
@@ -205,15 +480,17 @@ class Store:
 
     def idempotency_claim(
         self, cur, key: str, request_id: str, source_payload_digest: str | None,
-        result_record_id: str,
+        result_record_id: str, *, runtime_bundle_digest: str | None = None,
     ) -> None:
         cur.execute(
             """
             INSERT INTO kernel_idempotency
-              (idempotency_key, request_id, source_payload_digest, result_record_id)
-            VALUES (%s, %s, %s, %s)
+              (idempotency_key, request_id, source_payload_digest, result_record_id,
+               runtime_bundle_digest)
+            VALUES (%s, %s, %s, %s, %s)
             """,
-            (key, request_id, source_payload_digest, result_record_id),
+            (key, request_id, source_payload_digest, result_record_id,
+             self._bundle_digest(runtime_bundle_digest)),
         )
 
     # -- reads -----------------------------------------------------------------

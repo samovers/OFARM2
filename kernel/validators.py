@@ -341,6 +341,13 @@ class GovernanceAcceptanceValidator:
             return _refusal(ctx, "FAIL_REFERENCE_RESOLUTION", runtime_problem(
                 "EVIDENCE_REFERENCE_UNAVAILABLE", "Acceptance target unresolved",
                 f"{target_ref} does not resolve to a stored AssertionRecord"))
+        if not is_reject and row["runtime_bundle_digest"] != ctx.runtime_bundle.digest:
+            return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
+                "PACK_CONFLICT", "Queued assertion belongs to another RuntimeBundle",
+                f"{target_ref} was evaluated under {row['runtime_bundle_digest']}, "
+                f"but this acceptance uses {ctx.runtime_bundle.digest}; automatic "
+                "cross-bundle migration is forbidden, so the assertion remains queued",
+                related_refs=[target_ref]))
         target = row["payload"]
         ctx.acceptance_payload = target   # fetched once; later stages reuse it
         if {"scopeType": "FARM", "scopeRef": ctx.farm_ref} \

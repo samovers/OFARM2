@@ -38,13 +38,21 @@ from kernel.profile_runtime import (
     load_active_profile_selection,
     load_profile_descriptor_registry,
     load_profile_runtime_descriptor,
-    profile_runtime_descriptor_identity,
-    resolve_profile_route,
+    resolve_profile_route as _resolve_profile_route,
     resolve_active_descriptor,
 )
+from kernel.runtime_bundle import build_runtime_bundle
 from kernel.stages import IngressNormalizer
 from kernel.store import Store
 from kernel.views import OutputGenerator
+
+
+_ACTIVE_TEST_RUNTIME_BUNDLE = build_runtime_bundle(config.ACTIVE_PROFILE)
+
+
+def resolve_profile_route(*args, **kwargs):
+    kwargs.setdefault("runtime_bundle_digest", _ACTIVE_TEST_RUNTIME_BUNDLE.digest)
+    return _resolve_profile_route(*args, **kwargs)
 
 
 def _base_doc() -> dict:
@@ -166,7 +174,7 @@ def _si_route(**overrides) -> ProfileRouteRecord:
         "pack_ref": config.ACTIVE_PROFILE.pack_ref,
         "pack_activation_set_ref": config.ACTIVE_PROFILE.pack_activation_set_ref,
         "active_artifact_set_ref": config.ACTIVE_PROFILE.active_artifact_set_ref,
-        "descriptor_identity": profile_runtime_descriptor_identity(config.ACTIVE_PROFILE),
+        "runtime_bundle_digest": _ACTIVE_TEST_RUNTIME_BUNDLE.digest,
     }
     values.update(overrides)
     return ProfileRouteRecord(**values)
@@ -475,10 +483,13 @@ def _preseeded_dirty_spine_store(mutate):
             "activeArtifactSetId",
             config.ACTIVE_PROFILE.active_artifact_set_ref)
         mutate(profile, activation, artifact)
-        with store.tx() as cur:
-            store.insert_record(cur, profile)
-            store.insert_record(cur, activation)
-            store.insert_record(cur, artifact)
+        bundle = build_runtime_bundle(config.ACTIVE_PROFILE)
+        with store.serialized_tx() as cur:
+            store.install_runtime_bundle(cur, bundle)
+            with store.bootstrap_bundle_writes(bundle):
+                store.insert_record(cur, profile, runtime_bundle_digest=bundle.digest)
+                store.insert_record(cur, activation, runtime_bundle_digest=bundle.digest)
+                store.insert_record(cur, artifact, runtime_bundle_digest=bundle.digest)
         context.bootstrap(store)
         for payload in demo.substrate_records():
             contract = store.registry.get(payload["schemaVersion"])
@@ -622,7 +633,8 @@ def test_descriptor_constructor_alias_conflict_fails_closed():
 
 
 def test_descriptor_policy_provider_recognized_rule_refs_are_descriptor_derived():
-    provider = profile_policy.DescriptorPolicyProvider(config.ACTIVE_PROFILE)
+    provider = profile_policy.DescriptorPolicyProvider(
+        config.ACTIVE_PROFILE, runtime_bundle=_ACTIVE_TEST_RUNTIME_BUNDLE)
     assert provider.policy_ref == config.ACTIVE_PROFILE.evidence_policy_ref
     assert provider.recognized_rule_refs == frozenset({
         config.ACTIVE_PROFILE.evidence_policy_ref,
@@ -639,7 +651,8 @@ def test_descriptor_policy_provider_evidence_policy_does_not_call_config_wrapper
 
     monkeypatch.setattr(profile_policy, "load_evidence_review_policy",
                         fail_config_policy)
-    provider = profile_policy.DescriptorPolicyProvider(config.ACTIVE_PROFILE)
+    provider = profile_policy.DescriptorPolicyProvider(
+        config.ACTIVE_PROFILE, runtime_bundle=_ACTIVE_TEST_RUNTIME_BUNDLE)
     doc = provider.evidence_policy(supported_checks=sufficiency.OPERATION_FLOOR_CHECKS)
 
     assert doc["policyId"] == config.ACTIVE_PROFILE.evidence_policy_ref
@@ -1073,14 +1086,14 @@ def test_profile_route_rejects_descriptor_ref_mismatch(field, value, match):
         )
 
 
-def test_profile_route_rejects_descriptor_identity_mismatch():
+def test_profile_route_rejects_runtime_bundle_digest_mismatch():
     registry = load_profile_descriptor_registry(
         config.PACKAGE_ROOT,
         allowed_profile_package_names=config.ALLOWED_ACTIVE_PROFILE_PACKAGE_NAMES,
     )
-    route = _si_route(descriptor_identity="profile_si_ffs/runtime_profile_descriptor.json#bad")
+    route = _si_route(runtime_bundle_digest="sha256:" + "0" * 64)
 
-    with pytest.raises(ProfileRuntimeError, match="descriptor identity"):
+    with pytest.raises(ProfileRuntimeError, match="RuntimeBundle digest"):
         resolve_profile_route(
             registry,
             config.ACTIVE_PROFILE_PACKAGE_NAMES,
@@ -1477,6 +1490,17 @@ def test_descriptor_rejects_inconsistent_reference_family_behavior(tmp_path):
         _load_modified(tmp_path, mutate)
 
 
+def test_descriptor_rejects_required_non_context_reference_family(tmp_path):
+    def mutate(doc):
+        family = doc["referenceFamilies"][0]
+        family["includeInContext"] = False
+        family["requiredForNowContext"] = True
+        family["missingFamilyBehaviorNow"] = "REFUSE_CONTEXT"
+
+    with pytest.raises(ProfileRuntimeError, match="includeInContext false"):
+        _load_modified(tmp_path, mutate)
+
+
 def test_descriptor_rejects_mismatched_shipped_snapshot_ref(tmp_path):
     def mutate(doc):
         doc["referenceFamilies"][0]["shippedSnapshotRef"] = (
@@ -1501,42 +1525,34 @@ def _missing_family(required: bool) -> ReferenceFamily:
     )
 
 
-def test_optional_missing_reference_family_is_omitted(fresh_env, monkeypatch):
+def test_optional_missing_reference_family_is_omitted(fresh_env):
     store, _, _ = fresh_env
-    monkeypatch.setattr(
-        config,
-        "ACTIVE_PROFILE",
-        replace(
-            config.ACTIVE_PROFILE,
-            reference_families=config.ACTIVE_PROFILE.reference_families
-            + (_missing_family(required=False),),
-        ),
+    descriptor = replace(
+        config.ACTIVE_PROFILE,
+        reference_families=config.ACTIVE_PROFILE.reference_families
+        + (_missing_family(required=False),),
     )
 
-    with store.tx() as cur:
-        snap = context.ContextAssembler(store).assemble(cur, demo.FARM)
+    snapshots = context.context_reference_snapshots_for_descriptor(
+        store, descriptor)
 
     assert not any(
-        ref.startswith("referencesnapshot:test.missing-family")
-        for ref in snap["referenceSnapshotRefs"]
+        snapshot["referenceSnapshotId"].startswith(
+            "referencesnapshot:test.missing-family")
+        for snapshot in snapshots
     )
 
 
-def test_required_missing_reference_family_refuses_context(fresh_env, monkeypatch):
+def test_required_missing_reference_family_refuses_context(fresh_env):
     store, _, _ = fresh_env
-    monkeypatch.setattr(
-        config,
-        "ACTIVE_PROFILE",
-        replace(
-            config.ACTIVE_PROFILE,
-            reference_families=config.ACTIVE_PROFILE.reference_families
-            + (_missing_family(required=True),),
-        ),
+    descriptor = replace(
+        config.ACTIVE_PROFILE,
+        reference_families=config.ACTIVE_PROFILE.reference_families
+        + (_missing_family(required=True),),
     )
 
     with pytest.raises(context.ContextNotReconstructible, match="required reference family"):
-        with store.tx() as cur:
-            context.ContextAssembler(store).assemble(cur, demo.FARM)
+        context.context_reference_snapshots_for_descriptor(store, descriptor)
 
 
 def test_explicit_descriptor_bootstrap_inserts_expected_profile_instances():
@@ -1614,7 +1630,7 @@ def test_explicit_descriptor_asof_context_matches_wrapper(fresh_env):
     assert explicit == implicit
 
 
-def test_explicit_descriptor_optional_missing_reference_family_is_omitted(fresh_env):
+def test_explicit_descriptor_reference_family_change_requires_new_bundle(fresh_env):
     store, _, _ = fresh_env
     active = replace(
         config.ACTIVE_PROFILE,
@@ -1622,19 +1638,11 @@ def test_explicit_descriptor_optional_missing_reference_family_is_omitted(fresh_
         + (_missing_family(required=False),),
     )
 
-    with store.tx() as cur:
-        snap = context.ContextAssembler(
-            store,
-            active_profile=active,
-        ).assemble(cur, demo.FARM)
-
-    assert not any(
-        ref.startswith("referencesnapshot:test.missing-family")
-        for ref in snap["referenceSnapshotRefs"]
-    )
+    with pytest.raises(ProfileRuntimeError, match="RuntimeBundle do not match exactly"):
+        context.ContextAssembler(store, active_profile=active)
 
 
-def test_explicit_descriptor_required_missing_reference_family_refuses(fresh_env):
+def test_explicit_descriptor_required_family_change_requires_new_bundle(fresh_env):
     store, _, _ = fresh_env
     active = replace(
         config.ACTIVE_PROFILE,
@@ -1642,12 +1650,8 @@ def test_explicit_descriptor_required_missing_reference_family_refuses(fresh_env
         + (_missing_family(required=True),),
     )
 
-    with pytest.raises(context.ContextNotReconstructible, match="required reference family"):
-        with store.tx() as cur:
-            context.ContextAssembler(
-                store,
-                active_profile=active,
-            ).assemble(cur, demo.FARM)
+    with pytest.raises(ProfileRuntimeError, match="RuntimeBundle do not match exactly"):
+        context.ContextAssembler(store, active_profile=active)
 
 
 def test_now_context_uses_descriptor_spine_not_later_store_rows(fresh_env):
@@ -1692,12 +1696,8 @@ def test_explicit_descriptor_mismatched_spine_ref_fails_without_config_fallback(
         active_artifact_set_ref="activeartifactset:si.ffs.not-selected.v0_1",
     )
 
-    with pytest.raises(context.ContextNotReconstructible, match="matched 0"):
-        with store.tx() as cur:
-            context.ContextAssembler(
-                store,
-                active_profile=active,
-            ).assemble(cur, demo.FARM)
+    with pytest.raises(ProfileRuntimeError, match="RuntimeBundle do not match exactly"):
+        context.ContextAssembler(store, active_profile=active)
 
 
 def test_now_context_refuses_descriptor_id_spine_with_wrong_pack_profile():
@@ -1710,10 +1710,10 @@ def test_now_context_refuses_descriptor_id_spine_with_wrong_pack_profile():
         artifact["activePackRefs"] = [bad_pack]
         artifact["activeProfileRefs"] = [bad_profile]
 
-    with _preseeded_dirty_spine_store(mutate) as store:
-        with pytest.raises(context.ContextNotReconstructible, match="descriptor packRef"):
-            with store.tx() as cur:
-                context.ContextAssembler(store).assemble(cur, demo.FARM)
+    with pytest.raises(context.ContextNotReconstructible,
+                       match="already bound to different canonical content"):
+        with _preseeded_dirty_spine_store(mutate):
+            pass
 
 
 def test_now_context_refuses_descriptor_id_spine_missing_evidence_policy():
@@ -1723,20 +1723,20 @@ def test_now_context_refuses_descriptor_id_spine_missing_evidence_policy():
             if ref != config.ACTIVE_PROFILE.evidence_policy_ref
         ]
 
-    with _preseeded_dirty_spine_store(mutate) as store:
-        with pytest.raises(context.ContextNotReconstructible, match="evidence policy"):
-            with store.tx() as cur:
-                context.ContextAssembler(store).assemble(cur, demo.FARM)
+    with pytest.raises(context.ContextNotReconstructible,
+                       match="is reused for different canonical content"):
+        with _preseeded_dirty_spine_store(mutate):
+            pass
 
 
 def test_now_context_refuses_descriptor_id_profile_wrong_pack_scope():
     def mutate(profile, _activation, _artifact):
         profile["profileScope"]["packRefs"] = ["pack:si.ffs.dirty.v0_1"]
 
-    with _preseeded_dirty_spine_store(mutate) as store:
-        with pytest.raises(context.ContextNotReconstructible, match="profileScope.packRefs"):
-            with store.tx() as cur:
-                context.ContextAssembler(store).assemble(cur, demo.FARM)
+    with pytest.raises(context.ContextNotReconstructible,
+                       match="already bound to different canonical content"):
+        with _preseeded_dirty_spine_store(mutate):
+            pass
 
 
 def test_gate_pipeline_explicit_active_profile_matches_default_for_clean_operation(
@@ -1840,10 +1840,8 @@ def test_route_backed_gate_pipeline_accepts_clean_si_operation(fresh_env):
     ([], "no active profile route"),
     ([_si_route(), _si_route()], "multiple active overlapping"),
     (
-        [_si_route(
-            descriptor_identity="profile_si_ffs/runtime_profile_descriptor.json#bad",
-        )],
-        "descriptor identity",
+        [_si_route(runtime_bundle_digest="sha256:" + "0" * 64)],
+        "RuntimeBundle digest",
     ),
 ])
 def test_route_backed_gate_pipeline_refuses_route_resolution_failures(
@@ -2502,11 +2500,10 @@ def test_profile_applicability_wrong_pack_profile_is_governed_refusal():
         artifact["activePackRefs"] = ["pack:si.ffs.dirty.v0_1"]
         artifact["activeProfileRefs"] = ["profile:si.ffs.dirty.v0_1"]
 
-    with _preseeded_dirty_spine_store(mutate) as store:
-        result = GatePipeline(store).commit(_note_submission(
-            f"issue125-pack-profile:{_uid()}"))
-        trace = _assert_profile_applicability_refusal(store, result)
-        assert "descriptor packRef" in trace["gateSequence"][-1]["rationale"]
+    with pytest.raises(context.ContextNotReconstructible,
+                       match="already bound to different canonical content"):
+        with _preseeded_dirty_spine_store(mutate):
+            pass
 
 
 def test_profile_applicability_missing_evidence_policy_is_governed_refusal():
@@ -2516,11 +2513,10 @@ def test_profile_applicability_missing_evidence_policy_is_governed_refusal():
             if ref != config.ACTIVE_PROFILE.evidence_policy_ref
         ]
 
-    with _preseeded_dirty_spine_store(mutate) as store:
-        result = GatePipeline(store).commit(_note_submission(
-            f"issue125-policy-missing:{_uid()}"))
-        trace = _assert_profile_applicability_refusal(store, result)
-        assert "evidence policy" in trace["gateSequence"][-1]["rationale"]
+    with pytest.raises(context.ContextNotReconstructible,
+                       match="is reused for different canonical content"):
+        with _preseeded_dirty_spine_store(mutate):
+            pass
 
 
 def test_profile_applicability_missing_descriptor_artifact_is_governed_refusal(
@@ -2531,11 +2527,8 @@ def test_profile_applicability_missing_descriptor_artifact_is_governed_refusal(
         active_artifact_set_ref="activeartifactset:si.ffs.issue125.missing.v0_1",
     )
 
-    result = GatePipeline(store, active_profile=active).commit(_note_submission(
-        f"issue125-artifact-missing:{_uid()}"))
-
-    trace = _assert_profile_applicability_refusal(store, result)
-    assert "matched 0" in trace["gateSequence"][-1]["rationale"]
+    with pytest.raises(ProfileRuntimeError, match="RuntimeBundle do not match exactly"):
+        GatePipeline(store, active_profile=active)
 
 
 def test_profile_applicability_required_reference_family_is_governed_refusal(
@@ -2547,62 +2540,33 @@ def test_profile_applicability_required_reference_family_is_governed_refusal(
         + (_missing_family(required=True),),
     )
 
-    result = GatePipeline(store, active_profile=active).commit(_note_submission(
-        f"issue125-ref-family:{_uid()}"))
-
-    trace = _assert_profile_applicability_refusal(store, result)
-    assert "required reference family" in trace["gateSequence"][-1]["rationale"]
+    with pytest.raises(ProfileRuntimeError, match="RuntimeBundle do not match exactly"):
+        GatePipeline(store, active_profile=active)
 
 
-def test_profile_applicability_missing_context_spine_is_governed_refusal():
+def test_gate_pipeline_requires_bootstrapped_runtime_bundle():
     with _fresh_unbootstrapped_store() as store:
-        _bootstrap_demo_substrate_only(store)
-
-        result = GatePipeline(store).commit(_note_submission(
-            f"issue137-missing-spine:{_uid()}"))
-
-        trace = _assert_profile_applicability_refusal(store, result)
-        assert "context spine not bootstrapped" in \
-            trace["gateSequence"][-1]["rationale"]
-        assert result["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+        with pytest.raises(RuntimeError, match="no verified RuntimeBundle"):
+            GatePipeline(store)
 
 
-def test_materializer_missing_context_spine_refuses_use_governably():
+def test_materializer_requires_bootstrapped_runtime_bundle():
     with _fresh_unbootstrapped_store() as store:
-        materializer = Materializer(store)
-
-        with store.tx() as cur:
-            result = materializer.resolve_for_use(cur, demo.FARM)
-
-        assert result["decision"] == "REFUSE_USE"
-        assert result["freshness"] == "INVALID"
-        assert result["contextSnapshotRef"] == "contextsnapshot:not-reconstructible"
-        assert result["problems"][0]["reasonCode"] == "MATERIALIZATION_INVALID"
-        assert "context spine not bootstrapped" in result["problems"][0]["detail"]
+        with pytest.raises(RuntimeError, match="no verified RuntimeBundle"):
+            Materializer(store)
 
 
-def test_api_commit_returns_governed_profile_applicability_refusal_not_500():
+def test_dirty_profile_spine_refuses_before_api_startup():
     def mutate(_profile, _activation, artifact):
         artifact["activeArtifactRefs"] = [
             ref for ref in artifact["activeArtifactRefs"]
             if ref != config.ACTIVE_PROFILE.evidence_policy_ref
         ]
 
-    with _preseeded_dirty_spine_store(mutate) as store:
-        from fastapi.testclient import TestClient
-        from kernel.api import create_app
-
-        client = TestClient(create_app(store, oidc=None))
-        sub = _note_submission(f"issue125-api:{_uid()}")
-        response = client.post(
-            "/commit",
-            json={"submission": sub},
-            headers={"x-acting-party": demo.FARMER},
-        )
-
-        assert response.status_code == 200
-        payload = response.json()
-        _assert_profile_applicability_refusal(store, payload)
+    with pytest.raises(context.ContextNotReconstructible,
+                       match="is reused for different canonical content"):
+        with _preseeded_dirty_spine_store(mutate):
+            pass
 
 
 def test_product_register_boundary_remains_single_active_si_runtime():
@@ -2788,55 +2752,9 @@ def test_materializer_uses_active_descriptor_for_context_and_policy_freshness(
     }
 
 
-def test_materializer_dependency_index_uses_descriptor_policy_ref_and_invalidates():
+def test_materializer_policy_ref_change_requires_new_bundle(fresh_env):
+    store, _, _ = fresh_env
     policy_ref = f"policy:si.ffs.issue125.{_uid()}"
-
-    def mutate(_profile, _activation, artifact):
-        artifact["activeArtifactRefs"] = [
-            ref for ref in artifact["activeArtifactRefs"]
-            if ref != config.ACTIVE_PROFILE.evidence_policy_ref
-        ] + [policy_ref]
-
-    with _preseeded_dirty_spine_store(mutate) as store:
-        active = replace(config.ACTIVE_PROFILE, evidence_policy_ref=policy_ref)
-        materializer = Materializer(store, active_profile=active)
-
-        with store.tx() as cur:
-            materialized = materializer.recompute(cur, demo.FARM)
-        key_digest = materialized["materializationKey"]["materializationKeyId"]
-
-        with store.conn.cursor() as cur:
-            cur.execute(
-                "SELECT dependency_source_ref FROM derived_dependency_index "
-                "WHERE key_digest = %s "
-                "AND dependency_source_family = 'RULE_EVIDENCE_POLICY'",
-                (key_digest,),
-            )
-            policy_dependencies = {row["dependency_source_ref"] for row in cur.fetchall()}
-            cur.execute(
-                "SELECT freshness FROM derived_materialization "
-                "WHERE key_digest = %s AND superseded_by IS NULL",
-                (key_digest,),
-            )
-            assert cur.fetchone()["freshness"] == "FRESH"
-
-        assert policy_dependencies == {policy_ref}
-
-        with store.tx() as cur:
-            marked = materializer.invalidate_for_sources(
-                cur,
-                [policy_ref],
-                trigger_family="POLICY_CHANGED",
-                trigger_source_ref=policy_ref,
-                farm_scope_ref=demo.FARM,
-                reason_code="POLICY_CHANGED",
-            )
-
-        assert marked == 1
-        with store.conn.cursor() as cur:
-            cur.execute(
-                "SELECT freshness FROM derived_materialization "
-                "WHERE key_digest = %s AND superseded_by IS NULL",
-                (key_digest,),
-            )
-            assert cur.fetchone()["freshness"] == "STALE"
+    active = replace(config.ACTIVE_PROFILE, evidence_policy_ref=policy_ref)
+    with pytest.raises(ProfileRuntimeError, match="RuntimeBundle do not match exactly"):
+        Materializer(store, active_profile=active)

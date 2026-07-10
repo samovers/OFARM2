@@ -24,7 +24,8 @@
       "requiredForAsOfContext": false,
       "missingFamilyBehaviorNow": "OMIT_FROM_CONTEXT",
       "missingFamilyBehaviorAsOf": "OMIT_FROM_CONTEXT",
-      "shippedSnapshotRef": "referencesnapshot:si.uvhvvr.ffs-reg.2026-06-11"
+      "shippedSnapshotRef": "referencesnapshot:si.uvhvvr.ffs-reg.2026-06-11",
+      "includeInContext": true
     },
     {
       "familyId": "si.mkgp.gerk-layer",
@@ -34,7 +35,18 @@
       "requiredForAsOfContext": false,
       "missingFamilyBehaviorNow": "OMIT_FROM_CONTEXT",
       "missingFamilyBehaviorAsOf": "OMIT_FROM_CONTEXT",
-      "shippedSnapshotRef": "referencesnapshot:si.mkgp.gerk-layer.2025-06-30"
+      "shippedSnapshotRef": "referencesnapshot:si.mkgp.gerk-layer.2025-06-30",
+      "includeInContext": true
+    },
+    {
+      "familyId": "si.uvhvvr.ffs-naprave",
+      "snapshotPrefix": "referencesnapshot:si.uvhvvr.ffs-naprave",
+      "dataFamily": "si.uvhvvr.ffs-naprave",
+      "requiredForNowContext": false,
+      "requiredForAsOfContext": false,
+      "missingFamilyBehaviorNow": "OMIT_FROM_CONTEXT",
+      "missingFamilyBehaviorAsOf": "OMIT_FROM_CONTEXT",
+      "includeInContext": false
     }
   ],
   "contextSnapshotIdPrefix": "contextsnapshot:si.ffs"
