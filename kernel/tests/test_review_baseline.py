@@ -52,6 +52,14 @@ def test_authoritative_target_requires_linux_x86_64_cpython():
     assert required["pythonImplementation"] == "CPython"
 
 
+def test_dirty_or_missing_git_state_fails_preflight():
+    assert baseline._git_preflight_reasons({"dirty": False}) == []
+    assert baseline._git_preflight_reasons({"dirty": True}) == [
+        "Git worktree is dirty"
+    ]
+    assert baseline._git_preflight_reasons({}) == ["Git worktree is dirty"]
+
+
 def test_sanitized_environment_removes_ambient_test_and_ofarm_controls(monkeypatch):
     monkeypatch.setenv("PYTEST_ADDOPTS", "-k hidden")
     monkeypatch.setenv("PYTEST_PLUGINS", "ambient.plugin")

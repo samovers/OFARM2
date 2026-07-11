@@ -342,6 +342,12 @@ def _test_result_is_complete(results: dict[str, Any]) -> bool:
     )
 
 
+def _git_preflight_reasons(git: dict[str, Any]) -> list[str]:
+    if git.get("dirty") is not False:
+        return ["Git worktree is dirty"]
+    return []
+
+
 def run_baseline(output_arg: str) -> int:
     git = _git_state()  # must happen before the ignored output directory exists
     output = _controlled_output(Path(output_arg), must_be_empty=True)
@@ -356,6 +362,7 @@ def run_baseline(output_arg: str) -> int:
     pip_command = [python_display, "-m", "pip", "check"]
     pip_code = _execute([sys.executable, "-m", "pip", "check"], env)
     environment, preflight_reasons = _preflight(config, env, pip_code)
+    preflight_reasons = _git_preflight_reasons(git) + preflight_reasons
 
     results_path = output / "kernel-test-results.json"
     pytest_command = [
