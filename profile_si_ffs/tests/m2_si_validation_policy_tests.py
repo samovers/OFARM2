@@ -323,7 +323,8 @@ def test_compliance_validator_empty_recognized_refs_does_not_fallback(store):
         "governingRuleRefs": [config.EVIDENCE_POLICY_REF],
         "subjectScopeRef": demo.FARM,
     }}}
-    ctx = _FakeValidationContext(store, sub)
+    ctx = _FakeValidationContext(
+        store, sub, commit_class="COMPLIANCE_ASSERTION")
 
     refusal = validators.ComplianceClaimValidator(
         recognized_rule_refs=set()).run(ctx)
