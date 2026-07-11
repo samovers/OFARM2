@@ -7,6 +7,12 @@ profile — not OFARM law; claims record-keeping completeness only.
 
 ## Run it (no canonical-repository knowledge required)
 
+For the exact evidence-only review environment and the single complete Kernel
+test command, use `conformance/REVIEW_BASELINE.md`. That Linux x86_64 baseline
+pins Python 3.12.13, PostgreSQL 17.10, pip, every dependency wheel hash, and CI
+actions. The development setup below remains convenient but is not evidence of
+an exact baseline match.
+
 ```bash
 # 1. environment (Python 3.11+, PostgreSQL 15+)
 python3 -m venv .venv
