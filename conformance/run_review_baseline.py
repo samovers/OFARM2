@@ -9,26 +9,28 @@ import hashlib
 from importlib import metadata
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import platform
 import re
 import subprocess
 import sys
+import tempfile
 from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "conformance" / "review_baseline_config.json"
-EVIDENCE_SCHEMA = "ofarm.review-baseline-evidence.v1"
-COMPARISON_SCHEMA = "ofarm.review-baseline-comparison.v1"
-NORMALIZATION_POLICY = "ofarm.review-baseline-normalization.v1"
+EVIDENCE_SCHEMA = "ofarm.review-baseline-evidence.v2"
+COMPARISON_SCHEMA = "ofarm.review-baseline-comparison.v2"
+NORMALIZATION_POLICY = "ofarm.review-baseline-normalization.v2"
+INVENTORY_SCHEMA = "ofarm.review-baseline-test-inventory.v1"
 VOLATILE_POINTERS = (
     "/run/startedAt",
     "/run/finishedAt",
     "/environment/ci/runId",
     "/environment/ci/runAttempt",
 )
-ALLOWED_OFARM_ENV = {"OFARM_PG_DSN", "OFARM_PG_ADMIN_DSN"}
+ALLOWED_OFARM_ENV = {"OFARM_PG_ADMIN_DSN"}
 
 
 def _utc_now() -> str:
@@ -81,10 +83,10 @@ def _controlled_output(path: Path, *, must_be_empty: bool) -> Path:
     return resolved
 
 
-def _run_capture(args: list[str]) -> str:
+def _run_capture(args: list[str], *, cwd: Path = ROOT) -> str:
     result = subprocess.run(
         args,
-        cwd=ROOT,
+        cwd=cwd,
         check=True,
         text=True,
         stdout=subprocess.PIPE,
@@ -93,12 +95,12 @@ def _run_capture(args: list[str]) -> str:
     return result.stdout.strip()
 
 
-def _git_state() -> dict[str, Any]:
-    sha = _run_capture(["git", "rev-parse", "HEAD"])
-    tree_sha = _run_capture(["git", "rev-parse", "HEAD^{tree}"])
+def _git_state(root: Path = ROOT) -> dict[str, Any]:
+    sha = _run_capture(["git", "rev-parse", "HEAD"], cwd=root)
+    tree_sha = _run_capture(["git", "rev-parse", "HEAD^{tree}"], cwd=root)
     status = _run_capture([
         "git", "status", "--porcelain=v1", "--untracked-files=all",
-    ])
+    ], cwd=root)
     entries = status.splitlines() if status else []
     return {
         "sha": sha,
@@ -114,13 +116,22 @@ def _sanitized_environment(config: dict[str, Any]) -> dict[str, str]:
     env = dict(original)
     for name in list(env):
         if name.startswith("OFARM_") or name in {
-            "PYTEST_ADDOPTS", "PYTEST_PLUGINS", "PYTHONPATH", "PYTHONWARNINGS",
+            "PYTEST_ADDOPTS", "PYTEST_PLUGINS", "PYTHONOPTIMIZE",
+            "PYTHONPATH", "PYTHONWARNINGS",
         }:
             env.pop(name, None)
     for name in ALLOWED_OFARM_ENV:
         if original.get(name):
             env[name] = original[name]
     required = config["requiredEnvironment"]
+    if env.get("OFARM_PG_ADMIN_DSN"):
+        try:
+            env["OFARM_PG_DSN"] = _derive_test_dsn(
+                env["OFARM_PG_ADMIN_DSN"], required["testDatabaseName"])
+        except ValueError:
+            # Preflight records the unavailable derived route. Keep collection
+            # and evidence emission alive without exposing the malformed DSN.
+            env.pop("OFARM_PG_DSN", None)
     env.update({
         "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
         "PYTHONNOUSERSITE": "1",
@@ -132,6 +143,17 @@ def _sanitized_environment(config: dict[str, Any]) -> dict[str, str]:
         "OFARM_DISABLE_PLATFORM_MVP_EVIDENCE": "1",
     })
     return env
+
+
+def _derive_test_dsn(admin_dsn: str, test_database_name: str) -> str:
+    if not isinstance(test_database_name, str) or not re.fullmatch(
+            r"[a-z][a-z0-9_]{0,62}", test_database_name):
+        raise ValueError("review baseline test database name is unsafe")
+    try:
+        from psycopg.conninfo import make_conninfo
+        return make_conninfo(admin_dsn, dbname=test_database_name)
+    except Exception as exc:
+        raise ValueError("review baseline admin DSN cannot derive the test route") from exc
 
 
 def _normalise_name(name: str) -> str:
@@ -176,15 +198,56 @@ def _admin_dsn(env: dict[str, str]) -> str:
     )
 
 
-def _postgres_version(env: dict[str, str]) -> tuple[str | None, str | None]:
+def _postgres_identity(dsn: str) -> dict[str, Any]:
+    """Return a safe SQL-observed server identity without exposing the DSN."""
     try:
         import psycopg
-        with psycopg.connect(_admin_dsn(env)) as connection:
+        with psycopg.connect(dsn) as connection:
             raw = connection.execute("SHOW server_version").fetchone()[0]
+            database = connection.execute("SELECT current_database()").fetchone()[0]
+            system_identifier = connection.execute(
+                "SELECT system_identifier::text FROM pg_control_system()"
+            ).fetchone()[0]
         match = re.match(r"(\d+\.\d+)", raw)
-        return (match.group(1) if match else None), raw
+        return {
+            "available": True,
+            "version": match.group(1) if match else None,
+            "rawVersion": raw,
+            "systemIdentifier": system_identifier,
+            "database": database,
+        }
     except Exception as exc:  # evidence must still be emitted when DB is unavailable
-        return None, f"{type(exc).__name__}: {exc}"
+        return {
+            "available": False,
+            "errorType": type(exc).__name__,
+            "version": None,
+            "rawVersion": None,
+            "systemIdentifier": None,
+            "database": None,
+        }
+
+
+def _postgres_identity_reasons(
+    admin: dict[str, Any],
+    test_store: dict[str, Any],
+    expected_test_database: str,
+) -> list[str]:
+    reasons: list[str] = []
+    if test_store.get("available") is not True:
+        reasons.append("test-store PostgreSQL identity is unavailable")
+    if admin.get("available") is not True:
+        reasons.append("admin PostgreSQL identity is unavailable")
+    if reasons:
+        return reasons
+    if admin.get("version") != test_store.get("version"):
+        reasons.append("admin and test-store PostgreSQL versions differ")
+    if admin.get("rawVersion") != test_store.get("rawVersion"):
+        reasons.append("admin and test-store PostgreSQL build versions differ")
+    if admin.get("systemIdentifier") != test_store.get("systemIdentifier"):
+        reasons.append("admin and test-store PostgreSQL servers differ")
+    if test_store.get("database") != expected_test_database:
+        reasons.append("test-store PostgreSQL database name differs from the pinned target")
+    return reasons
 
 
 def _execute(args: list[str], env: dict[str, str]) -> int:
@@ -208,6 +271,16 @@ def _step(name: str, command: list[str], exit_code: int | None, reason: str | No
     return value
 
 
+def _python_optimization_reasons(
+    required: int,
+    actual: int | None = None,
+) -> list[str]:
+    effective = sys.flags.optimize if actual is None else actual
+    if effective != required:
+        return [f"Python optimization level {effective} != {required}"]
+    return []
+
+
 def _preflight(config: dict[str, Any], env: dict[str, str], pip_check_code: int):
     dependency_lock = ROOT / config["paths"]["dependencyLock"]
     pip_lock = ROOT / config["paths"]["packageManagerLock"]
@@ -220,9 +293,15 @@ def _preflight(config: dict[str, Any], env: dict[str, str], pip_check_code: int)
     operating_system = platform.system()
     machine = platform.machine()
     implementation = platform.python_implementation()
-    postgres_actual, postgres_raw = _postgres_version(env)
+    optimization_actual = sys.flags.optimize
+    admin_postgres = _postgres_identity(_admin_dsn(env))
     required = config["requiredEnvironment"]
     reasons: list[str] = []
+    for name in sorted(ALLOWED_OFARM_ENV):
+        if not env.get(name):
+            reasons.append(f"required database environment variable {name} is absent")
+    if not env.get("OFARM_PG_DSN"):
+        reasons.append("derived test-store database route is absent")
     if operating_system != required["operatingSystem"]:
         reasons.append(f"operating system {operating_system} != {required['operatingSystem']}")
     if machine != required["machine"]:
@@ -233,6 +312,8 @@ def _preflight(config: dict[str, Any], env: dict[str, str], pip_check_code: int)
         )
     if python_actual != required["pythonVersion"]:
         reasons.append(f"Python {python_actual} != {required['pythonVersion']}")
+    reasons.extend(_python_optimization_reasons(
+        required["pythonOptimizationLevel"], optimization_actual))
     if actual.get("pip") != required["pipVersion"]:
         reasons.append(f"pip {actual.get('pip')} != {required['pipVersion']}")
     if pip_check_code != 0:
@@ -241,8 +322,11 @@ def _preflight(config: dict[str, Any], env: dict[str, str], pip_check_code: int)
         reasons.append("locked distributions missing or mismatched")
     if unexpected:
         reasons.append("unexpected installed distributions")
-    if postgres_actual != required["postgresqlVersion"]:
-        reasons.append(f"PostgreSQL {postgres_actual} != {required['postgresqlVersion']}")
+    if admin_postgres["version"] != required["postgresqlVersion"]:
+        reasons.append(
+            f"PostgreSQL {admin_postgres['version']} != "
+            f"{required['postgresqlVersion']}"
+        )
 
     distributions = [
         {"name": name, "version": actual[name]}
@@ -258,12 +342,19 @@ def _preflight(config: dict[str, Any], env: dict[str, str], pip_check_code: int)
             "implementation": {"required": required["pythonImplementation"],
                                "actual": implementation},
             "version": {"required": required["pythonVersion"], "actual": python_actual},
+            "optimizationLevel": {
+                "required": required["pythonOptimizationLevel"],
+                "actual": optimization_actual,
+            },
         },
         "pip": {"required": required["pipVersion"], "actual": actual.get("pip")},
         "postgresql": {
-            "required": required["postgresqlVersion"],
-            "actual": postgres_actual,
-            "serverVersionSql": postgres_raw,
+            "requiredVersion": required["postgresqlVersion"],
+            "testConnectionSource": "derived-from-verified-admin-connection",
+            "testDatabase": required["testDatabaseName"],
+            "admin": admin_postgres,
+            "testStore": None,
+            "sameServer": None,
         },
         "dependencies": {
             "installed": distributions,
@@ -280,10 +371,11 @@ def _preflight(config: dict[str, Any], env: dict[str, str], pip_check_code: int)
             "pythonNoUserSite": True,
             "pythonDontWriteBytecode": True,
             "scrubbedAmbientVariables": [
-                "PYTEST_ADDOPTS", "PYTEST_PLUGINS", "PYTHONPATH",
-                "PYTHONWARNINGS", "OFARM_*",
+                "PYTEST_ADDOPTS", "PYTEST_PLUGINS", "PYTHONOPTIMIZE",
+                "PYTHONPATH", "PYTHONWARNINGS", "OFARM_*",
             ],
             "allowedOfarmVariables": sorted(ALLOWED_OFARM_ENV),
+            "derivedOfarmVariables": ["OFARM_PG_DSN"],
         },
         "ci": {
             "configuredRunnerLabel": required["runner"],
@@ -298,16 +390,134 @@ def _preflight(config: dict[str, Any], env: dict[str, str], pip_check_code: int)
     return environment, reasons
 
 
+_INVENTORY_ENTRY_KEYS = {"nodeid", "sourceModule", "sourcePath"}
+_WARNING_KEYS = {"nodeid", "when", "category", "message"}
+
+
+def _normalised_inventory_entries(value: Any) -> list[dict[str, str]]:
+    if not isinstance(value, list) or not value:
+        raise ValueError("review baseline test inventory entries must be non-empty")
+    entries: list[dict[str, str]] = []
+    seen_nodeids: set[str] = set()
+    for entry in value:
+        if not isinstance(entry, dict) or set(entry) != _INVENTORY_ENTRY_KEYS:
+            raise ValueError("review baseline test inventory entry is malformed")
+        if any(not isinstance(entry[key], str) or not entry[key]
+               for key in _INVENTORY_ENTRY_KEYS):
+            raise ValueError("review baseline test inventory fields must be non-empty strings")
+        nodeid = entry["nodeid"]
+        source_path = entry["sourcePath"]
+        if "\\" in nodeid or "\\" in source_path:
+            raise ValueError("review baseline test inventory paths must use POSIX separators")
+        parsed_path = PurePosixPath(source_path)
+        if parsed_path.is_absolute() or ".." in parsed_path.parts:
+            raise ValueError("review baseline source paths must stay repository-relative")
+        if nodeid in seen_nodeids:
+            raise ValueError(f"duplicate review baseline nodeid {nodeid!r}")
+        seen_nodeids.add(nodeid)
+        entries.append({key: entry[key] for key in sorted(_INVENTORY_ENTRY_KEYS)})
+    return sorted(entries, key=lambda entry: (
+        entry["nodeid"], entry["sourceModule"], entry["sourcePath"],
+    ))
+
+
+def _inventory_document(test_root: str, entries: Any) -> dict[str, Any]:
+    normalised = _normalised_inventory_entries(entries)
+    return {
+        "schemaVersion": INVENTORY_SCHEMA,
+        "testRoot": test_root,
+        "entryCount": len(normalised),
+        "entriesSha256": _sha256_bytes(_canonical_bytes(normalised)),
+        "entries": normalised,
+    }
+
+
+def _load_test_inventory(config: dict[str, Any]) -> dict[str, Any]:
+    path = ROOT / config["paths"]["testInventory"]
+    document = _read_json(path)
+    if set(document) != {
+        "schemaVersion", "testRoot", "entryCount", "entriesSha256", "entries",
+    }:
+        raise ValueError("review baseline test inventory has unknown or missing fields")
+    expected = _inventory_document(config["paths"]["testRoot"], document["entries"])
+    if document != expected:
+        raise ValueError("review baseline test inventory is stale or non-canonical")
+    return document
+
+
+def _test_inventory_check(
+    expected_document: dict[str, Any],
+    actual_entries: Any,
+) -> dict[str, Any]:
+    actual = _normalised_inventory_entries(actual_entries)
+    expected = expected_document["entries"]
+    expected_keys = {
+        (entry["nodeid"], entry["sourceModule"], entry["sourcePath"]): entry
+        for entry in expected
+    }
+    actual_keys = {
+        (entry["nodeid"], entry["sourceModule"], entry["sourcePath"]): entry
+        for entry in actual
+    }
+    missing = [expected_keys[key] for key in sorted(expected_keys.keys() - actual_keys.keys())]
+    unexpected = [actual_keys[key] for key in sorted(actual_keys.keys() - expected_keys.keys())]
+    actual_digest = _sha256_bytes(_canonical_bytes(actual))
+    return {
+        "matches": not missing and not unexpected,
+        "expectedCount": expected_document["entryCount"],
+        "actualCount": len(actual),
+        "expectedEntriesSha256": expected_document["entriesSha256"],
+        "actualEntriesSha256": actual_digest,
+        "missing": missing,
+        "unexpected": unexpected,
+    }
+
+
+def _normalised_warning_inventory(value: Any) -> list[dict[str, str]]:
+    if not isinstance(value, list):
+        raise ValueError("review baseline warning inventory must be a list")
+    warnings: list[dict[str, str]] = []
+    for entry in value:
+        if not isinstance(entry, dict) or set(entry) != _WARNING_KEYS:
+            raise ValueError("review baseline warning entry is malformed")
+        if any(not isinstance(entry[key], str) for key in _WARNING_KEYS):
+            raise ValueError("review baseline warning fields must be strings")
+        warnings.append({key: entry[key] for key in sorted(_WARNING_KEYS)})
+    return sorted(warnings, key=lambda entry: (
+        entry["nodeid"], entry["when"], entry["category"], entry["message"],
+    ))
+
+
+def _warning_policy_check(
+    policy: dict[str, Any],
+    actual_warnings: Any,
+) -> dict[str, Any]:
+    if not isinstance(policy, dict) or set(policy) != {"mode", "expected"}:
+        raise ValueError("review baseline warning policy is malformed")
+    if policy["mode"] != "exact-inventory":
+        raise ValueError("review baseline warning policy mode is unsupported")
+    expected = _normalised_warning_inventory(policy["expected"])
+    actual = _normalised_warning_inventory(actual_warnings)
+    return {
+        "mode": policy["mode"],
+        "matches": actual == expected,
+        "expected": expected,
+        "actual": actual,
+    }
+
+
 def _empty_results(reason: str) -> dict[str, Any]:
     return {
-        "schemaVersion": "ofarm.review-baseline-pytest-results.v1",
+        "schemaVersion": "ofarm.review-baseline-pytest-results.v2",
         "collection": {"collected": [], "selected": [], "deselected": [],
+                       "skippedCollectors": [],
                        "errors": [{"collector": "pytest", "outcome": reason}]},
         "execution": {"outcomes": [], "skipped": [], "unavailable": []},
         "warnings": [],
         "summary": {"collected": 0, "selected": 0, "passed": 0, "failed": 0,
                     "error": 0, "xfailed": 0, "xpassed": 0, "skipped": 0,
-                    "deselected": 0, "unavailable": 0, "collectionErrors": 1,
+                    "deselected": 0, "collectionSkipped": 0,
+                    "unavailable": 0, "collectionErrors": 1,
                     "warnings": 0, "pytestExitStatus": 3},
     }
 
@@ -328,31 +538,53 @@ def _mark_unavailable(results: dict[str, Any], reason: str) -> None:
     summary["unavailable"] = len(selected)
 
 
-def _test_result_is_complete(results: dict[str, Any]) -> bool:
+def _test_result_is_complete(
+    results: dict[str, Any],
+    *,
+    inventory_matches: bool = True,
+    warning_inventory_matches: bool = True,
+) -> bool:
     summary = results["summary"]
     return (
-        summary["collected"] > 0
+        results.get("schemaVersion") == "ofarm.review-baseline-pytest-results.v2"
+        and summary["collected"] > 0
         and summary["selected"] == summary["collected"]
         and summary["passed"] == summary["selected"]
         and all(summary[field] == 0 for field in (
             "failed", "error", "xfailed", "xpassed", "skipped", "deselected",
-            "unavailable", "collectionErrors",
+            "collectionSkipped", "unavailable", "collectionErrors",
         ))
+        and summary["warnings"] == len(results["warnings"])
+        and inventory_matches
+        and warning_inventory_matches
         and summary["pytestExitStatus"] == 0
     )
 
 
-def _git_preflight_reasons(git: dict[str, Any]) -> list[str]:
-    if git.get("dirty") is not False:
-        return ["Git worktree is dirty"]
-    return []
+def _git_integrity_reasons(
+    start: dict[str, Any],
+    end: dict[str, Any] | None = None,
+) -> list[str]:
+    reasons: list[str] = []
+    if start.get("dirty") is not False:
+        reasons.append("Git worktree is dirty before execution")
+    if end is None:
+        return reasons
+    if end.get("dirty") is not False:
+        reasons.append("Git worktree is dirty after execution")
+    if start != end:
+        reasons.append("Git worktree state changed during execution")
+    return reasons
 
 
 def run_baseline(output_arg: str) -> int:
-    git = _git_state()  # must happen before the ignored output directory exists
+    git_start = _git_state()  # must happen before the ignored output directory exists
     output = _controlled_output(Path(output_arg), must_be_empty=True)
     output.mkdir(parents=True, exist_ok=True)
     config = _read_json(CONFIG_PATH)
+    inventory_path = ROOT / config["paths"]["testInventory"]
+    test_inventory = _load_test_inventory(config)
+    inventory_file_digest = _sha256_file(inventory_path)
     env = _sanitized_environment(config)
     started = _utc_now()
     python_display = "python"
@@ -362,7 +594,7 @@ def run_baseline(output_arg: str) -> int:
     pip_command = [python_display, "-m", "pip", "check"]
     pip_code = _execute([sys.executable, "-m", "pip", "check"], env)
     environment, preflight_reasons = _preflight(config, env, pip_code)
-    preflight_reasons = _git_preflight_reasons(git) + preflight_reasons
+    preflight_reasons = _git_integrity_reasons(git_start) + preflight_reasons
 
     results_path = output / "kernel-test-results.json"
     pytest_command = [
@@ -391,6 +623,11 @@ def run_baseline(output_arg: str) -> int:
         _mark_unavailable(test_results, "; ".join(preflight_reasons))
         _write_json(results_path, test_results)
 
+    inventory_check = _test_inventory_check(
+        test_inventory, test_results["collection"]["collected"])
+    warning_check = _warning_policy_check(
+        config["warningPolicy"], test_results["warnings"])
+
     manifest_command = [python_display, "-m", "kernel.manifest", "--verify-generated"]
     if preflight_reasons:
         manifest_code = None
@@ -398,6 +635,35 @@ def run_baseline(output_arg: str) -> int:
         manifest_code = _execute(
             [sys.executable, "-m", "kernel.manifest", "--verify-generated"], env,
         )
+
+    if preflight_reasons:
+        test_store_postgres = {
+            "available": False,
+            "errorType": "EnvironmentPreflightFailed",
+            "version": None,
+            "rawVersion": None,
+            "systemIdentifier": None,
+            "database": None,
+        }
+    elif not env.get("OFARM_PG_DSN"):
+        test_store_postgres = {
+            "available": False,
+            "errorType": "DerivedTestDsnAbsent",
+            "version": None,
+            "rawVersion": None,
+            "systemIdentifier": None,
+            "database": None,
+        }
+    else:
+        test_store_postgres = _postgres_identity(env["OFARM_PG_DSN"])
+    environment["postgresql"]["testStore"] = test_store_postgres
+    postgres_identity_reasons = _postgres_identity_reasons(
+        environment["postgresql"]["admin"], test_store_postgres,
+        config["requiredEnvironment"]["testDatabaseName"])
+    environment["postgresql"]["sameServer"] = not postgres_identity_reasons
+
+    git_end = _git_state()
+    git_integrity_reasons = _git_integrity_reasons(git_start, git_end)
 
     dependency_lock = ROOT / config["paths"]["dependencyLock"]
     pip_lock = ROOT / config["paths"]["packageManagerLock"]
@@ -415,6 +681,16 @@ def run_baseline(output_arg: str) -> int:
             "; ".join(preflight_reasons) if preflight_reasons else None,
         ),
         _step(
+            "verify-pinned-test-inventory", ["internal:pinned-test-inventory"],
+            0 if inventory_check["matches"] else 1,
+            None if inventory_check["matches"] else "test inventory drifted",
+        ),
+        _step(
+            "verify-warning-inventory", ["internal:exact-warning-inventory"],
+            0 if warning_check["matches"] else 1,
+            None if warning_check["matches"] else "warning inventory drifted",
+        ),
+        _step(
             "complete-kernel-tests", pytest_command,
             None if preflight_reasons else pytest_code,
             "; ".join(preflight_reasons) if preflight_reasons else None,
@@ -423,11 +699,27 @@ def run_baseline(output_arg: str) -> int:
             "verify-generated-manifest", manifest_command, manifest_code,
             "environment preflight failed" if manifest_code is None else None,
         ),
+        _step(
+            "verify-test-store-postgresql", ["internal:postgresql-server-identity"],
+            0 if not postgres_identity_reasons else 1,
+            "; ".join(postgres_identity_reasons)
+            if postgres_identity_reasons else None,
+        ),
+        _step(
+            "verify-post-run-git-state", ["internal:post-run-git-integrity"],
+            0 if not git_integrity_reasons else 1,
+            "; ".join(git_integrity_reasons) if git_integrity_reasons else None,
+        ),
     ]
-    complete = _test_result_is_complete(test_results)
+    complete = _test_result_is_complete(
+        test_results,
+        inventory_matches=inventory_check["matches"],
+        warning_inventory_matches=warning_check["matches"],
+    )
     passed = (
         not preflight_reasons and package_code == pip_code == pytest_code == 0
-        and manifest_code == 0 and complete
+        and manifest_code == 0 and not postgres_identity_reasons
+        and not git_integrity_reasons and complete
     )
     evidence = {
         "schemaVersion": EVIDENCE_SCHEMA,
@@ -438,7 +730,11 @@ def run_baseline(output_arg: str) -> int:
             "canonicalCommand": config["canonicalCommand"],
             "outcome": "passed" if passed else "failed",
         },
-        "git": git,
+        "git": {
+            "start": git_start,
+            "end": git_end,
+            "unchanged": git_start == git_end,
+        },
         "inputs": {
             "config": {"path": str(CONFIG_PATH.relative_to(ROOT)),
                        "sha256": _sha256_file(CONFIG_PATH)},
@@ -446,11 +742,21 @@ def run_baseline(output_arg: str) -> int:
                                "sha256": _sha256_file(dependency_lock)},
             "packageManagerLock": {"path": str(pip_lock.relative_to(ROOT)),
                                    "sha256": _sha256_file(pip_lock)},
+            "testInventory": {
+                "path": str(inventory_path.relative_to(ROOT)),
+                "sha256": inventory_file_digest,
+                "entriesSha256": test_inventory["entriesSha256"],
+                "entryCount": test_inventory["entryCount"],
+            },
             "schema": {"path": str(schema.relative_to(ROOT)),
                        "sha256": _sha256_file(schema)},
         },
         "environment": environment,
         "tests": test_results,
+        "testAcceptance": {
+            "inventory": inventory_check,
+            "warnings": warning_check,
+        },
         "steps": steps,
         "producedArtifacts": [{
             "path": results_path.name,
@@ -494,7 +800,7 @@ def _normalised_evidence(evidence: dict[str, Any]) -> bytes:
     policy = evidence.get("normalizationPolicy")
     expected = _normalization_policy()
     if policy != expected:
-        raise ValueError("evidence normalization policy is not the fixed v1 policy")
+        raise ValueError("evidence normalization policy is not the fixed policy")
     value = copy.deepcopy(evidence)
     for pointer in VOLATILE_POINTERS:
         _remove_pointer(value, pointer)
@@ -537,7 +843,11 @@ def compare_evidence(left_arg: str, right_arg: str, output_arg: str) -> int:
     for label, evidence in (("left", left), ("right", right)):
         if evidence.get("schemaVersion") != EVIDENCE_SCHEMA:
             raise ValueError(f"{label} evidence has the wrong schemaVersion")
-        if evidence.get("git", {}).get("dirty") is not False:
+        git = evidence.get("git", {})
+        git_reasons = _git_integrity_reasons(
+            git.get("start", {}), git.get("end", {}))
+        computed_unchanged = git.get("start", {}) == git.get("end", {})
+        if git_reasons or git.get("unchanged") != computed_unchanged:
             raise ValueError(f"{label} evidence is not from a clean worktree")
         if evidence.get("run", {}).get("outcome") != "passed":
             raise ValueError(f"{label} evidence did not pass")
@@ -565,6 +875,52 @@ def compare_evidence(left_arg: str, right_arg: str, output_arg: str) -> int:
     return 0 if equivalent else 1
 
 
+def update_test_inventory() -> int:
+    config = _read_json(CONFIG_PATH)
+    optimization_reasons = _python_optimization_reasons(
+        config["requiredEnvironment"]["pythonOptimizationLevel"])
+    if optimization_reasons:
+        raise ValueError("; ".join(optimization_reasons))
+    env = _sanitized_environment(config)
+    with tempfile.TemporaryDirectory(prefix="ofarm-review-inventory-") as temporary:
+        results_path = Path(temporary) / "kernel-test-results.json"
+        command = [
+            sys.executable, "-m", "pytest", config["paths"]["testRoot"],
+            "--collect-only", "-q", "-p", "no:cacheprovider",
+            "-p", "conformance.review_baseline_pytest",
+            "--review-baseline-results", str(results_path),
+        ]
+        process = subprocess.run(
+            command,
+            cwd=ROOT,
+            env=env,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        if process.returncode != 0 or not results_path.exists():
+            raise ValueError("review baseline inventory collection failed")
+        results = _read_json(results_path)
+    summary = results.get("summary", {})
+    if (results.get("schemaVersion") != "ofarm.review-baseline-pytest-results.v2"
+            or summary.get("collected", 0) <= 0
+            or summary.get("selected") != summary.get("collected")
+            or any(summary.get(field) != 0 for field in (
+                "collectionErrors", "collectionSkipped", "deselected",
+            ))):
+        raise ValueError(
+            "review baseline inventory collection was incomplete or ambiguous")
+    document = _inventory_document(
+        config["paths"]["testRoot"], results["collection"]["collected"])
+    path = ROOT / config["paths"]["testInventory"]
+    _write_json(path, document)
+    print(
+        f"wrote {path.relative_to(ROOT)} with {document['entryCount']} pinned tests"
+    )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -574,10 +930,16 @@ def main(argv: list[str] | None = None) -> int:
     compare.add_argument("left")
     compare.add_argument("right")
     compare.add_argument("--output", required=True)
+    commands.add_parser(
+        "update-inventory",
+        help="explicitly regenerate the committed Kernel test inventory",
+    )
     args = parser.parse_args(argv)
     try:
         if args.command == "run":
             return run_baseline(args.output_dir)
+        if args.command == "update-inventory":
+            return update_test_inventory()
         return compare_evidence(args.left, args.right, args.output)
     except (KeyError, OSError, ValueError, subprocess.CalledProcessError) as exc:
         print(f"review baseline ERROR: {exc}", file=sys.stderr)

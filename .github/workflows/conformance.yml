@@ -41,12 +41,10 @@ jobs:
           .review-venv/bin/python -m pip check
       - name: Complete Kernel baseline run 1
         env:
-          OFARM_PG_DSN: "host=localhost port=5432 dbname=ofarm_kernel_test user=ofarm password=ofarm"
           OFARM_PG_ADMIN_DSN: "host=localhost port=5432 dbname=postgres user=ofarm password=ofarm"
         run: .review-venv/bin/python conformance/run_review_baseline.py run --output-dir .artifacts/review-baseline/run-1
       - name: Complete Kernel baseline run 2
         env:
-          OFARM_PG_DSN: "host=localhost port=5432 dbname=ofarm_kernel_test user=ofarm password=ofarm"
           OFARM_PG_ADMIN_DSN: "host=localhost port=5432 dbname=postgres user=ofarm password=ofarm"
         run: .review-venv/bin/python conformance/run_review_baseline.py run --output-dir .artifacts/review-baseline/run-2
       - name: Prove clean-run equivalence

@@ -17,13 +17,14 @@ from typing import Any
 import pytest
 
 
-SCHEMA_VERSION = "ofarm.review-baseline-pytest-results.v1"
+SCHEMA_VERSION = "ofarm.review-baseline-pytest-results.v2"
 _COLLECTED: list[dict[str, Any]] = []
 _DESELECTED: list[dict[str, Any]] = []
 _SEEN_NODEIDS: set[str] = set()
 _REPORTS: dict[str, list[dict[str, str]]] = {}
 _COLLECTION_ERRORS: list[dict[str, str]] = []
-_WARNINGS: set[tuple[str, str, str, str]] = set()
+_COLLECTION_SKIPS: list[dict[str, str]] = []
+_WARNINGS: list[tuple[str, str, str, str]] = []
 
 
 def pytest_addoption(parser):
@@ -91,6 +92,17 @@ def pytest_collectreport(report):
             "collector": report.nodeid.replace("\\", "/"),
             "outcome": "failed",
         })
+    elif report.skipped:
+        longrepr = getattr(report, "longrepr", None)
+        if isinstance(longrepr, tuple) and len(longrepr) == 3:
+            reason = str(longrepr[2])
+        else:
+            reprcrash = getattr(longrepr, "reprcrash", None)
+            reason = str(getattr(reprcrash, "message", None) or "pytest collection skip")
+        _COLLECTION_SKIPS.append({
+            "collector": report.nodeid.replace("\\", "/"),
+            "reason": reason,
+        })
 
 
 def pytest_runtest_logreport(report):
@@ -114,7 +126,7 @@ def pytest_runtest_logreport(report):
 
 def pytest_warning_recorded(warning_message, when, nodeid, location):
     del location  # absolute site-package paths are deliberately not evidence
-    _WARNINGS.add((
+    _WARNINGS.append((
         (nodeid or "").replace("\\", "/"),
         when,
         warning_message.category.__name__,
@@ -212,6 +224,10 @@ def pytest_sessionfinish(session, exitstatus):
             "collected": _sorted_entries(_COLLECTED),
             "selected": _sorted_entries(selected_entries),
             "deselected": _sorted_entries(_DESELECTED),
+            "skippedCollectors": sorted(
+                _COLLECTION_SKIPS,
+                key=lambda entry: (entry["collector"], entry["reason"]),
+            ),
             "errors": sorted(
                 _COLLECTION_ERRORS,
                 key=lambda entry: (entry["collector"], entry["outcome"]),
@@ -229,6 +245,7 @@ def pytest_sessionfinish(session, exitstatus):
             **counts,
             "skipped": len(skipped),
             "deselected": len(_DESELECTED),
+            "collectionSkipped": len(_COLLECTION_SKIPS),
             "unavailable": len(unavailable),
             "collectionErrors": len(_COLLECTION_ERRORS),
             "warnings": len(warnings),

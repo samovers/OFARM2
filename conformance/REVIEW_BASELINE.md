@@ -23,11 +23,16 @@ about the historical run. Every new envelope records the exact observed pip
 version. CI creates a dedicated `.review-venv`, installs both locks with
 `--require-hashes --only-binary=:all: --no-deps`, runs `pip check`, and rejects
 any installed distribution that is missing, mismatched, or extra.
+The interpreter optimization level is pinned to zero. An optimized parent
+process fails preflight, and `PYTHONOPTIMIZE` is removed from every child
+environment so imported profile-test assertions cannot be stripped.
 
 ## One complete command
 
-In the pinned environment, with `OFARM_PG_DSN` and `OFARM_PG_ADMIN_DSN` set,
-one complete Kernel run is:
+In the pinned environment, set only `OFARM_PG_ADMIN_DSN`. The runner derives
+the fixed `ofarm_kernel_test` Store DSN from that verified connection route,
+so an independently supplied test DSN cannot point tests at another server.
+One complete Kernel run is:
 
 ```bash
 .review-venv/bin/python conformance/run_review_baseline.py run \
@@ -38,32 +43,52 @@ The command always uses the full unfiltered `kernel/tests` root. It therefore
 includes the database integration suites, concurrent-writer/race checks,
 hostile regression cases, malformed-input and fail-closed cases, profile
 engineering bridges, and unit tests. No `-k`, marker, or ambient pytest option
-can narrow the selection. `PYTEST_ADDOPTS`, `PYTEST_PLUGINS`, `PYTHONPATH`, and
-ambient `OFARM_*` values are scrubbed; only the two explicit database DSNs are
-carried forward. Plugin autoload is disabled, and hash seed, time zone, and
-locale are fixed.
+can narrow the selection. `PYTEST_ADDOPTS`, `PYTEST_PLUGINS`,
+`PYTHONOPTIMIZE`, `PYTHONPATH`, and ambient `OFARM_*` values are scrubbed;
+only the explicit admin DSN is accepted, and the Store DSN is derived from it.
+Plugin autoload is disabled, and hash seed, time zone, locale, and optimization
+level are fixed.
 
 The runner emits `kernel-test-results.json` and
 `review-baseline-evidence.json`. The pytest report records:
 
 - every collected and selected node ID;
 - every deselected test;
+- every module-level collection skip, including collector and reason;
 - each callable's real source module and source path, including tests collected
   through root star-import bridges;
 - setup, call, and teardown outcomes;
 - pass, fail, error, skip, xfail, xpass, collection-error, and unavailable
   counts and inventories; and
-- warnings without absolute environment paths or durations.
+- a multiplicity-preserving warning inventory without absolute environment
+  paths or durations.
 
 If the database or an exact tool/dependency pin is unavailable, the command
 still performs collection and emits an honest inventory. It marks the selected
-tests unavailable and exits non-zero. CI accepts only a full run: no skips,
-deselections, unavailable tests, xfails, xpasses, errors, or collection errors.
+tests unavailable and exits non-zero. CI accepts only a full run: no item or
+module-level collection skips, deselections, unavailable tests, xfails,
+xpasses, errors, or collection errors. The warning list must exactly match the
+committed four-field warning inventory.
 
-The envelope also records Git SHA and full dirty-state detection, config and
-lock digests, the SQL-observed PostgreSQL server version, Python and pip
-versions, the exact installed-set digest, schema digest, all test outcomes, step
-outcomes, and produced/verified artifact digests.
+`conformance/review_baseline_test_inventory.json` pins every expected
+`nodeid`, original `sourceModule`, and original `sourcePath`. Every run must
+match that full inventory. Deleting, ignoring, adding, renaming, or changing
+the source attribution of a test fails even when two current runs drift in the
+same way. Intentional suite changes require the explicit maintenance command:
+
+```bash
+.review-venv/bin/python conformance/run_review_baseline.py update-inventory
+```
+
+The generated inventory diff must be reviewed and committed with the test
+change. CI never updates this file automatically.
+
+The envelope records complete Git state both before and after executable
+steps; both samples must be clean and byte-identical in commit, tree, and
+status digest. It also records config, lock and pinned-test-inventory digests,
+the SQL-observed admin and derived test-store PostgreSQL identities, Python,
+pip and optimization levels, the exact installed-set digest, schema digest,
+all test outcomes, step outcomes, and produced/verified artifact digests.
 
 ## Clean-run equivalence
 
@@ -77,8 +102,8 @@ envelopes:
   --output .artifacts/review-baseline/equivalence.json
 ```
 
-The comparator refuses dirty or failing runs. Its fixed v1 policy removes only
-these four volatile JSON pointers:
+The comparator refuses dirty, mutated, or failing runs. Its fixed v2 policy
+removes only these four volatile JSON pointers:
 
 - `/run/startedAt`
 - `/run/finishedAt`
