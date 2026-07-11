@@ -15,9 +15,20 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 LOCK_PATH = ROOT / "kernel" / "runtime_bundle.lock.json"
-LOCK_VERSION = "ofarm.runtime-bundle-component-lock.local.v1"
+LOCK_VERSION = "ofarm.runtime-bundle-component-lock.local.v2"
 JSON_CANONICALIZATION = "OFARM_CANONICAL_JSON_V1"
 RAW_CANONICALIZATION = "EXACT_BYTES_V1"
+GLOBAL_CONTENT_PLACEMENT = "GLOBAL_IMMUTABLE_CONTENT"
+TENANT_CONTENT_PLACEMENT = "TENANT_RUNTIME_SELECTION"
+
+_TENANT_PROFILE_INSTANCE_KINDS = {
+    "ofarm.activeartifactset.v0.1",
+    "ofarm.packactivationset.v0.1",
+    "ofarm.contextsnapshot.v0.1",
+}
+_GLOBAL_PROFILE_INSTANCE_KINDS = {
+    "ofarm.agronomiccodebindingprofile.v0.1",
+}
 
 
 class CatalogError(RuntimeError):
@@ -33,8 +44,28 @@ def _reject_duplicate_keys(pairs):
     return result
 
 
+def _reject_nonfinite_constant(value: str):
+    raise CatalogError(f"non-finite JSON number {value!r} is forbidden")
+
+
 def _json(path: Path) -> dict:
-    value = json.loads(path.read_bytes(), object_pairs_hook=_reject_duplicate_keys)
+    try:
+        text = path.read_bytes().decode("utf-8", errors="strict")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise CatalogError(f"catalog JSON is not strict UTF-8: {path}") from exc
+    if text.startswith("\ufeff"):
+        raise CatalogError(f"catalog JSON must not contain a UTF-8 BOM: {path}")
+    try:
+        value = json.loads(
+            text,
+            object_pairs_hook=_reject_duplicate_keys,
+            parse_constant=_reject_nonfinite_constant,
+        )
+        json.dumps(value, ensure_ascii=False, allow_nan=False).encode("utf-8")
+    except CatalogError:
+        raise
+    except (UnicodeError, ValueError, TypeError) as exc:
+        raise CatalogError(f"catalog JSON is malformed: {path}: {exc}") from exc
     if not isinstance(value, dict):
         raise CatalogError(f"catalog JSON must be an object: {path}")
     return value
@@ -45,7 +76,42 @@ def _canonical_bytes(path: Path, canonicalization: str) -> bytes:
         return path.read_bytes()
     return json.dumps(
         _json(path), sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+        allow_nan=False,
     ).encode("utf-8")
+
+
+def _placement(role: str, canonicalization: str, canonical: bytes) -> str:
+    if role in {
+            "PROFILE_DESCRIPTOR", "QUERY_PLAN", "REFERENCE_DATA", "TENANT_BINDING"}:
+        if role == "TENANT_BINDING":
+            payload = json.loads(canonical, object_pairs_hook=_reject_duplicate_keys)
+            if (payload.get("schemaVersion") !=
+                    "ofarm.runtime-tenant-binding.local.v1"
+                    or not isinstance(payload.get("tenantRef"), str)
+                    or not payload["tenantRef"]):
+                raise CatalogError("runtime tenant binding is malformed")
+        return TENANT_CONTENT_PLACEMENT
+    if role not in {"PROFILE_INSTANCE", "ACTIVE_MANIFEST"}:
+        return GLOBAL_CONTENT_PLACEMENT
+    if canonicalization != JSON_CANONICALIZATION:
+        raise CatalogError(f"placement-bearing role {role!r} must be canonical JSON")
+    try:
+        payload = json.loads(canonical, object_pairs_hook=_reject_duplicate_keys)
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise CatalogError(f"placement-bearing role {role!r} is malformed") from exc
+    kind = payload.get("schemaVersion") if isinstance(payload, dict) else None
+    if role == "ACTIVE_MANIFEST":
+        if (kind != "ofarm.capabilitymanifest.v0.1"
+                or (payload.get("deploymentScope") or {}).get("scopeType") != "TENANT"):
+            raise CatalogError(
+                "the active capability manifest must remain explicit tenant state")
+        return TENANT_CONTENT_PLACEMENT
+    if kind in _TENANT_PROFILE_INSTANCE_KINDS:
+        return TENANT_CONTENT_PLACEMENT
+    if kind in _GLOBAL_PROFILE_INSTANCE_KINDS:
+        return GLOBAL_CONTENT_PLACEMENT
+    raise CatalogError(
+        f"profile instance kind {kind!r} has no reviewed RuntimeBundle placement")
 
 
 def _profile_instance_ref(payload: dict, path: Path) -> str:
@@ -77,6 +143,7 @@ def build_catalog() -> dict:
             "path": relative.as_posix(),
             "canonicalization": canonicalization,
             "sha256": "sha256:" + hashlib.sha256(canonical).hexdigest(),
+            "placement": _placement(role, canonicalization, canonical),
         })
 
     descriptor_path = Path("profile_si_ffs/runtime_profile_descriptor.json")
@@ -87,6 +154,10 @@ def build_catalog() -> dict:
     policy_path = descriptor_path.parent / descriptor["evidencePolicyPath"]
     policy = _json(ROOT / policy_path)
     add("PROFILE_POLICY", policy["policyId"], policy_path,
+        JSON_CANONICALIZATION)
+
+    tenant_binding_path = Path("profile_si_ffs/runtime_tenant_binding.json")
+    add("TENANT_BINDING", "tenant-binding:active", tenant_binding_path,
         JSON_CANONICALIZATION)
 
     for filename in descriptor["profileInstanceFiles"]:
@@ -139,6 +210,8 @@ def build_catalog() -> dict:
         relative = path.relative_to(ROOT)
         if "tests" in relative.parts or "__pycache__" in relative.parts:
             continue
+        if relative == Path("kernel/demo.py"):
+            continue
         add("RUNTIME_CODE", f"python:{relative.as_posix()}", relative,
             RAW_CANONICALIZATION)
     add("RUNTIME_SCHEMA", "sql:kernel/schema.sql", Path("kernel/schema.sql"),
@@ -161,9 +234,15 @@ def build_catalog() -> dict:
         Path(".python-version"),
         Path("requirements-review-baseline.lock"),
         Path("requirements-review-pip.lock"),
+        Path("conformance/review_baseline_config.json"),
     ):
-        add("RUNTIME_ENVIRONMENT", f"environment:{relative.as_posix()}", relative,
-            RAW_CANONICALIZATION)
+        add(
+            "RUNTIME_ENVIRONMENT",
+            f"environment:{relative.as_posix()}",
+            relative,
+            JSON_CANONICALIZATION if relative.suffix == ".json"
+            else RAW_CANONICALIZATION,
+        )
 
     for filename in descriptor["profileInstanceFiles"]:
         snapshot_path = descriptor_path.parent / filename
@@ -190,7 +269,8 @@ def build_catalog() -> dict:
 
 
 def canonical_lock_bytes(document: dict) -> bytes:
-    return (json.dumps(document, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+    return (json.dumps(
+        document, indent=2, ensure_ascii=False, allow_nan=False) + "\n").encode("utf-8")
 
 
 def verify_lock_bytes(actual: bytes, expected_document: dict) -> None:

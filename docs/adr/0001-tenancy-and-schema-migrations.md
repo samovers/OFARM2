@@ -117,7 +117,7 @@ and tenant-qualified keys.
 
 | Relation | Classification | Frozen target rule |
 |---|---|---|
-| kernel_record | Tenant-owned | Primary identity is (tenant_id, record_id). There is no tenant default. Every emitted record carries its governed write-batch identity. Package or global content may not be mixed into this relation. |
+| kernel_record | Tenant-owned | Primary identity is (tenant_id, record_id). There is no tenant default. Every emitted record carries its governed write-batch identity. Tenant-neutral package/global content may not be mixed into this relation; a package-authored tenant-scoped instance enters only as a governed row for its exact tenant. |
 | kernel_edge | Tenant-owned | The edge, source, and destination share tenant_id. Both endpoints have composite foreign keys. The edge carries the batch that emitted it. Promotion reachability additionally requires edge, trace, and emitted record to share one batch. |
 | kernel_gate_log | Operational metadata, tenant-scoped and durable | Every entry carries tenant_id, batch identity, and request identity. It remains append-only audit evidence and is not disposable logging. |
 | kernel_idempotency | Operational metadata, tenant-scoped and durable | Its unique command identity is (tenant_id, authenticated_principal_ref, governed_operation, caller_key). Its durable result reference stays in the same tenant. |
@@ -127,8 +127,12 @@ and tenant-qualified keys.
 | runtime_trace | Operational metadata, tenant-scoped and durable | Primary identity is (tenant_id, trace_id). Every trace carries its write-batch identity, remains append-only, and is not treated as a disposable cache. |
 | export_artifact | Tenant-owned | Primary identity is (tenant_id, artifact_ref). The metadata/output-receipt reference is same-tenant. Document content is never placed in globally shared storage. |
 
-There is no globally governed database relation in the current schema. Package
-schemas and other repository files are global inputs, not database relations.
+At the #169 review baseline there was no globally governed content relation in
+the prototype schema. #171 adds one such target carrier,
+`runtime_content_blob`, solely for immutable tenant-neutral bytes. The
+tenant-specific RuntimeBundle receipt and membership relations remain
+tenant-owned; their placement is frozen below and #174 must reproduce it in
+the initial migration rather than preserve the prototype's unqualified tables.
 
 ### Required support relations
 
@@ -139,16 +143,22 @@ schemas and other repository files are global inputs, not database relations.
 | principal_binding_lifecycle | Globally governed append-only authorization authority | A digest-chained stream of ACTIVATE, REVOKE, EXPIRE, and SUPERSEDE acts names immutable binding versions, the prior lifecycle head, effective and decision data, accountable control identity, and reason. These acts, together with immutable versions, are the sole source for current and historical binding state. |
 | principal_binding_current | Optional derived/disposable global control projection and reservation | A unique (equality_policy, issuer, subject) row points to the computed active version and lifecycle head, or records the computed inactive state. It serializes transitions and accelerates lookup, but is rebuildable and never authoritative. |
 | tenant_binding_context | Protected disposable transaction operational metadata | An UNLOGGED migration-owned relation stores the one-use challenge and verified TenantBinding for exactly one database-derived backend identity and full xid8. Exact backend-start/full-transaction matching makes a physically retained row unusable after commit, rollback, backend restart, or pool reuse. Only hardened functions may read or write it; the application role has no table privileges. |
+| runtime_content_blob | Globally governed immutable tenant-neutral content | Stores only exact tenant-neutral bytes under a closed content class and canonicalization identity. Primary identity is the full content digest; an equal digest is reusable only after exact class, canonicalization, byte-length, and byte equality. It has no tenant, Party, farm, activation, selection, batch, knowledge, bundle, or component back-reference. |
+| runtime_tenant_content_blob | Tenant-owned immutable RuntimeBundle content | Primary identity is (tenant_id, content_digest). It retains exact canonical bytes for tenant-scoped activation/context instances and selected tenant reference data. Every key and reference is tenant-qualified, forced RLS applies, and an equal digest within one tenant is reusable only after exact class, canonicalization, byte-length, and byte equality. Bytes are never promoted or deduplicated into the global carrier merely because another tenant has the same digest. |
+| runtime_bundle | Tenant-owned immutable runtime-selection receipt | Primary identity is (tenant_id, bundle_digest). Its canonical receipt binds that tenant, the exact closed component inventory, every global content identity, and every tenant-scoped active-instance/reference-selection identity and digest. It carries the governed batch that created it. It is append-only, forced-RLS protected, and cannot be selected before trusted tenant binding. |
+| runtime_bundle_component | Tenant-owned immutable RuntimeBundle membership | Primary identity is (tenant_id, bundle_digest, component_role, logical_ref). A closed storage-lane discriminator and exactly-one target bind each member either to one global `runtime_content_blob` digest or to one same-tenant `runtime_tenant_content_blob` composite key; unverified polymorphic text is forbidden. Membership is exact, append-only, forced-RLS protected, and cannot point into another tenant. |
 | operational_security_event | Database-global operational security metadata, explicitly non-tenant | Append-only, bounded pre-tenant failure events plus audit-access, retention, and declared-gap maintenance events for this lane. It carries no tenant_id, tenant_ref, Party/farm/role identity, governed batch, knowledge position, or request-supplied attribution. It lives only in the separately provisioned audit PostgreSQL service's protected `ofarm_security` schema and is never read as tenant history. |
 | operational_security_quota_bucket | Disposable non-tenant operational security control state | One fixed database-time bucket per provisioned producer/component records accepted and overflow counts plus marker state. Only hardened audit functions mutate it. It contains no request, tenant, principal, correlation, or evidence data, cannot authorize anything, and is deleted after its bucket is closed and the corresponding overflow marker commits. |
 | schema_migration | Database-global operational metadata | Append-only ledger of version, filename, SHA-256, application/release identity, and applied time. Application access is read-only for readiness. |
 | governed_write_batch | Tenant-owned | Primary identity is (tenant_id, batch_id). It anchors the transaction's command identity and the records, edges, traces, gate entries, and receipts emitted by that command. |
 | kernel_record_reference | Tenant-owned relational enforcement carrier | Normalizes governed references extracted from immutable JSONB payloads without changing those payloads. Owner and tenant targets use composite tenant keys; global-content targets use a distinct constrained lane. |
 
-Any later relation must be classified before its migration is accepted. A future
-RuntimeBundle or other shared-content relation may be globally governed only if
-its bytes are immutable and content-addressed, it contains no tenant truth, and
-identifier equality verifies the canonical bytes.
+Any later relation must be classified before its migration is accepted. No
+additional RuntimeBundle relation or other content carrier may be globally
+governed merely because it is immutable or content-addressed. Global placement
+also requires an accepted tenant-neutral content class, no tenant truth or
+tenant back-reference, exact canonical-byte verification, and a release-owned
+write path unavailable to tenant application roles.
 
 ### Pre-tenant operational security-audit lane
 
@@ -378,24 +388,116 @@ an explicit logical-retention and physical-erasure posture. Audit read,
 break-glass export, role-grant, purge, store-loss, and empty-recreate tests are
 required before operational readiness.
 
-### RuntimeBundle placement prerequisite
+### RuntimeBundle placement and equality
 
-#171 must land before #174 freezes the initial migration. It must classify every
-currently bootstrapped descriptor, policy, profile instance, validator/adapter,
-query/output plan, and selected reference-source identity as either:
+#171 lands before #174 freezes the initial migration. The accepted design has
+one one-way global content carrier and a tenant-owned RuntimeBundle receipt:
 
-- immutable globally governed RuntimeBundle content in the content carrier
-  selected by #171; or
-- explicit tenant-owned selection, activation, or context state that references
-  the exact RuntimeBundle digest.
+```text
+tenant runtime_bundle
+        |
+        v
+tenant runtime_bundle_component
+        |-- GLOBAL target --> runtime_content_blob
+        |                     (tenant-neutral exact bytes only)
+        |
+        `-- TENANT target --> runtime_tenant_content_blob
+```
 
-Immutable global package/reference bytes may not remain mixed into the
-tenant-owned canonical record relation merely because the prototype bootstraps
-them there today. Conversely, tenant activation or context state may not be
-silently relabelled global. #171 must publish the placement map and equality
-rules before #174 cuts 0001; #174 refuses to guess. This prerequisite changes no
-manifest, active artifact set, profile activation, contract, or capability
-claim.
+The target arrows are references from tenant membership rows. The global blob relation
+never stores tenant_id, bundle membership, a reverse reference, or tenant truth.
+Deleting or changing either global or tenant content is forbidden; a bundle is
+replaced only by appending a new tenant bundle and selecting it through a later
+governed tenant batch.
+
+The placement map is:
+
+| Content or state | Placement | Binding rule |
+|---|---|---|
+| Profile candidate metadata that does not select tenant state, evidence policy, contracts and contract manifest, Kernel/runtime/validator/adapter/parser/output code, query specifications, runtime schema/environment/catalog inputs, and tenant-neutral AgronomicCodeBindingProfile bytes | Global `runtime_content_blob` | The reviewed release catalog classifies each item as tenant-neutral and pins its exact canonicalization, bytes, length, and full digest. Candidate metadata may describe packages but cannot select a tenant-local activation, context, manifest, route, plan, or reference-data row. |
+| Tenant-neutral authored ReferenceSnapshot metadata and genuinely global retained reference-source bytes | Global `runtime_content_blob` | Global placement is allowed only when neither the metadata nor retained bytes contain tenant truth. A tenant bundle names the exact global content identities it selects; the global rows never point back to the tenant or bundle. |
+| Active runtime descriptor, tenant binding, route-selection preimage, selection-bearing query plans, and package PackActivationSet, ActiveArtifactSet, or ContextSnapshot instances | Tenant-owned `runtime_tenant_content_blob`; governed PAS/AAS and derived ContextSnapshots also use tenant `kernel_record` | Package files are fixtures/templates, not global activation authority. The active descriptor and plans currently contain tenant selection pointers, so they stay tenant-side. A route preimage pins registry/package/route status, farm, interval, and target fields but excludes the completed bundle digest to avoid a hash cycle; every supplied route must then receipt that completed digest exactly. |
+| A Capability Manifest or any other authored instance whose deployment or target scope is `TENANT` | Tenant-owned state | Its package presence does not make it global and does not activate or raise a capability. Selection pins its exact tenant record identity/payload digest and tenant bundle digest. |
+| Imported or selected tenant ReferenceSnapshot state and canonical bytes derived from `reference_snapshot_data` | Tenant-owned `kernel_record`/selection state and `runtime_tenant_content_blob` | The selected bytes, data family, source identity, payload digest, and owning tenant are fixed in the bundle. Derived bytes are never copied into `runtime_content_blob`; #185 still owns durable source-byte closure before the separate cache may be treated as rebuildable. |
+| Farm, Party, route, activation, selection, ContextSnapshot, request, output, or other tenant truth | Tenant relations only | It is never global bundle content. Every durable consumer uses the trusted tenant key and pins the exact tenant bundle digest in its governed batch. |
+
+The current package's active runtime descriptor, selection-bearing query plans,
+tenant binding, PackActivationSet, ActiveArtifactSet, tenant-scoped Capability
+Manifest, and ContextSnapshot therefore cannot be global bundle members. They
+may remain source fixtures without becoming cross-tenant startup authority.
+The tenant-neutral code-binding profile and tenant-neutral reference metadata
+may be global content. A descriptor or process-global cache cannot use
+`tenant_ref`, a demo default, or rows from `kernel_record` to construct a global
+content identity.
+
+`runtime_bundle` and `runtime_bundle_component` are tenant-owned even though
+their digests are content-addressed. The #171 prototype, which necessarily
+precedes the tenant registry and TenantBinding delivered by #174, keys these
+relations by the exact external `tenant_ref` and includes that value in the
+canonical receipt. This is a transitional relational key, not authority and not
+permission to infer a tenant. #174 replaces it with the trusted internal
+tenant_id and pins the immutable tenant-registry digest during the one-time
+migration; no runtime fallback from tenant_id to textual tenant_ref is allowed.
+
+The target canonical bundle document contains its internal tenant_id, a closed
+schema/canonicalization version, and the complete
+component inventory sorted by exact (component_role, logical_ref) bytes. Each
+entry carries its `GLOBAL` or `TENANT` storage lane, canonicalization identity,
+full content digest, and byte length. It also binds the exact tenant record and
+payload digests for active instances and reference selections. Missing, extra,
+duplicate, cross-tenant, wrong-lane, or unequal entries refuse the entire
+atomic install. The receipt, its component rows, and any new tenant content
+blobs commit in one governed tenant batch; a partial bundle is never visible.
+
+V1 supports exactly two byte policies:
+
+- `OFARM_CANONICAL_JSON_V1` parses strict UTF-8 JSON with duplicate-key
+  rejection and emits the one reviewed canonical JSON byte representation; and
+- `EXACT_BYTES_V1` preserves every input byte without text decoding or
+  normalization.
+
+Every content and bundle digest is lowercase `sha256:` followed by 64
+hexadecimal digits and covers the exact bytes named by its policy. Digest
+equality alone is insufficient. Reuse of `runtime_content_blob` compares the
+closed content class, canonicalization, byte length, and exact bytes; reuse of
+`runtime_tenant_content_blob` compares the same fields inside the same tenant.
+The same digest in two tenants grants no sharing or cross-tenant reference.
+Bundle reuse compares the canonical receipt bytes and the exact relational
+component set. A mismatch under an existing digest is a collision or corrupt
+identity and fails closed.
+
+Component roles are a closed migration-owned vocabulary. `logical_ref` and any
+repository provenance use bounded ASCII `RUNTIME_COMPONENT_REF_V1` bytes. The
+#171 prototype pins and requires the PostgreSQL libc (`c`) locale provider in
+the bundle; #174 additionally declares the final identity domains and indexes
+with `COLLATE "C"`. Neither value is a content identity without tenant_id,
+bundle_digest, role, storage lane, and content digest. Provenance is bounded, relative,
+digest-bound, and never lookup or authorization authority. Truncated hashes,
+path-only identity, implicit normalization, delimiter-built composite keys,
+filesystem fallback, and last-writer-wins replacement are forbidden.
+
+Startup verifies the release-owned global catalog, exact interpreter/process
+environment, and a transaction-local PostgreSQL observation covering exact
+server build, encoding, locale/collation identity, timezone, semantic session
+settings, search path, roles, and extensions. It may cache defensive
+immutable views of those verified bytes without selecting a tenant. Only after
+trusted tenant binding may the runtime load `(tenant_id, bundle_digest)` through
+forced RLS. Cold load reconstructs from the persisted canonical receipt,
+membership rows, and exact global/tenant blob bytes; it rechecks every digest,
+length, canonicalization, storage lane, tenant key, and inventory equality and
+never reopens repository paths. The cache key is `(tenant_id, bundle_digest)`,
+is immutable for that bundle lifetime, and cannot satisfy another tenant. A
+queued operation or acceptance under a different tenant bundle refuses unless
+a separately governed migration operation is later defined.
+
+The global content installer is release-owned and unavailable to application,
+worker, tenant, and support roles. It accepts only catalog-classified
+tenant-neutral classes and exact bytes. Tenant bundle creation happens only
+after binding through the tenant write path. #174 must express these relations,
+domains, one-way foreign keys, forced RLS policies, grants, and atomic insertion
+constraints in 0001; it must not copy the prototype's globally unqualified
+bundle receipt tables. This placement changes no manifest, active artifact set,
+profile activation, contract, or capability claim.
 
 ## Tenant identity and trusted context
 
@@ -634,8 +736,11 @@ application role.
 
 ## Identifier and uniqueness namespaces
 
-V1 uses two closed equality policies. They validate or reject input; neither
-rewrites it.
+V1 uses closed, named equality policies. They validate or reject input; none
+rewrites it. `OIDC_EXACT_UTF8_V1` and `OFARM_ASCII_ID_V1` govern request and
+business identifiers. `RUNTIME_COMPONENT_REF_V1` is a release-only policy for
+the wider exact ASCII component/path vocabulary and is never accepted as a
+tenant-local identifier.
 
 | Namespace | Policy and canonical bytes | V1 grammar and bound | Database equality |
 |---|---|---|---|
@@ -644,6 +749,7 @@ rewrites it.
 | External `tenant_ref` | `OFARM_ASCII_ID_V1`: the authored ASCII bytes | 1-255 bytes matching `[A-Za-z0-9._:-]+` | Exact bytes |
 | Tenant-local authored identifiers, including record, Party, farm, scope, request, trace, batch, artifact, snapshot, materialization, and reference keys | `OFARM_ASCII_ID_V1`: the contract-validated authored ASCII bytes | 1-255 bytes matching `[A-Za-z0-9._:-]+`; a narrower contract grammar still applies where defined | Exact bytes inside the tenant-qualified composite key |
 | Idempotency `caller_key` | `OFARM_ASCII_ID_V1`: the contract-validated authored ASCII bytes | 1-255 bytes matching `[A-Za-z0-9._:-]+` | Exact bytes inside the full idempotency identity; no transport-layer rewriting |
+| RuntimeBundle component role, logical reference, and repository provenance | `RUNTIME_COMPONENT_REF_V1`: the release-catalog ASCII bytes exactly as authored | Role is one closed enum value. Logical reference and relative POSIX provenance path are 1-1024 bytes from `[A-Za-z0-9._:/#-]+`; no whitespace, control, NUL, backslash, absolute path, empty path segment, or `.`/`..` path segment | Exact bytes under `COLLATE "C"`; identity remains the full tenant/bundle/role/lane/logical-ref/content-digest tuple, never the path alone |
 | Principal lifecycle stream and current reservation | Separate equality-policy, issuer, and subject columns; digest input uses tag plus unsigned length-prefixed field bytes | Exactly the issuer/subject rules above | One composite exact-byte key; delimiter concatenation and digest-only equality are forbidden |
 
 PostgreSQL tenant storage is provisioned with `server_encoding=UTF8`.
@@ -776,13 +882,15 @@ ADR and explicit governed delivery semantics, such as a frozen copy and receipt.
 It may not be introduced as a generic edge or an unqualified Party reference.
 
 Tenant data may reference immutable globally governed content, such as an exact
-contract or RuntimeBundle digest. Global content never refers back to tenant
-rows, and the application cannot mutate it. The globally governed immutable
-principal-binding versions are the sole initial exception: they form a
-protected authorization bridge with an explicit composite target-Party foreign
-key, not shared content and not a general cross-tenant query path. Lifecycle
-acts and the current projection name those versions but add no second tenant-
-truth path.
+contract or tenant-neutral component digest, only through an accepted global
+lane. It references a RuntimeBundle through the same-tenant composite
+`(tenant_id, bundle_digest)` key; a bundle digest is not a global target. Global
+content never refers back to tenant rows, and the application cannot mutate it.
+The globally governed immutable principal-binding versions are the sole initial
+exception: they form a protected authorization bridge with an explicit
+composite target-Party foreign key, not shared content and not a general cross-
+tenant query path. Lifecycle acts and the current projection name those
+versions but add no second tenant-truth path.
 
 ## Database roles and row-level security
 
@@ -947,6 +1055,12 @@ deployment, #174 creates hardened `0001_initial.sql` migrations for both. The
 tenant migration waits for #171's reviewed RuntimeBundle placement map; the
 audit migration contains only the two classified audit relations, closed
 constants/checks/functions, roles/grants, and its own ledger/readiness surface.
+The tenant migration creates global `runtime_content_blob` with no tenant
+back-reference and creates `runtime_tenant_content_blob`, `runtime_bundle`, and
+`runtime_bundle_component` as tenant-qualified forced-RLS relations. It uses
+separate exact foreign-key lanes from tenant component membership to global or
+same-tenant content and gives the global installer and tenant bundle writer no
+interchangeable capability.
 #174 may progress the neutral carrier and non-semantic isolation work, but the
 tenant 0001 deliberately supplies only the neutral carrier and settled
 structural isolation constraints. #174 can close that database-primitives
@@ -1089,7 +1203,7 @@ accidental unqualified queries and direct SQL under the application role.
 | Cross-tenant idempotency replay or uniqueness existence oracle | Tenant/principal/operation command namespace and tenant-prefixed unique indexes. |
 | Advisory-lock collision, raw session lock, attacker-selected key, unlock, or migration-lock attempt | Raw advisory functions are denied; protected no-key wrappers derive disjoint keys and acquire transaction locks only. |
 | Materialization, dependency, cache, trace, gate-log, bound error, or frozen-output leakage | Tenant qualification and RLS apply regardless of authoritative status; pre-tenant errors use only the protected non-tenant audit lane, and readiness exposes no tenant or security-event data. |
-| Mutation, substitution, or tenant-table mixing of shared global content | #171 placement is prerequisite to 0001; application read-only privileges plus content digest and canonical-byte equality verification apply. |
+| Mutation, substitution, tenant-table mixing of tenant-neutral global content, or global placement of tenant RuntimeBundle state | #171 placement is prerequisite to 0001; the release-owned global installer, one-way membership lanes, tenant-qualified bundle relations, content digest, and canonical-byte equality verification apply. |
 | Concurrent, partial, reordered, missing, edited, future, or ledgerless non-empty migration history | Global migration lock, transactional application, immutable checksums, exact readiness, catalog-emptiness proof, and fail-closed dirty detection. |
 | Database administrator, migrator, backup, or trusted-binder compromise | Explicitly outside RLS; separate credentials, release controls, audit, and backup governance are required operational controls. |
 
@@ -1184,6 +1298,45 @@ PostgreSQL roles and real ASGI/application topology, not mocks.
    initially INACTIVE Party, altered Party record/schema/payload digest, or
    mutated registry field; every bind refuses and no unsupported eligibility
    transition is exposed.
+
+### RuntimeBundle placement and equality tests
+
+1. Build the reviewed global catalog twice and prove the ordered content
+   classes, canonical bytes, lengths, and full digests are identical. Mutate,
+   remove, duplicate, or add any descriptor, policy, contract, code,
+   validator/adapter/parser, query/plan/output, code-binding, or tenant-neutral
+   reference input; startup refuses the stale catalog before serving traffic.
+2. Try to install the package tenant-scoped PackActivationSet,
+   ActiveArtifactSet, Capability Manifest, ContextSnapshot, or tenant-derived
+   reference data through the global installer. Each attempt refuses and
+   leaves `runtime_content_blob` unchanged. Direct global-blob DML fails under
+   every application, worker, tenant, support, and readiness role.
+3. For tenants A and B, install equal and unequal tenant component bytes. Prove
+   every tenant blob, bundle, and component key starts with tenant_id, forced
+   RLS hides the other tenant, an equal cross-tenant digest grants no sharing,
+   and a component cannot target another tenant's blob or bundle.
+4. Reuse a global content digest, tenant content digest, and tenant bundle
+   digest with one-at-a-time changes to class, canonicalization, bytes, length,
+   receipt JSON, storage lane, role, logical ref, or relational inventory.
+   Exact replay is a no-op; every unequal reuse refuses atomically.
+5. Supply malformed UTF-8, duplicate JSON keys, non-canonical JSON, an unknown
+   canonicalization, truncated/uppercase/non-hex digests, path traversal,
+   absolute paths, duplicate component identities, and missing/extra rows.
+   Installation and cold load fail closed without a partial receipt.
+6. Build a tenant bundle from the reviewed global identities plus that
+   tenant's exact active-instance, manifest, ContextSnapshot, ReferenceSnapshot
+   selection, and `reference_snapshot_data` bytes. Alter any global identity,
+   tenant record/payload digest, source identity, data family, or retained byte;
+   the bundle digest changes and acceptance under the old bundle refuses.
+7. Cold-load after deleting process caches and making repository paths
+   unavailable. Reconstruction succeeds only from the exact persisted receipt,
+   membership, and blob bytes. Filesystem mutation, tenant-row mutation,
+   current selection drift, or a cache keyed only by bundle digest cannot alter
+   or satisfy `(tenant_id, bundle_digest)`.
+8. Cross a queue or retry boundary after the tenant selects a different bundle.
+   The old work refuses unless its exact tenant bundle remains the explicitly
+   governed basis; no descriptor default, demo tenant, latest row, or automatic
+   migration substitutes the new bundle.
 
 ### Pre-tenant operational security audit
 
@@ -1496,9 +1649,11 @@ tenancy and migration tests until the dependent tickets land.
 - #174 follows #168, #169, and #171 and is independently closeable before #172
   and #173. It supplies the one-time provisioning specification, exact role
   attributes and grants, immutable tenant/audit migration baselines, equality
-  domains/collations, immutable registry and insert-only registrar, principal
-  storage, NOLOGIN BYPASSRLS binder, challenge/context/current-tenant functions,
-  forced RLS,
+  domains/collations, the release-owned tenant-neutral global content carrier,
+  tenant-qualified RuntimeBundle content/receipt/membership relations and
+  one-way content foreign keys, immutable registry and insert-only registrar,
+  principal storage, NOLOGIN BYPASSRLS binder,
+  challenge/context/current-tenant functions, forced RLS,
   composite keys, the neutral reference carrier and settled structural graph
   constraints, protected lock wrappers, separately bounded audit
   service/relations, producer LOGIN/session map/reason allowlist, hardened
@@ -1516,9 +1671,11 @@ tenancy and migration tests until the dependent tickets land.
   and #174 storage; those tickets do not gain that ownership by reference.
 - #176 depends on #192 for this boundary and must not reuse a tenant relation,
   infer a tenant, or claim the lane exists before #192 lands.
-- #171 is a prerequisite to #174: it supplies immutable RuntimeBundle content,
-  equality verification, and the global-versus-tenant placement map required
-  before 0001 is frozen.
+- #171 is a prerequisite to #174: it supplies the tenant-neutral global content
+  catalog, tenant RuntimeBundle receipt and component model, exact-byte
+  equality/cold-load verification, and the one-way global-versus-tenant
+  placement map required before 0001 is frozen. It does not turn package
+  tenant fixtures into global activation authority.
 - #177 completes the within-tenant sharing and output-authorization gate.
 - #178 implements content-bound, result-complete command idempotency inside the
   exact `OFARM_ASCII_ID_V1` caller-key namespace frozen here and exposes the
@@ -1531,8 +1688,10 @@ tenancy and migration tests until the dependent tickets land.
   import design. It does not block #174's safe negative V1 posture, but it
   blocks destructive migrations, recovery promotion, and recovery-readiness
   claims.
-- #185 must make scheduled reference source bytes durable before their parsed
-  data can honestly be treated as disposable cache.
+- #185 must make scheduled reference source bytes durable before
+  `reference_snapshot_data` can honestly be treated as disposable cache.
+  Exact selected derived bytes retained in `runtime_tenant_content_blob` remain
+  tenant-owned reconstruction inputs and never become global content.
 
 No implementation ticket may claim that closing these persistence mechanics
 changes OFARM law, activates a profile, or proves a higher capability.
@@ -1550,11 +1709,21 @@ changes OFARM law, activates a profile, or proves a higher capability.
 | Startup verifies schema and performs no opportunistic DDL | Startup, readiness, compatibility, and rollback |
 | Threat model and adversarial pool/join verification | Threat model; Executable adversarial verification plan |
 
-## Validation for this documentation decision
+## Validation for this architecture decision
 
-- Compare the nine CREATE TABLE declarations in kernel/schema.sql with the
-  current-relation inventory above; each must be classified exactly once.
+- Preserve the nine-relation #169 prototype inventory above, then verify the
+  #171 target map adds exactly `runtime_content_blob`,
+  `runtime_tenant_content_blob`, `runtime_bundle`, and
+  `runtime_bundle_component`, with only the first globally governed.
+- Verify the initial-migration design gives every tenant RuntimeBundle relation
+  a tenant-leading key and forced RLS, gives membership exactly one global or
+  same-tenant content target, and gives global content no tenant back-reference.
+- Verify every current package/runtime input appears exactly once in the
+  placement map and that tenant-scoped PackActivationSet, ActiveArtifactSet,
+  Capability Manifest, ContextSnapshot, and derived reference bytes are absent
+  from the global catalog.
 - Verify every acceptance criterion maps to a section in the traceability table.
 - Run the package contract check and profile extraction-consistency check.
 - Run the repository whitespace/diff check.
-- Confirm the change contains documentation only.
+- Confirm the implementation changes neither manifests nor active artifact sets,
+  activates no profile, claims no capability, and does not relabel SI as RS.

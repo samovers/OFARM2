@@ -18,9 +18,11 @@ P2 closes the GERK import + attribute-resolution obligation only, NOT the
 geometry / G7 extent-carrier closure.
 
 The shipped RuntimeBundle contains GERK ReferenceSnapshot provenance metadata
-only: it retains neither the archive nor parsed parcel data, so it exposes no
-shipped GERK lookup. Resolution becomes available only in a future bundle that
-selects governed retained data bytes with their full digest.
+only. Its `archive:` and `surface:` values are closed non-content locators, not
+claims that archive bytes were selected; it retains neither the archive nor
+parsed parcel data, so it exposes no shipped GERK lookup. Resolution becomes
+available only in a future bundle that selects governed retained data bytes
+with their full digest.
 
 Claim limits / posture: an imported open layer reflects GERK state at the last collective
 subsidy application; it carries existence, geometry (as a shapefile), area, and
@@ -42,8 +44,13 @@ from ... import config
 from ...adapters import ImportRunner, ParseResult
 from ...context import GERK_SNAPSHOT_PREFIX
 from ...contracts import sha256_of
-from ...runtime_bundle import (RuntimeBundleError, require_store_runtime_bundle,
-                               sha256_bytes)
+from ...runtime_bundle import (
+    RuntimeBundleError,
+    _copy_runtime_cache_value,
+    _freeze_runtime_cache,
+    require_store_runtime_bundle,
+    sha256_bytes,
+)
 
 # GERK scheme constants (SI-specific). The parcel identity is the GERK-PID; the
 # layer supplies area + use code (RABA_ID / OPIS_RABE). Values mirror the shipped
@@ -296,16 +303,42 @@ class GerkLayer:
     mechanism that consumes it remain OPEN (the G7 ticket). It also backs Field
     identity existence (G1)."""
 
+    def __setattr__(self, name, value):
+        if (getattr(self, "_frozen", False)
+                and name in {
+                    "runtime_bundle", "_by_snapshot", "_unavailable_snapshot_refs",
+                    "_frozen"}):
+            raise AttributeError("GerkLayer runtime composition is immutable")
+        object.__setattr__(self, name, value)
+
     def __init__(self, *, runtime_bundle=None):
         self.runtime_bundle = runtime_bundle
         self._by_snapshot: dict[str, dict] = {}
         self._unavailable_snapshot_refs: set[str] = set()
         self._frozen = False
+        if runtime_bundle is not None:
+            self._load_runtime_bundle_bytes()
+            self.freeze()
+
+    def _load_runtime_bundle_bytes(self) -> None:
+        for reference in self.runtime_bundle.selected_references:
+            sid = reference.snapshot_ref
+            if not (sid == GERK_SNAPSHOT_PREFIX
+                    or sid.startswith(GERK_SNAPSHOT_PREFIX + ".")):
+                continue
+            if reference.data_family != GERK_DATA_FAMILY:
+                self._unavailable_snapshot_refs.add(sid)
+                continue
+            self.register_artifact(
+                sid,
+                self.runtime_bundle.reference_data_payload(
+                    sid, GERK_DATA_FAMILY),
+            )
 
     def register_artifact(self, snapshot_id: str, artifact: dict) -> None:
         if self._frozen:
             raise RuntimeError("GerkLayer is immutable for the RuntimeBundle lifetime")
-        features = artifact.get("features", [])
+        features = copy.deepcopy(artifact.get("features", []))
         # defense-in-depth: import_gerk_snapshot already refuses a layer with a
         # conflicting duplicate PID, so store-loaded data is conflict-free — but
         # never build a silent last-wins lookup from a direct/raw call either.
@@ -316,29 +349,25 @@ class GerkLayer:
                 "build a last-wins lookup (a governed import would have refused this)")
         self._by_snapshot[snapshot_id] = {f["gerkPid"]: f for f in features if f.get("gerkPid")}
 
+    def freeze(self) -> None:
+        """End construction and recursively freeze retained lookup state."""
+        if self._frozen:
+            return
+        object.__setattr__(self, "_by_snapshot", _freeze_runtime_cache(
+            self._by_snapshot))
+        object.__setattr__(self, "_unavailable_snapshot_refs",
+                           frozenset(self._unavailable_snapshot_refs))
+        object.__setattr__(self, "_frozen", True)
+
     def load_from_store(self, store) -> None:
         """Load store-backed GERK parcels persisted by a governed import (M2 P2),
         so a scheduled-import layer's parcels are resolvable from the store, not
         only from committed package files. The runtime never guesses."""
         if self.runtime_bundle is not None:
             require_store_runtime_bundle(store, self.runtime_bundle, "GERK layer load")
-            # A bundle-backed resolver consumes only retained canonical bytes.
-            # The shipped GERK ReferenceSnapshot is intentionally metadata-only:
-            # its locator remains provenance, but it exposes no lookup surface.
-            for reference in self.runtime_bundle.selected_references:
-                sid = reference.snapshot_ref
-                if not (sid == GERK_SNAPSHOT_PREFIX
-                        or sid.startswith(GERK_SNAPSHOT_PREFIX + ".")):
-                    continue
-                if reference.data_family != GERK_DATA_FAMILY:
-                    self._unavailable_snapshot_refs.add(sid)
-                    continue
-                self.register_artifact(
-                    sid,
-                    self.runtime_bundle.reference_data_payload(
-                        sid, GERK_DATA_FAMILY),
-                )
-            self._frozen = True
+            if not self._frozen:
+                raise RuntimeBundleError(
+                    "bundle-backed GERK cache was not frozen at construction")
             return
         for row in store.reference_data(GERK_DATA_FAMILY):
             sid = row["snapshot_ref"]
@@ -356,4 +385,5 @@ class GerkLayer:
                     "governed retained source/data bytes are unavailable")
             raise RuntimeBundleError(
                 f"GERK snapshot {snapshot_id!r} is not selected in this RuntimeBundle")
-        return copy.deepcopy(self._by_snapshot.get(snapshot_id, {}).get(gerk_pid))
+        return _copy_runtime_cache_value(
+            self._by_snapshot.get(snapshot_id, {}).get(gerk_pid))

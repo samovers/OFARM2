@@ -34,8 +34,9 @@ from .contracts import sha256_of
 from .emission import PromotionTraceWriter, ReplayWriter
 from .materializer import Materializer
 from .problems import runtime_problem
-from .runtime_bundle import require_store_runtime_bundle
+from .runtime_bundle import RuntimeBundleError, require_store_runtime_bundle
 from .profile_runtime import (ProfileRuntimeError, resolve_active_descriptor,
+                              profile_route_selection_document,
                               resolve_profile_route)
 from .stages import (AuthorityGate, EnvelopePersist, EvidenceSufficiencyGate,
                      GateContext, GateRefusal, GateReplay, IngressNormalizer,
@@ -58,6 +59,20 @@ CHAIN = (
 
 
 class GatePipeline:
+    _SEALED_FIELDS = {
+        "store", "route_backed", "profile_route_records",
+        "profile_route_registry", "selected_profile_package_names", "tenant_ref",
+        "active_profile", "runtime_bundle", "policy_provider",
+        "si_reference_bindings", "si_reference_bindings_descriptor", "authority",
+        "context", "materializer", "products",
+    }
+
+    def __setattr__(self, name, value):
+        if (getattr(self, "_runtime_composition_sealed", False)
+                and name in self._SEALED_FIELDS):
+            raise AttributeError("GatePipeline runtime composition is immutable")
+        object.__setattr__(self, name, value)
+
     def __init__(
         self,
         store,
@@ -71,6 +86,9 @@ class GatePipeline:
         tenant_ref=None,
         runtime_bundle=None,
     ):
+        if product_register is not None:
+            raise ProfileRuntimeError(
+                "caller-supplied ProductRegister is forbidden for governed runtime")
         self.store = store
         route_inputs = (
             profile_route_records,
@@ -84,9 +102,12 @@ class GatePipeline:
                 "route-backed GatePipeline requires profile_route_records, "
                 "profile_route_registry, selected_profile_package_names, and "
                 "tenant_ref")
-        self.profile_route_records = profile_route_records
+        self.profile_route_records = (
+            tuple(profile_route_records) if profile_route_records is not None else None)
         self.profile_route_registry = profile_route_registry
-        self.selected_profile_package_names = selected_profile_package_names
+        self.selected_profile_package_names = (
+            tuple(sorted(selected_profile_package_names))
+            if selected_profile_package_names is not None else None)
         self.tenant_ref = tenant_ref
         if (active_descriptor is not None and active_profile is not None
                 and active_descriptor != active_profile):
@@ -98,6 +119,30 @@ class GatePipeline:
         )
         self.runtime_bundle = runtime_bundle or store.runtime_bundle
         require_store_runtime_bundle(store, self.runtime_bundle, "GatePipeline")
+        if self.route_backed and self.tenant_ref != self.runtime_bundle.tenant_ref:
+            raise ProfileRuntimeError(
+                "profile route tenant must exactly match the RuntimeBundle tenant")
+        if self.route_backed:
+            if any(route.runtime_bundle_digest != self.runtime_bundle.digest
+                   for route in self.profile_route_records):
+                raise ProfileRuntimeError(
+                    "every profile route must receipt the exact RuntimeBundle digest")
+            route_selection = profile_route_selection_document(
+                self.profile_route_registry,
+                self.selected_profile_package_names,
+                self.profile_route_records,
+                tenant_ref=self.tenant_ref,
+            )
+            try:
+                retained_route_selection = self.runtime_bundle.json_component(
+                    "PROFILE_ROUTE_SELECTION", "profile-route-selection:active")
+            except RuntimeBundleError as exc:
+                raise ProfileRuntimeError(
+                    "route-backed runtime lacks a retained profile route selection") \
+                    from exc
+            if route_selection != retained_route_selection:
+                raise ProfileRuntimeError(
+                    "caller profile route selection differs from the RuntimeBundle")
         if self.runtime_bundle.descriptor != self.active_profile:
             raise ProfileRuntimeError(
                 "GatePipeline descriptor and RuntimeBundle do not match exactly")
@@ -113,18 +158,36 @@ class GatePipeline:
         self.materializer = Materializer(
             store, active_descriptor=self.active_profile,
             runtime_bundle=self.runtime_bundle)
-        if product_register is not None:
-            if (product_register.runtime_bundle is not self.runtime_bundle
-                    or product_register.bindings != self.si_reference_bindings):
-                raise ProfileRuntimeError(
-                    "ProductRegister and GatePipeline must share one RuntimeBundle "
-                    "and exact runtime reference bindings")
-            self.products = product_register
-        else:
-            self.products = ProductRegister(
-                self.si_reference_bindings, runtime_bundle=self.runtime_bundle)
+        self.products = ProductRegister(
+            self.si_reference_bindings, runtime_bundle=self.runtime_bundle)
         self.products.load_from_store(store)
         self.products.freeze()
+        self._runtime_composition_sealed = True
+
+    def _assert_runtime_composition(self) -> None:
+        require_store_runtime_bundle(
+            self.store, self.runtime_bundle, "GatePipeline decision")
+        expected_policy_refs = \
+            profile_policy.DescriptorPolicyProvider.expected_recognized_rule_refs(
+                self.active_profile)
+        if (self.runtime_bundle.descriptor != self.active_profile
+                or self.policy_provider.descriptor != self.active_profile
+                or self.policy_provider.runtime_bundle is not self.runtime_bundle
+                or self.policy_provider.policy_ref !=
+                self.active_profile.evidence_policy_ref
+                or self.policy_provider.recognized_rule_refs != expected_policy_refs
+                or self.si_reference_bindings_descriptor != self.active_profile
+                or self.context.store is not self.store
+                or self.context.runtime_bundle is not self.runtime_bundle
+                or self.materializer.store is not self.store
+                or self.materializer.runtime_bundle is not self.runtime_bundle
+                or self.materializer.context.store is not self.store
+                or self.materializer.context.runtime_bundle is not self.runtime_bundle
+                or self.products.runtime_bundle is not self.runtime_bundle
+                or self.products.bindings != self.si_reference_bindings
+                or self.authority.store is not self.store):
+            raise RuntimeBundleError(
+                "GatePipeline runtime composition changed after construction")
 
     # ======================================================================
     # the governed front door
@@ -133,6 +196,7 @@ class GatePipeline:
     def commit(self, submission: dict) -> dict:
         """Run one capture through the full chain. Returns the
         CommitIngressResult payload. One call = one transaction (D3)."""
+        self._assert_runtime_composition()
         try:
             with self.store.serialized_tx() as cur:
                 return self._commit_in_tx(cur, submission)

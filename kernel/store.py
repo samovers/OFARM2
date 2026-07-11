@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from contextlib import contextmanager
 
 import psycopg
@@ -48,12 +49,36 @@ _SCHEMA_SQL = _SCHEMA_BYTES.decode("utf-8")
 
 
 class Store:
+    _SEALED_REGISTRY_FIELDS = {
+        "_registry", "_registry_decision_identity", "_registry_sealed",
+    }
+
+    def __setattr__(self, name, value):
+        if (getattr(self, "_registry_sealed", False)
+                and name in self._SEALED_REGISTRY_FIELDS):
+            raise AttributeError(
+                "Store ContractRegistry binding is immutable after construction")
+        object.__setattr__(self, name, value)
+
     def __init__(self, dsn: str | None = None, registry: ContractRegistry | None = None):
+        self._registry_sealed = False
         self.dsn = dsn or config.database_dsn()
-        self.registry = registry or ContractRegistry()
+        self._registry = registry or ContractRegistry()
+        self._registry_decision_identity = self._registry.decision_identity()
         self._conn: psycopg.Connection | None = None
         self._runtime_bundle = None
-        self._bootstrap_bundle_digest: str | None = None
+        self._bootstrap_bundle = None
+        self._pending_runtime_bundle_activation = None
+        self._registry_sealed = True
+
+    @property
+    def registry(self) -> ContractRegistry:
+        registry = self._registry
+        if (type(registry) is not ContractRegistry
+                or registry.decision_identity() != self._registry_decision_identity):
+            raise RuntimeError(
+                "Store ContractRegistry decision semantics changed after construction")
+        return registry
 
     # -- connection / lifecycle ------------------------------------------------
 
@@ -61,6 +86,7 @@ class Store:
     def conn(self) -> psycopg.Connection:
         if self._conn is None or self._conn.closed:
             self._conn = psycopg.connect(self.dsn, row_factory=dict_row, autocommit=True)
+            self._conn.execute("SET TIME ZONE 'UTC'")
         return self._conn
 
     def migrate(self) -> None:
@@ -86,12 +112,120 @@ class Store:
         return self.runtime_bundle.digest
 
     def bind_runtime_bundle(self, bundle) -> None:
-        """Bind this Store instance to exactly one immutable bundle lifetime."""
+        """Reject direct binding; live activation belongs to atomic bootstrap."""
         if bundle.construction_mode != "LIVE_CURRENT":
             raise RuntimeError(
                 "persisted-audit RuntimeBundles cannot be bound for live decisions")
-        from .runtime_bundle import require_current_runtime_catalog
+        raise RuntimeError(
+            "direct RuntimeBundle binding is forbidden; use atomic context bootstrap")
+
+    @staticmethod
+    def _observe_database_environment(cur) -> dict:
+        """Capture decision-bearing PostgreSQL state in the bootstrap transaction."""
+        cur.execute(
+            "SELECT current_setting('server_version') AS version, "
+            "current_setting('server_version_num') AS version_number, "
+            "current_setting('server_encoding') AS encoding, "
+            "current_setting('TimeZone') AS timezone, "
+            "current_setting('DateStyle') AS date_style, "
+            "current_setting('IntervalStyle') AS interval_style, "
+            "current_setting('search_path') AS search_path, "
+            "current_setting('standard_conforming_strings') AS standard_strings, "
+            "current_setting('extra_float_digits') AS extra_float_digits, "
+            "current_setting('bytea_output') AS bytea_output, "
+            "current_user AS current_user_name, session_user AS session_user_name"
+        )
+        settings = cur.fetchone()
+        normalized = re.match(r"^(\d+\.\d+)", settings["version"])
+        if normalized is None:
+            raise RuntimeError("observed PostgreSQL version is not parseable")
+        cur.execute(
+            "SELECT datlocprovider::text AS locale_provider, "
+            "datcollate AS collation, datctype AS ctype, "
+            "datlocale AS locale, daticurules AS icu_rules, "
+            "datcollversion AS collation_version "
+            "FROM pg_database WHERE datname = current_database()"
+        )
+        database = cur.fetchone()
+        if database is None:
+            raise RuntimeError("current PostgreSQL database identity is unavailable")
+        cur.execute(
+            "SELECT extname AS name, extversion AS version "
+            "FROM pg_extension ORDER BY extname"
+        )
+        extensions = [dict(row) for row in cur.fetchall()]
+        return {
+            "schemaVersion": "ofarm.runtime-database-observation.local.v1",
+            "server": {
+                "version": settings["version"],
+                "versionNumber": settings["version_number"],
+                "normalizedVersion": normalized.group(1),
+            },
+            "database": {
+                "encoding": settings["encoding"],
+                "localeProvider": database["locale_provider"],
+                "collation": database["collation"],
+                "ctype": database["ctype"],
+                "locale": database["locale"],
+                "icuRules": database["icu_rules"],
+                "collationVersion": database["collation_version"],
+            },
+            "session": {
+                "currentUser": settings["current_user_name"],
+                "sessionUser": settings["session_user_name"],
+                "timezone": settings["timezone"],
+                "dateStyle": settings["date_style"],
+                "intervalStyle": settings["interval_style"],
+                "searchPath": settings["search_path"],
+                "standardConformingStrings": settings["standard_strings"],
+                "extraFloatDigits": settings["extra_float_digits"],
+                "byteaOutput": settings["bytea_output"],
+            },
+            "extensions": extensions,
+        }
+
+    def _prepare_runtime_bundle_binding(self, bundle):
+        """Run every fallible live-binding check inside the bootstrap transaction."""
+        if self._bootstrap_bundle is not bundle:
+            raise RuntimeError(
+                "RuntimeBundle binding preparation requires its verified bootstrap scope")
+        from .runtime_bundle import (
+            assert_runtime_environment_compatible,
+            database_runtime_environment_component,
+            require_current_runtime_catalog,
+        )
+        if bundle.tenant_ref != config.TENANT_REF:
+            raise RuntimeError(
+                "RuntimeBundle tenant does not match this Store runtime tenant")
         require_current_runtime_catalog(bundle, config.PACKAGE_ROOT)
+        required_environment = assert_runtime_environment_compatible(bundle)
+        with self.conn.cursor() as cur:
+            database_environment = self._observe_database_environment(cur)
+        selected_database = bundle.component(
+            "RUNTIME_DATABASE_OBSERVED", "environment:observed-postgresql.v1")
+        if selected_database != database_runtime_environment_component(
+                database_environment):
+            raise RuntimeError(
+                "observed PostgreSQL environment changed after RuntimeBundle selection")
+        if (database_environment["server"]["normalizedVersion"] !=
+                required_environment.get("postgresqlVersion")
+                or database_environment["session"]["timezone"] !=
+                required_environment.get("timezone")
+                or database_environment["database"]["encoding"] != "UTF8"
+                or database_environment["database"]["localeProvider"] != "c"):
+            raise RuntimeError(
+                "observed PostgreSQL version, timezone, encoding, or deterministic "
+                "locale provider differs from the retained runtime requirement")
+        required_settings = {
+            "dateStyle": "ISO, MDY",
+            "intervalStyle": "postgres",
+            "standardConformingStrings": "on",
+            "byteaOutput": "hex",
+        }
+        if any(database_environment["session"].get(name) != value
+               for name, value in required_settings.items()):
+            raise RuntimeError(
+                "observed PostgreSQL semantic settings are unsupported")
         if self._runtime_bundle is not None and self._runtime_bundle.digest != bundle.digest:
             raise RuntimeError(
                 "RuntimeBundle hot switching is forbidden; create a new runtime instance")
@@ -102,10 +236,36 @@ class Store:
                 or cold.selected_references != bundle.selected_references):
             raise RuntimeError(
                 "cannot bind an incomplete or byte-mismatched persisted RuntimeBundle")
-        self._runtime_bundle = bundle
+        if self._pending_runtime_bundle_activation is not None:
+            raise RuntimeError("a RuntimeBundle activation is already pending")
+        token = object()
+        self._pending_runtime_bundle_activation = (token, bundle)
+        return token
+
+    def _activate_prepared_runtime_bundle(self, activation_token) -> None:
+        """Consume the exact one-use activation prepared by atomic bootstrap."""
+        pending = self._pending_runtime_bundle_activation
+        if pending is None or activation_token is not pending[0]:
+            raise RuntimeError(
+                "RuntimeBundle activation was not successfully prepared by this Store")
+        if self.conn.info.transaction_status != psycopg.pq.TransactionStatus.IDLE:
+            raise RuntimeError(
+                "RuntimeBundle activation is allowed only after bootstrap commits")
+        self._pending_runtime_bundle_activation = None
+        self._runtime_bundle = pending[1]
+
+    def _discard_prepared_runtime_bundle_binding(self) -> None:
+        """Invalidate any one-use activation when bootstrap does not commit."""
+        self._pending_runtime_bundle_activation = None
 
     def assert_runtime_bundle_compatible(self, bundle) -> None:
         """Check process-local registry/runtime compatibility before commit."""
+        canonical_registry = ContractRegistry()
+        if (type(self.registry) is not ContractRegistry
+                or self.registry.decision_identity() !=
+                canonical_registry.decision_identity()):
+            raise RuntimeError(
+                "Store ContractRegistry decision semantics differ from code-owned runtime")
         schema_component = bundle.component(
             "RUNTIME_SCHEMA", "sql:kernel/schema.sql")
         if schema_component.canonical_bytes != _SCHEMA_BYTES:
@@ -136,96 +296,192 @@ class Store:
                 raise RuntimeError(
                     "a bound Store cannot write under a different RuntimeBundle")
             if (self._runtime_bundle is None
-                    and explicit != self._bootstrap_bundle_digest):
+                    and (self._bootstrap_bundle is None
+                         or explicit != self._bootstrap_bundle.digest)):
                 raise RuntimeError(
                     "an unbound Store cannot attribute writes to a RuntimeBundle "
                     "outside verified atomic bootstrap")
             return explicit
         return self.runtime_bundle_digest
 
+    def _bundle_tenant_ref(self) -> str:
+        if self._runtime_bundle is not None:
+            return self._runtime_bundle.tenant_ref
+        if self._bootstrap_bundle is not None:
+            return self._bootstrap_bundle.tenant_ref
+        raise RuntimeError(
+            "Store has no verified RuntimeBundle tenant; bootstrap first")
+
     @contextmanager
-    def bootstrap_bundle_writes(self, bundle):
+    def _bootstrap_bundle_writes(self, bundle):
         """Narrow pre-bind write authority to one verified bootstrap bundle."""
         if self._runtime_bundle is not None:
             raise RuntimeError("bootstrap bundle writes require an unbound Store")
-        if self._bootstrap_bundle_digest is not None:
+        if self._bootstrap_bundle is not None:
             raise RuntimeError("nested RuntimeBundle bootstrap write scopes are forbidden")
+        if bundle.construction_mode != "LIVE_CURRENT":
+            raise RuntimeError(
+                "bootstrap write authority requires a live-selected RuntimeBundle")
+        if bundle.tenant_ref != config.TENANT_REF:
+            raise RuntimeError(
+                "bootstrap write authority tenant differs from this runtime tenant")
+        if self.conn.info.transaction_status == psycopg.pq.TransactionStatus.IDLE:
+            raise RuntimeError(
+                "bootstrap write authority requires an active database transaction")
         self.assert_runtime_bundle_compatible(bundle)
-        self._bootstrap_bundle_digest = bundle.digest
+        self._bootstrap_bundle = bundle
         try:
             yield
         finally:
-            self._bootstrap_bundle_digest = None
+            self._bootstrap_bundle = None
 
     def install_runtime_bundle(self, cur, bundle) -> None:
         """Persist exact bundle/component bytes, verifying every identity reuse."""
-        for component in bundle.components:
+        from .runtime_bundle import (
+            GLOBAL_CONTENT_PLACEMENT,
+            TENANT_CONTENT_PLACEMENT,
+        )
+        if bundle.tenant_ref != config.TENANT_REF:
+            raise RuntimeError(
+                "cannot install a RuntimeBundle for a different runtime tenant")
+        if bundle.construction_mode != "LIVE_CURRENT":
+            raise RuntimeError(
+                "only a live-selected RuntimeBundle may be installed")
+        if cur.connection.info.transaction_status != psycopg.pq.TransactionStatus.INTRANS:
+            raise RuntimeError(
+                "RuntimeBundle installation requires one active database transaction")
+        cur.execute(
+            "SELECT tenant_ref, bundle_ref, canonical_document, canonical_bytes, "
+            "byte_length FROM runtime_bundle "
+            "WHERE tenant_ref = %s AND bundle_digest = %s",
+            (bundle.tenant_ref, bundle.digest),
+        )
+        prior_bundle = cur.fetchone()
+        document = json.loads(bundle.canonical_document_bytes)
+        if prior_bundle is not None:
+            if (prior_bundle["tenant_ref"] != bundle.tenant_ref
+                    or prior_bundle["bundle_ref"] != bundle.bundle_ref
+                    or prior_bundle["canonical_document"] != document
+                    or bytes(prior_bundle["canonical_bytes"]) !=
+                    bundle.canonical_document_bytes
+                    or prior_bundle["byte_length"] !=
+                    len(bundle.canonical_document_bytes)):
+                raise RuntimeError(
+                    f"RuntimeBundle digest {bundle.digest} was reused for unequal bytes")
             cur.execute(
-                "SELECT canonicalization, canonical_bytes, byte_length "
-                "FROM runtime_content_blob WHERE content_digest = %s",
-                (component.content_digest,),
+                "SELECT component_role, logical_ref FROM runtime_bundle_component "
+                "WHERE tenant_ref = %s AND bundle_digest = %s",
+                (bundle.tenant_ref, bundle.digest),
+            )
+            persisted_identities = {
+                (row["component_role"], row["logical_ref"])
+                for row in cur.fetchall()
+            }
+            expected_identities = {
+                (component.role, component.logical_ref)
+                for component in bundle.components
+            }
+            if persisted_identities != expected_identities:
+                raise RuntimeError(
+                    f"existing RuntimeBundle {bundle.digest} component set is not exact; "
+                    f"missing={sorted(expected_identities - persisted_identities)}, "
+                    f"extra={sorted(persisted_identities - expected_identities)}")
+        for component in bundle.components:
+            if component.placement == GLOBAL_CONTENT_PLACEMENT:
+                table = "runtime_content_blob"
+                where = "content_digest = %s"
+                params = (component.content_digest,)
+                columns = (
+                    "content_digest, content_class, canonicalization, "
+                    "canonical_bytes, byte_length")
+                values = (component.content_digest, component.role,
+                          component.canonicalization, component.canonical_bytes,
+                          len(component.canonical_bytes))
+            elif component.placement == TENANT_CONTENT_PLACEMENT:
+                table = "runtime_tenant_content_blob"
+                where = "tenant_ref = %s AND content_digest = %s"
+                params = (bundle.tenant_ref, component.content_digest)
+                columns = (
+                    "tenant_ref, content_digest, content_class, canonicalization, "
+                    "canonical_bytes, byte_length")
+                values = (bundle.tenant_ref, component.content_digest,
+                          component.role, component.canonicalization,
+                          component.canonical_bytes, len(component.canonical_bytes))
+            else:
+                raise RuntimeError(
+                    f"unknown RuntimeBundle component placement {component.placement!r}")
+            cur.execute(
+                f"SELECT content_class, canonicalization, canonical_bytes, byte_length "
+                f"FROM {table} WHERE {where}",
+                params,
             )
             prior = cur.fetchone()
             if prior is None:
+                if prior_bundle is not None:
+                    raise RuntimeError(
+                        f"existing RuntimeBundle {bundle.digest} is missing retained "
+                        f"content for {component.role}/{component.logical_ref}")
                 cur.execute(
-                    "INSERT INTO runtime_content_blob "
-                    "(content_digest, canonicalization, canonical_bytes, byte_length) "
-                    "VALUES (%s, %s, %s, %s)",
-                    (component.content_digest, component.canonicalization,
-                     component.canonical_bytes, len(component.canonical_bytes)),
+                    f"INSERT INTO {table} ({columns}) VALUES (" +
+                    ", ".join(["%s"] * len(values)) + ")",
+                    values,
                 )
-            elif (prior["canonicalization"] != component.canonicalization
+            elif (prior["content_class"] != component.role
+                  or prior["canonicalization"] != component.canonicalization
                   or bytes(prior["canonical_bytes"]) != component.canonical_bytes
                   or prior["byte_length"] != len(component.canonical_bytes)):
                 raise RuntimeError(
                     f"content digest {component.content_digest} was reused for unequal bytes")
 
-        cur.execute(
-            "SELECT bundle_ref, canonical_document, canonical_bytes, byte_length "
-            "FROM runtime_bundle "
-            "WHERE bundle_digest = %s",
-            (bundle.digest,),
-        )
-        prior_bundle = cur.fetchone()
-        document = json.loads(bundle.canonical_document_bytes)
         if prior_bundle is None:
             cur.execute(
                 "INSERT INTO runtime_bundle "
-                "(bundle_digest, bundle_ref, canonical_document, canonical_bytes, byte_length) "
-                "VALUES (%s, %s, %s, %s, %s)",
-                (bundle.digest, bundle.bundle_ref, Jsonb(document),
+                "(tenant_ref, bundle_digest, bundle_ref, canonical_document, "
+                "canonical_bytes, byte_length) VALUES (%s, %s, %s, %s, %s, %s)",
+                (bundle.tenant_ref, bundle.digest, bundle.bundle_ref, Jsonb(document),
                  bundle.canonical_document_bytes, len(bundle.canonical_document_bytes)),
             )
-        elif (prior_bundle["bundle_ref"] != bundle.bundle_ref
-              or prior_bundle["canonical_document"] != document
-              or bytes(prior_bundle["canonical_bytes"]) != bundle.canonical_document_bytes
-              or prior_bundle["byte_length"] != len(bundle.canonical_document_bytes)):
-            raise RuntimeError(
-                f"RuntimeBundle digest {bundle.digest} was reused for unequal bytes")
 
         for component in bundle.components:
             cur.execute(
-                "SELECT repository_path, canonicalization, content_digest, byte_length "
-                "FROM runtime_bundle_component WHERE bundle_digest = %s "
+                "SELECT repository_path, canonicalization, content_placement, "
+                "global_content_digest, tenant_content_digest, byte_length "
+                "FROM runtime_bundle_component WHERE tenant_ref = %s "
+                "AND bundle_digest = %s "
                 "AND component_role = %s AND logical_ref = %s",
-                (bundle.digest, component.role, component.logical_ref),
+                (bundle.tenant_ref, bundle.digest,
+                 component.role, component.logical_ref),
             )
             prior = cur.fetchone()
+            global_digest = (
+                component.content_digest
+                if component.placement == GLOBAL_CONTENT_PLACEMENT else None)
+            tenant_digest = (
+                component.content_digest
+                if component.placement == TENANT_CONTENT_PLACEMENT else None)
             expected = (
                 component.repository_path, component.canonicalization,
-                component.content_digest, len(component.canonical_bytes),
+                component.placement, global_digest, tenant_digest,
+                len(component.canonical_bytes),
             )
             if prior is None:
+                if prior_bundle is not None:
+                    raise RuntimeError(
+                        f"existing RuntimeBundle {bundle.digest} is missing component "
+                        f"{component.role}/{component.logical_ref}")
                 cur.execute(
                     "INSERT INTO runtime_bundle_component "
-                    "(bundle_digest, component_role, logical_ref, repository_path, "
-                    "canonicalization, content_digest, byte_length) "
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                    (bundle.digest, component.role, component.logical_ref, *expected),
+                    "(tenant_ref, bundle_digest, component_role, logical_ref, "
+                    "repository_path, canonicalization, content_placement, "
+                    "global_content_digest, tenant_content_digest, byte_length) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                    (bundle.tenant_ref, bundle.digest, component.role,
+                     component.logical_ref, *expected),
                 )
             elif (
                 prior["repository_path"], prior["canonicalization"],
-                prior["content_digest"], prior["byte_length"],
+                prior["content_placement"], prior["global_content_digest"],
+                prior["tenant_content_digest"], prior["byte_length"],
             ) != expected:
                 raise RuntimeError(
                     f"RuntimeBundle component identity was reused with drift: "
@@ -233,8 +489,8 @@ class Store:
 
         cur.execute(
             "SELECT component_role, logical_ref FROM runtime_bundle_component "
-            "WHERE bundle_digest = %s",
-            (bundle.digest,),
+            "WHERE tenant_ref = %s AND bundle_digest = %s",
+            (bundle.tenant_ref, bundle.digest),
         )
         persisted_identities = {
             (row["component_role"], row["logical_ref"]) for row in cur.fetchall()
@@ -251,26 +507,42 @@ class Store:
     def persisted_runtime_bundle(self, digest: str) -> dict | None:
         with self.conn.cursor() as cur:
             cur.execute(
-                "SELECT bundle_digest, bundle_ref, canonical_document, "
+                "SELECT tenant_ref, bundle_digest, bundle_ref, canonical_document, "
                 "canonical_bytes, byte_length FROM runtime_bundle "
-                "WHERE bundle_digest = %s",
-                (digest,),
+                "WHERE tenant_ref = %s AND bundle_digest = %s",
+                (config.TENANT_REF, digest),
             )
             bundle = cur.fetchone()
             if bundle is None:
                 return None
             cur.execute(
                 "SELECT c.component_role, c.logical_ref, c.repository_path, "
-                "c.canonicalization, c.content_digest, c.byte_length, "
-                "b.canonicalization AS blob_canonicalization, "
-                "b.byte_length AS blob_byte_length, b.canonical_bytes "
-                "FROM runtime_bundle_component c JOIN runtime_content_blob b "
-                "ON b.content_digest = c.content_digest "
-                "WHERE c.bundle_digest = %s ORDER BY c.component_role, c.logical_ref",
-                (digest,),
+                "c.canonicalization, c.content_placement, "
+                "CASE WHEN c.content_placement = 'GLOBAL_IMMUTABLE_CONTENT' "
+                "THEN c.global_content_digest ELSE c.tenant_content_digest END "
+                "AS content_digest, c.byte_length, "
+                "CASE WHEN c.content_placement = 'GLOBAL_IMMUTABLE_CONTENT' "
+                "THEN g.content_class ELSE t.content_class END AS blob_content_class, "
+                "CASE WHEN c.content_placement = 'GLOBAL_IMMUTABLE_CONTENT' "
+                "THEN g.canonicalization ELSE t.canonicalization END "
+                "AS blob_canonicalization, "
+                "CASE WHEN c.content_placement = 'GLOBAL_IMMUTABLE_CONTENT' "
+                "THEN g.byte_length ELSE t.byte_length END AS blob_byte_length, "
+                "CASE WHEN c.content_placement = 'GLOBAL_IMMUTABLE_CONTENT' "
+                "THEN g.canonical_bytes ELSE t.canonical_bytes END AS canonical_bytes "
+                "FROM runtime_bundle_component c "
+                "LEFT JOIN runtime_content_blob g "
+                "ON g.content_digest = c.global_content_digest "
+                "LEFT JOIN runtime_tenant_content_blob t "
+                "ON t.tenant_ref = c.tenant_ref "
+                "AND t.content_digest = c.tenant_content_digest "
+                "WHERE c.tenant_ref = %s AND c.bundle_digest = %s "
+                "ORDER BY c.component_role, c.logical_ref",
+                (config.TENANT_REF, digest),
             )
             components = cur.fetchall()
         return {
+            "tenant_ref": bundle["tenant_ref"],
             "bundle_digest": bundle["bundle_digest"],
             "bundle_ref": bundle["bundle_ref"],
             "canonical_document": bundle["canonical_document"],
@@ -288,6 +560,8 @@ class Store:
         canonical_document_bytes = persisted["canonical_document_bytes"]
         if persisted["bundle_digest"] != digest:
             raise RuntimeError("persisted RuntimeBundle key does not match requested digest")
+        if persisted["tenant_ref"] != config.TENANT_REF:
+            raise RuntimeError("persisted RuntimeBundle tenant does not match this Store")
         if persisted["bundle_ref"] != f"runtimebundle:{digest}":
             raise RuntimeError("persisted RuntimeBundle ref does not match requested digest")
         if persisted["byte_length"] != len(canonical_document_bytes):
@@ -299,11 +573,19 @@ class Store:
         if canonical_document != persisted["canonical_document"]:
             raise RuntimeError(
                 "persisted RuntimeBundle canonical JSON and exact bytes disagree")
+        if canonical_document.get("tenantRef") != persisted["tenant_ref"]:
+            raise RuntimeError(
+                "persisted RuntimeBundle document and relational tenant disagree")
         components = []
         for row in persisted["components"]:
+            if row["canonical_bytes"] is None:
+                raise RuntimeError(
+                    "persisted RuntimeBundle component points to the wrong or "
+                    "missing content carrier")
             canonical = bytes(row["canonical_bytes"])
             if (row["byte_length"] != len(canonical)
                     or row["blob_byte_length"] != len(canonical)
+                    or row["blob_content_class"] != row["component_role"]
                     or row["blob_canonicalization"] != row["canonicalization"]):
                 raise RuntimeError(
                     "persisted RuntimeBundle component/blob metadata mismatch")
@@ -314,6 +596,7 @@ class Store:
                 canonicalization=row["canonicalization"],
                 content_digest=row["content_digest"],
                 canonical_bytes=canonical,
+                placement=row["content_placement"],
             ))
         return runtime_bundle_from_persisted(
             descriptor,
@@ -357,9 +640,15 @@ class Store:
 
     # -- canonical record writes ----------------------------------------------
 
-    def insert_record(self, cur, payload: dict, *, tenant_ref: str = config.TENANT_REF,
+    def insert_record(self, cur, payload: dict, *, tenant_ref: str | None = None,
                       runtime_bundle_digest: str | None = None) -> str:
         """Validate against the package contract and append. Returns record id."""
+        bundle_tenant_ref = self._bundle_tenant_ref()
+        if tenant_ref is None:
+            tenant_ref = bundle_tenant_ref
+        elif tenant_ref != bundle_tenant_ref:
+            raise RuntimeError(
+                "kernel_record tenant must exactly match the verified RuntimeBundle tenant")
         contract = self.registry.validate(payload)
         if contract.lane != "canonical":
             raise ContractViolation(
@@ -437,11 +726,14 @@ class Store:
         for a scheme reader to load into its lookup index."""
         with self.conn.cursor() as cur:
             cur.execute(
-                "SELECT snapshot_ref, data_family, artifact_ref, source_digest, "
-                "parser_label, record_count, payload, payload_sha256, "
-                "runtime_bundle_digest FROM reference_snapshot_data "
-                "WHERE data_family = %s ORDER BY snapshot_ref",
-                (data_family,),
+                "SELECT d.snapshot_ref, d.data_family, d.artifact_ref, "
+                "d.source_digest, d.parser_label, d.record_count, d.payload, "
+                "d.payload_sha256, d.runtime_bundle_digest "
+                "FROM reference_snapshot_data d JOIN runtime_bundle b "
+                "ON b.bundle_digest = d.runtime_bundle_digest "
+                "WHERE d.data_family = %s AND b.tenant_ref = %s "
+                "ORDER BY d.snapshot_ref",
+                (data_family, self._bundle_tenant_ref()),
             )
             return cur.fetchall()
 

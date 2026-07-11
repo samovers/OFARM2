@@ -7,10 +7,11 @@ stays outside the required descriptor.
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -176,6 +177,74 @@ class ProfileRouteResolution:
     candidate: ProfileDescriptorCandidate
     descriptor: ProfileRuntimeDescriptor
     effective_time: datetime | None
+
+
+def profile_route_selection_document(
+    registry: ProfileDescriptorRegistry,
+    selected_profile_package_names: Sequence[str],
+    route_records: Sequence[ProfileRouteRecord],
+    *,
+    tenant_ref: str,
+) -> dict:
+    """Canonical tenant route-selection preimage, excluding the bundle digest cycle."""
+    if not isinstance(registry, ProfileDescriptorRegistry):
+        raise ProfileRuntimeError(
+            "profile route selection requires a descriptor registry")
+    _validate_ref(tenant_ref, "tenant_ref")
+    selected = sorted(_profile_package_names(selected_profile_package_names))
+    routes = _profile_route_records(route_records)
+    if any(route.tenant_ref != tenant_ref for route in routes):
+        raise ProfileRuntimeError(
+            "profile route selection cannot contain another tenant's route")
+    route_ids = [route.route_id for route in routes]
+    if len(route_ids) != len(set(route_ids)):
+        raise ProfileRuntimeError("profile route selection contains duplicate route ids")
+
+    def instant(value: datetime | None) -> str | None:
+        if value is None:
+            return None
+        return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+    candidates = []
+    for candidate in sorted(
+            registry.descriptor_candidates, key=lambda item: item.package_name):
+        descriptor_bytes = candidate.descriptor_path.read_bytes()
+        candidates.append({
+            "packageName": candidate.package_name,
+            "enabled": candidate.enabled,
+            "descriptorDigest":
+                "sha256:" + hashlib.sha256(descriptor_bytes).hexdigest(),
+            "profileRef": candidate.descriptor.profile_ref,
+            "packRef": candidate.descriptor.pack_ref,
+            "packActivationSetRef":
+                candidate.descriptor.pack_activation_set_ref,
+            "activeArtifactSetRef":
+                candidate.descriptor.active_artifact_set_ref,
+        })
+    return {
+        "schemaVersion": "ofarm.profile-route-selection.local.v1",
+        "tenantRef": tenant_ref,
+        "selectedProfilePackageNames": selected,
+        "registry": {
+            "discoverablePackageNames": sorted(
+                registry.discoverable_package_names),
+            "enabledPackageNames": sorted(registry.enabled_package_names),
+            "candidates": candidates,
+        },
+        "routes": sorted(({
+            "routeId": route.route_id,
+            "tenantRef": route.tenant_ref,
+            "farmRef": route.farm_ref,
+            "profilePackageName": route.profile_package_name,
+            "profileRef": route.profile_ref,
+            "packRef": route.pack_ref,
+            "packActivationSetRef": route.pack_activation_set_ref,
+            "activeArtifactSetRef": route.active_artifact_set_ref,
+            "effectiveFrom": instant(route.effective_from),
+            "effectiveUntil": instant(route.effective_until),
+            "status": route.status,
+        } for route in routes), key=lambda item: item["routeId"]),
+    }
 
 
 PRECONDITION_INVALID_PACKAGE_NAME = "INVALID_PACKAGE_NAME"

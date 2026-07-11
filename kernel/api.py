@@ -7,11 +7,18 @@ per request — there is no unauthenticated path to farm-scoped truth.
 """
 from __future__ import annotations
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+import json
+
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
+from fastapi.exception_handlers import (
+    http_exception_handler,
+    request_validation_exception_handler,
+)
+from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel
 
 from . import auth_oidc, config, context
-from .contracts import ContractViolation
+from .contracts import ContractViolation, sha256_of
 from .problems import runtime_problem
 from .gates import GatePipeline
 from .store import Store
@@ -109,14 +116,39 @@ def create_app(store: Store | None = None, *, oidc=_FROM_ENV) -> FastAPI:
 
     app.state.get_principal = get_principal
 
+    def _receipt(response: Response, payload: dict) -> dict:
+        response.headers["X-OFARM-Runtime-Bundle-Digest"] = \
+            app.state.store.runtime_bundle_digest
+        response.headers["X-OFARM-Receipt-Payload-Digest"] = sha256_of(payload)
+        return payload
+
+    def _receipt_existing_json_response(response: Response) -> Response:
+        payload = json.loads(bytes(response.body).decode("utf-8"))
+        _receipt(response, payload)
+        return response
+
+    @app.exception_handler(HTTPException)
+    async def receipted_http_exception(request: Request, exc: HTTPException):
+        return _receipt_existing_json_response(
+            await http_exception_handler(request, exc))
+
+    @app.exception_handler(RequestValidationError)
+    async def receipted_validation_exception(
+            request: Request, exc: RequestValidationError):
+        return _receipt_existing_json_response(
+            await request_validation_exception_handler(request, exc))
+
     @app.get("/health")
-    def health():
-        return {"status": "ok",
-                "unreachableAuthoritativeRecords":
-                    app.state.store.unreachable_authoritative_records()}
+    def health(response: Response):
+        return _receipt(response, {
+            "status": "ok",
+            "unreachableAuthoritativeRecords":
+                app.state.store.unreachable_authoritative_records(),
+        })
 
     @app.post("/commit")
-    def commit(body: CommitBody, principal: str = Depends(get_principal)):
+    def commit(body: CommitBody, response: Response,
+               principal: str = Depends(get_principal)):
         # The transport principal binds to the submitted actor BEFORE the
         # pipeline runs: a body-supplied actingPartyRef is never trusted on its
         # own (hostile review blocker 1). The principal is the OIDC-verified Party
@@ -133,7 +165,7 @@ def create_app(store: Store | None = None, *, oidc=_FROM_ENV) -> FastAPI:
                 "principal; body-level actor spoofing is refused",
                 problem_id="problem:api-principal-mismatch"))
         try:
-            return app.state.pipeline.commit(body.submission)
+            return _receipt(response, app.state.pipeline.commit(body.submission))
         except (ContractViolation, KeyError) as exc:
             raise HTTPException(status_code=422, detail=str(exc))
 
@@ -178,7 +210,8 @@ def create_app(store: Store | None = None, *, oidc=_FROM_ENV) -> FastAPI:
         return None
 
     @app.post("/review/accept")
-    def review_accept(body: ReviewAcceptBody, principal: str = Depends(get_principal)):
+    def review_accept(body: ReviewAcceptBody, response: Response,
+                      principal: str = Depends(get_principal)):
         # the review act is the REVIEWER'S own governed commit: the reviewer
         # IS the transport principal — there is no body-named reviewer field
         # to forge (hostile review blocker 1, second pass)
@@ -198,12 +231,13 @@ def create_app(store: Store | None = None, *, oidc=_FROM_ENV) -> FastAPI:
             "dominantSemanticConsequence": "review acceptance of a queued claim",
         }
         try:
-            return app.state.pipeline.commit(submission)
+            return _receipt(response, app.state.pipeline.commit(submission))
         except (ContractViolation, KeyError) as exc:
             raise HTTPException(status_code=422, detail=str(exc))
 
     @app.post("/review/reject")
-    def review_reject(body: ReviewAcceptBody, principal: str = Depends(get_principal)):
+    def review_reject(body: ReviewAcceptBody, response: Response,
+                      principal: str = Depends(get_principal)):
         # the reject act is the REVIEWER'S own governed decline under their own
         # transport principal (M2 G5-2). The endpoint supplies the normalized
         # review-decision pair (REVIEW_REJECT_OR_CONTEST / REJECTED) so the client
@@ -229,12 +263,13 @@ def create_app(store: Store | None = None, *, oidc=_FROM_ENV) -> FastAPI:
             "dominantSemanticConsequence": "review rejection of a queued claim",
         }
         try:
-            return app.state.pipeline.commit(submission)
+            return _receipt(response, app.state.pipeline.commit(submission))
         except (ContractViolation, KeyError) as exc:
             raise HTTPException(status_code=422, detail=str(exc))
 
     @app.post("/review/contest")
-    def review_contest(body: ReviewContestBody, principal: str = Depends(get_principal)):
+    def review_contest(body: ReviewContestBody, response: Response,
+                       principal: str = Depends(get_principal)):
         # a CONTEST opens an append-only dispute against an ALREADY IN-FORCE
         # consequence under the reviewer's own principal (M2 G5-4). The endpoint
         # supplies the normalized pair (REVIEW_REJECT_OR_CONTEST / CONTESTED) and
@@ -259,12 +294,13 @@ def create_app(store: Store | None = None, *, oidc=_FROM_ENV) -> FastAPI:
             "dominantSemanticConsequence": "dispute against an in-force consequence",
         }
         try:
-            return app.state.pipeline.commit(submission)
+            return _receipt(response, app.state.pipeline.commit(submission))
         except (ContractViolation, KeyError) as exc:
             raise HTTPException(status_code=422, detail=str(exc))
 
     @app.get("/records/{record_id}")
-    def get_record(record_id: str, principal: str = Depends(get_principal)):
+    def get_record(record_id: str, response: Response,
+                   principal: str = Depends(get_principal)):
         store = app.state.store
         row = store.get_record(record_id)
         if row is None:
@@ -297,22 +333,30 @@ def create_app(store: Store | None = None, *, oidc=_FROM_ENV) -> FastAPI:
                     store.insert_record(cur, access.result_payload)
                 if not access.allowed:
                     deny()
-        return {"recordId": row["record_id"], "recordKind": row["record_kind"],
-                "schemaHash": row["schema_hash"], "payloadSha256": row["payload_sha256"],
-                "runtimeBundleDigest": row["runtime_bundle_digest"],
-                "recordTime": row["record_time"].isoformat(), "payload": payload}
+        return _receipt(response, {
+            "recordId": row["record_id"], "recordKind": row["record_kind"],
+            "schemaHash": row["schema_hash"], "payloadSha256": row["payload_sha256"],
+            "runtimeBundleDigest": row["runtime_bundle_digest"],
+            "recordTime": row["record_time"].isoformat(), "payload": payload,
+        })
 
     @app.get("/views/passport/{farm_ref}")
-    def passport(farm_ref: str, principal: str = Depends(get_principal)):
-        return app.state.outputs.passport_view(farm_ref, principal)
+    def passport(farm_ref: str, response: Response,
+                 principal: str = Depends(get_principal)):
+        return _receipt(
+            response, app.state.outputs.passport_view(farm_ref, principal))
 
     @app.post("/views/inspection-register/freeze")
-    def freeze(body: FreezeBody, principal: str = Depends(get_principal)):
-        return app.state.outputs.freeze_inspection_register(
-            body.farmRef, principal, body.windowStart, body.windowEnd)
+    def freeze(body: FreezeBody, response: Response,
+               principal: str = Depends(get_principal)):
+        return _receipt(
+            response,
+            app.state.outputs.freeze_inspection_register(
+                body.farmRef, principal, body.windowStart, body.windowEnd),
+        )
 
     @app.get("/manifest")
-    def get_manifest():
+    def get_manifest(response: Response):
         manifests = [component for component in
                      app.state.store.runtime_bundle.components
                      if component.role == "ACTIVE_MANIFEST"]
@@ -321,7 +365,10 @@ def create_app(store: Store | None = None, *, oidc=_FROM_ENV) -> FastAPI:
                 status_code=503,
                 detail="RuntimeBundle does not contain exactly one active manifest",
             )
-        return app.state.store.runtime_bundle.json_component(
-            "ACTIVE_MANIFEST", manifests[0].logical_ref)
+        return _receipt(
+            response,
+            app.state.store.runtime_bundle.json_component(
+                "ACTIVE_MANIFEST", manifests[0].logical_ref),
+        )
 
     return app

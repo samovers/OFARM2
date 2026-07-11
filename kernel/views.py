@@ -26,7 +26,8 @@ from .materializer import Materializer
 from .problems import runtime_problem
 from .context import mint as _mint, now_iso, parse_ts
 from .profile_runtime import ProfileRuntimeError, resolve_active_descriptor
-from .runtime_bundle import require_store_runtime_bundle, sha256_bytes
+from .runtime_bundle import (RuntimeBundleError, require_store_runtime_bundle,
+                             sha256_bytes)
 
 PASSPORT_VIEW_REF = "view:si.ffs.spray-register.passportview.v0_1"
 DOCASM_VIEW_REF = "view:si.ffs.inspection-register.documentassembly.v0_1"
@@ -34,6 +35,26 @@ PASSPORT_QUERYSPEC = "queryspec:si.ffs.spray-register.passportview.v0_1"
 PASSPORT_QUERYPLAN = "queryplan:si.ffs.spray-register.passportview.v0_1"
 DOCASM_QUERYSPEC = "queryspec:si.ffs.inspection-register.documentassembly.v0_1"
 DOCASM_QUERYPLAN = "queryplan:si.ffs.inspection-register.documentassembly.v0_1"
+
+_COMPILED_OUTPUT_COMPONENT_DIGESTS = {
+    ("QUERY_PLAN", DOCASM_QUERYPLAN):
+        "sha256:6abdfc7a88e8f129dce28898712771fc8825f1a60aafbd1a1eee16ecf13d0236",
+    ("QUERY_PLAN", PASSPORT_QUERYPLAN):
+        "sha256:e86a25b5366e970275ad0348118718a63f19acfade31e7aa601cc3b2b941c0b4",
+    ("QUERY_SPECIFICATION", DOCASM_QUERYSPEC):
+        "sha256:932473a3d62e5b3c2e7cc80f08d02187bb8f130f06852a79d61c8e92950e77ea",
+    ("QUERY_SPECIFICATION", PASSPORT_QUERYSPEC):
+        "sha256:ccf0a641800ce0b3381793aece5306957e9bca64b0f47c3dcec519dfef478157",
+}
+
+
+def _assert_compiled_output_contract(runtime_bundle) -> None:
+    """Bind hard-coded output execution to every retained plan/spec byte."""
+    for (role, logical_ref), expected_digest in \
+            _COMPILED_OUTPUT_COMPONENT_DIGESTS.items():
+        if runtime_bundle.component(role, logical_ref).content_digest != expected_digest:
+            raise RuntimeBundleError(
+                f"compiled output implementation does not match {role}/{logical_ref}")
 
 CLAIM_STATEMENT = ("This register faithfully and traceably reflects what the farm "
                    "recorded, with gaps, disputes, and unresolved bindings visible. "
@@ -82,6 +103,15 @@ def _qualification(*, surface_class: str, staleness: str, sufficiency: str,
 
 
 class OutputGenerator:
+    _SEALED_FIELDS = {
+        "store", "active_profile", "runtime_bundle", "authority", "materializer"}
+
+    def __setattr__(self, name, value):
+        if (getattr(self, "_runtime_composition_sealed", False)
+                and name in self._SEALED_FIELDS):
+            raise AttributeError("OutputGenerator runtime composition is immutable")
+        object.__setattr__(self, name, value)
+
     def __init__(self, store, *, active_descriptor=None, active_profile=None,
                  runtime_bundle=None):
         self.store = store
@@ -98,10 +128,26 @@ class OutputGenerator:
         if self.runtime_bundle.descriptor != self.active_profile:
             raise ProfileRuntimeError(
                 "OutputGenerator descriptor and RuntimeBundle do not match exactly")
+        _assert_compiled_output_contract(self.runtime_bundle)
         self.authority = AuthorityEvaluator(store)
         self.materializer = Materializer(
             store, active_descriptor=self.active_profile,
             runtime_bundle=self.runtime_bundle)
+        self._runtime_composition_sealed = True
+
+    def _assert_runtime_composition(self) -> None:
+        require_store_runtime_bundle(
+            self.store, self.runtime_bundle, "OutputGenerator decision")
+        if (self.runtime_bundle.descriptor != self.active_profile
+                or self.authority.store is not self.store
+                or self.materializer.store is not self.store
+                or self.materializer.runtime_bundle is not self.runtime_bundle
+                or self.materializer.active_profile != self.active_profile
+                or self.materializer.context.store is not self.store
+                or self.materializer.context.runtime_bundle is not self.runtime_bundle):
+            raise RuntimeBundleError(
+                "OutputGenerator runtime composition changed after construction")
+        _assert_compiled_output_contract(self.runtime_bundle)
 
     def _runtime_receipt(self, **payloads) -> dict:
         return {
@@ -221,6 +267,7 @@ class OutputGenerator:
         """allow_recompute=False is a real render mode (cheap/offline serve):
         a STALE materialization renders only with the banner and is barred
         from export; a missing basis refuses (views/VIEWS.md)."""
+        self._assert_runtime_composition()
         # sharing/authority re-evaluated per request (D12) — a revoked
         # inspector loses access on this call, not at next recompute
         access = self.authority.evaluate_read(
@@ -328,6 +375,7 @@ class OutputGenerator:
         does not exist until the state publishes it (D13); "filed" means the
         frozen submission artifact left the publication gate complete.
         """
+        self._assert_runtime_composition()
         publication_action = ("FILE_SUBMISSION_ASSEMBLY" if as_submission
                               else "FREEZE_DOCUMENT_ASSEMBLY")
         output_kind = "SUBMISSION_ASSEMBLY" if as_submission else "REPORT_ASSEMBLY"
@@ -592,6 +640,7 @@ class OutputGenerator:
                     (durable_ref, digest, doc_id, Jsonb(document),
                      self.runtime_bundle.digest))
             elif (prior_artifact["digest"] != digest
+                  or prior_artifact["metadata_record_id"] != doc_id
                   or canonical_json(prior_artifact["document"]) != canonical_json(document)
                   or prior_artifact["runtime_bundle_digest"] != self.runtime_bundle.digest):
                 raise RuntimeError(

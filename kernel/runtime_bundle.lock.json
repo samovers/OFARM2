@@ -1,831 +1,957 @@
 {
-  "lockVersion": "ofarm.runtime-bundle-component-lock.local.v1",
+  "lockVersion": "ofarm.runtime-bundle-component-lock.local.v2",
   "components": [
     {
       "role": "ACTIVE_MANIFEST",
       "logicalRef": "manifest:si.ffs.pilot.v0_1",
       "path": "profile_si_ffs/OFARM_Capability_Manifest_si_ffs_pilot_v0_1.json",
       "canonicalization": "OFARM_CANONICAL_JSON_V1",
-      "sha256": "sha256:f1d619ee0eaa990e720791d182315b89da3bf35f5de9c221a3add2ae67de0490"
+      "sha256": "sha256:f1d619ee0eaa990e720791d182315b89da3bf35f5de9c221a3add2ae67de0490",
+      "placement": "TENANT_RUNTIME_SELECTION"
     },
     {
       "role": "CONTRACT_MANIFEST",
       "logicalRef": "manifest:contracts",
       "path": "contracts/CONTRACTS_MANIFEST.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:22663a53d2017fe28754195a2cbc55a3fefe35719a3a810fcfec670897676c1d"
+      "sha256": "sha256:22663a53d2017fe28754195a2cbc55a3fefe35719a3a810fcfec670897676c1d",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_METADATA",
       "logicalRef": "contract-file:contracts/drafts_reference/explainable_current_state_evidence/folder.status.json",
       "path": "contracts/drafts_reference/explainable_current_state_evidence/folder.status.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:af46ea052ac1516375bdb6b7ff908fd3a999499128513d4c2df231065bd91201"
+      "sha256": "sha256:af46ea052ac1516375bdb6b7ff908fd3a999499128513d4c2df231065bd91201",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.acceptedeventconsequence.v0.1",
       "path": "contracts/kernel/OFARM_AcceptedEventConsequence_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:4d252feea0822c9dae3cc86fc844b629e54918f5e9af4a0401b77f4940117652"
+      "sha256": "sha256:4d252feea0822c9dae3cc86fc844b629e54918f5e9af4a0401b77f4940117652",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.activeartifactset.v0.1",
       "path": "contracts/platform/OFARM_ActiveArtifactSet_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:a1f3395fd6f1e2c88de8dcbf9980f7928dd97b9695a205e879ab201557ddc75c"
+      "sha256": "sha256:a1f3395fd6f1e2c88de8dcbf9980f7928dd97b9695a205e879ab201557ddc75c",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.agronomiccodebindingprofile.v0.1",
       "path": "contracts/core/OFARM_AgronomicCodeBindingProfile_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:b5ff226251757c665da069ec0333f896893d328de4ceef02fbc0fe238b8fd98b"
+      "sha256": "sha256:b5ff226251757c665da069ec0333f896893d328de4ceef02fbc0fe238b8fd98b",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.agronomicidentitybinding.v0.1",
       "path": "contracts/core/OFARM_AgronomicIdentityBinding_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:3bdbc7137df159e747f473cbf7472c53904b7534292929c9db2f74d0c91c0908"
+      "sha256": "sha256:3bdbc7137df159e747f473cbf7472c53904b7534292929c9db2f74d0c91c0908",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.agronomicobservationcontext.v0.1",
       "path": "contracts/core/OFARM_AgronomicObservationContext_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:9b7919083305f7fa3739580f9a8cd2b63ec7938c4cf5a75249ea32f991556ebe"
+      "sha256": "sha256:9b7919083305f7fa3739580f9a8cd2b63ec7938c4cf5a75249ea32f991556ebe",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.appliedresourceidentitypayload.v0.1",
       "path": "contracts/core/OFARM_AppliedResourceIdentityPayload_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:a9528c9083cedbae3e01ea52a3e79381dc936ca3d1b344ab6f0b2b605da44f7a"
+      "sha256": "sha256:a9528c9083cedbae3e01ea52a3e79381dc936ca3d1b344ab6f0b2b605da44f7a",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.assertionrecord.v0.1",
       "path": "contracts/kernel/OFARM_AssertionRecord_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:82c0a2095a65040674303f593a62a3a9a45fb1385e08319c359fa74a2f351aab"
+      "sha256": "sha256:82c0a2095a65040674303f593a62a3a9a45fb1385e08319c359fa74a2f351aab",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.authoritygrant.v0.1",
       "path": "contracts/kernel/OFARM_AuthorityGrant_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:e2fe6ee1a1f74e05034d9f1dfc907d9f19914fb4145d88db71ca6b1bd34f04ea"
+      "sha256": "sha256:e2fe6ee1a1f74e05034d9f1dfc907d9f19914fb4145d88db71ca6b1bd34f04ea",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.authorizationdecisionrequest.v0.1",
       "path": "contracts/kernel/OFARM_AuthorizationDecisionRequest_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:a62c7b8a269130a4c3b618ab029ffada97597626131bd45e2335ff31e95880fa"
+      "sha256": "sha256:a62c7b8a269130a4c3b618ab029ffada97597626131bd45e2335ff31e95880fa",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.authorizationdecisionresult.v0.1",
       "path": "contracts/kernel/OFARM_AuthorizationDecisionResult_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:f6d0de06e1bc6b8fc7a3f991abf28f2a3242942b50834b97292fa8e00fdd0127"
+      "sha256": "sha256:f6d0de06e1bc6b8fc7a3f991abf28f2a3242942b50834b97292fa8e00fdd0127",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.authorizationdecisiontrace.v0.1",
       "path": "contracts/kernel/OFARM_AuthorizationDecisionTrace_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:1cc9886c3a9787a76657753fb682dd29337f2b8485e51557607bb6736de1571d"
+      "sha256": "sha256:1cc9886c3a9787a76657753fb682dd29337f2b8485e51557607bb6736de1571d",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.capabilitymanifest.v0.1",
       "path": "contracts/platform/OFARM_Capability_Manifest_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:7880026db81ab6c63332bf7c167ada05bc6d3846f8483a0b6e24844826551969"
+      "sha256": "sha256:7880026db81ab6c63332bf7c167ada05bc6d3846f8483a0b6e24844826551969",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.commitingressrequest.v0.1",
       "path": "contracts/kernel/OFARM_CommitIngressRequest_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:397ec3a61ed572b14f9916bc9e7b316ff48150c743c6b7aa2eab94a3be3e8ffc"
+      "sha256": "sha256:397ec3a61ed572b14f9916bc9e7b316ff48150c743c6b7aa2eab94a3be3e8ffc",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.commitingressresult.v0.1",
       "path": "contracts/kernel/OFARM_CommitIngressResult_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:55a21c697a651cdff6ce8d64dd7c29dd2afaa329047b4ebd55c94497a411e7d5"
+      "sha256": "sha256:55a21c697a651cdff6ce8d64dd7c29dd2afaa329047b4ebd55c94497a411e7d5",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.complianceclaim.v0.1",
       "path": "contracts/kernel/OFARM_ComplianceClaim_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:63046520273b75e40014da185d85e2dba370e15663cec98992bc350c129de32d"
+      "sha256": "sha256:63046520273b75e40014da185d85e2dba370e15663cec98992bc350c129de32d",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.contextsnapshot.v0.1",
       "path": "contracts/kernel/OFARM_ContextSnapshot_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:6a7048fe5ded813a8e277516c2502984b8f2cf1f326e9883de77d191472715d0"
+      "sha256": "sha256:6a7048fe5ded813a8e277516c2502984b8f2cf1f326e9883de77d191472715d0",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.cropcycleidentitypayload.v0.1",
       "path": "contracts/core/OFARM_CropCycleIdentityPayload_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:e166e0c9cef5629418a1024e4d1fe18ce5043681b4d32e8285a46d615a0c7cb7"
+      "sha256": "sha256:e166e0c9cef5629418a1024e4d1fe18ce5043681b4d32e8285a46d615a0c7cb7",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.delegationgrant.v0.1",
       "path": "contracts/kernel/OFARM_DelegationGrant_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:0e51d061112a40aadff73c57369aabe15b3c57dc64dddbb8607e429ddf92b043"
+      "sha256": "sha256:0e51d061112a40aadff73c57369aabe15b3c57dc64dddbb8607e429ddf92b043",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.documentassemblymetadata.v0.1",
       "path": "contracts/platform/OFARM_DocumentAssemblyMetadata_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:a12743d66b3eaa7195f372b537e890bdfaba1f76e5d9451ec0f7f1cbe8177c17"
+      "sha256": "sha256:a12743d66b3eaa7195f372b537e890bdfaba1f76e5d9451ec0f7f1cbe8177c17",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.equipmentidentitypayload.v0.1",
       "path": "contracts/core/OFARM_EquipmentIdentityPayload_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:c65758044ee68b0559c0cc2c62c96a57491057874c39ff9471feda0f83f396d7"
+      "sha256": "sha256:c65758044ee68b0559c0cc2c62c96a57491057874c39ff9471feda0f83f396d7",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.evidencerecord.v0.1",
       "path": "contracts/kernel/OFARM_EvidenceRecord_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:ee68822ae45e6a013412ef5173810747340c14671f44b593ee6f35ee113f2be6"
+      "sha256": "sha256:ee68822ae45e6a013412ef5173810747340c14671f44b593ee6f35ee113f2be6",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.evidencesufficiencycase.v0.2",
       "path": "contracts/kernel/OFARM_EvidenceSufficiencyCase_schema_v0_2.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:b3d93fa6ce4d6ff0693e5a71791a4429fb39753e7e9ba2cac192d53216c7a1ab"
+      "sha256": "sha256:b3d93fa6ce4d6ff0693e5a71791a4429fb39753e7e9ba2cac192d53216c7a1ab",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.executionrecordpayload.v0.1",
       "path": "contracts/core/OFARM_ExecutionRecordPayload_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:ca62f01d056794ee588d55c3f5df652fc039124b76af5631d417714bc7059ff0"
+      "sha256": "sha256:ca62f01d056794ee588d55c3f5df652fc039124b76af5631d417714bc7059ff0",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.explainableCurrentStateEvidence.explainableCurrentStateCapabilityClaim.v0.1-draft",
       "path": "contracts/drafts_reference/explainable_current_state_evidence/OFARM_ExplainableCurrentStateCapabilityClaim_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:fd338f5437758e12ba9b65b167b55d53779efc1b3ce7957ebd235b4350b1f47a"
+      "sha256": "sha256:fd338f5437758e12ba9b65b167b55d53779efc1b3ce7957ebd235b4350b1f47a",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.explainableCurrentStateEvidence.invalidationEvaluationTrace.v0.1-draft",
       "path": "contracts/drafts_reference/explainable_current_state_evidence/OFARM_InvalidationEvaluationTrace_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:bdb8958aa038bea1b6b808b48fce6885a390dcaa80166e12070b612c817b529b"
+      "sha256": "sha256:bdb8958aa038bea1b6b808b48fce6885a390dcaa80166e12070b612c817b529b",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.explainableCurrentStateEvidence.materializationCostProfile.v0.1-draft",
       "path": "contracts/drafts_reference/explainable_current_state_evidence/OFARM_MaterializationCostProfile_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:8fffd59f28f0d08de0e121050636a45ae230779c1b53de5bd5b289907651d1fb"
+      "sha256": "sha256:8fffd59f28f0d08de0e121050636a45ae230779c1b53de5bd5b289907651d1fb",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.explainableCurrentStateEvidence.materializationDependencyIndex.v0.1-draft",
       "path": "contracts/drafts_reference/explainable_current_state_evidence/OFARM_MaterializationDependencyIndex_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:402d3eb7cb0184567b4006ee880279065294f287d0521c6ebff9ae12531f6689"
+      "sha256": "sha256:402d3eb7cb0184567b4006ee880279065294f287d0521c6ebff9ae12531f6689",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.explainableCurrentStateEvidence.materializationFreshnessVector.v0.1-draft",
       "path": "contracts/drafts_reference/explainable_current_state_evidence/OFARM_MaterializationFreshnessVector_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:803f024e85c514081d66f75423defbf549c355f4405b67ce5bea3ebb6236c4fa"
+      "sha256": "sha256:803f024e85c514081d66f75423defbf549c355f4405b67ce5bea3ebb6236c4fa",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.explainableCurrentStateEvidence.materializationKey.v0.1-draft",
       "path": "contracts/drafts_reference/explainable_current_state_evidence/OFARM_MaterializationKey_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:2c9583f75296da8ef5d127bc4735dc6d83e692e93fb4401e418a35e7ea77b7e7"
+      "sha256": "sha256:2c9583f75296da8ef5d127bc4735dc6d83e692e93fb4401e418a35e7ea77b7e7",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.explainableCurrentStateEvidence.runtimeMaterializationBenchmarkRun.v0.1-draft",
       "path": "contracts/drafts_reference/explainable_current_state_evidence/OFARM_RuntimeMaterializationBenchmarkRun_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:2e0bd6137b7d292344278865269decacd8eda4e1e7df50b3f766779d046076b6"
+      "sha256": "sha256:2e0bd6137b7d292344278865269decacd8eda4e1e7df50b3f766779d046076b6",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.explainableCurrentStateEvidence.runtimeQueryMixProfile.v0.1-draft",
       "path": "contracts/drafts_reference/explainable_current_state_evidence/OFARM_RuntimeQueryMixProfile_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:a1540146e5c1690fbfe9fdcdfb95247293fd3c8d987e56ae58a7aa9676887212"
+      "sha256": "sha256:a1540146e5c1690fbfe9fdcdfb95247293fd3c8d987e56ae58a7aa9676887212",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.explainableCurrentStateEvidence.runtimeStorageAmplificationReport.v0.1-draft",
       "path": "contracts/drafts_reference/explainable_current_state_evidence/OFARM_RuntimeStorageAmplificationReport_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:fa16c3d4d1d82e7d82bf089e049f13a9a7e581c9c2fe4df72e65525241f2d8cc"
+      "sha256": "sha256:fa16c3d4d1d82e7d82bf089e049f13a9a7e581c9c2fe4df72e65525241f2d8cc",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.explainableCurrentStateEvidence.traceExpansionPolicy.v0.1-draft",
       "path": "contracts/drafts_reference/explainable_current_state_evidence/OFARM_TraceExpansionPolicy_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:b5e5a8fb53d36a2271268365ab4887a54e315013af142ef76adfa2096b4a66bd"
+      "sha256": "sha256:b5e5a8fb53d36a2271268365ab4887a54e315013af142ef76adfa2096b4a66bd",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.explainableCurrentStateEvidence.traceExpansionRequest.v0.1-draft",
       "path": "contracts/drafts_reference/explainable_current_state_evidence/OFARM_TraceExpansionRequest_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:8207acac3aa9ccc6f29e24b395d1ae63211288f04c7b87758cdb8100e8a87a1b"
+      "sha256": "sha256:8207acac3aa9ccc6f29e24b395d1ae63211288f04c7b87758cdb8100e8a87a1b",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.explainableCurrentStateEvidence.traceExpansionResult.v0.1-draft",
       "path": "contracts/drafts_reference/explainable_current_state_evidence/OFARM_TraceExpansionResult_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:c7554d34d9dc6508fec3a145eb8d04209e0fff849d87c62c8c244ec4eae90161"
+      "sha256": "sha256:c7554d34d9dc6508fec3a145eb8d04209e0fff849d87c62c8c244ec4eae90161",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.externalregistryverificationtrace.v0.1",
       "path": "contracts/core/OFARM_ExternalRegistryVerificationTrace_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:978c78ac5cf5f9d45b199b624b8e05b8be660355757c1a2cbf62aa50a93c99b1"
+      "sha256": "sha256:978c78ac5cf5f9d45b199b624b8e05b8be660355757c1a2cbf62aa50a93c99b1",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.farmidentitypayload.v0.1",
       "path": "contracts/core/OFARM_FarmIdentityPayload_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:3aadef4e297b7dba9e5b0bcb01e74f2593d8d08015ef1eda2af1973727292c0c"
+      "sha256": "sha256:3aadef4e297b7dba9e5b0bcb01e74f2593d8d08015ef1eda2af1973727292c0c",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.fieldidentitypayload.v0.1",
       "path": "contracts/core/OFARM_FieldIdentityPayload_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:baadfd40d8d1157f17dbedfb3e3905287b1e8a2d86a9dd0506b48d6aca95a983"
+      "sha256": "sha256:baadfd40d8d1157f17dbedfb3e3905287b1e8a2d86a9dd0506b48d6aca95a983",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.identitylifecyclechange.v0.1",
       "path": "contracts/kernel/OFARM_IdentityLifecycleChange_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:1802c9593400e2016339d41c50eb8286455b3061f0fd6418a6f3a62c33cd0be1"
+      "sha256": "sha256:1802c9593400e2016339d41c50eb8286455b3061f0fd6418a6f3a62c33cd0be1",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.identityrecord.v0.1",
       "path": "contracts/kernel/OFARM_IdentityRecord_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:0a7e30f7b6cd6d04fa4da3ac7b1127ff162dd1ebe578406cee5a743df4af7a2f"
+      "sha256": "sha256:0a7e30f7b6cd6d04fa4da3ac7b1127ff162dd1ebe578406cee5a743df4af7a2f",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.interventionintentpayload.v0.1",
       "path": "contracts/core/OFARM_InterventionIntentPayload_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:72e4603d3cc98fcd99439f8a06c80724e14d4961031ff3b0a1774f3407725ec0"
+      "sha256": "sha256:72e4603d3cc98fcd99439f8a06c80724e14d4961031ff3b0a1774f3407725ec0",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.materializationbasis.v0.1",
       "path": "contracts/kernel/OFARM_MaterializationBasis_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:e0281cf08d2c1862e1cb52e0958ba7378f5f4a48354f13af9e1f45839c08657b"
+      "sha256": "sha256:e0281cf08d2c1862e1cb52e0958ba7378f5f4a48354f13af9e1f45839c08657b",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.materializationrequest.v0.1",
       "path": "contracts/kernel/OFARM_MaterializationRequest_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:76e64fc7df1fc513da35ce0c4174382b7437f901d80a97acea179258bcaa4707"
+      "sha256": "sha256:76e64fc7df1fc513da35ce0c4174382b7437f901d80a97acea179258bcaa4707",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.materializationresult.v0.1",
       "path": "contracts/kernel/OFARM_MaterializationResult_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:7708d4829d18d8e34e974c464c81d4dae0ac3f461a0adfa7b2c09989ca7ac895"
+      "sha256": "sha256:7708d4829d18d8e34e974c464c81d4dae0ac3f461a0adfa7b2c09989ca7ac895",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.materializationsnapshot.v0.1",
       "path": "contracts/kernel/OFARM_MaterializationSnapshot_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:d0405138b41a3d4ee1bfd966a9cd37f0c3856056b62a4ec26bad958807a86927"
+      "sha256": "sha256:d0405138b41a3d4ee1bfd966a9cd37f0c3856056b62a4ec26bad958807a86927",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.measurementevidence.v0.1",
       "path": "contracts/core/OFARM_MeasurementEvidence_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:90c4cf2d1387633172e772c970d0c76889ceec0fca4682a5053914375bdc9280"
+      "sha256": "sha256:90c4cf2d1387633172e772c970d0c76889ceec0fca4682a5053914375bdc9280",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.narrativeobservation.v0.1",
       "path": "contracts/core/OFARM_NarrativeObservation_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:3c6cf0e42e8b00db7ebfb97142a0fb14ef89c49ca76ce731d5280f26525c8880"
+      "sha256": "sha256:3c6cf0e42e8b00db7ebfb97142a0fb14ef89c49ca76ce731d5280f26525c8880",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.packactivationset.v0.1",
       "path": "contracts/platform/OFARM_PackActivationSet_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:6ea098261928e74d447f89d87a3264d3b6230bac64569fde035b57fa1abc9a6c"
+      "sha256": "sha256:6ea098261928e74d447f89d87a3264d3b6230bac64569fde035b57fa1abc9a6c",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.partialextent.v0.1",
       "path": "contracts/core/OFARM_PartialExtent_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:ac0710a29c1b95656fcf7edd2f31fd77d01d288326245845400d1d8a713c16c7"
+      "sha256": "sha256:ac0710a29c1b95656fcf7edd2f31fd77d01d288326245845400d1d8a713c16c7",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.party.v0.1",
       "path": "contracts/kernel/OFARM_Party_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:3eebc6af3ff790fd0e5df8af310f3d91c55c0c365bb4571ae33fcaa88b535a0f"
+      "sha256": "sha256:3eebc6af3ff790fd0e5df8af310f3d91c55c0c365bb4571ae33fcaa88b535a0f",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.passportviewmetadata.v0.1",
       "path": "contracts/platform/OFARM_PassportViewMetadata_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:c544d89b27580649fa14fb3a965ba96536327d6b3a8710603faf94cf9792035f"
+      "sha256": "sha256:c544d89b27580649fa14fb3a965ba96536327d6b3a8710603faf94cf9792035f",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.plannedintervention.v0.1",
       "path": "contracts/core/OFARM_PlannedIntervention_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:f807389f5e5586423c024b2cfe3eb588f77bc7c4f6d7ec84d2df2aa102bb2663"
+      "sha256": "sha256:f807389f5e5586423c024b2cfe3eb588f77bc7c4f6d7ec84d2df2aa102bb2663",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.promotiontrace.v0.1",
       "path": "contracts/kernel/OFARM_PromotionTrace_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:07c073fba6fa023e4463339a383d4b0d881be38c17d626ec7d27caaa688d4e3f"
+      "sha256": "sha256:07c073fba6fa023e4463339a383d4b0d881be38c17d626ec7d27caaa688d4e3f",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.publicationassemblyrequest.v0.1",
       "path": "contracts/platform/OFARM_PublicationAssemblyRequest_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:81442625a17d73a35fd439a1622d3541d1aa8511cb9f6c1807c2f71cd5ceb2b0"
+      "sha256": "sha256:81442625a17d73a35fd439a1622d3541d1aa8511cb9f6c1807c2f71cd5ceb2b0",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.publicationassemblyresult.v0.1",
       "path": "contracts/platform/OFARM_PublicationAssemblyResult_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:9c04e6092394f066ae2214be271e1e38a996eed23e5bb9fdf0e73b04665155e8"
+      "sha256": "sha256:9c04e6092394f066ae2214be271e1e38a996eed23e5bb9fdf0e73b04665155e8",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.queryplanir.v0.1",
       "path": "contracts/platform/OFARM_QueryPlanIR_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:85049f7f9fd6a5e0b862ac64b7831b24915487c7324883678e306ce7f84e781d"
+      "sha256": "sha256:85049f7f9fd6a5e0b862ac64b7831b24915487c7324883678e306ce7f84e781d",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.queryspec.v0.1",
       "path": "contracts/platform/OFARM_QuerySpecification_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:2bea7cd2c1cd7a83577b75cc5a1b284c8a5f5db37aa99d95ac044a3f2bd0f035"
+      "sha256": "sha256:2bea7cd2c1cd7a83577b75cc5a1b284c8a5f5db37aa99d95ac044a3f2bd0f035",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.referencesnapshot.v0.1",
       "path": "contracts/core/OFARM_ReferenceSnapshot_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:2598fc43d33aeddeb314f0e95acb73c00db5b59994f60dccba32f5a52236c0b1"
+      "sha256": "sha256:2598fc43d33aeddeb314f0e95acb73c00db5b59994f60dccba32f5a52236c0b1",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.resultqualificationenvelope.v0.1",
       "path": "contracts/platform/OFARM_ResultQualificationEnvelope_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:a6fa2ac6029b01aa5536d563dab099e8adc224e696bfd468e9bd0ab90b5eeb52"
+      "sha256": "sha256:a6fa2ac6029b01aa5536d563dab099e8adc224e696bfd468e9bd0ab90b5eeb52",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.reviewdecision.v0.1",
       "path": "contracts/kernel/OFARM_ReviewDecision_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:fb6d3db91f59d566772286d5b3d1c2ee7953b88fbd30dc0a39de866b57f0b500"
+      "sha256": "sha256:fb6d3db91f59d566772286d5b3d1c2ee7953b88fbd30dc0a39de866b57f0b500",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.revocationdecision.v0.1",
       "path": "contracts/kernel/OFARM_RevocationDecision_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:71e24e0adef2b58c5103bd49c755a2922a47e0df9df94fcbab7d3054893bd68a"
+      "sha256": "sha256:71e24e0adef2b58c5103bd49c755a2922a47e0df9df94fcbab7d3054893bd68a",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.roleassignment.v0.1",
       "path": "contracts/kernel/OFARM_RoleAssignment_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:1f8d98449ba458157b1fa7aa4fa747aa37ae793997d6290e5001430bdc409b2a"
+      "sha256": "sha256:1f8d98449ba458157b1fa7aa4fa747aa37ae793997d6290e5001430bdc409b2a",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.runtimeproblem.v0.1",
       "path": "contracts/kernel/OFARM_RuntimeProblem_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:873dbeda2932d48a54e5d08d22f4031c6a86b44712a3cec85f1c1008f4d6e95b"
+      "sha256": "sha256:873dbeda2932d48a54e5d08d22f4031c6a86b44712a3cec85f1c1008f4d6e95b",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.semanticeventenvelope.v0.1",
       "path": "contracts/kernel/OFARM_SemanticEventEnvelope_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:75662a6c4952a62b7e8f8e9de99c23c98899c692914a98ba4b752873f48bd1a4"
+      "sha256": "sha256:75662a6c4952a62b7e8f8e9de99c23c98899c692914a98ba4b752873f48bd1a4",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "CONTRACT_SCHEMA",
       "logicalRef": "contract:ofarm.sharinggrant.v0.1",
       "path": "contracts/kernel/OFARM_SharingGrant_schema_v0_1.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:18be0d59e130c88ec0b408762488c84ddaa52a6e64cf217a2757b4f5d99a7c98"
+      "sha256": "sha256:18be0d59e130c88ec0b408762488c84ddaa52a6e64cf217a2757b4f5d99a7c98",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "PARSER_CODE",
       "logicalRef": "python:tooling/gerk_roundtrip/gerk_roundtrip.py",
       "path": "tooling/gerk_roundtrip/gerk_roundtrip.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:947a3295dd11906acef3206a16c2b8acf54e6024c955e7f8f866de58a513102e"
+      "sha256": "sha256:947a3295dd11906acef3206a16c2b8acf54e6024c955e7f8f866de58a513102e",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "PARSER_CODE",
       "logicalRef": "python:tooling/regsr_snapshot/parse_regsr.py",
       "path": "tooling/regsr_snapshot/parse_regsr.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:97a928d289dd57ef2500e3d469c0abaac50c5658384d9fe4de15434718d4c584"
+      "sha256": "sha256:97a928d289dd57ef2500e3d469c0abaac50c5658384d9fe4de15434718d4c584",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "PROFILE_DESCRIPTOR",
       "logicalRef": "profile:si.ffs.recordkeeping.v0_1",
       "path": "profile_si_ffs/runtime_profile_descriptor.json",
       "canonicalization": "OFARM_CANONICAL_JSON_V1",
-      "sha256": "sha256:c84573012d61c79e743ffd4c1280fb7b09746c3511c75052731f5a82237fcf0f"
+      "sha256": "sha256:c84573012d61c79e743ffd4c1280fb7b09746c3511c75052731f5a82237fcf0f",
+      "placement": "TENANT_RUNTIME_SELECTION"
     },
     {
       "role": "PROFILE_INSTANCE",
       "logicalRef": "activeartifactset:si.ffs.pilot.v0_1",
       "path": "profile_si_ffs/OFARM_ActiveArtifactSet_example_si_ffs_pilot_v0_1.json",
       "canonicalization": "OFARM_CANONICAL_JSON_V1",
-      "sha256": "sha256:383a3ad3020b84591e600e081a20e282748dedfd9699a12a2521ae58b63bead3"
+      "sha256": "sha256:383a3ad3020b84591e600e081a20e282748dedfd9699a12a2521ae58b63bead3",
+      "placement": "TENANT_RUNTIME_SELECTION"
     },
     {
       "role": "PROFILE_INSTANCE",
       "logicalRef": "codebindingprofile:si.ffs.v0_1",
       "path": "profile_si_ffs/OFARM_AgronomicCodeBindingProfile_si_ffs_v0_1.json",
       "canonicalization": "OFARM_CANONICAL_JSON_V1",
-      "sha256": "sha256:b41079879a89d4602ebc46f228c7bf00648fbbc56c3a36dec36e7781f80efc5f"
+      "sha256": "sha256:b41079879a89d4602ebc46f228c7bf00648fbbc56c3a36dec36e7781f80efc5f",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "PROFILE_INSTANCE",
       "logicalRef": "contextsnapshot:si.ffs.pilot.compliance.demo.v0_1",
       "path": "profile_si_ffs/OFARM_ContextSnapshot_example_si_ffs_pilot_compliance_v0_1.json",
       "canonicalization": "OFARM_CANONICAL_JSON_V1",
-      "sha256": "sha256:247265147f738c3b6f565e863a01d5a89007f3f2c488778471c095ca7c6ba1c6"
+      "sha256": "sha256:247265147f738c3b6f565e863a01d5a89007f3f2c488778471c095ca7c6ba1c6",
+      "placement": "TENANT_RUNTIME_SELECTION"
     },
     {
       "role": "PROFILE_INSTANCE",
       "logicalRef": "packactivationset:si.ffs.pilot.v0_1",
       "path": "profile_si_ffs/OFARM_PackActivationSet_example_si_ffs_pilot_v0_1.json",
       "canonicalization": "OFARM_CANONICAL_JSON_V1",
-      "sha256": "sha256:f6bc3ae47e0c06babb7e9299bde286c4682c3ef3e5d27ebfe8418d9c40aad142"
+      "sha256": "sha256:f6bc3ae47e0c06babb7e9299bde286c4682c3ef3e5d27ebfe8418d9c40aad142",
+      "placement": "TENANT_RUNTIME_SELECTION"
     },
     {
       "role": "PROFILE_POLICY",
       "logicalRef": "policy:si.ffs.evidence-review.v0_1",
       "path": "profile_si_ffs/evidence_review_policy_v0_1.json",
       "canonicalization": "OFARM_CANONICAL_JSON_V1",
-      "sha256": "sha256:b5425e20e51690cc8b052390c9bd6a8ec22756d061b4067f789707e49078a65b"
+      "sha256": "sha256:b5425e20e51690cc8b052390c9bd6a8ec22756d061b4067f789707e49078a65b",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "QUERY_PLAN",
       "logicalRef": "queryplan:si.ffs.inspection-register.documentassembly.v0_1",
       "path": "profile_si_ffs/views/OFARM_QueryPlanIR_si_ffs_inspection_register_documentassembly_v0_1.json",
       "canonicalization": "OFARM_CANONICAL_JSON_V1",
-      "sha256": "sha256:6abdfc7a88e8f129dce28898712771fc8825f1a60aafbd1a1eee16ecf13d0236"
+      "sha256": "sha256:6abdfc7a88e8f129dce28898712771fc8825f1a60aafbd1a1eee16ecf13d0236",
+      "placement": "TENANT_RUNTIME_SELECTION"
     },
     {
       "role": "QUERY_PLAN",
       "logicalRef": "queryplan:si.ffs.spray-register.passportview.v0_1",
       "path": "profile_si_ffs/views/OFARM_QueryPlanIR_si_ffs_spray_register_passportview_v0_1.json",
       "canonicalization": "OFARM_CANONICAL_JSON_V1",
-      "sha256": "sha256:e86a25b5366e970275ad0348118718a63f19acfade31e7aa601cc3b2b941c0b4"
+      "sha256": "sha256:e86a25b5366e970275ad0348118718a63f19acfade31e7aa601cc3b2b941c0b4",
+      "placement": "TENANT_RUNTIME_SELECTION"
     },
     {
       "role": "QUERY_SPECIFICATION",
       "logicalRef": "queryspec:si.ffs.inspection-register.documentassembly.v0_1",
       "path": "profile_si_ffs/views/OFARM_QuerySpecification_si_ffs_inspection_register_documentassembly_v0_1.json",
       "canonicalization": "OFARM_CANONICAL_JSON_V1",
-      "sha256": "sha256:932473a3d62e5b3c2e7cc80f08d02187bb8f130f06852a79d61c8e92950e77ea"
+      "sha256": "sha256:932473a3d62e5b3c2e7cc80f08d02187bb8f130f06852a79d61c8e92950e77ea",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "QUERY_SPECIFICATION",
       "logicalRef": "queryspec:si.ffs.spray-register.passportview.v0_1",
       "path": "profile_si_ffs/views/OFARM_QuerySpecification_si_ffs_spray_register_passportview_v0_1.json",
       "canonicalization": "OFARM_CANONICAL_JSON_V1",
-      "sha256": "sha256:ccf0a641800ce0b3381793aece5306957e9bca64b0f47c3dcec519dfef478157"
+      "sha256": "sha256:ccf0a641800ce0b3381793aece5306957e9bca64b0f47c3dcec519dfef478157",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "REFERENCE_SNAPSHOT",
       "logicalRef": "referencesnapshot:si.mkgp.gerk-layer.2025-06-30",
       "path": "profile_si_ffs/OFARM_ReferenceSnapshot_example_si_gerk_layer_2025-06-30.json",
       "canonicalization": "OFARM_CANONICAL_JSON_V1",
-      "sha256": "sha256:095654cf34b0d9f5cbf8ded4b52750dd62d28582f27b63fc1939c7b9dd1e1e6a"
+      "sha256": "sha256:095654cf34b0d9f5cbf8ded4b52750dd62d28582f27b63fc1939c7b9dd1e1e6a",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "REFERENCE_SNAPSHOT",
       "logicalRef": "referencesnapshot:si.uvhvvr.ffs-reg.2026-06-11",
       "path": "profile_si_ffs/OFARM_ReferenceSnapshot_example_si_uvhvvr_ffs_reg_2026-06-11.json",
       "canonicalization": "OFARM_CANONICAL_JSON_V1",
-      "sha256": "sha256:f9475f6f9c075daeb4d86e6a7225edb13eb06ff36baa594cd5d0a69db64da9de"
+      "sha256": "sha256:f9475f6f9c075daeb4d86e6a7225edb13eb06ff36baa594cd5d0a69db64da9de",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "REFERENCE_SOURCE",
       "logicalRef": "artifact:regsr_snapshot_2026-06-12.json",
       "path": "profile_si_ffs/examples/regsr_snapshot_2026-06-12.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:609a6eb35e21371056ba74b835951ea9104dd20353d535ca043746a970919474"
+      "sha256": "sha256:609a6eb35e21371056ba74b835951ea9104dd20353d535ca043746a970919474",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "RUNTIME_CATALOG_CODE",
       "logicalRef": "python:tooling/runtime_bundle_lock.py",
       "path": "tooling/runtime_bundle_lock.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:f02e939789932b091e0614899b6ee350e95020d19e4ff5de4132e8c073e675a0"
+      "sha256": "sha256:f9e4a0bbf903bc2c6c8c4dc5a3564df0094f1a43f73a3cc6582d12654b0f7e13",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "RUNTIME_CODE",
       "logicalRef": "python:kernel/__init__.py",
       "path": "kernel/__init__.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:3e839548905f9dc9587048a8aa25cf50daf5443b8ebf214247eedc4f82ae40dd"
+      "sha256": "sha256:3e839548905f9dc9587048a8aa25cf50daf5443b8ebf214247eedc4f82ae40dd",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "RUNTIME_CODE",
       "logicalRef": "python:kernel/adapters.py",
       "path": "kernel/adapters.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:171f592e49be9c3e1ab601eb4feaa0aeb1ab51a9cc29578f7d0d23b2a7ce13cf"
+      "sha256": "sha256:ee8a4c6ea0520ddc7179875a30fe74ecc1b5e275b36d72aefdcf9ad17773a0a9",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "RUNTIME_CODE",
       "logicalRef": "python:kernel/api.py",
       "path": "kernel/api.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:786344a352576fbbca5515d1695999e23bdd7e3a9791388444cb21a5f778366e"
+      "sha256": "sha256:2185dc93c16015a8eada2be0feb388ca40b35c5d30cf6ba44cf650e82db0a384",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "RUNTIME_CODE",
       "logicalRef": "python:kernel/auth_oidc.py",
       "path": "kernel/auth_oidc.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:e291eb33b1a08f6c135b86ee23de46d195756b016732706620f1e3db71e44bc9"
+      "sha256": "sha256:e291eb33b1a08f6c135b86ee23de46d195756b016732706620f1e3db71e44bc9",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "RUNTIME_CODE",
       "logicalRef": "python:kernel/authority.py",
       "path": "kernel/authority.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:0a3de71c721007da53b05093a0218d865dbe64a0858aa4367183a6ba18867a1f"
+      "sha256": "sha256:0a3de71c721007da53b05093a0218d865dbe64a0858aa4367183a6ba18867a1f",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "RUNTIME_CODE",
       "logicalRef": "python:kernel/config.py",
       "path": "kernel/config.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:f7ae5314c3c76b8525942219dffeeead452e53f83c18cb36ce851b0dd28b34a2"
+      "sha256": "sha256:68f862a6ddaa9831ef852e041dfdcded27e546bb0159f2a3894655e2cf40e2c1",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "RUNTIME_CODE",
       "logicalRef": "python:kernel/context.py",
       "path": "kernel/context.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:67ee7631dceeffcf964d4748690f2894d69d48e0723115fd793ab9b1a4235c11"
+      "sha256": "sha256:04fbd7cc79860e5f97c6945d7dd1870a126d55a289474d4aefda58f83c8ab8e5",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "RUNTIME_CODE",
       "logicalRef": "python:kernel/contracts.py",
       "path": "kernel/contracts.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:f92efe5f936d2fde96fbe2d55e75710e338ef163c1b767c64dc4313f0e75a4d7"
-    },
-    {
-      "role": "RUNTIME_CODE",
-      "logicalRef": "python:kernel/demo.py",
-      "path": "kernel/demo.py",
-      "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:77b9d490d2a0bd836e486c613dd9809beefa601897501b0d6d440cd9adbbe552"
+      "sha256": "sha256:9fce5bea18b4997a6326bcf16cf9a5f3610691f4b9a706443fabe8670386e692",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "RUNTIME_CODE",
       "logicalRef": "python:kernel/emission.py",
       "path": "kernel/emission.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:c5b2d35ec323e1642d404f4e63d646a4c9a9ac5dc91e65594992abcdee52ed13"
+      "sha256": "sha256:c5b2d35ec323e1642d404f4e63d646a4c9a9ac5dc91e65594992abcdee52ed13",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "RUNTIME_CODE",
       "logicalRef": "python:kernel/gates.py",
       "path": "kernel/gates.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:44c00bd5129c75503090023e0109461d03cd4172275db6d38e09dcf7f677630d"
+      "sha256": "sha256:a02790c0731593472353c7a03e1fffc5caad762ef99ad84593678efb421eac93",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "RUNTIME_CODE",
       "logicalRef": "python:kernel/manifest.py",
       "path": "kernel/manifest.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:b5630d053bea4b6316054c9cd12edb560bb57fa126e349b387aca00396164a6a"
+      "sha256": "sha256:b5630d053bea4b6316054c9cd12edb560bb57fa126e349b387aca00396164a6a",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "RUNTIME_CODE",
       "logicalRef": "python:kernel/materializer.py",
       "path": "kernel/materializer.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:1a385e81cf06376f330b6a179c35934c2cdaaa89c683c36257e79afad8769dc4"
+      "sha256": "sha256:030297e9efd50e6d5b68697e318ead5b0ef158d6afd2d563028a44ff229f6991",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "RUNTIME_CODE",
       "logicalRef": "python:kernel/policy.py",
       "path": "kernel/policy.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:883f342ef5251d208e3ae504ea500324cdef0047448b843c5077859d84c3f4e3"
+      "sha256": "sha256:883f342ef5251d208e3ae504ea500324cdef0047448b843c5077859d84c3f4e3",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "RUNTIME_CODE",
       "logicalRef": "python:kernel/problems.py",
       "path": "kernel/problems.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:c4a3a3520f53e2aca1246ce637de78aa2fdefba3bb57f1bd8fe711dd69dca0fe"
+      "sha256": "sha256:c4a3a3520f53e2aca1246ce637de78aa2fdefba3bb57f1bd8fe711dd69dca0fe",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "RUNTIME_CODE",
       "logicalRef": "python:kernel/profile_policy.py",
       "path": "kernel/profile_policy.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:6cc8bd61483e23d1c8b71f37a4da31045b78f8c72803f718499d6de8f03ed7bd"
+      "sha256": "sha256:731e6468bac19b5acff279bf761aa1cf8c383624be02b1494c25fff28015276c",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "RUNTIME_CODE",
       "logicalRef": "python:kernel/profile_runtime.py",
       "path": "kernel/profile_runtime.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:1dd099f7b90ebe33e787b6201b03a5ad912cfb518dbb2024b24b585dbc93f510"
+      "sha256": "sha256:ebfa3087baac5985a1a124fbab1f6893c32a22f4f53f2f8f3b351d42f76397e4",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "RUNTIME_CODE",
       "logicalRef": "python:kernel/profiles/__init__.py",
       "path": "kernel/profiles/__init__.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:2376e174fef2212fd06e651e9466cea1b506edb3898a14d2244de645ea0e2aa9"
+      "sha256": "sha256:2376e174fef2212fd06e651e9466cea1b506edb3898a14d2244de645ea0e2aa9",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "RUNTIME_CODE",
       "logicalRef": "python:kernel/profiles/si_ffs/__init__.py",
       "path": "kernel/profiles/si_ffs/__init__.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:7c0de9cf66a8f96f7adf104b9c4433228043cc83f99c70b57f34e256dfd99628"
+      "sha256": "sha256:7c0de9cf66a8f96f7adf104b9c4433228043cc83f99c70b57f34e256dfd99628",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "RUNTIME_CODE",
       "logicalRef": "python:kernel/profiles/si_ffs/ffsnaprave_adapter.py",
       "path": "kernel/profiles/si_ffs/ffsnaprave_adapter.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:6e707e1e411e482438652e71c7c2437ce7b3b5dcb74d864dea3dd4d1b9cbc728"
+      "sha256": "sha256:c6291516c2d5cbab674c047d6b8caf18fa84c2fa510252ee26949a182996e018",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "RUNTIME_CODE",
       "logicalRef": "python:kernel/profiles/si_ffs/gerk_adapter.py",
       "path": "kernel/profiles/si_ffs/gerk_adapter.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:91a596398bff00b52b9070d040fd4d28c218199eb933a12a0794f6a3459211d9"
+      "sha256": "sha256:c6c6faa56c9f5801802622d8b39b276238353c82e5815c9a4f1ea8e636ac7c14",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "RUNTIME_CODE",
       "logicalRef": "python:kernel/profiles/si_ffs/regsr_adapter.py",
       "path": "kernel/profiles/si_ffs/regsr_adapter.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:aa07ade5eb99db2a0cf7cfceef49a4e784f14b7c712fd4e8a1b0ba1bab45ff13"
+      "sha256": "sha256:aa07ade5eb99db2a0cf7cfceef49a4e784f14b7c712fd4e8a1b0ba1bab45ff13",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "RUNTIME_CODE",
       "logicalRef": "python:kernel/profiles/si_ffs/si_bindings.py",
       "path": "kernel/profiles/si_ffs/si_bindings.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:ad07a68d5fa2f509cabaaa564a85520f9ad4fbc94558ad7b5e7eb1a0a018e6d4"
+      "sha256": "sha256:ad07a68d5fa2f509cabaaa564a85520f9ad4fbc94558ad7b5e7eb1a0a018e6d4",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "RUNTIME_CODE",
       "logicalRef": "python:kernel/runtime_bundle.py",
       "path": "kernel/runtime_bundle.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:a235ef340038c1a7e4599c32f4fceaa33726e602c2fd12343d61060093eac6db"
+      "sha256": "sha256:ad42ffbcd2729eeeb098cdd6547ccd07f786be266a1774a22230a26a63737853",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "RUNTIME_CODE",
       "logicalRef": "python:kernel/stages.py",
       "path": "kernel/stages.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:792598f9dfebf24f34a01701078b617f778ac5421647eced3d26428becfce710"
+      "sha256": "sha256:792598f9dfebf24f34a01701078b617f778ac5421647eced3d26428becfce710",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "RUNTIME_CODE",
       "logicalRef": "python:kernel/store.py",
       "path": "kernel/store.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:8ef3a21b38840c6117c676a8a7e5aa7b1ea8d46ed43671a23e02aaf9f71910d1"
+      "sha256": "sha256:a34f5424557c3f9589ba5242ca733f30a7b1bef70a8a6bfdd1a219c2b736470e",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "RUNTIME_CODE",
       "logicalRef": "python:kernel/sufficiency.py",
       "path": "kernel/sufficiency.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:81bc9bd538226beb68c1368743c4a46024493cdd6448cc8653b7cbea6134ca13"
+      "sha256": "sha256:81bc9bd538226beb68c1368743c4a46024493cdd6448cc8653b7cbea6134ca13",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "RUNTIME_CODE",
       "logicalRef": "python:kernel/validators.py",
       "path": "kernel/validators.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:e2916c242a73fc858aca13a33e7c5fbf7cf3fbbc3e12a6d2569f477da4853a0f"
+      "sha256": "sha256:e2916c242a73fc858aca13a33e7c5fbf7cf3fbbc3e12a6d2569f477da4853a0f",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "RUNTIME_CODE",
       "logicalRef": "python:kernel/verification.py",
       "path": "kernel/verification.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:0dc8e16c05074daea9de0cdf1ab11d3285739a9d5a3ddfc794417cc6ca148192"
+      "sha256": "sha256:0dc8e16c05074daea9de0cdf1ab11d3285739a9d5a3ddfc794417cc6ca148192",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "RUNTIME_CODE",
       "logicalRef": "python:kernel/views.py",
       "path": "kernel/views.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:796a7c0f5a7b89287d37fa248b27d8bf63ab99d9651431b322549fb82a8e3725"
+      "sha256": "sha256:369d29ade0877c308df827932a267075ef11a4a115f034017627b442c5e78217",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "RUNTIME_ENVIRONMENT",
       "logicalRef": "environment:.python-version",
       "path": ".python-version",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:aa0d6581054e6e4ff3f91839deca7a854ad37221b8784d060b42d0f847ff1a3b"
+      "sha256": "sha256:aa0d6581054e6e4ff3f91839deca7a854ad37221b8784d060b42d0f847ff1a3b",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
+    },
+    {
+      "role": "RUNTIME_ENVIRONMENT",
+      "logicalRef": "environment:conformance/review_baseline_config.json",
+      "path": "conformance/review_baseline_config.json",
+      "canonicalization": "OFARM_CANONICAL_JSON_V1",
+      "sha256": "sha256:75012dc6ee1c57f02b83109ea11ed9889681043c7f9893895342d7656474412e",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "RUNTIME_ENVIRONMENT",
       "logicalRef": "environment:requirements-review-baseline.lock",
       "path": "requirements-review-baseline.lock",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:34ae57baf0cff1d485c0f256ea0169e6407021cf730ae9f56c056fc1783dfd46"
+      "sha256": "sha256:34ae57baf0cff1d485c0f256ea0169e6407021cf730ae9f56c056fc1783dfd46",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "RUNTIME_ENVIRONMENT",
       "logicalRef": "environment:requirements-review-pip.lock",
       "path": "requirements-review-pip.lock",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:549d9ca34c7e72097b0e135cb11039cf7a9a560dd4d9159ef6626d9fb4ad8679"
+      "sha256": "sha256:549d9ca34c7e72097b0e135cb11039cf7a9a560dd4d9159ef6626d9fb4ad8679",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "RUNTIME_SCHEMA",
       "logicalRef": "sql:kernel/schema.sql",
       "path": "kernel/schema.sql",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:8486e0e82f4bd8f83057ac291606eb61661921559a908676c6a785a76c13213a"
+      "sha256": "sha256:6ac9d4d4353edaedea018ff5cd888d0d491189c90884121dffb36af7ccdbdb51",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
+    },
+    {
+      "role": "TENANT_BINDING",
+      "logicalRef": "tenant-binding:active",
+      "path": "profile_si_ffs/runtime_tenant_binding.json",
+      "canonicalization": "OFARM_CANONICAL_JSON_V1",
+      "sha256": "sha256:2811df108ff596ce9cf585ccb1c81864b1c9bbf0cf2d4e2a5cbb712518e2576e",
+      "placement": "TENANT_RUNTIME_SELECTION"
     }
   ]
 }

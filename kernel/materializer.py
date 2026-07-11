@@ -60,6 +60,14 @@ def _full_digest(obj) -> str:
 
 
 class Materializer:
+    _SEALED_FIELDS = {"store", "active_profile", "runtime_bundle", "context"}
+
+    def __setattr__(self, name, value):
+        if (getattr(self, "_runtime_composition_sealed", False)
+                and name in self._SEALED_FIELDS):
+            raise AttributeError("Materializer runtime composition is immutable")
+        object.__setattr__(self, name, value)
+
     def __init__(self, store, *, active_descriptor=None, active_profile=None,
                  runtime_bundle=None):
         self.store = store
@@ -79,6 +87,7 @@ class Materializer:
         self.context = ContextAssembler(
             store, active_descriptor=self.active_profile,
             runtime_bundle=self.runtime_bundle)
+        self._runtime_composition_sealed = True
 
     # ------------------------------------------------------------------ key --
 

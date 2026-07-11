@@ -6,6 +6,7 @@ package-local development cluster created for M1.
 """
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -41,10 +42,16 @@ ACTIVE_PROFILE = ACTIVE_PROFILE_SELECTION.active_profile
 ACTIVE_PROFILE_ROOTS = ACTIVE_PROFILE_SELECTION.profile_roots
 PROFILE_ROOT = ACTIVE_PROFILE.profile_root
 
-# Active deployment/demo binding. This is deliberately separate from the
-# profile-local runtime descriptor: tenant identity is not inherent package
-# content.
-TENANT_REF = "tenant:si.ffs.pilot.demo"
+# Active deployment binding. Its exact bytes are a tenant-owned RuntimeBundle
+# component; global runtime code contains no tenant identity literal.
+TENANT_BINDING_PATH = PROFILE_ROOT / "runtime_tenant_binding.json"
+_TENANT_BINDING = json.loads(TENANT_BINDING_PATH.read_bytes())
+if (_TENANT_BINDING.get("schemaVersion") !=
+        "ofarm.runtime-tenant-binding.local.v1"
+        or not isinstance(_TENANT_BINDING.get("tenantRef"), str)
+        or not _TENANT_BINDING["tenantRef"]):
+    raise RuntimeError("active runtime tenant binding is malformed")
+TENANT_REF = _TENANT_BINDING["tenantRef"]
 
 RUNTIME_VERSION = "ofarm2-kernel-m1.0"
 

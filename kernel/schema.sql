@@ -23,38 +23,92 @@ $$ LANGUAGE plpgsql;
 -- implementation receipts, not promoted OFARM machine contracts. Exact bytes
 -- are retained so historical bundle reconstruction never depends on mutable
 -- filesystem paths or derived caches.
+-- The current pilot schema predates #174's internal tenant_id/TenantBinding.
+-- Its exact tenant_ref key is transitional storage identity only; #174 replaces
+-- it with tenant_id, composite FKs, forced RLS, and the governed batch key.
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS runtime_content_blob (
   content_digest  text PRIMARY KEY CHECK (content_digest ~ '^sha256:[0-9a-f]{64}$'),
-  canonicalization text NOT NULL,
+  content_class text NOT NULL CHECK (content_class IN ('ACTIVE_MANIFEST', 'CONTRACT_MANIFEST', 'CONTRACT_METADATA', 'CONTRACT_SCHEMA', 'PARSER_CODE', 'PROFILE_DESCRIPTOR', 'PROFILE_INSTANCE', 'PROFILE_POLICY', 'PROFILE_ROUTE_SELECTION', 'QUERY_PLAN', 'QUERY_SPECIFICATION', 'REFERENCE_DATA', 'REFERENCE_SNAPSHOT', 'REFERENCE_SOURCE', 'RUNTIME_CATALOG_CODE', 'RUNTIME_CODE', 'RUNTIME_DATABASE_OBSERVED', 'RUNTIME_ENVIRONMENT', 'RUNTIME_ENVIRONMENT_OBSERVED', 'RUNTIME_SCHEMA', 'TENANT_BINDING')),
+  canonicalization text NOT NULL CHECK (
+    canonicalization IN ('OFARM_CANONICAL_JSON_V1', 'EXACT_BYTES_V1')),
   canonical_bytes bytea NOT NULL,
-  byte_length bigint NOT NULL CHECK (byte_length >= 0)
+  byte_length bigint NOT NULL CHECK (
+    byte_length >= 0 AND byte_length = octet_length(canonical_bytes))
+);
+
+CREATE TABLE IF NOT EXISTS runtime_tenant_content_blob (
+  tenant_ref text NOT NULL CHECK (
+    length(tenant_ref) BETWEEN 1 AND 255
+    AND tenant_ref ~ '^[A-Za-z0-9._:-]+$'),
+  content_digest text NOT NULL CHECK (content_digest ~ '^sha256:[0-9a-f]{64}$'),
+  content_class text NOT NULL CHECK (content_class IN ('ACTIVE_MANIFEST', 'CONTRACT_MANIFEST', 'CONTRACT_METADATA', 'CONTRACT_SCHEMA', 'PARSER_CODE', 'PROFILE_DESCRIPTOR', 'PROFILE_INSTANCE', 'PROFILE_POLICY', 'PROFILE_ROUTE_SELECTION', 'QUERY_PLAN', 'QUERY_SPECIFICATION', 'REFERENCE_DATA', 'REFERENCE_SNAPSHOT', 'REFERENCE_SOURCE', 'RUNTIME_CATALOG_CODE', 'RUNTIME_CODE', 'RUNTIME_DATABASE_OBSERVED', 'RUNTIME_ENVIRONMENT', 'RUNTIME_ENVIRONMENT_OBSERVED', 'RUNTIME_SCHEMA', 'TENANT_BINDING')),
+  canonicalization text NOT NULL CHECK (
+    canonicalization IN ('OFARM_CANONICAL_JSON_V1', 'EXACT_BYTES_V1')),
+  canonical_bytes bytea NOT NULL,
+  byte_length bigint NOT NULL CHECK (
+    byte_length >= 0 AND byte_length = octet_length(canonical_bytes)),
+  PRIMARY KEY (tenant_ref, content_digest)
 );
 
 CREATE TABLE IF NOT EXISTS runtime_bundle (
-  bundle_digest   text PRIMARY KEY CHECK (bundle_digest ~ '^sha256:[0-9a-f]{64}$'),
-  bundle_ref      text NOT NULL UNIQUE,
+  tenant_ref      text NOT NULL CHECK (
+    length(tenant_ref) BETWEEN 1 AND 255
+    AND tenant_ref ~ '^[A-Za-z0-9._:-]+$'),
+  bundle_digest   text NOT NULL CHECK (bundle_digest ~ '^sha256:[0-9a-f]{64}$'),
+  bundle_ref      text NOT NULL,
   canonical_document jsonb NOT NULL,
   canonical_bytes bytea NOT NULL,
-  byte_length bigint NOT NULL CHECK (byte_length >= 0),
+  byte_length bigint NOT NULL CHECK (
+    byte_length >= 0 AND byte_length = octet_length(canonical_bytes)),
   record_time timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_ref, bundle_digest),
+  UNIQUE (bundle_digest),
+  UNIQUE (tenant_ref, bundle_ref),
   CHECK (bundle_ref = 'runtimebundle:' || bundle_digest)
 );
 
 CREATE TABLE IF NOT EXISTS runtime_bundle_component (
-  bundle_digest text NOT NULL REFERENCES runtime_bundle(bundle_digest),
-  component_role text NOT NULL,
-  logical_ref text NOT NULL,
-  repository_path text NOT NULL,
-  canonicalization text NOT NULL,
-  content_digest text NOT NULL REFERENCES runtime_content_blob(content_digest),
+  tenant_ref text NOT NULL CHECK (
+    length(tenant_ref) BETWEEN 1 AND 255
+    AND tenant_ref ~ '^[A-Za-z0-9._:-]+$'),
+  bundle_digest text NOT NULL,
+  component_role text NOT NULL CHECK (component_role IN ('ACTIVE_MANIFEST', 'CONTRACT_MANIFEST', 'CONTRACT_METADATA', 'CONTRACT_SCHEMA', 'PARSER_CODE', 'PROFILE_DESCRIPTOR', 'PROFILE_INSTANCE', 'PROFILE_POLICY', 'PROFILE_ROUTE_SELECTION', 'QUERY_PLAN', 'QUERY_SPECIFICATION', 'REFERENCE_DATA', 'REFERENCE_SNAPSHOT', 'REFERENCE_SOURCE', 'RUNTIME_CATALOG_CODE', 'RUNTIME_CODE', 'RUNTIME_DATABASE_OBSERVED', 'RUNTIME_ENVIRONMENT', 'RUNTIME_ENVIRONMENT_OBSERVED', 'RUNTIME_SCHEMA', 'TENANT_BINDING')),
+  logical_ref text NOT NULL CHECK (
+    length(logical_ref) BETWEEN 1 AND 1024
+    AND logical_ref ~ '^[A-Za-z0-9._:/#-]+$'),
+  repository_path text NOT NULL CHECK (
+    length(repository_path) BETWEEN 1 AND 1024
+    AND repository_path ~ '^[A-Za-z0-9._:/#-]+$'
+    AND repository_path !~ '(^/|//|/$|(^|/)\.\.?(/|$))'),
+  canonicalization text NOT NULL CHECK (
+    canonicalization IN ('OFARM_CANONICAL_JSON_V1', 'EXACT_BYTES_V1')),
+  content_placement text NOT NULL,
+  global_content_digest text REFERENCES runtime_content_blob(content_digest),
+  tenant_content_digest text,
   byte_length bigint NOT NULL CHECK (byte_length >= 0),
-  PRIMARY KEY (bundle_digest, component_role, logical_ref)
+  PRIMARY KEY (tenant_ref, bundle_digest, component_role, logical_ref),
+  FOREIGN KEY (tenant_ref, bundle_digest)
+    REFERENCES runtime_bundle(tenant_ref, bundle_digest),
+  FOREIGN KEY (tenant_ref, tenant_content_digest)
+    REFERENCES runtime_tenant_content_blob(tenant_ref, content_digest),
+  CHECK (
+    (content_placement = 'GLOBAL_IMMUTABLE_CONTENT'
+      AND global_content_digest IS NOT NULL AND tenant_content_digest IS NULL)
+    OR
+    (content_placement = 'TENANT_RUNTIME_SELECTION'
+      AND global_content_digest IS NULL AND tenant_content_digest IS NOT NULL)
+  )
 );
 
 DROP TRIGGER IF EXISTS trg_runtime_content_blob_append_only ON runtime_content_blob;
 CREATE TRIGGER trg_runtime_content_blob_append_only
   BEFORE UPDATE OR DELETE ON runtime_content_blob
+  FOR EACH STATEMENT EXECUTE FUNCTION kernel_forbid_mutation();
+DROP TRIGGER IF EXISTS trg_runtime_tenant_content_blob_append_only
+  ON runtime_tenant_content_blob;
+CREATE TRIGGER trg_runtime_tenant_content_blob_append_only
+  BEFORE UPDATE OR DELETE ON runtime_tenant_content_blob
   FOR EACH STATEMENT EXECUTE FUNCTION kernel_forbid_mutation();
 DROP TRIGGER IF EXISTS trg_runtime_bundle_append_only ON runtime_bundle;
 CREATE TRIGGER trg_runtime_bundle_append_only
@@ -83,8 +137,10 @@ CREATE TABLE IF NOT EXISTS kernel_record (
   payload        jsonb NOT NULL,
   payload_sha256 text NOT NULL,
   record_time    timestamptz NOT NULL DEFAULT now(),
-  tenant_ref     text NOT NULL DEFAULT 'tenant:si.ffs.pilot.demo',
-  runtime_bundle_digest text NOT NULL REFERENCES runtime_bundle(bundle_digest)
+  tenant_ref     text NOT NULL,
+  runtime_bundle_digest text NOT NULL,
+  FOREIGN KEY (tenant_ref, runtime_bundle_digest)
+    REFERENCES runtime_bundle(tenant_ref, bundle_digest)
 );
 CREATE INDEX IF NOT EXISTS ix_kernel_record_kind ON kernel_record (record_kind);
 

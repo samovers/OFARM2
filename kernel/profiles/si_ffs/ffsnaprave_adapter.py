@@ -33,7 +33,12 @@ from pathlib import Path
 from ...adapters import ImportRunner, ParseResult
 from ...authority import AuthorityEvaluator
 from ...context import now_iso
-from ...runtime_bundle import RuntimeBundleError, require_store_runtime_bundle
+from ...runtime_bundle import (
+    RuntimeBundleError,
+    _copy_runtime_cache_value,
+    _freeze_runtime_cache,
+    require_store_runtime_bundle,
+)
 from ...contracts import canonical_json, sha256_of
 from ...problems import runtime_problem
 
@@ -216,16 +221,36 @@ class FFSNapraveRegister:
     machine — the composite key `StevilkaZnaka` + `VeljavnostZnaka`. A missing or
     ambiguous match is surfaced as None, never a fabricated inspection."""
 
+    def __setattr__(self, name, value):
+        if (getattr(self, "_frozen", False)
+                and name in {"runtime_bundle", "_by_snapshot", "_frozen"}):
+            raise AttributeError(
+                "FFSNapraveRegister runtime composition is immutable")
+        object.__setattr__(self, name, value)
+
     def __init__(self, *, runtime_bundle=None):
         self.runtime_bundle = runtime_bundle
         self._by_snapshot: dict[str, dict] = {}
         self._frozen = False
+        if runtime_bundle is not None:
+            self._load_runtime_bundle_bytes()
+            self.freeze()
+
+    def _load_runtime_bundle_bytes(self) -> None:
+        for reference in self.runtime_bundle.selected_references:
+            if reference.data_family != FFSNAPRAVE_DATA_FAMILY:
+                continue
+            self.register_artifact(
+                reference.snapshot_ref,
+                self.runtime_bundle.reference_data_payload(
+                    reference.snapshot_ref, FFSNAPRAVE_DATA_FAMILY),
+            )
 
     def register_artifact(self, snapshot_id: str, artifact: dict) -> None:
         if self._frozen:
             raise RuntimeError(
                 "FFSNapraveRegister is immutable for the RuntimeBundle lifetime")
-        inspections = artifact.get("inspections", [])
+        inspections = copy.deepcopy(artifact.get("inspections", []))
         # defense-in-depth: import already refuses a conflicting composite key, so
         # store-loaded data is conflict-free — but never build a last-wins index
         # from a direct/raw call either.
@@ -243,21 +268,23 @@ class FFSNapraveRegister:
             by_sticker.setdefault(sticker, []).append(r)
         self._by_snapshot[snapshot_id] = {"byKey": by_key, "bySticker": by_sticker}
 
+    def freeze(self) -> None:
+        """End construction and recursively freeze retained lookup state."""
+        if self._frozen:
+            return
+        object.__setattr__(self, "_by_snapshot", _freeze_runtime_cache(
+            self._by_snapshot))
+        object.__setattr__(self, "_frozen", True)
+
     def load_from_store(self, store) -> None:
         """Load store-backed inspections persisted by a governed import (M2 P3),
         so a scheduled-import file's inspections resolve from the store."""
         if self.runtime_bundle is not None:
             require_store_runtime_bundle(
                 store, self.runtime_bundle, "FFSNaprave register load")
-            for reference in self.runtime_bundle.selected_references:
-                if reference.data_family != FFSNAPRAVE_DATA_FAMILY:
-                    continue
-                self.register_artifact(
-                    reference.snapshot_ref,
-                    self.runtime_bundle.reference_data_payload(
-                        reference.snapshot_ref, FFSNAPRAVE_DATA_FAMILY),
-                )
-            self._frozen = True
+            if not self._frozen:
+                raise RuntimeBundleError(
+                    "bundle-backed FFSNaprave cache was not frozen at construction")
             return
         for row in store.reference_data(FFSNAPRAVE_DATA_FAMILY):
             sid = row["snapshot_ref"]
@@ -291,10 +318,11 @@ class FFSNapraveRegister:
         if not data:
             return None
         if validity is not None:
-            return copy.deepcopy(data["byKey"].get((sticker_number, validity)))
+            return _copy_runtime_cache_value(
+                data["byKey"].get((sticker_number, validity)))
         candidates = data["bySticker"].get(sticker_number, [])
         distinct = {r.get(VALIDITY_FIELD): r for r in candidates}
-        return copy.deepcopy(
+        return _copy_runtime_cache_value(
             next(iter(distinct.values())) if len(distinct) == 1 else None)
 
 

@@ -107,6 +107,20 @@ class ImportRunner:
                 "with a different exact data family; no restart-unsafe snapshot "
                 "was written"), "disposition": "WRONG_DATA_FAMILY"}
 
+        global_snapshot_ids = {
+            component.logical_ref
+            for component in self.store.runtime_bundle.components
+            if (component.role == "REFERENCE_SNAPSHOT"
+                and component.placement == "GLOBAL_IMMUTABLE_CONTENT")
+        }
+        if snapshot_id in global_snapshot_ids:
+            return {**self._refuse(
+                request_id, snapshot_id, "DUPLICATE_IMPORT_AMBIGUOUS",
+                "Import identifier collides with package reference",
+                "a tenant import cannot reuse a globally authored ReferenceSnapshot "
+                "identity, even for byte-equal content; mint a new dated identity"),
+                "disposition": "GLOBAL_IDENTITY_COLLISION"}
+
         # A successful import must be restart-safe. This build retains the
         # canonical parsed data bytes, not arbitrary raw archives. Therefore a
         # source digest is acceptable only when it is a full SHA-256 of those
@@ -172,6 +186,8 @@ class ImportRunner:
                 expected_snapshot_digest = sha256_of(snapshot)
                 exact_snapshot = (
                     existing["record_kind"] == "ofarm.referencesnapshot.v0.1"
+                    and existing["tenant_ref"] ==
+                    self.store.runtime_bundle.tenant_ref
                     and existing["schema_hash"] == snapshot_contract.schema_hash
                     and existing["payload_sha256"] == expected_snapshot_digest
                     and sha256_of(existing["payload"]) == expected_snapshot_digest
@@ -183,10 +199,12 @@ class ImportRunner:
                     # replay; restore a missing row from the supplied retained
                     # bytes, and refuse an unequal identity reuse.
                     cur.execute(
-                        "SELECT data_family, artifact_ref, source_digest, "
-                        "parser_label, record_count, payload, payload_sha256 "
-                        "FROM reference_snapshot_data WHERE snapshot_ref = %s",
-                        (snapshot_id,),
+                        "SELECT d.data_family, d.artifact_ref, d.source_digest, "
+                        "d.parser_label, d.record_count, d.payload, d.payload_sha256 "
+                        "FROM reference_snapshot_data d JOIN runtime_bundle b "
+                        "ON b.bundle_digest = d.runtime_bundle_digest "
+                        "WHERE d.snapshot_ref = %s AND b.tenant_ref = %s",
+                        (snapshot_id, self.store.runtime_bundle.tenant_ref),
                     )
                     data_rows = cur.fetchall()
                     data_row = next((row for row in data_rows

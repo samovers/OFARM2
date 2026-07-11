@@ -228,6 +228,16 @@
       "forbiddenUse": "Do not treat active SI pilot tests as generic multi-profile runtime support."
     },
     {
+      "id": "runtime-bundle-active-si-tests",
+      "path": "kernel/tests/test_runtime_bundle.py",
+      "term": "SI|REGSR|GERK|FFSNaprave",
+      "category": "ACTIVE_RUNTIME_SI_SUPPORT",
+      "reason": "RuntimeBundle tests exercise the current active SI pilot descriptor, adapters, and selected reference families while proving generic content-addressing and fail-closed behavior.",
+      "owner": "runtime-bundle-boundary-review",
+      "expiresWhen": "A multi-profile runtime harness replaces SI-specific bundle fixtures without weakening immutable bundle coverage.",
+      "forbiddenUse": "Do not treat SI-shaped bundle fixtures as generic multi-profile readiness or as authority to activate another profile."
+    },
+    {
       "id": "generic-root-test-guards",
       "path": "kernel/tests/test_m2_adapters.py|kernel/tests/test_m2_bindings.py|kernel/tests/test_m2_extent.py|kernel/tests/test_m2_identities.py|kernel/tests/test_review_fixes.py",
       "term": "REGSR|GERK|FFSNaprave|SI",

@@ -22,6 +22,7 @@ fictional and format-true (privacy rule 1).
 """
 from __future__ import annotations
 
+import json
 import uuid
 from contextlib import contextmanager
 
@@ -38,7 +39,16 @@ def uid():
 
 
 def _shipped(store, kind):
-    return dict(store.find_by_kind(kind)[0]["payload"])
+    rows = store.find_by_kind(kind)
+    if rows:
+        return dict(rows[0]["payload"])
+    for component in store.runtime_bundle.components:
+        if component.role != "PROFILE_INSTANCE":
+            continue
+        payload = json.loads(component.canonical_bytes)
+        if payload.get("schemaVersion") == kind:
+            return payload
+    raise AssertionError(f"missing shipped profile instance {kind}")
 
 
 def _activation_vintage(store, evaluated_at: str) -> str:
@@ -174,12 +184,13 @@ def test_asof_ignores_newer_unrelated_profile_spine(fresh_env):
     assert snap["sourcePackActivationSetRefs"] == [g0["activation"]]
 
 
-def test_asof_ignores_same_pack_profile_generation_from_other_tenant(fresh_env):
+def test_asof_rejects_same_pack_profile_generation_for_other_tenant(fresh_env):
     store, _, _ = fresh_env
     g0 = _generation(store, at="2025-02-01T00:00:00Z")
-    _generation(
-        store, at="2025-12-01T00:00:00Z",
-        tenant_ref="tenant:issue171.other")
+    with pytest.raises(RuntimeError, match="exactly match the verified RuntimeBundle tenant"):
+        _generation(
+            store, at="2025-12-01T00:00:00Z",
+            tenant_ref="tenant:issue171.other")
 
     snap = _asof(store, "2026-01-01T00:00:00Z")
     assert snap["activeArtifactSetRef"] == g0["artifact"]

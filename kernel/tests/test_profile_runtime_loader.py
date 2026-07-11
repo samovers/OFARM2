@@ -38,10 +38,11 @@ from kernel.profile_runtime import (
     load_active_profile_selection,
     load_profile_descriptor_registry,
     load_profile_runtime_descriptor,
+    profile_route_selection_document,
     resolve_profile_route as _resolve_profile_route,
     resolve_active_descriptor,
 )
-from kernel.runtime_bundle import build_runtime_bundle
+from kernel.runtime_bundle import _build_live_runtime_bundle, build_runtime_bundle
 from kernel.stages import IngressNormalizer
 from kernel.store import Store
 from kernel.views import OutputGenerator
@@ -201,14 +202,31 @@ def _surface_inventory(*package_names: str) -> ProfileRuntimeSurfaceInventory:
 
 
 def _route_pipeline(store, *, routes=None, registry=None, selected=None, tenant=None):
+    route_records = tuple([_si_route()] if routes is None else routes)
+    route_registry = registry or _route_registry()
+    selected_names = tuple(
+        config.ACTIVE_PROFILE_PACKAGE_NAMES if selected is None else selected)
+    tenant_ref = config.TENANT_REF if tenant is None else tenant
+    selection = profile_route_selection_document(
+        route_registry, selected_names, route_records, tenant_ref=tenant_ref)
+    route_store = Store(dsn=store.dsn)
+    # The fresh-env owner closes this shared connection at teardown; using the
+    # same connection avoids leaving a second backend attached to the test DB.
+    route_store._conn = store.conn
+    context.bootstrap_for_descriptor(
+        route_store,
+        config.ACTIVE_PROFILE,
+        profile_route_selection=selection,
+    )
+    receipted_routes = tuple(
+        replace(route, runtime_bundle_digest=route_store.runtime_bundle_digest)
+        for route in route_records)
     return GatePipeline(
-        store,
-        profile_route_records=([_si_route()] if routes is None else routes),
-        profile_route_registry=registry or _route_registry(),
-        selected_profile_package_names=(
-            config.ACTIVE_PROFILE_PACKAGE_NAMES if selected is None else selected
-        ),
-        tenant_ref=config.TENANT_REF if tenant is None else tenant,
+        route_store,
+        profile_route_records=receipted_routes,
+        profile_route_registry=route_registry,
+        selected_profile_package_names=selected_names,
+        tenant_ref=tenant_ref,
     )
 
 
@@ -259,10 +277,9 @@ def _insert_decoy_spine(store) -> dict:
     store order. Descriptor-backed NOW selection must ignore it.
     """
     suffix = _uid()
-    profile = _payload(
-        store, "ofarm.agronomiccodebindingprofile.v0.1",
-        config.ACTIVE_PROFILE.code_binding_profile_ref,
-        "agronomicCodeBindingProfileId")
+    profile = _profile_instance_payload(
+        "agronomicCodeBindingProfileId",
+        config.ACTIVE_PROFILE.code_binding_profile_ref)
     profile_id = f"codebindingprofile:si.ffs.decoy.{suffix}"
     profile["agronomicCodeBindingProfileId"] = profile_id
     profile["issuedAt"] = context.now_iso()
@@ -326,6 +343,10 @@ def _expected_profile_instance_ids(store, active_profile) -> list[str]:
     expected = []
     for path in active_profile.profile_instance_paths:
         payload = json.loads(path.read_text())
+        if payload.get("schemaVersion") not in {
+                "ofarm.activeartifactset.v0.1",
+                "ofarm.packactivationset.v0.1"}:
+            continue
         contract = store.registry.get(payload["schemaVersion"])
         expected.append(payload[contract.id_field])
     return expected
@@ -476,6 +497,7 @@ def _preseeded_dirty_spine_store(mutate):
         profile = _profile_instance_payload(
             "agronomicCodeBindingProfileId",
             config.ACTIVE_PROFILE.code_binding_profile_ref)
+        original_profile = copy.deepcopy(profile)
         activation = _profile_instance_payload(
             "packActivationSetId",
             config.ACTIVE_PROFILE.pack_activation_set_ref)
@@ -483,11 +505,16 @@ def _preseeded_dirty_spine_store(mutate):
             "activeArtifactSetId",
             config.ACTIVE_PROFILE.active_artifact_set_ref)
         mutate(profile, activation, artifact)
-        bundle = build_runtime_bundle(config.ACTIVE_PROFILE)
         with store.serialized_tx() as cur:
+            bundle = _build_live_runtime_bundle(
+                config.ACTIVE_PROFILE,
+                _database_environment=store._observe_database_environment(cur),
+            )
             store.install_runtime_bundle(cur, bundle)
-            with store.bootstrap_bundle_writes(bundle):
-                store.insert_record(cur, profile, runtime_bundle_digest=bundle.digest)
+            with store._bootstrap_bundle_writes(bundle):
+                if profile != original_profile:
+                    store.insert_record(
+                        cur, profile, runtime_bundle_digest=bundle.digest)
                 store.insert_record(cur, activation, runtime_bundle_digest=bundle.digest)
                 store.insert_record(cur, artifact, runtime_bundle_digest=bundle.digest)
         context.bootstrap(store)
@@ -1101,6 +1128,26 @@ def test_profile_route_rejects_runtime_bundle_digest_mismatch():
             tenant_ref=config.TENANT_REF,
             farm_ref=demo.FARM,
         )
+
+
+def test_profile_route_selection_preimage_excludes_only_bundle_receipt():
+    registry = _route_registry()
+    original = _si_route()
+    changed_receipt = replace(
+        original, runtime_bundle_digest="sha256:" + "0" * 64)
+    first = profile_route_selection_document(
+        registry, config.ACTIVE_PROFILE_PACKAGE_NAMES, [original],
+        tenant_ref=config.TENANT_REF)
+    second = profile_route_selection_document(
+        registry, config.ACTIVE_PROFILE_PACKAGE_NAMES, [changed_receipt],
+        tenant_ref=config.TENANT_REF)
+    assert first == second
+    assert first != profile_route_selection_document(
+        registry,
+        config.ACTIVE_PROFILE_PACKAGE_NAMES,
+        [replace(original, status="DRAFT")],
+        tenant_ref=config.TENANT_REF,
+    )
 
 
 def test_profile_route_requires_one_active_matching_route():
@@ -1734,7 +1781,7 @@ def test_now_context_refuses_descriptor_id_profile_wrong_pack_scope():
         profile["profileScope"]["packRefs"] = ["pack:si.ffs.dirty.v0_1"]
 
     with pytest.raises(context.ContextNotReconstructible,
-                       match="already bound to different canonical content"):
+                       match="tenant-origin profile instance.*collides"):
         with _preseeded_dirty_spine_store(mutate):
             pass
 
@@ -1836,13 +1883,44 @@ def test_route_backed_gate_pipeline_accepts_clean_si_operation(fresh_env):
     assert trace["gateSequence"][1]["outcome"] == "PROFILE_ROUTE_PASS"
 
 
+def test_route_backed_pipeline_freezes_caller_selection_sequences(fresh_env):
+    store, _, _ = fresh_env
+    routes = [_si_route()]
+    selected = list(config.ACTIVE_PROFILE_PACKAGE_NAMES)
+    pipeline = _route_pipeline(store, routes=routes, selected=selected)
+    expected_routes = pipeline.profile_route_records
+    expected_selected = pipeline.selected_profile_package_names
+
+    routes.clear()
+    selected.append("profile_hostile_mutation")
+
+    assert pipeline.profile_route_records == expected_routes
+    assert pipeline.selected_profile_package_names == expected_selected
+    result = pipeline.commit(demo.spray_submission(
+        f"mp7-route-frozen:{_uid()}",
+        erp_id=f"erp:mp7.route.frozen.{_uid()}",
+        confirm=True,
+    ))
+    assert result["decisionOutcome"] == "PROMOTE_ACCEPTED"
+
+
+def test_route_backed_pipeline_rejects_same_digest_different_route(fresh_env):
+    store, _, _ = fresh_env
+    pipeline = _route_pipeline(store)
+    changed = replace(pipeline.profile_route_records[0], status="DRAFT")
+    with pytest.raises(ProfileRuntimeError, match="differs from the RuntimeBundle"):
+        GatePipeline(
+            pipeline.store,
+            profile_route_records=[changed],
+            profile_route_registry=pipeline.profile_route_registry,
+            selected_profile_package_names=pipeline.selected_profile_package_names,
+            tenant_ref=pipeline.tenant_ref,
+        )
+
+
 @pytest.mark.parametrize("routes,match", [
     ([], "no active profile route"),
     ([_si_route(), _si_route()], "multiple active overlapping"),
-    (
-        [_si_route(runtime_bundle_digest="sha256:" + "0" * 64)],
-        "RuntimeBundle digest",
-    ),
 ])
 def test_route_backed_gate_pipeline_refuses_route_resolution_failures(
         fresh_env, routes, match):
@@ -2120,25 +2198,18 @@ def test_route_backed_gate_pipeline_ignores_other_farm_time_bounded_route(
     assert result["decisionOutcome"] == "PROMOTE_ACCEPTED"
 
 
-def test_route_backed_gate_pipeline_ignores_other_tenant_time_bounded_route(
+def test_route_backed_gate_pipeline_rejects_other_tenant_route_storage(
         fresh_env):
     store, _, _ = fresh_env
     t0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
-    pipeline = _route_pipeline(
-        store,
-        routes=[
-            _si_route(tenant_ref="tenant:demo.other", effective_from=t0),
-            _si_route(route_id=f"profileroute:test.si.timeless.{_uid()}"),
-        ],
-    )
-
-    result = pipeline.commit(demo.spray_submission(
-        f"mp7-route-other-tenant-time:{_uid()}",
-        erp_id=f"erp:mp7.route.other-tenant-time.{_uid()}",
-        confirm=True,
-    ))
-
-    assert result["decisionOutcome"] == "PROMOTE_ACCEPTED"
+    with pytest.raises(ProfileRuntimeError, match="another tenant's route"):
+        _route_pipeline(
+            store,
+            routes=[
+                _si_route(tenant_ref="tenant:demo.other", effective_from=t0),
+                _si_route(route_id=f"profileroute:test.si.timeless.{_uid()}"),
+            ],
+        )
 
 
 def test_route_backed_gate_pipeline_ignores_inactive_time_bounded_route(
@@ -2666,22 +2737,14 @@ def test_gate_pipeline_threads_si_reference_bindings(fresh_env):
     assert ctx.si_reference_bindings is pipeline.si_reference_bindings
 
 
-def test_gate_pipeline_omits_si_reference_bindings_when_descriptor_changes(
+def test_gate_pipeline_runtime_descriptor_cannot_change_after_construction(
         fresh_env):
     _store, pipeline, _ = fresh_env
-    pipeline.active_profile = replace(
-        config.ACTIVE_PROFILE,
-        profile_ref="profile:si.ffs.changed-binding-context.v0_1",
-    )
-    sub = demo.spray_submission(
-        f"issue127b-binding-context-mutated:{_uid()}",
-        erp_id=f"erp:issue127b.binding.mutated.{_uid()}",
-        confirm=True,
-    )
-
-    ctx = pipeline._new_context(None, sub)
-
-    assert ctx.si_reference_bindings is None
+    with pytest.raises(AttributeError, match="runtime composition is immutable"):
+        pipeline.active_profile = replace(
+            config.ACTIVE_PROFILE,
+            profile_ref="profile:si.ffs.changed-binding-context.v0_1",
+        )
 
 
 def test_registry_reverification_prefers_context_si_reference_bindings(

@@ -45,12 +45,7 @@ def _spray(pipeline, **kw):
 
 
 def _commit_compat(pipeline, sub):
-    active_profile = pipeline.active_profile
-    try:
-        pipeline.active_profile = None
-        return pipeline.commit(sub)
-    finally:
-        pipeline.active_profile = active_profile
+    return pipeline.commit(sub)
 
 
 def _problem_titles(result):

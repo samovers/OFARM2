@@ -18,8 +18,19 @@ from pathlib import Path
 from . import config
 from .contracts import UnknownContract, canonical_json
 from .profile_runtime import ProfileRuntimeError, resolve_active_descriptor
-from .runtime_bundle import (RuntimeBundleError, build_runtime_bundle,
-                             require_store_runtime_bundle, sha256_bytes)
+from .runtime_bundle import (
+    TENANT_CONTENT_PLACEMENT,
+    RuntimeBundleError,
+    _build_live_runtime_bundle,
+    _copy_runtime_cache_value,
+    _freeze_runtime_cache,
+    require_store_runtime_bundle,
+    sha256_bytes,
+)
+
+# Private module seam so the lock/atomic-selection regression can observe the
+# exact builder call without exporting live-selection authority as a public API.
+_build_runtime_bundle_for_bootstrap = _build_live_runtime_bundle
 
 PROFILE_INSTANCE_FILES = list(config.ACTIVE_PROFILE.profile_instance_files)
 
@@ -239,12 +250,26 @@ def _profile_payloads_from_bundle(store, active_profile, bundle):
                 f"profile instance escapes the bound package root: {path}") from exc
         matches = [component for component in bundle.components
                    if component.repository_path == relative
-                   and component.role in {"PROFILE_INSTANCE", "REFERENCE_SNAPSHOT"}]
+                   and component.role == "PROFILE_INSTANCE"
+                   and component.placement == TENANT_CONTENT_PLACEMENT]
         if len(matches) != 1:
+            # Tenant-neutral package/reference instances stay solely in the
+            # global content carrier. They are selected by the tenant bundle
+            # but are never copied into tenant kernel_record.
+            global_matches = [component for component in bundle.components
+                              if component.repository_path == relative]
+            if len(global_matches) == 1 \
+                    and global_matches[0].placement != TENANT_CONTENT_PLACEMENT:
+                continue
             raise ContextNotReconstructible(
-                f"RuntimeBundle does not contain profile instance {relative!r}")
+                f"RuntimeBundle does not contain one tenant profile instance {relative!r}")
         try:
             payload = json.loads(matches[0].canonical_bytes)
+            if payload.get("schemaVersion") == "ofarm.contextsnapshot.v0.1":
+                # The shipped tenant ContextSnapshot is a fixture/template. NOW
+                # and AS_OF snapshots are generated under a farm/tenant basis;
+                # package presence is never startup context authority.
+                continue
             contract = store.registry.get(payload["schemaVersion"])
             record_id = payload[contract.id_field]
         except (KeyError, TypeError, ValueError, UnknownContract) as exc:
@@ -254,7 +279,8 @@ def _profile_payloads_from_bundle(store, active_profile, bundle):
     return payloads
 
 
-def bootstrap_for_descriptor(store, active_profile) -> list[str]:
+def bootstrap_for_descriptor(
+        store, active_profile, *, profile_route_selection: dict | None = None) -> list[str]:
     """Atomically install one verified bundle and its shipped profile instances.
 
     Reusing an identifier is permitted only for canonically equal content. A
@@ -266,10 +292,22 @@ def bootstrap_for_descriptor(store, active_profile) -> list[str]:
         if bound_bundle.descriptor != active_profile:
             raise ContextNotReconstructible(
                 "the Store is already bound to a different RuntimeBundle descriptor")
+        if profile_route_selection is not None:
+            try:
+                retained_route_selection = bound_bundle.json_component(
+                    "PROFILE_ROUTE_SELECTION", "profile-route-selection:active")
+            except RuntimeBundleError as exc:
+                raise ContextNotReconstructible(
+                    "the bound RuntimeBundle has no matching profile route selection") \
+                    from exc
+            if retained_route_selection != profile_route_selection:
+                raise ContextNotReconstructible(
+                    "the bound RuntimeBundle profile route selection differs")
         for record_id, kind, payload, expected_digest in _profile_payloads_from_bundle(
                 store, active_profile, bound_bundle):
             existing = store.get_record(record_id)
             if (existing is None or existing["record_kind"] != kind
+                    or existing["tenant_ref"] != bound_bundle.tenant_ref
                     or existing["payload_sha256"] != expected_digest
                     or canonical_json(existing["payload"]) != canonical_json(payload)):
                 raise ContextNotReconstructible(
@@ -284,15 +322,22 @@ def bootstrap_for_descriptor(store, active_profile) -> list[str]:
             # share the import/commit advisory lock. A governed import cannot
             # commit between selection and bundle installation.
             cur.execute(
-                "SELECT payload, payload_sha256, runtime_bundle_digest "
-                "FROM kernel_record "
-                "WHERE record_kind = 'ofarm.referencesnapshot.v0.1' "
-                "AND tenant_ref = %s ORDER BY record_time, record_id",
+                "SELECT k.payload, k.payload_sha256, k.runtime_bundle_digest, "
+                "b.tenant_ref AS origin_tenant_ref FROM kernel_record k "
+                "JOIN runtime_bundle b "
+                "ON b.bundle_digest = k.runtime_bundle_digest "
+                "WHERE k.record_kind = 'ofarm.referencesnapshot.v0.1' "
+                "AND k.tenant_ref = %s ORDER BY k.record_time, k.record_id",
                 (config.TENANT_REF,))
+            reference_candidates = cur.fetchall()
+            if any(row["origin_tenant_ref"] != config.TENANT_REF
+                   for row in reference_candidates):
+                raise ContextNotReconstructible(
+                    "stored ReferenceSnapshot origin bundle belongs to another tenant")
             family_prefixes = tuple(
                 family.snapshot_prefix for family in active_profile.reference_families)
             additional_reference_rows = [
-                row for row in cur.fetchall()
+                row for row in reference_candidates
                 if isinstance(row["payload"], dict)
                 and isinstance(row["payload"].get("referenceSnapshotId"), str)
                 and any(
@@ -312,9 +357,12 @@ def bootstrap_for_descriptor(store, active_profile) -> list[str]:
             additional_references = [
                 row["payload"] for row in additional_reference_rows]
             cur.execute(
-                "SELECT payload, payload_sha256, runtime_bundle_digest "
-                "FROM kernel_record WHERE record_kind = ANY(%s) "
-                "AND tenant_ref = %s ORDER BY record_time, record_id",
+                "SELECT k.payload, k.payload_sha256, k.runtime_bundle_digest, "
+                "b.tenant_ref AS origin_tenant_ref FROM kernel_record k "
+                "JOIN runtime_bundle b "
+                "ON b.bundle_digest = k.runtime_bundle_digest "
+                "WHERE k.record_kind = ANY(%s) AND k.tenant_ref = %s "
+                "ORDER BY k.record_time, k.record_id",
                 ([
                     "ofarm.activeartifactset.v0.1",
                     "ofarm.packactivationset.v0.1",
@@ -322,6 +370,10 @@ def bootstrap_for_descriptor(store, active_profile) -> list[str]:
                 ], config.TENANT_REF),
             )
             raw_profile_rows = cur.fetchall()
+            if any(row["origin_tenant_ref"] != config.TENANT_REF
+                   for row in raw_profile_rows):
+                raise ContextNotReconstructible(
+                    "stored profile spine origin bundle belongs to another tenant")
             expected_scope = {
                 "scopeType": "TENANT", "scopeRef": config.TENANT_REF}
 
@@ -361,12 +413,17 @@ def bootstrap_for_descriptor(store, active_profile) -> list[str]:
                     profile_scope = payload.get("profileScope")
                     pack_refs = (profile_scope.get("packRefs")
                                  if isinstance(profile_scope, dict) else None)
+                    code_binding_ref = payload.get(
+                        "agronomicCodeBindingProfileId")
                     selected = (
-                        isinstance(pack_refs, list)
-                        and all(isinstance(ref, str) for ref in pack_refs)
-                        and active_profile.pack_ref in pack_refs
-                        and payload.get("agronomicCodeBindingProfileId")
-                        in deployed_code_bindings)
+                        code_binding_ref == active_profile.code_binding_profile_ref
+                        or (
+                            isinstance(pack_refs, list)
+                            and all(isinstance(ref, str) for ref in pack_refs)
+                            and active_profile.pack_ref in pack_refs
+                            and code_binding_ref in deployed_code_bindings
+                        )
+                    )
                 else:
                     selected = False
                 if selected:
@@ -407,16 +464,19 @@ def bootstrap_for_descriptor(store, active_profile) -> list[str]:
                              active_profile.reference_families if family.data_family]
             if data_families:
                 cur.execute(
-                    "SELECT snapshot_ref, data_family, artifact_ref, source_digest, "
-                    "parser_label, record_count, payload, payload_sha256, "
-                    "runtime_bundle_digest FROM reference_snapshot_data "
-                    "WHERE data_family = ANY(%s) ORDER BY snapshot_ref, data_family",
-                    (data_families,),
+                    "SELECT d.snapshot_ref, d.data_family, d.artifact_ref, "
+                    "d.source_digest, d.parser_label, d.record_count, d.payload, "
+                    "d.payload_sha256, d.runtime_bundle_digest "
+                    "FROM reference_snapshot_data d JOIN runtime_bundle b "
+                    "ON b.bundle_digest = d.runtime_bundle_digest "
+                    "WHERE d.data_family = ANY(%s) AND b.tenant_ref = %s "
+                    "ORDER BY d.snapshot_ref, d.data_family",
+                    (data_families, config.TENANT_REF),
                 )
                 reference_data = cur.fetchall()
             else:
                 reference_data = []
-            bundle = build_runtime_bundle(
+            bundle = _build_runtime_bundle_for_bootstrap(
                 active_profile,
                 additional_profile_payloads=[
                     row["payload"] for row in additional_profile_rows],
@@ -424,21 +484,25 @@ def bootstrap_for_descriptor(store, active_profile) -> list[str]:
                 additional_reference_payloads=additional_references,
                 reference_data=reference_data,
                 tenant_ref=config.TENANT_REF,
+                _database_environment=store._observe_database_environment(cur),
+                _profile_route_selection=profile_route_selection,
             )
             payloads = _profile_payloads_from_bundle(
                 store, active_profile, bundle)
             store.install_runtime_bundle(cur, bundle)
             store.assert_runtime_bundle_compatible(bundle)
-            with store.bootstrap_bundle_writes(bundle):
+            with store._bootstrap_bundle_writes(bundle):
                 for record_id, kind, payload, expected_digest in payloads:
                     cur.execute(
-                        "SELECT record_kind, payload, payload_sha256 FROM kernel_record "
+                        "SELECT record_kind, payload, payload_sha256, tenant_ref "
+                        "FROM kernel_record "
                         "WHERE record_id = %s",
                         (record_id,),
                     )
                     existing = cur.fetchone()
                     if existing is not None:
                         if (existing["record_kind"] != kind
+                                or existing["tenant_ref"] != bundle.tenant_ref
                                 or existing["payload_sha256"] != expected_digest
                                 or canonical_json(existing["payload"]) != canonical_json(payload)):
                             raise ContextNotReconstructible(
@@ -448,14 +512,20 @@ def bootstrap_for_descriptor(store, active_profile) -> list[str]:
                     store.insert_record(
                         cur, payload, runtime_bundle_digest=bundle.digest)
                     inserted.append(record_id)
+                # All fallible catalog, registry, persisted-byte, and cold-load
+                # checks run before this transaction may commit. Process binding
+                # after commit is then a non-fallible assignment only.
+                activation_token = store._prepare_runtime_bundle_binding(bundle)
     except (ContextNotReconstructible, RuntimeBundleError) as exc:
+        store._discard_prepared_runtime_bundle_binding()
         if isinstance(exc, RuntimeBundleError):
             raise ContextNotReconstructible(
                 f"RuntimeBundle cannot be constructed: {exc}") from exc
         raise
     except Exception as exc:
+        store._discard_prepared_runtime_bundle_binding()
         raise ContextNotReconstructible(f"atomic RuntimeBundle bootstrap failed: {exc}") from exc
-    store.bind_runtime_bundle(bundle)
+    store._activate_prepared_runtime_bundle(activation_token)
     return inserted
 
 
@@ -560,6 +630,13 @@ class ProductRegister:
     the same path; the runtime itself only ever reads registered artifacts.
     """
 
+    def __setattr__(self, name, value):
+        if (getattr(self, "_frozen", False)
+                and name in {
+                    "bindings", "runtime_bundle", "_by_snapshot", "_frozen"}):
+            raise AttributeError("ProductRegister runtime composition is immutable")
+        object.__setattr__(self, name, value)
+
     def __init__(self, bindings: SIReferenceBindings | None = None, *,
                  runtime_bundle=None):
         self.bindings = bindings or SI_REFERENCE_BINDINGS
@@ -569,12 +646,8 @@ class ProductRegister:
         # the shipped real parse (623 products, fictional-free: public register data)
         shipped = self.bindings.regsr_shipped_artifact_path
         if runtime_bundle is not None:
-            artifact_ref = f"artifact:{shipped.name}"
-            component = runtime_bundle.component("REFERENCE_SOURCE", artifact_ref)
-            self.register_artifact(
-                self.bindings.regsr_shipped_snapshot_ref,
-                json.loads(component.canonical_bytes),
-            )
+            self._load_runtime_bundle_bytes()
+            self.freeze()
         elif shipped.exists():
             # Construction-only seam for focused parser tests. Governed runtime
             # construction always supplies a RuntimeBundle.
@@ -583,9 +656,38 @@ class ProductRegister:
                 json.loads(shipped.read_text()),
             )
 
+    def _load_runtime_bundle_bytes(self) -> None:
+        """Build the cache only from retained bytes before it becomes immutable."""
+        for reference in self.runtime_bundle.selected_references:
+            sid = reference.snapshot_ref
+            if not _snapshot_matches_family(
+                    sid, self.bindings.regsr_snapshot_prefix):
+                continue
+            if reference.data_family == self.bindings.regsr_data_family:
+                self.register_artifact(
+                    sid,
+                    self.runtime_bundle.reference_data_payload(
+                        sid, self.bindings.regsr_data_family),
+                )
+                continue
+            snapshot = self.runtime_bundle.reference_payload(sid)
+            artifact_refs = [
+                ref for ref in snapshot.get("sourceArtifactRefs", [])
+                if isinstance(ref, str) and ref.startswith("artifact:")]
+            if not artifact_refs:
+                continue
+            if len(artifact_refs) != 1:
+                raise RuntimeError(
+                    f"selected REGSR snapshot {sid!r} has ambiguous source artifacts")
+            component = self.runtime_bundle.component(
+                "REFERENCE_SOURCE", artifact_refs[0])
+            self.register_artifact(
+                sid, json.loads(component.canonical_bytes.decode("utf-8")))
+
     def register_artifact(self, snapshot_id: str, artifact: dict) -> None:
         if self._frozen:
             raise RuntimeError("ProductRegister is immutable for the RuntimeBundle lifetime")
+        artifact = copy.deepcopy(artifact)
         products = {p["regsrCode"]: p for p in artifact.get("products", [])}
         details = {d.get("regsrCode"): d for d in artifact.get("productDetails", [])}
         # D9: the binding identity is the decision number (stevilka odlocbe)
@@ -617,33 +719,9 @@ class ProductRegister:
         if self.runtime_bundle is not None:
             require_store_runtime_bundle(
                 store, self.runtime_bundle, "ProductRegister load")
-            # Bundle-backed runtime never consults the mutable store cache or
-            # filesystem after construction. It consumes only canonical bytes
-            # retained in the RuntimeBundle.
-            for reference in self.runtime_bundle.selected_references:
-                sid = reference.snapshot_ref
-                if sid in self._by_snapshot or not _snapshot_matches_family(
-                        sid, self.bindings.regsr_snapshot_prefix):
-                    continue
-                if reference.data_family == self.bindings.regsr_data_family:
-                    self.register_artifact(
-                        sid,
-                        self.runtime_bundle.reference_data_payload(
-                            sid, self.bindings.regsr_data_family),
-                    )
-                    continue
-                snapshot = self.runtime_bundle.reference_payload(sid)
-                artifact_refs = [ref for ref in snapshot.get("sourceArtifactRefs", [])
-                                 if isinstance(ref, str) and ref.startswith("artifact:")]
-                if not artifact_refs:
-                    continue
-                if len(artifact_refs) != 1:
-                    raise RuntimeError(
-                        f"selected REGSR snapshot {sid!r} has ambiguous source artifacts")
-                component = self.runtime_bundle.component(
-                    "REFERENCE_SOURCE", artifact_refs[0])
-                self.register_artifact(sid, json.loads(component.canonical_bytes))
-            self.freeze()
+            if not self._frozen:
+                raise RuntimeBundleError(
+                    "bundle-backed ProductRegister was not frozen at construction")
             return
         for row in store.reference_data(self.bindings.regsr_data_family):
             sid = row["snapshot_ref"]
@@ -668,7 +746,11 @@ class ProductRegister:
 
     def freeze(self) -> None:
         """End construction; later selection/cache mutation is forbidden."""
-        self._frozen = True
+        if self._frozen:
+            return
+        object.__setattr__(self, "_by_snapshot", _freeze_runtime_cache(
+            self._by_snapshot))
+        object.__setattr__(self, "_frozen", True)
 
     def identities_by_decision(self, snapshot_id: str, decision_number: str) -> list[dict]:
         """The DISTINCT D9 identities for a decision number — one record per
@@ -684,7 +766,7 @@ class ProductRegister:
         for c in data["byDecision"].get(decision_number, []):
             dec = c.get("decision", {})
             distinct.setdefault((dec.get("issued"), dec.get("validUntil")), c)
-        return copy.deepcopy(list(distinct.values()))
+        return _copy_runtime_cache_value(list(distinct.values()))
 
     def lookup_by_decision(self, snapshot_id: str, decision_number: str) -> dict | None:
         """Identity-grade lookup (D9): the sole record for a decision number
@@ -702,13 +784,13 @@ class ProductRegister:
         data = self._by_snapshot.get(snapshot_id)
         if not data:
             return None
-        return copy.deepcopy(data["products"].get(regsr_code))
+        return _copy_runtime_cache_value(data["products"].get(regsr_code))
 
     def detail(self, snapshot_id: str, regsr_code: str) -> dict | None:
         data = self._by_snapshot.get(snapshot_id)
         if not data:
             return None
-        return copy.deepcopy(data["details"].get(regsr_code))
+        return _copy_runtime_cache_value(data["details"].get(regsr_code))
 
     def has_snapshot(self, snapshot_id: str) -> bool:
         return snapshot_id in self._by_snapshot
@@ -720,6 +802,14 @@ class ContextNotReconstructible(Exception):
 
 class ContextAssembler:
     """Assembles (and reuses) per-farm Compliance-twin ContextSnapshots."""
+
+    _SEALED_FIELDS = {"store", "active_profile", "runtime_bundle"}
+
+    def __setattr__(self, name, value):
+        if (getattr(self, "_runtime_composition_sealed", False)
+                and name in self._SEALED_FIELDS):
+            raise AttributeError("ContextAssembler runtime composition is immutable")
+        object.__setattr__(self, name, value)
 
     def __init__(self, store, *, active_descriptor=None, active_profile=None,
                  runtime_bundle=None):
@@ -738,6 +828,7 @@ class ContextAssembler:
         if self.runtime_bundle.descriptor != self.active_profile:
             raise ProfileRuntimeError(
                 "ContextAssembler descriptor and RuntimeBundle do not match exactly")
+        self._runtime_composition_sealed = True
 
     def _spine(self, as_of: str | None = None) -> dict:
         # Spine selection is over immutable bundle bytes, never live rows that

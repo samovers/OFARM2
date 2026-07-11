@@ -12,23 +12,70 @@ SHA-256 and every digest reuse is followed by byte equality verification.
 from __future__ import annotations
 
 import copy
+import base64
 import hashlib
+import importlib.metadata
 import json
+import locale
+import os
+import platform
 import re
-from dataclasses import dataclass
+import sys
+import sysconfig
+import time
+from dataclasses import InitVar, dataclass
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Iterable, Mapping
 
 from .contracts import canonical_json
 
-BUNDLE_VERSION = "ofarm.runtime-bundle.local.v1"
-LOCK_VERSION = "ofarm.runtime-bundle-component-lock.local.v1"
+BUNDLE_VERSION = "ofarm.runtime-bundle.local.v2"
+LOCK_VERSION = "ofarm.runtime-bundle-component-lock.local.v2"
 JSON_CANONICALIZATION = "OFARM_CANONICAL_JSON_V1"
 RAW_CANONICALIZATION = "EXACT_BYTES_V1"
 LOCK_FILENAME = "runtime_bundle.lock.json"
+GLOBAL_CONTENT_PLACEMENT = "GLOBAL_IMMUTABLE_CONTENT"
+TENANT_CONTENT_PLACEMENT = "TENANT_RUNTIME_SELECTION"
+
+_TENANT_PROFILE_INSTANCE_KINDS = {
+    "ofarm.activeartifactset.v0.1",
+    "ofarm.packactivationset.v0.1",
+    "ofarm.contextsnapshot.v0.1",
+}
+_GLOBAL_PROFILE_INSTANCE_KINDS = {
+    "ofarm.agronomiccodebindingprofile.v0.1",
+}
 
 _SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+_RUNTIME_COMPONENT_REF_RE = re.compile(r"^[A-Za-z0-9._:/#-]{1,1024}$")
+_RUNTIME_COMPONENT_ROLES = {
+    "ACTIVE_MANIFEST",
+    "CONTRACT_MANIFEST",
+    "CONTRACT_METADATA",
+    "CONTRACT_SCHEMA",
+    "PARSER_CODE",
+    "PROFILE_DESCRIPTOR",
+    "PROFILE_INSTANCE",
+    "PROFILE_POLICY",
+    "PROFILE_ROUTE_SELECTION",
+    "QUERY_PLAN",
+    "QUERY_SPECIFICATION",
+    "REFERENCE_DATA",
+    "REFERENCE_SNAPSHOT",
+    "REFERENCE_SOURCE",
+    "RUNTIME_CATALOG_CODE",
+    "RUNTIME_CODE",
+    "RUNTIME_DATABASE_OBSERVED",
+    "RUNTIME_ENVIRONMENT",
+    "RUNTIME_ENVIRONMENT_OBSERVED",
+    "RUNTIME_SCHEMA",
+    "TENANT_BINDING",
+}
+_LIVE_SELECTION_PROOF = object()
+_OBSERVED_ENVIRONMENT_REF = "environment:observed-runtime.v1"
+_OBSERVED_DATABASE_REF = "environment:observed-postgresql.v1"
+_PROFILE_ROUTE_SELECTION_REF = "profile-route-selection:active"
 
 
 class RuntimeBundleError(RuntimeError):
@@ -37,6 +84,38 @@ class RuntimeBundleError(RuntimeError):
 
 def sha256_bytes(value: bytes) -> str:
     return "sha256:" + hashlib.sha256(value).hexdigest()
+
+
+def _freeze_runtime_cache(value):
+    """Recursively freeze lookup state retained for one runtime lifetime.
+
+    Runtime lookup indexes are intentionally private, but private dictionaries
+    are still writable by any in-process collaborator. Mapping proxies, tuples,
+    and frozensets make both indexes and retained JSON records immutable after
+    preload instead of relying on callers to leave them alone.
+    """
+    if isinstance(value, dict):
+        return MappingProxyType({
+            key: _freeze_runtime_cache(item) for key, item in value.items()
+        })
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze_runtime_cache(item) for item in value)
+    if isinstance(value, (set, frozenset)):
+        return frozenset(_freeze_runtime_cache(item) for item in value)
+    return value
+
+
+def _copy_runtime_cache_value(value):
+    """Return ordinary mutable containers without exposing frozen cache state."""
+    if isinstance(value, Mapping):
+        return {
+            key: _copy_runtime_cache_value(item) for key, item in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return [_copy_runtime_cache_value(item) for item in value]
+    if isinstance(value, (set, frozenset)):
+        return {_copy_runtime_cache_value(item) for item in value}
+    return copy.deepcopy(value)
 
 
 def require_store_runtime_bundle(store, bundle, consumer: str) -> None:
@@ -82,9 +161,72 @@ def require_current_runtime_catalog(bundle, package_root: Path) -> None:
         component = actual[key]
         if (component.repository_path != entry["path"]
                 or component.canonicalization != entry["canonicalization"]
+                or component.placement != entry["placement"]
                 or component.content_digest != entry["sha256"]):
             raise RuntimeBundleError(
                 f"live RuntimeBundle component differs from current catalog: {key!r}")
+    observed_key = ("RUNTIME_ENVIRONMENT_OBSERVED", _OBSERVED_ENVIRONMENT_REF)
+    database_key = ("RUNTIME_DATABASE_OBSERVED", _OBSERVED_DATABASE_REF)
+    current_observed = observed_runtime_environment_component()
+    if actual.get(observed_key) != current_observed:
+        raise RuntimeBundleError(
+            "live RuntimeBundle does not match the currently observed runtime environment")
+    if bundle.construction_mode == "LIVE_CURRENT" and database_key not in actual:
+        raise RuntimeBundleError(
+            "live RuntimeBundle omits its PostgreSQL environment observation")
+    for key in sorted(set(actual) - set(expected)):
+        component = actual[key]
+        if key == observed_key:
+            continue
+        if key == database_key:
+            if (component.repository_path != "runtime-observed/postgresql-v1"
+                    or component.canonicalization != JSON_CANONICALIZATION
+                    or component.placement != GLOBAL_CONTENT_PLACEMENT):
+                raise RuntimeBundleError(
+                    "live RuntimeBundle PostgreSQL observation provenance is invalid")
+            _validate_database_environment_document(
+                _strict_json_value(
+                    component.canonical_bytes,
+                    "RuntimeBundle PostgreSQL environment observation"))
+            continue
+        if (component.placement != TENANT_CONTENT_PLACEMENT
+                or component.canonicalization != JSON_CANONICALIZATION):
+            raise RuntimeBundleError(
+                f"live RuntimeBundle has an ungoverned extra component: {key!r}")
+        if component.role == "PROFILE_INSTANCE":
+            expected_path = f"database/profile-instance/{component.logical_ref}"
+            payload = _strict_json_value(
+                component.canonical_bytes,
+                f"dynamic profile component {component.logical_ref!r}")
+            if payload.get("schemaVersion") not in (
+                    _TENANT_PROFILE_INSTANCE_KINDS | _GLOBAL_PROFILE_INSTANCE_KINDS):
+                raise RuntimeBundleError(
+                    f"dynamic profile component has unsupported kind: {key!r}")
+        elif component.role == "PROFILE_ROUTE_SELECTION":
+            expected_path = "runtime-selected/profile-route-selection"
+            payload = _strict_json_value(
+                component.canonical_bytes, "dynamic profile route selection")
+            if payload.get("schemaVersion") != \
+                    "ofarm.profile-route-selection.local.v1":
+                raise RuntimeBundleError(
+                    "dynamic profile route selection has an unsupported version")
+        elif component.role == "REFERENCE_SNAPSHOT":
+            expected_path = f"database/reference-snapshot/{component.logical_ref}"
+            payload = _strict_json_value(
+                component.canonical_bytes,
+                f"dynamic reference component {component.logical_ref!r}")
+            if payload.get("schemaVersion") != "ofarm.referencesnapshot.v0.1":
+                raise RuntimeBundleError(
+                    f"dynamic reference component has unsupported kind: {key!r}")
+        elif component.role == "REFERENCE_DATA" and "#" in component.logical_ref:
+            snapshot_ref, data_family = component.logical_ref.rsplit("#", 1)
+            expected_path = f"database/reference-data/{snapshot_ref}/{data_family}"
+        else:
+            raise RuntimeBundleError(
+                f"live RuntimeBundle has an ungoverned extra role: {key!r}")
+        if component.repository_path != expected_path:
+            raise RuntimeBundleError(
+                f"live RuntimeBundle extra component provenance is invalid: {key!r}")
 
 
 def _reject_duplicate_keys(pairs):
@@ -96,12 +238,39 @@ def _reject_duplicate_keys(pairs):
     return result
 
 
+def _reject_nonfinite_constant(value: str):
+    raise RuntimeBundleError(f"non-finite JSON number {value!r} is forbidden")
+
+
+def _strict_json_value(raw: bytes, label: str) -> Any:
+    try:
+        text = raw.decode("utf-8", errors="strict")
+    except (AttributeError, UnicodeDecodeError) as exc:
+        raise RuntimeBundleError(f"{label} is not strict UTF-8 JSON") from exc
+    if text.startswith("\ufeff"):
+        raise RuntimeBundleError(f"{label} must not contain a UTF-8 BOM")
+    try:
+        value = json.loads(
+            text,
+            object_pairs_hook=_reject_duplicate_keys,
+            parse_constant=_reject_nonfinite_constant,
+        )
+        # Apply the shared non-finite/surrogate/type policy even when the
+        # original spelling would otherwise parse on this interpreter.
+        canonical_json(value)
+    except RuntimeBundleError:
+        raise
+    except (UnicodeError, ValueError, TypeError) as exc:
+        raise RuntimeBundleError(f"{label} is malformed JSON: {exc}") from exc
+    return value
+
+
 def strict_json_bytes(path: Path) -> tuple[bytes, dict[str, Any]]:
     try:
         raw = path.read_bytes()
-        value = json.loads(raw, object_pairs_hook=_reject_duplicate_keys)
-    except (OSError, UnicodeDecodeError, ValueError) as exc:
+    except OSError as exc:
         raise RuntimeBundleError(f"runtime component is unreadable at {path}: {exc}") from exc
+    value = _strict_json_value(raw, f"runtime component at {path}")
     if not isinstance(value, dict):
         raise RuntimeBundleError(f"runtime JSON component must be an object: {path}")
     return canonical_json(value).encode("utf-8"), value
@@ -118,6 +287,95 @@ def _component_bytes(path: Path, canonicalization: str) -> bytes:
     raise RuntimeBundleError(f"unknown component canonicalization {canonicalization!r}")
 
 
+def component_placement(
+    role: str,
+    canonicalization: str,
+    canonical_bytes: bytes,
+    repository_path: str = "",
+) -> str:
+    """Classify exact component bytes before they enter a storage carrier.
+
+    The global carrier is reserved for tenant-neutral immutable content. Tenant
+    activation/context fixtures and imported reference-data bytes remain in the
+    tenant carrier even though the RuntimeBundle digest covers them together
+    with the global execution content.
+    """
+    if (repository_path.startswith("database/")
+            and role in {"PROFILE_INSTANCE", "REFERENCE_SNAPSHOT", "REFERENCE_DATA"}):
+        return TENANT_CONTENT_PLACEMENT
+    if role in {
+            "PROFILE_DESCRIPTOR", "PROFILE_ROUTE_SELECTION", "QUERY_PLAN",
+            "REFERENCE_DATA", "TENANT_BINDING"}:
+        return TENANT_CONTENT_PLACEMENT
+    if role not in {"PROFILE_INSTANCE", "ACTIVE_MANIFEST"}:
+        return GLOBAL_CONTENT_PLACEMENT
+    if canonicalization != JSON_CANONICALIZATION:
+        raise RuntimeBundleError(
+            f"placement-bearing component {role!r} must be canonical JSON")
+    try:
+        payload = _strict_json_value(canonical_bytes, f"placement-bearing {role}")
+    except RuntimeBundleError as exc:
+        raise RuntimeBundleError(
+            f"placement-bearing component {role!r} is malformed") from exc
+    if not isinstance(payload, dict):
+        raise RuntimeBundleError(
+            f"placement-bearing component {role!r} must be a JSON object")
+    kind = payload.get("schemaVersion")
+    if role == "ACTIVE_MANIFEST":
+        if (kind != "ofarm.capabilitymanifest.v0.1"
+                or (payload.get("deploymentScope") or {}).get("scopeType") != "TENANT"):
+            raise RuntimeBundleError(
+                "the active capability manifest must remain explicit tenant state")
+        return TENANT_CONTENT_PLACEMENT
+    if kind in _TENANT_PROFILE_INSTANCE_KINDS:
+        return TENANT_CONTENT_PLACEMENT
+    if kind in _GLOBAL_PROFILE_INSTANCE_KINDS:
+        return GLOBAL_CONTENT_PLACEMENT
+    raise RuntimeBundleError(
+        f"profile instance kind {kind!r} has no reviewed RuntimeBundle placement")
+
+
+def _validate_tenant_component_owner(
+    component: "RuntimeComponent",
+    tenant_ref: str,
+) -> None:
+    if component.placement != TENANT_CONTENT_PLACEMENT \
+            or component.canonicalization != JSON_CANONICALIZATION:
+        return
+    payload = _strict_json_value(
+        component.canonical_bytes, f"tenant component {component.logical_ref!r}")
+    kind = payload.get("schemaVersion")
+    if kind == "ofarm.runtime-tenant-binding.local.v1":
+        if payload.get("tenantRef") != tenant_ref:
+            raise RuntimeBundleError(
+                f"tenant RuntimeBundle component {component.logical_ref!r} is not "
+                f"owned exactly by {tenant_ref!r}")
+        return
+    if kind == "ofarm.profile-route-selection.local.v1":
+        if payload.get("tenantRef") != tenant_ref:
+            raise RuntimeBundleError(
+                f"tenant RuntimeBundle component {component.logical_ref!r} is not "
+                f"owned exactly by {tenant_ref!r}")
+        return
+    if kind == "ofarm.activeartifactset.v0.1":
+        scopes = [payload.get("deploymentScope")]
+    elif kind == "ofarm.packactivationset.v0.1":
+        scopes = [payload.get("targetScope")]
+    elif kind == "ofarm.contextsnapshot.v0.1":
+        scopes = payload.get("anchorScopes", [])
+    elif kind == "ofarm.capabilitymanifest.v0.1":
+        scopes = [payload.get("deploymentScope")]
+    else:
+        return
+    tenant_scopes = [scope for scope in scopes if isinstance(scope, dict)
+                     and scope.get("scopeType") == "TENANT"]
+    expected = {"scopeType": "TENANT", "scopeRef": tenant_ref}
+    if tenant_scopes != [expected]:
+        raise RuntimeBundleError(
+            f"tenant RuntimeBundle component {component.logical_ref!r} is not "
+            f"owned exactly by {tenant_ref!r}")
+
+
 @dataclass(frozen=True)
 class RuntimeComponent:
     role: str
@@ -126,19 +384,36 @@ class RuntimeComponent:
     canonicalization: str
     content_digest: str
     canonical_bytes: bytes
+    placement: str = GLOBAL_CONTENT_PLACEMENT
 
     def __post_init__(self) -> None:
         if not self.role or not self.logical_ref or not self.repository_path:
             raise RuntimeBundleError("runtime component role/ref/path must be non-empty")
+        if self.role not in _RUNTIME_COMPONENT_ROLES:
+            raise RuntimeBundleError(
+                f"runtime component role {self.role!r} is outside the closed vocabulary")
+        if not _RUNTIME_COMPONENT_REF_RE.fullmatch(self.logical_ref):
+            raise RuntimeBundleError(
+                f"runtime component logical ref {self.logical_ref!r} is not "
+                "RUNTIME_COMPONENT_REF_V1")
+        if (not _RUNTIME_COMPONENT_REF_RE.fullmatch(self.repository_path)
+                or self.repository_path.startswith("/")
+                or "\\" in self.repository_path
+                or any(part in {"", ".", ".."}
+                       for part in self.repository_path.split("/"))):
+            raise RuntimeBundleError(
+                f"runtime component provenance {self.repository_path!r} is not a "
+                "bounded relative RUNTIME_COMPONENT_REF_V1 path")
         if self.canonicalization not in {
                 JSON_CANONICALIZATION, RAW_CANONICALIZATION}:
             raise RuntimeBundleError(
                 f"runtime component {self.logical_ref!r} has unknown canonicalization")
         if self.canonicalization == JSON_CANONICALIZATION:
             try:
-                value = json.loads(
-                    self.canonical_bytes, object_pairs_hook=_reject_duplicate_keys)
-            except (UnicodeDecodeError, ValueError) as exc:
+                value = _strict_json_value(
+                    self.canonical_bytes,
+                    f"runtime JSON component {self.logical_ref!r}")
+            except RuntimeBundleError as exc:
                 raise RuntimeBundleError(
                     f"runtime JSON component {self.logical_ref!r} is malformed") from exc
             if not isinstance(value, dict) \
@@ -153,6 +428,13 @@ class RuntimeComponent:
             raise RuntimeBundleError(
                 f"runtime component {self.logical_ref!r} digest mismatch: "
                 f"declared {self.content_digest}, actual {actual}")
+        expected_placement = component_placement(
+            self.role, self.canonicalization, self.canonical_bytes,
+            self.repository_path)
+        if self.placement != expected_placement:
+            raise RuntimeBundleError(
+                f"runtime component {self.logical_ref!r} placement is "
+                f"{self.placement!r}, expected {expected_placement!r}")
 
     def identity_document(self) -> dict[str, Any]:
         return {
@@ -162,7 +444,251 @@ class RuntimeComponent:
             "canonicalization": self.canonicalization,
             "contentDigest": self.content_digest,
             "byteLength": len(self.canonical_bytes),
+            "placement": self.placement,
         }
+
+
+def observed_runtime_environment_component() -> RuntimeComponent:
+    """Bind the bundle to the interpreter and installed distribution bytes."""
+    distributions = []
+    for distribution in importlib.metadata.distributions():
+        raw_name = distribution.metadata.get("Name")
+        if not raw_name:
+            continue
+        name = re.sub(r"[-_.]+", "-", raw_name).lower()
+        files = []
+        for relative in sorted(distribution.files or (), key=lambda item: str(item)):
+            path = Path(distribution.locate_file(relative))
+            if not path.is_file():
+                raise RuntimeBundleError(
+                    f"installed distribution file is missing: {name}/{relative}")
+            exact = path.read_bytes()
+            recorded_hash = getattr(relative, "hash", None)
+            if recorded_hash is not None:
+                try:
+                    recorded = base64.urlsafe_b64decode(
+                        recorded_hash.value + "=" * (-len(recorded_hash.value) % 4))
+                    observed_hash = hashlib.new(recorded_hash.mode, exact).digest()
+                except (ValueError, TypeError) as exc:
+                    raise RuntimeBundleError(
+                        f"installed distribution hash metadata is invalid: "
+                        f"{name}/{relative}") from exc
+                if observed_hash != recorded:
+                    raise RuntimeBundleError(
+                        f"installed distribution bytes differ from RECORD: "
+                        f"{name}/{relative}")
+            files.append({
+                "path": str(relative).replace("\\", "/"),
+                "contentDigest": sha256_bytes(exact),
+                "byteLength": len(exact),
+            })
+        distributions.append({
+            "name": name,
+            "version": distribution.version,
+            "files": files,
+        })
+    distributions.sort(key=lambda item: item["name"])
+    names = [item["name"] for item in distributions]
+    if len(names) != len(set(names)):
+        raise RuntimeBundleError(
+            "multiple installed distributions normalize to the same name")
+    executable = Path(sys.executable).resolve(strict=True).read_bytes()
+    document = {
+        "schemaVersion": "ofarm.runtime-environment-observation.local.v1",
+        "python": {
+            "implementation": platform.python_implementation(),
+            "version": platform.python_version(),
+            "cacheTag": sys.implementation.cache_tag,
+            "soabi": sysconfig.get_config_var("SOABI"),
+            "optimizationLevel": sys.flags.optimize,
+            "hashSeedEnvironment": os.environ.get("PYTHONHASHSEED"),
+            "executableDigest": sha256_bytes(executable),
+            "executableByteLength": len(executable),
+        },
+        "platform": {
+            "operatingSystem": platform.system(),
+            "machine": platform.machine(),
+        },
+        "process": {
+            "localeEnvironment": {
+                "LANG": os.environ.get("LANG"),
+                "LC_ALL": os.environ.get("LC_ALL"),
+            },
+            "localeCategories": {
+                "collate": locale.setlocale(locale.LC_COLLATE, None),
+                "ctype": locale.setlocale(locale.LC_CTYPE, None),
+                "monetary": locale.setlocale(locale.LC_MONETARY, None),
+                "numeric": locale.setlocale(locale.LC_NUMERIC, None),
+                "time": locale.setlocale(locale.LC_TIME, None),
+            },
+            "timezoneEnvironment": os.environ.get("TZ"),
+            "timezoneNames": list(time.tzname),
+            "utcOffsetSeconds": -time.timezone,
+        },
+        "distributions": distributions,
+    }
+    canonical = canonical_json(document).encode("utf-8")
+    return RuntimeComponent(
+        role="RUNTIME_ENVIRONMENT_OBSERVED",
+        logical_ref=_OBSERVED_ENVIRONMENT_REF,
+        repository_path="runtime-observed/environment-v1",
+        canonicalization=JSON_CANONICALIZATION,
+        content_digest=sha256_bytes(canonical),
+        canonical_bytes=canonical,
+        placement=GLOBAL_CONTENT_PLACEMENT,
+    )
+
+
+def _validate_database_environment_document(document: Any) -> None:
+    if not isinstance(document, dict) or set(document) != {
+            "schemaVersion", "server", "database", "session", "extensions"}:
+        raise RuntimeBundleError("PostgreSQL environment observation is malformed")
+    if document.get("schemaVersion") != \
+            "ofarm.runtime-database-observation.local.v1":
+        raise RuntimeBundleError("PostgreSQL environment observation version is invalid")
+    expected_server = {"version", "versionNumber", "normalizedVersion"}
+    expected_database = {
+        "encoding", "localeProvider", "collation", "ctype",
+        "locale", "icuRules", "collationVersion",
+    }
+    expected_session = {
+        "currentUser", "sessionUser", "timezone", "dateStyle",
+        "intervalStyle", "searchPath", "standardConformingStrings",
+        "extraFloatDigits", "byteaOutput",
+    }
+    if (not isinstance(document.get("server"), dict)
+            or set(document["server"]) != expected_server
+            or not all(isinstance(document["server"].get(key), str)
+                       for key in expected_server)
+            or not isinstance(document.get("database"), dict)
+            or set(document["database"]) != expected_database
+            or not isinstance(document.get("session"), dict)
+            or set(document["session"]) != expected_session
+            or not all(isinstance(document["session"].get(key), str)
+                       for key in expected_session)
+            or not isinstance(document.get("extensions"), list)):
+        raise RuntimeBundleError("PostgreSQL environment observation fields are malformed")
+    for field_name, value in document["database"].items():
+        if value is not None and not isinstance(value, str):
+            raise RuntimeBundleError(
+                f"PostgreSQL database observation {field_name!r} is malformed")
+    for extension in document["extensions"]:
+        if (not isinstance(extension, dict)
+                or set(extension) != {"name", "version"}
+                or not all(isinstance(value, str) for value in extension.values())):
+            raise RuntimeBundleError("PostgreSQL extension observation is malformed")
+    names = [extension["name"] for extension in document["extensions"]]
+    if names != sorted(names) or len(names) != len(set(names)):
+        raise RuntimeBundleError("PostgreSQL extension observation is not canonical")
+
+
+def database_runtime_environment_component(document: dict[str, Any]) -> RuntimeComponent:
+    """Canonicalize one transaction-local PostgreSQL environment observation."""
+    _validate_database_environment_document(document)
+    canonical = canonical_json(document).encode("utf-8")
+    return RuntimeComponent(
+        role="RUNTIME_DATABASE_OBSERVED",
+        logical_ref=_OBSERVED_DATABASE_REF,
+        repository_path="runtime-observed/postgresql-v1",
+        canonicalization=JSON_CANONICALIZATION,
+        content_digest=sha256_bytes(canonical),
+        canonical_bytes=canonical,
+        placement=GLOBAL_CONTENT_PLACEMENT,
+    )
+
+
+def _locked_distribution_versions(lock_bytes: bytes) -> dict[str, str]:
+    try:
+        text = lock_bytes.decode("utf-8", errors="strict")
+    except UnicodeDecodeError as exc:
+        raise RuntimeBundleError("retained dependency lock is not UTF-8") from exc
+    versions = {}
+    pattern = re.compile(r"^([A-Za-z0-9_.-]+)==([^\s\\]+)")
+    for line in text.splitlines():
+        match = pattern.match(line.strip())
+        if not match:
+            continue
+        name, version = match.groups()
+        normalized = re.sub(r"[-_.]+", "-", name).lower()
+        if normalized in versions:
+            raise RuntimeBundleError(
+                f"duplicate retained dependency lock entry {normalized!r}")
+        versions[normalized] = version
+    if not versions:
+        raise RuntimeBundleError("retained dependency lock contains no distributions")
+    return versions
+
+
+def assert_runtime_environment_compatible(bundle: "RuntimeBundle") -> dict[str, Any]:
+    """Fail closed when observed execution differs from the retained baseline."""
+    observed_component = bundle.component(
+        "RUNTIME_ENVIRONMENT_OBSERVED", _OBSERVED_ENVIRONMENT_REF)
+    current_component = observed_runtime_environment_component()
+    if observed_component != current_component:
+        raise RuntimeBundleError(
+            "observed interpreter or installed distribution bytes changed after selection")
+    observed = bundle.json_component(
+        "RUNTIME_ENVIRONMENT_OBSERVED", _OBSERVED_ENVIRONMENT_REF)
+    config_doc = bundle.json_component(
+        "RUNTIME_ENVIRONMENT", "environment:conformance/review_baseline_config.json")
+    required = config_doc.get("requiredEnvironment")
+    if not isinstance(required, dict):
+        raise RuntimeBundleError("retained runtime baseline has no requiredEnvironment")
+    retained_python_version = bundle.component(
+        "RUNTIME_ENVIRONMENT", "environment:.python-version"
+    ).canonical_bytes.decode("utf-8", errors="strict").strip()
+    if retained_python_version != required.get("pythonVersion"):
+        raise RuntimeBundleError(
+            "retained .python-version and runtime baseline disagree")
+    expected_python = {
+        "implementation": required.get("pythonImplementation"),
+        "version": required.get("pythonVersion"),
+        "optimizationLevel": required.get("pythonOptimizationLevel"),
+    }
+    actual_python = observed["python"]
+    for field_name, expected in expected_python.items():
+        if actual_python.get(field_name) != expected:
+            raise RuntimeBundleError(
+                f"observed Python {field_name} {actual_python.get(field_name)!r} "
+                f"does not equal retained requirement {expected!r}")
+    if (observed["platform"].get("operatingSystem")
+            != required.get("operatingSystem")
+            or observed["platform"].get("machine") != required.get("machine")):
+        raise RuntimeBundleError(
+            "observed operating system or machine differs from retained requirement")
+    if actual_python.get("hashSeedEnvironment") != required.get("pythonHashSeed"):
+        raise RuntimeBundleError(
+            "observed PYTHONHASHSEED differs from retained requirement")
+    process = observed.get("process") or {}
+    locale_environment = process.get("localeEnvironment") or {}
+    if (locale_environment.get("LANG") != required.get("locale")
+            or locale_environment.get("LC_ALL") != required.get("locale")):
+        raise RuntimeBundleError(
+            "observed process locale environment differs from retained requirement")
+    if (process.get("timezoneEnvironment") != required.get("timezone")
+            or process.get("utcOffsetSeconds") != 0
+            or not process.get("timezoneNames")
+            or process["timezoneNames"][0] not in {"UTC", "GMT"}):
+        raise RuntimeBundleError(
+            "observed process timezone differs from retained requirement")
+    expected_distributions = {}
+    for logical_ref in (
+        "environment:requirements-review-baseline.lock",
+        "environment:requirements-review-pip.lock",
+    ):
+        component = bundle.component("RUNTIME_ENVIRONMENT", logical_ref)
+        for name, version in _locked_distribution_versions(
+                component.canonical_bytes).items():
+            if name in expected_distributions:
+                raise RuntimeBundleError(
+                    f"distribution {name!r} appears in multiple retained locks")
+            expected_distributions[name] = version
+    actual_distributions = {
+        item["name"]: item["version"] for item in observed["distributions"]}
+    if actual_distributions != expected_distributions:
+        raise RuntimeBundleError(
+            "installed distribution set/versions differ from retained locks")
+    return required
 
 
 @dataclass(frozen=True)
@@ -178,7 +704,7 @@ class SelectedReferenceIdentity:
     source_digest: str | None = None
 
     def __post_init__(self) -> None:
-        if self.source_byte_status not in {"LOCKED", "UNAVAILABLE_METADATA_ONLY"}:
+        if self.source_byte_status not in {"LOCKED", "PROVENANCE_LOCATOR_ONLY"}:
             raise RuntimeBundleError("unknown selected-reference source byte status")
         if (not isinstance(self.family_id, str) or not self.family_id
                 or not isinstance(self.snapshot_ref, str) or not self.snapshot_ref
@@ -191,6 +717,10 @@ class SelectedReferenceIdentity:
                 or len(self.unavailable_source_identities) !=
                 len(set(self.unavailable_source_identities))):
             raise RuntimeBundleError("selected-reference identities contain duplicates")
+        if any(not ref.startswith(("archive:", "surface:"))
+               for ref in self.unavailable_source_identities):
+            raise RuntimeBundleError(
+                "unretained reference identities must be closed non-content locators")
         if self.data_family is not None \
                 and (not isinstance(self.data_family, str) or not self.data_family):
             raise RuntimeBundleError("selected-reference data family is malformed")
@@ -232,10 +762,15 @@ class RuntimeBundle:
     components: tuple[RuntimeComponent, ...]
     selected_references: tuple[SelectedReferenceIdentity, ...]
     construction_mode: str
+    _live_selection_proof: InitVar[object | None] = None
 
-    def __post_init__(self) -> None:
+    def __post_init__(self, _live_selection_proof) -> None:
         if self.construction_mode not in {"LIVE_CURRENT", "PERSISTED_AUDIT"}:
             raise RuntimeBundleError("RuntimeBundle construction mode is unverified")
+        if ((self.construction_mode == "LIVE_CURRENT")
+                != (_live_selection_proof is _LIVE_SELECTION_PROOF)):
+            raise RuntimeBundleError(
+                "RuntimeBundle live-selection provenance is unverified")
         if not _SHA256_RE.fullmatch(self.digest):
             raise RuntimeBundleError("RuntimeBundle digest must be a full SHA-256")
         if self.bundle_ref != f"runtimebundle:{self.digest}":
@@ -245,15 +780,23 @@ class RuntimeBundle:
             raise RuntimeBundleError(
                 f"RuntimeBundle digest mismatch: declared {self.digest}, actual {actual}")
         try:
-            document = json.loads(self.canonical_document_bytes)
-        except (UnicodeDecodeError, ValueError) as exc:
+            document = _strict_json_value(
+                self.canonical_document_bytes, "RuntimeBundle document")
+        except RuntimeBundleError as exc:
             raise RuntimeBundleError("RuntimeBundle document bytes are malformed") from exc
         if not isinstance(document, dict):
             raise RuntimeBundleError("RuntimeBundle document must be an object")
+        if set(document) != {
+                "schemaVersion", "canonicalization", "tenantRef", "profileRef",
+                "packRef", "components", "selectedReferenceIdentities"}:
+            raise RuntimeBundleError(
+                "RuntimeBundle document has unknown or missing fields")
         if canonical_json(document).encode("utf-8") != self.canonical_document_bytes:
             raise RuntimeBundleError("RuntimeBundle document bytes are not canonical")
         if document.get("schemaVersion") != BUNDLE_VERSION \
                 or document.get("canonicalization") != JSON_CANONICALIZATION \
+                or not isinstance(document.get("tenantRef"), str) \
+                or not document.get("tenantRef") \
                 or document.get("profileRef") != self.descriptor.profile_ref \
                 or document.get("packRef") != self.descriptor.pack_ref:
             raise RuntimeBundleError(
@@ -269,6 +812,8 @@ class RuntimeBundle:
         keys = [(component.role, component.logical_ref) for component in self.components]
         if len(keys) != len(set(keys)):
             raise RuntimeBundleError("RuntimeBundle contains duplicate component role/ref entries")
+        for component in self.components:
+            _validate_tenant_component_owner(component, document["tenantRef"])
         descriptor_components = [component for component in self.components
                                  if component.role == "PROFILE_DESCRIPTOR"
                                  and component.logical_ref == self.descriptor.profile_ref]
@@ -301,8 +846,10 @@ class RuntimeBundle:
                 raise RuntimeBundleError(
                     f"selected snapshot identity drift for {reference.snapshot_ref!r}")
             try:
-                snapshot_payload = json.loads(snapshot.canonical_bytes)
-            except (UnicodeDecodeError, ValueError) as exc:
+                snapshot_payload = _strict_json_value(
+                    snapshot.canonical_bytes,
+                    f"selected snapshot {reference.snapshot_ref!r}")
+            except RuntimeBundleError as exc:
                 raise RuntimeBundleError(
                     f"selected snapshot bytes are malformed for "
                     f"{reference.snapshot_ref!r}") from exc
@@ -366,10 +913,10 @@ class RuntimeBundle:
                 raise RuntimeBundleError(
                     f"selected reference {reference.snapshot_ref!r} claims locked "
                     "source bytes but has no retained source/data component")
-            elif reference.source_byte_status == "UNAVAILABLE_METADATA_ONLY" \
+            elif reference.source_byte_status == "PROVENANCE_LOCATOR_ONLY" \
                     and artifact_refs:
                 raise RuntimeBundleError(
-                    f"metadata-only reference {reference.snapshot_ref!r} names a "
+                    f"locator-only reference {reference.snapshot_ref!r} names a "
                     "retained source artifact")
             if digest_refs != paired_digest_refs:
                 raise RuntimeBundleError(
@@ -392,6 +939,11 @@ class RuntimeBundle:
     def policy_ref(self) -> str:
         return self.descriptor.evidence_policy_ref
 
+    @property
+    def tenant_ref(self) -> str:
+        return _strict_json_value(
+            self.canonical_document_bytes, "RuntimeBundle document")["tenantRef"]
+
     def component(self, role: str, logical_ref: str) -> RuntimeComponent:
         matches = [component for component in self.components
                    if component.role == role and component.logical_ref == logical_ref]
@@ -405,7 +957,9 @@ class RuntimeBundle:
         component = self.component(role, logical_ref)
         if component.canonicalization != JSON_CANONICALIZATION:
             raise RuntimeBundleError(f"component {logical_ref!r} is not canonical JSON")
-        return copy.deepcopy(json.loads(component.canonical_bytes))
+        return copy.deepcopy(_strict_json_value(
+            component.canonical_bytes,
+            f"runtime JSON component {logical_ref!r}"))
 
     def policy_document(self) -> dict[str, Any]:
         return self.json_component("PROFILE_POLICY", self.descriptor.evidence_policy_ref)
@@ -429,7 +983,7 @@ class RuntimeBundle:
     ) -> dict[str, Any]:
         """Return only retained, digest-verified data selected into this bundle.
 
-        A metadata-only ReferenceSnapshot is useful context provenance, but it
+        A locator-only ReferenceSnapshot is useful context provenance, but it
         is never a lookup surface.  Consumers must cross this method so absent
         retained source/data bytes fail closed instead of becoming an empty or
         live-filesystem lookup.
@@ -473,10 +1027,13 @@ def _component_from_path(
     path: Path,
     canonicalization: str,
     expected_digest: str | None = None,
+    expected_placement: str | None = None,
 ) -> RuntimeComponent:
     relative = _repository_relative(package_root, path)
     canonical = _component_bytes(path, canonicalization)
     actual = sha256_bytes(canonical)
+    placement = component_placement(
+        role, canonicalization, canonical, relative)
     if expected_digest is not None:
         if not _SHA256_RE.fullmatch(expected_digest):
             raise RuntimeBundleError(
@@ -485,6 +1042,10 @@ def _component_from_path(
             raise RuntimeBundleError(
                 f"component lock mismatch for {logical_ref!r}: "
                 f"expected {expected_digest}, actual {actual}")
+    if expected_placement is not None and placement != expected_placement:
+        raise RuntimeBundleError(
+            f"component lock placement mismatch for {logical_ref!r}: "
+            f"expected {expected_placement}, actual {placement}")
     return RuntimeComponent(
         role=role,
         logical_ref=logical_ref,
@@ -492,6 +1053,7 @@ def _component_from_path(
         canonicalization=canonicalization,
         content_digest=actual,
         canonical_bytes=canonical,
+        placement=placement,
     )
 
 
@@ -606,9 +1168,10 @@ def _validate_artifact_ref_list(
                     f"active view ref {ref!r} lacks its exact query specification, "
                     "query plan, or locked output implementation")
             try:
-                plan = json.loads(
-                    component_map[("QUERY_PLAN", plan_ref)].canonical_bytes)
-            except (UnicodeDecodeError, ValueError) as exc:
+                plan = _strict_json_value(
+                    component_map[("QUERY_PLAN", plan_ref)].canonical_bytes,
+                    f"query plan {plan_ref!r}")
+            except RuntimeBundleError as exc:
                 raise RuntimeBundleError(
                     f"active view ref {ref!r} has a malformed query plan") from exc
             expected_mode = view_output_modes.get(ref)
@@ -745,7 +1308,7 @@ def _locked_components(package_root: Path) -> list[RuntimeComponent]:
     seen = set()
     for index, entry in enumerate(entries):
         if not isinstance(entry, dict) or set(entry) != {
-            "role", "logicalRef", "path", "canonicalization", "sha256"
+            "role", "logicalRef", "path", "canonicalization", "sha256", "placement"
         }:
             raise RuntimeBundleError(f"malformed runtime component lock entry {index}")
         key = (entry["role"], entry["logicalRef"])
@@ -759,6 +1322,7 @@ def _locked_components(package_root: Path) -> list[RuntimeComponent]:
             path=package_root / entry["path"],
             canonicalization=entry["canonicalization"],
             expected_digest=entry["sha256"],
+            expected_placement=entry["placement"],
         ))
     return components
 
@@ -771,6 +1335,9 @@ def build_runtime_bundle(
     additional_reference_payloads: Iterable[dict[str, Any]] = (),
     reference_data: Iterable[dict[str, Any]] = (),
     tenant_ref: str | None = None,
+    _database_environment: dict[str, Any] | None = None,
+    _profile_route_selection: dict[str, Any] | None = None,
+    _live_selection_proof: object | None = None,
 ) -> RuntimeBundle:
     """Build one immutable bundle from an explicit descriptor and trusted lock.
 
@@ -783,6 +1350,8 @@ def build_runtime_bundle(
         tenant_ref = config.TENANT_REF
     if not isinstance(tenant_ref, str) or not tenant_ref:
         raise RuntimeBundleError("runtime tenant ref must be non-empty")
+    if _live_selection_proof not in {None, _LIVE_SELECTION_PROOF}:
+        raise RuntimeBundleError("unknown RuntimeBundle live-selection authority")
     profile_origin_bundles = profile_origin_bundles or {}
     package_root = Path(descriptor.profile_root).resolve().parent
     locked = _locked_components(package_root)
@@ -802,6 +1371,22 @@ def build_runtime_bundle(
             raise RuntimeBundleError(
                 f"locked runtime component {component.role}/{component.logical_ref} "
                 "does not equal the selected canonical bytes")
+
+    add_component(observed_runtime_environment_component())
+    if _database_environment is not None:
+        add_component(database_runtime_environment_component(
+            _database_environment))
+    if _profile_route_selection is not None:
+        route_bytes = canonical_json(_profile_route_selection).encode("utf-8")
+        add_component(RuntimeComponent(
+            role="PROFILE_ROUTE_SELECTION",
+            logical_ref=_PROFILE_ROUTE_SELECTION_REF,
+            repository_path="runtime-selected/profile-route-selection",
+            canonicalization=JSON_CANONICALIZATION,
+            content_digest=sha256_bytes(route_bytes),
+            canonical_bytes=route_bytes,
+            placement=TENANT_CONTENT_PLACEMENT,
+        ))
 
     add_component(_component_from_path(
         package_root,
@@ -840,6 +1425,7 @@ def build_runtime_bundle(
             canonicalization=JSON_CANONICALIZATION,
             content_digest=sha256_bytes(canonical),
             canonical_bytes=canonical,
+            placement=component_placement(role, JSON_CANONICALIZATION, canonical),
         ))
 
     required_locked = {
@@ -879,6 +1465,12 @@ def build_runtime_bundle(
         canonical = canonical_json(payload).encode("utf-8")
         prior = instance_payloads.get(logical_ref)
         if prior is not None:
+            prior_component = component_map.get(("PROFILE_INSTANCE", logical_ref))
+            if (prior_component is not None
+                    and prior_component.placement == GLOBAL_CONTENT_PLACEMENT):
+                raise RuntimeBundleError(
+                    f"tenant-origin profile instance {logical_ref!r} collides with "
+                    "an already selected global package identity")
             if canonical_json(prior[0]).encode("utf-8") != canonical:
                 raise RuntimeBundleError(
                     f"profile instance identifier {logical_ref!r} is reused for "
@@ -906,6 +1498,9 @@ def build_runtime_bundle(
             canonicalization=JSON_CANONICALIZATION,
             content_digest=sha256_bytes(canonical),
             canonical_bytes=canonical,
+            placement=component_placement(
+                "PROFILE_INSTANCE", JSON_CANONICALIZATION, canonical,
+                f"database/profile-instance/{logical_ref}"),
         ))
 
         if payload.get("schemaVersion") == "ofarm.activeartifactset.v0.1":
@@ -936,9 +1531,10 @@ def build_runtime_bundle(
             continue
         canonical = canonical_json(payload).encode("utf-8")
         prior = selected_payloads.get(ref)
-        if prior is not None and canonical_json(prior).encode("utf-8") != canonical:
+        if prior is not None:
             raise RuntimeBundleError(
-                f"ReferenceSnapshot identifier {ref!r} is reused for different content")
+                f"tenant-origin ReferenceSnapshot identifier {ref!r} collides with "
+                "an already selected package identity")
         selected_payloads[ref] = copy.deepcopy(payload)
         if ref not in instance_payloads:
             add_component(RuntimeComponent(
@@ -948,6 +1544,7 @@ def build_runtime_bundle(
                 canonicalization=JSON_CANONICALIZATION,
                 content_digest=sha256_bytes(canonical),
                 canonical_bytes=canonical,
+                placement=TENANT_CONTENT_PLACEMENT,
             ))
 
     data_by_ref: dict[tuple[str, str], dict[str, Any]] = {}
@@ -983,6 +1580,7 @@ def build_runtime_bundle(
             canonicalization=JSON_CANONICALIZATION,
             content_digest=actual,
             canonical_bytes=canonical,
+            placement=TENANT_CONTENT_PLACEMENT,
         ))
 
     _validate_selected_spine_scopes(instance_payloads, tenant_ref)
@@ -1031,7 +1629,7 @@ def build_runtime_bundle(
             snapshot_payload_digest=sha256_bytes(canonical),
             source_identities=source_refs,
             source_byte_status=("LOCKED" if artifact_refs or family_row
-                                else "UNAVAILABLE_METADATA_ONLY"),
+                                else "PROVENANCE_LOCATOR_ONLY"),
             unavailable_source_identities=tuple(
                 ref for ref in source_refs
                 if not (isinstance(ref, str) and (
@@ -1047,6 +1645,7 @@ def build_runtime_bundle(
     bundle_document = {
         "schemaVersion": BUNDLE_VERSION,
         "canonicalization": JSON_CANONICALIZATION,
+        "tenantRef": tenant_ref,
         "profileRef": descriptor.profile_ref,
         "packRef": descriptor.pack_ref,
         "components": [component.identity_document() for component in ordered_components],
@@ -1063,7 +1662,22 @@ def build_runtime_bundle(
         canonical_document_bytes=canonical_document,
         components=ordered_components,
         selected_references=tuple(selected_references),
-        construction_mode="LIVE_CURRENT",
+        construction_mode=(
+            "LIVE_CURRENT" if _live_selection_proof is _LIVE_SELECTION_PROOF
+            else "PERSISTED_AUDIT"),
+        _live_selection_proof=_live_selection_proof,
+    )
+
+
+def _build_live_runtime_bundle(descriptor, **kwargs) -> RuntimeBundle:
+    """Internal startup path: mark only the under-lock selection as live."""
+    if kwargs.get("_database_environment") is None:
+        raise RuntimeBundleError(
+            "live RuntimeBundle selection requires a PostgreSQL environment observation")
+    return build_runtime_bundle(
+        descriptor,
+        _live_selection_proof=_LIVE_SELECTION_PROOF,
+        **kwargs,
     )
 
 
@@ -1077,15 +1691,16 @@ def runtime_bundle_from_persisted(
 ) -> RuntimeBundle:
     """Cold-load a bundle from immutable persisted bytes and verify everything."""
     try:
-        document = json.loads(canonical_document_bytes)
-    except (UnicodeDecodeError, ValueError) as exc:
+        document = _strict_json_value(
+            canonical_document_bytes, "persisted RuntimeBundle document")
+    except RuntimeBundleError as exc:
         raise RuntimeBundleError("persisted RuntimeBundle document is malformed") from exc
     if not isinstance(document, dict):
         raise RuntimeBundleError("persisted RuntimeBundle document must be an object")
     if canonical_json(document).encode("utf-8") != canonical_document_bytes:
         raise RuntimeBundleError("persisted RuntimeBundle document is not canonical")
     if set(document) != {
-        "schemaVersion", "canonicalization", "profileRef", "packRef",
+        "schemaVersion", "canonicalization", "tenantRef", "profileRef", "packRef",
         "components", "selectedReferenceIdentities",
     }:
         raise RuntimeBundleError("persisted RuntimeBundle document has unknown/missing fields")
@@ -1112,7 +1727,7 @@ def runtime_bundle_from_persisted(
             or any(not isinstance(entry, dict)
                    or set(entry) != {
                        "role", "logicalRef", "repositoryPath", "canonicalization",
-                       "contentDigest", "byteLength"}
+                       "contentDigest", "byteLength", "placement"}
                    for entry in component_entries)):
         raise RuntimeBundleError("persisted RuntimeBundle component inventory is malformed")
     expected = {(entry["role"], entry["logicalRef"]): entry
@@ -1191,8 +1806,9 @@ def _assert_descriptor_matches_component(
     if component.canonicalization != JSON_CANONICALIZATION:
         raise RuntimeBundleError("persisted profile descriptor is not canonical JSON")
     try:
-        payload = json.loads(component.canonical_bytes)
-    except (UnicodeDecodeError, ValueError) as exc:
+        payload = _strict_json_value(
+            component.canonical_bytes, "persisted profile descriptor")
+    except RuntimeBundleError as exc:
         raise RuntimeBundleError("persisted profile descriptor bytes are malformed") from exc
     scalar_fields = {
         "descriptorVersion": descriptor.descriptor_version,
@@ -1263,8 +1879,9 @@ def descriptor_from_retained_component(
             or component.canonicalization != JSON_CANONICALIZATION:
         raise RuntimeBundleError("retained descriptor component is malformed")
     try:
-        payload = json.loads(component.canonical_bytes)
-    except (UnicodeDecodeError, ValueError) as exc:
+        payload = _strict_json_value(
+            component.canonical_bytes, "retained profile descriptor")
+    except RuntimeBundleError as exc:
         raise RuntimeBundleError("retained descriptor bytes are malformed") from exc
     descriptor_path = Path(package_root).resolve() / component.repository_path
     profile_root = descriptor_path.parent

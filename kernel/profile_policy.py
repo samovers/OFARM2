@@ -10,19 +10,18 @@ policy file (config.EVIDENCE_POLICY_PATH) and is read here.
 
 Fail closed: a missing or malformed policy raises ProfilePolicyError, which the
 gate turns into a governed RuntimeProblem (never a silent permissive default,
-never a crash). The policy is read fresh per call so the active profile's policy
-file is authoritative — changing it changes behavior without touching kernel/.
+never a crash). Legacy configuration helpers read the profile file explicitly;
+governed runtime decisions reparse the exact policy bytes retained by their
+verified RuntimeBundle.
 """
 from __future__ import annotations
 
-import copy
 import json
 import re
 import string
 from pathlib import Path
 
 from . import config
-from .contracts import canonical_json
 from .problems import REGISTERED_REASON_CODES
 
 
@@ -371,6 +370,21 @@ class DescriptorPolicyProvider:
     the existing full evidence-review policy loader.
     """
 
+    def __setattr__(self, name, value):
+        if getattr(self, "_runtime_composition_sealed", False):
+            raise AttributeError(
+                "DescriptorPolicyProvider runtime composition is immutable")
+        object.__setattr__(self, name, value)
+
+    @staticmethod
+    def expected_recognized_rule_refs(descriptor) -> frozenset[str]:
+        return frozenset({
+            descriptor.evidence_policy_ref,
+            descriptor.profile_ref,
+            descriptor.pack_ref,
+            descriptor.code_binding_profile_ref,
+        })
+
     def __init__(self, descriptor, *, runtime_bundle):
         self.descriptor = descriptor
         self.runtime_bundle = runtime_bundle
@@ -378,13 +392,8 @@ class DescriptorPolicyProvider:
             raise ProfilePolicyError(
                 "policy descriptor and RuntimeBundle do not match exactly")
         self.policy_ref = descriptor.evidence_policy_ref
-        self.recognized_rule_refs = frozenset({
-            descriptor.evidence_policy_ref,
-            descriptor.profile_ref,
-            descriptor.pack_ref,
-            descriptor.code_binding_profile_ref,
-        })
-        self._evidence_policy_cache: dict[tuple[str, ...] | None, bytes] = {}
+        self.recognized_rule_refs = self.expected_recognized_rule_refs(descriptor)
+        self._runtime_composition_sealed = True
 
     @staticmethod
     def _supported_checks_key(supported_checks) -> tuple[str, ...] | None:
@@ -393,17 +402,15 @@ class DescriptorPolicyProvider:
         return tuple(supported_checks)
 
     def evidence_policy(self, supported_checks=None) -> dict:
+        # RuntimeBundle.policy_document() reparses immutable retained bytes and
+        # returns a fresh object. Revalidating that fresh object avoids a mutable
+        # process-local cache becoming an unreceipted policy authority.
         key = self._supported_checks_key(supported_checks)
-        if key not in self._evidence_policy_cache:
-            validated = _validated_evidence_review_policy(
-                self.runtime_bundle.policy_document(),
-                supported_checks=key,
-                expected_policy_ref=self.policy_ref,
-            )
-            self._evidence_policy_cache[key] = canonical_json(validated).encode("utf-8")
-        # The cached bytes are immutable. Callers receive a fresh object and can
-        # never mutate policy for a later decision in the same bundle lifetime.
-        return copy.deepcopy(json.loads(self._evidence_policy_cache[key]))
+        return _validated_evidence_review_policy(
+            self.runtime_bundle.policy_document(),
+            supported_checks=key,
+            expected_policy_ref=self.policy_ref,
+        )
 
     def validation_policy(self) -> dict:
         return self.evidence_policy()["validation"]

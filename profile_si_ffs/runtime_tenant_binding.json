@@ -1,0 +1,4 @@
+{
+  "schemaVersion": "ofarm.runtime-tenant-binding.local.v1",
+  "tenantRef": "tenant:si.ffs.pilot.demo"
+}
