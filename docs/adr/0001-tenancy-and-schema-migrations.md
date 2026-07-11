@@ -6,9 +6,11 @@
 - Parent: GitHub #167
 - Depends on: GitHub #168
 - Implementation coordination: GitHub #172, #173, #174, and #192
-- Additional prerequisites for #174: GitHub #171 and the #184 semantic stop
-  described below
+- Additional prerequisite for #174: GitHub #171. GitHub #184 follows the
+  neutral structural carrier supplied by #174 and owns semantic reference
+  kind/cardinality enforcement; #174 may not claim that later semantic closure.
 - Temporal/audit-boundary coordination: GitHub #170 and ADR 0002
+- Non-forking recovery design (not supported in V1): GitHub #193
 - Pre-tenant audit runtime/operations owner: GitHub #192, consuming the bounded
   outcomes and storage supplied by GitHub #172, #173, and #174
 
@@ -80,16 +82,20 @@ cannot authorize or reconstruct tenant state, and is visible only to the
 separate security-operations boundary defined below.
 
 **TenantBinding** is the verified database context containing at least the
-internal tenant identifier, external tenant reference, authenticated Party
-reference, issuer, subject, immutable binding-version identity and digest, and
+internal tenant identifier and registration digest, external tenant reference,
+authenticated Party reference and exact `ofarm.party.v0.1` record-kind
+identity/record identity/schema digest/payload digest, issuer, subject,
+equality-policy identity, immutable binding-version identity and digest, and
 authoritative lifecycle-head identity and digest. It exists only after the
 hardened binder verifies a transaction-bound TenantCapability.
 
 **TenantCapability** is a short-lived, signed, single-use proof minted by the
 trusted authentication boundary. Its signing authority is unavailable to the
 application database role. It binds one immutable principal-binding version and
-its authoritative lifecycle head to one database transaction challenge and
-cannot be used to select or rebind another tenant.
+its authoritative lifecycle head, exact equality policy, immutable tenant
+registration, and pinned Party record-kind/identity/schema/payload digests to one
+database transaction challenge and cannot be used to select or rebind another
+tenant.
 
 **UnitOfWork** is one checked-out connection and one database transaction for one
 trusted-tenant request, governed command, or explicitly assigned background
@@ -128,11 +134,11 @@ schemas and other repository files are global inputs, not database relations.
 
 | Future relation | Classification | Frozen target rule |
 |---|---|---|
-| tenant_registry | Globally governed | Maps an internal immutable UUID tenant_id to a unique external tenant_ref, active state, and a database-assigned advisory-lock key. Application DML is forbidden. |
-| principal_binding | Globally governed immutable authorization versions | One immutable candidate version maps normalized (issuer, subject) to (tenant_id, party_ref), carries a version identity and digest plus validity metadata, and has a composite target-Party foreign key. Repeated principal keys are expected; no mutable lifecycle state or partial ACTIVE uniqueness lives here. It is the only initial global authority relation allowed to reference a tenant-owned Party. |
+| tenant_registry | Globally governed immutable V1 registry | Maps an internal immutable UUID tenant_id to one unique, bytewise-equal external tenant_ref, a row digest, and a database-assigned advisory-lock key. V1 has no mutable active flag, tenant retirement transition, or tenant eligibility lifecycle. Direct DML is forbidden; one hardened insert-only registrar creates rows. |
+| principal_binding | Globally governed immutable authorization versions | One immutable candidate version maps the exact-policy (issuer, subject) bytes to (tenant_id, party_ref), pins the immutable tenant-registry digest and exact ACTIVE Party record identity/schema/payload digests, and carries an equality-policy identity, version identity/digest, and validity metadata. Repeated principal keys are expected; no mutable lifecycle state or partial ACTIVE uniqueness lives here. It is the only initial global authority relation allowed to reference a tenant-owned Party. |
 | principal_binding_lifecycle | Globally governed append-only authorization authority | A digest-chained stream of ACTIVATE, REVOKE, EXPIRE, and SUPERSEDE acts names immutable binding versions, the prior lifecycle head, effective and decision data, accountable control identity, and reason. These acts, together with immutable versions, are the sole source for current and historical binding state. |
-| principal_binding_current | Optional derived/disposable global control projection and reservation | A unique (issuer, subject) row points to the computed active version and lifecycle head, or records the computed inactive state. It serializes transitions and accelerates lookup, but is rebuildable and never authoritative. |
-| tenant_binding_context | Protected transaction operational metadata | Stores the one-use challenge and verified TenantBinding for one backend transaction. Only hardened owner functions may read or write it; the application role has no table privileges. |
+| principal_binding_current | Optional derived/disposable global control projection and reservation | A unique (equality_policy, issuer, subject) row points to the computed active version and lifecycle head, or records the computed inactive state. It serializes transitions and accelerates lookup, but is rebuildable and never authoritative. |
+| tenant_binding_context | Protected disposable transaction operational metadata | An UNLOGGED migration-owned relation stores the one-use challenge and verified TenantBinding for exactly one database-derived backend identity and full xid8. Exact backend-start/full-transaction matching makes a physically retained row unusable after commit, rollback, backend restart, or pool reuse. Only hardened functions may read or write it; the application role has no table privileges. |
 | operational_security_event | Database-global operational security metadata, explicitly non-tenant | Append-only, bounded pre-tenant failure events plus audit-access, retention, and declared-gap maintenance events for this lane. It carries no tenant_id, tenant_ref, Party/farm/role identity, governed batch, knowledge position, or request-supplied attribution. It lives only in the separately provisioned audit PostgreSQL service's protected `ofarm_security` schema and is never read as tenant history. |
 | operational_security_quota_bucket | Disposable non-tenant operational security control state | One fixed database-time bucket per provisioned producer/component records accepted and overflow counts plus marker state. Only hardened audit functions mutate it. It contains no request, tenant, principal, correlation, or evidence data, cannot authorize anything, and is deleted after its bucket is closed and the corresponding overflow marker commits. |
 | schema_migration | Database-global operational metadata | Append-only ledger of version, filename, SHA-256, application/release identity, and applied time. Application access is read-only for readiness. |
@@ -403,14 +409,21 @@ Embedding a tenant name in a string does not qualify a key.
 
 The authoritative production source for tenant selection is the combination of
 immutable principal-binding versions and their append-only lifecycle acts. A
-`principal_binding` version records the normalized issuer and subject,
-tenant_id, party_ref, validity bounds, immutable version identity and digest,
-and any predecessor version. It has no mutable state. Its target Party has a
-composite (tenant_id, party_ref) foreign key.
+`principal_binding` version records the exact issuer and subject bytes under a
+named equality policy, tenant_id, the immutable tenant-registry row digest,
+party_ref, the exact `ofarm.party.v0.1` Party record identity, record-kind
+identity, schema digest, payload digest, validity bounds, immutable version
+identity and digest, and any predecessor version. The pinned payload must
+declare `partyState=ACTIVE`. The version has no mutable state. Its target Party
+has a composite (tenant_id, party_ref) foreign key, and its version digest covers
+every pinned identity, digest, and equality-policy field.
+For this contract, party_ref is both the Party `kernel_record.record_id` and the
+validated payload `partyId`; the binder requires all three values and the
+`record_kind` to agree.
 
 `principal_binding_lifecycle` is the authoritative state machine. Every
 immutable act is one of ACTIVATE, REVOKE, EXPIRE, or SUPERSEDE and contains the
-normalized principal key, affected version or predecessor/successor versions,
+exact-policy principal key, affected version or predecessor/successor versions,
 monotonic stream sequence, prior-act identity and digest, effective time,
 decision time, accountable control identity, reason, and its own digest. Unique
 stream sequence and prior-head constraints prevent a fork. Folding the accepted
@@ -420,20 +433,22 @@ the projection is never consulted for historical reconstruction.
 The current binding is the version left ACTIVE by that fold, within its
 immutable validity bounds, and not subsequently revoked, expired, or
 superseded. Zero active versions, a broken or ambiguous act chain, more than one
-active candidate, an inactive tenant, an inactive Party, or an invalid validity
-window denies context. Token roles never synthesize a Party, tenant, OFARM role,
-or authority grant.
+active candidate, a tenant-registry or pinned Party identity/digest mismatch, a
+pinned Party record that does not declare `partyState=ACTIVE`, or an invalid
+validity window denies context. Token roles never synthesize a Party, tenant,
+OFARM role, or authority grant.
 
 `principal_binding_current` is only an optional, disposable locator and
-concurrency reservation. It has one UNIQUE (issuer, subject) slot containing the
-computed active version identity/digest and lifecycle-head identity/digest, or
-the computed inactive state. The unique slot does not confer authority. Missing,
+concurrency reservation. It has one UNIQUE (equality_policy, issuer, subject)
+slot containing the computed active version identity/digest and lifecycle-head
+identity/digest, or the computed inactive state. The unique slot does not confer
+authority. Missing,
 stale, corrupt, or mismatched projection data never authorizes a request and can
 be dropped and rebuilt deterministically from immutable versions and acts.
 
 Creation, activation, revocation, expiry, supersession, or target replacement
 uses one hardened identity-control transition. It first acquires the unique
-normalized (issuer, subject) reservation, reconstructs and validates the
+exact-policy (issuer, subject) reservation, reconstructs and validates the
 authoritative lifecycle head from immutable versions and acts, and checks its
 expected-head precondition. In one database transaction it inserts any new
 immutable binding version, appends exactly one lifecycle act, and updates the
@@ -445,14 +460,53 @@ repair authority by inventing or editing history.
 A revocation, expiry, or replacement makes every capability naming the old
 version or prior lifecycle head unusable for later UnitOfWork binding. It does
 not rewrite earlier receipts or acts. A historical authorization decision is
-reconstructed as of its recorded lifecycle cut using only immutable versions
-and acts, never the then-current projection.
+reconstructed as of its recorded lifecycle cut using the immutable binding
+version, its pinned tenant/Party record digests and equality policy, and the
+append-only acts, never the then-current projection or a floating Party record.
 
-The initial architecture supports exactly one active tenant and Party per
-(issuer, subject). Multi-tenant principals, tenant switching, and user-selected
-tenant candidates are unsupported. Supporting them requires a separate decision
-covering selection, disclosure, confused-deputy risk, and receipt semantics.
-There is no production default.
+V1 deliberately has no mutable tenant eligibility, tenant retirement, or Party
+authorization-eligibility lifecycle. A tenant-registry row is immutable after
+provisioning. Binding creation may pin only an immutable Party record whose
+payload declares `partyState=ACTIVE`; a later Party payload does not silently
+change that binding's authority. A new Party record is a different immutable
+target and requires a new principal-binding version plus lifecycle transition.
+To stop a principal from binding in V1, the
+control plane revokes, expires, or supersedes its principal binding. A claim to
+deactivate one tenant or Party across principals is unsupported. Adding it
+requires a later decision with append-only tenant and Party lifecycle sources,
+transition authority, historical-cut semantics, knowledge ordering, current
+projections, and exact head identities/digests in capabilities, bindings, and
+authorization receipts. The `partyState` field in an immutable domain payload
+is not a hidden authentication switch.
+
+The tenant-registration digest is SHA-256 over
+`ASCII("OFARM_TENANT_REGISTRATION_V1") || 0x00`, the tenant UUID in RFC 4122
+network byte order exactly as PostgreSQL `uuid_send(tenant_id)`,
+`lp32(ASCII("OFARM_ASCII_ID_V1"))`, `lp32(tenant_ref ASCII bytes)`, and the
+advisory-lock key as one signed 64-bit big-endian integer, in that order.
+`lp32` is defined below. The registry stores the source fields as well as the
+digest; equality is never digest-only. Binding versions and capabilities carry
+tenant_id and this digest, and the binder compares both against the immutable
+row.
+
+Tenant registration occurs only through a migration-owned, fixed-SQL
+`register_tenant` SECURITY DEFINER function. The control-plane caller supplies
+only a validated external tenant_ref; the function derives the UUID, disjoint
+advisory-lock key, equality-policy identity, canonical digest, and returned
+registration receipt inside the database. `ofarm_tenant_registrar` may EXECUTE
+only that function and has no direct registry or tenant-table privileges.
+Direct INSERT, UPDATE, and DELETE are denied to application, worker, readiness,
+identity-writer, registrar, and every other runtime/control role. A
+migration-owned mutation-forbid trigger rejects UPDATE/DELETE regardless of a
+mistaken grant. Owner or migrator ability to alter that protection remains an
+explicit privileged-boundary compromise.
+
+The initial architecture supports exactly one active principal-binding version
+per exact-policy (issuer, subject), and that version pins one immutable tenant
+registry row and Party record. Multi-tenant principals, tenant switching, and
+user-selected tenant candidates are unsupported. Supporting them requires a
+separate decision covering selection, disclosure, confused-deputy risk, and
+receipt semantics. There is no production default.
 
 The identity-control writer may invoke only the hardened lifecycle transition;
 it has no direct DML on versions, acts, or projection and may not read tenant
@@ -466,18 +520,21 @@ versions, lifecycle acts, or current projection.
 
 In production, #172's authentication boundary verifies issuer, audience,
 signature, algorithm, expiry, not-before time, key identity, and the exact
-(issuer, subject) identity. It does not pass a raw tenant identifier to SQL.
-After #173 begins one UnitOfWork on one checked-out backend, binding proceeds as
-follows:
+(issuer, subject) identity under the binding version's equality policy. It does
+not pass a raw tenant identifier to SQL. After #173 begins one UnitOfWork on one
+checked-out backend, binding proceeds as follows:
 
 1. A hardened owner function creates a cryptographically random one-use
    challenge bound to the current backend identity and full transaction
    identity in protected transaction context.
 2. The trusted authentication boundary mints a short-lived TenantCapability
-   containing that challenge, binder audience, issuer, subject, immutable
-   binding-version identity and digest, lifecycle-head act identity and digest,
-   tenant_id, party_ref, issued/expiry times, and a unique nonce. The capability
-   is signed by a key unavailable to the application database role.
+   containing that challenge, binder audience, equality-policy identity, exact
+   issuer and subject, immutable binding-version identity and digest,
+   lifecycle-head act identity and digest, tenant_id, tenant-registry digest,
+   party_ref, pinned Party record-kind identity, record identity, schema digest,
+   and payload digest,
+   issued/expiry times, and a unique nonce. The capability is signed by a key
+   unavailable to the application database role.
 3. A schema-qualified SECURITY DEFINER binder with a fixed trusted search_path
    verifies the signature, audience, expiry, backend/transaction challenge,
    nonce, exact immutable version bytes and digest, and the authoritative
@@ -485,13 +542,72 @@ follows:
    `principal_binding_current` to locate a candidate only when its version and
    head exactly equal that reconstruction; a missing or mismatched projection
    causes refusal or a separate privileged deterministic rebuild, never
-   authorization. The binder also verifies the active tenant and active Party,
-   then inserts exactly one verified TenantBinding into the protected context
-   relation.
+   authorization. Before context exists, the binder uses only the narrow
+   bootstrap privilege frozen below to verify the immutable tenant-registry row
+   and the exact pinned ACTIVE `ofarm.party.v0.1` record kind, identity, schema
+   digest, and payload digest; it performs no floating latest-Party or mutable
+   tenant-state lookup. It then inserts exactly one verified
+   TenantBinding, including those pinned identities/digests and the equality
+   policy, into the protected context relation.
 4. A uniqueness constraint makes the first successful bind final for that
    transaction. A second call, reset, principal change, tenant change, or
-   capability replay refuses. Commit or rollback ends the context; a capability
-   from another transaction or backend cannot be reused.
+   capability replay refuses. The current-context function accepts the row only
+   when its database-derived backend identity, backend-start instant, and full
+   xid8 all equal the current transaction. Commit, rollback, or backend restart
+   makes the physical row unusable; a capability from another transaction or
+   backend cannot be reused.
+
+The bootstrap path is explicit. `tenant_registry`, `principal_binding`,
+`principal_binding_lifecycle`, `principal_binding_current`,
+`tenant_binding_context`, and `schema_migration` are non-tenant control or
+operational relations and are not given tenant RLS policies. They are protected
+by ownership, relation privilege denial, and migration-checksummed hardened
+functions. Every tenant-bearing relation, including the Party-bearing
+`kernel_record`, remains under enabled and forced RLS.
+
+The hardened binder executes as `ofarm_binder`, provisioned `NOSUPERUSER`,
+`NOCREATEDB`, `NOCREATEROLE`, `NOREPLICATION`, `NOLOGIN`, `NOINHERIT`, and
+`BYPASSRLS`. No LOGIN role is a member, no `SET ROLE` or admin path to it is
+granted, and it has only the relation/column privileges required
+to reconstruct one principal stream and compare the exact tenant-registry and
+Party tuple named by that binding. Its fixed, schema-qualified SQL accepts no
+table, column, predicate, tenant, or Party selector other than the signed and
+database-matched binding tuple; it returns no tenant row or Party payload. The
+application receives EXECUTE only on the exact challenge, binder, and current-
+context functions. There is no generic query/dynamic-SQL function owned by this
+role. Compromise of `ofarm_binder` is therefore an explicit privileged-boundary
+compromise outside RLS, while possession of application credentials or raw SQL
+cannot exercise its bypass as a general tenant-data read path.
+
+`tenant_binding_context` is an UNLOGGED, migration-owned disposable relation.
+Its authority key is `(backend_pid, backend_start, full_xid8)`, all derived
+inside PostgreSQL; an additional UNIQUE `(backend_pid, backend_start)` permits
+at most one visible row for a backend incarnation. The challenge function uses
+`pg_current_xact_id()` for xid8, deletes only a stale row for the same backend
+incarnation, and inserts state `CHALLENGE` with all binding fields null. A
+guarded binder update must change exactly that current row once from
+`CHALLENGE` to `BOUND`; all verified binding fields are then non-null. Zero or
+more than one affected row refuses, and no transition out of `BOUND` exists.
+The no-argument current-context function recomputes and exactly matches all
+three keys and `BOUND` state. xid8 includes the transaction epoch and is never
+treated as a wrapping 32-bit XID. A committed orphan may remain physically,
+but no later transaction can match it; the next challenge on that backend
+removes it. Every challenge also invokes the protected no-caller-cutoff
+`purge_stale_tenant_context` function, which deletes up to a fixed migration-
+owned bound of rows whose exact backend incarnation is absent from
+`pg_stat_activity`; it accepts no PID, xid, timestamp, or cutoff argument and
+returns no context data. #174 owns that function, its EXECUTE grant only through
+the challenge path, and direct-role tests. Cleanup is mandatory for bounded
+physical state but never makes a row valid and is not required for fail-closed
+authorization. Rollback removes uncommitted context, and crash recovery clears
+the UNLOGGED relation.
+
+#173 must commit or roll back before returning a connection to the pool and
+must reject a return whose PostgreSQL transaction status is not idle.
+Cancellation, exception, timeout, serialization retry, and pool reset all issue
+rollback before reuse. Successful commit changes the full xid before any later
+checkout. This lifetime rule avoids deleting context before deferred checks run
+while proving that no completed transaction's binding is usable in another.
 
 The signing or capability-minting authority is outside the application database
 role and the SQL-injection boundary. A fully compromised authentication signer
@@ -518,6 +634,51 @@ application role.
 
 ## Identifier and uniqueness namespaces
 
+V1 uses two closed equality policies. They validate or reject input; neither
+rewrites it.
+
+| Namespace | Policy and canonical bytes | V1 grammar and bound | Database equality |
+|---|---|---|---|
+| OIDC issuer | `OIDC_EXACT_UTF8_V1`: UTF-8 encoding of the verified decoded `iss` JSON string exactly as received | 1-2048 UTF-8 bytes; configured case-sensitive `https` issuer URL with host, optional port/path, and no query, fragment, NUL, or control character | Exact bytes; no trimming, case folding, percent/host/path rewriting, Unicode normalization, or discovery-alias substitution |
+| OIDC subject | `OIDC_EXACT_UTF8_V1`: UTF-8 encoding of the verified decoded `sub` JSON string exactly as received | 1-255 visible ASCII bytes, as required by the V1 OIDC profile; no whitespace, control, or NUL | Exact case-sensitive bytes; no trimming, folding, or Unicode transformation |
+| External `tenant_ref` | `OFARM_ASCII_ID_V1`: the authored ASCII bytes | 1-255 bytes matching `[A-Za-z0-9._:-]+` | Exact bytes |
+| Tenant-local authored identifiers, including record, Party, farm, scope, request, trace, batch, artifact, snapshot, materialization, and reference keys | `OFARM_ASCII_ID_V1`: the contract-validated authored ASCII bytes | 1-255 bytes matching `[A-Za-z0-9._:-]+`; a narrower contract grammar still applies where defined | Exact bytes inside the tenant-qualified composite key |
+| Idempotency `caller_key` | `OFARM_ASCII_ID_V1`: the contract-validated authored ASCII bytes | 1-255 bytes matching `[A-Za-z0-9._:-]+` | Exact bytes inside the full idempotency identity; no transport-layer rewriting |
+| Principal lifecycle stream and current reservation | Separate equality-policy, issuer, and subject columns; digest input uses tag plus unsigned length-prefixed field bytes | Exactly the issuer/subject rules above | One composite exact-byte key; delimiter concatenation and digest-only equality are forbidden |
+
+PostgreSQL tenant storage is provisioned with `server_encoding=UTF8`.
+Equality-sensitive text columns and their unique/foreign-key indexes use the
+deterministic built-in `COLLATE "C"` byte ordering plus migration-owned domains
+that enforce `octet_length` and grammar; canonical digest input uses
+`convert_to(value, 'UTF8')` and unambiguous tagged length prefixes. `citext`,
+locale-default equality, nondeterministic ICU collations, application-only
+normalization, and delimiter-joined composite keys are forbidden. Readiness
+verifies the database encoding, each governed domain/check, collation provider
+and determinism, explicit index collation, and equality-policy identity.
+
+Every immutable principal-binding version stores its equality-policy identity,
+and the version digest covers that identity and the exact length-prefixed issuer
+and subject bytes. Lifecycle acts, reservations, capabilities, bindings, and
+receipts name the same version and policy; no layer recomputes a differently
+normalized principal. An issuer that cannot satisfy `OIDC_EXACT_UTF8_V1`
+requires a new reviewed policy identity, migration, verifier configuration, and
+cross-layer tests before it is accepted.
+
+The canonical principal key bytes are exactly:
+
+```text
+ASCII("OFARM_PRINCIPAL_KEY_V1") || 0x00
+|| lp32(ASCII(equality_policy))
+|| lp32(UTF8(issuer))
+|| lp32(UTF8(subject))
+```
+
+`lp32(x)` is the unsigned 32-bit big-endian byte length of `x`, followed by
+`x`. The JSON parser first produces the verified decoded claim string, so JSON
+escape spellings that decode to the same scalar sequence are the same input;
+no transformation occurs after decoding. Delimiter concatenation, implicit
+database casts, and digest equality without the canonical bytes are forbidden.
+
 - Every tenant-owned primary key, unique constraint, and foreign key begins
   with tenant_id.
 - record_id, trace_id, request_id, batch_id, artifact_ref, and other authored
@@ -525,12 +686,12 @@ application role.
   distinctive.
 - Globally governed identifiers are globally unique and, for content, are
   collision-resistant digests whose canonical bytes are also compared.
-- Principal identity is normalized (issuer, subject). Immutable binding versions
-  may repeat that pair. Only the disposable current projection/reservation has
-  UNIQUE (issuer, subject); serialized lifecycle transitions and the
-  authoritative act fold, not that projection constraint, establish at most one
-  active version. A token role or caller tenant string is never part of the
-  identity.
+- Principal identity is the exact-policy (issuer, subject) pair. Immutable
+  binding versions may repeat that pair. Only the disposable current
+  projection/reservation has UNIQUE (equality_policy, issuer, subject);
+  serialized lifecycle transitions and the authoritative act fold, not that
+  projection constraint, establish at most one active version. A token role or
+  caller tenant string is never part of the identity.
 - Idempotency identity is exactly (tenant_id,
   authenticated_principal_ref, governed_operation, caller_key). #178 adds the
   canonical semantic request digest, complete durable response, retention, and
@@ -582,7 +743,9 @@ and cardinality matrix. #174 may create the neutral carrier, tenant key, batch
 key, exclusivity checks, and already-settled endpoint constraints, but it may
 not infer full JSON paths, target kinds, edge meanings, or cardinalities. If the
 #184 extraction/matrix artifact is not accepted and RuntimeBundle-pinned, #174
-stops before claiming or implementing complete carrier/reference enforcement.
+can close only its neutral structural slice and the runtime refuses surfaces
+that need complete carrier/reference semantics. #184 then adds those semantics
+through a reviewed forward migration.
 
 The database enforces these structural graph invariants:
 
@@ -630,7 +793,8 @@ schemas, tables, sequences, and functions.
 The role model is:
 
 - ofarm_owner: NOLOGIN owner of tenant/application schemas, tables, policies,
-  and functions, explicitly excluding the isolated `ofarm_security` objects;
+  and ordinary functions, explicitly excluding the isolated `ofarm_security`
+  objects and the three narrowly `ofarm_binder`-owned functions;
 - ofarm_migrator: release-only credentials allowed to take the migration lock
   and apply reviewed DDL through the applicable application or security-audit
   owner role, with no runtime ingest/read/retention authority;
@@ -638,10 +802,19 @@ The role model is:
   migrator membership, and only required DML;
 - ofarm_worker: same isolation posture as the application, with an explicit
   TenantBinding per job;
-- ofarm_binder: NOLOGIN capability used only by the hardened binder/current-
-  context functions to read immutable binding versions, authoritative lifecycle
-  acts, optional current projection, tenant, Party, and transaction context; the
-  application may EXECUTE those functions but cannot SET ROLE to this role;
+- ofarm_tenant_registrar: NOLOGIN control-plane capability granted only to one
+  separately provisioned tenant-control LOGIN with `INHERIT TRUE`, `SET FALSE`,
+  and `ADMIN FALSE`; it has EXECUTE only on the insert-only `register_tenant`
+  function, no direct relation privileges, application membership,
+  binding/lifecycle authority, or tenant reads;
+- ofarm_binder: NOSUPERUSER, NOCREATEDB, NOCREATEROLE, NOREPLICATION, NOLOGIN,
+  NOINHERIT, BYPASSRLS privileged function owner used
+  only by the hardened challenge, binder, and current-context functions. It has
+  no members or role-assumption path and only the exact column/relation rights
+  needed to read immutable binding versions, authoritative lifecycle acts,
+  optional current projection, tenant registry, one pinned Party record, and
+  transaction context. The application may EXECUTE those closed functions but
+  cannot SET ROLE to this role or obtain generic tenant reads;
 - ofarm_identity_writer: control-plane-only capability that may execute the
   principal-binding lifecycle transition but has no direct DML on binding
   versions, lifecycle acts, or projection, no tenant-truth read role, and no
@@ -682,6 +855,15 @@ use only the protected current-tenant function for both USING and WITH CHECK.
 They never consume a raw custom setting. Missing, invalid, expired, replayed, or
 multiply bound context denies or raises; it never selects all tenants. Append-
 only restrictions remain additional constraints and do not substitute for RLS.
+The closed non-tenant control list is `tenant_registry`, `principal_binding`,
+`principal_binding_lifecycle`, `principal_binding_current`,
+`tenant_binding_context`, and `schema_migration`; these relations have no
+tenant RLS policy and instead deny direct application, worker, and end-user
+relation access. The binder/registrar reach only their named functions and
+minimum underlying fields; readiness receives the separately specified exact
+read-only migration-ledger grant. Adding any relation or privilege to that list
+requires a migration and classification change. Party and every other tenant-
+bearing record remain forced-RLS protected.
 
 Normal functions execute as the caller. Any unavoidable SECURITY DEFINER
 function has a fixed trusted search_path, schema-qualified objects, no
@@ -701,9 +883,11 @@ functions; cannot assume any privileged role; and cannot execute raw
 advisory-lock functions. End users and support users never receive application,
 migration, or security-audit credentials. Superusers, database administrators,
 migrators, identity-control writers, security-audit owners/readers/retention
-operators, backup readers, and a fully compromised capability signer are
-outside the RLS protection boundary; access to those capabilities requires
-separate operational controls and audit.
+operators, backup readers, `ofarm_binder`, and a fully compromised capability
+signer are outside the RLS protection boundary; access to those capabilities
+requires separate operational controls and audit. The binder's NOLOGIN/no-
+membership posture and fixed functions are the control that keeps this narrow
+bypass from becoming an application SQL path.
 
 ## Protected advisory locks
 
@@ -732,11 +916,20 @@ versioned infrastructure step run by a database administrator creates the
 tenant database, plus a separately bounded audit PostgreSQL service/database
 with its empty `ofarm_security` namespace. It creates the NOLOGIN application,
 binder, and security owners, migrator/application/worker/readiness identities or
-grants, identity-control writer, seven isolated security-audit capabilities,
-distinct producer/control LOGIN identities and exact `INHERIT TRUE`/`SET
-FALSE`/`ADMIN FALSE` memberships, service resource limits, and initial PUBLIC
-revocations. Application startup and either migration runner do not create or
-repair their own cluster roles or services.
+grants, tenant registrar, identity-control writer, seven isolated
+security-audit capabilities,
+the distinct tenant-control and audit producer/control LOGIN identities and
+exact `INHERIT TRUE`/`SET FALSE`/`ADMIN FALSE` memberships, service resource
+limits, and initial PUBLIC revocations. Application startup and either migration
+runner do not create or repair their own cluster roles or services.
+
+The tenant database is created with UTF8 server encoding. Provisioning verifies
+the built-in deterministic `C` collation used by every equality-sensitive
+domain and index, creates `ofarm_binder` with exactly NOSUPERUSER, NOCREATEDB,
+NOCREATEROLE, NOREPLICATION, NOLOGIN, NOINHERIT, and BYPASSRLS, and proves that
+no LOGIN can inherit, assume, or administer it. It
+creates no tenant-service restore, point-in-time-recovery promotion, snapshot-
+adoption, or tenant-history import identity or command in V1.
 
 Provisioning is verify-or-create only for a provably new target. On an existing
 target it compares role attributes, memberships, namespace owners, database
@@ -755,10 +948,14 @@ tenant migration waits for #171's reviewed RuntimeBundle placement map; the
 audit migration contains only the two classified audit relations, closed
 constants/checks/functions, roles/grants, and its own ledger/readiness surface.
 #174 may progress the neutral carrier and non-semantic isolation work, but the
-tenant 0001 and #174 cannot be accepted as complete reference enforcement until
-#184 supplies the extraction/kind/cardinality semantics required by the stop
-above. Neither migration preserves the unsafe prototype as a compatibility
-layer. Development and conformance targets are dropped and recreated.
+tenant 0001 deliberately supplies only the neutral carrier and settled
+structural isolation constraints. #174 can close that database-primitives
+slice without claiming complete reference semantics. #184 follows with the
+accepted extraction/kind/cardinality artifact and an immutable forward
+migration; until then the runtime must refuse any operation that depends on the
+missing semantic matrix. Neither initial migration preserves the unsafe
+prototype as a compatibility layer. Development and conformance targets are
+dropped and recreated.
 
 Once either baseline is accepted, an applied migration file is never edited,
 renamed, reordered, or deleted. Every schema change appends to the applicable
@@ -816,6 +1013,15 @@ records. Liveness checks only process health. An empty database, an older or
 newer schema, a dirty history, an unavailable ledger, or a checksum mismatch
 never becomes ready and never triggers DDL.
 
+V1 readiness applies only to a proven-empty initial target or the uninterrupted
+in-place lineage created from that target. It has no recovery-readiness mode.
+A target declared restored, point-in-time promoted, snapshot-cloned,
+tenant-history imported, forked, or of unknown provenance cannot be promoted to
+service even when its build and migration digests match. The application cannot
+detect a privileged operator who conceals such an operation; database-
+administrator and recovery-control compromise is outside the RLS boundary.
+Schema compatibility is never represented as proof of timeline continuity.
+
 The first deployment has an exact-version compatibility window: one release
 supports exactly one tenant migration-set digest and one audit migration-set
 digest. There is no N-minus-one support, dual-read/write path, compatibility
@@ -829,16 +1035,24 @@ rollback means deleting and recreating the disposable development database.
 After deployment:
 
 - a failed transactional migration rolls back both DDL and ledger append;
-- a successful migration is corrected by a new forward migration; or
-- tenant operational disaster recovery restores a tested whole-tenant-database
-  backup and the exactly matching application build together; the V1 audit
-  service has no backup/restore and follows its declared empty-recreate/gap
-  posture.
+- a successful migration is corrected by a new forward migration; and
+- loss of the uninterrupted live tenant-service lineage is terminal unreadiness
+  in V1. There is no supported tenant-service backup restore, point-in-time
+  recovery promotion, snapshot-clone promotion, database logical restore, or
+  tenant-history logical import. The separate V1 audit service independently
+  keeps its empty-recreate/declared-gap posture.
+
+A domain data import that writes new governed batches at new positions is not
+database recovery. Whole shared-database physical recovery and tenant-specific
+logical history recovery are different future designs; neither is supported.
+#193 must define and implement an external non-rewindable recovery witness,
+authority/idempotency/release reconciliation, non-reuse of every published cut,
+and fail-closed recovery readiness before either path exists.
 
 Starting an older binary against a newer schema is not rollback; it is a
-readiness failure. Destructive forward migrations require a verified backup and
-restore rehearsal, but this ADR does not claim that those operations already
-exist.
+readiness failure. Destructive forward migrations are unsupported in V1 because
+there is no accepted recovery path. They require #193's accepted recovery ADR,
+implementation, and real recovery rehearsal first.
 
 ## Threat model
 
@@ -853,8 +1067,10 @@ accidental unqualified queries and direct SQL under the application role.
 | Threat | Required control |
 |---|---|
 | Forged tenant in a body, route, header, farm reference, or environment default | Only a signed, challenge-bound TenantCapability verified against an immutable binding version and the authoritative lifecycle head can create TenantBinding; selectors are untrusted and there is no production default. |
-| Raw SET, SET LOCAL, set_config, reset, shadow object, second bind, or cross-backend capability replay | RLS ignores caller settings and reads protected one-bind-per-transaction context through fixed-schema owner functions. Capability audience, signature, nonce, backend, transaction, immutable version digest, and lifecycle-head digest are verified. |
-| Missing, malformed, expired, revoked, superseded, forked, or ambiguous principal binding | The protected binder reconstructs currentness from immutable versions and lifecycle acts and fails before any tenant query; repositories require a bound UnitOfWork. |
+| Raw SET, SET LOCAL, set_config, reset, shadow object, second bind, stale committed context, or cross-backend/transaction capability replay | RLS ignores caller settings and reads protected one-bind-per-transaction context through fixed-schema functions. Capability audience, signature, nonce, database-derived backend identity/start and full xid8, immutable version/tenant/Party digests, equality policy, and lifecycle-head digest are verified. A physically retained row cannot match a later transaction. |
+| Missing, malformed, expired, revoked, superseded, forked, or ambiguous principal binding | The protected binder reconstructs currentness from immutable versions and lifecycle acts and fails before tenant repository access; its sole pre-context tenant read is the fixed exact pinned-Party comparison. Repositories require a bound UnitOfWork. |
+| Case, whitespace, Unicode, URI, collation, or delimiter ambiguity splits or merges a principal, tenant reference, local identifier, lifecycle reservation, or caller key | Closed equality policies preserve exact validated bytes, use explicit byte bounds and grammars, store separate composite fields, bind policy identity into immutable digests, and use verified UTF8/`C`-collated database domains and indexes. |
+| Mutable tenant flag or floating Party payload silently changes authentication authority without history | V1 has no tenant active flag or tenant/Party eligibility transition. Each binding pins one immutable tenant-registry digest and exact ACTIVE Party record identity/schema/payload digests; access cessation uses the append-only principal-binding lifecycle. |
 | Attacker-supplied tenant, Party, role, issuer/subject, request ID, route value, or token claim contaminates a pre-tenant audit event | The closed append API accepts only a trusted-producer event UUID, allowed reason and protected correlation HMAC; it derives producer/time/policies itself and writes a relation with no tenant or principal columns. Exact ID/fingerprint retry prevents substitution. Request data cannot select a tenant lane. |
 | Credential, token, header, body, network identifier, low-entropy identity, or arbitrary error detail leaks through security audit | Closed reason/component classes, one bounded HMAC of only a high-entropy server correlation value, keys outside database/application roles, and rejection of every general evidence field. No ordinary log, telemetry, queue, or dead-letter fallback is allowed. |
 | Failed binder or tenant transaction loses its audit event, partially commits tenant work, or redirects it into a tenant log | The attempted tenant transaction rolls back; a separate bounded audit connection commits only the non-tenant event. After successful binding, the separate lane is forbidden and durable refusal joins the tenant batch. |
@@ -863,12 +1079,13 @@ accidental unqualified queries and direct SQL under the application role.
 | Audit backup, replica, CDC, or restore retains or resurrects an event beyond 30 days | V1 provisions none. Tenant backup targets cannot address the separate audit service; audit-store loss uses verified empty recreation plus an honest gap marker, never restore. |
 | Deleted, stale, forged, or corrupt principal-binding current projection | Projection data is only a candidate locator. The binder compares it with the authoritative lifecycle fold and refuses on absence or mismatch; only a privileged deterministic rebuild from versions and acts may restore it. |
 | Edited or deleted binding version or lifecycle history, or concurrent activation attempts | Direct DML is denied, versions and acts are immutable, lifecycle streams are serialized by the unique principal reservation and expected-head checks, and current/historical state ignores projection as authority. |
-| Context surviving connection-pool reuse after success, rollback, failure, cancellation, or retry | SET LOCAL-equivalent transaction lifetime, rollback-on-return, and same-backend alternating-tenant tests. |
+| Stale shared-database restore, snapshot/PITR promotion, or tenant-history logical import reuses a published position, removes a revocation, loses an idempotency/receipt row, or forks an already released output | V1 exposes no recovery/import promotion or recovery-readiness path; a matching schema/build is insufficient. No signer, binder, allocator, repository, release, or delivery path may start for a declared recovery target. #193 must supply non-rewindable continuity proof before this posture changes. |
+| Context surviving connection-pool reuse after success, rollback, failure, cancellation, or retry | Exact database-derived backend/start/xid8 matching, unusable committed orphans, rollback-on-return, idle-status enforcement, protected stale cleanup, and same-backend alternating-tenant tests. |
 | Unqualified reads, joins, subqueries, aggregates, prepared statements, or background scans | Forced RLS on every tenant-bearing relation and explicit tenant assignment for workers. |
 | Direct SQL inserts another tenant_id or attempts to disable row security | WITH CHECK, NOBYPASSRLS non-owner role, FORCE RLS, composite constraints, and no DDL privileges. |
 | Owner, SECURITY DEFINER, search_path, function, trigger, or PUBLIC privilege bypass | Separate NOLOGIN owner, hardened functions, fully qualified SQL, revoked defaults, and role-capability tests. |
 | Cross-tenant or dangling graph construction, including a future-ID/two-transaction promotion exploit | Same-tenant composite FKs plus same-batch promotion reachability and deferred constraints. |
-| JSONB payload reference omitted from relational enforcement or assigned a guessed kind | Exact RuntimeBundle-pinned carrier extraction is verified; #174 stops before complete semantics unless #184 supplies the accepted path/kind/cardinality matrix. |
+| JSONB payload reference omitted from relational enforcement or assigned a guessed kind | #174 supplies only the neutral structural carrier and makes no semantic-completeness claim. Exact RuntimeBundle-pinned extraction/kind/cardinality enforcement arrives through #184's reviewed forward migration; dependent runtime surfaces refuse before it exists. |
 | Cross-tenant idempotency replay or uniqueness existence oracle | Tenant/principal/operation command namespace and tenant-prefixed unique indexes. |
 | Advisory-lock collision, raw session lock, attacker-selected key, unlock, or migration-lock attempt | Raw advisory functions are denied; protected no-key wrappers derive disjoint keys and acquire transaction locks only. |
 | Materialization, dependency, cache, trace, gate-log, bound error, or frozen-output leakage | Tenant qualification and RLS apply regardless of authoritative status; pre-tenant errors use only the protected non-tenant audit lane, and readiness exposes no tenant or security-event data. |
@@ -903,30 +1120,75 @@ PostgreSQL roles and real ASGI/application topology, not mocks.
 8. Pre-create same-named functions, operators, relations, and schemas in every
    caller-writable search path. The fixed-schema challenge, verifier, context,
    and policy functions cannot be shadowed.
-9. Revoke, supersede, or expire the active binding, or deactivate its tenant or
-   Party, before a new UnitOfWork. Binding refuses. A capability pinning the old
-   version or lifecycle head also refuses after any later lifecycle transition.
-   Prove a token role and caller tenant string cannot create an alternative
-   mapping.
-10. Race two ACTIVATE or replacement transitions for one normalized (issuer,
+9. Exercise the actual provisioned roles: the NOBYPASSRLS application cannot
+   read Party without context; the NOLOGIN/NOINHERIT/BYPASSRLS binder can compare
+   only the exact signed Party tuple through its fixed function; it cannot be
+   inherited, assumed, used through a generic query, or made to return payload.
+10. Commit a context row, then attempt reuse under a new full xid8 on the same
+    backend; restart the backend; create a stale orphan; and alternate tenants
+    through pool reuse. Exact backend-start/xid8 matching always refuses stale
+    state, the next challenge or protected sweep removes it, and no completed
+    transaction's binding becomes usable again.
+11. Revoke, supersede, or expire the active binding before a new UnitOfWork.
+    Binding refuses. A capability pinning the old version or lifecycle head also
+    refuses after any later lifecycle transition. Attempt to mutate the tenant
+    registry, replace the pinned Party record kind/identity/schema/payload
+    digests, or use a floating newer Party payload; all refuse. Prove
+    tenant/Party deactivate/reactivate is not a V1 transition and a token role
+    or caller tenant string cannot create an alternative mapping.
+12. Race two ACTIVATE or replacement transitions for one exact-policy (issuer,
     subject). The unique projection reservation serializes them, expected-head
     validation permits only one authoritative active result, and a principal
     spanning two tenants remains unsupported.
-11. Under every non-owner role, attempt UPDATE or DELETE of an immutable binding
+13. Under every non-owner role, attempt UPDATE or DELETE of an immutable binding
     version or lifecycle act and direct INSERT of a lifecycle act. Every attempt
     fails; only the hardened transition can append a valid act.
-12. Delete the current projection row, then make it stale and corrupt its
+14. Delete the current projection row, then make it stale and corrupt its
     version/head fields under a privileged test fixture. The binder never
     authorizes from it. A privileged rebuild from immutable versions and acts
     deterministically recreates the same unique projection.
-13. Resolve current state with the projection absent, and reconstruct state at
+15. Resolve current state with the projection absent, and reconstruct state at
     each earlier lifecycle cut after later revocation and supersession. Results
     come only from immutable versions and acts and are unchanged by any
     projection contents.
+16. Across verifier, control plane, capability, binder, and PostgreSQL UNIQUE
+    behavior, test issuer/subject case changes, leading/trailing/internal
+    whitespace, URI variants, composed/decomposed Unicode, invisible/control
+    characters, delimiter-like values, maximum and over-limit bytes, and
+    equality-policy mismatch. Valid distinct bytes never collapse; rejected
+    bytes never reach storage; the same exact bytes never split into two streams.
+
+### Identifier equality and immutable eligibility
+
+1. For issuer, subject, tenant_ref, every tenant-local authored identifier, and
+   caller_key, exercise case variants, leading/trailing/internal whitespace,
+   ASCII/Unicode boundaries, controls, empty input, exact maximum bytes, and one
+   byte over the limit. Each value is either one exact distinct key or a stable
+   validation refusal; no layer rewrites it.
+2. Prove the same tenant-local identifier can exist in tenants A and B while an
+   exact duplicate in one tenant fails. An exact caller key replays; an allowed
+   case variant is distinct; whitespace or Unicode variants outside
+   `OFARM_ASCII_ID_V1` refuse.
+3. Prove `(policy, issuer="ab", subject="c")` and
+   `(policy, issuer="a", subject="bc")` cannot collide. JSON escape spellings
+   that decode to the same issuer/subject scalars produce the same canonical
+   bytes. Golden vectors from #172's verifier and #174's PostgreSQL functions
+   must produce identical tagged/lp32 bytes and digests.
+4. Provision targets with a non-UTF8 encoding, wrong/default/nondeterministic
+   collation, missing/widened domain check, wrong index collation, `citext`, or
+   a folding functional index. Provisioning or readiness refuses each before
+   repositories are constructed.
+5. Register a tenant only through `register_tenant`, then attempt direct INSERT,
+   UPDATE, or DELETE under application, worker, readiness, identity-writer, and
+   registrar identities. Every attempt fails. Bind to a wrong-kind record, an
+   initially INACTIVE Party, altered Party record/schema/payload digest, or
+   mutated registry field; every bind refuses and no unsupported eligibility
+   transition is exposed.
 
 ### Pre-tenant operational security audit
 
-1. Trigger missing/malformed credentials, unknown/inactive principal or tenant,
+1. Trigger missing/malformed credentials, unknown/revoked principal, immutable
+   tenant-registry or Party record kind/identity/schema/payload mismatch,
    verifier outage, actor mismatch, security-relevant route rejection,
    capability failure, and binder rejection while supplying tenant A, tenant B,
    and the demo tenant in every request-controlled location. Every durable event
@@ -1077,14 +1339,19 @@ PostgreSQL roles and real ASGI/application topology, not mocks.
    back. Run two migration processes and prove the global lock serializes them.
 7. Start the application and audit client against empty, old, exact, newer,
    dirty, crossed, and unavailable tenant/audit schemas. Only the exact matched
-   pair becomes ready, and catalog snapshots prove startup performed no DDL.
+   pair among fresh or uninterrupted in-place targets becomes ready, and
+   catalog snapshots prove startup performed no DDL.
 8. Prove application and readiness roles cannot provision, apply, repair, or
    downgrade a migration.
-9. Restore a tenant test backup with its matching application build and execute
-   the documented recovery check. Separately destroy the audit service, rebuild
-   only an empty exact-version store, append the declared gap where possible,
-   and prove no backup/replica/expired event is restored before any operational-
-   readiness claim.
+9. Restore a tenant snapshot ending at K40 after K41-K45 and a principal/grant
+   revocation were published. Also try a matching build/digest, PITR/snapshot
+   promotion, and one-tenant history import. Prove V1 exposes no recovery
+   promotion/readiness procedure and starts no capability minting, binder,
+   allocator, repository, release, outbox, or delivery path. Matching schema is
+   insufficient and the old K41 cannot be republished. Separately destroy the
+   audit service, rebuild only an empty exact-version store, append the declared
+   gap where possible, and prove no backup/replica/expired event is restored
+   before any operational-readiness claim.
 
 ## Alternatives considered
 
@@ -1139,6 +1406,22 @@ row remains ACTIVE in storage. Both designs are rejected. Immutable versions and
 append-only lifecycle acts are authority; uniqueness belongs only to the
 disposable current reservation/projection.
 
+### Mutable tenant or Party active flags as authentication authority
+
+A mutable registry flag or floating `partyState` lookup would affect binding
+without an append-only authority history and could not reconstruct an earlier
+decision. It is rejected. V1 pins immutable tenant-registry and ACTIVE Party
+record digests into the binding version and stops access through the governed
+principal-binding lifecycle. Tenant-wide suspension or Party eligibility
+transitions require a later lifecycle decision.
+
+### Implicit principal or identifier normalization
+
+Trimming, case folding, URI rewriting, Unicode normalization, locale collation,
+or delimiter-joined composite keys can split or merge authority streams across
+the verifier, control plane, and database. They are rejected in favor of closed
+validation policies and exact deterministic byte equality.
+
 ### Application-selected advisory keys
 
 Allowing the application to call raw advisory functions can create session-lock
@@ -1166,9 +1449,23 @@ runner.
 ### Mutable historical migrations and down migrations
 
 Editing history destroys reproducibility; generic down migrations can erase or
-reinterpret durable truth. Both are rejected. Tenant recovery is forward
-correction or whole-tenant-database restore; the V1 audit store has only the
-empty-recreate/gap posture above.
+reinterpret durable truth. Both are rejected. Tenant correction is forward-only
+in V1; the audit store separately has only the empty-recreate/gap posture above.
+
+### Restore a tenant-service backup with the matching build
+
+Matching application and migration digests prove compatibility, not continuity.
+An older image can reuse a published knowledge position, erase revocation and
+idempotency tails, and fork an already released output. V1 rejects recovery
+promotion until #193 supplies a non-rewindable external witness and complete
+reconciliation.
+
+### Import one tenant's old database history
+
+The shared service contains global principal/tenant control state and
+cross-cutting knowledge, receipt, sharing, and release invariants. Splicing one
+tenant's old rows cannot honestly preserve them. Tenant-history logical import
+is unsupported; ordinary domain imports must enter new governed batches.
 
 ### An N-minus-one compatibility window now
 
@@ -1186,23 +1483,29 @@ tenancy and migration tests until the dependent tickets land.
   The documentation-only guardrail authorizes no implementation.
 - #172 supplies explicit production authentication and verifier behavior, the
   governed control-plane integration for immutable principal-binding versions,
-  append-only lifecycle transitions and deterministic projection rebuild, the
-  normalized `(issuer, subject)` to active Party binding outcome, and the
-  trusted TenantCapability issuer/verifier boundary. #174 supplies that
-  control plane's classified PostgreSQL storage/functions. #172 does not own
-  durable pre-tenant audit emission.
-- #173 supplies the pool, UnitOfWork, one-use challenge/binder call, protected
-  transaction context, tenant rollback, and write-batch allocation. It does not
-  own the separate audit connection or producer integrations.
-- #174 supplies the one-time provisioning specification, verifies provisioned
-  roles, and creates the hardened tenant and audit migration baselines, RLS,
-  composite keys, neutral reference carrier, foreign keys, graph constraints,
-  protected lock wrappers, separately bounded audit service/relations,
-  producer LOGIN provisioning and migration-checksummed session map/reason
-  allowlist, hardened append/control/query/purge functions, resource limits,
-  role/grant and database privilege tests, runners, and structural readiness.
-  It implements only this ADR-classified PostgreSQL audit-storage slice and must
-  not bypass the #184 stop.
+  append-only lifecycle transitions and deterministic projection rebuild,
+  exact-principal equality enforcement, immutable V1 tenant/Party eligibility
+  validation, and the trusted TenantCapability issuer/verifier boundary. #174
+  is its database-primitives prerequisite and supplies the classified storage
+  and hardened functions. #172 does not own durable pre-tenant audit emission.
+- #173 follows #172 and #174. It supplies the pool, UnitOfWork, application call
+  to #174's one-use challenge/binder functions, exact digest propagation,
+  transaction finalization/rollback, pool-idle enforcement, and write-batch
+  allocation. It does not own the context DDL, separate audit connection, or
+  producer integrations.
+- #174 follows #168, #169, and #171 and is independently closeable before #172
+  and #173. It supplies the one-time provisioning specification, exact role
+  attributes and grants, immutable tenant/audit migration baselines, equality
+  domains/collations, immutable registry and insert-only registrar, principal
+  storage, NOLOGIN BYPASSRLS binder, challenge/context/current-tenant functions,
+  forced RLS,
+  composite keys, the neutral reference carrier and settled structural graph
+  constraints, protected lock wrappers, separately bounded audit
+  service/relations, producer LOGIN/session map/reason allowlist, hardened
+  audit functions, resource limits, direct-SQL/catalog tests, runners, and
+  structural readiness. It does not implement #172 verifier integration, #173
+  application/pool integration, #184's semantic relationship matrix, #192's
+  audit runtime, or #193 recovery.
 - #192 owns the end-to-end pre-tenant audit implementation: isolated client and
   connection/credentials, use of the provisioned producer identities,
   closed-outcome-to-reason integration, HMAC/redaction/key-service lifecycle,
@@ -1218,11 +1521,16 @@ tenancy and migration tests until the dependent tickets land.
   before 0001 is frozen.
 - #177 completes the within-tenant sharing and output-authorization gate.
 - #178 implements content-bound, result-complete command idempotency inside the
-  namespace frozen here.
+  exact `OFARM_ASCII_ID_V1` caller-key namespace frozen here and exposes the
+  durable identities/receipts later recovery must reconcile.
 - #184 supplies the complete reference extraction and semantic relationship
-  matrix without changing the structural isolation rules in this ADR. Until
-  that matrix is accepted, #174 cannot invent or claim complete payload-
+  matrix in a forward migration after #174's neutral structural carrier. Until
+  that matrix is accepted, no ticket can invent or claim complete payload-
   reference kind/cardinality enforcement.
+- #193 owns any later non-forking tenant-service recovery or tenant-history
+  import design. It does not block #174's safe negative V1 posture, but it
+  blocks destructive migrations, recovery promotion, and recovery-readiness
+  claims.
 - #185 must make scheduled reference source bytes durable before their parsed
   data can honestly be treated as disposable cache.
 
@@ -1234,11 +1542,11 @@ changes OFARM law, activates a profile, or proves a higher capability.
 | Issue #169 criterion | ADR section |
 |---|---|
 | Classify every table | Relation classification |
-| Trusted immutable principal source, non-authoritative current projection, transaction context lifetime, and no production default | Governed principal source; Unforgeable transaction binding |
-| Identifier, idempotency-key, advisory-lock, and uniqueness namespaces | Identifier and uniqueness namespaces; Protected advisory locks |
+| Trusted immutable principal source, immutable V1 tenant/Party eligibility, non-authoritative current projection, transaction context lifetime, and no production default | Governed principal source; Unforgeable transaction binding |
+| Exact identifier equality, idempotency-key, advisory-lock, and uniqueness namespaces | Identifier and uniqueness namespaces; Protected advisory locks |
 | Tenant-qualified FKs, graph rules, cross-tenant references, and sharing | Foreign keys, normalized reference carrier, graph rules, and sharing boundary |
 | Roles, forced RLS, migration privileges, and direct-SQL posture | Database roles and row-level security; One-time infrastructure provisioning |
-| Immutable numbered baseline, rollback, compatibility, and readiness | One-time infrastructure provisioning; Immutable migration baseline; Startup, readiness, compatibility, and rollback |
+| Immutable numbered baseline, forward-only correction, no unsafe V1 recovery, compatibility, and readiness | One-time infrastructure provisioning; Immutable migration baseline; Startup, readiness, compatibility, and rollback |
 | Startup verifies schema and performs no opportunistic DDL | Startup, readiness, compatibility, and rollback |
 | Threat model and adversarial pool/join verification | Threat model; Executable adversarial verification plan |
 
