@@ -27,6 +27,8 @@ from . import config
 from .context import now_iso
 from .policy import (COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS,
                      COMMIT_CLASS_TO_FAMILY, NON_COMMIT_ACTION_CLASSES)
+from .runtime_bundle import (GLOBAL_CONTENT_PLACEMENT, JSON_CANONICALIZATION,
+                             RuntimeBundleError, require_store_runtime_bundle)
 
 MANIFEST_ID = "manifest:si.ffs.pilot.v0_1"
 MANIFEST_PATH = config.PROFILE_ROOT / "OFARM_Capability_Manifest_si_ffs_pilot_v0_1.json"
@@ -60,6 +62,43 @@ SUPPORTED_IMPORT_SURFACES = {
     "scheme:si.gerk-pid": "kernel.profiles.si_ffs.gerk_adapter",
     "scheme:si.ffs-naprave": "kernel.profiles.si_ffs.ffsnaprave_adapter",
 }
+
+
+def _retained_code_binding_profile(store) -> dict:
+    """Return the exact global code-binding bytes selected by this Store.
+
+    The code-binding profile is immutable package content, so bootstrap does
+    not copy it into the tenant ``kernel_record`` table.  Manifest grounding
+    must therefore cross the verified RuntimeBundle receipt instead of falling
+    back to either tenant records or the live package filesystem.
+    """
+    bundle = store.runtime_bundle
+    require_store_runtime_bundle(store, bundle, "Capability Manifest grounding")
+    descriptor = bundle.descriptor
+    if (bundle.tenant_ref != config.TENANT_REF
+            or descriptor.profile_ref != config.PROFILE_REF
+            or descriptor.pack_ref != config.PACK_REF
+            or descriptor.code_binding_profile_ref !=
+            config.CODE_BINDING_PROFILE_REF):
+        raise RuntimeBundleError(
+            "Capability Manifest selection does not exactly match the bound "
+            "RuntimeBundle tenant/profile/pack/code-binding identity")
+
+    component = bundle.component(
+        "PROFILE_INSTANCE", descriptor.code_binding_profile_ref)
+    if (component.placement != GLOBAL_CONTENT_PLACEMENT
+            or component.canonicalization != JSON_CANONICALIZATION):
+        raise RuntimeBundleError(
+            "code-binding profile is not exact global canonical JSON content")
+    profile = bundle.json_component(
+        "PROFILE_INSTANCE", descriptor.code_binding_profile_ref)
+    if (profile.get("schemaVersion") !=
+            "ofarm.agronomiccodebindingprofile.v0.1"
+            or profile.get("agronomicCodeBindingProfileId") !=
+            descriptor.code_binding_profile_ref):
+        raise RuntimeBundleError(
+            "code-binding profile payload identity differs from its RuntimeBundle ref")
+    return profile
 
 
 def build_manifest(store) -> dict:
@@ -230,9 +269,19 @@ def verify_grounding(store, manifest: dict, artifact_set: dict) -> list[str]:
     if manifest["registryRelation"]["activeArtifactSetRef"] != \
             artifact_set["activeArtifactSetId"]:
         failures.append("manifest does not reference the regenerated artifact set")
+    expected_scope = {"scopeType": "TENANT", "scopeRef": config.TENANT_REF}
+    if manifest.get("deploymentScope") != expected_scope:
+        failures.append(
+            "manifest deployment scope does not equal the bound runtime tenant")
+    if artifact_set.get("deploymentScope") != expected_scope:
+        failures.append(
+            "artifact set deployment scope does not equal the bound runtime tenant")
     refs = set(artifact_set["activeArtifactRefs"])
     if MANIFEST_ID not in refs:
         failures.append("artifact set does not list the manifest")
+    if config.CODE_BINDING_PROFILE_REF not in refs:
+        failures.append(
+            "artifact set does not list the descriptor code-binding profile")
     for ref in VIEW_ARTIFACTS:
         if ref not in refs:
             failures.append(f"artifact set missing authored view artifact {ref}")
@@ -273,10 +322,14 @@ def verify_grounding(store, manifest: dict, artifact_set: dict) -> list[str]:
     import_targets = [s["targetRef"] for s in manifest["capabilitySections"]
                       ["importExportSupport"]["declaredSurfaces"]
                       if s["surfaceType"] == "IMPORT_MAPPING"]
-    profile = store.get_payload(config.CODE_BINDING_PROFILE_REF)
+    try:
+        profile = _retained_code_binding_profile(store)
+    except RuntimeError as exc:
+        profile = None
+        failures.append(
+            "code-binding profile is not available from the exact verified "
+            f"RuntimeBundle; cannot ground import surfaces ({exc})")
     scheme_refs = _standard_refs(profile) if profile is not None else None
-    if scheme_refs is None:
-        failures.append("code-binding profile not loaded; cannot ground import surfaces")
     for target in import_targets:
         if scheme_refs is not None and target not in scheme_refs:
             failures.append(f"import surface {target} is not a scheme the code-binding "

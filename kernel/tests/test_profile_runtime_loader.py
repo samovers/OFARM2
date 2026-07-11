@@ -2251,13 +2251,16 @@ def _governance_submission(idem_key: str, *, decision_time=None,
 
 
 def test_route_backed_gate_pipeline_governance_uses_decision_time(fresh_env):
-    store, default_pipeline, _ = fresh_env
-    queued = default_pipeline.commit(demo.spray_submission(
+    store, _, _ = fresh_env
+    pipeline = _route_pipeline(store, routes=[_route_interval("06")])
+    # Queue and review under the same receipted route selection. Crossing from
+    # the default bundle into this route bundle is an automatic migration and
+    # must remain a PACK_CONFLICT refusal.
+    queued = pipeline.commit(demo.spray_submission(
         f"mp7-governance-queued:{_uid()}",
         erp_id=f"erp:mp7.governance.queued.{_uid()}",
         confirm=False,
     ))
-    pipeline = _route_pipeline(store, routes=[_route_interval("06")])
 
     result = pipeline.commit(_governance_submission(
         f"mp7-governance-accept:{_uid()}",

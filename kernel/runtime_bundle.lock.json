@@ -758,7 +758,7 @@
       "logicalRef": "python:kernel/manifest.py",
       "path": "kernel/manifest.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:b5630d053bea4b6316054c9cd12edb560bb57fa126e349b387aca00396164a6a",
+      "sha256": "sha256:6026ba077d44098c8e8ce6d484472472db62bec773e7a9f82944d5c36b8270af",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {

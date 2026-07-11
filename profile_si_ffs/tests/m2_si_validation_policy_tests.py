@@ -10,7 +10,11 @@ import json
 import uuid
 from dataclasses import replace
 
+import pytest
+
 from kernel import config, profile_policy, validators
+from kernel.contracts import canonical_json
+from kernel.runtime_bundle import sha256_bytes
 from profile_si_ffs.test_fixtures import demo
 
 
@@ -22,41 +26,55 @@ def _policy_doc():
     return json.loads(config.EVIDENCE_POLICY_PATH.read_text())
 
 
-def _use_policy(monkeypatch, tmp_path, doc):
-    path = tmp_path / f"validation_policy_{uid()}.json"
-    path.write_text(json.dumps(doc))
-    monkeypatch.setattr(config, "EVIDENCE_POLICY_PATH", path)
-    return path
+def _runtime_bundle_with_policy(base, doc):
+    """Return an audit bundle whose retained policy bytes are ``doc``.
+
+    Governed pipelines seal their policy provider at construction. Policy
+    variants therefore have to exist before provider construction; mutating a
+    config path or the module-level validator sequence afterwards is not a
+    valid runtime seam.
+    """
+    canonical = canonical_json(doc).encode("utf-8")
+    original = base.component("PROFILE_POLICY", base.descriptor.evidence_policy_ref)
+    replacement = replace(
+        original,
+        canonical_bytes=canonical,
+        content_digest=sha256_bytes(canonical),
+    )
+    components = tuple(
+        replacement if item is original else item
+        for item in base.components
+    )
+    document = json.loads(base.canonical_document_bytes)
+    document["components"] = [item.identity_document() for item in components]
+    canonical_document = canonical_json(document).encode("utf-8")
+    digest = sha256_bytes(canonical_document)
+    return replace(
+        base,
+        digest=digest,
+        bundle_ref=f"runtimebundle:{digest}",
+        canonical_document_bytes=canonical_document,
+        components=components,
+        construction_mode="PERSISTED_AUDIT",
+    )
 
 
-def _spray(pipeline, **kw):
-    return _commit_compat(pipeline, demo.spray_submission(
-        f"d4:{uid()}", erp_id=f"erp:d4.{uid()}", **kw))
-
-
-def _commit_compat(pipeline, sub):
-    return pipeline.commit(sub)
-
-
-def _use_explicit_operation_validation(monkeypatch, validation):
-    monkeypatch.setattr(validators, "OPERATION_SEQUENCE", (
-        validators.CarrierSchemaValidator(),
-        validators.CarrierSemanticsValidator(validation_policy=validation),
-        validators.ExecutionExtentValidator(validation_policy=validation),
-        validators.ReferenceResolutionValidator(),
-        validators.ActorAttributionValidator(),
-        validators.CodeBindingValidator(validation_policy=validation),
-        validators.RegistryReverificationValidator(),
-    ))
+def _policy_provider(pipeline, doc):
+    bundle = _runtime_bundle_with_policy(pipeline.runtime_bundle, doc)
+    return profile_policy.DescriptorPolicyProvider(
+        pipeline.active_profile,
+        runtime_bundle=bundle,
+    )
 
 
 class _FakeValidationContext:
-    def __init__(self, store, sub, commit_class="COMPLIANCE_ASSERTION"):
+    def __init__(self, store, sub, commit_class="OPERATION_CLAIM"):
         self.store = store
         self.sub = sub
         self.commit_class = commit_class
         self.farm_ref = demo.FARM
         self.gate_sequence = []
+        self.review_route_reasons = []
 
     def log(self, gate, outcome, *, reason_code=None, rationale=None, refs=None):
         self.gate_sequence.append({
@@ -164,48 +182,54 @@ def test_explicit_policy_path_preserves_unsupported_floor_item_validation(tmp_pa
 
 
 def test_unresolved_dose_unit_uses_profile_validation_policy(
-        pipeline, monkeypatch, tmp_path):
+        pipeline):
     doc = _policy_doc()
     quantity = doc["validation"]["quantityAndUnit"]
     quantity["unresolvedTitle"] = "Custom dose unit unresolved"
     quantity["unresolvedDetail"] = "custom unresolved dose detail"
     quantity["unresolvedRationale"] = "custom unresolved dose rationale"
-    _use_policy(monkeypatch, tmp_path, doc)
+    validation = _policy_provider(pipeline, doc).validation_policy()
 
-    r = _spray(pipeline, confirm=True, unit_ref="scheme:bad:L")
-    assert r["decisionOutcome"] == "RETAIN_DRAFT"
-    problem = r["problems"][0]
+    sub = demo.spray_submission(
+        f"d4:{uid()}", erp_id=f"erp:d4.{uid()}",
+        confirm=True, unit_ref="scheme:bad:L")
+    ctx = _FakeValidationContext(pipeline.store, sub)
+    refusal = validators.CarrierSemanticsValidator(validation).run(ctx)
+
+    assert refusal is not None
+    problem = refusal.problems[0]
     assert problem["reasonCode"] == "UNIT_UNRESOLVED"
     assert problem["title"] == "Custom dose unit unresolved"
     assert problem["detail"] == "custom unresolved dose detail"
 
 
 def test_explicit_validator_policy_injection_uses_supplied_subdocument(
-        pipeline, monkeypatch):
-    validation = _policy_doc()["validation"]
-    validation["quantityAndUnit"]["unresolvedTitle"] = \
+        pipeline):
+    doc = _policy_doc()
+    doc["validation"]["quantityAndUnit"]["unresolvedTitle"] = \
         "Explicit dose unit unresolved"
-    validation["quantityAndUnit"]["unresolvedDetail"] = \
+    doc["validation"]["quantityAndUnit"]["unresolvedDetail"] = \
         "explicit unresolved dose detail"
-    validation["recordFields"]["nonWholeExtentBound"]["missingTitle"] = \
+    doc["validation"]["recordFields"]["nonWholeExtentBound"]["missingTitle"] = \
         "Explicit extent bound missing"
-    validation["recordFields"]["nonWholeExtentBound"]["requiredLabel"] = \
+    doc["validation"]["recordFields"]["nonWholeExtentBound"]["requiredLabel"] = \
         "explicit treated area"
-    validation["bindings"]["product"]["title"] = \
+    doc["validation"]["bindings"]["product"]["title"] = \
         "Explicit product binding review"
-    validation["bindings"]["product"]["detailTemplate"] = \
+    doc["validation"]["bindings"]["product"]["detailTemplate"] = \
         "explicit product state: {state}"
-    _use_explicit_operation_validation(monkeypatch, validation)
+    validation = _policy_provider(pipeline, doc).validation_policy()
 
-    def fail_config_policy():
-        raise profile_policy.ProfilePolicyError(
-            "config-backed validation policy was called")
-
-    monkeypatch.setattr(profile_policy, "validation_policy", fail_config_policy)
-
-    bad_unit = _spray(pipeline, confirm=True, unit_ref="scheme:bad:L")
-    assert bad_unit["decisionOutcome"] == "RETAIN_DRAFT"
-    assert bad_unit["problems"][0]["title"] == "Explicit dose unit unresolved"
+    bad_unit = demo.spray_submission(
+        f"d4-explicit-unit:{uid()}",
+        erp_id=f"erp:d4.explicit.unit.{uid()}",
+        confirm=True,
+        unit_ref="scheme:bad:L",
+    )
+    unit_ctx = _FakeValidationContext(pipeline.store, bad_unit)
+    unit_refusal = validators.CarrierSemanticsValidator(validation).run(unit_ctx)
+    assert unit_refusal is not None
+    assert unit_refusal.problems[0]["title"] == "Explicit dose unit unresolved"
 
     partial = demo.spray_submission(
         f"d4-explicit-extent:{uid()}",
@@ -216,54 +240,65 @@ def test_explicit_validator_policy_injection_uses_supplied_subdocument(
         "targetScope": {"scopeType": "FIELD", "scopeRef": demo.FIELD},
         "extentBasisStatus": "OPERATOR_SKETCH",
     }
-    extent = _commit_compat(pipeline, partial)
-    assert extent["decisionOutcome"] == "RETAIN_DRAFT"
-    assert extent["problems"][0]["title"] == "Explicit extent bound missing"
-    assert "explicit treated area" in extent["problems"][0]["detail"]
+    extent_ctx = _FakeValidationContext(pipeline.store, partial)
+    extent_refusal = validators.ExecutionExtentValidator(validation).run(extent_ctx)
+    assert extent_refusal is not None
+    assert extent_refusal.problems[0]["title"] == "Explicit extent bound missing"
+    assert "explicit treated area" in extent_refusal.problems[0]["detail"]
 
-    missing_product = _spray(
-        pipeline,
+    missing_product = demo.spray_submission(
+        f"d4-explicit-product:{uid()}",
+        erp_id=f"erp:d4.explicit.product.{uid()}",
         confirm=True,
         binding_refs=[demo.CROP_BINDING],
     )
-    assert missing_product["decisionOutcome"] == "REQUIRE_REVIEW"
+    product_ctx = _FakeValidationContext(pipeline.store, missing_product)
+    assert validators.CodeBindingValidator(validation).run(product_ctx) is None
     assert any(p["title"] == "Explicit product binding review"
                and p["detail"] == "explicit product state: MISSING"
-               for p in missing_product["problems"])
+               for p in product_ctx.review_route_reasons)
 
 
 def test_malformed_explicit_validator_policy_fails_closed(
-        pipeline, monkeypatch):
-    _use_explicit_operation_validation(monkeypatch, None)
+        store):
+    ctx = _FakeValidationContext(store, demo.spray_submission(
+        f"d4-explicit-malformed:{uid()}",
+        erp_id=f"erp:d4.explicit.malformed.{uid()}",
+        confirm=True,
+    ))
 
-    r = _spray(pipeline, confirm=True)
+    refusal = validators.CarrierSemanticsValidator(None).run(ctx)
 
-    assert r["decisionOutcome"] == "RETAIN_DRAFT"
-    problem = r["problems"][0]
+    assert refusal is not None
+    problem = refusal.problems[0]
     assert problem["reasonCode"] == "PROFILE_NOT_ACTIVE"
     assert "explicit validation policy must be a JSON object" in problem["detail"]
 
 
 def test_full_evidence_policy_doc_as_validator_policy_fails_closed(
-        pipeline, monkeypatch):
-    _use_explicit_operation_validation(monkeypatch, _policy_doc())
+        store):
+    ctx = _FakeValidationContext(store, demo.spray_submission(
+        f"d4-explicit-full-doc:{uid()}",
+        erp_id=f"erp:d4.explicit.full-doc.{uid()}",
+        confirm=True,
+    ))
 
-    r = _spray(pipeline, confirm=True)
+    refusal = validators.CarrierSemanticsValidator(_policy_doc()).run(ctx)
 
-    assert r["decisionOutcome"] == "RETAIN_DRAFT"
-    problem = r["problems"][0]
+    assert refusal is not None
+    problem = refusal.problems[0]
     assert problem["reasonCode"] == "PROFILE_NOT_ACTIVE"
     assert "quantityAndUnit" in problem["detail"]
 
 
 def test_non_whole_extent_missing_bound_uses_profile_validation_policy(
-        pipeline, monkeypatch, tmp_path):
+        pipeline):
     doc = _policy_doc()
     extent_policy = doc["validation"]["recordFields"]["nonWholeExtentBound"]
     extent_policy["missingTitle"] = "Custom extent bound missing"
     extent_policy["requiredLabel"] = "custom treated area"
     extent_policy["missingRationale"] = "custom extent rationale"
-    _use_policy(monkeypatch, tmp_path, doc)
+    validation = _policy_provider(pipeline, doc).validation_policy()
 
     sub = demo.spray_submission(f"d4-extent:{uid()}", erp_id=f"erp:d4.extent.{uid()}")
     sub["payload"]["executionExtent"] = {
@@ -271,9 +306,11 @@ def test_non_whole_extent_missing_bound_uses_profile_validation_policy(
         "targetScope": {"scopeType": "FIELD", "scopeRef": demo.FIELD},
         "extentBasisStatus": "OPERATOR_SKETCH",
     }
-    r = _commit_compat(pipeline, sub)
-    assert r["decisionOutcome"] == "RETAIN_DRAFT"
-    problem = r["problems"][0]
+    ctx = _FakeValidationContext(pipeline.store, sub)
+    refusal = validators.ExecutionExtentValidator(validation).run(ctx)
+
+    assert refusal is not None
+    problem = refusal.problems[0]
     assert problem["reasonCode"] == "EVIDENCE_INSUFFICIENT"
     assert problem["title"] == "Custom extent bound missing"
     assert "custom treated area" in problem["detail"]
@@ -297,95 +334,89 @@ def test_compliance_validator_empty_recognized_refs_does_not_fallback(store):
 
 
 def test_product_binding_review_uses_profile_validation_policy(
-        pipeline, monkeypatch, tmp_path):
+        pipeline):
     doc = _policy_doc()
     product = doc["validation"]["bindings"]["product"]
     product["title"] = "Custom product binding review"
     product["detailTemplate"] = "custom product state: {state}"
-    _use_policy(monkeypatch, tmp_path, doc)
+    validation = _policy_provider(pipeline, doc).validation_policy()
 
-    r = _spray(pipeline, confirm=True, binding_refs=[demo.CROP_BINDING])
-    assert r["decisionOutcome"] == "REQUIRE_REVIEW"
+    sub = demo.spray_submission(
+        f"d4-product:{uid()}", erp_id=f"erp:d4.product.{uid()}",
+        confirm=True, binding_refs=[demo.CROP_BINDING])
+    ctx = _FakeValidationContext(pipeline.store, sub)
+    assert validators.CodeBindingValidator(validation).run(ctx) is None
     assert any(p["reasonCode"] == "PRODUCT_BINDING_UNRESOLVED"
                and p["title"] == "Custom product binding review"
                and p["detail"] == "custom product state: MISSING"
-               for p in r["problems"])
+               for p in ctx.review_route_reasons)
 
 
 def test_wrong_kind_binding_ref_uses_profile_validation_policy(
-        pipeline, monkeypatch, tmp_path):
+        pipeline):
     doc = _policy_doc()
     wrong = doc["validation"]["bindings"]["wrongKindRef"]
     wrong["title"] = "Custom wrong-kind binding ref"
     wrong["detailTemplate"] = "custom wrong-kind refs: {refs}"
-    _use_policy(monkeypatch, tmp_path, doc)
+    validation = _policy_provider(pipeline, doc).validation_policy()
 
-    r = _spray(pipeline, confirm=True, binding_refs=[demo.PHOTO_EVIDENCE])
-    assert r["decisionOutcome"] == "RETAIN_DRAFT"
-    problem = r["problems"][0]
+    sub = demo.spray_submission(
+        f"d4-wrong-kind:{uid()}", erp_id=f"erp:d4.wrong-kind.{uid()}",
+        confirm=True, binding_refs=[demo.PHOTO_EVIDENCE])
+    ctx = _FakeValidationContext(pipeline.store, sub)
+    refusal = validators.CodeBindingValidator(validation).run(ctx)
+
+    assert refusal is not None
+    problem = refusal.problems[0]
     assert problem["reasonCode"] == "PRODUCT_BINDING_UNRESOLVED"
     assert problem["title"] == "Custom wrong-kind binding ref"
     assert "evidence:demo.spray.photo.1" in problem["detail"]
 
 
 def test_wrong_kind_binding_ref_review_disposition_fails_closed(
-        pipeline, monkeypatch, tmp_path):
+        pipeline):
     doc = _policy_doc()
     doc["validation"]["bindings"]["wrongKindRef"]["disposition"] = "REVIEW"
-    _use_policy(monkeypatch, tmp_path, doc)
 
-    r = _spray(pipeline, confirm=True, binding_refs=[demo.PHOTO_EVIDENCE])
-    assert r["decisionOutcome"] == "RETAIN_DRAFT"
-    problem = r["problems"][0]
-    assert problem["reasonCode"] == "PROFILE_NOT_ACTIVE"
-    assert "wrongKindRef.disposition must be REFUSE" in problem["detail"]
+    with pytest.raises(profile_policy.ProfilePolicyError,
+                       match="wrongKindRef.disposition must be REFUSE"):
+        _policy_provider(pipeline, doc).validation_policy()
 
 
 def test_product_binding_role_must_stay_product_specific(
-        pipeline, monkeypatch, tmp_path):
+        pipeline):
     doc = _policy_doc()
     doc["validation"]["bindings"]["product"]["bindingRole"] = "CROP_SPECIES"
-    _use_policy(monkeypatch, tmp_path, doc)
 
-    r = _spray(pipeline, confirm=True)
-    problem = r["problems"][0]
-    assert r["decisionOutcome"] == "RETAIN_DRAFT"
-    assert problem["reasonCode"] == "PROFILE_NOT_ACTIVE"
-    assert "product.bindingRole must be CROP_PROTECTION_PRODUCT" in problem["detail"]
+    with pytest.raises(profile_policy.ProfilePolicyError,
+                       match="product.bindingRole must be CROP_PROTECTION_PRODUCT"):
+        _policy_provider(pipeline, doc).validation_policy()
 
 
 def test_crop_binding_role_must_stay_crop_specific(
-        pipeline, monkeypatch, tmp_path):
+        pipeline):
     doc = _policy_doc()
     doc["validation"]["bindings"]["crop"]["bindingRole"] = "CROP_PROTECTION_PRODUCT"
-    _use_policy(monkeypatch, tmp_path, doc)
 
-    r = _spray(pipeline, confirm=True)
-    problem = r["problems"][0]
-    assert r["decisionOutcome"] == "RETAIN_DRAFT"
-    assert problem["reasonCode"] == "PROFILE_NOT_ACTIVE"
-    assert "crop.bindingRole must be CROP_SPECIES" in problem["detail"]
+    with pytest.raises(profile_policy.ProfilePolicyError,
+                       match="crop.bindingRole must be CROP_SPECIES"):
+        _policy_provider(pipeline, doc).validation_policy()
 
 
 def test_unknown_validation_policy_key_fails_closed(
-        pipeline, monkeypatch, tmp_path):
+        pipeline):
     doc = _policy_doc()
     doc["validation"]["quantityAndUnit"]["extraSofteningKey"] = True
-    _use_policy(monkeypatch, tmp_path, doc)
 
-    r = _spray(pipeline, confirm=True)
-    assert r["decisionOutcome"] == "RETAIN_DRAFT"
-    problem = r["problems"][0]
-    assert problem["reasonCode"] == "PROFILE_NOT_ACTIVE"
-    assert "unsupported key" in problem["detail"]
+    with pytest.raises(profile_policy.ProfilePolicyError, match="unsupported key"):
+        _policy_provider(pipeline, doc).validation_policy()
 
 
-def test_malformed_validation_policy_fails_closed(pipeline, monkeypatch, tmp_path):
+def test_malformed_validation_policy_fails_closed(pipeline):
     doc = _policy_doc()
     doc["validation"]["quantityAndUnit"]["unresolvedReasonCode"] = \
         "NOT_A_REGISTERED_CODE"
-    _use_policy(monkeypatch, tmp_path, doc)
 
-    r = _spray(pipeline, confirm=True)
-    assert r["decisionOutcome"] == "RETAIN_DRAFT"
-    assert r["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+    with pytest.raises(profile_policy.ProfilePolicyError,
+                       match="not a registered reason code"):
+        _policy_provider(pipeline, doc).validation_policy()

@@ -16,12 +16,16 @@ identifiers fictional and format-true (privacy rule 1).
 """
 from __future__ import annotations
 
+import copy
 import json
 import uuid
+from dataclasses import replace
 
 import pytest
 
 from kernel import config, policy, profile_policy, sufficiency
+from kernel.contracts import canonical_json
+from kernel.runtime_bundle import sha256_bytes
 from profile_si_ffs.test_fixtures import demo
 
 
@@ -138,6 +142,48 @@ def _policy_doc(hard, soft, *, advisories=None, display=None, validation=None):
         "validation": validation or _valid_validation(),
         "advisories": advisories or {},
     }
+
+
+def _runtime_bundle_with_policy(base, doc):
+    """Build an audit bundle with a policy variant fixed before provider use."""
+    retained = copy.deepcopy(doc)
+    retained["policyId"] = base.descriptor.evidence_policy_ref
+    canonical = canonical_json(retained).encode("utf-8")
+    original = base.component("PROFILE_POLICY", base.descriptor.evidence_policy_ref)
+    replacement = replace(
+        original,
+        canonical_bytes=canonical,
+        content_digest=sha256_bytes(canonical),
+    )
+    components = tuple(
+        replacement if item is original else item
+        for item in base.components
+    )
+    document = json.loads(base.canonical_document_bytes)
+    document["components"] = [item.identity_document() for item in components]
+    canonical_document = canonical_json(document).encode("utf-8")
+    digest = sha256_bytes(canonical_document)
+    return replace(
+        base,
+        digest=digest,
+        bundle_ref=f"runtimebundle:{digest}",
+        canonical_document_bytes=canonical_document,
+        components=components,
+        construction_mode="PERSISTED_AUDIT",
+    )
+
+
+def _policy_provider(pipeline, doc):
+    bundle = _runtime_bundle_with_policy(pipeline.runtime_bundle, doc)
+    return profile_policy.DescriptorPolicyProvider(
+        pipeline.active_profile,
+        runtime_bundle=bundle,
+    )
+
+
+def _retained_policy(pipeline, doc):
+    return _policy_provider(pipeline, doc).evidence_policy(
+        supported_checks=OPERATION_FLOOR_CHECKS)
 
 
 # ---------------------------------------------------------------------------
@@ -282,34 +328,35 @@ def test_clean_operation_claim_uses_profile_display_metadata(store, pipeline):
                     for item in OPERATION_FLOOR_CHECKS}
 
 
-def test_missing_policy_fails_closed(store, pipeline, monkeypatch, tmp_path):
-    # a missing floor policy must FAIL CLOSED (governed PROFILE_NOT_ACTIVE), never
-    # crash and never silently permit
-    monkeypatch.setattr(config, "EVIDENCE_POLICY_PATH", tmp_path / "absent.json")
-    r = _spray(pipeline, confirm=True)
-    assert r["decisionOutcome"] == "RETAIN_DRAFT"
-    assert r["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+def test_missing_policy_fails_closed(tmp_path):
+    # Missing bytes cannot enter a RuntimeBundle. Refusal therefore happens at
+    # the explicit pre-bootstrap loader boundary, before a pipeline is built.
+    with pytest.raises(profile_policy.ProfilePolicyError, match="unreadable"):
+        profile_policy.load_evidence_review_policy_from_path(
+            tmp_path / "absent.json",
+            supported_checks=OPERATION_FLOOR_CHECKS,
+        )
 
 
-def test_malformed_policy_fails_closed(store, pipeline, monkeypatch, tmp_path):
+def test_malformed_policy_fails_closed(tmp_path):
     bad = tmp_path / "bad.json"
     bad.write_text("{ not valid json")
-    monkeypatch.setattr(config, "EVIDENCE_POLICY_PATH", bad)
-    r = _spray(pipeline, confirm=True)
-    assert r["decisionOutcome"] == "RETAIN_DRAFT"
-    assert r["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+    with pytest.raises(profile_policy.ProfilePolicyError, match="unreadable"):
+        profile_policy.load_evidence_review_policy_from_path(
+            bad,
+            supported_checks=OPERATION_FLOOR_CHECKS,
+        )
 
 
-def test_missing_display_metadata_fails_closed(store, pipeline, monkeypatch, tmp_path):
-    bad = tmp_path / "missing_display.json"
-    bad.write_text(json.dumps({
+def test_missing_display_metadata_fails_closed(pipeline):
+    doc = {
         "policyId": "policy:test.missing-display",
         "operationFloor": {"hardItems": ["dose-unit"], "softItems": []},
-        "advisories": {}}))
-    monkeypatch.setattr(config, "EVIDENCE_POLICY_PATH", bad)
-    r = _spray(pipeline, confirm=True)
-    assert r["decisionOutcome"] == "RETAIN_DRAFT"
-    assert r["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+        "advisories": {},
+    }
+    with pytest.raises(profile_policy.ProfilePolicyError,
+                       match="display metadata object"):
+        _retained_policy(pipeline, doc)
 
 
 @pytest.mark.parametrize("variant", [
@@ -332,7 +379,7 @@ def test_missing_display_metadata_fails_closed(store, pipeline, monkeypatch, tmp
     "bad-review-code",
 ])
 def test_malformed_display_metadata_fails_closed(
-        store, pipeline, monkeypatch, tmp_path, variant):
+        pipeline, variant):
     hard = ["dose-unit", "operator", "event-time", "parcel"]
     soft = ["product-binding", "crop-binding"]
     doc = _policy_doc(hard, soft)
@@ -360,15 +407,11 @@ def test_malformed_display_metadata_fails_closed(
     elif variant == "bad-review-code":
         display["floorItems"]["product-binding"]["reviewReasonCode"] = \
             "NOT_A_RUNTIME_CODE"
-    bad = tmp_path / "bad_display.json"
-    bad.write_text(json.dumps(doc))
-    monkeypatch.setattr(config, "EVIDENCE_POLICY_PATH", bad)
-    r = _spray(pipeline, confirm=True)
-    assert r["decisionOutcome"] == "RETAIN_DRAFT"
-    assert r["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+    with pytest.raises(profile_policy.ProfilePolicyError):
+        _retained_policy(pipeline, doc)
 
 
-def test_floor_composition_from_package_changes_behavior(store, pipeline, monkeypatch, tmp_path):
+def test_floor_composition_from_package_changes_behavior(store, pipeline):
     # changing the PACKAGE floor changes behavior WITHOUT touching kernel/: a claim
     # missing its crop binding ROUTES TO REVIEW by default (crop-binding is SOFT),
     # but REFUSES under a package policy that makes crop-binding HARD. Same claim,
@@ -378,12 +421,24 @@ def test_floor_composition_from_package_changes_behavior(store, pipeline, monkey
             f"p5-nocrop:{uid()}", erp_id=f"erp:p5.nocrop.{uid()}",
             confirm=True, binding_refs=[demo.PRODUCT_BINDING])   # crop binding omitted
 
-    default = _commit_compat(pipeline, _no_crop_binding())
-    assert default["decisionOutcome"] == "REQUIRE_REVIEW", \
+    sub = _no_crop_binding()
+    default_policy = pipeline.policy_provider.evidence_policy(
+        supported_checks=OPERATION_FLOOR_CHECKS)
+    default_case, default_failures = sufficiency.build_floor_case_with_policy(
+        store,
+        sub,
+        "OPERATION_CLAIM",
+        demo.FARM,
+        f"assertion:p5.default.{uid()}",
+        f"erp:p5.default.{uid()}",
+        evidence_policy=default_policy,
+        policy_ref=pipeline.policy_provider.policy_ref,
+    )
+    assert default_case["outcome"]["decision"] == "REQUIRE_REVIEW", \
         "crop-binding SOFT by default -> route to review"
+    assert default_failures
 
-    harder = tmp_path / "crop_hard_policy.json"
-    harder.write_text(json.dumps({
+    harder_doc = {
         "policyId": "policy:test.crop-hard",
         "profileRef": "profile:test.crop-hard",
         "operationFloor": {
@@ -392,29 +447,47 @@ def test_floor_composition_from_package_changes_behavior(store, pipeline, monkey
         "display": _valid_display(["dose-unit", "operator", "event-time", "parcel",
                                    "crop-binding", "product-binding"]),
         "validation": _valid_validation(),
-        "advisories": {}}))
-    monkeypatch.setattr(config, "EVIDENCE_POLICY_PATH", harder)
-    refused = _commit_compat(pipeline, _no_crop_binding())
-    assert refused["decisionOutcome"] == "RETAIN_DRAFT", \
+        "advisories": {},
+    }
+    harder_policy = _retained_policy(pipeline, harder_doc)
+    refused_case, refused_failures = sufficiency.build_floor_case_with_policy(
+        store,
+        sub,
+        "OPERATION_CLAIM",
+        demo.FARM,
+        f"assertion:p5.harder.{uid()}",
+        f"erp:p5.harder.{uid()}",
+        evidence_policy=harder_policy,
+        policy_ref=pipeline.policy_provider.policy_ref,
+    )
+    assert refused_case["outcome"]["decision"] == "REFUSE", \
         "crop-binding HARD in the package policy -> refuse, not route"
-    assert refused["problems"][0]["reasonCode"] == "EVIDENCE_INSUFFICIENT"
+    assert refused_failures == []
 
 
 def test_display_metadata_changes_case_text_without_changing_decision(
-        store, pipeline, monkeypatch, tmp_path):
+        store, pipeline):
     hard = ["dose-unit", "operator", "event-time", "parcel"]
     soft = ["product-binding", "crop-binding"]
     display = _valid_display([*hard, *soft])
     display["operationFloorClaimStatement"] = "custom profile-owned floor statement"
     display["operationFloorAllowRationale"] = "custom profile-owned allow rationale"
     doc = _policy_doc(hard, soft, display=display)
-    path = tmp_path / "custom_display.json"
-    path.write_text(json.dumps(doc))
-    monkeypatch.setattr(config, "EVIDENCE_POLICY_PATH", path)
-
-    r = _spray(pipeline, confirm=True)
-    assert r["decisionOutcome"] == "PROMOTE_ACCEPTED"
-    case = _case_for_result(store, r)
+    evidence_policy = _retained_policy(pipeline, doc)
+    sub = demo.spray_submission(
+        f"p5-display:{uid()}", erp_id=f"erp:p5.display.{uid()}", confirm=True)
+    case, failures = sufficiency.build_floor_case_with_policy(
+        store,
+        sub,
+        "OPERATION_CLAIM",
+        demo.FARM,
+        f"assertion:p5.display.{uid()}",
+        f"erp:p5.display.{uid()}",
+        evidence_policy=evidence_policy,
+        policy_ref=pipeline.policy_provider.policy_ref,
+    )
+    assert case["outcome"]["decision"] == "ALLOW"
+    assert failures == []
     assert case["claims"][0]["statement"] == "custom profile-owned floor statement"
     assert case["outcome"]["rationale"] == "custom profile-owned allow rationale"
     assert {a["ruleRef"] for a in case["arguments"]} == {
@@ -587,21 +660,20 @@ def test_non_verified_binding_raises_no_authorisation_advisory(store, pipeline):
     assert not any(t == "Authorisation-mismatch advisory" for t in _problem_titles(r))
 
 
-def test_malformed_advisories_fails_closed(store, pipeline, monkeypatch, tmp_path):
+def test_malformed_advisories_fails_closed(pipeline):
     # a present-but-non-dict advisories block is malformed -> fail closed at load
     # (the floor path refuses), never crash, never silently proceed
-    bad = tmp_path / "null_advisories.json"
-    bad.write_text(json.dumps({
+    doc = {
         "policyId": "policy:test.bad-advisories",
         "profileRef": "profile:test.bad-advisories",
         "operationFloor": {"hardItems": ["dose-unit"], "softItems": []},
         "display": _valid_display(["dose-unit"]),
         "validation": _valid_validation(),
-        "advisories": None}))
-    monkeypatch.setattr(config, "EVIDENCE_POLICY_PATH", bad)
-    r = _spray(pipeline, confirm=True)
-    assert r["decisionOutcome"] == "RETAIN_DRAFT"
-    assert r["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+        "advisories": None,
+    }
+    with pytest.raises(profile_policy.ProfilePolicyError,
+                       match="must be a JSON object"):
+        _retained_policy(pipeline, doc)
 
 
 @pytest.mark.parametrize("policy_doc", [
@@ -613,15 +685,11 @@ def test_malformed_advisories_fails_closed(store, pipeline, monkeypatch, tmp_pat
     _policy_doc(["dose-unit"], [], advisories={"doseRange": {"min": 100, "max": 1}}),
 ], ids=["unknown-item", "hard-soft-overlap", "non-string-item",
         "null-advisory-block", "non-numeric-dose", "unordered-dose"])
-def test_malformed_policy_variants_fail_closed(store, pipeline, monkeypatch, tmp_path, policy_doc):
+def test_malformed_policy_variants_fail_closed(pipeline, policy_doc):
     # every malformed shape the kernel later indexes/compares fails CLOSED at load
     # (governed PROFILE_NOT_ACTIVE), never a raw KeyError / AttributeError / compare
-    bad = tmp_path / "bad.json"
-    bad.write_text(json.dumps(policy_doc))
-    monkeypatch.setattr(config, "EVIDENCE_POLICY_PATH", bad)
-    r = _spray(pipeline, confirm=True)
-    assert r["decisionOutcome"] == "RETAIN_DRAFT"
-    assert r["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+    with pytest.raises(profile_policy.ProfilePolicyError):
+        _retained_policy(pipeline, policy_doc)
 
 
 def test_advisory_warning_survives_idempotency_replay(store, pipeline):

@@ -486,12 +486,22 @@
       "sourcePath": "kernel/tests/test_m2_manifest.py"
     },
     {
+      "nodeid": "kernel/tests/test_m2_manifest.py::test_grounding_rejects_other_tenant_manifest_scope",
+      "sourceModule": "kernel.tests.test_m2_manifest",
+      "sourcePath": "kernel/tests/test_m2_manifest.py"
+    },
+    {
       "nodeid": "kernel/tests/test_m2_manifest.py::test_grounding_rejects_profile_scheme_without_supported_adapter",
       "sourceModule": "kernel.tests.test_m2_manifest",
       "sourcePath": "kernel/tests/test_m2_manifest.py"
     },
     {
       "nodeid": "kernel/tests/test_m2_manifest.py::test_grounding_rejects_ungrounded_import_surface",
+      "sourceModule": "kernel.tests.test_m2_manifest",
+      "sourcePath": "kernel/tests/test_m2_manifest.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_m2_manifest.py::test_grounding_uses_retained_global_code_binding_bytes",
       "sourceModule": "kernel.tests.test_m2_manifest",
       "sourcePath": "kernel/tests/test_m2_manifest.py"
     },
@@ -3036,8 +3046,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "95f37155408132a908aba01eaa1e138dc07a3c70189ec04a43fd8cac8e132c0a",
-  "entryCount": 607,
+  "entriesSha256": "dc5b969cbe5b998b6630ec6d5b708be9b19872723fd423bf83babbb1971e9f81",
+  "entryCount": 609,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

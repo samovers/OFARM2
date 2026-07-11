@@ -986,7 +986,9 @@ def test_runtime_bundle_unbound_store_cannot_claim_persisted_digest(fresh_env):
     store_a, _pipeline, _outputs = fresh_env
     unbound = Store(dsn=store_a.dsn)
     try:
-        with pytest.raises(RuntimeError, match="outside verified atomic bootstrap"):
+        with pytest.raises(
+                RuntimeError,
+                match="has no verified RuntimeBundle tenant; bootstrap first"):
             with unbound.tx() as cur:
                 unbound.insert_record(cur, {
                     "schemaVersion": "ofarm.party.v0.1",

@@ -12,7 +12,8 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
-from kernel import manifest
+from kernel import config, manifest
+from kernel.runtime_bundle import GLOBAL_CONTENT_PLACEMENT
 from kernel.tests import conftest as evidence_conftest
 
 
@@ -36,6 +37,36 @@ def test_grounding_passes_for_regenerated_artifacts(store):
     m = manifest.build_manifest(store)
     a = manifest.build_artifact_set()
     assert manifest.verify_grounding(store, m, a) == []
+
+
+def test_grounding_uses_retained_global_code_binding_bytes(store):
+    # Global immutable package content is deliberately not copied into the
+    # tenant record table. Grounding must use the exact component selected by
+    # this Store's verified RuntimeBundle and must not fall back to that table.
+    assert store.get_payload(config.CODE_BINDING_PROFILE_REF) is None
+    component = store.runtime_bundle.component(
+        "PROFILE_INSTANCE", config.CODE_BINDING_PROFILE_REF)
+    assert component.placement == GLOBAL_CONTENT_PLACEMENT
+    profile = manifest._retained_code_binding_profile(store)
+    assert profile["agronomicCodeBindingProfileId"] == \
+        config.CODE_BINDING_PROFILE_REF
+
+    m = manifest.build_manifest(store)
+    a = manifest.build_artifact_set()
+    assert manifest.verify_grounding(store, m, a) == []
+
+
+def test_grounding_rejects_other_tenant_manifest_scope(store):
+    m = manifest.build_manifest(store)
+    a = manifest.build_artifact_set()
+    m["deploymentScope"] = {
+        "scopeType": "TENANT", "scopeRef": "tenant:other.invalid"
+    }
+
+    failures = manifest.verify_grounding(store, m, a)
+
+    assert "manifest deployment scope does not equal the bound runtime tenant" \
+        in failures
 
 
 def test_generated_artifacts_match_committed_json_after_timestamp_normalization(store):
