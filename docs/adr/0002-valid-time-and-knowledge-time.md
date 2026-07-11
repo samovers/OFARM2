@@ -77,12 +77,16 @@ share or compare one position.
 
 Tenant knowledge ordering begins only after the hardened database binder has
 verified a transaction-bound `TenantCapability`, its immutable binding version
-and lifecycle head, the active tenant and Party, and has installed the resulting
-`TenantBinding` in protected transaction context. The authentication boundary
-only mints the capability. Missing or malformed credentials, verifier failures,
-unknown or inactive principals or tenants, binder or actor-binding failures,
-and routing failures before successful binder completion are not tenant facts
-and cannot lawfully enter a tenant batch.
+and lifecycle head, the exact immutable tenant-registry digest and pinned ACTIVE
+`ofarm.party.v0.1` record-kind identity/record identity/schema digest/payload
+digest, and has installed the resulting
+`TenantBinding` in protected transaction context. The authentication boundary only mints the
+capability. Missing or malformed credentials, verifier failures, unknown or
+revoked principals, immutable registry/Party mismatch, binder or actor-binding
+failures, and routing failures before successful binder completion are not
+tenant facts and cannot lawfully enter a tenant batch. V1 has no mutable tenant
+or Party eligibility transition; access cessation uses the principal-binding
+lifecycle defined by ADR 0001.
 
 Such failures enter a separate append-only operational security-audit lane that
 is outside every tenant's truth, reconstruction, and knowledge head. A
@@ -105,17 +109,14 @@ as tenant history. It is not an exception inside tenant-scoped
 binding exists, a durable refusal belongs only to that bound tenant's governed
 batch and receives that tenant's position.
 
-#176 must stop rather than invent this lane or reuse a tenant table. #172 owns
-fail-closed authentication and verifier behavior, but its current scope does
-not authorize persistent audit emission or every routing and binder producer.
-Before persistence is implemented, the #169 design path, including ADR 0001/PR
-#190 while it remains under review, must be updated to classify the relation or
-protected external sink and its trust and access boundary; otherwise a
-separately scoped design-owner ticket is required. That accepted design must
-assign producer ownership for each failure class, writer privileges, retention,
-redaction, and implementation ownership. #174 may implement a relational lane
-only after that classification; neither #173 nor #174 may invent the missing
-semantics.
+#176 must stop rather than invent this lane or reuse a tenant table. ADR 0001
+classifies the separate bounded audit service and freezes its trust, event,
+access, retention, redaction, and failure boundaries. #172 owns fail-closed
+authentication outcomes, #173 owns the binding boundary, #174 owns the
+classified PostgreSQL storage/provisioning slice, and #192 owns the isolated
+client, all producer integrations, delivery/health behavior, security-
+operations execution, and end-to-end verification. None may move pre-tenant
+evidence into tenant history.
 Persistence of a separate pre-tenant security event does not make a refused
 tenant transaction partially commit: the attempted tenant batch still rolls
 back as a unit.
@@ -279,12 +280,14 @@ advances the head only in the atomic commit. A rollback publishes neither the
 batch nor a position; its uncommitted candidate may be proposed again because
 it never existed as a valid cut.
 
-If an explicit restore/import design later advances the head across unused
-integers, those gaps are permanently retired. A cut on a retired gap has the
-same visible state as the greatest committed position below it, and no future
-batch may fill any position at or below the committed head. A position exposed
-by a committed batch is never reused. Therefore a previously valid cut can
-never acquire new members later.
+A position exposed by a committed batch is never reused, even if the database
+that stored it is later lost. Only a future #193 recovery design with an
+external non-rewindable witness may advance a recovered head across skipped
+integers. Every such gap is permanently retired: a cut on it has the same
+visible state as the greatest committed position below it, and no future batch
+may fill any position at or below the witnessed high-water mark. V1 has no such
+witness or recovery path. Therefore a previously valid cut can never acquire
+new or different members later.
 
 Stable identifiers may provide deterministic display ordering, but they never
 select truth when valid times or decision times are equal.
@@ -305,6 +308,26 @@ or cancelled transaction exposes none of them.
 - Cross-tenant positions cannot be compared or reused as another tenant's cut.
 - A diagnostic wall clock cannot be converted into a knowledge position by
   searching for the nearest row.
+
+### Recovery boundary
+
+Only an uncommitted candidate rolled back by its allocating transaction may be
+proposed again. A committed position remains consumed forever, including when
+its rows are absent from an older backup.
+
+V1 provides no tenant-service backup restore, point-in-time or snapshot
+promotion, database logical restore, or tenant-history logical import. A
+restored, copied, imported, forked, or provenance-unknown database cannot serve
+governed traffic merely because its schema and application build match. It has
+no V1 recovery-readiness path. An ordinary domain import is different: it
+enters through a governed command and publishes new batches at new positions.
+
+#193 must distinguish recovery of the whole shared tenant service from a
+tenant-specific logical history operation and must reconcile the external
+knowledge high-water mark, all authorization-relevant heads, idempotency and
+release receipts, outbox/delivery state, and already released outputs. Until
+that design and implementation exist, neither form of history recovery is
+supported and destructive migrations are forbidden by ADR 0001.
 
 ### Prototype-data transition
 
@@ -710,7 +733,10 @@ domain existence comes from explicit lifecycle/effective facts.
 | Whole batch at K40 | cut K40 | Every emitted member. |
 | Candidate K41 rolls back while head is K40 | cut K41 before another commit | Refuse as above head; no K41 was published. |
 | Next serialized batch commits after that rollback | allocated position | It may become K41 because the rolled-back candidate was never a valid position. |
-| Imported head K51 permanently retires unused K50 | later write attempting K50 | Refuse; no position at or below the head can be filled later. |
+| Future #193-witnessed recovery head K51 permanently retires unused K50 | later write attempting K50 | Refuse; no position at or below the witnessed head can be filled later. V1 cannot create this recovery state. |
+| K41-K45 were published, then an operator restores K40 | attempt to promote or allocate a new K41 | Refuse the recovery target before governed traffic; the original K41 remains consumed. |
+| A principal or grant was revoked after the restored image | current authorization on that image | Refuse recovery promotion; absence of the revocation tail cannot reactivate authority. |
+| One tenant's old rows are copied into the shared service | attempt to preserve or splice their old cuts | Unsupported tenant-history recovery; domain facts must enter new governed batches instead. |
 | Equal wall clocks in two batches | any | Knowledge positions decide visibility. |
 | Exclusive overlap without lineage | any | Ambiguity and refusal. |
 | Missing event/effective time with capture time | any | Refuse; no substitution. |
@@ -889,6 +915,8 @@ mutate active artifacts, or weaken replay evidence.
 | Floating `NOW` in receipts | Replay after time or knowledge advances cannot reproduce the original cut. |
 | Mutable temporal sidecar | Breaks immutable, digest-bound replay evidence. |
 | Infer prototype batches from equal or nearby timestamps | Fabricates atomicity and order that the old store never recorded; disposable data is rebuilt instead. |
+| Promote an older backup because schema/build digests match | Compatibility does not prove timeline continuity; the image can reuse published positions and erase revocations, receipts, or released-output history. |
+| Splice one tenant's old history into the shared service | Global control state and tenant cuts cannot be reconciled independently, and old positions cannot be reused. |
 | One hidden WINDOW predicate for a heterogeneous assembly | Event occurrence and state overlap answer different questions and must remain explicit per step. |
 | Reuse one qualification envelope for stable content and current release | Later revocation/redaction would either mutate historical evidence or make current permission false. |
 
@@ -912,6 +940,11 @@ At minimum, executable verification must cover:
   table remains unchanged, regardless of attacker-supplied tenant context;
 - a post-binding refusal affecting only the bound tenant;
 - rollback, retired-gap immutability, and concurrent monotonic allocation;
+- restore K40 after publishing K41-K45 and prove V1 cannot promote the target,
+  reuse K41, mint/bind authority, allocate, read, release, or deliver; a matching
+  schema/build alone never passes recovery readiness;
+- restore an image predating principal/grant revocation and attempt a one-tenant
+  history import; both refuse before current authorization or timeline splice;
 - cross-tenant non-comparability;
 - prototype rebuild from a proven-empty target with no timestamp-derived batch
   grouping or fabricated historical position;
@@ -942,7 +975,7 @@ At minimum, executable verification must cover:
 | Issue #170 criterion | ADR section |
 | --- | --- |
 | Interval inclusivity and point/window/current reads | Valid-time model; governed carrier/window matrix; Current state |
-| Tenant monotonic position and whole write batch | Pre-tenant operational security audit; Knowledge-time model |
+| Tenant monotonic position, non-reuse across recovery, and whole write batch | Pre-tenant operational security audit; Knowledge-time model; Recovery boundary |
 | Every existing timestamp classified | Existing timestamp classification |
 | Late/future/expiry/correction/supersession/dispute/equal-time behavior | Dedicated behavior sections; examples |
 | UTC-aware representation and naive rejection | Timestamp representation |
@@ -956,14 +989,14 @@ At minimum, executable verification must cover:
 - #170 changes no runtime behavior.
 - #171 supplies the immutable RuntimeBundle identity that historical receipts
   must pin.
-- #172 owns fail-closed authentication and verifier behavior, but no current
-  ticket owns production of every safe authentication, routing, and binder
-  audit event. The #169 design path (including ADR 0001/PR #190 while open), or
-  a separately accepted design-owner ticket, must assign those producers and
-  classify the storage/sink, trust boundary, writer privileges, retention,
-  redaction, and implementation owner before persistence proceeds. #174 may
-  then implement a governed relational lane. #169/#173/#174 retain the
-  proven-empty rebuild posture without timestamp-derived historical batches.
+- ADR 0001 classifies the pre-tenant audit lane. #172 owns closed authentication
+  outcomes, #173 the binding boundary, #174 the isolated PostgreSQL storage and
+  privileges, and #192 the client, producers, delivery/health behavior,
+  operations, and end-to-end verification. #176 consumes that completed
+  boundary and may not invent another.
+- #193 owns any later non-forking recovery design. Until it lands, the tenant
+  service has no restore/import promotion or recovery-readiness path and no
+  destructive migration may rely on one.
 - A separately authorized SI profile-artifact patch must replace and retire the
   incompatible inspection-register v0.1 query and plan before #176 enables that
   freeze under these semantics.
