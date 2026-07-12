@@ -670,7 +670,7 @@
       "logicalRef": "python:tooling/ofarm_isolated.py",
       "path": "tooling/ofarm_isolated.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:ecd8ff9418b034abf6613caf0d9a31608bc4f60e5d4f03e2e954ed61ec58513e",
+      "sha256": "sha256:c70365d38026ac92022555909cc4225e55c1b3971793856982e33a7927207f71",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {

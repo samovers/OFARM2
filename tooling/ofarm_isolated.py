@@ -213,8 +213,17 @@ def _standard_tree_identity(root: Path) -> tuple[list[dict], list[str]]:
             path = base / name
             relative = relative_base / name
             if name == "__pycache__":
-                raise LaunchError(
-                    f"standard runtime bytecode directory is forbidden: {path}")
+                # The official retained image ships precompiled caches, which
+                # the OCI-derived source/native manifest deliberately excludes.
+                # They are non-authoritative: the launcher redirected
+                # ``sys.pycache_prefix`` to an absent path before any
+                # source-backed import, and live module observation refuses
+                # every bytecode origin. The image root is also exact-pinned
+                # and read-only, so this directory cannot become a late input.
+                if path.is_symlink() or not path.is_dir():
+                    raise LaunchError(
+                        f"standard runtime bytecode directory is unsafe: {path}")
+                continue
             if name in {"site-packages", "dist-packages"}:
                 continue
             if path.is_symlink() or not path.is_dir():
