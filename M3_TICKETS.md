@@ -2,11 +2,67 @@
 
 Companion to `M3_BRIEF.md`. This is a planning and execution-control document for the M3 platform MVP track. It is not OFARM law, not a schema or contract promotion, not generated evidence, and not a production-readiness claim.
 
-M3 is claim-limited to the fictional/sandbox SI plant-protection record-keeping MVP loop: phone/PWA capture, offline draft, governed sync, review/promotion, materialized register view, and honest refusal/disclosure. It does not claim current compliance, certification readiness, legal advice, production readiness, official filing support, second-profile activation, profile-extension support, organic runtime readiness, or durable Advisory Twin output.
+M3 is claim-limited to the fictional/sandbox SI plant-protection record-keeping milestone: phone/PWA capture, offline draft, governed sync, review/promotion, and centralized honest output-readiness refusal. Successful register rendering and release are later gates. M3 does not claim current compliance, certification readiness, legal advice, production readiness, official filing support, second-profile activation, profile-extension support, organic runtime readiness, or durable Advisory Twin output.
 
 Endpoint names in `M3_BRIEF.md` are implementation candidates only and do not create public API commitments in M3.0.
 
 E-006 remains deferred. M3 may display non-blocking warning result problems returned by governed calls, but it must not claim durable `ADVISORY_OUTPUT` records or PassportView `_advisory_flags` unless a separate trace-safe slice resolves E-006.
+
+## Forward-development conformance baseline
+
+These tickets are implementation control, not canonical OFARM law. Before an
+M3 runtime ticket starts, its design and acceptance evidence must remain
+conformant with the digest-pinned canonical material in `reference/` and with
+the package-local implementation decisions in `DECISIONS.md` and
+`docs/adr/0001-tenancy-and-schema-migrations.md` / `0002-valid-time-and-knowledge-time.md`.
+The ADRs narrow how this package implements canonical OFARM; they do not amend,
+promote, or replace canonical law.
+
+The forward tickets share these hard requirements:
+
+- Canonical truth remains assertion/history-first. Drafts, caches, imports,
+  projections, materializations, UI state, and generated outputs never become
+  truth merely because they exist.
+- Every authoritative or evidence-bearing tenant write is atomic inside one
+  tenant-scoped governed write batch after trusted tenant binding. No default,
+  request-chosen, or inferred tenant is allowed.
+- Tenant-owned and tenant-bearing derived state uses tenant-qualified identity,
+  references, idempotency, locks, traces, caches, and output keys. Cross-tenant
+  references and disclosure fail closed.
+- Every governed current-state read resolves and records an explicit valid
+  instant and tenant knowledge cut. Historical and high-consequence reads bind
+  both axes plus the exact runtime and governed context basis. Wall-clock
+  record, capture, assertion, acceptance, or decision time never substitutes
+  for either axis.
+- Database schema readiness comes from immutable numbered migrations and their
+  migration ledger, not application-startup DDL or a record contract version.
+- Closed security-relevant authentication, verifier, binding, or pre-binding
+  routing failures never enter tenant history. When ADR 0001 classifies them as
+  durable, they use only its isolated operational-security lane. Ordinary
+  unmatched routes/404s are not automatically durable. Audit failure never
+  authorizes, selects a default tenant, or falls back to tenant storage.
+- Claim limits remain record-keeping completeness for fictional/sandbox use:
+  no current-compliance, certification, official filing, production-readiness,
+  or capability-level claim follows from completing an M3 ticket.
+
+If an M3 ticket conflicts with this baseline, the ticket must be revised before
+implementation. Passing a UI or scenario test does not waive a canonical or
+package-architecture stop condition.
+
+## Runtime dependency order
+
+| M3 surface | Required predecessor |
+|---|---|
+| Any tenant-bound endpoint | #172, #173, #174, #192, and the governed-batch/knowledge-position portion of #176 |
+| Spray-register PassportView readiness guard | Reviewed reason-code governance supplying an exact registered low-consequence code; M3.6 then pins that code and response before implementation |
+| M3.1 output exposure | Centralized M3.6 `OutputGenerator` guard plus façade, existing-route, and direct-call regression tests; output stays out of M3.1 until then |
+| M3.3–M3.5 temporal behavior | Applicable #176 valid-time carrier and governed correction replacement-set implementation |
+| Successful spray-register PassportView | #176 current-read cuts; versioned stable content-qualification/release surfaces; #177, #181, and #182 as applicable |
+| Successful inspection-register DocumentAssembly freeze | All shared output dependencies plus ADR 0002 carrier/window/date semantics, versioned contracts, #177/#181/#182, and separately governed SI query/plan and active-artifact replacement |
+
+The centralized M3.6 guard is the first M3 runtime slice. M3.1 may add
+tenant-bound non-output helpers only after its foundation row is green. A
+successful output is not part of this M3 milestone.
 
 ## How to work an M3 ticket
 
@@ -22,24 +78,29 @@ Ticket field key: **Status · Goal · Likely touched files · Forbidden files ·
 
 ---
 
-## M3.0 - Add platform MVP brief and ticket map
+## M3.0 - Add platform MVP brief, ticket map, and authority-name correction
 
-Status: implemented by this docs-only PR / no runtime behavior.
+Status: implemented by this documentation/control PR / no runtime behavior.
 
 Goal:
 
 - Add `M3_BRIEF.md`.
 - Add this `M3_TICKETS.md`.
+- Correct `reference/REFERENCE_MANIFEST.json` metadata to identify
+  `samovers/OFARM` as canonical authority without changing extracted content or
+  any provenance/digest entry.
 - Record the M3 claim boundary and E-006 default posture before implementation begins.
 
 Likely touched files:
 
 - `M3_BRIEF.md`
 - `M3_TICKETS.md`
+- `reference/REFERENCE_MANIFEST.json` (the `rule` metadata string only)
 
 Forbidden files:
 
-- `reference/`
+- extracted files under `reference/` and every manifest field except the
+  approved canonical-authority name in `reference/REFERENCE_MANIFEST.json`
 - `contracts/`
 - `conformance/evidence/`
 - generated manifests
@@ -67,10 +128,12 @@ Required tests:
 
 Acceptance criteria:
 
-- Only `M3_BRIEF.md` and `M3_TICKETS.md` are added.
+- The change is limited to `M3_BRIEF.md`, `M3_TICKETS.md`, and the approved
+  canonical-authority metadata correction in `reference/REFERENCE_MANIFEST.json`.
 - `M3_BRIEF.md` lists `M3_TICKETS.md` as a new file, not an optional future file.
 - This ticket map includes M3.0 and the planned M3.1-M3.8 tickets.
-- No evidence files, generated files, manifests, active artifact sets, contracts, reference files, or runtime files are changed.
+- No evidence files, generated manifests, active artifact sets, contracts,
+  extracted reference contents, provenance/digest entries, or runtime files are changed.
 
 Non-goals:
 
@@ -82,8 +145,10 @@ Non-goals:
 
 Stop conditions:
 
-- Stop if the slice would edit law, contracts, manifests, active artifact sets, profile activation, runtime behavior, or capability claims.
-- Stop if validation produces files that would broaden the M3.0 diff beyond the two root docs.
+- Stop if the slice would edit law, contracts, manifest structure or entries,
+  active artifact sets, profile activation, runtime behavior, or capability claims.
+- Stop if validation produces files that broaden the M3.0 diff beyond the two
+  root docs and the single approved manifest metadata string.
 
 Validation:
 
@@ -104,8 +169,11 @@ Status: planned.
 
 Goal:
 
-- Add the smallest backend facade needed by the PWA to bootstrap, cache references, check sync status, and access predefined outputs.
-- Preserve canonical commit, review, materialization, and output behavior.
+- After #172/#173/#174/#192 and the governed-batch/knowledge-position portion
+  of #176 are green, add the smallest tenant-bound backend façade needed by the
+  PWA to bootstrap, cache references, and check sync status.
+- Preserve canonical commit and review behavior. Output helpers remain excluded
+  until the centralized M3.6 guard exists.
 
 Likely touched files:
 
@@ -125,6 +193,8 @@ Forbidden files:
 Read first:
 
 - `M3_BRIEF.md`
+- `docs/adr/0001-tenancy-and-schema-migrations.md`
+- `docs/adr/0002-valid-time-and-knowledge-time.md`
 - `kernel/api.py`
 - `kernel/gates.py`
 - `kernel/stages.py`
@@ -134,20 +204,28 @@ Read first:
 
 Behavior change:
 
-- Expose product-facing read/status/output helpers over existing governed behavior.
+- Expose product-facing bootstrap/cache/status helpers over governed behavior.
 - Keep `/commit` and review calls canonical.
-- Keep transport principal binding to Party; role names alone never authorize.
+- Require completed TenantCapability/TenantBinding/UnitOfWork principal binding;
+  `X-Acting-Party` and default-tenant fallbacks are forbidden, and role names
+  alone never authorize.
 
 Required tests:
 
 - Facade endpoints do not create authoritative truth outside governed paths.
 - Rejected, retained, review-required, accepted, and warning outcomes are machine-readable.
 - Role claims without grants do not authorize farm-scoped actions.
+- A trusted tenant binding lasts exactly one request UnitOfWork; caller input
+  cannot choose or replace it, and tenant-scoped identifiers and idempotency do
+  not collide across tenants.
+- Durable endpoint outcomes share the request's governed batch and knowledge
+  position; pre-tenant failures create no tenant record, trace, or batch.
 
 Acceptance criteria:
 
 - PWA bootstrap/cache/status needs are served without bypassing `GatePipeline`, review governance, materializer freshness, or output qualification.
 - Candidate endpoint names remain implementation-local and do not become promoted contracts.
+- No output endpoint or helper is added by M3.1.
 
 Non-goals:
 
@@ -159,6 +237,10 @@ Stop conditions:
 
 - Stop if an endpoint writes directly to projections, caches, materialization tables, or report stores.
 - Stop if request-chosen profile law or hidden profile selection is needed.
+- Stop if the required tenant binding, UnitOfWork, governed-batch, numbered-
+  migration, or pre-tenant audit foundations are not implemented and green.
+- Stop if any path uses the development principal shim, a default tenant, an
+  unbound connection, or exposes output behavior before M3.6 is centralized.
 
 Validation:
 
@@ -196,6 +278,8 @@ Forbidden files:
 Read first:
 
 - `M3_BRIEF.md`
+- `docs/adr/0001-tenancy-and-schema-migrations.md`
+- `docs/adr/0002-valid-time-and-knowledge-time.md`
 - `profile_si_ffs/PROFILE.md`
 - `profile_si_ffs/UNSUPPORTED_SURFACES.md`
 - `kernel/api.py`
@@ -212,6 +296,9 @@ Required tests:
 - Cached reference data displays snapshot identity.
 - Retry state preserves the same idempotency key.
 - Draft edits after server acceptance create a new correction/supersession path instead of mutating server truth.
+- Local drafts, caches, and retry keys are partitioned by the trusted session's
+  tenant and principal context and are cleared or made inaccessible when that
+  context changes.
 
 Acceptance criteria:
 
@@ -228,6 +315,8 @@ Stop conditions:
 
 - Stop if local cache is treated as authoritative current state.
 - Stop if frontend code needs direct database/projection access.
+- Stop if tenant context is accepted from editable draft data or one tenant's
+  local state can be displayed or submitted under another tenant binding.
 
 Validation:
 
@@ -264,6 +353,8 @@ Forbidden files:
 Read first:
 
 - `M3_BRIEF.md`
+- `docs/adr/0001-tenancy-and-schema-migrations.md`
+- `docs/adr/0002-valid-time-and-knowledge-time.md`
 - `CAPTURE_MAPPING.md`
 - `profile_si_ffs/SI_RECORD_FIELDS.md`
 - `profile_si_ffs/PROFILE.md`
@@ -280,6 +371,9 @@ Required tests:
 
 - Routine spray draft can be prepared without required free-text fields beyond the five planned inputs.
 - Generated commit payload maps to expected contract destinations.
+- Generated payload selects the governed valid-time carrier for the represented
+  act; capture time, local persistence time, sync time, and server record time
+  cannot silently supply occurrence or effective time.
 - Five consecutive fictional records can be entered in 90 seconds or less, or the failure is recorded with UX findings.
 
 Acceptance criteria:
@@ -297,6 +391,8 @@ Stop conditions:
 
 - Stop if users must type KMG-MID, GERK, profile refs, policy refs, schema refs, or other governance fields per record.
 - Stop if event time, record time, assertion time, or effective time are collapsed.
+- Stop if a required valid-time carrier is absent, contradictory, or inferred
+  from capture, sync, ingestion, assertion, acceptance, decision, or record time.
 
 Validation:
 
@@ -333,6 +429,8 @@ Forbidden files:
 Read first:
 
 - `M3_BRIEF.md`
+- `docs/adr/0001-tenancy-and-schema-migrations.md`
+- `docs/adr/0002-valid-time-and-knowledge-time.md`
 - `kernel/problems.py`
 - `kernel/gates.py`
 - `kernel/sufficiency.py`
@@ -352,6 +450,9 @@ Required tests:
 - Reference snapshot drift routes to warning/review/refusal per policy, not silent acceptance.
 - Revoked worker sync denies or routes governably.
 - Advisory warning does not enter Compliance materialization.
+- A committed refusal, acceptance, or warning-bearing result is visible only
+  with its complete tenant batch; retries preserve tenant/principal-scoped
+  idempotency and never create a second knowledge position.
 
 Acceptance criteria:
 
@@ -404,6 +505,8 @@ Forbidden files:
 Read first:
 
 - `M3_BRIEF.md`
+- `docs/adr/0001-tenancy-and-schema-migrations.md`
+- `docs/adr/0002-valid-time-and-knowledge-time.md`
 - `docs/REVIEW_DISPUTE_SEMANTICS.md`
 - `kernel/tests/test_m2_review.py`
 - `kernel/stages.py`
@@ -420,6 +523,11 @@ Required tests:
 - Self-review works only within bounded policy.
 - Distinct reviewer is required where self-review is not allowed.
 - Reject/contest preserve append-only semantics and do not edit queued assertions or in-force consequences.
+- Review/reject/contest preserve the underlying fact's valid-time carrier and
+  bounds while receiving their own atomic tenant knowledge position.
+- A correction may change valid time only through a complete governed
+  replacement set, including left/corrected/right interval slices or a
+  corrected point where applicable; it never edits the prior fact.
 
 Acceptance criteria:
 
@@ -445,20 +553,29 @@ Validation:
 
 ---
 
-## M3.6 - Register views and frozen inspection export
+## M3.6 - Centralized output-readiness guards
 
-Status: planned.
+Status: blocked on reviewed PassportView reason-code governance, then planned.
 
 Goal:
 
-- Show predefined PassportView register results.
-- Freeze a predefined inspection-register DocumentAssembly when freshness, basis, dispute, and output policy allow.
-- Refuse or disclose unsupported output states.
+- Add one shared `OutputGenerator` guard before blocked query, materialization,
+  qualification, assembly, persistence, or release work.
+- Keep the NOW-based `view:si.ffs.spray-register.passportview.v0_1` unexposed
+  until reviewed reason-code governance supplies an exact registered
+  low-consequence readiness code; amend this ticket to pin that accepted code
+  and response before implementation.
+- Block freeze for the WINDOW-based
+  `view:si.ffs.inspection-register.documentassembly.v0_1` on the shared output
+  gaps plus its carrier/window/date-conversion and SI artifact gaps.
+- Do not expose release while its versioned contract is absent.
 
 Likely touched files:
 
-- PWA register/export views
-- backend output facade tests
+- PWA register/freeze refusal views
+- `kernel/views.py` shared output-service guard
+- `kernel/api.py` only to route new façade calls through that service
+- backend façade, existing-route, and direct-service tests
 - scenario fixtures for output qualification
 
 Forbidden files:
@@ -473,6 +590,8 @@ Forbidden files:
 Read first:
 
 - `M3_BRIEF.md`
+- `docs/adr/0001-tenancy-and-schema-migrations.md`
+- `docs/adr/0002-valid-time-and-knowledge-time.md`
 - `PLATFORM.md`
 - `views/VIEWS.md`
 - `profile_si_ffs/views/VIEWS.md`
@@ -481,31 +600,62 @@ Read first:
 
 Behavior change:
 
-- Accepted spray records appear in governed register views with traceable basis/context/sufficiency refs.
-- Missing, stale, invalid, disputed, or incomplete basis refuses, recomputes, or discloses according to existing output policy.
+- The M3 façade, existing `GET /views/passport/{farm_ref}` and
+  `POST /views/inspection-register/freeze` routes, and direct
+  `OutputGenerator` calls reach the same centralized stop.
+- The centralized stop is a nondurable readiness/unsupported-surface refusal
+  before a governed output operation begins. It creates no governed tenant or
+  publication refusal evidence and must not be reported as publication-gate evidence.
+- Freeze returns `{"refused": true, "problem": <RuntimeProblem>,
+  "qualification": null}` with registered reason code
+  `HIGH_CONSEQUENCE_BLOCKED`. PassportView does not reuse that code.
+- Release remains a separate, unexposed operation.
 
 Required tests:
 
-- Accepted spray appears with materialization trace available.
-- Missing basis refuses.
-- STALE state bars clean export or triggers governed recompute/refusal.
-- Open dispute blocks clean frozen export.
-- Frozen document carries snapshot, basis, context, and sufficiency refs.
+- The façade, both existing `/views/**` routes, and direct service calls cannot
+  bypass the same readiness guard.
+- PassportView stays unexposed until the reason-code predecessor lands. After
+  this ticket pins the accepted code, its readiness refusal executes no NOW
+  query, materialization, qualification, or render and does not attribute its
+  blocker to the DocumentAssembly WINDOW artifacts.
+- Freeze readiness refusal executes no WINDOW query/materialization and creates
+  no publication request/result, governed tenant refusal trace/receipt,
+  DocumentAssembly, frozen-artifact receipt,
+  qualification, export artifact, published reference, wrapper, enqueue, or
+  bytes.
+- No release endpoint exists. A future denied release must commit its denial
+  decision/receipt at its own `Kreceipt` while producing no wrapper, enqueue,
+  handoff, or bytes; reason-code governance is required first if no registered
+  code accurately describes that denial.
 
 Acceptance criteria:
 
-- The UI never renders a clean register when the governed output path refuses or qualifies it.
+- The UI renders neither a spray-register PassportView nor a frozen inspection
+  register while the corresponding centralized guard refuses it.
+- PassportView success waits only on its shared current-read and
+  qualification/release prerequisites. DocumentAssembly freeze success also
+  waits on its WINDOW/date and separately governed SI artifact prerequisites.
 
 Non-goals:
 
 - No public query builder/compiler.
 - No official government filing.
 - No production export workflow.
+- No release endpoint or release-denial implementation.
 
 Stop conditions:
 
-- Stop if output UI bypasses governed output qualification.
+- Stop if any endpoint or direct service call bypasses the centralized guard.
+- Stop if a nondurable readiness refusal is called a governed tenant or
+  publication refusal, or is presented as publication-gate evidence.
 - Stop if stale, disputed, missing-basis, or incomplete states are hidden.
+- Stop if freeze refusal and release denial are collapsed, an unregistered
+  reason code is invented, PassportView uses `HIGH_CONSEQUENCE_BLOCKED`, or the
+  freeze stop writes durable refusal/publication state.
+- Stop if this ticket adds or reinterprets temporal fields, applies new
+  semantics to v0.1 identities, renders a blocked output, or emits any frozen
+  artifact before its separate governance path is complete.
 
 Validation:
 
@@ -523,7 +673,7 @@ Status: planned.
 
 Goal:
 
-- Add scenario tests or scripted demo runs for the full phone-to-register path using fictional, format-true data.
+- Add scenario tests or scripted demo runs for the full capture-to-centralized-refusal path using fictional, format-true data.
 
 Likely touched files:
 
@@ -544,6 +694,8 @@ Forbidden files:
 Read first:
 
 - `M3_BRIEF.md`
+- `docs/adr/0001-tenancy-and-schema-migrations.md`
+- `docs/adr/0002-valid-time-and-knowledge-time.md`
 - `conformance/CONFORMANCE.md`
 - `conformance/evidence/README.md`
 - `kernel/demo.py`
@@ -551,20 +703,35 @@ Read first:
 
 Behavior change:
 
-- A repeatable local/sandbox scenario proves bootstrap, offline capture, sync, review, materialization, register view, export/refusal, replay, revoked delegation, binding mismatch, and privacy audit.
+- A repeatable local/sandbox scenario proves bootstrap, offline capture, sync,
+  review, centralized spray-register/freeze readiness refusals, replay, revoked
+  delegation, binding mismatch, and privacy audit.
 
 Required tests:
 
 - Bootstrap fictional farm and cache refs.
 - Capture routine spray offline.
 - Sync and self-review to accepted.
-- Materialize register and render PassportView.
-- Freeze DocumentAssembly.
+- Confirm the live spray-register PassportView remains unexposed until reviewed
+  reason-code governance lands. After M3.6 pins that accepted low-consequence
+  code, request it through the façade, existing route, and direct service and
+  receive the same nondurable readiness refusal without executing
+  NOW/current-read or qualification work.
+- Request inspection-register DocumentAssembly freeze through each path and
+  receive the nondurable `HIGH_CONSEQUENCE_BLOCKED` readiness refusal before
+  WINDOW, materialization, or publication work, with no governed refusal
+  evidence, partial output state, or bytes.
 - Replay idempotency key without duplicate truth.
 - Revoked worker sync refuses or routes governably.
 - Product binding mismatch warns/reviews without compliance fact.
-- Missing/stale/disputed basis refuses clean export.
+- Missing/stale/disputed basis refuses a clean output.
 - Privacy audit finds no real identifiers or documents.
+- Isolation scenarios cover cross-tenant identifiers, references, idempotency,
+  caches, traces, and outputs.
+- At the same valid cut and `Kcontent`, temporal replay reproduces the same
+  historical basis, content/result, and stable content-qualification digests.
+  A new request independently reevaluates `Kauth`, permission/redaction,
+  wrapper or denial, and its own `Kreceipt` once the governed release path exists.
 
 Acceptance criteria:
 
@@ -581,6 +748,8 @@ Stop conditions:
 
 - Stop if demo output is mislabeled as conformance evidence, profile evidence, production evidence, or manifest grounding.
 - Stop if fixtures contain real personal/farm data.
+- Stop if the scenario claims a successful blocked output before its distinct
+  prerequisites land, treats `Kcontent` as `Kauth`/`Kreceipt`, or exposes release.
 
 Validation:
 
@@ -598,7 +767,9 @@ Status: planned.
 
 Goal:
 
-- Add local/sandbox deployment instructions for backend, PostgreSQL, PWA, and development OIDC/principal binding.
+- Add local/sandbox deployment instructions for the completed #172/#173/#174
+  authentication, TenantCapability, TenantBinding, UnitOfWork, migration, and
+  RLS architecture; no development-header fallback.
 - Include seeded fictional data and reset notes.
 
 Likely touched files:
@@ -621,19 +792,25 @@ Read first:
 
 - `M3_BRIEF.md`
 - `README.md`
+- `docs/adr/0001-tenancy-and-schema-migrations.md`
+- `docs/adr/0002-valid-time-and-knowledge-time.md`
 - `kernel/README.md`
 - `profile_si_ffs/UNSUPPORTED_SURFACES.md`
 - existing local run scripts and docs
 
 Behavior change:
 
-- A fresh contributor can run the sandbox backend and PWA, load fictional data, capture/sync/review/export one record, and rerun baseline checks.
+- A fresh contributor can run the sandbox backend and PWA, load fictional data, capture/sync/review one record, exercise the governed register/freeze refusals, and rerun baseline checks.
 
 Required tests:
 
 - Fresh-run instructions are verified from a clean local checkout or equivalent clean environment.
 - Reset instructions remove only sandbox/generated local state.
 - Baseline backend checks pass after setup.
+- `X-Acting-Party`, default-tenant, and unbound-connection paths are unavailable.
+- Startup refuses a missing, unknown, reordered, or digest-mismatched numbered
+  migration; application startup does not mutate the schema.
+- Sandbox reset cannot cross tenant boundaries or erase canonical source inputs.
 
 Acceptance criteria:
 
@@ -642,7 +819,8 @@ Acceptance criteria:
 
 Non-goals:
 
-- No production authentication hardening.
+- No authentication path other than the completed ADR architecture; this is a
+  sandbox deployment of that architecture, not production-readiness evidence.
 - No backup/restore operations.
 - No billing, support desk, or multi-tenant administration.
 
@@ -650,6 +828,8 @@ Stop conditions:
 
 - Stop if docs imply production operations or real-farm onboarding.
 - Stop if setup needs live registry integration or real personal/farm data.
+- Stop if setup relies on a default tenant, application-startup DDL, shared
+  tenant/audit credentials, or a database whose migration readiness is unknown.
 
 Validation:
 

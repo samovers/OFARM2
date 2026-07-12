@@ -2,7 +2,7 @@
   "manifestVersion": "0.1",
   "sourceRepoCommit": "08db4d5deee82eae552192a4042732662689df6f",
   "budget": "max 30 files",
-  "rule": "Reference files are verbatim, read-only, non-normative within this package. Canonical authority remains the OFARM2 repository. Package-vs-reference discrepancy is an extraction bug: log to ERRATA.md and resolve against the canonical repository.",
+  "rule": "Reference files are verbatim, read-only, non-normative within this package. Canonical authority remains the OFARM repository (samovers/OFARM). Package-vs-reference discrepancy is an extraction bug: log to ERRATA.md and resolve against the canonical repository.",
   "entries": [
     {
       "packagePath": "reference/law/OFARM_Reference_Model_and_Artifact_Constitution_RC2_1.md",
