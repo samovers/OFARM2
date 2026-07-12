@@ -870,7 +870,7 @@
       "logicalRef": "python:kernel/runtime_bundle.py",
       "path": "kernel/runtime_bundle.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:ab0a1fa266b550e1f9f6902f792083278ed0d2f14df07d84f77aa65b360b4b40",
+      "sha256": "sha256:a0825ab545389a2d516b7664a2dd8af69452c57656ec0a07467c3cf9d7b64a87",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {

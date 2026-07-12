@@ -962,6 +962,7 @@ def _cached_standard_runtime_observation():
                 }
                 files.append(entry)
                 file_map[str(path)] = entry
+        files.sort(key=lambda item: item["path"])
         roots.append({
             "path": str(root),
             "directories": sorted(retained_directories),

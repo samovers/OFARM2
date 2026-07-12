@@ -26,6 +26,7 @@ from kernel.runtime_bundle import (
     _native_loader_environment_observation,
     _parse_executable_mappings,
     _require_reviewed_import_search_state,
+    _standard_runtime_observation,
 )
 from tooling.runtime_bundle_lock import build_catalog
 
@@ -475,6 +476,13 @@ def test_native_loader_environment_observes_presence_even_when_empty(monkeypatch
         "GLIBC_TUNABLES": "",
         "LD_FUTURE": "",
     }
+
+
+def test_standard_runtime_observation_file_order_is_canonical():
+    observation, _file_map = _standard_runtime_observation()
+    for root in observation["roots"]:
+        paths = [entry["path"] for entry in root["files"]]
+        assert paths == sorted(paths)
 
 
 @pytest.mark.skipif(sys.platform != "linux", reason="Linux /proc fd identity")
