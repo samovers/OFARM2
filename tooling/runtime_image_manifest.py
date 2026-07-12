@@ -94,7 +94,7 @@ def _standard_tree(rootfs: Path, relative_root: Path) -> tuple[list[dict], list[
 
 def _native_files(rootfs: Path) -> list[dict]:
     files = []
-    for path in sorted(rootfs.rglob("*")):
+    for path in sorted(rootfs.rglob("*"), key=lambda item: item.as_posix()):
         if path.is_symlink() or not path.is_file():
             continue
         name = path.name

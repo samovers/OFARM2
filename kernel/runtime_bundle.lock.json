@@ -686,7 +686,7 @@
       "logicalRef": "python:tooling/runtime_image_manifest.py",
       "path": "tooling/runtime_image_manifest.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:63cead440a38d495a9adf0d5023f88dc325a1eb631575497b6043558e819891d",
+      "sha256": "sha256:e56f9a3da62279b4c42f640e8dad8d554261f34136b7640ea46d6702dcdd4093",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -950,7 +950,7 @@
       "logicalRef": "environment:conformance/python_runtime_image_manifest.json",
       "path": "conformance/python_runtime_image_manifest.json",
       "canonicalization": "OFARM_CANONICAL_JSON_V1",
-      "sha256": "sha256:7006872b70fd7d3aded87a1eba7a7318cd8fca5395efffe1fd703cbb7dacc86e",
+      "sha256": "sha256:6eedf8b822a7eea6817607e181bd5ba06cbbc68e806b8a407127f412f0909c95",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {

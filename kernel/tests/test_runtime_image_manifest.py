@@ -10,6 +10,8 @@ import tarfile
 
 import pytest
 
+from kernel import config as kernel_config
+from kernel.runtime_bundle import _validate_runtime_image_manifest
 from tooling import runtime_image_manifest as image_manifest
 
 
@@ -45,6 +47,8 @@ def _synthetic_oci(tmp_path: Path, monkeypatch):
         "usr/local/bin/python3.12": b"synthetic python executable\n",
         "usr/local/lib/libpython3.12.so.1.0": b"synthetic libpython\n",
         "usr/lib/libc.so.6": b"synthetic libc\n",
+        "usr/lib/python3/dist-packages/z-native.so": b"synthetic native z\n",
+        "usr/lib/python3.11/lib-dynload/a-native.so": b"synthetic native a\n",
         "usr/bin/git": b"synthetic git\n",
         "etc/ld.so.cache": b"synthetic cache\n",
         "etc/ld.so.conf": b"include /etc/ld.so.conf.d/*.conf\n",
@@ -108,6 +112,15 @@ def test_generator_derives_closed_tree_from_verified_oci_layers(
     assert files["base.py"]["contentDigest"] == (
         "sha256:" + hashlib.sha256(b"upper layer\n").hexdigest())
     assert document["python"]["requiredAbsentPaths"] == ["/etc/ld.so.preload"]
+    native_paths = [entry["path"] for entry in document["python"]["nativeFiles"]]
+    assert native_paths == sorted(native_paths)
+
+
+def test_committed_runtime_image_manifest_passes_runtime_validation():
+    document = json.loads(
+        (kernel_config.PACKAGE_ROOT / "conformance" /
+         "python_runtime_image_manifest.json").read_text(encoding="utf-8"))
+    _validate_runtime_image_manifest(document)
 
 
 def test_generator_rejects_wrong_uncompressed_layer_identity(

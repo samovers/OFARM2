@@ -3221,6 +3221,11 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_image_manifest.py::test_committed_runtime_image_manifest_passes_runtime_validation",
+      "sourceModule": "kernel.tests.test_runtime_image_manifest",
+      "sourcePath": "kernel/tests/test_runtime_image_manifest.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_image_manifest.py::test_deferred_hardlink_cannot_follow_later_symlink_outside_root",
       "sourceModule": "kernel.tests.test_runtime_image_manifest",
       "sourcePath": "kernel/tests/test_runtime_image_manifest.py"
@@ -3386,8 +3391,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "d10b2998e7b873fca6e70f3a6d5f3eb5c6413a9b92b1f57e550fb6a4c16f97c5",
-  "entryCount": 677,
+  "entriesSha256": "6b8b2f6589e3a95b27e07fa6dc8d8f64be1705dc8a8c8408a7947437d33b96a3",
+  "entryCount": 678,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
