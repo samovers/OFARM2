@@ -35,6 +35,10 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - name: Trust only the mounted checkout for Git evidence
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git -C "$GITHUB_WORKSPACE" rev-parse --verify HEAD
       - name: Verify pinned container boundary
         run: |
           git --version
