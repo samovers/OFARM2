@@ -774,7 +774,7 @@
       "logicalRef": "python:kernel/manifest.py",
       "path": "kernel/manifest.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:da98a55f90086445c272ce5d1163ce5900b997713db3e6783e29d82752b8c85e",
+      "sha256": "sha256:ce2a074200d4d2c61b225f62427c18d061531c6a1d22534cb3946202f7150444",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -838,7 +838,7 @@
       "logicalRef": "python:kernel/profiles/si_ffs/ffsnaprave_adapter.py",
       "path": "kernel/profiles/si_ffs/ffsnaprave_adapter.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:c6291516c2d5cbab674c047d6b8caf18fa84c2fa510252ee26949a182996e018",
+      "sha256": "sha256:4951442a196c93afd19567728d0fb0ef4f7e4b32d10ab0bf347cb758474e6035",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -846,7 +846,7 @@
       "logicalRef": "python:kernel/profiles/si_ffs/gerk_adapter.py",
       "path": "kernel/profiles/si_ffs/gerk_adapter.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:c6c6faa56c9f5801802622d8b39b276238353c82e5815c9a4f1ea8e636ac7c14",
+      "sha256": "sha256:597439bce40e7aaa9071458120a27fd12eef5bb53bebca251f1c5efde3c54b89",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -854,7 +854,7 @@
       "logicalRef": "python:kernel/profiles/si_ffs/regsr_adapter.py",
       "path": "kernel/profiles/si_ffs/regsr_adapter.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:aa07ade5eb99db2a0cf7cfceef49a4e784f14b7c712fd4e8a1b0ba1bab45ff13",
+      "sha256": "sha256:1985aae4a078ec7f39ab7a1301e16275f3f321afffad69ba0351b8b5101a974d",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {

@@ -24,6 +24,7 @@ cached (not needed for the match; privacy-conservative, D14).
 """
 from __future__ import annotations
 
+import codecs
 import copy
 import csv
 import hashlib
@@ -59,6 +60,16 @@ FFSNAPRAVE_CADENCE = {
     "posture": "official yearly TXT/XLS/XML download (strong-currentness surface, D7)",
     "liveIntegration": False,
 }
+_PARSER_RUNTIME_CODECS = ("utf-8-sig",)
+
+
+def preload_runtime_import_surface() -> tuple[object, ...]:
+    """Load the retained parser's public codec dependency before selection."""
+    codec_infos = tuple(
+        codecs.lookup(name) for name in _PARSER_RUNTIME_CODECS)
+    if tuple(info.name for info in codec_infos) != _PARSER_RUNTIME_CODECS:
+        raise RuntimeError("FFSNaprave parser runtime preload is not exact")
+    return codec_infos
 
 # the D9-style composite identity key: sticker number + sticker validity
 STICKER_FIELD = "StevilkaZnaka"

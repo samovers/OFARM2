@@ -17,6 +17,8 @@ makes no current-compliance or production-currentness claim.
 """
 from __future__ import annotations
 
+import codecs
+import importlib
 from pathlib import Path
 from types import ModuleType
 
@@ -56,6 +58,22 @@ REGSR_CADENCE = {
     "posture": "unofficial-surface-over-official-content (D9, ERRATA E-002)",
     "liveIntegration": False,
 }
+_PARSER_RUNTIME_MODULES = (
+    "argparse", "datetime", "hashlib", "html", "json", "pathlib", "re", "sys",
+)
+_PARSER_RUNTIME_CODECS = ("cp1250",)
+
+
+def preload_runtime_import_surface() -> tuple[object, ...]:
+    """Load the retained dynamic parser's public dependencies before selection."""
+    modules = tuple(
+        importlib.import_module(name) for name in _PARSER_RUNTIME_MODULES)
+    codec_infos = tuple(
+        codecs.lookup(name) for name in _PARSER_RUNTIME_CODECS)
+    if (tuple(module.__name__ for module in modules) != _PARSER_RUNTIME_MODULES
+            or tuple(info.name for info in codec_infos) != _PARSER_RUNTIME_CODECS):
+        raise RuntimeError("REGSR parser runtime preload is not exact")
+    return modules + codec_infos
 
 
 def _parser():

@@ -10,11 +10,42 @@ the NONE conformance level. All identifiers fictional and format-true.
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 from types import SimpleNamespace
 
 from kernel import config, manifest
 from kernel.runtime_bundle import GLOBAL_CONTENT_PLACEMENT
 from kernel.tests import conftest as evidence_conftest
+
+
+def test_supported_adapter_preload_closes_dynamic_parser_imports():
+    script = """
+import sys
+from kernel import manifest
+from kernel.profiles.si_ffs import gerk_adapter, regsr_adapter
+
+manifest.preload_runtime_import_surfaces()
+required = {"html", "html.entities", "encodings.cp1250", "encodings.utf_8_sig"}
+missing = sorted(required - set(sys.modules))
+before = set(sys.modules)
+regsr_adapter._parser()
+gerk_adapter._parser()
+added = sorted(set(sys.modules) - before)
+if missing or added:
+    raise SystemExit(f"missing={missing!r}, added={added!r}")
+"""
+    env = dict(os.environ)
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    proc = subprocess.run(
+        [sys.executable, "-B", "-c", script],
+        cwd=config.PACKAGE_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
 
 
 def test_manifest_declares_all_m2_import_surfaces(store):

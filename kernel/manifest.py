@@ -73,6 +73,17 @@ def preload_runtime_import_surfaces() -> tuple[object, ...]:
     if tuple(module.__name__ for module in modules) != tuple(
             sorted(set(SUPPORTED_IMPORT_SURFACES.values()))):
         raise RuntimeError("reviewed runtime import-surface preload is not exact")
+    for module in modules:
+        hook = getattr(module, "preload_runtime_import_surface", None)
+        if not callable(hook):
+            raise RuntimeError(
+                f"reviewed runtime import surface has no preload hook: "
+                f"{module.__name__}")
+        dependencies = hook()
+        if not isinstance(dependencies, tuple) or not dependencies:
+            raise RuntimeError(
+                f"reviewed runtime import surface preload is empty: "
+                f"{module.__name__}")
     return modules
 
 

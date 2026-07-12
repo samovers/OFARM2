@@ -35,8 +35,10 @@ claim (D7). Scheduled-import invalidation rides context-key drift (D19), as P1.
 """
 from __future__ import annotations
 
+import codecs
 import copy
 import hashlib
+import importlib
 from pathlib import Path
 from types import ModuleType
 
@@ -77,6 +79,20 @@ GERK_CADENCE = {
     "posture": "open-data layer snapshot per sync; farmer izpis is fallback only",
     "liveIntegration": False,
 }
+_PARSER_RUNTIME_MODULES = ("argparse", "csv", "pathlib", "struct", "sys")
+_PARSER_RUNTIME_CODECS = ("cp1250", "utf-8-sig")
+
+
+def preload_runtime_import_surface() -> tuple[object, ...]:
+    """Load the retained dynamic parser's public dependencies before selection."""
+    modules = tuple(
+        importlib.import_module(name) for name in _PARSER_RUNTIME_MODULES)
+    codec_infos = tuple(
+        codecs.lookup(name) for name in _PARSER_RUNTIME_CODECS)
+    if (tuple(module.__name__ for module in modules) != _PARSER_RUNTIME_MODULES
+            or tuple(info.name for info in codec_infos) != _PARSER_RUNTIME_CODECS):
+        raise RuntimeError("GERK parser runtime preload is not exact")
+    return modules + codec_infos
 
 # attribute-name candidates (mirror the tooling parser's own detection lists)
 GERK_PID_FIELDS = ("GERK_PID", "GERKPID", "GERK_PID_", "PID", "ID_GERK")

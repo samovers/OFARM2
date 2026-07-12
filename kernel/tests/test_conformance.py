@@ -18,7 +18,6 @@ import json
 import pickle
 import queue
 import uuid
-from encodings import utf_8_sig
 
 import anyio._backends._asyncio as anyio_asyncio
 import jsonschema
@@ -34,12 +33,11 @@ from kernel.runtime_bundle import sha256_bytes
 from .conftest import record_detail
 
 # The platform evidence lane activates its session Store in test 01. Pytest's
-# tmp_path fixture, UTF-8-SIG adapter parsing, and Starlette's TestClient would
-# otherwise import these retained surfaces lazily after the RuntimeBundle seal.
-# Preload them during collection so both evidence lanes share one zero-growth
-# runtime boundary.
+# tmp_path fixture and Starlette's TestClient would otherwise import these
+# retained harness surfaces lazily after the RuntimeBundle seal. Preload them
+# during collection so both evidence lanes share one zero-growth boundary.
 _REVIEW_RUNTIME_PRELOAD = (
-    getpass, pickle, queue, utf_8_sig, anyio_asyncio, pydantic_v1,
+    getpass, pickle, queue, anyio_asyncio, pydantic_v1,
 )
 
 FIXTURES = config.PACKAGE_ROOT / "conformance" / "fixtures" / "gate_sequencing"
@@ -862,8 +860,6 @@ def test_15_manifest_grounding(store):
 def test_92_review_runtime_preloads_lazy_harness_surfaces():
     assert getpass in _REVIEW_RUNTIME_PRELOAD
     assert getpass.termios.__name__ == "termios"
-    assert utf_8_sig in _REVIEW_RUNTIME_PRELOAD
-    assert utf_8_sig.getregentry().name == "utf-8-sig"
     assert pickle in _REVIEW_RUNTIME_PRELOAD
     assert pickle.Pickler.__module__ == "_pickle"
     assert pydantic_v1 in _REVIEW_RUNTIME_PRELOAD
