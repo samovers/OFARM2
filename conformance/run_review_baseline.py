@@ -624,6 +624,7 @@ def run_baseline(output_arg: str) -> int:
     results_path = output / "kernel-test-results.json"
     pytest_command = _isolated_display(
         "pytest", config["paths"]["testRoot"], "-q",
+        "--maxfail=1",
         "--assert=plain",
         "--import-mode=importlib",
         "-p", "no:cacheprovider",
@@ -632,6 +633,7 @@ def run_baseline(output_arg: str) -> int:
     )
     actual_pytest_command = _isolated_python(
         "pytest", config["paths"]["testRoot"], "-q",
+        "--maxfail=1",
         "--assert=plain",
         "--import-mode=importlib",
         "-p", "no:cacheprovider",
