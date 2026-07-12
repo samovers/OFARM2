@@ -1,4 +1,4 @@
-# M3 brief — platform MVP: capture, sync, review, and governed output refusal
+# M3 brief — platform MVP: capture, sync, review, and output-readiness refusal
 
 Status: proposed execution brief for M3. This is an implementation/conformance planning artifact, not OFARM law, not a schema or contract promotion, and not a production-readiness claim.
 
@@ -26,7 +26,7 @@ Assumed starting facts:
 
 M3 delivers a bounded capture/sync/review/output-refusal milestone:
 
-> A farmer can enter a plant-protection spray record on a phone/PWA with five primary inputs, offline if needed; sync it through the tenant-bound governed OFARM backend; have the commit pass through authority, validation, profile applicability, evidence sufficiency, and review/promotion; then request the live SI spray-register PassportView or frozen inspection-register DocumentAssembly and receive the correct centralized governed refusal until each output's distinct prerequisites are accepted and activated.
+> A farmer can enter a plant-protection spray record on a phone/PWA with five primary inputs, offline if needed; sync it through the tenant-bound governed OFARM backend; have the commit pass through authority, validation, profile applicability, evidence sufficiency, and review/promotion; then request the live SI spray-register PassportView or frozen inspection-register DocumentAssembly and receive the correct centralized nondurable readiness refusal until each output's distinct prerequisites are accepted and activated.
 
 M3 is successful when this works end to end on a real device or browser profile against a local/sandbox deployment using fictional, format-true data.
 
@@ -176,12 +176,24 @@ The two current outputs have different blockers:
   `EVENT_OCCURRENCE`/`STATE_OVERLAP` window meaning, calendar-date conversion,
   versioned query/plan, and separately governed SI active-artifact replacement.
 
-Until those paths land, the shared guard returns the existing refusal shape
+Until those paths land, the shared guard is a nondurable
+readiness/unsupported-surface stop before a governed output operation begins.
+It creates no governed publication refusal, tenant refusal trace, qualification,
+or receipt and must not be reported as publication-gate evidence.
+
+The inspection-register freeze readiness response uses the existing shape
 `{"refused": true, "problem": <RuntimeProblem>, "qualification": null}` with
-registered reason code `HIGH_CONSEQUENCE_BLOCKED`. A freeze refusal occurs
-before any materialization or publication request and creates no partial
-DocumentAssembly, frozen-artifact receipt, qualification, published reference,
-wrapper, enqueue, or bytes.
+registered reason code `HIGH_CONSEQUENCE_BLOCKED`. It occurs before any
+materialization or publication request and creates no partial DocumentAssembly,
+frozen-artifact receipt, qualification, published reference, wrapper, enqueue,
+or bytes.
+
+No registered reason code currently describes the spray-register PassportView's
+low-consequence current-read/qualification architecture gap exactly. A reviewed
+reason-code governance change is therefore an explicit predecessor to the
+PassportView readiness guard. M3 must not reuse `HIGH_CONSEQUENCE_BLOCKED`,
+invent a local code, or enable the surface before that predecessor lands and
+this plan pins the accepted code and response.
 
 Release is a separate future operation and is not exposed by M3 while the
 versioned release contract is absent. Once governed, a denied release must
@@ -209,7 +221,7 @@ Minimum backend façade:
 - `GET /m3/sync-status/{idempotencyKey}` — returns replay/current sync status without creating new truth.
 - `POST /review/accept` or existing equivalent — records deliberate self-review/advisor acceptance through the governed review path.
 - `POST /review/reject` and `POST /review/contest` if existing backend support is exposed to the M3 exception queue.
-- `GET /m3/register/passport` — reaches the shared `OutputGenerator` guard and returns `HIGH_CONSEQUENCE_BLOCKED` for the NOW-based spray-register PassportView while its current-read and qualification/release prerequisites remain unmet.
+- `GET /m3/register/passport` — remains unexposed until reason-code governance supplies the exact registered low-consequence readiness code; it then reaches the shared `OutputGenerator` readiness guard before NOW/current-read or qualification work.
 - `POST /m3/register/document-assembly/freeze` — reaches the same shared guard and returns `HIGH_CONSEQUENCE_BLOCKED` before the WINDOW query/materialization/publication path; it may freeze only after its additional temporal and active-artifact prerequisites are accepted and activated.
 
 No M3 release endpoint is exposed until the versioned release contract can
@@ -223,6 +235,7 @@ Stop if any endpoint requires new law, hidden profile selection, direct projecti
 | M3 surface | Must land first |
 |---|---|
 | Any tenant-bound M3 endpoint | #172 authentication and TenantCapability; #173 request UnitOfWork/binding; #174 migrations, RLS, tenant-qualified storage, and binding primitives; #192 isolated pre-tenant audit integration; governed-batch/knowledge-position portion of #176 |
+| Spray-register PassportView readiness guard | Reviewed reason-code governance supplying an exact registered low-consequence code; M3.6 must then pin that code and response before implementation |
 | M3.1 output exposure | The centralized M3.6 `OutputGenerator` guard and its route/direct-call regression tests; output helpers stay out of M3.1 until this exists |
 | M3.3–M3.5 temporal behavior | Applicable #176 valid-time carrier and governed replacement-set behavior |
 | Spray-register PassportView success | #176 current-read dual cuts; versioned stable content-qualification and release surfaces; #177, #181, and #182 as applicable |
@@ -243,6 +256,9 @@ Each slice should be a narrow PR with: goal, touched files, forbidden files, beh
 Allowed change:
 
 - Add `M3_BRIEF.md` and `M3_TICKETS.md`.
+- Correct `reference/REFERENCE_MANIFEST.json` metadata to name
+  `samovers/OFARM` as canonical authority; no extracted reference content or
+  digest entry changes.
 - Record the current M2/MP7/E-006 boundaries.
 - Run the baseline checks and record whether they pass.
 
@@ -360,19 +376,20 @@ Stop if:
 
 - “review” becomes a UI flag without `ReviewDecision`, authority trace, and PromotionTrace linkage.
 
-### M3.6 — Centralized output guards and governed refusals
+### M3.6 — Centralized output-readiness guards
 
 Allowed change:
 
 - Add one shared `OutputGenerator` guard before blocked query, materialization,
   qualification, assembly, persistence, or release work.
-- For `view:si.ffs.spray-register.passportview.v0_1`, return the registered
-  `HIGH_CONSEQUENCE_BLOCKED` RuntimeProblem in the existing refusal shape while
-  NOW/current-read dual-cut and qualification/release prerequisites are absent.
+- Keep `view:si.ffs.spray-register.passportview.v0_1` unexposed until reviewed
+  reason-code governance supplies the exact registered low-consequence
+  readiness code. Amend M3.6 to pin that accepted code/response before adding
+  the NOW/current-read guard.
 - For `view:si.ffs.inspection-register.documentassembly.v0_1`, refuse freeze
-  with the same registered code and response shape before publication state is
-  written, while the additional WINDOW carrier/meaning/date and SI artifact
-  prerequisites are absent.
+  nondurably with registered code `HIGH_CONSEQUENCE_BLOCKED` before a governed
+  publication operation or any publication state begins, while the additional
+  WINDOW carrier/meaning/date and SI artifact prerequisites are absent.
 - Do not expose release. A future denied release records its denial receipt at
   `Kreceipt` but emits no wrapper, enqueue, handoff, or bytes.
 
@@ -380,13 +397,17 @@ Required proof:
 
 - The M3 façade, both existing `/views/**` routes, and direct `OutputGenerator`
   calls all reach the same guard.
-- PassportView refusal does not execute its NOW query, materialize, qualify, or
-  render and does not claim the DocumentAssembly WINDOW defect.
-- Freeze refusal creates no publication request/result, DocumentAssembly,
+- PassportView is unavailable until the reason-code predecessor lands; after
+  M3.6 pins it, the readiness refusal does not execute its NOW query,
+  materialize, qualify, or render and does not claim the DocumentAssembly
+  WINDOW defect.
+- Freeze readiness refusal creates no publication request/result, governed
+  tenant refusal trace/receipt, DocumentAssembly,
   frozen-artifact receipt, qualification, export artifact, published reference,
   wrapper, enqueue, or bytes.
-- The exact response is `{"refused": true, "problem": <RuntimeProblem with
-  reasonCode HIGH_CONSEQUENCE_BLOCKED>, "qualification": null}`.
+- The freeze response is `{"refused": true, "problem": <RuntimeProblem with
+  reasonCode HIGH_CONSEQUENCE_BLOCKED>, "qualification": null}` and is labeled
+  nondurable readiness evidence, never a governed publication refusal.
 - No release surface exists. A later release-denial test must prove its denial
   decision/receipt commits at `Kreceipt` while delivery side effects remain absent.
 
@@ -394,8 +415,11 @@ Stop if:
 
 - the output UI renders a clean register when the governed output path refuses or qualifies it.
 - an endpoint or direct service call can bypass the centralized guard.
-- freeze refusal and release denial are represented as the same operation or
-  M3 invents an unregistered reason code.
+- a readiness refusal is described as a governed tenant/publication refusal or
+  publication-gate evidence.
+- freeze refusal and release denial are represented as the same operation,
+  PassportView reuses `HIGH_CONSEQUENCE_BLOCKED`, or M3 invents an unregistered
+  reason code.
 
 ### M3.7 — End-to-end MVP scenario runner
 
@@ -409,8 +433,8 @@ Required scenarios:
 1. Bootstrap fictional farm and cache refs.
 2. Capture routine spray offline.
 3. Sync and self-review to accepted.
-4. Request the live spray-register PassportView and receive the centralized `HIGH_CONSEQUENCE_BLOCKED` refusal without executing its NOW/current-read or qualification path.
-5. Request inspection-register DocumentAssembly freeze and receive the centralized `HIGH_CONSEQUENCE_BLOCKED` refusal before its WINDOW/materialization/publication path, with no partial output state or bytes.
+4. Confirm the live spray-register PassportView remains unexposed until its exact registered readiness code is governed; once pinned, request it and verify the centralized nondurable readiness refusal executes no NOW/current-read or qualification path.
+5. Request inspection-register DocumentAssembly freeze and receive the centralized nondurable `HIGH_CONSEQUENCE_BLOCKED` readiness refusal before its WINDOW/materialization/publication path, with no governed publication-refusal evidence, partial output state, or bytes.
 6. Replay same idempotency key without duplicate truth.
 7. Revoked worker sync refuses or routes governably.
 8. Product binding mismatch raises warning/review without creating a compliance fact.
@@ -455,7 +479,7 @@ Stop if:
 | M3-T06 | Reference snapshot drift | Sync re-verifies against current snapshot and records discrepancy/review/warning, not silent accept. |
 | M3-T07 | Revoked delegation | Worker’s offline draft synced after revocation denies or routes governably. |
 | M3-T08 | Advisory boundary | Warning visible; no Advisory material enters Compliance materialization. |
-| M3-T09 | Centralized blocked outputs | Spray-register PassportView and inspection-register freeze return the exact `HIGH_CONSEQUENCE_BLOCKED` refusal through façade, existing routes, and direct service calls; no blocked work or partial output state executes. Release is not exposed. |
+| M3-T09 | Centralized blocked outputs | PassportView stays unexposed pending exact reason-code governance; once pinned, its low-consequence readiness refusal and the freeze-only `HIGH_CONSEQUENCE_BLOCKED` readiness refusal work through façade, existing routes, and direct service calls. Neither is claimed as governed publication evidence; release is not exposed. |
 | M3-T10 | Privacy audit | Fixtures and run records contain fictional, format-true data only. |
 | M3-T11 | No direct projection writes | Tests prove UI/API cannot write authoritative facts into derived tables/caches. |
 | M3-T12 | Claim honesty | Docs, UI labels, manifests, and evidence files do not claim production/current-compliance/certification readiness. |
@@ -535,6 +559,9 @@ Goal:
 
 - Add this brief as `M3_BRIEF.md`.
 - Add `M3_TICKETS.md` with the ordered M3.0–M3.8 ticket stubs.
+- Correct only the canonical-repository name in
+  `reference/REFERENCE_MANIFEST.json`; do not alter reference content or entry
+  provenance.
 - Record the E-006 default posture: M3 displays warning result problems only; durable Advisory Twin output remains deferred unless a separate implementation slice resolves it.
 
 Validation:
