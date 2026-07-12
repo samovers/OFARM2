@@ -3291,6 +3291,16 @@
       "sourcePath": "kernel/tests/test_schema_guard.py"
     },
     {
+      "nodeid": "kernel/tests/test_schema_guard.py::test_catalog_lock_contention_releases_partial_locks_before_retry",
+      "sourceModule": "kernel.tests.test_schema_guard",
+      "sourcePath": "kernel/tests/test_schema_guard.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_schema_guard.py::test_catalog_lock_contention_remains_fail_closed",
+      "sourceModule": "kernel.tests.test_schema_guard",
+      "sourcePath": "kernel/tests/test_schema_guard.py"
+    },
+    {
       "nodeid": "kernel/tests/test_schema_guard.py::test_cross_schema_inheritance_cannot_inject_governed_rows",
       "sourceModule": "kernel.tests.test_schema_guard",
       "sourcePath": "kernel/tests/test_schema_guard.py"
@@ -3401,8 +3411,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "b5a5882c7980bbab2a7007073700a4f3635f538b31010fda29b0618c9d3ee851",
-  "entryCount": 680,
+  "entriesSha256": "3550ea477926ee40d9f3fbc71ba09785cc462cf7252049dd3387b85a292efe9f",
+  "entryCount": 682,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

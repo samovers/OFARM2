@@ -22,6 +22,60 @@ from kernel.store import Store
 from kernel.tests.conftest import _admin_dsn
 
 
+class _CatalogLockCursor:
+    def __init__(self, failures: int):
+        self.connection = type("Connection", (), {
+            "info": type("Info", (), {
+                "transaction_status": psycopg.pq.TransactionStatus.INTRANS,
+            })(),
+        })()
+        self.failures = failures
+        self.lock_attempts = 0
+        self.queries = []
+        self._row = None
+
+    def execute(self, query, params=None):
+        self.queries.append((query, params))
+        if query.startswith("SELECT pg_catalog.pg_my_temp_schema"):
+            self._row = {"temp_schema_oid": 0}
+        elif query.startswith("LOCK TABLE"):
+            self.lock_attempts += 1
+            if self.lock_attempts <= self.failures:
+                raise psycopg.errors.LockNotAvailable("catalog is busy")
+        return self
+
+    def fetchone(self):
+        return self._row
+
+
+def test_catalog_lock_contention_releases_partial_locks_before_retry(monkeypatch):
+    cursor = _CatalogLockCursor(failures=1)
+    delays = []
+    monkeypatch.setattr(schema_guard.time, "sleep", delays.append)
+
+    schema_guard.hold_fingerprint_catalog_locks(cursor)
+
+    statements = [query for query, _params in cursor.queries]
+    assert cursor.lock_attempts == 2
+    assert delays == [schema_guard._CATALOG_LOCK_RETRY_DELAY_SECONDS]
+    assert all(statement.endswith("NOWAIT") for statement in statements
+               if statement.startswith("LOCK TABLE"))
+    assert statements.count(
+        f"ROLLBACK TO SAVEPOINT {schema_guard._CATALOG_LOCK_SAVEPOINT}") == 1
+    assert statements.count(
+        f"RELEASE SAVEPOINT {schema_guard._CATALOG_LOCK_SAVEPOINT}") == 2
+
+
+def test_catalog_lock_contention_remains_fail_closed(monkeypatch):
+    cursor = _CatalogLockCursor(failures=2)
+    monkeypatch.setattr(schema_guard, "_CATALOG_LOCK_ATTEMPTS", 2)
+    monkeypatch.setattr(schema_guard.time, "sleep", lambda _delay: None)
+
+    with pytest.raises(SchemaGuardError, match="catalogs remained busy"):
+        schema_guard.hold_fingerprint_catalog_locks(cursor)
+    assert cursor.lock_attempts == 2
+
+
 @contextmanager
 def _isolated_database(label: str):
     dbname = f"ofarm_{label}_{uuid.uuid4().hex[:10]}"

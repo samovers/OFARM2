@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -49,6 +50,9 @@ _SCHEMA_TRANSACTION_SETTINGS = (
     ("extra_float_digits", "1"),
     ("bytea_output", "hex"),
 )
+_CATALOG_LOCK_ATTEMPTS = 100
+_CATALOG_LOCK_RETRY_DELAY_SECONDS = 0.01
+_CATALOG_LOCK_SAVEPOINT = "ofarm_catalog_lock_attempt"
 _FINGERPRINT_CATALOGS = (
     "pg_aggregate",
     "pg_am",
@@ -210,13 +214,40 @@ def hold_fingerprint_catalog_locks(cur) -> None:
             "schema catalog locks require one active PostgreSQL transaction")
     qualified = ", ".join(
         f"pg_catalog.{name}" for name in _FINGERPRINT_CATALOGS)
-    try:
-        cur.execute(f"LOCK TABLE {qualified} IN SHARE MODE")
-    except psycopg.Error as exc:
-        raise SchemaGuardError(
-            "cannot lock PostgreSQL catalogs against concurrent DDL; exact schema "
-            "installation or governed runtime use is forbidden"
-        ) from exc
+    lock_sql = f"LOCK TABLE {qualified} IN SHARE MODE NOWAIT"
+    last_contention = None
+    for attempt in range(_CATALOG_LOCK_ATTEMPTS):
+        cur.execute(f"SAVEPOINT {_CATALOG_LOCK_SAVEPOINT}")
+        try:
+            cur.execute(lock_sql)
+        except psycopg.errors.LockNotAvailable as exc:
+            # One multi-relation LOCK can acquire an earlier catalog before a
+            # later catalog is found busy. Rolling back the savepoint releases
+            # that partial prefix, so retrying cannot deadlock with autovacuum's
+            # own target-catalog -> dependency-catalog lock order.
+            cur.execute(f"ROLLBACK TO SAVEPOINT {_CATALOG_LOCK_SAVEPOINT}")
+            cur.execute(f"RELEASE SAVEPOINT {_CATALOG_LOCK_SAVEPOINT}")
+            last_contention = exc
+            if attempt + 1 < _CATALOG_LOCK_ATTEMPTS:
+                time.sleep(_CATALOG_LOCK_RETRY_DELAY_SECONDS)
+                continue
+        except psycopg.Error as exc:
+            cur.execute(f"ROLLBACK TO SAVEPOINT {_CATALOG_LOCK_SAVEPOINT}")
+            cur.execute(f"RELEASE SAVEPOINT {_CATALOG_LOCK_SAVEPOINT}")
+            raise SchemaGuardError(
+                "cannot lock PostgreSQL catalogs against concurrent DDL; exact "
+                "schema installation or governed runtime use is forbidden"
+            ) from exc
+        else:
+            # Explicit relation locks acquired inside a savepoint remain held
+            # by the outer transaction after RELEASE and therefore cover the
+            # fingerprint plus the complete governed decision body.
+            cur.execute(f"RELEASE SAVEPOINT {_CATALOG_LOCK_SAVEPOINT}")
+            return
+    raise SchemaGuardError(
+        "PostgreSQL catalogs remained busy while excluding concurrent DDL; exact "
+        "schema installation or governed runtime use is forbidden"
+    ) from last_contention
 
 
 def verify_static_runtime_catalog(package_root: Path) -> VerifiedStaticSchema:
