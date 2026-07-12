@@ -67,16 +67,71 @@ def _assert_portable_json(value, path: str = "<root>") -> None:
     raise ValueError(f"{path} contains unsupported JSON value {type(value).__name__}")
 
 
+def _has_exact_builtin_json_types(value) -> bool:
+    """Recognize the ordinary JSON tree without constructing error paths.
+
+    Cycles are left for ``json.dumps`` and the strict diagnostic fallback to
+    reject.  Subclasses deliberately take the fallback too, preserving their
+    established validation and serialization behavior exactly.
+    """
+    pending = [value]
+    visited_containers: dict[int, object] = {}
+    while pending:
+        item = pending.pop()
+        item_type = type(item)
+        if (item is None
+                or item_type is str
+                or item_type is bool
+                or item_type is int
+                or item_type is float):
+            continue
+        if item_type is list:
+            marker = id(item)
+            if marker not in visited_containers:
+                visited_containers[marker] = item
+                pending.extend(item)
+            continue
+        if item_type is dict:
+            marker = id(item)
+            if marker in visited_containers:
+                continue
+            visited_containers[marker] = item
+            for key, nested in item.items():
+                if type(key) is not str:
+                    return False
+                pending.append(nested)
+            continue
+        return False
+    return True
+
+
 def canonical_json(payload: dict) -> str:
     """Strict UTF-8-portable deterministic serialization used for digests."""
-    _assert_portable_json(payload)
-    return json.dumps(
-        payload,
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
-        allow_nan=False,
-    )
+    if not _has_exact_builtin_json_types(payload):
+        _assert_portable_json(payload)
+        return json.dumps(
+            payload,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        )
+
+    try:
+        rendered = json.dumps(
+            payload,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        )
+        rendered.encode("utf-8", errors="strict")
+    except (TypeError, ValueError, RecursionError):
+        # Preserve the existing path-specific exception type and message for
+        # non-finite numbers, surrogates, cycles, and concurrent mutation.
+        _assert_portable_json(payload)
+        raise
+    return rendered
 
 
 def sha256_of(payload: dict) -> str:

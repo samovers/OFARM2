@@ -26,7 +26,7 @@ import pytest
 import pydantic.v1 as pydantic_v1
 from fastapi.testclient import TestClient
 
-from kernel import config, context, demo, sufficiency
+from kernel import config, context, contracts as contracts_module, demo, sufficiency
 from kernel.api import create_app
 from kernel.contracts import canonical_json, sha256_of
 from kernel.runtime_bundle import sha256_bytes
@@ -70,6 +70,84 @@ def accepted_spray(pipeline, **kwargs):
     sub = demo.spray_submission(f"device-demo-1:q-{uid()}",
                                 erp_id=f"erp:demo.spray.{uid()}", **kwargs)
     return pipeline.commit(sub)
+
+
+def test_00a_canonical_json_exact_builtin_fast_path(monkeypatch):
+    def unexpected_fallback(_value, _path="<root>"):
+        raise AssertionError("exact built-in JSON unexpectedly used the slow path")
+
+    monkeypatch.setattr(
+        contracts_module, "_assert_portable_json", unexpected_fallback)
+
+    shared = ["retained once", {"accent": "é"}]
+    assert canonical_json({
+        "z": [1, True, None, "ž"],
+        "a": {"b": -0.0},
+        "left": shared,
+        "right": shared,
+    }) == (
+        '{"a":{"b":-0.0},'
+        '"left":["retained once",{"accent":"é"}],'
+        '"right":["retained once",{"accent":"é"}],'
+        '"z":[1,true,null,"ž"]}'
+    )
+
+
+def test_00b_canonical_json_fast_path_matches_strict_fallback():
+    class StringSubclass(str):
+        pass
+
+    class IntegerSubclass(int):
+        pass
+
+    class ListSubclass(list):
+        pass
+
+    class DictSubclass(dict):
+        pass
+
+    def strict_reference(payload):
+        contracts_module._assert_portable_json(payload)
+        return json.dumps(
+            payload,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        )
+
+    def outcome(serializer, payload):
+        try:
+            return "RETURN", serializer(payload)
+        except Exception as exc:  # noqa: BLE001 - exact behavior is the assertion.
+            return type(exc), str(exc)
+
+    list_cycle = []
+    list_cycle.append(list_cycle)
+    dict_cycle = {}
+    dict_cycle["self"] = dict_cycle
+    corpus = [
+        {"nested": [None, False, 7, -0.0, "é", {"x": "漢字"}]},
+        DictSubclass({
+            StringSubclass("items"): ListSubclass([IntegerSubclass(4)]),
+        }),
+        {"bad": float("nan")},
+        {"bad": float("inf")},
+        {"bad": float("-inf")},
+        {1: "non-string key"},
+        {"bad": (1, 2)},
+        {"bad": {1, 2}},
+        {"bad": b"bytes"},
+        {"bad": object()},
+        {"bad": "\ud800"},
+        {"\ud800": "bad key"},
+        list_cycle,
+        dict_cycle,
+    ]
+
+    for payload in corpus:
+        assert outcome(canonical_json, payload) == \
+            outcome(strict_reference, payload)
 
 
 # =========================================================================

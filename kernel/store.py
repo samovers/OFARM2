@@ -15,6 +15,7 @@ enforces the storage posture:
 """
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import re
@@ -23,7 +24,7 @@ import types
 from contextlib import contextmanager
 
 import psycopg
-from psycopg.adapt import AdaptersMap
+from psycopg.adapt import AdaptersMap, PyFormat
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
@@ -45,11 +46,93 @@ from .schema_guard import (
     verify_static_runtime_catalog,
 )
 
+_PSYCOPG_ADAPTER_MAP_FIELDS = frozenset({
+    "_dumpers", "_own_dumpers", "_dumpers_by_oid",
+    "_own_dumpers_by_oid", "_loaders", "_own_loaders", "types",
+})
+
+
+def _detached_psycopg_adapter_context(template: AdaptersMap) -> AdaptersMap:
+    """Return an exact, structurally independent Psycopg adapter context.
+
+    Psycopg's supported ``AdaptersMap(template)`` copy is intentionally
+    copy-on-write. Its nested dumper maps remain shared, and lazy resolution of
+    a string registration such as ``"datetime.datetime"`` rewrites that shared
+    map in place. A retained decision root and a live connection must not share
+    such mutable state, so both boundaries use a full structural copy.
+    """
+
+    def state(value: object) -> dict:
+        if type(value) is not AdaptersMap:
+            raise RuntimeError("Psycopg adapter context has an unexpected type")
+        fields = vars(value)
+        if set(fields) != _PSYCOPG_ADAPTER_MAP_FIELDS:
+            raise RuntimeError("Psycopg adapter context has an unexpected shape")
+        if (type(fields["_dumpers"]) is not dict
+                or set(fields["_dumpers"]) != set(PyFormat)
+                or any(type(item) is not dict
+                       for item in fields["_dumpers"].values())
+                or type(fields["_own_dumpers"]) is not dict
+                or set(fields["_own_dumpers"]) != set(PyFormat)
+                or any(type(item) is not bool
+                       for item in fields["_own_dumpers"].values())
+                or any(
+                    type(fields[name]) is not list
+                    or len(fields[name]) != 2
+                    for name in (
+                        "_dumpers_by_oid", "_own_dumpers_by_oid",
+                        "_loaders", "_own_loaders",
+                    )
+                )
+                or any(type(item) is not dict for name in (
+                    "_dumpers_by_oid", "_loaders",
+                ) for item in fields[name])
+                or any(type(item) is not bool for name in (
+                    "_own_dumpers_by_oid", "_own_loaders",
+                ) for item in fields[name])
+                or not hasattr(fields["types"], "__dict__")
+                or set(vars(fields["types"])) != {"_registry", "_own_state"}
+                or type(vars(fields["types"])["_registry"]) is not dict
+                or type(vars(fields["types"])["_own_state"]) is not bool):
+            raise RuntimeError("Psycopg adapter context state is malformed")
+        return fields
+
+    source = state(template)
+    detached = copy.deepcopy(template)
+    selected = state(detached)
+    mapping_fields = (
+        "_dumpers", "_own_dumpers", "_dumpers_by_oid",
+        "_own_dumpers_by_oid", "_loaders", "_own_loaders",
+    )
+    if (detached is template
+            or any(selected[name] is source[name] for name in mapping_fields)
+            or any(selected[name] != source[name] for name in mapping_fields)
+            or any(
+                selected["_dumpers"][fmt] is source["_dumpers"][fmt]
+                for fmt in PyFormat
+            )
+            or any(
+                selected[container][index] is source[container][index]
+                for container in ("_dumpers_by_oid", "_loaders")
+                for index in range(2)
+            )
+            or selected["types"] is source["types"]
+            or vars(selected["types"])["_registry"] is
+            vars(source["types"])["_registry"]
+            or set(vars(selected["types"])["_registry"]) !=
+            set(vars(source["types"])["_registry"])):
+        raise RuntimeError(
+            "Psycopg adapter context was not copied exactly and independently")
+    return detached
+
+
 # A clean, private copy of Psycopg's adapter registry is selected at reviewed
-# module import. Connections copy this context instead of the mutable public
-# ``psycopg.adapters`` map, so an application-registered Dumper/Loader cannot
-# receive the raw Connection during parameter adaptation.
-_RETAINED_PSYCOPG_ADAPTERS = AdaptersMap(psycopg.adapters)
+# module import. Each connection receives another detached copy, so neither
+# public registration nor Psycopg's lazy string-to-class resolution can mutate
+# this retained decision root or expose the raw Connection to an injected
+# Dumper/Loader.
+_RETAINED_PSYCOPG_ADAPTERS = \
+    _detached_psycopg_adapter_context(psycopg.adapters)
 
 # Single-writer advisory-lock key (M2 G2): a stable signed-64-bit derived from
 # the tenant ref. Every governed WRITE entry point (user commit + scheduled
@@ -1099,7 +1182,8 @@ class Store:
                     self.dsn,
                     row_factory=dict_row,
                     autocommit=True,
-                    context=_RETAINED_PSYCOPG_ADAPTERS,
+                    context=_detached_psycopg_adapter_context(
+                        _RETAINED_PSYCOPG_ADAPTERS),
                 )
             return self._conn
 

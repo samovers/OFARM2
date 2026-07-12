@@ -14,12 +14,14 @@ import types
 import uuid
 from contextlib import contextmanager
 from dataclasses import replace
-from pathlib import Path
+from datetime import datetime
+from pathlib import Path, PurePosixPath
 
 import pytest
 import psycopg
 import psycopg.conninfo
 from psycopg import sql
+from psycopg.adapt import AdaptersMap, PyFormat
 from psycopg.types.json import Jsonb
 
 from kernel import config, context, demo
@@ -43,13 +45,18 @@ from kernel.runtime_bundle import (
     RuntimeBundle,
     RuntimeBundleError,
     RuntimeComponent,
+    _C0_CONTROL_RE,
     _build_live_runtime_bundle,
     _capture_decision_semantics,
+    _inventory_contains_path,
+    _join_stable_locator,
     _locked_components,
     _require_decision_semantics,
     _require_runtime_bundle_integrity,
     _require_runtime_environment_seal_integrity,
+    _retained_locator_ancestor_index,
     _runtime_environment_component_from_document,
+    _stable_locator_parts,
     _stable_runtime_environment_document,
     _validate_stable_runtime_environment_document,
     assert_runtime_environment_compatible,
@@ -765,6 +772,57 @@ def test_stable_runtime_identity_excludes_host_paths_and_inodes(monkeypatch):
         with pytest.raises(RuntimeBundleError, match="native runtime inventory"):
             _validate_stable_runtime_environment_document(
                 missing_native, retained_components)
+
+
+def test_stable_locator_c0_control_check_is_exact():
+    matched_codepoints = {
+        codepoint
+        for codepoint in range(sys.maxunicode + 1)
+        if _C0_CONTROL_RE.search(f"safe{chr(codepoint)}suffix") is not None
+    }
+
+    assert matched_codepoints == set(range(32))
+    for codepoint in range(32):
+        relative = f"safe{chr(codepoint)}suffix"
+        with pytest.raises(RuntimeBundleError, match="unsafe relative locator"):
+            _join_stable_locator("PROJECT_ROOT", PurePosixPath(relative))
+        assert _stable_locator_parts(f"PROJECT_ROOT/{relative}") is None
+
+    for character in ("\x7f", "\x85", "\u2028", "\ud800"):
+        relative = f"safe{character}suffix"
+        locator = f"PROJECT_ROOT/{relative}"
+        assert _join_stable_locator(
+            "PROJECT_ROOT", PurePosixPath(relative)) == locator
+        assert _stable_locator_parts(locator) == ("PROJECT_ROOT", relative)
+
+
+def test_stable_locator_inventory_index_preserves_ancestor_boundaries():
+    standard_root = f"PINNED_IMAGE_ROOT[sha256:{'a' * 64}]"
+    wheel_root = f"LOCKED_WHEEL_ROOT[sha256:{'b' * 64}]"
+    missing_root = f"LOCKED_WHEEL_ROOT[sha256:{'c' * 64}]"
+    inventory = {
+        f"{standard_root}/lib/python3.12/pkg/module.py": object(),
+        f"{standard_root}/lib/python3.12/pkg/sub/other.py": object(),
+        f"{standard_root}/lib/python3.12/pkgish/sibling.py": object(),
+        f"{standard_root}/unsafe/../ignored.py": object(),
+        f"{wheel_root}/example/__init__.py": object(),
+    }
+    index = _retained_locator_ancestor_index(inventory)
+
+    for retained in inventory:
+        if "/../" not in retained:
+            assert _inventory_contains_path(retained, index)
+    assert _inventory_contains_path(standard_root, index)
+    assert _inventory_contains_path(f"{standard_root}/lib", index)
+    assert _inventory_contains_path(
+        f"{standard_root}/lib/python3.12/pkg/sub", index)
+    assert not _inventory_contains_path(
+        f"{standard_root}/lib/python3.12/pk", index)
+    assert not _inventory_contains_path(
+        f"{standard_root}/lib/python3.12/pkg/sibling", index)
+    assert not _inventory_contains_path(f"{standard_root}/unsafe", index)
+    assert not _inventory_contains_path(f"{missing_root}/example", index)
+    assert not _inventory_contains_path("not-a-stable-locator", index)
 
 
 def test_selection_to_activation_refuses_fake_retained_origin_module():
@@ -2919,6 +2977,14 @@ def test_preselection_method_mutation_changes_semantic_receipt():
 
 def test_decision_semantic_seal_is_self_consistent_without_mutation():
     selected = _capture_decision_semantics()
+    control_pattern = next(
+        entry for entry in selected
+        if entry[1] == "kernel.runtime_bundle._C0_CONTROL_RE"
+    )
+
+    assert control_pattern[5] is _C0_CONTROL_RE
+    assert control_pattern[6][0] == "DATA"
+    assert control_pattern[6][1][0] == "REGEX"
     _require_decision_semantics(selected)
 
 
@@ -3094,6 +3160,35 @@ def test_retained_psycopg_adapter_class_mutation_is_in_semantic_closure():
             _require_decision_semantics(selected)
     finally:
         psycopg_json._JsonDumper.dump.__code__ = original_code
+
+
+def test_retained_psycopg_adapters_survive_lazy_connection_resolution():
+    from kernel.store import (
+        _RETAINED_PSYCOPG_ADAPTERS,
+        _detached_psycopg_adapter_context,
+    )
+
+    public_auto = vars(psycopg.adapters)["_dumpers"][PyFormat.AUTO]
+    retained_auto = vars(
+        _RETAINED_PSYCOPG_ADAPTERS)["_dumpers"][PyFormat.AUTO]
+    assert retained_auto is not public_auto
+    assert "datetime.datetime" in retained_auto
+    assert datetime not in retained_auto
+
+    selected = _capture_decision_semantics()
+    connection_context = _detached_psycopg_adapter_context(
+        _RETAINED_PSYCOPG_ADAPTERS)
+    connection_adapters = AdaptersMap(connection_context)
+    cursor_adapters = AdaptersMap(connection_adapters)
+    transient_auto = vars(cursor_adapters)["_dumpers"][PyFormat.AUTO]
+
+    assert transient_auto is not retained_auto
+    dumper = cursor_adapters.get_dumper(datetime, PyFormat.AUTO)
+    assert dumper is transient_auto[datetime]
+    assert "datetime.datetime" not in transient_auto
+    assert "datetime.datetime" in retained_auto
+    assert datetime not in retained_auto
+    _require_decision_semantics(selected)
 
 
 def test_unbound_dynamic_psycopg_adapter_class_is_in_semantic_closure():

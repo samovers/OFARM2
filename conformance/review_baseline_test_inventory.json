@@ -1,6 +1,16 @@
 {
   "entries": [
     {
+      "nodeid": "kernel/tests/test_conformance.py::test_00a_canonical_json_exact_builtin_fast_path",
+      "sourceModule": "kernel.tests.test_conformance",
+      "sourcePath": "kernel/tests/test_conformance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_conformance.py::test_00b_canonical_json_fast_path_matches_strict_fallback",
+      "sourceModule": "kernel.tests.test_conformance",
+      "sourcePath": "kernel/tests/test_conformance.py"
+    },
+    {
       "nodeid": "kernel/tests/test_conformance.py::test_01_append_only",
       "sourceModule": "kernel.tests.test_conformance",
       "sourcePath": "kernel/tests/test_conformance.py"
@@ -3251,6 +3261,11 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_retained_psycopg_adapters_survive_lazy_connection_resolution",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_runtime_bundle_active_artifact_ref_must_resolve_exactly",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
@@ -3661,6 +3676,16 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_stable_locator_c0_control_check_is_exact",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_stable_locator_inventory_index_preserves_ancestor_boundaries",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_stable_runtime_identity_excludes_host_paths_and_inodes",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
@@ -3896,8 +3921,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "1b58bf8837f39dc2907d6c55f9e3a752da0cdb7e692e06d4bd25d6ddeebdedf4",
-  "entryCount": 779,
+  "entriesSha256": "5128531fb4f21abe2cd99786e7338b068e2b575391988a6b3d90cadf89971034",
+  "entryCount": 784,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

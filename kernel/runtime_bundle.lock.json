@@ -750,7 +750,7 @@
       "logicalRef": "python:kernel/contracts.py",
       "path": "kernel/contracts.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:9fce5bea18b4997a6326bcf16cf9a5f3610691f4b9a706443fabe8670386e692",
+      "sha256": "sha256:e2a6e721bab83d0eea70c551162dfc78098873e6bfa146ef45f7318f16562443",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -870,7 +870,7 @@
       "logicalRef": "python:kernel/runtime_bundle.py",
       "path": "kernel/runtime_bundle.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:d474f0c492cd5cf9ea2594f4530efb2fc9f796d6b452b40c0385df27ded4ca00",
+      "sha256": "sha256:32edad9b03b05284809bc114205581121bc6a2557e375484941408cd0efee264",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -894,7 +894,7 @@
       "logicalRef": "python:kernel/store.py",
       "path": "kernel/store.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:095b24257320ed9d475182c7b9386b552f67c04aa6f98ea3556823886ea6e9d8",
+      "sha256": "sha256:23e225f002bb934dde13381c5eb25476e30cca3da5cff4c454d322acc318769a",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {

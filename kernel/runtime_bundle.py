@@ -3946,6 +3946,7 @@ _STABLE_LOCATOR_RE = re.compile(
     r"PINNED_IMAGE_ROOT\[sha256:[0-9a-f]{64}\])"
     r"(?P<suffix>(?:/[^/\\\x00]+)*)$"
 )
+_C0_CONTROL_RE = re.compile(r"[\x00-\x1f]")
 
 
 def _stable_root_locator(kind: str, identity: dict[str, Any]) -> str:
@@ -3959,7 +3960,7 @@ def _join_stable_locator(root: str, relative: PurePosixPath) -> str:
     if (relative.is_absolute()
             or any(part in {"", ".", ".."}
                    or "\\" in part
-                   or any(ord(character) < 32 for character in part)
+                   or _C0_CONTROL_RE.search(part) is not None
                    for part in relative.parts)):
         raise RuntimeBundleError(
             f"runtime identity has an unsafe relative locator: {relative!s}")
@@ -3975,10 +3976,36 @@ def _stable_locator_parts(locator: object) -> tuple[str, str] | None:
     suffix = match.group("suffix")
     parts = suffix[1:].split("/") if suffix else []
     if any(part in {"", ".", ".."}
-           or any(ord(character) < 32 for character in part)
+           or _C0_CONTROL_RE.search(part) is not None
            for part in parts):
         return None
     return match.group("root"), suffix[1:] if suffix else ""
+
+
+def _retained_locator_ancestor_index(
+        inventory: Mapping[str, object],
+) -> frozenset[tuple[str, str]]:
+    """Index exact retained files and every segment-boundary ancestor."""
+    ancestors: set[tuple[str, str]] = set()
+    for retained in inventory:
+        parts = _stable_locator_parts(retained)
+        if parts is None:
+            continue
+        root, suffix = parts
+        segments = suffix.split("/") if suffix else []
+        ancestors.update(
+            (root, "/".join(segments[:index]))
+            for index in range(1, len(segments) + 1)
+        )
+    return frozenset(ancestors)
+
+
+def _inventory_contains_path(
+        value: str,
+        ancestor_index: frozenset[tuple[str, str]],
+) -> bool:
+    parts = _stable_locator_parts(value)
+    return parts is not None and (not parts[1] or parts in ancestor_index)
 
 
 def _stable_locator_root(locator: object) -> str | None:
@@ -4312,7 +4339,7 @@ def _validate_stable_runtime_environment_document(
 
     def relative_identity(value: Any) -> bool:
         if (not nonempty_text(value) or "\\" in value
-                or any(ord(character) < 32 for character in value)):
+                or _C0_CONTROL_RE.search(value) is not None):
             return False
         path = PurePosixPath(value)
         return (not path.is_absolute()
@@ -4987,26 +5014,10 @@ def _validate_stable_runtime_environment_document(
         "PROJECT_ROOT", "PINNED_IMAGE_ROOTFS",
         *distribution_roots, *standard_roots, *standalone_files,
     }
-
-    def inventory_contains_path(
-            value: str,
-            inventory: Mapping[str, object],
-    ) -> bool:
-        parts = _stable_locator_parts(value)
-        if parts is None:
-            return False
-        root, suffix = parts
-        if not suffix:
-            return True
-        for retained in inventory:
-            retained_parts = _stable_locator_parts(retained)
-            if retained_parts is None or retained_parts[0] != root:
-                continue
-            retained_suffix = retained_parts[1]
-            if retained_suffix == suffix \
-                    or retained_suffix.startswith(suffix + "/"):
-                return True
-        return False
+    distribution_locator_ancestors = _retained_locator_ancestor_index(
+        distribution_files)
+    standard_locator_ancestors = _retained_locator_ancestor_index(
+        standard_files)
 
     for item in locators:
         parts = _stable_locator_parts(item)
@@ -5014,10 +5025,12 @@ def _validate_stable_runtime_environment_document(
             malformed("locator closure")
         root = parts[0]
         if (root in distribution_roots
-                and not inventory_contains_path(item, distribution_files)):
+                and not _inventory_contains_path(
+                    item, distribution_locator_ancestors)):
             malformed("distribution locator inventory closure")
         if (root in standard_roots
-                and not inventory_contains_path(item, standard_files)):
+                and not _inventory_contains_path(
+                    item, standard_locator_ancestors)):
             malformed("standard runtime locator inventory closure")
         if (root == "PINNED_IMAGE_ROOTFS"
                 and item not in manifest_rootfs_files

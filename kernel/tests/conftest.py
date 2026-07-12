@@ -9,10 +9,13 @@ from __future__ import annotations
 
 import json
 import os
+import uuid
 from datetime import datetime, timezone
 
 import psycopg
+import psycopg.conninfo
 import pytest
+from psycopg import sql
 
 os.environ.setdefault("OFARM_PG_DBNAME", "ofarm_kernel_test")
 
@@ -43,6 +46,35 @@ def _admin_dsn() -> str:
     return f"host={socket_dir} port={port} dbname=postgres user={user}"
 
 
+def _database_dsn(dbname: str) -> str:
+    """Derive one isolated database route from the verified admin route."""
+    params = psycopg.conninfo.conninfo_to_dict(_admin_dsn())
+    params["dbname"] = dbname
+    return psycopg.conninfo.make_conninfo(**params)
+
+
+def _create_database(dbname: str, *, template: str | None = None) -> None:
+    with psycopg.connect(_admin_dsn(), autocommit=True) as admin:
+        statement = sql.SQL("CREATE DATABASE {}").format(sql.Identifier(dbname))
+        if template is not None:
+            statement += sql.SQL(" TEMPLATE {}").format(sql.Identifier(template))
+        admin.execute(statement)
+
+
+def _drop_database(dbname: str) -> None:
+    """Remove an isolated database even if a failed test leaked a connection."""
+    with psycopg.connect(_admin_dsn(), autocommit=True) as admin:
+        admin.execute(
+            "SELECT pg_catalog.pg_terminate_backend(pid) "
+            "FROM pg_catalog.pg_stat_activity "
+            "WHERE datname = %s AND pid <> pg_catalog.pg_backend_pid()",
+            (dbname,),
+        )
+        admin.execute(
+            sql.SQL("DROP DATABASE IF EXISTS {}").format(sql.Identifier(dbname))
+        )
+
+
 @pytest.fixture(scope="session")
 def store():
     dbname = os.environ["OFARM_PG_DBNAME"]
@@ -52,7 +84,12 @@ def store():
     s = Store()
     s.migrate()
     context.bootstrap(s)
-    demo.bootstrap(s)
+    # The ephemeral seed needs the exact demo logic and final state, not 43
+    # independently durable bootstrap commits. One outer transaction keeps
+    # every inner contract/gate path and nested savepoint while amortizing the
+    # outer transaction-boundary posture checks.
+    with s.serialized_tx():
+        demo.bootstrap(s)
     yield s
     s.close()
 
@@ -72,34 +109,65 @@ def materializer(store):
     return Materializer(store)
 
 
-@pytest.fixture
-def fresh_env():
-    """A FUNCTION-scoped fresh DB + bootstrap, yielding (store, pipeline,
-    outputs). For tests that assert farm-GLOBAL derived state (e.g. a passport's
-    disputeStatus) and must not see — or leak — session-accumulated state."""
-    import uuid as _uuid
-    import psycopg.conninfo
-    from kernel.gates import GatePipeline
-    from kernel.views import OutputGenerator
+@pytest.fixture(scope="session")
+def _fresh_env_template():
+    """Build and close one exact seed copied by isolated function databases."""
     base = os.environ.get("OFARM_PG_DBNAME", "ofarm_kernel_test")
-    dbname = f"{base[:40]}_iso_{_uuid.uuid4().hex[:8]}"
-    with psycopg.connect(_admin_dsn(), autocommit=True) as admin:
-        admin.execute(f'DROP DATABASE IF EXISTS "{dbname}"')
-        admin.execute(f'CREATE DATABASE "{dbname}"')
-    # Build the fresh-DB DSN from the admin DSN's connection params (correct
-    # host/port/user/password) with the fresh dbname — NEVER via
-    # config.database_dsn(), which returns a FIXED OFARM_PG_DSN verbatim in CI and
-    # would silently connect to the shared DB (no isolation).
-    params = psycopg.conninfo.conninfo_to_dict(_admin_dsn())
-    params["dbname"] = dbname
-    s = Store(dsn=psycopg.conninfo.make_conninfo(**params))
-    s.migrate()
-    context.bootstrap(s)
-    demo.bootstrap(s)
-    yield s, GatePipeline(s), OutputGenerator(s)
-    s.close()
-    with psycopg.connect(_admin_dsn(), autocommit=True) as admin:
-        admin.execute(f'DROP DATABASE IF EXISTS "{dbname}"')
+    dbname = f"{base[:32]}_iso_seed_{uuid.uuid4().hex[:8]}"
+    seed = None
+    created = False
+    try:
+        _create_database(dbname)
+        created = True
+        seed = Store(dsn=_database_dsn(dbname))
+        seed.migrate()
+        context.bootstrap(seed)
+        with seed.serialized_tx():
+            demo.bootstrap(seed)
+        runtime_bundle_digest = seed.runtime_bundle_digest
+        seed.close()
+        seed = None
+        yield dbname, runtime_bundle_digest
+    finally:
+        if seed is not None:
+            seed.close()
+        if created:
+            _drop_database(dbname)
+
+
+@pytest.fixture
+def fresh_env(_fresh_env_template):
+    """An isolated clone of one exact seed, yielding (store, pipeline, outputs).
+
+    Every clone re-proves the schema and live RuntimeBundle before use. The seed
+    Store is closed before PostgreSQL copies it, and no test can write back into
+    the session template or another test's database.
+    """
+    template_dbname, template_runtime_bundle_digest = _fresh_env_template
+    base = os.environ.get("OFARM_PG_DBNAME", "ofarm_kernel_test")
+    dbname = f"{base[:40]}_iso_{uuid.uuid4().hex[:8]}"
+    isolated = None
+    created = False
+    try:
+        _create_database(dbname, template=template_dbname)
+        created = True
+        isolated = Store(dsn=_database_dsn(dbname))
+        isolated.migrate()
+        inserted = context.bootstrap(isolated)
+        if inserted:
+            raise AssertionError(
+                "fresh_env template clone unexpectedly required profile inserts"
+            )
+        if isolated.runtime_bundle_digest != template_runtime_bundle_digest:
+            raise AssertionError(
+                "fresh_env template clone selected a different RuntimeBundle"
+            )
+        yield isolated, GatePipeline(isolated), OutputGenerator(isolated)
+    finally:
+        if isolated is not None:
+            isolated.close()
+        if created:
+            _drop_database(dbname)
 
 
 def is_platform_mvp_evidence_report(report) -> bool:
