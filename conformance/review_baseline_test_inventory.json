@@ -76,6 +76,11 @@
       "sourcePath": "kernel/tests/test_conformance.py"
     },
     {
+      "nodeid": "kernel/tests/test_conformance.py::test_92_review_runtime_preloads_pickle_native_extension",
+      "sourceModule": "kernel.tests.test_conformance",
+      "sourcePath": "kernel/tests/test_conformance.py"
+    },
+    {
       "nodeid": "kernel/tests/test_conformance.py::test_93_governed_acceptance_semantics",
       "sourceModule": "kernel.tests.test_conformance",
       "sourcePath": "kernel/tests/test_conformance.py"
@@ -3396,8 +3401,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "b9885f9c04f51c4d1703d1665d80fe60b4ce4a11a9b2281b6afcffdeaf0c7c8a",
-  "entryCount": 679,
+  "entriesSha256": "eb5edef1d43925f76ae69001f3679206d05388bbfe13aa6178507c0ead44239f",
+  "entryCount": 680,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

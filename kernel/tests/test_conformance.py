@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import copy
 import json
+import pickle
 import queue
 import uuid
 
@@ -34,7 +35,7 @@ from .conftest import record_detail
 # 93, after the RuntimeBundle import seal. Preload the exact pinned backend
 # during collection so the evidence lane and the complete suite share the same
 # zero-growth runtime boundary.
-_TEST_CLIENT_RUNTIME_PRELOAD = (queue, anyio_asyncio)
+_TEST_CLIENT_RUNTIME_PRELOAD = (pickle, queue, anyio_asyncio)
 
 FIXTURES = config.PACKAGE_ROOT / "conformance" / "fixtures" / "gate_sequencing"
 
@@ -852,6 +853,11 @@ def test_15_manifest_grounding(store):
 #     queue door, acceptance is a governed resolution, attribution basis is
 #     trace-linked.
 # =========================================================================
+
+def test_92_review_runtime_preloads_pickle_native_extension():
+    assert pickle in _TEST_CLIENT_RUNTIME_PRELOAD
+    assert pickle.Pickler.__module__ == "_pickle"
+
 
 def test_93_governed_acceptance_semantics(store, pipeline):
     client = TestClient(create_app(store, oidc=None))
