@@ -124,6 +124,7 @@ class _BundleOnlyStore:
 
     def __init__(self, bundle):
         self.runtime_bundle = bundle
+        self._runtime_environment_seal = bundle._selection_environment_seal
 
 
 def _test_database_environment() -> dict:
@@ -683,6 +684,7 @@ def test_runtime_bundle_post_start_source_mutation_has_no_filesystem_fallback(
 
     class NoLiveCache:
         runtime_bundle = bundle
+        _runtime_environment_seal = bundle._selection_environment_seal
 
         def reference_data(self, *_args, **_kwargs):
             raise AssertionError("bundle-backed ProductRegister read the live cache")
