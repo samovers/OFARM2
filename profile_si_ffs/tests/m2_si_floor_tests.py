@@ -170,6 +170,7 @@ def _runtime_bundle_with_policy(base, doc):
         canonical_document_bytes=canonical_document,
         components=components,
         construction_mode="PERSISTED_AUDIT",
+        _selection_environment_seal=None,
     )
 
 
