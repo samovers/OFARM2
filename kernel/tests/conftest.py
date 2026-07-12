@@ -46,11 +46,51 @@ def _admin_dsn() -> str:
     return f"host={socket_dir} port={port} dbname=postgres user={user}"
 
 
-def _database_dsn(dbname: str) -> str:
-    """Derive one isolated database route from the verified admin route."""
+def _admin_database_dsn(dbname: str) -> str:
+    """Derive one database route from the DDL-capable admin route."""
     params = psycopg.conninfo.conninfo_to_dict(_admin_dsn())
     params["dbname"] = dbname
     return psycopg.conninfo.make_conninfo(**params)
+
+
+def _store_database_dsn(dbname: str) -> str:
+    """Retain the configured Store role/server while selecting an isolated DB."""
+    params = psycopg.conninfo.conninfo_to_dict(config.database_dsn())
+    params["dbname"] = dbname
+    return psycopg.conninfo.make_conninfo(**params)
+
+
+def _require_same_postgres_server_and_role(
+        admin_dsn: str, store_dsn: str) -> None:
+    """Prove both routes share one lock namespace and effective DB role."""
+    lock_key = uuid.uuid4().int & ((1 << 63) - 1)
+    with (
+        psycopg.connect(admin_dsn, autocommit=True) as admin,
+        psycopg.connect(store_dsn, autocommit=True) as store,
+    ):
+        admin_user = admin.execute("SELECT CURRENT_USER").fetchone()[0]
+        store_user = store.execute("SELECT CURRENT_USER").fetchone()[0]
+        if admin_user != store_user:
+            raise AssertionError(
+                "admin and Store DSNs must use the same PostgreSQL role"
+            )
+        admin.execute(
+            "SELECT pg_catalog.pg_advisory_lock(%s)", (lock_key,)
+        )
+        try:
+            if store.execute(
+                    "SELECT pg_catalog.pg_try_advisory_lock(%s)",
+                    (lock_key,)).fetchone()[0]:
+                store.execute(
+                    "SELECT pg_catalog.pg_advisory_unlock(%s)", (lock_key,)
+                )
+                raise AssertionError(
+                    "admin and Store DSNs must reach the same PostgreSQL server"
+                )
+        finally:
+            admin.execute(
+                "SELECT pg_catalog.pg_advisory_unlock(%s)", (lock_key,)
+            )
 
 
 def _create_database(dbname: str, *, template: str | None = None) -> None:
@@ -59,6 +99,14 @@ def _create_database(dbname: str, *, template: str | None = None) -> None:
         if template is not None:
             statement += sql.SQL(" TEMPLATE {}").format(sql.Identifier(template))
         admin.execute(statement)
+
+
+def _drop_fixed_database_if_idle(dbname: str) -> None:
+    """Replace the shared test DB without terminating another test process."""
+    with psycopg.connect(_admin_dsn(), autocommit=True) as admin:
+        admin.execute(
+            sql.SQL("DROP DATABASE IF EXISTS {}").format(sql.Identifier(dbname))
+        )
 
 
 def _drop_database(dbname: str) -> None:
@@ -75,23 +123,58 @@ def _drop_database(dbname: str) -> None:
         )
 
 
+def _bootstrap_demo_seed(seed: Store) -> None:
+    """Seed through the same independent transaction boundaries as production."""
+    if Store._transaction_depth(seed) != 0:
+        raise AssertionError("demo seed requires no ambient governed transaction")
+    demo.bootstrap(seed)
+    if Store._transaction_depth(seed) != 0:
+        raise AssertionError("demo seed leaked a governed transaction")
+
+
 @pytest.fixture(scope="session")
-def store():
+def _seeded_environment():
+    """Build one production-faithful seed and snapshot it before tests mutate it."""
     dbname = os.environ["OFARM_PG_DBNAME"]
-    with psycopg.connect(_admin_dsn(), autocommit=True) as admin:
-        admin.execute(f'DROP DATABASE IF EXISTS "{dbname}"')
-        admin.execute(f'CREATE DATABASE "{dbname}"')
-    s = Store()
-    s.migrate()
-    context.bootstrap(s)
-    # The ephemeral seed needs the exact demo logic and final state, not 43
-    # independently durable bootstrap commits. One outer transaction keeps
-    # every inner contract/gate path and nested savepoint while amortizing the
-    # outer transaction-boundary posture checks.
-    with s.serialized_tx():
-        demo.bootstrap(s)
-    yield s
-    s.close()
+    base = os.environ.get("OFARM_PG_DBNAME", "ofarm_kernel_test")
+    template_dbname = f"{base[:32]}_iso_seed_{uuid.uuid4().hex[:16]}"
+    seed = None
+    template_created = False
+    try:
+        _drop_fixed_database_if_idle(dbname)
+        _create_database(dbname)
+        store_dsn = _store_database_dsn(dbname)
+        _require_same_postgres_server_and_role(
+            _admin_database_dsn(dbname), store_dsn)
+        seed = Store(dsn=store_dsn)
+        seed.migrate()
+        context.bootstrap(seed)
+        _bootstrap_demo_seed(seed)
+        runtime_bundle_digest = seed.runtime_bundle_digest
+
+        # PostgreSQL requires the source database to have no open sessions.
+        # Snapshot before yielding, so later session-scoped test mutations can
+        # never enter the private template. Store reconnects lazily on use.
+        seed.close()
+        _create_database(template_dbname, template=dbname)
+        template_created = True
+        with psycopg.connect(_admin_dsn(), autocommit=True) as admin:
+            admin.execute(
+                sql.SQL("ALTER DATABASE {} ALLOW_CONNECTIONS false").format(
+                    sql.Identifier(template_dbname)
+                )
+            )
+        yield seed, template_dbname, runtime_bundle_digest
+    finally:
+        if seed is not None:
+            seed.close()
+        if template_created:
+            _drop_database(template_dbname)
+
+
+@pytest.fixture(scope="session")
+def store(_seeded_environment):
+    return _seeded_environment[0]
 
 
 @pytest.fixture(scope="session")
@@ -110,29 +193,9 @@ def materializer(store):
 
 
 @pytest.fixture(scope="session")
-def _fresh_env_template():
-    """Build and close one exact seed copied by isolated function databases."""
-    base = os.environ.get("OFARM_PG_DBNAME", "ofarm_kernel_test")
-    dbname = f"{base[:32]}_iso_seed_{uuid.uuid4().hex[:8]}"
-    seed = None
-    created = False
-    try:
-        _create_database(dbname)
-        created = True
-        seed = Store(dsn=_database_dsn(dbname))
-        seed.migrate()
-        context.bootstrap(seed)
-        with seed.serialized_tx():
-            demo.bootstrap(seed)
-        runtime_bundle_digest = seed.runtime_bundle_digest
-        seed.close()
-        seed = None
-        yield dbname, runtime_bundle_digest
-    finally:
-        if seed is not None:
-            seed.close()
-        if created:
-            _drop_database(dbname)
+def _fresh_env_template(_seeded_environment):
+    """Expose the immutable pre-test seed snapshot to isolated clones."""
+    return _seeded_environment[1], _seeded_environment[2]
 
 
 @pytest.fixture
@@ -145,13 +208,13 @@ def fresh_env(_fresh_env_template):
     """
     template_dbname, template_runtime_bundle_digest = _fresh_env_template
     base = os.environ.get("OFARM_PG_DBNAME", "ofarm_kernel_test")
-    dbname = f"{base[:40]}_iso_{uuid.uuid4().hex[:8]}"
+    dbname = f"{base[:40]}_iso_{uuid.uuid4().hex[:16]}"
     isolated = None
     created = False
     try:
         _create_database(dbname, template=template_dbname)
         created = True
-        isolated = Store(dsn=_database_dsn(dbname))
+        isolated = Store(dsn=_store_database_dsn(dbname))
         isolated.migrate()
         inserted = context.bootstrap(isolated)
         if inserted:

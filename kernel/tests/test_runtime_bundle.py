@@ -3290,6 +3290,34 @@ def test_semantic_receipt_normalizes_relocated_kernel_module_file():
 def test_semantic_receipt_refuses_projector_code_replacement():
     from kernel import runtime_bundle as runtime_bundle_module
 
+    helper = runtime_bundle_module._canonical_stable_semantic_bytes
+
+    def strict_reference(value):
+        return canonical_json(value).encode("utf-8")
+
+    def outcome(serializer, value):
+        try:
+            return "RETURN", serializer(value)
+        except Exception as exc:  # noqa: BLE001 - exact behavior is asserted.
+            return type(exc), str(exc)
+
+    shared = ["retained once", {"accent": "ž"}]
+    valid = {
+        "left": shared,
+        "right": shared,
+        "nested": [None, False, 7, -0.0, "漢字"],
+    }
+    assert helper(valid) == strict_reference(valid)
+
+    cycle = []
+    cycle.append(cycle)
+    for invalid in (
+            {"bad": float("nan")},
+            {"bad": "\ud800"},
+            {"bad": object()},
+            cycle):
+        assert outcome(helper, invalid) == outcome(strict_reference, invalid)
+
     original = runtime_bundle_module._stable_decision_semantics_document.__code__
 
     def forged_projector(_selected, _package_root):
@@ -3306,6 +3334,18 @@ def test_semantic_receipt_refuses_projector_code_replacement():
             observed_decision_semantics_component(config.PACKAGE_ROOT)
     finally:
         runtime_bundle_module._stable_decision_semantics_document.__code__ = original
+
+    helper_original = helper.__code__
+
+    def forged_serializer(_value):
+        return b"{}"
+
+    try:
+        helper.__code__ = forged_serializer.__code__
+        with pytest.raises(RuntimeBundleError, match="implementation changed"):
+            observed_decision_semantics_component(config.PACKAGE_ROOT)
+    finally:
+        helper.__code__ = helper_original
 
 
 def test_runtime_bundle_refuses_new_module_claiming_retained_origin(fresh_env):

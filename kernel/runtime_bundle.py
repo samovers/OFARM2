@@ -3161,6 +3161,22 @@ _STABLE_DECISION_SEMANTICS_LABEL_RE = re.compile(
 )
 
 
+def _canonical_stable_semantic_bytes(value: Any) -> bytes:
+    """Serialize an internally constructed stable tree without a second walk."""
+    try:
+        return json.dumps(
+            value,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        ).encode("utf-8", errors="strict")
+    except (TypeError, ValueError, RecursionError):
+        # Stable projectors produce exact built-in JSON trees. If that invariant
+        # changes, retain canonical_json's established strict diagnostics.
+        return canonical_json(value).encode("utf-8")
+
+
 def _stable_decision_semantics_document(
         selected: tuple[tuple[Any, ...], ...], package_root: Path,
 ) -> dict[str, Any]:
@@ -3183,7 +3199,7 @@ def _stable_decision_semantics_document(
         else:
             raise RuntimeBundleError(
                 f"unsupported stable decision semantic entry: {kind!r}")
-        stable_bytes = canonical_json(stable_state).encode("utf-8")
+        stable_bytes = _canonical_stable_semantic_bytes(stable_state)
         if kind == "IDENTITY_CLASS":
             # The stable label contains no process identity.  Equal generated
             # classes collapse to one semantic identity, while unequal states
@@ -3262,6 +3278,7 @@ _DECISION_RECEIPT_IMPLEMENTATION_ANCHORS = tuple(
         _stable_semantic_class_state,
         _stable_semantic_binding_state,
         _decision_semantic_callable_anchors,
+        _canonical_stable_semantic_bytes,
         _stable_decision_semantics_document,
         _validate_stable_decision_semantics_document,
     )
