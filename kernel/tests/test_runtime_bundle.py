@@ -2,7 +2,14 @@
 from __future__ import annotations
 
 import copy
+import hashlib
+import importlib.machinery
 import json
+import mmap
+import os
+import sys
+import threading
+import types
 import uuid
 from dataclasses import replace
 from pathlib import Path
@@ -10,6 +17,7 @@ from pathlib import Path
 import pytest
 import psycopg
 import psycopg.conninfo
+from psycopg import sql
 from psycopg.types.json import Jsonb
 
 from kernel import config, context, demo
@@ -24,8 +32,11 @@ from kernel.gates import GatePipeline
 from kernel.materializer import Materializer
 from kernel.profiles.si_ffs.gerk_adapter import GerkLayer
 from kernel.profiles.si_ffs.ffsnaprave_adapter import FFSNapraveRegister
+from kernel.schema_guard import SchemaGuardError
 from kernel.runtime_bundle import (
     GLOBAL_CONTENT_PLACEMENT,
+    JSON_CANONICALIZATION,
+    RAW_CANONICALIZATION,
     TENANT_CONTENT_PLACEMENT,
     RuntimeBundle,
     RuntimeBundleError,
@@ -33,6 +44,7 @@ from kernel.runtime_bundle import (
     _build_live_runtime_bundle,
     assert_runtime_environment_compatible,
     build_runtime_bundle,
+    database_runtime_environment_component,
     require_current_runtime_catalog,
     runtime_bundle_from_persisted,
     sha256_bytes,
@@ -48,6 +60,30 @@ from tooling.runtime_bundle_lock import (
     canonical_lock_bytes,
     verify_lock_bytes,
 )
+
+
+def _assert_exact_http_receipt(
+        response, runtime_bundle_digest: str, *,
+        canonicalization: str = JSON_CANONICALIZATION,
+        expected_content: bytes | None = None,
+        expect_content_length: bool = True) -> None:
+    """The receipt covers the bytes delivered, not a reparsed JSON value."""
+    assert response.headers["content-type"] == \
+        "application/json; charset=utf-8"
+    if expect_content_length:
+        assert int(response.headers["content-length"]) == len(response.content)
+    else:
+        assert "content-length" not in response.headers
+    assert response.headers["x-ofarm-runtime-bundle-digest"] == \
+        runtime_bundle_digest
+    assert response.headers["x-ofarm-receipt-canonicalization"] == \
+        canonicalization
+    assert response.headers["x-ofarm-receipt-payload-digest"] == \
+        "sha256:" + hashlib.sha256(response.content).hexdigest()
+    if expected_content is None:
+        assert response.content == canonical_json(response.json()).encode("utf-8")
+    else:
+        assert response.content == expected_content
 
 
 def _variant_bundle(base: RuntimeBundle) -> RuntimeBundle:
@@ -79,6 +115,7 @@ def _variant_bundle(base: RuntimeBundle) -> RuntimeBundle:
         canonical_document_bytes=canonical,
         components=components,
         construction_mode="PERSISTED_AUDIT",
+        _selection_environment_seal=None,
     )
 
 
@@ -112,7 +149,9 @@ def _test_database_environment() -> dict:
             "timezone": "UTC",
             "dateStyle": "ISO, MDY",
             "intervalStyle": "postgres",
-            "searchPath": '"$user", public',
+            "searchPath": "pg_catalog, public",
+            "sessionReplicationRole": "origin",
+            "transactionIsolation": "read committed",
             "standardConformingStrings": "on",
             "extraFloatDigits": "1",
             "byteaOutput": "hex",
@@ -369,6 +408,24 @@ def test_observed_runtime_environment_change_is_detected(monkeypatch):
         runtime_bundle_module.platform, "python_version", lambda: "0.0.0-hostile")
     with pytest.raises(RuntimeBundleError, match="observed interpreter"):
         assert_runtime_environment_compatible(bundle)
+
+
+def test_selection_to_activation_refuses_fake_retained_origin_module():
+    bundle = _live_test_bundle()
+    module_name = f"_ofarm_selection_gap_{uuid.uuid4().hex}"
+    source = str(Path(json.__file__).resolve())
+    loader = importlib.machinery.SourceFileLoader(module_name, source)
+    module = types.ModuleType(module_name)
+    module.__file__ = source
+    module.__loader__ = loader
+    module.__spec__ = importlib.machinery.ModuleSpec(
+        module_name, loader=loader, origin=source)
+    sys.modules[module_name] = module
+    try:
+        with pytest.raises(RuntimeBundleError, match="changed after selection"):
+            assert_runtime_environment_compatible(bundle)
+    finally:
+        del sys.modules[module_name]
 
 
 def test_runtime_bundle_lock_rejects_missing_extra_duplicate_and_stale_entries():
@@ -793,9 +850,7 @@ def test_runtime_bundle_manifest_response_ignores_post_start_file_mutation(
     response = TestClient(app).get("/manifest")
     assert response.status_code == 200
     assert response.json() == expected
-    assert response.headers["x-ofarm-runtime-bundle-digest"] == \
-        store.runtime_bundle_digest
-    assert response.headers["x-ofarm-receipt-payload-digest"] == sha256_of(expected)
+    _assert_exact_http_receipt(response, store.runtime_bundle_digest)
 
 
 def test_commit_api_returns_self_contained_runtime_receipt_headers(fresh_env):
@@ -812,10 +867,7 @@ def test_commit_api_returns_self_contained_runtime_receipt_headers(fresh_env):
         )},
     )
     assert response.status_code == 200
-    assert response.headers["x-ofarm-runtime-bundle-digest"] == \
-        store.runtime_bundle_digest
-    assert response.headers["x-ofarm-receipt-payload-digest"] == \
-        sha256_of(response.json())
+    _assert_exact_http_receipt(response, store.runtime_bundle_digest)
 
 
 def test_read_and_output_apis_receipt_exact_response_payloads(fresh_env):
@@ -823,7 +875,8 @@ def test_read_and_output_apis_receipt_exact_response_payloads(fresh_env):
     from kernel.api import create_app
 
     store, _pipeline, _outputs = fresh_env
-    client = TestClient(create_app(store, oidc=None))
+    app = create_app(store, oidc=None)
+    client = TestClient(app)
     commit = client.post(
         "/commit",
         headers={"X-Acting-Party": demo.FARMER},
@@ -854,10 +907,7 @@ def test_read_and_output_apis_receipt_exact_response_payloads(fresh_env):
     ]
     for response in responses:
         assert response.status_code == 200
-        assert response.headers["x-ofarm-runtime-bundle-digest"] == \
-            store.runtime_bundle_digest
-        assert response.headers["x-ofarm-receipt-payload-digest"] == \
-            sha256_of(response.json())
+        _assert_exact_http_receipt(response, store.runtime_bundle_digest)
 
 
 def test_health_and_api_refusals_receipt_exact_response_payloads(fresh_env):
@@ -865,22 +915,61 @@ def test_health_and_api_refusals_receipt_exact_response_payloads(fresh_env):
     from kernel.api import create_app
 
     store, _pipeline, _outputs = fresh_env
-    client = TestClient(create_app(store, oidc=None))
+    app = create_app(store, oidc=None)
+
+    @app.get("/_test/unhandled-runtime-error")
+    def unhandled_runtime_error():
+        raise RuntimeError("hostile detail must never cross the HTTP boundary")
+
+    client = TestClient(app)
     responses = [
         client.get("/health"),
         client.get(f"/records/{demo.FARMER}"),
+        client.get(
+            "/records/record:does-not-exist",
+            headers={"X-Acting-Party": demo.FARMER},
+        ),
+        client.post(
+            "/commit",
+            headers={"X-Acting-Party": demo.WORKER},
+            json={"submission": demo.spray_submission(
+                f"issue171:api-actor-refusal:{uuid.uuid4().hex}",
+                confirm=True,
+            )},
+        ),
         client.post(
             "/commit",
             headers={"X-Acting-Party": demo.FARMER},
             json={},
         ),
+        client.get("/route-that-does-not-exist"),
     ]
-    assert [response.status_code for response in responses] == [200, 401, 422]
+    assert [response.status_code for response in responses] == \
+        [200, 401, 404, 403, 422, 404]
     for response in responses:
-        assert response.headers["x-ofarm-runtime-bundle-digest"] == \
-            store.runtime_bundle_digest
-        assert response.headers["x-ofarm-receipt-payload-digest"] == \
-            sha256_of(response.json())
+        _assert_exact_http_receipt(response, store.runtime_bundle_digest)
+
+    # HTTP suppresses the representation body for HEAD. The receipt must cover
+    # the empty bytes the client actually receives, while preserving the 405's
+    # method-discovery header.
+    head_response = client.head("/health")
+    assert head_response.status_code == 405
+    assert head_response.headers["allow"] == "GET"
+    _assert_exact_http_receipt(
+        head_response,
+        store.runtime_bundle_digest,
+        canonicalization=RAW_CANONICALIZATION,
+        expected_content=b"",
+        expect_content_length=False,
+    )
+
+    unhandled = TestClient(
+        app, raise_server_exceptions=False).get(
+            "/_test/unhandled-runtime-error")
+    assert unhandled.status_code == 500
+    assert unhandled.json() == {"detail": "Internal Server Error"}
+    assert b"hostile detail" not in unhandled.content
+    _assert_exact_http_receipt(unhandled, store.runtime_bundle_digest)
 
 
 def test_runtime_bundle_mixed_bundle_write_is_refused(fresh_env):
@@ -941,6 +1030,414 @@ def test_runtime_bundle_install_refuses_autocommit_cursor(fresh_env):
     with store.conn.cursor() as cur:
         with pytest.raises(RuntimeError, match="one active database transaction"):
             store.install_runtime_bundle(cur, store.runtime_bundle)
+
+
+def test_runtime_bundle_each_transaction_restores_and_verifies_database_posture(
+        fresh_env):
+    store, _pipeline, _outputs = fresh_env
+    selected = store.runtime_bundle.component(
+        "RUNTIME_DATABASE_OBSERVED", "environment:observed-postgresql.v1")
+    mutations = (
+        ("TimeZone", "Europe/Ljubljana", "UTC"),
+        ("DateStyle", "SQL, DMY", "ISO, MDY"),
+        ("IntervalStyle", "iso_8601", "postgres"),
+        ("search_path", "public", "pg_catalog, public"),
+        ("session_replication_role", "replica", "origin"),
+        ("default_transaction_isolation", "repeatable read", "read committed"),
+        ("standard_conforming_strings", "off", "on"),
+        ("extra_float_digits", "0", "1"),
+        ("bytea_output", "escape", "hex"),
+    )
+
+    for setting_name, poison, retained_value in mutations:
+        poisoned = store.conn.execute(
+            "SELECT pg_catalog.set_config(%s, %s, false) AS value",
+            (setting_name, poison),
+        ).fetchone()["value"]
+        assert poisoned != retained_value
+        party_id = f"party:issue171.session-posture.{uuid.uuid4().hex}"
+        with store.serialized_tx() as cur:
+            observed = store._observe_database_environment(cur)
+            assert database_runtime_environment_component(observed) == selected
+            store.insert_record(cur, {
+                "schemaVersion": "ofarm.party.v0.1",
+                "partyId": party_id,
+                "partyClass": "NATURAL_PERSON",
+                "displayName": "Issue 171 session posture test (fictional)",
+                "partyState": "ACTIVE",
+                "recordedAt": context.now_iso(),
+            })
+        assert store.get_record(party_id) is not None
+
+
+def test_runtime_bundle_transaction_refuses_temporary_schema_shadow(fresh_env):
+    store, _pipeline, _outputs = fresh_env
+    store.conn.execute(
+        "CREATE TEMP TABLE kernel_record "
+        "(LIKE public.kernel_record INCLUDING ALL)"
+    )
+    try:
+        with pytest.raises(SchemaGuardError, match="temporary schema"):
+            store.get_record(demo.FARMER)
+    finally:
+        store.conn.execute("DROP TABLE pg_temp.kernel_record")
+
+
+def test_runtime_bundle_outer_transaction_rechecks_live_catalog(fresh_env):
+    store, _pipeline, _outputs = fresh_env
+    entered = False
+    store.conn.execute(
+        "CREATE AGGREGATE public.hostile_runtime_sum(integer) "
+        "(SFUNC = pg_catalog.int4pl, STYPE = integer, INITCOND = '0')"
+    )
+    try:
+        with pytest.raises(SchemaGuardError, match="catalog-drifted"):
+            with store.tx():
+                entered = True
+        assert entered is False
+    finally:
+        store.conn.execute(
+            "DROP AGGREGATE public.hostile_runtime_sum(integer)")
+    with store.tx() as cur:
+        cur.execute("SELECT 1 AS ok")
+        assert cur.fetchone()["ok"] == 1
+
+
+def test_runtime_bundle_outer_transaction_refuses_ambient_connection_state(
+        fresh_env):
+    store, _pipeline, _outputs = fresh_env
+
+    store.conn.execute("BEGIN ISOLATION LEVEL REPEATABLE READ")
+    try:
+        with pytest.raises(RuntimeError, match="ambient transactions are forbidden"):
+            store.get_record(demo.FARMER)
+    finally:
+        store.conn.rollback()
+
+    store.conn.autocommit = False
+    try:
+        with pytest.raises(RuntimeError, match="autocommit connection to be IDLE"):
+            store.get_record(demo.FARMER)
+    finally:
+        store.conn.autocommit = True
+
+
+def test_runtime_bundle_outer_transaction_rechecks_live_python_posture(
+        fresh_env, monkeypatch):
+    store, _pipeline, _outputs = fresh_env
+    from kernel import runtime_bundle as runtime_bundle_module
+    original = runtime_bundle_module.require_store_runtime_bundle
+    calls = []
+
+    def traced(store_arg, bundle_arg, consumer):
+        calls.append((store_arg, bundle_arg, consumer))
+        return original(store_arg, bundle_arg, consumer)
+
+    monkeypatch.setattr(
+        runtime_bundle_module, "require_store_runtime_bundle", traced)
+    with store.tx() as cur:
+        cur.execute("SELECT 1 AS ok")
+        assert cur.fetchone()["ok"] == 1
+    assert calls == [
+        (store, store.runtime_bundle, "Store governed transaction"),
+        (store, store.runtime_bundle, "Store governed transaction"),
+    ]
+
+
+def test_runtime_bundle_late_python_drift_rolls_back_current_transaction(
+        fresh_env, monkeypatch):
+    store, _pipeline, _outputs = fresh_env
+    from kernel import runtime_bundle as runtime_bundle_module
+    original = runtime_bundle_module.require_store_runtime_bundle
+    calls = 0
+
+    def fail_after_body(store_arg, bundle_arg, consumer):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise RuntimeBundleError(
+                "late import posture changed before governed commit")
+        return original(store_arg, bundle_arg, consumer)
+
+    monkeypatch.setattr(
+        runtime_bundle_module, "require_store_runtime_bundle", fail_after_body)
+    party_id = f"party:issue171.late-import.{uuid.uuid4().hex}"
+    with pytest.raises(RuntimeBundleError, match="late import posture"):
+        with store.serialized_tx() as cur:
+            store.insert_record(cur, {
+                "schemaVersion": "ofarm.party.v0.1",
+                "partyId": party_id,
+                "partyClass": "NATURAL_PERSON",
+                "displayName": "Issue 171 late import rollback test (fictional)",
+                "partyState": "ACTIVE",
+                "recordedAt": context.now_iso(),
+            })
+    assert calls == 2
+    assert store.get_record(party_id) is None
+
+
+def test_runtime_bundle_refuses_new_module_claiming_retained_origin(fresh_env):
+    store, _pipeline, _outputs = fresh_env
+    module_name = f"_ofarm_fake_retained_origin_{uuid.uuid4().hex}"
+    source = str(Path(json.__file__).resolve())
+    loader = importlib.machinery.SourceFileLoader(module_name, source)
+    module = types.ModuleType(module_name)
+    module.__file__ = source
+    module.__loader__ = loader
+    module.__spec__ = importlib.machinery.ModuleSpec(
+        module_name, loader=loader, origin=source)
+    sys.modules[module_name] = module
+    try:
+        with pytest.raises(RuntimeBundleError, match="module set changed"):
+            store.get_record(demo.FARMER)
+    finally:
+        del sys.modules[module_name]
+
+
+def test_runtime_bundle_refuses_existing_module_object_replacement(fresh_env):
+    store, _pipeline, _outputs = fresh_env
+    original = sys.modules["typing.io"]
+    sys.modules["typing.io"] = types.ModuleType("typing.io")
+    try:
+        with pytest.raises(RuntimeBundleError, match="module object replaced"):
+            store.get_record(demo.FARMER)
+    finally:
+        sys.modules["typing.io"] = original
+
+
+def test_runtime_bundle_refuses_same_module_loader_state_replacement(fresh_env):
+    store, _pipeline, _outputs = fresh_env
+    module = json
+    original_spec = module.__spec__
+    original_loader = module.__loader__
+    source = str(Path(module.__file__).resolve())
+    changed_loader = importlib.machinery.SourceFileLoader(module.__name__, source)
+    module.__loader__ = changed_loader
+    module.__spec__ = importlib.machinery.ModuleSpec(
+        module.__name__, loader=changed_loader, origin=source)
+    try:
+        with pytest.raises(RuntimeBundleError, match="module state changed"):
+            store.get_record(demo.FARMER)
+    finally:
+        module.__loader__ = original_loader
+        module.__spec__ = original_spec
+
+
+def test_runtime_bundle_refuses_none_valued_module_set_growth(fresh_env):
+    store, _pipeline, _outputs = fresh_env
+    module_name = f"_ofarm_none_import_blocker_{uuid.uuid4().hex}"
+    sys.modules[module_name] = None
+    try:
+        with pytest.raises(RuntimeBundleError, match="module set changed"):
+            store.get_record(demo.FARMER)
+    finally:
+        del sys.modules[module_name]
+
+
+def test_runtime_bundle_refuses_sys_modules_mapping_replacement(fresh_env):
+    store, _pipeline, _outputs = fresh_env
+    original = sys.modules
+    sys.modules = dict(original)
+    try:
+        with pytest.raises(RuntimeBundleError, match="sys.modules mapping identity"):
+            store.get_record(demo.FARMER)
+    finally:
+        sys.modules = original
+
+
+def test_runtime_bundle_refuses_path_importer_cache_replacement(fresh_env):
+    store, _pipeline, _outputs = fresh_env
+    retained_root = str(config.PACKAGE_ROOT.resolve())
+    original = sys.path_importer_cache[retained_root]
+
+    class HostileFinder:
+        pass
+
+    sys.path_importer_cache[retained_root] = HostileFinder()
+    try:
+        with pytest.raises(RuntimeBundleError, match="path_importer_cache"):
+            store.get_record(demo.FARMER)
+    finally:
+        sys.path_importer_cache[retained_root] = original
+
+
+def test_runtime_bundle_refuses_path_importer_cache_alias_key(fresh_env):
+    store, _pipeline, _outputs = fresh_env
+    retained_root = str(config.PACKAGE_ROOT.resolve())
+    finder = sys.path_importer_cache.pop(retained_root)
+    alias = retained_root + "/."
+    sys.path_importer_cache[alias] = finder
+    try:
+        with pytest.raises(RuntimeBundleError, match="path importer cache key"):
+            store.get_record(demo.FARMER)
+    finally:
+        del sys.path_importer_cache[alias]
+        sys.path_importer_cache[retained_root] = finder
+
+
+def test_runtime_bundle_refuses_file_finder_instance_method_override(fresh_env):
+    store, _pipeline, _outputs = fresh_env
+    retained_root = str(config.PACKAGE_ROOT.resolve())
+    finder = sys.path_importer_cache[retained_root]
+    finder.find_spec = lambda *args, **kwargs: None
+    try:
+        with pytest.raises(RuntimeBundleError, match="instance method override"):
+            store.get_record(demo.FARMER)
+    finally:
+        del finder.find_spec
+
+
+def test_runtime_bundle_refuses_sys_path_alias(fresh_env):
+    store, _pipeline, _outputs = fresh_env
+    retained_root = str(config.PACKAGE_ROOT.resolve())
+    index = sys.path.index(retained_root)
+    sys.path[index] = retained_root + "/."
+    try:
+        with pytest.raises(RuntimeBundleError, match="live sys.path changed"):
+            store.get_record(demo.FARMER)
+    finally:
+        sys.path[index] = retained_root
+
+
+def test_runtime_bundle_refuses_import_provider_method_replacement(fresh_env):
+    store, _pipeline, _outputs = fresh_env
+    provider = importlib.machinery.PathFinder
+    original = vars(provider)["find_spec"]
+
+    @classmethod
+    def hostile_find_spec(cls, fullname, path=None, target=None):
+        del cls, fullname, path, target
+        return None
+
+    provider.find_spec = hostile_find_spec
+    try:
+        with pytest.raises(RuntimeBundleError, match="import callable identity"):
+            store.get_record(demo.FARMER)
+    finally:
+        provider.find_spec = original
+
+
+def test_store_runtime_activation_fields_reject_direct_replacement(fresh_env):
+    store, _pipeline, _outputs = fresh_env
+    for field_name in (
+        "_runtime_bundle",
+        "_runtime_environment_seal",
+        "_pending_runtime_bundle_activation",
+        "_bootstrap_bundle",
+    ):
+        with pytest.raises(AttributeError, match="sealed lifecycle"):
+            setattr(store, field_name, object())
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="Linux executable mappings")
+def test_runtime_bundle_late_native_mapping_rolls_back_current_transaction(
+        fresh_env):
+    store, _pipeline, _outputs = fresh_env
+    party_id = f"party:issue171.late-native.{uuid.uuid4().hex}"
+    mapped_path = (
+        config.PACKAGE_ROOT / ".artifacts" /
+        f"issue171-native-map-{uuid.uuid4().hex}.bin")
+    mapped_path.parent.mkdir(parents=True, exist_ok=True)
+    mapped_path.write_bytes(b"unretained executable mapping")
+    descriptor = os.open(mapped_path, os.O_RDONLY)
+    mapping = None
+    try:
+        with pytest.raises(RuntimeBundleError, match="native executable mappings"):
+            with store.serialized_tx() as cur:
+                store.insert_record(cur, {
+                    "schemaVersion": "ofarm.party.v0.1",
+                    "partyId": party_id,
+                    "partyClass": "NATURAL_PERSON",
+                    "displayName": "Issue 171 native mapping rollback (fictional)",
+                    "partyState": "ACTIVE",
+                    "recordedAt": context.now_iso(),
+                })
+                mapping = mmap.mmap(
+                    descriptor, 0, flags=mmap.MAP_PRIVATE,
+                    prot=mmap.PROT_READ | mmap.PROT_EXEC)
+    finally:
+        if mapping is not None:
+            mapping.close()
+        os.close(descriptor)
+        mapped_path.unlink(missing_ok=True)
+    assert store.get_record(party_id) is None
+
+
+def test_runtime_bundle_shared_connection_serializes_complete_transactions(
+        fresh_env):
+    """A second sync FastAPI worker cannot join another worker's transaction."""
+    store, _pipeline, _outputs = fresh_env
+    writer_entered = threading.Event()
+    release_writer = threading.Event()
+    reader_attempting = threading.Event()
+    reader_done = threading.Event()
+    failures = []
+    result = []
+
+    def writer():
+        try:
+            with store.tx() as cur:
+                cur.execute("SELECT 1 AS ok")
+                assert cur.fetchone()["ok"] == 1
+                writer_entered.set()
+                if not release_writer.wait(10):
+                    raise AssertionError("threaded transaction test timed out")
+        except BaseException as exc:  # preserve thread failures for the test
+            failures.append(exc)
+
+    def reader():
+        try:
+            if not writer_entered.wait(10):
+                raise AssertionError("writer did not enter its transaction")
+            reader_attempting.set()
+            result.append(store.get_record(demo.FARMER))
+        except BaseException as exc:  # preserve thread failures for the test
+            failures.append(exc)
+        finally:
+            reader_done.set()
+
+    writer_thread = threading.Thread(target=writer)
+    reader_thread = threading.Thread(target=reader)
+    writer_thread.start()
+    assert writer_entered.wait(10)
+    reader_thread.start()
+    assert reader_attempting.wait(10)
+    assert reader_done.wait(0.25) is False
+    release_writer.set()
+    writer_thread.join(10)
+    reader_thread.join(10)
+    assert not writer_thread.is_alive()
+    assert not reader_thread.is_alive()
+    assert failures == []
+    assert result and result[0]["record_id"] == demo.FARMER
+
+
+def test_runtime_bundle_rejects_role_drift_before_governed_sql(fresh_env):
+    store, _pipeline, _outputs = fresh_env
+    role_name = f"ofarm_issue171_role_{uuid.uuid4().hex[:12]}"
+    party_id = f"party:issue171.role-drift.{uuid.uuid4().hex}"
+    entered = False
+    store.conn.execute(sql.SQL("CREATE ROLE {}").format(sql.Identifier(role_name)))
+    try:
+        store.conn.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(role_name)))
+        with pytest.raises(
+                RuntimeError,
+                match="PostgreSQL current role differs"):
+            with store.serialized_tx() as cur:
+                entered = True
+                store.insert_record(cur, {
+                    "schemaVersion": "ofarm.party.v0.1",
+                    "partyId": party_id,
+                    "partyClass": "NATURAL_PERSON",
+                    "displayName": "Issue 171 role drift test (fictional)",
+                    "partyState": "ACTIVE",
+                    "recordedAt": context.now_iso(),
+                })
+        assert entered is False
+    finally:
+        store.conn.execute("RESET ROLE")
+        store.conn.execute(sql.SQL("DROP ROLE {}").format(sql.Identifier(role_name)))
+    assert store.get_record(party_id) is None
 
 
 def test_existing_incomplete_bundle_receipt_is_never_repaired():
@@ -1495,6 +1992,7 @@ def test_runtime_bundle_live_bind_rejects_stale_executable_bytes(fresh_env):
         canonical_document_bytes=canonical,
         components=components,
         construction_mode="PERSISTED_AUDIT",
+        _selection_environment_seal=None,
     )
     with pytest.raises(RuntimeBundleError, match="differs from current catalog"):
         require_current_runtime_catalog(stale, config.PACKAGE_ROOT)
@@ -1620,6 +2118,49 @@ def test_runtime_bundle_atomic_bootstrap_rolls_back_on_unequal_identifier_reuse(
             )
             assert cur.fetchone()["n"] == 0
     finally:
+        store.close()
+        with psycopg.connect(admin_dsn, autocommit=True) as admin:
+            admin.execute(f'DROP DATABASE IF EXISTS "{dbname}"')
+
+
+def test_pending_runtime_seal_is_rechecked_before_bootstrap_commit(monkeypatch):
+    dbname = f"ofarm_issue171_pending_seal_{uuid.uuid4().hex[:10]}"
+    admin_dsn = _admin_dsn()
+    with psycopg.connect(admin_dsn, autocommit=True) as admin:
+        admin.execute(f'CREATE DATABASE "{dbname}"')
+    params = psycopg.conninfo.conninfo_to_dict(admin_dsn)
+    params["dbname"] = dbname
+    store = Store(dsn=psycopg.conninfo.make_conninfo(**params))
+    module_name = f"_ofarm_pending_seal_{uuid.uuid4().hex}"
+    source = str(Path(json.__file__).resolve())
+    loader = importlib.machinery.SourceFileLoader(module_name, source)
+    module = types.ModuleType(module_name)
+    module.__file__ = source
+    module.__loader__ = loader
+    module.__spec__ = importlib.machinery.ModuleSpec(
+        module_name, loader=loader, origin=source)
+    try:
+        store.migrate()
+        original_prepare = store._prepare_runtime_bundle_binding
+
+        def prepare_then_mutate(bundle):
+            token = original_prepare(bundle)
+            sys.modules[module_name] = module
+            return token
+
+        monkeypatch.setattr(
+            store, "_prepare_runtime_bundle_binding", prepare_then_mutate)
+        with pytest.raises(context.ContextNotReconstructible,
+                           match="module set changed"):
+            context.bootstrap(store)
+        assert store._runtime_bundle is None
+        assert store._runtime_environment_seal is None
+        assert store._pending_runtime_bundle_activation is None
+        with store.conn.cursor() as cur:
+            cur.execute("SELECT count(*) AS n FROM ONLY runtime_bundle")
+            assert cur.fetchone()["n"] == 0
+    finally:
+        sys.modules.pop(module_name, None)
         store.close()
         with psycopg.connect(admin_dsn, autocommit=True) as admin:
             admin.execute(f'DROP DATABASE IF EXISTS "{dbname}"')

@@ -286,6 +286,11 @@ def bootstrap_for_descriptor(
     Reusing an identifier is permitted only for canonically equal content. A
     conflict aborts the whole bootstrap; no prefix of the profile spine lands.
     """
+    # Import every adapter declared as a supported runtime surface before the
+    # live Python environment is selected. Later manifest verification and
+    # governed imports must execute within a zero-growth module seal.
+    from .manifest import preload_runtime_import_surfaces
+    preload_runtime_import_surfaces()
     active_profile = _require_active_profile(active_profile)
     bound_bundle = getattr(store, "_runtime_bundle", None)
     if bound_bundle is not None:
@@ -323,8 +328,8 @@ def bootstrap_for_descriptor(
             # commit between selection and bundle installation.
             cur.execute(
                 "SELECT k.payload, k.payload_sha256, k.runtime_bundle_digest, "
-                "b.tenant_ref AS origin_tenant_ref FROM kernel_record k "
-                "JOIN runtime_bundle b "
+                "b.tenant_ref AS origin_tenant_ref FROM ONLY kernel_record k "
+                "JOIN ONLY runtime_bundle b "
                 "ON b.bundle_digest = k.runtime_bundle_digest "
                 "WHERE k.record_kind = 'ofarm.referencesnapshot.v0.1' "
                 "AND k.tenant_ref = %s ORDER BY k.record_time, k.record_id",
@@ -358,8 +363,8 @@ def bootstrap_for_descriptor(
                 row["payload"] for row in additional_reference_rows]
             cur.execute(
                 "SELECT k.payload, k.payload_sha256, k.runtime_bundle_digest, "
-                "b.tenant_ref AS origin_tenant_ref FROM kernel_record k "
-                "JOIN runtime_bundle b "
+                "b.tenant_ref AS origin_tenant_ref FROM ONLY kernel_record k "
+                "JOIN ONLY runtime_bundle b "
                 "ON b.bundle_digest = k.runtime_bundle_digest "
                 "WHERE k.record_kind = ANY(%s) AND k.tenant_ref = %s "
                 "ORDER BY k.record_time, k.record_id",
@@ -467,7 +472,8 @@ def bootstrap_for_descriptor(
                     "SELECT d.snapshot_ref, d.data_family, d.artifact_ref, "
                     "d.source_digest, d.parser_label, d.record_count, d.payload, "
                     "d.payload_sha256, d.runtime_bundle_digest "
-                    "FROM reference_snapshot_data d JOIN runtime_bundle b "
+                    "FROM ONLY reference_snapshot_data d "
+                    "JOIN ONLY runtime_bundle b "
                     "ON b.bundle_digest = d.runtime_bundle_digest "
                     "WHERE d.data_family = ANY(%s) AND b.tenant_ref = %s "
                     "ORDER BY d.snapshot_ref, d.data_family",
@@ -495,7 +501,7 @@ def bootstrap_for_descriptor(
                 for record_id, kind, payload, expected_digest in payloads:
                     cur.execute(
                         "SELECT record_kind, payload, payload_sha256, tenant_ref "
-                        "FROM kernel_record "
+                        "FROM ONLY kernel_record "
                         "WHERE record_id = %s",
                         (record_id,),
                     )
@@ -512,9 +518,11 @@ def bootstrap_for_descriptor(
                     store.insert_record(
                         cur, payload, runtime_bundle_digest=bundle.digest)
                     inserted.append(record_id)
-                # All fallible catalog, registry, persisted-byte, and cold-load
-                # checks run before this transaction may commit. Process binding
-                # after commit is then a non-fallible assignment only.
+                # Catalog, registry, persisted-byte, cold-load, and selection-time
+                # import-seal checks all run before this transaction may commit.
+                # Activation repeats the exact seal check after COMMIT; a hostile
+                # concurrent mutation can therefore refuse process binding, while
+                # the already persisted bootstrap remains safe for exact restart.
                 activation_token = store._prepare_runtime_bundle_binding(bundle)
     except (ContextNotReconstructible, RuntimeBundleError) as exc:
         store._discard_prepared_runtime_bundle_binding()

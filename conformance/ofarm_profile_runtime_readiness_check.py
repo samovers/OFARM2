@@ -152,10 +152,15 @@ def profile_evidence_credits_package(
 
 
 def manifest_grounded_package_names() -> tuple[frozenset[str], tuple[str, ...]]:
-    python = PKG / ".venv" / "bin" / "python"
-    executable = str(python if python.exists() else Path(sys.executable))
+    executable = str(Path(sys.executable).absolute())
+    venv_root = str(Path(executable).parent.parent)
+    launcher = str(PKG / "tooling" / "ofarm_isolated.py")
     proc = subprocess.run(
-        [executable, "-m", "kernel.manifest", "--verify-generated"],
+        [
+            executable, "-I", "-B", "-S", launcher,
+            "--venv-root", venv_root,
+            "-m", "kernel.manifest", "--verify-generated",
+        ],
         cwd=PKG,
         capture_output=True,
         text=True,

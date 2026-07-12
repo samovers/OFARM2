@@ -229,12 +229,26 @@ def build_catalog() -> dict:
         Path("tooling/runtime_bundle_lock.py"),
         RAW_CANONICALIZATION,
     )
+    add(
+        "RUNTIME_CATALOG_CODE",
+        "python:tooling/ofarm_isolated.py",
+        Path("tooling/ofarm_isolated.py"),
+        RAW_CANONICALIZATION,
+    )
+    add(
+        "RUNTIME_CATALOG_CODE",
+        "python:tooling/runtime_image_manifest.py",
+        Path("tooling/runtime_image_manifest.py"),
+        RAW_CANONICALIZATION,
+    )
 
     for relative in (
         Path(".python-version"),
         Path("requirements-review-baseline.lock"),
         Path("requirements-review-pip.lock"),
         Path("conformance/review_baseline_config.json"),
+        Path("conformance/python_runtime_image_manifest.json"),
+        Path(".github/workflows/conformance.yml"),
     ):
         add(
             "RUNTIME_ENVIRONMENT",

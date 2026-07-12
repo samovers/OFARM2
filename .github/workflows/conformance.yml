@@ -11,6 +11,12 @@ jobs:
   conformance:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    container:
+      # Complete Python, stdlib, libc/loader, and native dependency identity.
+      # The root stays immutable; only runner mounts and the explicit tmpfs
+      # are writable during the job.
+      image: python:3.12.13-bookworm@sha256:c36262cd12ed3eb4c32146f5268ea5037e04c688ccf32cdb04b6084671845541
+      options: --read-only --tmpfs /tmp:rw,noexec,nosuid,nodev,size=256m
     services:
       postgres:
         # Immutable last-green PostgreSQL 17.10 artifact; the baseline also
@@ -29,42 +35,60 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
-        with:
-          python-version: "3.12.13"
-          architecture: x64
+      - name: Verify pinned container boundary
+        run: |
+          git --version
+          python -c "import os,tempfile; assert os.statvfs('/usr/local').f_flag & os.ST_RDONLY; handle=tempfile.NamedTemporaryFile(); handle.write(b'ofarm'); handle.flush()"
+          printf '#!/bin/sh\nexit 0\n' > /tmp/ofarm-noexec-probe
+          chmod 700 /tmp/ofarm-noexec-probe
+          if /tmp/ofarm-noexec-probe; then exit 1; fi
       - name: Create isolated locked environment
         run: |
           python -m venv .review-venv
-          .review-venv/bin/python -m pip install --require-hashes --only-binary=:all: --no-deps --requirement requirements-review-pip.lock
-          .review-venv/bin/python -m pip install --require-hashes --only-binary=:all: --no-deps --requirement requirements-review-baseline.lock
+          mkdir -p .review-venv/.ofarm-wheelhouse
+          .review-venv/bin/python -m pip download --require-hashes --only-binary=:all: --no-deps --dest .review-venv/.ofarm-wheelhouse --requirement requirements-review-pip.lock
+          .review-venv/bin/python -m pip install --no-compile --no-index --find-links .review-venv/.ofarm-wheelhouse --require-hashes --only-binary=:all: --no-deps --requirement requirements-review-pip.lock
+          .review-venv/bin/python -m pip download --require-hashes --only-binary=:all: --no-deps --dest .review-venv/.ofarm-wheelhouse --requirement requirements-review-baseline.lock
+          .review-venv/bin/python -m pip install --no-compile --no-index --find-links .review-venv/.ofarm-wheelhouse --require-hashes --only-binary=:all: --no-deps --requirement requirements-review-baseline.lock
           .review-venv/bin/python -m pip check
+          find .review-venv -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
+          find .review-venv -depth -type d -name __pycache__ -empty -delete
       - name: Complete Kernel baseline run 1
         env:
-          OFARM_PG_ADMIN_DSN: "host=localhost port=5432 dbname=postgres user=ofarm password=ofarm"
-        run: .review-venv/bin/python conformance/run_review_baseline.py run --output-dir .artifacts/review-baseline/run-1
+          OFARM_PG_ADMIN_DSN: "host=postgres port=5432 dbname=postgres user=ofarm password=ofarm"
+        run: >-
+          .review-venv/bin/python -I -B -S tooling/ofarm_isolated.py
+          --venv-root .review-venv -m conformance.run_review_baseline
+          run --output-dir .artifacts/review-baseline/run-1
       - name: Complete Kernel baseline run 2
         env:
-          OFARM_PG_ADMIN_DSN: "host=localhost port=5432 dbname=postgres user=ofarm password=ofarm"
-        run: .review-venv/bin/python conformance/run_review_baseline.py run --output-dir .artifacts/review-baseline/run-2
+          OFARM_PG_ADMIN_DSN: "host=postgres port=5432 dbname=postgres user=ofarm password=ofarm"
+        run: >-
+          .review-venv/bin/python -I -B -S tooling/ofarm_isolated.py
+          --venv-root .review-venv -m conformance.run_review_baseline
+          run --output-dir .artifacts/review-baseline/run-2
       - name: Prove clean-run equivalence
         run: >-
-          .review-venv/bin/python conformance/run_review_baseline.py compare
+          .review-venv/bin/python -I -B -S tooling/ofarm_isolated.py
+          --venv-root .review-venv -m conformance.run_review_baseline compare
           .artifacts/review-baseline/run-1/review-baseline-evidence.json
           .artifacts/review-baseline/run-2/review-baseline-evidence.json
           --output .artifacts/review-baseline/equivalence.json
       - name: Preserve root platform MVP evidence lane
         env:
-          OFARM_PG_DSN: "host=localhost port=5432 dbname=ofarm_kernel_test user=ofarm password=ofarm"
-          OFARM_PG_ADMIN_DSN: "host=localhost port=5432 dbname=postgres user=ofarm password=ofarm"
+          OFARM_PG_DSN: "host=postgres port=5432 dbname=ofarm_kernel_test user=ofarm password=ofarm"
+          OFARM_PG_ADMIN_DSN: "host=postgres port=5432 dbname=postgres user=ofarm password=ofarm"
           OFARM_PLATFORM_MVP_EVIDENCE_DIR: .artifacts/platform-evidence
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
           PYTHONDONTWRITEBYTECODE: "1"
-          PYTHONHASHSEED: "0"
           TZ: UTC
           LANG: C.UTF-8
           LC_ALL: C.UTF-8
-        run: .review-venv/bin/python -m pytest kernel/tests/test_conformance.py -q -p no:cacheprovider
+        run: >-
+          .review-venv/bin/python -I -B -S tooling/ofarm_isolated.py
+          --venv-root .review-venv -m pytest
+          kernel/tests/test_conformance.py -q --assert=plain
+          --import-mode=importlib -p no:cacheprovider
       - name: Upload deterministic review baseline
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6

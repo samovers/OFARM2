@@ -120,10 +120,10 @@ class Materializer:
     # ------------------------------------------------------- freshness vector --
 
     def _watermark(self, kind: str) -> str:
-        with self.store.conn.cursor() as cur:
+        with self.store._read_cursor() as cur:
             cur.execute(
                 "SELECT count(*) AS n, coalesce(max(record_time)::text, 'none') AS t "
-                "FROM kernel_record WHERE record_kind = %s", (kind,))
+                "FROM ONLY kernel_record WHERE record_kind = %s", (kind,))
             row = cur.fetchone()
             return f"{row['n']}@{row['t']}"
 
@@ -317,7 +317,7 @@ class Materializer:
             self.store.insert_runtime_trace(cur, key)  # key id is content-stable
         else:
             cur.execute(
-                "SELECT payload, runtime_bundle_digest FROM runtime_trace "
+                "SELECT payload, runtime_bundle_digest FROM ONLY runtime_trace "
                 "WHERE trace_id = %s", (key_id,))
             prior_key = cur.fetchone()
             if (prior_key["runtime_bundle_digest"] != self.runtime_bundle.digest
@@ -530,7 +530,7 @@ class Materializer:
             self.store.insert_runtime_trace(cur, key)
         else:
             cur.execute(
-                "SELECT payload, runtime_bundle_digest FROM runtime_trace "
+                "SELECT payload, runtime_bundle_digest FROM ONLY runtime_trace "
                 "WHERE trace_id = %s", (key_id,))
             prior_key = cur.fetchone()
             if (prior_key["runtime_bundle_digest"] != self.runtime_bundle.digest
@@ -733,7 +733,7 @@ class Materializer:
         mat, and must never be attributed to it."""
         cur.execute(
             "SELECT DISTINCT payload ->> 'triggerFamily' AS family "
-            "FROM runtime_trace WHERE trace_kind = %s "
+            "FROM ONLY runtime_trace WHERE trace_kind = %s "
             "AND payload ->> 'evaluatedMaterializationKeyRef' = %s "
             "AND payload ->> 'statusAfter' = 'STALE' "
             "AND record_time > %s",

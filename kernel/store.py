@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import threading
 from contextlib import contextmanager
 
 import psycopg
@@ -26,6 +27,14 @@ from psycopg.types.json import Jsonb
 
 from . import config
 from .contracts import ContractRegistry, ContractViolation, sha256_of
+from .schema_guard import (
+    SchemaGuardError,
+    ensure_schema,
+    hold_fingerprint_catalog_locks,
+    require_exact_schema,
+    require_no_temporary_schema,
+    verify_static_runtime_catalog,
+)
 
 # Single-writer advisory-lock key (M2 G2): a stable signed-64-bit derived from
 # the tenant ref. Every governed WRITE entry point (user commit + scheduled
@@ -43,32 +52,59 @@ AUTHORITATIVE_KINDS = (
     "ofarm.acceptedeventconsequence.v0.1",
 )
 
-_SCHEMA_PATH = config.PACKAGE_ROOT / "kernel" / "schema.sql"
-_SCHEMA_BYTES = _SCHEMA_PATH.read_bytes()
-_SCHEMA_SQL = _SCHEMA_BYTES.decode("utf-8")
+# Every governed transaction establishes these values transaction-locally
+# before it reads decision data or acquires the single-writer lock.  Session
+# settings remain mutable to PostgreSQL clients, but they can never influence
+# an OFARM decision: the next entry point replaces them and proves the complete
+# observation against the retained RuntimeBundle.
+_DETERMINISTIC_SESSION_SETTINGS = (
+    ("timezone", "TimeZone", "UTC"),
+    ("dateStyle", "DateStyle", "ISO, MDY"),
+    ("intervalStyle", "IntervalStyle", "postgres"),
+    ("searchPath", "search_path", "pg_catalog, public"),
+    ("sessionReplicationRole", "session_replication_role", "origin"),
+    ("standardConformingStrings", "standard_conforming_strings", "on"),
+    ("extraFloatDigits", "extra_float_digits", "1"),
+    ("byteaOutput", "bytea_output", "hex"),
+)
 
 
 class Store:
     _SEALED_REGISTRY_FIELDS = {
         "_registry", "_registry_decision_identity", "_registry_sealed",
+        "_verified_static_schema", "_transaction_lock", "_transaction_state",
+        "_runtime_bundle", "_runtime_environment_seal", "_bootstrap_bundle",
+        "_pending_runtime_bundle_activation",
     }
 
     def __setattr__(self, name, value):
         if (getattr(self, "_registry_sealed", False)
                 and name in self._SEALED_REGISTRY_FIELDS):
             raise AttributeError(
-                "Store ContractRegistry binding is immutable after construction")
+                "Store registry/runtime binding is immutable outside its sealed lifecycle")
         object.__setattr__(self, name, value)
 
     def __init__(self, dsn: str | None = None, registry: ContractRegistry | None = None):
         self._registry_sealed = False
+        # This reads only local reviewed bytes.  It must complete before the
+        # Store is capable of opening or touching a database connection.
+        self._verified_static_schema = verify_static_runtime_catalog(
+            config.PACKAGE_ROOT)
         self.dsn = dsn or config.database_dsn()
         self._registry = registry or ContractRegistry()
         self._registry_decision_identity = self._registry.decision_identity()
         self._conn: psycopg.Connection | None = None
         self._runtime_bundle = None
+        self._runtime_environment_seal = None
         self._bootstrap_bundle = None
         self._pending_runtime_bundle_activation = None
+        # One psycopg connection is shared by the synchronous API object.  The
+        # lock spans the complete transaction/yield window so another FastAPI
+        # worker can never join the first worker's PostgreSQL transaction.  The
+        # depth is thread-local: only genuine same-thread nested reads may reuse
+        # an already verified cursor/transaction.
+        self._transaction_lock = threading.RLock()
+        self._transaction_state = threading.local()
         self._registry_sealed = True
 
     @property
@@ -82,24 +118,74 @@ class Store:
 
     # -- connection / lifecycle ------------------------------------------------
 
+    def _require_static_runtime_catalog(self) -> None:
+        """Re-prove reviewed static inputs before any database mutation."""
+        current = verify_static_runtime_catalog(config.PACKAGE_ROOT)
+        if current != self._verified_static_schema:
+            raise SchemaGuardError(
+                "static RuntimeBundle catalog or exact schema bytes changed after "
+                "Store construction; database startup is forbidden")
+
+    def _require_preconnection_runtime_posture(self) -> None:
+        """Re-prove static and import inputs before opening a DB connection."""
+        self._require_static_runtime_catalog()
+        # Imported decision code is part of the pre-DB posture as well.  The
+        # runtime_bundle helper validates module origins and bytes without
+        # opening a PostgreSQL connection.
+        from .runtime_bundle import require_live_python_import_posture
+        require_live_python_import_posture(config.PACKAGE_ROOT)
+
+    def _require_transaction_python_posture(self) -> None:
+        """Re-prove executable Python state before every outer DB transaction."""
+        from .runtime_bundle import (
+            require_live_python_import_posture,
+            require_runtime_environment_seal,
+            require_store_runtime_bundle,
+        )
+        if self._runtime_bundle is None:
+            pending = self._pending_runtime_bundle_activation
+            if pending is not None:
+                require_runtime_environment_seal(
+                    pending[1], pending[2],
+                    "Store pending RuntimeBundle activation",
+                )
+                return
+            require_live_python_import_posture(config.PACKAGE_ROOT)
+            return
+        require_store_runtime_bundle(
+            self, self._runtime_bundle, "Store governed transaction")
+
+    def _transaction_depth(self) -> int:
+        return int(getattr(self._transaction_state, "depth", 0))
+
+    def _set_transaction_depth(self, depth: int) -> None:
+        if depth < 0:
+            raise RuntimeError("governed transaction depth cannot be negative")
+        self._transaction_state.depth = depth
+
     @property
     def conn(self) -> psycopg.Connection:
-        if self._conn is None or self._conn.closed:
-            self._conn = psycopg.connect(self.dsn, row_factory=dict_row, autocommit=True)
-            self._conn.execute("SET TIME ZONE 'UTC'")
-        return self._conn
+        with self._transaction_lock:
+            if self._conn is None or self._conn.closed:
+                self._require_preconnection_runtime_posture()
+                self._conn = psycopg.connect(
+                    self.dsn, row_factory=dict_row, autocommit=True)
+            return self._conn
 
     def migrate(self) -> None:
-        if _SCHEMA_PATH.read_bytes() != _SCHEMA_BYTES:
-            raise RuntimeError(
-                "kernel schema bytes changed after process startup; refusing to "
-                "migrate under an unreceipted schema")
-        with self.conn.cursor() as cur:
-            cur.execute(_SCHEMA_SQL)
+        """Install exact schema once, or verify an exact no-DDL restart.
+
+        Despite the historical method name, this never forward-migrates,
+        backfills, or repairs a non-empty database.
+        """
+        with self._transaction_lock:
+            self._require_static_runtime_catalog()
+            ensure_schema(self.conn, self._verified_static_schema)
 
     def close(self) -> None:
-        if self._conn is not None and not self._conn.closed:
-            self._conn.close()
+        with self._transaction_lock:
+            if self._conn is not None and not self._conn.closed:
+                self._conn.close()
 
     @property
     def runtime_bundle(self):
@@ -123,16 +209,22 @@ class Store:
     def _observe_database_environment(cur) -> dict:
         """Capture decision-bearing PostgreSQL state in the bootstrap transaction."""
         cur.execute(
-            "SELECT current_setting('server_version') AS version, "
-            "current_setting('server_version_num') AS version_number, "
-            "current_setting('server_encoding') AS encoding, "
-            "current_setting('TimeZone') AS timezone, "
-            "current_setting('DateStyle') AS date_style, "
-            "current_setting('IntervalStyle') AS interval_style, "
-            "current_setting('search_path') AS search_path, "
-            "current_setting('standard_conforming_strings') AS standard_strings, "
-            "current_setting('extra_float_digits') AS extra_float_digits, "
-            "current_setting('bytea_output') AS bytea_output, "
+            "SELECT pg_catalog.current_setting('server_version') AS version, "
+            "pg_catalog.current_setting('server_version_num') AS version_number, "
+            "pg_catalog.current_setting('server_encoding') AS encoding, "
+            "pg_catalog.current_setting('TimeZone') AS timezone, "
+            "pg_catalog.current_setting('DateStyle') AS date_style, "
+            "pg_catalog.current_setting('IntervalStyle') AS interval_style, "
+            "pg_catalog.current_setting('search_path') AS search_path, "
+            "pg_catalog.current_setting('session_replication_role') "
+            "AS session_replication_role, "
+            "pg_catalog.current_setting('transaction_isolation') "
+            "AS transaction_isolation, "
+            "pg_catalog.current_setting('standard_conforming_strings') "
+            "AS standard_strings, "
+            "pg_catalog.current_setting('extra_float_digits') "
+            "AS extra_float_digits, "
+            "pg_catalog.current_setting('bytea_output') AS bytea_output, "
             "current_user AS current_user_name, session_user AS session_user_name"
         )
         settings = cur.fetchone()
@@ -144,14 +236,15 @@ class Store:
             "datcollate AS collation, datctype AS ctype, "
             "datlocale AS locale, daticurules AS icu_rules, "
             "datcollversion AS collation_version "
-            "FROM pg_database WHERE datname = current_database()"
+            "FROM pg_catalog.pg_database "
+            "WHERE datname = pg_catalog.current_database()"
         )
         database = cur.fetchone()
         if database is None:
             raise RuntimeError("current PostgreSQL database identity is unavailable")
         cur.execute(
             "SELECT extname AS name, extversion AS version "
-            "FROM pg_extension ORDER BY extname"
+            "FROM pg_catalog.pg_extension ORDER BY extname"
         )
         extensions = [dict(row) for row in cur.fetchall()]
         return {
@@ -177,12 +270,68 @@ class Store:
                 "dateStyle": settings["date_style"],
                 "intervalStyle": settings["interval_style"],
                 "searchPath": settings["search_path"],
+                "sessionReplicationRole": settings["session_replication_role"],
+                "transactionIsolation": settings["transaction_isolation"],
                 "standardConformingStrings": settings["standard_strings"],
                 "extraFloatDigits": settings["extra_float_digits"],
                 "byteaOutput": settings["bytea_output"],
             },
             "extensions": extensions,
         }
+
+    def _establish_database_transaction_posture(self, cur) -> dict:
+        """Fix and verify all decision-bearing DB state before transaction use."""
+        require_no_temporary_schema(cur)
+        cur.execute(
+            "SELECT CURRENT_USER::pg_catalog.text AS current_user_name, "
+            "SESSION_USER::pg_catalog.text AS session_user_name"
+        )
+        identity = cur.fetchone()
+        if identity["current_user_name"] != identity["session_user_name"]:
+            raise RuntimeError(
+                "PostgreSQL current role differs from the authenticated session "
+                "role before the governed transaction")
+        for _field_name, setting_name, expected in _DETERMINISTIC_SESSION_SETTINGS:
+            cur.execute(
+                "SELECT pg_catalog.set_config(%s, %s, true) AS value",
+                (setting_name, expected),
+            )
+            if cur.fetchone()["value"] != expected:
+                raise RuntimeError(
+                    f"PostgreSQL setting {setting_name!r} could not be fixed "
+                    "for the governed transaction")
+
+        observed = self._observe_database_environment(cur)
+        session = observed["session"]
+        if any(session.get(field_name) != expected
+               for field_name, _setting_name, expected
+               in _DETERMINISTIC_SESSION_SETTINGS):
+            raise RuntimeError(
+                "PostgreSQL transaction did not retain the deterministic "
+                "session posture")
+        if session.get("transactionIsolation") != "read committed":
+            raise RuntimeError(
+                "PostgreSQL transaction did not retain READ COMMITTED isolation")
+
+        selected_bundle = self._runtime_bundle or self._bootstrap_bundle
+        if selected_bundle is None:
+            # Before the first bundle exists there is no retained observation
+            # to compare.  Refuse inherited SET ROLE state so it cannot become
+            # the baseline selected during bootstrap.
+            if session["currentUser"] != session["sessionUser"]:
+                raise RuntimeError(
+                    "PostgreSQL current role differs from the authenticated "
+                    "session role before RuntimeBundle selection")
+            return observed
+
+        from .runtime_bundle import database_runtime_environment_component
+        selected_database = selected_bundle.component(
+            "RUNTIME_DATABASE_OBSERVED", "environment:observed-postgresql.v1")
+        if database_runtime_environment_component(observed) != selected_database:
+            raise RuntimeError(
+                "PostgreSQL environment differs from the retained "
+                "RuntimeBundle observation")
+        return observed
 
     def _prepare_runtime_bundle_binding(self, bundle):
         """Run every fallible live-binding check inside the bootstrap transaction."""
@@ -198,7 +347,8 @@ class Store:
             raise RuntimeError(
                 "RuntimeBundle tenant does not match this Store runtime tenant")
         require_current_runtime_catalog(bundle, config.PACKAGE_ROOT)
-        required_environment = assert_runtime_environment_compatible(bundle)
+        required_environment, environment_seal = \
+            assert_runtime_environment_compatible(bundle)
         with self.conn.cursor() as cur:
             database_environment = self._observe_database_environment(cur)
         selected_database = bundle.component(
@@ -217,15 +367,22 @@ class Store:
                 "observed PostgreSQL version, timezone, encoding, or deterministic "
                 "locale provider differs from the retained runtime requirement")
         required_settings = {
+            "timezone": "UTC",
             "dateStyle": "ISO, MDY",
             "intervalStyle": "postgres",
+            "searchPath": "pg_catalog, public",
+            "sessionReplicationRole": "origin",
+            "transactionIsolation": "read committed",
             "standardConformingStrings": "on",
+            "extraFloatDigits": "1",
             "byteaOutput": "hex",
         }
         if any(database_environment["session"].get(name) != value
                for name, value in required_settings.items()):
             raise RuntimeError(
                 "observed PostgreSQL semantic settings are unsupported")
+        with self.conn.cursor() as cur:
+            require_exact_schema(cur, self._verified_static_schema)
         if self._runtime_bundle is not None and self._runtime_bundle.digest != bundle.digest:
             raise RuntimeError(
                 "RuntimeBundle hot switching is forbidden; create a new runtime instance")
@@ -239,7 +396,10 @@ class Store:
         if self._pending_runtime_bundle_activation is not None:
             raise RuntimeError("a RuntimeBundle activation is already pending")
         token = object()
-        self._pending_runtime_bundle_activation = (token, bundle)
+        object.__setattr__(
+            self, "_pending_runtime_bundle_activation",
+            (token, bundle, environment_seal),
+        )
         return token
 
     def _activate_prepared_runtime_bundle(self, activation_token) -> None:
@@ -251,12 +411,16 @@ class Store:
         if self.conn.info.transaction_status != psycopg.pq.TransactionStatus.IDLE:
             raise RuntimeError(
                 "RuntimeBundle activation is allowed only after bootstrap commits")
-        self._pending_runtime_bundle_activation = None
-        self._runtime_bundle = pending[1]
+        from .runtime_bundle import require_runtime_environment_seal
+        require_runtime_environment_seal(
+            pending[1], pending[2], "Store RuntimeBundle activation")
+        object.__setattr__(self, "_pending_runtime_bundle_activation", None)
+        object.__setattr__(self, "_runtime_bundle", pending[1])
+        object.__setattr__(self, "_runtime_environment_seal", pending[2])
 
     def _discard_prepared_runtime_bundle_binding(self) -> None:
         """Invalidate any one-use activation when bootstrap does not commit."""
-        self._pending_runtime_bundle_activation = None
+        object.__setattr__(self, "_pending_runtime_bundle_activation", None)
 
     def assert_runtime_bundle_compatible(self, bundle) -> None:
         """Check process-local registry/runtime compatibility before commit."""
@@ -268,7 +432,8 @@ class Store:
                 "Store ContractRegistry decision semantics differ from code-owned runtime")
         schema_component = bundle.component(
             "RUNTIME_SCHEMA", "sql:kernel/schema.sql")
-        if schema_component.canonical_bytes != _SCHEMA_BYTES:
+        if schema_component.canonical_bytes != \
+                self._verified_static_schema.schema_bytes:
             raise RuntimeError(
                 "RuntimeBundle schema bytes differ from the schema executed by Store")
         contract_components = {
@@ -329,11 +494,11 @@ class Store:
             raise RuntimeError(
                 "bootstrap write authority requires an active database transaction")
         self.assert_runtime_bundle_compatible(bundle)
-        self._bootstrap_bundle = bundle
+        object.__setattr__(self, "_bootstrap_bundle", bundle)
         try:
             yield
         finally:
-            self._bootstrap_bundle = None
+            object.__setattr__(self, "_bootstrap_bundle", None)
 
     def install_runtime_bundle(self, cur, bundle) -> None:
         """Persist exact bundle/component bytes, verifying every identity reuse."""
@@ -352,7 +517,7 @@ class Store:
                 "RuntimeBundle installation requires one active database transaction")
         cur.execute(
             "SELECT tenant_ref, bundle_ref, canonical_document, canonical_bytes, "
-            "byte_length FROM runtime_bundle "
+            "byte_length FROM ONLY runtime_bundle "
             "WHERE tenant_ref = %s AND bundle_digest = %s",
             (bundle.tenant_ref, bundle.digest),
         )
@@ -369,7 +534,7 @@ class Store:
                 raise RuntimeError(
                     f"RuntimeBundle digest {bundle.digest} was reused for unequal bytes")
             cur.execute(
-                "SELECT component_role, logical_ref FROM runtime_bundle_component "
+                "SELECT component_role, logical_ref FROM ONLY runtime_bundle_component "
                 "WHERE tenant_ref = %s AND bundle_digest = %s",
                 (bundle.tenant_ref, bundle.digest),
             )
@@ -446,7 +611,7 @@ class Store:
             cur.execute(
                 "SELECT repository_path, canonicalization, content_placement, "
                 "global_content_digest, tenant_content_digest, byte_length "
-                "FROM runtime_bundle_component WHERE tenant_ref = %s "
+                "FROM ONLY runtime_bundle_component WHERE tenant_ref = %s "
                 "AND bundle_digest = %s "
                 "AND component_role = %s AND logical_ref = %s",
                 (bundle.tenant_ref, bundle.digest,
@@ -488,7 +653,7 @@ class Store:
                     f"{component.role}/{component.logical_ref}")
 
         cur.execute(
-            "SELECT component_role, logical_ref FROM runtime_bundle_component "
+            "SELECT component_role, logical_ref FROM ONLY runtime_bundle_component "
             "WHERE tenant_ref = %s AND bundle_digest = %s",
             (bundle.tenant_ref, bundle.digest),
         )
@@ -505,10 +670,10 @@ class Store:
                 f"extra={sorted(persisted_identities - expected_identities)}")
 
     def persisted_runtime_bundle(self, digest: str) -> dict | None:
-        with self.conn.cursor() as cur:
+        with self._read_cursor() as cur:
             cur.execute(
                 "SELECT tenant_ref, bundle_digest, bundle_ref, canonical_document, "
-                "canonical_bytes, byte_length FROM runtime_bundle "
+                "canonical_bytes, byte_length FROM ONLY runtime_bundle "
                 "WHERE tenant_ref = %s AND bundle_digest = %s",
                 (config.TENANT_REF, digest),
             )
@@ -530,10 +695,10 @@ class Store:
                 "THEN g.byte_length ELSE t.byte_length END AS blob_byte_length, "
                 "CASE WHEN c.content_placement = 'GLOBAL_IMMUTABLE_CONTENT' "
                 "THEN g.canonical_bytes ELSE t.canonical_bytes END AS canonical_bytes "
-                "FROM runtime_bundle_component c "
-                "LEFT JOIN runtime_content_blob g "
+                "FROM ONLY runtime_bundle_component c "
+                "LEFT JOIN ONLY runtime_content_blob g "
                 "ON g.content_digest = c.global_content_digest "
-                "LEFT JOIN runtime_tenant_content_blob t "
+                "LEFT JOIN ONLY runtime_tenant_content_blob t "
                 "ON t.tenant_ref = c.tenant_ref "
                 "AND t.content_digest = c.tenant_content_digest "
                 "WHERE c.tenant_ref = %s AND c.bundle_digest = %s "
@@ -607,9 +772,68 @@ class Store:
         )
 
     @contextmanager
+    def _governed_transaction(self, *, serialized: bool):
+        """Own one thread-safe transaction and verify all runtime inputs once."""
+        with self._transaction_lock:
+            depth = self._transaction_depth()
+            outermost = depth == 0
+            if outermost:
+                # No database decision SQL is exposed until executable Python
+                # state has been re-proven against the selected RuntimeBundle.
+                self._require_transaction_python_posture()
+            connection = self.conn
+            if outermost and (
+                    not connection.autocommit
+                    or connection.info.transaction_status !=
+                    psycopg.pq.TransactionStatus.IDLE):
+                raise RuntimeError(
+                    "outer governed transaction requires its owned autocommit "
+                    "connection to be IDLE; ambient transactions are forbidden")
+            with connection.transaction():
+                with connection.cursor() as cur:
+                    if outermost:
+                        # This must be the first statement after BEGIN.  A
+                        # poisoned session default must never select an older
+                        # snapshot before the single-writer lock is acquired.
+                        cur.execute(
+                            "SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
+                        self._establish_database_transaction_posture(cur)
+                        # SHARE locks persist through the complete user/yield
+                        # window.  Catalog DDL can neither race the fingerprint
+                        # nor land between verification and the decision.
+                        hold_fingerprint_catalog_locks(cur)
+                        require_exact_schema(
+                            cur, self._verified_static_schema)
+                    elif connection.info.transaction_status != \
+                            psycopg.pq.TransactionStatus.INTRANS:
+                        raise RuntimeError(
+                            "nested governed transaction has no PostgreSQL transaction")
+                    if serialized:
+                        cur.execute(
+                            "SELECT pg_catalog.pg_advisory_xact_lock(%s)",
+                            (_SINGLE_WRITER_LOCK_KEY,),
+                        )
+                    self._set_transaction_depth(depth + 1)
+                    try:
+                        yield cur
+                        if outermost:
+                            # Lazy imports, reloads, or hook/path changes inside
+                            # the body must be verified before COMMIT.  A late
+                            # failure raises here and rolls the current decision
+                            # back instead of deferring detection to the next
+                            # transaction.
+                            self._require_transaction_python_posture()
+                    finally:
+                        self._set_transaction_depth(depth)
+
+    @contextmanager
     def tx(self):
         """One transaction. The reachability constraint trigger fires at COMMIT
         of this block (D3).
+
+        This is the current UnitOfWork boundary.  A future UnitOfWork type must
+        own this same posture check before it exposes a cursor; callers must
+        never depend on a long-lived connection remaining untouched.
 
         CONVENTION (M2 G2, PR #10 review H1): plain ``tx()`` does NOT hold the
         single-writer lock. During G2's single-writer phase (until M5/L2 lifts
@@ -618,9 +842,8 @@ class Store:
         instead. ``tx()`` is for bootstrap/test setup and explicitly safe
         audit/read-decision traces only (e.g. recording a read-authorization
         decision). New write-capable paths default to ``serialized_tx()``."""
-        with self.conn.transaction():
-            with self.conn.cursor() as cur:
-                yield cur
+        with self._governed_transaction(serialized=False) as cur:
+            yield cur
 
     @contextmanager
     def serialized_tx(self):
@@ -633,10 +856,22 @@ class Store:
         connection it is granted immediately (no self-contention); it only blocks
         a *different* connection's write, which is the cross-writer race we mean
         to serialize."""
-        with self.conn.transaction():
+        with self._governed_transaction(serialized=True) as cur:
+            yield cur
+
+    @contextmanager
+    def _read_cursor(self):
+        """Return a cursor only inside a verified governed transaction."""
+        if self._transaction_depth():
+            if self.conn.info.transaction_status != \
+                    psycopg.pq.TransactionStatus.INTRANS:
+                raise RuntimeError(
+                    "governed transaction tracking disagrees with PostgreSQL state")
             with self.conn.cursor() as cur:
-                cur.execute("SELECT pg_advisory_xact_lock(%s)", (_SINGLE_WRITER_LOCK_KEY,))
                 yield cur
+            return
+        with self.tx() as cur:
+            yield cur
 
     # -- canonical record writes ----------------------------------------------
 
@@ -673,8 +908,8 @@ class Store:
         return record_id
 
     def runtime_trace_exists(self, trace_id: str) -> bool:
-        with self.conn.cursor() as cur:
-            cur.execute("SELECT 1 FROM runtime_trace WHERE trace_id = %s", (trace_id,))
+        with self._read_cursor() as cur:
+            cur.execute("SELECT 1 FROM ONLY runtime_trace WHERE trace_id = %s", (trace_id,))
             return cur.fetchone() is not None
 
     def insert_runtime_trace(self, cur, payload: dict, *,
@@ -724,12 +959,13 @@ class Store:
     def reference_data(self, data_family: str) -> list[dict]:
         """Store-backed reference-data rows of a family (snapshot_ref + payload),
         for a scheme reader to load into its lookup index."""
-        with self.conn.cursor() as cur:
+        with self._read_cursor() as cur:
             cur.execute(
                 "SELECT d.snapshot_ref, d.data_family, d.artifact_ref, "
                 "d.source_digest, d.parser_label, d.record_count, d.payload, "
                 "d.payload_sha256, d.runtime_bundle_digest "
-                "FROM reference_snapshot_data d JOIN runtime_bundle b "
+                "FROM ONLY reference_snapshot_data d "
+                "JOIN ONLY runtime_bundle b "
                 "ON b.bundle_digest = d.runtime_bundle_digest "
                 "WHERE d.data_family = %s AND b.tenant_ref = %s "
                 "ORDER BY d.snapshot_ref",
@@ -767,7 +1003,8 @@ class Store:
     # -- idempotency (ingress boundary RFC §2.4) -------------------------------
 
     def idempotency_lookup(self, cur, key: str) -> dict | None:
-        cur.execute("SELECT * FROM kernel_idempotency WHERE idempotency_key = %s", (key,))
+        cur.execute(
+            "SELECT * FROM ONLY kernel_idempotency WHERE idempotency_key = %s", (key,))
         return cur.fetchone()
 
     def idempotency_claim(
@@ -788,8 +1025,9 @@ class Store:
     # -- reads -----------------------------------------------------------------
 
     def get_record(self, record_id: str) -> dict | None:
-        with self.conn.cursor() as cur:
-            cur.execute("SELECT * FROM kernel_record WHERE record_id = %s", (record_id,))
+        with self._read_cursor() as cur:
+            cur.execute(
+                "SELECT * FROM ONLY kernel_record WHERE record_id = %s", (record_id,))
             return cur.fetchone()
 
     def get_payload(self, record_id: str) -> dict | None:
@@ -800,30 +1038,31 @@ class Store:
         return self.get_record(record_id) is not None
 
     def find_by_kind(self, kind: str) -> list[dict]:
-        with self.conn.cursor() as cur:
+        with self._read_cursor() as cur:
             cur.execute(
-                "SELECT * FROM kernel_record WHERE record_kind = %s ORDER BY record_time, record_id",
+                "SELECT * FROM ONLY kernel_record WHERE record_kind = %s "
+                "ORDER BY record_time, record_id",
                 (kind,),
             )
             return cur.fetchall()
 
     def edges_from(self, record_id: str, edge_type: str | None = None) -> list[dict]:
-        q = "SELECT * FROM kernel_edge WHERE src_record_id = %s"
+        q = "SELECT * FROM ONLY kernel_edge WHERE src_record_id = %s"
         args: list = [record_id]
         if edge_type:
             q += " AND edge_type = %s"
             args.append(edge_type)
-        with self.conn.cursor() as cur:
+        with self._read_cursor() as cur:
             cur.execute(q + " ORDER BY edge_id", args)
             return cur.fetchall()
 
     def edges_to(self, record_id: str, edge_type: str | None = None) -> list[dict]:
-        q = "SELECT * FROM kernel_edge WHERE dst_record_id = %s"
+        q = "SELECT * FROM ONLY kernel_edge WHERE dst_record_id = %s"
         args: list = [record_id]
         if edge_type:
             q += " AND edge_type = %s"
             args.append(edge_type)
-        with self.conn.cursor() as cur:
+        with self._read_cursor() as cur:
             cur.execute(q + " ORDER BY edge_id", args)
             return cur.fetchall()
 
@@ -847,16 +1086,16 @@ class Store:
         never the as-of selection key, which would mix the app clock with the
         edge's server clock and collapse Kernel rule 6 (times stay distinct).
         """
-        with self.conn.cursor() as cur:
+        with self._read_cursor() as cur:
             if as_of is None:
                 cur.execute(
                     """
-                    SELECT r.* FROM kernel_record r
+                    SELECT r.* FROM ONLY kernel_record r
                     WHERE r.record_kind = 'ofarm.acceptedeventconsequence.v0.1'
                       AND r.payload ->> 'inForceState' = 'IN_FORCE'
                       AND r.payload -> 'anchorScopes' @> %s
                       AND NOT EXISTS (
-                        SELECT 1 FROM kernel_edge e
+                        SELECT 1 FROM ONLY kernel_edge e
                          WHERE e.dst_record_id = r.record_id
                            AND e.edge_type = 'LINEAGE_SUPERSEDES')
                     ORDER BY r.record_time, r.record_id
@@ -866,13 +1105,13 @@ class Store:
             else:
                 cur.execute(
                     """
-                    SELECT r.* FROM kernel_record r
+                    SELECT r.* FROM ONLY kernel_record r
                     WHERE r.record_kind = 'ofarm.acceptedeventconsequence.v0.1'
                       AND r.payload ->> 'inForceState' = 'IN_FORCE'
                       AND r.payload -> 'anchorScopes' @> %s
                       AND r.record_time <= %s::timestamptz
                       AND NOT EXISTS (
-                        SELECT 1 FROM kernel_edge e
+                        SELECT 1 FROM ONLY kernel_edge e
                          WHERE e.dst_record_id = r.record_id
                            AND e.edge_type = 'LINEAGE_SUPERSEDES'
                            AND e.record_time <= %s::timestamptz)
@@ -887,13 +1126,13 @@ class Store:
 
     def unreachable_authoritative_records(self) -> list[str]:
         """Records violating the reachability invariant (must always be [])."""
-        with self.conn.cursor() as cur:
+        with self._read_cursor() as cur:
             cur.execute(
                 """
-                SELECT r.record_id FROM kernel_record r
+                SELECT r.record_id FROM ONLY kernel_record r
                 WHERE r.record_kind = ANY(%s)
                   AND NOT EXISTS (
-                    SELECT 1 FROM kernel_edge e
+                    SELECT 1 FROM ONLY kernel_edge e
                      WHERE e.edge_type = 'PROMOTION_EMITS'
                        AND e.dst_record_id = r.record_id)
                 ORDER BY r.record_id

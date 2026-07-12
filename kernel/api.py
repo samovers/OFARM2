@@ -7,20 +7,23 @@ per request — there is no unauthenticated path to farm-scoped truth.
 """
 from __future__ import annotations
 
-import json
+import uuid
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
-from fastapi.exception_handlers import (
-    http_exception_handler,
-    request_validation_exception_handler,
-)
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import auth_oidc, config, context
-from .contracts import ContractViolation, sha256_of
+from .contracts import ContractViolation, canonical_json
 from .problems import runtime_problem
 from .gates import GatePipeline
+from .runtime_bundle import (
+    JSON_CANONICALIZATION,
+    RAW_CANONICALIZATION,
+    sha256_bytes,
+)
 from .store import Store
 from .views import OutputGenerator
 
@@ -116,39 +119,94 @@ def create_app(store: Store | None = None, *, oidc=_FROM_ENV) -> FastAPI:
 
     app.state.get_principal = get_principal
 
-    def _receipt(response: Response, payload: dict) -> dict:
+    def _receipt(
+            payload: object, *, status_code: int = 200,
+            headers: dict[str, str] | None = None,
+            head_request: bool = False) -> Response:
+        """Emit, hash, and return one exact canonical JSON byte sequence.
+
+        Returning a Response (rather than a Python object) is intentional:
+        FastAPI must not perform a second Pydantic/JSON encoding pass after the
+        receipt digest has been calculated. HTTP never delivers a response body
+        for HEAD, so a handled HEAD error explicitly emits and hashes empty
+        exact bytes instead of hashing the suppressed JSON representation.
+        """
+        encoded_payload = jsonable_encoder(payload)
+        canonical_bytes = canonical_json(encoded_payload).encode("utf-8")
+        delivered_bytes = b"" if head_request else canonical_bytes
+        protected_headers = {
+            "content-length",
+            "content-type",
+            "x-ofarm-runtime-bundle-digest",
+            "x-ofarm-receipt-payload-digest",
+            "x-ofarm-receipt-canonicalization",
+        }
+        forwarded_headers = {
+            name: value for name, value in (headers or {}).items()
+            if name.lower() not in protected_headers
+        }
+        response = Response(
+            content=delivered_bytes,
+            status_code=status_code,
+            headers=forwarded_headers,
+        )
+        if head_request:
+            # Content-Length on HEAD describes the corresponding GET
+            # representation, not transferred bytes. This method-level error
+            # has no such safely equivalent representation, so omit it.
+            del response.headers["Content-Length"]
+        response.headers["Content-Type"] = "application/json; charset=utf-8"
         response.headers["X-OFARM-Runtime-Bundle-Digest"] = \
             app.state.store.runtime_bundle_digest
-        response.headers["X-OFARM-Receipt-Payload-Digest"] = sha256_of(payload)
-        return payload
-
-    def _receipt_existing_json_response(response: Response) -> Response:
-        payload = json.loads(bytes(response.body).decode("utf-8"))
-        _receipt(response, payload)
+        response.headers["X-OFARM-Receipt-Payload-Digest"] = \
+            sha256_bytes(delivered_bytes)
+        response.headers["X-OFARM-Receipt-Canonicalization"] = \
+            RAW_CANONICALIZATION if head_request else JSON_CANONICALIZATION
         return response
 
-    @app.exception_handler(HTTPException)
-    async def receipted_http_exception(request: Request, exc: HTTPException):
-        return _receipt_existing_json_response(
-            await http_exception_handler(request, exc))
+    @app.exception_handler(StarletteHTTPException)
+    async def receipted_http_exception(
+            request: Request, exc: StarletteHTTPException):
+        return _receipt(
+            {"detail": exc.detail},
+            status_code=exc.status_code,
+            headers=dict(exc.headers or {}),
+            head_request=request.method == "HEAD",
+        )
 
     @app.exception_handler(RequestValidationError)
     async def receipted_validation_exception(
             request: Request, exc: RequestValidationError):
-        return _receipt_existing_json_response(
-            await request_validation_exception_handler(request, exc))
+        return _receipt(
+            {"detail": exc.errors()},
+            status_code=422,
+            head_request=request.method == "HEAD",
+        )
+
+    @app.exception_handler(Exception)
+    async def receipted_unhandled_exception(
+            request: Request, exc: Exception):
+        # Unexpected implementation failures still cross the governed HTTP
+        # boundary as exact receipted bytes.  Never expose exception text or a
+        # traceback to the caller; operational logging remains the server's
+        # responsibility.
+        del exc
+        return _receipt(
+            {"detail": "Internal Server Error"},
+            status_code=500,
+            head_request=request.method == "HEAD",
+        )
 
     @app.get("/health")
-    def health(response: Response):
-        return _receipt(response, {
+    def health():
+        return _receipt({
             "status": "ok",
             "unreachableAuthoritativeRecords":
                 app.state.store.unreachable_authoritative_records(),
         })
 
     @app.post("/commit")
-    def commit(body: CommitBody, response: Response,
-               principal: str = Depends(get_principal)):
+    def commit(body: CommitBody, principal: str = Depends(get_principal)):
         # The transport principal binds to the submitted actor BEFORE the
         # pipeline runs: a body-supplied actingPartyRef is never trusted on its
         # own (hostile review blocker 1). The principal is the OIDC-verified Party
@@ -165,7 +223,7 @@ def create_app(store: Store | None = None, *, oidc=_FROM_ENV) -> FastAPI:
                 "principal; body-level actor spoofing is refused",
                 problem_id="problem:api-principal-mismatch"))
         try:
-            return _receipt(response, app.state.pipeline.commit(body.submission))
+            return _receipt(app.state.pipeline.commit(body.submission))
         except (ContractViolation, KeyError) as exc:
             raise HTTPException(status_code=422, detail=str(exc))
 
@@ -210,33 +268,31 @@ def create_app(store: Store | None = None, *, oidc=_FROM_ENV) -> FastAPI:
         return None
 
     @app.post("/review/accept")
-    def review_accept(body: ReviewAcceptBody, response: Response,
+    def review_accept(body: ReviewAcceptBody,
                       principal: str = Depends(get_principal)):
         # the review act is the REVIEWER'S own governed commit: the reviewer
         # IS the transport principal — there is no body-named reviewer field
         # to forge (hostile review blocker 1, second pass)
-        import uuid as _uuid
-        from .context import now_iso as _now
         submission = {
             "commitClass": "GOVERNANCE_DECISION",
             "ingressChannel": "MANUAL_UI",
             "actingPartyRef": principal,
             "farmRef": body.farmRef,
             "idempotencyKey": body.idempotencyKey
-                              or f"review-accept:{_uuid.uuid4().hex}",
-            "decisionTime": _now(),
+                              or f"review-accept:{uuid.uuid4().hex}",
+            "decisionTime": context.now_iso(),
             "reviewTargetAssertionRef": body.assertionRef,
             "reviewRationale": body.rationale,
             "reviewEvidenceRefs": body.evidenceRefs,
             "dominantSemanticConsequence": "review acceptance of a queued claim",
         }
         try:
-            return _receipt(response, app.state.pipeline.commit(submission))
+            return _receipt(app.state.pipeline.commit(submission))
         except (ContractViolation, KeyError) as exc:
             raise HTTPException(status_code=422, detail=str(exc))
 
     @app.post("/review/reject")
-    def review_reject(body: ReviewAcceptBody, response: Response,
+    def review_reject(body: ReviewAcceptBody,
                       principal: str = Depends(get_principal)):
         # the reject act is the REVIEWER'S own governed decline under their own
         # transport principal (M2 G5-2). The endpoint supplies the normalized
@@ -245,16 +301,14 @@ def create_app(store: Store | None = None, *, oidc=_FROM_ENV) -> FastAPI:
         # Authority is the DISTINCT REVIEW_REJECT_OR_CONTEST action — a principal
         # holding only REVIEW_ACCEPT is denied. The rationale is mandatory;
         # supplied evidence is validated like acceptance's.
-        import uuid as _uuid
-        from .context import now_iso as _now
         submission = {
             "commitClass": "GOVERNANCE_DECISION",
             "ingressChannel": "MANUAL_UI",
             "actingPartyRef": principal,
             "farmRef": body.farmRef,
             "idempotencyKey": body.idempotencyKey
-                              or f"review-reject:{_uuid.uuid4().hex}",
-            "decisionTime": _now(),
+                              or f"review-reject:{uuid.uuid4().hex}",
+            "decisionTime": context.now_iso(),
             "reviewTargetAssertionRef": body.assertionRef,
             "reviewAction": "REVIEW_REJECT_OR_CONTEST",
             "decisionOutcomeState": "REJECTED",
@@ -263,12 +317,12 @@ def create_app(store: Store | None = None, *, oidc=_FROM_ENV) -> FastAPI:
             "dominantSemanticConsequence": "review rejection of a queued claim",
         }
         try:
-            return _receipt(response, app.state.pipeline.commit(submission))
+            return _receipt(app.state.pipeline.commit(submission))
         except (ContractViolation, KeyError) as exc:
             raise HTTPException(status_code=422, detail=str(exc))
 
     @app.post("/review/contest")
-    def review_contest(body: ReviewContestBody, response: Response,
+    def review_contest(body: ReviewContestBody,
                        principal: str = Depends(get_principal)):
         # a CONTEST opens an append-only dispute against an ALREADY IN-FORCE
         # consequence under the reviewer's own principal (M2 G5-4). The endpoint
@@ -276,16 +330,14 @@ def create_app(store: Store | None = None, *, oidc=_FROM_ENV) -> FastAPI:
         # the target consequence ref; authority is the distinct
         # REVIEW_REJECT_OR_CONTEST action; the consequence is flagged (DISPUTE
         # edge) but never edited, and dependent materializations stale (spec §6).
-        import uuid as _uuid
-        from .context import now_iso as _now
         submission = {
             "commitClass": "GOVERNANCE_DECISION",
             "ingressChannel": "MANUAL_UI",
             "actingPartyRef": principal,
             "farmRef": body.farmRef,
             "idempotencyKey": body.idempotencyKey
-                              or f"review-contest:{_uuid.uuid4().hex}",
-            "decisionTime": _now(),
+                              or f"review-contest:{uuid.uuid4().hex}",
+            "decisionTime": context.now_iso(),
             "reviewTargetConsequenceRef": body.consequenceRef,
             "reviewAction": "REVIEW_REJECT_OR_CONTEST",
             "decisionOutcomeState": "CONTESTED",
@@ -294,13 +346,12 @@ def create_app(store: Store | None = None, *, oidc=_FROM_ENV) -> FastAPI:
             "dominantSemanticConsequence": "dispute against an in-force consequence",
         }
         try:
-            return _receipt(response, app.state.pipeline.commit(submission))
+            return _receipt(app.state.pipeline.commit(submission))
         except (ContractViolation, KeyError) as exc:
             raise HTTPException(status_code=422, detail=str(exc))
 
     @app.get("/records/{record_id}")
-    def get_record(record_id: str, response: Response,
-                   principal: str = Depends(get_principal)):
+    def get_record(record_id: str, principal: str = Depends(get_principal)):
         store = app.state.store
         row = store.get_record(record_id)
         if row is None:
@@ -333,7 +384,7 @@ def create_app(store: Store | None = None, *, oidc=_FROM_ENV) -> FastAPI:
                     store.insert_record(cur, access.result_payload)
                 if not access.allowed:
                     deny()
-        return _receipt(response, {
+        return _receipt({
             "recordId": row["record_id"], "recordKind": row["record_kind"],
             "schemaHash": row["schema_hash"], "payloadSha256": row["payload_sha256"],
             "runtimeBundleDigest": row["runtime_bundle_digest"],
@@ -341,22 +392,18 @@ def create_app(store: Store | None = None, *, oidc=_FROM_ENV) -> FastAPI:
         })
 
     @app.get("/views/passport/{farm_ref}")
-    def passport(farm_ref: str, response: Response,
-                 principal: str = Depends(get_principal)):
-        return _receipt(
-            response, app.state.outputs.passport_view(farm_ref, principal))
+    def passport(farm_ref: str, principal: str = Depends(get_principal)):
+        return _receipt(app.state.outputs.passport_view(farm_ref, principal))
 
     @app.post("/views/inspection-register/freeze")
-    def freeze(body: FreezeBody, response: Response,
-               principal: str = Depends(get_principal)):
+    def freeze(body: FreezeBody, principal: str = Depends(get_principal)):
         return _receipt(
-            response,
             app.state.outputs.freeze_inspection_register(
                 body.farmRef, principal, body.windowStart, body.windowEnd),
         )
 
     @app.get("/manifest")
-    def get_manifest(response: Response):
+    def get_manifest():
         manifests = [component for component in
                      app.state.store.runtime_bundle.components
                      if component.role == "ACTIVE_MANIFEST"]
@@ -366,7 +413,6 @@ def create_app(store: Store | None = None, *, oidc=_FROM_ENV) -> FastAPI:
                 detail="RuntimeBundle does not contain exactly one active manifest",
             )
         return _receipt(
-            response,
             app.state.store.runtime_bundle.json_component(
                 "ACTIVE_MANIFEST", manifests[0].logical_ref),
         )

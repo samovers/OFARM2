@@ -11,135 +11,12 @@
 -- ---------------------------------------------------------------------------
 -- Append-only enforcement (Kernel rule 1): correction is supersession.
 -- ---------------------------------------------------------------------------
-CREATE FUNCTION public.kernel_forbid_mutation() RETURNS trigger AS $$
+CREATE OR REPLACE FUNCTION kernel_forbid_mutation() RETURNS trigger AS $$
 BEGIN
   RAISE EXCEPTION 'OFARM Kernel rule 1 (append-only): % on %.% is forbidden; correction is supersession',
     TG_OP, TG_TABLE_SCHEMA, TG_TABLE_NAME;
 END
 $$ LANGUAGE plpgsql;
-
--- ---------------------------------------------------------------------------
--- One-time exact schema install receipt.  Startup creates this row only after
--- the complete verified schema has been applied in the same transaction.  On
--- every restart, the application recomputes a canonical pg_catalog document
--- and requires byte equality with this receipt.  There is deliberately no
--- forward-migration or repair path in the pre-deployment build: non-empty
--- targets without this exact receipt must be recreated.
--- ---------------------------------------------------------------------------
-CREATE TABLE public.runtime_schema_ledger (
-  ledger_key text PRIMARY KEY CHECK (ledger_key = 'ofarm-kernel-schema'),
-  schema_digest text NOT NULL CHECK (schema_digest ~ '^sha256:[0-9a-f]{64}$'),
-  catalog_fingerprint text NOT NULL CHECK (
-    catalog_fingerprint ~ '^sha256:[0-9a-f]{64}$'),
-  catalog_document jsonb NOT NULL CHECK (
-    jsonb_typeof(catalog_document) = 'object'
-    AND catalog_document ->> 'catalogVersion' =
-      'ofarm.postgresql-catalog-fingerprint.local.v3'),
-  catalog_bytes bytea NOT NULL,
-  byte_length bigint NOT NULL CHECK (
-    byte_length >= 0 AND byte_length = octet_length(catalog_bytes)),
-  installed_at timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE TRIGGER trg_runtime_schema_ledger_append_only
-  BEFORE UPDATE OR DELETE OR TRUNCATE ON public.runtime_schema_ledger
-  FOR EACH STATEMENT EXECUTE FUNCTION public.kernel_forbid_mutation();
-
--- ---------------------------------------------------------------------------
--- Immutable content-addressed RuntimeBundles (issue #171). These are
--- implementation receipts, not promoted OFARM machine contracts. Exact bytes
--- are retained so historical bundle reconstruction never depends on mutable
--- filesystem paths or derived caches.
--- The current pilot schema predates #174's internal tenant_id/TenantBinding.
--- Its exact tenant_ref key is transitional storage identity only; #174 replaces
--- it with tenant_id, composite FKs, forced RLS, and the governed batch key.
--- ---------------------------------------------------------------------------
-CREATE TABLE public.runtime_content_blob (
-  content_digest  text PRIMARY KEY CHECK (content_digest ~ '^sha256:[0-9a-f]{64}$'),
-  content_class text NOT NULL CHECK (content_class IN ('ACTIVE_MANIFEST', 'CONTRACT_MANIFEST', 'CONTRACT_METADATA', 'CONTRACT_SCHEMA', 'PARSER_CODE', 'PROFILE_DESCRIPTOR', 'PROFILE_INSTANCE', 'PROFILE_POLICY', 'PROFILE_ROUTE_SELECTION', 'QUERY_PLAN', 'QUERY_SPECIFICATION', 'REFERENCE_DATA', 'REFERENCE_SNAPSHOT', 'REFERENCE_SOURCE', 'RUNTIME_CATALOG_CODE', 'RUNTIME_CODE', 'RUNTIME_DATABASE_OBSERVED', 'RUNTIME_ENVIRONMENT', 'RUNTIME_ENVIRONMENT_OBSERVED', 'RUNTIME_SCHEMA', 'TENANT_BINDING')),
-  canonicalization text NOT NULL CHECK (
-    canonicalization IN ('OFARM_CANONICAL_JSON_V1', 'EXACT_BYTES_V1')),
-  canonical_bytes bytea NOT NULL,
-  byte_length bigint NOT NULL CHECK (
-    byte_length >= 0 AND byte_length = octet_length(canonical_bytes))
-);
-
-CREATE TABLE public.runtime_tenant_content_blob (
-  tenant_ref text NOT NULL CHECK (
-    length(tenant_ref) BETWEEN 1 AND 255
-    AND tenant_ref ~ '^[A-Za-z0-9._:-]+$'),
-  content_digest text NOT NULL CHECK (content_digest ~ '^sha256:[0-9a-f]{64}$'),
-  content_class text NOT NULL CHECK (content_class IN ('ACTIVE_MANIFEST', 'CONTRACT_MANIFEST', 'CONTRACT_METADATA', 'CONTRACT_SCHEMA', 'PARSER_CODE', 'PROFILE_DESCRIPTOR', 'PROFILE_INSTANCE', 'PROFILE_POLICY', 'PROFILE_ROUTE_SELECTION', 'QUERY_PLAN', 'QUERY_SPECIFICATION', 'REFERENCE_DATA', 'REFERENCE_SNAPSHOT', 'REFERENCE_SOURCE', 'RUNTIME_CATALOG_CODE', 'RUNTIME_CODE', 'RUNTIME_DATABASE_OBSERVED', 'RUNTIME_ENVIRONMENT', 'RUNTIME_ENVIRONMENT_OBSERVED', 'RUNTIME_SCHEMA', 'TENANT_BINDING')),
-  canonicalization text NOT NULL CHECK (
-    canonicalization IN ('OFARM_CANONICAL_JSON_V1', 'EXACT_BYTES_V1')),
-  canonical_bytes bytea NOT NULL,
-  byte_length bigint NOT NULL CHECK (
-    byte_length >= 0 AND byte_length = octet_length(canonical_bytes)),
-  PRIMARY KEY (tenant_ref, content_digest)
-);
-
-CREATE TABLE public.runtime_bundle (
-  tenant_ref      text NOT NULL CHECK (
-    length(tenant_ref) BETWEEN 1 AND 255
-    AND tenant_ref ~ '^[A-Za-z0-9._:-]+$'),
-  bundle_digest   text NOT NULL CHECK (bundle_digest ~ '^sha256:[0-9a-f]{64}$'),
-  bundle_ref      text NOT NULL,
-  canonical_document jsonb NOT NULL,
-  canonical_bytes bytea NOT NULL,
-  byte_length bigint NOT NULL CHECK (
-    byte_length >= 0 AND byte_length = octet_length(canonical_bytes)),
-  record_time timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (tenant_ref, bundle_digest),
-  UNIQUE (bundle_digest),
-  UNIQUE (tenant_ref, bundle_ref),
-  CHECK (bundle_ref = 'runtimebundle:' || bundle_digest)
-);
-
-CREATE TABLE public.runtime_bundle_component (
-  tenant_ref text NOT NULL CHECK (
-    length(tenant_ref) BETWEEN 1 AND 255
-    AND tenant_ref ~ '^[A-Za-z0-9._:-]+$'),
-  bundle_digest text NOT NULL,
-  component_role text NOT NULL CHECK (component_role IN ('ACTIVE_MANIFEST', 'CONTRACT_MANIFEST', 'CONTRACT_METADATA', 'CONTRACT_SCHEMA', 'PARSER_CODE', 'PROFILE_DESCRIPTOR', 'PROFILE_INSTANCE', 'PROFILE_POLICY', 'PROFILE_ROUTE_SELECTION', 'QUERY_PLAN', 'QUERY_SPECIFICATION', 'REFERENCE_DATA', 'REFERENCE_SNAPSHOT', 'REFERENCE_SOURCE', 'RUNTIME_CATALOG_CODE', 'RUNTIME_CODE', 'RUNTIME_DATABASE_OBSERVED', 'RUNTIME_ENVIRONMENT', 'RUNTIME_ENVIRONMENT_OBSERVED', 'RUNTIME_SCHEMA', 'TENANT_BINDING')),
-  logical_ref text NOT NULL CHECK (
-    length(logical_ref) BETWEEN 1 AND 1024
-    AND logical_ref ~ '^[A-Za-z0-9._:/#-]+$'),
-  repository_path text NOT NULL CHECK (
-    length(repository_path) BETWEEN 1 AND 1024
-    AND repository_path ~ '^[A-Za-z0-9._:/#-]+$'
-    AND repository_path !~ '(^/|//|/$|(^|/)\.\.?(/|$))'),
-  canonicalization text NOT NULL CHECK (
-    canonicalization IN ('OFARM_CANONICAL_JSON_V1', 'EXACT_BYTES_V1')),
-  content_placement text NOT NULL,
-  global_content_digest text REFERENCES public.runtime_content_blob(content_digest),
-  tenant_content_digest text,
-  byte_length bigint NOT NULL CHECK (byte_length >= 0),
-  PRIMARY KEY (tenant_ref, bundle_digest, component_role, logical_ref),
-  FOREIGN KEY (tenant_ref, bundle_digest)
-    REFERENCES public.runtime_bundle(tenant_ref, bundle_digest),
-  FOREIGN KEY (tenant_ref, tenant_content_digest)
-    REFERENCES public.runtime_tenant_content_blob(tenant_ref, content_digest),
-  CHECK (
-    (content_placement = 'GLOBAL_IMMUTABLE_CONTENT'
-      AND global_content_digest IS NOT NULL AND tenant_content_digest IS NULL)
-    OR
-    (content_placement = 'TENANT_RUNTIME_SELECTION'
-      AND global_content_digest IS NULL AND tenant_content_digest IS NOT NULL)
-  )
-);
-
-CREATE TRIGGER trg_runtime_content_blob_append_only
-  BEFORE UPDATE OR DELETE OR TRUNCATE ON public.runtime_content_blob
-  FOR EACH STATEMENT EXECUTE FUNCTION public.kernel_forbid_mutation();
-CREATE TRIGGER trg_runtime_tenant_content_blob_append_only
-  BEFORE UPDATE OR DELETE OR TRUNCATE ON public.runtime_tenant_content_blob
-  FOR EACH STATEMENT EXECUTE FUNCTION public.kernel_forbid_mutation();
-CREATE TRIGGER trg_runtime_bundle_append_only
-  BEFORE UPDATE OR DELETE OR TRUNCATE ON public.runtime_bundle
-  FOR EACH STATEMENT EXECUTE FUNCTION public.kernel_forbid_mutation();
-CREATE TRIGGER trg_runtime_bundle_component_append_only
-  BEFORE UPDATE OR DELETE OR TRUNCATE ON public.runtime_bundle_component
-  FOR EACH STATEMENT EXECUTE FUNCTION public.kernel_forbid_mutation();
 
 -- ---------------------------------------------------------------------------
 -- kernel_record: one row per governed contract record. JSONB payload is
@@ -151,7 +28,7 @@ CREATE TRIGGER trg_runtime_bundle_component_append_only
 -- lane: 'canonical' = package contract lane; 'draft' = drafts_reference
 -- shapes implemented behind Kernel law without promotion (D16).
 -- ---------------------------------------------------------------------------
-CREATE TABLE public.kernel_record (
+CREATE TABLE IF NOT EXISTS kernel_record (
   record_id      text PRIMARY KEY,
   record_kind    text NOT NULL,            -- schemaVersion const, e.g. 'ofarm.assertionrecord.v0.1'
   lane           text NOT NULL DEFAULT 'canonical' CHECK (lane IN ('canonical', 'draft')),
@@ -159,22 +36,20 @@ CREATE TABLE public.kernel_record (
   payload        jsonb NOT NULL,
   payload_sha256 text NOT NULL,
   record_time    timestamptz NOT NULL DEFAULT now(),
-  tenant_ref     text NOT NULL,
-  runtime_bundle_digest text NOT NULL,
-  FOREIGN KEY (tenant_ref, runtime_bundle_digest)
-    REFERENCES public.runtime_bundle(tenant_ref, bundle_digest)
+  tenant_ref     text NOT NULL DEFAULT 'tenant:si.ffs.pilot.demo'
 );
-CREATE INDEX ix_kernel_record_kind ON public.kernel_record (record_kind);
+CREATE INDEX IF NOT EXISTS ix_kernel_record_kind ON kernel_record (record_kind);
 
+DROP TRIGGER IF EXISTS trg_kernel_record_append_only ON kernel_record;
 CREATE TRIGGER trg_kernel_record_append_only
-  BEFORE UPDATE OR DELETE OR TRUNCATE ON public.kernel_record
-  FOR EACH STATEMENT EXECUTE FUNCTION public.kernel_forbid_mutation();
+  BEFORE UPDATE OR DELETE ON kernel_record
+  FOR EACH STATEMENT EXECUTE FUNCTION kernel_forbid_mutation();
 
 -- ---------------------------------------------------------------------------
 -- kernel_edge: explicit, durable relation table. References are edges,
 -- not JSON-path conventions (PLATFORM.md). Append-only.
 -- ---------------------------------------------------------------------------
-CREATE TABLE public.kernel_edge (
+CREATE TABLE IF NOT EXISTS kernel_edge (
   edge_id       bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   edge_type     text NOT NULL CHECK (edge_type IN (
                   'AUTHORITY_BASIS',        -- record -> AuthorizationDecisionResult / grant
@@ -192,24 +67,30 @@ CREATE TABLE public.kernel_edge (
                 )),
   src_record_id text NOT NULL,
   dst_record_id text NOT NULL,
-  record_time   timestamptz NOT NULL DEFAULT now(),
-  runtime_bundle_digest text NOT NULL REFERENCES public.runtime_bundle(bundle_digest)
+  record_time   timestamptz NOT NULL DEFAULT now()
 );
+-- CREATE TABLE IF NOT EXISTS never updates an existing CHECK: refresh the
+-- edge vocabulary idempotently so pre-existing databases pick up new types
+ALTER TABLE kernel_edge DROP CONSTRAINT IF EXISTS kernel_edge_edge_type_check;
+ALTER TABLE kernel_edge ADD CONSTRAINT kernel_edge_edge_type_check CHECK (edge_type IN (
+  'AUTHORITY_BASIS', 'EVIDENCE', 'REVIEW', 'EVENT_SOURCE',
+  'LINEAGE_SUPERSEDES', 'LINEAGE_REVISES', 'MATERIALIZATION_BASIS',
+  'PROMOTION_EMITS', 'COMPLIANCE_CLAIM', 'STRUCTURE_PAYLOAD',
+  'LINEAGE_SUPERSEDES_INTENT', 'DISPUTE'));
 
-CREATE INDEX ix_kernel_edge_src
-  ON public.kernel_edge (src_record_id, edge_type);
-CREATE INDEX ix_kernel_edge_dst
-  ON public.kernel_edge (dst_record_id, edge_type);
+CREATE INDEX IF NOT EXISTS ix_kernel_edge_src ON kernel_edge (src_record_id, edge_type);
+CREATE INDEX IF NOT EXISTS ix_kernel_edge_dst ON kernel_edge (dst_record_id, edge_type);
 
 -- Reachability invariant (KERNEL.md): every authoritative record reachable
 -- from EXACTLY ONE PromotionTrace. "At most one" is this unique index;
 -- "at least one" is the deferred constraint trigger below.
-CREATE UNIQUE INDEX uq_promotion_emits_dst
-  ON public.kernel_edge (dst_record_id) WHERE edge_type = 'PROMOTION_EMITS';
+CREATE UNIQUE INDEX IF NOT EXISTS uq_promotion_emits_dst
+  ON kernel_edge (dst_record_id) WHERE edge_type = 'PROMOTION_EMITS';
 
+DROP TRIGGER IF EXISTS trg_kernel_edge_append_only ON kernel_edge;
 CREATE TRIGGER trg_kernel_edge_append_only
-  BEFORE UPDATE OR DELETE OR TRUNCATE ON public.kernel_edge
-  FOR EACH STATEMENT EXECUTE FUNCTION public.kernel_forbid_mutation();
+  BEFORE UPDATE OR DELETE ON kernel_edge
+  FOR EACH STATEMENT EXECUTE FUNCTION kernel_forbid_mutation();
 
 -- A PROMOTION_EMITS edge is only reachability evidence if its SOURCE really
 -- is a stored PromotionTrace AND that trace's own payload agrees: the edge
@@ -218,14 +99,14 @@ CREATE TRIGGER trg_kernel_edge_append_only
 -- compatible outcome. Reconstruction from the edge table and from the trace
 -- payload must never disagree (hostile review blockers 5 + 7). Checked
 -- deferred so the trace can land later in the same transaction.
-CREATE FUNCTION public.kernel_require_trace_source() RETURNS trigger AS $$
+CREATE OR REPLACE FUNCTION kernel_require_trace_source() RETURNS trigger AS $$
 DECLARE
   trace jsonb;
 BEGIN
   IF NEW.edge_type <> 'PROMOTION_EMITS' THEN
     RETURN NULL;
   END IF;
-  SELECT payload INTO trace FROM public.kernel_record
+  SELECT payload INTO trace FROM kernel_record
    WHERE record_id = NEW.src_record_id
      AND record_kind = 'ofarm.promotiontrace.v0.1';
   IF trace IS NULL THEN
@@ -250,15 +131,16 @@ BEGIN
 END
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_kernel_edge_trace_source ON kernel_edge;
 CREATE CONSTRAINT TRIGGER trg_kernel_edge_trace_source
-  AFTER INSERT ON public.kernel_edge
+  AFTER INSERT ON kernel_edge
   DEFERRABLE INITIALLY DEFERRED
-  FOR EACH ROW EXECUTE FUNCTION public.kernel_require_trace_source();
+  FOR EACH ROW EXECUTE FUNCTION kernel_require_trace_source();
 
 -- "At least one" half of the reachability invariant, checked at COMMIT time
 -- so the PROMOTION_EMITS edge can land later in the same transaction (D3:
 -- linked in the same transaction; no schema change is required or permitted).
-CREATE FUNCTION public.kernel_require_promotion_reachability() RETURNS trigger AS $$
+CREATE OR REPLACE FUNCTION kernel_require_promotion_reachability() RETURNS trigger AS $$
 BEGIN
   IF NEW.record_kind IN (
        'ofarm.assertionrecord.v0.1',
@@ -267,7 +149,7 @@ BEGIN
        'ofarm.acceptedeventconsequence.v0.1'
      )
      AND NOT EXISTS (
-       SELECT 1 FROM public.kernel_edge
+       SELECT 1 FROM kernel_edge
         WHERE edge_type = 'PROMOTION_EMITS' AND dst_record_id = NEW.record_id
      )
   THEN
@@ -278,10 +160,11 @@ BEGIN
 END
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_kernel_record_reachability ON kernel_record;
 CREATE CONSTRAINT TRIGGER trg_kernel_record_reachability
-  AFTER INSERT ON public.kernel_record
+  AFTER INSERT ON kernel_record
   DEFERRABLE INITIALLY DEFERRED
-  FOR EACH ROW EXECUTE FUNCTION public.kernel_require_promotion_reachability();
+  FOR EACH ROW EXECUTE FUNCTION kernel_require_promotion_reachability();
 
 -- ---------------------------------------------------------------------------
 -- kernel_gate_log: enforcement/outbox trace. Every gate outcome that affects
@@ -289,7 +172,7 @@ CREATE CONSTRAINT TRIGGER trg_kernel_record_reachability
 -- (PLATFORM.md). Append-only. Zero silent acceptances (PILOT_SI.md success
 -- criterion) is auditable from this table joined to kernel_record.
 -- ---------------------------------------------------------------------------
-CREATE TABLE public.kernel_gate_log (
+CREATE TABLE IF NOT EXISTS kernel_gate_log (
   entry_id     bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   request_id   text NOT NULL,
   gate         text NOT NULL,
@@ -297,33 +180,32 @@ CREATE TABLE public.kernel_gate_log (
   reason_code  text,
   rationale    text,
   related_refs jsonb,
-  record_time  timestamptz NOT NULL DEFAULT now(),
-  runtime_bundle_digest text NOT NULL REFERENCES public.runtime_bundle(bundle_digest)
+  record_time  timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX ix_kernel_gate_log_request
-  ON public.kernel_gate_log (request_id);
+CREATE INDEX IF NOT EXISTS ix_kernel_gate_log_request ON kernel_gate_log (request_id);
 
+DROP TRIGGER IF EXISTS trg_kernel_gate_log_append_only ON kernel_gate_log;
 CREATE TRIGGER trg_kernel_gate_log_append_only
-  BEFORE UPDATE OR DELETE OR TRUNCATE ON public.kernel_gate_log
-  FOR EACH STATEMENT EXECUTE FUNCTION public.kernel_forbid_mutation();
+  BEFORE UPDATE OR DELETE ON kernel_gate_log
+  FOR EACH STATEMENT EXECUTE FUNCTION kernel_forbid_mutation();
 
 -- ---------------------------------------------------------------------------
 -- kernel_idempotency: replay bookkeeping for the ingress boundary
 -- (Event Ingress and Promotion Boundary Closure RFC §2.4). Append-only:
 -- a key is claimed once; replays read, never rewrite.
 -- ---------------------------------------------------------------------------
-CREATE TABLE public.kernel_idempotency (
+CREATE TABLE IF NOT EXISTS kernel_idempotency (
   idempotency_key       text PRIMARY KEY,
   request_id            text NOT NULL,
   source_payload_digest text,
   result_record_id      text NOT NULL,
-  record_time           timestamptz NOT NULL DEFAULT now(),
-  runtime_bundle_digest text NOT NULL REFERENCES public.runtime_bundle(bundle_digest)
+  record_time           timestamptz NOT NULL DEFAULT now()
 );
 
+DROP TRIGGER IF EXISTS trg_kernel_idempotency_append_only ON kernel_idempotency;
 CREATE TRIGGER trg_kernel_idempotency_append_only
-  BEFORE UPDATE OR DELETE OR TRUNCATE ON public.kernel_idempotency
-  FOR EACH STATEMENT EXECUTE FUNCTION public.kernel_forbid_mutation();
+  BEFORE UPDATE OR DELETE ON kernel_idempotency
+  FOR EACH STATEMENT EXECUTE FUNCTION kernel_forbid_mutation();
 
 -- ---------------------------------------------------------------------------
 -- DERIVED / RECOMPUTABLE tables. Never authoritative (Kernel rule 5; the
@@ -336,7 +218,7 @@ CREATE TRIGGER trg_kernel_idempotency_append_only
 -- derived: one row per live materialization key/answer. The governed records
 -- (MaterializationBasis/Result/Snapshot, ContextSnapshot) live in
 -- kernel_record; this is the runtime index over them.
-CREATE TABLE public.derived_materialization (
+CREATE TABLE IF NOT EXISTS derived_materialization (
   materialization_id   text PRIMARY KEY,
   key_digest           text NOT NULL,        -- digest of the draft MaterializationKey shape
   materialization_key  jsonb NOT NULL,       -- draft MaterializationKey (implemented, not promoted — D16)
@@ -351,28 +233,23 @@ CREATE TABLE public.derived_materialization (
   context_snapshot_ref text NOT NULL,
   freshness_vector     jsonb NOT NULL,       -- draft MaterializationFreshnessVector (D16)
   generated_at         timestamptz NOT NULL DEFAULT now(),
-  superseded_by        text,
-  runtime_bundle_digest text NOT NULL REFERENCES public.runtime_bundle(bundle_digest)
+  superseded_by        text
 );
-CREATE INDEX ix_derived_mat_key
-  ON public.derived_materialization (key_digest);
+CREATE INDEX IF NOT EXISTS ix_derived_mat_key ON derived_materialization (key_digest);
 
 -- derived: dependency index entries (draft MaterializationDependencyIndex
 -- shape, D16). Connects basis changes to affected materialization keys
 -- (explainable-evidence RFC §6).
-CREATE TABLE public.derived_dependency_index (
+CREATE TABLE IF NOT EXISTS derived_dependency_index (
   entry_id                 bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   dependency_source_ref    text NOT NULL,
   dependency_source_family text NOT NULL,
   key_digest               text NOT NULL,
   entry                    jsonb NOT NULL,
-  generated_at             timestamptz NOT NULL DEFAULT now(),
-  runtime_bundle_digest    text NOT NULL REFERENCES public.runtime_bundle(bundle_digest)
+  generated_at             timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX ix_derived_dep_source
-  ON public.derived_dependency_index (dependency_source_ref);
-CREATE INDEX ix_derived_dep_key
-  ON public.derived_dependency_index (key_digest);
+CREATE INDEX IF NOT EXISTS ix_derived_dep_source ON derived_dependency_index (dependency_source_ref);
+CREATE INDEX IF NOT EXISTS ix_derived_dep_key ON derived_dependency_index (key_digest);
 
 -- derived: store-backed external reference-data cache (M2 P1). When a governed
 -- import (kernel/adapters.py) is given a data payload, it persists the parsed
@@ -386,7 +263,7 @@ CREATE INDEX ix_derived_dep_key
 -- parameter, never a hardcoded scheme. One row per (snapshot_ref, data_family);
 -- a conflicting re-import is refused at the snapshot gate, so this never
 -- overwrites. Recomputable from the source, hence outside the append-only rule.
-CREATE TABLE public.reference_snapshot_data (
+CREATE TABLE IF NOT EXISTS reference_snapshot_data (
   snapshot_ref   text NOT NULL,
   data_family    text NOT NULL,
   artifact_ref   text,
@@ -396,42 +273,40 @@ CREATE TABLE public.reference_snapshot_data (
   payload        jsonb NOT NULL,
   payload_sha256 text NOT NULL,
   record_time    timestamptz NOT NULL DEFAULT now(),
-  runtime_bundle_digest text NOT NULL REFERENCES public.runtime_bundle(bundle_digest),
   PRIMARY KEY (snapshot_ref, data_family)
 );
-CREATE INDEX ix_reference_snapshot_data_family
-  ON public.reference_snapshot_data (data_family);
+CREATE INDEX IF NOT EXISTS ix_reference_snapshot_data_family ON reference_snapshot_data (data_family);
 
 -- runtime evidence lane: draft-shape traces (InvalidationEvaluationTrace …)
 -- recorded append-only but OUTSIDE the canonical record table — implemented
 -- behind Kernel law without promoting the draft contracts (D16). Not part of
 -- the reachability invariant (traces are runtime evidence, not source truth).
-CREATE TABLE public.runtime_trace (
+CREATE TABLE IF NOT EXISTS runtime_trace (
   trace_id       text PRIMARY KEY,
   trace_kind     text NOT NULL,
   schema_hash    text NOT NULL,
   payload        jsonb NOT NULL,
   payload_sha256 text NOT NULL,
-  record_time    timestamptz NOT NULL DEFAULT now(),
-  runtime_bundle_digest text NOT NULL REFERENCES public.runtime_bundle(bundle_digest)
+  record_time    timestamptz NOT NULL DEFAULT now()
 );
 
+DROP TRIGGER IF EXISTS trg_runtime_trace_append_only ON runtime_trace;
 CREATE TRIGGER trg_runtime_trace_append_only
-  BEFORE UPDATE OR DELETE OR TRUNCATE ON public.runtime_trace
-  FOR EACH STATEMENT EXECUTE FUNCTION public.kernel_forbid_mutation();
+  BEFORE UPDATE OR DELETE ON runtime_trace
+  FOR EACH STATEMENT EXECUTE FUNCTION kernel_forbid_mutation();
 
 -- frozen export artifacts (DocumentAssembly documents): durable, append-only,
 -- digest-addressed so a later inspection can verify the handed-over artifact
 -- against the store (views/VIEWS.md "Identification").
-CREATE TABLE public.export_artifact (
+CREATE TABLE IF NOT EXISTS export_artifact (
   artifact_ref       text PRIMARY KEY,
   digest             text NOT NULL,
   metadata_record_id text NOT NULL,
   document           jsonb NOT NULL,
-  record_time        timestamptz NOT NULL DEFAULT now(),
-  runtime_bundle_digest text NOT NULL REFERENCES public.runtime_bundle(bundle_digest)
+  record_time        timestamptz NOT NULL DEFAULT now()
 );
 
+DROP TRIGGER IF EXISTS trg_export_artifact_append_only ON export_artifact;
 CREATE TRIGGER trg_export_artifact_append_only
-  BEFORE UPDATE OR DELETE OR TRUNCATE ON public.export_artifact
-  FOR EACH STATEMENT EXECUTE FUNCTION public.kernel_forbid_mutation();
+  BEFORE UPDATE OR DELETE ON export_artifact
+  FOR EACH STATEMENT EXECUTE FUNCTION kernel_forbid_mutation();

@@ -490,6 +490,76 @@ is immutable for that bundle lifetime, and cannot satisfy another tenant. A
 queued operation or acceptance under a different tenant bundle refuses unless
 a separately governed migration operation is later defined.
 
+The Python boundary is executable, not an environment convention. Every live
+entry point uses the retained launcher with actual `python -I -B -S` flags
+inside the one digest-pinned, read-only Python Bookworm image.
+Before exposing project or dependency roots, that launcher verifies the static
+component lock and exact locked distribution set, verifies each retained wheel
+archive against its reviewed hash, and compares every installed import-root
+member directly with that archive. Mutable installed `RECORD` metadata is not
+an integrity authority. It also refuses `PYTHONPATH`/`PYTHONHOME` or other
+startup customization, native loader environment (including empty values),
+`.pth` files, user/site customization, project or
+dependency bytecode, and unowned dependency data or importable files. The only
+resulting path order is the pinned CPython standard runtime, locked virtual-
+environment roots, then the reviewed project root.
+
+The retained OCI-derived image manifest binds the exact executable, complete
+stdlib tree, libpython/native files, loader configuration, and required loader
+preload absence. `RUNTIME_ENVIRONMENT_OBSERVED` v3 retains that image identity,
+ordered path and flag posture, a complete source/native stdlib and
+lib-dynload inventory, every locked wheel import-root member, and each actually
+loaded module's name, loader, resolved origin, byte identity, package search
+paths, and classification. It also binds `sys.meta_path` and `sys.path_hooks`
+provider provenance and live object identity. Project origins must equal
+retained `RUNTIME_CODE`; dependency and standard-runtime origins must equal
+their retained file inventory. Unknown origins refuse, with closed built-in/
+frozen and native-created auxiliary cases attributed to their retained parent
+runtime. Live selection captures exact identities for the `sys.modules`
+mapping (including `None` entries), every module object and loader state, the
+`sys.path`/meta-path/path-hook containers and providers, and every canonical
+`sys.path_importer_cache` key, `FileFinder` object, loader configuration, and
+mutable finder cache. Activation, the pre-commit bootstrap guard, and every
+later decision boundary require that immutable seal: module additions,
+removals, replacements or reload state, path/container changes, and importer
+cache/finder drift refuse instead of widening the selected runtime. It also
+inventories every file-backed executable Linux
+mapping, attributes it to the read-only image or a hash-locked wheel, explicitly
+receipts the kernel vDSO/vsyscall boundary, and rejects anonymous, deleted,
+memfd, unknown, or late-added mappings before a governed commit.
+
+Before #174 replaces the prototype with immutable numbered migrations, #171
+also closes the mutable-DDL startup gap without inventing a compatibility path.
+The process verifies the complete static RuntimeBundle lock, exact schema bytes,
+and closed Python import posture before opening a database connection. It then
+classifies `public` through catalog reads as provably empty, exact current, or
+other. Only the empty case executes the verified schema and writes one protected
+`runtime_schema_ledger` receipt in the same transaction. The receipt retains the
+schema digest and canonical pg_catalog fingerprint for relations, columns and
+defaults, types, constraints and their internal enforcement-trigger state,
+indexes, non-internal triggers, functions, rewrite rules, policies, owners, and
+grants. Exact current is a verified no-DDL restart. A
+missing ledger on a non-empty schema, an older prototype schema, changed schema
+bytes, or catalog drift refuses before DDL with an instruction to recreate the
+pre-deployment database. #174 supersedes this transitional one-schema receipt
+with the separately applied numbered migration/readiness design below; it does
+not forward-migrate or adopt a database accepted by the prototype receipt.
+The one allowed empty install runs at SERIALIZABLE and holds SHARE locks on
+every catalog relation read by the fingerprint from its second empty check
+through DDL, fingerprinting, and ledger insertion. Every later outer governed
+transaction takes the same catalog locks before recomputing the receipt and
+holds them through commit, so DDL cannot land between verification and decision
+SQL. Concurrent non-cooperating DDL therefore finishes before the check or
+waits until the governed transaction completes.
+
+This transitional, pre-deployment prototype uses one elevated schema-owner and
+runtime identity because both installation and the per-transaction DDL exclusion
+need catalog-lock authority. It does not claim a least-privilege application
+role. #174 must separate numbered-migration ownership from stable application
+grants, provide a least-privilege runtime design that preserves the no-DDL-race
+invariant, and remove schema installation from application startup before any
+deployment.
+
 The global content installer is release-owned and unavailable to application,
 worker, tenant, and support roles. It accepts only catalog-classified
 tenant-neutral classes and exact bytes. Tenant bundle creation happens only

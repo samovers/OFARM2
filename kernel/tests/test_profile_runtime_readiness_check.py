@@ -82,7 +82,12 @@ def test_runtime_readiness_command_exits_zero_and_reports_current_boundaries():
     artifact_set_before = artifact_set_path.read_bytes()
 
     proc = subprocess.run(
-        [sys.executable, "conformance/ofarm_profile_runtime_readiness_check.py"],
+        [
+            sys.executable, "-I", "-B", "-S",
+            str(config.PACKAGE_ROOT / "tooling" / "ofarm_isolated.py"),
+            "--venv-root", str(Path(sys.executable).absolute().parent.parent),
+            "-m", "conformance.ofarm_profile_runtime_readiness_check",
+        ],
         cwd=config.PACKAGE_ROOT,
         capture_output=True,
         text=True,

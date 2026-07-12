@@ -20,6 +20,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "conformance" / "review_baseline_config.json"
+ISOLATED_LAUNCHER = ROOT / "tooling" / "ofarm_isolated.py"
 EVIDENCE_SCHEMA = "ofarm.review-baseline-evidence.v2"
 COMPARISON_SCHEMA = "ofarm.review-baseline-comparison.v2"
 NORMALIZATION_POLICY = "ofarm.review-baseline-normalization.v2"
@@ -117,8 +118,12 @@ def _sanitized_environment(config: dict[str, Any]) -> dict[str, str]:
     for name in list(env):
         if name.startswith("OFARM_") or name in {
             "PYTEST_ADDOPTS", "PYTEST_PLUGINS", "PYTHONOPTIMIZE",
-            "PYTHONPATH", "PYTHONWARNINGS",
-        }:
+            "PYTHONCASEOK", "PYTHONEXECUTABLE", "PYTHONHASHSEED",
+            "PYTHONHOME", "PYTHONINSPECT",
+            "PYTHONMALLOC", "PYTHONPATH", "PYTHONPLATLIBDIR",
+            "PYTHONPYCACHEPREFIX", "PYTHONSAFEPATH", "PYTHONSTARTUP",
+            "PYTHONWARNINGS", "GLIBC_TUNABLES", "GCONV_PATH",
+        } or name.startswith(("LD_", "DYLD_")):
             env.pop(name, None)
     for name in ALLOWED_OFARM_ENV:
         if original.get(name):
@@ -136,7 +141,6 @@ def _sanitized_environment(config: dict[str, Any]) -> dict[str, str]:
         "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
         "PYTHONNOUSERSITE": "1",
         "PYTHONDONTWRITEBYTECODE": "1",
-        "PYTHONHASHSEED": required["pythonHashSeed"],
         "TZ": required["timezone"],
         "LANG": required["locale"],
         "LC_ALL": required["locale"],
@@ -255,6 +259,23 @@ def _execute(args: list[str], env: dict[str, str]) -> int:
     return subprocess.run(args, cwd=ROOT, env=env, check=False).returncode
 
 
+def _isolated_python(module: str, *arguments: str) -> list[str]:
+    """Use the same closed import posture for every baseline subprocess."""
+    venv_root = Path(sys.executable).absolute().parent.parent
+    return [
+        sys.executable, "-I", "-B", "-S", str(ISOLATED_LAUNCHER),
+        "--venv-root", str(venv_root), "-m", module, *arguments,
+    ]
+
+
+def _isolated_display(module: str, *arguments: str) -> list[str]:
+    return [
+        ".review-venv/bin/python", "-I", "-B", "-S",
+        "tooling/ofarm_isolated.py", "--venv-root", ".review-venv",
+        "-m", module, *arguments,
+    ]
+
+
 def _step(name: str, command: list[str], exit_code: int | None, reason: str | None = None):
     if exit_code is None:
         outcome = "unavailable"
@@ -364,7 +385,8 @@ def _preflight(config: dict[str, Any], env: dict[str, str], pip_check_code: int)
             "pipCheckPassed": pip_check_code == 0,
         },
         "determinism": {
-            "pythonHashSeed": env["PYTHONHASHSEED"],
+            "pythonHashSeed": None,
+            "pythonHashRandomization": bool(sys.flags.hash_randomization),
             "timezone": env["TZ"],
             "locale": env["LC_ALL"],
             "pytestPluginAutoloadDisabled": True,
@@ -372,7 +394,11 @@ def _preflight(config: dict[str, Any], env: dict[str, str], pip_check_code: int)
             "pythonDontWriteBytecode": True,
             "scrubbedAmbientVariables": [
                 "PYTEST_ADDOPTS", "PYTEST_PLUGINS", "PYTHONOPTIMIZE",
-                "PYTHONPATH", "PYTHONWARNINGS", "OFARM_*",
+                "PYTHONCASEOK", "PYTHONEXECUTABLE", "PYTHONHASHSEED",
+                "PYTHONHOME", "PYTHONINSPECT", "PYTHONMALLOC", "PYTHONPATH",
+                "PYTHONPLATLIBDIR", "PYTHONPYCACHEPREFIX", "PYTHONSAFEPATH",
+                "PYTHONSTARTUP", "PYTHONWARNINGS", "LD_*", "DYLD_*",
+                "GLIBC_TUNABLES", "GCONV_PATH", "OFARM_*",
             ],
             "allowedOfarmVariables": sorted(ALLOWED_OFARM_ENV),
             "derivedOfarmVariables": ["OFARM_PG_DSN"],
@@ -587,28 +613,31 @@ def run_baseline(output_arg: str) -> int:
     inventory_file_digest = _sha256_file(inventory_path)
     env = _sanitized_environment(config)
     started = _utc_now()
-    python_display = "python"
-
-    package_command = [python_display, "conformance/ofarm_pkg_contract_check.py"]
-    package_code = _execute([sys.executable, package_command[1]], env)
-    pip_command = [python_display, "-m", "pip", "check"]
-    pip_code = _execute([sys.executable, "-m", "pip", "check"], env)
+    package_command = _isolated_display("conformance.ofarm_pkg_contract_check")
+    package_code = _execute(_isolated_python(
+        "conformance.ofarm_pkg_contract_check"), env)
+    pip_command = _isolated_display("pip", "check")
+    pip_code = _execute(_isolated_python("pip", "check"), env)
     environment, preflight_reasons = _preflight(config, env, pip_code)
     preflight_reasons = _git_integrity_reasons(git_start) + preflight_reasons
 
     results_path = output / "kernel-test-results.json"
-    pytest_command = [
-        python_display, "-m", "pytest", config["paths"]["testRoot"], "-q",
+    pytest_command = _isolated_display(
+        "pytest", config["paths"]["testRoot"], "-q",
+        "--assert=plain",
+        "--import-mode=importlib",
         "-p", "no:cacheprovider",
         "-p", "conformance.review_baseline_pytest",
         "--review-baseline-results", "kernel-test-results.json",
-    ]
-    actual_pytest_command = [
-        sys.executable, "-m", "pytest", config["paths"]["testRoot"], "-q",
+    )
+    actual_pytest_command = _isolated_python(
+        "pytest", config["paths"]["testRoot"], "-q",
+        "--assert=plain",
+        "--import-mode=importlib",
         "-p", "no:cacheprovider",
         "-p", "conformance.review_baseline_pytest",
         "--review-baseline-results", str(results_path),
-    ]
+    )
     if preflight_reasons:
         collection_command = actual_pytest_command + ["--collect-only"]
         pytest_code = _execute(collection_command, env)
@@ -628,13 +657,13 @@ def run_baseline(output_arg: str) -> int:
     warning_check = _warning_policy_check(
         config["warningPolicy"], test_results["warnings"])
 
-    manifest_command = [python_display, "-m", "kernel.manifest", "--verify-generated"]
+    manifest_command = _isolated_display(
+        "kernel.manifest", "--verify-generated")
     if preflight_reasons:
         manifest_code = None
     else:
-        manifest_code = _execute(
-            [sys.executable, "-m", "kernel.manifest", "--verify-generated"], env,
-        )
+        manifest_code = _execute(_isolated_python(
+            "kernel.manifest", "--verify-generated"), env)
 
     if preflight_reasons:
         test_store_postgres = {
@@ -884,12 +913,13 @@ def update_test_inventory() -> int:
     env = _sanitized_environment(config)
     with tempfile.TemporaryDirectory(prefix="ofarm-review-inventory-") as temporary:
         results_path = Path(temporary) / "kernel-test-results.json"
-        command = [
-            sys.executable, "-m", "pytest", config["paths"]["testRoot"],
-            "--collect-only", "-q", "-p", "no:cacheprovider",
+        command = _isolated_python(
+            "pytest", config["paths"]["testRoot"],
+            "--collect-only", "-q", "--assert=plain",
+            "--import-mode=importlib", "-p", "no:cacheprovider",
             "-p", "conformance.review_baseline_pytest",
             "--review-baseline-results", str(results_path),
-        ]
+        )
         process = subprocess.run(
             command,
             cwd=ROOT,

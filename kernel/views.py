@@ -630,7 +630,7 @@ class OutputGenerator:
             self.store.registry.validate(qualification)
             cur.execute(
                 "SELECT digest, metadata_record_id, document, runtime_bundle_digest "
-                "FROM export_artifact WHERE artifact_ref = %s", (durable_ref,))
+                "FROM ONLY export_artifact WHERE artifact_ref = %s", (durable_ref,))
             prior_artifact = cur.fetchone()
             if prior_artifact is None:
                 cur.execute(

@@ -201,7 +201,8 @@ class ImportRunner:
                     cur.execute(
                         "SELECT d.data_family, d.artifact_ref, d.source_digest, "
                         "d.parser_label, d.record_count, d.payload, d.payload_sha256 "
-                        "FROM reference_snapshot_data d JOIN runtime_bundle b "
+                        "FROM ONLY reference_snapshot_data d "
+                        "JOIN ONLY runtime_bundle b "
                         "ON b.bundle_digest = d.runtime_bundle_digest "
                         "WHERE d.snapshot_ref = %s AND b.tenant_ref = %s",
                         (snapshot_id, self.store.runtime_bundle.tenant_ref),

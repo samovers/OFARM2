@@ -65,6 +65,17 @@ def test_authoritative_target_requires_linux_x86_64_cpython():
     assert required["machine"] == "x86_64"
     assert required["pythonImplementation"] == "CPython"
     assert required["pythonOptimizationLevel"] == 0
+    assert required["pythonRuntimeImage"] == {
+        "reference": "docker.io/library/python:3.12.13-bookworm",
+        "indexDigest": (
+            "sha256:c36262cd12ed3eb4c32146f5268ea5037e04c688ccf32cdb04b6084671845541"
+        ),
+        "platform": "linux/amd64",
+        "platformManifestDigest": (
+            "sha256:bf530f921d806e9a604ae776d1c578e7465befc4d88a3b9d6cf9ee1db7d527ca"
+        ),
+        "rootFilesystem": "READ_ONLY",
+    }
     assert required["testDatabaseName"] == "ofarm_kernel_test"
 
 
@@ -83,6 +94,10 @@ def test_sanitized_environment_removes_ambient_test_and_ofarm_controls(monkeypat
     monkeypatch.setenv("PYTEST_PLUGINS", "ambient.plugin")
     monkeypatch.setenv("PYTHONOPTIMIZE", "2")
     monkeypatch.setenv("PYTHONPATH", "/ambient")
+    monkeypatch.setenv("LD_FUTURE", "")
+    monkeypatch.setenv("DYLD_FUTURE", "/ambient")
+    monkeypatch.setenv("GLIBC_TUNABLES", "")
+    monkeypatch.setenv("GCONV_PATH", "/ambient")
     monkeypatch.setenv("OFARM_ACTIVE_PROFILE", "profile_bad")
     monkeypatch.setenv("OFARM_PG_DSN", "host=wrong.example dbname=wrong")
     admin_dsn = "host=localhost port=5432 dbname=postgres user=ofarm password=ofarm"
@@ -95,13 +110,17 @@ def test_sanitized_environment_removes_ambient_test_and_ofarm_controls(monkeypat
     assert "PYTEST_PLUGINS" not in env
     assert "PYTHONOPTIMIZE" not in env
     assert "PYTHONPATH" not in env
+    assert "LD_FUTURE" not in env
+    assert "DYLD_FUTURE" not in env
+    assert "GLIBC_TUNABLES" not in env
+    assert "GCONV_PATH" not in env
     assert "OFARM_ACTIVE_PROFILE" not in env
     assert env["OFARM_PG_ADMIN_DSN"] == admin_dsn
     assert env["OFARM_PG_DSN"] == baseline._derive_test_dsn(
         admin_dsn, "ofarm_kernel_test")
     assert "wrong.example" not in env["OFARM_PG_DSN"]
     assert env["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] == "1"
-    assert env["PYTHONHASHSEED"] == "0"
+    assert "PYTHONHASHSEED" not in env
 
 
 def test_malformed_admin_dsn_emits_unavailable_evidence(tmp_path):
@@ -111,13 +130,10 @@ def test_malformed_admin_dsn_emits_unavailable_evidence(tmp_path):
     env.pop("OFARM_PG_DSN", None)
 
     proc = subprocess.run(
-        [
-            sys.executable,
-            "conformance/run_review_baseline.py",
-            "run",
-            "--output-dir",
-            str(output),
-        ],
+        baseline._isolated_python(
+            "conformance.run_review_baseline",
+            "run", "--output-dir", str(output),
+        ),
         cwd=baseline.ROOT,
         env=env,
         capture_output=True,
@@ -274,7 +290,7 @@ print(json.dumps({
     env = dict(os.environ)
     env["PYTHONOPTIMIZE"] = "1"
     proc = subprocess.run(
-        [sys.executable, "-c", probe],
+        [sys.executable, "-B", "-c", probe],
         cwd=baseline.ROOT,
         env=env,
         capture_output=True,

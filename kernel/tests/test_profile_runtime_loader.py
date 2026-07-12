@@ -709,7 +709,7 @@ def test_active_profile_env_import_fails_closed_for_blank_tokens(raw):
     env[config.ACTIVE_PROFILE_PACKAGE_NAMES_ENV] = raw
 
     proc = subprocess.run(
-        [sys.executable, "-c", "import kernel.config"],
+        [sys.executable, "-B", "-c", "import kernel.config"],
         cwd=config.PACKAGE_ROOT,
         env=env,
         capture_output=True,

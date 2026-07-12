@@ -64,6 +64,18 @@ SUPPORTED_IMPORT_SURFACES = {
 }
 
 
+def preload_runtime_import_surfaces() -> tuple[object, ...]:
+    """Load every reviewed adapter before RuntimeBundle environment selection."""
+    modules = tuple(
+        importlib.import_module(module_name)
+        for module_name in sorted(set(SUPPORTED_IMPORT_SURFACES.values()))
+    )
+    if tuple(module.__name__ for module in modules) != tuple(
+            sorted(set(SUPPORTED_IMPORT_SURFACES.values()))):
+        raise RuntimeError("reviewed runtime import-surface preload is not exact")
+    return modules
+
+
 def _retained_code_binding_profile(store) -> dict:
     """Return the exact global code-binding bytes selected by this Store.
 

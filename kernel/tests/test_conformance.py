@@ -14,16 +14,27 @@ from __future__ import annotations
 
 import copy
 import json
+import queue
 import uuid
 
+import anyio._backends._asyncio as anyio_asyncio
 import jsonschema
 import psycopg
 import pytest
+from fastapi.testclient import TestClient
 
 from kernel import config, context, demo, sufficiency
+from kernel.api import create_app
 from kernel.contracts import canonical_json, sha256_of
 from kernel.runtime_bundle import sha256_bytes
 from .conftest import record_detail
+
+# The single-file platform evidence lane activates its session Store in test 01.
+# Starlette's TestClient otherwise imports these backend modules lazily in test
+# 93, after the RuntimeBundle import seal. Preload the exact pinned backend
+# during collection so the evidence lane and the complete suite share the same
+# zero-growth runtime boundary.
+_TEST_CLIENT_RUNTIME_PRELOAD = (queue, anyio_asyncio)
 
 FIXTURES = config.PACKAGE_ROOT / "conformance" / "fixtures" / "gate_sequencing"
 
@@ -843,8 +854,6 @@ def test_15_manifest_grounding(store):
 # =========================================================================
 
 def test_93_governed_acceptance_semantics(store, pipeline):
-    from fastapi.testclient import TestClient
-    from kernel.api import create_app
     client = TestClient(create_app(store, oidc=None))
     closed = {}
 
@@ -1042,8 +1051,6 @@ def test_94_second_hostile_regressions(store, pipeline, materializer, outputs):
         "naming the advisor in the farmer's request must not promote"
     queued = forged["emittedAssertionRecordRefs"][0]
 
-    from fastapi.testclient import TestClient
-    from kernel.api import create_app
     client = TestClient(create_app(store, oidc=None))
     spoofed = client.post("/review/accept",
                           json={"farmRef": demo.FARM, "assertionRef": queued,
@@ -1304,8 +1311,6 @@ def test_95_hostile_review_regressions(store, pipeline, materializer):
 
     # B1 — the HTTP boundary binds the transport principal to the actor:
     # body-level spoofing is refused before the pipeline runs
-    from fastapi.testclient import TestClient
-    from kernel.api import create_app
     client = TestClient(create_app(store, oidc=None))
     spoof = demo.spray_submission(f"hr:b1:{uid()}", erp_id=f"erp:hr.{uid()}")
     no_header = client.post("/commit", json={"submission": spoof})
@@ -1947,8 +1952,6 @@ def test_97_review_driven_regressions(store, pipeline):
 
     # (g) the read API default-denies governance/trace records: a stranger
     # gets PERMISSION_REDACTED, never the record
-    from fastapi.testclient import TestClient
-    from kernel.api import create_app
     client = TestClient(create_app(store, oidc=None))
     trace_ref = first["promotionTraceRef"]
     resp = client.get(f"/records/{trace_ref}",

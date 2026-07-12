@@ -38,17 +38,25 @@
     "pythonImplementation": "CPython",
     "pythonVersion": "3.12.13",
     "pythonOptimizationLevel": 0,
+    "pythonRuntimeImage": {
+      "reference": "docker.io/library/python:3.12.13-bookworm",
+      "indexDigest": "sha256:c36262cd12ed3eb4c32146f5268ea5037e04c688ccf32cdb04b6084671845541",
+      "platform": "linux/amd64",
+      "platformManifestDigest": "sha256:bf530f921d806e9a604ae776d1c578e7465befc4d88a3b9d6cf9ee1db7d527ca",
+      "rootFilesystem": "READ_ONLY"
+    },
     "postgresqlVersion": "17.10",
     "testDatabaseName": "ofarm_kernel_test",
     "pipVersion": "26.1",
     "runner": "ubuntu-24.04",
     "locale": "C.UTF-8",
     "timezone": "UTC",
-    "pythonHashSeed": "0"
+    "pythonHashSeed": null
   },
   "paths": {
     "dependencyLock": "requirements-review-baseline.lock",
     "packageManagerLock": "requirements-review-pip.lock",
+    "pythonRuntimeImageManifest": "conformance/python_runtime_image_manifest.json",
     "schema": "kernel/schema.sql",
     "testInventory": "conformance/review_baseline_test_inventory.json",
     "testRoot": "kernel/tests"
@@ -65,8 +73,15 @@
     ]
   },
   "canonicalCommand": [
-    "python",
-    "conformance/run_review_baseline.py",
+    ".review-venv/bin/python",
+    "-I",
+    "-B",
+    "-S",
+    "tooling/ofarm_isolated.py",
+    "--venv-root",
+    ".review-venv",
+    "-m",
+    "conformance.run_review_baseline",
     "run",
     "--output-dir",
     ".artifacts/review-baseline/run"

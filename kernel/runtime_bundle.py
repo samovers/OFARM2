@@ -12,19 +12,23 @@ SHA-256 and every digest reuse is followed by byte equality verification.
 from __future__ import annotations
 
 import copy
-import base64
+import functools
 import hashlib
+import io
+import importlib.machinery
 import importlib.metadata
 import json
 import locale
 import os
 import platform
 import re
+import stat
 import sys
 import sysconfig
 import time
-from dataclasses import InitVar, dataclass
-from pathlib import Path
+import zipfile
+from dataclasses import InitVar, dataclass, field, replace
+from pathlib import Path, PurePosixPath
 from types import MappingProxyType
 from typing import Any, Iterable, Mapping
 
@@ -73,9 +77,38 @@ _RUNTIME_COMPONENT_ROLES = {
     "TENANT_BINDING",
 }
 _LIVE_SELECTION_PROOF = object()
-_OBSERVED_ENVIRONMENT_REF = "environment:observed-runtime.v1"
+_OBSERVED_ENVIRONMENT_REF = "environment:observed-runtime.v3"
 _OBSERVED_DATABASE_REF = "environment:observed-postgresql.v1"
 _PROFILE_ROUTE_SELECTION_REF = "profile-route-selection:active"
+
+
+@dataclass(frozen=True)
+class RuntimeEnvironmentSeal:
+    """Write-once process identity captured during atomic live activation."""
+
+    bundle_digest: str
+    flags: tuple[Any, ...]
+    ambient: tuple[Any, ...]
+    native_loader_environment: tuple[Any, ...]
+    native_runtime: str
+    native_runtime_stat: tuple[Any, ...]
+    customization: tuple[str, ...]
+    sys_path: tuple[Any, ...]
+    sys_path_object: object
+    meta_path: tuple[str, ...]
+    path_hooks: tuple[str, ...]
+    meta_path_container: object
+    path_hooks_container: object
+    meta_path_objects: tuple[object, ...]
+    path_hook_objects: tuple[object, ...]
+    path_importer_cache: tuple[str, ...]
+    path_importer_cache_mapping: object
+    path_importer_cache_objects: tuple[tuple[str, object, type, tuple[Any, ...]], ...]
+    import_callable_state: tuple[tuple[Any, ...], ...]
+    sys_modules_mapping: object
+    modules: tuple[tuple[str, object, tuple[Any, ...]], ...]
+    pycache_prefix: str | None
+    project_root: str
 
 
 class RuntimeBundleError(RuntimeError):
@@ -136,6 +169,11 @@ def require_store_runtime_bundle(store, bundle, consumer: str) -> None:
             or bound.selected_references != bundle.selected_references):
         raise RuntimeBundleError(
             f"{consumer} RuntimeBundle does not exactly match the Store bundle")
+    seal = getattr(store, "_runtime_environment_seal", None)
+    if not isinstance(seal, RuntimeEnvironmentSeal):
+        raise RuntimeBundleError(
+            f"{consumer} requires the Store's write-once runtime environment seal")
+    require_runtime_environment_seal(bundle, seal, consumer)
 
 
 def require_current_runtime_catalog(bundle, package_root: Path) -> None:
@@ -167,8 +205,22 @@ def require_current_runtime_catalog(bundle, package_root: Path) -> None:
                 f"live RuntimeBundle component differs from current catalog: {key!r}")
     observed_key = ("RUNTIME_ENVIRONMENT_OBSERVED", _OBSERVED_ENVIRONMENT_REF)
     database_key = ("RUNTIME_DATABASE_OBSERVED", _OBSERVED_DATABASE_REF)
-    current_observed = observed_runtime_environment_component()
-    if actual.get(observed_key) != current_observed:
+    current_observed = observed_runtime_environment_component(
+        package_root, bundle.components)
+    selected_observed = actual.get(observed_key)
+    if (selected_observed is None
+            or selected_observed.repository_path != "runtime-observed/environment-v3"
+            or selected_observed.canonicalization != JSON_CANONICALIZATION
+            or selected_observed.placement != GLOBAL_CONTENT_PLACEMENT):
+        raise RuntimeBundleError(
+            "live RuntimeBundle environment observation provenance is invalid")
+    current_environment = _strict_json_value(
+        current_observed.canonical_bytes, "current runtime environment observation")
+    selected_environment = _strict_json_value(
+        selected_observed.canonical_bytes, "selected runtime environment observation")
+    _validate_runtime_environment_document(current_environment)
+    _validate_runtime_environment_document(selected_environment)
+    if current_environment != selected_environment:
         raise RuntimeBundleError(
             "live RuntimeBundle does not match the currently observed runtime environment")
     if bundle.construction_mode == "LIVE_CURRENT" and database_key not in actual:
@@ -448,53 +500,1514 @@ class RuntimeComponent:
         }
 
 
-def observed_runtime_environment_component() -> RuntimeComponent:
-    """Bind the bundle to the interpreter and installed distribution bytes."""
+_AMBIENT_IMPORT_ENVIRONMENT = (
+    "PYTHONCASEOK",
+    "PYTHONEXECUTABLE",
+    "PYTHONHASHSEED",
+    "PYTHONHOME",
+    "PYTHONINSPECT",
+    "PYTHONMALLOC",
+    "PYTHONPATH",
+    "PYTHONPLATLIBDIR",
+    "PYTHONPYCACHEPREFIX",
+    "PYTHONSAFEPATH",
+    "PYTHONSTARTUP",
+    "PYTHONWARNINGS",
+)
+_NATIVE_LOADER_ENVIRONMENT_PREFIXES = ("LD_", "DYLD_")
+_NATIVE_LOADER_ENVIRONMENT_EXACT = frozenset({"GLIBC_TUNABLES", "GCONV_PATH"})
+_IMPORT_PROVIDER_METHODS = frozenset({
+    "find_spec", "find_module", "create_module", "exec_module",
+    "invalidate_caches", "path_hook", "_fill_cache", "get_code",
+    "get_data", "path_stats", "set_data",
+})
+_PROJECT_TEST_PATHS = (
+    "conformance/ofarm_profile_runtime_readiness_check.py",
+    "conformance/review_baseline_pytest.py",
+    "conformance/run_review_baseline.py",
+    "kernel/demo.py",
+    "kernel/tests/",
+    "profile_si_ffs/test_fixtures/",
+    "profile_si_ffs/tests/",
+)
+_PROJECT_TEST_NAMESPACE_PATHS = {"conformance", "profile_si_ffs"}
+_REVIEWED_ORIGINLESS_AUXILIARY_MODULES = {
+    # These module objects are created by an already pinned parent; they are
+    # not independently resolved by Python's import machinery.
+    "pyexpat.errors": "pyexpat",
+    "pyexpat.model": "pyexpat",
+    "typing.io": "typing",
+    "typing.re": "typing",
+    "cython_runtime": "psycopg_binary._psycopg",
+    "_cython_3_2_4": "psycopg_binary._psycopg",
+}
+
+
+def _resolved_path(value: str | os.PathLike[str]) -> Path:
+    return Path(value).expanduser().resolve(strict=False)
+
+
+@functools.lru_cache(maxsize=65536)
+def _sha256_for_unchanged_stat(
+    path: str,
+    device: int,
+    inode: int,
+    size: int,
+    modified_ns: int,
+    changed_ns: int,
+) -> str:
+    # All stat fields are intentional cache-key inputs. A byte replacement or
+    # in-place rewrite changes at least ctime on the supported live platform;
+    # unchanged files avoid repeated multi-megabyte scans during startup tests.
+    del device, inode, size, modified_ns, changed_ns
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return "sha256:" + digest.hexdigest()
+
+
+def _file_content_identity(path: Path) -> tuple[str, int]:
+    path = _resolved_path(path)
+    stat = path.stat()
+    if not path.is_file():
+        raise RuntimeBundleError(f"runtime identity path is not a file: {path}")
+    return _sha256_for_unchanged_stat(
+        str(path), stat.st_dev, stat.st_ino, stat.st_size,
+        stat.st_mtime_ns, stat.st_ctime_ns), stat.st_size
+
+
+def _validate_runtime_image_file_entry(
+    entry: Any,
+    *,
+    relative: bool = False,
+) -> None:
+    keys = {"path", "contentDigest", "byteLength"}
+    if relative:
+        keys.add("relativePath")
+    if (not isinstance(entry, dict) or set(entry) != keys
+            or not isinstance(entry.get("path"), str)
+            or not Path(entry["path"]).is_absolute()
+            or not _SHA256_RE.fullmatch(entry.get("contentDigest", ""))
+            or not isinstance(entry.get("byteLength"), int)
+            or entry["byteLength"] < 0):
+        raise RuntimeBundleError("retained Python image file entry is malformed")
+    if relative:
+        value = entry.get("relativePath")
+        path = PurePosixPath(value) if isinstance(value, str) else None
+        if (path is None or not value or path.is_absolute()
+                or any(part in {"", ".", ".."} for part in path.parts)):
+            raise RuntimeBundleError(
+                "retained Python standard-library relative path is malformed")
+
+
+def _validate_runtime_image_manifest(document: Any) -> None:
+    if (not isinstance(document, dict)
+            or set(document) != {"schemaVersion", "image", "python"}
+            or document.get("schemaVersion") !=
+            "ofarm.python-runtime-image-manifest.local.v1"):
+        raise RuntimeBundleError("retained Python runtime image manifest is malformed")
+    image = document.get("image")
+    if (not isinstance(image, dict)
+            or set(image) != {
+                "reference", "indexDigest", "platform",
+                "platformManifestDigest", "configDigest", "layers",
+            }
+            or image.get("platform") != "linux/amd64"
+            or not isinstance(image.get("reference"), str)
+            or not image["reference"]
+            or any(not _SHA256_RE.fullmatch(image.get(key, ""))
+                   for key in (
+                       "indexDigest", "platformManifestDigest", "configDigest"))
+            or not isinstance(image.get("layers"), list)
+            or not image["layers"]):
+        raise RuntimeBundleError("retained Python runtime image identity is malformed")
+    for layer in image["layers"]:
+        if (not isinstance(layer, dict)
+                or set(layer) != {"digest", "byteLength"}
+                or not _SHA256_RE.fullmatch(layer.get("digest", ""))
+                or not isinstance(layer.get("byteLength"), int)
+                or layer["byteLength"] <= 0):
+            raise RuntimeBundleError("retained Python runtime image layer is malformed")
+    python = document.get("python")
+    if (not isinstance(python, dict)
+            or set(python) != {
+                "version", "executable", "sharedLibrary",
+                "standardLibraryRoots", "nativeFiles",
+                "loaderConfigurationFiles", "requiredAbsentPaths",
+                "requiredExecutables",
+            }
+            or not isinstance(python.get("version"), str)
+            or not isinstance(python.get("standardLibraryRoots"), list)
+            or not python["standardLibraryRoots"]):
+        raise RuntimeBundleError("retained Python runtime file inventory is malformed")
+    _validate_runtime_image_file_entry(python["executable"])
+    _validate_runtime_image_file_entry(python["sharedLibrary"])
+    for field_name in (
+            "nativeFiles", "loaderConfigurationFiles", "requiredExecutables"):
+        entries = python.get(field_name)
+        if not isinstance(entries, list) or not entries:
+            raise RuntimeBundleError(
+                f"retained Python runtime {field_name} inventory is malformed")
+        for entry in entries:
+            _validate_runtime_image_file_entry(entry)
+        paths = [entry["path"] for entry in entries]
+        if paths != sorted(paths) or len(paths) != len(set(paths)):
+            raise RuntimeBundleError(
+                f"retained Python runtime {field_name} inventory is not canonical")
+    absent = python.get("requiredAbsentPaths")
+    if (not isinstance(absent, list) or absent != sorted(set(absent))
+            or any(not isinstance(path, str) or not Path(path).is_absolute()
+                   for path in absent)):
+        raise RuntimeBundleError(
+            "retained Python runtime required-absence inventory is malformed")
+    root_paths = []
+    for root in python["standardLibraryRoots"]:
+        if (not isinstance(root, dict)
+                or set(root) != {"path", "directories", "files"}
+                or not isinstance(root.get("path"), str)
+                or not Path(root["path"]).is_absolute()
+                or not isinstance(root.get("directories"), list)
+                or root["directories"] != sorted(set(root["directories"]))
+                or any(not isinstance(path, str) or not path
+                       for path in root["directories"])
+                or not isinstance(root.get("files"), list)
+                or not root["files"]):
+            raise RuntimeBundleError(
+                "retained Python standard-library root is malformed")
+        file_paths = []
+        for entry in root["files"]:
+            _validate_runtime_image_file_entry(entry, relative=True)
+            expected_path = Path(root["path"]) / entry["relativePath"]
+            if str(expected_path) != entry["path"]:
+                raise RuntimeBundleError(
+                    "retained Python standard-library path is inconsistent")
+            file_paths.append(entry["relativePath"])
+        if file_paths != sorted(file_paths) or len(file_paths) != len(set(file_paths)):
+            raise RuntimeBundleError(
+                "retained Python standard-library file inventory is not canonical")
+        root_paths.append(root["path"])
+    if root_paths != sorted(set(root_paths)):
+        raise RuntimeBundleError(
+            "retained Python standard-library roots are not canonical")
+
+
+def _runtime_image_manifest(
+    retained_components: Iterable["RuntimeComponent"],
+) -> dict[str, Any]:
+    matches = [
+        component for component in retained_components
+        if component.role == "RUNTIME_ENVIRONMENT"
+        and component.logical_ref ==
+        "environment:conformance/python_runtime_image_manifest.json"
+    ]
+    if len(matches) != 1:
+        raise RuntimeBundleError(
+            "RuntimeBundle must retain exactly one Python image manifest")
+    document = _strict_json_value(
+        matches[0].canonical_bytes, "retained Python image manifest")
+    _validate_runtime_image_manifest(document)
+    return document
+
+
+def _retained_runtime_image_maps(
+    manifest: Mapping[str, Any],
+) -> tuple[dict[str, tuple[str, int]], dict[str, tuple[str, int]]]:
+    standard: dict[str, tuple[str, int]] = {}
+    native: dict[str, tuple[str, int]] = {}
+
+    def add(target, entry):
+        identity = (entry["contentDigest"], entry["byteLength"])
+        prior = target.get(entry["path"])
+        if prior is not None and prior != identity:
+            raise RuntimeBundleError(
+                f"retained Python image disagrees about {entry['path']!r}")
+        target[entry["path"]] = identity
+
+    python = manifest["python"]
+    for root in python["standardLibraryRoots"]:
+        for entry in root["files"]:
+            add(standard, entry)
+            if entry["path"].endswith(tuple(importlib.machinery.EXTENSION_SUFFIXES)):
+                add(native, entry)
+    for entry in (
+            python["executable"], python["sharedLibrary"],
+            *python["nativeFiles"], *python["requiredExecutables"]):
+        add(native, entry)
+    return standard, native
+
+
+def _runtime_locked_requirements(package_root: Path) -> dict[str, dict[str, Any]]:
+    requirements: dict[str, dict[str, Any]] = {}
+    pattern = re.compile(r"^([A-Za-z0-9_.-]+)==([^\s\\]+)")
+    for filename in ("requirements-review-baseline.lock", "requirements-review-pip.lock"):
+        pending = ""
+        for physical in (package_root / filename).read_text(encoding="utf-8").splitlines():
+            stripped = physical.strip()
+            if not pending and (not stripped or stripped.startswith("#")):
+                continue
+            continued = stripped.endswith("\\")
+            pending += stripped[:-1].strip() + " " if continued else stripped
+            if continued:
+                continue
+            match = pattern.match(pending)
+            hashes = tuple(sorted(set(re.findall(
+                r"(?:^|\s)--hash=sha256:([0-9a-f]{64})(?=\s|$)", pending))))
+            if match is None or not hashes:
+                raise RuntimeBundleError(
+                    f"retained requirement is not an exact hashed wheel: {pending!r}")
+            raw_name, version = match.groups()
+            name = re.sub(r"[-_.]+", "-", raw_name).lower()
+            if name in requirements:
+                raise RuntimeBundleError(f"duplicate locked distribution {name!r}")
+            requirements[name] = {"version": version, "hashes": hashes}
+            pending = ""
+        if pending:
+            raise RuntimeBundleError(f"unterminated retained requirement in {filename}")
+    return requirements
+
+
+def _runtime_wheel_destination(member: str, data_prefix: str) -> PurePosixPath | None:
+    path = PurePosixPath(member)
+    if (not member or member.startswith(("/", "\\")) or "\\" in member
+            or any(part in {"", ".", ".."} for part in path.parts)):
+        raise RuntimeBundleError(f"locked wheel contains unsafe path {member!r}")
+    if path.parts[0] != data_prefix:
+        return path
+    if len(path.parts) < 3 or path.parts[1] not in {"purelib", "platlib"}:
+        return None
+    return PurePosixPath(*path.parts[2:])
+
+
+@functools.lru_cache(maxsize=1)
+def _cached_locked_wheel_inventory() -> dict[str, dict[str, Any]]:
+    package_root = Path(__file__).resolve().parents[1]
+    requirements = _runtime_locked_requirements(package_root)
+    venv_root = Path(sys.executable).absolute().parent.parent
+    wheelhouse = venv_root / ".ofarm-wheelhouse"
+    if not wheelhouse.is_dir() or wheelhouse.is_symlink():
+        raise RuntimeBundleError("retained RuntimeBundle wheelhouse is unavailable")
+    inventory: dict[str, dict[str, Any]] = {}
+    archives = sorted(wheelhouse.iterdir(), key=lambda path: path.name)
+    if not archives or any(path.is_symlink() or not path.is_file()
+                           or path.suffix != ".whl" for path in archives):
+        raise RuntimeBundleError("retained RuntimeBundle wheelhouse is not closed")
+    for archive in archives:
+        archive_bytes = archive.read_bytes()
+        archive_digest = hashlib.sha256(archive_bytes).hexdigest()
+        try:
+            with zipfile.ZipFile(io.BytesIO(archive_bytes)) as wheel:
+                members = [item for item in wheel.infolist() if not item.is_dir()]
+                metadata_names = [
+                    item.filename for item in members
+                    if item.filename.count("/") == 1
+                    and item.filename.endswith(".dist-info/METADATA")
+                ]
+                if len(metadata_names) != 1:
+                    raise RuntimeBundleError(
+                        f"locked wheel has ambiguous METADATA: {archive.name}")
+                dist_info = metadata_names[0].split("/", 1)[0]
+                data_prefix = dist_info.removesuffix(".dist-info") + ".data"
+                metadata = wheel.read(metadata_names[0]).decode("utf-8", errors="strict")
+                name_match = re.search(r"(?m)^Name:\s*([^\r\n]+)\s*$", metadata)
+                version_match = re.search(r"(?m)^Version:\s*([^\r\n]+)\s*$", metadata)
+                if name_match is None or version_match is None:
+                    raise RuntimeBundleError(
+                        f"locked wheel METADATA has no name/version: {archive.name}")
+                name = re.sub(
+                    r"[-_.]+", "-", name_match.group(1).strip()).lower()
+                version = version_match.group(1).strip()
+                requirement = requirements.get(name)
+                if (requirement is None or version != requirement["version"]
+                        or archive_digest not in requirement["hashes"]):
+                    raise RuntimeBundleError(
+                        f"wheel archive differs from retained lock: {name}=={version}")
+                files: dict[str, tuple[str, int]] = {}
+                for item in members:
+                    destination = _runtime_wheel_destination(
+                        item.filename, data_prefix)
+                    if destination is None \
+                            or destination == PurePosixPath(dist_info, "RECORD"):
+                        continue
+                    relative = destination.as_posix()
+                    exact = wheel.read(item)
+                    identity = (sha256_bytes(exact), len(exact))
+                    if relative in files:
+                        raise RuntimeBundleError(
+                            f"locked wheel maps duplicate installed path {relative!r}")
+                    files[relative] = identity
+        except (OSError, UnicodeDecodeError, zipfile.BadZipFile, KeyError) as exc:
+            raise RuntimeBundleError(f"locked wheel cannot be read: {archive}") from exc
+        if name in inventory:
+            raise RuntimeBundleError(f"multiple locked wheels normalize to {name!r}")
+        inventory[name] = {
+            "version": version,
+            "wheelArchiveDigest": "sha256:" + archive_digest,
+            "wheelArchiveByteLength": len(archive_bytes),
+            "files": files,
+        }
+    if set(inventory) != set(requirements):
+        raise RuntimeBundleError("locked wheelhouse distribution set is not exact")
+    return inventory
+
+
+@functools.lru_cache(maxsize=1)
+def _cached_distribution_observation():
+    wheel_inventory = _cached_locked_wheel_inventory()
     distributions = []
+    file_owners: dict[str, list[str]] = {}
+    dependency_roots: set[str] = set()
     for distribution in importlib.metadata.distributions():
         raw_name = distribution.metadata.get("Name")
         if not raw_name:
-            continue
+            raise RuntimeBundleError("an installed distribution has no canonical name")
         name = re.sub(r"[-_.]+", "-", raw_name).lower()
+        retained = wheel_inventory.get(name)
+        if retained is None or distribution.version != retained["version"]:
+            raise RuntimeBundleError(
+                f"installed distribution does not equal a locked wheel: {name!r}")
+        root_path = _resolved_path(distribution.locate_file(""))
+        root = str(root_path)
+        dependency_roots.add(root)
         files = []
-        for relative in sorted(distribution.files or (), key=lambda item: str(item)):
-            path = Path(distribution.locate_file(relative))
+        for relative, expected_identity in sorted(retained["files"].items()):
+            path = _resolved_path(root_path.joinpath(*PurePosixPath(relative).parts))
             if not path.is_file():
                 raise RuntimeBundleError(
-                    f"installed distribution file is missing: {name}/{relative}")
-            exact = path.read_bytes()
-            recorded_hash = getattr(relative, "hash", None)
-            if recorded_hash is not None:
-                try:
-                    recorded = base64.urlsafe_b64decode(
-                        recorded_hash.value + "=" * (-len(recorded_hash.value) % 4))
-                    observed_hash = hashlib.new(recorded_hash.mode, exact).digest()
-                except (ValueError, TypeError) as exc:
-                    raise RuntimeBundleError(
-                        f"installed distribution hash metadata is invalid: "
-                        f"{name}/{relative}") from exc
-                if observed_hash != recorded:
-                    raise RuntimeBundleError(
-                        f"installed distribution bytes differ from RECORD: "
-                        f"{name}/{relative}")
+                    f"locked wheel file is missing from environment: {name}/{relative}")
+            content_digest, byte_length = _file_content_identity(path)
+            if (content_digest, byte_length) != expected_identity:
+                raise RuntimeBundleError(
+                    f"installed bytes differ from locked wheel: {name}/{relative}")
+            resolved = str(path)
+            file_owners.setdefault(resolved, []).append(name)
             files.append({
-                "path": str(relative).replace("\\", "/"),
-                "contentDigest": sha256_bytes(exact),
-                "byteLength": len(exact),
+                "path": relative,
+                "resolvedPath": resolved,
+                "contentDigest": content_digest,
+                "byteLength": byte_length,
             })
         distributions.append({
             "name": name,
             "version": distribution.version,
+            "wheelArchiveDigest": retained["wheelArchiveDigest"],
+            "wheelArchiveByteLength": retained["wheelArchiveByteLength"],
+            "root": root,
             "files": files,
         })
     distributions.sort(key=lambda item: item["name"])
     names = [item["name"] for item in distributions]
-    if len(names) != len(set(names)):
+    if len(names) != len(set(names)) or set(names) != set(wheel_inventory):
         raise RuntimeBundleError(
-            "multiple installed distributions normalize to the same name")
-    executable = Path(sys.executable).resolve(strict=True).read_bytes()
+            "installed distribution set does not equal locked wheelhouse")
+    for owners in file_owners.values():
+        owners.sort()
+    return distributions, file_owners, sorted(dependency_roots)
+
+
+def _distribution_observation():
+    distributions, file_owners, dependency_roots = \
+        _cached_distribution_observation()
+    return (copy.deepcopy(distributions), copy.deepcopy(file_owners),
+            list(dependency_roots))
+
+
+@functools.lru_cache(maxsize=1)
+def _cached_standard_runtime_observation():
+    raw_roots = {
+        str(_resolved_path(value)) for value in (
+            sysconfig.get_path("stdlib"), sysconfig.get_path("platstdlib"))
+        if value and "site-packages" not in Path(value).parts
+    }
+    roots = []
+    file_map: dict[str, dict[str, Any]] = {}
+    for raw_root in sorted(raw_roots):
+        root = Path(raw_root)
+        if not root.is_dir():
+            continue
+        files = []
+        retained_directories = []
+        for directory, directories, filenames in os.walk(root):
+            base = Path(directory)
+            relative_base = base.relative_to(root)
+            kept = []
+            for name in sorted(directories):
+                if name in {"__pycache__", "site-packages", "dist-packages"}:
+                    continue
+                unresolved = base / name
+                if unresolved.is_symlink() or not unresolved.is_dir():
+                    continue
+                kept.append(name)
+                retained_directories.append(
+                    (relative_base / name).as_posix())
+            directories[:] = kept
+            for filename in sorted(filenames):
+                unresolved = base / filename
+                if unresolved.is_symlink():
+                    continue
+                path = _resolved_path(unresolved)
+                if not path.is_file():
+                    continue
+                try:
+                    relative = path.relative_to(root).as_posix()
+                except ValueError as exc:
+                    raise RuntimeBundleError(
+                        f"standard-library file escapes its runtime root: {path}") from exc
+                content_digest, byte_length = _file_content_identity(path)
+                entry = {
+                    "path": relative,
+                    "resolvedPath": str(path),
+                    "contentDigest": content_digest,
+                    "byteLength": byte_length,
+                }
+                files.append(entry)
+                file_map[str(path)] = entry
+        roots.append({
+            "path": str(root),
+            "directories": sorted(retained_directories),
+            "files": files,
+        })
+
+    archives = []
+    for raw in sys.path:
+        path = _resolved_path(raw) if isinstance(raw, str) and raw else None
+        if path is None or path.suffix != ".zip" or not path.is_file():
+            continue
+        content_digest, byte_length = _file_content_identity(path)
+        entry = {
+            "resolvedPath": str(path),
+            "contentDigest": content_digest,
+            "byteLength": byte_length,
+        }
+        archives.append(entry)
+        file_map[str(path)] = entry
+
+    shared_library = None
+    library_directory = sysconfig.get_config_var("LIBDIR")
+    library_name = sysconfig.get_config_var("LDLIBRARY")
+    if library_directory and library_name:
+        candidate = _resolved_path(Path(library_directory) / library_name)
+        if candidate.is_file():
+            content_digest, byte_length = _file_content_identity(candidate)
+            shared_library = {
+                "resolvedPath": str(candidate),
+                "contentDigest": content_digest,
+                "byteLength": byte_length,
+            }
+    return {
+        "roots": roots,
+        "archives": sorted(archives, key=lambda item: item["resolvedPath"]),
+        "sharedLibrary": shared_library,
+    }, file_map
+
+
+def _standard_runtime_observation():
+    standard_runtime, file_map = _cached_standard_runtime_observation()
+    return copy.deepcopy(standard_runtime), copy.deepcopy(file_map)
+
+
+def _native_loader_environment_observation() -> dict[str, str]:
+    return {
+        name: os.environ[name] for name in sorted(os.environ)
+        if name in _NATIVE_LOADER_ENVIRONMENT_EXACT
+        or name.startswith(_NATIVE_LOADER_ENVIRONMENT_PREFIXES)
+    }
+
+
+def _decode_proc_maps_path(value: str) -> str:
+    def replace(match):
+        character = chr(int(match.group(1), 8))
+        if character == "\x00":
+            raise RuntimeBundleError("executable mapping path contains NUL")
+        return character
+
+    return re.sub(r"\\([0-7]{3})", replace, value)
+
+
+def _parse_executable_mappings(
+    raw: str,
+) -> tuple[list[tuple[str, int, int, int]], list[str]]:
+    files: dict[str, tuple[int, int, int]] = {}
+    kernel: set[str] = set()
+    for line in raw.splitlines():
+        fields = line.split(None, 5)
+        if len(fields) < 5 or len(fields[1]) != 4:
+            raise RuntimeBundleError("/proc/self/maps contains a malformed record")
+        if "x" not in fields[1]:
+            continue
+        if len(fields) != 6:
+            raise RuntimeBundleError("anonymous executable mapping is forbidden")
+        pathname = _decode_proc_maps_path(fields[5])
+        if pathname in {"[vdso]", "[vsyscall]"}:
+            kernel.add(pathname)
+            continue
+        if (pathname.endswith(" (deleted)") or pathname.startswith(("[", "memfd:"))
+                or not pathname.startswith("/")):
+            raise RuntimeBundleError(
+                f"unattributable executable mapping is forbidden: {pathname!r}")
+        try:
+            major_raw, minor_raw = fields[3].split(":", 1)
+            identity = (int(major_raw, 16), int(minor_raw, 16), int(fields[4]))
+        except (ValueError, TypeError) as exc:
+            raise RuntimeBundleError(
+                "executable mapping has malformed device/inode identity") from exc
+        if identity[2] <= 0:
+            raise RuntimeBundleError("executable file mapping has no inode identity")
+        prior = files.get(pathname)
+        if prior is not None and prior != identity:
+            raise RuntimeBundleError(
+                f"executable mapping path changed identity: {pathname!r}")
+        files[pathname] = identity
+    return (
+        [(path, *files[path]) for path in sorted(files)],
+        sorted(kernel),
+    )
+
+
+def _read_executable_mappings() -> tuple[list[tuple[str, int, int, int]], list[str]]:
+    try:
+        raw = Path("/proc/self/maps").read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise RuntimeBundleError("Linux executable mappings are unavailable") from exc
+    return _parse_executable_mappings(raw)
+
+
+def _path_is_read_only(path: Path) -> bool:
+    try:
+        return bool(os.statvfs(path).f_flag & os.ST_RDONLY)
+    except OSError:
+        return False
+
+
+def _open_mapped_file(
+    path: Path,
+    major: int,
+    minor: int,
+    inode: int,
+) -> tuple[int, os.stat_result]:
+    flags = (os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+             | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as exc:
+        raise RuntimeBundleError(
+            f"executable mapping cannot be opened safely: {path}") from exc
+    try:
+        before = os.fstat(descriptor)
+        if (not stat.S_ISREG(before.st_mode) or os.major(before.st_dev) != major
+                or os.minor(before.st_dev) != minor
+                or before.st_ino != inode):
+            raise RuntimeBundleError(
+                f"executable mapping no longer equals its open file: {path}")
+        try:
+            descriptor_target = Path(
+                f"/proc/self/fd/{descriptor}").resolve(strict=True)
+        except OSError as exc:
+            raise RuntimeBundleError(
+                f"executable mapping descriptor has no stable target: {path}") from exc
+        if descriptor_target != path:
+            raise RuntimeBundleError(
+                f"executable mapping descriptor resolves elsewhere: {path}")
+        return descriptor, before
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def _mapped_file_content_identity(
+    path: Path,
+    major: int,
+    minor: int,
+    inode: int,
+) -> tuple[str, int]:
+    descriptor, before = _open_mapped_file(path, major, minor, inode)
+    try:
+        digest = hashlib.sha256()
+        while True:
+            block = os.read(descriptor, 1024 * 1024)
+            if not block:
+                break
+            digest.update(block)
+        after = os.fstat(descriptor)
+        fields = ("st_dev", "st_ino", "st_size", "st_mtime_ns", "st_ctime_ns")
+        if tuple(getattr(before, field) for field in fields) != \
+                tuple(getattr(after, field) for field in fields):
+            raise RuntimeBundleError(
+                f"executable mapping file changed while hashing: {path}")
+        return "sha256:" + digest.hexdigest(), before.st_size
+    finally:
+        os.close(descriptor)
+
+
+def _native_runtime_observation(
+    distributions: Iterable[Mapping[str, Any]],
+    manifest: Mapping[str, Any],
+) -> dict[str, Any]:
+    image = copy.deepcopy(manifest["image"])
+    if platform.system() != "Linux":
+        return {
+            "imageIdentity": image,
+            "containerMarkerPresent": False,
+            "imageFilesReadOnly": False,
+            "loaderConfiguration": {"files": [], "absentPaths": []},
+            "kernelExecutableMappings": [],
+            "actualNativeImages": [],
+        }
+
+    _standard_expected, image_expected = _retained_runtime_image_maps(manifest)
+    distribution_expected: dict[str, tuple[str, int, list[str]]] = {}
+    for distribution in distributions:
+        for entry in distribution["files"]:
+            identity = entry["resolvedPath"]
+            prior = distribution_expected.get(identity)
+            owners = sorted({*(prior[2] if prior else []), distribution["name"]})
+            current = (entry["contentDigest"], entry["byteLength"])
+            if prior is not None and prior[:2] != current:
+                raise RuntimeBundleError(
+                    f"retained wheels disagree about native path {identity!r}")
+            distribution_expected[identity] = (*current, owners)
+
+    before, kernel_mappings = _read_executable_mappings()
+    actual = []
+    for mapped_path, major, minor, inode in before:
+        path = Path(mapped_path).resolve(strict=True)
+        content_digest, byte_length = _mapped_file_content_identity(
+            path, major, minor, inode)
+        identity = (content_digest, byte_length)
+        retained_image = image_expected.get(str(path))
+        retained_distribution = distribution_expected.get(str(path))
+        if retained_image == identity and _path_is_read_only(path):
+            classification = "PINNED_RUNTIME_IMAGE_FILE"
+            owners: list[str] = []
+        elif (retained_distribution is not None
+              and retained_distribution[:2] == identity):
+            classification = "RETAINED_DISTRIBUTION_FILE"
+            owners = retained_distribution[2]
+        else:
+            classification = "UNKNOWN"
+            owners = []
+        actual.append({
+            "resolvedPath": str(path),
+            "device": f"{major:x}:{minor:x}",
+            "inode": inode,
+            "contentDigest": content_digest,
+            "byteLength": byte_length,
+            "classification": classification,
+            "distributions": owners,
+        })
+    actual.sort(key=lambda entry: entry["resolvedPath"])
+    after, after_kernel = _read_executable_mappings()
+    if after != before or after_kernel != kernel_mappings:
+        raise RuntimeBundleError("executable mapping set changed while observing it")
+
+    python = manifest["python"]
+    loader_files = []
+    for retained in python["loaderConfigurationFiles"]:
+        path = Path(retained["path"])
+        digest, length = _file_content_identity(path)
+        loader_files.append({
+            "path": str(path),
+            "contentDigest": digest,
+            "byteLength": length,
+        })
+    absent_paths = [
+        path for path in python["requiredAbsentPaths"] if not Path(path).exists()
+    ]
+    all_image_paths = [
+        *(Path(root["path"]) for root in python["standardLibraryRoots"]),
+        *(Path(entry["path"]) for entry in (
+            python["executable"], python["sharedLibrary"],
+            *python["nativeFiles"], *python["loaderConfigurationFiles"],
+            *python["requiredExecutables"])),
+    ]
+    return {
+        "imageIdentity": image,
+        "containerMarkerPresent": Path("/.dockerenv").exists(),
+        "imageFilesReadOnly": all(
+            path.exists() and _path_is_read_only(path) for path in all_image_paths),
+        "loaderConfiguration": {
+            "files": loader_files,
+            "absentPaths": absent_paths,
+        },
+        "kernelExecutableMappings": kernel_mappings,
+        "actualNativeImages": actual,
+    }
+
+
+def _native_runtime_stat_signature(
+    native_runtime: Mapping[str, Any],
+) -> tuple[Any, ...]:
+    mappings, kernel_mappings = _read_executable_mappings()
+    observed_mappings = []
+    for raw_path, major, minor, inode in mappings:
+        path = Path(raw_path).resolve(strict=True)
+        descriptor, current = _open_mapped_file(path, major, minor, inode)
+        try:
+            observed_mappings.append((
+                str(path), f"{major:x}:{minor:x}", inode,
+                current.st_size, current.st_mtime_ns, current.st_ctime_ns,
+            ))
+        finally:
+            os.close(descriptor)
+    observed_mappings.sort()
+    after_mappings, after_kernel = _read_executable_mappings()
+    if after_mappings != mappings or after_kernel != kernel_mappings:
+        raise RuntimeBundleError(
+            "native executable mappings changed while checking their identity")
+    selected = {
+        (entry["resolvedPath"], entry["device"], entry["inode"])
+        for entry in native_runtime["actualNativeImages"]
+    }
+    current_selected = {
+        (path, device, inode)
+        for path, device, inode, _size, _modified, _changed in observed_mappings
+    }
+    if selected != current_selected \
+            or kernel_mappings != native_runtime["kernelExecutableMappings"]:
+        raise RuntimeBundleError(
+            "live native executable mappings changed after selection")
+    loader_stats = []
+    for entry in native_runtime["loaderConfiguration"]["files"]:
+        path = Path(entry["path"])
+        current = path.stat()
+        loader_stats.append((
+            str(path), current.st_dev, current.st_ino, current.st_size,
+            current.st_mtime_ns, current.st_ctime_ns,
+        ))
+    absent = tuple(
+        (path, Path(path).exists())
+        for path in native_runtime["loaderConfiguration"]["absentPaths"])
+    if any(exists for _path, exists in absent):
+        raise RuntimeBundleError("forbidden native loader configuration appeared")
+    return (
+        tuple(observed_mappings), tuple(sorted(loader_stats)), absent,
+        bool(native_runtime["containerMarkerPresent"]),
+        bool(native_runtime["imageFilesReadOnly"]),
+    )
+
+
+def _project_component_files(
+    package_root: Path,
+    retained_components: Iterable[RuntimeComponent],
+) -> dict[str, RuntimeComponent]:
+    return {
+        str(_resolved_path(package_root / component.repository_path)): component
+        for component in retained_components
+        if component.role in {"RUNTIME_CODE", "RUNTIME_CATALOG_CODE", "PARSER_CODE"}
+        and component.repository_path.endswith(".py")
+    }
+
+
+def _loader_name(module) -> str | None:
+    loader = getattr(module, "__loader__", None)
+    if loader is None:
+        return None
+    kind = type(loader)
+    return f"{kind.__module__}.{kind.__qualname__}"
+
+
+def _ordered_search_paths(value) -> list[str]:
+    paths = []
+    for raw in value or ():
+        if not isinstance(raw, str) or not raw or not Path(raw).is_absolute():
+            raise RuntimeBundleError(
+                f"Python package search path is not filesystem-backed: {raw!r}")
+        path = str(_resolved_path(raw))
+        if raw != path:
+            raise RuntimeBundleError(
+                f"Python package search path is not canonical: {raw!r}")
+        paths.append(path)
+    if len(paths) != len(set(paths)):
+        raise RuntimeBundleError("Python package search path contains duplicates")
+    return paths
+
+
+def _module_search_paths(module) -> tuple[list[str], list[str]]:
+    spec = getattr(module, "__spec__", None)
+    return (
+        _ordered_search_paths(getattr(module, "__path__", None)),
+        _ordered_search_paths(getattr(spec, "submodule_search_locations", None)),
+    )
+
+
+def _import_callable_observation(value) -> dict[str, str]:
+    value_type = type(value)
+    if isinstance(value, type):
+        provider = value
+        kind = "CLASS"
+    elif (value_type.__module__ == "builtins"
+          and value_type.__qualname__ in {"function", "builtin_function_or_method"}):
+        provider = value
+        kind = "FUNCTION"
+    else:
+        provider = value_type
+        kind = "INSTANCE"
+    provider_module = getattr(provider, "__module__", None)
+    provider_qualname = getattr(provider, "__qualname__", None)
+    if not isinstance(provider_module, str) or not isinstance(provider_qualname, str):
+        raise RuntimeBundleError(
+            f"Python import provider has no stable class/function identity: {value!r}")
+    return {
+        "objectKind": kind,
+        "providerModule": provider_module,
+        "providerQualname": provider_qualname,
+        "typeModule": value_type.__module__,
+        "typeQualname": value_type.__qualname__,
+    }
+
+
+def _import_infrastructure_observation() -> tuple[list[dict[str, str]],
+                                                   list[dict[str, str]]]:
+    return (
+        [_import_callable_observation(value) for value in sys.meta_path],
+        [_import_callable_observation(value) for value in sys.path_hooks],
+    )
+
+
+def _path_importer_cache_state() -> tuple[
+        list[dict[str, Any]], dict[str, tuple[object, type]]]:
+    """Return canonical provider metadata and exact live finder identities."""
+    entries = []
+    objects: dict[str, tuple[object, type]] = {}
+    for raw_path, finder in tuple(sys.path_importer_cache.items()):
+        if (not isinstance(raw_path, str) or not raw_path
+                or not Path(raw_path).is_absolute()):
+            raise RuntimeBundleError(
+                f"Python path importer cache key is not absolute: {raw_path!r}")
+        path = str(_resolved_path(raw_path))
+        if raw_path != path:
+            raise RuntimeBundleError(
+                f"Python path importer cache key is not canonical: {raw_path!r}")
+        if path in objects:
+            raise RuntimeBundleError(
+                f"Python path importer cache has duplicate resolved key {path!r}")
+        provider = None if finder is None else _import_callable_observation(finder)
+        entries.append({"path": path, "finder": provider})
+        objects[path] = (finder, type(finder))
+    entries.sort(key=lambda item: item["path"])
+    return entries, objects
+
+
+def _path_importer_cache_observation() -> list[dict[str, Any]]:
+    return _path_importer_cache_state()[0]
+
+
+def _file_finder_state(path: str, finder: object) -> tuple[Any, ...]:
+    """Bind the mutable state of CPython's standard directory finder."""
+    if type(finder) is not importlib.machinery.FileFinder:
+        raise RuntimeBundleError(
+            f"Python path importer cache has an unreviewed finder for {path!r}")
+    finder_path = getattr(finder, "path", None)
+    if not isinstance(finder_path, str) or finder_path != path:
+        raise RuntimeBundleError(
+            f"Python path importer cache finder path differs from key {path!r}")
+    if _IMPORT_PROVIDER_METHODS.intersection(vars(finder)):
+        raise RuntimeBundleError(
+            f"Python path importer cache finder has an instance method override: {path!r}")
+    expected_loaders = tuple(
+        (suffix, loader)
+        for loader, suffixes in (
+            (importlib.machinery.ExtensionFileLoader,
+             importlib.machinery.EXTENSION_SUFFIXES),
+            (importlib.machinery.SourceFileLoader,
+             importlib.machinery.SOURCE_SUFFIXES),
+            (importlib.machinery.SourcelessFileLoader,
+             importlib.machinery.BYTECODE_SUFFIXES),
+        )
+        for suffix in suffixes
+    )
+    loaders = tuple(getattr(finder, "_loaders", ()))
+    path_cache = getattr(finder, "_path_cache", None)
+    relaxed_cache = getattr(finder, "_relaxed_path_cache", None)
+    path_mtime = getattr(finder, "_path_mtime", None)
+    if (loaders != expected_loaders
+            or type(path_cache) is not set
+            or type(relaxed_cache) is not set
+            or any(not isinstance(name, str) for name in path_cache)
+            or any(not isinstance(name, str) for name in relaxed_cache)
+            or not isinstance(path_mtime, (int, float))):
+        raise RuntimeBundleError(
+            f"Python path importer cache finder state is unreviewed for {path!r}")
+    return (
+        path,
+        expected_loaders,
+        path_mtime,
+        tuple(sorted(path_cache)),
+        tuple(sorted(relaxed_cache)),
+    )
+
+
+def _callable_seal_entry(label: str, value: object) -> tuple[Any, ...]:
+    defaults = getattr(value, "__defaults__", None)
+    kwdefaults = getattr(value, "__kwdefaults__", None)
+    closure = getattr(value, "__closure__", None)
+    return (
+        label,
+        value,
+        getattr(value, "__code__", None),
+        defaults,
+        tuple(defaults or ()),
+        kwdefaults,
+        tuple(sorted((kwdefaults or {}).items())),
+        tuple(cell.cell_contents for cell in (closure or ())),
+    )
+
+
+def _import_callable_seal_state() -> tuple[tuple[Any, ...], ...]:
+    """Capture executable identities for the live import machinery."""
+    entries: list[tuple[Any, ...]] = []
+
+    def add_provider(prefix: str, provider: object) -> None:
+        for method_name in sorted(_IMPORT_PROVIDER_METHODS):
+            value = None
+            for owner in getattr(provider, "__mro__", (provider,)):
+                namespace = vars(owner)
+                if method_name in namespace:
+                    value = namespace[method_name]
+                    break
+            if isinstance(value, (classmethod, staticmethod)):
+                value = value.__func__
+            if value is not None:
+                entries.append(_callable_seal_entry(
+                    f"{prefix}.{method_name}", value))
+
+    for index, provider in enumerate(sys.meta_path):
+        if (not isinstance(provider, type)
+                and hasattr(provider, "__dict__")
+                and _IMPORT_PROVIDER_METHODS.intersection(vars(provider))):
+            raise RuntimeBundleError(
+                "live sys.meta_path provider has an instance method override: "
+                f"index {index}")
+        owner = provider if isinstance(provider, type) else type(provider)
+        add_provider(f"metaPath[{index}]:{owner.__module__}.{owner.__qualname__}", owner)
+    for index, hook in enumerate(sys.path_hooks):
+        entries.append(_callable_seal_entry(f"pathHooks[{index}]", hook))
+        if isinstance(hook, type):
+            add_provider(f"pathHooks[{index}]:type", hook)
+
+    fixed_providers = (
+        importlib.machinery.BuiltinImporter,
+        importlib.machinery.FrozenImporter,
+        importlib.machinery.PathFinder,
+        importlib.machinery.FileFinder,
+        importlib.machinery.SourceFileLoader,
+        importlib.machinery.SourcelessFileLoader,
+        importlib.machinery.ExtensionFileLoader,
+        importlib.machinery.NamespaceLoader,
+    )
+    for provider in fixed_providers:
+        add_provider(f"fixed:{provider.__module__}.{provider.__qualname__}", provider)
+    return tuple(entries)
+
+
+def _same_callable_seal_entry(
+        current: tuple[Any, ...], prior: tuple[Any, ...]) -> bool:
+    if current[0] != prior[0] or any(
+            current[index] is not prior[index] for index in (1, 2, 3, 5)):
+        return False
+    for current_values, prior_values in (
+        (current[4], prior[4]),
+        (current[7], prior[7]),
+    ):
+        if (len(current_values) != len(prior_values)
+                or any(value is not prior_value for value, prior_value in
+                       zip(current_values, prior_values))):
+            return False
+    current_kw, prior_kw = current[6], prior[6]
+    return (
+        len(current_kw) == len(prior_kw)
+        and all(
+            current_key == prior_key and current_value is prior_value
+            for (current_key, current_value), (prior_key, prior_value)
+            in zip(current_kw, prior_kw)
+        )
+    )
+
+
+def _test_harness_path(package_root: Path, path: Path) -> bool:
+    try:
+        relative = path.relative_to(package_root).as_posix()
+    except ValueError:
+        return False
+    return any(
+        (relative == prefix.rstrip("/") or relative.startswith(prefix))
+        if prefix.endswith("/") else relative == prefix
+        for prefix in _PROJECT_TEST_PATHS)
+
+
+def _test_harness_namespace_path(package_root: Path, path: Path) -> bool:
+    try:
+        relative = path.relative_to(package_root).as_posix()
+    except ValueError:
+        return False
+    return (relative in _PROJECT_TEST_NAMESPACE_PATHS
+            or _test_harness_path(package_root, path))
+
+
+def _module_observation(
+    package_root: Path,
+    project_files: Mapping[str, RuntimeComponent],
+    distribution_files: Mapping[str, list[str]],
+    dependency_roots: Iterable[str],
+    standard_files: Mapping[str, tuple[str, int]],
+) -> list[dict[str, Any]]:
+    dependency_roots = tuple(dependency_roots)
+    pytest_module = sys.modules.get("pytest")
+    pytest_origin = getattr(
+        getattr(pytest_module, "__spec__", None), "origin", None) \
+        or getattr(pytest_module, "__file__", None)
+    trusted_test_harness = (
+        isinstance(pytest_origin, str)
+        and str(_resolved_path(pytest_origin)) in distribution_files)
+    modules = []
+    for name, module in sorted(sys.modules.items()):
+        if module is None:
+            continue
+        spec = getattr(module, "__spec__", None)
+        origin = getattr(spec, "origin", None) or getattr(module, "__file__", None)
+        loader = _loader_name(module)
+        package_paths, spec_paths = _module_search_paths(module)
+        entry: dict[str, Any] = {
+            "name": name,
+            "loader": loader,
+            "packageSearchPaths": package_paths,
+            "specSearchPaths": spec_paths,
+        }
+        if origin in {"built-in", "frozen"}:
+            entry.update({
+                "classification": origin.upper().replace("-", "_"),
+                "origin": origin,
+            })
+        elif isinstance(origin, str) and origin:
+            path = _resolved_path(origin)
+            identity = _file_content_identity(path) if path.is_file() else None
+            entry["origin"] = str(path)
+            if path.suffix in {".pyc", ".pyo"} or "__pycache__" in path.parts:
+                classification = "BYTECODE"
+            elif str(path) in project_files:
+                classification = "RETAINED_PROJECT_COMPONENT"
+                component = project_files[str(path)]
+                entry["retainedComponent"] = {
+                    "role": component.role,
+                    "logicalRef": component.logical_ref,
+                }
+            elif str(path) in distribution_files:
+                classification = "RETAINED_DISTRIBUTION_FILE"
+                entry["distributions"] = distribution_files[str(path)]
+            elif (str(path) in standard_files
+                  and identity == standard_files[str(path)]):
+                classification = "PINNED_RUNTIME_IMAGE_FILE"
+            elif trusted_test_harness and _test_harness_path(package_root, path):
+                classification = "NON_RUNTIME_TEST_HARNESS"
+            else:
+                classification = "UNKNOWN"
+            entry["classification"] = classification
+            if identity is not None:
+                entry["contentDigest"], entry["byteLength"] = identity
+        else:
+            namespace_paths = package_paths
+            entry["origin"] = None
+            retained_parent_name = \
+                _REVIEWED_ORIGINLESS_AUXILIARY_MODULES.get(name)
+            retained_parent = sys.modules.get(retained_parent_name) \
+                if retained_parent_name else None
+            retained_parent_origin = getattr(
+                getattr(retained_parent, "__spec__", None), "origin", None) \
+                or getattr(retained_parent, "__file__", None)
+            retained_parent_path = (
+                str(_resolved_path(retained_parent_origin))
+                if isinstance(retained_parent_origin, str) else None)
+            if retained_parent_path in distribution_files \
+                    or retained_parent_path in standard_files \
+                    or retained_parent_path in project_files:
+                entry["classification"] = "REVIEWED_NATIVE_AUXILIARY"
+                entry["retainedParent"] = {
+                    "name": retained_parent_name,
+                    "origin": retained_parent_path,
+                }
+            elif namespace_paths and all(
+                    any(path == root or path.startswith(root + os.sep)
+                        for root in dependency_roots)
+                    or any(component_path.startswith(path + os.sep)
+                           for component_path in project_files)
+                    or (trusted_test_harness
+                        and _test_harness_namespace_path(
+                            package_root, Path(path)))
+                    for path in namespace_paths):
+                entry["classification"] = "RETAINED_NAMESPACE"
+            else:
+                entry["classification"] = "UNKNOWN"
+        modules.append(entry)
+    return modules
+
+
+def _python_flags_document() -> dict[str, Any]:
+    return {
+        "isolated": sys.flags.isolated,
+        "ignoreEnvironment": sys.flags.ignore_environment,
+        "noSite": sys.flags.no_site,
+        "noUserSite": sys.flags.no_user_site,
+        "safePath": bool(getattr(sys.flags, "safe_path", False)),
+        "dontWriteBytecode": sys.flags.dont_write_bytecode,
+        "hashRandomization": sys.flags.hash_randomization,
+        "optimizationLevel": sys.flags.optimize,
+    }
+
+
+def _sys_path_observation(
+    package_root: Path,
+    dependency_roots: Iterable[str],
+    retained_standard_roots: Iterable[str],
+) -> list[dict[str, Any]]:
+    dependency_roots = set(dependency_roots)
+    standard_roots = set(retained_standard_roots)
+    entries = []
+    for index, raw in enumerate(sys.path):
+        if not isinstance(raw, str) or not raw:
+            entries.append({"index": index, "path": raw, "classification": "UNKNOWN"})
+            continue
+        path = str(_resolved_path(raw))
+        if raw != path:
+            classification = "UNKNOWN"
+        elif path == str(package_root):
+            classification = "REVIEWED_PROJECT_ROOT"
+        elif path in dependency_roots:
+            classification = "LOCKED_DEPENDENCY_ROOT"
+        elif any(path == root or path.startswith(root + os.sep)
+                 for root in standard_roots):
+            classification = "PINNED_RUNTIME_IMAGE_ROOT"
+        else:
+            classification = "UNKNOWN"
+        entries.append({"index": index, "path": path, "classification": classification})
+    return entries
+
+
+def _validate_runtime_environment_document(document: Any) -> None:
+    top_level = {
+        "schemaVersion", "python", "platform", "process", "importPosture",
+        "standardRuntime", "nativeRuntime", "distributions",
+    }
+    python_keys = {
+        "implementation", "version", "cacheTag", "soabi", "optimizationLevel",
+        "hashSeedEnvironment", "executableDigest", "executableByteLength",
+        "flags", "pycachePrefix",
+    }
+    flag_keys = {
+        "isolated", "ignoreEnvironment", "noSite", "noUserSite", "safePath",
+        "dontWriteBytecode", "hashRandomization", "optimizationLevel",
+    }
+    import_keys = {
+        "projectRoot", "ambientEnvironment", "startupCustomizationModules",
+        "dependencyRoots", "sysPath", "metaPath", "pathHooks",
+        "pathImporterCache", "actualModules",
+    }
+    if (not isinstance(document, dict) or set(document) != top_level
+            or document.get("schemaVersion") !=
+            "ofarm.runtime-environment-observation.local.v3"
+            or not isinstance(document.get("python"), dict)
+            or set(document["python"]) != python_keys
+            or not isinstance(document["python"].get("flags"), dict)
+            or set(document["python"]["flags"]) != flag_keys
+            or not isinstance(document.get("importPosture"), dict)
+            or set(document["importPosture"]) != import_keys):
+        raise RuntimeBundleError("Python runtime environment observation is malformed")
+    if (not isinstance(document["python"].get("executableDigest"), str)
+            or not _SHA256_RE.fullmatch(
+                document["python"].get("executableDigest", ""))
+            or not isinstance(document["python"].get("executableByteLength"), int)
+            or document["python"]["executableByteLength"] <= 0
+            or not isinstance(document["importPosture"].get("projectRoot"), str)
+            or not Path(document["importPosture"]["projectRoot"]).is_absolute()
+            or set(document["importPosture"].get("ambientEnvironment", {})) !=
+            set(_AMBIENT_IMPORT_ENVIRONMENT)
+            or not isinstance(document["importPosture"].get(
+                "startupCustomizationModules"), list)):
+        raise RuntimeBundleError("Python runtime identity fields are malformed")
+
+    process = document.get("process")
+    native_loader_environment = (
+        process.get("nativeLoaderEnvironment") if isinstance(process, dict) else None)
+    if (not isinstance(document.get("platform"), dict)
+            or set(document["platform"]) != {"operatingSystem", "machine"}
+            or any(not isinstance(value, str) or not value
+                   for value in document["platform"].values())
+            or not isinstance(process, dict)
+            or set(process) != {
+                "localeEnvironment", "localeCategories", "timezoneEnvironment",
+                "timezoneNames", "utcOffsetSeconds", "nativeLoaderEnvironment",
+            }
+            or not isinstance(native_loader_environment, dict)
+            or any(not isinstance(name, str) or not isinstance(value, str)
+                   or (name not in _NATIVE_LOADER_ENVIRONMENT_EXACT
+                       and not name.startswith(
+                           _NATIVE_LOADER_ENVIRONMENT_PREFIXES))
+                   for name, value in native_loader_environment.items())):
+        raise RuntimeBundleError("Python process environment observation is malformed")
+
+    roots = document["importPosture"].get("dependencyRoots")
+    path_entries = document["importPosture"].get("sysPath")
+    modules = document["importPosture"].get("actualModules")
+    if (not isinstance(roots, list) or roots != sorted(set(roots))
+            or any(not isinstance(path, str) or not Path(path).is_absolute()
+                   for path in roots)
+            or not isinstance(path_entries, list)
+            or any(not isinstance(item, dict)
+                   or set(item) != {"index", "path", "classification"}
+                   or item.get("index") != index
+                   or item.get("classification") not in {
+                       "PINNED_RUNTIME_IMAGE_ROOT", "LOCKED_DEPENDENCY_ROOT",
+                       "REVIEWED_PROJECT_ROOT", "UNKNOWN"}
+                   for index, item in enumerate(path_entries))
+            or not isinstance(modules, list)):
+        raise RuntimeBundleError("Python import path observation is malformed")
+    module_classes = {
+        "BUILT_IN", "FROZEN", "BYTECODE", "RETAINED_PROJECT_COMPONENT",
+        "RETAINED_DISTRIBUTION_FILE", "PINNED_RUNTIME_IMAGE_FILE",
+        "NON_RUNTIME_TEST_HARNESS", "UNKNOWN", "RETAINED_NAMESPACE",
+        "REVIEWED_NATIVE_AUXILIARY",
+    }
+    allowed_module_keys = {
+        "name", "loader", "classification", "origin", "packageSearchPaths",
+        "specSearchPaths",
+        "contentDigest", "byteLength", "retainedComponent", "distributions",
+        "retainedParent",
+    }
+    module_names = []
+    for module in modules:
+        if (not isinstance(module, dict)
+                or not {"name", "loader", "classification", "origin"} <= set(module)
+                or not set(module) <= allowed_module_keys
+                or not isinstance(module.get("name"), str)
+                or module.get("classification") not in module_classes
+                or module.get("loader") is not None
+                and not isinstance(module.get("loader"), str)
+                or module.get("origin") is not None
+                and not isinstance(module.get("origin"), str)
+                or not isinstance(module.get("packageSearchPaths"), list)
+                or not isinstance(module.get("specSearchPaths"), list)
+                or any(not isinstance(path, str) or not Path(path).is_absolute()
+                       for path in module.get("packageSearchPaths", ()))
+                or any(not isinstance(path, str) or not Path(path).is_absolute()
+                       for path in module.get("specSearchPaths", ()))
+                or len(module.get("packageSearchPaths", ())) !=
+                len(set(module.get("packageSearchPaths", ())))
+                or len(module.get("specSearchPaths", ())) !=
+                len(set(module.get("specSearchPaths", ())))):
+            raise RuntimeBundleError("loaded Python module observation is malformed")
+        if "contentDigest" in module and (
+                not isinstance(module["contentDigest"], str)
+                or not _SHA256_RE.fullmatch(module["contentDigest"])
+                or not isinstance(module.get("byteLength"), int)
+                or module["byteLength"] < 0):
+            raise RuntimeBundleError("loaded Python module content identity is malformed")
+        module_names.append(module["name"])
+    if module_names != sorted(module_names) or len(module_names) != len(set(module_names)):
+        raise RuntimeBundleError("loaded Python module inventory is not canonical")
+
+    import_provider_keys = {
+        "objectKind", "providerModule", "providerQualname",
+        "typeModule", "typeQualname",
+    }
+
+    def valid_import_provider(item: object) -> bool:
+        return (
+            isinstance(item, dict)
+            and set(item) == import_provider_keys
+            and item.get("objectKind") in {"CLASS", "FUNCTION", "INSTANCE"}
+            and all(isinstance(item.get(key), str) and bool(item[key])
+                    for key in import_provider_keys - {"objectKind"})
+        )
+
+    for field_name in ("metaPath", "pathHooks"):
+        providers = document["importPosture"].get(field_name)
+        if (not isinstance(providers, list) or not providers
+                or any(not valid_import_provider(item) for item in providers)):
+            raise RuntimeBundleError(
+                f"Python import infrastructure {field_name!r} is malformed")
+
+    importer_cache = document["importPosture"].get("pathImporterCache")
+    if (not isinstance(importer_cache, list)
+            or any(not isinstance(item, dict)
+                   or set(item) != {"path", "finder"}
+                   or not isinstance(item.get("path"), str)
+                   or not Path(item["path"]).is_absolute()
+                   or (item.get("finder") is not None
+                       and not valid_import_provider(item["finder"]))
+                   for item in importer_cache)):
+        raise RuntimeBundleError("Python path importer cache observation is malformed")
+    cache_paths = [item["path"] for item in importer_cache]
+    if cache_paths != sorted(cache_paths) or len(cache_paths) != len(set(cache_paths)):
+        raise RuntimeBundleError(
+            "Python path importer cache observation is not canonical")
+
+    def validate_files(files, expected_keys):
+        if not isinstance(files, list):
+            raise RuntimeBundleError("runtime file inventory is malformed")
+        identities = []
+        for item in files:
+            if (not isinstance(item, dict) or set(item) != expected_keys
+                    or not isinstance(item.get("contentDigest"), str)
+                    or not _SHA256_RE.fullmatch(item.get("contentDigest", ""))
+                    or not isinstance(item.get("byteLength"), int)
+                    or item["byteLength"] < 0
+                    or not isinstance(item.get("resolvedPath"), str)
+                    or not Path(item["resolvedPath"]).is_absolute()):
+                raise RuntimeBundleError("runtime file content identity is malformed")
+            identities.append(item["resolvedPath"])
+        if len(identities) != len(set(identities)):
+            raise RuntimeBundleError("runtime file inventory contains duplicates")
+
+    standard = document.get("standardRuntime")
+    if (not isinstance(standard, dict)
+            or set(standard) != {"roots", "archives", "sharedLibrary"}
+            or not isinstance(standard["roots"], list)):
+        raise RuntimeBundleError("standard Python runtime observation is malformed")
+    standard_root_names = []
+    for root in standard["roots"]:
+        if (not isinstance(root, dict)
+                or set(root) != {"path", "directories", "files"}
+                or not isinstance(root.get("path"), str)
+                or not Path(root["path"]).is_absolute()
+                or not isinstance(root.get("directories"), list)
+                or root["directories"] != sorted(set(root["directories"]))
+                or any(not isinstance(path, str) or not path
+                       for path in root["directories"])):
+            raise RuntimeBundleError("standard Python runtime root is malformed")
+        validate_files(
+            root["files"], {"path", "resolvedPath", "contentDigest", "byteLength"})
+        standard_root_names.append(root["path"])
+    if standard_root_names != sorted(set(standard_root_names)):
+        raise RuntimeBundleError("standard Python runtime roots are not canonical")
+    validate_files(
+        standard["archives"], {"resolvedPath", "contentDigest", "byteLength"})
+    shared = standard["sharedLibrary"]
+    if shared is not None:
+        validate_files([shared], {"resolvedPath", "contentDigest", "byteLength"})
+
+    native = document.get("nativeRuntime")
+    if (not isinstance(native, dict)
+            or set(native) != {
+                "imageIdentity", "containerMarkerPresent", "imageFilesReadOnly",
+                "loaderConfiguration", "kernelExecutableMappings",
+                "actualNativeImages",
+            }
+            or not isinstance(native.get("imageIdentity"), dict)
+            or not isinstance(native.get("containerMarkerPresent"), bool)
+            or not isinstance(native.get("imageFilesReadOnly"), bool)
+            or not isinstance(native.get("kernelExecutableMappings"), list)
+            or native["kernelExecutableMappings"] !=
+            sorted(set(native["kernelExecutableMappings"]))
+            or any(item not in {"[vdso]", "[vsyscall]"}
+                   for item in native["kernelExecutableMappings"])):
+        raise RuntimeBundleError("native runtime observation is malformed")
+    image = native["imageIdentity"]
+    if (set(image) != {
+            "reference", "indexDigest", "platform", "platformManifestDigest",
+            "configDigest", "layers"}
+            or not isinstance(image.get("reference"), str)
+            or image.get("platform") != "linux/amd64"
+            or any(not _SHA256_RE.fullmatch(image.get(key, ""))
+                   for key in (
+                       "indexDigest", "platformManifestDigest", "configDigest"))
+            or not isinstance(image.get("layers"), list)
+            or not image["layers"]):
+        raise RuntimeBundleError("native runtime image identity is malformed")
+    for layer in image["layers"]:
+        if (not isinstance(layer, dict)
+                or set(layer) != {"digest", "byteLength"}
+                or not _SHA256_RE.fullmatch(layer.get("digest", ""))
+                or not isinstance(layer.get("byteLength"), int)
+                or layer["byteLength"] <= 0):
+            raise RuntimeBundleError("native runtime image layer is malformed")
+    loader = native.get("loaderConfiguration")
+    if (not isinstance(loader, dict)
+            or set(loader) != {"files", "absentPaths"}
+            or not isinstance(loader.get("absentPaths"), list)
+            or loader["absentPaths"] != sorted(set(loader["absentPaths"]))
+            or any(not isinstance(path, str) or not Path(path).is_absolute()
+                   for path in loader["absentPaths"])):
+        raise RuntimeBundleError("native loader configuration observation is malformed")
+    if not isinstance(loader.get("files"), list):
+        raise RuntimeBundleError("native loader file observation is malformed")
+    for entry in loader["files"]:
+        _validate_runtime_image_file_entry(entry)
+    loader_paths = [entry["path"] for entry in loader["files"]]
+    if loader_paths != sorted(loader_paths) or len(loader_paths) != len(set(loader_paths)):
+        raise RuntimeBundleError("native loader file observation is not canonical")
+    images = native.get("actualNativeImages")
+    native_keys = {
+        "resolvedPath", "device", "inode", "contentDigest", "byteLength",
+        "classification", "distributions",
+    }
+    if not isinstance(images, list):
+        raise RuntimeBundleError("native executable image inventory is malformed")
+    image_paths = []
+    for entry in images:
+        if (not isinstance(entry, dict) or set(entry) != native_keys
+                or not isinstance(entry.get("resolvedPath"), str)
+                or not Path(entry["resolvedPath"]).is_absolute()
+                or not re.fullmatch(r"[0-9a-f]+:[0-9a-f]+", entry.get("device", ""))
+                or not isinstance(entry.get("inode"), int) or entry["inode"] <= 0
+                or not _SHA256_RE.fullmatch(entry.get("contentDigest", ""))
+                or not isinstance(entry.get("byteLength"), int)
+                or entry["byteLength"] <= 0
+                or entry.get("classification") not in {
+                    "PINNED_RUNTIME_IMAGE_FILE", "RETAINED_DISTRIBUTION_FILE",
+                    "UNKNOWN",
+                }
+                or not isinstance(entry.get("distributions"), list)
+                or entry["distributions"] != sorted(set(entry["distributions"]))):
+            raise RuntimeBundleError("native executable image identity is malformed")
+        image_paths.append(entry["resolvedPath"])
+    if image_paths != sorted(image_paths) or len(image_paths) != len(set(image_paths)):
+        raise RuntimeBundleError("native executable image inventory is not canonical")
+
+    distributions = document.get("distributions")
+    if not isinstance(distributions, list):
+        raise RuntimeBundleError("Python distribution observation is malformed")
+    distribution_names = []
+    for distribution in distributions:
+        if (not isinstance(distribution, dict)
+                or set(distribution) != {
+                    "name", "version", "wheelArchiveDigest",
+                    "wheelArchiveByteLength", "root", "files",
+                }
+                or not all(isinstance(distribution.get(key), str)
+                           for key in (
+                               "name", "version", "wheelArchiveDigest", "root"))
+                or not _SHA256_RE.fullmatch(distribution["wheelArchiveDigest"])
+                or not isinstance(distribution.get("wheelArchiveByteLength"), int)
+                or distribution["wheelArchiveByteLength"] <= 0):
+            raise RuntimeBundleError("Python distribution identity is malformed")
+        validate_files(
+            distribution["files"],
+            {"path", "resolvedPath", "contentDigest", "byteLength"})
+        distribution_names.append(distribution["name"])
+    if distribution_names != sorted(distribution_names) \
+            or len(distribution_names) != len(set(distribution_names)):
+        raise RuntimeBundleError("Python distribution inventory is not canonical")
+
+
+def _runtime_environment_document(
+    package_root: Path,
+    retained_components: Iterable[RuntimeComponent],
+) -> dict[str, Any]:
+    package_root = package_root.resolve()
+    distributions, distribution_files, dependency_roots = \
+        _distribution_observation()
+    standard_runtime, _observed_standard_files = _standard_runtime_observation()
+    image_manifest = _runtime_image_manifest(retained_components)
+    standard_files, _native_files = _retained_runtime_image_maps(image_manifest)
+    project_files = _project_component_files(
+        package_root, retained_components)
+    executable_path = Path(sys.executable).resolve(strict=True)
+    executable_digest, executable_length = _file_content_identity(executable_path)
+    modules = _module_observation(
+        package_root, project_files, distribution_files, dependency_roots,
+        standard_files)
+    meta_path, path_hooks = _import_infrastructure_observation()
     document = {
-        "schemaVersion": "ofarm.runtime-environment-observation.local.v1",
+        "schemaVersion": "ofarm.runtime-environment-observation.local.v3",
         "python": {
             "implementation": platform.python_implementation(),
             "version": platform.python_version(),
@@ -502,8 +2015,10 @@ def observed_runtime_environment_component() -> RuntimeComponent:
             "soabi": sysconfig.get_config_var("SOABI"),
             "optimizationLevel": sys.flags.optimize,
             "hashSeedEnvironment": os.environ.get("PYTHONHASHSEED"),
-            "executableDigest": sha256_bytes(executable),
-            "executableByteLength": len(executable),
+            "executableDigest": executable_digest,
+            "executableByteLength": executable_length,
+            "flags": _python_flags_document(),
+            "pycachePrefix": sys.pycache_prefix,
         },
         "platform": {
             "operatingSystem": platform.system(),
@@ -524,19 +2039,655 @@ def observed_runtime_environment_component() -> RuntimeComponent:
             "timezoneEnvironment": os.environ.get("TZ"),
             "timezoneNames": list(time.tzname),
             "utcOffsetSeconds": -time.timezone,
+            "nativeLoaderEnvironment":
+                _native_loader_environment_observation(),
         },
+        "importPosture": {
+            "projectRoot": str(package_root),
+            "ambientEnvironment": {
+                name: os.environ.get(name) for name in _AMBIENT_IMPORT_ENVIRONMENT
+            },
+            "startupCustomizationModules": [
+                name for name in ("sitecustomize", "usercustomize")
+                if name in sys.modules
+            ],
+            "dependencyRoots": dependency_roots,
+            "sysPath": _sys_path_observation(
+                package_root, dependency_roots,
+                [root["path"] for root in
+                 image_manifest["python"]["standardLibraryRoots"]]),
+            "metaPath": meta_path,
+            "pathHooks": path_hooks,
+            "pathImporterCache": _path_importer_cache_observation(),
+            "actualModules": modules,
+        },
+        "standardRuntime": standard_runtime,
+        "nativeRuntime": _native_runtime_observation(
+            distributions, image_manifest),
         "distributions": distributions,
     }
+    _validate_runtime_environment_document(document)
+    return document
+
+
+def _bytecode_or_customization_findings(
+    package_root: Path,
+    retained_components: Iterable[RuntimeComponent],
+    dependency_roots: Iterable[str],
+) -> list[str]:
+    findings = []
+    for component in retained_components:
+        if component.role not in {
+                "RUNTIME_CODE", "RUNTIME_CATALOG_CODE", "PARSER_CODE"} \
+                or not component.repository_path.endswith(".py"):
+            continue
+        source = package_root / component.repository_path
+        if source.with_suffix(".pyc").exists():
+            findings.append(str(source.with_suffix(".pyc")))
+        cache = source.parent / "__pycache__"
+        if cache.is_dir() and any(cache.glob(source.stem + ".*.pyc")):
+            findings.append(str(cache))
+    for raw_root in dependency_roots:
+        root = Path(raw_root)
+        if not root.is_dir():
+            findings.append(str(root))
+            continue
+        for directory, directories, filenames in os.walk(root):
+            if "__pycache__" in directories:
+                findings.append(str(Path(directory) / "__pycache__"))
+                directories.remove("__pycache__")
+            for filename in filenames:
+                if (Path(filename).suffix.lower() in {".pyc", ".pyo", ".pth"}
+                        or filename in {"sitecustomize.py", "usercustomize.py"}):
+                    findings.append(str(Path(directory) / filename))
+    return sorted(set(findings))
+
+
+def _module_loader_is_reviewed(module: Mapping[str, Any]) -> bool:
+    classification = module.get("classification")
+    loader = module.get("loader")
+    origin = module.get("origin")
+    if classification in {"BUILT_IN", "FROZEN"}:
+        return loader == "builtins.type"
+    if classification == "REVIEWED_NATIVE_AUXILIARY":
+        return loader is None
+    if classification == "RETAINED_NAMESPACE":
+        return loader in {None, "_frozen_importlib_external.NamespaceLoader"}
+    if classification == "NON_RUNTIME_TEST_HARNESS":
+        return loader in {
+            "_frozen_importlib_external.SourceFileLoader",
+            "_pytest.assertion.rewrite.AssertionRewritingHook",
+        }
+    if classification in {
+            "RETAINED_PROJECT_COMPONENT", "RETAINED_DISTRIBUTION_FILE",
+            "PINNED_RUNTIME_IMAGE_FILE"}:
+        if not isinstance(origin, str):
+            return False
+        native = any(origin.endswith(suffix)
+                     for suffix in importlib.machinery.EXTENSION_SUFFIXES)
+        expected = ("_frozen_importlib_external.ExtensionFileLoader" if native
+                    else "_frozen_importlib_external.SourceFileLoader")
+        return loader == expected
+    return False
+
+
+def _require_reviewed_import_search_state(document: Mapping[str, Any]) -> None:
+    modules = document["importPosture"]["actualModules"]
+    for module in modules:
+        package_paths = module["packageSearchPaths"]
+        spec_paths = module["specSearchPaths"]
+        if package_paths != spec_paths:
+            raise RuntimeBundleError(
+                f"loaded package {module['name']!r} has divergent __path__ and spec paths")
+        if not package_paths:
+            continue
+        origin = module.get("origin")
+        if isinstance(origin, str) and origin not in {"built-in", "frozen"}:
+            expected = [str(_resolved_path(origin).parent)]
+            if package_paths != expected:
+                raise RuntimeBundleError(
+                    f"loaded package {module['name']!r} search path does not equal "
+                    "its retained origin directory")
+        elif module["classification"] != "RETAINED_NAMESPACE":
+            raise RuntimeBundleError(
+                f"loaded module {module['name']!r} has unreviewed package search paths")
+
+    by_name = {module["name"]: module for module in modules}
+    permitted_provider_classes = {
+        "BUILT_IN", "FROZEN", "RETAINED_PROJECT_COMPONENT",
+        "RETAINED_DISTRIBUTION_FILE", "PINNED_RUNTIME_IMAGE_FILE",
+    }
+    for field_name in ("metaPath", "pathHooks"):
+        providers = document["importPosture"][field_name]
+        identities = [canonical_json(item) for item in providers]
+        if len(identities) != len(set(identities)):
+            raise RuntimeBundleError(
+                f"live Python {field_name} contains duplicate provider identities")
+        for provider in providers:
+            owner = by_name.get(provider["providerModule"])
+            if owner is None or owner["classification"] not in permitted_provider_classes:
+                raise RuntimeBundleError(
+                    f"live Python {field_name} provider is not retained: "
+                    f"{provider['providerModule']}.{provider['providerQualname']}")
+
+    if "pathImporterCache" not in document["importPosture"]:
+        # Narrow unit seams may exercise package/provider validation without a
+        # complete runtime-environment document. Full live documents are
+        # schema-validated above and always include the cache observation.
+        return
+    cache_entries = document["importPosture"]["pathImporterCache"]
+    live_entries, live_objects = _path_importer_cache_state()
+    if cache_entries != live_entries:
+        raise RuntimeBundleError(
+            "live sys.path_importer_cache changed during runtime observation")
+    search_roots = [Path(item["path"]) for item in
+                    document["importPosture"].get("sysPath", [])]
+    for entry in cache_entries:
+        path = Path(entry["path"])
+        if (not path.is_dir()
+                or not any(path == root or path.is_relative_to(root)
+                           for root in search_roots)):
+            raise RuntimeBundleError(
+                f"live sys.path_importer_cache key is outside retained roots: {path}")
+        finder = live_objects[entry["path"]][0]
+        _file_finder_state(entry["path"], finder)
+        provider = entry["finder"]
+        if provider is None:
+            raise RuntimeBundleError(
+                f"live sys.path_importer_cache has no retained finder for {path}")
+        owner = by_name.get(provider["providerModule"])
+        if owner is None or owner["classification"] not in permitted_provider_classes:
+            raise RuntimeBundleError(
+                "live sys.path_importer_cache provider is not retained: "
+                f"{provider['providerModule']}.{provider['providerQualname']}")
+
+
+def _require_runtime_image_matches_observation(
+    document: Mapping[str, Any],
+    retained_components: tuple[RuntimeComponent, ...],
+) -> None:
+    manifest = _runtime_image_manifest(retained_components)
+    python_manifest = manifest["python"]
+    native = document["nativeRuntime"]
+    if (native["imageIdentity"] != manifest["image"]
+            or not native["containerMarkerPresent"]
+            or not native["imageFilesReadOnly"]):
+        raise RuntimeBundleError(
+            "live RuntimeBundle is not executing from the retained read-only image")
+    if document["process"]["nativeLoaderEnvironment"]:
+        raise RuntimeBundleError(
+            "live RuntimeBundle forbids ambient native loader customization")
+    if (Path(sys.executable).resolve(strict=True) !=
+            Path(python_manifest["executable"]["path"])
+            or (document["python"]["executableDigest"],
+                document["python"]["executableByteLength"]) != (
+                    python_manifest["executable"]["contentDigest"],
+                    python_manifest["executable"]["byteLength"])):
+        raise RuntimeBundleError(
+            "live Python executable differs from the retained runtime image")
+
+    actual_roots = document["standardRuntime"]["roots"]
+    expected_roots = []
+    for retained_root in python_manifest["standardLibraryRoots"]:
+        expected_roots.append({
+            "path": retained_root["path"],
+            "directories": retained_root["directories"],
+            "files": [{
+                "path": entry["relativePath"],
+                "resolvedPath": entry["path"],
+                "contentDigest": entry["contentDigest"],
+                "byteLength": entry["byteLength"],
+            } for entry in retained_root["files"]],
+        })
+    retained_shared = python_manifest["sharedLibrary"]
+    expected_shared = {
+        "resolvedPath": retained_shared["path"],
+        "contentDigest": retained_shared["contentDigest"],
+        "byteLength": retained_shared["byteLength"],
+    }
+    if (actual_roots != expected_roots
+            or document["standardRuntime"]["archives"] != []
+            or document["standardRuntime"]["sharedLibrary"] != expected_shared):
+        raise RuntimeBundleError(
+            "live standard library differs from the retained runtime image manifest")
+
+    loader = native["loaderConfiguration"]
+    if (loader["files"] != python_manifest["loaderConfigurationFiles"]
+            or loader["absentPaths"] != python_manifest["requiredAbsentPaths"]):
+        raise RuntimeBundleError(
+            "live native loader configuration differs from the retained image")
+    invalid_native = [
+        entry for entry in native["actualNativeImages"]
+        if entry["classification"] == "UNKNOWN"
+        or (entry["classification"] == "PINNED_RUNTIME_IMAGE_FILE"
+            and entry["distributions"])
+        or (entry["classification"] == "RETAINED_DISTRIBUTION_FILE"
+            and not entry["distributions"])
+    ]
+    if not native["actualNativeImages"] or invalid_native:
+        raise RuntimeBundleError(
+            "live process has executable mappings outside the retained image/wheels: "
+            f"{[entry['resolvedPath'] for entry in invalid_native[:5]]!r}")
+
+    config_matches = [
+        component for component in retained_components
+        if component.role == "RUNTIME_ENVIRONMENT"
+        and component.logical_ref ==
+        "environment:conformance/review_baseline_config.json"
+    ]
+    if len(config_matches) != 1:
+        raise RuntimeBundleError("retained runtime baseline config is not unique")
+    config = _strict_json_value(
+        config_matches[0].canonical_bytes, "retained runtime baseline config")
+    required_image = (config.get("requiredEnvironment") or {}).get(
+        "pythonRuntimeImage")
+    expected_required_image = {
+        "reference": manifest["image"]["reference"],
+        "indexDigest": manifest["image"]["indexDigest"],
+        "platform": manifest["image"]["platform"],
+        "platformManifestDigest": manifest["image"]["platformManifestDigest"],
+        "rootFilesystem": "READ_ONLY",
+    }
+    if required_image != expected_required_image:
+        raise RuntimeBundleError(
+            "retained baseline config and Python image manifest disagree")
+
+
+def require_live_python_import_posture(
+    package_root: Path,
+    *,
+    retained_components: Iterable[RuntimeComponent] | None = None,
+) -> dict[str, Any]:
+    """Refuse live binding unless imports are isolated, source-only, and owned."""
+    package_root = package_root.resolve()
+    if retained_components is None:
+        retained_components = _locked_components(package_root)
+    retained_components = tuple(retained_components)
+    document = _runtime_environment_document(package_root, retained_components)
+    flags = document["python"]["flags"]
+    expected_flags = {
+        "isolated": 1,
+        "ignoreEnvironment": 1,
+        "noSite": 1,
+        "noUserSite": 1,
+        "safePath": True,
+        "dontWriteBytecode": 1,
+        "hashRandomization": 1,
+        "optimizationLevel": sys.flags.optimize,
+    }
+    if flags != expected_flags:
+        raise RuntimeBundleError(
+            "live RuntimeBundle requires actual python -I -B -S import flags")
+    if any(value is not None for value in
+           document["importPosture"]["ambientEnvironment"].values()):
+        raise RuntimeBundleError(
+            "live RuntimeBundle forbids ambient Python import customization")
+    _require_runtime_image_matches_observation(document, retained_components)
+    if document["importPosture"]["startupCustomizationModules"]:
+        raise RuntimeBundleError(
+            "live RuntimeBundle forbids sitecustomize/usercustomize")
+    path_entries = document["importPosture"]["sysPath"]
+    if any(item["classification"] == "UNKNOWN" for item in path_entries):
+        raise RuntimeBundleError("live RuntimeBundle sys.path contains an unknown root")
+    ranks = {
+        "PINNED_RUNTIME_IMAGE_ROOT": 0,
+        "LOCKED_DEPENDENCY_ROOT": 1,
+        "REVIEWED_PROJECT_ROOT": 2,
+    }
+    observed_ranks = [ranks[item["classification"]] for item in path_entries]
+    if (observed_ranks != sorted(observed_ranks)
+            or len({item["path"] for item in path_entries}) != len(path_entries)
+            or not path_entries
+            or path_entries[-1]["classification"] != "REVIEWED_PROJECT_ROOT"):
+        raise RuntimeBundleError("live RuntimeBundle sys.path is not the closed ordered path")
+    cache_prefix = document["python"]["pycachePrefix"]
+    if (not isinstance(cache_prefix, str) or not cache_prefix
+            or Path(cache_prefix).exists()):
+        raise RuntimeBundleError(
+            "live RuntimeBundle requires an absent isolated bytecode-cache prefix")
+    findings = _bytecode_or_customization_findings(
+        package_root, retained_components,
+        document["importPosture"]["dependencyRoots"])
+    if findings:
+        raise RuntimeBundleError(
+            f"live RuntimeBundle found bytecode/customization files: {findings[:5]!r}")
+    invalid_modules = [
+        item for item in document["importPosture"]["actualModules"]
+        if item["classification"] in {"UNKNOWN", "BYTECODE"}
+    ]
+    if invalid_modules:
+        raise RuntimeBundleError(
+            "live RuntimeBundle found imported code outside retained identities: "
+            f"{[(item['name'], item['origin']) for item in invalid_modules[:5]]!r}")
+    invalid_loaders = [
+        item for item in document["importPosture"]["actualModules"]
+        if not _module_loader_is_reviewed(item)
+    ]
+    if invalid_loaders:
+        raise RuntimeBundleError(
+            "live RuntimeBundle found an unreviewed Python module loader: "
+            f"{[(item['name'], item['loader']) for item in invalid_loaders[:5]]!r}")
+    _require_reviewed_import_search_state(document)
+    component_by_identity = {
+        (component.role, component.logical_ref): component
+        for component in retained_components
+    }
+    distribution_inventory: dict[str, tuple[str, int, list[str]]] = {}
+    for distribution in document["distributions"]:
+        for retained_file in distribution["files"]:
+            identity = retained_file["resolvedPath"]
+            prior = distribution_inventory.get(identity)
+            owners = sorted({*(prior[2] if prior else []), distribution["name"]})
+            if prior is not None and prior[:2] != (
+                    retained_file["contentDigest"], retained_file["byteLength"]):
+                raise RuntimeBundleError(
+                    f"retained distributions disagree about shared file {identity!r}")
+            distribution_inventory[identity] = (
+                retained_file["contentDigest"], retained_file["byteLength"], owners)
+    standard_inventory, _native_inventory = _retained_runtime_image_maps(
+        _runtime_image_manifest(retained_components))
+    for module in document["importPosture"]["actualModules"]:
+        retained = module.get("retainedComponent")
+        classification = module["classification"]
+        if retained is not None:
+            component = component_by_identity.get(
+                (retained.get("role"), retained.get("logicalRef")))
+            if (component is None
+                    or module.get("contentDigest") != component.content_digest
+                    or module.get("byteLength") != len(component.canonical_bytes)):
+                raise RuntimeBundleError(
+                    f"loaded project module {module['name']!r} differs from retained code")
+        elif classification == "RETAINED_DISTRIBUTION_FILE":
+            retained_identity = distribution_inventory.get(module.get("origin"))
+            if (retained_identity is None
+                    or (module.get("contentDigest"), module.get("byteLength")) !=
+                    retained_identity[:2]
+                    or module.get("distributions") != retained_identity[2]):
+                raise RuntimeBundleError(
+                    f"loaded dependency module {module['name']!r} differs from "
+                    "the retained distribution file")
+        elif classification == "PINNED_RUNTIME_IMAGE_FILE":
+            retained_identity = standard_inventory.get(module.get("origin"))
+            if (retained_identity is None
+                    or (module.get("contentDigest"), module.get("byteLength")) !=
+                    retained_identity):
+                raise RuntimeBundleError(
+                    f"loaded standard module {module['name']!r} differs from "
+                    "the retained Python image file")
+    return document
+
+
+def observed_runtime_environment_component(
+    package_root: Path | None = None,
+    retained_components: Iterable[RuntimeComponent] = (),
+) -> RuntimeComponent:
+    """Bind the bundle to flags, paths, imported origins, and runtime bytes."""
+    package_root = (package_root or Path(__file__).resolve().parents[1]).resolve()
+    return _runtime_environment_component_from_document(
+        _runtime_environment_document(package_root, tuple(retained_components)))
+
+
+def _runtime_environment_component_from_document(
+    document: dict[str, Any],
+) -> RuntimeComponent:
+    _validate_runtime_environment_document(document)
     canonical = canonical_json(document).encode("utf-8")
     return RuntimeComponent(
         role="RUNTIME_ENVIRONMENT_OBSERVED",
         logical_ref=_OBSERVED_ENVIRONMENT_REF,
-        repository_path="runtime-observed/environment-v1",
+        repository_path="runtime-observed/environment-v3",
         canonicalization=JSON_CANONICALIZATION,
         content_digest=sha256_bytes(canonical),
         canonical_bytes=canonical,
         placement=GLOBAL_CONTENT_PLACEMENT,
     )
+
+
+def _module_origin_stat_signature(module: object) -> tuple[Any, ...]:
+    spec = getattr(module, "__spec__", None)
+    origin = getattr(spec, "origin", None) or getattr(module, "__file__", None)
+    package_paths, spec_paths = _module_search_paths(module)
+    import_state = (
+        tuple(package_paths), tuple(spec_paths),
+        getattr(module, "__loader__", None),
+        getattr(spec, "loader", None),
+    )
+    if not isinstance(origin, str) or origin in {"built-in", "frozen"}:
+        return (origin, *import_state)
+    path = _resolved_path(origin)
+    try:
+        stat = path.stat()
+    except OSError:
+        return (str(path), None, *import_state)
+    return (
+        str(path), stat.st_dev, stat.st_ino, stat.st_size,
+        stat.st_mtime_ns, stat.st_ctime_ns,
+        *import_state,
+    )
+
+
+def _loaded_module_objects() -> dict[str, tuple[object, tuple[Any, ...]]]:
+    items = tuple(sys.modules.items())
+    if any(not isinstance(name, str) or not name for name, _module in items):
+        raise RuntimeBundleError("live sys.modules contains a non-string module key")
+    return {
+        name: (module, _module_origin_stat_signature(module))
+        for name, module in items
+    }
+
+
+def _capture_runtime_environment_seal(
+        bundle_digest: str, document: Mapping[str, Any],
+) -> RuntimeEnvironmentSeal:
+    if (type(sys.modules) is not dict
+            or type(sys.path_importer_cache) is not dict
+            or type(sys.path) is not list
+            or type(sys.meta_path) is not list
+            or type(sys.path_hooks) is not list):
+        raise RuntimeBundleError(
+            "live Python import containers do not have their exact built-in types")
+    modules = _loaded_module_objects()
+    observed_names = {
+        item["name"] for item in document["importPosture"]["actualModules"]
+    }
+    loaded_names = {
+        name for name, (module, _signature) in modules.items()
+        if module is not None
+    }
+    if loaded_names != observed_names:
+        raise RuntimeBundleError(
+            "live sys.modules changed while the runtime environment was sealed")
+
+    cache_document, cache_objects = _path_importer_cache_state()
+    if cache_document != document["importPosture"]["pathImporterCache"]:
+        raise RuntimeBundleError(
+            "live sys.path_importer_cache changed while the runtime was sealed")
+    sealed_cache = tuple(
+        (path, finder, finder_type, _file_finder_state(path, finder))
+        for path, (finder, finder_type) in sorted(cache_objects.items())
+    )
+    return RuntimeEnvironmentSeal(
+        bundle_digest=bundle_digest,
+        flags=tuple(sorted(document["python"]["flags"].items())),
+        ambient=tuple(sorted(
+            document["importPosture"]["ambientEnvironment"].items())),
+        native_loader_environment=tuple(sorted(
+            document["process"]["nativeLoaderEnvironment"].items())),
+        native_runtime=canonical_json(document["nativeRuntime"]),
+        native_runtime_stat=_native_runtime_stat_signature(
+            document["nativeRuntime"]),
+        customization=tuple(
+            document["importPosture"]["startupCustomizationModules"]),
+        sys_path=tuple(item["path"] for item in
+                       document["importPosture"]["sysPath"]),
+        sys_path_object=sys.path,
+        meta_path=tuple(canonical_json(item) for item in
+                        document["importPosture"]["metaPath"]),
+        path_hooks=tuple(canonical_json(item) for item in
+                         document["importPosture"]["pathHooks"]),
+        meta_path_container=sys.meta_path,
+        path_hooks_container=sys.path_hooks,
+        meta_path_objects=tuple(sys.meta_path),
+        path_hook_objects=tuple(sys.path_hooks),
+        path_importer_cache=tuple(
+            canonical_json(item) for item in cache_document),
+        path_importer_cache_mapping=sys.path_importer_cache,
+        path_importer_cache_objects=sealed_cache,
+        import_callable_state=_import_callable_seal_state(),
+        sys_modules_mapping=sys.modules,
+        modules=tuple(
+            (name, module, signature)
+            for name, (module, signature) in sorted(modules.items())),
+        pycache_prefix=document["python"]["pycachePrefix"],
+        project_root=document["importPosture"]["projectRoot"],
+    )
+
+
+def _require_sealed_import_object_identities(
+        seal: RuntimeEnvironmentSeal,
+) -> dict[str, tuple[object, tuple[Any, ...]]]:
+    current_callable_state = _import_callable_seal_state()
+    if (len(current_callable_state) != len(seal.import_callable_state)
+            or any(not _same_callable_seal_entry(current, prior)
+                   for current, prior in
+                   zip(current_callable_state, seal.import_callable_state))):
+        raise RuntimeBundleError(
+            "live Python import callable identity changed after activation")
+    if sys.modules is not seal.sys_modules_mapping:
+        raise RuntimeBundleError(
+            "live sys.modules mapping identity changed after RuntimeBundle activation")
+    loaded = _loaded_module_objects()
+    verified = {
+        name: (module, signature) for name, module, signature in seal.modules
+    }
+    added = sorted(set(loaded) - set(verified))
+    removed = sorted(set(verified) - set(loaded))
+    if added or removed:
+        raise RuntimeBundleError(
+            "live Python module set changed after RuntimeBundle activation: "
+            f"added={added[:5]!r}, removed={removed[:5]!r}")
+    replaced = sorted(
+        name for name, prior in verified.items()
+        if loaded[name][0] is not prior[0]
+    )
+    if replaced:
+        raise RuntimeBundleError(
+            "live Python module object replaced after RuntimeBundle activation: "
+            f"{replaced[:5]!r}")
+
+    if sys.path_importer_cache is not seal.path_importer_cache_mapping:
+        raise RuntimeBundleError(
+            "live sys.path_importer_cache mapping identity changed after activation")
+    cache_document, cache_objects = _path_importer_cache_state()
+    current_cache_document = tuple(
+        canonical_json(item) for item in cache_document)
+    if current_cache_document != seal.path_importer_cache:
+        raise RuntimeBundleError(
+            "live sys.path_importer_cache structure changed after activation")
+    verified_cache = {
+        path: (finder, finder_type, state)
+        for path, finder, finder_type, state in seal.path_importer_cache_objects
+    }
+    if set(cache_objects) != set(verified_cache):
+        raise RuntimeBundleError(
+            "live sys.path_importer_cache key set changed after activation")
+    for path, (finder, finder_type) in cache_objects.items():
+        prior_finder, prior_type, prior_state = verified_cache[path]
+        if finder is not prior_finder or finder_type is not prior_type:
+            raise RuntimeBundleError(
+                "live sys.path_importer_cache finder identity changed after activation: "
+                f"{path!r}")
+        if _file_finder_state(path, finder) != prior_state:
+            raise RuntimeBundleError(
+                "live sys.path_importer_cache finder state changed after activation: "
+                f"{path!r}")
+    return loaded
+
+
+def _assert_live_import_growth_is_retained(
+        bundle: "RuntimeBundle", seal: RuntimeEnvironmentSeal) -> None:
+    """Require the activation-time module and importer sets without widening."""
+    if type(seal) is not RuntimeEnvironmentSeal or seal.bundle_digest != bundle.digest:
+        raise RuntimeBundleError(
+            "runtime environment seal does not belong to this RuntimeBundle")
+    if tuple(sorted(_python_flags_document().items())) != seal.flags:
+        raise RuntimeBundleError("live Python import flags changed after activation")
+    ambient = tuple(sorted(
+        (name, os.environ.get(name)) for name in _AMBIENT_IMPORT_ENVIRONMENT))
+    if ambient != seal.ambient:
+        raise RuntimeBundleError(
+            "ambient Python import customization changed after activation")
+    native_loader_environment = tuple(sorted(
+        _native_loader_environment_observation().items()))
+    if native_loader_environment != seal.native_loader_environment:
+        raise RuntimeBundleError(
+            "ambient native loader customization changed after activation")
+    customization = tuple(
+        name for name in ("sitecustomize", "usercustomize") if name in sys.modules)
+    if customization != seal.customization:
+        raise RuntimeBundleError(
+            "Python startup customization appeared after activation")
+    if sys.path is not seal.sys_path_object:
+        raise RuntimeBundleError(
+            "live sys.path container identity changed after RuntimeBundle activation")
+    current_path = tuple(sys.path)
+    if current_path != seal.sys_path:
+        raise RuntimeBundleError("live sys.path changed after RuntimeBundle activation")
+    if sys.meta_path is not seal.meta_path_container:
+        raise RuntimeBundleError(
+            "live sys.meta_path container identity changed after activation")
+    if sys.path_hooks is not seal.path_hooks_container:
+        raise RuntimeBundleError(
+            "live sys.path_hooks container identity changed after activation")
+    current_meta, current_hooks = _import_infrastructure_observation()
+    if tuple(canonical_json(item) for item in current_meta) != seal.meta_path:
+        raise RuntimeBundleError("live sys.meta_path changed after RuntimeBundle activation")
+    if tuple(canonical_json(item) for item in current_hooks) != seal.path_hooks:
+        raise RuntimeBundleError("live sys.path_hooks changed after RuntimeBundle activation")
+    if (len(sys.meta_path) != len(seal.meta_path_objects)
+            or any(current is not selected for current, selected in
+                   zip(sys.meta_path, seal.meta_path_objects))):
+        raise RuntimeBundleError(
+            "live sys.meta_path provider identity changed after RuntimeBundle activation")
+    if (len(sys.path_hooks) != len(seal.path_hook_objects)
+            or any(current is not selected for current, selected in
+                   zip(sys.path_hooks, seal.path_hook_objects))):
+        raise RuntimeBundleError(
+            "live sys.path_hooks provider identity changed after RuntimeBundle activation")
+    if (sys.pycache_prefix != seal.pycache_prefix
+            or not isinstance(sys.pycache_prefix, str)
+            or Path(sys.pycache_prefix).exists()):
+        raise RuntimeBundleError(
+            "live bytecode cache posture changed after RuntimeBundle activation")
+
+    if _native_runtime_stat_signature(
+            json.loads(seal.native_runtime)) != seal.native_runtime_stat:
+        raise RuntimeBundleError(
+            "live native executable mappings changed after RuntimeBundle activation")
+
+    loaded = _require_sealed_import_object_identities(seal)
+    verified = {
+        name: (module, signature) for name, module, signature in seal.modules
+    }
+    changed = sorted(
+        name for name, prior in verified.items()
+        if loaded[name][1] != prior[1]
+    )
+    if changed:
+        raise RuntimeBundleError(
+            "live Python module state changed after RuntimeBundle activation: "
+            f"{changed[:5]!r}")
+
+
+def require_runtime_environment_seal(
+        bundle: "RuntimeBundle", seal: RuntimeEnvironmentSeal,
+        consumer: str = "governed decision",
+) -> None:
+    """Validate one Store-owned, write-once activation seal."""
+    try:
+        _assert_live_import_growth_is_retained(bundle, seal)
+    except RuntimeBundleError as exc:
+        raise RuntimeBundleError(f"{consumer} import posture is invalid: {exc}") from exc
 
 
 def _validate_database_environment_document(document: Any) -> None:
@@ -553,7 +2704,8 @@ def _validate_database_environment_document(document: Any) -> None:
     }
     expected_session = {
         "currentUser", "sessionUser", "timezone", "dateStyle",
-        "intervalStyle", "searchPath", "standardConformingStrings",
+        "intervalStyle", "searchPath", "sessionReplicationRole",
+        "transactionIsolation", "standardConformingStrings",
         "extraFloatDigits", "byteaOutput",
     }
     if (not isinstance(document.get("server"), dict)
@@ -619,16 +2771,19 @@ def _locked_distribution_versions(lock_bytes: bytes) -> dict[str, str]:
     return versions
 
 
-def assert_runtime_environment_compatible(bundle: "RuntimeBundle") -> dict[str, Any]:
-    """Fail closed when observed execution differs from the retained baseline."""
-    observed_component = bundle.component(
-        "RUNTIME_ENVIRONMENT_OBSERVED", _OBSERVED_ENVIRONMENT_REF)
-    current_component = observed_runtime_environment_component()
-    if observed_component != current_component:
-        raise RuntimeBundleError(
-            "observed interpreter or installed distribution bytes changed after selection")
+def assert_runtime_environment_compatible(
+        bundle: "RuntimeBundle",
+) -> tuple[dict[str, Any], RuntimeEnvironmentSeal]:
+    """Validate activation and return its requirement document and frozen seal."""
+    package_root = Path(bundle.descriptor.profile_root).resolve().parent
+    current_document = require_live_python_import_posture(
+        package_root, retained_components=bundle.components)
     observed = bundle.json_component(
         "RUNTIME_ENVIRONMENT_OBSERVED", _OBSERVED_ENVIRONMENT_REF)
+    _validate_runtime_environment_document(observed)
+    if current_document != observed:
+        raise RuntimeBundleError(
+            "observed interpreter, import posture, or runtime bytes changed after selection")
     config_doc = bundle.json_component(
         "RUNTIME_ENVIRONMENT", "environment:conformance/review_baseline_config.json")
     required = config_doc.get("requiredEnvironment")
@@ -688,7 +2843,18 @@ def assert_runtime_environment_compatible(bundle: "RuntimeBundle") -> dict[str, 
     if actual_distributions != expected_distributions:
         raise RuntimeBundleError(
             "installed distribution set/versions differ from retained locks")
-    return required
+    final_document = require_live_python_import_posture(
+        package_root, retained_components=bundle.components)
+    if final_document != observed:
+        raise RuntimeBundleError(
+            "Python runtime identity changed while activation was being sealed")
+    seal = bundle._selection_environment_seal
+    if type(seal) is not RuntimeEnvironmentSeal:
+        raise RuntimeBundleError(
+            "live RuntimeBundle has no selection-time runtime environment seal")
+    require_runtime_environment_seal(
+        bundle, seal, "RuntimeBundle activation")
+    return required, seal
 
 
 @dataclass(frozen=True)
@@ -762,6 +2928,8 @@ class RuntimeBundle:
     components: tuple[RuntimeComponent, ...]
     selected_references: tuple[SelectedReferenceIdentity, ...]
     construction_mode: str
+    _selection_environment_seal: RuntimeEnvironmentSeal | None = field(
+        default=None, repr=False, compare=False)
     _live_selection_proof: InitVar[object | None] = None
 
     def __post_init__(self, _live_selection_proof) -> None:
@@ -771,6 +2939,14 @@ class RuntimeBundle:
                 != (_live_selection_proof is _LIVE_SELECTION_PROOF)):
             raise RuntimeBundleError(
                 "RuntimeBundle live-selection provenance is unverified")
+        if self.construction_mode == "LIVE_CURRENT":
+            if (type(self._selection_environment_seal) is not RuntimeEnvironmentSeal
+                    or self._selection_environment_seal.bundle_digest != self.digest):
+                raise RuntimeBundleError(
+                    "live RuntimeBundle lacks its exact selection-time import seal")
+        elif self._selection_environment_seal is not None:
+            raise RuntimeBundleError(
+                "persisted-audit RuntimeBundle cannot carry a live import seal")
         if not _SHA256_RE.fullmatch(self.digest):
             raise RuntimeBundleError("RuntimeBundle digest must be a full SHA-256")
         if self.bundle_ref != f"runtimebundle:{self.digest}":
@@ -831,6 +3007,14 @@ class RuntimeBundle:
             raise RuntimeBundleError("RuntimeBundle contains duplicate selected references")
         component_map = {(component.role, component.logical_ref): component
                          for component in self.components}
+        environment_component = component_map.get(
+            ("RUNTIME_ENVIRONMENT_OBSERVED", _OBSERVED_ENVIRONMENT_REF))
+        if environment_component is None:
+            raise RuntimeBundleError(
+                "RuntimeBundle has no closed Python environment observation")
+        _validate_runtime_environment_document(_strict_json_value(
+            environment_component.canonical_bytes,
+            "RuntimeBundle Python environment observation"))
         snapshot_components = {
             logical_ref for role, logical_ref in component_map
             if role == "REFERENCE_SNAPSHOT"
@@ -1337,6 +3521,8 @@ def build_runtime_bundle(
     tenant_ref: str | None = None,
     _database_environment: dict[str, Any] | None = None,
     _profile_route_selection: dict[str, Any] | None = None,
+    _observed_python_environment: dict[str, Any] | None = None,
+    _selection_environment_seal: RuntimeEnvironmentSeal | None = None,
     _live_selection_proof: object | None = None,
 ) -> RuntimeBundle:
     """Build one immutable bundle from an explicit descriptor and trusted lock.
@@ -1352,6 +3538,10 @@ def build_runtime_bundle(
         raise RuntimeBundleError("runtime tenant ref must be non-empty")
     if _live_selection_proof not in {None, _LIVE_SELECTION_PROOF}:
         raise RuntimeBundleError("unknown RuntimeBundle live-selection authority")
+    if ((_live_selection_proof is _LIVE_SELECTION_PROOF)
+            != (type(_selection_environment_seal) is RuntimeEnvironmentSeal)):
+        raise RuntimeBundleError(
+            "live RuntimeBundle selection requires its exact import seal")
     profile_origin_bundles = profile_origin_bundles or {}
     package_root = Path(descriptor.profile_root).resolve().parent
     locked = _locked_components(package_root)
@@ -1372,7 +3562,15 @@ def build_runtime_bundle(
                 f"locked runtime component {component.role}/{component.logical_ref} "
                 "does not equal the selected canonical bytes")
 
-    add_component(observed_runtime_environment_component())
+    if _observed_python_environment is not None:
+        if _live_selection_proof is not _LIVE_SELECTION_PROOF:
+            raise RuntimeBundleError(
+                "only live startup may supply a preverified Python environment")
+        add_component(_runtime_environment_component_from_document(
+            _observed_python_environment))
+    else:
+        add_component(observed_runtime_environment_component(
+            package_root, tuple(component_map.values())))
     if _database_environment is not None:
         add_component(database_runtime_environment_component(
             _database_environment))
@@ -1655,6 +3853,10 @@ def build_runtime_bundle(
     }
     canonical_document = canonical_json(bundle_document).encode("utf-8")
     digest = sha256_bytes(canonical_document)
+    selection_environment_seal = (
+        replace(_selection_environment_seal, bundle_digest=digest)
+        if _selection_environment_seal is not None else None
+    )
     return RuntimeBundle(
         descriptor=descriptor,
         digest=digest,
@@ -1665,6 +3867,7 @@ def build_runtime_bundle(
         construction_mode=(
             "LIVE_CURRENT" if _live_selection_proof is _LIVE_SELECTION_PROOF
             else "PERSISTED_AUDIT"),
+        _selection_environment_seal=selection_environment_seal,
         _live_selection_proof=_live_selection_proof,
     )
 
@@ -1674,8 +3877,17 @@ def _build_live_runtime_bundle(descriptor, **kwargs) -> RuntimeBundle:
     if kwargs.get("_database_environment") is None:
         raise RuntimeBundleError(
             "live RuntimeBundle selection requires a PostgreSQL environment observation")
+    if "_observed_python_environment" in kwargs:
+        raise RuntimeBundleError(
+            "caller-supplied Python environment observations are forbidden")
+    package_root = Path(descriptor.profile_root).resolve().parent
+    observed_python_environment = require_live_python_import_posture(package_root)
+    selection_environment_seal = _capture_runtime_environment_seal(
+        "", observed_python_environment)
     return build_runtime_bundle(
         descriptor,
+        _observed_python_environment=observed_python_environment,
+        _selection_environment_seal=selection_environment_seal,
         _live_selection_proof=_LIVE_SELECTION_PROOF,
         **kwargs,
     )
