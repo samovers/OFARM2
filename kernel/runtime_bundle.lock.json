@@ -934,7 +934,7 @@
       "logicalRef": "environment:.github/workflows/conformance.yml",
       "path": ".github/workflows/conformance.yml",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:dbd0b670bbeb1429eae299fd424cffce9e731300b53fbba6455baa57ad8b02d1",
+      "sha256": "sha256:27e21a13bfc1fb483f024ec99bdb0cedf46d93efafcfcc37b2453a928994214a",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
