@@ -22,6 +22,7 @@ import anyio._backends._asyncio as anyio_asyncio
 import jsonschema
 import psycopg
 import pytest
+import pydantic.v1 as pydantic_v1
 from fastapi.testclient import TestClient
 
 from kernel import config, context, demo, sufficiency
@@ -35,7 +36,7 @@ from .conftest import record_detail
 # 93, after the RuntimeBundle import seal. Preload the exact pinned backend
 # during collection so the evidence lane and the complete suite share the same
 # zero-growth runtime boundary.
-_TEST_CLIENT_RUNTIME_PRELOAD = (pickle, queue, anyio_asyncio)
+_TEST_CLIENT_RUNTIME_PRELOAD = (pickle, queue, anyio_asyncio, pydantic_v1)
 
 FIXTURES = config.PACKAGE_ROOT / "conformance" / "fixtures" / "gate_sequencing"
 
@@ -854,9 +855,11 @@ def test_15_manifest_grounding(store):
 #     trace-linked.
 # =========================================================================
 
-def test_92_review_runtime_preloads_pickle_native_extension():
+def test_92_review_runtime_preloads_lazy_testclient_surfaces():
     assert pickle in _TEST_CLIENT_RUNTIME_PRELOAD
     assert pickle.Pickler.__module__ == "_pickle"
+    assert pydantic_v1 in _TEST_CLIENT_RUNTIME_PRELOAD
+    assert pydantic_v1.BaseModel.__module__ == "pydantic.v1.main"
 
 
 def test_93_governed_acceptance_semantics(store, pipeline):
