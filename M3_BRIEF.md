@@ -1,4 +1,4 @@
-# M3 brief — platform MVP: phone capture to governed register
+# M3 brief — platform MVP: capture, sync, review, and governed output refusal
 
 Status: proposed execution brief for M3. This is an implementation/conformance planning artifact, not OFARM law, not a schema or contract promotion, and not a production-readiness claim.
 
@@ -17,16 +17,16 @@ M3 starts from the current OFARM2 implementation package after M1/M2 closure.
 
 Assumed starting facts:
 
-- The Kernel/Core/Platform implementation exists as a governed backend with append-only truth, gate-chain commits, materialization, outputs, profile-aware SI runtime surfaces, and platform MVP conformance evidence.
-- M2 has closed the Core-on-Kernel path for repo-facing currentness: governed structure identities, reference snapshots/imports, code bindings, OIDC development principal binding, review/dispute verbs, AS_OF reconstruction, and extent-carrier handling.
+- The Kernel/Core/Platform prototype exists with append-only truth, gate-chain commits, materialization, and SI output surfaces. Its current authentication, persistence, temporal, and output paths predate ADR 0001/0002 and are not M3 runtime foundations.
+- M2 has closed the Core-on-Kernel path for repo-facing currentness: governed structure identities, reference snapshots/imports, code bindings, the prototype OIDC/development principal binding, review/dispute verbs, AS_OF reconstruction, and extent-carrier handling. ADR 0001 supersedes that prototype for future tenant-bound M3 runtime work.
 - MP7.1–MP7.6 have added route/readiness infrastructure, but the runtime remains single-active-SI. M3 must not activate a second profile.
 - E-006 remains deferred: durable Advisory Twin records are not implemented. M3 may display non-blocking advisory/warning result problems, but it must not claim durable `ADVISORY_OUTPUT` records or PassportView `_advisory_flags` unless E-006 is resolved in a separate trace-safe slice.
 
 ## 2. M3 target
 
-M3 delivers the first usable platform MVP loop:
+M3 delivers a bounded capture/sync/review/output-refusal milestone:
 
-> A farmer can enter a plant-protection spray record on a phone/PWA with five primary inputs, offline if needed; sync it to the governed OFARM backend; have the commit pass through authority, validation, profile applicability, evidence sufficiency, and review/promotion; then request the SI inspection-register view or freeze/release and receive an honest governed refusal until ADR 0002's contract and active-artifact prerequisites are accepted and activated.
+> A farmer can enter a plant-protection spray record on a phone/PWA with five primary inputs, offline if needed; sync it through the tenant-bound governed OFARM backend; have the commit pass through authority, validation, profile applicability, evidence sufficiency, and review/promotion; then request the live SI spray-register PassportView or frozen inspection-register DocumentAssembly and receive the correct centralized governed refusal until each output's distinct prerequisites are accepted and activated.
 
 M3 is successful when this works end to end on a real device or browser profile against a local/sandbox deployment using fictional, format-true data.
 
@@ -36,7 +36,7 @@ M3 does not require a real farm, real advisor, official submission, production a
 
 M3 may claim only:
 
-- platform MVP usability for the SI plant-protection record-keeping loop;
+- platform MVP usability for the bounded SI capture, sync, review, and output-refusal loop;
 - traceable record-keeping completeness for the fictional/sandbox pilot flow;
 - visible refusal and disclosure behavior;
 - offline draft/sync behavior through the governed backend;
@@ -65,7 +65,7 @@ M3 supports the following MVP users with fictional/synthetic identities:
 1. Farmer: asserts operation claims and performs bounded self-review for routine records.
 2. Family worker or contractor: submits via DelegationGrant; revocation is rechecked on sync.
 3. Advisor: sees exception/review queue for records that cannot self-accept.
-4. Read-only inspector/export recipient: may exercise SharingGrant, but the SI inspection-register view and frozen DocumentAssembly remain unsupported until the ADR 0002 prerequisites land.
+4. Read-only inspector/export recipient: may exercise SharingGrant, but the spray-register PassportView and frozen inspection-register DocumentAssembly remain blocked on their separately stated prerequisites.
 
 Real farmers/advisors/inspectors are M4/M5 scope unless the steward explicitly authorizes a privacy-safe shadow trial.
 
@@ -81,7 +81,7 @@ Real farmers/advisors/inspectors are M4/M5 scope unless the steward explicitly a
 - Display of `RuntimeProblem`s, warnings, retained-draft decisions, review-required decisions, and accepted decisions.
 - Deliberate “confirm & accept” self-review for routine operation claims.
 - Advisor exception queue sufficient to accept/reject/contest synthetic cases already supported by backend semantics.
-- PassportView and DocumentAssembly requests through versioned, predefined outputs only; the active SI inspection-register view and freeze/release remain governed refusals until ADR 0002's versioned contract, query/plan, qualification/release, and active-artifact prerequisites land.
+- Output requests through versioned, predefined surfaces only: the NOW-based spray-register PassportView and the WINDOW-based inspection-register DocumentAssembly remain centrally guarded for their distinct dependency gaps.
 - Scenario tests proving offline, authority, binding, review, materialization, output, and refusal behavior.
 
 ### Out of scope
@@ -108,8 +108,10 @@ M3 runtime work is downstream of the accepted package architecture in
 `docs/adr/0001-tenancy-and-schema-migrations.md` and
 `docs/adr/0002-valid-time-and-knowledge-time.md`. A request operates in one
 trusted tenant-bound UnitOfWork; every durable tenant outcome belongs to one
-atomic governed write batch and tenant knowledge position. Historical and
-high-consequence reads bind both valid time and knowledge position. Numbered
+atomic governed write batch and tenant knowledge position. Every governed
+current-state read resolves and records one explicit valid instant and tenant
+knowledge cut. Historical and high-consequence reads likewise bind both axes
+and their exact runtime/context basis. Numbered
 migrations, tenant-qualified storage, and the separate pre-tenant operational
 security lane are prerequisites where the relevant M3 surface depends on them.
 These package-local decisions implement canonical OFARM constraints and do not
@@ -134,11 +136,59 @@ The PWA must not store or assert authoritative truth. Offline records are drafts
 
 ### Auth
 
-M3 uses the existing OIDC/development principal binding path. Authentication identifies the transport principal; it does not authorize by role name. AuthorityGrant, DelegationGrant, SharingGrant, and revocation state remain the authority basis.
+M3 does not use the existing `X-Acting-Party` fallback or the pre-ADR OIDC shim
+as a runtime foundation. Tenant-bound M3 requests start only after #172, #173,
+and #174 provide the explicit authentication mode, immutable principal-binding
+lifecycle, transaction-bound TenantCapability, same-backend challenge/binder,
+transaction-local TenantBinding, request UnitOfWork, forced RLS, and
+tenant-qualified persistence. #192 must provide the isolated pre-tenant audit
+client and producer integration before tenant-bound endpoints are enabled.
+
+Authentication establishes the exact transport Party and tenant binding; it
+never authorizes by role name. `AuthorityGrant`, `DelegationGrant`,
+`SharingGrant`, and revocation state remain the authority basis. Missing or
+failed foundations are readiness failures, not permission to fall back to a
+header, default tenant, or unbound connection.
+
+Only closed security-relevant authentication, verifier, binding, or
+pre-binding routing failures classified by ADR 0001 enter the isolated audit
+lane. Ordinary unmatched routes/404s are not automatically durable. Failure of
+the audit lane never authorizes a request or permits fallback to tenant storage.
 
 ### Outputs
 
-Use predefined PassportView behavior only. No public query authoring. Stale, disputed, missing-basis, or unresolved states must refuse, route to review, or disclose according to the existing output policy. The active SI inspection-register PassportView and DocumentAssembly freeze/release must return the governed unsupported/refusal outcome until the ADR 0002 governance path is complete; M3 must not apply new temporal semantics to the existing v0.1 artifact identities.
+No public query authoring is added. The centralized guard lives at the shared
+`OutputGenerator` boundary, before a blocked query, materialization,
+qualification, assembly, persistence, or release path executes. It covers the
+new M3 façade, existing `GET /views/passport/{farm_ref}` and
+`POST /views/inspection-register/freeze` routes, and direct service calls.
+
+The two current outputs have different blockers:
+
+- `view:si.ffs.spray-register.passportview.v0_1` is the live NOW-based
+  spray-register PassportView. It remains blocked until the current-read path
+  resolves and records valid/knowledge cuts and the versioned qualification and
+  release surfaces separate stable content qualification from request-time
+  permission/redaction.
+- `view:si.ffs.inspection-register.documentassembly.v0_1` is the frozen
+  WINDOW-based inspection-register DocumentAssembly. Freeze has the shared
+  qualification/release blockers plus ADR 0002's carrier selector,
+  `EVENT_OCCURRENCE`/`STATE_OVERLAP` window meaning, calendar-date conversion,
+  versioned query/plan, and separately governed SI active-artifact replacement.
+
+Until those paths land, the shared guard returns the existing refusal shape
+`{"refused": true, "problem": <RuntimeProblem>, "qualification": null}` with
+registered reason code `HIGH_CONSEQUENCE_BLOCKED`. A freeze refusal occurs
+before any materialization or publication request and creates no partial
+DocumentAssembly, frozen-artifact receipt, qualification, published reference,
+wrapper, enqueue, or bytes.
+
+Release is a separate future operation and is not exposed by M3 while the
+versioned release contract is absent. Once governed, a denied release must
+commit its denial decision/receipt at its own `Kreceipt`, while creating no
+wrapper, enqueue, handoff, or bytes. If `HIGH_CONSEQUENCE_BLOCKED` cannot
+accurately describe a later release denial, reason-code governance is a
+prerequisite; M3 must not invent a code.
 
 ### Advisory behavior
 
@@ -159,10 +209,30 @@ Minimum backend façade:
 - `GET /m3/sync-status/{idempotencyKey}` — returns replay/current sync status without creating new truth.
 - `POST /review/accept` or existing equivalent — records deliberate self-review/advisor acceptance through the governed review path.
 - `POST /review/reject` and `POST /review/contest` if existing backend support is exposed to the M3 exception queue.
-- `GET /m3/register/passport` — returns the governed unsupported/refusal outcome for the active SI inspection-register v0.1 artifacts while ADR 0002's prerequisites remain unmet.
-- `POST /m3/register/document-assembly/freeze` — returns the governed unsupported/refusal outcome while ADR 0002's contract and active-artifact prerequisites remain unmet; it may freeze only after those separately governed dependencies are accepted and activated.
+- `GET /m3/register/passport` — reaches the shared `OutputGenerator` guard and returns `HIGH_CONSEQUENCE_BLOCKED` for the NOW-based spray-register PassportView while its current-read and qualification/release prerequisites remain unmet.
+- `POST /m3/register/document-assembly/freeze` — reaches the same shared guard and returns `HIGH_CONSEQUENCE_BLOCKED` before the WINDOW query/materialization/publication path; it may freeze only after its additional temporal and active-artifact prerequisites are accepted and activated.
+
+No M3 release endpoint is exposed until the versioned release contract can
+record `Kauth`, `Kreceipt`, the denial decision/receipt, and the required digest
+bindings without semantic distortion.
 
 Stop if any endpoint requires new law, hidden profile selection, direct projection writes, request-chosen profile law, or a current-compliance claim.
+
+### Runtime dependency order
+
+| M3 surface | Must land first |
+|---|---|
+| Any tenant-bound M3 endpoint | #172 authentication and TenantCapability; #173 request UnitOfWork/binding; #174 migrations, RLS, tenant-qualified storage, and binding primitives; #192 isolated pre-tenant audit integration; governed-batch/knowledge-position portion of #176 |
+| M3.1 output exposure | The centralized M3.6 `OutputGenerator` guard and its route/direct-call regression tests; output helpers stay out of M3.1 until this exists |
+| M3.3–M3.5 temporal behavior | Applicable #176 valid-time carrier and governed replacement-set behavior |
+| Spray-register PassportView success | #176 current-read dual cuts; versioned stable content-qualification and release surfaces; #177, #181, and #182 as applicable |
+| Inspection-register DocumentAssembly freeze success | All shared output dependencies plus ADR 0002 carrier/window/date semantics, versioned contracts, #177/#181/#182, and separately governed SI query/plan and active-artifact replacement |
+
+The centralized M3.6 guard is the first M3 runtime change. M3.1 may expose
+tenant-bound bootstrap/cache/status/commit/review helpers only after its
+foundation row is green, and may not expose any output helper until that guard
+is installed. Successful outputs are later completion gates, not M3 completion
+claims.
 
 ## 8. Ordered implementation slices
 
@@ -192,9 +262,12 @@ Stop if:
 
 Allowed change:
 
-- Add M3 façade endpoints over existing backend behavior.
-- Return bootstrap/cache/status/output data needed by the PWA.
-- Preserve canonical commit/review/output payloads.
+- After #172/#173/#174/#192 and the governed-batch/knowledge-position portion
+  of #176 are green, add tenant-bound M3 façade endpoints over governed backend
+  behavior.
+- Return bootstrap/cache/status data needed by the PWA.
+- Preserve canonical commit/review payloads. Output helpers remain excluded
+  until the centralized M3.6 guard is installed.
 
 Required proof:
 
@@ -205,6 +278,8 @@ Required proof:
 Stop if:
 
 - API code bypasses `GatePipeline`, review governance, materializer freshness rules, or output qualification.
+- any path uses `X-Acting-Party`, a default tenant, an unbound connection, or
+  exposes an output helper before the M3.6 shared-service guard exists.
 
 ### M3.2 — PWA shell, local draft queue, and reference cache
 
@@ -276,34 +351,57 @@ Required proof:
 - Self-review works only within the bounded policy for routine operation claims.
 - Distinct reviewer is required where self-review is not allowed.
 - REJECT/CONTEST, if exposed, preserve append-only semantics and do not edit queued assertions or in-force consequences.
+- Review/reject/contest preserve the underlying fact's valid-time carrier and
+  bounds. A correction may change valid time only through a complete governed
+  replacement set, including left/corrected/right slices for an interval or a
+  corrected point where applicable; it never edits the prior fact.
 
 Stop if:
 
 - “review” becomes a UI flag without `ReviewDecision`, authority trace, and PromotionTrace linkage.
 
-### M3.6 — Governed inspection-register output refusal
+### M3.6 — Centralized output guards and governed refusals
 
 Allowed change:
 
-- Return a governed unsupported/refusal outcome for the active SI inspection-register PassportView while its v0.1 WINDOW query/plan lacks ADR 0002's required carrier and window-meaning surfaces.
-- Return a governed unsupported/refusal outcome for inspection-register DocumentAssembly freeze/release while ADR 0002's required versioned contracts, temporal carrier/window semantics, qualification/release surfaces, and SI query/plan artifacts remain unavailable.
-- Display refusal/disclosure when basis is stale, invalid, disputed, or incomplete.
+- Add one shared `OutputGenerator` guard before blocked query, materialization,
+  qualification, assembly, persistence, or release work.
+- For `view:si.ffs.spray-register.passportview.v0_1`, return the registered
+  `HIGH_CONSEQUENCE_BLOCKED` RuntimeProblem in the existing refusal shape while
+  NOW/current-read dual-cut and qualification/release prerequisites are absent.
+- For `view:si.ffs.inspection-register.documentassembly.v0_1`, refuse freeze
+  with the same registered code and response shape before publication state is
+  written, while the additional WINDOW carrier/meaning/date and SI artifact
+  prerequisites are absent.
+- Do not expose release. A future denied release records its denial receipt at
+  `Kreceipt` but emits no wrapper, enqueue, handoff, or bytes.
 
 Required proof:
 
-- A register-view request does not render a clean PassportView or reinterpret the v0.1 query/plan identities.
-- A freeze request does not produce a DocumentAssembly, wrapper, receipt, or bytes.
-- Both outcomes identify the unmet ADR 0002 governance dependency without claiming conformance.
+- The M3 façade, both existing `/views/**` routes, and direct `OutputGenerator`
+  calls all reach the same guard.
+- PassportView refusal does not execute its NOW query, materialize, qualify, or
+  render and does not claim the DocumentAssembly WINDOW defect.
+- Freeze refusal creates no publication request/result, DocumentAssembly,
+  frozen-artifact receipt, qualification, export artifact, published reference,
+  wrapper, enqueue, or bytes.
+- The exact response is `{"refused": true, "problem": <RuntimeProblem with
+  reasonCode HIGH_CONSEQUENCE_BLOCKED>, "qualification": null}`.
+- No release surface exists. A later release-denial test must prove its denial
+  decision/receipt commits at `Kreceipt` while delivery side effects remain absent.
 
 Stop if:
 
 - the output UI renders a clean register when the governed output path refuses or qualifies it.
+- an endpoint or direct service call can bypass the centralized guard.
+- freeze refusal and release denial are represented as the same operation or
+  M3 invents an unregistered reason code.
 
 ### M3.7 — End-to-end MVP scenario runner
 
 Allowed change:
 
-- Add scenario tests or scripted demo runs for the full phone-to-register path.
+- Add scenario tests or scripted demo runs for the full capture-to-centralized-refusal path.
 - Produce an M3 demo run record only if clearly labeled as M3 demo evidence, not root platform conformance evidence and not profile executed evidence.
 
 Required scenarios:
@@ -311,13 +409,17 @@ Required scenarios:
 1. Bootstrap fictional farm and cache refs.
 2. Capture routine spray offline.
 3. Sync and self-review to accepted.
-4. Request the SI inspection-register PassportView and receive the governed unsupported/refusal outcome without rendering a clean register.
-5. Request DocumentAssembly freeze and receive the governed unsupported/refusal outcome with no frozen artifact or released bytes.
+4. Request the live spray-register PassportView and receive the centralized `HIGH_CONSEQUENCE_BLOCKED` refusal without executing its NOW/current-read or qualification path.
+5. Request inspection-register DocumentAssembly freeze and receive the centralized `HIGH_CONSEQUENCE_BLOCKED` refusal before its WINDOW/materialization/publication path, with no partial output state or bytes.
 6. Replay same idempotency key without duplicate truth.
 7. Revoked worker sync refuses or routes governably.
 8. Product binding mismatch raises warning/review without creating a compliance fact.
 9. Missing/stale/disputed basis refuses a clean output.
 10. Privacy audit passes: no real identifiers, names, document filenames, addresses, dates, or images.
+11. At the same valid cut and `Kcontent`, replay reproduces the same historical
+    basis, content/result, and stable content-qualification digests; a new
+    request independently reevaluates `Kauth`, permission/redaction, wrapper or
+    denial, and commits its own `Kreceipt` when the governed release path exists.
 
 Stop if:
 
@@ -327,7 +429,9 @@ Stop if:
 
 Allowed change:
 
-- Add local/sandbox deployment instructions for backend, PostgreSQL, PWA, and development OIDC/Keycloak or equivalent existing principal-binding setup.
+- Add local/sandbox deployment instructions for the completed #172/#173/#174
+  authentication, TenantCapability, TenantBinding, UnitOfWork, migration, and
+  RLS architecture; no development-header fallback.
 - Include seeded fictional data only.
 - Include operational notes for resetting the sandbox.
 
@@ -351,7 +455,7 @@ Stop if:
 | M3-T06 | Reference snapshot drift | Sync re-verifies against current snapshot and records discrepancy/review/warning, not silent accept. |
 | M3-T07 | Revoked delegation | Worker’s offline draft synced after revocation denies or routes governably. |
 | M3-T08 | Advisory boundary | Warning visible; no Advisory material enters Compliance materialization. |
-| M3-T09 | SI inspection-register output | PassportView and DocumentAssembly freeze/release return the governed unsupported/refusal outcome until ADR 0002's prerequisites are accepted and activated; no clean register or exported bytes. |
+| M3-T09 | Centralized blocked outputs | Spray-register PassportView and inspection-register freeze return the exact `HIGH_CONSEQUENCE_BLOCKED` refusal through façade, existing routes, and direct service calls; no blocked work or partial output state executes. Release is not exposed. |
 | M3-T10 | Privacy audit | Fixtures and run records contain fictional, format-true data only. |
 | M3-T11 | No direct projection writes | Tests prove UI/API cannot write authoritative facts into derived tables/caches. |
 | M3-T12 | Claim honesty | Docs, UI labels, manifests, and evidence files do not claim production/current-compliance/certification readiness. |
@@ -416,7 +520,7 @@ M3 is done when all of the following are true:
 5. The draft can be captured offline, synced later, and retried idempotently.
 6. A routine record can pass through governed self-review and promote to accepted state.
 7. Exceptions are visible and route to retained draft, review, denial, or warning without silent acceptance.
-8. SI inspection-register view and freeze/release requests refuse honestly until ADR 0002's separately governed prerequisites are accepted and activated.
+8. The live spray-register PassportView and frozen inspection-register DocumentAssembly refuse centrally for their distinct blockers; release is not exposed.
 9. The M3 scenario runner or manual acceptance script proves the end-to-end flow with fictional data.
 10. Baseline backend checks pass.
 11. Frontend tests/build pass once the PWA exists.
