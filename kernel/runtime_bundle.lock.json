@@ -742,7 +742,7 @@
       "logicalRef": "python:kernel/context.py",
       "path": "kernel/context.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:31174866b82b1d9c195927aad1e5df48f587822dc0e685a19e2a8b7741d11180",
+      "sha256": "sha256:2d61ed3acdd100c967cdd9c907069707023cf08c03f97cf4d0e9dfc51bc7a740",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -782,7 +782,7 @@
       "logicalRef": "python:kernel/materializer.py",
       "path": "kernel/materializer.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:b0f73fd8d6a4b93655c720efe9568364d8f9220019653910199adce5f85502aa",
+      "sha256": "sha256:9624b5e7c2f0496752d1af2538d7641e8e743dae62e223ca2d2e6cafa17eee99",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -870,7 +870,7 @@
       "logicalRef": "python:kernel/runtime_bundle.py",
       "path": "kernel/runtime_bundle.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:6e20ee2daafde3ba8f313c99e6552a2e0fc83e20060453c157b8de46c2570c11",
+      "sha256": "sha256:05e98d129ca6610da970b211a0e1efe0b3981aca075ff93c8d3a6a044c24c09c",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {

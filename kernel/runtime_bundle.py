@@ -1921,7 +1921,25 @@ def _prepare_decision_semantic_caches() -> None:
         raise RuntimeBundleError("regex cache reset did not produce an empty cache")
 
 
-def _freeze_semantic_value(value: Any, active: set[int] | None = None) -> tuple:
+_SemanticStateCache = dict[int, tuple[object, tuple]]
+_SemanticTraversal = tuple[
+    _SemanticStateCache, _SemanticStateCache,
+    _SemanticStateCache, _SemanticStateCache,
+    set[tuple[int, int, bool]], set[tuple[int, int]],
+    set[tuple[int, int]], set[tuple[int, int]],
+]
+
+
+def _new_semantic_traversal() -> _SemanticTraversal:
+    """Return isolated state for exactly one semantic capture or proof."""
+    return ({}, {}, {}, {}, set(), set(), set(), set())
+
+
+def _freeze_semantic_value(
+        value: Any,
+        active: set[int] | None = None,
+        traversal: _SemanticTraversal | None = None,
+) -> tuple:
     """Copy declared semantic state while retaining exact container identity."""
     if active is None:
         active = set()
@@ -1933,18 +1951,33 @@ def _freeze_semantic_value(value: Any, active: set[int] | None = None) -> tuple:
                 "POSITIVE_INFINITY" if value > 0 else "NEGATIVE_INFINITY")
             return ("NONFINITE_FLOAT", float, label)
         return ("SCALAR", float, value)
+    if traversal is None:
+        traversal = _new_semantic_traversal()
+    value_states = traversal[0]
+    cached = value_states.get(id(value))
+    if cached is not None and cached[0] is value:
+        return cached[1]
     if isinstance(value, Path):
-        return ("PATH", type(value), value, str(value))
+        state = ("PATH", type(value), value, str(value))
+        value_states[id(value)] = (value, state)
+        return state
     if isinstance(value, re.Pattern):
-        return ("REGEX", type(value), value, value.pattern, value.flags)
+        state = ("REGEX", type(value), value, value.pattern, value.flags)
+        value_states[id(value)] = (value, state)
+        return state
     if type(value) is _METHODCALLER_TYPE:
         reduced = value.__reduce__()
-        return (
+        state = (
             "METHODCALLER", type(value), value,
-            _freeze_semantic_value(reduced[1], active),
+            _freeze_semantic_value(reduced[1], active, traversal),
         )
+        value_states[id(value)] = (value, state)
+        return state
     if type(value) is types.FunctionType:
-        return ("CALLABLE", value, _semantic_function_state(value))
+        state = (
+            "CALLABLE", value, _semantic_function_state(value, traversal))
+        value_states[id(value)] = (value, state)
+        return state
     if isinstance(value, Mapping):
         marker = id(value)
         if marker in active:
@@ -1958,26 +1991,31 @@ def _freeze_semantic_value(value: Any, active: set[int] | None = None) -> tuple:
                     repr(item[0]),
                 ),
             )
-            return (
+            state = (
                 "MAPPING", type(value), value,
-                tuple((_freeze_semantic_value(key, active),
-                       _freeze_semantic_value(item, active))
+                tuple((_freeze_semantic_value(key, active, traversal),
+                       _freeze_semantic_value(item, active, traversal))
                       for key, item in items),
             )
         finally:
             active.remove(marker)
+        value_states[id(value)] = (value, state)
+        return state
     if type(value) in {list, tuple}:
         marker = id(value)
         if marker in active:
             raise RuntimeBundleError("decision semantics contain a sequence cycle")
         active.add(marker)
         try:
-            return (
+            state = (
                 "SEQUENCE", type(value), value,
-                tuple(_freeze_semantic_value(item, active) for item in value),
+                tuple(_freeze_semantic_value(item, active, traversal)
+                      for item in value),
             )
         finally:
             active.remove(marker)
+        value_states[id(value)] = (value, state)
+        return state
     if type(value) in {set, frozenset}:
         marker = id(value)
         if marker in active:
@@ -1989,14 +2027,19 @@ def _freeze_semantic_value(value: Any, active: set[int] | None = None) -> tuple:
                 key=lambda item: (
                     type(item).__module__, type(item).__qualname__, repr(item)),
             )
-            return (
+            state = (
                 "SET", type(value), value,
-                tuple(_freeze_semantic_value(item, active) for item in ordered),
+                tuple(_freeze_semantic_value(item, active, traversal)
+                      for item in ordered),
             )
         finally:
             active.remove(marker)
+        value_states[id(value)] = (value, state)
+        return state
     if isinstance(value, (type, types.ModuleType)):
-        return ("IDENTITY", value)
+        state = ("IDENTITY", value)
+        value_states[id(value)] = (value, state)
+        return state
     object_fields: list[tuple[str, Any]] = []
     if is_dataclass(value):
         object_fields.extend(
@@ -2032,16 +2075,20 @@ def _freeze_semantic_value(value: Any, active: set[int] | None = None) -> tuple:
             raise RuntimeBundleError("decision semantics contain an object cycle")
         active.add(marker)
         try:
-            return (
+            state = (
                 "OBJECT", type(value), value,
                 tuple(
-                    (name, _freeze_semantic_value(item, active))
+                    (name, _freeze_semantic_value(item, active, traversal))
                     for name, item in sorted(object_fields)
                 ),
             )
         finally:
             active.remove(marker)
-    return ("IDENTITY", value)
+        value_states[id(value)] = (value, state)
+        return state
+    state = ("IDENTITY", value)
+    value_states[id(value)] = (value, state)
+    return state
 
 
 def _same_semantic_value(
@@ -2049,100 +2096,151 @@ def _same_semantic_value(
         prior: tuple,
         *,
         require_container_identity: bool = True,
+        traversal: _SemanticTraversal | None = None,
 ) -> bool:
     if current[0] != prior[0]:
         return False
+    if traversal is None:
+        traversal = _new_semantic_traversal()
+    comparison_key = None
+    if current[0] not in {"NONFINITE_FLOAT", "SCALAR"}:
+        comparison_key = (
+            id(current), id(prior), require_container_identity)
+        if comparison_key in traversal[4]:
+            return True
     if current[0] == "NONFINITE_FLOAT":
-        return current[1:] == prior[1:]
-    if current[0] == "SCALAR":
-        return current[1] is prior[1] and current[2] == prior[2]
-    if current[0] == "IDENTITY":
-        return current[1] is prior[1]
-    if current[0] == "PATH":
-        return (current[1] is prior[1]
-                and (not require_container_identity
-                     or current[2] is prior[2])
-                and current[3] == prior[3])
-    if current[0] == "REGEX":
-        return (current[1] is prior[1]
-                and (not require_container_identity
-                     or current[2] is prior[2])
-                and current[3:] == prior[3:])
-    if current[0] == "METHODCALLER":
-        return (current[1] is prior[1] and current[2] is prior[2]
-                and _same_semantic_value(
-                    current[3], prior[3], require_container_identity=False))
-    if current[0] == "CALLABLE":
-        return (current[1] is prior[1]
-                and _same_semantic_function(current[2], prior[2]))
-    if (current[1] is not prior[1]
-            or (require_container_identity and current[2] is not prior[2])):
-        return False
-    if len(current[3]) != len(prior[3]):
-        return False
-    if current[0] == "MAPPING":
-        return all(
+        matches = current[1:] == prior[1:]
+    elif current[0] == "SCALAR":
+        matches = current[1] is prior[1] and current[2] == prior[2]
+    elif current[0] == "IDENTITY":
+        matches = current[1] is prior[1]
+    elif current[0] == "PATH":
+        matches = (current[1] is prior[1]
+                   and (not require_container_identity
+                        or current[2] is prior[2])
+                   and current[3] == prior[3])
+    elif current[0] == "REGEX":
+        matches = (current[1] is prior[1]
+                   and (not require_container_identity
+                        or current[2] is prior[2])
+                   and current[3:] == prior[3:])
+    elif current[0] == "METHODCALLER":
+        matches = (current[1] is prior[1] and current[2] is prior[2]
+                   and _same_semantic_value(
+                       current[3], prior[3],
+                       require_container_identity=False,
+                       traversal=traversal))
+    elif current[0] == "CALLABLE":
+        matches = (current[1] is prior[1]
+                   and _same_semantic_function(
+                       current[2], prior[2], traversal=traversal))
+    elif (current[1] is not prior[1]
+          or (require_container_identity and current[2] is not prior[2])):
+        matches = False
+    elif len(current[3]) != len(prior[3]):
+        matches = False
+    elif current[0] == "MAPPING":
+        matches = all(
             _same_semantic_value(
                 current_key, prior_key,
-                require_container_identity=require_container_identity)
+                require_container_identity=require_container_identity,
+                traversal=traversal)
             and _same_semantic_value(
                 current_value, prior_value,
-                require_container_identity=require_container_identity)
+                require_container_identity=require_container_identity,
+                traversal=traversal)
             for (current_key, current_value), (prior_key, prior_value)
             in zip(current[3], prior[3])
         )
-    if current[0] == "OBJECT":
-        return all(
+    elif current[0] == "OBJECT":
+        matches = all(
             current_name == prior_name
             and _same_semantic_value(
                 current_value, prior_value,
-                require_container_identity=require_container_identity)
+                require_container_identity=require_container_identity,
+                traversal=traversal)
             for (current_name, current_value), (prior_name, prior_value)
             in zip(current[3], prior[3])
         )
-    return all(
-        _same_semantic_value(
-            current_item, prior_item,
-            require_container_identity=require_container_identity)
-        for current_item, prior_item in zip(current[3], prior[3])
-    )
+    else:
+        matches = all(
+            _same_semantic_value(
+                current_item, prior_item,
+                require_container_identity=require_container_identity,
+                traversal=traversal)
+            for current_item, prior_item in zip(current[3], prior[3])
+        )
+    if matches and comparison_key is not None:
+        traversal[4].add(comparison_key)
+    return matches
 
 
-def _semantic_function_state(function: object) -> tuple:
+def _semantic_function_state(
+        function: object,
+        traversal: _SemanticTraversal | None = None,
+) -> tuple:
     if type(function) is not types.FunctionType:
         return ("IDENTITY", function)
+    if traversal is None:
+        traversal = _new_semantic_traversal()
+    function_states = traversal[1]
+    cached = function_states.get(id(function))
+    if cached is not None and cached[0] is function:
+        return cached[1]
     closure = function.__closure__ or ()
-    return (
+    state = (
         "FUNCTION", function, function.__code__,
-        function.__defaults__, _freeze_semantic_value(function.__defaults__),
-        function.__kwdefaults__, _freeze_semantic_value(function.__kwdefaults__),
-        tuple((cell, _freeze_semantic_value(cell.cell_contents)) for cell in closure),
-        function.__annotations__, _freeze_semantic_value(function.__annotations__),
-        function.__dict__, _freeze_semantic_value(function.__dict__),
+        function.__defaults__, _freeze_semantic_value(
+            function.__defaults__, traversal=traversal),
+        function.__kwdefaults__, _freeze_semantic_value(
+            function.__kwdefaults__, traversal=traversal),
+        tuple((cell, _freeze_semantic_value(
+            cell.cell_contents, traversal=traversal)) for cell in closure),
+        function.__annotations__, _freeze_semantic_value(
+            function.__annotations__, traversal=traversal),
+        function.__dict__, _freeze_semantic_value(
+            function.__dict__, traversal=traversal),
         function.__module__, function.__name__, function.__qualname__,
     )
+    function_states[id(function)] = (function, state)
+    return state
 
 
-def _same_semantic_function(current: tuple, prior: tuple) -> bool:
+def _same_semantic_function(
+        current: tuple,
+        prior: tuple,
+        *,
+        traversal: _SemanticTraversal | None = None,
+) -> bool:
     if current[0] != prior[0]:
         return False
     if current[0] == "IDENTITY":
         return current[1] is prior[1]
+    if traversal is None:
+        traversal = _new_semantic_traversal()
+    comparison_key = (id(current), id(prior))
+    if comparison_key in traversal[5]:
+        return True
     if any(current[index] is not prior[index] for index in (1, 2, 3, 5, 8, 10)):
         return False
-    if not all(_same_semantic_value(current[index], prior[index])
+    if not all(_same_semantic_value(
+            current[index], prior[index], traversal=traversal)
                for index in (4, 6, 9, 11)):
         return False
     if current[12:] != prior[12:]:
         return False
     if len(current[7]) != len(prior[7]):
         return False
-    return all(
+    matches = all(
         current_cell is prior_cell
-        and _same_semantic_value(current_value, prior_value)
+        and _same_semantic_value(
+            current_value, prior_value, traversal=traversal)
         for (current_cell, current_value), (prior_cell, prior_value)
         in zip(current[7], prior[7])
     )
+    if matches:
+        traversal[5].add(comparison_key)
+    return matches
 
 
 def _semantic_descriptor_functions(descriptor: object) -> tuple[tuple[str, object], ...]:
@@ -2160,7 +2258,16 @@ def _semantic_descriptor_functions(descriptor: object) -> tuple[tuple[str, objec
     return ()
 
 
-def _semantic_class_state(class_object: type) -> tuple:
+def _semantic_class_state(
+        class_object: type,
+        traversal: _SemanticTraversal | None = None,
+) -> tuple:
+    if traversal is None:
+        traversal = _new_semantic_traversal()
+    class_states = traversal[2]
+    cached = class_states.get(id(class_object))
+    if cached is not None and cached[0] is class_object:
+        return cached[1]
     descriptors = []
     data = []
     for name, descriptor in sorted(vars(class_object).items()):
@@ -2169,25 +2276,38 @@ def _semantic_class_state(class_object: type) -> tuple:
             descriptors.append((
                 name,
                 descriptor,
-                tuple((kind, _semantic_function_state(function))
+                tuple((kind, _semantic_function_state(function, traversal))
                       for kind, function in functions),
             ))
         elif not name.startswith("__"):
             data.append((
-                name, descriptor, _freeze_semantic_value(descriptor)))
+                name, descriptor,
+                _freeze_semantic_value(descriptor, traversal=traversal)))
     base_states = tuple(
-        (base, _semantic_class_state(base))
+        (base, _semantic_class_state(base, traversal))
         for base in class_object.__bases__
         if _stable_decision_namespace(base.__module__)
     )
-    return (
+    state = (
         class_object, tuple(class_object.__mro__), tuple(descriptors),
         tuple(data), class_object.__module__, class_object.__name__,
         class_object.__qualname__, base_states,
     )
+    class_states[id(class_object)] = (class_object, state)
+    return state
 
 
-def _same_semantic_class(current: tuple, prior: tuple) -> bool:
+def _same_semantic_class(
+        current: tuple,
+        prior: tuple,
+        *,
+        traversal: _SemanticTraversal | None = None,
+) -> bool:
+    if traversal is None:
+        traversal = _new_semantic_traversal()
+    comparison_key = (id(current), id(prior))
+    if comparison_key in traversal[6]:
+        return True
     if current[0] is not prior[0] or len(current[1]) != len(prior[1]):
         return False
     if any(current_item is not prior_item
@@ -2204,7 +2324,8 @@ def _same_semantic_class(current: tuple, prior: tuple) -> bool:
                 current_entry[2], prior_entry[2]):
             if (current_kind != prior_kind
                     or not _same_semantic_function(
-                        current_function, prior_function)):
+                        current_function, prior_function,
+                        traversal=traversal)):
                 return False
     if len(current[3]) != len(prior[3]):
         return False
@@ -2212,21 +2333,35 @@ def _same_semantic_class(current: tuple, prior: tuple) -> bool:
         if (current_entry[0] != prior_entry[0]
                 or current_entry[1] is not prior_entry[1]
                 or not _same_semantic_value(
-                    current_entry[2], prior_entry[2])):
+                    current_entry[2], prior_entry[2],
+                    traversal=traversal)):
             return False
     if current[4:7] != prior[4:7] or len(current[7]) != len(prior[7]):
         return False
-    return all(
+    matches = all(
         current_base is prior_base
-        and _same_semantic_class(current_state, prior_state)
+        and _same_semantic_class(
+            current_state, prior_state, traversal=traversal)
         for (current_base, current_state), (prior_base, prior_state)
         in zip(current[7], prior[7])
     )
+    if matches:
+        traversal[6].add(comparison_key)
+    return matches
 
 
-def _semantic_sequence_state(sequence: object) -> tuple:
+def _semantic_sequence_state(
+        sequence: object,
+        traversal: _SemanticTraversal | None = None,
+) -> tuple:
     if type(sequence) is not tuple:
         raise RuntimeBundleError("decision dispatch sequence is not an exact tuple")
+    if traversal is None:
+        traversal = _new_semantic_traversal()
+    sequence_states = traversal[3]
+    cached = sequence_states.get(id(sequence))
+    if cached is not None and cached[0] is sequence:
+        return cached[1]
     items = []
     for item in sequence:
         namespace = getattr(item, "__dict__", None)
@@ -2234,22 +2369,37 @@ def _semantic_sequence_state(sequence: object) -> tuple:
             item,
             type(item),
             namespace,
-            _freeze_semantic_value(namespace),
-            _semantic_class_state(type(item)),
+            _freeze_semantic_value(namespace, traversal=traversal),
+            _semantic_class_state(type(item), traversal),
         ))
-    return (sequence, tuple(items))
+    state = (sequence, tuple(items))
+    sequence_states[id(sequence)] = (sequence, state)
+    return state
 
 
-def _same_semantic_sequence(current: tuple, prior: tuple) -> bool:
+def _same_semantic_sequence(
+        current: tuple,
+        prior: tuple,
+        *,
+        traversal: _SemanticTraversal | None = None,
+) -> bool:
+    if traversal is None:
+        traversal = _new_semantic_traversal()
+    comparison_key = (id(current), id(prior))
+    if comparison_key in traversal[7]:
+        return True
     if current[0] is not prior[0] or len(current[1]) != len(prior[1]):
         return False
     for current_item, prior_item in zip(current[1], prior[1]):
         if any(current_item[index] is not prior_item[index]
                for index in (0, 1, 2)):
             return False
-        if (not _same_semantic_value(current_item[3], prior_item[3])
-                or not _same_semantic_class(current_item[4], prior_item[4])):
+        if (not _same_semantic_value(
+                current_item[3], prior_item[3], traversal=traversal)
+                or not _same_semantic_class(
+                    current_item[4], prior_item[4], traversal=traversal)):
             return False
+    traversal[7].add(comparison_key)
     return True
 
 
@@ -2262,21 +2412,33 @@ def _decision_semantic_module(module_name: str) -> types.ModuleType:
 
 
 def _semantic_binding_state(
-        value: object, owner: types.ModuleType | None = None) -> tuple:
+        value: object,
+        owner: types.ModuleType | None = None,
+        traversal: _SemanticTraversal | None = None,
+) -> tuple:
+    if traversal is None:
+        traversal = _new_semantic_traversal()
     if value is _MISSING:
         return ("ABSENT",)
     if type(value) is types.ModuleType:
         return ("MODULE", value, value.__name__)
     if type(value) is types.FunctionType:
-        return ("FUNCTION", _semantic_function_state(value))
+        return ("FUNCTION", _semantic_function_state(value, traversal))
     if isinstance(value, type):
-        return ("CLASS", _semantic_class_state(value))
+        return ("CLASS", _semantic_class_state(value, traversal))
     if owner is not None and not _stable_decision_namespace(owner.__name__):
         return ("IDENTITY_DATA", value, type(value))
-    return ("DATA", _freeze_semantic_value(value))
+    return ("DATA", _freeze_semantic_value(value, traversal=traversal))
 
 
-def _same_semantic_binding(current: tuple, prior: tuple) -> bool:
+def _same_semantic_binding(
+        current: tuple,
+        prior: tuple,
+        *,
+        traversal: _SemanticTraversal | None = None,
+) -> bool:
+    if traversal is None:
+        traversal = _new_semantic_traversal()
     if current[0] != prior[0]:
         return False
     if current[0] == "ABSENT":
@@ -2284,12 +2446,15 @@ def _same_semantic_binding(current: tuple, prior: tuple) -> bool:
     if current[0] == "MODULE":
         return current[1] is prior[1] and current[2] == prior[2]
     if current[0] == "FUNCTION":
-        return _same_semantic_function(current[1], prior[1])
+        return _same_semantic_function(
+            current[1], prior[1], traversal=traversal)
     if current[0] == "CLASS":
-        return _same_semantic_class(current[1], prior[1])
+        return _same_semantic_class(
+            current[1], prior[1], traversal=traversal)
     if current[0] == "IDENTITY_DATA":
         return current[1] is prior[1] and current[2] is prior[2]
-    return _same_semantic_value(current[1], prior[1])
+    return _same_semantic_value(
+        current[1], prior[1], traversal=traversal)
 
 
 def _nested_code_objects(code: types.CodeType) -> tuple[types.CodeType, ...]:
@@ -2380,6 +2545,7 @@ def _semantic_class_functions(class_state: tuple) -> tuple[types.FunctionType, .
 def _capture_decision_semantics() -> tuple[tuple[Any, ...], ...]:
     """Capture declared roots plus their exact runtime global-binding closure."""
     _prepare_decision_semantic_caches()
+    traversal = _new_semantic_traversal()
     entries: list[tuple[Any, ...]] = []
     explicit: set[tuple[int, str]] = set()
     pending_functions: list[types.FunctionType] = []
@@ -2464,7 +2630,7 @@ def _capture_decision_semantics() -> tuple[tuple[Any, ...], ...]:
             if value is _MISSING:
                 raise RuntimeBundleError(
                     f"decision semantic data root is absent: {module_name}.{name}")
-            state = _freeze_semantic_value(value)
+            state = _freeze_semantic_value(value, traversal=traversal)
             append_entry(
                 "DATA", f"{module_name}.{name}", module, name, value,
                 state,
@@ -2477,7 +2643,7 @@ def _capture_decision_semantics() -> tuple[tuple[Any, ...], ...]:
             if type(function) is not types.FunctionType:
                 raise RuntimeBundleError(
                     f"decision semantic function is absent: {module_name}.{name}")
-            state = _semantic_function_state(function)
+            state = _semantic_function_state(function, traversal)
             append_entry(
                 "FUNCTION", f"{module_name}.{name}", module, name, function,
                 state,
@@ -2495,7 +2661,7 @@ def _capture_decision_semantics() -> tuple[tuple[Any, ...], ...]:
             if type(function) is not types.FunctionType:
                 raise RuntimeBundleError(
                     f"decision semantic function is absent: {module_name}.{name}")
-            state = _semantic_function_state(function)
+            state = _semantic_function_state(function, traversal)
             append_entry(
                 "FUNCTION", f"{module_name}.{name}", module, name, function,
                 state,
@@ -2508,7 +2674,7 @@ def _capture_decision_semantics() -> tuple[tuple[Any, ...], ...]:
             if not isinstance(class_object, type):
                 raise RuntimeBundleError(
                     f"decision semantic class is absent: {module_name}.{name}")
-            state = _semantic_class_state(class_object)
+            state = _semantic_class_state(class_object, traversal)
             append_entry(
                 "CLASS", f"{module_name}.{name}", module, name, class_object,
                 state,
@@ -2526,7 +2692,7 @@ def _capture_decision_semantics() -> tuple[tuple[Any, ...], ...]:
             if not isinstance(class_object, type):
                 raise RuntimeBundleError(
                     f"decision semantic class is absent: {module_name}.{name}")
-            state = _semantic_class_state(class_object)
+            state = _semantic_class_state(class_object, traversal)
             append_entry(
                 "CLASS", f"{module_name}.{name}", module, name, class_object,
                 state,
@@ -2535,7 +2701,7 @@ def _capture_decision_semantics() -> tuple[tuple[Any, ...], ...]:
     for module_name, name in _DECISION_SEQUENCE_ROOTS:
         module = _decision_semantic_module(module_name)
         sequence = vars(module).get(name, _MISSING)
-        state = _semantic_sequence_state(sequence)
+        state = _semantic_sequence_state(sequence, traversal)
         append_entry(
             "SEQUENCE", f"{module_name}.{name}", module, name, sequence,
             state,
@@ -2566,7 +2732,7 @@ def _capture_decision_semantics() -> tuple[tuple[Any, ...], ...]:
                     "BINDING",
                     f"{_semantic_module_import_name(module)}.{name}",
                     module, name, class_object,
-                    ("CLASS", _semantic_class_state(class_object)),
+                    ("CLASS", _semantic_class_state(class_object, traversal)),
                 )
             elif vars(module).get(name) is not class_object:
                 # Psycopg creates exact adapter classes dynamically and keeps
@@ -2588,7 +2754,7 @@ def _capture_decision_semantics() -> tuple[tuple[Any, ...], ...]:
                     _semantic_module_import_name(module),
                     name,
                     class_object,
-                    _semantic_class_state(class_object),
+                    _semantic_class_state(class_object, traversal),
                 ))
             continue
         if pending_classes:
@@ -2604,7 +2770,7 @@ def _capture_decision_semantics() -> tuple[tuple[Any, ...], ...]:
             name = class_object.__name__
             key = (id(module), name)
             if vars(module).get(name) is class_object and key not in explicit:
-                state = _semantic_class_state(class_object)
+                state = _semantic_class_state(class_object, traversal)
                 append_entry(
                     "BINDING",
                     f"{_semantic_module_import_name(module)}.{name}",
@@ -2620,7 +2786,7 @@ def _capture_decision_semantics() -> tuple[tuple[Any, ...], ...]:
         module = _semantic_function_module(function)
         if module is None or not _stable_decision_namespace(module.__name__):
             continue
-        enqueue_function_state(_semantic_function_state(function))
+        enqueue_function_state(_semantic_function_state(function, traversal))
         namespace = function.__globals__
         referenced_names = sorted({
             name
@@ -2639,7 +2805,7 @@ def _capture_decision_semantics() -> tuple[tuple[Any, ...], ...]:
             present = name in namespace
             value = namespace[name] if present else _MISSING
             if key not in explicit:
-                state = _semantic_binding_state(value, owner)
+                state = _semantic_binding_state(value, owner, traversal)
                 append_entry(
                     "BINDING",
                     f"{_semantic_module_import_name(owner)}.{name}",
@@ -2654,13 +2820,14 @@ def _capture_decision_semantics() -> tuple[tuple[Any, ...], ...]:
                 enqueue_function(value)
             elif (isinstance(value, type)
                   and _stable_decision_namespace(value.__module__)):
-                enqueue_class_state(_semantic_class_state(value))
+                enqueue_class_state(_semantic_class_state(value, traversal))
     return tuple(sorted(entries, key=lambda item: (item[1], item[0])))
 
 
 def _require_decision_semantics(
         selected: tuple[tuple[Any, ...], ...]) -> None:
     _prepare_decision_semantic_caches()
+    traversal = _new_semantic_traversal()
     for (kind, label, module, module_name, name, original,
          prior_state) in selected:
         if sys.modules.get(module_name) is not module:
@@ -2668,7 +2835,8 @@ def _require_decision_semantics(
                 f"decision semantic module changed after activation: {label}")
         if kind == "IDENTITY_CLASS":
             if not _same_semantic_class(
-                    _semantic_class_state(original), prior_state):
+                    _semantic_class_state(original, traversal), prior_state,
+                    traversal=traversal):
                 raise RuntimeBundleError(
                     "decision semantic state changed after activation: "
                     f"{label}")
@@ -2679,19 +2847,24 @@ def _require_decision_semantics(
                 f"decision semantic root changed after activation: {label}")
         if kind == "DATA":
             matches = _same_semantic_value(
-                _freeze_semantic_value(current), prior_state)
+                _freeze_semantic_value(current, traversal=traversal), prior_state,
+                traversal=traversal)
         elif kind == "FUNCTION":
             matches = _same_semantic_function(
-                _semantic_function_state(current), prior_state)
+                _semantic_function_state(current, traversal), prior_state,
+                traversal=traversal)
         elif kind == "CLASS":
             matches = _same_semantic_class(
-                _semantic_class_state(current), prior_state)
+                _semantic_class_state(current, traversal), prior_state,
+                traversal=traversal)
         elif kind == "SEQUENCE":
             matches = _same_semantic_sequence(
-                _semantic_sequence_state(current), prior_state)
+                _semantic_sequence_state(current, traversal), prior_state,
+                traversal=traversal)
         elif kind == "BINDING":
             matches = _same_semantic_binding(
-                _semantic_binding_state(current, module), prior_state)
+                _semantic_binding_state(current, module, traversal), prior_state,
+                traversal=traversal)
         else:
             raise RuntimeBundleError(
                 f"unknown decision semantic seal entry: {kind!r}")
@@ -2718,7 +2891,16 @@ def _stable_semantic_path(raw: str, package_root: Path) -> str:
         "PROJECT_ROOT", PurePosixPath(relative.as_posix()))
 
 
-def _stable_frozen_semantic_value(state: tuple, package_root: Path) -> Any:
+_StableSemanticProjection = tuple[
+    dict[int, tuple[tuple, dict[str, Any]]],
+    dict[int, tuple[tuple, dict[str, Any]]],
+]
+
+
+def _stable_frozen_semantic_value(
+        state: tuple,
+        package_root: Path,
+        projection: _StableSemanticProjection | None = None) -> Any:
     kind = state[0]
     if kind == "SCALAR":
         value = state[2]
@@ -2773,21 +2955,24 @@ def _stable_frozen_semantic_value(state: tuple, package_root: Path) -> Any:
         return {
             "kind": "METHODCALLER",
             "arguments": _stable_frozen_semantic_value(
-                state[3], package_root),
+                state[3], package_root, projection),
         }
     if kind == "CALLABLE":
-        return _stable_semantic_function_state(state[2], package_root)
+        return _stable_semantic_function_state(
+            state[2], package_root, projection)
     if kind == "MAPPING":
         return {
             "kind": "MAPPING", "type": _semantic_type_label(state[1]),
             "entries": [{
-                "key": _stable_frozen_semantic_value(key, package_root),
-                "value": _stable_frozen_semantic_value(value, package_root),
+                "key": _stable_frozen_semantic_value(
+                    key, package_root, projection),
+                "value": _stable_frozen_semantic_value(
+                    value, package_root, projection),
             } for key, value in state[3]],
         }
     if kind in {"SEQUENCE", "SET"}:
         values = [
-            _stable_frozen_semantic_value(item, package_root)
+            _stable_frozen_semantic_value(item, package_root, projection)
             for item in state[3]
         ]
         if kind == "SET":
@@ -2801,15 +2986,22 @@ def _stable_frozen_semantic_value(state: tuple, package_root: Path) -> Any:
             "kind": "OBJECT", "type": _semantic_type_label(state[1]),
             "fields": [{
                 "name": name,
-                "value": _stable_frozen_semantic_value(value, package_root),
+                "value": _stable_frozen_semantic_value(
+                    value, package_root, projection),
             } for name, value in state[3]],
         }
     raise RuntimeBundleError(f"unsupported frozen semantic value: {kind!r}")
 
 
-def _stable_code_constant(value: Any, package_root: Path) -> Any:
+def _stable_code_constant(
+        value: Any,
+        package_root: Path,
+        projection: _StableSemanticProjection | None = None) -> Any:
     if isinstance(value, types.CodeType):
-        return {"kind": "CODE", "value": _stable_code_document(value, package_root)}
+        return {
+            "kind": "CODE",
+            "value": _stable_code_document(value, package_root, projection),
+        }
     if value is Ellipsis:
         return {"kind": "ELLIPSIS"}
     if isinstance(value, complex):
@@ -2817,10 +3009,13 @@ def _stable_code_constant(value: Any, package_root: Path) -> Any:
             raise RuntimeBundleError("decision bytecode contains non-finite complex data")
         return {"kind": "COMPLEX", "real": value.real, "imag": value.imag}
     return _stable_frozen_semantic_value(
-        _freeze_semantic_value(value), package_root)
+        _freeze_semantic_value(value), package_root, projection)
 
 
-def _stable_code_document(code: types.CodeType, package_root: Path) -> dict[str, Any]:
+def _stable_code_document(
+        code: types.CodeType,
+        package_root: Path,
+        projection: _StableSemanticProjection | None = None) -> dict[str, Any]:
     attrs_hash = (
         code.co_name == "__hash__"
         and code.co_filename.startswith("<attrs generated methods ")
@@ -2842,7 +3037,7 @@ def _stable_code_document(code: types.CodeType, package_root: Path) -> dict[str,
         stable_value = (
             {"kind": "ATTRS_HASH_SALT"}
             if attrs_hash and isinstance(value, int)
-            else _stable_code_constant(value, package_root)
+            else _stable_code_constant(value, package_root, projection)
         )
         # attrs can emit both the randomized salt and its folded negation in
         # ``co_consts`` even though only one is loaded.  Their count therefore
@@ -2870,40 +3065,63 @@ def _stable_code_document(code: types.CodeType, package_root: Path) -> dict[str,
 
 
 def _stable_semantic_function_state(
-        state: tuple, package_root: Path) -> dict[str, Any]:
+        state: tuple,
+        package_root: Path,
+        projection: _StableSemanticProjection | None = None) -> dict[str, Any]:
+    cache = projection[0] if projection is not None else None
+    cached = cache.get(id(state)) if cache is not None else None
+    if cached is not None and cached[0] is state:
+        return cached[1]
     if state[0] != "FUNCTION":
         value = state[1]
-        return {
+        result = {
             "kind": "CALLABLE_REF",
             "ref": f"{type(value).__module__}.{type(value).__qualname__}",
         }
-    return {
-        "kind": "FUNCTION",
-        "module": state[12],
-        "name": state[13],
-        "qualname": state[14],
-        "code": _stable_code_document(state[2], package_root),
-        "defaults": _stable_frozen_semantic_value(state[4], package_root),
-        "keywordDefaults": _stable_frozen_semantic_value(state[6], package_root),
-        "closure": [
-            _stable_frozen_semantic_value(value, package_root)
-            for _cell, value in state[7]
-        ],
-        "annotations": _stable_frozen_semantic_value(state[9], package_root),
-        "attributes": _stable_frozen_semantic_value(state[11], package_root),
-    }
+    else:
+        result = {
+            "kind": "FUNCTION",
+            "module": state[12],
+            "name": state[13],
+            "qualname": state[14],
+            "code": _stable_code_document(
+                state[2], package_root, projection),
+            "defaults": _stable_frozen_semantic_value(
+                state[4], package_root, projection),
+            "keywordDefaults": _stable_frozen_semantic_value(
+                state[6], package_root, projection),
+            "closure": [
+                _stable_frozen_semantic_value(
+                    value, package_root, projection)
+                for _cell, value in state[7]
+            ],
+            "annotations": _stable_frozen_semantic_value(
+                state[9], package_root, projection),
+            "attributes": _stable_frozen_semantic_value(
+                state[11], package_root, projection),
+        }
+    if cache is not None:
+        cache[id(state)] = (state, result)
+    return result
 
 
 def _stable_semantic_class_state(
-        state: tuple, package_root: Path) -> dict[str, Any]:
-    return {
+        state: tuple,
+        package_root: Path,
+        projection: _StableSemanticProjection | None = None) -> dict[str, Any]:
+    cache = projection[1] if projection is not None else None
+    cached = cache.get(id(state)) if cache is not None else None
+    if cached is not None and cached[0] is state:
+        return cached[1]
+    result = {
         "kind": "CLASS",
         "module": state[4],
         "name": state[5],
         "qualname": state[6],
         "mro": [_semantic_type_label(item) for item in state[1]],
         "bases": [
-            _stable_semantic_class_state(base_state, package_root)
+            _stable_semantic_class_state(
+                base_state, package_root, projection)
             for _base, base_state in state[7]
         ],
         "descriptors": [{
@@ -2912,24 +3130,32 @@ def _stable_semantic_class_state(
             "functions": [{
                 "kind": function_kind,
                 "state": _stable_semantic_function_state(
-                    function_state, package_root),
+                    function_state, package_root, projection),
             } for function_kind, function_state in functions],
         } for name, descriptor, functions in state[2]],
         "data": [{
             "name": name,
-            "state": _stable_frozen_semantic_value(value_state, package_root),
+            "state": _stable_frozen_semantic_value(
+                value_state, package_root, projection),
         } for name, _value, value_state in state[3]],
     }
+    if cache is not None:
+        cache[id(state)] = (state, result)
+    return result
 
 
 def _stable_semantic_sequence_state(
-        state: tuple, package_root: Path) -> dict[str, Any]:
+        state: tuple,
+        package_root: Path,
+        projection: _StableSemanticProjection | None = None) -> dict[str, Any]:
     return {
         "kind": "DISPATCH_SEQUENCE",
         "items": [{
             "class": _semantic_type_label(item[1]),
-            "state": _stable_frozen_semantic_value(item[3], package_root),
-            "classState": _stable_semantic_class_state(item[4], package_root),
+            "state": _stable_frozen_semantic_value(
+                item[3], package_root, projection),
+            "classState": _stable_semantic_class_state(
+                item[4], package_root, projection),
         } for item in state[1]],
     }
 
@@ -2939,6 +3165,7 @@ def _stable_semantic_binding_state(
         package_root: Path,
         owner: types.ModuleType,
         name: str,
+        projection: _StableSemanticProjection | None = None,
 ) -> dict[str, Any]:
     if state[0] == "ABSENT":
         return {"kind": "ABSENT"}
@@ -2966,11 +3193,13 @@ def _stable_semantic_binding_state(
         return {"kind": "MODULE", "name": state[2]}
     if state[0] == "FUNCTION":
         function_state = state[1]
-        return _stable_semantic_function_state(function_state, package_root)
+        return _stable_semantic_function_state(
+            function_state, package_root, projection)
     if state[0] == "CLASS":
         class_state = state[1]
         if _stable_decision_namespace(class_state[4]):
-            return _stable_semantic_class_state(class_state, package_root)
+            return _stable_semantic_class_state(
+                class_state, package_root, projection)
         return {
             "kind": "EXTERNAL_CLASS_REF",
             "module": class_state[4],
@@ -2994,7 +3223,8 @@ def _stable_semantic_binding_state(
             "module": owner.__name__,
             "type": _semantic_type_label(state[2]),
         }
-    return _stable_frozen_semantic_value(state[1], package_root)
+    return _stable_frozen_semantic_value(
+        state[1], package_root, projection)
 
 
 def _stable_originless_module_value(value: object, package_root: Path) -> Any:
@@ -3182,20 +3412,26 @@ def _stable_decision_semantics_document(
 ) -> dict[str, Any]:
     entries = []
     identity_class_states: dict[str, bytes] = {}
+    projection: _StableSemanticProjection = ({}, {})
     for kind, label, module, _module_name, name, _original, state in selected:
         if kind == "DATA":
-            stable_state = _stable_frozen_semantic_value(state, package_root)
+            stable_state = _stable_frozen_semantic_value(
+                state, package_root, projection)
         elif kind == "FUNCTION":
-            stable_state = _stable_semantic_function_state(state, package_root)
+            stable_state = _stable_semantic_function_state(
+                state, package_root, projection)
         elif kind == "CLASS":
-            stable_state = _stable_semantic_class_state(state, package_root)
+            stable_state = _stable_semantic_class_state(
+                state, package_root, projection)
         elif kind == "SEQUENCE":
-            stable_state = _stable_semantic_sequence_state(state, package_root)
+            stable_state = _stable_semantic_sequence_state(
+                state, package_root, projection)
         elif kind == "BINDING":
             stable_state = _stable_semantic_binding_state(
-                state, package_root, module, name)
+                state, package_root, module, name, projection)
         elif kind == "IDENTITY_CLASS":
-            stable_state = _stable_semantic_class_state(state, package_root)
+            stable_state = _stable_semantic_class_state(
+                state, package_root, projection)
         else:
             raise RuntimeBundleError(
                 f"unsupported stable decision semantic entry: {kind!r}")
@@ -3263,6 +3499,7 @@ def _validate_stable_decision_semantics_document(document: Any) -> None:
 _DECISION_RECEIPT_IMPLEMENTATION_ANCHORS = tuple(
     (function, function.__code__)
     for function in (
+        _new_semantic_traversal,
         _freeze_semantic_value,
         _same_semantic_value,
         _prepare_decision_semantic_caches,
@@ -3273,9 +3510,11 @@ _DECISION_RECEIPT_IMPLEMENTATION_ANCHORS = tuple(
         _capture_decision_semantics,
         _require_decision_semantics,
         _stable_frozen_semantic_value,
+        _stable_code_constant,
         _stable_code_document,
         _stable_semantic_function_state,
         _stable_semantic_class_state,
+        _stable_semantic_sequence_state,
         _stable_semantic_binding_state,
         _decision_semantic_callable_anchors,
         _canonical_stable_semantic_bytes,
@@ -6153,11 +6392,10 @@ class RuntimeBundle:
         if environment_component is None:
             raise RuntimeBundleError(
                 "RuntimeBundle has no closed Python environment observation")
-        _validate_stable_runtime_environment_document(
-            _strict_json_value(
-                environment_component.canonical_bytes,
-                "RuntimeBundle Python environment observation"),
-            self.components,
+        _require_validated_stable_runtime_environment_value(
+            environment_component.canonical_bytes,
+            tuple(_runtime_component_validation_value(component)
+                  for component in self.components),
         )
         semantics_component = component_map.get(
             ("RUNTIME_ENVIRONMENT_OBSERVED", _DECISION_SEMANTICS_REF))
@@ -6166,9 +6404,8 @@ class RuntimeBundle:
                 "runtime-observed/decision-semantics-v1"):
             raise RuntimeBundleError(
                 "RuntimeBundle has no stable decision semantics identity")
-        _validate_stable_decision_semantics_document(_strict_json_value(
-            semantics_component.canonical_bytes,
-            "RuntimeBundle decision semantics identity"))
+        _require_validated_stable_decision_semantics_value(
+            semantics_component.canonical_bytes)
         snapshot_components = {
             logical_ref for role, logical_ref in component_map
             if role == "REFERENCE_SNAPSHOT"
@@ -6349,27 +6586,293 @@ class RuntimeBundle:
         })
 
 
+_RUNTIME_COMPONENT_STATE_FIELDS = frozenset(
+    item.name for item in dataclass_fields(RuntimeComponent))
+_SELECTED_REFERENCE_STATE_FIELDS = frozenset(
+    item.name for item in dataclass_fields(SelectedReferenceIdentity))
+_RUNTIME_BUNDLE_STATE_FIELDS = frozenset(
+    item.name for item in dataclass_fields(RuntimeBundle))
+
+
+def _runtime_component_validation_value(component: object) -> tuple:
+    """Read every component field into an immutable value-cache key."""
+    if (type(component) is not RuntimeComponent
+            or set(vars(component)) != _RUNTIME_COMPONENT_STATE_FIELDS):
+        raise RuntimeBundleError(
+            "RuntimeBundle component instance state is not closed")
+    value = (
+        component.role,
+        component.logical_ref,
+        component.repository_path,
+        component.canonicalization,
+        component.content_digest,
+        component.canonical_bytes,
+        component.placement,
+    )
+    if (any(type(item) is not str for item in (*value[:5], value[6]))
+            or type(value[5]) is not bytes):
+        raise RuntimeBundleError("runtime component role/ref/path must be non-empty")
+    return value
+
+
+def _selected_reference_validation_value(reference: object) -> tuple:
+    """Read every selected-reference field into an immutable value-cache key."""
+    if (type(reference) is not SelectedReferenceIdentity
+            or set(vars(reference)) != _SELECTED_REFERENCE_STATE_FIELDS):
+        raise RuntimeBundleError(
+            "RuntimeBundle selected-reference instance state is not closed")
+    value = (
+        reference.family_id,
+        reference.snapshot_ref,
+        reference.snapshot_payload_digest,
+        reference.source_identities,
+        reference.source_byte_status,
+        reference.unavailable_source_identities,
+        reference.data_family,
+        reference.data_payload_digest,
+        reference.source_digest,
+    )
+    if (any(type(item) is not str for item in value[:3])
+            or type(value[3]) is not tuple
+            or any(type(item) is not str for item in value[3])
+            or type(value[4]) is not str
+            or type(value[5]) is not tuple
+            or any(type(item) is not str for item in value[5])
+            or any(item is not None and type(item) is not str
+                   for item in value[6:])):
+        raise RuntimeBundleError(
+            "selected-reference identity field types are malformed")
+    return value
+
+
+@functools.lru_cache(maxsize=512, typed=True)
+def _validated_runtime_component_value(value: tuple) -> None:
+    """Fully validate one exact primitive/bytes component value."""
+    _require_runtime_bundle_validation_implementation()
+    RuntimeComponent(*value)
+    return None
+
+
+@functools.lru_cache(maxsize=512, typed=True)
+def _validated_selected_reference_value(value: tuple) -> None:
+    """Fully validate one exact primitive/tuple selected-reference value."""
+    _require_runtime_bundle_validation_implementation()
+    SelectedReferenceIdentity(*value)
+    return None
+
+
+def _runtime_components_from_validation_values(
+        values: tuple[tuple, ...],
+) -> tuple[RuntimeComponent, ...]:
+    """Rebuild field-only component views for pure cross-component validation."""
+    components = []
+    field_names = tuple(
+        item.name for item in dataclass_fields(RuntimeComponent))
+    for value in values:
+        component = object.__new__(RuntimeComponent)
+        for name, item in zip(field_names, value, strict=True):
+            object.__setattr__(component, name, item)
+        components.append(component)
+    return tuple(components)
+
+
+@functools.lru_cache(maxsize=8, typed=True)
+def _validated_stable_runtime_environment_value(
+        canonical_bytes: bytes,
+        component_values: tuple[tuple, ...],
+) -> None:
+    """Validate retained environment bytes against exact component values."""
+    _require_runtime_bundle_validation_implementation()
+    _validate_stable_runtime_environment_document(
+        _strict_json_value(
+            canonical_bytes, "RuntimeBundle Python environment observation"),
+        _runtime_components_from_validation_values(component_values),
+    )
+    return None
+
+
+@functools.lru_cache(maxsize=64, typed=True)
+def _validated_stable_decision_semantics_value(
+        canonical_bytes: bytes,
+) -> None:
+    """Validate one exact retained decision-semantics byte value."""
+    _require_runtime_bundle_validation_implementation()
+    _validate_stable_decision_semantics_document(_strict_json_value(
+        canonical_bytes, "RuntimeBundle decision semantics identity"))
+    return None
+
+
+def _require_validated_runtime_component_value(value: tuple) -> None:
+    _require_runtime_bundle_validation_implementation()
+    _validated_runtime_component_value(value)
+
+
+def _require_validated_selected_reference_value(value: tuple) -> None:
+    _require_runtime_bundle_validation_implementation()
+    _validated_selected_reference_value(value)
+
+
+def _require_validated_stable_runtime_environment_value(
+        canonical_bytes: bytes,
+        component_values: tuple[tuple, ...],
+) -> None:
+    _require_runtime_bundle_validation_implementation()
+    _validated_stable_runtime_environment_value(
+        canonical_bytes, component_values)
+
+
+def _require_validated_stable_decision_semantics_value(
+        canonical_bytes: bytes,
+) -> None:
+    _require_runtime_bundle_validation_implementation()
+    _validated_stable_decision_semantics_value(canonical_bytes)
+
+
+_RUNTIME_BUNDLE_VALIDATION_CACHES = (
+    (
+        "_validated_runtime_component_value",
+        _validated_runtime_component_value,
+        _validated_runtime_component_value.__wrapped__,
+        _validated_runtime_component_value.cache_parameters,
+        (512, True),
+    ),
+    (
+        "_validated_selected_reference_value",
+        _validated_selected_reference_value,
+        _validated_selected_reference_value.__wrapped__,
+        _validated_selected_reference_value.cache_parameters,
+        (512, True),
+    ),
+    (
+        "_validated_stable_runtime_environment_value",
+        _validated_stable_runtime_environment_value,
+        _validated_stable_runtime_environment_value.__wrapped__,
+        _validated_stable_runtime_environment_value.cache_parameters,
+        (8, True),
+    ),
+    (
+        "_validated_stable_decision_semantics_value",
+        _validated_stable_decision_semantics_value,
+        _validated_stable_decision_semantics_value.__wrapped__,
+        _validated_stable_decision_semantics_value.cache_parameters,
+        (64, True),
+    ),
+)
+_RUNTIME_BUNDLE_VALIDATION_FUNCTION_ANCHORS = tuple(
+    (function, function.__code__)
+    for function in (
+        _runtime_component_validation_value,
+        _selected_reference_validation_value,
+        _runtime_components_from_validation_values,
+        _require_validated_runtime_component_value,
+        _require_validated_selected_reference_value,
+        _require_validated_stable_runtime_environment_value,
+        _require_validated_stable_decision_semantics_value,
+        _strict_json_value,
+        sha256_bytes,
+        component_placement,
+        _validate_runtime_image_manifest,
+        _runtime_image_manifest,
+        _validate_stable_runtime_environment_document,
+        _validate_stable_decision_semantics_document,
+        canonical_json,
+    )
+)
+_RUNTIME_BUNDLE_VALIDATION_METHOD_ANCHORS = (
+    (RuntimeComponent, "__post_init__", RuntimeComponent.__post_init__,
+     RuntimeComponent.__post_init__.__code__),
+    (SelectedReferenceIdentity, "__post_init__",
+     SelectedReferenceIdentity.__post_init__,
+     SelectedReferenceIdentity.__post_init__.__code__),
+    (RuntimeBundle, "__post_init__", RuntimeBundle.__post_init__,
+     RuntimeBundle.__post_init__.__code__),
+)
+_RUNTIME_BUNDLE_VALIDATION_CLASS_ANCHORS = (
+    ("RuntimeEnvironmentSeal", RuntimeEnvironmentSeal),
+    ("RuntimeComponent", RuntimeComponent),
+    ("SelectedReferenceIdentity", SelectedReferenceIdentity),
+    ("RuntimeBundle", RuntimeBundle),
+)
+_RUNTIME_BUNDLE_VALIDATION_STATE_ANCHORS = (
+    ("_RUNTIME_COMPONENT_STATE_FIELDS", _RUNTIME_COMPONENT_STATE_FIELDS),
+    ("_SELECTED_REFERENCE_STATE_FIELDS", _SELECTED_REFERENCE_STATE_FIELDS),
+    ("_RUNTIME_BUNDLE_STATE_FIELDS", _RUNTIME_BUNDLE_STATE_FIELDS),
+)
+
+
+def _require_runtime_bundle_validation_implementation() -> None:
+    """Require the exact value extractors, validators, and bounded caches."""
+    if (_require_runtime_bundle_validation_implementation.__code__ is not
+            _RUNTIME_BUNDLE_VALIDATION_GUARD_CODE
+            or globals().get(
+                "_require_runtime_bundle_validation_implementation") is not
+            _require_runtime_bundle_validation_implementation
+            or any(
+                globals().get(name) is not cache
+                or cache.__wrapped__ is not body
+                or cache.cache_parameters is not parameters
+                or cache.cache_parameters() != {
+                    "maxsize": expected_parameters[0],
+                    "typed": expected_parameters[1],
+                }
+                or body.__code__ is not code
+                for (name, cache, body, parameters, expected_parameters), code
+                in zip(
+                    _RUNTIME_BUNDLE_VALIDATION_CACHES,
+                    _RUNTIME_BUNDLE_VALIDATION_BODY_CODES,
+                    strict=True,
+                ))
+            or any(
+                function.__code__ is not code
+                or function.__globals__.get(function.__name__) is not function
+                for function, code
+                in _RUNTIME_BUNDLE_VALIDATION_FUNCTION_ANCHORS)
+            or any(
+                getattr(owner, name, None) is not function
+                or function.__code__ is not code
+                for owner, name, function, code
+                in _RUNTIME_BUNDLE_VALIDATION_METHOD_ANCHORS)
+            or any(globals().get(name) is not expected
+                   for name, expected
+                   in _RUNTIME_BUNDLE_VALIDATION_CLASS_ANCHORS)
+            or any(globals().get(name) is not expected
+                   for name, expected
+                   in _RUNTIME_BUNDLE_VALIDATION_STATE_ANCHORS)):
+        raise RuntimeBundleError(
+            "RuntimeBundle validation implementation changed after import")
+
+
+_RUNTIME_BUNDLE_VALIDATION_BODY_CODES = tuple(
+    cache_entry[2].__code__
+    for cache_entry in _RUNTIME_BUNDLE_VALIDATION_CACHES)
+_RUNTIME_BUNDLE_VALIDATION_GUARD_CODE = \
+    _require_runtime_bundle_validation_implementation.__code__
+
+
 def _require_runtime_bundle_integrity(bundle: object) -> None:
-    """Re-run immutable bundle/component validation at every decision boundary."""
+    """Re-run current structure/live checks and reuse only exact pure proofs."""
+    _require_runtime_bundle_validation_implementation()
     if type(bundle) is not RuntimeBundle:
         raise RuntimeBundleError("governed runtime requires an exact RuntimeBundle")
-    bundle_fields = {item.name for item in dataclass_fields(RuntimeBundle)}
-    if set(vars(bundle)) != bundle_fields:
+    if set(vars(bundle)) != _RUNTIME_BUNDLE_STATE_FIELDS:
         raise RuntimeBundleError("RuntimeBundle instance state is not closed")
-    for component in bundle.components:
-        if (type(component) is not RuntimeComponent
-                or set(vars(component)) != {
-                    item.name for item in dataclass_fields(RuntimeComponent)}):
-            raise RuntimeBundleError("RuntimeBundle component instance state is not closed")
-        RuntimeComponent.__post_init__(component)
-    for reference in bundle.selected_references:
-        if (type(reference) is not SelectedReferenceIdentity
-                or set(vars(reference)) != {
-                    item.name for item in dataclass_fields(
-                        SelectedReferenceIdentity)}):
-            raise RuntimeBundleError(
-                "RuntimeBundle selected-reference instance state is not closed")
-        SelectedReferenceIdentity.__post_init__(reference)
+    if (type(bundle.digest) is not str
+            or type(bundle.bundle_ref) is not str
+            or type(bundle.canonical_document_bytes) is not bytes
+            or type(bundle.components) is not tuple
+            or type(bundle.selected_references) is not tuple
+            or type(bundle.construction_mode) is not str):
+        raise RuntimeBundleError("RuntimeBundle field types are not immutable")
+    component_values = tuple(
+        _runtime_component_validation_value(component)
+        for component in bundle.components)
+    reference_values = tuple(
+        _selected_reference_validation_value(reference)
+        for reference in bundle.selected_references)
+    for component_value in component_values:
+        _require_validated_runtime_component_value(component_value)
+    for reference_value in reference_values:
+        _require_validated_selected_reference_value(reference_value)
     proof = (
         _LIVE_SELECTION_PROOF
         if bundle.construction_mode == "LIVE_CURRENT" else None)

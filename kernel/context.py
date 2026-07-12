@@ -969,9 +969,16 @@ class ContextAssembler:
                 "ContextAssembler descriptor and RuntimeBundle do not match exactly")
         self._runtime_composition_sealed = True
 
-    def _assert_runtime_composition(self, cur=None) -> None:
+    def _require_runtime_composition_structure(self, cur=None) -> None:
+        """Check retained Context wiring without repeating a caller's full proof."""
         try:
             if (type(self) is not ContextAssembler
+                    or vars(ContextAssembler).get(
+                        "_require_runtime_composition_structure") is not
+                    _RETAINED_CONTEXT_REQUIRE_RUNTIME_COMPOSITION_STRUCTURE
+                    or _RETAINED_CONTEXT_REQUIRE_RUNTIME_COMPOSITION_STRUCTURE.__code__
+                    is not
+                    _RETAINED_CONTEXT_REQUIRE_RUNTIME_COMPOSITION_STRUCTURE_CODE
                     or vars(ContextAssembler).get(
                         "_assert_runtime_composition") is not
                     _RETAINED_CONTEXT_ASSERT_RUNTIME_COMPOSITION
@@ -986,11 +993,19 @@ class ContextAssembler:
                            for name in vars(self))):
                 raise RuntimeBundleError(
                     "ContextAssembler runtime composition changed")
+            if cur is not None:
+                Store._require_active_governed_cursor(self.store, cur)
+        except BaseException:
+            if type(getattr(self, "store", None)) is Store:
+                Store._mark_transaction_integrity_violation(self.store)
+            raise
+
+    def _assert_runtime_composition(self, cur=None) -> None:
+        try:
             Store._require_transaction_python_posture(self.store)
             require_store_runtime_bundle(
                 self.store, self.runtime_bundle, "ContextAssembler decision")
-            if cur is not None:
-                Store._require_active_governed_cursor(self.store, cur)
+            _RETAINED_CONTEXT_REQUIRE_RUNTIME_COMPOSITION_STRUCTURE(self, cur)
         except BaseException:
             if type(getattr(self, "store", None)) is Store:
                 Store._mark_transaction_integrity_violation(self.store)
@@ -1263,6 +1278,10 @@ class ContextAssembler:
         return payload
 
 
+_RETAINED_CONTEXT_REQUIRE_RUNTIME_COMPOSITION_STRUCTURE = \
+    ContextAssembler._require_runtime_composition_structure
+_RETAINED_CONTEXT_REQUIRE_RUNTIME_COMPOSITION_STRUCTURE_CODE = \
+    _RETAINED_CONTEXT_REQUIRE_RUNTIME_COMPOSITION_STRUCTURE.__code__
 _RETAINED_CONTEXT_ASSERT_RUNTIME_COMPOSITION = \
     ContextAssembler._assert_runtime_composition
 _RETAINED_CONTEXT_ASSERT_RUNTIME_COMPOSITION_CODE = \

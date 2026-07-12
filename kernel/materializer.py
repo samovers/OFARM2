@@ -23,6 +23,8 @@ from .context import (ContextAssembler, ContextNotReconstructible,
                     _RETAINED_CONTEXT_ASSEMBLE_CODE,
                     _RETAINED_CONTEXT_ASSERT_RUNTIME_COMPOSITION,
                     _RETAINED_CONTEXT_ASSERT_RUNTIME_COMPOSITION_CODE,
+                    _RETAINED_CONTEXT_REQUIRE_RUNTIME_COMPOSITION_STRUCTURE,
+                    _RETAINED_CONTEXT_REQUIRE_RUNTIME_COMPOSITION_STRUCTURE_CODE,
                       mint as _mint, now_iso, parse_ts)
 from .contracts import canonical_json
 from .profile_runtime import ProfileRuntimeError, resolve_active_descriptor
@@ -129,6 +131,12 @@ class Materializer:
                     _RETAINED_CONTEXT_ASSERT_RUNTIME_COMPOSITION
                     or _RETAINED_CONTEXT_ASSERT_RUNTIME_COMPOSITION.__code__ is not
                     _RETAINED_CONTEXT_ASSERT_RUNTIME_COMPOSITION_CODE
+                    or vars(ContextAssembler).get(
+                        "_require_runtime_composition_structure") is not
+                    _RETAINED_CONTEXT_REQUIRE_RUNTIME_COMPOSITION_STRUCTURE
+                    or _RETAINED_CONTEXT_REQUIRE_RUNTIME_COMPOSITION_STRUCTURE.__code__
+                    is not
+                    _RETAINED_CONTEXT_REQUIRE_RUNTIME_COMPOSITION_STRUCTURE_CODE
                     or type(self.store) is not Store
                     or type(self.context) is not ContextAssembler
                     or self._runtime_composition_sealed is not True
@@ -147,9 +155,12 @@ class Materializer:
             Store._require_transaction_python_posture(self.store)
             require_store_runtime_bundle(
                 self.store, self.runtime_bundle, "Materializer decision")
-            _RETAINED_CONTEXT_ASSERT_RUNTIME_COMPOSITION(self.context, cur)
-            if cur is not None:
-                Store._require_active_governed_cursor(self.store, cur)
+            # Materializer has just completed the full Store/bundle proof and
+            # invokes Context immediately with no caller or decision hook in
+            # between. Recheck Context's exact retained wiring/cursor ownership,
+            # but do not repeat the same complete semantic proof back-to-back.
+            _RETAINED_CONTEXT_REQUIRE_RUNTIME_COMPOSITION_STRUCTURE(
+                self.context, cur)
         except BaseException:
             if type(getattr(self, "store", None)) is Store:
                 Store._mark_transaction_integrity_violation(self.store)

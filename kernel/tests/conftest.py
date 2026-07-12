@@ -20,9 +20,13 @@ from psycopg import sql
 os.environ.setdefault("OFARM_PG_DBNAME", "ofarm_kernel_test")
 
 from kernel import config, context, demo, manifest  # noqa: E402
+from kernel.contracts import canonical_json  # noqa: E402
 from kernel.gates import GatePipeline  # noqa: E402
 from kernel.materializer import Materializer  # noqa: E402
-from kernel.store import Store  # noqa: E402
+from kernel.store import (  # noqa: E402
+    Store,
+    _RETAINED_GOVERNED_CURSOR_EXECUTE_READ as _CURSOR_EXECUTE_READ,
+)
 from kernel.views import OutputGenerator  # noqa: E402
 
 EVIDENCE_DIR = config.PACKAGE_ROOT / "conformance" / "evidence"
@@ -132,6 +136,115 @@ def _bootstrap_demo_seed(seed: Store) -> None:
         raise AssertionError("demo seed leaked a governed transaction")
 
 
+def _activate_cloned_seed_runtime(store: Store, bundle, environment_seal) -> None:
+    """Attach one seed-selected runtime to its exact PostgreSQL template clone.
+
+    The production-faithful seed performs live selection, installation, and
+    activation once. A physical ``CREATE DATABASE ... TEMPLATE`` clone already
+    contains those exact persisted bytes. Each isolated Store still runs the
+    production preparation and activation checks; it only skips selecting and
+    reinstalling the same runtime a second time.
+    """
+    if (type(store) is not Store
+            or Store._transaction_depth(store) != 0
+            or store._runtime_bundle is not None
+            or store._runtime_environment_seal is not None
+            or store._bootstrap_bundle is not None
+            or store._pending_runtime_bundle_activation is not None):
+        raise AssertionError(
+            "fresh_env runtime activation requires one clean unbound Store"
+        )
+    if (bundle.construction_mode != "LIVE_CURRENT"
+            or bundle._selection_environment_seal is not environment_seal
+            or environment_seal.bundle_digest != bundle.digest):
+        raise AssertionError(
+            "fresh_env template runtime is not one exact live bundle/seal pair"
+        )
+
+    activation_token = None
+    try:
+        with Store.serialized_tx(store) as cur:
+            expected_payloads = context._profile_payloads_from_bundle(  # noqa: SLF001
+                store, config.ACTIVE_PROFILE, bundle)
+            expected_by_id = {
+                record_id: (kind, payload, expected_digest)
+                for record_id, kind, payload, expected_digest
+                in expected_payloads
+            }
+            if len(expected_by_id) != len(expected_payloads):
+                raise AssertionError(
+                    "fresh_env template profile payload identities are not unique"
+                )
+            selection_kinds = (
+                "ofarm.referencesnapshot.v0.1",
+                "ofarm.activeartifactset.v0.1",
+                "ofarm.packactivationset.v0.1",
+                "ofarm.agronomiccodebindingprofile.v0.1",
+            )
+            _CURSOR_EXECUTE_READ(
+                cur,
+                "SELECT record_id, record_kind, lane, schema_hash, payload, "
+                "payload_sha256, tenant_ref, runtime_bundle_digest "
+                "FROM ONLY kernel_record "
+                "WHERE record_id = ANY(%s) "
+                "OR (tenant_ref = %s AND record_kind = ANY(%s)) "
+                "ORDER BY record_id",
+                (list(expected_by_id), bundle.tenant_ref, list(selection_kinds)),
+            )
+            actual_rows = {row["record_id"]: row for row in cur.fetchall()}
+            if set(actual_rows) != set(expected_by_id):
+                raise AssertionError(
+                    "fresh_env PostgreSQL clone lacks the exact bundled profile spine"
+                )
+            for record_id, (kind, payload, expected_digest) in \
+                    expected_by_id.items():
+                row = actual_rows[record_id]
+                contract = store.registry.get(kind)
+                if (row["record_kind"] != kind
+                        or row["lane"] != "canonical"
+                        or row["schema_hash"] != contract.schema_hash
+                        or row["tenant_ref"] != bundle.tenant_ref
+                        or row["runtime_bundle_digest"] != bundle.digest
+                        or row["payload_sha256"] != expected_digest
+                        or canonical_json(row["payload"]) != canonical_json(payload)):
+                    raise AssertionError(
+                        "fresh_env PostgreSQL clone has a byte-mismatched profile "
+                        f"instance {record_id!r}"
+                    )
+            _CURSOR_EXECUTE_READ(
+                cur, "SELECT count(*) AS n FROM ONLY reference_snapshot_data")
+            if cur.fetchone()["n"] != 0:
+                raise AssertionError(
+                    "fresh_env seed unexpectedly contains database-origin reference "
+                    "data; extend the exact clone comparison before importing it"
+                )
+
+            # Reuse the production activation path. It rechecks the current
+            # runtime catalog and process seal, verifies the cloned database
+            # observation and exact schema, and cold-loads every persisted
+            # bundle/component byte before preparing the one-use token.
+            with Store._bootstrap_bundle_writes(store, bundle):
+                activation_token = Store._prepare_runtime_bundle_binding(
+                    store, bundle)
+    except BaseException:
+        Store._discard_prepared_runtime_bundle_binding(store)
+        raise
+
+    try:
+        Store._activate_prepared_runtime_bundle(store, activation_token)
+    except BaseException:
+        Store._discard_prepared_runtime_bundle_binding(store)
+        raise
+    if (Store._transaction_depth(store) != 0
+            or store._runtime_bundle is not bundle
+            or store._runtime_environment_seal is not environment_seal
+            or store._pending_runtime_bundle_activation is not None
+            or store.runtime_bundle_digest != bundle.digest):
+        raise AssertionError(
+            "fresh_env clone did not activate the exact seed RuntimeBundle"
+        )
+
+
 @pytest.fixture(scope="session")
 def _seeded_environment():
     """Build one production-faithful seed and snapshot it before tests mutate it."""
@@ -150,7 +263,15 @@ def _seeded_environment():
         seed.migrate()
         context.bootstrap(seed)
         _bootstrap_demo_seed(seed)
-        runtime_bundle_digest = seed.runtime_bundle_digest
+        runtime_bundle = seed.runtime_bundle
+        runtime_environment_seal = seed._runtime_environment_seal
+        if (runtime_bundle._selection_environment_seal is not
+                runtime_environment_seal
+                or runtime_environment_seal.bundle_digest !=
+                seed.runtime_bundle_digest):
+            raise AssertionError(
+                "production-faithful seed lacks one exact live bundle/seal pair"
+            )
 
         # PostgreSQL requires the source database to have no open sessions.
         # Snapshot before yielding, so later session-scoped test mutations can
@@ -164,12 +285,14 @@ def _seeded_environment():
                     sql.Identifier(template_dbname)
                 )
             )
-        yield seed, template_dbname, runtime_bundle_digest
+        yield seed, template_dbname, runtime_bundle, runtime_environment_seal
     finally:
-        if seed is not None:
-            seed.close()
-        if template_created:
-            _drop_database(template_dbname)
+        try:
+            if seed is not None:
+                seed.close()
+        finally:
+            if template_created:
+                _drop_database(template_dbname)
 
 
 @pytest.fixture(scope="session")
@@ -195,7 +318,11 @@ def materializer(store):
 @pytest.fixture(scope="session")
 def _fresh_env_template(_seeded_environment):
     """Expose the immutable pre-test seed snapshot to isolated clones."""
-    return _seeded_environment[1], _seeded_environment[2]
+    return (
+        _seeded_environment[1],
+        _seeded_environment[2],
+        _seeded_environment[3],
+    )
 
 
 @pytest.fixture
@@ -206,7 +333,8 @@ def fresh_env(_fresh_env_template):
     Store is closed before PostgreSQL copies it, and no test can write back into
     the session template or another test's database.
     """
-    template_dbname, template_runtime_bundle_digest = _fresh_env_template
+    template_dbname, template_runtime_bundle, template_environment_seal = \
+        _fresh_env_template
     base = os.environ.get("OFARM_PG_DBNAME", "ofarm_kernel_test")
     dbname = f"{base[:40]}_iso_{uuid.uuid4().hex[:16]}"
     isolated = None
@@ -216,21 +344,16 @@ def fresh_env(_fresh_env_template):
         created = True
         isolated = Store(dsn=_store_database_dsn(dbname))
         isolated.migrate()
-        inserted = context.bootstrap(isolated)
-        if inserted:
-            raise AssertionError(
-                "fresh_env template clone unexpectedly required profile inserts"
-            )
-        if isolated.runtime_bundle_digest != template_runtime_bundle_digest:
-            raise AssertionError(
-                "fresh_env template clone selected a different RuntimeBundle"
-            )
+        _activate_cloned_seed_runtime(
+            isolated, template_runtime_bundle, template_environment_seal)
         yield isolated, GatePipeline(isolated), OutputGenerator(isolated)
     finally:
-        if isolated is not None:
-            isolated.close()
-        if created:
-            _drop_database(dbname)
+        try:
+            if isolated is not None:
+                isolated.close()
+        finally:
+            if created:
+                _drop_database(dbname)
 
 
 def is_platform_mvp_evidence_report(report) -> bool:

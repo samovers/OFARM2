@@ -10,6 +10,7 @@ import os
 import re
 import sys
 import threading
+import time
 import types
 import uuid
 from contextlib import contextmanager
@@ -47,18 +48,28 @@ from kernel.runtime_bundle import (
     RuntimeComponent,
     _C0_CONTROL_RE,
     _build_live_runtime_bundle,
+    _canonical_stable_semantic_bytes,
     _capture_decision_semantics,
+    _freeze_semantic_value,
     _inventory_contains_path,
     _join_stable_locator,
     _locked_components,
+    _new_semantic_traversal,
     _require_decision_semantics,
     _require_runtime_bundle_integrity,
+    _require_runtime_bundle_validation_implementation,
     _require_runtime_environment_seal_integrity,
     _retained_locator_ancestor_index,
     _runtime_environment_component_from_document,
+    _same_semantic_value,
+    _stable_decision_semantics_document,
     _stable_locator_parts,
     _stable_runtime_environment_document,
     _validate_stable_runtime_environment_document,
+    _validated_runtime_component_value,
+    _validated_selected_reference_value,
+    _validated_stable_decision_semantics_value,
+    _validated_stable_runtime_environment_value,
     assert_runtime_environment_compatible,
     build_runtime_bundle,
     database_runtime_environment_component,
@@ -450,6 +461,127 @@ def test_runtime_bundle_integrity_rejects_mutable_container_substitutions():
         object.__setattr__(reference, "source_identities", original_sources)
 
 
+def test_runtime_bundle_integrity_cache_rejects_same_type_mutation_and_restore():
+    bundle = build_runtime_bundle(config.ACTIVE_PROFILE)
+    caches = (
+        _validated_runtime_component_value,
+        _validated_selected_reference_value,
+        _validated_stable_runtime_environment_value,
+        _validated_stable_decision_semantics_value,
+    )
+    for cache in caches:
+        cache.cache_clear()
+    _require_runtime_bundle_integrity(bundle)
+    warm_sizes = tuple(cache.cache_info().currsize for cache in caches)
+    assert warm_sizes == (len(bundle.components), len(bundle.selected_references), 1, 1)
+
+    component = bundle.component(
+        "PROFILE_POLICY", bundle.descriptor.evidence_policy_ref)
+    original_component_bytes = component.canonical_bytes
+    object.__setattr__(
+        component, "canonical_bytes", original_component_bytes + b" ")
+    try:
+        with pytest.raises(RuntimeBundleError):
+            _require_runtime_bundle_integrity(bundle)
+        assert tuple(cache.cache_info().currsize for cache in caches) == warm_sizes
+    finally:
+        object.__setattr__(
+            component, "canonical_bytes", original_component_bytes)
+    _require_runtime_bundle_integrity(bundle)
+
+    reference = bundle.selected_references[0]
+    original_snapshot_digest = reference.snapshot_payload_digest
+    object.__setattr__(
+        reference, "snapshot_payload_digest", "sha256:" + "z" * 64)
+    try:
+        with pytest.raises(RuntimeBundleError):
+            _require_runtime_bundle_integrity(bundle)
+        assert tuple(cache.cache_info().currsize for cache in caches) == warm_sizes
+    finally:
+        object.__setattr__(
+            reference, "snapshot_payload_digest", original_snapshot_digest)
+    _require_runtime_bundle_integrity(bundle)
+
+    descriptor = bundle.descriptor
+    original_pack_ref = descriptor.pack_ref
+    object.__setattr__(descriptor, "pack_ref", original_pack_ref + ".hostile")
+    try:
+        with pytest.raises(RuntimeBundleError, match="descriptor"):
+            _require_runtime_bundle_integrity(bundle)
+        assert tuple(cache.cache_info().currsize for cache in caches) == warm_sizes
+    finally:
+        object.__setattr__(descriptor, "pack_ref", original_pack_ref)
+    _require_runtime_bundle_integrity(bundle)
+
+    original_document = bundle.canonical_document_bytes
+    object.__setattr__(
+        bundle, "canonical_document_bytes", original_document + b" ")
+    try:
+        with pytest.raises(RuntimeBundleError):
+            _require_runtime_bundle_integrity(bundle)
+        assert tuple(cache.cache_info().currsize for cache in caches) == warm_sizes
+    finally:
+        object.__setattr__(bundle, "canonical_document_bytes", original_document)
+    before_restore = tuple(cache.cache_info() for cache in caches)
+    _require_runtime_bundle_integrity(bundle)
+    after_restore = tuple(cache.cache_info() for cache in caches)
+    assert all(after.hits > before.hits
+               for before, after in zip(before_restore, after_restore))
+    assert tuple(info.currsize for info in after_restore) == warm_sizes
+
+
+def test_runtime_bundle_integrity_cache_implementation_is_anchored(monkeypatch):
+    from kernel import runtime_bundle as runtime_bundle_module
+
+    bundle = build_runtime_bundle(config.ACTIVE_PROFILE)
+    _require_runtime_bundle_integrity(bundle)
+    monkeypatch.setattr(
+        runtime_bundle_module,
+        "_validated_runtime_component_value",
+        lambda _value: None,
+    )
+    with pytest.raises(RuntimeBundleError, match="implementation changed"):
+        _require_runtime_bundle_integrity(bundle)
+    with pytest.raises(RuntimeBundleError, match="implementation changed"):
+        _require_runtime_bundle_validation_implementation()
+
+
+def test_runtime_bundle_integrity_value_cache_benchmark():
+    bundle = build_runtime_bundle(config.ACTIVE_PROFILE)
+    caches = (
+        _validated_runtime_component_value,
+        _validated_selected_reference_value,
+        _validated_stable_runtime_environment_value,
+        _validated_stable_decision_semantics_value,
+    )
+    for cache in caches:
+        cache.cache_clear()
+
+    started = time.perf_counter()
+    _require_runtime_bundle_integrity(bundle)
+    cold_seconds = time.perf_counter() - started
+    cold_info = tuple(cache.cache_info() for cache in caches)
+
+    started = time.perf_counter()
+    _require_runtime_bundle_integrity(bundle)
+    warm_seconds = time.perf_counter() - started
+    warm_info = tuple(cache.cache_info() for cache in caches)
+
+    assert tuple(info.misses for info in cold_info) == (
+        len(bundle.components), len(bundle.selected_references), 1, 1)
+    assert tuple(info.currsize for info in cold_info) == (
+        len(bundle.components), len(bundle.selected_references), 1, 1)
+    assert all(warm.hits > cold.hits
+               for cold, warm in zip(cold_info, warm_info))
+    assert tuple(info.currsize for info in warm_info) == \
+        tuple(info.currsize for info in cold_info)
+    assert warm_seconds < cold_seconds
+    print(
+        "RuntimeBundle integrity cache benchmark: "
+        f"cold={cold_seconds:.6f}s warm={warm_seconds:.6f}s "
+        f"speedup={cold_seconds / warm_seconds:.1f}x")
+
+
 def test_runtime_environment_seal_integrity_rejects_mutable_receipt_state():
     bundle = _live_test_bundle()
     seal = bundle._selection_environment_seal
@@ -461,6 +593,7 @@ def test_runtime_environment_seal_integrity_rejects_mutable_receipt_state():
             _require_runtime_environment_seal_integrity(bundle, seal)
     finally:
         object.__setattr__(seal, "decision_semantics", original_semantics)
+    _require_runtime_environment_seal_integrity(bundle, seal)
 
     original_canonical = seal.decision_semantics_canonical
     object.__setattr__(
@@ -471,6 +604,19 @@ def test_runtime_environment_seal_integrity_rejects_mutable_receipt_state():
     finally:
         object.__setattr__(
             seal, "decision_semantics_canonical", original_canonical)
+    _require_runtime_environment_seal_integrity(bundle, seal)
+
+    poisoned_canonical = bytes([original_canonical[0] ^ 1]) + \
+        original_canonical[1:]
+    object.__setattr__(
+        seal, "decision_semantics_canonical", poisoned_canonical)
+    try:
+        with pytest.raises(RuntimeBundleError, match="semantics differ"):
+            _require_runtime_environment_seal_integrity(bundle, seal)
+    finally:
+        object.__setattr__(
+            seal, "decision_semantics_canonical", original_canonical)
+    _require_runtime_environment_seal_integrity(bundle, seal)
 
 
 def test_observed_runtime_environment_change_is_detected(monkeypatch):
@@ -2141,6 +2287,52 @@ def test_caught_runtime_integrity_failure_poison_rolls_back_transaction(
     assert store.get_record(party_id) is None
 
 
+def test_context_structural_helper_cannot_self_restore_before_full_proof(
+        fresh_env):
+    store, _pipeline, outputs = fresh_env
+    assembler = outputs.materializer.context
+    helper = context._RETAINED_CONTEXT_REQUIRE_RUNTIME_COMPOSITION_STRUCTURE
+    original_code = helper.__code__
+    original_profile = assembler.active_profile
+    party_id = f"party:issue171.context-helper.{uuid.uuid4().hex}"
+
+    def self_restoring_helper(_self, _cur=None):
+        retained = globals()[
+            "_RETAINED_CONTEXT_REQUIRE_RUNTIME_COMPOSITION_STRUCTURE"]
+        retained.__code__ = retained.__dict__.pop(
+            "_issue171_restore_code")
+
+    with pytest.raises(RuntimeBundleError, match="rollback-only"):
+        with store.serialized_tx() as cur:
+            store.insert_record(cur, {
+                "schemaVersion": "ofarm.party.v0.1",
+                "partyId": party_id,
+                "partyClass": "NATURAL_PERSON",
+                "displayName": "Issue 171 Context guard test (fictional)",
+                "partyState": "ACTIVE",
+                "recordedAt": context.now_iso(),
+            })
+            object.__setattr__(
+                assembler, "active_profile",
+                replace(
+                    original_profile,
+                    context_snapshot_id_prefix="hostile-context-helper"),
+            )
+            helper.__dict__["_issue171_restore_code"] = original_code
+            helper.__code__ = self_restoring_helper.__code__
+            try:
+                with pytest.raises(RuntimeBundleError):
+                    context.ContextAssembler._assert_runtime_composition(
+                        assembler, cur)
+            finally:
+                helper.__code__ = original_code
+                helper.__dict__.pop("_issue171_restore_code", None)
+                object.__setattr__(
+                    assembler, "active_profile", original_profile)
+
+    assert store.get_record(party_id) is None
+
+
 @pytest.mark.parametrize("forbidden_sql", (
     "COMMIT AND CHAIN",
     'SELECT "pg_catalog".U&"set\\005fconfig"('
@@ -2986,6 +3178,136 @@ def test_decision_semantic_seal_is_self_consistent_without_mutation():
     assert control_pattern[6][0] == "DATA"
     assert control_pattern[6][1][0] == "REGEX"
     _require_decision_semantics(selected)
+
+
+def test_semantic_traversal_shares_aliases_without_changing_stable_receipt():
+    from kernel import runtime_bundle as runtime_bundle_module
+
+    shared_value = {"semantic": ["alias"]}
+    aliased = (shared_value, shared_value)
+    shared_state = _freeze_semantic_value(aliased)
+    unshared_state = (
+        "SEQUENCE", tuple, aliased,
+        tuple(_freeze_semantic_value(shared_value) for _index in range(2)),
+    )
+
+    assert shared_state[3][0] is shared_state[3][1]
+    assert unshared_state[3][0] is not unshared_state[3][1]
+
+    module = types.ModuleType("_ofarm_semantic_traversal_test")
+    shared_selected = ((
+        "DATA", "test.semantic_alias", module, module.__name__, "alias",
+        aliased, shared_state,
+    ),)
+    unshared_selected = ((
+        "DATA", "test.semantic_alias", module, module.__name__, "alias",
+        aliased, unshared_state,
+    ),)
+    shared_document = _stable_decision_semantics_document(
+        shared_selected, config.PACKAGE_ROOT)
+    unshared_document = _stable_decision_semantics_document(
+        unshared_selected, config.PACKAGE_ROOT)
+
+    assert shared_document == unshared_document
+    assert (
+        _canonical_stable_semantic_bytes(shared_document)
+        == _canonical_stable_semantic_bytes(unshared_document)
+    )
+
+    def projection_probe(value=None):
+        return value
+
+    class ProjectionProbe:
+        def decide(self, value=None):
+            return value
+
+    traversal = _new_semantic_traversal()
+    function_state = runtime_bundle_module._semantic_function_state(
+        projection_probe, traversal)
+    class_state = runtime_bundle_module._semantic_class_state(
+        ProjectionProbe, traversal)
+    projection = ({}, {})
+    projected_function = runtime_bundle_module._stable_semantic_function_state(
+        function_state, config.PACKAGE_ROOT, projection)
+    projected_class = runtime_bundle_module._stable_semantic_class_state(
+        class_state, config.PACKAGE_ROOT, projection)
+    assert runtime_bundle_module._stable_semantic_function_state(
+        function_state, config.PACKAGE_ROOT, projection) is projected_function
+    assert runtime_bundle_module._stable_semantic_class_state(
+        class_state, config.PACKAGE_ROOT, projection) is projected_class
+
+    fresh_projection = ({}, {})
+    fresh_function = runtime_bundle_module._stable_semantic_function_state(
+        function_state, config.PACKAGE_ROOT, fresh_projection)
+    fresh_class = runtime_bundle_module._stable_semantic_class_state(
+        class_state, config.PACKAGE_ROOT, fresh_projection)
+    assert fresh_function is not projected_function
+    assert fresh_class is not projected_class
+    assert _canonical_stable_semantic_bytes(fresh_function) == \
+        _canonical_stable_semantic_bytes(projected_function)
+    assert _canonical_stable_semantic_bytes(fresh_class) == \
+        _canonical_stable_semantic_bytes(projected_class)
+
+
+def test_semantic_comparison_memo_keeps_container_identity_mode_distinct():
+    current_state = _freeze_semantic_value([])
+    prior_state = _freeze_semantic_value([])
+    traversal = _new_semantic_traversal()
+
+    assert _same_semantic_value(
+        current_state, prior_state,
+        require_container_identity=False,
+        traversal=traversal,
+    )
+    assert not _same_semantic_value(
+        current_state, prior_state,
+        require_container_identity=True,
+        traversal=traversal,
+    )
+
+
+def test_semantic_traversal_does_not_publish_partial_cycle_state():
+    cyclic = []
+    cyclic.append(cyclic)
+
+    with pytest.raises(RuntimeBundleError, match="sequence cycle"):
+        _freeze_semantic_value(cyclic)
+
+
+def test_semantic_traversal_factory_is_an_implementation_anchor():
+    from kernel import runtime_bundle as runtime_bundle_module
+
+    def forged_helper(*_args, **_kwargs):
+        return {}
+
+    for helper in (
+        runtime_bundle_module._new_semantic_traversal,
+        runtime_bundle_module._stable_code_constant,
+        runtime_bundle_module._stable_semantic_sequence_state,
+    ):
+        original = helper.__code__
+        try:
+            helper.__code__ = forged_helper.__code__
+            with pytest.raises(RuntimeBundleError, match="implementation changed"):
+                observed_decision_semantics_component(config.PACKAGE_ROOT)
+        finally:
+            helper.__code__ = original
+
+
+def test_semantic_proof_rechecks_mutation_after_restore():
+    from kernel import policy
+
+    selected = _capture_decision_semantics()
+    marker = "ISSUE171_REPEATED_SEMANTIC_MUTATION"
+    _require_decision_semantics(selected)
+    for _index in range(2):
+        policy.COMMIT_CLASS_TO_FAMILY[marker] = "HOSTILE_EVENT"
+        try:
+            with pytest.raises(RuntimeBundleError, match="decision semantic state"):
+                _require_decision_semantics(selected)
+        finally:
+            policy.COMMIT_CLASS_TO_FAMILY.pop(marker)
+        _require_decision_semantics(selected)
 
 
 def test_decision_semantic_seal_retains_exact_import_table_key():
