@@ -1265,8 +1265,13 @@ def _native_runtime_stat_signature(
     }
     if selected != current_selected \
             or kernel_mappings != native_runtime["kernelExecutableMappings"]:
+        added = sorted(current_selected - selected)
+        removed = sorted(selected - current_selected)
+        selected_kernel = native_runtime["kernelExecutableMappings"]
         raise RuntimeBundleError(
-            "live native executable mappings changed after selection")
+            "live native executable mappings changed after selection: "
+            f"added={added[:5]!r}, removed={removed[:5]!r}, "
+            f"kernelBefore={selected_kernel!r}, kernelAfter={kernel_mappings!r}")
     loader_stats = []
     for entry in native_runtime["loaderConfiguration"]["files"]:
         path = Path(entry["path"])
