@@ -76,7 +76,7 @@
       "sourcePath": "kernel/tests/test_conformance.py"
     },
     {
-      "nodeid": "kernel/tests/test_conformance.py::test_92_review_runtime_preloads_lazy_testclient_surfaces",
+      "nodeid": "kernel/tests/test_conformance.py::test_92_review_runtime_preloads_lazy_harness_surfaces",
       "sourceModule": "kernel.tests.test_conformance",
       "sourcePath": "kernel/tests/test_conformance.py"
     },
@@ -3411,7 +3411,7 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "3550ea477926ee40d9f3fbc71ba09785cc462cf7252049dd3387b85a292efe9f",
+  "entriesSha256": "af2e9f2ccdf4e43f9547de80da7542040988595f024edbad1d8ebe43259626b2",
   "entryCount": 682,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"

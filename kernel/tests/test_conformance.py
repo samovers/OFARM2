@@ -13,10 +13,12 @@ replay maps vocabulary 1:1 and asserts semantics exactly.
 from __future__ import annotations
 
 import copy
+import getpass
 import json
 import pickle
 import queue
 import uuid
+from encodings import utf_8_sig
 
 import anyio._backends._asyncio as anyio_asyncio
 import jsonschema
@@ -31,12 +33,14 @@ from kernel.contracts import canonical_json, sha256_of
 from kernel.runtime_bundle import sha256_bytes
 from .conftest import record_detail
 
-# The single-file platform evidence lane activates its session Store in test 01.
-# Starlette's TestClient otherwise imports these backend modules lazily in test
-# 93, after the RuntimeBundle import seal. Preload the exact pinned backend
-# during collection so the evidence lane and the complete suite share the same
-# zero-growth runtime boundary.
-_TEST_CLIENT_RUNTIME_PRELOAD = (pickle, queue, anyio_asyncio, pydantic_v1)
+# The platform evidence lane activates its session Store in test 01. Pytest's
+# tmp_path fixture, UTF-8-SIG adapter parsing, and Starlette's TestClient would
+# otherwise import these retained surfaces lazily after the RuntimeBundle seal.
+# Preload them during collection so both evidence lanes share one zero-growth
+# runtime boundary.
+_REVIEW_RUNTIME_PRELOAD = (
+    getpass, pickle, queue, utf_8_sig, anyio_asyncio, pydantic_v1,
+)
 
 FIXTURES = config.PACKAGE_ROOT / "conformance" / "fixtures" / "gate_sequencing"
 
@@ -855,10 +859,14 @@ def test_15_manifest_grounding(store):
 #     trace-linked.
 # =========================================================================
 
-def test_92_review_runtime_preloads_lazy_testclient_surfaces():
-    assert pickle in _TEST_CLIENT_RUNTIME_PRELOAD
+def test_92_review_runtime_preloads_lazy_harness_surfaces():
+    assert getpass in _REVIEW_RUNTIME_PRELOAD
+    assert getpass.termios.__name__ == "termios"
+    assert utf_8_sig in _REVIEW_RUNTIME_PRELOAD
+    assert utf_8_sig.getregentry().name == "utf-8-sig"
+    assert pickle in _REVIEW_RUNTIME_PRELOAD
     assert pickle.Pickler.__module__ == "_pickle"
-    assert pydantic_v1 in _TEST_CLIENT_RUNTIME_PRELOAD
+    assert pydantic_v1 in _REVIEW_RUNTIME_PRELOAD
     assert pydantic_v1.BaseModel.__module__ == "pydantic.v1.main"
 
 
