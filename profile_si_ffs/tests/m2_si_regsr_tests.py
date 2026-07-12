@@ -67,8 +67,8 @@ def _data_row(store, sid):
 def _governed_import_refusals(store):
     """Every GOVERNED_IMPORT/REFUSED gate-log row, oldest first — to prove a
     refused import leaves a governed audit trace (not a silent hand-built one)."""
-    with store.conn.cursor() as cur:
-        cur.execute(
+    with store.tx() as cur:
+        cur._execute_read(
             "SELECT outcome, reason_code, related_refs FROM kernel_gate_log "
             "WHERE gate = 'GOVERNED_IMPORT' AND outcome = 'REFUSED' ORDER BY entry_id")
         return cur.fetchall()
@@ -225,7 +225,7 @@ def test_p1_identical_reimport_repairs_missing_data_then_restarts(store):
     first = regsr.import_regsr_snapshot(store, art)
     sid = first["snapshotRef"]
     with store.serialized_tx() as cur:
-        cur.execute(
+        cur._execute_mutation(
             "DELETE FROM reference_snapshot_data WHERE snapshot_ref = %s "
             "AND data_family = %s", (sid, REGSR_DATA_FAMILY))
     replay = regsr.import_regsr_snapshot(store, art)

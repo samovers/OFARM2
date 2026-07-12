@@ -7,10 +7,12 @@ import importlib.machinery
 import json
 import mmap
 import os
+import re
 import sys
 import threading
 import types
 import uuid
+from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
 
@@ -42,10 +44,20 @@ from kernel.runtime_bundle import (
     RuntimeBundleError,
     RuntimeComponent,
     _build_live_runtime_bundle,
+    _capture_decision_semantics,
+    _locked_components,
+    _require_decision_semantics,
+    _require_runtime_bundle_integrity,
+    _require_runtime_environment_seal_integrity,
+    _runtime_environment_component_from_document,
+    _stable_runtime_environment_document,
+    _validate_stable_runtime_environment_document,
     assert_runtime_environment_compatible,
     build_runtime_bundle,
     database_runtime_environment_component,
+    observed_decision_semantics_component,
     require_current_runtime_catalog,
+    require_live_python_import_posture,
     runtime_bundle_from_persisted,
     sha256_bytes,
     strict_json_bytes,
@@ -401,6 +413,59 @@ def test_live_bundle_cannot_be_copied_or_replaced_as_live():
         replace(_live_test_bundle())
 
 
+def test_runtime_bundle_integrity_rejects_mutable_container_substitutions():
+    bundle = build_runtime_bundle(config.ACTIVE_PROFILE)
+
+    original_components = bundle.components
+    object.__setattr__(bundle, "components", list(original_components))
+    try:
+        with pytest.raises(RuntimeBundleError, match="field types"):
+            _require_runtime_bundle_integrity(bundle)
+    finally:
+        object.__setattr__(bundle, "components", original_components)
+
+    component = bundle.components[0]
+    original_bytes = component.canonical_bytes
+    object.__setattr__(component, "canonical_bytes", bytearray(original_bytes))
+    try:
+        with pytest.raises(RuntimeBundleError, match="role/ref/path"):
+            _require_runtime_bundle_integrity(bundle)
+    finally:
+        object.__setattr__(component, "canonical_bytes", original_bytes)
+
+    reference = bundle.selected_references[0]
+    original_sources = reference.source_identities
+    object.__setattr__(reference, "source_identities", list(original_sources))
+    try:
+        with pytest.raises(RuntimeBundleError, match="field types"):
+            _require_runtime_bundle_integrity(bundle)
+    finally:
+        object.__setattr__(reference, "source_identities", original_sources)
+
+
+def test_runtime_environment_seal_integrity_rejects_mutable_receipt_state():
+    bundle = _live_test_bundle()
+    seal = bundle._selection_environment_seal
+
+    original_semantics = seal.decision_semantics
+    object.__setattr__(seal, "decision_semantics", list(original_semantics))
+    try:
+        with pytest.raises(RuntimeBundleError, match="seal structure"):
+            _require_runtime_environment_seal_integrity(bundle, seal)
+    finally:
+        object.__setattr__(seal, "decision_semantics", original_semantics)
+
+    original_canonical = seal.decision_semantics_canonical
+    object.__setattr__(
+        seal, "decision_semantics_canonical", bytearray(original_canonical))
+    try:
+        with pytest.raises(RuntimeBundleError, match="seal structure"):
+            _require_runtime_environment_seal_integrity(bundle, seal)
+    finally:
+        object.__setattr__(
+            seal, "decision_semantics_canonical", original_canonical)
+
+
 def test_observed_runtime_environment_change_is_detected(monkeypatch):
     from kernel import runtime_bundle as runtime_bundle_module
 
@@ -409,6 +474,297 @@ def test_observed_runtime_environment_change_is_detected(monkeypatch):
         runtime_bundle_module.platform, "python_version", lambda: "0.0.0-hostile")
     with pytest.raises(RuntimeBundleError, match="observed interpreter"):
         assert_runtime_environment_compatible(bundle)
+
+
+def test_stable_runtime_identity_excludes_host_paths_and_inodes(monkeypatch):
+    live = require_live_python_import_posture(config.PACKAGE_ROOT)
+    retained_components = _locked_components(config.PACKAGE_ROOT)
+    stable = _stable_runtime_environment_document(live, retained_components)
+    relocated = copy.deepcopy(live)
+    physical_roots = [
+        live["importPosture"]["projectRoot"],
+        *live["importPosture"]["dependencyRoots"],
+        *(root["path"] for root in live["standardRuntime"]["roots"]),
+    ]
+    standard_root_paths = [
+        Path(root["path"]) for root in live["standardRuntime"]["roots"]
+    ]
+    standalone_paths = [
+        entry["resolvedPath"]
+        for entry in (
+            *live["standardRuntime"]["archives"],
+            *([live["standardRuntime"]["sharedLibrary"]]
+              if live["standardRuntime"]["sharedLibrary"] is not None else []),
+        )
+        if not any(
+            Path(entry["resolvedPath"]).is_relative_to(root)
+            for root in standard_root_paths
+        )
+    ]
+    physical_roots.extend(standalone_paths)
+    replacements = {
+        physical_roots[0]: "/relocated/ofarm-project",
+        **{
+            root: f"/relocated/ofarm-wheel-root-{index}"
+            for index, root in enumerate(
+                live["importPosture"]["dependencyRoots"])
+        },
+        **{
+            root["path"]: f"/relocated/ofarm-runtime-root-{index}"
+            for index, root in enumerate(live["standardRuntime"]["roots"])
+        },
+        **{
+            path: f"/relocated/ofarm-runtime-file-{index}"
+            for index, path in enumerate(standalone_paths)
+        },
+    }
+
+    def relocate(value):
+        if isinstance(value, dict):
+            return {key: relocate(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [relocate(item) for item in value]
+        if isinstance(value, str):
+            for old, new in sorted(
+                    replacements.items(), key=lambda item: len(item[0]), reverse=True):
+                if value == old:
+                    return new
+                if value.startswith(old + os.sep):
+                    return new + value[len(old):]
+        return value
+
+    relocated = relocate(relocated)
+    relocated["python"]["pycachePrefix"] = "/relocated/absent-pycache"
+    for index, image in enumerate(
+            relocated["nativeRuntime"]["actualNativeImages"]):
+        image["device"] = f"{index + 100:x}:{index + 200:x}"
+        image["inode"] += 1_000_000
+
+    assert _stable_runtime_environment_document(
+        relocated, retained_components) == stable
+    monkeypatch.setattr(Path, "exists", lambda _path: True)
+    assert _stable_runtime_environment_document(
+        relocated, retained_components) == stable
+    assert _runtime_environment_component_from_document(
+        relocated, retained_components) == \
+        _runtime_environment_component_from_document(
+            live, retained_components)
+    retained = canonical_json(stable)
+    assert all(root not in retained for root in physical_roots)
+    assert all(set(image) == {
+        "originLocator", "contentDigest", "byteLength", "classification",
+        "distributions",
+    } for image in stable["nativeRuntime"]["actualNativeImages"])
+    assert "pathImporterCache" not in stable["importIdentity"]
+
+    live_shared = live["standardRuntime"]["sharedLibrary"]
+    if (live_shared is not None
+            and any(image["resolvedPath"] == live_shared["resolvedPath"]
+                    for image in live["nativeRuntime"]["actualNativeImages"])):
+        stable_shared = stable["standardRuntime"]["sharedLibrary"]
+        retained_native = next(
+            image for image in stable["nativeRuntime"]["actualNativeImages"]
+            if image["originLocator"] == stable_shared["originLocator"])
+        assert (retained_native["contentDigest"], retained_native["byteLength"]) == (
+            stable_shared["contentDigest"], stable_shared["byteLength"])
+        forged_shared_native = copy.deepcopy(stable)
+        forged_native = next(
+            image for image in forged_shared_native["nativeRuntime"]
+            ["actualNativeImages"]
+            if image["originLocator"] == stable_shared["originLocator"])
+        forged_native["contentDigest"] = "sha256:" + "e" * 64
+        with pytest.raises(RuntimeBundleError, match="native image identity"):
+            _validate_stable_runtime_environment_document(
+                forged_shared_native, retained_components)
+
+    changed = copy.deepcopy(relocated)
+    module = next(
+        item for item in changed["importPosture"]["actualModules"]
+        if "contentDigest" in item)
+    module["contentDigest"] = "sha256:" + "f" * 64
+    with pytest.raises(RuntimeBundleError, match="classification identity"):
+        _stable_runtime_environment_document(changed, retained_components)
+
+    unowned = copy.deepcopy(relocated)
+    unowned_module = next(
+        item for item in unowned["importPosture"]["actualModules"]
+        if isinstance(item.get("origin"), str)
+        and item["origin"] not in {"built-in", "frozen"})
+    unowned_module["origin"] = "/Users/alice/private/unowned.py"
+    unowned_module["classification"] = "UNKNOWN"
+    unowned_module.pop("retainedComponent", None)
+    unowned_module.pop("distributions", None)
+    with pytest.raises(RuntimeBundleError, match="outside every retained root"):
+        _stable_runtime_environment_document(unowned, retained_components)
+
+    malformed_raw_documents = []
+    malformed_raw = copy.deepcopy(relocated)
+    malformed_raw["process"]["localeEnvironment"] = None
+    malformed_raw_documents.append(malformed_raw)
+    malformed_raw = copy.deepcopy(relocated)
+    malformed_raw["python"]["pycachePrefix"] = 7
+    malformed_raw_documents.append(malformed_raw)
+    malformed_raw = copy.deepcopy(relocated)
+    ambient_name = next(iter(malformed_raw["importPosture"]
+                             ["ambientEnvironment"]))
+    malformed_raw["importPosture"]["ambientEnvironment"][ambient_name] = 7
+    malformed_raw_documents.append(malformed_raw)
+    malformed_raw = copy.deepcopy(relocated)
+    malformed_raw["importPosture"]["startupCustomizationModules"] = [1]
+    malformed_raw_documents.append(malformed_raw)
+    malformed_raw = copy.deepcopy(relocated)
+    malformed_raw["importPosture"]["sysPath"][1]["index"] = True
+    malformed_raw_documents.append(malformed_raw)
+    for malformed_raw in malformed_raw_documents:
+        with pytest.raises(RuntimeBundleError, match="malformed"):
+            _stable_runtime_environment_document(
+                malformed_raw, retained_components)
+
+    malformed = copy.deepcopy(stable)
+    malformed["python"]["hostHome"] = "Users/alice/private-runtime"
+    with pytest.raises(RuntimeBundleError, match="Python identity"):
+        _validate_stable_runtime_environment_document(
+            malformed, retained_components)
+
+    unsafe = copy.deepcopy(stable)
+    unsafe["importIdentity"]["sysPath"][0]["rootLocator"] = \
+        "PROJECT_ROOT/../host-private"
+    with pytest.raises(RuntimeBundleError, match="locator"):
+        _validate_stable_runtime_environment_document(
+            unsafe, retained_components)
+
+    bool_index = copy.deepcopy(stable)
+    bool_index["importIdentity"]["sysPath"][1]["index"] = True
+    with pytest.raises(RuntimeBundleError, match="sys.path entry"):
+        _validate_stable_runtime_environment_document(
+            bool_index, retained_components)
+
+    forged_root = copy.deepcopy(stable)
+    forged_root["distributions"][0]["rootLocator"] = \
+        "LOCKED_WHEEL_ROOT[sha256:" + "e" * 64 + "]"
+    with pytest.raises(RuntimeBundleError, match="root content identity"):
+        _validate_stable_runtime_environment_document(
+            forged_root, retained_components)
+
+    forged_suffix = copy.deepcopy(stable)
+    distribution_module = next(
+        item for item in forged_suffix["importIdentity"]["actualModules"]
+        if item["classification"] == "RETAINED_DISTRIBUTION_FILE")
+    distribution_root = distribution_module["originLocator"].split("/", 1)[0]
+    distribution_module["originLocator"] = \
+        distribution_root + "/not-in-the-retained-wheel.py"
+    with pytest.raises(RuntimeBundleError, match="module classification"):
+        _validate_stable_runtime_environment_document(
+            forged_suffix, retained_components)
+
+    forged_namespace = copy.deepcopy(stable)
+    namespace_module = forged_namespace["importIdentity"]["actualModules"][0]
+    namespace_module.clear()
+    namespace_module.update({
+        "name": stable["importIdentity"]["actualModules"][0]["name"],
+        "loader": None,
+        "classification": "RETAINED_NAMESPACE",
+        "originLocator": None,
+        "packageSearchLocators": ["PROJECT_ROOT/not-retained"],
+        "specSearchLocators": [],
+    })
+    with pytest.raises(RuntimeBundleError, match="project locator"):
+        _validate_stable_runtime_environment_document(
+            forged_namespace, retained_components)
+
+    forged_root_namespace = copy.deepcopy(stable)
+    namespace_module = forged_root_namespace["importIdentity"]["actualModules"][0]
+    namespace_module.clear()
+    namespace_module.update({
+        "name": stable["importIdentity"]["actualModules"][0]["name"],
+        "loader": None,
+        "classification": "RETAINED_NAMESPACE",
+        "originLocator": None,
+        "packageSearchLocators": ["PROJECT_ROOT"],
+        "specSearchLocators": ["PROJECT_ROOT"],
+    })
+    with pytest.raises(RuntimeBundleError, match="classification identity"):
+        _validate_stable_runtime_environment_document(
+            forged_root_namespace, retained_components)
+
+    non_code = next(
+        component for component in retained_components
+        if component.role not in {
+            "RUNTIME_CODE", "RUNTIME_CATALOG_CODE", "PARSER_CODE"}
+        and component.repository_path.endswith(".json"))
+    forged_non_code_module = copy.deepcopy(stable)
+    module = forged_non_code_module["importIdentity"]["actualModules"][0]
+    module.clear()
+    module.update({
+        "name": stable["importIdentity"]["actualModules"][0]["name"],
+        "loader": "_frozen_importlib_external.SourceFileLoader",
+        "classification": "RETAINED_PROJECT_COMPONENT",
+        "originLocator": f"PROJECT_ROOT/{non_code.repository_path}",
+        "packageSearchLocators": [],
+        "specSearchLocators": [],
+        "contentDigest": non_code.content_digest,
+        "byteLength": len(non_code.canonical_bytes),
+        "retainedComponent": {
+            "role": non_code.role,
+            "logicalRef": non_code.logical_ref,
+        },
+    })
+    with pytest.raises(RuntimeBundleError, match="classification identity"):
+        _validate_stable_runtime_environment_document(
+            forged_non_code_module, retained_components)
+
+    if stable["standardRuntime"]["sharedLibrary"] is not None:
+        forged_standalone = copy.deepcopy(stable)
+        forged_standalone["standardRuntime"]["sharedLibrary"] \
+            ["originLocator"] += "/host-suffix"
+        with pytest.raises(RuntimeBundleError, match="content locator"):
+            _validate_stable_runtime_environment_document(
+                forged_standalone, retained_components)
+
+    if stable["nativeRuntime"]["actualNativeImages"]:
+        unknown_native = copy.deepcopy(stable)
+        unknown_native["nativeRuntime"]["actualNativeImages"][0] \
+            ["classification"] = "UNKNOWN"
+        with pytest.raises(RuntimeBundleError, match="native image identity"):
+            _validate_stable_runtime_environment_document(
+                unknown_native, retained_components)
+
+    auxiliary = next((
+        item for item in stable["importIdentity"]["actualModules"]
+        if item["classification"] == "REVIEWED_NATIVE_AUXILIARY"
+    ), None)
+    if auxiliary is not None:
+        forged_parent = copy.deepcopy(stable)
+        parent = next(
+            item for item in forged_parent["importIdentity"]["actualModules"]
+            if item["name"] == auxiliary["name"])
+        parent["retainedParent"]["originLocator"] = \
+            parent["retainedParent"]["originLocator"].split("/", 1)[0]
+        with pytest.raises(RuntimeBundleError, match="classification"):
+            _validate_stable_runtime_environment_document(
+                forged_parent, retained_components)
+
+        forged_parent_name = copy.deepcopy(stable)
+        parent = next(
+            item for item in forged_parent_name["importIdentity"]["actualModules"]
+            if item["name"] == auxiliary["name"])
+        parent["retainedParent"]["name"] = auxiliary["name"]
+        with pytest.raises(RuntimeBundleError, match="classification"):
+            _validate_stable_runtime_environment_document(
+                forged_parent_name, retained_components)
+
+    if stable["nativeRuntime"]["containerBoundary"] == "PINNED_READ_ONLY_IMAGE":
+        missing_loader = copy.deepcopy(stable)
+        missing_loader["nativeRuntime"]["loaderConfiguration"]["files"].clear()
+        with pytest.raises(RuntimeBundleError, match="native runtime inventory"):
+            _validate_stable_runtime_environment_document(
+                missing_loader, retained_components)
+
+        missing_native = copy.deepcopy(stable)
+        missing_native["nativeRuntime"]["actualNativeImages"].clear()
+        with pytest.raises(RuntimeBundleError, match="native runtime inventory"):
+            _validate_stable_runtime_environment_document(
+                missing_native, retained_components)
 
 
 def test_selection_to_activation_refuses_fake_retained_origin_module():
@@ -427,6 +783,115 @@ def test_selection_to_activation_refuses_fake_retained_origin_module():
             assert_runtime_environment_compatible(bundle)
     finally:
         del sys.modules[module_name]
+
+
+def test_import_posture_refuses_behavior_on_originless_project_namespace():
+    module_name = f"issue171_namespace_{uuid.uuid4().hex}"
+    module = types.ModuleType(module_name)
+    module.__package__ = module_name
+    module.__loader__ = None
+    module.__file__ = None
+    module.__path__ = [str(config.PACKAGE_ROOT)]
+    module.__spec__ = importlib.machinery.ModuleSpec(
+        module_name, loader=None, is_package=True)
+    module.__spec__.submodule_search_locations = [str(config.PACKAGE_ROOT)]
+    module.hostile_behavior = lambda: "unretained"
+    sys.modules[module_name] = module
+    try:
+        with pytest.raises(RuntimeBundleError, match="outside retained identities"):
+            require_live_python_import_posture(config.PACKAGE_ROOT)
+    finally:
+        del sys.modules[module_name]
+
+
+def test_live_seal_refuses_originless_namespace_metadata_mutation():
+    import tooling
+
+    bundle = _live_test_bundle()
+    original = tooling.__package__
+    tooling.__package__ = "hostile.tooling"
+    try:
+        with pytest.raises(RuntimeBundleError):
+            assert_runtime_environment_compatible(bundle)
+    finally:
+        tooling.__package__ = original
+
+
+def test_every_loaded_reviewed_originless_auxiliary_has_stable_state_identity():
+    from kernel import runtime_bundle as runtime_bundle_module
+
+    loaded = []
+    for name in runtime_bundle_module._REVIEWED_ORIGINLESS_AUXILIARY_MODULES:
+        module = sys.modules.get(name)
+        if module is None:
+            continue
+        loaded.append(name)
+        assert re.fullmatch(
+            r"sha256:[0-9a-f]{64}",
+            runtime_bundle_module._originless_module_state_digest(
+                name, module, config.PACKAGE_ROOT),
+        )
+    assert loaded
+
+
+def test_live_seal_refuses_originless_namespace_child_object_replacement():
+    import tooling
+    from tooling import runtime_bundle_lock
+
+    bundle = _live_test_bundle()
+    replacement = types.ModuleType(runtime_bundle_lock.__name__)
+    tooling.runtime_bundle_lock = replacement
+    try:
+        with pytest.raises(RuntimeBundleError):
+            assert_runtime_environment_compatible(bundle)
+    finally:
+        tooling.runtime_bundle_lock = runtime_bundle_lock
+
+
+def test_live_seal_refuses_originless_auxiliary_state_mutation():
+    import pyexpat
+
+    bundle = _live_test_bundle()
+    original = pyexpat.errors.XML_ERROR_ABORTED
+    pyexpat.errors.XML_ERROR_ABORTED = "hostile parsing outcome"
+    try:
+        with pytest.raises(RuntimeBundleError):
+            assert_runtime_environment_compatible(bundle)
+    finally:
+        pyexpat.errors.XML_ERROR_ABORTED = original
+
+
+def test_live_seal_refuses_pseudo_module_auxiliary_state_mutation():
+    import typing
+
+    class PseudoAuxiliary:
+        pass
+
+    pseudo = PseudoAuxiliary()
+    pseudo.__name__ = "typing.io"
+    pseudo.__package__ = None
+    pseudo.__doc__ = "reviewed pseudo-module probe"
+    pseudo.__loader__ = None
+    pseudo.__spec__ = None
+    pseudo.marker = "selected"
+    prior_module = sys.modules.get("typing.io")
+    prior_attribute = getattr(typing, "io", None)
+    sys.modules["typing.io"] = pseudo
+    typing.io = pseudo
+    try:
+        bundle = _live_test_bundle()
+        pseudo.marker = "mutated"
+        with pytest.raises(RuntimeBundleError):
+            assert_runtime_environment_compatible(bundle)
+    finally:
+        if prior_module is None:
+            del sys.modules["typing.io"]
+        else:
+            sys.modules["typing.io"] = prior_module
+        if prior_attribute is None:
+            del typing.io
+        else:
+            typing.io = prior_attribute
 
 
 def test_runtime_bundle_lock_rejects_missing_extra_duplicate_and_stale_entries():
@@ -657,6 +1122,164 @@ def test_ffsnaprave_frozen_cache_refuses_nested_in_place_poisoning():
     assert inspection["checks"] == [{
         "name": "nozzle", "status": "ORIGINAL"}]
     assert register.validity_windows(snapshot_ref, sticker) == [validity]
+
+
+def test_profile_register_frozen_methods_refuse_assignment_and_deletion():
+    cases = (
+        (context.ProductRegister(), "lookup_by_decision"),
+        (GerkLayer(), "lookup"),
+        (FFSNapraveRegister(), "match"),
+    )
+
+    for register, method_name in cases:
+        register.freeze()
+        with pytest.raises(AttributeError, match="immutable"):
+            setattr(register, method_name, lambda *_args: None)
+        with pytest.raises(AttributeError, match="cannot be deleted"):
+            delattr(register, method_name)
+        assert method_name not in vars(register)
+
+
+@pytest.mark.parametrize("register_kind", ("product", "gerk", "ffsnaprave"))
+def test_construction_seam_cache_cannot_be_upgraded_to_bundle_runtime(
+        fresh_env, register_kind):
+    from kernel.context import require_product_register_runtime_composition
+    from kernel.profiles.si_ffs.ffsnaprave_adapter import (
+        require_ffsnaprave_register_runtime_composition,
+    )
+    from kernel.profiles.si_ffs.gerk_adapter import (
+        require_gerk_layer_runtime_composition,
+    )
+
+    store, _pipeline, _outputs = fresh_env
+    bundle = store.runtime_bundle
+    if register_kind == "product":
+        register = context.ProductRegister()
+        register.register_artifact("referencesnapshot:test.forged-product", {
+            "products": [{"regsrCode": "FORGED", "name": "Forged"}],
+            "productDetails": [],
+        })
+        guard = require_product_register_runtime_composition
+    elif register_kind == "gerk":
+        register = GerkLayer()
+        register.register_artifact("referencesnapshot:test.forged-gerk", {
+            "features": [{
+                "gerkPid": "9999999", "area": "999", "rabaId": "FORGED",
+            }],
+        })
+        guard = require_gerk_layer_runtime_composition
+    else:
+        register = FFSNapraveRegister()
+        register.register_artifact("referencesnapshot:test.forged-ffsnaprave", {
+            "inspections": [{
+                "StevilkaZnaka": "FORGED",
+                "VeljavnostZnaka": "2099-12-31",
+            }],
+        })
+        guard = require_ffsnaprave_register_runtime_composition
+
+    register.freeze()
+    object.__setattr__(register, "runtime_bundle", bundle)
+    with pytest.raises(RuntimeBundleError, match="cache was not derived"):
+        with store.serialized_tx():
+            guard(store, register, "forged construction-seam upgrade")
+
+
+@pytest.mark.parametrize("register_kind", ("product", "gerk", "ffsnaprave"))
+def test_profile_register_callable_shadow_poisons_active_transaction(
+        fresh_env, register_kind):
+    from kernel.context import require_product_register_runtime_composition
+    from kernel.profiles.si_ffs.ffsnaprave_adapter import (
+        require_ffsnaprave_register_runtime_composition,
+    )
+    from kernel.profiles.si_ffs.gerk_adapter import (
+        require_gerk_layer_runtime_composition,
+    )
+
+    store, _pipeline, _outputs = fresh_env
+    bundle = store.runtime_bundle
+    bindings = context.SIReferenceBindings.from_descriptor(
+        bundle.descriptor, runtime_bundle=bundle)
+    cases = {
+        "product": (
+            context.ProductRegister(bindings, runtime_bundle=bundle),
+            "lookup_by_decision",
+            require_product_register_runtime_composition,
+        ),
+        "gerk": (
+            GerkLayer(runtime_bundle=bundle),
+            "lookup",
+            require_gerk_layer_runtime_composition,
+        ),
+        "ffsnaprave": (
+            FFSNapraveRegister(runtime_bundle=bundle),
+            "match",
+            require_ffsnaprave_register_runtime_composition,
+        ),
+    }
+    register, method_name, guard = cases[register_kind]
+
+    with pytest.raises(RuntimeBundleError, match="rollback-only"):
+        with store.serialized_tx():
+            object.__setattr__(register, method_name, lambda *_args: None)
+            try:
+                with pytest.raises(
+                        RuntimeBundleError, match="runtime composition changed"):
+                    guard(store, register, "hostile callable shadow")
+            finally:
+                object.__delattr__(register, method_name)
+
+
+def test_si_resolvers_and_evidence_attachment_reject_duck_and_subclass_registers(
+        fresh_env):
+    from kernel.profiles.si_ffs import si_bindings
+    from kernel.profiles.si_ffs.ffsnaprave_adapter import (
+        attach_inspection_evidence,
+    )
+
+    store, _pipeline, _outputs = fresh_env
+    bundle = store.runtime_bundle
+    bindings = context.SIReferenceBindings.from_descriptor(
+        bundle.descriptor, runtime_bundle=bundle)
+
+    class ProductRegisterSubclass(context.ProductRegister):
+        pass
+
+    class DuckGerkLayer:
+        runtime_bundle = bundle
+        _frozen = True
+
+        def lookup(self, *_args):
+            return None
+
+    class FFSNapraveRegisterSubclass(FFSNapraveRegister):
+        pass
+
+    product = ProductRegisterSubclass(bindings, runtime_bundle=bundle)
+    gerk = DuckGerkLayer()
+    ffsnaprave = FFSNapraveRegisterSubclass(runtime_bundle=bundle)
+
+    calls = (
+        lambda cur: si_bindings.resolve_product_authorisation(
+            store, cur, product, "FORGED-DECISION", "resource:test.forged",
+            created_by=demo.FARMER, evidence_ref=demo.ONBOARDING_EVIDENCE),
+        lambda cur: si_bindings.resolve_parcel(
+            store, cur, gerk, "9999999", "field:test.forged",
+            created_by=demo.FARMER, evidence_ref=demo.ONBOARDING_EVIDENCE),
+        lambda cur: si_bindings.resolve_equipment(
+            store, cur, ffsnaprave, "FORGED", "equipment:test.forged",
+            created_by=demo.FARMER, evidence_ref=demo.ONBOARDING_EVIDENCE),
+        lambda _cur: attach_inspection_evidence(
+            store, ffsnaprave,
+            "referencesnapshot:test.forged-ffsnaprave", "FORGED",
+            captured_by=demo.FARMER, farm_ref=demo.FARM),
+    )
+
+    for call in calls:
+        with pytest.raises(
+                RuntimeBundleError, match="runtime composition changed"):
+            with store.serialized_tx() as cur:
+                call(cur)
 
 
 def test_runtime_bundle_post_start_source_mutation_has_no_filesystem_fallback(
@@ -912,17 +1535,30 @@ def test_read_and_output_apis_receipt_exact_response_payloads(fresh_env):
         _assert_exact_http_receipt(response, store.runtime_bundle_digest)
 
 
-def test_health_and_api_refusals_receipt_exact_response_payloads(fresh_env):
-    from fastapi.testclient import TestClient
+def test_record_api_blocks_authority_instance_dispatch_shadow(fresh_env):
     from kernel.api import create_app
 
     store, _pipeline, _outputs = fresh_env
     app = create_app(store, oidc=None)
+    called = False
 
-    @app.get("/_test/unhandled-runtime-error")
-    def unhandled_runtime_error():
-        raise RuntimeError("hostile detail must never cross the HTTP boundary")
+    def hostile_allow(**_kwargs):
+        nonlocal called
+        called = True
+        raise AssertionError("hostile read-authority override executed")
 
+    with pytest.raises(AttributeError, match="runtime composition is immutable"):
+        app.state.outputs.authority.evaluate_read = hostile_allow
+    assert called is False
+
+
+def test_health_and_api_refusals_receipt_exact_response_payloads(fresh_env):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from kernel.api import _ReceiptedApplication, create_app
+
+    store, _pipeline, _outputs = fresh_env
+    app = create_app(store, oidc=None)
     client = TestClient(app)
     responses = [
         client.get("/health"),
@@ -945,9 +1581,13 @@ def test_health_and_api_refusals_receipt_exact_response_payloads(fresh_env):
             json={},
         ),
         client.get("/route-that-does-not-exist"),
+        client.get("/docs"),
+        client.get("/redoc"),
+        client.get("/openapi.json"),
+        client.get("/health/"),
     ]
     assert [response.status_code for response in responses] == \
-        [200, 401, 404, 403, 422, 404]
+        [200, 401, 404, 403, 422, 404, 404, 404, 404, 404]
     for response in responses:
         _assert_exact_http_receipt(response, store.runtime_bundle_digest)
 
@@ -965,20 +1605,188 @@ def test_health_and_api_refusals_receipt_exact_response_payloads(fresh_env):
         expect_content_length=False,
     )
 
-    unhandled = TestClient(
-        app, raise_server_exceptions=False).get(
-            "/_test/unhandled-runtime-error")
+    # Exercise the generic outer boundary with all hostile routes registered
+    # before wrapping.  The production create_app() graph is already sealed
+    # when returned and cannot expose a test-only, unbound construction seam.
+    hostile_inner = FastAPI(
+        openapi_url=None, docs_url=None, redoc_url=None,
+        swagger_ui_oauth2_redirect_url=None,
+    )
+
+    @hostile_inner.get("/_test/unhandled-runtime-error")
+    def unhandled_runtime_error():
+        raise RuntimeError("hostile detail must never cross the HTTP boundary")
+
+    @hostile_inner.get("/_test/unreceipted-response")
+    def unreceipted_response():
+        return {"forged": True}
+
+    hostile_boundary = _ReceiptedApplication(
+        hostile_inner, store.runtime_bundle_digest)
+    hostile_boundary._seal()
+    hostile_client = TestClient(
+        hostile_boundary, raise_server_exceptions=False)
+    unhandled = hostile_client.get("/_test/unhandled-runtime-error")
     assert unhandled.status_code == 500
     assert unhandled.json() == {"detail": "Internal Server Error"}
     assert b"hostile detail" not in unhandled.content
     _assert_exact_http_receipt(unhandled, store.runtime_bundle_digest)
+
+    unreceipted = hostile_client.get("/_test/unreceipted-response")
+    assert unreceipted.status_code == 500
+    assert unreceipted.json() == {"detail": "Internal Server Error"}
+    _assert_exact_http_receipt(unreceipted, store.runtime_bundle_digest)
+
+
+def test_http_graph_mutation_is_stopped_before_dispatch(fresh_env):
+    from fastapi.testclient import TestClient
+    from kernel.api import create_app
+
+    store, _pipeline, _outputs = fresh_env
+    app = create_app(store, oidc=None)
+    with pytest.raises(AttributeError):
+        app.get("/_test/late-route")(lambda: {"late": True})
+    client = TestClient(app, raise_server_exceptions=False)
+    baseline = client.get("/health")
+    assert baseline.status_code == 200
+
+    health_route = next(route for route in app.router.routes
+                        if getattr(route, "path", None) == "/health")
+    original_app = health_route.app
+    called = False
+
+    async def hostile_route(_scope, _receive, _send):
+        nonlocal called
+        called = True
+
+    health_route.app = hostile_route
+    try:
+        response = client.get("/health")
+    finally:
+        health_route.app = original_app
+    assert response.status_code == 500
+    assert called is False
+    _assert_exact_http_receipt(response, store.runtime_bundle_digest)
+
+    original_store = app.state.store
+    app.state.store = object()
+    try:
+        state_response = client.get("/health")
+    finally:
+        app.state.store = original_store
+    assert state_response.status_code == 500
+    assert state_response.json() == {"detail": "Internal Server Error"}
+    _assert_exact_http_receipt(state_response, store.runtime_bundle_digest)
+
+    with pytest.raises(TypeError):
+        app.dependency_overrides[app.state.get_principal] = lambda: demo.FARMER
+
+
+def test_http_graph_covers_regex_route_handle_router_stack_and_helpers(
+        fresh_env, monkeypatch):
+    from fastapi.testclient import TestClient
+    from kernel import api as api_runtime
+    from kernel.api import create_app
+
+    store, _pipeline, _outputs = fresh_env
+    app = create_app(store, oidc=None)
+    client = TestClient(app, raise_server_exceptions=False)
+    assert client.get("/health").status_code == 200
+    health_route = next(route for route in app.router.routes
+                        if getattr(route, "path", None) == "/health")
+
+    original_regex = health_route.path_regex
+
+    class BehavioralRegex:
+        pattern = original_regex.pattern
+        flags = original_regex.flags
+
+        def match(self, value):
+            return original_regex.match(value)
+
+    health_route.path_regex = BehavioralRegex()
+    try:
+        regex_response = client.get("/health")
+    finally:
+        health_route.path_regex = original_regex
+    assert regex_response.status_code == 500
+    _assert_exact_http_receipt(regex_response, store.runtime_bundle_digest)
+
+    route_type = type(health_route)
+    original_handle = route_type.handle
+    handle_called = False
+
+    async def hostile_handle(_self, _scope, _receive, _send):
+        nonlocal handle_called
+        handle_called = True
+
+    route_type.handle = hostile_handle
+    try:
+        handle_response = client.get("/health")
+    finally:
+        route_type.handle = original_handle
+    assert handle_response.status_code == 500
+    assert handle_called is False
+    _assert_exact_http_receipt(handle_response, store.runtime_bundle_digest)
+
+    original_router_stack = app.router.middleware_stack
+    stack_called = False
+
+    async def hostile_stack(_scope, _receive, _send):
+        nonlocal stack_called
+        stack_called = True
+
+    app.router.middleware_stack = hostile_stack
+    try:
+        stack_response = client.get("/health")
+    finally:
+        app.router.middleware_stack = original_router_stack
+    assert stack_response.status_code == 500
+    assert stack_called is False
+    _assert_exact_http_receipt(stack_response, store.runtime_bundle_digest)
+
+    original_helper = api_runtime._route_graph_state
+    monkeypatch.setattr(
+        api_runtime, "_route_graph_state", lambda _route: ("forged",))
+    helper_response = client.get("/health")
+    monkeypatch.setattr(api_runtime, "_route_graph_state", original_helper)
+    assert helper_response.status_code == 500
+    _assert_exact_http_receipt(helper_response, store.runtime_bundle_digest)
+
+
+def test_http_wire_validator_rejects_duplicate_terminal_body_messages():
+    from kernel.api import _validate_receipted_messages
+
+    bundle_digest = "sha256:" + "0" * 64
+    body = canonical_json({"forged": True}).encode("utf-8")
+    headers = [
+        (b"content-type", b"application/json; charset=utf-8"),
+        (b"content-length", str(len(body)).encode("ascii")),
+        (b"x-ofarm-runtime-bundle-digest",
+         bundle_digest.encode("ascii")),
+        (b"x-ofarm-receipt-payload-digest",
+         sha256_bytes(body).encode("ascii")),
+        (b"x-ofarm-receipt-canonicalization",
+         JSON_CANONICALIZATION.encode("ascii")),
+    ]
+
+    messages = (
+        {
+            "type": "http.response.start", "status": 200,
+            "headers": headers,
+        },
+        {"type": "http.response.body", "body": body},
+        {"type": "http.response.body", "body": body},
+    )
+    assert not _validate_receipted_messages(
+        messages, bundle_digest, "GET")
 
 
 def test_runtime_bundle_mixed_bundle_write_is_refused(fresh_env):
     store, _pipeline, _outputs = fresh_env
     bundle_b = _variant_bundle(store.runtime_bundle)
     with pytest.raises(RuntimeError, match="different RuntimeBundle"):
-        with store.tx() as cur:
+        with store.serialized_tx() as cur:
             store.insert_record(cur, {
                 "schemaVersion": "ofarm.party.v0.1",
                 "partyId": f"party:issue171.mixed.{uuid.uuid4().hex}",
@@ -992,7 +1800,7 @@ def test_runtime_bundle_mixed_bundle_write_is_refused(fresh_env):
 def test_runtime_bundle_persists_components_in_exact_storage_carriers(fresh_env):
     store, _pipeline, _outputs = fresh_env
     bundle = store.runtime_bundle
-    with store.conn.cursor() as cur:
+    with Store._raw_connection(store).cursor() as cur:
         cur.execute(
             "SELECT component_role, logical_ref, content_placement, "
             "global_content_digest, tenant_content_digest "
@@ -1029,8 +1837,8 @@ def test_runtime_bundle_persists_components_in_exact_storage_carriers(fresh_env)
 
 def test_runtime_bundle_install_refuses_autocommit_cursor(fresh_env):
     store, _pipeline, _outputs = fresh_env
-    with store.conn.cursor() as cur:
-        with pytest.raises(RuntimeError, match="one active database transaction"):
+    with Store._raw_connection(store).cursor() as cur:
+        with pytest.raises(RuntimeError, match="exact active governed cursor"):
             store.install_runtime_bundle(cur, store.runtime_bundle)
 
 
@@ -1052,7 +1860,7 @@ def test_runtime_bundle_each_transaction_restores_and_verifies_database_posture(
     )
 
     for setting_name, poison, retained_value in mutations:
-        poisoned = store.conn.execute(
+        poisoned = Store._raw_connection(store).execute(
             "SELECT pg_catalog.set_config(%s, %s, false) AS value",
             (setting_name, poison),
         ).fetchone()["value"]
@@ -1072,9 +1880,73 @@ def test_runtime_bundle_each_transaction_restores_and_verifies_database_posture(
         assert store.get_record(party_id) is not None
 
 
+def test_runtime_bundle_late_database_posture_drift_rolls_back_current_transaction(
+        fresh_env):
+    store, _pipeline, _outputs = fresh_env
+    mutations = (
+        ("TimeZone", "Europe/Ljubljana"),
+        ("DateStyle", "SQL, DMY"),
+        ("IntervalStyle", "iso_8601"),
+        ("search_path", "public"),
+        ("session_replication_role", "replica"),
+        ("standard_conforming_strings", "off"),
+        ("extra_float_digits", "0"),
+        ("bytea_output", "escape"),
+    )
+
+    for setting_name, poison in mutations:
+        party_id = f"party:issue171.late-db-posture.{uuid.uuid4().hex}"
+        with pytest.raises(
+                RuntimeError,
+                match="PostgreSQL transaction did not retain"):
+            with store.serialized_tx() as cur:
+                store.insert_record(cur, {
+                    "schemaVersion": "ofarm.party.v0.1",
+                    "partyId": party_id,
+                    "partyClass": "NATURAL_PERSON",
+                    "displayName": "Issue 171 late DB posture test (fictional)",
+                    "partyState": "ACTIVE",
+                    "recordedAt": context.now_iso(),
+                })
+                store._transaction_state.connection.execute(
+                    "SELECT pg_catalog.set_config(%s, %s, true) AS value",
+                    (setting_name, poison),
+                )
+        assert store.get_record(party_id) is None
+
+
+def test_runtime_bundle_same_transaction_ddl_rolls_back_before_commit(fresh_env):
+    store, _pipeline, _outputs = fresh_env
+    party_id = f"party:issue171.late-ddl.{uuid.uuid4().hex}"
+    relation = f"issue171_late_ddl_{uuid.uuid4().hex}"
+
+    with pytest.raises(SchemaGuardError, match="catalog-drifted"):
+        with store.serialized_tx() as cur:
+            store.insert_record(cur, {
+                "schemaVersion": "ofarm.party.v0.1",
+                "partyId": party_id,
+                "partyClass": "NATURAL_PERSON",
+                "displayName": "Issue 171 late DDL test (fictional)",
+                "partyState": "ACTIVE",
+                "recordedAt": context.now_iso(),
+            })
+            store._transaction_state.connection.execute(
+                sql.SQL("CREATE TABLE public.{} (value text)").format(
+                    sql.Identifier(relation))
+            )
+
+    assert store.get_record(party_id) is None
+    with store.tx() as cur:
+        cur._execute_read(
+            "SELECT pg_catalog.to_regclass(%s) AS relation",
+            (f"public.{relation}",),
+        )
+        assert cur.fetchone()["relation"] is None
+
+
 def test_runtime_bundle_transaction_refuses_temporary_schema_shadow(fresh_env):
     store, _pipeline, _outputs = fresh_env
-    store.conn.execute(
+    Store._raw_connection(store).execute(
         "CREATE TEMP TABLE kernel_record "
         "(LIKE public.kernel_record INCLUDING ALL)"
     )
@@ -1082,13 +1954,14 @@ def test_runtime_bundle_transaction_refuses_temporary_schema_shadow(fresh_env):
         with pytest.raises(SchemaGuardError, match="temporary schema"):
             store.get_record(demo.FARMER)
     finally:
-        store.conn.execute("DROP TABLE pg_temp.kernel_record")
+        Store._raw_connection(store).execute(
+            "DROP TABLE pg_temp.kernel_record")
 
 
 def test_runtime_bundle_outer_transaction_rechecks_live_catalog(fresh_env):
     store, _pipeline, _outputs = fresh_env
     entered = False
-    store.conn.execute(
+    Store._raw_connection(store).execute(
         "CREATE AGGREGATE public.hostile_runtime_sum(integer) "
         "(SFUNC = pg_catalog.int4pl, STYPE = integer, INITCOND = '0')"
     )
@@ -1098,10 +1971,10 @@ def test_runtime_bundle_outer_transaction_rechecks_live_catalog(fresh_env):
                 entered = True
         assert entered is False
     finally:
-        store.conn.execute(
+        Store._raw_connection(store).execute(
             "DROP AGGREGATE public.hostile_runtime_sum(integer)")
     with store.tx() as cur:
-        cur.execute("SELECT 1 AS ok")
+        cur._execute_read("SELECT 1 AS ok")
         assert cur.fetchone()["ok"] == 1
 
 
@@ -1109,73 +1982,1207 @@ def test_runtime_bundle_outer_transaction_refuses_ambient_connection_state(
         fresh_env):
     store, _pipeline, _outputs = fresh_env
 
-    store.conn.execute("BEGIN ISOLATION LEVEL REPEATABLE READ")
+    Store._raw_connection(store).execute(
+        "BEGIN ISOLATION LEVEL REPEATABLE READ")
     try:
         with pytest.raises(RuntimeError, match="ambient transactions are forbidden"):
             store.get_record(demo.FARMER)
     finally:
-        store.conn.rollback()
+        Store._raw_connection(store).rollback()
 
-    store.conn.autocommit = False
+    Store._raw_connection(store).autocommit = False
     try:
         with pytest.raises(RuntimeError, match="autocommit connection to be IDLE"):
             store.get_record(demo.FARMER)
     finally:
-        store.conn.autocommit = True
+        Store._raw_connection(store).autocommit = True
 
 
-def test_runtime_bundle_outer_transaction_rechecks_live_python_posture(
-        fresh_env, monkeypatch):
+def test_governed_transaction_requires_exact_nested_ownership(fresh_env):
     store, _pipeline, _outputs = fresh_env
-    from kernel import runtime_bundle as runtime_bundle_module
-    original = runtime_bundle_module.require_store_runtime_bundle
-    calls = []
 
-    def traced(store_arg, bundle_arg, consumer):
-        calls.append((store_arg, bundle_arg, consumer))
-        return original(store_arg, bundle_arg, consumer)
+    for forged_depth in (True, "1", 1):
+        store._transaction_state.depth = forged_depth
+        try:
+            expected = ("exact integer" if forged_depth != 1
+                        or type(forged_depth) is not int else "ownership")
+            with pytest.raises(RuntimeError, match=expected):
+                with Store.tx(store):
+                    pass
+        finally:
+            del store._transaction_state.depth
 
-    monkeypatch.setattr(
-        runtime_bundle_module, "require_store_runtime_bundle", traced)
-    with store.tx() as cur:
-        cur.execute("SELECT 1 AS ok")
-        assert cur.fetchone()["ok"] == 1
-    assert calls == [
-        (store, store.runtime_bundle, "Store governed transaction"),
-        (store, store.runtime_bundle, "Store governed transaction"),
-    ]
+    Store._raw_connection(store).execute("BEGIN")
+    store._transaction_state.depth = 1
+    try:
+        with pytest.raises(RuntimeError, match="ownership"):
+            with Store.tx(store):
+                pass
+    finally:
+        del store._transaction_state.depth
+        Store._raw_connection(store).rollback()
 
 
-def test_runtime_bundle_late_python_drift_rolls_back_current_transaction(
-        fresh_env, monkeypatch):
+def test_governed_transaction_valid_nesting_and_cleanup(fresh_env):
     store, _pipeline, _outputs = fresh_env
-    from kernel import runtime_bundle as runtime_bundle_module
-    original = runtime_bundle_module.require_store_runtime_bundle
-    calls = 0
+    with Store.tx(store) as outer:
+        outer._execute_read("SELECT 1 AS outer_value")
+        assert outer.fetchone()["outer_value"] == 1
+        with Store.tx(store) as inner:
+            inner._execute_read("SELECT 2 AS inner_value")
+            assert inner.fetchone()["inner_value"] == 2
 
-    def fail_after_body(store_arg, bundle_arg, consumer):
-        nonlocal calls
-        calls += 1
-        if calls == 2:
-            raise RuntimeBundleError(
-                "late import posture changed before governed commit")
-        return original(store_arg, bundle_arg, consumer)
+    class BodyFailure(Exception):
+        pass
 
-    monkeypatch.setattr(
-        runtime_bundle_module, "require_store_runtime_bundle", fail_after_body)
-    party_id = f"party:issue171.late-import.{uuid.uuid4().hex}"
-    with pytest.raises(RuntimeBundleError, match="late import posture"):
+    with pytest.raises(BodyFailure):
+        with Store.serialized_tx(store):
+            raise BodyFailure
+    assert Store._transaction_depth(store) == 0
+    assert store._active_transaction_token is None
+    assert not any(hasattr(store._transaction_state, name)
+                   for name in (
+                       "token", "ownerThread", "connection",
+                       "integrity",
+                   ))
+    assert store._active_transaction_integrity is None
+
+
+def test_caught_runtime_integrity_failure_poison_rolls_back_transaction(
+        fresh_env):
+    from kernel import policy
+
+    store, pipeline, _outputs = fresh_env
+    party_id = f"party:issue171.rollback-only.{uuid.uuid4().hex}"
+    marker = "ISSUE171_CAUGHT_SEMANTIC_MUTATION"
+
+    with pytest.raises(RuntimeBundleError, match="rollback-only"):
         with store.serialized_tx() as cur:
             store.insert_record(cur, {
                 "schemaVersion": "ofarm.party.v0.1",
                 "partyId": party_id,
                 "partyClass": "NATURAL_PERSON",
-                "displayName": "Issue 171 late import rollback test (fictional)",
+                "displayName": "Issue 171 rollback-only test (fictional)",
                 "partyState": "ACTIVE",
                 "recordedAt": context.now_iso(),
             })
-    assert calls == 2
+            policy.COMMIT_CLASS_TO_FAMILY[marker] = "HOSTILE_EVENT"
+            try:
+                with pytest.raises(
+                        RuntimeBundleError, match="decision semantic state"):
+                    GatePipeline._assert_runtime_composition(pipeline)
+            finally:
+                policy.COMMIT_CLASS_TO_FAMILY.pop(marker, None)
+            latch = store._active_transaction_integrity
+            with pytest.raises(AttributeError, match="one-way"):
+                latch.poisoned = False
+            # Replacing the public thread-local pointer cannot replace or
+            # clear the Store-retained one-way latch.
+            store._transaction_state.integrity = object()
+
     assert store.get_record(party_id) is None
+
+
+@pytest.mark.parametrize("forbidden_sql", (
+    "COMMIT AND CHAIN",
+    'SELECT "pg_catalog".U&"set\\005fconfig"('
+    "'session_replication_role', 'replica', true)",
+))
+def test_governed_cursor_refuses_caught_commit_and_rolls_back(
+        fresh_env, forbidden_sql):
+    store, _pipeline, _outputs = fresh_env
+    party_id = f"party:issue171.cursor-commit.{uuid.uuid4().hex}"
+
+    with pytest.raises(RuntimeBundleError, match="rollback-only"):
+        with store.serialized_tx() as cur:
+            store.insert_record(cur, {
+                "schemaVersion": "ofarm.party.v0.1",
+                "partyId": party_id,
+                "partyClass": "NATURAL_PERSON",
+                "displayName": "Issue 171 cursor COMMIT test (fictional)",
+                "partyState": "ACTIVE",
+                "recordedAt": context.now_iso(),
+            })
+            with pytest.raises(RuntimeError, match="public governed cursor SQL"):
+                cur.execute(forbidden_sql)
+
+    assert store.get_record(party_id) is None
+
+
+@pytest.mark.parametrize("forbidden_sql", ("COMMIT", "COMMIT AND CHAIN"))
+def test_governed_cursor_self_restoring_statement_guard_cannot_commit(
+        fresh_env, forbidden_sql):
+    store, _pipeline, _outputs = fresh_env
+    party_id = f"party:issue171.cursor-self-restore.{uuid.uuid4().hex}"
+    hostile_guard_called = False
+
+    with pytest.raises(RuntimeBundleError, match="rollback-only"):
+        with store.serialized_tx() as cur:
+            store.insert_record(cur, {
+                "schemaVersion": "ofarm.party.v0.1",
+                "partyId": party_id,
+                "partyClass": "NATURAL_PERSON",
+                "displayName": "Issue 171 cursor dispatch test (fictional)",
+                "partyState": "ACTIVE",
+                "recordedAt": context.now_iso(),
+            })
+            cursor_type = type(cur)
+            retained_guard = cursor_type._require_statement
+
+            def restore_then_accept(_self, query, *, allow_mutation=False):
+                nonlocal hostile_guard_called
+                hostile_guard_called = True
+                cursor_type._require_statement = retained_guard
+                return query
+
+            cursor_type._require_statement = restore_then_accept
+            try:
+                with pytest.raises(RuntimeError, match="public governed cursor SQL"):
+                    cur.execute(forbidden_sql)
+                assert hostile_guard_called is False
+            finally:
+                cursor_type._require_statement = retained_guard
+
+    assert store.get_record(party_id) is None
+
+
+def test_governed_cursor_transient_mutation_replacement_cannot_skip_write(
+        fresh_env):
+    store, _pipeline, _outputs = fresh_env
+    first_id = f"party:issue171.cursor-transient-first.{uuid.uuid4().hex}"
+    skipped_id = f"party:issue171.cursor-transient-skip.{uuid.uuid4().hex}"
+    replacement_called = False
+    returned_id = None
+
+    with pytest.raises(RuntimeBundleError, match="rollback-only"):
+        with store.serialized_tx() as cur:
+            store.insert_record(cur, {
+                "schemaVersion": "ofarm.party.v0.1",
+                "partyId": first_id,
+                "partyClass": "NATURAL_PERSON",
+                "displayName": "Issue 171 transient cursor first write (fictional)",
+                "partyState": "ACTIVE",
+                "recordedAt": context.now_iso(),
+            })
+            cursor_type = type(cur)
+            retained_mutation = cursor_type._execute_mutation
+
+            def restore_then_skip(self, *_args, **_kwargs):
+                nonlocal replacement_called
+                replacement_called = True
+                cursor_type._execute_mutation = retained_mutation
+                return self
+
+            cursor_type._execute_mutation = restore_then_skip
+            try:
+                with pytest.raises(
+                        RuntimeError, match="exact active governed cursor"):
+                    returned_id = store.insert_record(cur, {
+                        "schemaVersion": "ofarm.party.v0.1",
+                        "partyId": skipped_id,
+                        "partyClass": "NATURAL_PERSON",
+                        "displayName": (
+                            "Issue 171 transient cursor skipped write (fictional)"),
+                        "partyState": "ACTIVE",
+                        "recordedAt": context.now_iso(),
+                    })
+            finally:
+                cursor_type._execute_mutation = retained_mutation
+
+    assert replacement_called is False
+    assert returned_id is None
+    assert store.get_record(first_id) is None
+    assert store.get_record(skipped_id) is None
+
+
+def test_reference_resolver_rejects_noop_cursor_and_poisons_transaction(
+        fresh_env):
+    from kernel.verification import ReferenceResolver
+
+    store, _pipeline, _outputs = fresh_env
+    party_id = f"party:issue171.fake-resolver-cursor.{uuid.uuid4().hex}"
+
+    class NoOpCursor:
+        calls = 0
+
+        def execute(self, *_args, **_kwargs):
+            self.calls += 1
+            return self
+
+    fake_cursor = NoOpCursor()
+    with pytest.raises(RuntimeBundleError, match="rollback-only"):
+        with store.serialized_tx() as cur:
+            store.insert_record(cur, {
+                "schemaVersion": "ofarm.party.v0.1",
+                "partyId": party_id,
+                "partyClass": "NATURAL_PERSON",
+                "displayName": "Issue 171 fake cursor test (fictional)",
+                "partyState": "ACTIVE",
+                "recordedAt": context.now_iso(),
+            })
+            with pytest.raises(RuntimeError, match="exact active governed cursor"):
+                ReferenceResolver(store).verify(
+                    fake_cursor,
+                    query_value="1234567",
+                    snapshot_prefix=context.GERK_SNAPSHOT_PREFIX,
+                    lookup=lambda _snapshot, _query: None,
+                    profile_ref=config.ACTIVE_PROFILE.profile_ref,
+                    authority_ref="party:si.mkgp",
+                    jurisdiction_ref="jurisdiction:SI",
+                    lookup_runtime_bundle=store.runtime_bundle,
+                )
+            assert fake_cursor.calls == 0
+
+    assert store.get_record(party_id) is None
+
+
+def test_authority_evaluator_requires_active_serialized_cursor(fresh_env):
+    from kernel.authority import AuthorityEvaluator
+
+    store, _pipeline, _outputs = fresh_env
+    evaluator = AuthorityEvaluator(store)
+    request = {
+        "acting_party_ref": demo.FARMER,
+        "action_class": "RECEIVE_READ_DATA",
+        "action_stage": "QUERY_READ",
+        "scope": {"scopeType": "FARM", "scopeRef": demo.FARM},
+    }
+
+    with pytest.raises(RuntimeError, match="exact active governed cursor"):
+        evaluator.evaluate(cur=None, **request)
+    with pytest.raises(RuntimeBundleError, match="rollback-only"):
+        with store.tx() as cur:
+            with pytest.raises(RuntimeError, match="active serialized cursor"):
+                evaluator.evaluate(cur=cur, **request)
+    with store.serialized_tx() as cur:
+        decision = evaluator.evaluate(cur=cur, **request)
+        assert decision.outcome in {"ALLOW", "DENY"}
+
+
+def test_authority_evaluator_has_no_instance_dispatch_shadow_seam():
+    from kernel.authority import AuthorityEvaluator
+
+    evaluator = object.__new__(AuthorityEvaluator)
+    assert not hasattr(evaluator, "__dict__")
+    for name in (
+        "_party",
+        "_role_assignments",
+        "_matching_grants",
+        "_matching_delegations",
+    ):
+        with pytest.raises(AttributeError):
+            object.__setattr__(evaluator, name, lambda *_args: None)
+
+
+def test_plain_transaction_cannot_mutate_or_upgrade_to_writer(fresh_env):
+    store, _pipeline, _outputs = fresh_env
+
+    with pytest.raises(RuntimeBundleError, match="rollback-only"):
+        with store.tx() as cur:
+            with pytest.raises(RuntimeError, match="active serialized cursor"):
+                cur._execute_mutation("SELECT 1")
+
+    with store.tx() as cur:
+        with pytest.raises(RuntimeError, match="cannot be upgraded"):
+            with store.serialized_tx():
+                pass
+        cur._execute_read("SELECT 1 AS ok")
+        assert cur.fetchone()["ok"] == 1
+
+
+def test_closed_nested_cursor_cannot_authorize_inside_live_outer_transaction(
+        fresh_env):
+    from kernel.authority import AuthorityEvaluator
+
+    store, _pipeline, _outputs = fresh_env
+    evaluator = AuthorityEvaluator(store)
+    with pytest.raises(RuntimeBundleError, match="rollback-only"):
+        with store.serialized_tx():
+            with store.tx() as escaped:
+                escaped._execute_read("SELECT 1 AS ok")
+                assert escaped.fetchone()["ok"] == 1
+            with pytest.raises(RuntimeError, match="escaped its transaction"):
+                evaluator.evaluate(
+                    cur=escaped,
+                    acting_party_ref=demo.FARMER,
+                    action_class="RECEIVE_READ_DATA",
+                    action_stage="QUERY_READ",
+                    scope={"scopeType": "FARM", "scopeRef": demo.FARM},
+                )
+
+
+def test_authority_decision_is_immutable_and_detects_payload_mutation():
+    from kernel.authority import (
+        AuthorityDecision,
+        authority_decision_allowed,
+    )
+
+    problems = []
+    request = {"requestId": "authzreq:test"}
+    result = {
+        "decisionOutcome": "DENY",
+        "finalActionPermitted": False,
+        "humanApprovalRequired": False,
+        "problems": problems,
+    }
+    trace = {"decisionOutcome": "DENY"}
+    decision = AuthorityDecision("DENY", request, result, trace, problems)
+    assert authority_decision_allowed(decision) is False
+    with pytest.raises(AttributeError):
+        decision.outcome = "ALLOW"
+    with pytest.raises(TypeError, match="runtime type is immutable"):
+        AuthorityDecision.allowed = property(lambda _self: True)
+    result["finalActionPermitted"] = True
+    with pytest.raises(RuntimeError, match="state changed"):
+        authority_decision_allowed(decision)
+
+
+@pytest.mark.parametrize(("field", "value", "error"), [
+    ("action_stage", "UNREVIEWED_FINALIZATION", ValueError),
+    ("revocation_disposition", "ALLOW", ValueError),
+    ("scope", {"scopeType": "FARM", "scopeRef": demo.FARM, "extra": True},
+     TypeError),
+])
+def test_authority_evaluator_rejects_unclosed_inputs(
+        fresh_env, field, value, error):
+    from kernel.authority import AuthorityEvaluator
+
+    store, _pipeline, _outputs = fresh_env
+    evaluator = AuthorityEvaluator(store)
+    request = {
+        "acting_party_ref": demo.FARMER,
+        "action_class": "RECEIVE_READ_DATA",
+        "action_stage": "QUERY_READ",
+        "scope": {"scopeType": "FARM", "scopeRef": demo.FARM},
+        "revocation_disposition": "DENY",
+    }
+    request[field] = value
+    with store.serialized_tx() as cur:
+        with pytest.raises(error):
+            evaluator.evaluate(cur=cur, **request)
+
+
+def test_reference_resolver_rejects_cursor_from_another_store(fresh_env):
+    from kernel.verification import ReferenceResolver
+
+    store, _pipeline, _outputs = fresh_env
+    other_store = Store(dsn=store.dsn)
+    party_id = f"party:issue171.foreign-resolver-cursor.{uuid.uuid4().hex}"
+    try:
+        context.bootstrap_for_descriptor(other_store, config.ACTIVE_PROFILE)
+        with pytest.raises(RuntimeBundleError, match="rollback-only"):
+            with store.serialized_tx() as cur:
+                store.insert_record(cur, {
+                    "schemaVersion": "ofarm.party.v0.1",
+                    "partyId": party_id,
+                    "partyClass": "NATURAL_PERSON",
+                    "displayName": "Issue 171 foreign cursor test (fictional)",
+                    "partyState": "ACTIVE",
+                    "recordedAt": context.now_iso(),
+                })
+                with other_store.tx() as foreign_cur:
+                    with pytest.raises(
+                            RuntimeError, match="this Store's exact active"):
+                        ReferenceResolver(store).verify(
+                            foreign_cur,
+                            query_value="1234567",
+                            snapshot_prefix=context.GERK_SNAPSHOT_PREFIX,
+                            lookup=lambda _snapshot, _query: None,
+                            profile_ref=config.ACTIVE_PROFILE.profile_ref,
+                            authority_ref="party:si.mkgp",
+                            jurisdiction_ref="jurisdiction:SI",
+                            lookup_runtime_bundle=store.runtime_bundle,
+                        )
+    finally:
+        other_store.close()
+
+    assert store.get_record(party_id) is None
+
+
+def test_governed_transaction_hides_direct_connection_commit(fresh_env):
+    store, _pipeline, _outputs = fresh_env
+    party_id = f"party:issue171.connection-commit.{uuid.uuid4().hex}"
+    retained_connection = store.conn
+
+    with pytest.raises(RuntimeBundleError, match="rollback-only"):
+        with store.serialized_tx() as cur:
+            store.insert_record(cur, {
+                "schemaVersion": "ofarm.party.v0.1",
+                "partyId": party_id,
+                "partyClass": "NATURAL_PERSON",
+                "displayName": "Issue 171 connection COMMIT test (fictional)",
+                "partyState": "ACTIVE",
+                "recordedAt": context.now_iso(),
+            })
+            store._transaction_state.depth = 0
+            with pytest.raises(RuntimeError, match="public Store connection SQL"):
+                retained_connection.execute("COMMIT")
+
+    assert store.get_record(party_id) is None
+
+
+def test_governed_cursor_does_not_leak_raw_command_channels(fresh_env):
+    store, _pipeline, _outputs = fresh_env
+
+    with store.tx() as cur:
+        assert iter(cur) is cur
+        cur._execute_read("SELECT 1 AS value")
+        assert next(cur)["value"] == 1
+        with pytest.raises(AttributeError):
+            _ = cur.connection.info.pgconn
+        with pytest.raises(AttributeError):
+            _ = cur.connection.pgconn
+
+
+def test_public_store_sql_facades_are_disabled(fresh_env):
+    store, _pipeline, _outputs = fresh_env
+    direct_id = f"party:issue171.direct-sql.{uuid.uuid4().hex}"
+    statement = (
+        "INSERT INTO kernel_record "
+        "(record_id, record_kind, lane, schema_hash, payload, payload_sha256, "
+        "tenant_ref, runtime_bundle_digest) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
+    )
+    params = (
+        direct_id, "ofarm.party.v0.1", "canonical", "sha256:" + "0" * 64,
+        Jsonb({}), "sha256:" + "0" * 64, config.TENANT_REF,
+        store.runtime_bundle_digest,
+    )
+
+    with pytest.raises(RuntimeError, match="public Store connection SQL"):
+        store.conn.execute(statement, params)
+    with pytest.raises(RuntimeBundleError, match="rollback-only"):
+        with store.tx() as cur:
+            with pytest.raises(RuntimeError, match="public governed cursor SQL"):
+                cur.execute(statement, params)
+    assert store.get_record(direct_id) is None
+
+
+def test_governed_cursor_rejects_stateful_composable_without_rendering(fresh_env):
+    store, _pipeline, _outputs = fresh_env
+
+    class FlippingComposable(sql.Composable):
+        def __init__(self):
+            super().__init__(None)
+            self.render_count = 0
+
+        def as_bytes(self, _context=None):
+            self.render_count += 1
+            return b"SELECT 1 AS value" if self.render_count == 1 else b"COMMIT"
+
+    statement = FlippingComposable()
+    with pytest.raises(RuntimeBundleError, match="rollback-only"):
+        with store.tx() as cur:
+            with pytest.raises(TypeError, match="exact immutable"):
+                cur._execute_read(statement)
+    assert statement.render_count == 0
+
+
+def test_governed_savepoint_cannot_escape_parent_transaction(fresh_env):
+    store, _pipeline, _outputs = fresh_env
+
+    with store.tx() as cur:
+        escaped = cur.connection.transaction()
+    with pytest.raises(RuntimeError, match="ownership"):
+        with escaped:
+            pass
+
+
+def test_governed_cursor_cannot_escape_parent_transaction(fresh_env):
+    store, _pipeline, _outputs = fresh_env
+
+    with store.tx() as escaped:
+        escaped._execute_read("SELECT 1 AS value")
+        assert escaped.fetchone()["value"] == 1
+    with pytest.raises(RuntimeError, match="ownership"):
+        escaped._execute_read("SELECT 2 AS value")
+
+
+def test_governed_savepoint_preserves_database_error_and_recovers(fresh_env):
+    store, _pipeline, _outputs = fresh_env
+
+    with store.tx() as cur:
+        with pytest.raises(psycopg.errors.DivisionByZero):
+            with cur.connection.transaction():
+                cur._execute_read("SELECT 1 / 0")
+        cur._execute_read("SELECT 1 AS value")
+        assert cur.fetchone()["value"] == 1
+
+
+def test_public_maintenance_cursor_is_not_exposed(fresh_env):
+    store, _pipeline, _outputs = fresh_env
+    with pytest.raises(RuntimeError, match="public Store cursors are forbidden"):
+        store.conn.cursor()
+    with pytest.raises(RuntimeError, match="public Store connection SQL"):
+        store.conn.execute("SELECT pg_catalog.pg_notify('issue171', 'x')")
+
+
+def test_runtime_bundle_outer_transaction_rechecks_live_python_posture(
+        fresh_env):
+    store, _pipeline, _outputs = fresh_env
+    original_codes = store._runtime_posture_verifier_codes
+    try:
+        with pytest.raises(RuntimeError, match="posture verifier changed"):
+            with store.tx() as cur:
+                cur._execute_read("SELECT 1 AS ok")
+                assert cur.fetchone()["ok"] == 1
+                object.__setattr__(
+                    store, "_runtime_posture_verifier_codes",
+                    (object(), *original_codes[1:]))
+    finally:
+        object.__setattr__(
+            store, "_runtime_posture_verifier_codes", original_codes)
+
+
+def test_runtime_bundle_refuses_paired_posture_verifier_replacement(fresh_env):
+    store, _pipeline, _outputs = fresh_env
+    original_verifiers = store._runtime_posture_verifiers
+    original_codes = store._runtime_posture_verifier_codes
+
+    def no_op_verifier(*_args, **_kwargs):
+        return None
+
+    replacements = (no_op_verifier,) * len(original_verifiers)
+    try:
+        object.__setattr__(store, "_runtime_posture_verifiers", replacements)
+        object.__setattr__(
+            store, "_runtime_posture_verifier_codes",
+            tuple(item.__code__ for item in replacements),
+        )
+        with pytest.raises(RuntimeError, match="posture verifier changed"):
+            store.get_record(demo.FARMER)
+    finally:
+        object.__setattr__(
+            store, "_runtime_posture_verifiers", original_verifiers)
+        object.__setattr__(
+            store, "_runtime_posture_verifier_codes", original_codes)
+
+
+def test_store_refuses_class_level_guard_replacement(fresh_env):
+    store, _pipeline, _outputs = fresh_env
+    original = Store._require_transaction_python_posture
+    Store._require_transaction_python_posture = lambda _self: None
+    try:
+        with pytest.raises(RuntimeError, match="runtime dispatch changed"):
+            store.get_record(demo.FARMER)
+    finally:
+        Store._require_transaction_python_posture = original
+
+
+def test_caught_store_dispatch_drift_poison_rolls_back_transaction(fresh_env):
+    store, _pipeline, _outputs = fresh_env
+    party_id = f"party:issue171.dispatch-poison.{uuid.uuid4().hex}"
+    original = Store._bundle_digest
+
+    with pytest.raises(RuntimeBundleError, match="rollback-only"):
+        with store.serialized_tx() as cur:
+            store.insert_record(cur, {
+                "schemaVersion": "ofarm.party.v0.1",
+                "partyId": party_id,
+                "partyClass": "NATURAL_PERSON",
+                "displayName": "Issue 171 dispatch poison test (fictional)",
+                "partyState": "ACTIVE",
+                "recordedAt": context.now_iso(),
+            })
+            Store._bundle_digest = lambda _self, _explicit=None: "hostile"
+            try:
+                with pytest.raises(RuntimeError, match="runtime dispatch changed"):
+                    Store._require_runtime_dispatch_integrity(store)
+            finally:
+                Store._bundle_digest = original
+
+    assert store.get_record(party_id) is None
+
+
+def test_store_refuses_registry_instance_validate_shadow(fresh_env):
+    store, _pipeline, _outputs = fresh_env
+    store._registry.validate = lambda _payload: None
+    try:
+        with pytest.raises(RuntimeError, match="decision semantics"):
+            store.get_record(demo.FARMER)
+    finally:
+        del store._registry.validate
+
+
+def test_store_read_cursor_instance_shadow_cannot_skip_guards(fresh_env):
+    store, _pipeline, _outputs = fresh_env
+
+    @contextmanager
+    def unguarded_cursor():
+        yield Store._raw_connection(store).cursor()
+
+    object.__setattr__(store, "_read_cursor", unguarded_cursor)
+    try:
+        with pytest.raises(RuntimeError, match="runtime dispatch changed"):
+            store.get_record(demo.FARMER)
+    finally:
+        object.__delattr__(store, "_read_cursor")
+
+
+def test_runtime_bundle_late_python_drift_rolls_back_current_transaction(
+        fresh_env):
+    store, _pipeline, _outputs = fresh_env
+    party_id = f"party:issue171.late-import.{uuid.uuid4().hex}"
+    module_name = f"_ofarm_late_transaction_{uuid.uuid4().hex}"
+    module = types.ModuleType(module_name)
+    try:
+        with pytest.raises(RuntimeBundleError, match="module set changed"):
+            with store.serialized_tx() as cur:
+                store.insert_record(cur, {
+                    "schemaVersion": "ofarm.party.v0.1",
+                    "partyId": party_id,
+                    "partyClass": "NATURAL_PERSON",
+                    "displayName": "Issue 171 late import rollback test (fictional)",
+                    "partyState": "ACTIVE",
+                    "recordedAt": context.now_iso(),
+                })
+                sys.modules[module_name] = module
+    finally:
+        sys.modules.pop(module_name, None)
+    assert store.get_record(party_id) is None
+
+
+def test_runtime_bundle_refuses_mutable_decision_semantic_roots(fresh_env):
+    from kernel import gates as gates_module
+    from kernel import policy
+    from kernel import runtime_bundle as runtime_bundle_module
+
+    store, _pipeline, _outputs = fresh_env
+
+    original_policy = policy.COMMIT_CLASS_TO_FAMILY
+    policy.COMMIT_CLASS_TO_FAMILY = dict(original_policy)
+    try:
+        with pytest.raises(RuntimeBundleError, match="decision semantic root"):
+            store.get_record(demo.FARMER)
+    finally:
+        policy.COMMIT_CLASS_TO_FAMILY = original_policy
+
+    original_validate = ContractRegistry.validate
+    replacement = types.FunctionType(
+        original_validate.__code__, original_validate.__globals__,
+        original_validate.__name__, original_validate.__defaults__,
+        original_validate.__closure__,
+    )
+    ContractRegistry.validate = replacement
+    try:
+        with pytest.raises(RuntimeBundleError, match="decision semantic state"):
+            store.get_record(demo.FARMER)
+    finally:
+        ContractRegistry.validate = original_validate
+
+    def hostile_validate(self, payload):
+        del self, payload
+        raise AssertionError("hostile ContractRegistry.validate executed")
+
+    original_code = original_validate.__code__
+    original_validate.__code__ = hostile_validate.__code__
+    try:
+        with pytest.raises(RuntimeBundleError, match="decision semantic state"):
+            store.get_record(demo.FARMER)
+    finally:
+        original_validate.__code__ = original_code
+
+    authority_class = type(_pipeline.authority)
+    original_evaluate = authority_class.evaluate
+    authority_class.evaluate = lambda self, **_kwargs: None
+    try:
+        with pytest.raises(RuntimeBundleError, match="decision semantic state"):
+            store.get_record(demo.FARMER)
+    finally:
+        authority_class.evaluate = original_evaluate
+
+    original_chain = gates_module.CHAIN
+    stage_class = type(original_chain[0])
+    original_run = stage_class.run
+    stage_class.run = lambda self, ctx: None
+    try:
+        with pytest.raises(RuntimeBundleError, match="decision semantic state"):
+            store.get_record(demo.FARMER)
+    finally:
+        stage_class.run = original_run
+
+    gates_module.CHAIN = tuple(reversed(original_chain))
+    try:
+        with pytest.raises(RuntimeBundleError, match="decision semantic root"):
+            store.get_record(demo.FARMER)
+    finally:
+        gates_module.CHAIN = original_chain
+
+    original_ingress = gates_module.IngressNormalizer
+    gates_module.IngressNormalizer = object
+    try:
+        with pytest.raises(RuntimeBundleError, match="decision semantic root"):
+            store.get_record(demo.FARMER)
+    finally:
+        gates_module.IngressNormalizer = original_ingress
+
+    original_checker = runtime_bundle_module.require_store_runtime_bundle
+    runtime_bundle_module.require_store_runtime_bundle = lambda *_args: None
+    try:
+        with pytest.raises(RuntimeError, match="posture verifier changed"):
+            store.get_record(demo.FARMER)
+    finally:
+        runtime_bundle_module.require_store_runtime_bundle = original_checker
+
+    original_semantic_checker = runtime_bundle_module._require_decision_semantics
+    runtime_bundle_module._require_decision_semantics = lambda *_args: None
+    try:
+        with pytest.raises(RuntimeError, match="posture verifier changed"):
+            store.get_record(demo.FARMER)
+    finally:
+        runtime_bundle_module._require_decision_semantics = \
+            original_semantic_checker
+
+    assert store.get_record(demo.FARMER) is not None
+
+
+def test_gate_pipeline_refuses_instance_level_dispatch_override(fresh_env):
+    _store, pipeline, _outputs = fresh_env
+    with pytest.raises(AttributeError, match="runtime composition is immutable"):
+        pipeline.authority.evaluate = lambda **_kwargs: None
+
+    with pytest.raises(AttributeError, match="runtime dispatch is immutable"):
+        pipeline._commit_in_tx = lambda _cur, _submission: {}  # type: ignore[method-assign]
+
+    object.__setattr__(
+        pipeline, "_commit_in_tx", lambda _cur, _submission: {})
+    try:
+        with pytest.raises(RuntimeBundleError, match="runtime composition changed"):
+            pipeline._assert_runtime_composition()
+    finally:
+        object.__delattr__(pipeline, "_commit_in_tx")
+
+    object.__setattr__(pipeline, "_assert_runtime_composition", lambda: None)
+    object.__setattr__(pipeline.authority, "evaluate", lambda **_kwargs: None)
+    try:
+        with pytest.raises(RuntimeBundleError, match="runtime composition changed"):
+            pipeline.commit({})
+    finally:
+        object.__delattr__(pipeline.authority, "evaluate")
+        object.__delattr__(pipeline, "_assert_runtime_composition")
+
+    original_cache = pipeline.products._by_snapshot
+    object.__setattr__(pipeline.products, "_by_snapshot", {})
+    try:
+        with pytest.raises(RuntimeBundleError, match="runtime composition changed"):
+            GatePipeline._assert_runtime_composition(pipeline)
+    finally:
+        object.__setattr__(pipeline.products, "_by_snapshot", original_cache)
+
+
+def test_gate_entry_refuses_temporary_semantic_mutation_even_if_restored(
+        fresh_env, monkeypatch):
+    from kernel import policy
+
+    store, pipeline, _outputs = fresh_env
+    submission = demo.spray_submission(
+        f"issue171-temporary-semantics:{uuid.uuid4().hex}",
+        erp_id=f"erp:issue171.temporary-semantics.{uuid.uuid4().hex}",
+        confirm=True,
+    )
+    with pytest.raises(RuntimeBundleError, match="decision semantic root"):
+        with store.serialized_tx() as cur:
+            with monkeypatch.context() as patch:
+                patch.setattr(
+                    policy, "COMMIT_CLASS_TO_FAMILY",
+                    dict(policy.COMMIT_CLASS_TO_FAMILY),
+                )
+                GatePipeline._commit_in_tx(pipeline, cur, submission)
+
+
+def test_gate_uses_retained_stage_callable_during_temporary_class_mutation(
+        fresh_env):
+    from kernel import gates as gates_module
+
+    store, pipeline, _outputs = fresh_env
+    submission = demo.spray_submission(
+        f"issue171-retained-stage:{uuid.uuid4().hex}",
+        erp_id=f"erp:issue171.retained-stage.{uuid.uuid4().hex}",
+        confirm=True,
+    )
+    hostile_called = False
+
+    def hostile_run(_self, _ctx):
+        nonlocal hostile_called
+        hostile_called = True
+        raise AssertionError("temporary hostile stage dispatch executed")
+
+    class RollbackProbe(Exception):
+        pass
+
+    with pytest.raises(RollbackProbe):
+        with Store.serialized_tx(store) as cur:
+            ctx = GatePipeline._new_context(pipeline, cur, submission)
+            ingress_run = gates_module._GATE_ENTRY_CALLABLES[0][2]
+            ingress_run(gates_module.IngressNormalizer(), ctx)
+            stage, stage_type, retained_run, retained_code = \
+                pipeline._stage_dispatch[0]
+            assert retained_run.__code__ is retained_code
+            original = stage_type.run
+            stage_type.run = hostile_run
+            try:
+                retained_run(stage, ctx)
+            finally:
+                stage_type.run = original
+            assert hostile_called is False
+            raise RollbackProbe
+
+
+def test_runtime_bundle_late_semantic_mutation_rolls_back_current_transaction(
+        fresh_env):
+    from kernel import policy
+
+    store, _pipeline, _outputs = fresh_env
+    party_id = f"party:issue171.late-semantics.{uuid.uuid4().hex}"
+    marker = "ISSUE171_HOSTILE_COMMIT_CLASS"
+    try:
+        with pytest.raises(RuntimeBundleError, match="decision semantic state"):
+            with store.serialized_tx() as cur:
+                store.insert_record(cur, {
+                    "schemaVersion": "ofarm.party.v0.1",
+                    "partyId": party_id,
+                    "partyClass": "NATURAL_PERSON",
+                    "displayName": "Issue 171 late semantic drift (fictional)",
+                    "partyState": "ACTIVE",
+                    "recordedAt": context.now_iso(),
+                })
+                policy.COMMIT_CLASS_TO_FAMILY[marker] = "HOSTILE_EVENT"
+    finally:
+        policy.COMMIT_CLASS_TO_FAMILY.pop(marker, None)
+    assert store.get_record(party_id) is None
+
+
+def test_preselection_semantic_mutation_changes_runtime_bundle_digest():
+    from kernel import policy
+
+    clean = build_runtime_bundle(config.ACTIVE_PROFILE)
+    marker = "ISSUE171_PRESELECTION_SEMANTIC_MUTATION"
+    try:
+        policy.COMMIT_CLASS_TO_FAMILY[marker] = "HOSTILE_EVENT"
+        changed = build_runtime_bundle(config.ACTIVE_PROFILE)
+    finally:
+        policy.COMMIT_CLASS_TO_FAMILY.pop(marker, None)
+
+    clean_semantics = clean.component(
+        "RUNTIME_ENVIRONMENT_OBSERVED",
+        "environment:stable-decision-semantics.v1")
+    changed_semantics = changed.component(
+        "RUNTIME_ENVIRONMENT_OBSERVED",
+        "environment:stable-decision-semantics.v1")
+    assert changed_semantics.content_digest != clean_semantics.content_digest
+    assert changed.digest != clean.digest
+
+
+def test_preselection_method_mutation_changes_semantic_receipt():
+    clean = observed_decision_semantics_component(config.PACKAGE_ROOT)
+    original = ContractRegistry.validate.__code__
+
+    def hostile_validate(self, payload):
+        del self, payload
+        return None
+
+    try:
+        ContractRegistry.validate.__code__ = hostile_validate.__code__
+        changed = observed_decision_semantics_component(config.PACKAGE_ROOT)
+    finally:
+        ContractRegistry.validate.__code__ = original
+
+    assert changed.content_digest != clean.content_digest
+
+
+def test_decision_semantic_seal_is_self_consistent_without_mutation():
+    selected = _capture_decision_semantics()
+    _require_decision_semantics(selected)
+
+
+def test_decision_semantic_seal_retains_exact_import_table_key():
+    selected = _capture_decision_semantics()
+    entry = next(item for item in selected if item[3] == "_collections_abc")
+    module = entry[2]
+    alias = f"_ofarm_semantic_alias_{uuid.uuid4().hex}"
+    prior_alias = sys.modules.get(alias)
+    assert sys.modules.pop("_collections_abc") is module
+    sys.modules[alias] = module
+    try:
+        with pytest.raises(RuntimeBundleError, match="module changed"):
+            _require_decision_semantics(selected)
+    finally:
+        sys.modules["_collections_abc"] = module
+        if prior_alias is None:
+            sys.modules.pop(alias, None)
+        else:
+            sys.modules[alias] = prior_alias
+
+
+def test_runtime_module_lifetime_signature_seals_module_spec_name():
+    import posixpath
+    from kernel import runtime_bundle as runtime_bundle_module
+
+    original = posixpath.__spec__.name
+    selected = runtime_bundle_module._module_origin_stat_signature(posixpath)
+    try:
+        posixpath.__spec__.name = "os.path"
+        assert runtime_bundle_module._module_origin_stat_signature(
+            posixpath) != selected
+    finally:
+        posixpath.__spec__.name = original
+
+
+def test_nested_jsonschema_helper_mutation_changes_semantic_receipt():
+    from jsonschema import _keywords
+
+    clean = observed_decision_semantics_component(config.PACKAGE_ROOT)
+    original = _keywords.ensure_list
+    try:
+        _keywords.ensure_list = lambda _value: ["integer"]
+        changed = observed_decision_semantics_component(config.PACKAGE_ROOT)
+    finally:
+        _keywords.ensure_list = original
+
+    assert changed.content_digest != clean.content_digest
+
+
+def test_si_binding_resolver_mutation_is_in_semantic_closure():
+    from kernel.profiles.si_ffs import si_bindings
+
+    selected = _capture_decision_semantics()
+    original = si_bindings.resolve_equipment.__code__
+
+    def hostile(*_args, **_kwargs):
+        return {"bindingState": "CONFIRMED"}
+
+    try:
+        si_bindings.resolve_equipment.__code__ = hostile.__code__
+        with pytest.raises(RuntimeBundleError, match="decision semantic state"):
+            _require_decision_semantics(selected)
+    finally:
+        si_bindings.resolve_equipment.__code__ = original
+
+
+def test_copy_dispatch_mutation_changes_semantic_receipt():
+    clean = observed_decision_semantics_component(config.PACKAGE_ROOT)
+    original = copy._deepcopy_dispatch[dict]
+    try:
+        copy._deepcopy_dispatch[dict] = lambda _value, _memo: {}
+        changed = observed_decision_semantics_component(config.PACKAGE_ROOT)
+    finally:
+        copy._deepcopy_dispatch[dict] = original
+
+    assert changed.content_digest != clean.content_digest
+
+
+def test_calendar_validation_table_mutation_changes_semantic_receipt():
+    import calendar
+
+    clean = observed_decision_semantics_component(config.PACKAGE_ROOT)
+    original = calendar.mdays[4]
+    try:
+        calendar.mdays[4] = 31
+        changed = observed_decision_semantics_component(config.PACKAGE_ROOT)
+    finally:
+        calendar.mdays[4] = original
+
+    assert changed.content_digest != clean.content_digest
+
+
+def test_builtin_callable_rebinding_changes_semantic_receipt():
+    import bisect
+
+    clean = observed_decision_semantics_component(config.PACKAGE_ROOT)
+    original = bisect.bisect_right
+    try:
+        bisect.bisect_right = bisect.bisect_left
+        changed = observed_decision_semantics_component(config.PACKAGE_ROOT)
+    finally:
+        bisect.bisect_right = original
+
+    assert changed.content_digest != clean.content_digest
+
+
+def test_regex_compiler_rebinding_changes_semantic_receipt():
+    clean = observed_decision_semantics_component(config.PACKAGE_ROOT)
+    original = re._compile
+    try:
+        re._compile = lambda _pattern, _flags=0: None
+        changed = observed_decision_semantics_component(config.PACKAGE_ROOT)
+    finally:
+        re._compile = original
+
+    assert changed.content_digest != clean.content_digest
+
+
+def test_regex_cache_growth_does_not_change_semantic_receipt():
+    clean = observed_decision_semantics_component(config.PACKAGE_ROOT)
+    re.compile(f"issue171-derived-cache-{uuid.uuid4().hex}")
+    after_cache_growth = observed_decision_semantics_component(
+        config.PACKAGE_ROOT)
+    assert after_cache_growth == clean
+
+
+def test_nested_regex_compiler_mutation_is_in_semantic_closure():
+    selected = _capture_decision_semantics()
+    original = re._compiler.compile
+    try:
+        re._compiler.compile = lambda _pattern, _flags=0: None
+        with pytest.raises(RuntimeBundleError, match="decision semantic root"):
+            _require_decision_semantics(selected)
+    finally:
+        re._compiler.compile = original
+
+
+def test_json_default_decoder_mutation_is_in_semantic_closure():
+    selected = _capture_decision_semantics()
+    original = json._default_decoder
+    try:
+        json._default_decoder = json.JSONDecoder(parse_int=lambda _value: 0)
+        with pytest.raises(RuntimeBundleError, match="decision semantic root"):
+            _require_decision_semantics(selected)
+    finally:
+        json._default_decoder = original
+
+
+def test_external_python_class_mutation_changes_semantic_receipt():
+    clean = observed_decision_semantics_component(config.PACKAGE_ROOT)
+    original = Path.read_text
+    try:
+        Path.read_text = lambda _self, **_kwargs: "{}"
+        changed = observed_decision_semantics_component(config.PACKAGE_ROOT)
+    finally:
+        Path.read_text = original
+    assert changed.content_digest != clean.content_digest
+
+
+def test_retained_psycopg_adapter_class_mutation_is_in_semantic_closure():
+    from psycopg.types import json as psycopg_json
+
+    selected = _capture_decision_semantics()
+    original_code = psycopg_json._JsonDumper.dump.__code__
+
+    def hostile_dump(_self, _obj):
+        return b'{}'
+
+    try:
+        psycopg_json._JsonDumper.dump.__code__ = hostile_dump.__code__
+        with pytest.raises(RuntimeBundleError, match="decision semantic state"):
+            _require_decision_semantics(selected)
+    finally:
+        psycopg_json._JsonDumper.dump.__code__ = original_code
+
+
+def test_unbound_dynamic_psycopg_adapter_class_is_in_semantic_closure():
+    from kernel.store import _RETAINED_PSYCOPG_ADAPTERS
+
+    dumpers_by_oid = vars(_RETAINED_PSYCOPG_ADAPTERS)["_dumpers_by_oid"]
+    adapter_class = next(
+        class_object
+        for dumpers in dumpers_by_oid
+        for class_object in dumpers.values()
+        if (isinstance(class_object, type)
+            and class_object.__name__ == "JsonbListDumper")
+    )
+    owner = sys.modules[adapter_class.__module__]
+    assert vars(owner).get(adapter_class.__name__) is not adapter_class
+
+    selected = _capture_decision_semantics()
+    marker = object()
+    original = vars(adapter_class).get("dump", marker)
+    adapter_class.dump = lambda _self, _obj: b'{}'
+    try:
+        with pytest.raises(RuntimeBundleError, match="decision semantic state"):
+            _require_decision_semantics(selected)
+    finally:
+        if original is marker:
+            del adapter_class.dump
+        else:
+            adapter_class.dump = original
+
+
+@pytest.mark.parametrize(("class_object", "method_name"), [
+    (OutputGenerator, "passport_view"),
+    (ImportRunner, "run_import"),
+    (GerkLayer, "lookup"),
+    (FFSNapraveRegister, "match"),
+])
+def test_all_governed_service_entries_are_in_semantic_closure(
+        class_object, method_name):
+    selected = _capture_decision_semantics()
+    original = getattr(class_object, method_name)
+    setattr(class_object, method_name, lambda *_args, **_kwargs: None)
+    try:
+        with pytest.raises(RuntimeBundleError, match="decision semantic state"):
+            _require_decision_semantics(selected)
+    finally:
+        setattr(class_object, method_name, original)
+
+
+def test_inherited_jsonschema_error_behavior_changes_semantic_receipt():
+    from collections import deque
+    from jsonschema import exceptions
+
+    clean = observed_decision_semantics_component(config.PACKAGE_ROOT)
+    original = exceptions._Error.absolute_path
+    try:
+        exceptions._Error.absolute_path = property(
+            lambda _self: deque(["hostile"]))
+        changed = observed_decision_semantics_component(config.PACKAGE_ROOT)
+    finally:
+        exceptions._Error.absolute_path = original
+
+    assert changed.content_digest != clean.content_digest
+
+
+def test_reached_kernel_object_class_behavior_changes_semantic_receipt():
+    from kernel import policy
+
+    absent_class = type(policy.ABSENT)
+    clean = observed_decision_semantics_component(config.PACKAGE_ROOT)
+    had_equality = "__eq__" in vars(absent_class)
+    original = vars(absent_class).get("__eq__")
+    try:
+        absent_class.__eq__ = lambda _self, _other: True
+        changed = observed_decision_semantics_component(config.PACKAGE_ROOT)
+    finally:
+        if had_equality:
+            absent_class.__eq__ = original
+        else:
+            del absent_class.__eq__
+
+    assert changed.content_digest != clean.content_digest
+
+
+def test_semantic_receipt_normalizes_relocated_kernel_module_file():
+    from kernel import runtime_bundle as runtime_bundle_module
+
+    clean = observed_decision_semantics_component(config.PACKAGE_ROOT)
+    original = runtime_bundle_module.__file__
+    try:
+        runtime_bundle_module.__file__ = \
+            "/relocated/checkout/kernel/runtime_bundle.py"
+        relocated = observed_decision_semantics_component(config.PACKAGE_ROOT)
+    finally:
+        runtime_bundle_module.__file__ = original
+
+    assert relocated == clean
+
+
+def test_semantic_receipt_refuses_projector_code_replacement():
+    from kernel import runtime_bundle as runtime_bundle_module
+
+    original = runtime_bundle_module._stable_decision_semantics_document.__code__
+
+    def forged_projector(_selected, _package_root):
+        return {
+            "schemaVersion":
+                "ofarm.runtime-decision-semantics-identity.local.v1",
+            "entries": [],
+        }
+
+    try:
+        runtime_bundle_module._stable_decision_semantics_document.__code__ = \
+            forged_projector.__code__
+        with pytest.raises(RuntimeBundleError, match="implementation changed"):
+            observed_decision_semantics_component(config.PACKAGE_ROOT)
+    finally:
+        runtime_bundle_module._stable_decision_semantics_document.__code__ = original
 
 
 def test_runtime_bundle_refuses_new_module_claiming_retained_origin(fresh_env):
@@ -1326,9 +3333,21 @@ def test_store_runtime_activation_fields_reject_direct_replacement(fresh_env):
         "_runtime_environment_seal",
         "_pending_runtime_bundle_activation",
         "_bootstrap_bundle",
+        "_runtime_posture_verifiers",
+        "_runtime_posture_verifier_codes",
     ):
         with pytest.raises(AttributeError, match="sealed lifecycle"):
             setattr(store, field_name, object())
+    with pytest.raises(AttributeError, match="runtime dispatch is immutable"):
+        store._require_transaction_python_posture = lambda: None  # type: ignore[method-assign]
+    object.__setattr__(
+        store, "_require_database_transaction_posture", lambda _cur: {})
+    try:
+        with pytest.raises(RuntimeError, match="runtime dispatch changed"):
+            with store.tx():
+                pass
+    finally:
+        object.__delattr__(store, "_require_database_transaction_posture")
 
 
 @pytest.mark.skipif(sys.platform != "linux", reason="Linux executable mappings")
@@ -1379,7 +3398,7 @@ def test_runtime_bundle_shared_connection_serializes_complete_transactions(
     def writer():
         try:
             with store.tx() as cur:
-                cur.execute("SELECT 1 AS ok")
+                cur._execute_read("SELECT 1 AS ok")
                 assert cur.fetchone()["ok"] == 1
                 writer_entered.set()
                 if not release_writer.wait(10):
@@ -1419,9 +3438,11 @@ def test_runtime_bundle_rejects_role_drift_before_governed_sql(fresh_env):
     role_name = f"ofarm_issue171_role_{uuid.uuid4().hex[:12]}"
     party_id = f"party:issue171.role-drift.{uuid.uuid4().hex}"
     entered = False
-    store.conn.execute(sql.SQL("CREATE ROLE {}").format(sql.Identifier(role_name)))
+    Store._raw_connection(store).execute(
+        sql.SQL("CREATE ROLE {}").format(sql.Identifier(role_name)))
     try:
-        store.conn.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(role_name)))
+        Store._raw_connection(store).execute(
+            sql.SQL("SET ROLE {}").format(sql.Identifier(role_name)))
         with pytest.raises(
                 RuntimeError,
                 match="PostgreSQL current role differs"):
@@ -1437,8 +3458,9 @@ def test_runtime_bundle_rejects_role_drift_before_governed_sql(fresh_env):
                 })
         assert entered is False
     finally:
-        store.conn.execute("RESET ROLE")
-        store.conn.execute(sql.SQL("DROP ROLE {}").format(sql.Identifier(role_name)))
+        Store._raw_connection(store).execute("RESET ROLE")
+        Store._raw_connection(store).execute(
+            sql.SQL("DROP ROLE {}").format(sql.Identifier(role_name)))
     assert store.get_record(party_id) is None
 
 
@@ -1457,7 +3479,7 @@ def test_existing_incomplete_bundle_receipt_is_never_repaired():
                 config.ACTIVE_PROFILE,
                 _database_environment=store._observe_database_environment(cur),
             )
-            cur.execute(
+            cur._execute_mutation(
                 "INSERT INTO runtime_bundle "
                 "(tenant_ref, bundle_digest, bundle_ref, canonical_document, "
                 "canonical_bytes, byte_length) VALUES (%s, %s, %s, %s, %s, %s)",
@@ -1470,7 +3492,7 @@ def test_existing_incomplete_bundle_receipt_is_never_repaired():
                 context.ContextNotReconstructible,
                 match="component set is not exact"):
             context.bootstrap_for_descriptor(store, config.ACTIVE_PROFILE)
-        with store.conn.cursor() as cur:
+        with Store._raw_connection(store).cursor() as cur:
             cur.execute(
                 "SELECT count(*) AS n FROM runtime_bundle_component "
                 "WHERE bundle_digest = %s", (bundle.digest,))
@@ -1488,7 +3510,7 @@ def test_runtime_bundle_unbound_store_cannot_claim_persisted_digest(fresh_env):
         with pytest.raises(
                 RuntimeError,
                 match="has no verified RuntimeBundle tenant; bootstrap first"):
-            with unbound.tx() as cur:
+            with unbound.serialized_tx() as cur:
                 unbound.insert_record(cur, {
                     "schemaVersion": "ofarm.party.v0.1",
                     "partyId": f"party:issue171.unbound.{uuid.uuid4().hex}",
@@ -1696,14 +3718,14 @@ def test_runtime_bundle_persisted_extra_component_is_refused(fresh_env):
     extra_digest = sha256_bytes(extra_bytes)
     with pytest.raises(RuntimeError, match="component set is not exact"):
         with store.serialized_tx() as cur:
-            cur.execute(
+            cur._execute_mutation(
                 "INSERT INTO runtime_content_blob "
                 "(content_digest, content_class, canonicalization, canonical_bytes, "
                 "byte_length) VALUES (%s, 'CONTRACT_METADATA', 'EXACT_BYTES_V1', "
                 "%s, %s)",
                 (extra_digest, extra_bytes, len(extra_bytes)),
             )
-            cur.execute(
+            cur._execute_mutation(
                 "INSERT INTO runtime_bundle_component "
                 "(tenant_ref, bundle_digest, component_role, logical_ref, "
                 "repository_path, canonicalization, content_placement, "
@@ -1942,7 +3964,7 @@ def test_governed_import_refuses_post_start_parser_mutation(fresh_env, monkeypat
     assert result["disposition"] == "PARSER_BUNDLE_MISMATCH"
     assert store.get_record(
         "referencesnapshot:si.uvhvvr.ffs-reg.2099-12-31") is None
-    with store.conn.cursor() as cur:
+    with Store._raw_connection(store).cursor() as cur:
         cur.execute(
             "SELECT outcome, reason_code FROM kernel_gate_log "
             "WHERE gate = 'GOVERNED_IMPORT' ORDER BY entry_id DESC LIMIT 1")
@@ -2038,7 +4060,7 @@ def test_runtime_bundle_digest_pins_commit_context_materialization_review_and_ou
     }
     # Query once for the matrix so the assertion also covers every emitted row,
     # not only one representative ID per receipt family.
-    with store.conn.cursor() as cur:
+    with Store._raw_connection(store).cursor() as cur:
         cur.execute(
             "SELECT record_kind, runtime_bundle_digest FROM kernel_record "
             "WHERE record_kind = ANY(%s)", (list(required_kinds),))
@@ -2107,7 +4129,7 @@ def test_runtime_bundle_atomic_bootstrap_rolls_back_on_unequal_identifier_reuse(
         assert store._runtime_bundle is None
         assert all(not store.record_exists(record_id) for record_id in earlier_ids)
         assert store.get_payload(conflict_id) == conflicting
-        with store.conn.cursor() as cur:
+        with Store._raw_connection(store).cursor() as cur:
             cur.execute(
                 "SELECT count(*) AS n FROM runtime_bundle WHERE bundle_digest = %s",
                 (target_bundle.digest,),
@@ -2125,7 +4147,7 @@ def test_runtime_bundle_atomic_bootstrap_rolls_back_on_unequal_identifier_reuse(
             admin.execute(f'DROP DATABASE IF EXISTS "{dbname}"')
 
 
-def test_pending_runtime_seal_is_rechecked_before_bootstrap_commit(monkeypatch):
+def test_pending_runtime_seal_is_rechecked_before_bootstrap_commit():
     dbname = f"ofarm_issue171_pending_seal_{uuid.uuid4().hex[:10]}"
     admin_dsn = _admin_dsn()
     with psycopg.connect(admin_dsn, autocommit=True) as admin:
@@ -2143,22 +4165,27 @@ def test_pending_runtime_seal_is_rechecked_before_bootstrap_commit(monkeypatch):
         module_name, loader=loader, origin=source)
     try:
         store.migrate()
-        original_prepare = store._prepare_runtime_bundle_binding
-
-        def prepare_then_mutate(bundle):
-            token = original_prepare(bundle)
-            sys.modules[module_name] = module
-            return token
-
-        monkeypatch.setattr(
-            store, "_prepare_runtime_bundle_binding", prepare_then_mutate)
-        with pytest.raises(context.ContextNotReconstructible,
-                           match="module set changed"):
-            context.bootstrap(store)
+        try:
+            with pytest.raises(RuntimeBundleError, match="module set changed"):
+                with store.serialized_tx() as cur:
+                    bundle = _build_live_runtime_bundle(
+                        config.ACTIVE_PROFILE,
+                        _database_environment=
+                        Store._observe_database_environment(cur),
+                    )
+                    Store.install_runtime_bundle(store, cur, bundle)
+                    with Store._bootstrap_bundle_writes(store, bundle):
+                        Store._prepare_runtime_bundle_binding(store, bundle)
+                        # Mutate only after the pending seal exists.  The outer
+                        # transaction's final posture proof must detect it.
+                        sys.modules[module_name] = module
+        finally:
+            sys.modules.pop(module_name, None)
+            Store._discard_prepared_runtime_bundle_binding(store)
         assert store._runtime_bundle is None
         assert store._runtime_environment_seal is None
         assert store._pending_runtime_bundle_activation is None
-        with store.conn.cursor() as cur:
+        with Store._raw_connection(store).cursor() as cur:
             cur.execute("SELECT count(*) AS n FROM ONLY runtime_bundle")
             assert cur.fetchone()["n"] == 0
     finally:
@@ -2166,6 +4193,59 @@ def test_pending_runtime_seal_is_rechecked_before_bootstrap_commit(monkeypatch):
         store.close()
         with psycopg.connect(admin_dsn, autocommit=True) as admin:
             admin.execute(f'DROP DATABASE IF EXISTS "{dbname}"')
+
+
+def test_pending_database_identity_is_rechecked_before_bootstrap_commit():
+    dbname = f"ofarm_issue171_pending_db_{uuid.uuid4().hex[:10]}"
+    role_name = f"ofarm_issue171_pending_{uuid.uuid4().hex[:12]}"
+    admin_dsn = _admin_dsn()
+    with psycopg.connect(admin_dsn, autocommit=True) as admin:
+        admin.execute(sql.SQL("CREATE ROLE {}").format(sql.Identifier(role_name)))
+        admin.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(dbname)))
+    params = psycopg.conninfo.conninfo_to_dict(admin_dsn)
+    params["dbname"] = dbname
+    store = Store(dsn=psycopg.conninfo.make_conninfo(**params))
+    try:
+        store.migrate()
+        try:
+            with pytest.raises(RuntimeError, match="PostgreSQL environment differs"):
+                with store.serialized_tx() as cur:
+                    bundle = _build_live_runtime_bundle(
+                        config.ACTIVE_PROFILE,
+                        _database_environment=
+                        Store._observe_database_environment(cur),
+                    )
+                    Store.install_runtime_bundle(store, cur, bundle)
+                    with Store._bootstrap_bundle_writes(store, bundle):
+                        Store._prepare_runtime_bundle_binding(store, bundle)
+                        store._transaction_state.connection.execute(
+                            sql.SQL("SET LOCAL SESSION AUTHORIZATION {}").format(
+                                sql.Identifier(role_name)))
+                        cur._execute_read(
+                            "SELECT CURRENT_USER::pg_catalog.text AS "
+                            "current_user_name, SESSION_USER::pg_catalog.text AS "
+                            "session_user_name"
+                        )
+                        identity = cur.fetchone()
+                        assert identity == {
+                            "current_user_name": role_name,
+                            "session_user_name": role_name,
+                        }
+        finally:
+            Store._discard_prepared_runtime_bundle_binding(store)
+        assert store._runtime_bundle is None
+        assert store._runtime_environment_seal is None
+        assert store._pending_runtime_bundle_activation is None
+        with Store._raw_connection(store).cursor() as cur:
+            cur.execute("SELECT count(*) AS n FROM ONLY runtime_bundle")
+            assert cur.fetchone()["n"] == 0
+    finally:
+        store.close()
+        with psycopg.connect(admin_dsn, autocommit=True) as admin:
+            admin.execute(sql.SQL("DROP DATABASE IF EXISTS {}").format(
+                sql.Identifier(dbname)))
+            admin.execute(sql.SQL("DROP ROLE IF EXISTS {}").format(
+                sql.Identifier(role_name)))
 
 
 def test_runtime_bundle_bootstrap_selects_and_builds_under_import_lock(monkeypatch):
@@ -2182,8 +4262,8 @@ def test_runtime_bundle_bootstrap_selects_and_builds_under_import_lock(monkeypat
     observations = []
 
     def checked_build(*args, **kwargs):
-        with competing.conn.transaction():
-            with competing.conn.cursor() as cur:
+        with Store._raw_connection(competing).transaction():
+            with Store._raw_connection(competing).cursor() as cur:
                 cur.execute(
                     "SELECT pg_try_advisory_xact_lock(%s) AS acquired",
                     (_SINGLE_WRITER_LOCK_KEY,),
@@ -2230,7 +4310,7 @@ def test_runtime_bundle_registry_mismatch_rolls_back_bootstrap():
         with pytest.raises(context.ContextNotReconstructible,
                            match="atomic RuntimeBundle bootstrap failed"):
             context.bootstrap_for_descriptor(store, config.ACTIVE_PROFILE)
-        with store.conn.cursor() as cur:
+        with Store._raw_connection(store).cursor() as cur:
             cur.execute("SELECT count(*) AS n FROM runtime_bundle")
             assert cur.fetchone()["n"] == 0
             cur.execute("SELECT count(*) AS n FROM runtime_bundle_component")

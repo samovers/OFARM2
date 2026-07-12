@@ -42,7 +42,7 @@ def _meta(snapshot_id, *, effective="2026-05-01T00:00:00Z", label="fixture.parse
 
 
 def _import_log(store, snapshot_id):
-    with store.conn.cursor() as cur:
+    with Store._raw_connection(store).cursor() as cur:
         cur.execute(
             "SELECT outcome, reason_code FROM kernel_gate_log "
             "WHERE gate = 'GOVERNED_IMPORT' AND related_refs @> %s ORDER BY entry_id",
@@ -133,7 +133,7 @@ def test_g2_single_writer_lock_is_mutually_exclusive(store):
     # cannot acquire it; once A releases (at commit), B can.
     a, b = Store(), Store()
     try:
-        with b.conn.cursor() as cb:
+        with Store._raw_connection(b).cursor() as cb:
             with a.serialized_tx():
                 cb.execute("SELECT pg_try_advisory_lock(%s)", (_SINGLE_WRITER_LOCK_KEY,))
                 assert cb.fetchone()["pg_try_advisory_lock"] is False, \

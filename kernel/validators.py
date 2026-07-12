@@ -13,10 +13,20 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from . import config, policy, profile_policy, sufficiency
-from .context import REGSR_SNAPSHOT_PREFIX, current_reference_snapshot, parse_ts
+from .authority import authority_decision_allowed
+from .context import (REGSR_SNAPSHOT_PREFIX, current_reference_snapshot,
+                      invoke_product_register_identities, parse_ts)
 from .contracts import ContractViolation, UnknownContract, sha256_of
 from .problems import runtime_problem
-from .stages import GateContext, GatePass, GateRefusal
+from .runtime_bundle import RuntimeBundleError
+from .stages import (
+    _AUTHORITY_EVALUATE,
+    GateContext,
+    GatePass,
+    GateRefusal,
+    _invoke_retained_context_service,
+)
+from .store import Store
 
 
 _CONFIG_BACKED_POLICY = object()
@@ -937,14 +947,17 @@ class ActorAttributionValidator:
         named_actor = payload["actor"]["actorPartyRef"]
         if named_actor == ctx.acting_party:
             return None
-        basis = ctx.authority.evaluate(
+        basis = _invoke_retained_context_service(
+            ctx, _AUTHORITY_EVALUATE, ctx.authority,
+            cur=ctx.cur,
             acting_party_ref=named_actor,
             action_class="ASSERT_OPERATION_CLAIM",
             action_stage="DRAFT_PREPARATION",
             scope={"scopeType": "FARM", "scopeRef": ctx.farm_ref})
+        allowed = authority_decision_allowed(basis)
         ctx.record_authority_decision(basis)
         ctx.attribution_ref = basis.result_payload["resultId"]
-        if not basis.allowed:
+        if not allowed:
             ctx.review_route_reasons.append(runtime_problem(
                 "ACTOR_BINDING_UNRESOLVED", "Actor attribution unverified",
                 f"the carrier names {named_actor} as the operator, but that "
@@ -1062,8 +1075,10 @@ class RegistryReverificationValidator:
             return None
         event_time = ctx.event_time or ctx.captured_at
         decision_number = product_binding["bindingValue"].get("registrationRef")
-        confirmed = (ctx.products.lookup_by_decision(current_id, decision_number)
-                     if decision_number else None)
+        identities = (invoke_product_register_identities(
+            ctx.store, ctx.products, current_id, decision_number)
+            if decision_number else [])
+        confirmed = identities[0] if len(identities) == 1 else None
         if confirmed is not None:
             valid_until = (confirmed.get("decision", {}).get("validUntil")
                            or confirmed.get("registrationValidUntil") or "")
@@ -1160,6 +1175,83 @@ def _operation_sequence_for_validation_policy(validation_policy: dict) -> tuple:
     )
 
 
+_RETAINED_VALIDATOR_RUNS = tuple(
+    (owner, "run", owner.run, owner.run.__code__)
+    for owner in (
+        TemporalConformanceValidator,
+        PromotionTargetValidator,
+        ScopeContainmentValidator,
+        SupersessionValidator,
+        GovernanceAcceptanceValidator,
+        ComplianceClaimValidator,
+        StructureCarrierValidator,
+        StructureSemanticsValidator,
+        CarrierSchemaValidator,
+        CarrierSemanticsValidator,
+        ExecutionExtentValidator,
+        ReferenceResolutionValidator,
+        ActorAttributionValidator,
+        CodeBindingValidator,
+        RegistryReverificationValidator,
+        CarrierStore,
+    )
+)
+
+
+def _raise_validator_dispatch_error(ctx: GateContext, message: str) -> None:
+    """Poison the active transaction before reporting validator-code drift."""
+    if type(ctx.store) is Store:
+        Store._mark_transaction_integrity_violation(ctx.store)
+    raise RuntimeBundleError(message)
+
+
+def _require_retained_validator_run(
+    ctx: GateContext,
+    entry,
+    validator,
+) -> None:
+    """Require an exact validator instance, class binding, and code object."""
+    if type(entry) is not tuple or len(entry) != 4:
+        _raise_validator_dispatch_error(
+            ctx, "retained validator dispatch entry is malformed")
+    owner, name, function, code = entry
+    if (type(validator) is not owner
+            or name != "run"
+            or name in vars(validator)
+            or vars(owner).get(name) is not function
+            or getattr(function, "__code__", None) is not code):
+        _raise_validator_dispatch_error(
+            ctx, f"retained {owner.__name__}.run callable changed")
+
+
+def _retained_validator_run_entry(ctx: GateContext, validator):
+    matches = []
+    for entry in _RETAINED_VALIDATOR_RUNS:
+        if type(entry) is not tuple or len(entry) != 4:
+            _raise_validator_dispatch_error(
+                ctx, "retained validator dispatch table is malformed")
+        if type(validator) is entry[0]:
+            matches.append(entry)
+    if len(matches) != 1:
+        _raise_validator_dispatch_error(
+            ctx, "validator has no unique retained run callable")
+    return matches[0]
+
+
+def _invoke_retained_validator(ctx: GateContext, validator):
+    """Invoke retained validator code with adjacent pre/post checks."""
+    entry = _retained_validator_run_entry(ctx, validator)
+    _require_retained_validator_run(ctx, entry, validator)
+    function = entry[2]
+    try:
+        result = function(validator, ctx)
+    except BaseException:
+        _require_retained_validator_run(ctx, entry, validator)
+        raise
+    _require_retained_validator_run(ctx, entry, validator)
+    return result
+
+
 class ValidationGate:
     """Runs the named validators in law-pinned order; first refusal stops
     the chain (already logged); review-route reasons accumulate on the
@@ -1169,7 +1261,7 @@ class ValidationGate:
 
     def run(self, ctx: GateContext) -> GatePass | GateRefusal:
         for validator in COMMON_SEQUENCE:
-            refusal = validator.run(ctx)
+            refusal = _invoke_retained_validator(ctx, validator)
             if refusal:
                 return refusal
 
@@ -1178,7 +1270,8 @@ class ValidationGate:
         # operation sequence logs one PASS here so the attribution ref can
         # ride the single VALIDATION entry
         if ctx.commit_class == "GOVERNANCE_DECISION":
-            return GovernanceAcceptanceValidator().run(ctx) or GatePass()
+            return _invoke_retained_validator(
+                ctx, GovernanceAcceptanceValidator()) or GatePass()
         if ctx.commit_class == "COMPLIANCE_ASSERTION":
             if ctx.policy_provider is not None:
                 recognized_refs = ctx.policy_provider.recognized_rule_refs
@@ -1186,13 +1279,18 @@ class ValidationGate:
                 recognized_refs = (
                     _descriptor_recognized_rule_refs(ctx.active_profile)
                     if ctx.active_profile is not None else None)
-            return ComplianceClaimValidator(
-                recognized_rule_refs=recognized_refs).run(ctx) or GatePass()
+            return _invoke_retained_validator(
+                ctx,
+                ComplianceClaimValidator(
+                    recognized_rule_refs=recognized_refs),
+            ) or GatePass()
         if ctx.commit_class == "STRUCTURE_ASSERTION":
-            refusal = StructureCarrierValidator().run(ctx)
+            refusal = _invoke_retained_validator(
+                ctx, StructureCarrierValidator())
             if refusal:
                 return refusal
-            return StructureSemanticsValidator().run(ctx) or GatePass()
+            return _invoke_retained_validator(
+                ctx, StructureSemanticsValidator()) or GatePass()
         if ctx.commit_class != "OPERATION_CLAIM":
             ctx.log("VALIDATION", "PASS")
             return GatePass()
@@ -1208,11 +1306,11 @@ class ValidationGate:
                 validation_policy)
 
         for validator in operation_sequence:
-            refusal = validator.run(ctx)
+            refusal = _invoke_retained_validator(ctx, validator)
             if refusal:
                 return refusal
         # the trace's VALIDATION entry surfaces the attribution decision so
         # both authority decisions are visible on the promotion path
         ctx.log("VALIDATION", "PASS",
                 refs=[ctx.attribution_ref] if ctx.attribution_ref else None)
-        return CarrierStore().run(ctx) or GatePass()
+        return _invoke_retained_validator(ctx, CarrierStore()) or GatePass()

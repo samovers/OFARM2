@@ -28,14 +28,21 @@ generic resolver / validators carry no per-scheme branch.
 from __future__ import annotations
 
 from ... import config
-from ...context import GERK_SNAPSHOT_PREFIX, mint, now_iso
+from ...context import (GERK_SNAPSHOT_PREFIX, mint, now_iso,
+                        require_product_register_runtime_composition)
 from ...problems import runtime_problem
+from ...runtime_bundle import RuntimeBundleError, require_store_runtime_bundle
+from ...store import Store
 from ...verification import (CONFIRM, LOCATOR, NONE, LookupResult,
                              ReferenceResolver)
 from . import regsr_adapter as regsr
 from .ffsnaprave_adapter import (FFSNAPRAVE_AUTHORITY_REF, FFSNAPRAVE_SCHEME,
-                                 FFSNAPRAVE_SNAPSHOT_PREFIX, VALIDITY_FIELD)
-from .gerk_adapter import GERK_AUTHORITY_REF, GERK_SCHEME
+                                 FFSNAPRAVE_SNAPSHOT_PREFIX, VALIDITY_FIELD,
+                                 invoke_ffsnaprave_register_method,
+                                 require_ffsnaprave_register_runtime_composition)
+from .gerk_adapter import (GERK_AUTHORITY_REF, GERK_SCHEME,
+                           invoke_gerk_layer_lookup,
+                           require_gerk_layer_runtime_composition)
 
 # the profile standardRefs (profile_si_ffs/OFARM_AgronomicCodeBindingProfile_si_ffs_v0_1.json)
 REGSR_SCHEME_REF = "scheme:si.uvhvvr.ffs-reg"
@@ -47,12 +54,80 @@ SI_JURISDICTION_REF = "jurisdiction:SI"
 MKGP_REF = "party:si.mkgp"
 UVHVVR_REF = "party:si.uvhvvr"
 
+_RETAINED_PRODUCT_COMPOSITION_GUARD = \
+    require_product_register_runtime_composition
+_RETAINED_GERK_COMPOSITION_GUARD = \
+    require_gerk_layer_runtime_composition
+_RETAINED_FFS_COMPOSITION_GUARD = \
+    require_ffsnaprave_register_runtime_composition
+
+_RETAINED_SI_STORE_POSTURE = Store._require_transaction_python_posture
+_RETAINED_SI_STORE_POSTURE_CODE = _RETAINED_SI_STORE_POSTURE.__code__
+_RETAINED_SI_STORE_CURSOR_GUARD = Store._require_active_governed_cursor
+_RETAINED_SI_STORE_CURSOR_GUARD_CODE = \
+    _RETAINED_SI_STORE_CURSOR_GUARD.__code__
+_RETAINED_SI_STORE_GET_RECORD = Store.get_record
+_RETAINED_SI_STORE_GET_RECORD_CODE = _RETAINED_SI_STORE_GET_RECORD.__code__
+_RETAINED_SI_STORE_BUNDLE_FGET = Store.runtime_bundle.fget
+_RETAINED_SI_STORE_BUNDLE_FGET_CODE = \
+    _RETAINED_SI_STORE_BUNDLE_FGET.__code__
+_RETAINED_SI_STORE_INTEGRITY_MARKER = \
+    Store._mark_transaction_integrity_violation
+_RETAINED_SI_STORE_INTEGRITY_MARKER_CODE = \
+    _RETAINED_SI_STORE_INTEGRITY_MARKER.__code__
+
+
+def _mark_si_runtime_integrity_violation(store) -> None:
+    if (type(store) is Store
+            and vars(Store).get("_mark_transaction_integrity_violation") is
+            _RETAINED_SI_STORE_INTEGRITY_MARKER
+            and _RETAINED_SI_STORE_INTEGRITY_MARKER.__code__ is
+            _RETAINED_SI_STORE_INTEGRITY_MARKER_CODE):
+        _RETAINED_SI_STORE_INTEGRITY_MARKER(store)
+
+
+def _require_retained_store(store, label: str):
+    try:
+        if (type(store) is not Store
+                or vars(Store).get("_require_transaction_python_posture") is not
+                _RETAINED_SI_STORE_POSTURE
+                or _RETAINED_SI_STORE_POSTURE.__code__ is not
+                _RETAINED_SI_STORE_POSTURE_CODE
+                or vars(Store).get("_require_active_governed_cursor") is not
+                _RETAINED_SI_STORE_CURSOR_GUARD
+                or _RETAINED_SI_STORE_CURSOR_GUARD.__code__ is not
+                _RETAINED_SI_STORE_CURSOR_GUARD_CODE
+                or vars(Store).get("get_record") is not
+                _RETAINED_SI_STORE_GET_RECORD
+                or _RETAINED_SI_STORE_GET_RECORD.__code__ is not
+                _RETAINED_SI_STORE_GET_RECORD_CODE
+                or Store.runtime_bundle.fget is not
+                _RETAINED_SI_STORE_BUNDLE_FGET
+                or _RETAINED_SI_STORE_BUNDLE_FGET.__code__ is not
+                _RETAINED_SI_STORE_BUNDLE_FGET_CODE):
+            raise RuntimeBundleError(
+                f"{label} requires the exact retained Store runtime")
+        _RETAINED_SI_STORE_POSTURE(store)
+        bundle = _RETAINED_SI_STORE_BUNDLE_FGET(store)
+        require_store_runtime_bundle(store, bundle, label)
+        return bundle
+    except BaseException:
+        _mark_si_runtime_integrity_violation(store)
+        raise
+
+
+def _require_resolution_context(store, cur, label: str) -> None:
+    _require_retained_store(store, label)
+    _RETAINED_SI_STORE_CURSOR_GUARD(store, cur)
+
 
 def _evidence_ok(store, ref) -> bool:
     """The caller-supplied evidence ref must resolve to an actual EvidenceRecord —
     a binding may not cite fabricated captured evidence (PR #15 hostile B2). A
     generated verification-trace ref is separately trustworthy (G3 inserted it)."""
-    rec = store.get_record(ref)
+    _require_retained_store(store, "SI binding evidence lookup")
+    rec = _RETAINED_SI_STORE_GET_RECORD(store, ref)
+    _require_retained_store(store, "SI binding evidence lookup")
     return rec is not None and rec["record_kind"] == "ofarm.evidencerecord.v0.1"
 
 
@@ -71,7 +146,9 @@ def _scheme_version(store, snapshot_ref):
     bindings, PR #15 hostile B1). None when no snapshot is in force."""
     if not snapshot_ref:
         return None
-    rec = store.get_record(snapshot_ref)
+    _require_retained_store(store, "SI binding scheme-version lookup")
+    rec = _RETAINED_SI_STORE_GET_RECORD(store, snapshot_ref)
+    _require_retained_store(store, "SI binding scheme-version lookup")
     return rec["payload"].get("canonicalVersionLabel") if rec else None
 
 
@@ -127,8 +204,17 @@ def _locator_lookup(find):
 def resolve_product_authorisation(store, cur, product_register, decision_number,
                                   subject_ref, *, created_by, evidence_ref, issued=None,
                                   valid_until=None, as_of=None) -> dict:
+    _require_resolution_context(
+        store, cur, "REGSR product authorisation")
+    _RETAINED_PRODUCT_COMPOSITION_GUARD(
+        store, product_register, "REGSR product authorisation")
     if not _evidence_ok(store, evidence_ref):
-        return _evidence_refused(REGSR_SCHEME_REF, evidence_ref)
+        response = _evidence_refused(REGSR_SCHEME_REF, evidence_ref)
+        _RETAINED_PRODUCT_COMPOSITION_GUARD(
+            store, product_register, "REGSR product authorisation")
+        _require_resolution_context(
+            store, cur, "REGSR product authorisation")
+        return response
     res = regsr.verify_product_authorisation(
         store, cur, product_register, decision_number, issued=issued,
         valid_until=valid_until, as_of=as_of, created_by=created_by)
@@ -150,8 +236,14 @@ def resolve_product_authorisation(store, cur, product_register, decision_number,
         evidence_refs=evidence_refs, snapshot_refs=[snapshot_ref] if snapshot_ref else None,
         scheme_version=_scheme_version(store, snapshot_ref), may_promote=confirmed,
         hcu="ALLOWED_WHEN_PROFILE_AND_EVIDENCE_PASS" if confirmed else "REVIEW_REQUIRED")
-    return {"verdict": res["verdict"], "grade": res["grade"], "binding": binding,
-            "trace": trace, "problem": res.get("problem"), "advisory": None}
+    response = {
+        "verdict": res["verdict"], "grade": res["grade"], "binding": binding,
+        "trace": trace, "problem": res.get("problem"), "advisory": None,
+    }
+    _RETAINED_PRODUCT_COMPOSITION_GUARD(
+        store, product_register, "REGSR product authorisation")
+    _require_resolution_context(store, cur, "REGSR product authorisation")
+    return response
 
 
 # ---------------------------------------------------------------------------
@@ -160,16 +252,27 @@ def resolve_product_authorisation(store, cur, product_register, decision_number,
 
 def resolve_parcel(store, cur, gerk_layer, gerk_pid, subject_ref, *, created_by,
                    evidence_ref, as_of=None) -> dict:
+    _require_resolution_context(store, cur, "GERK parcel resolution")
+    _RETAINED_GERK_COMPOSITION_GUARD(
+        store, gerk_layer, "GERK parcel resolution")
     if not _evidence_ok(store, evidence_ref):
-        return _evidence_refused(GERK_SCHEME_REF, evidence_ref)
+        response = _evidence_refused(GERK_SCHEME_REF, evidence_ref)
+        _RETAINED_GERK_COMPOSITION_GUARD(
+            store, gerk_layer, "GERK parcel resolution")
+        _require_resolution_context(store, cur, "GERK parcel resolution")
+        return response
     res = ReferenceResolver(store).verify(
         cur, query_value=gerk_pid, snapshot_prefix=GERK_SNAPSHOT_PREFIX,
-        lookup=_locator_lookup(gerk_layer.lookup),
+        lookup=_locator_lookup(
+            lambda snapshot_id, query_value: invoke_gerk_layer_lookup(
+                store, gerk_layer, snapshot_id, query_value)),
         profile_ref=config.CODE_BINDING_PROFILE_REF, authority_ref=GERK_AUTHORITY_REF,
         jurisdiction_ref=SI_JURISDICTION_REF, scheme=GERK_SCHEME, key_field="gerk-pid",
         purpose="OTHER", lookup_surface="OTHER", external_id_role="OTHER",
         review_reason_code="IDENTITY_UNRESOLVED", as_of=as_of, created_by=created_by,
         lookup_runtime_bundle=gerk_layer.runtime_bundle)
+    _RETAINED_GERK_COMPOSITION_GUARD(
+        store, gerk_layer, "GERK parcel resolution")
     found = res["grade"] == LOCATOR
     trace = res.get("trace")
     binding = _binding(
@@ -182,24 +285,31 @@ def resolve_parcel(store, cur, gerk_layer, gerk_pid, subject_ref, *, created_by,
         snapshot_refs=[res["snapshotRef"]] if res.get("snapshotRef") else None,
         scheme_version=_scheme_version(store, res.get("snapshotRef")),
         may_promote=False, hcu="REVIEW_REQUIRED")
-    return {"verdict": res["verdict"], "grade": res["grade"], "binding": binding,
-            "trace": trace, "problem": res.get("problem"),
-            "advisory": "GERK-PID existence is locator-only; the field<->parcel binding "
-                        "is the farmer's claim (no owner link in the open layer) — review"}
+    response = {
+        "verdict": res["verdict"], "grade": res["grade"], "binding": binding,
+        "trace": trace, "problem": res.get("problem"),
+        "advisory": "GERK-PID existence is locator-only; the field<->parcel binding "
+                    "is the farmer's claim (no owner link in the open layer) — review",
+    }
+    _RETAINED_GERK_COMPOSITION_GUARD(
+        store, gerk_layer, "GERK parcel resolution")
+    _require_resolution_context(store, cur, "GERK parcel resolution")
+    return response
 
 
 # ---------------------------------------------------------------------------
 # FFSNaprave — Equipment sticker (LOCATOR-only: inspection existence, not binding)
 # ---------------------------------------------------------------------------
 
-def _ffsnaprave_lookup(register, validity):
+def _ffsnaprave_lookup(store, register, validity):
     """A G3 lookup that resolves the D9-style COMPOSITE key StevilkaZnaka +
     VeljavnostZnaka (never the sticker alone — same sticker, different validity is a
     different inspection cycle, P3). On a hit it records the matched record's
     VeljavnostZnaka in datesObserved.statusEffectiveUntil so the composite key is
     explicit in the trace (PR #15 B2). Locator-only (existence, not owner-binding)."""
     def lookup(snapshot_id, sticker) -> LookupResult:
-        rec = register.match(snapshot_id, sticker, validity)
+        rec = invoke_ffsnaprave_register_method(
+            store, register, "match", snapshot_id, sticker, validity)
         if rec is not None:
             v = rec.get(VALIDITY_FIELD)
             return LookupResult(grade=LOCATOR, candidate_count=1, status_observed="UNKNOWN",
@@ -208,7 +318,8 @@ def _ffsnaprave_lookup(register, validity):
         # multiple validity windows and no validity supplied to disambiguate) — the
         # latter is "exists but supply VeljavnostZnaka", not "not in the snapshot"
         # (PR #15 hostile B3).
-        windows = register.validity_windows(snapshot_id, sticker)
+        windows = invoke_ffsnaprave_register_method(
+            store, register, "validity_windows", snapshot_id, sticker)
         if validity is None and len(windows) > 1:
             return LookupResult(
                 grade=NONE, candidate_count=len(windows), status_observed="MULTIPLE_CANDIDATES",
@@ -221,17 +332,29 @@ def _ffsnaprave_lookup(register, validity):
 
 def resolve_equipment(store, cur, ffsnaprave_register, sticker_number, subject_ref, *,
                       created_by, evidence_ref, validity=None, as_of=None) -> dict:
+    _require_resolution_context(
+        store, cur, "FFSNaprave equipment resolution")
+    _RETAINED_FFS_COMPOSITION_GUARD(
+        store, ffsnaprave_register, "FFSNaprave equipment resolution")
     if not _evidence_ok(store, evidence_ref):
-        return _evidence_refused(FFSNAPRAVE_SCHEME_REF, evidence_ref)
+        response = _evidence_refused(FFSNAPRAVE_SCHEME_REF, evidence_ref)
+        _RETAINED_FFS_COMPOSITION_GUARD(
+            store, ffsnaprave_register, "FFSNaprave equipment resolution")
+        _require_resolution_context(
+            store, cur, "FFSNaprave equipment resolution")
+        return response
     res = ReferenceResolver(store).verify(
         cur, query_value=sticker_number, snapshot_prefix=FFSNAPRAVE_SNAPSHOT_PREFIX,
-        lookup=_ffsnaprave_lookup(ffsnaprave_register, validity),
+        lookup=_ffsnaprave_lookup(
+            store, ffsnaprave_register, validity),
         profile_ref=config.CODE_BINDING_PROFILE_REF, authority_ref=FFSNAPRAVE_AUTHORITY_REF,
         jurisdiction_ref=SI_JURISDICTION_REF, scheme=FFSNAPRAVE_SCHEME,
         key_field="stevilka-znaka", purpose="OTHER", lookup_surface="OTHER",
         external_id_role="OTHER", review_reason_code="IDENTITY_UNRESOLVED",
         as_of=as_of, created_by=created_by,
         lookup_runtime_bundle=ffsnaprave_register.runtime_bundle)
+    _RETAINED_FFS_COMPOSITION_GUARD(
+        store, ffsnaprave_register, "FFSNaprave equipment resolution")
     found = res["grade"] == LOCATOR
     trace = res.get("trace")
     # the RESOLVED validity (the matched record's VeljavnostZnaka) rides the trace's
@@ -252,10 +375,18 @@ def resolve_equipment(store, cur, ffsnaprave_register, sticker_number, subject_r
         snapshot_refs=[res["snapshotRef"]] if res.get("snapshotRef") else None,
         scheme_version=_scheme_version(store, res.get("snapshotRef")),
         may_promote=False, hcu="REVIEW_REQUIRED")
-    return {"verdict": res["verdict"], "grade": res["grade"], "binding": binding,
-            "trace": trace, "problem": res.get("problem"), "resolvedValidity": resolved_validity,
-            "advisory": "sprayer-inspection existence is locator-only; the equipment<->"
-                        "inspection binding is the farmer's sticker claim — review"}
+    response = {
+        "verdict": res["verdict"], "grade": res["grade"], "binding": binding,
+        "trace": trace, "problem": res.get("problem"),
+        "resolvedValidity": resolved_validity,
+        "advisory": "sprayer-inspection existence is locator-only; the equipment<->"
+                    "inspection binding is the farmer's sticker claim — review",
+    }
+    _RETAINED_FFS_COMPOSITION_GUARD(
+        store, ffsnaprave_register, "FFSNaprave equipment resolution")
+    _require_resolution_context(
+        store, cur, "FFSNaprave equipment resolution")
+    return response
 
 
 # ---------------------------------------------------------------------------

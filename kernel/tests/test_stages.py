@@ -103,7 +103,7 @@ class _Rollback(Exception):
 @contextmanager
 def scratch_tx(store):
     try:
-        with store.tx() as cur:
+        with store.serialized_tx() as cur:
             yield cur
             raise _Rollback
     except _Rollback:

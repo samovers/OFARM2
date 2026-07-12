@@ -20,14 +20,28 @@ import hashlib
 from psycopg.types.json import Jsonb
 
 from . import config
-from .authority import AuthorityEvaluator
+from .authority import AuthorityEvaluator, authority_decision_allowed
 from .contracts import canonical_json
 from .materializer import Materializer
 from .problems import runtime_problem
-from .context import mint as _mint, now_iso, parse_ts
+from .context import ContextAssembler, mint as _mint, now_iso, parse_ts
 from .profile_runtime import ProfileRuntimeError, resolve_active_descriptor
 from .runtime_bundle import (RuntimeBundleError, require_store_runtime_bundle,
                              sha256_bytes)
+from .store import (
+    Store,
+    _RETAINED_GOVERNED_CURSOR_EXECUTE_MUTATION as _CURSOR_EXECUTE_MUTATION,
+    _RETAINED_GOVERNED_CURSOR_EXECUTE_READ as _CURSOR_EXECUTE_READ,
+)
+
+_RETAINED_AUTHORITY_EVALUATE = AuthorityEvaluator.evaluate
+_RETAINED_AUTHORITY_EVALUATE_CODE = _RETAINED_AUTHORITY_EVALUATE.__code__
+_RETAINED_AUTHORITY_EVALUATE_READ = AuthorityEvaluator.evaluate_read
+_RETAINED_AUTHORITY_EVALUATE_READ_CODE = \
+    _RETAINED_AUTHORITY_EVALUATE_READ.__code__
+_RETAINED_AUTHORITY_DECISION_ALLOWED = authority_decision_allowed
+_RETAINED_AUTHORITY_DECISION_ALLOWED_CODE = \
+    authority_decision_allowed.__code__
 
 PASSPORT_VIEW_REF = "view:si.ffs.spray-register.passportview.v0_1"
 DOCASM_VIEW_REF = "view:si.ffs.inspection-register.documentassembly.v0_1"
@@ -104,13 +118,26 @@ def _qualification(*, surface_class: str, staleness: str, sufficiency: str,
 
 class OutputGenerator:
     _SEALED_FIELDS = {
-        "store", "active_profile", "runtime_bundle", "authority", "materializer"}
+        "store", "active_profile", "runtime_bundle", "authority", "materializer",
+        "_runtime_composition_sealed"}
 
     def __setattr__(self, name, value):
-        if (getattr(self, "_runtime_composition_sealed", False)
-                and name in self._SEALED_FIELDS):
-            raise AttributeError("OutputGenerator runtime composition is immutable")
+        if getattr(self, "_runtime_composition_sealed", False):
+            if name in self._SEALED_FIELDS:
+                raise AttributeError(
+                    "OutputGenerator runtime composition is immutable")
+            if callable(getattr(type(self), name, None)):
+                raise AttributeError(
+                    "OutputGenerator runtime dispatch is immutable")
         object.__setattr__(self, name, value)
+
+    def __delattr__(self, name):
+        if (getattr(self, "_runtime_composition_sealed", False)
+                and (name in self._SEALED_FIELDS
+                     or callable(getattr(type(self), name, None)))):
+            raise AttributeError(
+                "OutputGenerator sealed runtime state cannot be deleted")
+        object.__delattr__(self, name)
 
     def __init__(self, store, *, active_descriptor=None, active_profile=None,
                  runtime_bundle=None):
@@ -138,13 +165,42 @@ class OutputGenerator:
     def _assert_runtime_composition(self) -> None:
         require_store_runtime_bundle(
             self.store, self.runtime_bundle, "OutputGenerator decision")
-        if (self.runtime_bundle.descriptor != self.active_profile
+        if (type(self) is not OutputGenerator
+                or type(self.store) is not Store
+                or type(self.authority) is not AuthorityEvaluator
+                or vars(AuthorityEvaluator).get("evaluate") is not
+                _RETAINED_AUTHORITY_EVALUATE
+                or _RETAINED_AUTHORITY_EVALUATE.__code__ is not
+                _RETAINED_AUTHORITY_EVALUATE_CODE
+                or vars(AuthorityEvaluator).get("evaluate_read") is not
+                _RETAINED_AUTHORITY_EVALUATE_READ
+                or _RETAINED_AUTHORITY_EVALUATE_READ.__code__ is not
+                _RETAINED_AUTHORITY_EVALUATE_READ_CODE
+                or authority_decision_allowed is not
+                _RETAINED_AUTHORITY_DECISION_ALLOWED
+                or _RETAINED_AUTHORITY_DECISION_ALLOWED.__code__ is not
+                _RETAINED_AUTHORITY_DECISION_ALLOWED_CODE
+                or type(self.materializer) is not Materializer
+                or type(self.materializer.context) is not ContextAssembler
+                or self._runtime_composition_sealed is not True
+                or self.materializer._runtime_composition_sealed is not True
+                or self.materializer.context._runtime_composition_sealed is not True
+                or any(callable(getattr(OutputGenerator, name, None))
+                       for name in vars(self))
+                or any(callable(getattr(AuthorityEvaluator, name, None))
+                       for name in vars(self.authority))
+                or any(callable(getattr(Materializer, name, None))
+                       for name in vars(self.materializer))
+                or any(callable(getattr(ContextAssembler, name, None))
+                       for name in vars(self.materializer.context))
+                or self.runtime_bundle.descriptor != self.active_profile
                 or self.authority.store is not self.store
                 or self.materializer.store is not self.store
                 or self.materializer.runtime_bundle is not self.runtime_bundle
                 or self.materializer.active_profile != self.active_profile
                 or self.materializer.context.store is not self.store
                 or self.materializer.context.runtime_bundle is not self.runtime_bundle):
+            Store._mark_transaction_integrity_violation(self.store)
             raise RuntimeBundleError(
                 "OutputGenerator runtime composition changed after construction")
         _assert_compiled_output_contract(self.runtime_bundle)
@@ -267,21 +323,27 @@ class OutputGenerator:
         """allow_recompute=False is a real render mode (cheap/offline serve):
         a STALE materialization renders only with the banner and is barred
         from export; a missing basis refuses (views/VIEWS.md)."""
-        self._assert_runtime_composition()
-        # sharing/authority re-evaluated per request (D12) — a revoked
-        # inspector loses access on this call, not at next recompute
-        access = self.authority.evaluate_read(
-            requesting_party_ref=requesting_party_ref, farm_ref=farm_ref,
-            artifact_family="PASSPORT_VIEW")
+        OutputGenerator._assert_runtime_composition(self)
         # serialized write path (M2 G2): this render can recompute a
         # materialization, so it must hold the single-writer lock — a scheduled
         # import must not commit a newer ReferenceSnapshot mid-render and leave
         # the output reflecting a pre-import context (PR #10 review).
-        with self.store.serialized_tx() as cur:
+        with Store.serialized_tx(self.store) as cur:
+            # Sharing/authority is selected only after the same writer lock
+            # that protects its consumption. A revocation cannot land between
+            # this decision and the rendered output.
+            access = _RETAINED_AUTHORITY_EVALUATE_READ(
+                self.authority,
+                cur=cur,
+                requesting_party_ref=requesting_party_ref,
+                farm_ref=farm_ref,
+                artifact_family="PASSPORT_VIEW",
+            )
+            access_allowed = _RETAINED_AUTHORITY_DECISION_ALLOWED(access)
             self.store.insert_record(cur, access.request_payload)
             self.store.insert_record(cur, access.trace_payload)
             self.store.insert_record(cur, access.result_payload)
-            if not access.allowed:
+            if not access_allowed:
                 return self._refusal_response(
                     access.problems[0] if access.problems else runtime_problem(
                         "AUTHORITY_DENIED", "Read denied", "no read path to this farm"))
@@ -289,8 +351,9 @@ class OutputGenerator:
             # the no-recompute render is an exploratory serve: STALE is
             # honored as ALLOW_STALE_EXPLORATORY semantics (banner + export
             # bar below), never silently treated as FRESH
-            resolution = self.materializer.resolve_for_use(
-                cur, farm_ref, use_class="OPERATIONAL_DASHBOARD",
+            resolution = Materializer.resolve_for_use(
+                self.materializer, cur, farm_ref,
+                use_class="OPERATIONAL_DASHBOARD",
                 required_freshness=("REQUIRE_FRESH" if allow_recompute
                                     else "ALLOW_STALE_EXPLORATORY"),
                 high_consequence=False,
@@ -375,23 +438,28 @@ class OutputGenerator:
         does not exist until the state publishes it (D13); "filed" means the
         frozen submission artifact left the publication gate complete.
         """
-        self._assert_runtime_composition()
+        OutputGenerator._assert_runtime_composition(self)
         publication_action = ("FILE_SUBMISSION_ASSEMBLY" if as_submission
                               else "FREEZE_DOCUMENT_ASSEMBLY")
         output_kind = "SUBMISSION_ASSEMBLY" if as_submission else "REPORT_ASSEMBLY"
         final_outcome = "FILED" if as_submission else "FROZEN"
-        # accepted Action Matrix names: approval-before-freeze vs formal filing
-        decision = self.authority.evaluate(
-            acting_party_ref=requesting_party_ref,
-            action_class=("OUTPUT_FILE_SUBMISSION_ASSEMBLY" if as_submission
-                          else "OUTPUT_APPROVE_DOCUMENT_ASSEMBLY"),
-            action_stage="PUBLICATION",
-            scope={"scopeType": "FARM", "scopeRef": farm_ref})
         # serialized write path (M2 G2): freezing high-consequence ATTESTED_OUTPUT
         # resolves a fresh materialization, so it must hold the single-writer lock
         # — a scheduled import must not commit a newer ReferenceSnapshot mid-freeze
         # and let the frozen document claim FRESH over a pre-import context (PR #10 review).
-        with self.store.serialized_tx() as cur:
+        with Store.serialized_tx(self.store) as cur:
+            # Accepted Action Matrix names: approval-before-freeze vs formal
+            # filing. Selection and use share this serialized transaction.
+            decision = _RETAINED_AUTHORITY_EVALUATE(
+                self.authority,
+                cur=cur,
+                acting_party_ref=requesting_party_ref,
+                action_class=("OUTPUT_FILE_SUBMISSION_ASSEMBLY" if as_submission
+                              else "OUTPUT_APPROVE_DOCUMENT_ASSEMBLY"),
+                action_stage="PUBLICATION",
+                scope={"scopeType": "FARM", "scopeRef": farm_ref},
+            )
+            decision_allowed = _RETAINED_AUTHORITY_DECISION_ALLOWED(decision)
             self.store.insert_record(cur, decision.request_payload)
             self.store.insert_record(cur, decision.trace_payload)
             self.store.insert_record(cur, decision.result_payload)
@@ -432,7 +500,7 @@ class OutputGenerator:
                 self.store.insert_record(cur, payload)
                 return payload
 
-            if not decision.allowed:
+            if not decision_allowed:
                 problem = decision.problems[0] if decision.problems else runtime_problem(
                     "AUTHORITY_DENIED", "Export denied", "no export authority")
                 publication_result("DENIED", [problem], "export authority denied")
@@ -456,8 +524,9 @@ class OutputGenerator:
             # degrade (explainable-evidence RFC §15.3)
             window_policy = {"policyType": "WINDOW",
                              "windowStart": window_start, "windowEnd": window_end}
-            resolution = self.materializer.resolve_for_use(
-                cur, farm_ref, use_class="ATTESTED_OUTPUT", time_policy=window_policy,
+            resolution = Materializer.resolve_for_use(
+                self.materializer, cur, farm_ref,
+                use_class="ATTESTED_OUTPUT", time_policy=window_policy,
                 required_freshness="REQUIRE_FRESH", high_consequence=True)
             mat = resolution["materialization"]
             if mat is None or resolution["freshness"] != "FRESH":
@@ -628,12 +697,12 @@ class OutputGenerator:
             # against the store (views/VIEWS.md "Identification")
             self.store.insert_record(cur, metadata)
             self.store.registry.validate(qualification)
-            cur.execute(
+            _CURSOR_EXECUTE_READ(cur,
                 "SELECT digest, metadata_record_id, document, runtime_bundle_digest "
                 "FROM ONLY export_artifact WHERE artifact_ref = %s", (durable_ref,))
             prior_artifact = cur.fetchone()
             if prior_artifact is None:
-                cur.execute(
+                _CURSOR_EXECUTE_MUTATION(cur,
                     "INSERT INTO export_artifact "
                     "(artifact_ref, digest, metadata_record_id, document, "
                     "runtime_bundle_digest) VALUES (%s, %s, %s, %s, %s)",

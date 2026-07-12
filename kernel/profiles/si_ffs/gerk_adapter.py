@@ -50,9 +50,11 @@ from ...runtime_bundle import (
     RuntimeBundleError,
     _copy_runtime_cache_value,
     _freeze_runtime_cache,
+    _runtime_cache_state,
     require_store_runtime_bundle,
     sha256_bytes,
 )
+from ...store import Store
 
 # GERK scheme constants (SI-specific). The parcel identity is the GERK-PID; the
 # layer supplies area + use code (RABA_ID / OPIS_RABE). Values mirror the shipped
@@ -81,6 +83,36 @@ GERK_CADENCE = {
 }
 _PARSER_RUNTIME_MODULES = ("argparse", "csv", "pathlib", "struct", "sys")
 _PARSER_RUNTIME_CODECS = ("cp1250", "utf-8-sig")
+_RETAINED_IMPORT_RUNNER_TYPE = ImportRunner
+_RETAINED_IMPORT_RUN = _RETAINED_IMPORT_RUNNER_TYPE.run_import
+_RETAINED_IMPORT_RUN_CODE = _RETAINED_IMPORT_RUN.__code__
+
+
+def _require_retained_import_run(store) -> None:
+    if (ImportRunner is not _RETAINED_IMPORT_RUNNER_TYPE
+            or vars(_RETAINED_IMPORT_RUNNER_TYPE).get("run_import") is not
+            _RETAINED_IMPORT_RUN
+            or _RETAINED_IMPORT_RUN.__code__ is not
+            _RETAINED_IMPORT_RUN_CODE):
+        if type(store) is Store:
+            Store._mark_transaction_integrity_violation(store)
+        raise RuntimeBundleError(
+            "GERK retained ImportRunner.run_import changed before invocation")
+
+
+def _run_retained_import(store, parse_result, snapshot_meta, *, data_family):
+    _require_retained_import_run(store)
+    runner = object.__new__(_RETAINED_IMPORT_RUNNER_TYPE)
+    object.__setattr__(runner, "store", store)
+    _require_retained_import_run(store)
+    try:
+        result = _RETAINED_IMPORT_RUN(
+            runner, parse_result, snapshot_meta, data_family=data_family)
+    except BaseException:
+        _require_retained_import_run(store)
+        raise
+    _require_retained_import_run(store)
+    return result
 
 
 def preload_runtime_import_surface() -> tuple[object, ...]:
@@ -223,7 +255,7 @@ def import_gerk_snapshot(store, artifact, *, layer_date=None, version_label=None
     try:
         _require_pinned_parser(store, artifact)
     except RuntimeBundleError as exc:
-        result = ImportRunner(store).run_import(
+        result = _run_retained_import(store,
             ParseResult(ok=False, error=str(exc)),
             {"referenceSnapshotId": None}, data_family=GERK_DATA_FAMILY)
         return {**result, "disposition": "PARSER_BUNDLE_MISMATCH",
@@ -236,7 +268,7 @@ def import_gerk_snapshot(store, artifact, *, layer_date=None, version_label=None
         # gate-log entry, no snapshot/data — never a hand-built mini problem that
         # bypasses the audit trail (PR #12 review). No snapshot id to reference
         # (the vintage dates it), so the refusal carries no related ref.
-        result = ImportRunner(store).run_import(
+        result = _run_retained_import(store,
             ParseResult(ok=False, error=error),
             {"referenceSnapshotId": None}, data_family=GERK_DATA_FAMILY)
         return {**result, "disposition": disposition, "layerDate": layer_date}
@@ -294,7 +326,7 @@ def import_gerk_snapshot(store, artifact, *, layer_date=None, version_label=None
                  "(discrepancies route to review). Attributes only (no domace ime / "
                  "BLOK-ID / NUP). Parser: " + GERK_PARSER_REF,
     }
-    result = ImportRunner(store).run_import(
+    result = _run_retained_import(store,
         ParseResult(ok=True, sourceDigest=digest, artifactRef=source_artifact_ref,
                     recordCount=artifact.get("featureCount"), records=artifact),
         meta, data_family=GERK_DATA_FAMILY)
@@ -320,12 +352,23 @@ class GerkLayer:
     identity existence (G1)."""
 
     def __setattr__(self, name, value):
-        if (getattr(self, "_frozen", False)
-                and name in {
-                    "runtime_bundle", "_by_snapshot", "_unavailable_snapshot_refs",
-                    "_frozen"}):
+        immutable_fields = {
+            "runtime_bundle", "_by_snapshot", "_unavailable_snapshot_refs",
+            "_frozen"}
+        if ((name in immutable_fields and name in vars(self))
+                or (vars(self).get("_frozen", False) is not False
+                    and callable(getattr(type(self), name, None)))):
             raise AttributeError("GerkLayer runtime composition is immutable")
         object.__setattr__(self, name, value)
+
+    def __delattr__(self, name):
+        if (name in {
+                "runtime_bundle", "_by_snapshot", "_unavailable_snapshot_refs",
+                "_frozen"}
+                or (vars(self).get("_frozen", False) is not False
+                    and callable(getattr(type(self), name, None)))):
+            raise AttributeError("GerkLayer sealed runtime state cannot be deleted")
+        object.__delattr__(self, name)
 
     def __init__(self, *, runtime_bundle=None):
         self.runtime_bundle = runtime_bundle
@@ -352,7 +395,7 @@ class GerkLayer:
             )
 
     def register_artifact(self, snapshot_id: str, artifact: dict) -> None:
-        if self._frozen:
+        if self._frozen is not False:
             raise RuntimeError("GerkLayer is immutable for the RuntimeBundle lifetime")
         features = copy.deepcopy(artifact.get("features", []))
         # defense-in-depth: import_gerk_snapshot already refuses a layer with a
@@ -367,8 +410,10 @@ class GerkLayer:
 
     def freeze(self) -> None:
         """End construction and recursively freeze retained lookup state."""
-        if self._frozen:
+        if self._frozen is True:
             return
+        if self._frozen is not False:
+            raise RuntimeError("GerkLayer frozen state is malformed")
         object.__setattr__(self, "_by_snapshot", _freeze_runtime_cache(
             self._by_snapshot))
         object.__setattr__(self, "_unavailable_snapshot_refs",
@@ -381,7 +426,7 @@ class GerkLayer:
         only from committed package files. The runtime never guesses."""
         if self.runtime_bundle is not None:
             require_store_runtime_bundle(store, self.runtime_bundle, "GERK layer load")
-            if not self._frozen:
+            if self._frozen is not True:
                 raise RuntimeBundleError(
                     "bundle-backed GERK cache was not frozen at construction")
             return
@@ -403,3 +448,86 @@ class GerkLayer:
                 f"GERK snapshot {snapshot_id!r} is not selected in this RuntimeBundle")
         return _copy_runtime_cache_value(
             self._by_snapshot.get(snapshot_id, {}).get(gerk_pid))
+
+
+_RETAINED_GERK_LAYER_TYPE = GerkLayer
+_RETAINED_GERK_LOOKUP = GerkLayer.lookup
+_RETAINED_GERK_LOOKUP_CODE = _RETAINED_GERK_LOOKUP.__code__
+_RETAINED_GERK_STORE_TRANSACTION_POSTURE = \
+    Store._require_transaction_python_posture
+_RETAINED_GERK_STORE_TRANSACTION_POSTURE_CODE = \
+    _RETAINED_GERK_STORE_TRANSACTION_POSTURE.__code__
+_RETAINED_GERK_STORE_INTEGRITY_MARKER = \
+    Store._mark_transaction_integrity_violation
+_RETAINED_GERK_STORE_INTEGRITY_MARKER_CODE = \
+    _RETAINED_GERK_STORE_INTEGRITY_MARKER.__code__
+
+
+def _mark_gerk_runtime_integrity_violation(store) -> None:
+    if (type(store) is Store
+            and vars(Store).get("_mark_transaction_integrity_violation") is
+            _RETAINED_GERK_STORE_INTEGRITY_MARKER
+            and _RETAINED_GERK_STORE_INTEGRITY_MARKER.__code__ is
+            _RETAINED_GERK_STORE_INTEGRITY_MARKER_CODE):
+        _RETAINED_GERK_STORE_INTEGRITY_MARKER(store)
+
+
+def require_gerk_layer_runtime_composition(store, layer, label: str) -> None:
+    """Require an exact frozen cache rebuilt from selected GERK bytes."""
+    try:
+        if (type(store) is not Store
+                or globals().get(
+                    "require_gerk_layer_runtime_composition") is not
+                _RETAINED_GERK_COMPOSITION_GUARD
+                or _RETAINED_GERK_COMPOSITION_GUARD.__code__ is not
+                _RETAINED_GERK_COMPOSITION_GUARD_CODE
+                or vars(Store).get("_require_transaction_python_posture") is not
+                _RETAINED_GERK_STORE_TRANSACTION_POSTURE
+                or _RETAINED_GERK_STORE_TRANSACTION_POSTURE.__code__ is not
+                _RETAINED_GERK_STORE_TRANSACTION_POSTURE_CODE):
+            raise RuntimeBundleError(
+                f"{label} Store runtime dispatch changed before decision")
+        _RETAINED_GERK_STORE_TRANSACTION_POSTURE(store)
+        bundle = Store.runtime_bundle.fget(store)
+        require_store_runtime_bundle(store, bundle, label)
+        if (type(layer) is not _RETAINED_GERK_LAYER_TYPE
+                or vars(layer).get("_frozen") is not True
+                or layer.runtime_bundle is not bundle
+                or any(callable(getattr(_RETAINED_GERK_LAYER_TYPE, name, None))
+                       for name in vars(layer))
+                or vars(_RETAINED_GERK_LAYER_TYPE).get("lookup") is not
+                _RETAINED_GERK_LOOKUP
+                or _RETAINED_GERK_LOOKUP.__code__ is not
+                _RETAINED_GERK_LOOKUP_CODE):
+            raise RuntimeBundleError(
+                f"{label} GerkLayer runtime composition changed")
+        expected = _RETAINED_GERK_LAYER_TYPE(runtime_bundle=bundle)
+        if (_runtime_cache_state(layer._by_snapshot) !=
+                _runtime_cache_state(expected._by_snapshot)
+                or _runtime_cache_state(layer._unavailable_snapshot_refs) !=
+                _runtime_cache_state(expected._unavailable_snapshot_refs)):
+            raise RuntimeBundleError(
+                f"{label} GerkLayer cache was not derived from selected bytes")
+    except BaseException:
+        _mark_gerk_runtime_integrity_violation(store)
+        raise
+
+
+_RETAINED_GERK_COMPOSITION_GUARD = require_gerk_layer_runtime_composition
+_RETAINED_GERK_COMPOSITION_GUARD_CODE = \
+    _RETAINED_GERK_COMPOSITION_GUARD.__code__
+
+
+def invoke_gerk_layer_lookup(store, layer, snapshot_id: str, gerk_pid: str):
+    """Invoke retained GERK lookup with immediate pre/post checks."""
+    _RETAINED_GERK_COMPOSITION_GUARD(
+        store, layer, "GERK parcel resolution")
+    try:
+        result = _RETAINED_GERK_LOOKUP(layer, snapshot_id, gerk_pid)
+    except BaseException:
+        _RETAINED_GERK_COMPOSITION_GUARD(
+            store, layer, "GERK parcel resolution")
+        raise
+    _RETAINED_GERK_COMPOSITION_GUARD(
+        store, layer, "GERK parcel resolution")
+    return result

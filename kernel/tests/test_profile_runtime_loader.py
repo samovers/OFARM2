@@ -43,7 +43,14 @@ from kernel.profile_runtime import (
     resolve_active_descriptor,
 )
 from kernel.runtime_bundle import _build_live_runtime_bundle, build_runtime_bundle
-from kernel.stages import IngressNormalizer
+from kernel.stages import (
+    AuthorityGate,
+    EvidenceSufficiencyGate,
+    GatePass,
+    GateRefusal,
+    IngressNormalizer,
+    ProfileApplicabilityGate,
+)
 from kernel.store import Store
 from kernel.views import OutputGenerator
 
@@ -212,7 +219,8 @@ def _route_pipeline(store, *, routes=None, registry=None, selected=None, tenant=
     route_store = Store(dsn=store.dsn)
     # The fresh-env owner closes this shared connection at teardown; using the
     # same connection avoids leaving a second backend attached to the test DB.
-    route_store._conn = store.conn
+    Store._raw_connection(store)
+    route_store._conn = store._conn
     context.bootstrap_for_descriptor(
         route_store,
         config.ACTIVE_PROFILE,
@@ -306,7 +314,7 @@ def _insert_decoy_spine(store) -> dict:
         if not ref.startswith("codebindingprofile:")
     ] + [profile_id]
 
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, profile)
         store.insert_record(cur, activation)
         store.insert_record(cur, artifact)
@@ -358,7 +366,7 @@ def _bootstrap_demo_substrate_only(store) -> None:
         record_id = payload[contract.id_field]
         if store.record_exists(record_id):
             continue
-        with store.tx() as cur:
+        with store.serialized_tx() as cur:
             store.insert_record(cur, payload)
 
 
@@ -523,7 +531,7 @@ def _preseeded_dirty_spine_store(mutate):
             record_id = payload[contract.id_field]
             if store.record_exists(record_id):
                 continue
-            with store.tx() as cur:
+            with store.serialized_tx() as cur:
                 store.insert_record(cur, payload)
         yield store
     finally:
@@ -1643,9 +1651,9 @@ def test_explicit_descriptor_reference_snapshots_match_wrapper(fresh_env):
 def test_explicit_descriptor_context_assembly_matches_wrapper(fresh_env):
     store, _, _ = fresh_env
 
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         implicit = context.ContextAssembler(store).assemble(cur, demo.FARM)
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         explicit = context.ContextAssembler(
             store,
             active_profile=config.ACTIVE_PROFILE,
@@ -1658,13 +1666,13 @@ def test_explicit_descriptor_asof_context_matches_wrapper(fresh_env):
     store, _, _ = fresh_env
     policy = {"policyType": "AS_OF", "asOfTime": "2026-12-01T00:00:00Z"}
 
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         implicit = context.ContextAssembler(store).assemble(
             cur,
             demo.FARM,
             evaluation_time_policy=policy,
         )
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         explicit = context.ContextAssembler(
             store,
             active_profile=config.ACTIVE_PROFILE,
@@ -1705,7 +1713,7 @@ def test_now_context_uses_descriptor_spine_not_later_store_rows(fresh_env):
     store, _, _ = fresh_env
     decoy = _insert_decoy_spine(store)
 
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         snap = context.ContextAssembler(store).assemble(cur, demo.FARM)
 
     assert snap["activeArtifactSetRef"] == config.ACTIVE_PROFILE.active_artifact_set_ref
@@ -1721,7 +1729,7 @@ def test_explicit_descriptor_now_context_uses_descriptor_spine_not_later_store_r
     store, _, _ = fresh_env
     decoy = _insert_decoy_spine(store)
 
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         snap = context.ContextAssembler(
             store,
             active_profile=config.ACTIVE_PROFILE,
@@ -2013,7 +2021,7 @@ def test_route_backed_gate_pipeline_counts_malformed_farm_scope_entries(
         confirm=True,
     )
 
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         ctx = pipeline._new_context(cur, sub)
         ctx.envelope = {
             "anchorScopes": [
@@ -2338,30 +2346,20 @@ def test_route_backed_gate_pipeline_refuses_design_only_route_target(
 
 
 def test_route_backed_gate_pipeline_uses_descriptor_backed_policy_paths(
-        fresh_env, monkeypatch):
+        fresh_env):
     store, _, _ = fresh_env
+    pipeline = _route_pipeline(store)
 
-    def fail_config_policy(*_args, **_kwargs):
-        raise AssertionError("config-backed policy path was called")
-
-    monkeypatch.setattr(profile_policy, "validation_policy", fail_config_policy)
-    monkeypatch.setattr(profile_policy, "load_evidence_review_policy",
-                        fail_config_policy)
-    monkeypatch.setattr(profile_policy, "operation_floor_with_display",
-                        fail_config_policy)
-    monkeypatch.setattr(profile_policy, "operation_floor_display",
-                        fail_config_policy)
-    monkeypatch.setattr(profile_policy, "advisory_rules", fail_config_policy)
-    monkeypatch.setattr(sufficiency, "build_floor_case", fail_config_policy)
-    monkeypatch.setattr(sufficiency, "operation_advisories", fail_config_policy)
-
-    result = _route_pipeline(store).commit(demo.spray_submission(
+    submission = demo.spray_submission(
         f"mp7-route-provider:{_uid()}",
         erp_id=f"erp:mp7.route.provider.{_uid()}",
         confirm=True,
-    ))
+    )
+    result = pipeline.commit(submission)
 
     assert result["decisionOutcome"] == "PROMOTE_ACCEPTED"
+    assert type(pipeline.policy_provider) is \
+        profile_policy.DescriptorPolicyProvider
 
 
 def test_route_backed_handoff_binds_materializer_to_resolved_descriptor(fresh_env):
@@ -2373,7 +2371,7 @@ def test_route_backed_handoff_binds_materializer_to_resolved_descriptor(fresh_en
         confirm=True,
     )
 
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         ctx = pipeline._new_context(cur, sub)
         ingress = IngressNormalizer().run(ctx)
         assert not hasattr(ingress, "result")
@@ -2404,47 +2402,36 @@ def test_output_generator_explicit_descriptor_matches_default_profile_refs(fresh
 
 
 def test_descriptor_backed_validation_uses_provider_without_config_wrapper(
-        fresh_env, monkeypatch):
-    store, _, _ = fresh_env
+        fresh_env):
+    store, pipeline, _ = fresh_env
 
-    def fail_config_policy(*_args, **_kwargs):
-        raise AssertionError("config-backed validation policy path was called")
-
-    monkeypatch.setattr(profile_policy, "validation_policy", fail_config_policy)
-
-    result = GatePipeline(store).commit(demo.spray_submission(
+    submission = demo.spray_submission(
         f"mp3d-validation-provider:{_uid()}",
         erp_id=f"erp:mp3d.validation.provider.{_uid()}",
         confirm=True,
-    ))
+    )
+    result = pipeline.commit(submission)
 
     assert result["decisionOutcome"] == "PROMOTE_ACCEPTED"
+    assert pipeline.policy_provider.validation_policy() == \
+        pipeline.runtime_bundle.json_component(
+            "PROFILE_POLICY", config.ACTIVE_PROFILE.validation_policy_ref)
 
 
 def test_descriptor_backed_sufficiency_uses_provider_without_config_wrappers(
-        fresh_env, monkeypatch):
-    store, _, _ = fresh_env
+        fresh_env):
+    store, pipeline, _ = fresh_env
 
-    def fail_config_policy(*_args, **_kwargs):
-        raise AssertionError("config-backed sufficiency policy path was called")
-
-    monkeypatch.setattr(profile_policy, "load_evidence_review_policy",
-                        fail_config_policy)
-    monkeypatch.setattr(profile_policy, "operation_floor_with_display",
-                        fail_config_policy)
-    monkeypatch.setattr(profile_policy, "operation_floor_display",
-                        fail_config_policy)
-    monkeypatch.setattr(profile_policy, "advisory_rules", fail_config_policy)
-    monkeypatch.setattr(sufficiency, "build_floor_case", fail_config_policy)
-    monkeypatch.setattr(sufficiency, "operation_advisories", fail_config_policy)
-
-    result = GatePipeline(store).commit(demo.spray_submission(
+    submission = demo.spray_submission(
         f"mp3d-sufficiency-provider:{_uid()}",
         erp_id=f"erp:mp3d.sufficiency.provider.{_uid()}",
         confirm=True,
-    ))
+    )
+    result = pipeline.commit(submission)
 
     assert result["decisionOutcome"] == "PROMOTE_ACCEPTED"
+    assert pipeline.policy_provider.policy_ref == \
+        config.ACTIVE_PROFILE.evidence_policy_ref
 
 
 def test_global_operation_sequence_uses_named_compatibility_constructors():
@@ -2463,7 +2450,7 @@ def test_global_operation_sequence_uses_named_compatibility_constructors():
 
 
 def test_acceptance_sufficiency_uses_descriptor_policy_ref_without_policy_body(
-        fresh_env, monkeypatch):
+        fresh_env):
     store, pipeline, _ = fresh_env
     queued = pipeline.commit(demo.spray_submission(
         f"mp3d-accept-queued:{_uid()}",
@@ -2472,13 +2459,7 @@ def test_acceptance_sufficiency_uses_descriptor_policy_ref_without_policy_body(
     ))
     assert queued["decisionOutcome"] == "RETAIN_DRAFT"
 
-    def fail_descriptor_policy(*_args, **_kwargs):
-        raise AssertionError("acceptance path loaded the full descriptor policy")
-
-    monkeypatch.setattr(profile_policy, "load_evidence_review_policy_for_descriptor",
-                        fail_descriptor_policy)
-
-    accepted = pipeline.commit({
+    submission = {
         "commitClass": "GOVERNANCE_DECISION",
         "actingPartyRef": demo.FARMER,
         "farmRef": demo.FARM,
@@ -2486,7 +2467,8 @@ def test_acceptance_sufficiency_uses_descriptor_policy_ref_without_policy_body(
         "decisionTime": "2026-06-10T10:00:00Z",
         "reviewTargetAssertionRef": queued["emittedAssertionRecordRefs"][0],
         "reviewRationale": "self-review of a routine operation claim meeting the floor",
-    })
+    }
+    accepted = pipeline.commit(submission)
 
     assert accepted["decisionOutcome"] == "PROMOTE_ACCEPTED"
     case = _case_payload(store, accepted)
@@ -2495,66 +2477,86 @@ def test_acceptance_sufficiency_uses_descriptor_policy_ref_without_policy_body(
         config.ACTIVE_PROFILE.evidence_policy_ref}
 
 
-def test_descriptor_validation_policy_failure_stops_at_validation(
-        fresh_env, monkeypatch):
-    store, _, _ = fresh_env
+def test_descriptor_validation_policy_failure_stops_at_validation(fresh_env):
+    store, pipeline, _ = fresh_env
 
-    def fail_validation_policy(_provider):
-        raise profile_policy.ProfilePolicyError("descriptor validation unavailable")
+    class FailingValidationPolicyProvider:
+        @staticmethod
+        def validation_policy():
+            raise profile_policy.ProfilePolicyError(
+                "descriptor validation unavailable")
 
-    monkeypatch.setattr(profile_policy.DescriptorPolicyProvider, "validation_policy",
-                        fail_validation_policy)
-
-    result = GatePipeline(store).commit(demo.spray_submission(
+    submission = demo.spray_submission(
         f"mp3d-validation-fail:{_uid()}",
         erp_id=f"erp:mp3d.validation.fail.{_uid()}",
         confirm=True,
-    ))
+    )
+    with pytest.raises(RuntimeError, match="rollback-only stage probe"):
+        with store.serialized_tx() as cur:
+            ctx = pipeline._new_context(cur, submission)
+            assert isinstance(IngressNormalizer().run(ctx), GatePass)
+            assert isinstance(AuthorityGate().run(ctx), GatePass)
+            ctx.policy_provider = FailingValidationPolicyProvider()
+            refusal = validators.ValidationGate().run(ctx)
+            raise RuntimeError("rollback-only stage probe")
 
-    assert result["decisionOutcome"] == "RETAIN_DRAFT"
-    assert result["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
-    trace = _trace_payload(store, result)
-    assert [entry["gate"] for entry in trace["gateSequence"]] == [
+    assert isinstance(refusal, GateRefusal)
+    assert refusal.final_outcome == "RETAIN_DRAFT"
+    assert refusal.problems[0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+    assert [entry["gate"] for entry in ctx.gate_sequence] == [
         "INGRESS_NORMALIZATION",
         "AUTHORITY",
         "VALIDATION",
     ]
-    assert trace["gateSequence"][-1]["outcome"] == "FAIL_PROFILE_POLICY"
-    assert "evidenceSufficiencyCaseRef" not in trace
+    assert ctx.gate_sequence[-1]["outcome"] == "FAIL_PROFILE_POLICY"
+    assert "evidenceSufficiencyCaseRef" not in ctx.trace_refs
 
 
 def test_descriptor_sufficiency_policy_failure_happens_after_validation(
-        fresh_env, monkeypatch):
-    store, _, _ = fresh_env
-    validation = profile_policy.validation_policy_for_descriptor(config.ACTIVE_PROFILE)
+        fresh_env):
+    store, pipeline, _ = fresh_env
 
-    monkeypatch.setattr(profile_policy.DescriptorPolicyProvider, "validation_policy",
-                        lambda _provider: validation)
+    class FailingEvidencePolicyProvider:
+        def __init__(self, provider):
+            self.policy_ref = provider.policy_ref
+            self.recognized_rule_refs = provider.recognized_rule_refs
 
-    def fail_evidence_policy(_provider, *_args, **_kwargs):
-        raise profile_policy.ProfilePolicyError("descriptor floor unavailable")
+        @staticmethod
+        def evidence_policy(*_args, **_kwargs):
+            raise profile_policy.ProfilePolicyError(
+                "descriptor floor unavailable")
 
-    monkeypatch.setattr(profile_policy.DescriptorPolicyProvider, "evidence_policy",
-                        fail_evidence_policy)
-
-    result = GatePipeline(store).commit(demo.spray_submission(
+    submission = demo.spray_submission(
         f"mp3d-sufficiency-fail:{_uid()}",
         erp_id=f"erp:mp3d.sufficiency.fail.{_uid()}",
         confirm=True,
-    ))
+    )
+    with pytest.raises(RuntimeError, match="rollback-only stage probe"):
+        with store.serialized_tx() as cur:
+            ctx = pipeline._new_context(cur, submission)
+            for stage in (
+                IngressNormalizer(),
+                AuthorityGate(),
+                validators.ValidationGate(),
+                ProfileApplicabilityGate(),
+            ):
+                assert isinstance(stage.run(ctx), GatePass)
+            ctx.policy_provider = FailingEvidencePolicyProvider(ctx.policy_provider)
+            refusal = EvidenceSufficiencyGate().run(ctx)
+            raise RuntimeError("rollback-only stage probe")
 
-    assert result["decisionOutcome"] == "RETAIN_DRAFT"
-    assert result["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
-    trace = _trace_payload(store, result)
-    assert [entry["gate"] for entry in trace["gateSequence"]] == [
+    assert isinstance(refusal, GateRefusal)
+    assert refusal.final_outcome == "RETAIN_DRAFT"
+    assert refusal.problems[0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+    assert [entry["gate"] for entry in ctx.gate_sequence] == [
         "INGRESS_NORMALIZATION",
         "AUTHORITY",
         "VALIDATION",
         "PACK_PROFILE_APPLICABILITY",
         "EVIDENCE_SUFFICIENCY",
     ]
-    assert trace["gateSequence"][2]["outcome"] == "PASS"
-    assert trace["gateSequence"][-1]["outcome"] == "INSUFFICIENT"
+    assert ctx.gate_sequence[2]["outcome"] == "PASS"
+    assert ctx.gate_sequence[-1]["outcome"] == "INSUFFICIENT"
 
 
 def test_descriptor_compliance_recognized_refs_are_exact():

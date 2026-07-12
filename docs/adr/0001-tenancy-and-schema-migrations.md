@@ -506,24 +506,33 @@ environment roots, then the reviewed project root.
 
 The retained OCI-derived image manifest binds the exact executable, complete
 stdlib tree, libpython/native files, loader configuration, and required loader
-preload absence. `RUNTIME_ENVIRONMENT_OBSERVED` v3 retains that image identity,
-ordered path and flag posture, a complete source/native stdlib and
-lib-dynload inventory, every locked wheel import-root member, and each actually
-loaded module's name, loader, resolved origin, byte identity, package search
-paths, and classification. It also binds `sys.meta_path` and `sys.path_hooks`
-provider provenance and live object identity. Project origins must equal
-retained `RUNTIME_CODE`; dependency and standard-runtime origins must equal
-their retained file inventory. Unknown origins refuse, with closed built-in/
-frozen and native-created auxiliary cases attributed to their retained parent
-runtime. Live selection captures exact identities for the `sys.modules`
-mapping (including `None` entries), every module object and loader state, the
-`sys.path`/meta-path/path-hook containers and providers, and every canonical
-`sys.path_importer_cache` key, `FileFinder` object, loader configuration, and
-mutable finder cache. Activation, the pre-commit bootstrap guard, and every
-later decision boundary require that immutable seal: module additions,
-removals, replacements or reload state, path/container changes, and importer
-cache/finder drift refuse instead of widening the selected runtime. It also
-inventories every file-backed executable Linux
+preload absence. `RUNTIME_ENVIRONMENT_OBSERVED` v4 persists only relocatable
+content identity: project, locked-wheel, and pinned-image locators; complete
+source/native byte digests and lengths; ordered import classifications; and
+the closed interpreter, platform, and environment policies. Checkout and
+virtual-environment paths, importer-cache keys, bytecode-cache paths, and
+device/inode values never enter the RuntimeBundle digest. Root locators are
+recomputed from their canonical file or wheel inventories and every locator
+must resolve into that declared root closure.
+
+The selection-time observation remains exact and process-local. It binds
+`sys.meta_path` and `sys.path_hooks` provider provenance and live object
+identity, the `sys.modules` mapping (including `None` entries), every module
+object and loader state, the `sys.path`/meta-path/path-hook containers and
+providers, and every canonical `sys.path_importer_cache` key, `FileFinder`
+object, loader configuration, mutable finder cache, physical origin, and
+device/inode signature. A second stable component receipts the declared
+decision-semantic roots and their referenced global-binding closure. Its
+per-root digests cover mutable policy data, function bytecode/defaults/closure
+state, class descriptors and class data, ordered gate/validator instances, and
+the Store verification path. A pre-selection mutation therefore changes the
+RuntimeBundle digest; after selection, exact object/container/code identity is
+the write-once process seal. Activation, the pre-commit bootstrap guard, and
+every later decision boundary require that seal: semantic rebinding, method or
+chain mutation, module additions, removals, replacements or reload state,
+path/container changes, and importer-cache/finder drift refuse instead of
+widening the selected runtime. The local observation also inventories every
+file-backed executable Linux
 mapping, attributes it to the read-only image or a hash-locked wheel, explicitly
 receipts the kernel vDSO/vsyscall boundary, and rejects anonymous, deleted,
 memfd, unknown, or late-added mappings before a governed commit.
@@ -551,6 +560,29 @@ transaction takes the same catalog locks before recomputing the receipt and
 holds them through commit, so DDL cannot land between verification and decision
 SQL. Concurrent non-cooperating DDL therefore finishes before the check or
 waits until the governed transaction completes.
+
+Immediately before every outer COMMIT, while those catalog locks are still
+held, the runtime repeats its Python/semantic seal and exact PostgreSQL
+observation. It first observes without repairing late role or GUC drift,
+recomputes the complete catalog receipt, and observes again after the schema
+classifier. Same-session DDL or a late decision-bearing session mutation rolls
+back the current transaction instead of becoming visible and being discovered
+only by the next request.
+
+The prototype's Python guard is an integrity boundary for reviewed public
+runtime entry points, not a sandbox for arbitrary code already executing in the
+same interpreter. Public `Store.conn` and every yielded cursor expose read-only
+SQL; reviewed Store writers retain the only ordinary mutation capability and
+recheck exact cursor ownership. Underscore-prefixed raw connection state,
+name-mangled slots, `object.__setattr__`, direct class/module dictionary writes,
+or a same-call mutate-and-restore of those private objects are private
+reflection and therefore equivalent to arbitrary in-process code execution.
+They are outside this Python-level threat boundary. No untrusted plugin,
+extension, callback, or tenant-authored Python may run in the service process;
+the digest-pinned read-only image and deployment code-loading policy enforce
+that premise. A future design that admits untrusted code must isolate it in a
+different process and database role rather than claiming these Python guards
+are a security sandbox.
 
 This transitional, pre-deployment prototype uses one elevated schema-owner and
 runtime identity because both installation and the per-transaction DDL exclusion

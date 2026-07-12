@@ -34,7 +34,11 @@ from .contracts import sha256_of
 from .emission import PromotionTraceWriter, ReplayWriter
 from .materializer import Materializer
 from .problems import runtime_problem
-from .runtime_bundle import RuntimeBundleError, require_store_runtime_bundle
+from .runtime_bundle import (
+    RuntimeBundleError,
+    require_store_runtime_bundle,
+)
+from .store import Store
 from .profile_runtime import (ProfileRuntimeError, resolve_active_descriptor,
                               profile_route_selection_document,
                               resolve_profile_route)
@@ -57,6 +61,107 @@ CHAIN = (
     ReviewPromotionGate(),
 )
 
+_GATE_ENTRY_CALLABLES = (
+    (IngressNormalizer, "run", IngressNormalizer.run,
+     IngressNormalizer.run.__code__),
+    (MaterializationGate, "run", MaterializationGate.run,
+     MaterializationGate.run.__code__),
+    (PromotionTraceWriter, "write", PromotionTraceWriter.write,
+     PromotionTraceWriter.write.__code__),
+    (ReplayWriter, "write", ReplayWriter.write, ReplayWriter.write.__code__),
+)
+_RETAINED_GATE_ENTRY_CALLABLES = _GATE_ENTRY_CALLABLES
+
+
+def _has_instance_dispatch_override(instance) -> bool:
+    """Reject an instance attribute that shadows executable class behavior."""
+    return any(
+        callable(getattr(type(instance), name, None))
+        for name in vars(instance)
+    )
+
+
+def _raise_retained_gate_dispatch_error(store, message: str) -> None:
+    """Poison an active write transaction before reporting dispatch drift."""
+    if type(store) is Store:
+        Store._mark_transaction_integrity_violation(store)
+    raise RuntimeBundleError(message)
+
+
+def _require_retained_gate_callable(store, entry, instance) -> None:
+    if type(entry) is not tuple or len(entry) != 4:
+        _RETAINED_RAISE_GATE_DISPATCH_ERROR(
+            store, "retained gate dispatch entry is malformed")
+    owner, name, function, code = entry
+    if (type(instance) is not owner
+            or _RETAINED_HAS_INSTANCE_DISPATCH_OVERRIDE(instance)
+            or vars(owner).get(name) is not function
+            or getattr(function, "__code__", None) is not code):
+        _RETAINED_RAISE_GATE_DISPATCH_ERROR(
+            store, "retained gate callable changed before invocation")
+
+
+def _invoke_retained_gate_callable(store, entry, instance, *args):
+    """Invoke one retained function with immediate pre/post code checks."""
+    _RETAINED_REQUIRE_GATE_CALLABLE(store, entry, instance)
+    function = entry[2]
+    try:
+        result = function(instance, *args)
+    except BaseException:
+        _RETAINED_REQUIRE_GATE_CALLABLE(store, entry, instance)
+        raise
+    _RETAINED_REQUIRE_GATE_CALLABLE(store, entry, instance)
+    return result
+
+
+def _invoke_gate_entry(store, index: int, *args):
+    entry = _RETAINED_GATE_ENTRY_CALLABLES[index]
+    return _RETAINED_INVOKE_GATE_CALLABLE(
+        store, entry, object.__new__(entry[0]), *args)
+
+
+def _invoke_retained_stage(store, stage_dispatch, ctx):
+    if type(stage_dispatch) is not tuple or len(stage_dispatch) != 4:
+        _RETAINED_RAISE_GATE_DISPATCH_ERROR(
+            store, "retained stage dispatch entry is malformed")
+    stage, owner, function, code = stage_dispatch
+    return _RETAINED_INVOKE_GATE_CALLABLE(
+        store, (owner, "run", function, code), stage, ctx)
+
+
+_RETAINED_HAS_INSTANCE_DISPATCH_OVERRIDE = _has_instance_dispatch_override
+_RETAINED_HAS_INSTANCE_DISPATCH_OVERRIDE_CODE = \
+    _RETAINED_HAS_INSTANCE_DISPATCH_OVERRIDE.__code__
+_RETAINED_RAISE_GATE_DISPATCH_ERROR = _raise_retained_gate_dispatch_error
+_RETAINED_RAISE_GATE_DISPATCH_ERROR_CODE = \
+    _RETAINED_RAISE_GATE_DISPATCH_ERROR.__code__
+_RETAINED_REQUIRE_GATE_CALLABLE = _require_retained_gate_callable
+_RETAINED_REQUIRE_GATE_CALLABLE_CODE = \
+    _RETAINED_REQUIRE_GATE_CALLABLE.__code__
+_RETAINED_INVOKE_GATE_CALLABLE = _invoke_retained_gate_callable
+_RETAINED_INVOKE_GATE_CALLABLE_CODE = \
+    _RETAINED_INVOKE_GATE_CALLABLE.__code__
+_RETAINED_INVOKE_GATE_ENTRY = _invoke_gate_entry
+_RETAINED_INVOKE_GATE_ENTRY_CODE = _RETAINED_INVOKE_GATE_ENTRY.__code__
+_RETAINED_INVOKE_STAGE = _invoke_retained_stage
+_RETAINED_INVOKE_STAGE_CODE = _RETAINED_INVOKE_STAGE.__code__
+_GATE_HELPER_ANCHORS = (
+    ("_has_instance_dispatch_override",
+     _RETAINED_HAS_INSTANCE_DISPATCH_OVERRIDE,
+     _RETAINED_HAS_INSTANCE_DISPATCH_OVERRIDE_CODE),
+    ("_raise_retained_gate_dispatch_error",
+     _RETAINED_RAISE_GATE_DISPATCH_ERROR,
+     _RETAINED_RAISE_GATE_DISPATCH_ERROR_CODE),
+    ("_require_retained_gate_callable", _RETAINED_REQUIRE_GATE_CALLABLE,
+     _RETAINED_REQUIRE_GATE_CALLABLE_CODE),
+    ("_invoke_retained_gate_callable", _RETAINED_INVOKE_GATE_CALLABLE,
+     _RETAINED_INVOKE_GATE_CALLABLE_CODE),
+    ("_invoke_gate_entry", _RETAINED_INVOKE_GATE_ENTRY,
+     _RETAINED_INVOKE_GATE_ENTRY_CODE),
+    ("_invoke_retained_stage", _RETAINED_INVOKE_STAGE,
+     _RETAINED_INVOKE_STAGE_CODE),
+)
+
 
 class GatePipeline:
     _SEALED_FIELDS = {
@@ -64,14 +169,26 @@ class GatePipeline:
         "profile_route_registry", "selected_profile_package_names", "tenant_ref",
         "active_profile", "runtime_bundle", "policy_provider",
         "si_reference_bindings", "si_reference_bindings_descriptor", "authority",
-        "context", "materializer", "products",
+        "context", "materializer", "products", "chain",
+        "_stage_dispatch", "_runtime_composition_sealed",
     }
 
     def __setattr__(self, name, value):
-        if (getattr(self, "_runtime_composition_sealed", False)
-                and name in self._SEALED_FIELDS):
-            raise AttributeError("GatePipeline runtime composition is immutable")
+        if getattr(self, "_runtime_composition_sealed", False):
+            if name in self._SEALED_FIELDS:
+                raise AttributeError(
+                    "GatePipeline runtime composition is immutable")
+            if callable(getattr(type(self), name, None)):
+                raise AttributeError("GatePipeline runtime dispatch is immutable")
         object.__setattr__(self, name, value)
+
+    def __delattr__(self, name):
+        if (getattr(self, "_runtime_composition_sealed", False)
+                and (name in self._SEALED_FIELDS
+                     or callable(getattr(type(self), name, None)))):
+            raise AttributeError(
+                "GatePipeline sealed runtime state cannot be deleted")
+        object.__delattr__(self, name)
 
     def __init__(
         self,
@@ -162,6 +279,10 @@ class GatePipeline:
             self.si_reference_bindings, runtime_bundle=self.runtime_bundle)
         self.products.load_from_store(store)
         self.products.freeze()
+        self.chain = CHAIN
+        self._stage_dispatch = tuple(
+            (stage, type(stage), type(stage).run, type(stage).run.__code__)
+            for stage in self.chain)
         self._runtime_composition_sealed = True
 
     def _assert_runtime_composition(self) -> None:
@@ -170,24 +291,93 @@ class GatePipeline:
         expected_policy_refs = \
             profile_policy.DescriptorPolicyProvider.expected_recognized_rule_refs(
                 self.active_profile)
-        if (self.runtime_bundle.descriptor != self.active_profile
+        expected_bindings = SIReferenceBindings.from_descriptor(
+            self.active_profile, runtime_bundle=self.runtime_bundle)
+        expected_products = ProductRegister(
+            expected_bindings, runtime_bundle=self.runtime_bundle)
+        route_selection_matches = not self.route_backed
+        if self.route_backed:
+            try:
+                route_selection_matches = profile_route_selection_document(
+                    self.profile_route_registry,
+                    self.selected_profile_package_names,
+                    self.profile_route_records,
+                    tenant_ref=self.tenant_ref,
+                ) == self.runtime_bundle.json_component(
+                    "PROFILE_ROUTE_SELECTION", "profile-route-selection:active")
+            except (ProfileRuntimeError, RuntimeBundleError, TypeError, ValueError):
+                route_selection_matches = False
+        services = (
+            self.policy_provider, self.authority, self.context,
+            self.materializer, self.materializer.context, self.products,
+        )
+        if (type(self) is not GatePipeline
+                or self._runtime_composition_sealed is not True
+                or self.runtime_bundle.descriptor != self.active_profile
+                or not route_selection_matches
+                or _RETAINED_HAS_INSTANCE_DISPATCH_OVERRIDE(self)
+                or _RETAINED_HAS_INSTANCE_DISPATCH_OVERRIDE(self.store)
+                or type(self.store) is not Store
+                or type(self.policy_provider) is not
+                profile_policy.DescriptorPolicyProvider
+                or type(self.authority) is not AuthorityEvaluator
+                or type(self.context) is not ContextAssembler
+                or type(self.materializer) is not Materializer
+                or type(self.materializer.context) is not ContextAssembler
+                or type(self.products) is not ProductRegister
+                or self.context._runtime_composition_sealed is not True
+                or self.materializer._runtime_composition_sealed is not True
+                or self.materializer.context._runtime_composition_sealed is not True
+                or any(_RETAINED_HAS_INSTANCE_DISPATCH_OVERRIDE(service)
+                       for service in services)
+                or self.chain is not CHAIN
+                or len(self._stage_dispatch) != len(self.chain)
+                or _GATE_ENTRY_CALLABLES is not
+                _RETAINED_GATE_ENTRY_CALLABLES
+                or any(
+                    globals().get(name) is not function
+                    or function.__code__ is not code
+                    for name, function, code in _GATE_HELPER_ANCHORS)
+                or any(
+                    selected_stage is not stage
+                    or selected_type is not type(stage)
+                    or selected_function is not vars(selected_type).get("run")
+                    or getattr(selected_function, "__code__", None) is not
+                    selected_code
+                    for stage, (selected_stage, selected_type,
+                                selected_function, selected_code)
+                    in zip(self.chain, self._stage_dispatch))
+                or any(
+                    vars(owner).get(name) is not function
+                    or getattr(function, "__code__", None) is not code
+                    for owner, name, function, code in _GATE_ENTRY_CALLABLES)
+                or any(_RETAINED_HAS_INSTANCE_DISPATCH_OVERRIDE(stage)
+                       for stage in self.chain)
                 or self.policy_provider.descriptor != self.active_profile
                 or self.policy_provider.runtime_bundle is not self.runtime_bundle
                 or self.policy_provider.policy_ref !=
                 self.active_profile.evidence_policy_ref
                 or self.policy_provider.recognized_rule_refs != expected_policy_refs
                 or self.si_reference_bindings_descriptor != self.active_profile
+                or self.si_reference_bindings != expected_bindings
                 or self.context.store is not self.store
                 or self.context.runtime_bundle is not self.runtime_bundle
+                or self.context.active_profile != self.active_profile
                 or self.materializer.store is not self.store
                 or self.materializer.runtime_bundle is not self.runtime_bundle
+                or self.materializer.active_profile != self.active_profile
                 or self.materializer.context.store is not self.store
                 or self.materializer.context.runtime_bundle is not self.runtime_bundle
+                or self.materializer.context.active_profile != self.active_profile
                 or self.products.runtime_bundle is not self.runtime_bundle
                 or self.products.bindings != self.si_reference_bindings
+                or self.products._frozen is not True
+                or self.products._by_snapshot != expected_products._by_snapshot
                 or self.authority.store is not self.store):
-            raise RuntimeBundleError(
-                "GatePipeline runtime composition changed after construction")
+            _raise_retained_gate_dispatch_error(
+                self.store,
+                "GatePipeline runtime composition changed after construction",
+            )
 
     # ======================================================================
     # the governed front door
@@ -196,22 +386,27 @@ class GatePipeline:
     def commit(self, submission: dict) -> dict:
         """Run one capture through the full chain. Returns the
         CommitIngressResult payload. One call = one transaction (D3)."""
-        self._assert_runtime_composition()
+        GatePipeline._assert_runtime_composition(self)
         try:
-            with self.store.serialized_tx() as cur:
-                return self._commit_in_tx(cur, submission)
+            with Store.serialized_tx(self.store) as cur:
+                result = GatePipeline._commit_in_tx(self, cur, submission)
+                return result
         except psycopg.errors.UniqueViolation:
             # a concurrent commit won the idempotency-key race; our transaction
             # rolled back completely — serve the replay path against the winner.
             # (Under the single-writer lock — M2 G2 — writers serialize, so this
             # backstop is now reached only across connections that bypass it.)
-            with self.store.serialized_tx() as cur:
-                prior = self.store.idempotency_lookup(
+            with Store.serialized_tx(self.store) as cur:
+                prior = Store.idempotency_lookup(
+                    self.store,
                     cur, submission["idempotencyKey"])
                 if prior is None:
                     raise
-                ctx = self._new_context(cur, submission)
-                return ReplayWriter().write(ctx, prior)
+                ctx = GatePipeline._new_context(self, cur, submission)
+                result = _RETAINED_INVOKE_GATE_ENTRY(
+                    self.store, 3, ctx, prior)
+                GatePipeline._assert_runtime_composition(self)
+                return result
 
     @staticmethod
     def _source_digest(sub: dict) -> str:
@@ -242,7 +437,7 @@ class GatePipeline:
             si_reference_bindings=si_reference_bindings,
             sub=sub,
             request_id=mint("cir"), ingested_at=now_iso(),
-            source_digest=self._source_digest(sub),
+            source_digest=GatePipeline._source_digest(sub),
             commit_class=sub["commitClass"], farm_ref=sub["farmRef"],
             acting_party=sub["actingPartyRef"], idem_key=sub["idempotencyKey"],
             event_id=mint("event"), assertion_id=mint("assert"))
@@ -313,8 +508,8 @@ class GatePipeline:
 
     def _resolve_profile_route(self, ctx: GateContext):
         try:
-            farm_ref = self._route_farm_ref(ctx)
-            effective_time = self._route_effective_time(ctx)
+            farm_ref = GatePipeline._route_farm_ref(ctx)
+            effective_time = GatePipeline._route_effective_time(ctx)
             resolution = resolve_profile_route(
                 self.profile_route_registry,
                 self.selected_profile_package_names,
@@ -338,38 +533,47 @@ class GatePipeline:
                     suggested_remediation="restore an explicit active "
                     "tenant/farm profile route before resubmitting")])
         ctx.farm_ref = farm_ref
-        self._bind_route_resolution(ctx, resolution)
+        GatePipeline._bind_route_resolution(self, ctx, resolution)
         ctx.log("PACK_PROFILE_APPLICABILITY", "PROFILE_ROUTE_PASS",
                 rationale="PROFILE_ROUTE: resolved active profile route",
                 refs=[resolution.route.route_id, resolution.descriptor.profile_ref])
         return None
 
     def _commit_in_tx(self, cur, sub: dict) -> dict:
-        ctx = self._new_context(cur, sub)
+        GatePipeline._assert_runtime_composition(self)
+        ctx = GatePipeline._new_context(self, cur, sub)
 
-        ingress = IngressNormalizer().run(ctx)
+        ingress = _RETAINED_INVOKE_GATE_ENTRY(self.store, 0, ctx)
         if isinstance(ingress, GateReplay):
+            GatePipeline._assert_runtime_composition(self)
             return ingress.result
 
         if self.route_backed:
-            route_outcome = self._resolve_profile_route(ctx)
+            route_outcome = GatePipeline._resolve_profile_route(self, ctx)
             if isinstance(route_outcome, GateRefusal):
                 ctx.problems.extend(route_outcome.problems)
                 ctx.final_outcome = route_outcome.final_outcome
                 ctx.ensure_envelope_stored()
-                return PromotionTraceWriter().write(ctx)
+                result = _RETAINED_INVOKE_GATE_ENTRY(self.store, 2, ctx)
+                GatePipeline._assert_runtime_composition(self)
+                return result
 
-        for stage in CHAIN:
-            outcome = stage.run(ctx)
+        for stage_dispatch in self._stage_dispatch:
+            outcome = _RETAINED_INVOKE_STAGE(
+                self.store, stage_dispatch, ctx)
             if isinstance(outcome, GateRefusal):
                 ctx.problems.extend(outcome.problems)
                 ctx.final_outcome = outcome.final_outcome
                 # the normalized draft event is still recorded (refusals are
                 # traceable history, not silence) — emitted under this trace
                 ctx.ensure_envelope_stored()
-                return PromotionTraceWriter().write(ctx)
+                result = _RETAINED_INVOKE_GATE_ENTRY(self.store, 2, ctx)
+                GatePipeline._assert_runtime_composition(self)
+                return result
 
         if ctx.final_outcome == "PROMOTE_ACCEPTED":
-            MaterializationGate().run(ctx)
+            _RETAINED_INVOKE_GATE_ENTRY(self.store, 1, ctx)
 
-        return PromotionTraceWriter().write(ctx)
+        result = _RETAINED_INVOKE_GATE_ENTRY(self.store, 2, ctx)
+        GatePipeline._assert_runtime_composition(self)
+        return result

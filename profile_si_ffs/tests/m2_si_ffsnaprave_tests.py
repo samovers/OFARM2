@@ -87,8 +87,8 @@ def _data_row(store, sid):
 
 
 def _governed_import_refusals(store):
-    with store.conn.cursor() as cur:
-        cur.execute(
+    with store.tx() as cur:
+        cur._execute_read(
             "SELECT outcome, reason_code, related_refs FROM kernel_gate_log "
             "WHERE gate = 'GOVERNED_IMPORT' AND outcome = 'REFUSED' ORDER BY entry_id")
         return cur.fetchall()

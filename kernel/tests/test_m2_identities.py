@@ -20,6 +20,7 @@ import uuid
 
 from kernel import config, demo, policy
 from kernel.context import now_iso
+from kernel.store import Store
 
 
 def uid() -> str:
@@ -49,7 +50,7 @@ def _field_payload(identity_ref: str, *, payload_id: str, area: float = 1.0,
 
 
 def _registry(store, materializer, farm_ref=demo.FARM) -> dict:
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         return materializer.materialize_identity_registry(cur, farm_ref)
 
 
@@ -92,7 +93,7 @@ def _inject_conflicting_structural_state(store):
     c1, c2 = f"conseq:m2conf.{s}.a", f"conseq:m2conf.{s}.b"
     t = now_iso()
     anchors = [{"scopeType": "FARM", "scopeRef": farm}]
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, {
             "schemaVersion": "ofarm.semanticeventenvelope.v0.1", "semanticEventId": event,
             "primaryEventFamily": "StructureEvent",
@@ -136,13 +137,13 @@ def test_g1_registry_conflict_marks_materialization_invalid(store, materializer)
     current state — the registry surfaces the conflict AND marks the
     materialization INVALID (snapshot + derived row + return), never FRESH."""
     farm, field = _inject_conflicting_structural_state(store)
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         reg = materializer.materialize_identity_registry(cur, farm)
     assert reg["freshness"] == "INVALID"
     assert reg["currentState"]["conflictCount"] >= 1
     entries = {e["identityRecordRef"]: e for e in reg["currentState"]["identities"]}
     assert entries[field].get("conflict") is True
-    with store.conn.cursor() as cur:
+    with Store._raw_connection(store).cursor() as cur:
         cur.execute("SELECT freshness FROM derived_materialization "
                     "WHERE key_digest = %s AND superseded_by IS NULL", (reg["keyDigest"],))
         assert cur.fetchone()["freshness"] == "INVALID"
@@ -298,7 +299,7 @@ def test_g1_supersede_updates_current_preserves_prior_and_stales(pipeline, store
     c2 = second["emittedAcceptedConsequenceRefs"][0]
 
     # D12: the live registry materialization is staled by the supersession
-    with store.conn.cursor() as cur:
+    with Store._raw_connection(store).cursor() as cur:
         cur.execute("SELECT freshness FROM derived_materialization "
                     "WHERE key_digest = %s AND superseded_by IS NULL", (key_digest,))
         assert cur.fetchone()["freshness"] == "STALE"
@@ -445,7 +446,7 @@ def test_g1_racing_queued_corrections_second_accept_refused(pipeline, store):
 def test_g1_structure_holder_without_review_accept_cannot_self_promote(pipeline, store):
     suffix = uid()
     structurer = f"party:m2s.{suffix}"
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, {
             "schemaVersion": "ofarm.party.v0.1", "partyId": structurer,
             "partyClass": "NATURAL_PERSON", "displayName": "M2 Structurer (fictional)",

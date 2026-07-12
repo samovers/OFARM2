@@ -19,10 +19,19 @@ from __future__ import annotations
 
 from . import config, policy
 from .context import (ContextAssembler, ContextNotReconstructible,
+                    _RETAINED_CONTEXT_ASSEMBLE,
+                    _RETAINED_CONTEXT_ASSEMBLE_CODE,
+                    _RETAINED_CONTEXT_ASSERT_RUNTIME_COMPOSITION,
+                    _RETAINED_CONTEXT_ASSERT_RUNTIME_COMPOSITION_CODE,
                       mint as _mint, now_iso, parse_ts)
 from .contracts import canonical_json
 from .profile_runtime import ProfileRuntimeError, resolve_active_descriptor
 from .runtime_bundle import require_store_runtime_bundle, sha256_bytes
+from .store import (
+    Store,
+    _RETAINED_GOVERNED_CURSOR_EXECUTE_MUTATION as _CURSOR_EXECUTE_MUTATION,
+    _RETAINED_GOVERNED_CURSOR_EXECUTE_READ as _CURSOR_EXECUTE_READ,
+)
 from psycopg.types.json import Jsonb
 
 MATERIALIZATION_POLICY_REF = "policy:si.ffs.materialization.v0_1"
@@ -60,13 +69,27 @@ def _full_digest(obj) -> str:
 
 
 class Materializer:
-    _SEALED_FIELDS = {"store", "active_profile", "runtime_bundle", "context"}
+    _SEALED_FIELDS = {
+        "store", "active_profile", "runtime_bundle", "context",
+        "_runtime_composition_sealed",
+    }
 
     def __setattr__(self, name, value):
-        if (getattr(self, "_runtime_composition_sealed", False)
-                and name in self._SEALED_FIELDS):
-            raise AttributeError("Materializer runtime composition is immutable")
+        if "_runtime_composition_sealed" in vars(self):
+            if name in self._SEALED_FIELDS:
+                raise AttributeError(
+                    "Materializer runtime composition is immutable")
+            if callable(getattr(type(self), name, None)):
+                raise AttributeError("Materializer runtime dispatch is immutable")
         object.__setattr__(self, name, value)
+
+    def __delattr__(self, name):
+        if ("_runtime_composition_sealed" in vars(self)
+                and (name in self._SEALED_FIELDS
+                     or callable(getattr(type(self), name, None)))):
+            raise AttributeError(
+                "Materializer sealed runtime state cannot be deleted")
+        object.__delattr__(self, name)
 
     def __init__(self, store, *, active_descriptor=None, active_profile=None,
                  runtime_bundle=None):
@@ -89,11 +112,55 @@ class Materializer:
             runtime_bundle=self.runtime_bundle)
         self._runtime_composition_sealed = True
 
+    def _assert_runtime_composition(self, cur=None) -> None:
+        try:
+            if (type(self) is not Materializer
+                    or vars(Materializer).get(
+                        "_assert_runtime_composition") is not
+                    _RETAINED_MATERIALIZER_ASSERT_RUNTIME_COMPOSITION
+                    or _RETAINED_MATERIALIZER_ASSERT_RUNTIME_COMPOSITION.__code__
+                    is not _RETAINED_MATERIALIZER_ASSERT_RUNTIME_COMPOSITION_CODE
+                    or vars(ContextAssembler).get("assemble") is not
+                    _RETAINED_CONTEXT_ASSEMBLE
+                    or _RETAINED_CONTEXT_ASSEMBLE.__code__ is not
+                    _RETAINED_CONTEXT_ASSEMBLE_CODE
+                    or vars(ContextAssembler).get(
+                        "_assert_runtime_composition") is not
+                    _RETAINED_CONTEXT_ASSERT_RUNTIME_COMPOSITION
+                    or _RETAINED_CONTEXT_ASSERT_RUNTIME_COMPOSITION.__code__ is not
+                    _RETAINED_CONTEXT_ASSERT_RUNTIME_COMPOSITION_CODE
+                    or type(self.store) is not Store
+                    or type(self.context) is not ContextAssembler
+                    or self._runtime_composition_sealed is not True
+                    or self.runtime_bundle is not
+                    Store.runtime_bundle.fget(self.store)
+                    or self.runtime_bundle.descriptor != self.active_profile
+                    or self.context.store is not self.store
+                    or self.context.runtime_bundle is not self.runtime_bundle
+                    or self.context.active_profile != self.active_profile
+                    or any(callable(getattr(Materializer, name, None))
+                           for name in vars(self))
+                    or any(callable(getattr(ContextAssembler, name, None))
+                           for name in vars(self.context))):
+                raise RuntimeError(
+                    "Materializer runtime composition changed")
+            Store._require_transaction_python_posture(self.store)
+            require_store_runtime_bundle(
+                self.store, self.runtime_bundle, "Materializer decision")
+            _RETAINED_CONTEXT_ASSERT_RUNTIME_COMPOSITION(self.context, cur)
+            if cur is not None:
+                Store._require_active_governed_cursor(self.store, cur)
+        except BaseException:
+            if type(getattr(self, "store", None)) is Store:
+                Store._mark_transaction_integrity_violation(self.store)
+            raise
+
     # ------------------------------------------------------------------ key --
 
     def build_key(self, farm_ref: str, *, twin: str, use_class: str,
                   time_policy: dict, context_snapshot_ref: str,
                   result_shape_family: str = RESULT_SHAPE_FAMILY) -> dict:
+        _RETAINED_MATERIALIZER_ASSERT_RUNTIME_COMPOSITION(self)
         key_core = {
             "deploymentScope": {"scopeType": "TENANT", "scopeRef": config.TENANT_REF},
             "twin": twin,
@@ -121,7 +188,7 @@ class Materializer:
 
     def _watermark(self, kind: str) -> str:
         with self.store._read_cursor() as cur:
-            cur.execute(
+            _CURSOR_EXECUTE_READ(cur,
                 "SELECT count(*) AS n, coalesce(max(record_time)::text, 'none') AS t "
                 "FROM ONLY kernel_record WHERE record_kind = %s", (kind,))
             row = cur.fetchone()
@@ -177,13 +244,16 @@ class Materializer:
                   time_policy: dict | None = None) -> dict:
         """Deterministic recompute of one governed answer. Returns the
         derived_materialization row content (with record refs)."""
+        _RETAINED_MATERIALIZER_ASSERT_RUNTIME_COMPOSITION(self, cur)
         time_policy = time_policy or {"policyType": "NOW"}
-        ctx = self.context.assemble(cur, farm_ref, target_twin=twin,
-                                    evaluation_time_policy=time_policy)
+        ctx = _RETAINED_CONTEXT_ASSEMBLE(
+            self.context, cur, farm_ref, target_twin=twin,
+            evaluation_time_policy=time_policy)
         ctx_ref = ctx["contextSnapshotId"]
         reference_refs = ctx.get("referenceSnapshotRefs", [])
-        key = self.build_key(farm_ref, twin=twin, use_class=use_class,
-                             time_policy=time_policy, context_snapshot_ref=ctx_ref)
+        key = Materializer.build_key(
+            self, farm_ref, twin=twin, use_class=use_class,
+            time_policy=time_policy, context_snapshot_ref=ctx_ref)
         key_id = key["materializationKeyId"]
 
         # ---- gather in-force substrate (Compliance twin: hard truth only) ----
@@ -316,7 +386,7 @@ class Materializer:
         if not self.store.runtime_trace_exists(key_id):
             self.store.insert_runtime_trace(cur, key)  # key id is content-stable
         else:
-            cur.execute(
+            _CURSOR_EXECUTE_READ(cur,
                 "SELECT payload, runtime_bundle_digest FROM ONLY runtime_trace "
                 "WHERE trace_id = %s", (key_id,))
             prior_key = cur.fetchone()
@@ -329,16 +399,16 @@ class Materializer:
         self.store.insert_runtime_trace(cur, dep_index)
 
         # ---- supersede prior live materialization for this key ----
-        cur.execute(
+        _CURSOR_EXECUTE_READ(cur,
             "SELECT materialization_id FROM derived_materialization "
             "WHERE key_digest = %s AND runtime_bundle_digest = %s "
             "AND superseded_by IS NULL", (key_id, self.runtime_bundle.digest))
         for prior in cur.fetchall():
-            cur.execute(
+            _CURSOR_EXECUTE_MUTATION(cur,
                 "UPDATE derived_materialization SET superseded_by = %s "
                 "WHERE materialization_id = %s", (mat_id, prior["materialization_id"]))
 
-        cur.execute(
+        _CURSOR_EXECUTE_MUTATION(cur,
             """
             INSERT INTO derived_materialization
               (materialization_id, key_digest, materialization_key, target_twin,
@@ -352,14 +422,14 @@ class Materializer:
              self.runtime_bundle.digest))
         # fast-lookup rows mirroring the dependency-index entries (derived only)
         for entry in dep_index["entries"]:
-            cur.execute(
+            _CURSOR_EXECUTE_MUTATION(cur,
                 "INSERT INTO derived_dependency_index "
                 "(dependency_source_ref, dependency_source_family, key_digest, entry, "
                 "runtime_bundle_digest) VALUES (%s, %s, %s, %s, %s)",
                 (entry["dependencySourceRef"], entry["dependencySourceFamily"],
                  key_id, Jsonb(entry), self.runtime_bundle.digest))
 
-        return {
+        result = {
             "materializationId": mat_id,
             "materializationKey": key,
             "basisRef": basis_id,
@@ -369,6 +439,8 @@ class Materializer:
             "currentState": current_state,
             "freshnessVector": vector,
         }
+        _RETAINED_MATERIALIZER_ASSERT_RUNTIME_COMPOSITION(self, cur)
+        return result
 
     def materialize_identity_registry(self, cur, farm_ref: str, *,
                                       twin: str = "COMPLIANCE",
@@ -386,14 +458,17 @@ class Materializer:
         contributing structural consequences, so the commit-gate
         invalidate_for_sources marks it STALE when any is superseded.
         """
+        _RETAINED_MATERIALIZER_ASSERT_RUNTIME_COMPOSITION(self, cur)
         time_policy = time_policy or {"policyType": "NOW"}
-        ctx = self.context.assemble(cur, farm_ref, target_twin=twin,
-                                    evaluation_time_policy=time_policy)
+        ctx = _RETAINED_CONTEXT_ASSEMBLE(
+            self.context, cur, farm_ref, target_twin=twin,
+            evaluation_time_policy=time_policy)
         ctx_ref = ctx["contextSnapshotId"]
         reference_refs = ctx.get("referenceSnapshotRefs", [])
-        key = self.build_key(farm_ref, twin=twin, use_class=use_class,
-                             time_policy=time_policy, context_snapshot_ref=ctx_ref,
-                             result_shape_family=IDENTITY_REGISTRY_SHAPE_FAMILY)
+        key = Materializer.build_key(
+            self, farm_ref, twin=twin, use_class=use_class,
+            time_policy=time_policy, context_snapshot_ref=ctx_ref,
+            result_shape_family=IDENTITY_REGISTRY_SHAPE_FAMILY)
         key_id = key["materializationKeyId"]
 
         as_of = (time_policy.get("asOfTime")
@@ -529,7 +604,7 @@ class Materializer:
         if not self.store.runtime_trace_exists(key_id):
             self.store.insert_runtime_trace(cur, key)
         else:
-            cur.execute(
+            _CURSOR_EXECUTE_READ(cur,
                 "SELECT payload, runtime_bundle_digest FROM ONLY runtime_trace "
                 "WHERE trace_id = %s", (key_id,))
             prior_key = cur.fetchone()
@@ -543,16 +618,16 @@ class Materializer:
         self.store.insert_runtime_trace(cur, dep_index)
 
         # ---- supersede the prior live registry for this key ----
-        cur.execute(
+        _CURSOR_EXECUTE_READ(cur,
             "SELECT materialization_id FROM derived_materialization "
             "WHERE key_digest = %s AND runtime_bundle_digest = %s "
             "AND superseded_by IS NULL", (key_id, self.runtime_bundle.digest))
         for prior in cur.fetchall():
-            cur.execute(
+            _CURSOR_EXECUTE_MUTATION(cur,
                 "UPDATE derived_materialization SET superseded_by = %s "
                 "WHERE materialization_id = %s", (mat_id, prior["materialization_id"]))
 
-        cur.execute(
+        _CURSOR_EXECUTE_MUTATION(cur,
             """
             INSERT INTO derived_materialization
               (materialization_id, key_digest, materialization_key, target_twin,
@@ -565,14 +640,14 @@ class Materializer:
              freshness, Jsonb(current_state), basis_id, snapshot_id, ctx_ref, Jsonb(vector),
              self.runtime_bundle.digest))
         for entry in dep_index["entries"]:
-            cur.execute(
+            _CURSOR_EXECUTE_MUTATION(cur,
                 "INSERT INTO derived_dependency_index "
                 "(dependency_source_ref, dependency_source_family, key_digest, entry, "
                 "runtime_bundle_digest) VALUES (%s, %s, %s, %s, %s)",
                 (entry["dependencySourceRef"], entry["dependencySourceFamily"],
                  key_id, Jsonb(entry), self.runtime_bundle.digest))
 
-        return {
+        result = {
             "materializationId": mat_id,
             "materializationKey": key,
             "keyDigest": key_id,
@@ -583,6 +658,8 @@ class Materializer:
             "currentState": current_state,
             "freshnessVector": vector,
         }
+        _RETAINED_MATERIALIZER_ASSERT_RUNTIME_COMPOSITION(self, cur)
+        return result
 
     def _build_dependency_index(self, key_id: str, basis: dict, ctx_ref: str,
                                 reference_refs: list[str], use_class: str) -> dict:
@@ -650,7 +727,8 @@ class Materializer:
         every live materialization anchored on that farm (RFC §6.5: broaden,
         never narrow unsafely).
         """
-        cur.execute(
+        _RETAINED_MATERIALIZER_ASSERT_RUNTIME_COMPOSITION(self, cur)
+        _CURSOR_EXECUTE_READ(cur,
             "SELECT dependency_source_ref, key_digest FROM derived_dependency_index "
             "WHERE dependency_source_ref = ANY(%s) AND runtime_bundle_digest = %s",
             (source_refs, self.runtime_bundle.digest))
@@ -663,7 +741,7 @@ class Materializer:
             # RFC §6.5: when ANY trigger in the batch has no dependency entry,
             # broaden for it rather than narrow unsafely — mixed batches must
             # not under-invalidate just because some triggers resolved
-            cur.execute(
+            _CURSOR_EXECUTE_READ(cur,
                 "SELECT DISTINCT key_digest FROM derived_materialization "
                 "WHERE anchor_scope_ref = %s AND runtime_bundle_digest = %s "
                 "AND superseded_by IS NULL",
@@ -672,14 +750,14 @@ class Materializer:
             broadened = (f"farm-scope broadening applied for {len(unresolved)} "
                          "trigger(s) with no dependency entry (uncertain boundary)")
 
-        cur.execute(
+        _CURSOR_EXECUTE_READ(cur,
             "SELECT count(*) AS n FROM derived_materialization "
             "WHERE runtime_bundle_digest = %s AND superseded_by IS NULL",
             (self.runtime_bundle.digest,))
         considered = cur.fetchone()["n"]
         marked = 0
         for key_id in key_ids:
-            cur.execute(
+            _CURSOR_EXECUTE_MUTATION(cur,
                 "UPDATE derived_materialization SET freshness = 'STALE' "
                 "WHERE key_digest = %s AND runtime_bundle_digest = %s "
                 "AND superseded_by IS NULL AND freshness = 'FRESH' "
@@ -719,6 +797,7 @@ class Materializer:
                 "redactionDoesNotUpgradeFreshness": True,
             }
             self.store.insert_runtime_trace(cur, trace)
+        _RETAINED_MATERIALIZER_ASSERT_RUNTIME_COMPOSITION(self, cur)
         return marked
 
     # -------------------------------------------------------- resolve for use --
@@ -731,7 +810,7 @@ class Materializer:
         mat's generated_at: in the commit-gate transaction the trace that
         staled the PRIOR mat shares the transaction timestamp with the new
         mat, and must never be attributed to it."""
-        cur.execute(
+        _CURSOR_EXECUTE_READ(cur,
             "SELECT DISTINCT payload ->> 'triggerFamily' AS family "
             "FROM ONLY runtime_trace WHERE trace_kind = %s "
             "AND payload ->> 'evaluatedMaterializationKeyRef' = %s "
@@ -757,6 +836,7 @@ class Materializer:
                         recompute_if_needed: bool = True) -> dict:
         """Current-state use evaluation: reuse, recompute, or refuse — never
         silently serve stale state for high-consequence use (RFC §8)."""
+        _RETAINED_MATERIALIZER_ASSERT_RUNTIME_COMPOSITION(self, cur)
         time_policy = time_policy or {"policyType": "NOW"}
         request_id = _mint("matreq")
         request = {
@@ -774,8 +854,9 @@ class Materializer:
         self.store.insert_record(cur, request)
 
         try:
-            ctx = self.context.assemble(cur, farm_ref, target_twin=twin,
-                                        evaluation_time_policy=time_policy)
+            ctx = _RETAINED_CONTEXT_ASSEMBLE(
+                self.context, cur, farm_ref, target_twin=twin,
+                evaluation_time_policy=time_policy)
         except ContextNotReconstructible as exc:
             from .problems import runtime_problem
             problem = runtime_problem(
@@ -801,14 +882,19 @@ class Materializer:
                 "reasonSummary": "refused: historical context cannot be reconstructed",
             }
             self.store.insert_record(cur, refusal)
-            return {"decision": "REFUSE_USE", "freshness": "INVALID",
-                    "materialization": None, "materializationResult": refusal,
-                    "contextSnapshotRef": "contextsnapshot:not-reconstructible",
-                    "recomputed": False, "problems": [problem]}
-        key = self.build_key(farm_ref, twin=twin, use_class=use_class,
-                             time_policy=time_policy,
-                             context_snapshot_ref=ctx["contextSnapshotId"])
-        cur.execute(
+            response = {
+                "decision": "REFUSE_USE", "freshness": "INVALID",
+                "materialization": None, "materializationResult": refusal,
+                "contextSnapshotRef": "contextsnapshot:not-reconstructible",
+                "recomputed": False, "problems": [problem],
+            }
+            _RETAINED_MATERIALIZER_ASSERT_RUNTIME_COMPOSITION(self, cur)
+            return response
+        key = Materializer.build_key(
+            self, farm_ref, twin=twin, use_class=use_class,
+            time_policy=time_policy,
+            context_snapshot_ref=ctx["contextSnapshotId"])
+        _CURSOR_EXECUTE_READ(cur,
             "SELECT * FROM derived_materialization "
             "WHERE key_digest = %s AND runtime_bundle_digest = %s "
             "AND superseded_by IS NULL "
@@ -832,11 +918,13 @@ class Materializer:
         elif recompute_if_needed:
             # STALE/INVALID/absent → recompute (allowed path; refusal and review
             # are the alternatives when recomputation is not permitted)
-            result = self.recompute(cur, farm_ref, twin=twin, use_class=use_class,
-                                    time_policy=time_policy)
+            result = Materializer.recompute(
+                self, cur, farm_ref, twin=twin, use_class=use_class,
+                time_policy=time_policy)
             recomputed = True
             decision = "RECOMPUTE_REQUIRED"
-            cur.execute("SELECT * FROM derived_materialization WHERE materialization_id = %s",
+            _CURSOR_EXECUTE_READ(cur,
+                "SELECT * FROM derived_materialization WHERE materialization_id = %s",
                         (result["materializationId"],))
             mat = cur.fetchone()
         else:
@@ -890,7 +978,7 @@ class Materializer:
                 else "refused: not demonstrably FRESH"),
         }
         self.store.insert_record(cur, result_payload)
-        return {
+        response = {
             "decision": decision,
             "freshness": freshness,
             "materialization": dict(mat) if mat else None,
@@ -899,3 +987,11 @@ class Materializer:
             "recomputed": recomputed,
             "problems": problems,
         }
+        _RETAINED_MATERIALIZER_ASSERT_RUNTIME_COMPOSITION(self, cur)
+        return response
+
+
+_RETAINED_MATERIALIZER_ASSERT_RUNTIME_COMPOSITION = \
+    Materializer._assert_runtime_composition
+_RETAINED_MATERIALIZER_ASSERT_RUNTIME_COMPOSITION_CODE = \
+    _RETAINED_MATERIALIZER_ASSERT_RUNTIME_COMPOSITION.__code__

@@ -61,7 +61,7 @@ def _partial_extent(store, pe_id: str, *, extent_state: str = "ACCEPTED_FOR_DECL
             "mayDriveMaterialization": may_drive,
             "mustNotPromoteTo": must_not_promote or []},
     }
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, pe)
     return pe_id
 

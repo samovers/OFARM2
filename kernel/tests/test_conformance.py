@@ -30,6 +30,7 @@ from kernel import config, context, demo, sufficiency
 from kernel.api import create_app
 from kernel.contracts import canonical_json, sha256_of
 from kernel.runtime_bundle import sha256_bytes
+from kernel.store import Store
 from .conftest import record_detail
 
 # The platform evidence lane activates its session Store in test 01. Pytest's
@@ -88,8 +89,8 @@ def test_01_append_only(store, pipeline):
         "DELETE FROM runtime_trace",
     ]:
         with pytest.raises(psycopg.errors.RaiseException):
-            with store.tx() as cur:
-                cur.execute(stmt)
+            with store.serialized_tx() as cur:
+                cur._execute_mutation(stmt)
         blocked.append(stmt.split(" WHERE")[0])
 
     # correction is supersession: history survives every correction
@@ -115,7 +116,7 @@ def test_01_append_only(store, pipeline):
 
 def test_02_default_deny(store, pipeline):
     stranger = f"party:demo.stranger.{uid()}"
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, {
             "schemaVersion": "ofarm.party.v0.1", "partyId": stranger,
             "partyClass": "NATURAL_PERSON",
@@ -260,7 +261,7 @@ def _replay_commit_fixture(store, pipeline, fixture):
 def _replay_authority_fixture(store, pipeline, fixture):
     fid = fixture["fixtureId"]
     if fid == "ai-assisted-submission-requires-human":
-        decision = pipeline.authority.evaluate(
+        decision_args = dict(
             acting_party_ref=demo.AGENT,
             action_class=fixture["actionClass"],
             action_stage=fixture["actionStage"],
@@ -269,7 +270,7 @@ def _replay_authority_fixture(store, pipeline, fixture):
         party = f"party:fixture.submitter.{uid()}"
         grant = f"grant:fixture.submit.{uid()}"
         now = context.now_iso()
-        with store.tx() as cur:
+        with store.serialized_tx() as cur:
             store.insert_record(cur, {
                 "schemaVersion": "ofarm.party.v0.1", "partyId": party,
                 "partyClass": "NATURAL_PERSON",
@@ -292,7 +293,7 @@ def _replay_authority_fixture(store, pipeline, fixture):
                 "decidedAt": now, "effectiveFrom": now,
                 "revocationMode": "TERMINATE",
                 "targetScope": {"scopeType": "FARM", "scopeRef": demo.FARM}})
-        decision = pipeline.authority.evaluate(
+        decision_args = dict(
             acting_party_ref=party,
             action_class=fixture["actionClass"],
             action_stage=fixture["actionStage"],
@@ -301,7 +302,8 @@ def _replay_authority_fixture(store, pipeline, fixture):
     else:
         pytest.fail(f"unmapped authority fixture {fid}")
 
-    with store.tx() as cur:  # the envelopes must validate as real records
+    with store.serialized_tx() as cur:  # select, record, and use one snapshot
+        decision = pipeline.authority.evaluate(cur=cur, **decision_args)
         store.insert_record(cur, decision.request_payload)
         store.insert_record(cur, decision.trace_payload)
         store.insert_record(cur, decision.result_payload)
@@ -326,7 +328,7 @@ def _replay_publication_fixture(store, pipeline, outputs, materializer, fixture)
     accepted_spray(pipeline)
     window = {"policyType": "WINDOW", "windowStart": "2026-01-01T00:00:00Z",
               "windowEnd": "2026-12-31T23:59:59Z"}
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         materializer.resolve_for_use(cur, demo.FARM, use_class="ATTESTED_OUTPUT",
                                      time_policy=window,
                                      high_consequence=True)
@@ -373,7 +375,7 @@ def _replay_publication_fixture(store, pipeline, outputs, materializer, fixture)
             f"{want['gate']}: live {live[want['gate']]} != fixture {want['outcome']}"
     assert result["metadata"]["reviewState"] == "FILED"
     # the frozen artifact is durable and digest-verifiable in the store
-    with store.conn.cursor() as cur:
+    with Store._raw_connection(store).cursor() as cur:
         cur.execute("SELECT digest FROM export_artifact WHERE artifact_ref = %s",
                     (result["metadata"]["durableArtifactRef"],))
         stored = cur.fetchone()
@@ -419,7 +421,7 @@ def test_05_free_text_product_refusal(store, pipeline):
 
     # explicit UNRESOLVED binding routes to review (never silent)
     unresolved = f"binding:demo.unresolved.{uid()}"
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, {
             "schemaVersion": "ofarm.agronomicidentitybinding.v0.1",
             "agronomicIdentityBindingId": unresolved,
@@ -457,7 +459,7 @@ def test_05_free_text_product_refusal(store, pipeline):
 
 def test_07_revoked_delegation_recheck(store, pipeline):
     now = context.now_iso()
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, {
             "schemaVersion": "ofarm.revocationdecision.v0.1",
             "revocationDecisionId": f"revoke:demo.worker.{uid()}",
@@ -487,7 +489,7 @@ def test_07_revoked_delegation_recheck(store, pipeline):
 
 def test_08_materialization_basis_and_staleness(store, pipeline, materializer):
     accepted_spray(pipeline)
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         resolution = materializer.resolve_for_use(cur, demo.FARM)
     mat = resolution["materialization"]
     basis = store.get_payload(mat["basis_record_id"])
@@ -504,13 +506,13 @@ def test_08_materialization_basis_and_staleness(store, pipeline, materializer):
     live_before = mat["materialization_id"]
     key_id = mat["key_digest"]
     accepted_spray(pipeline)
-    with store.conn.cursor() as cur:
+    with Store._raw_connection(store).cursor() as cur:
         cur.execute("SELECT freshness, superseded_by FROM derived_materialization "
                     "WHERE materialization_id = %s", (live_before,))
         row = cur.fetchone()
     assert row["freshness"] == "STALE" or row["superseded_by"], \
         "prior materialization must go STALE (or be superseded) on basis advance"
-    with store.conn.cursor() as cur:
+    with Store._raw_connection(store).cursor() as cur:
         cur.execute(
             "SELECT payload FROM runtime_trace WHERE trace_kind = %s "
             "AND payload ->> 'evaluatedMaterializationKeyRef' = %s "
@@ -550,7 +552,7 @@ def test_08b_advisory_never_enters_compliance_materialization(
     advisory_ids |= set(adv.get("emittedAssertionRecordRefs") or [])
     advisory_ids.discard(None)
 
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         resolution = materializer.resolve_for_use(cur, demo.FARM)
     mat = resolution["materialization"]
     basis = store.get_payload(mat["basis_record_id"])
@@ -603,7 +605,7 @@ def test_09_passport_view_refusal_disclosure(store, pipeline, outputs):
     # M2 registry adapter's integration point; only the adapter's scheduler
     # is absent, the invalidation path is the shipped one)
     regsr = context.current_reference_snapshot(store, context.REGSR_SNAPSHOT_PREFIX)
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         flipped = outputs.materializer.invalidate_for_sources(
             cur, [regsr["referenceSnapshotId"]],
             trigger_family="REFERENCE_CHANGED",
@@ -624,7 +626,7 @@ def test_09_passport_view_refusal_disclosure(store, pipeline, outputs):
     # missing basis refuses with a RuntimeProblem: a farm with no
     # materialization at all, rendered without recompute, has no basis to show
     fresh_farm = f"farm:demo.kmetija.b.{uid()}"
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, {
             "schemaVersion": "ofarm.identityrecord.v0.1",
             "identityRecordId": fresh_farm, "identityType": "FARM",
@@ -698,7 +700,7 @@ def test_11_inspector_read_only(store, pipeline, outputs):
     inspector = f"party:demo.inspector2.{uid()}"
     share = f"share:demo.inspector2.{uid()}"
     now = context.now_iso()
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, {
             "schemaVersion": "ofarm.party.v0.1", "partyId": inspector,
             "partyClass": "PUBLIC_BODY",
@@ -721,7 +723,7 @@ def test_11_inspector_read_only(store, pipeline, outputs):
     assert pipeline.commit(write_attempt)["decisionOutcome"] == "DENY", \
         "a SharingGrant grants read, never write/review"
 
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, {
             "schemaVersion": "ofarm.revocationdecision.v0.1",
             "revocationDecisionId": f"revoke:share.{uid()}",
@@ -796,7 +798,7 @@ def test_14_reachability(store, pipeline):
 
     # at least one: an orphan authoritative record cannot commit
     with pytest.raises(psycopg.errors.RaiseException):
-        with store.tx() as cur:
+        with store.serialized_tx() as cur:
             store.insert_record(cur, {
                 "schemaVersion": "ofarm.reviewdecision.v0.1",
                 "reviewDecisionId": f"review:orphan.{uid()}",
@@ -812,7 +814,7 @@ def test_14_reachability(store, pipeline):
     accepted = accepted_spray(pipeline)
     claimed = accepted["emittedAcceptedConsequenceRefs"][0]
     with pytest.raises(psycopg.errors.UniqueViolation):
-        with store.tx() as cur:
+        with store.serialized_tx() as cur:
             store.add_edge(cur, "PROMOTION_EMITS", accepted["promotionTraceRef"], claimed)
     record_detail("test_14", {"unreachable": [], "atLeastOneEnforced": True,
                               "exactlyOneEnforced": True})
@@ -934,7 +936,7 @@ def test_93_governed_acceptance_semantics(store, pipeline):
     # accepted with rationale alone — the resolution needs NEW durable
     # evidence attached by the reviewer
     stranger = f"party:hr3.stranger.{uid()}"
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, {
             "schemaVersion": "ofarm.party.v0.1", "partyId": stranger,
             "partyClass": "NATURAL_PERSON",
@@ -954,7 +956,7 @@ def test_93_governed_acceptance_semantics(store, pipeline):
         "an 'approve anyway' without new evidence must refuse"
 
     statement_evidence = f"evidence:hr3.statement.{uid()}"
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, {
             "schemaVersion": "ofarm.evidencerecord.v0.1",
             "evidenceRecordId": statement_evidence,
@@ -991,7 +993,7 @@ def test_93_governed_acceptance_semantics(store, pipeline):
     # AUTHORITY_BASIS edges on the assertion, and the trace's VALIDATION
     # entry surfaces the attribution decision
     operator = f"party:hr3.operator.{uid()}"
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, {
             "schemaVersion": "ofarm.party.v0.1", "partyId": operator,
             "partyClass": "NATURAL_PERSON",
@@ -1091,7 +1093,7 @@ def test_94_second_hostile_regressions(store, pipeline, materializer, outputs):
     # (2) actor attribution: naming an actor with no live authority path on
     # this farm routes to review; naming the delegated worker is verified
     stranger = f"party:hr2.stranger.{uid()}"
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, {
             "schemaVersion": "ofarm.party.v0.1", "partyId": stranger,
             "partyClass": "NATURAL_PERSON",
@@ -1106,7 +1108,7 @@ def test_94_second_hostile_regressions(store, pipeline, materializer, outputs):
     # a FRESH delegated operator (test_07 revokes the demo worker's
     # delegation earlier in the suite): live delegation = verified basis
     operator = f"party:hr2.operator.{uid()}"
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, {
             "schemaVersion": "ofarm.party.v0.1", "partyId": operator,
             "partyClass": "NATURAL_PERSON",
@@ -1156,7 +1158,7 @@ def test_94_second_hostile_regressions(store, pipeline, materializer, outputs):
             targetScope={"scopeType": "FIELD", "scopeRef": demo.FARMER}),
         "IDENTITY_UNRESOLVED")
     foreign_facility = f"facility:hr2.foreign.{uid()}"
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, {
             "schemaVersion": "ofarm.identityrecord.v0.1",
             "identityRecordId": foreign_facility, "identityType": "FACILITY",
@@ -1182,7 +1184,7 @@ def test_94_second_hostile_regressions(store, pipeline, materializer, outputs):
     real = _json.loads(source_path.read_text())
     raw_digest = sha256_bytes(source_path.read_bytes())
     data_digest = sha256_of(real)
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, {
             "schemaVersion": "ofarm.referencesnapshot.v0.1",
             "referenceSnapshotId": newer,
@@ -1200,7 +1202,7 @@ def test_94_second_hostile_regressions(store, pipeline, materializer, outputs):
             source_digest=data_digest)
     with pytest.raises(RuntimeError, match="immutable"):
         pipeline.products.register_artifact(newer, real)
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         as_of_res = materializer.resolve_for_use(
             cur, demo.FARM, time_policy={"policyType": "AS_OF", "asOfTime": as_of_t})
         now_res = materializer.resolve_for_use(cur, demo.FARM)
@@ -1218,7 +1220,7 @@ def test_94_second_hostile_regressions(store, pipeline, materializer, outputs):
     try:
         context.bootstrap(restarted)
         restarted_materializer = Materializer(restarted)
-        with restarted.tx() as cur:
+        with restarted.serialized_tx() as cur:
             restarted_as_of = restarted_materializer.resolve_for_use(
                 cur, demo.FARM,
                 time_policy={"policyType": "AS_OF", "asOfTime": as_of_t})
@@ -1238,7 +1240,7 @@ def test_94_second_hostile_regressions(store, pipeline, materializer, outputs):
 
     # (5) sharing never resurrects an inactive party
     ghost_inspector = f"party:hr2.ghost.inspector.{uid()}"
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, {
             "schemaVersion": "ofarm.party.v0.1", "partyId": ghost_inspector,
             "partyClass": "PUBLIC_BODY",
@@ -1259,14 +1261,14 @@ def test_94_second_hostile_regressions(store, pipeline, materializer, outputs):
     closed["5-inactive-sharing-denied"] = True
 
     # (6) an invalid window never freezes a valid-looking empty register
-    with store.conn.cursor() as cur:
+    with Store._raw_connection(store).cursor() as cur:
         cur.execute("SELECT count(*) AS n FROM export_artifact")
         artifacts_before = cur.fetchone()["n"]
     inverted = outputs.freeze_inspection_register(
         demo.FARM, demo.FARMER, "2026-12-31T23:59:59Z", "2026-01-01T00:00:00Z")
     assert inverted["refused"] is True
     assert inverted["problem"]["reasonCode"] == "HIGH_CONSEQUENCE_BLOCKED"
-    with store.conn.cursor() as cur:
+    with Store._raw_connection(store).cursor() as cur:
         cur.execute("SELECT count(*) AS n FROM export_artifact")
         assert cur.fetchone()["n"] == artifacts_before, \
             "an invalid window must produce no durable export artifact"
@@ -1275,7 +1277,7 @@ def test_94_second_hostile_regressions(store, pipeline, materializer, outputs):
     # (7) a REAL stored trace whose payload does not list the destination
     # cannot satisfy reachability — edge/payload reconstruction must agree
     with pytest.raises(psycopg.errors.RaiseException) as exc:
-        with store.tx() as cur:
+        with store.serialized_tx() as cur:
             empty_trace = f"promtrace:hr2.empty.{uid()}"
             store.insert_record(cur, {
                 "schemaVersion": "ofarm.promotiontrace.v0.1",
@@ -1302,7 +1304,7 @@ def test_94_second_hostile_regressions(store, pipeline, materializer, outputs):
                 "decidedByPartyRef": demo.FARMER,
                 "decidedAt": context.now_iso(),
                 "decisionOutcomeState": "ACCEPTED"})
-            cur.execute(
+            cur._execute_mutation(
                 "INSERT INTO kernel_edge "
                 "(edge_type, src_record_id, dst_record_id, runtime_bundle_digest) "
                 "VALUES ('PROMOTION_EMITS', %s, %s, %s)",
@@ -1361,7 +1363,7 @@ def test_95_hostile_review_regressions(store, pipeline, materializer):
     delegate = f"party:hr.delegate.{uid()}"
     source_grant = f"grant:hr.source.{uid()}"
     farm_scope = {"scopeType": "FARM", "scopeRef": demo.FARM}
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         for pid, name in ((delegator, "Delegator"), (delegate, "Delegate")):
             store.insert_record(cur, {
                 "schemaVersion": "ofarm.party.v0.1", "partyId": pid,
@@ -1392,14 +1394,22 @@ def test_95_hostile_review_regressions(store, pipeline, materializer):
         good_delegation = f"deleg:hr.good.{uid()}"
         delegation(good_delegation, [source_grant])
 
-    evaluate = pipeline.authority.evaluate
-    live = evaluate(acting_party_ref=delegate, action_class="ASSERT_OPERATION_CLAIM",
-                    action_stage="PROMOTION", scope=farm_scope)
+    def evaluate_and_persist(**kwargs):
+        with store.serialized_tx() as cur:
+            decision = pipeline.authority.evaluate(cur=cur, **kwargs)
+            store.insert_record(cur, decision.request_payload)
+            store.insert_record(cur, decision.trace_payload)
+            store.insert_record(cur, decision.result_payload)
+            return decision
+
+    live = evaluate_and_persist(
+        acting_party_ref=delegate, action_class="ASSERT_OPERATION_CLAIM",
+        action_stage="PROMOTION", scope=farm_scope)
     assert live.outcome == "ALLOW" and \
         live.result_payload["delegationBasisUsed"] == [good_delegation]
 
     # (a) revoked SOURCE grant kills the delegation, audibly
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, {
             "schemaVersion": "ofarm.revocationdecision.v0.1",
             "revocationDecisionId": f"revoke:hr.source.{uid()}",
@@ -1408,8 +1418,9 @@ def test_95_hostile_review_regressions(store, pipeline, materializer):
             "decidedByPartyRef": demo.FARMER,
             "decidedAt": context.now_iso(), "effectiveFrom": context.now_iso(),
             "revocationMode": "TERMINATE", "targetScope": farm_scope})
-    dead = evaluate(acting_party_ref=delegate, action_class="ASSERT_OPERATION_CLAIM",
-                    action_stage="PROMOTION", scope=farm_scope)
+    dead = evaluate_and_persist(
+        acting_party_ref=delegate, action_class="ASSERT_OPERATION_CLAIM",
+        action_stage="PROMOTION", scope=farm_scope)
     assert dead.outcome == "DENY"
     assert dead.result_payload["revocationResult"] == "ACTIVE_REVOCATION_FOUND", \
         "delegated authority must not outlive its revoked source grant"
@@ -1420,7 +1431,7 @@ def test_95_hostile_review_regressions(store, pipeline, materializer):
     # mask the default-deny semantics (review observation on test isolation).
     def fresh_delegate(tag):
         pid = f"party:hr.delegate.{tag}.{uid()}"
-        with store.tx() as cur:
+        with store.serialized_tx() as cur:
             store.insert_record(cur, {
                 "schemaVersion": "ofarm.party.v0.1", "partyId": pid,
                 "partyClass": "NATURAL_PERSON",
@@ -1430,7 +1441,7 @@ def test_95_hostile_review_regressions(store, pipeline, materializer):
 
     def isolated_delegation(delegate_pid, source_refs):
         did = f"deleg:hr.{uid()}"
-        with store.tx() as cur:
+        with store.serialized_tx() as cur:
             store.insert_record(cur, {
                 "schemaVersion": "ofarm.delegationgrant.v0.1",
                 "delegationGrantId": did,
@@ -1445,15 +1456,16 @@ def test_95_hostile_review_regressions(store, pipeline, materializer):
 
     delegate_b = fresh_delegate("b")
     isolated_delegation(delegate_b, ["grant:hr.does.not.exist"])
-    b = evaluate(acting_party_ref=delegate_b, action_class="ASSERT_OPERATION_CLAIM",
-                 action_stage="PROMOTION", scope=farm_scope)
+    b = evaluate_and_persist(
+        acting_party_ref=delegate_b, action_class="ASSERT_OPERATION_CLAIM",
+        action_stage="PROMOTION", scope=farm_scope)
     assert b.outcome == "DENY", "a delegation with no provable source grants nothing"
     assert b.result_payload["revocationResult"] == "NONE_APPLICABLE", \
         "missing source is default deny, not a revocation case"
 
     delegate_c = fresh_delegate("c")
     narrow_grant = f"grant:hr.narrow.{uid()}"
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, {
             "schemaVersion": "ofarm.authoritygrant.v0.1",
             "authorityGrantId": narrow_grant,
@@ -1464,14 +1476,15 @@ def test_95_hostile_review_regressions(store, pipeline, materializer):
             "validFrom": demo.VALID_FROM,
             "inheritanceMode": "EXACT_ONLY", "grantState": "ACTIVE"})
     isolated_delegation(delegate_c, [narrow_grant])
-    c = evaluate(acting_party_ref=delegate_c, action_class="ASSERT_OPERATION_CLAIM",
-                 action_stage="PROMOTION", scope=farm_scope)
+    c = evaluate_and_persist(
+        acting_party_ref=delegate_c, action_class="ASSERT_OPERATION_CLAIM",
+        action_stage="PROMOTION", scope=farm_scope)
     assert c.outcome == "DENY", "the source must cover the delegated action class"
     assert c.result_payload["revocationResult"] == "NONE_APPLICABLE"
 
     delegate_d = fresh_delegate("d")
     exact_grant = f"grant:hr.exact.{uid()}"
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, {
             "schemaVersion": "ofarm.authoritygrant.v0.1",
             "authorityGrantId": exact_grant,
@@ -1483,9 +1496,10 @@ def test_95_hostile_review_regressions(store, pipeline, materializer):
             "inheritanceMode": "EXACT_ONLY",   # farm only, no descendants
             "grantState": "ACTIVE"})
     isolated_delegation(delegate_d, [exact_grant])
-    d = evaluate(acting_party_ref=delegate_d, action_class="ASSERT_OPERATION_CLAIM",
-                 action_stage="PROMOTION",
-                 scope={"scopeType": "FIELD", "scopeRef": demo.FIELD})
+    d = evaluate_and_persist(
+        acting_party_ref=delegate_d, action_class="ASSERT_OPERATION_CLAIM",
+        action_stage="PROMOTION",
+        scope={"scopeType": "FIELD", "scopeRef": demo.FIELD})
     assert d.outcome == "DENY", \
         "a delegation must not widen the source grant's scope/inheritance"
     assert d.result_payload["revocationResult"] == "NONE_APPLICABLE"
@@ -1496,7 +1510,7 @@ def test_95_hostile_review_regressions(store, pipeline, materializer):
     # authority cannot create accepted truth targeting a farm-B identity
     foreign_farm = f"farm:hr.kmetija.b.{uid()}"
     foreign_field = f"field:hr.kmetija.b.{uid()}"
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, {
             "schemaVersion": "ofarm.identityrecord.v0.1",
             "identityRecordId": foreign_farm, "identityType": "FARM",
@@ -1522,7 +1536,7 @@ def test_95_hostile_review_regressions(store, pipeline, materializer):
     # B5 — a PROMOTION_EMITS edge from arbitrary text cannot satisfy the
     # reachability invariant: the source must be a stored PromotionTrace
     with pytest.raises(psycopg.errors.RaiseException) as exc:
-        with store.tx() as cur:
+        with store.serialized_tx() as cur:
             store.insert_record(cur, {
                 "schemaVersion": "ofarm.reviewdecision.v0.1",
                 "reviewDecisionId": f"review:hr.orphan.{uid()}",
@@ -1533,7 +1547,7 @@ def test_95_hostile_review_regressions(store, pipeline, materializer):
                 "decidedByPartyRef": demo.FARMER,
                 "decidedAt": context.now_iso(),
                 "decisionOutcomeState": "ACCEPTED"})
-            cur.execute(
+            cur._execute_mutation(
                 "INSERT INTO kernel_edge "
                     "(edge_type, src_record_id, dst_record_id, runtime_bundle_digest) "
                     "VALUES ('PROMOTION_EMITS', 'fake:trace', "
@@ -1551,7 +1565,7 @@ def test_95_hostile_review_regressions(store, pipeline, materializer):
     spray2 = pipeline.commit(demo.spray_submission(
         f"hr:f6b:{uid()}", erp_id=f"erp:hr.{uid()}"))
     assert {spray1["decisionOutcome"], spray2["decisionOutcome"]} == {"PROMOTE_ACCEPTED"}
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         as_of = materializer.resolve_for_use(
             cur, demo.FARM, time_policy={"policyType": "AS_OF", "asOfTime": as_of_t})
         now_view = materializer.resolve_for_use(cur, demo.FARM)
@@ -1572,7 +1586,7 @@ def test_95_hostile_review_regressions(store, pipeline, materializer):
                                        dose_value=0.25)
     correction["supersedesConsequenceRef"] = spray1["emittedAcceptedConsequenceRefs"][0]
     assert pipeline.commit(correction)["decisionOutcome"] == "PROMOTE_ACCEPTED"
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         as_of_after = materializer.resolve_for_use(
             cur, demo.FARM, time_policy={"policyType": "AS_OF", "asOfTime": as_of_t})
     as_of_after_refs = {e["consequenceRef"] for e in
@@ -1584,7 +1598,7 @@ def test_95_hostile_review_regressions(store, pipeline, materializer):
 
     # F7 — an INACTIVE party with otherwise-valid grants acts as nobody
     ghost = f"party:hr.inactive.{uid()}"
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, {
             "schemaVersion": "ofarm.party.v0.1", "partyId": ghost,
             "partyClass": "NATURAL_PERSON",
@@ -1599,14 +1613,15 @@ def test_95_hostile_review_regressions(store, pipeline, materializer):
             "authorityActionClasses": ["ASSERT_OPERATION_CLAIM"],
             "validFrom": demo.VALID_FROM,
             "inheritanceMode": "DESCENDANT_SCOPES", "grantState": "ACTIVE"})
-    g = evaluate(acting_party_ref=ghost, action_class="ASSERT_OPERATION_CLAIM",
-                 action_stage="PROMOTION", scope=farm_scope)
+    g = evaluate_and_persist(
+        acting_party_ref=ghost, action_class="ASSERT_OPERATION_CLAIM",
+        action_stage="PROMOTION", scope=farm_scope)
     assert g.outcome == "DENY" and "not ACTIVE" in g.result_payload["reasonSummary"]
     closed["f7-inactive-party-denied"] = g.outcome
 
     # F8 — a stale reuse says STALE, never "reused FRESH materialization"
     regsr = context.current_reference_snapshot(store, context.REGSR_SNAPSHOT_PREFIX)
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         materializer.invalidate_for_sources(
             cur, [regsr["referenceSnapshotId"]], trigger_family="REFERENCE_CHANGED",
             trigger_source_ref="test:f8", farm_scope_ref=demo.FARM)
@@ -1622,7 +1637,7 @@ def test_95_hostile_review_regressions(store, pipeline, materializer):
     # (steward review of PR #4, finding 2)
     assert stale_reuse["materializationResult"][
         "invalidationTriggerFamilies"] == ["CONTEXT"]
-    with store.tx() as cur:   # leave the suite FRESH
+    with store.serialized_tx() as cur:   # leave the suite FRESH
         materializer.resolve_for_use(cur, demo.FARM)
     closed["f8-honest-stale-reason"] = summary
 
@@ -1643,13 +1658,13 @@ INVTRACE_KIND = ("ofarm.explainableCurrentStateEvidence."
 def test_96_identity_context_invalidation_and_freshness_modes(
         store, pipeline, materializer):
     accepted_spray(pipeline)
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         resolution = materializer.resolve_for_use(cur, demo.FARM)
     mat = resolution["materialization"]
     ctx_ref = mat["context_snapshot_ref"]
 
     # every identity the basis names is dependency-indexed (finding 2)
-    with store.conn.cursor() as cur:
+    with Store._raw_connection(store).cursor() as cur:
         cur.execute(
             "SELECT DISTINCT dependency_source_ref FROM derived_dependency_index "
             "WHERE key_digest = %s AND dependency_source_family = 'IDENTITY_LIFECYCLE'",
@@ -1659,7 +1674,7 @@ def test_96_identity_context_invalidation_and_freshness_modes(
     assert demo.CYCLE in identity_sources, "crop-cycle identity must be dependency-indexed"
 
     def latest_trace():
-        with store.conn.cursor() as cur:
+        with Store._raw_connection(store).cursor() as cur:
             cur.execute("SELECT payload FROM runtime_trace WHERE trace_kind = %s "
                         "ORDER BY record_time DESC, trace_id DESC LIMIT 1",
                         (INVTRACE_KIND,))
@@ -1668,7 +1683,7 @@ def test_96_identity_context_invalidation_and_freshness_modes(
     def flip_via_index(source, family, label):
         # farm_scope_ref=None: resolution must come from the dependency
         # index alone — broadening would mask an indexing gap
-        with store.tx() as cur:
+        with store.serialized_tx() as cur:
             n = materializer.invalidate_for_sources(
                 cur, [source], trigger_family=family,
                 trigger_source_ref=f"test:{label}", farm_scope_ref=None,
@@ -1677,7 +1692,7 @@ def test_96_identity_context_invalidation_and_freshness_modes(
         trace = latest_trace()
         assert trace["fanout"]["maximumScopeExpansion"] == "", \
             f"{label}: no scope expansion expected"
-        with store.tx() as cur:   # restore FRESH for the next leg
+        with store.serialized_tx() as cur:   # restore FRESH for the next leg
             materializer.resolve_for_use(cur, demo.FARM)
         return n
 
@@ -1691,7 +1706,7 @@ def test_96_identity_context_invalidation_and_freshness_modes(
 
     # partial-batch broadening is explicit: one resolvable + one unknown
     # trigger must broaden (and say so), never under-invalidate (RFC §6.5)
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         n = materializer.invalidate_for_sources(
             cur, ["unknown:trigger:source", demo.FIELD],
             trigger_family="IDENTITY_CHANGED",
@@ -1702,15 +1717,15 @@ def test_96_identity_context_invalidation_and_freshness_modes(
 
     # freshness-mode semantics (finding 4): produce a genuinely STALE live
     # materialization, then exercise the three modes without recompute
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         materializer.resolve_for_use(cur, demo.FARM)   # FRESH baseline
     regsr = context.current_reference_snapshot(store, context.REGSR_SNAPSHOT_PREFIX)
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         materializer.invalidate_for_sources(
             cur, [regsr["referenceSnapshotId"]], trigger_family="REFERENCE_CHANGED",
             trigger_source_ref="test:freshness-modes", farm_scope_ref=demo.FARM)
 
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         strict = materializer.resolve_for_use(cur, demo.FARM,
                                               recompute_if_needed=False)
     assert strict["decision"] == "REFUSE_USE" and strict["freshness"] == "STALE"
@@ -1719,7 +1734,7 @@ def test_96_identity_context_invalidation_and_freshness_modes(
         "invalidationTriggerFamilies"] == ["CONTEXT"], \
         "a reference-change staling must report CONTEXT (PR #4 finding 2)"
 
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         exploratory = materializer.resolve_for_use(
             cur, demo.FARM, required_freshness="ALLOW_STALE_EXPLORATORY",
             recompute_if_needed=False)
@@ -1729,14 +1744,14 @@ def test_96_identity_context_invalidation_and_freshness_modes(
     assert exploratory["materializationResult"][
         "invalidationTriggerFamilies"] == ["CONTEXT"]
 
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         escalated = materializer.resolve_for_use(
             cur, demo.FARM, required_freshness="ALLOW_STALE_EXPLORATORY",
             high_consequence=True, recompute_if_needed=False)
     assert escalated["decision"] == "REFUSE_USE", \
         "high-consequence use escalates ALLOW_STALE_EXPLORATORY to REQUIRE_FRESH"
 
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         nodep = materializer.resolve_for_use(
             cur, demo.FARM, required_freshness="NO_CURRENT_STATE_DEPENDENCY",
             recompute_if_needed=False)
@@ -1748,7 +1763,7 @@ def test_96_identity_context_invalidation_and_freshness_modes(
     # SURFACES.md, ERRATA E-003): a never-materialized key (FORENSIC_AUDIT
     # use class) must refuse with MATERIALIZATION_BASIS_MISSING, never
     # serve without a basis
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         nobasis = materializer.resolve_for_use(
             cur, demo.FARM, use_class="FORENSIC_AUDIT",
             required_freshness="NO_CURRENT_STATE_DEPENDENCY",
@@ -1759,7 +1774,7 @@ def test_96_identity_context_invalidation_and_freshness_modes(
         "satisfiedFreshnessRequirement"] is False
     assert nobasis["problems"][0]["reasonCode"] == "MATERIALIZATION_BASIS_MISSING"
 
-    with store.tx() as cur:   # leave the suite FRESH
+    with store.serialized_tx() as cur:   # leave the suite FRESH
         materializer.resolve_for_use(cur, demo.FARM)
     record_detail("test_96", {
         "indexResolvedFlips": flips,
@@ -1869,7 +1884,7 @@ def test_97_review_driven_regressions(store, pipeline):
     field_b = f"field:demo.kmetija.b.gerk-1000002.{uid()}"
     farmer_b = f"party:demo.farmer.b.{uid()}"
     now = context.now_iso()
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, {
             "schemaVersion": "ofarm.party.v0.1", "partyId": farmer_b,
             "partyClass": "NATURAL_PERSON",
@@ -1992,7 +2007,7 @@ def test_98_stale_registry_snapshot_recheck(store, pipeline):
     real = json.loads(source_path.read_text())
     raw_digest = sha256_bytes(source_path.read_bytes())
     data_digest = sha256_of(real)
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, {
             "schemaVersion": "ofarm.referencesnapshot.v0.1",
             "referenceSnapshotId": synthetic,
@@ -2044,7 +2059,7 @@ def test_98_stale_registry_snapshot_recheck(store, pipeline):
         stale_codes = {p["reasonCode"] for p in stale_result["problems"]}
         assert stale_result["decisionOutcome"] == "PROMOTE_ACCEPTED"
         assert "SUPERSEDED_RECORD_USED" not in stale_codes
-        with restarted.conn.cursor() as cur:
+        with Store._raw_connection(restarted).cursor() as cur:
             cur.execute(
                 "SELECT outcome, rationale FROM kernel_gate_log "
                 "WHERE request_id = %s AND gate = 'VALIDATION' "
@@ -2071,7 +2086,7 @@ def test_98_stale_registry_snapshot_recheck(store, pipeline):
     )
     expired_decision["validUntil"] = "2025-01-01"
     expired_digest = sha256_of(expired_data)
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, {
             "schemaVersion": "ofarm.referencesnapshot.v0.1",
             "referenceSnapshotId": expired,
@@ -2117,7 +2132,7 @@ def test_98_stale_registry_snapshot_recheck(store, pipeline):
         "productDetails": [],
     }
     locator_digest = sha256_of(locator_data)
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, {
             "schemaVersion": "ofarm.referencesnapshot.v0.1",
             "referenceSnapshotId": locator_only,
@@ -2151,7 +2166,7 @@ def test_98_stale_registry_snapshot_recheck(store, pipeline):
     # Leave the shared session with a newer exact real-data snapshot so later
     # fresh runtimes do not inherit the synthetic locator-only register.
     restored = "referencesnapshot:si.uvhvvr.ffs-reg.2026-06-12-restored-test"
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, {
             "schemaVersion": "ofarm.referencesnapshot.v0.1",
             "referenceSnapshotId": restored,
@@ -2195,10 +2210,10 @@ def test_98z_as_of_spine_guard(store, pipeline, materializer):
     duplicate["notes"] = ("SYNTHETIC TEST duplicate of the pilot activation set "
                           "(identical content, new id) — AS_OF spine-guard "
                           "regression only")
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, duplicate)
 
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         as_of_result = materializer.resolve_for_use(
             cur, demo.FARM,
             time_policy={"policyType": "AS_OF", "asOfTime": context.now_iso()},
@@ -2207,7 +2222,7 @@ def test_98z_as_of_spine_guard(store, pipeline, materializer):
 
     # NOW materialization remains lawful (current context is unambiguous:
     # the latest record; the duplicate's content is identical)
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         now_ok = materializer.resolve_for_use(cur, demo.FARM)
     assert now_ok["decision"] in ("ALLOW_REUSE", "RECOMPUTE_REQUIRED")
 
@@ -2219,7 +2234,7 @@ def test_98z_as_of_spine_guard(store, pipeline, materializer):
     restarted = Store(dsn=store.dsn)
     try:
         context.bootstrap(restarted)
-        with restarted.tx() as cur:
+        with restarted.serialized_tx() as cur:
             refused = Materializer(restarted).resolve_for_use(
                 cur, demo.FARM,
                 time_policy={"policyType": "AS_OF",

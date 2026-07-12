@@ -62,18 +62,26 @@ SUPPORTED_IMPORT_SURFACES = {
     "scheme:si.gerk-pid": "kernel.profiles.si_ffs.gerk_adapter",
     "scheme:si.ffs-naprave": "kernel.profiles.si_ffs.ffsnaprave_adapter",
 }
+RUNTIME_DECISION_SURFACE_MODULES = (
+    "kernel.profiles.si_ffs.si_bindings",
+)
 
 
 def preload_runtime_import_surfaces() -> tuple[object, ...]:
     """Load every reviewed adapter before RuntimeBundle environment selection."""
+    import_surface_modules = set(SUPPORTED_IMPORT_SURFACES.values())
+    module_names = import_surface_modules | set(
+        RUNTIME_DECISION_SURFACE_MODULES)
     modules = tuple(
         importlib.import_module(module_name)
-        for module_name in sorted(set(SUPPORTED_IMPORT_SURFACES.values()))
+        for module_name in sorted(module_names)
     )
     if tuple(module.__name__ for module in modules) != tuple(
-            sorted(set(SUPPORTED_IMPORT_SURFACES.values()))):
+            sorted(module_names)):
         raise RuntimeError("reviewed runtime import-surface preload is not exact")
     for module in modules:
+        if module.__name__ not in import_surface_modules:
+            continue
         hook = getattr(module, "preload_runtime_import_surface", None)
         if not callable(hook):
             raise RuntimeError(

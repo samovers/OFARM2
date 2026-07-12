@@ -546,12 +546,47 @@
       "sourcePath": "kernel/tests/test_m2_oidc.py"
     },
     {
+      "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_application_rejects_equal_behavioral_oidc_mutation",
+      "sourceModule": "kernel.tests.test_m2_oidc",
+      "sourcePath": "kernel/tests/test_m2_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_application_rejects_oidc_helper_replacement",
+      "sourceModule": "kernel.tests.test_m2_oidc",
+      "sourcePath": "kernel/tests/test_m2_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_application_rejects_post_start_oidc_config_mutation",
+      "sourceModule": "kernel.tests.test_m2_oidc",
+      "sourcePath": "kernel/tests/test_m2_oidc.py"
+    },
+    {
       "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_critical_jose_headers_rejected_even_if_signed",
       "sourceModule": "kernel.tests.test_m2_oidc",
       "sourcePath": "kernel/tests/test_m2_oidc.py"
     },
     {
       "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_from_env_default_reads_oidc_config_deterministically",
+      "sourceModule": "kernel.tests.test_m2_oidc",
+      "sourcePath": "kernel/tests/test_m2_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_huge_integer_numericdate_is_fail_closed_oidc_error[exp-negative]",
+      "sourceModule": "kernel.tests.test_m2_oidc",
+      "sourcePath": "kernel/tests/test_m2_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_huge_integer_numericdate_is_fail_closed_oidc_error[exp-positive]",
+      "sourceModule": "kernel.tests.test_m2_oidc",
+      "sourcePath": "kernel/tests/test_m2_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_huge_integer_numericdate_is_fail_closed_oidc_error[nbf-negative]",
+      "sourceModule": "kernel.tests.test_m2_oidc",
+      "sourcePath": "kernel/tests/test_m2_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_huge_integer_numericdate_is_fail_closed_oidc_error[nbf-positive]",
       "sourceModule": "kernel.tests.test_m2_oidc",
       "sourcePath": "kernel/tests/test_m2_oidc.py"
     },
@@ -567,6 +602,11 @@
     },
     {
       "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_noncanonical_base64url_segment_rejected_even_if_signed",
+      "sourceModule": "kernel.tests.test_m2_oidc",
+      "sourcePath": "kernel/tests/test_m2_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_oidc_config_rejects_equal_but_behavioral_subclasses",
       "sourceModule": "kernel.tests.test_m2_oidc",
       "sourcePath": "kernel/tests/test_m2_oidc.py"
     },
@@ -597,6 +637,11 @@
     },
     {
       "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_valid_token_binds_principal_and_commits",
+      "sourceModule": "kernel.tests.test_m2_oidc",
+      "sourcePath": "kernel/tests/test_m2_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_verifier_rejects_retained_helper_alias_replacement",
       "sourceModule": "kernel.tests.test_m2_oidc",
       "sourcePath": "kernel/tests/test_m2_oidc.py"
     },
@@ -2756,7 +2801,62 @@
       "sourcePath": "kernel/tests/test_review_fixes.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_all_governed_service_entries_are_in_semantic_closure[FFSNapraveRegister-match]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_all_governed_service_entries_are_in_semantic_closure[GerkLayer-lookup]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_all_governed_service_entries_are_in_semantic_closure[ImportRunner-run_import]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_all_governed_service_entries_are_in_semantic_closure[OutputGenerator-passport_view]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_authority_decision_is_immutable_and_detects_payload_mutation",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_authority_evaluator_has_no_instance_dispatch_shadow_seam",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_authority_evaluator_rejects_unclosed_inputs[action_stage-UNREVIEWED_FINALIZATION-ValueError]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_authority_evaluator_rejects_unclosed_inputs[revocation_disposition-ALLOW-ValueError]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_authority_evaluator_rejects_unclosed_inputs[scope-value2-TypeError]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_authority_evaluator_requires_active_serialized_cursor",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_bound_store_rejects_object_level_registry_replacement",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_builtin_callable_rebinding_changes_semantic_receipt",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
@@ -2771,12 +2871,47 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_calendar_validation_table_mutation_changes_semantic_receipt",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_caught_runtime_integrity_failure_poison_rolls_back_transaction",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_caught_store_dispatch_drift_poison_rolls_back_transaction",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_closed_nested_cursor_cannot_authorize_inside_live_outer_transaction",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_cold_bundle_cannot_be_relabelled_live",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_commit_api_returns_self_contained_runtime_receipt_headers",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_construction_seam_cache_cannot_be_upgraded_to_bundle_runtime[ffsnaprave]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_construction_seam_cache_cannot_be_upgraded_to_bundle_runtime[gerk]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_construction_seam_cache_cannot_be_upgraded_to_bundle_runtime[product]",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
@@ -2791,7 +2926,32 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_copy_dispatch_mutation_changes_semantic_receipt",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_decision_semantic_seal_is_self_consistent_without_mutation",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_decision_semantic_seal_retains_exact_import_table_key",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_every_loaded_reviewed_originless_auxiliary_has_stable_state_identity",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_existing_incomplete_bundle_receipt_is_never_repaired",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_external_python_class_mutation_changes_semantic_receipt",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
@@ -2801,7 +2961,17 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_gate_entry_refuses_temporary_semantic_mutation_even_if_restored",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_gate_pipeline_rechecks_exact_policy_provider_identity",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_gate_pipeline_refuses_instance_level_dispatch_override",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
@@ -2811,7 +2981,52 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_gate_uses_retained_stage_callable_during_temporary_class_mutation",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_gerk_layer_frozen_cache_and_unavailable_set_refuse_poisoning",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_governed_cursor_cannot_escape_parent_transaction",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_governed_cursor_does_not_leak_raw_command_channels",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_governed_cursor_refuses_caught_commit_and_rolls_back[COMMIT AND CHAIN]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_governed_cursor_refuses_caught_commit_and_rolls_back[SELECT \"pg_catalog\".U&\"set//005fconfig\"('session_replication_role', 'replica', true)]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_governed_cursor_rejects_stateful_composable_without_rendering",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_governed_cursor_self_restoring_statement_guard_cannot_commit[COMMIT AND CHAIN]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_governed_cursor_self_restoring_statement_guard_cannot_commit[COMMIT]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_governed_cursor_transient_mutation_replacement_cannot_skip_write",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
@@ -2821,7 +3036,52 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_governed_savepoint_cannot_escape_parent_transaction",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_governed_savepoint_preserves_database_error_and_recovers",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_governed_transaction_hides_direct_connection_commit",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_governed_transaction_requires_exact_nested_ownership",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_governed_transaction_valid_nesting_and_cleanup",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_health_and_api_refusals_receipt_exact_response_payloads",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_http_graph_covers_regex_route_handle_router_stack_and_helpers",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_http_graph_mutation_is_stopped_before_dispatch",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_http_wire_validator_rejects_duplicate_terminal_body_messages",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_import_posture_refuses_behavior_on_originless_project_namespace",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
@@ -2831,7 +3091,47 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_inherited_jsonschema_error_behavior_changes_semantic_receipt",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_json_default_decoder_mutation_is_in_semantic_closure",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_live_bundle_cannot_be_copied_or_replaced_as_live",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_live_seal_refuses_originless_auxiliary_state_mutation",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_live_seal_refuses_originless_namespace_child_object_replacement",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_live_seal_refuses_originless_namespace_metadata_mutation",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_live_seal_refuses_pseudo_module_auxiliary_state_mutation",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_nested_jsonschema_helper_mutation_changes_semantic_receipt",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_nested_regex_compiler_mutation_is_in_semantic_closure",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
@@ -2841,7 +3141,27 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_pending_database_identity_is_rechecked_before_bootstrap_commit",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_pending_runtime_seal_is_rechecked_before_bootstrap_commit",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_plain_transaction_cannot_mutate_or_upgrade_to_writer",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_preselection_method_mutation_changes_semantic_receipt",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_preselection_semantic_mutation_changes_runtime_bundle_digest",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
@@ -2851,7 +3171,72 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_profile_register_callable_shadow_poisons_active_transaction[ffsnaprave]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_profile_register_callable_shadow_poisons_active_transaction[gerk]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_profile_register_callable_shadow_poisons_active_transaction[product]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_profile_register_frozen_methods_refuse_assignment_and_deletion",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_public_maintenance_cursor_is_not_exposed",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_public_store_sql_facades_are_disabled",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_reached_kernel_object_class_behavior_changes_semantic_receipt",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_read_and_output_apis_receipt_exact_response_payloads",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_record_api_blocks_authority_instance_dispatch_shadow",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_reference_resolver_rejects_cursor_from_another_store",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_reference_resolver_rejects_noop_cursor_and_poisons_transaction",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_regex_cache_growth_does_not_change_semantic_receipt",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_regex_compiler_rebinding_changes_semantic_receipt",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_retained_psycopg_adapter_class_mutation_is_in_semantic_closure",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
@@ -2926,12 +3311,27 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_runtime_bundle_integrity_rejects_mutable_container_substitutions",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_runtime_bundle_late_database_posture_drift_rolls_back_current_transaction",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_runtime_bundle_late_native_mapping_rolls_back_current_transaction",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_runtime_bundle_late_python_drift_rolls_back_current_transaction",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_runtime_bundle_late_semantic_mutation_rolls_back_current_transaction",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
@@ -3046,12 +3446,22 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_runtime_bundle_refuses_mutable_decision_semantic_roots",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_runtime_bundle_refuses_new_module_claiming_retained_origin",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_runtime_bundle_refuses_none_valued_module_set_growth",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_runtime_bundle_refuses_paired_posture_verifier_replacement",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
@@ -3102,6 +3512,11 @@
     },
     {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_runtime_bundle_same_document_cannot_swap_component_bytes",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_runtime_bundle_same_transaction_ddl_rolls_back_before_commit",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
@@ -3186,6 +3601,16 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_runtime_environment_seal_integrity_rejects_mutable_receipt_state",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_runtime_module_lifetime_signature_seals_module_spec_name",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_runtime_service_composition_cannot_mutate_after_construction",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
@@ -3201,7 +3626,47 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_semantic_receipt_normalizes_relocated_kernel_module_file",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_semantic_receipt_refuses_projector_code_replacement",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_si_binding_resolver_mutation_is_in_semantic_closure",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_si_reference_bindings_reject_mixed_descriptor_and_bundle",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_si_resolvers_and_evidence_attachment_reject_duck_and_subclass_registers",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_stable_runtime_identity_excludes_host_paths_and_inodes",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_store_read_cursor_instance_shadow_cannot_skip_guards",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_store_refuses_class_level_guard_replacement",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_store_refuses_registry_instance_validate_shadow",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
@@ -3232,6 +3697,11 @@
     },
     {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_tenant_origin_reference_snapshot_never_enters_global_placement",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_unbound_dynamic_psycopg_adapter_class_is_in_semantic_closure",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
@@ -3416,8 +3886,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "1b7f764986845da33f8ca8e5e16b109405ea3e70e72f0e7d7305a88edde008b0",
-  "entryCount": 683,
+  "entriesSha256": "7f6a3a37c6e5a16b987efd034bad600e06e94d316cd8428e499626e3b3450e14",
+  "entryCount": 777,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

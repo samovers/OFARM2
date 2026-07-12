@@ -28,6 +28,10 @@ from dataclasses import dataclass
 from .context import mint
 from .contracts import ContractViolation, UnknownContract, sha256_of
 from .problems import runtime_problem
+from .store import (
+    Store,
+    _RETAINED_GOVERNED_CURSOR_EXECUTE_READ as _CURSOR_EXECUTE_READ,
+)
 
 _FULL_SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
 
@@ -54,11 +58,24 @@ class ImportRunner:
     def __init__(self, store):
         self.store = store
 
+    def _assert_runtime_composition(self) -> None:
+        if (type(self) is not ImportRunner
+                or type(self.store) is not Store
+                or any(callable(getattr(ImportRunner, name, None))
+                       for name in vars(self))):
+            if type(self.store) is Store:
+                Store._mark_transaction_integrity_violation(self.store)
+            raise RuntimeError(
+                "ImportRunner runtime composition changed after construction")
+        Store._require_runtime_dispatch_integrity(self.store)
+        Store._require_transaction_python_posture(self.store)
+
     def _refuse(self, request_id: str, snapshot_id: str | None, reason_code: str,
                 title: str, detail: str, *, remediation: str | None = None) -> dict:
+        ImportRunner._assert_runtime_composition(self)
         problem = runtime_problem(reason_code, title, detail,
                                   suggested_remediation=remediation)
-        with self.store.serialized_tx() as cur:
+        with Store.serialized_tx(self.store) as cur:
             self.store.log_gate(cur, request_id, self.GATE, "REFUSED",
                                 reason_code=reason_code, rationale=detail,
                                 related_refs=[snapshot_id] if snapshot_id else None)
@@ -79,12 +96,15 @@ class ImportRunner:
         later resolve the imported snapshot's content from the store. Generic:
         `records`/`data_family` are opaque here; no scheme literals (M2 P1).
         """
+        ImportRunner._assert_runtime_composition(self)
+        if type(parse_result) is not ParseResult or type(snapshot_meta) is not dict:
+            raise RuntimeError("ImportRunner input identity is not exact")
         request_id = mint("import")
         snapshot_id = snapshot_meta.get("referenceSnapshotId")
 
         # 1. a failed / partial parse imports nothing
         if not parse_result.ok or not parse_result.sourceDigest:
-            return {**self._refuse(
+            return {**ImportRunner._refuse(self,
                 request_id, snapshot_id, "SOURCE_FIDELITY_LOSS", "Import parse failed",
                 parse_result.error or "the parser did not produce a complete, "
                 "digestible source; no snapshot was written",
@@ -100,7 +120,7 @@ class ImportRunner:
         if (len(matching_families) > 1
                 or (len(matching_families) == 1
                     and data_family != matching_families[0].data_family)):
-            return {**self._refuse(
+            return {**ImportRunner._refuse(self,
                 request_id, snapshot_id, "SOURCE_FIDELITY_LOSS",
                 "Import data family does not match runtime selection",
                 "the snapshot identity maps to a RuntimeBundle reference family "
@@ -114,7 +134,7 @@ class ImportRunner:
                 and component.placement == "GLOBAL_IMMUTABLE_CONTENT")
         }
         if snapshot_id in global_snapshot_ids:
-            return {**self._refuse(
+            return {**ImportRunner._refuse(self,
                 request_id, snapshot_id, "DUPLICATE_IMPORT_AMBIGUOUS",
                 "Import identifier collides with package reference",
                 "a tenant import cannot reuse a globally authored ReferenceSnapshot "
@@ -146,7 +166,7 @@ class ImportRunner:
                 or not data_family
                 or parse_result.records is None
                 or sha256_of(parse_result.records) != parse_result.sourceDigest):
-            return {**self._refuse(
+            return {**ImportRunner._refuse(self,
                 request_id, snapshot_id, "SOURCE_FIDELITY_LOSS",
                 "Import source bytes are not retained",
                 "the import does not provide a full SHA-256 over exact retained "
@@ -172,13 +192,13 @@ class ImportRunner:
         try:
             self.store.registry.validate(snapshot)
         except (ContractViolation, UnknownContract) as exc:
-            return {**self._refuse(
+            return {**ImportRunner._refuse(self,
                 request_id, snapshot_id, "SOURCE_FIDELITY_LOSS", "Import record malformed",
                 f"the assembled ReferenceSnapshot is not contract-valid: {exc}"),
                 "disposition": "INVALID_SNAPSHOT"}
 
         # 4. import inside the single serialized write transaction
-        with self.store.serialized_tx() as cur:
+        with Store.serialized_tx(self.store) as cur:
             existing = self.store.get_record(snapshot_id)
             if existing is not None:
                 snapshot_contract = self.store.registry.get(
@@ -198,7 +218,7 @@ class ImportRunner:
                     # restartable bundle. Exact-verify it before calling this a
                     # replay; restore a missing row from the supplied retained
                     # bytes, and refuse an unequal identity reuse.
-                    cur.execute(
+                    _CURSOR_EXECUTE_READ(cur,
                         "SELECT d.data_family, d.artifact_ref, d.source_digest, "
                         "d.parser_label, d.record_count, d.payload, d.payload_sha256 "
                         "FROM ONLY reference_snapshot_data d "

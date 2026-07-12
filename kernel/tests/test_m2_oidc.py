@@ -19,16 +19,15 @@ import time
 import uuid
 
 import pytest
-
-
-def uid():
-    return uuid.uuid4().hex[:8]
-
 from fastapi.testclient import TestClient
 
 from kernel import demo
 from kernel.api import create_app
 from kernel.auth_oidc import OidcConfig, OidcError, issue_dev_token
+
+
+def uid():
+    return uuid.uuid4().hex[:8]
 
 ISSUER = "https://keycloak.example/realms/ofarm-dev"
 AUDIENCE = "ofarm2-kernel"
@@ -61,17 +60,23 @@ def _bearer(token):
     return {"Authorization": f"Bearer {token}"}
 
 
+def _encode_json_segment(value: dict) -> str:
+    return base64.urlsafe_b64encode(
+        json.dumps(value, separators=(",", ":")).encode(),
+    ).rstrip(b"=").decode()
+
+
 def _raw_token(header: dict, payload: dict, signature: str = "x") -> str:
-    enc = lambda d: base64.urlsafe_b64encode(
-        json.dumps(d, separators=(",", ":")).encode()).rstrip(b"=").decode()
-    return f"{enc(header)}.{enc(payload)}.{signature}"
+    return (
+        f"{_encode_json_segment(header)}."
+        f"{_encode_json_segment(payload)}.{signature}"
+    )
 
 
 def _signed(header: dict, payload: dict, secret: str = SECRET) -> str:
     """A correctly HS256-SIGNED token with a CUSTOM header (e.g. carrying crit/b64)."""
-    enc = lambda d: base64.urlsafe_b64encode(
-        json.dumps(d, separators=(",", ":")).encode()).rstrip(b"=").decode()
-    h, p = enc(header), enc(payload)
+    h = _encode_json_segment(header)
+    p = _encode_json_segment(payload)
     sig = base64.urlsafe_b64encode(
         hmac.new(secret.encode(), f"{h}.{p}".encode(), hashlib.sha256).digest()).rstrip(b"=").decode()
     return f"{h}.{p}.{sig}"
@@ -193,6 +198,98 @@ def test_g4_verifier_returns_party_and_roles_separately(store):
     assert claims["roles"] == ["operator"]   # surfaced as RoleAssignment-level, never authority
 
 
+def test_g4_application_rejects_post_start_oidc_config_mutation(store):
+    cfg = _cfg()
+    assert not hasattr(cfg, "__dict__")
+    client = TestClient(
+        create_app(store, oidc=cfg), raise_server_exceptions=False)
+    object.__setattr__(cfg, "hs256_secret", "attacker-controlled-secret")
+    forged = _token(
+        demo.FARMER, secret="attacker-controlled-secret")
+
+    response = client.get(
+        f"/records/{demo.FARMER}", headers=_bearer(forged))
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Internal Server Error"}
+
+
+def test_g4_oidc_config_rejects_equal_but_behavioral_subclasses():
+    class BehavioralString(str):
+        def encode(self, *_args, **_kwargs):
+            return b"attacker-controlled-secret"
+
+    with pytest.raises(TypeError, match="exact string"):
+        OidcConfig(
+            issuer=ISSUER,
+            audience=AUDIENCE,
+            hs256_secret=BehavioralString(SECRET),
+        )
+
+
+def test_g4_application_rejects_equal_behavioral_oidc_mutation(store):
+    class BehavioralSecret(str):
+        def encode(self, *_args, **_kwargs):
+            return b"attacker-controlled-secret"
+
+    cfg = _cfg()
+    client = TestClient(
+        create_app(store, oidc=cfg), raise_server_exceptions=False)
+    poisoned = BehavioralSecret(SECRET)
+    assert poisoned == SECRET
+    object.__setattr__(cfg, "hs256_secret", poisoned)
+    forged = _token(
+        demo.FARMER, secret="attacker-controlled-secret")
+
+    response = client.get(
+        f"/records/{demo.FARMER}", headers=_bearer(forged))
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Internal Server Error"}
+
+
+def test_g4_application_rejects_oidc_helper_replacement(
+        store, monkeypatch):
+    import kernel.auth_oidc as oidc_runtime
+
+    called = False
+
+    def hostile_verify(*_args, **_kwargs):
+        nonlocal called
+        called = True
+        return {"sub": demo.FARMER}
+
+    client = _client(store)
+    monkeypatch.setattr(oidc_runtime, "_verify_hs256", hostile_verify)
+    response = client.get(
+        f"/records/{demo.FARMER}",
+        headers=_bearer(_token(demo.FARMER)),
+    )
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Internal Server Error"}
+    assert called is False
+
+
+def test_g4_verifier_rejects_retained_helper_alias_replacement(monkeypatch):
+    import kernel.auth_oidc as oidc_runtime
+
+    called = False
+
+    def hostile_verify(*_args, **_kwargs):
+        nonlocal called
+        called = True
+        return {
+            "sub": "party:forged",
+            "iss": ISSUER,
+            "aud": AUDIENCE,
+            "exp": int(time.time()) + 3600,
+        }
+
+    monkeypatch.setattr(
+        oidc_runtime, "_RETAINED_VERIFY_HS256", hostile_verify)
+    with pytest.raises(OidcError, match="runtime composition changed"):
+        _cfg().verify("not.a.token")
+    assert called is False
+
+
 def test_g4_non_finite_numericdate_is_fail_closed_401(store):
     # PR #16 hostile B1: NaN / Infinity exp or nbf must FAIL CLOSED (401), never
     # crash int()/the endpoint into a 500. The verifier raises OidcError, not
@@ -210,6 +307,30 @@ def test_g4_non_finite_numericdate_is_fail_closed_401(store):
     nbf_nan = issue_dev_token({"sub": demo.FARMER, "iss": ISSUER, "aud": AUDIENCE,
                                "exp": now + 3600, "nbf": float("nan")}, secret=SECRET)
     assert client.post("/commit", json={"submission": sub}, headers=_bearer(nbf_nan)).status_code == 401
+
+
+@pytest.mark.parametrize(
+    "huge", (1 << 4096, -(1 << 4096)),
+    ids=("positive", "negative"),
+)
+@pytest.mark.parametrize("claim_name", ("exp", "nbf"))
+def test_g4_huge_integer_numericdate_is_fail_closed_oidc_error(
+        store, huge, claim_name):
+    now = int(time.time())
+    claims = {
+        "sub": demo.FARMER,
+        "iss": ISSUER,
+        "aud": AUDIENCE,
+        "exp": now + 3600,
+    }
+    claims[claim_name] = huge
+    token = issue_dev_token(claims, secret=SECRET)
+
+    with pytest.raises(OidcError, match="signed-64-bit NumericDate"):
+        _cfg().verify(token)
+    response = _client(store).get(
+        f"/records/{demo.FARMER}", headers=_bearer(token))
+    assert response.status_code == 401
 
 
 def test_g4_noncanonical_base64url_segment_rejected_even_if_signed(store):

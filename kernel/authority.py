@@ -9,27 +9,337 @@ store; the evaluator simply stops finding a valid path through them.
 """
 from __future__ import annotations
 
+import types
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from .context import mint as _mint, now_iso
+from .contracts import canonical_json
 from .problems import runtime_problem
+from .store import Store
+
+_RETAINED_STORE_REQUIRE_ACTIVE_SERIALIZED_CURSOR = \
+    Store._require_active_serialized_cursor
+_RETAINED_STORE_REQUIRE_ACTIVE_SERIALIZED_CURSOR_CODE = \
+    _RETAINED_STORE_REQUIRE_ACTIVE_SERIALIZED_CURSOR.__code__
+_RETAINED_STORE_FIND_BY_KIND = Store.find_by_kind
+_RETAINED_STORE_FIND_BY_KIND_CODE = _RETAINED_STORE_FIND_BY_KIND.__code__
+_RETAINED_STORE_GET_RECORD = Store.get_record
+_RETAINED_STORE_GET_RECORD_CODE = _RETAINED_STORE_GET_RECORD.__code__
+_RETAINED_STORE_GET_PAYLOAD = Store.get_payload
+_RETAINED_STORE_GET_PAYLOAD_CODE = _RETAINED_STORE_GET_PAYLOAD.__code__
 
 # Scope types a FARM-scoped grant covers under DESCENDANT_SCOPES
-_FARM_DESCENDANTS = {"FARM", "SITE", "FIELD", "ZONE", "CROP_CYCLE", "LOT", "FACILITY", "OPERATION"}
+_FARM_DESCENDANTS = frozenset({
+    "FARM", "SITE", "FIELD", "ZONE", "CROP_CYCLE", "LOT", "FACILITY",
+    "OPERATION",
+})
+
+_ACTION_STAGE_VALUES = (
+    "DRAFT_PREPARATION",
+    "PROMOTION",
+    "PUBLICATION",
+    "ATTESTATION",
+    "QUERY_READ",
+    "CURRENT_STATE_USE",
+    "CONTEXT_ACTIVATION",
+)
+_REVOCATION_DISPOSITION_VALUES = ("DENY", "REQUIRE_REVIEW")
+_SCOPE_TYPE_VALUES = (
+    "FARM",
+    "SITE",
+    "FIELD",
+    "ZONE",
+    "CROP_CYCLE",
+    "LOT",
+    "FACILITY",
+    "OPERATION",
+    "DEPLOYMENT",
+    "TENANT",
+)
+_AI_ASSISTANT_ROLE_VALUES = (
+    "INTERPRETATION_AI",
+    "QUERY_AI",
+    "AUTHORING_AI",
+    "ADVISORY_AI",
+    "SIMULATION_AI",
+)
+_AI_SUGGESTION_MODE_VALUES = (
+    "PREPARE",
+    "RECOMMEND",
+    "AUTO_FILL",
+    "AUTO_ROUTE",
+)
+_RETAINED_ACTION_STAGE_VALUES = _ACTION_STAGE_VALUES
+_RETAINED_REVOCATION_DISPOSITION_VALUES = _REVOCATION_DISPOSITION_VALUES
+_RETAINED_SCOPE_TYPE_VALUES = _SCOPE_TYPE_VALUES
+_RETAINED_AI_ASSISTANT_ROLE_VALUES = _AI_ASSISTANT_ROLE_VALUES
+_RETAINED_AI_SUGGESTION_MODE_VALUES = _AI_SUGGESTION_MODE_VALUES
+_RETAINED_AUTHORITY_CANONICAL_JSON = canonical_json
+_RETAINED_AUTHORITY_CANONICAL_JSON_CODE = canonical_json.__code__
 
 
-@dataclass
-class AuthorityDecision:
+def _canonical_authority_decision_state(
+        outcome, request, result, trace, problems) -> str:
+    return _RETAINED_AUTHORITY_CANONICAL_JSON({
+        "outcome": outcome,
+        "request": request,
+        "result": result,
+        "trace": trace,
+        "problems": problems,
+    })
+
+
+_RETAINED_CANONICAL_AUTHORITY_DECISION_STATE = \
+    _canonical_authority_decision_state
+_RETAINED_CANONICAL_AUTHORITY_DECISION_STATE_CODE = \
+    _canonical_authority_decision_state.__code__
+
+
+class _ImmutableAuthorityDecisionType(type):
+    """Block ordinary mutation of the decision class after construction."""
+
+    def __setattr__(cls, name, value):
+        if cls.__dict__.get("_authority_type_frozen", False):
+            raise TypeError("AuthorityDecision runtime type is immutable")
+        super().__setattr__(name, value)
+
+    def __delattr__(cls, name):
+        if cls.__dict__.get("_authority_type_frozen", False):
+            raise TypeError("AuthorityDecision runtime type is immutable")
+        super().__delattr__(name)
+
+
+@dataclass(frozen=True, slots=True)
+class AuthorityDecision(metaclass=_ImmutableAuthorityDecisionType):
+    _authority_type_frozen = False
+
     outcome: str                     # ALLOW | DENY | REQUIRE_REVIEW | REQUIRE_HUMAN_APPROVAL
     request_payload: dict
     result_payload: dict
     trace_payload: dict
     problems: list[dict] = field(default_factory=list)
+    _canonical_state: str = field(init=False, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "_canonical_state",
+            _RETAINED_CANONICAL_AUTHORITY_DECISION_STATE(
+                object.__getattribute__(self, "outcome"),
+                object.__getattribute__(self, "request_payload"),
+                object.__getattribute__(self, "result_payload"),
+                object.__getattribute__(self, "trace_payload"),
+                object.__getattribute__(self, "problems"),
+            ),
+        )
 
     @property
     def allowed(self) -> bool:
-        return self.outcome == "ALLOW"
+        return object.__getattribute__(self, "outcome") == "ALLOW"
+
+
+AuthorityDecision._authority_type_frozen = True
+
+_RETAINED_AUTHORITY_DECISION_TYPE = AuthorityDecision
+_RETAINED_AUTHORITY_DECISION_INIT = AuthorityDecision.__init__
+_RETAINED_AUTHORITY_DECISION_INIT_CODE = \
+    _RETAINED_AUTHORITY_DECISION_INIT.__code__
+_RETAINED_AUTHORITY_DECISION_SETATTR = AuthorityDecision.__setattr__
+_RETAINED_AUTHORITY_DECISION_SETATTR_CODE = \
+    _RETAINED_AUTHORITY_DECISION_SETATTR.__code__
+_RETAINED_AUTHORITY_DECISION_DELATTR = AuthorityDecision.__delattr__
+_RETAINED_AUTHORITY_DECISION_DELATTR_CODE = \
+    _RETAINED_AUTHORITY_DECISION_DELATTR.__code__
+_RETAINED_AUTHORITY_DECISION_POST_INIT = AuthorityDecision.__post_init__
+_RETAINED_AUTHORITY_DECISION_POST_INIT_CODE = \
+    _RETAINED_AUTHORITY_DECISION_POST_INIT.__code__
+_RETAINED_AUTHORITY_DECISION_ALLOWED_PROPERTY = \
+    vars(AuthorityDecision)["allowed"]
+_RETAINED_AUTHORITY_DECISION_ALLOWED_GETTER = \
+    _RETAINED_AUTHORITY_DECISION_ALLOWED_PROPERTY.fget
+_RETAINED_AUTHORITY_DECISION_ALLOWED_GETTER_CODE = \
+    _RETAINED_AUTHORITY_DECISION_ALLOWED_GETTER.__code__
+_RETAINED_AUTHORITY_DECISION_SLOT_STATE = tuple(
+    (name, vars(AuthorityDecision)[name])
+    for name in AuthorityDecision.__slots__
+)
+
+
+def _require_authority_decision_type() -> None:
+    allowed = vars(_RETAINED_AUTHORITY_DECISION_TYPE).get("allowed")
+    if (globals().get("AuthorityDecision") is not
+            _RETAINED_AUTHORITY_DECISION_TYPE
+            or type(_RETAINED_AUTHORITY_DECISION_TYPE) is not
+            _ImmutableAuthorityDecisionType
+            or vars(_RETAINED_AUTHORITY_DECISION_TYPE).get(
+                "_authority_type_frozen") is not True
+            or vars(_RETAINED_AUTHORITY_DECISION_TYPE).get("__init__") is not
+            _RETAINED_AUTHORITY_DECISION_INIT
+            or _RETAINED_AUTHORITY_DECISION_INIT.__code__ is not
+            _RETAINED_AUTHORITY_DECISION_INIT_CODE
+            or vars(_RETAINED_AUTHORITY_DECISION_TYPE).get("__setattr__") is not
+            _RETAINED_AUTHORITY_DECISION_SETATTR
+            or _RETAINED_AUTHORITY_DECISION_SETATTR.__code__ is not
+            _RETAINED_AUTHORITY_DECISION_SETATTR_CODE
+            or vars(_RETAINED_AUTHORITY_DECISION_TYPE).get("__delattr__") is not
+            _RETAINED_AUTHORITY_DECISION_DELATTR
+            or _RETAINED_AUTHORITY_DECISION_DELATTR.__code__ is not
+            _RETAINED_AUTHORITY_DECISION_DELATTR_CODE
+            or vars(_RETAINED_AUTHORITY_DECISION_TYPE).get("__post_init__") is not
+            _RETAINED_AUTHORITY_DECISION_POST_INIT
+            or _RETAINED_AUTHORITY_DECISION_POST_INIT.__code__ is not
+            _RETAINED_AUTHORITY_DECISION_POST_INIT_CODE
+            or allowed is not _RETAINED_AUTHORITY_DECISION_ALLOWED_PROPERTY
+            or type(allowed) is not property
+            or allowed.fget is not
+            _RETAINED_AUTHORITY_DECISION_ALLOWED_GETTER
+            or _RETAINED_AUTHORITY_DECISION_ALLOWED_GETTER.__code__ is not
+            _RETAINED_AUTHORITY_DECISION_ALLOWED_GETTER_CODE
+            or any(
+                vars(_RETAINED_AUTHORITY_DECISION_TYPE).get(name) is not slot
+                for name, slot in _RETAINED_AUTHORITY_DECISION_SLOT_STATE)):
+        raise RuntimeError("AuthorityDecision runtime type changed")
+
+
+def authority_decision_allowed(decision) -> bool:
+    """Validate the exact frozen decision state before branching on it."""
+    _RETAINED_REQUIRE_AUTHORITY_DECISION_TYPE()
+    if type(decision) is not _RETAINED_AUTHORITY_DECISION_TYPE:
+        raise RuntimeError("authority decision has a substituted runtime type")
+    outcome = object.__getattribute__(decision, "outcome")
+    request = object.__getattribute__(decision, "request_payload")
+    result = object.__getattribute__(decision, "result_payload")
+    trace = object.__getattribute__(decision, "trace_payload")
+    problems = object.__getattribute__(decision, "problems")
+    canonical_state = object.__getattribute__(decision, "_canonical_state")
+    allowed = _RETAINED_AUTHORITY_DECISION_ALLOWED_GETTER(decision)
+    if (type(outcome) is not str
+            or outcome not in (
+                "ALLOW", "DENY", "REQUIRE_REVIEW",
+                "REQUIRE_HUMAN_APPROVAL",
+            )
+            or type(request) is not dict
+            or type(result) is not dict
+            or type(trace) is not dict
+            or type(problems) is not list
+            or type(canonical_state) is not str
+            or canonical_state !=
+            _RETAINED_CANONICAL_AUTHORITY_DECISION_STATE(
+                outcome, request, result, trace, problems)
+            or type(allowed) is not bool
+            or type(result.get("decisionOutcome")) is not str
+            or result.get("decisionOutcome") != outcome
+            or type(trace.get("decisionOutcome")) is not str
+            or trace.get("decisionOutcome") != outcome
+            or type(result.get("finalActionPermitted")) is not bool
+            or result.get("finalActionPermitted") is not allowed
+            or type(result.get("humanApprovalRequired")) is not bool
+            or result.get("humanApprovalRequired") is not
+            (outcome == "REQUIRE_HUMAN_APPROVAL")
+            or result.get("problems") is not problems):
+        raise RuntimeError("authority decision state changed or is inconsistent")
+    return allowed
+
+
+_RETAINED_AUTHORITY_DECISION_ALLOWED = authority_decision_allowed
+_RETAINED_AUTHORITY_DECISION_ALLOWED_CODE = \
+    authority_decision_allowed.__code__
+_RETAINED_REQUIRE_AUTHORITY_DECISION_TYPE = _require_authority_decision_type
+_RETAINED_REQUIRE_AUTHORITY_DECISION_TYPE_CODE = \
+    _require_authority_decision_type.__code__
+
+
+def _copy_evaluate_inputs(
+    *,
+    acting_party_ref,
+    action_class,
+    action_stage,
+    scope,
+    acting_agent_ref,
+    ai_assistance,
+    revocation_check_required,
+    revocation_disposition,
+    use_purpose,
+):
+    """Reject behavioral inputs and return closed exact primitive copies."""
+    if (type(acting_party_ref) is not str
+            or type(action_class) is not str
+            or type(action_stage) is not str
+            or type(revocation_check_required) is not bool
+            or type(revocation_disposition) is not str
+            or (acting_agent_ref is not None
+                and type(acting_agent_ref) is not str)
+            or (use_purpose is not None and type(use_purpose) is not str)):
+        raise TypeError(
+            "AuthorityEvaluator inputs must use exact primitive types")
+    if not acting_party_ref or not action_class:
+        raise ValueError("AuthorityEvaluator party and action refs must be non-empty")
+    if action_stage not in _RETAINED_ACTION_STAGE_VALUES:
+        raise ValueError("AuthorityEvaluator action_stage is not closed")
+    if revocation_disposition not in \
+            _RETAINED_REVOCATION_DISPOSITION_VALUES:
+        raise ValueError(
+            "AuthorityEvaluator revocation_disposition is not closed")
+    if (type(scope) is not dict
+            or set(scope) != {"scopeType", "scopeRef"}
+            or any(type(key) is not str for key in scope)
+            or type(scope.get("scopeType")) is not str
+            or scope.get("scopeType") not in _RETAINED_SCOPE_TYPE_VALUES
+            or type(scope.get("scopeRef")) is not str
+            or not scope.get("scopeRef")):
+        raise TypeError(
+            "AuthorityEvaluator scope must be an exact closed primitive map")
+    scope_copy = {
+        "scopeType": scope["scopeType"],
+        "scopeRef": scope["scopeRef"],
+    }
+
+    ai_copy = None
+    if ai_assistance is not None:
+        allowed_keys = {
+            "assisted", "assistantRef", "assistantRoleFamily", "suggestionMode",
+        }
+        if (type(ai_assistance) is not dict
+                or any(type(key) is not str for key in ai_assistance)
+                or not set(ai_assistance) <= allowed_keys
+                or "assisted" not in ai_assistance
+                or type(ai_assistance.get("assisted")) is not bool
+                or ("assistantRef" in ai_assistance
+                    and type(ai_assistance["assistantRef"]) is not str)
+                or ("assistantRoleFamily" in ai_assistance
+                    and (type(ai_assistance["assistantRoleFamily"]) is not str
+                         or ai_assistance["assistantRoleFamily"] not in
+                         _RETAINED_AI_ASSISTANT_ROLE_VALUES))
+                or ("suggestionMode" in ai_assistance
+                    and (type(ai_assistance["suggestionMode"]) is not str
+                         or ai_assistance["suggestionMode"] not in
+                         _RETAINED_AI_SUGGESTION_MODE_VALUES))):
+            raise TypeError(
+                "AuthorityEvaluator ai_assistance must be an exact closed map")
+        ai_copy = {
+            key: ai_assistance[key]
+            for key in (
+                "assisted", "assistantRef", "assistantRoleFamily",
+                "suggestionMode",
+            )
+            if key in ai_assistance
+        }
+    return (
+        acting_party_ref,
+        action_class,
+        action_stage,
+        scope_copy,
+        acting_agent_ref,
+        ai_copy,
+        revocation_check_required,
+        revocation_disposition,
+        use_purpose,
+    )
+
+
+_RETAINED_COPY_EVALUATE_INPUTS = _copy_evaluate_inputs
+_RETAINED_COPY_EVALUATE_INPUTS_CODE = _copy_evaluate_inputs.__code__
 
 
 def _parse_dt(value: str) -> datetime | None:
@@ -68,20 +378,34 @@ def _revocation_effective(revocation: dict, at: str) -> bool:
 
 
 class AuthorityEvaluator:
+    __slots__ = ("store",)
+
     def __init__(self, store):
-        self.store = store
+        if type(store) is not Store:
+            raise TypeError("AuthorityEvaluator requires the exact Store runtime")
+        object.__setattr__(self, "store", store)
+
+    def __setattr__(self, name, value):
+        del name, value
+        raise AttributeError("AuthorityEvaluator runtime composition is immutable")
+
+    def __delattr__(self, name):
+        del name
+        raise AttributeError("AuthorityEvaluator runtime composition cannot be deleted")
 
     # -- record gathering (all reads; default deny means absence = DENY) ------
 
     def _role_assignments(self, party_ref: str, at: str) -> list[dict]:
         return [
-            r["payload"] for r in self.store.find_by_kind("ofarm.roleassignment.v0.1")
+            r["payload"] for r in _RETAINED_STORE_FIND_BY_KIND(
+                self.store, "ofarm.roleassignment.v0.1")
             if r["payload"]["partyRef"] == party_ref and _time_valid(r["payload"], at)
         ]
 
     def _revocations_for(self, artifact_ref: str, at: str) -> list[dict]:
         return [
-            r["payload"] for r in self.store.find_by_kind("ofarm.revocationdecision.v0.1")
+            r["payload"] for r in _RETAINED_STORE_FIND_BY_KIND(
+                self.store, "ofarm.revocationdecision.v0.1")
             if r["payload"]["revokesArtifactRef"] == artifact_ref
             and _revocation_effective(r["payload"], at)
         ]
@@ -97,7 +421,8 @@ class AuthorityEvaluator:
                     return target["scopeRef"] == grant_scope["scopeRef"]
                 # descendant containment is real, not assumed: the target
                 # identity must be anchored on the granting farm
-                identity = self.store.get_payload(target["scopeRef"])
+                identity = _RETAINED_STORE_GET_PAYLOAD(
+                    self.store, target["scopeRef"])
                 if identity is None:
                     return False
                 return {"scopeType": "FARM", "scopeRef": grant_scope["scopeRef"]} \
@@ -106,9 +431,13 @@ class AuthorityEvaluator:
 
     def _matching_grants(self, party_ref: str, action_class: str, scope: dict, at: str):
         """(grant, revocations) pairs for direct AuthorityGrants."""
-        roles = {r["roleAssignmentId"] for r in self._role_assignments(party_ref, at)}
+        roles = {
+            r["roleAssignmentId"]
+            for r in _RETAINED_AUTHORITY_ROLE_ASSIGNMENTS(self, party_ref, at)
+        }
         out = []
-        for row in self.store.find_by_kind("ofarm.authoritygrant.v0.1"):
+        for row in _RETAINED_STORE_FIND_BY_KIND(
+                self.store, "ofarm.authoritygrant.v0.1"):
             g = row["payload"]
             target = g["grantTarget"]
             targets_party = target["targetKind"] == "PARTY" and target["targetRef"] == party_ref
@@ -119,9 +448,11 @@ class AuthorityEvaluator:
                 continue
             if action_class not in g["authorityActionClasses"]:
                 continue
-            if not self._scope_covers(g["targetScope"], g["inheritanceMode"], scope):
+            if not _RETAINED_AUTHORITY_SCOPE_COVERS(
+                    self, g["targetScope"], g["inheritanceMode"], scope):
                 continue
-            out.append((g, self._revocations_for(g["authorityGrantId"], at)))
+            out.append((g, _RETAINED_AUTHORITY_REVOCATIONS_FOR(
+                self, g["authorityGrantId"], at)))
         return out
 
     def _live_source_authority(self, delegation: dict, action_class: str,
@@ -139,13 +470,16 @@ class AuthorityEvaluator:
         delegator = delegation["delegatingPartyRef"]
         source_revocations: list[dict] = []
         for ref in source_refs:
-            row = self.store.get_record(ref)
+            row = _RETAINED_STORE_GET_RECORD(self.store, ref)
             if row is None or row["record_kind"] != "ofarm.authoritygrant.v0.1":
                 continue
             g = row["payload"]
             target = g["grantTarget"]
-            delegator_roles = {r["roleAssignmentId"]
-                               for r in self._role_assignments(delegator, at)}
+            delegator_roles = {
+                r["roleAssignmentId"]
+                for r in _RETAINED_AUTHORITY_ROLE_ASSIGNMENTS(
+                    self, delegator, at)
+            }
             controls = ((target["targetKind"] == "PARTY"
                          and target["targetRef"] == delegator)
                         or (target["targetKind"] == "ROLE_ASSIGNMENT"
@@ -158,12 +492,15 @@ class AuthorityEvaluator:
                 continue
             # no widening: the source must cover both the delegation's own
             # scope and the scope being requested right now
-            if not self._scope_covers(g["targetScope"], g["inheritanceMode"],
-                                      delegation["targetScope"]):
+            if not _RETAINED_AUTHORITY_SCOPE_COVERS(
+                    self, g["targetScope"], g["inheritanceMode"],
+                    delegation["targetScope"]):
                 continue
-            if not self._scope_covers(g["targetScope"], g["inheritanceMode"], scope):
+            if not _RETAINED_AUTHORITY_SCOPE_COVERS(
+                    self, g["targetScope"], g["inheritanceMode"], scope):
                 continue
-            revs = self._revocations_for(g["authorityGrantId"], at)
+            revs = _RETAINED_AUTHORITY_REVOCATIONS_FOR(
+                self, g["authorityGrantId"], at)
             if revs:
                 source_revocations.extend(revs)
                 continue
@@ -172,7 +509,8 @@ class AuthorityEvaluator:
 
     def _matching_delegations(self, party_ref: str, action_class: str, scope: dict, at: str):
         out = []
-        for row in self.store.find_by_kind("ofarm.delegationgrant.v0.1"):
+        for row in _RETAINED_STORE_FIND_BY_KIND(
+                self.store, "ofarm.delegationgrant.v0.1"):
             d = row["payload"]
             if d["delegatePartyRef"] != party_ref:
                 continue
@@ -180,11 +518,14 @@ class AuthorityEvaluator:
                 continue
             if action_class not in d["authorityActionClasses"]:
                 continue
-            if not self._scope_covers(d["targetScope"], d["inheritanceMode"], scope):
+            if not _RETAINED_AUTHORITY_SCOPE_COVERS(
+                    self, d["targetScope"], d["inheritanceMode"], scope):
                 continue
-            revocations = self._revocations_for(d["delegationGrantId"], at)
-            source_live, source_revocations = self._live_source_authority(
-                d, action_class, scope, at)
+            revocations = _RETAINED_AUTHORITY_REVOCATIONS_FOR(
+                self, d["delegationGrantId"], at)
+            source_live, source_revocations = \
+                _RETAINED_AUTHORITY_LIVE_SOURCE(
+                    self, d, action_class, scope, at)
             if not source_live:
                 if source_revocations:
                     # the delegation chain is broken by a revoked source —
@@ -198,13 +539,14 @@ class AuthorityEvaluator:
         return out
 
     def _party(self, party_ref: str) -> dict | None:
-        return self.store.get_payload(party_ref)
+        return _RETAINED_STORE_GET_PAYLOAD(self.store, party_ref)
 
     # -- the decision -----------------------------------------------------------
 
     def evaluate(
         self,
         *,
+        cur,
         acting_party_ref: str,
         action_class: str,
         action_stage: str,
@@ -215,6 +557,29 @@ class AuthorityEvaluator:
         revocation_disposition: str = "DENY",   # DENY | REQUIRE_REVIEW (both lawful per schema)
         use_purpose: str | None = None,
     ) -> AuthorityDecision:
+        _RETAINED_AUTHORITY_RUNTIME_GUARD(self, cur)
+        (
+            acting_party_ref,
+            action_class,
+            action_stage,
+            scope,
+            acting_agent_ref,
+            ai_assistance,
+            revocation_check_required,
+            revocation_disposition,
+            use_purpose,
+        ) = _RETAINED_COPY_EVALUATE_INPUTS(
+            acting_party_ref=acting_party_ref,
+            action_class=action_class,
+            action_stage=action_stage,
+            scope=scope,
+            acting_agent_ref=acting_agent_ref,
+            ai_assistance=ai_assistance,
+            revocation_check_required=revocation_check_required,
+            revocation_disposition=revocation_disposition,
+            use_purpose=use_purpose,
+        )
+        _RETAINED_AUTHORITY_RUNTIME_GUARD(self, cur)
         at = now_iso()
         request_id = _mint("authzreq")
         trace_id = _mint("authztrace")
@@ -239,15 +604,21 @@ class AuthorityEvaluator:
         if use_purpose:
             request["usePurpose"] = use_purpose
 
-        party = self._party(acting_party_ref)
+        party = _RETAINED_AUTHORITY_PARTY(self, acting_party_ref)
         non_human = bool(acting_agent_ref) or (
             party is not None and party.get("partyClass") == "SOFTWARE_AGENT"
         )
         request["nonHumanActor"] = non_human
 
-        role_basis = [r["roleAssignmentId"] for r in self._role_assignments(acting_party_ref, at)]
-        grants = self._matching_grants(acting_party_ref, action_class, scope, at)
-        delegations = self._matching_delegations(acting_party_ref, action_class, scope, at)
+        role_basis = [
+            r["roleAssignmentId"]
+            for r in _RETAINED_AUTHORITY_ROLE_ASSIGNMENTS(
+                self, acting_party_ref, at)
+        ]
+        grants = _RETAINED_AUTHORITY_MATCHING_GRANTS(
+            self, acting_party_ref, action_class, scope, at)
+        delegations = _RETAINED_AUTHORITY_MATCHING_DELEGATIONS(
+            self, acting_party_ref, action_class, scope, at)
 
         live_grants = [g for g, rev in grants if not rev]
         live_delegations = [d for d, rev in delegations if not rev]
@@ -361,36 +732,46 @@ class AuthorityEvaluator:
             "problems": problems,
             "reasonSummary": reason,
         }
-        return AuthorityDecision(outcome, request, result, trace, problems)
+        decision = _RETAINED_AUTHORITY_DECISION_TYPE(
+            outcome, request, result, trace, problems)
+        _RETAINED_AUTHORITY_DECISION_ALLOWED(decision)
+        _RETAINED_AUTHORITY_RUNTIME_GUARD(self, cur)
+        return decision
 
     # -- read access (sharing gate; re-evaluated per request — D12) -------------
 
-    def evaluate_read(self, *, requesting_party_ref: str, farm_ref: str,
+    def evaluate_read(self, *, cur, requesting_party_ref: str, farm_ref: str,
                       artifact_family: str) -> AuthorityDecision:
         """Read access via ownership, grant, or SharingGrant. Authority and
         sharing are re-evaluated per request at the sharing gate, never via
         materialization staleness (PLATFORM.md invalidation posture)."""
+        _RETAINED_AUTHORITY_RUNTIME_GUARD(self, cur)
         at = now_iso()
         scope = {"scopeType": "FARM", "scopeRef": farm_ref}
         # RECEIVE_READ_DATA per the accepted Authority Action Matrix
-        direct = self.evaluate(
+        direct = _RETAINED_AUTHORITY_EVALUATE(
+            self,
+            cur=cur,
             acting_party_ref=requesting_party_ref,
             action_class="RECEIVE_READ_DATA",
             action_stage="QUERY_READ",
             scope=scope,
         )
-        if direct.allowed:
+        if _RETAINED_AUTHORITY_DECISION_ALLOWED(direct):
+            _RETAINED_AUTHORITY_RUNTIME_GUARD(self, cur)
             return direct
 
         # sharing never resurrects a non-active party: the inactive-party
         # denial applies to SharingGrant reads exactly as to direct grants
         # (hostile review finding 5, second pass)
-        party = self._party(requesting_party_ref)
+        party = _RETAINED_AUTHORITY_PARTY(self, requesting_party_ref)
         if party is None or party.get("partyState") != "ACTIVE":
+            _RETAINED_AUTHORITY_RUNTIME_GUARD(self, cur)
             return direct   # already a fail-closed DENY
 
         sharing_basis, revocation_refs = [], []
-        for row in self.store.find_by_kind("ofarm.sharinggrant.v0.1"):
+        for row in _RETAINED_STORE_FIND_BY_KIND(
+                self.store, "ofarm.sharinggrant.v0.1"):
             g = row["payload"]
             if g["granteePartyRef"] != requesting_party_ref:
                 continue
@@ -398,7 +779,8 @@ class AuthorityEvaluator:
                 continue
             if g["sharingState"] != "ACTIVE" or not _time_valid(g, at):
                 continue
-            revs = self._revocations_for(g["sharingGrantId"], at)
+            revs = _RETAINED_AUTHORITY_REVOCATIONS_FOR(
+                self, g["sharingGrantId"], at)
             if revs:
                 revocation_refs += [r["revocationDecisionId"] for r in revs]
                 continue
@@ -406,32 +788,158 @@ class AuthorityEvaluator:
 
         decision = direct
         if sharing_basis:
-            decision.outcome = "ALLOW"
-            decision.result_payload.update(
+            problems = []
+            result = dict(direct.result_payload)
+            trace = dict(direct.trace_payload)
+            result.update(
                 decisionOutcome="ALLOW", finalActionPermitted=True,
                 humanApprovalRequired=False, sharingBasisUsed=sharing_basis,
-                problems=[], reasonSummary="read allowed via active SharingGrant",
+                problems=problems,
+                reasonSummary="read allowed via active SharingGrant",
                 revocationResult="NO_ACTIVE_REVOCATION",
             )
-            decision.trace_payload.update(
+            trace.update(
                 decisionOutcome="ALLOW", sharingBasisUsed=sharing_basis,
                 reason="read allowed via active SharingGrant",
                 revocationResult="NO_ACTIVE_REVOCATION",
             )
-            decision.problems = []
+            decision = _RETAINED_AUTHORITY_DECISION_TYPE(
+                "ALLOW", direct.request_payload, result, trace, problems)
         elif revocation_refs:
-            decision.result_payload.update(
+            problems = [runtime_problem(
+                "PERMISSION_REDACTED", "Sharing revoked",
+                "the sharing grant backing this read was revoked; revocation "
+                "cuts access on the next request, it erases nothing")]
+            result = dict(direct.result_payload)
+            trace = dict(direct.trace_payload)
+            result.update(
                 revocationResult="ACTIVE_REVOCATION_FOUND",
                 reasonSummary="sharing grant revoked; access cut on this request",
+                problems=problems,
             )
-            decision.trace_payload.update(
+            trace.update(
                 revocationResult="ACTIVE_REVOCATION_FOUND",
                 revocationDecisionRefs=revocation_refs,
                 reason="sharing grant revoked; access cut on this request",
             )
-            decision.problems = [runtime_problem(
-                "PERMISSION_REDACTED", "Sharing revoked",
-                "the sharing grant backing this read was revoked; revocation cuts "
-                "access on the next request, it erases nothing")]
-            decision.result_payload["problems"] = decision.problems
+            decision = _RETAINED_AUTHORITY_DECISION_TYPE(
+                direct.outcome, direct.request_payload, result, trace, problems)
+        _RETAINED_AUTHORITY_DECISION_ALLOWED(decision)
+        _RETAINED_AUTHORITY_RUNTIME_GUARD(self, cur)
         return decision
+
+
+_RETAINED_AUTHORITY_ROLE_ASSIGNMENTS = AuthorityEvaluator._role_assignments
+_RETAINED_AUTHORITY_REVOCATIONS_FOR = AuthorityEvaluator._revocations_for
+_RETAINED_AUTHORITY_SCOPE_COVERS = AuthorityEvaluator._scope_covers
+_RETAINED_AUTHORITY_MATCHING_GRANTS = AuthorityEvaluator._matching_grants
+_RETAINED_AUTHORITY_LIVE_SOURCE = AuthorityEvaluator._live_source_authority
+_RETAINED_AUTHORITY_MATCHING_DELEGATIONS = \
+    AuthorityEvaluator._matching_delegations
+_RETAINED_AUTHORITY_PARTY = AuthorityEvaluator._party
+_AUTHORITY_HELPER_ALIAS_ANCHORS = (
+    ("_RETAINED_AUTHORITY_ROLE_ASSIGNMENTS",
+     _RETAINED_AUTHORITY_ROLE_ASSIGNMENTS),
+    ("_RETAINED_AUTHORITY_REVOCATIONS_FOR",
+     _RETAINED_AUTHORITY_REVOCATIONS_FOR),
+    ("_RETAINED_AUTHORITY_SCOPE_COVERS", _RETAINED_AUTHORITY_SCOPE_COVERS),
+    ("_RETAINED_AUTHORITY_MATCHING_GRANTS",
+     _RETAINED_AUTHORITY_MATCHING_GRANTS),
+    ("_RETAINED_AUTHORITY_LIVE_SOURCE", _RETAINED_AUTHORITY_LIVE_SOURCE),
+    ("_RETAINED_AUTHORITY_MATCHING_DELEGATIONS",
+     _RETAINED_AUTHORITY_MATCHING_DELEGATIONS),
+    ("_RETAINED_AUTHORITY_PARTY", _RETAINED_AUTHORITY_PARTY),
+)
+
+
+_AUTHORITY_METHOD_ANCHORS = tuple(
+    (name, value, value.__code__)
+    for name, value in vars(AuthorityEvaluator).items()
+    if type(value) is types.FunctionType
+)
+_RETAINED_AUTHORITY_EVALUATE = AuthorityEvaluator.evaluate
+_RETAINED_AUTHORITY_EVALUATE_CODE = _RETAINED_AUTHORITY_EVALUATE.__code__
+_RETAINED_AUTHORITY_EVALUATE_READ = AuthorityEvaluator.evaluate_read
+_RETAINED_AUTHORITY_EVALUATE_READ_CODE = \
+    _RETAINED_AUTHORITY_EVALUATE_READ.__code__
+
+
+def _require_authority_runtime(evaluator, cur) -> None:
+    store = object.__getattribute__(evaluator, "store") \
+        if type(evaluator) is AuthorityEvaluator else None
+    try:
+        _RETAINED_REQUIRE_AUTHORITY_DECISION_TYPE()
+    except BaseException:
+        if type(store) is Store:
+            Store._mark_transaction_integrity_violation(store)
+        raise
+    if (type(evaluator) is not AuthorityEvaluator
+            or type(store) is not Store
+            or globals().get("_require_authority_decision_type") is not
+            _RETAINED_REQUIRE_AUTHORITY_DECISION_TYPE
+            or _RETAINED_REQUIRE_AUTHORITY_DECISION_TYPE.__code__ is not
+            _RETAINED_REQUIRE_AUTHORITY_DECISION_TYPE_CODE
+            or globals().get("authority_decision_allowed") is not
+            _RETAINED_AUTHORITY_DECISION_ALLOWED
+            or _RETAINED_AUTHORITY_DECISION_ALLOWED.__code__ is not
+            _RETAINED_AUTHORITY_DECISION_ALLOWED_CODE
+            or globals().get("_copy_evaluate_inputs") is not
+            _RETAINED_COPY_EVALUATE_INPUTS
+            or _RETAINED_COPY_EVALUATE_INPUTS.__code__ is not
+            _RETAINED_COPY_EVALUATE_INPUTS_CODE
+            or globals().get("_canonical_authority_decision_state") is not
+            _RETAINED_CANONICAL_AUTHORITY_DECISION_STATE
+            or _RETAINED_CANONICAL_AUTHORITY_DECISION_STATE.__code__ is not
+            _RETAINED_CANONICAL_AUTHORITY_DECISION_STATE_CODE
+            or globals().get("canonical_json") is not
+            _RETAINED_AUTHORITY_CANONICAL_JSON
+            or _RETAINED_AUTHORITY_CANONICAL_JSON.__code__ is not
+            _RETAINED_AUTHORITY_CANONICAL_JSON_CODE
+            or _ACTION_STAGE_VALUES is not _RETAINED_ACTION_STAGE_VALUES
+            or _REVOCATION_DISPOSITION_VALUES is not
+            _RETAINED_REVOCATION_DISPOSITION_VALUES
+            or _SCOPE_TYPE_VALUES is not _RETAINED_SCOPE_TYPE_VALUES
+            or _AI_ASSISTANT_ROLE_VALUES is not
+            _RETAINED_AI_ASSISTANT_ROLE_VALUES
+            or _AI_SUGGESTION_MODE_VALUES is not
+            _RETAINED_AI_SUGGESTION_MODE_VALUES
+            or Store._require_active_serialized_cursor is not
+            _RETAINED_STORE_REQUIRE_ACTIVE_SERIALIZED_CURSOR
+            or _RETAINED_STORE_REQUIRE_ACTIVE_SERIALIZED_CURSOR.__code__ is not
+            _RETAINED_STORE_REQUIRE_ACTIVE_SERIALIZED_CURSOR_CODE
+            or Store.find_by_kind is not _RETAINED_STORE_FIND_BY_KIND
+            or _RETAINED_STORE_FIND_BY_KIND.__code__ is not
+            _RETAINED_STORE_FIND_BY_KIND_CODE
+            or Store.get_record is not _RETAINED_STORE_GET_RECORD
+            or _RETAINED_STORE_GET_RECORD.__code__ is not
+            _RETAINED_STORE_GET_RECORD_CODE
+            or Store.get_payload is not _RETAINED_STORE_GET_PAYLOAD
+            or _RETAINED_STORE_GET_PAYLOAD.__code__ is not
+            _RETAINED_STORE_GET_PAYLOAD_CODE
+            or globals().get("_require_authority_runtime") is not
+            _RETAINED_AUTHORITY_RUNTIME_GUARD
+            or _RETAINED_AUTHORITY_RUNTIME_GUARD.__code__ is not
+            _RETAINED_AUTHORITY_RUNTIME_GUARD_CODE
+            or vars(AuthorityEvaluator).get("evaluate") is not
+            _RETAINED_AUTHORITY_EVALUATE
+            or _RETAINED_AUTHORITY_EVALUATE.__code__ is not
+            _RETAINED_AUTHORITY_EVALUATE_CODE
+            or vars(AuthorityEvaluator).get("evaluate_read") is not
+            _RETAINED_AUTHORITY_EVALUATE_READ
+            or _RETAINED_AUTHORITY_EVALUATE_READ.__code__ is not
+            _RETAINED_AUTHORITY_EVALUATE_READ_CODE
+            or any(
+                vars(AuthorityEvaluator).get(name) is not function
+                or function.__code__ is not code
+                for name, function, code in _AUTHORITY_METHOD_ANCHORS)
+            or any(
+                globals().get(name) is not function
+                for name, function in _AUTHORITY_HELPER_ALIAS_ANCHORS)):
+        if type(store) is Store:
+            Store._mark_transaction_integrity_violation(store)
+        raise RuntimeError("AuthorityEvaluator runtime composition changed")
+    _RETAINED_STORE_REQUIRE_ACTIVE_SERIALIZED_CURSOR(store, cur)
+
+
+_RETAINED_AUTHORITY_RUNTIME_GUARD = _require_authority_runtime
+_RETAINED_AUTHORITY_RUNTIME_GUARD_CODE = _require_authority_runtime.__code__

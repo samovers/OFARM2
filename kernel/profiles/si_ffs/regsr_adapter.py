@@ -24,10 +24,18 @@ from types import ModuleType
 
 from ... import config
 from ...adapters import ImportRunner, ParseResult
-from ...context import REGSR_DATA_FAMILY, REGSR_SNAPSHOT_PREFIX, now_iso
+from ...context import (
+    REGSR_DATA_FAMILY,
+    REGSR_SNAPSHOT_PREFIX,
+    ProductRegister,
+    invoke_product_register_identities,
+    now_iso,
+    require_product_register_runtime_composition,
+)
 from ...contracts import sha256_of
 from ...runtime_bundle import (RuntimeBundleError, require_store_runtime_bundle,
                                sha256_bytes)
+from ...store import Store
 from ...verification import IDENTITY, NONE, LookupResult, ReferenceResolver
 
 # REGSR scheme constants (SI-specific — D9). Identity = Številka odločbe
@@ -62,6 +70,38 @@ _PARSER_RUNTIME_MODULES = (
     "argparse", "datetime", "hashlib", "html", "json", "pathlib", "re", "sys",
 )
 _PARSER_RUNTIME_CODECS = ("cp1250",)
+_RETAINED_IMPORT_RUNNER_TYPE = ImportRunner
+_RETAINED_IMPORT_RUN = _RETAINED_IMPORT_RUNNER_TYPE.run_import
+_RETAINED_IMPORT_RUN_CODE = _RETAINED_IMPORT_RUN.__code__
+_RETAINED_PRODUCT_REGISTER_COMPOSITION_GUARD = \
+    require_product_register_runtime_composition
+
+
+def _require_retained_import_run(store) -> None:
+    if (ImportRunner is not _RETAINED_IMPORT_RUNNER_TYPE
+            or vars(_RETAINED_IMPORT_RUNNER_TYPE).get("run_import") is not
+            _RETAINED_IMPORT_RUN
+            or _RETAINED_IMPORT_RUN.__code__ is not
+            _RETAINED_IMPORT_RUN_CODE):
+        if type(store) is Store:
+            Store._mark_transaction_integrity_violation(store)
+        raise RuntimeBundleError(
+            "REGSR retained ImportRunner.run_import changed before invocation")
+
+
+def _run_retained_import(store, parse_result, snapshot_meta, *, data_family):
+    _require_retained_import_run(store)
+    runner = object.__new__(_RETAINED_IMPORT_RUNNER_TYPE)
+    object.__setattr__(runner, "store", store)
+    _require_retained_import_run(store)
+    try:
+        result = _RETAINED_IMPORT_RUN(
+            runner, parse_result, snapshot_meta, data_family=data_family)
+    except BaseException:
+        _require_retained_import_run(store)
+        raise
+    _require_retained_import_run(store)
+    return result
 
 
 def preload_runtime_import_surface() -> tuple[object, ...]:
@@ -139,7 +179,7 @@ def import_regsr_snapshot(store, artifact, *, register_day=None,
     try:
         _require_pinned_parser(store, artifact)
     except RuntimeBundleError as exc:
-        result = ImportRunner(store).run_import(
+        result = _run_retained_import(store,
             ParseResult(ok=False, error=str(exc)),
             {"referenceSnapshotId": None}, data_family=REGSR_DATA_FAMILY)
         return {**result, "disposition": "PARSER_BUNDLE_MISMATCH",
@@ -153,7 +193,7 @@ def import_regsr_snapshot(store, artifact, *, register_day=None,
         # gate-log entry, with no snapshot and no data row. There is no snapshot
         # id to reference (the register day is what dates it), so the refusal
         # carries no related ref — honest, not a fabricated sid.
-        result = ImportRunner(store).run_import(
+        result = _run_retained_import(store,
             ParseResult(ok=False, error="REGSR parse carries no register day; "
                         "cannot date a snapshot"),
             {"referenceSnapshotId": None}, data_family=REGSR_DATA_FAMILY)
@@ -178,14 +218,14 @@ def import_regsr_snapshot(store, artifact, *, register_day=None,
         "notes": "REGSR HTML parse; register self-declares unofficial/informational, "
                  "legal record is the odlocba (D9). Parser: " + REGSR_PARSER_REF,
     }
-    result = ImportRunner(store).run_import(
+    result = _run_retained_import(store,
         ParseResult(ok=True, sourceDigest=digest, artifactRef=source_artifact_ref,
                     recordCount=len(artifact.get("products", [])), records=artifact),
         meta, data_family=REGSR_DATA_FAMILY)
     return {**result, "registerDay": register_day}
 
 
-def regsr_lookup(product_register, *, issued=None, valid_until=None):
+def regsr_lookup(product_register, *, issued=None, valid_until=None, store=None):
     """A G3 lookup callable bound to a REGSR `ProductRegister`, grading identity
     by the D9 composite key — decision number (Številka odločbe) PLUS validity
     dates (issued / validUntil), never the decision number alone (PR #12 hostile
@@ -201,7 +241,13 @@ def regsr_lookup(product_register, *, issued=None, valid_until=None):
     that would otherwise be ambiguous. regsrCode stays a locator, never identity.
     Returns a closure of the G3 `lookup(snapshot_id, query_value)` shape."""
     def lookup(snapshot_id, decision_number) -> LookupResult:
-        ids = product_register.identities_by_decision(snapshot_id, decision_number)
+        if store is None:
+            # Construction-only parser/lookup seam for focused unit tests.
+            ids = ProductRegister.identities_by_decision(
+                product_register, snapshot_id, decision_number)
+        else:
+            ids = invoke_product_register_identities(
+                store, product_register, snapshot_id, decision_number)
         if issued or valid_until:
             ids = [c for c in ids
                    if (not issued or c.get("decision", {}).get("issued") == issued)
@@ -243,12 +289,28 @@ def verify_product_authorisation(store, cur, product_register, decision_number, 
     resolves unambiguously; an ambiguous or absent key routes to review
     (PRODUCT_BINDING_UNRESOLVED) — free text never becomes identity (D9). Pass
     `issued`/`valid_until` to disambiguate an otherwise-ambiguous decision number."""
-    return ReferenceResolver(store).verify(
-        cur, query_value=decision_number, snapshot_prefix=REGSR_SNAPSHOT_PREFIX,
-        lookup=regsr_lookup(product_register, issued=issued, valid_until=valid_until),
-        profile_ref=REGSR_PROFILE_REF, authority_ref=REGSR_AUTHORITY_REF,
-        jurisdiction_ref=REGSR_JURISDICTION_REF, scheme=REGSR_SCHEME,
-        key_field=REGSR_KEY_FIELD, purpose="PRODUCT_AUTHORISATION_IDENTITY",
-        lookup_surface=REGSR_LOOKUP_SURFACE, external_id_role="AUTHORISATION_NUMBER",
-        review_reason_code="PRODUCT_BINDING_UNRESOLVED", as_of=as_of,
-        created_by=created_by, lookup_runtime_bundle=product_register.runtime_bundle)
+    _RETAINED_PRODUCT_REGISTER_COMPOSITION_GUARD(
+        store, product_register, "REGSR product authorisation")
+    try:
+        result = ReferenceResolver(store).verify(
+            cur, query_value=decision_number,
+            snapshot_prefix=REGSR_SNAPSHOT_PREFIX,
+            lookup=regsr_lookup(
+                product_register, issued=issued, valid_until=valid_until,
+                store=store),
+            profile_ref=REGSR_PROFILE_REF, authority_ref=REGSR_AUTHORITY_REF,
+            jurisdiction_ref=REGSR_JURISDICTION_REF, scheme=REGSR_SCHEME,
+            key_field=REGSR_KEY_FIELD,
+            purpose="PRODUCT_AUTHORISATION_IDENTITY",
+            lookup_surface=REGSR_LOOKUP_SURFACE,
+            external_id_role="AUTHORISATION_NUMBER",
+            review_reason_code="PRODUCT_BINDING_UNRESOLVED", as_of=as_of,
+            created_by=created_by,
+            lookup_runtime_bundle=product_register.runtime_bundle)
+    except BaseException:
+        _RETAINED_PRODUCT_REGISTER_COMPOSITION_GUARD(
+            store, product_register, "REGSR product authorisation")
+        raise
+    _RETAINED_PRODUCT_REGISTER_COMPOSITION_GUARD(
+        store, product_register, "REGSR product authorisation")
+    return result

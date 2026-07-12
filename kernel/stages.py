@@ -19,10 +19,84 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from . import policy, profile_policy, sufficiency
-from .context import ContextNotReconstructible, mint, parse_ts
+from .authority import AuthorityEvaluator, authority_decision_allowed
+from .context import ContextAssembler, ContextNotReconstructible, mint, parse_ts
 from .contracts import ContractViolation
 from .emission import PromotionEmitter, ReplayWriter, submission_evidence_refs
+from .materializer import Materializer
 from .problems import runtime_problem
+from .runtime_bundle import RuntimeBundleError
+from .store import Store
+
+
+_AUTHORITY_EVALUATE = (
+    AuthorityEvaluator,
+    "evaluate",
+    AuthorityEvaluator.evaluate,
+    AuthorityEvaluator.evaluate.__code__,
+)
+_AUTHORITY_DECISION_ALLOWED = authority_decision_allowed
+_AUTHORITY_DECISION_ALLOWED_CODE = authority_decision_allowed.__code__
+_CONTEXT_ASSEMBLE = (
+    ContextAssembler,
+    "assemble",
+    ContextAssembler.assemble,
+    ContextAssembler.assemble.__code__,
+)
+_MATERIALIZER_INVALIDATE_FOR_SOURCES = (
+    Materializer,
+    "invalidate_for_sources",
+    Materializer.invalidate_for_sources,
+    Materializer.invalidate_for_sources.__code__,
+)
+_MATERIALIZER_RECOMPUTE = (
+    Materializer,
+    "recompute",
+    Materializer.recompute,
+    Materializer.recompute.__code__,
+)
+_RETAINED_CONTEXT_SERVICE_CALLABLES = (
+    _AUTHORITY_EVALUATE,
+    _CONTEXT_ASSEMBLE,
+    _MATERIALIZER_INVALIDATE_FOR_SOURCES,
+    _MATERIALIZER_RECOMPUTE,
+)
+
+
+def _raise_context_service_dispatch_error(ctx, message: str) -> None:
+    """Poison the active transaction before reporting service-code drift."""
+    if type(ctx.store) is Store:
+        Store._mark_transaction_integrity_violation(ctx.store)
+    raise RuntimeBundleError(message)
+
+
+def _require_retained_context_service(ctx, entry, service) -> None:
+    """Require the exact retained service method immediately around a call."""
+    if (type(entry) is not tuple
+            or len(entry) != 4
+            or entry not in _RETAINED_CONTEXT_SERVICE_CALLABLES):
+        _raise_context_service_dispatch_error(
+            ctx, "retained context-service dispatch entry is malformed")
+    owner, name, function, code = entry
+    if (type(service) is not owner
+            or name in vars(service)
+            or vars(owner).get(name) is not function
+            or getattr(function, "__code__", None) is not code):
+        _raise_context_service_dispatch_error(
+            ctx, f"retained {owner.__name__}.{name} callable changed")
+
+
+def _invoke_retained_context_service(ctx, entry, service, *args, **kwargs):
+    """Call retained service code with adjacent pre/post integrity checks."""
+    _require_retained_context_service(ctx, entry, service)
+    function = entry[2]
+    try:
+        result = function(service, *args, **kwargs)
+    except BaseException:
+        _require_retained_context_service(ctx, entry, service)
+        raise
+    _require_retained_context_service(ctx, entry, service)
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -279,7 +353,9 @@ class AuthorityGate:
                 return GateRefusal("AUTHORITY", "DENY", "DENY", [problem])
         else:
             action_class = policy.COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS[ctx.commit_class]
-        decision = ctx.authority.evaluate(
+        decision = _invoke_retained_context_service(
+            ctx, _AUTHORITY_EVALUATE, ctx.authority,
+            cur=ctx.cur,
             acting_party_ref=ctx.acting_party,
             action_class=action_class,
             action_stage="PROMOTION",
@@ -290,6 +366,12 @@ class AuthorityGate:
             revocation_disposition=policy.revocation_disposition(
                 ctx.commit_class, sub.get("ingressChannel", "MANUAL_UI")),
         )
+        allowed = _AUTHORITY_DECISION_ALLOWED(decision)
+        if _AUTHORITY_DECISION_ALLOWED.__code__ is not \
+                _AUTHORITY_DECISION_ALLOWED_CODE:
+            _raise_context_service_dispatch_error(
+                ctx, "authority decision predicate changed")
+        outcome = object.__getattribute__(decision, "outcome")
         ctx.record_authority_decision(decision)
         ctx.authz_decision = decision
         ctx.trace_refs["authorizationDecisionResultRef"] = \
@@ -297,10 +379,10 @@ class AuthorityGate:
         authz_refs = [decision.request_payload["requestId"],
                       decision.result_payload["resultId"],
                       decision.trace_payload["traceId"]]
-        if decision.outcome == "ALLOW":
+        if allowed:
             ctx.log("AUTHORITY", "ALLOW", refs=authz_refs)
             return GatePass()
-        if decision.outcome == "REQUIRE_REVIEW":
+        if outcome == "REQUIRE_REVIEW":
             ctx.log("AUTHORITY", "REQUIRE_REVIEW",
                     reason_code=decision.problems[0]["reasonCode"]
                                 if decision.problems else None,
@@ -309,13 +391,13 @@ class AuthorityGate:
             return GateRefusal("AUTHORITY", "REQUIRE_REVIEW", "REQUIRE_REVIEW",
                                decision.problems)
         # DENY | REQUIRE_HUMAN_APPROVAL
-        ctx.log("AUTHORITY", decision.outcome,
+        ctx.log("AUTHORITY", outcome,
                 reason_code=decision.problems[0]["reasonCode"]
                             if decision.problems else "AUTHORITY_DENIED",
                 rationale=decision.result_payload["reasonSummary"],
                 refs=authz_refs)
-        final = "DENY" if decision.outcome == "DENY" else "REQUIRE_REVIEW"
-        return GateRefusal("AUTHORITY", decision.outcome, final,
+        final = "DENY" if outcome == "DENY" else "REQUIRE_REVIEW"
+        return GateRefusal("AUTHORITY", outcome, final,
                            decision.problems)
 
 
@@ -379,7 +461,9 @@ class EnvelopePersist:
 class ProfileApplicabilityGate:
     def run(self, ctx: GateContext) -> GatePass | GateRefusal:
         try:
-            snapshot = ctx.context_assembler.assemble(ctx.cur, ctx.farm_ref)
+            snapshot = _invoke_retained_context_service(
+                ctx, _CONTEXT_ASSEMBLE, ctx.context_assembler,
+                ctx.cur, ctx.farm_ref)
         except ContextNotReconstructible as exc:
             ctx.log("PACK_PROFILE_APPLICABILITY", "NOT_APPLICABLE",
                     reason_code="PROFILE_NOT_ACTIVE", rationale=str(exc))
@@ -624,12 +708,15 @@ class ReviewPromotionGate:
         # SELF-review only: the reviewer is the transport-bound acting party.
         # REVIEW_ACCEPT authority is checked mechanically; self-review cannot
         # bypass the gates above.
-        review_auth = ctx.authority.evaluate(
+        review_auth = _invoke_retained_context_service(
+            ctx, _AUTHORITY_EVALUATE, ctx.authority,
+            cur=ctx.cur,
             acting_party_ref=ctx.acting_party, action_class="REVIEW_ACCEPT",
             action_stage="PROMOTION",
             scope={"scopeType": "FARM", "scopeRef": ctx.farm_ref})
+        review_allowed = _AUTHORITY_DECISION_ALLOWED(review_auth)
         ctx.record_authority_decision(review_auth)
-        if not review_auth.allowed:
+        if not review_allowed:
             ctx.log("REVIEW_PROMOTION", "REQUIRE_REVIEW",
                     reason_code="AUTHORITY_DENIED",
                     rationale=f"{ctx.acting_party} holds no REVIEW_ACCEPT for "
@@ -647,13 +734,16 @@ class ReviewPromotionGate:
 
 class MaterializationGate:
     def run(self, ctx: GateContext) -> GatePass:
-        ctx.materializer.invalidate_for_sources(
+        _invoke_retained_context_service(
+            ctx, _MATERIALIZER_INVALIDATE_FOR_SOURCES, ctx.materializer,
             ctx.cur, ctx.invalidation_sources or [ctx.trigger_source],
             trigger_family="BASIS_ADVANCED",
             trigger_source_ref=ctx.trigger_source,
             farm_scope_ref=ctx.farm_ref,
             reason_code="TRUTH_BASIS_ADVANCED")
-        mat = ctx.materializer.recompute(ctx.cur, ctx.farm_ref)
+        mat = _invoke_retained_context_service(
+            ctx, _MATERIALIZER_RECOMPUTE, ctx.materializer,
+            ctx.cur, ctx.farm_ref)
         # NOTE: no materializationResultRef on the trace — the commit-time
         # recompute emits Basis+Snapshot, not a boundary Result; those
         # receipts ride the gateSequence entry below

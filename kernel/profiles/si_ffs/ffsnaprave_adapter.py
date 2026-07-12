@@ -32,14 +32,16 @@ import hashlib
 from pathlib import Path
 
 from ...adapters import ImportRunner, ParseResult
-from ...authority import AuthorityEvaluator
+from ...authority import AuthorityEvaluator, authority_decision_allowed
 from ...context import now_iso
 from ...runtime_bundle import (
     RuntimeBundleError,
     _copy_runtime_cache_value,
     _freeze_runtime_cache,
+    _runtime_cache_state,
     require_store_runtime_bundle,
 )
+from ...store import Store
 from ...contracts import canonical_json, sha256_of
 from ...problems import runtime_problem
 
@@ -61,6 +63,42 @@ FFSNAPRAVE_CADENCE = {
     "liveIntegration": False,
 }
 _PARSER_RUNTIME_CODECS = ("utf-8-sig",)
+_RETAINED_IMPORT_RUNNER_TYPE = ImportRunner
+_RETAINED_IMPORT_RUN = _RETAINED_IMPORT_RUNNER_TYPE.run_import
+_RETAINED_IMPORT_RUN_CODE = _RETAINED_IMPORT_RUN.__code__
+_RETAINED_AUTHORITY_EVALUATOR_TYPE = AuthorityEvaluator
+_RETAINED_AUTHORITY_EVALUATE = AuthorityEvaluator.evaluate
+_RETAINED_AUTHORITY_EVALUATE_CODE = _RETAINED_AUTHORITY_EVALUATE.__code__
+_RETAINED_AUTHORITY_DECISION_ALLOWED = authority_decision_allowed
+_RETAINED_AUTHORITY_DECISION_ALLOWED_CODE = \
+    authority_decision_allowed.__code__
+
+
+def _require_retained_import_run(store) -> None:
+    if (ImportRunner is not _RETAINED_IMPORT_RUNNER_TYPE
+            or vars(_RETAINED_IMPORT_RUNNER_TYPE).get("run_import") is not
+            _RETAINED_IMPORT_RUN
+            or _RETAINED_IMPORT_RUN.__code__ is not
+            _RETAINED_IMPORT_RUN_CODE):
+        if type(store) is Store:
+            Store._mark_transaction_integrity_violation(store)
+        raise RuntimeBundleError(
+            "FFSNaprave retained ImportRunner.run_import changed before invocation")
+
+
+def _run_retained_import(store, parse_result, snapshot_meta, *, data_family):
+    _require_retained_import_run(store)
+    runner = object.__new__(_RETAINED_IMPORT_RUNNER_TYPE)
+    object.__setattr__(runner, "store", store)
+    _require_retained_import_run(store)
+    try:
+        result = _RETAINED_IMPORT_RUN(
+            runner, parse_result, snapshot_meta, data_family=data_family)
+    except BaseException:
+        _require_retained_import_run(store)
+        raise
+    _require_retained_import_run(store)
+    return result
 
 
 def preload_runtime_import_surface() -> tuple[object, ...]:
@@ -173,7 +211,7 @@ def import_ffsnaprave_snapshot(store, artifact, *, file_date=None, version_label
         # RuntimeProblem AND a GOVERNED_IMPORT/REFUSED gate-log entry, no snapshot/
         # data — never a hand-built mini problem (PR #12 review). No snapshot id to
         # reference (the vintage dates it), so the refusal carries no related ref.
-        result = ImportRunner(store).run_import(
+        result = _run_retained_import(store,
             ParseResult(ok=False, error=error),
             {"referenceSnapshotId": None}, data_family=FFSNAPRAVE_DATA_FAMILY)
         return {**result, "disposition": disposition, "fileDate": file_date}
@@ -219,7 +257,7 @@ def import_ffsnaprave_snapshot(store, artifact, *, file_date=None, version_label
                  "currentness surface, D7). A sticker match is advisory inspection "
                  "evidence, never a current-compliance claim.",
     }
-    result = ImportRunner(store).run_import(
+    result = _run_retained_import(store,
         ParseResult(ok=True, sourceDigest=digest, artifactRef=source_artifact_ref,
                     recordCount=artifact.get("inspectionCount"), records=artifact),
         meta, data_family=FFSNAPRAVE_DATA_FAMILY)
@@ -233,11 +271,21 @@ class FFSNapraveRegister:
     ambiguous match is surfaced as None, never a fabricated inspection."""
 
     def __setattr__(self, name, value):
-        if (getattr(self, "_frozen", False)
-                and name in {"runtime_bundle", "_by_snapshot", "_frozen"}):
+        immutable_fields = {"runtime_bundle", "_by_snapshot", "_frozen"}
+        if ((name in immutable_fields and name in vars(self))
+                or (vars(self).get("_frozen", False) is not False
+                    and callable(getattr(type(self), name, None)))):
             raise AttributeError(
                 "FFSNapraveRegister runtime composition is immutable")
         object.__setattr__(self, name, value)
+
+    def __delattr__(self, name):
+        if (name in {"runtime_bundle", "_by_snapshot", "_frozen"}
+                or (vars(self).get("_frozen", False) is not False
+                    and callable(getattr(type(self), name, None)))):
+            raise AttributeError(
+                "FFSNapraveRegister sealed runtime state cannot be deleted")
+        object.__delattr__(self, name)
 
     def __init__(self, *, runtime_bundle=None):
         self.runtime_bundle = runtime_bundle
@@ -258,7 +306,7 @@ class FFSNapraveRegister:
             )
 
     def register_artifact(self, snapshot_id: str, artifact: dict) -> None:
-        if self._frozen:
+        if self._frozen is not False:
             raise RuntimeError(
                 "FFSNapraveRegister is immutable for the RuntimeBundle lifetime")
         inspections = copy.deepcopy(artifact.get("inspections", []))
@@ -281,8 +329,10 @@ class FFSNapraveRegister:
 
     def freeze(self) -> None:
         """End construction and recursively freeze retained lookup state."""
-        if self._frozen:
+        if self._frozen is True:
             return
+        if self._frozen is not False:
+            raise RuntimeError("FFSNapraveRegister frozen state is malformed")
         object.__setattr__(self, "_by_snapshot", _freeze_runtime_cache(
             self._by_snapshot))
         object.__setattr__(self, "_frozen", True)
@@ -293,7 +343,7 @@ class FFSNapraveRegister:
         if self.runtime_bundle is not None:
             require_store_runtime_bundle(
                 store, self.runtime_bundle, "FFSNaprave register load")
-            if not self._frozen:
+            if self._frozen is not True:
                 raise RuntimeBundleError(
                     "bundle-backed FFSNaprave cache was not frozen at construction")
             return
@@ -337,6 +387,145 @@ class FFSNapraveRegister:
             next(iter(distinct.values())) if len(distinct) == 1 else None)
 
 
+_RETAINED_FFSNAPRAVE_REGISTER_TYPE = FFSNapraveRegister
+_FFSNAPRAVE_REGISTER_DECISION_DISPATCH = (
+    ("match", FFSNapraveRegister.match, FFSNapraveRegister.match.__code__),
+    ("validity_windows", FFSNapraveRegister.validity_windows,
+     FFSNapraveRegister.validity_windows.__code__),
+)
+_RETAINED_FFS_STORE_TRANSACTION_POSTURE = \
+    Store._require_transaction_python_posture
+_RETAINED_FFS_STORE_TRANSACTION_POSTURE_CODE = \
+    _RETAINED_FFS_STORE_TRANSACTION_POSTURE.__code__
+_RETAINED_FFS_STORE_INTEGRITY_MARKER = \
+    Store._mark_transaction_integrity_violation
+_RETAINED_FFS_STORE_INTEGRITY_MARKER_CODE = \
+    _RETAINED_FFS_STORE_INTEGRITY_MARKER.__code__
+
+
+def _mark_ffsnaprave_runtime_integrity_violation(store) -> None:
+    if (type(store) is Store
+            and vars(Store).get("_mark_transaction_integrity_violation") is
+            _RETAINED_FFS_STORE_INTEGRITY_MARKER
+            and _RETAINED_FFS_STORE_INTEGRITY_MARKER.__code__ is
+            _RETAINED_FFS_STORE_INTEGRITY_MARKER_CODE):
+        _RETAINED_FFS_STORE_INTEGRITY_MARKER(store)
+
+
+def require_ffsnaprave_register_runtime_composition(
+        store, register, label: str) -> None:
+    """Require an exact frozen cache rebuilt from selected FFSNaprave bytes."""
+    try:
+        if (type(store) is not Store
+                or globals().get(
+                    "require_ffsnaprave_register_runtime_composition") is not
+                _RETAINED_FFS_COMPOSITION_GUARD
+                or _RETAINED_FFS_COMPOSITION_GUARD.__code__ is not
+                _RETAINED_FFS_COMPOSITION_GUARD_CODE
+                or vars(Store).get("_require_transaction_python_posture") is not
+                _RETAINED_FFS_STORE_TRANSACTION_POSTURE
+                or _RETAINED_FFS_STORE_TRANSACTION_POSTURE.__code__ is not
+                _RETAINED_FFS_STORE_TRANSACTION_POSTURE_CODE):
+            raise RuntimeBundleError(
+                f"{label} Store runtime dispatch changed before decision")
+        _RETAINED_FFS_STORE_TRANSACTION_POSTURE(store)
+        bundle = Store.runtime_bundle.fget(store)
+        require_store_runtime_bundle(store, bundle, label)
+        if (type(register) is not _RETAINED_FFSNAPRAVE_REGISTER_TYPE
+                or vars(register).get("_frozen") is not True
+                or register.runtime_bundle is not bundle
+                or any(callable(getattr(
+                    _RETAINED_FFSNAPRAVE_REGISTER_TYPE, name, None))
+                       for name in vars(register))
+                or any(
+                    vars(_RETAINED_FFSNAPRAVE_REGISTER_TYPE).get(name) is not
+                    function
+                    or function.__code__ is not code
+                    for name, function, code
+                    in _FFSNAPRAVE_REGISTER_DECISION_DISPATCH)):
+            raise RuntimeBundleError(
+                f"{label} FFSNapraveRegister runtime composition changed")
+        expected = _RETAINED_FFSNAPRAVE_REGISTER_TYPE(runtime_bundle=bundle)
+        if (_runtime_cache_state(register._by_snapshot) !=
+                _runtime_cache_state(expected._by_snapshot)):
+            raise RuntimeBundleError(
+                f"{label} FFSNapraveRegister cache was not derived from "
+                "selected bytes")
+    except BaseException:
+        _mark_ffsnaprave_runtime_integrity_violation(store)
+        raise
+
+
+_RETAINED_FFS_COMPOSITION_GUARD = \
+    require_ffsnaprave_register_runtime_composition
+_RETAINED_FFS_COMPOSITION_GUARD_CODE = \
+    _RETAINED_FFS_COMPOSITION_GUARD.__code__
+
+
+def invoke_ffsnaprave_register_method(
+        store, register, method_name: str, *args):
+    """Invoke one retained register method with immediate pre/post checks."""
+    _RETAINED_FFS_COMPOSITION_GUARD(
+        store, register, "FFSNaprave registry lookup")
+    try:
+        entry = next(
+            item for item in _FFSNAPRAVE_REGISTER_DECISION_DISPATCH
+            if item[0] == method_name)
+    except StopIteration as exc:
+        _mark_ffsnaprave_runtime_integrity_violation(store)
+        raise RuntimeBundleError(
+            "FFSNaprave retained register method is not allowed") from exc
+    try:
+        result = entry[1](register, *args)
+    except BaseException:
+        _RETAINED_FFS_COMPOSITION_GUARD(
+            store, register, "FFSNaprave registry lookup")
+        raise
+    _RETAINED_FFS_COMPOSITION_GUARD(
+        store, register, "FFSNaprave registry lookup")
+    return result
+
+
+def _require_retained_authority_evaluator(store, evaluator=None) -> None:
+    try:
+        if (AuthorityEvaluator is not _RETAINED_AUTHORITY_EVALUATOR_TYPE
+                or vars(_RETAINED_AUTHORITY_EVALUATOR_TYPE).get("evaluate") is not
+                _RETAINED_AUTHORITY_EVALUATE
+                or _RETAINED_AUTHORITY_EVALUATE.__code__ is not
+                _RETAINED_AUTHORITY_EVALUATE_CODE
+                or authority_decision_allowed is not
+                _RETAINED_AUTHORITY_DECISION_ALLOWED
+                or _RETAINED_AUTHORITY_DECISION_ALLOWED.__code__ is not
+                _RETAINED_AUTHORITY_DECISION_ALLOWED_CODE
+                or (evaluator is not None
+                    and (type(evaluator) is not
+                         _RETAINED_AUTHORITY_EVALUATOR_TYPE
+                         or evaluator.store is not store
+                         or any(callable(getattr(
+                             _RETAINED_AUTHORITY_EVALUATOR_TYPE, name, None))
+                                for name in vars(evaluator))))):
+            raise RuntimeBundleError(
+                "FFSNaprave authority decision dispatch changed")
+        _RETAINED_FFS_STORE_TRANSACTION_POSTURE(store)
+    except BaseException:
+        _mark_ffsnaprave_runtime_integrity_violation(store)
+        raise
+
+
+def _invoke_retained_authority_evaluator(store, **kwargs):
+    _require_retained_authority_evaluator(store)
+    evaluator = object.__new__(_RETAINED_AUTHORITY_EVALUATOR_TYPE)
+    object.__setattr__(evaluator, "store", store)
+    _require_retained_authority_evaluator(store, evaluator)
+    try:
+        result = _RETAINED_AUTHORITY_EVALUATE(evaluator, **kwargs)
+    except BaseException:
+        _require_retained_authority_evaluator(store, evaluator)
+        raise
+    _require_retained_authority_evaluator(store, evaluator)
+    return result
+
+
 def attach_inspection_evidence(store, register, snapshot_id, sticker_number, *,
                                captured_by, farm_ref, validity=None) -> dict:
     """Match a farm sprayer's inspection sticker against a dated FFSNaprave snapshot
@@ -363,18 +552,15 @@ def attach_inspection_evidence(store, register, snapshot_id, sticker_number, *,
     SNAPSHOT-SCOPED (vintage + sticker + validity) so a later vintage never reuses an
     older one's evidence (B1); the existence re-check is UNDER the single-writer lock
     so concurrent captures are idempotent (B2)."""
-    require_store_runtime_bundle(
-        store, register.runtime_bundle, "FFSNaprave evidence attachment")
-    inspection = register.match(snapshot_id, sticker_number, validity)
+    _RETAINED_FFS_COMPOSITION_GUARD(
+        store, register, "FFSNaprave evidence attachment")
+    inspection = invoke_ffsnaprave_register_method(
+        store, register, "match", snapshot_id, sticker_number, validity)
     if inspection is None:
         return {"attached": False, "evidenceRef": None, "disposition": "NO_MATCH",
                 "problem": None}
 
     scope = {"scopeType": "FARM", "scopeRef": farm_ref}
-    decision = AuthorityEvaluator(store).evaluate(
-        acting_party_ref=captured_by, action_class="OBSERVE_ATTACH_EVIDENCE",
-        action_stage="PROMOTION", scope=scope)
-
     v = inspection.get(VALIDITY_FIELD)
     identity_basis = {
         "identityVersion": "ofarm.ffs-naprave-evidence-identity.local.v1",
@@ -419,13 +605,26 @@ def attach_inspection_evidence(store, register, snapshot_id, sticker_number, *,
                  "inspection match in the dated register, not a current-compliance "
                  "claim (D7).",
     }
-    with store.serialized_tx() as cur:
+    with Store.serialized_tx(store) as cur:
+        decision = _invoke_retained_authority_evaluator(
+            store,
+            cur=cur,
+            acting_party_ref=captured_by,
+            action_class="OBSERVE_ATTACH_EVIDENCE",
+            action_stage="PROMOTION",
+            scope=scope,
+        )
+        _RETAINED_FFS_COMPOSITION_GUARD(
+            store, register, "FFSNaprave evidence attachment")
+        decision_allowed = _RETAINED_AUTHORITY_DECISION_ALLOWED(decision)
         # record the authorization decision (request/trace/result) regardless of
         # outcome — a governed, auditable authority trace, exactly as the gate does.
         store.insert_record(cur, decision.request_payload)
         store.insert_record(cur, decision.trace_payload)
         store.insert_record(cur, decision.result_payload)
-        if not decision.allowed:
+        if not decision_allowed:
+            _RETAINED_FFS_COMPOSITION_GUARD(
+                store, register, "FFSNaprave evidence attachment")
             problem = decision.problems[0] if decision.problems else runtime_problem(
                 "AUTHORITY_DENIED", "Evidence capture not authorised",
                 f"{captured_by} may not attach inspection evidence on {farm_ref}")
@@ -452,7 +651,11 @@ def attach_inspection_evidence(store, register, snapshot_id, sticker_number, *,
                 raise RuntimeBundleError(
                     f"inspection evidence identity {eid!r} was reused for unequal "
                     "content or a different RuntimeBundle")
+            _RETAINED_FFS_COMPOSITION_GUARD(
+                store, register, "FFSNaprave evidence attachment")
             return {"attached": True, "evidenceRef": eid,
                     "disposition": "ALREADY_CAPTURED", "problem": None}
         store.insert_record(cur, evidence)
+        _RETAINED_FFS_COMPOSITION_GUARD(
+            store, register, "FFSNaprave evidence attachment")
     return {"attached": True, "evidenceRef": eid, "disposition": "CAPTURED", "problem": None}

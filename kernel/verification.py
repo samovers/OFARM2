@@ -28,11 +28,13 @@ This mirrors the shipped demo `ExternalRegistryVerificationTrace`, whose
 """
 from __future__ import annotations
 
+import types
 from dataclasses import dataclass
 
 from .context import current_reference_snapshot, mint, now_iso
 from .problems import runtime_problem
-from .runtime_bundle import require_store_runtime_bundle
+from .runtime_bundle import RuntimeBundleError, require_store_runtime_bundle
+from .store import Store
 
 # verdicts (the caller routes/refuses on these; not contract enums)
 CONFIRM = "CONFIRM"   # identity-grade match — the binding is confirmable
@@ -45,7 +47,7 @@ LOCATOR = "LOCATOR"
 NONE = "NONE"
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class LookupResult:
     """The outcome of a scheme-specific lookup of a candidate in one snapshot's
     data. The resolver turns this into a verdict + trace; it never does the
@@ -69,11 +71,72 @@ class LookupResult:
     discrepancies: list | None = None       # extra discrepancy entries
 
 
+def _exact_lookup_value(value):
+    """Snapshot one exact JSON-shaped lookup value without behavioral subclasses."""
+    if type(value) is dict:
+        result = {}
+        for key, item in value.items():
+            if type(key) is not str:
+                raise RuntimeBundleError(
+                    "reference lookup mapping keys must be exact strings")
+            result[key] = _exact_lookup_value(item)
+        return result
+    if type(value) is list:
+        return [_exact_lookup_value(item) for item in value]
+    if type(value) in {type(None), bool, int, float, str}:
+        return value
+    raise RuntimeBundleError(
+        f"reference lookup returned behavioral value {type(value)!r}")
+
+
+def _snapshot_lookup_result(value) -> LookupResult:
+    if type(value) is not LookupResult:
+        raise RuntimeBundleError(
+            "reference lookup must return exact immutable LookupResult")
+    if (type(value.grade) is not str
+            or value.grade not in {IDENTITY, LOCATOR, NONE}
+            or type(value.candidate_count) is not int
+            or value.candidate_count < 0
+            or (value.external_id is not None
+                and type(value.external_id) is not str)
+            or type(value.status_observed) is not str
+            or (value.dates_observed is not None
+                and type(value.dates_observed) is not dict)
+            or (value.discrepancies is not None
+                and type(value.discrepancies) is not list)):
+        raise RuntimeBundleError(
+            "reference lookup result has malformed exact field types")
+    return LookupResult(
+        grade=value.grade,
+        candidate_count=value.candidate_count,
+        external_id=value.external_id,
+        status_observed=value.status_observed,
+        dates_observed=(None if value.dates_observed is None
+                        else _exact_lookup_value(value.dates_observed)),
+        discrepancies=(None if value.discrepancies is None
+                       else _exact_lookup_value(value.discrepancies)),
+    )
+
+
 class ReferenceResolver:
     """Resolves a candidate against an in-force ReferenceSnapshot and emits an
     ExternalRegistryVerificationTrace. The trace is stored through the caller's
     transaction cursor (a governed write — the caller supplies a serialized_tx
     cursor per the G2 single-writer convention)."""
+
+    __slots__ = ("store",)
+
+    def __setattr__(self, name, value):
+        if name in self.__slots__ and hasattr(self, name):
+            raise AttributeError(
+                "ReferenceResolver runtime composition is immutable")
+        object.__setattr__(self, name, value)
+
+    def __delattr__(self, name):
+        if name in self.__slots__:
+            raise AttributeError(
+                "ReferenceResolver runtime composition cannot be deleted")
+        object.__delattr__(self, name)
 
     def __init__(self, store):
         self.store = store
@@ -98,6 +161,19 @@ class ReferenceResolver:
         REVIEW); the absent-snapshot REFUSE emits no trace (the trace contract
         requires a real snapshot ref) — its refusal lives in the returned problem.
         """
+        _RETAINED_REFERENCE_DISPATCH_GUARD(self, cur)
+        string_inputs = (
+            query_value, snapshot_prefix, profile_ref, authority_ref,
+            jurisdiction_ref, scheme, key_field, purpose, lookup_surface,
+            external_id_role, review_reason_code, high_consequence_use,
+        )
+        if (any(type(value) is not str for value in string_inputs)
+                or type(lookup) is not types.FunctionType
+                or (as_of is not None and type(as_of) is not str)
+                or (created_by is not None and type(created_by) is not str)):
+            Store._mark_transaction_integrity_violation(self.store)
+            raise RuntimeBundleError(
+                "ReferenceResolver inputs must be exact retained primitives")
         require_store_runtime_bundle(
             self.store, lookup_runtime_bundle, "ReferenceResolver lookup")
         accessed = now_iso()
@@ -109,16 +185,22 @@ class ReferenceResolver:
             # snapshot (snapshotRefs is required non-empty), so there is no trace
             # to emit here — the refusal is the RuntimeProblem the caller records
             # (gate log / review routing). We refuse rather than pretend to verify.
-            return {"verdict": REFUSE, "grade": NONE, "trace": None, "snapshotRef": None,
-                    "problem": runtime_problem(
-                        "EVIDENCE_REFERENCE_UNAVAILABLE", "Reference snapshot unavailable",
-                        f"no in-force {scheme} snapshot to verify {key_field} "
-                        f"{query_value!r}; refusing rather than pretending to verify")}
+            response = {
+                "verdict": REFUSE, "grade": NONE, "trace": None,
+                "snapshotRef": None,
+                "problem": runtime_problem(
+                    "EVIDENCE_REFERENCE_UNAVAILABLE",
+                    "Reference snapshot unavailable",
+                    f"no in-force {scheme} snapshot to verify {key_field} "
+                    f"{query_value!r}; refusing rather than pretending to verify"),
+            }
+            _RETAINED_REFERENCE_DISPATCH_GUARD(self, cur)
+            return response
 
         snapshot_id = snapshot["referenceSnapshotId"]
         selected_reference = self.store.runtime_bundle.selected_reference(snapshot_id)
         if selected_reference.source_byte_status != "LOCKED":
-            return {
+            response = {
                 "verdict": REFUSE,
                 "grade": NONE,
                 "trace": None,
@@ -130,7 +212,18 @@ class ReferenceResolver:
                     f"retained source/data bytes are unavailable, so {key_field} "
                     f"{query_value!r} cannot be resolved"),
             }
-        result = lookup(snapshot_id, query_value)
+            _RETAINED_REFERENCE_DISPATCH_GUARD(self, cur)
+            return response
+        try:
+            raw_result = lookup(snapshot_id, query_value)
+        finally:
+            _RETAINED_REFERENCE_DISPATCH_GUARD(self, cur)
+        try:
+            result = _RETAINED_SNAPSHOT_LOOKUP_RESULT(raw_result)
+        except BaseException:
+            Store._mark_transaction_integrity_violation(self.store)
+            raise
+        _RETAINED_REFERENCE_DISPATCH_GUARD(self, cur)
 
         # Identity-grade REQUIRES a stable external key. A lookup that claims
         # grade IDENTITY but carries no externalId is not identity-grade — it
@@ -165,16 +258,29 @@ class ReferenceResolver:
             hcu = high_consequence_use
 
         dates = {"accessedAt": accessed, **(result.dates_observed or {})}
-        trace = self._build_trace(
-            profile_ref=profile_ref, purpose=purpose, authority_ref=authority_ref,
-            jurisdiction_ref=jurisdiction_ref, lookup_surface=lookup_surface,
-            query_value=query_value, candidate_count=result.candidate_count,
-            selected=selected, rationale=rationale,
-            status_observed=result.status_observed, dates_observed=dates,
-            snapshot_refs=[snapshot_id], registry_availability="AVAILABLE",
-            discrepancies=discrepancies, final_outcome=final,
-            high_consequence_use=hcu, downstream=downstream, created_by=created_by)
-        self.store.insert_record(cur, trace)
+        try:
+            trace = _RETAINED_REFERENCE_BUILD_TRACE(
+                self,
+                profile_ref=profile_ref, purpose=purpose,
+                authority_ref=authority_ref,
+                jurisdiction_ref=jurisdiction_ref,
+                lookup_surface=lookup_surface,
+                query_value=query_value,
+                candidate_count=result.candidate_count,
+                selected=selected, rationale=rationale,
+                status_observed=result.status_observed,
+                dates_observed=dates,
+                snapshot_refs=[snapshot_id],
+                registry_availability="AVAILABLE",
+                discrepancies=discrepancies, final_outcome=final,
+                high_consequence_use=hcu, downstream=downstream,
+                created_by=created_by)
+            _RETAINED_REFERENCE_DISPATCH_GUARD(self, cur)
+            _RETAINED_REFERENCE_STORE_INSERT(self.store, cur, trace)
+        except BaseException:
+            Store._mark_transaction_integrity_violation(self.store)
+            raise
+        _RETAINED_REFERENCE_DISPATCH_GUARD(self, cur)
         return {"verdict": verdict, "grade": result.grade, "trace": trace,
                 "snapshotRef": snapshot_id, "problem": problem}
 
@@ -209,3 +315,69 @@ class ReferenceResolver:
         if created_by:
             trace["createdByPartyRef"] = created_by
         return trace
+
+
+_RETAINED_REFERENCE_VERIFY = ReferenceResolver.verify
+_RETAINED_REFERENCE_VERIFY_CODE = _RETAINED_REFERENCE_VERIFY.__code__
+_RETAINED_REFERENCE_BUILD_TRACE = ReferenceResolver._build_trace
+_RETAINED_REFERENCE_BUILD_TRACE_CODE = \
+    _RETAINED_REFERENCE_BUILD_TRACE.__code__
+_RETAINED_SNAPSHOT_LOOKUP_RESULT = _snapshot_lookup_result
+_RETAINED_SNAPSHOT_LOOKUP_RESULT_CODE = \
+    _RETAINED_SNAPSHOT_LOOKUP_RESULT.__code__
+_RETAINED_EXACT_LOOKUP_VALUE = _exact_lookup_value
+_RETAINED_EXACT_LOOKUP_VALUE_CODE = _RETAINED_EXACT_LOOKUP_VALUE.__code__
+_RETAINED_REFERENCE_STORE_INSERT = Store.insert_record
+_RETAINED_REFERENCE_STORE_INSERT_CODE = \
+    _RETAINED_REFERENCE_STORE_INSERT.__code__
+_RETAINED_REFERENCE_STORE_POSTURE = Store._require_transaction_python_posture
+_RETAINED_REFERENCE_STORE_POSTURE_CODE = \
+    _RETAINED_REFERENCE_STORE_POSTURE.__code__
+
+
+def _require_reference_resolver_dispatch(resolver, cur) -> None:
+    store = getattr(resolver, "store", None)
+    try:
+        if (type(resolver) is not ReferenceResolver
+                or type(store) is not Store
+                or globals().get("_require_reference_resolver_dispatch") is not
+                _RETAINED_REFERENCE_DISPATCH_GUARD
+                or _RETAINED_REFERENCE_DISPATCH_GUARD.__code__ is not
+                _RETAINED_REFERENCE_DISPATCH_GUARD_CODE
+                or vars(ReferenceResolver).get("verify") is not
+                _RETAINED_REFERENCE_VERIFY
+                or _RETAINED_REFERENCE_VERIFY.__code__ is not
+                _RETAINED_REFERENCE_VERIFY_CODE
+                or vars(ReferenceResolver).get("_build_trace") is not
+                _RETAINED_REFERENCE_BUILD_TRACE
+                or _RETAINED_REFERENCE_BUILD_TRACE.__code__ is not
+                _RETAINED_REFERENCE_BUILD_TRACE_CODE
+                or globals().get("_snapshot_lookup_result") is not
+                _RETAINED_SNAPSHOT_LOOKUP_RESULT
+                or _RETAINED_SNAPSHOT_LOOKUP_RESULT.__code__ is not
+                _RETAINED_SNAPSHOT_LOOKUP_RESULT_CODE
+                or globals().get("_exact_lookup_value") is not
+                _RETAINED_EXACT_LOOKUP_VALUE
+                or _RETAINED_EXACT_LOOKUP_VALUE.__code__ is not
+                _RETAINED_EXACT_LOOKUP_VALUE_CODE
+                or vars(Store).get("insert_record") is not
+                _RETAINED_REFERENCE_STORE_INSERT
+                or _RETAINED_REFERENCE_STORE_INSERT.__code__ is not
+                _RETAINED_REFERENCE_STORE_INSERT_CODE
+                or vars(Store).get("_require_transaction_python_posture") is not
+                _RETAINED_REFERENCE_STORE_POSTURE
+                or _RETAINED_REFERENCE_STORE_POSTURE.__code__ is not
+                _RETAINED_REFERENCE_STORE_POSTURE_CODE):
+            raise RuntimeBundleError(
+                "ReferenceResolver retained dispatch changed")
+        _RETAINED_REFERENCE_STORE_POSTURE(store)
+        Store._require_active_governed_cursor(store, cur)
+    except BaseException:
+        if type(store) is Store:
+            Store._mark_transaction_integrity_violation(store)
+        raise
+
+
+_RETAINED_REFERENCE_DISPATCH_GUARD = _require_reference_resolver_dispatch
+_RETAINED_REFERENCE_DISPATCH_GUARD_CODE = \
+    _RETAINED_REFERENCE_DISPATCH_GUARD.__code__

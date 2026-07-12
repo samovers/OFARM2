@@ -58,7 +58,7 @@ def _activation_vintage(store, evaluated_at: str) -> str:
     act = _shipped(store, "ofarm.packactivationset.v0.1")
     act["packActivationSetId"] = f"{act['packActivationSetId']}.vintage.{uid()}"
     act["evaluatedAt"] = evaluated_at
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, act)
     return act["packActivationSetId"]
 
@@ -92,7 +92,7 @@ def _generation(store, *, at: str, cb_state: str = "ACTIVE",
     art["activeArtifactRefs"] = [r for r in art["activeArtifactRefs"]
                                  if not r.startswith("codebindingprofile:")] + [cb_id]
 
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, cb, tenant_ref=tenant_ref)
         store.insert_record(cur, act, tenant_ref=tenant_ref)
         store.insert_record(cur, art, tenant_ref=tenant_ref)
@@ -113,7 +113,7 @@ def _rebundled(store):
 def _asof(store, as_of: str):
     with _rebundled(store) as runtime:
         ca = ContextAssembler(runtime)
-        with runtime.tx() as cur:
+        with runtime.serialized_tx() as cur:
             return ca.assemble(
                 cur, demo.FARM,
                 evaluation_time_policy={"policyType": "AS_OF", "asOfTime": as_of})
@@ -121,7 +121,7 @@ def _asof(store, as_of: str):
 
 def _resolve_asof(store, as_of: str):
     with _rebundled(store) as runtime:
-        with runtime.tx() as cur:
+        with runtime.serialized_tx() as cur:
             return Materializer(runtime).resolve_for_use(
                 cur, demo.FARM,
                 time_policy={"policyType": "AS_OF", "asOfTime": as_of},
@@ -174,7 +174,7 @@ def test_asof_ignores_newer_unrelated_profile_spine(fresh_env):
         ref for ref in art["activeArtifactRefs"]
         if not ref.startswith("codebindingprofile:")
     ] + [cb["agronomicCodeBindingProfileId"]]
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, cb)
         store.insert_record(cur, act)
         store.insert_record(cur, art)
@@ -204,7 +204,7 @@ def test_asof_ignores_same_pack_codebinding_never_deployed_by_artifact_set(fresh
     sibling["agronomicCodeBindingProfileId"] = (
         f"codebindingprofile:si.ffs.undeployed.{uid()}")
     sibling["issuedAt"] = "2025-12-01T00:00:00Z"
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, sibling)
 
     snap = _asof(store, "2026-01-01T00:00:00Z")
@@ -269,7 +269,7 @@ def test_asof_artifact_without_source_activation_refuses(fresh_env):
     art["activeArtifactSetId"] = f"{art['activeArtifactSetId']}.nosrc.{uid()}"
     art["generatedAt"] = "2025-06-01T00:00:00Z"   # latest -> selected at 2025-07
     art["sourcePackActivationSetRefs"] = []
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, art)
     with pytest.raises(
             ContextNotReconstructible,
@@ -286,7 +286,7 @@ def test_asof_historical_artifact_with_unknown_active_ref_refuses_startup(fresh_
     art["activeArtifactSetId"] = f"{art['activeArtifactSetId']}.unknown.{uid()}"
     art["generatedAt"] = "2025-06-01T00:00:00Z"
     art["activeArtifactRefs"].append("queryplan:test.unknown.v0_1")
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, art)
     with pytest.raises(
             ContextNotReconstructible,

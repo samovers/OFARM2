@@ -560,7 +560,7 @@ def _broad_product_binding(store, state="VERIFIED"):
     binding (soft-floor route), which must NOT raise the advisory."""
     bid = f"binding:p5.broad.{uid()}"
     from kernel import context
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, {
             "schemaVersion": "ofarm.agronomicidentitybinding.v0.1",
             "agronomicIdentityBindingId": bid,

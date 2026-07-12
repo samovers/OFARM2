@@ -132,7 +132,7 @@ def test_empty_install_is_atomic_and_exact_restart_executes_no_schema_ddl():
         restarted = None
         try:
             store.migrate()
-            with store.conn.cursor() as cur:
+            with Store._raw_connection(store).cursor() as cur:
                 cur.execute(
                     "SELECT ledger_key, schema_digest, catalog_fingerprint, "
                     "catalog_bytes, byte_length, installed_at, xmin::text AS xmin "
@@ -158,7 +158,7 @@ def test_empty_install_is_atomic_and_exact_restart_executes_no_schema_ddl():
 
             restarted = Store(dsn=dsn)
             restarted.migrate()
-            with restarted.conn.cursor() as cur:
+            with Store._raw_connection(restarted).cursor() as cur:
                 cur.execute(
                     "SELECT ledger_key, schema_digest, catalog_fingerprint, "
                     "catalog_bytes, byte_length, installed_at, xmin::text AS xmin "
@@ -202,7 +202,7 @@ def test_every_append_only_relation_refuses_truncate():
         store = Store(dsn=dsn)
         try:
             store.migrate()
-            trigger_rows = store.conn.execute(
+            trigger_rows = Store._raw_connection(store).execute(
                 "SELECT rel.relname AS relation, "
                 "pg_catalog.pg_get_triggerdef(trg.oid, true) AS definition "
                 "FROM pg_catalog.pg_trigger trg "
@@ -229,10 +229,10 @@ def test_every_append_only_relation_refuses_truncate():
                 with pytest.raises(
                         psycopg.errors.RaiseException,
                         match="TRUNCATE.*forbidden"):
-                    store.conn.execute(
+                    Store._raw_connection(store).execute(
                         sql.SQL("TRUNCATE TABLE {} CASCADE").format(
                             sql.Identifier("public", relation)))
-            assert store.conn.execute(
+            assert Store._raw_connection(store).execute(
                 "SELECT count(*) AS n FROM public.runtime_schema_ledger"
             ).fetchone()["n"] == 1
         finally:
@@ -244,10 +244,11 @@ def test_temporary_schema_refuses_before_any_schema_ddl():
     with _isolated_database("schema_temp_shadow") as dsn:
         store = Store(dsn=dsn)
         try:
-            store.conn.execute("CREATE TEMP TABLE export_artifact (value text)")
+            Store._raw_connection(store).execute(
+                "CREATE TEMP TABLE export_artifact (value text)")
             with pytest.raises(SchemaGuardError, match="temporary schema"):
                 store.migrate()
-            assert store.conn.execute(
+            assert Store._raw_connection(store).execute(
                 "SELECT pg_catalog.to_regclass("
                 "'public.runtime_schema_ledger') AS relation"
             ).fetchone()["relation"] is None
@@ -282,7 +283,7 @@ def test_empty_install_excludes_noncooperating_concurrent_ddl(monkeypatch):
         try:
             store.migrate()
             assert classifications[:2] == [SchemaState.EMPTY, SchemaState.EMPTY]
-            with store.conn.cursor() as cur:
+            with Store._raw_connection(store).cursor() as cur:
                 cur.execute(
                     "SELECT to_regclass('public.hostile_concurrent_ddl') AS relation"
                 )
@@ -435,7 +436,7 @@ def test_catalog_fingerprint_covers_internal_triggers_rules_and_user_types():
         store = Store(dsn=dsn)
         try:
             store.migrate()
-            with store.conn.cursor() as cur:
+            with Store._raw_connection(store).cursor() as cur:
                 cur.execute(
                     "SELECT trg.tgname FROM pg_trigger trg "
                     "JOIN pg_class rel ON rel.oid = trg.tgrelid "
@@ -445,52 +446,55 @@ def test_catalog_fingerprint_covers_internal_triggers_rules_and_user_types():
                     "AND trg.tgisinternal ORDER BY trg.tgname LIMIT 1"
                 )
                 internal_trigger = cur.fetchone()["tgname"]
-            store.conn.execute(sql.SQL(
+            Store._raw_connection(store).execute(sql.SQL(
                 "ALTER TABLE public.derived_materialization DISABLE TRIGGER {}"
             ).format(sql.Identifier(internal_trigger)))
             with pytest.raises(SchemaGuardError, match="catalog-drifted"):
                 store.migrate()
-            store.conn.execute(sql.SQL(
+            Store._raw_connection(store).execute(sql.SQL(
                 "ALTER TABLE public.derived_materialization ENABLE TRIGGER {}"
             ).format(sql.Identifier(internal_trigger)))
             store.migrate()
 
-            store.conn.execute(
+            Store._raw_connection(store).execute(
                 "CREATE RULE hostile_rule AS ON INSERT TO public.kernel_record "
                 "DO INSTEAD NOTHING"
             )
             with pytest.raises(SchemaGuardError, match="catalog-drifted"):
                 store.migrate()
-            store.conn.execute(
+            Store._raw_connection(store).execute(
                 "DROP RULE hostile_rule ON public.kernel_record"
             )
             store.migrate()
 
-            store.conn.execute(
+            Store._raw_connection(store).execute(
                 "CREATE TYPE public.hostile_enum AS ENUM ('one', 'two')"
             )
-            store.conn.execute(
+            Store._raw_connection(store).execute(
                 "CREATE DOMAIN public.hostile_domain AS text "
                 "CHECK (VALUE <> '')"
             )
-            store.conn.execute(
+            Store._raw_connection(store).execute(
                 "CREATE TYPE public.hostile_composite AS "
                 "(label public.hostile_domain, state public.hostile_enum)"
             )
             with pytest.raises(SchemaGuardError, match="catalog-drifted"):
                 store.migrate()
-            store.conn.execute("DROP TYPE public.hostile_composite")
-            store.conn.execute("DROP DOMAIN public.hostile_domain")
-            store.conn.execute("DROP TYPE public.hostile_enum")
+            Store._raw_connection(store).execute(
+                "DROP TYPE public.hostile_composite")
+            Store._raw_connection(store).execute(
+                "DROP DOMAIN public.hostile_domain")
+            Store._raw_connection(store).execute(
+                "DROP TYPE public.hostile_enum")
             store.migrate()
 
-            store.conn.execute(
+            Store._raw_connection(store).execute(
                 "CREATE AGGREGATE public.hostile_sum(integer) "
                 "(SFUNC = pg_catalog.int4pl, STYPE = integer, INITCOND = '0')"
             )
             with pytest.raises(SchemaGuardError, match="catalog-drifted"):
                 store.migrate()
-            store.conn.execute(
+            Store._raw_connection(store).execute(
                 "DROP AGGREGATE public.hostile_sum(integer)")
             store.migrate()
         finally:
@@ -502,7 +506,7 @@ def test_live_catalog_drift_refuses_activation_and_rolls_back_bundle_writes():
         store = Store(dsn=dsn)
         try:
             store.migrate()
-            store.conn.execute(
+            Store._raw_connection(store).execute(
                 "ALTER TABLE public.kernel_record "
                 "ADD COLUMN hostile_catalog_drift text"
             )
@@ -513,7 +517,7 @@ def test_live_catalog_drift_refuses_activation_and_rolls_back_bundle_writes():
                 context.bootstrap_for_descriptor(store, config.ACTIVE_PROFILE)
 
             assert store._runtime_bundle is None
-            with store.conn.cursor() as cur:
+            with Store._raw_connection(store).cursor() as cur:
                 cur.execute("SELECT count(*) AS n FROM runtime_bundle")
                 assert cur.fetchone()["n"] == 0
                 cur.execute("SELECT count(*) AS n FROM runtime_bundle_component")

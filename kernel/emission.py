@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 from . import policy, sufficiency
 from .context import mint, now_iso
+from .materializer import Materializer
 from .problems import runtime_problem
 
 if TYPE_CHECKING:   # type-only: keeps stages -> emission imports acyclic
@@ -72,7 +73,7 @@ class PromotionEmitter:
         ctx = self.ctx
         ctx.store.add_edge(ctx.cur, "EVENT_SOURCE", ctx.assertion_id, ctx.event_id)
         ctx.store.add_edge(ctx.cur, "AUTHORITY_BASIS", ctx.assertion_id,
-                           ctx.authz_decision.result_payload["resultId"])
+                           ctx.trace_refs["authorizationDecisionResultRef"])
         if ctx.attribution_ref:
             # second authority decision: the named-actor attribution basis is
             # reachable from the assertion exactly like submitter authority
@@ -389,8 +390,8 @@ class PromotionEmitter:
         # recompute and re-qualify disputed on the next read (spec §6.6). The
         # dispute is recorded authoritatively on the DISPUTE edge; this trace only
         # propagates staleness (BASIS_ADVANCED family, dispute-specific reason).
-        ctx.materializer.invalidate_for_sources(
-            ctx.cur, [target],
+        Materializer.invalidate_for_sources(
+            ctx.materializer, ctx.cur, [target],
             trigger_family="BASIS_ADVANCED",
             trigger_source_ref=review_id,
             farm_scope_ref=ctx.farm_ref,

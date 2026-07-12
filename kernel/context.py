@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import config
-from .contracts import UnknownContract, canonical_json
+from .contracts import ContractRegistry, UnknownContract, canonical_json
 from .profile_runtime import ProfileRuntimeError, resolve_active_descriptor
 from .runtime_bundle import (
     TENANT_CONTENT_PLACEMENT,
@@ -24,8 +24,13 @@ from .runtime_bundle import (
     _build_live_runtime_bundle,
     _copy_runtime_cache_value,
     _freeze_runtime_cache,
+    _runtime_cache_state,
     require_store_runtime_bundle,
     sha256_bytes,
+)
+from .store import (
+    Store,
+    _RETAINED_GOVERNED_CURSOR_EXECUTE_READ as _CURSOR_EXECUTE_READ,
 )
 
 # Private module seam so the lock/atomic-selection regression can observe the
@@ -38,7 +43,7 @@ SI_REGSR_FAMILY_ID = "si.uvhvvr.ffs-reg"
 SI_GERK_FAMILY_ID = "si.mkgp.gerk-layer"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class SIReferenceBindings:
     """Active SI REGSR/GERK runtime bindings.
 
@@ -322,11 +327,11 @@ def bootstrap_for_descriptor(
     inserted = []
     bundle = None
     try:
-        with store.serialized_tx() as cur:
+        with Store.serialized_tx(store) as cur:
             # Selection, content verification, persistence, and spine insertion
             # share the import/commit advisory lock. A governed import cannot
             # commit between selection and bundle installation.
-            cur.execute(
+            _CURSOR_EXECUTE_READ(cur,
                 "SELECT k.payload, k.payload_sha256, k.runtime_bundle_digest, "
                 "b.tenant_ref AS origin_tenant_ref FROM ONLY kernel_record k "
                 "JOIN ONLY runtime_bundle b "
@@ -351,7 +356,8 @@ def bootstrap_for_descriptor(
                     for prefix in family_prefixes)
             ]
             for row in additional_reference_rows:
-                contract = store.registry.validate(row["payload"])
+                contract = ContractRegistry.validate(
+                    store.registry, row["payload"])
                 if contract.kind != "ofarm.referencesnapshot.v0.1":
                     raise ContextNotReconstructible(
                         "stored ReferenceSnapshot row resolves to the wrong contract")
@@ -361,7 +367,7 @@ def bootstrap_for_descriptor(
                         "stored ReferenceSnapshot payload digest does not match its bytes")
             additional_references = [
                 row["payload"] for row in additional_reference_rows]
-            cur.execute(
+            _CURSOR_EXECUTE_READ(cur,
                 "SELECT k.payload, k.payload_sha256, k.runtime_bundle_digest, "
                 "b.tenant_ref AS origin_tenant_ref FROM ONLY kernel_record k "
                 "JOIN ONLY runtime_bundle b "
@@ -434,7 +440,8 @@ def bootstrap_for_descriptor(
                 if selected:
                     additional_profile_rows.append(row)
             for row in additional_profile_rows:
-                contract = store.registry.validate(row["payload"])
+                contract = ContractRegistry.validate(
+                    store.registry, row["payload"])
                 if contract.kind not in {
                     "ofarm.activeartifactset.v0.1",
                     "ofarm.packactivationset.v0.1",
@@ -468,7 +475,7 @@ def bootstrap_for_descriptor(
             data_families = [family.data_family for family in
                              active_profile.reference_families if family.data_family]
             if data_families:
-                cur.execute(
+                _CURSOR_EXECUTE_READ(cur,
                     "SELECT d.snapshot_ref, d.data_family, d.artifact_ref, "
                     "d.source_digest, d.parser_label, d.record_count, d.payload, "
                     "d.payload_sha256, d.runtime_bundle_digest "
@@ -490,16 +497,16 @@ def bootstrap_for_descriptor(
                 additional_reference_payloads=additional_references,
                 reference_data=reference_data,
                 tenant_ref=config.TENANT_REF,
-                _database_environment=store._observe_database_environment(cur),
+                _database_environment=Store._observe_database_environment(cur),
                 _profile_route_selection=profile_route_selection,
             )
             payloads = _profile_payloads_from_bundle(
                 store, active_profile, bundle)
-            store.install_runtime_bundle(cur, bundle)
-            store.assert_runtime_bundle_compatible(bundle)
-            with store._bootstrap_bundle_writes(bundle):
+            Store.install_runtime_bundle(store, cur, bundle)
+            Store.assert_runtime_bundle_compatible(store, bundle)
+            with Store._bootstrap_bundle_writes(store, bundle):
                 for record_id, kind, payload, expected_digest in payloads:
-                    cur.execute(
+                    _CURSOR_EXECUTE_READ(cur,
                         "SELECT record_kind, payload, payload_sha256, tenant_ref "
                         "FROM ONLY kernel_record "
                         "WHERE record_id = %s",
@@ -515,7 +522,8 @@ def bootstrap_for_descriptor(
                                 f"profile instance identifier {record_id!r} is already "
                                 "bound to different canonical content")
                         continue
-                    store.insert_record(
+                    Store.insert_record(
+                        store,
                         cur, payload, runtime_bundle_digest=bundle.digest)
                     inserted.append(record_id)
                 # Catalog, registry, persisted-byte, cold-load, and selection-time
@@ -523,17 +531,18 @@ def bootstrap_for_descriptor(
                 # Activation repeats the exact seal check after COMMIT; a hostile
                 # concurrent mutation can therefore refuse process binding, while
                 # the already persisted bootstrap remains safe for exact restart.
-                activation_token = store._prepare_runtime_bundle_binding(bundle)
+                activation_token = Store._prepare_runtime_bundle_binding(
+                    store, bundle)
     except (ContextNotReconstructible, RuntimeBundleError) as exc:
-        store._discard_prepared_runtime_bundle_binding()
+        Store._discard_prepared_runtime_bundle_binding(store)
         if isinstance(exc, RuntimeBundleError):
             raise ContextNotReconstructible(
                 f"RuntimeBundle cannot be constructed: {exc}") from exc
         raise
     except Exception as exc:
-        store._discard_prepared_runtime_bundle_binding()
+        Store._discard_prepared_runtime_bundle_binding(store)
         raise ContextNotReconstructible(f"atomic RuntimeBundle bootstrap failed: {exc}") from exc
-    store._activate_prepared_runtime_bundle(activation_token)
+    Store._activate_prepared_runtime_bundle(store, activation_token)
     return inserted
 
 
@@ -639,11 +648,22 @@ class ProductRegister:
     """
 
     def __setattr__(self, name, value):
-        if (getattr(self, "_frozen", False)
-                and name in {
-                    "bindings", "runtime_bundle", "_by_snapshot", "_frozen"}):
+        immutable_fields = {
+            "bindings", "runtime_bundle", "_by_snapshot", "_frozen"}
+        if ((name in immutable_fields and name in vars(self))
+                or (vars(self).get("_frozen", False) is not False
+                    and callable(getattr(type(self), name, None)))):
             raise AttributeError("ProductRegister runtime composition is immutable")
         object.__setattr__(self, name, value)
+
+    def __delattr__(self, name):
+        if (name in {
+                "bindings", "runtime_bundle", "_by_snapshot", "_frozen"}
+                or (vars(self).get("_frozen", False) is not False
+                    and callable(getattr(type(self), name, None)))):
+            raise AttributeError(
+                "ProductRegister sealed runtime state cannot be deleted")
+        object.__delattr__(self, name)
 
     def __init__(self, bindings: SIReferenceBindings | None = None, *,
                  runtime_bundle=None):
@@ -693,7 +713,7 @@ class ProductRegister:
                 sid, json.loads(component.canonical_bytes.decode("utf-8")))
 
     def register_artifact(self, snapshot_id: str, artifact: dict) -> None:
-        if self._frozen:
+        if self._frozen is not False:
             raise RuntimeError("ProductRegister is immutable for the RuntimeBundle lifetime")
         artifact = copy.deepcopy(artifact)
         products = {p["regsrCode"]: p for p in artifact.get("products", [])}
@@ -727,7 +747,7 @@ class ProductRegister:
         if self.runtime_bundle is not None:
             require_store_runtime_bundle(
                 store, self.runtime_bundle, "ProductRegister load")
-            if not self._frozen:
+            if self._frozen is not True:
                 raise RuntimeBundleError(
                     "bundle-backed ProductRegister was not frozen at construction")
             return
@@ -754,8 +774,10 @@ class ProductRegister:
 
     def freeze(self) -> None:
         """End construction; later selection/cache mutation is forbidden."""
-        if self._frozen:
+        if self._frozen is True:
             return
+        if self._frozen is not False:
+            raise RuntimeError("ProductRegister frozen state is malformed")
         object.__setattr__(self, "_by_snapshot", _freeze_runtime_cache(
             self._by_snapshot))
         object.__setattr__(self, "_frozen", True)
@@ -782,7 +804,8 @@ class ProductRegister:
         validity window. Zero matches OR an ambiguous decision number (multiple
         differing validity windows) returns None: ambiguity is never collapsed
         to a single record, it routes the caller to review."""
-        ids = self.identities_by_decision(snapshot_id, decision_number)
+        ids = ProductRegister.identities_by_decision(
+            self, snapshot_id, decision_number)
         return ids[0] if len(ids) == 1 else None
 
     def lookup(self, snapshot_id: str, regsr_code: str) -> dict | None:
@@ -804,6 +827,99 @@ class ProductRegister:
         return snapshot_id in self._by_snapshot
 
 
+_RETAINED_PRODUCT_REGISTER_TYPE = ProductRegister
+_PRODUCT_REGISTER_DECISION_DISPATCH = (
+    ("identities_by_decision", ProductRegister.identities_by_decision,
+     ProductRegister.identities_by_decision.__code__),
+    ("lookup_by_decision", ProductRegister.lookup_by_decision,
+     ProductRegister.lookup_by_decision.__code__),
+)
+_RETAINED_STORE_TRANSACTION_POSTURE = Store._require_transaction_python_posture
+_RETAINED_STORE_TRANSACTION_POSTURE_CODE = \
+    _RETAINED_STORE_TRANSACTION_POSTURE.__code__
+_RETAINED_STORE_INTEGRITY_MARKER = Store._mark_transaction_integrity_violation
+_RETAINED_STORE_INTEGRITY_MARKER_CODE = \
+    _RETAINED_STORE_INTEGRITY_MARKER.__code__
+
+
+def _mark_product_register_integrity_violation(store) -> None:
+    if (type(store) is Store
+            and vars(Store).get("_mark_transaction_integrity_violation") is
+            _RETAINED_STORE_INTEGRITY_MARKER
+            and _RETAINED_STORE_INTEGRITY_MARKER.__code__ is
+            _RETAINED_STORE_INTEGRITY_MARKER_CODE):
+        _RETAINED_STORE_INTEGRITY_MARKER(store)
+
+
+def require_product_register_runtime_composition(
+        store, register, label: str) -> None:
+    """Require a frozen register rebuilt exactly from the selected bundle."""
+    try:
+        if (type(store) is not Store
+                or globals().get(
+                    "require_product_register_runtime_composition") is not
+                _RETAINED_PRODUCT_REGISTER_COMPOSITION_GUARD
+                or _RETAINED_PRODUCT_REGISTER_COMPOSITION_GUARD.__code__ is not
+                _RETAINED_PRODUCT_REGISTER_COMPOSITION_GUARD_CODE
+                or vars(Store).get("_require_transaction_python_posture") is not
+                _RETAINED_STORE_TRANSACTION_POSTURE
+                or _RETAINED_STORE_TRANSACTION_POSTURE.__code__ is not
+                _RETAINED_STORE_TRANSACTION_POSTURE_CODE):
+            raise RuntimeBundleError(
+                f"{label} Store runtime dispatch changed before decision")
+        _RETAINED_STORE_TRANSACTION_POSTURE(store)
+        bundle = Store.runtime_bundle.fget(store)
+        require_store_runtime_bundle(store, bundle, label)
+        if (type(register) is not _RETAINED_PRODUCT_REGISTER_TYPE
+                or vars(register).get("_frozen") is not True
+                or register.runtime_bundle is not bundle
+                or any(callable(getattr(_RETAINED_PRODUCT_REGISTER_TYPE, name, None))
+                       for name in vars(register))
+                or any(
+                    vars(_RETAINED_PRODUCT_REGISTER_TYPE).get(name) is not function
+                    or function.__code__ is not code
+                    for name, function, code
+                    in _PRODUCT_REGISTER_DECISION_DISPATCH)):
+            raise RuntimeBundleError(
+                f"{label} ProductRegister runtime composition changed")
+        expected_bindings = SIReferenceBindings.from_descriptor(
+            bundle.descriptor, runtime_bundle=bundle)
+        expected = _RETAINED_PRODUCT_REGISTER_TYPE(
+            expected_bindings, runtime_bundle=bundle)
+        if (type(register.bindings) is not SIReferenceBindings
+                or register.bindings != expected_bindings
+                or _runtime_cache_state(register._by_snapshot) !=
+                _runtime_cache_state(expected._by_snapshot)):
+            raise RuntimeBundleError(
+                f"{label} ProductRegister cache was not derived from selected bytes")
+    except BaseException:
+        _mark_product_register_integrity_violation(store)
+        raise
+
+
+_RETAINED_PRODUCT_REGISTER_COMPOSITION_GUARD = \
+    require_product_register_runtime_composition
+_RETAINED_PRODUCT_REGISTER_COMPOSITION_GUARD_CODE = \
+    _RETAINED_PRODUCT_REGISTER_COMPOSITION_GUARD.__code__
+
+
+def invoke_product_register_identities(
+        store, register, snapshot_id: str, decision_number: str) -> list[dict]:
+    """Invoke retained identity lookup with immediate composition checks."""
+    _RETAINED_PRODUCT_REGISTER_COMPOSITION_GUARD(
+        store, register, "REGSR product authorisation")
+    function = _PRODUCT_REGISTER_DECISION_DISPATCH[0][1]
+    try:
+        result = function(register, snapshot_id, decision_number)
+    except BaseException:
+        _RETAINED_PRODUCT_REGISTER_COMPOSITION_GUARD(
+            store, register, "REGSR product authorisation")
+        raise
+    _RETAINED_PRODUCT_REGISTER_COMPOSITION_GUARD(
+        store, register, "REGSR product authorisation")
+    return result
+
+
 class ContextNotReconstructible(Exception):
     """A historical (AS_OF) context cannot be honestly reconstructed."""
 
@@ -811,13 +927,28 @@ class ContextNotReconstructible(Exception):
 class ContextAssembler:
     """Assembles (and reuses) per-farm Compliance-twin ContextSnapshots."""
 
-    _SEALED_FIELDS = {"store", "active_profile", "runtime_bundle"}
+    _SEALED_FIELDS = {
+        "store", "active_profile", "runtime_bundle",
+        "_runtime_composition_sealed",
+    }
 
     def __setattr__(self, name, value):
-        if (getattr(self, "_runtime_composition_sealed", False)
-                and name in self._SEALED_FIELDS):
-            raise AttributeError("ContextAssembler runtime composition is immutable")
+        if "_runtime_composition_sealed" in vars(self):
+            if name in self._SEALED_FIELDS:
+                raise AttributeError(
+                    "ContextAssembler runtime composition is immutable")
+            if callable(getattr(type(self), name, None)):
+                raise AttributeError(
+                    "ContextAssembler runtime dispatch is immutable")
         object.__setattr__(self, name, value)
+
+    def __delattr__(self, name):
+        if ("_runtime_composition_sealed" in vars(self)
+                and (name in self._SEALED_FIELDS
+                     or callable(getattr(type(self), name, None)))):
+            raise AttributeError(
+                "ContextAssembler sealed runtime state cannot be deleted")
+        object.__delattr__(self, name)
 
     def __init__(self, store, *, active_descriptor=None, active_profile=None,
                  runtime_bundle=None):
@@ -837,6 +968,33 @@ class ContextAssembler:
             raise ProfileRuntimeError(
                 "ContextAssembler descriptor and RuntimeBundle do not match exactly")
         self._runtime_composition_sealed = True
+
+    def _assert_runtime_composition(self, cur=None) -> None:
+        try:
+            if (type(self) is not ContextAssembler
+                    or vars(ContextAssembler).get(
+                        "_assert_runtime_composition") is not
+                    _RETAINED_CONTEXT_ASSERT_RUNTIME_COMPOSITION
+                    or _RETAINED_CONTEXT_ASSERT_RUNTIME_COMPOSITION.__code__ is not
+                    _RETAINED_CONTEXT_ASSERT_RUNTIME_COMPOSITION_CODE
+                    or type(self.store) is not Store
+                    or self._runtime_composition_sealed is not True
+                    or self.runtime_bundle is not
+                    Store.runtime_bundle.fget(self.store)
+                    or self.runtime_bundle.descriptor != self.active_profile
+                    or any(callable(getattr(ContextAssembler, name, None))
+                           for name in vars(self))):
+                raise RuntimeBundleError(
+                    "ContextAssembler runtime composition changed")
+            Store._require_transaction_python_posture(self.store)
+            require_store_runtime_bundle(
+                self.store, self.runtime_bundle, "ContextAssembler decision")
+            if cur is not None:
+                Store._require_active_governed_cursor(self.store, cur)
+        except BaseException:
+            if type(getattr(self, "store", None)) is Store:
+                Store._mark_transaction_integrity_violation(self.store)
+            raise
 
     def _spine(self, as_of: str | None = None) -> dict:
         # Spine selection is over immutable bundle bytes, never live rows that
@@ -1032,13 +1190,14 @@ class ContextAssembler:
                  evaluation_time_policy: dict | None = None) -> dict:
         """Return the in-force ContextSnapshot payload for a farm, minting a
         new record only on basis drift (content-addressed reuse)."""
+        _RETAINED_CONTEXT_ASSERT_RUNTIME_COMPOSITION(self, cur)
         policy = evaluation_time_policy or {"policyType": "NOW"}
         # AS_OF context selects the reference snapshots in force AT that
         # moment; a missing family is honest (none was in force yet) and
         # makes the context content — and therefore the snapshot id and the
         # materialization key — distinct from the NOW answer
         as_of = policy.get("asOfTime") if policy.get("policyType") == "AS_OF" else None
-        spine = self._spine(as_of=as_of)
+        spine = ContextAssembler._spine(self, as_of=as_of)
         reference_snapshots = context_reference_snapshots_for_descriptor(
             self.store, self.active_profile, as_of=as_of)
         reference_refs = [p["referenceSnapshotId"] for p in reference_snapshots]
@@ -1061,7 +1220,7 @@ class ContextAssembler:
             f"{_local(farm_ref)}.{target_twin.lower()}.{digest}"
         )
 
-        existing_row = self.store.get_record(snapshot_id)
+        existing_row = Store.get_record(self.store, snapshot_id)
         if existing_row:
             existing = existing_row["payload"]
             projected = {
@@ -1080,6 +1239,7 @@ class ContextAssembler:
                     or canonical_json(projected) != canonical_json(material_basis)):
                 raise ContextNotReconstructible(
                     "ContextSnapshot content identity was reused for unequal basis bytes")
+            _RETAINED_CONTEXT_ASSERT_RUNTIME_COMPOSITION(self, cur)
             return existing
 
         payload = {
@@ -1098,8 +1258,17 @@ class ContextAssembler:
             "evidencePolicyRefs": [self.active_profile.evidence_policy_ref],
             "notes": "Per-farm Compliance-twin snapshot assembled from the shipped SI pilot spine.",
         }
-        self.store.insert_record(cur, payload)
+        Store.insert_record(self.store, cur, payload)
+        _RETAINED_CONTEXT_ASSERT_RUNTIME_COMPOSITION(self, cur)
         return payload
+
+
+_RETAINED_CONTEXT_ASSERT_RUNTIME_COMPOSITION = \
+    ContextAssembler._assert_runtime_composition
+_RETAINED_CONTEXT_ASSERT_RUNTIME_COMPOSITION_CODE = \
+    _RETAINED_CONTEXT_ASSERT_RUNTIME_COMPOSITION.__code__
+_RETAINED_CONTEXT_ASSEMBLE = ContextAssembler.assemble
+_RETAINED_CONTEXT_ASSEMBLE_CODE = _RETAINED_CONTEXT_ASSEMBLE.__code__
 
 
 def _local(ref: str) -> str:

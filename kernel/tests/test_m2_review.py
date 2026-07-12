@@ -335,7 +335,7 @@ def test_reject_of_needs_evidence_claim_needs_no_reviewer_evidence(store, pipeli
     # a claim ROUTED for NEEDS_EVIDENCE (unverifiable actor attribution) — an
     # 'approve anyway' accept without new evidence would refuse
     stranger = f"party:rej.stranger.{uid()}"
-    with store.tx() as cur:
+    with store.serialized_tx() as cur:
         store.insert_record(cur, {
             "schemaVersion": "ofarm.party.v0.1", "partyId": stranger,
             "partyClass": "NATURAL_PERSON",

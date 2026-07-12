@@ -208,7 +208,7 @@ def bootstrap(store) -> None:
         contract = store.registry.get(payload["schemaVersion"])
         if store.record_exists(payload[contract.id_field]):
             continue
-        with store.tx() as cur:
+        with store.serialized_tx() as cur:
             store.insert_record(cur, payload)
     onboard(store)
 

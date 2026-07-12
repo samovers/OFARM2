@@ -12,6 +12,8 @@ SHA-256 and every digest reuse is followed by byte equality verification.
 from __future__ import annotations
 
 import copy
+import builtins
+import dis
 import functools
 import hashlib
 import io
@@ -19,22 +21,26 @@ import importlib.machinery
 import importlib.metadata
 import json
 import locale
+import math
 import os
+import operator
 import platform
 import re
 import stat
 import sys
 import sysconfig
 import time
+import types
 import zipfile
-from dataclasses import InitVar, dataclass, field, replace
+from dataclasses import InitVar, dataclass, field, fields as dataclass_fields, \
+    is_dataclass, replace
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
 from typing import Any, Iterable, Mapping
 
 from .contracts import canonical_json
 
-BUNDLE_VERSION = "ofarm.runtime-bundle.local.v2"
+BUNDLE_VERSION = "ofarm.runtime-bundle.local.v3"
 LOCK_VERSION = "ofarm.runtime-bundle-component-lock.local.v2"
 JSON_CANONICALIZATION = "OFARM_CANONICAL_JSON_V1"
 RAW_CANONICALIZATION = "EXACT_BYTES_V1"
@@ -77,9 +83,11 @@ _RUNTIME_COMPONENT_ROLES = {
     "TENANT_BINDING",
 }
 _LIVE_SELECTION_PROOF = object()
-_OBSERVED_ENVIRONMENT_REF = "environment:observed-runtime.v3"
+_OBSERVED_ENVIRONMENT_REF = "environment:stable-runtime.v4"
+_DECISION_SEMANTICS_REF = "environment:stable-decision-semantics.v1"
 _OBSERVED_DATABASE_REF = "environment:observed-postgresql.v1"
 _PROFILE_ROUTE_SELECTION_REF = "profile-route-selection:active"
+_MISSING = object()
 
 
 @dataclass(frozen=True)
@@ -107,6 +115,9 @@ class RuntimeEnvironmentSeal:
     import_callable_state: tuple[tuple[Any, ...], ...]
     sys_modules_mapping: object
     modules: tuple[tuple[str, object, tuple[Any, ...]], ...]
+    decision_semantics: tuple[tuple[Any, ...], ...]
+    decision_callable_anchors: tuple[tuple[types.FunctionType, types.CodeType], ...]
+    decision_semantics_canonical: bytes
     pycache_prefix: str | None
     project_root: str
 
@@ -119,6 +130,40 @@ def sha256_bytes(value: bytes) -> str:
     return "sha256:" + hashlib.sha256(value).hexdigest()
 
 
+class _FrozenRuntimeMapping(Mapping):
+    """Closed immutable mapping that never delegates to a caller dictionary."""
+
+    __slots__ = ("__items",)
+
+    def __init__(self, items: tuple[tuple[object, object], ...]):
+        if type(items) is not tuple or any(
+                type(item) is not tuple or len(item) != 2 for item in items):
+            raise TypeError("frozen runtime mapping requires exact item tuples")
+        object.__setattr__(self, "_FrozenRuntimeMapping__items", items)
+
+    def __setattr__(self, _name, _value):
+        raise AttributeError("frozen runtime mapping is immutable")
+
+    def __delattr__(self, _name):
+        raise AttributeError("frozen runtime mapping cannot be deleted")
+
+    def __getitem__(self, key):
+        for retained_key, value in self.__items:
+            if type(key) is type(retained_key) and key == retained_key:
+                return value
+        raise KeyError(key)
+
+    def __iter__(self):
+        return (item[0] for item in self.__items)
+
+    def __len__(self):
+        return len(self.__items)
+
+    def __eq__(self, other):
+        return (type(other) is _FrozenRuntimeMapping
+                and _runtime_cache_state(self) == _runtime_cache_state(other))
+
+
 def _freeze_runtime_cache(value):
     """Recursively freeze lookup state retained for one runtime lifetime.
 
@@ -127,15 +172,44 @@ def _freeze_runtime_cache(value):
     and frozensets make both indexes and retained JSON records immutable after
     preload instead of relying on callers to leave them alone.
     """
-    if isinstance(value, dict):
-        return MappingProxyType({
-            key: _freeze_runtime_cache(item) for key, item in value.items()
-        })
-    if isinstance(value, (list, tuple)):
+    if type(value) is dict:
+        return _FrozenRuntimeMapping(tuple(
+            (_freeze_runtime_cache(key), _freeze_runtime_cache(item))
+            for key, item in value.items()
+        ))
+    if type(value) in {list, tuple}:
         return tuple(_freeze_runtime_cache(item) for item in value)
-    if isinstance(value, (set, frozenset)):
+    if type(value) in {set, frozenset}:
         return frozenset(_freeze_runtime_cache(item) for item in value)
+    if type(value) not in {type(None), bool, int, float, str, bytes}:
+        raise RuntimeBundleError(
+            f"runtime cache value has unsupported mutable type {type(value)!r}")
     return value
+
+
+def _runtime_cache_state(value):
+    """Return an exact primitive state; reject substituted behavioral values."""
+    if type(value) is _FrozenRuntimeMapping:
+        items = object.__getattribute__(
+            value, "_FrozenRuntimeMapping__items")
+        if type(items) is not tuple:
+            raise RuntimeBundleError("frozen runtime mapping item state changed")
+        return (
+            "MAPPING",
+            tuple(
+                (_runtime_cache_state(key), _runtime_cache_state(item))
+                for key, item in items
+            ),
+        )
+    if type(value) is tuple:
+        return ("TUPLE", tuple(_runtime_cache_state(item) for item in value))
+    if type(value) is frozenset:
+        states = [_runtime_cache_state(item) for item in value]
+        return ("FROZENSET", tuple(sorted(states, key=repr)))
+    if type(value) in {type(None), bool, int, float, str, bytes}:
+        return (type(value).__name__, value)
+    raise RuntimeBundleError(
+        f"runtime cache contains substituted type {type(value)!r}")
 
 
 def _copy_runtime_cache_value(value):
@@ -151,8 +225,27 @@ def _copy_runtime_cache_value(value):
     return copy.deepcopy(value)
 
 
-def require_store_runtime_bundle(store, bundle, consumer: str) -> None:
-    """Prevent service evaluation under bytes different from Store receipts."""
+def _mark_store_runtime_integrity_violation(store) -> None:
+    """Make a caught runtime-integrity failure rollback-only.
+
+    ``runtime_bundle`` cannot import ``Store`` without a cycle, so it invokes
+    the exact class-defined one-way latch marker when present.  An integrity
+    failure must still poison the active transaction when the caller catches
+    the exception and restores the mutated state.
+    """
+    try:
+        latch = object.__getattribute__(store, "_active_transaction_integrity")
+        if latch is not None:
+            object.__setattr__(
+                latch, "_TransactionIntegrityLatch__poisoned", True)
+    except Exception:
+        # A malformed/non-Store consumer is rejected by the original check.
+        # Never replace that useful error with a best-effort poison error.
+        return
+
+
+def _require_store_runtime_bundle(store, bundle, consumer: str) -> None:
+    """Implement the exact Store/bundle comparison."""
     if bundle is None:
         raise RuntimeBundleError(
             f"{consumer} requires an explicit verified RuntimeBundle")
@@ -161,7 +254,8 @@ def require_store_runtime_bundle(store, bundle, consumer: str) -> None:
     except Exception as exc:
         raise RuntimeBundleError(
             f"{consumer} requires a Store bound to a verified RuntimeBundle") from exc
-    if (bound.digest != bundle.digest
+    if (bound is not bundle
+            or bound.digest != bundle.digest
             or bundle.construction_mode != "LIVE_CURRENT"
             or bound.descriptor != bundle.descriptor
             or bound.canonical_document_bytes != bundle.canonical_document_bytes
@@ -174,6 +268,20 @@ def require_store_runtime_bundle(store, bundle, consumer: str) -> None:
         raise RuntimeBundleError(
             f"{consumer} requires the Store's write-once runtime environment seal")
     require_runtime_environment_seal(bundle, seal, consumer)
+
+
+def require_store_runtime_bundle(store, bundle, consumer: str) -> None:
+    """Prevent service evaluation under bytes different from Store receipts.
+
+    A failure observed inside a governed transaction is sticky: restoring the
+    mutated object and catching ``RuntimeBundleError`` cannot make that
+    transaction eligible to commit.
+    """
+    try:
+        _require_store_runtime_bundle(store, bundle, consumer)
+    except RuntimeBundleError:
+        _mark_store_runtime_integrity_violation(store)
+        raise
 
 
 def require_current_runtime_catalog(bundle, package_root: Path) -> None:
@@ -204,12 +312,13 @@ def require_current_runtime_catalog(bundle, package_root: Path) -> None:
             raise RuntimeBundleError(
                 f"live RuntimeBundle component differs from current catalog: {key!r}")
     observed_key = ("RUNTIME_ENVIRONMENT_OBSERVED", _OBSERVED_ENVIRONMENT_REF)
+    semantics_key = ("RUNTIME_ENVIRONMENT_OBSERVED", _DECISION_SEMANTICS_REF)
     database_key = ("RUNTIME_DATABASE_OBSERVED", _OBSERVED_DATABASE_REF)
     current_observed = observed_runtime_environment_component(
         package_root, bundle.components)
     selected_observed = actual.get(observed_key)
     if (selected_observed is None
-            or selected_observed.repository_path != "runtime-observed/environment-v3"
+            or selected_observed.repository_path != "runtime-observed/environment-v4"
             or selected_observed.canonicalization != JSON_CANONICALIZATION
             or selected_observed.placement != GLOBAL_CONTENT_PLACEMENT):
         raise RuntimeBundleError(
@@ -218,17 +327,35 @@ def require_current_runtime_catalog(bundle, package_root: Path) -> None:
         current_observed.canonical_bytes, "current runtime environment observation")
     selected_environment = _strict_json_value(
         selected_observed.canonical_bytes, "selected runtime environment observation")
-    _validate_runtime_environment_document(current_environment)
-    _validate_runtime_environment_document(selected_environment)
+    _validate_stable_runtime_environment_document(
+        current_environment, bundle.components)
+    _validate_stable_runtime_environment_document(
+        selected_environment, bundle.components)
     if current_environment != selected_environment:
         raise RuntimeBundleError(
             "live RuntimeBundle does not match the currently observed runtime environment")
+    current_semantics = observed_decision_semantics_component(package_root)
+    selected_semantics = actual.get(semantics_key)
+    if (selected_semantics is None
+            or selected_semantics.repository_path !=
+            "runtime-observed/decision-semantics-v1"
+            or selected_semantics.canonicalization != JSON_CANONICALIZATION
+            or selected_semantics.placement != GLOBAL_CONTENT_PLACEMENT):
+        raise RuntimeBundleError(
+            "live RuntimeBundle decision semantics provenance is invalid")
+    selected_semantics_document = _strict_json_value(
+        selected_semantics.canonical_bytes,
+        "selected stable decision semantics identity")
+    _validate_stable_decision_semantics_document(selected_semantics_document)
+    if current_semantics != selected_semantics:
+        raise RuntimeBundleError(
+            "live RuntimeBundle does not match current decision semantics")
     if bundle.construction_mode == "LIVE_CURRENT" and database_key not in actual:
         raise RuntimeBundleError(
             "live RuntimeBundle omits its PostgreSQL environment observation")
     for key in sorted(set(actual) - set(expected)):
         component = actual[key]
-        if key == observed_key:
+        if key in {observed_key, semantics_key}:
             continue
         if key == database_key:
             if (component.repository_path != "runtime-observed/postgresql-v1"
@@ -439,7 +566,15 @@ class RuntimeComponent:
     placement: str = GLOBAL_CONTENT_PLACEMENT
 
     def __post_init__(self) -> None:
-        if not self.role or not self.logical_ref or not self.repository_path:
+        if (type(self.role) is not str
+                or type(self.logical_ref) is not str
+                or type(self.repository_path) is not str
+                or type(self.canonicalization) is not str
+                or type(self.content_digest) is not str
+                or type(self.canonical_bytes) is not bytes
+                or type(self.placement) is not str
+                or not self.role or not self.logical_ref
+                or not self.repository_path):
             raise RuntimeBundleError("runtime component role/ref/path must be non-empty")
         if self.role not in _RUNTIME_COMPONENT_ROLES:
             raise RuntimeBundleError(
@@ -590,6 +725,7 @@ def _validate_runtime_image_file_entry(
             or not Path(entry["path"]).is_absolute()
             or not _SHA256_RE.fullmatch(entry.get("contentDigest", ""))
             or not isinstance(entry.get("byteLength"), int)
+            or isinstance(entry.get("byteLength"), bool)
             or entry["byteLength"] < 0):
         raise RuntimeBundleError("retained Python image file entry is malformed")
     if relative:
@@ -1304,6 +1440,44 @@ def _project_component_files(
     }
 
 
+_NAMESPACE_MODULE_METADATA = {
+    "__name__", "__doc__", "__package__", "__loader__", "__spec__",
+    "__path__", "__file__", "__cached__", "__builtins__",
+}
+
+
+def _namespace_module_state_is_closed(name: str, module: object) -> bool:
+    """Permit namespace metadata and exact imported child modules only."""
+    if type(module) is not types.ModuleType:
+        return False
+    spec = getattr(module, "__spec__", None)
+    package_paths = tuple(getattr(module, "__path__", ()))
+    spec_paths = tuple(getattr(spec, "submodule_search_locations", ()) or ())
+    if (type(spec) is not importlib.machinery.ModuleSpec
+            or module.__name__ != name
+            or getattr(module, "__package__", None) != name
+            or getattr(module, "__doc__", None) is not None
+            or getattr(module, "__file__", None) is not None
+            or getattr(module, "__cached__", None) is not None
+            or spec.name != name
+            or spec.parent != name
+            or spec.origin is not None
+            or spec.has_location
+            or module.__loader__ is not spec.loader
+            or type(spec.loader) is not importlib.machinery.NamespaceLoader
+            or not package_paths
+            or package_paths != spec_paths):
+        return False
+    for attribute, value in vars(module).items():
+        if attribute in _NAMESPACE_MODULE_METADATA:
+            continue
+        if (type(value) is not types.ModuleType
+                or value.__name__ != f"{name}.{attribute}"
+                or sys.modules.get(value.__name__) is not value):
+            return False
+    return True
+
+
 def _loader_name(module) -> str | None:
     loader = getattr(module, "__loader__", None)
     if loader is None:
@@ -1530,6 +1704,1561 @@ def _same_callable_seal_entry(
     )
 
 
+_MAPPING_PROXY_TYPE = type(MappingProxyType({}))
+_METHODCALLER_TYPE = type(operator.methodcaller("_ofarm_semantic_probe"))
+_DECISION_DATA_ROOTS = (
+    ("kernel.policy", (
+        "COMMIT_CLASS_TO_FAMILY", "COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS",
+        "COMMIT_CLASS_TO_ASSERTION_TYPE", "COMMIT_CLASS_TO_PROMOTION_TARGET",
+        "PROMOTION_TARGET_TO_CONSEQUENCE_TYPE", "ACCEPTANCE_BY_ASSERTION_TYPE",
+        "NON_COMMIT_ACTION_CLASSES", "REVIEW_ACTION_AUTHORITY", "ABSENT",
+        "SELF_ACCEPTABLE_ASSERTION_TYPES", "CONSEQUENCE_SUBJECT_TYPES",
+        "STRUCTURE_PAYLOAD_IDENTITY_TYPE", "STRUCTURE_PAYLOAD_REF_FIELDS",
+        "STRUCTURE_REF_CATEGORY_KIND", "NON_COMMITABLE_SCOPE_TYPES",
+        "NON_WHOLE_EXTENT_CLASSES", "ALLOWED_EXTENT_BOUND_KINDS",
+        "EXTENT_CARRIER_USABLE_STATES", "EXTENT_CARRIER_DRIVEN_PROMOTIONS",
+        "NON_PROMOTING_RETAIN_REASONS", "NON_PROMOTING_DEFAULT_REASON",
+        "EVENT_TIME_PLAUSIBILITY_PAST_DAYS",
+        "EVENT_TIME_PLAUSIBILITY_FUTURE_HOURS", "DOSE_SANITY_MAX",
+        "UCUM_SCHEME_PREFIX", "COMPLIANCE_ASSERTED_STATUSES",
+        "NEEDS_EVIDENCE_CODES", "ROUTE_REASON_TO_INSUFFICIENCY",
+        "ROUTE_REASON_INSUFFICIENCY_DEFAULT", "USE_CLASS_TO_CANONICAL",
+        "FRESHNESS_USE_POLICY",
+    )),
+    ("kernel.authority", ("_FARM_DESCENDANTS",)),
+    ("kernel.contracts", ("_ID_FIELDS",)),
+    ("kernel.profile_policy", (
+        "INSUFFICIENCY_REASON_CODES", "DISPLAY_TEXT_FIELDS",
+        "DISPLAY_TEMPLATE_FIELDS", "RULE_REF_RE", "VALIDATION_DISPOSITIONS",
+        "PRODUCT_VALIDATION_BINDING_ROLE", "CROP_VALIDATION_BINDING_ROLE",
+    )),
+    ("kernel.sufficiency", ("BINDING_KIND", "OPERATION_FLOOR_CHECKS")),
+    ("kernel.materializer", (
+        "MATERIALIZATION_POLICY_REF", "RESULT_SHAPE_FAMILY",
+        "IDENTITY_REGISTRY_SHAPE_FAMILY", "INVALIDATION_TRACE_KIND",
+        "_TRIGGER_TO_RESULT_FAMILY", "RUNTIME_VERSION", "_USE_CLASS_MAP",
+    )),
+    ("kernel.context", (
+        "PROFILE_INSTANCE_FILES", "SI_REGSR_FAMILY_ID", "SI_GERK_FAMILY_ID",
+        "SI_REFERENCE_BINDINGS", "REGSR_SNAPSHOT_PREFIX", "GERK_SNAPSHOT_PREFIX",
+        "REGSR_DATA_FAMILY", "_ACTIVE_PROFILE_REQUIRED_FIELDS",
+    )),
+    ("kernel.problems", ("REGISTERED_REASON_CODES",)),
+    ("kernel.validators", ("_CONFIG_BACKED_POLICY",)),
+)
+_DECISION_FUNCTION_ROOTS = (
+    ("re", ("_compile",)),
+    ("rfc3339_validator", ("validate_rfc3339",)),
+    ("kernel.policy", (
+        "review_branch", "structure_self_acceptable", "is_resolved_ucum_unit",
+        "revocation_disposition", "effective_freshness_requirement",
+        "freshness_satisfied", "reuse_reason_summary",
+    )),
+    ("kernel.authority", ("_parse_dt", "_time_valid", "_revocation_effective")),
+    ("kernel.validators", (
+        "_refusal", "_validation_policy_refusal", "_validation_policy_or_refusal",
+        "_assert_contained", "_assert_parent_scope_contained",
+        "_in_force_structural_consequences_for", "_structure_target_identity",
+        "_verified_product_binding", "_carrier_admits_bound",
+        "_descriptor_recognized_rule_refs",
+        "_operation_sequence_for_validation_policy",
+    )),
+    ("kernel.profile_policy", (
+        "_require_text", "_validate_template", "_validate_rule_ref",
+        "_require_bool", "_require_reason_code", "_require_disposition",
+        "_require_object", "_reject_unknown_keys", "_validate_display",
+        "_validate_validation_policy", "_validated_evidence_review_policy",
+        "floor_item_rule_ref", "floor_item_insufficiency_reason_code",
+        "floor_item_review_reason_code", "format_display_template",
+        "format_validation_template",
+    )),
+    ("kernel.sufficiency", (
+        "durable_evidence", "resolved_bindings", "recover_compliance_claim",
+        "route_reasons_for", "build_case_from_checks", "build_floor_case",
+        "build_floor_case_with_policy", "operation_advisories",
+        "operation_advisories_with_policy", "build_acceptance_case",
+        "amend_case_for_routing",
+    )),
+    ("kernel.emission", ("submission_evidence_refs",)),
+    ("kernel.problems", ("runtime_problem",)),
+    ("kernel.context", (
+        "_build_runtime_bundle_for_bootstrap", "bootstrap_for_descriptor",
+        "bootstrap",
+    )),
+    ("kernel.runtime_bundle", (
+        "require_store_runtime_bundle", "require_current_runtime_catalog",
+        "_require_decision_semantics", "require_runtime_environment_seal",
+        "assert_runtime_environment_compatible",
+    )),
+)
+_DECISION_CLASS_ROOTS = (
+    ("kernel.contracts", ("Contract", "ContractRegistry")),
+    ("kernel.authority", ("AuthorityDecision", "AuthorityEvaluator")),
+    ("kernel.gates", ("GatePipeline",)),
+    ("kernel.stages", (
+        "GatePass", "GateRefusal", "GateReplay", "GateContext",
+        "IngressNormalizer", "AuthorityGate", "EnvelopePersist",
+        "ProfileApplicabilityGate", "EvidenceSufficiencyGate",
+        "ReviewPromotionGate", "MaterializationGate",
+    )),
+    ("kernel.validators", (
+        "TemporalConformanceValidator", "PromotionTargetValidator",
+        "ScopeContainmentValidator", "SupersessionValidator",
+        "GovernanceAcceptanceValidator", "ComplianceClaimValidator",
+        "StructureCarrierValidator", "StructureSemanticsValidator",
+        "CarrierSchemaValidator", "CarrierSemanticsValidator",
+        "ExecutionExtentValidator", "ReferenceResolutionValidator",
+        "ActorAttributionValidator", "CodeBindingValidator",
+        "RegistryReverificationValidator", "CarrierStore", "ValidationGate",
+    )),
+    ("kernel.profile_policy", ("DescriptorPolicyProvider",)),
+    ("kernel.emission", (
+        "PromotionEmitter", "PromotionTraceWriter", "ReplayWriter")),
+    ("kernel.context", (
+        "SIReferenceBindings", "ProductRegister", "ContextAssembler")),
+    ("kernel.materializer", ("Materializer",)),
+    ("kernel.store", ("Store",)),
+    ("kernel.runtime_bundle", (
+        "RuntimeEnvironmentSeal", "RuntimeComponent",
+        "SelectedReferenceIdentity", "RuntimeBundle",
+    )),
+)
+_DECISION_OPTIONAL_FUNCTION_ROOTS = (
+    ("kernel.profiles.si_ffs.si_bindings", (
+        "_evidence_ok", "_evidence_refused", "_scheme_version", "_binding",
+        "_locator_lookup", "resolve_product_authorisation", "resolve_parcel",
+        "_ffsnaprave_lookup", "resolve_equipment", "_unresolved",
+        "resolve_holding", "resolve_operator",
+    )),
+    ("kernel.profiles.si_ffs.regsr_adapter", (
+        "import_regsr_snapshot", "regsr_lookup",
+        "verify_product_authorisation",
+    )),
+    ("kernel.profiles.si_ffs.gerk_adapter", ("import_gerk_snapshot",)),
+    ("kernel.profiles.si_ffs.ffsnaprave_adapter", (
+        "import_ffsnaprave_snapshot", "attach_inspection_evidence",
+    )),
+)
+_DECISION_OPTIONAL_CLASS_ROOTS = (
+    ("kernel.views", ("OutputGenerator",)),
+    ("kernel.adapters", ("ParseResult", "ImportRunner")),
+    ("kernel.auth_oidc", ("OidcError", "OidcConfig")),
+    ("kernel.profiles.si_ffs.gerk_adapter", ("GerkLayer",)),
+    ("kernel.profiles.si_ffs.ffsnaprave_adapter", ("FFSNapraveRegister",)),
+)
+_DECISION_SEQUENCE_ROOTS = (
+    ("kernel.gates", "CHAIN"),
+    ("kernel.validators", "COMMON_SEQUENCE"),
+    ("kernel.validators", "OPERATION_SEQUENCE"),
+)
+_DECISION_EXTERNAL_MODULE_PREFIXES = (
+    "calendar", "copy", "jsonschema", "referencing", "rpds",
+    "rfc3339_validator", "idna",
+)
+_PROCESS_LOCAL_DECISION_MODULES = {"os", "threading"}
+
+
+def _stable_decision_namespace(module_name: str) -> bool:
+    if module_name in _PROCESS_LOCAL_DECISION_MODULES:
+        return False
+    if (module_name == "kernel" or module_name.startswith("kernel.")
+            or any(module_name == prefix or module_name.startswith(prefix + ".")
+                   for prefix in _DECISION_EXTERNAL_MODULE_PREFIXES)):
+        return True
+    # Mutable Python helper code remains decision semantics even when it lives
+    # in the standard library or a locked wheel.  Follow every already-loaded
+    # source-backed helper reachable from a declared root; native/builtin
+    # objects have immutable executable bytes and are retained by exact object
+    # identity instead.
+    module = sys.modules.get(module_name)
+    if type(module) is not types.ModuleType:
+        return False
+    origin = getattr(module, "__file__", None)
+    return isinstance(origin, str) and Path(origin).suffix in {".py", ".pyw"}
+
+
+_RE_PURGE = re.purge
+_RE_PURGE_CODE = re.purge.__code__
+
+
+def _prepare_decision_semantic_caches() -> None:
+    """Reset derived caches whose contents must never become decision input."""
+    if (re.purge is not _RE_PURGE
+            or _RE_PURGE.__code__ is not _RE_PURGE_CODE):
+        raise RuntimeBundleError("regex cache reset semantics changed after import")
+    for name in ("_cache", "_cache2"):
+        cache = vars(re).get(name, _MISSING)
+        if cache is not _MISSING and type(cache) is not dict:
+            raise RuntimeBundleError("regex cache structure is not exact")
+    _RE_PURGE()
+    if any(vars(re).get(name) for name in ("_cache", "_cache2")):
+        raise RuntimeBundleError("regex cache reset did not produce an empty cache")
+
+
+def _freeze_semantic_value(value: Any, active: set[int] | None = None) -> tuple:
+    """Copy declared semantic state while retaining exact container identity."""
+    if active is None:
+        active = set()
+    if value is None or type(value) in {bool, int, str, bytes}:
+        return ("SCALAR", type(value), value)
+    if type(value) is float:
+        if not math.isfinite(value):
+            label = "NAN" if math.isnan(value) else (
+                "POSITIVE_INFINITY" if value > 0 else "NEGATIVE_INFINITY")
+            return ("NONFINITE_FLOAT", float, label)
+        return ("SCALAR", float, value)
+    if isinstance(value, Path):
+        return ("PATH", type(value), value, str(value))
+    if isinstance(value, re.Pattern):
+        return ("REGEX", type(value), value, value.pattern, value.flags)
+    if type(value) is _METHODCALLER_TYPE:
+        reduced = value.__reduce__()
+        return (
+            "METHODCALLER", type(value), value,
+            _freeze_semantic_value(reduced[1], active),
+        )
+    if type(value) is types.FunctionType:
+        return ("CALLABLE", value, _semantic_function_state(value))
+    if isinstance(value, Mapping):
+        marker = id(value)
+        if marker in active:
+            raise RuntimeBundleError("decision semantics contain a mapping cycle")
+        active.add(marker)
+        try:
+            items = sorted(
+                value.items(),
+                key=lambda item: (
+                    type(item[0]).__module__, type(item[0]).__qualname__,
+                    repr(item[0]),
+                ),
+            )
+            return (
+                "MAPPING", type(value), value,
+                tuple((_freeze_semantic_value(key, active),
+                       _freeze_semantic_value(item, active))
+                      for key, item in items),
+            )
+        finally:
+            active.remove(marker)
+    if type(value) in {list, tuple}:
+        marker = id(value)
+        if marker in active:
+            raise RuntimeBundleError("decision semantics contain a sequence cycle")
+        active.add(marker)
+        try:
+            return (
+                "SEQUENCE", type(value), value,
+                tuple(_freeze_semantic_value(item, active) for item in value),
+            )
+        finally:
+            active.remove(marker)
+    if type(value) in {set, frozenset}:
+        marker = id(value)
+        if marker in active:
+            raise RuntimeBundleError("decision semantics contain a set cycle")
+        active.add(marker)
+        try:
+            ordered = sorted(
+                value,
+                key=lambda item: (
+                    type(item).__module__, type(item).__qualname__, repr(item)),
+            )
+            return (
+                "SET", type(value), value,
+                tuple(_freeze_semantic_value(item, active) for item in ordered),
+            )
+        finally:
+            active.remove(marker)
+    if isinstance(value, (type, types.ModuleType)):
+        return ("IDENTITY", value)
+    object_fields: list[tuple[str, Any]] = []
+    if is_dataclass(value):
+        object_fields.extend(
+            (item.name, getattr(value, item.name))
+            for item in dataclass_fields(value)
+        )
+    else:
+        namespace = getattr(value, "__dict__", None)
+        if isinstance(namespace, Mapping):
+            object_fields.extend(
+                (name, item) for name, item in namespace.items()
+                if isinstance(name, str)
+            )
+        slots = {
+            name
+            for class_object in type(value).__mro__
+            for name in (
+                (class_object.__slots__,)
+                if isinstance(getattr(class_object, "__slots__", ()), str)
+                else getattr(class_object, "__slots__", ())
+            )
+            if isinstance(name, str) and name not in {"__dict__", "__weakref__"}
+        }
+        known = {name for name, _item in object_fields}
+        object_fields.extend(
+            (name, getattr(value, name))
+            for name in sorted(slots - known)
+            if hasattr(value, name)
+        )
+    if object_fields:
+        marker = id(value)
+        if marker in active:
+            raise RuntimeBundleError("decision semantics contain an object cycle")
+        active.add(marker)
+        try:
+            return (
+                "OBJECT", type(value), value,
+                tuple(
+                    (name, _freeze_semantic_value(item, active))
+                    for name, item in sorted(object_fields)
+                ),
+            )
+        finally:
+            active.remove(marker)
+    return ("IDENTITY", value)
+
+
+def _same_semantic_value(
+        current: tuple,
+        prior: tuple,
+        *,
+        require_container_identity: bool = True,
+) -> bool:
+    if current[0] != prior[0]:
+        return False
+    if current[0] == "NONFINITE_FLOAT":
+        return current[1:] == prior[1:]
+    if current[0] == "SCALAR":
+        return current[1] is prior[1] and current[2] == prior[2]
+    if current[0] == "IDENTITY":
+        return current[1] is prior[1]
+    if current[0] == "PATH":
+        return (current[1] is prior[1]
+                and (not require_container_identity
+                     or current[2] is prior[2])
+                and current[3] == prior[3])
+    if current[0] == "REGEX":
+        return (current[1] is prior[1]
+                and (not require_container_identity
+                     or current[2] is prior[2])
+                and current[3:] == prior[3:])
+    if current[0] == "METHODCALLER":
+        return (current[1] is prior[1] and current[2] is prior[2]
+                and _same_semantic_value(
+                    current[3], prior[3], require_container_identity=False))
+    if current[0] == "CALLABLE":
+        return (current[1] is prior[1]
+                and _same_semantic_function(current[2], prior[2]))
+    if (current[1] is not prior[1]
+            or (require_container_identity and current[2] is not prior[2])):
+        return False
+    if len(current[3]) != len(prior[3]):
+        return False
+    if current[0] == "MAPPING":
+        return all(
+            _same_semantic_value(
+                current_key, prior_key,
+                require_container_identity=require_container_identity)
+            and _same_semantic_value(
+                current_value, prior_value,
+                require_container_identity=require_container_identity)
+            for (current_key, current_value), (prior_key, prior_value)
+            in zip(current[3], prior[3])
+        )
+    if current[0] == "OBJECT":
+        return all(
+            current_name == prior_name
+            and _same_semantic_value(
+                current_value, prior_value,
+                require_container_identity=require_container_identity)
+            for (current_name, current_value), (prior_name, prior_value)
+            in zip(current[3], prior[3])
+        )
+    return all(
+        _same_semantic_value(
+            current_item, prior_item,
+            require_container_identity=require_container_identity)
+        for current_item, prior_item in zip(current[3], prior[3])
+    )
+
+
+def _semantic_function_state(function: object) -> tuple:
+    if type(function) is not types.FunctionType:
+        return ("IDENTITY", function)
+    closure = function.__closure__ or ()
+    return (
+        "FUNCTION", function, function.__code__,
+        function.__defaults__, _freeze_semantic_value(function.__defaults__),
+        function.__kwdefaults__, _freeze_semantic_value(function.__kwdefaults__),
+        tuple((cell, _freeze_semantic_value(cell.cell_contents)) for cell in closure),
+        function.__annotations__, _freeze_semantic_value(function.__annotations__),
+        function.__dict__, _freeze_semantic_value(function.__dict__),
+        function.__module__, function.__name__, function.__qualname__,
+    )
+
+
+def _same_semantic_function(current: tuple, prior: tuple) -> bool:
+    if current[0] != prior[0]:
+        return False
+    if current[0] == "IDENTITY":
+        return current[1] is prior[1]
+    if any(current[index] is not prior[index] for index in (1, 2, 3, 5, 8, 10)):
+        return False
+    if not all(_same_semantic_value(current[index], prior[index])
+               for index in (4, 6, 9, 11)):
+        return False
+    if current[12:] != prior[12:]:
+        return False
+    if len(current[7]) != len(prior[7]):
+        return False
+    return all(
+        current_cell is prior_cell
+        and _same_semantic_value(current_value, prior_value)
+        for (current_cell, current_value), (prior_cell, prior_value)
+        in zip(current[7], prior[7])
+    )
+
+
+def _semantic_descriptor_functions(descriptor: object) -> tuple[tuple[str, object], ...]:
+    if type(descriptor) is types.FunctionType:
+        return (("function", descriptor),)
+    if type(descriptor) in {classmethod, staticmethod}:
+        return (("descriptor", descriptor.__func__),)
+    if type(descriptor) is property:
+        return tuple(
+            (name, function) for name, function in (
+                ("get", descriptor.fget), ("set", descriptor.fset),
+                ("delete", descriptor.fdel),
+            ) if function is not None
+        )
+    return ()
+
+
+def _semantic_class_state(class_object: type) -> tuple:
+    descriptors = []
+    data = []
+    for name, descriptor in sorted(vars(class_object).items()):
+        functions = _semantic_descriptor_functions(descriptor)
+        if functions:
+            descriptors.append((
+                name,
+                descriptor,
+                tuple((kind, _semantic_function_state(function))
+                      for kind, function in functions),
+            ))
+        elif not name.startswith("__"):
+            data.append((
+                name, descriptor, _freeze_semantic_value(descriptor)))
+    base_states = tuple(
+        (base, _semantic_class_state(base))
+        for base in class_object.__bases__
+        if _stable_decision_namespace(base.__module__)
+    )
+    return (
+        class_object, tuple(class_object.__mro__), tuple(descriptors),
+        tuple(data), class_object.__module__, class_object.__name__,
+        class_object.__qualname__, base_states,
+    )
+
+
+def _same_semantic_class(current: tuple, prior: tuple) -> bool:
+    if current[0] is not prior[0] or len(current[1]) != len(prior[1]):
+        return False
+    if any(current_item is not prior_item
+           for current_item, prior_item in zip(current[1], prior[1])):
+        return False
+    if len(current[2]) != len(prior[2]):
+        return False
+    for current_entry, prior_entry in zip(current[2], prior[2]):
+        if (current_entry[0] != prior_entry[0]
+                or current_entry[1] is not prior_entry[1]
+                or len(current_entry[2]) != len(prior_entry[2])):
+            return False
+        for (current_kind, current_function), (prior_kind, prior_function) in zip(
+                current_entry[2], prior_entry[2]):
+            if (current_kind != prior_kind
+                    or not _same_semantic_function(
+                        current_function, prior_function)):
+                return False
+    if len(current[3]) != len(prior[3]):
+        return False
+    for current_entry, prior_entry in zip(current[3], prior[3]):
+        if (current_entry[0] != prior_entry[0]
+                or current_entry[1] is not prior_entry[1]
+                or not _same_semantic_value(
+                    current_entry[2], prior_entry[2])):
+            return False
+    if current[4:7] != prior[4:7] or len(current[7]) != len(prior[7]):
+        return False
+    return all(
+        current_base is prior_base
+        and _same_semantic_class(current_state, prior_state)
+        for (current_base, current_state), (prior_base, prior_state)
+        in zip(current[7], prior[7])
+    )
+
+
+def _semantic_sequence_state(sequence: object) -> tuple:
+    if type(sequence) is not tuple:
+        raise RuntimeBundleError("decision dispatch sequence is not an exact tuple")
+    items = []
+    for item in sequence:
+        namespace = getattr(item, "__dict__", None)
+        items.append((
+            item,
+            type(item),
+            namespace,
+            _freeze_semantic_value(namespace),
+            _semantic_class_state(type(item)),
+        ))
+    return (sequence, tuple(items))
+
+
+def _same_semantic_sequence(current: tuple, prior: tuple) -> bool:
+    if current[0] is not prior[0] or len(current[1]) != len(prior[1]):
+        return False
+    for current_item, prior_item in zip(current[1], prior[1]):
+        if any(current_item[index] is not prior_item[index]
+               for index in (0, 1, 2)):
+            return False
+        if (not _same_semantic_value(current_item[3], prior_item[3])
+                or not _same_semantic_class(current_item[4], prior_item[4])):
+            return False
+    return True
+
+
+def _decision_semantic_module(module_name: str) -> types.ModuleType:
+    module = sys.modules.get(module_name)
+    if type(module) is not types.ModuleType:
+        raise RuntimeBundleError(
+            f"decision semantic module was not preloaded: {module_name}")
+    return module
+
+
+def _semantic_binding_state(
+        value: object, owner: types.ModuleType | None = None) -> tuple:
+    if value is _MISSING:
+        return ("ABSENT",)
+    if type(value) is types.ModuleType:
+        return ("MODULE", value, value.__name__)
+    if type(value) is types.FunctionType:
+        return ("FUNCTION", _semantic_function_state(value))
+    if isinstance(value, type):
+        return ("CLASS", _semantic_class_state(value))
+    if owner is not None and not _stable_decision_namespace(owner.__name__):
+        return ("IDENTITY_DATA", value, type(value))
+    return ("DATA", _freeze_semantic_value(value))
+
+
+def _same_semantic_binding(current: tuple, prior: tuple) -> bool:
+    if current[0] != prior[0]:
+        return False
+    if current[0] == "ABSENT":
+        return True
+    if current[0] == "MODULE":
+        return current[1] is prior[1] and current[2] == prior[2]
+    if current[0] == "FUNCTION":
+        return _same_semantic_function(current[1], prior[1])
+    if current[0] == "CLASS":
+        return _same_semantic_class(current[1], prior[1])
+    if current[0] == "IDENTITY_DATA":
+        return current[1] is prior[1] and current[2] is prior[2]
+    return _same_semantic_value(current[1], prior[1])
+
+
+def _nested_code_objects(code: types.CodeType) -> tuple[types.CodeType, ...]:
+    nested = [code]
+    for constant in code.co_consts:
+        if isinstance(constant, types.CodeType):
+            nested.extend(_nested_code_objects(constant))
+    return tuple(nested)
+
+
+def _semantic_module_import_name(module: types.ModuleType) -> str:
+    """Return the live ``sys.modules`` key, not a mutable display name.
+
+    CPython's frozen ``_collections_abc`` deliberately reports
+    ``module.__name__ == 'collections.abc'`` even though its real import key
+    (and ``__spec__.name``) is ``_collections_abc``.  Runtime lifetime checks
+    must retain the actual import-table binding or a clean capture rejects
+    itself immediately.
+    """
+    spec = getattr(module, "__spec__", None)
+    spec_name = getattr(spec, "name", None)
+    if type(spec_name) is str:
+        return spec_name
+    names = sorted(
+        name for name, selected in sys.modules.items()
+        if selected is module
+    )
+    if not names:
+        raise RuntimeBundleError(
+            "decision semantic module has no live import-table binding")
+    return names[0]
+
+
+def _semantic_function_module(function: types.FunctionType) -> types.ModuleType | None:
+    module_name = function.__globals__.get("__name__")
+    module = sys.modules.get(module_name)
+    if type(module) is types.ModuleType and vars(module) is function.__globals__:
+        return module
+    for candidate in sys.modules.values():
+        if (type(candidate) is types.ModuleType
+                and vars(candidate) is function.__globals__):
+            return candidate
+    return None
+
+
+def _referenced_module_attributes(
+        function: types.FunctionType,
+) -> tuple[tuple[types.ModuleType, str], ...]:
+    """Return immediate module attributes loaded by this function's bytecode."""
+    references: dict[tuple[str, str], tuple[types.ModuleType, str]] = {}
+    namespace = function.__globals__
+    for code in _nested_code_objects(function.__code__):
+        instructions = tuple(dis.get_instructions(code))
+        for index, instruction in enumerate(instructions):
+            if instruction.opname != "LOAD_GLOBAL":
+                continue
+            owner = namespace.get(instruction.argval)
+            for following in instructions[index + 1:]:
+                if (following.opname not in {"LOAD_ATTR", "LOAD_METHOD"}
+                        or not isinstance(following.argval, str)):
+                    break
+                if type(owner) is types.ModuleType:
+                    key = (
+                        _semantic_module_import_name(owner), following.argval)
+                    references[key] = (owner, following.argval)
+                try:
+                    owner = getattr(owner, following.argval)
+                except (AttributeError, TypeError):
+                    break
+    return tuple(references[key] for key in sorted(references))
+
+
+def _semantic_class_functions(class_state: tuple) -> tuple[types.FunctionType, ...]:
+    direct = tuple(
+        function_state[1]
+        for _name, _descriptor, functions in class_state[2]
+        for _kind, function_state in functions
+        if function_state[0] == "FUNCTION"
+    )
+    inherited = tuple(
+        function
+        for _base, base_state in class_state[7]
+        for function in _semantic_class_functions(base_state)
+    )
+    return direct + inherited
+
+
+def _capture_decision_semantics() -> tuple[tuple[Any, ...], ...]:
+    """Capture declared roots plus their exact runtime global-binding closure."""
+    _prepare_decision_semantic_caches()
+    entries: list[tuple[Any, ...]] = []
+    explicit: set[tuple[int, str]] = set()
+    pending_functions: list[types.FunctionType] = []
+    pending_classes: list[type] = []
+    pending_identity_classes: list[type] = []
+
+    def append_entry(kind, label, module, name, value, state) -> None:
+        entries.append((
+            kind, label, module, _semantic_module_import_name(module),
+            name, value, state,
+        ))
+        explicit.add((id(module), name))
+
+    def enqueue_function(function: object) -> None:
+        if (type(function) is types.FunctionType
+                and _semantic_function_module(function) is not None):
+            pending_functions.append(function)
+
+    def enqueue_class(class_object: object) -> None:
+        if (isinstance(class_object, type)
+                and _stable_decision_namespace(class_object.__module__)):
+            pending_classes.append(class_object)
+
+    def enqueue_identity_class(class_object: object) -> None:
+        """Capture a reached class body without expanding every helper global.
+
+        Exact class objects stored inside semantic data (notably psycopg's
+        private adapter registry) are executable choices. Their complete class
+        state, bases, descriptors, and callable states must be sealed. Following
+        every global referenced by every third-party method, however, pulls in
+        non-decision logging registries and other cyclic process state. The
+        class state already retains each method/default/data callable exactly;
+        ordinary declared function/class roots continue to receive the full
+        transitive global-binding walk.
+        """
+        if (isinstance(class_object, type)
+                and _stable_decision_namespace(class_object.__module__)):
+            pending_identity_classes.append(class_object)
+
+    def enqueue_value_state(state: tuple) -> None:
+        kind = state[0]
+        if kind == "CALLABLE":
+            enqueue_function(state[1])
+        elif kind == "MAPPING":
+            for key_state, value_state in state[3]:
+                enqueue_value_state(key_state)
+                enqueue_value_state(value_state)
+        elif kind in {"SEQUENCE", "SET"}:
+            for item_state in state[3]:
+                enqueue_value_state(item_state)
+        elif kind == "OBJECT":
+            enqueue_class(state[1])
+            for _name, item_state in state[3]:
+                enqueue_value_state(item_state)
+        elif kind == "METHODCALLER":
+            enqueue_value_state(state[3])
+        elif kind == "IDENTITY":
+            value = state[1]
+            if isinstance(value, type):
+                enqueue_identity_class(value)
+
+    def enqueue_function_state(state: tuple) -> None:
+        if state[0] != "FUNCTION":
+            return
+        for value_state in (state[4], state[6], state[9], state[11]):
+            enqueue_value_state(value_state)
+        for _cell, value_state in state[7]:
+            enqueue_value_state(value_state)
+
+    def enqueue_class_state(state: tuple) -> None:
+        for function in _semantic_class_functions(state):
+            enqueue_function(function)
+        for _name, _value, value_state in state[3]:
+            enqueue_value_state(value_state)
+        for _base, base_state in state[7]:
+            enqueue_class_state(base_state)
+
+    for module_name, names in _DECISION_DATA_ROOTS:
+        module = _decision_semantic_module(module_name)
+        for name in names:
+            value = vars(module).get(name, _MISSING)
+            if value is _MISSING:
+                raise RuntimeBundleError(
+                    f"decision semantic data root is absent: {module_name}.{name}")
+            state = _freeze_semantic_value(value)
+            append_entry(
+                "DATA", f"{module_name}.{name}", module, name, value,
+                state,
+            )
+            enqueue_value_state(state)
+    for module_name, names in _DECISION_FUNCTION_ROOTS:
+        module = _decision_semantic_module(module_name)
+        for name in names:
+            function = vars(module).get(name, _MISSING)
+            if type(function) is not types.FunctionType:
+                raise RuntimeBundleError(
+                    f"decision semantic function is absent: {module_name}.{name}")
+            state = _semantic_function_state(function)
+            append_entry(
+                "FUNCTION", f"{module_name}.{name}", module, name, function,
+                state,
+            )
+            enqueue_function(function)
+    for module_name, names in _DECISION_OPTIONAL_FUNCTION_ROOTS:
+        module = sys.modules.get(module_name)
+        if module is None:
+            continue
+        if type(module) is not types.ModuleType:
+            raise RuntimeBundleError(
+                f"optional decision semantic module is malformed: {module_name}")
+        for name in names:
+            function = vars(module).get(name, _MISSING)
+            if type(function) is not types.FunctionType:
+                raise RuntimeBundleError(
+                    f"decision semantic function is absent: {module_name}.{name}")
+            state = _semantic_function_state(function)
+            append_entry(
+                "FUNCTION", f"{module_name}.{name}", module, name, function,
+                state,
+            )
+            enqueue_function(function)
+    for module_name, names in _DECISION_CLASS_ROOTS:
+        module = _decision_semantic_module(module_name)
+        for name in names:
+            class_object = vars(module).get(name, _MISSING)
+            if not isinstance(class_object, type):
+                raise RuntimeBundleError(
+                    f"decision semantic class is absent: {module_name}.{name}")
+            state = _semantic_class_state(class_object)
+            append_entry(
+                "CLASS", f"{module_name}.{name}", module, name, class_object,
+                state,
+            )
+            enqueue_class_state(state)
+    for module_name, names in _DECISION_OPTIONAL_CLASS_ROOTS:
+        module = sys.modules.get(module_name)
+        if module is None:
+            continue
+        if type(module) is not types.ModuleType:
+            raise RuntimeBundleError(
+                f"optional decision semantic module is malformed: {module_name}")
+        for name in names:
+            class_object = vars(module).get(name, _MISSING)
+            if not isinstance(class_object, type):
+                raise RuntimeBundleError(
+                    f"decision semantic class is absent: {module_name}.{name}")
+            state = _semantic_class_state(class_object)
+            append_entry(
+                "CLASS", f"{module_name}.{name}", module, name, class_object,
+                state,
+            )
+            enqueue_class_state(state)
+    for module_name, name in _DECISION_SEQUENCE_ROOTS:
+        module = _decision_semantic_module(module_name)
+        sequence = vars(module).get(name, _MISSING)
+        state = _semantic_sequence_state(sequence)
+        append_entry(
+            "SEQUENCE", f"{module_name}.{name}", module, name, sequence,
+            state,
+        )
+        for item in state[1]:
+            enqueue_value_state(item[3])
+            enqueue_class_state(item[4])
+
+    captured_functions: set[int] = set()
+    captured_classes: set[int] = set()
+    captured_identity_classes: set[int] = set()
+    while pending_functions or pending_classes or pending_identity_classes:
+        if pending_identity_classes:
+            class_object = pending_identity_classes.pop()
+            if id(class_object) in captured_identity_classes:
+                continue
+            captured_identity_classes.add(id(class_object))
+            module = sys.modules.get(class_object.__module__)
+            if type(module) is not types.ModuleType:
+                raise RuntimeBundleError(
+                    "decision semantic identity class module disappeared while "
+                    f"sealing: {class_object.__module__}."
+                    f"{class_object.__qualname__}")
+            name = class_object.__name__
+            key = (id(module), name)
+            if vars(module).get(name) is class_object and key not in explicit:
+                append_entry(
+                    "BINDING",
+                    f"{_semantic_module_import_name(module)}.{name}",
+                    module, name, class_object,
+                    ("CLASS", _semantic_class_state(class_object)),
+                )
+            elif vars(module).get(name) is not class_object:
+                # Psycopg creates exact adapter classes dynamically and keeps
+                # them only inside its adapter maps.  Their ``__module__`` and
+                # ``__name__`` describe provenance but do not create a module
+                # binding, so a binding-only seal would silently omit their
+                # mutable class bodies.  Retain the object itself and compare
+                # its complete class state for the runtime lifetime.
+                label_bytes = canonical_json({
+                    "module": class_object.__module__,
+                    "name": class_object.__name__,
+                    "qualname": class_object.__qualname__,
+                }).encode("utf-8")
+                entries.append((
+                    "IDENTITY_CLASS",
+                    "identity_class.class_" +
+                    hashlib.sha256(label_bytes).hexdigest(),
+                    module,
+                    _semantic_module_import_name(module),
+                    name,
+                    class_object,
+                    _semantic_class_state(class_object),
+                ))
+            continue
+        if pending_classes:
+            class_object = pending_classes.pop()
+            if id(class_object) in captured_classes:
+                continue
+            captured_classes.add(id(class_object))
+            module = sys.modules.get(class_object.__module__)
+            if type(module) is not types.ModuleType:
+                raise RuntimeBundleError(
+                    "decision semantic class module disappeared while sealing: "
+                    f"{class_object.__module__}.{class_object.__qualname__}")
+            name = class_object.__name__
+            key = (id(module), name)
+            if vars(module).get(name) is class_object and key not in explicit:
+                state = _semantic_class_state(class_object)
+                append_entry(
+                    "BINDING",
+                    f"{_semantic_module_import_name(module)}.{name}",
+                    module, name,
+                    class_object, ("CLASS", state),
+                )
+                enqueue_class_state(state)
+            continue
+        function = pending_functions.pop()
+        if id(function) in captured_functions:
+            continue
+        captured_functions.add(id(function))
+        module = _semantic_function_module(function)
+        if module is None or not _stable_decision_namespace(module.__name__):
+            continue
+        enqueue_function_state(_semantic_function_state(function))
+        namespace = function.__globals__
+        referenced_names = sorted({
+            name
+            for code in _nested_code_objects(function.__code__)
+            for name in code.co_names
+        })
+        bindings = [
+            (module, name) if name in namespace else (builtins, name)
+            for name in referenced_names
+            if name in namespace or name in vars(builtins)
+        ]
+        bindings.extend(_referenced_module_attributes(function))
+        for owner, name in bindings:
+            key = (id(owner), name)
+            namespace = vars(owner)
+            present = name in namespace
+            value = namespace[name] if present else _MISSING
+            if key not in explicit:
+                state = _semantic_binding_state(value, owner)
+                append_entry(
+                    "BINDING",
+                    f"{_semantic_module_import_name(owner)}.{name}",
+                    owner, name,
+                    value, state,
+                )
+                if state[0] == "CLASS":
+                    enqueue_class_state(state[1])
+                elif state[0] == "DATA":
+                    enqueue_value_state(state[1])
+            if type(value) is types.FunctionType:
+                enqueue_function(value)
+            elif (isinstance(value, type)
+                  and _stable_decision_namespace(value.__module__)):
+                enqueue_class_state(_semantic_class_state(value))
+    return tuple(sorted(entries, key=lambda item: (item[1], item[0])))
+
+
+def _require_decision_semantics(
+        selected: tuple[tuple[Any, ...], ...]) -> None:
+    _prepare_decision_semantic_caches()
+    for (kind, label, module, module_name, name, original,
+         prior_state) in selected:
+        if sys.modules.get(module_name) is not module:
+            raise RuntimeBundleError(
+                f"decision semantic module changed after activation: {label}")
+        if kind == "IDENTITY_CLASS":
+            if not _same_semantic_class(
+                    _semantic_class_state(original), prior_state):
+                raise RuntimeBundleError(
+                    "decision semantic state changed after activation: "
+                    f"{label}")
+            continue
+        current = vars(module).get(name, _MISSING)
+        if current is not original:
+            raise RuntimeBundleError(
+                f"decision semantic root changed after activation: {label}")
+        if kind == "DATA":
+            matches = _same_semantic_value(
+                _freeze_semantic_value(current), prior_state)
+        elif kind == "FUNCTION":
+            matches = _same_semantic_function(
+                _semantic_function_state(current), prior_state)
+        elif kind == "CLASS":
+            matches = _same_semantic_class(
+                _semantic_class_state(current), prior_state)
+        elif kind == "SEQUENCE":
+            matches = _same_semantic_sequence(
+                _semantic_sequence_state(current), prior_state)
+        elif kind == "BINDING":
+            matches = _same_semantic_binding(
+                _semantic_binding_state(current, module), prior_state)
+        else:
+            raise RuntimeBundleError(
+                f"unknown decision semantic seal entry: {kind!r}")
+        if not matches:
+            raise RuntimeBundleError(
+                f"decision semantic state changed after activation: {label}")
+
+
+def _semantic_type_label(value: type) -> str:
+    return f"{value.__module__}.{value.__qualname__}"
+
+
+def _stable_semantic_path(raw: str, package_root: Path) -> str:
+    path = Path(raw)
+    if not path.is_absolute():
+        return "RELATIVE_PATH/" + PurePosixPath(path.as_posix()).as_posix()
+    try:
+        relative = path.relative_to(package_root)
+    except ValueError as exc:
+        raise RuntimeBundleError(
+            f"decision semantics contain a host path outside the package: {raw!r}") \
+            from exc
+    return _join_stable_locator(
+        "PROJECT_ROOT", PurePosixPath(relative.as_posix()))
+
+
+def _stable_frozen_semantic_value(state: tuple, package_root: Path) -> Any:
+    kind = state[0]
+    if kind == "SCALAR":
+        value = state[2]
+        if isinstance(value, bytes):
+            return {
+                "kind": "BYTES", "contentDigest": sha256_bytes(value),
+                "byteLength": len(value),
+            }
+        return {
+            "kind": _semantic_type_label(state[1]),
+            "value": value,
+        }
+    if kind == "NONFINITE_FLOAT":
+        return {"kind": "builtins.float", "nonFiniteValue": state[2]}
+    if kind == "IDENTITY":
+        value = state[1]
+        if isinstance(value, type):
+            return {"kind": "CLASS_REF", "ref": _semantic_type_label(value)}
+        if type(value) is types.FunctionType:
+            return {
+                "kind": "FUNCTION_REF",
+                "ref": f"{value.__module__}.{value.__qualname__}",
+            }
+        if callable(value):
+            return {
+                "kind": "CALLABLE_REF",
+                "module": getattr(value, "__module__", None),
+                "qualname": (
+                    getattr(value, "__qualname__", None)
+                    or getattr(value, "__name__", None)
+                ),
+                "type": _semantic_type_label(type(value)),
+            }
+        return {"kind": "OBJECT_REF", "type": _semantic_type_label(type(value))}
+    if kind == "PATH":
+        return {
+            "kind": "PATH", "type": _semantic_type_label(state[1]),
+            "locator": _stable_semantic_path(state[3], package_root),
+        }
+    if kind == "REGEX":
+        pattern = state[3]
+        stable_pattern = (
+            {"kind": "BYTES", "contentDigest": sha256_bytes(pattern),
+             "byteLength": len(pattern)}
+            if isinstance(pattern, bytes) else pattern
+        )
+        return {
+            "kind": "REGEX", "type": _semantic_type_label(state[1]),
+            "pattern": stable_pattern, "flags": state[4],
+        }
+    if kind == "METHODCALLER":
+        return {
+            "kind": "METHODCALLER",
+            "arguments": _stable_frozen_semantic_value(
+                state[3], package_root),
+        }
+    if kind == "CALLABLE":
+        return _stable_semantic_function_state(state[2], package_root)
+    if kind == "MAPPING":
+        return {
+            "kind": "MAPPING", "type": _semantic_type_label(state[1]),
+            "entries": [{
+                "key": _stable_frozen_semantic_value(key, package_root),
+                "value": _stable_frozen_semantic_value(value, package_root),
+            } for key, value in state[3]],
+        }
+    if kind in {"SEQUENCE", "SET"}:
+        values = [
+            _stable_frozen_semantic_value(item, package_root)
+            for item in state[3]
+        ]
+        if kind == "SET":
+            values.sort(key=canonical_json)
+        return {
+            "kind": kind, "type": _semantic_type_label(state[1]),
+            "values": values,
+        }
+    if kind == "OBJECT":
+        return {
+            "kind": "OBJECT", "type": _semantic_type_label(state[1]),
+            "fields": [{
+                "name": name,
+                "value": _stable_frozen_semantic_value(value, package_root),
+            } for name, value in state[3]],
+        }
+    raise RuntimeBundleError(f"unsupported frozen semantic value: {kind!r}")
+
+
+def _stable_code_constant(value: Any, package_root: Path) -> Any:
+    if isinstance(value, types.CodeType):
+        return {"kind": "CODE", "value": _stable_code_document(value, package_root)}
+    if value is Ellipsis:
+        return {"kind": "ELLIPSIS"}
+    if isinstance(value, complex):
+        if not math.isfinite(value.real) or not math.isfinite(value.imag):
+            raise RuntimeBundleError("decision bytecode contains non-finite complex data")
+        return {"kind": "COMPLEX", "real": value.real, "imag": value.imag}
+    return _stable_frozen_semantic_value(
+        _freeze_semantic_value(value), package_root)
+
+
+def _stable_code_document(code: types.CodeType, package_root: Path) -> dict[str, Any]:
+    attrs_hash = (
+        code.co_name == "__hash__"
+        and code.co_filename.startswith("<attrs generated methods ")
+    )
+    instruction_bytes = code.co_code
+    if attrs_hash:
+        instruction_bytes = canonical_json([{
+            "opname": instruction.opname,
+            "argument": (
+                "ATTRS_HASH_SALT"
+                if (instruction.opname == "LOAD_CONST"
+                    and isinstance(instruction.arg, int)
+                    and isinstance(code.co_consts[instruction.arg], int))
+                else instruction.arg
+            ),
+        } for instruction in dis.get_instructions(code)]).encode("utf-8")
+    constants = []
+    for value in code.co_consts:
+        stable_value = (
+            {"kind": "ATTRS_HASH_SALT"}
+            if attrs_hash and isinstance(value, int)
+            else _stable_code_constant(value, package_root)
+        )
+        # attrs can emit both the randomized salt and its folded negation in
+        # ``co_consts`` even though only one is loaded.  Their count therefore
+        # varies with PYTHONHASHSEED; one marker retains the semantic fact that
+        # an attrs salt participates without retaining that process accident.
+        if not (attrs_hash and stable_value in constants):
+            constants.append(stable_value)
+    return {
+        "name": code.co_name,
+        "qualname": code.co_qualname,
+        "argCount": code.co_argcount,
+        "positionalOnlyArgCount": code.co_posonlyargcount,
+        "keywordOnlyArgCount": code.co_kwonlyargcount,
+        "localCount": code.co_nlocals,
+        "stackSize": code.co_stacksize,
+        "flags": code.co_flags,
+        "instructionDigest": sha256_bytes(instruction_bytes),
+        "exceptionTableDigest": sha256_bytes(code.co_exceptiontable),
+        "constants": constants,
+        "names": list(code.co_names),
+        "variableNames": list(code.co_varnames),
+        "freeVariables": list(code.co_freevars),
+        "cellVariables": list(code.co_cellvars),
+    }
+
+
+def _stable_semantic_function_state(
+        state: tuple, package_root: Path) -> dict[str, Any]:
+    if state[0] != "FUNCTION":
+        value = state[1]
+        return {
+            "kind": "CALLABLE_REF",
+            "ref": f"{type(value).__module__}.{type(value).__qualname__}",
+        }
+    return {
+        "kind": "FUNCTION",
+        "module": state[12],
+        "name": state[13],
+        "qualname": state[14],
+        "code": _stable_code_document(state[2], package_root),
+        "defaults": _stable_frozen_semantic_value(state[4], package_root),
+        "keywordDefaults": _stable_frozen_semantic_value(state[6], package_root),
+        "closure": [
+            _stable_frozen_semantic_value(value, package_root)
+            for _cell, value in state[7]
+        ],
+        "annotations": _stable_frozen_semantic_value(state[9], package_root),
+        "attributes": _stable_frozen_semantic_value(state[11], package_root),
+    }
+
+
+def _stable_semantic_class_state(
+        state: tuple, package_root: Path) -> dict[str, Any]:
+    return {
+        "kind": "CLASS",
+        "module": state[4],
+        "name": state[5],
+        "qualname": state[6],
+        "mro": [_semantic_type_label(item) for item in state[1]],
+        "bases": [
+            _stable_semantic_class_state(base_state, package_root)
+            for _base, base_state in state[7]
+        ],
+        "descriptors": [{
+            "name": name,
+            "kind": _semantic_type_label(type(descriptor)),
+            "functions": [{
+                "kind": function_kind,
+                "state": _stable_semantic_function_state(
+                    function_state, package_root),
+            } for function_kind, function_state in functions],
+        } for name, descriptor, functions in state[2]],
+        "data": [{
+            "name": name,
+            "state": _stable_frozen_semantic_value(value_state, package_root),
+        } for name, _value, value_state in state[3]],
+    }
+
+
+def _stable_semantic_sequence_state(
+        state: tuple, package_root: Path) -> dict[str, Any]:
+    return {
+        "kind": "DISPATCH_SEQUENCE",
+        "items": [{
+            "class": _semantic_type_label(item[1]),
+            "state": _stable_frozen_semantic_value(item[3], package_root),
+            "classState": _stable_semantic_class_state(item[4], package_root),
+        } for item in state[1]],
+    }
+
+
+def _stable_semantic_binding_state(
+        state: tuple,
+        package_root: Path,
+        owner: types.ModuleType,
+        name: str,
+) -> dict[str, Any]:
+    if state[0] == "ABSENT":
+        return {"kind": "ABSENT"}
+    if (name == "__file__" and state[0] == "DATA"
+            and state[1][0] == "SCALAR"
+            and state[1][1] is str):
+        identity = {"kind": "MODULE_FILE", "module": owner.__name__}
+        if owner.__name__ == "kernel" or owner.__name__.startswith("kernel."):
+            raw_path = Path(state[1][2])
+            try:
+                relative = raw_path.relative_to(package_root)
+            except ValueError:
+                try:
+                    kernel_index = len(raw_path.parts) - 1 \
+                        - tuple(reversed(raw_path.parts)).index("kernel")
+                except ValueError as exc:
+                    raise RuntimeBundleError(
+                        "kernel decision module file has no project-relative "
+                        f"identity: {state[1][2]!r}") from exc
+                relative = Path(*raw_path.parts[kernel_index:])
+            identity["locator"] = _join_stable_locator(
+                "PROJECT_ROOT", PurePosixPath(relative.as_posix()))
+        return identity
+    if state[0] == "MODULE":
+        return {"kind": "MODULE", "name": state[2]}
+    if state[0] == "FUNCTION":
+        function_state = state[1]
+        return _stable_semantic_function_state(function_state, package_root)
+    if state[0] == "CLASS":
+        class_state = state[1]
+        if _stable_decision_namespace(class_state[4]):
+            return _stable_semantic_class_state(class_state, package_root)
+        return {
+            "kind": "EXTERNAL_CLASS_REF",
+            "module": class_state[4],
+            "qualname": class_state[6],
+        }
+    if state[0] == "IDENTITY_DATA":
+        value = state[1]
+        if callable(value):
+            return {
+                "kind": "EXTERNAL_CALLABLE_REF",
+                "ownerModule": owner.__name__,
+                "callableModule": getattr(value, "__module__", None),
+                "callableQualname": (
+                    getattr(value, "__qualname__", None)
+                    or getattr(value, "__name__", None)
+                ),
+                "type": _semantic_type_label(state[2]),
+            }
+        return {
+            "kind": "EXTERNAL_DATA_REF",
+            "module": owner.__name__,
+            "type": _semantic_type_label(state[2]),
+        }
+    return _stable_frozen_semantic_value(state[1], package_root)
+
+
+def _stable_originless_module_value(value: object, package_root: Path) -> Any:
+    if type(value) is types.ModuleType:
+        return {"kind": "MODULE_REF", "name": value.__name__}
+    if isinstance(value, type):
+        module_name = getattr(value, "__module__", None)
+        qualname = getattr(value, "__qualname__", None)
+        if (isinstance(module_name, str)
+                and isinstance(qualname, str)
+                and _stable_decision_namespace(module_name)):
+            return _stable_semantic_class_state(
+                _semantic_class_state(value), package_root)
+
+        def safe_class_ref(class_object: object) -> dict[str, Any]:
+            return {
+                "module": (
+                    getattr(class_object, "__module__", None)
+                    if isinstance(getattr(class_object, "__module__", None), str)
+                    else None
+                ),
+                "name": (
+                    getattr(class_object, "__name__", None)
+                    if isinstance(getattr(class_object, "__name__", None), str)
+                    else None
+                ),
+                "qualname": (
+                    getattr(class_object, "__qualname__", None)
+                    if isinstance(getattr(class_object, "__qualname__", None), str)
+                    else None
+                ),
+            }
+
+        return {
+            "kind": "NATIVE_CLASS_REF",
+            **safe_class_ref(value),
+            "metaclass": safe_class_ref(type(value)),
+            "attributes": [{
+                "name": name,
+                "type": safe_class_ref(type(descriptor)),
+                "callable": ({
+                    "module": getattr(descriptor, "__module__", None),
+                    "qualname": (
+                        getattr(descriptor, "__qualname__", None)
+                        or getattr(descriptor, "__name__", None)
+                    ),
+                } if callable(descriptor)
+                    and isinstance(getattr(descriptor, "__module__", None), str)
+                    and isinstance((
+                        getattr(descriptor, "__qualname__", None)
+                        or getattr(descriptor, "__name__", None)), str)
+                    else None),
+            } for name, descriptor in sorted(vars(value).items())],
+        }
+    if type(value) is types.FunctionType:
+        return _stable_semantic_function_state(
+            _semantic_function_state(value), package_root)
+    return _stable_frozen_semantic_value(
+        _freeze_semantic_value(value), package_root)
+
+
+def _originless_module_state_digest(
+        name: str, module: object, package_root: Path) -> str:
+    """Bind behavior/data on namespace and retained-parent auxiliary modules."""
+    spec = getattr(module, "__spec__", None)
+    state = {
+        "name": getattr(module, "__name__", None),
+        "package": getattr(module, "__package__", None),
+        "documentation": getattr(module, "__doc__", None),
+        "fileIsAbsent": getattr(module, "__file__", None) is None,
+        "cachedIsAbsent": getattr(module, "__cached__", None) is None,
+        "spec": (
+            None if spec is None else {
+                "name": getattr(spec, "name", None),
+                "parent": getattr(spec, "parent", None),
+                "origin": getattr(spec, "origin", None),
+                "hasLocation": getattr(spec, "has_location", None),
+                "loader": (
+                    None if getattr(spec, "loader", None) is None else
+                    _semantic_type_label(type(spec.loader))
+                ),
+            }
+        ),
+        "loader": (
+            None if getattr(module, "__loader__", None) is None else
+            _semantic_type_label(type(module.__loader__))
+        ),
+        "attributes": [],
+    }
+    for attribute, value in sorted(vars(module).items()):
+        if attribute in _NAMESPACE_MODULE_METADATA:
+            continue
+        state["attributes"].append({
+            "name": attribute,
+            "value": _stable_originless_module_value(value, package_root),
+        })
+    canonical = canonical_json(state).encode("utf-8")
+    return sha256_bytes(canonical)
+
+
+def _decision_semantic_callable_anchors(
+        selected: tuple[tuple[Any, ...], ...],
+) -> tuple[tuple[types.FunctionType, types.CodeType], ...]:
+    anchors: dict[int, tuple[types.FunctionType, types.CodeType]] = {}
+
+    def add_value(state: tuple) -> None:
+        if state[0] == "CALLABLE":
+            add_function(state[2])
+        elif state[0] == "MAPPING":
+            for key, value in state[3]:
+                add_value(key)
+                add_value(value)
+        elif state[0] in {"SEQUENCE", "SET"}:
+            for value in state[3]:
+                add_value(value)
+        elif state[0] == "OBJECT":
+            for _name, value in state[3]:
+                add_value(value)
+
+    def add_function(state: tuple) -> None:
+        if state[0] == "FUNCTION":
+            anchors[id(state[1])] = (state[1], state[2])
+            for value in (state[4], state[6], state[9], state[11]):
+                add_value(value)
+            for _cell, value in state[7]:
+                add_value(value)
+
+    def add_class(state: tuple) -> None:
+        for _name, _descriptor, functions in state[2]:
+            for _kind, function_state in functions:
+                add_function(function_state)
+        for _name, _value, value_state in state[3]:
+            add_value(value_state)
+        for _base, base_state in state[7]:
+            add_class(base_state)
+
+    for kind, _label, _module, _module_name, _name, _original, state in selected:
+        if kind == "FUNCTION":
+            add_function(state)
+        elif kind == "DATA":
+            add_value(state)
+        elif kind == "CLASS":
+            add_class(state)
+        elif kind == "SEQUENCE":
+            for item in state[1]:
+                add_value(item[3])
+                add_class(item[4])
+        elif kind == "BINDING":
+            if state[0] == "FUNCTION":
+                add_function(state[1])
+            elif state[0] == "CLASS":
+                add_class(state[1])
+            elif state[0] == "DATA":
+                add_value(state[1])
+        elif kind == "IDENTITY_CLASS":
+            add_class(state)
+    return tuple(anchors[key] for key in sorted(anchors))
+
+
+_STABLE_DECISION_SEMANTICS_SCHEMA = \
+    "ofarm.runtime-decision-semantics-identity.local.v1"
+_STABLE_DECISION_SEMANTICS_LABEL_RE = re.compile(
+    r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+"
+)
+
+
+def _stable_decision_semantics_document(
+        selected: tuple[tuple[Any, ...], ...], package_root: Path,
+) -> dict[str, Any]:
+    entries = []
+    identity_class_states: dict[str, bytes] = {}
+    for kind, label, module, _module_name, name, _original, state in selected:
+        if kind == "DATA":
+            stable_state = _stable_frozen_semantic_value(state, package_root)
+        elif kind == "FUNCTION":
+            stable_state = _stable_semantic_function_state(state, package_root)
+        elif kind == "CLASS":
+            stable_state = _stable_semantic_class_state(state, package_root)
+        elif kind == "SEQUENCE":
+            stable_state = _stable_semantic_sequence_state(state, package_root)
+        elif kind == "BINDING":
+            stable_state = _stable_semantic_binding_state(
+                state, package_root, module, name)
+        elif kind == "IDENTITY_CLASS":
+            stable_state = _stable_semantic_class_state(state, package_root)
+        else:
+            raise RuntimeBundleError(
+                f"unsupported stable decision semantic entry: {kind!r}")
+        stable_bytes = canonical_json(stable_state).encode("utf-8")
+        if kind == "IDENTITY_CLASS":
+            # The stable label contains no process identity.  Equal generated
+            # classes collapse to one semantic identity, while unequal states
+            # receive different labels.  As everywhere else in RuntimeBundle,
+            # digest reuse is accepted only after exact byte equality.
+            label = "identity_class.class_" + \
+                hashlib.sha256(stable_bytes).hexdigest()
+            retained = identity_class_states.get(label)
+            if retained is not None:
+                if retained != stable_bytes:
+                    raise RuntimeBundleError(
+                        "decision identity-class digest collision")
+                continue
+            identity_class_states[label] = stable_bytes
+        entries.append({
+            "kind": kind,
+            "label": label,
+            "stateDigest": sha256_bytes(stable_bytes),
+        })
+    entries.sort(key=lambda entry: (entry["label"], entry["kind"]))
+    document = {
+        "schemaVersion": _STABLE_DECISION_SEMANTICS_SCHEMA,
+        "entries": entries,
+    }
+    _validate_stable_decision_semantics_document(document)
+    return document
+
+
+def _validate_stable_decision_semantics_document(document: Any) -> None:
+    if (not isinstance(document, dict)
+            or set(document) != {"schemaVersion", "entries"}
+            or document.get("schemaVersion") != _STABLE_DECISION_SEMANTICS_SCHEMA
+            or not isinstance(document.get("entries"), list)
+            or not document["entries"]):
+        raise RuntimeBundleError("stable decision semantics identity is malformed")
+    identities = []
+    for entry in document["entries"]:
+        if (not isinstance(entry, dict)
+                or set(entry) != {"kind", "label", "stateDigest"}
+                or entry.get("kind") not in {
+                    "DATA", "FUNCTION", "CLASS", "SEQUENCE", "BINDING",
+                    "IDENTITY_CLASS"}
+                or not isinstance(entry.get("label"), str)
+                or not _STABLE_DECISION_SEMANTICS_LABEL_RE.fullmatch(
+                    entry["label"])
+                or not isinstance(entry.get("stateDigest"), str)
+                or not _SHA256_RE.fullmatch(entry["stateDigest"])):
+            raise RuntimeBundleError(
+                "stable decision semantics entry is malformed")
+        identities.append((entry["label"], entry["kind"]))
+    if identities != sorted(identities) or len(identities) != len(set(identities)):
+        raise RuntimeBundleError(
+            "stable decision semantics inventory is not canonical")
+    try:
+        canonical_json(document)
+    except (TypeError, ValueError) as exc:
+        raise RuntimeBundleError(
+            "stable decision semantics identity is not canonical JSON") from exc
+
+
+_DECISION_RECEIPT_IMPLEMENTATION_ANCHORS = tuple(
+    (function, function.__code__)
+    for function in (
+        _freeze_semantic_value,
+        _same_semantic_value,
+        _prepare_decision_semantic_caches,
+        _semantic_function_state,
+        _same_semantic_function,
+        _semantic_class_state,
+        _same_semantic_class,
+        _capture_decision_semantics,
+        _require_decision_semantics,
+        _stable_frozen_semantic_value,
+        _stable_code_document,
+        _stable_semantic_function_state,
+        _stable_semantic_class_state,
+        _stable_semantic_binding_state,
+        _decision_semantic_callable_anchors,
+        _stable_decision_semantics_document,
+        _validate_stable_decision_semantics_document,
+    )
+)
+
+
+def _require_decision_receipt_implementation() -> None:
+    """Require the import-time code anchors that construct semantic receipts."""
+    if (_require_decision_receipt_implementation.__code__ is not
+            _DECISION_RECEIPT_GUARD_CODE
+            or globals().get("_require_decision_receipt_implementation") is not
+            _require_decision_receipt_implementation
+            or any(
+            function.__code__ is not code
+            or function.__globals__.get(function.__name__) is not function
+            for function, code in _DECISION_RECEIPT_IMPLEMENTATION_ANCHORS)):
+        raise RuntimeBundleError(
+            "decision semantics receipt implementation changed after import")
+
+
+_DECISION_RECEIPT_GUARD_CODE = _require_decision_receipt_implementation.__code__
+
+
 def _test_harness_path(package_root: Path, path: Path) -> bool:
     try:
         relative = path.relative_to(package_root).as_posix()
@@ -1631,7 +3360,9 @@ def _module_observation(
                     "name": retained_parent_name,
                     "origin": retained_parent_path,
                 }
-            elif namespace_paths and all(
+            elif (namespace_paths
+                  and _namespace_module_state_is_closed(name, module)
+                  and all(
                     any(path == root or path.startswith(root + os.sep)
                         for root in dependency_roots)
                     or any(component_path.startswith(path + os.sep)
@@ -1639,10 +3370,14 @@ def _module_observation(
                     or (trusted_test_harness
                         and _test_harness_namespace_path(
                             package_root, Path(path)))
-                    for path in namespace_paths):
+                    for path in namespace_paths)):
                 entry["classification"] = "RETAINED_NAMESPACE"
             else:
                 entry["classification"] = "UNKNOWN"
+        if entry["classification"] in {
+                "RETAINED_NAMESPACE", "REVIEWED_NATIVE_AUXILIARY"}:
+            entry["originlessStateDigest"] = \
+                _originless_module_state_digest(name, module, package_root)
         modules.append(entry)
     return modules
 
@@ -1696,7 +3431,7 @@ def _validate_runtime_environment_document(document: Any) -> None:
     python_keys = {
         "implementation", "version", "cacheTag", "soabi", "optimizationLevel",
         "hashSeedEnvironment", "executableDigest", "executableByteLength",
-        "flags", "pycachePrefix",
+        "flags", "pycachePrefix", "pycachePrefixExists",
     }
     flag_keys = {
         "isolated", "ignoreEnvironment", "noSite", "noUserSite", "safePath",
@@ -1709,7 +3444,7 @@ def _validate_runtime_environment_document(document: Any) -> None:
     }
     if (not isinstance(document, dict) or set(document) != top_level
             or document.get("schemaVersion") !=
-            "ofarm.runtime-environment-observation.local.v3"
+            "ofarm.runtime-environment-observation.local.v4"
             or not isinstance(document.get("python"), dict)
             or set(document["python"]) != python_keys
             or not isinstance(document["python"].get("flags"), dict)
@@ -1721,18 +3456,50 @@ def _validate_runtime_environment_document(document: Any) -> None:
             or not _SHA256_RE.fullmatch(
                 document["python"].get("executableDigest", ""))
             or not isinstance(document["python"].get("executableByteLength"), int)
+            or isinstance(document["python"].get("executableByteLength"), bool)
             or document["python"]["executableByteLength"] <= 0
+            or any(not isinstance(document["python"].get(key), str)
+                   or not document["python"][key]
+                   for key in ("implementation", "version", "cacheTag"))
+            or (document["python"].get("soabi") is not None
+                and not isinstance(document["python"]["soabi"], str))
+            or not isinstance(document["python"].get("optimizationLevel"), int)
+            or isinstance(document["python"]["optimizationLevel"], bool)
+            or (document["python"].get("hashSeedEnvironment") is not None
+                and not isinstance(
+                    document["python"]["hashSeedEnvironment"], str))
+            or (document["python"].get("pycachePrefix") is not None
+                and not isinstance(document["python"]["pycachePrefix"], str))
+            or (document["python"].get("pycachePrefixExists") is not None
+                and type(document["python"].get("pycachePrefixExists")) is not bool)
+            or type(document["python"]["flags"].get("safePath")) is not bool
+            or any(not isinstance(document["python"]["flags"].get(key), int)
+                   or isinstance(document["python"]["flags"][key], bool)
+                   for key in flag_keys - {"safePath"})
             or not isinstance(document["importPosture"].get("projectRoot"), str)
             or not Path(document["importPosture"]["projectRoot"]).is_absolute()
             or set(document["importPosture"].get("ambientEnvironment", {})) !=
             set(_AMBIENT_IMPORT_ENVIRONMENT)
+            or any(value is not None and not isinstance(value, str)
+                   for value in document["importPosture"]
+                   ["ambientEnvironment"].values())
             or not isinstance(document["importPosture"].get(
-                "startupCustomizationModules"), list)):
+                "startupCustomizationModules"), list)
+            or any(not isinstance(name, str) or not name
+                   for name in document["importPosture"]
+                   ["startupCustomizationModules"])
+            or document["importPosture"]["startupCustomizationModules"] !=
+            sorted(set(document["importPosture"]
+                       ["startupCustomizationModules"]))):
         raise RuntimeBundleError("Python runtime identity fields are malformed")
 
     process = document.get("process")
     native_loader_environment = (
         process.get("nativeLoaderEnvironment") if isinstance(process, dict) else None)
+    locale_environment = (
+        process.get("localeEnvironment") if isinstance(process, dict) else None)
+    locale_categories = (
+        process.get("localeCategories") if isinstance(process, dict) else None)
     if (not isinstance(document.get("platform"), dict)
             or set(document["platform"]) != {"operatingSystem", "machine"}
             or any(not isinstance(value, str) or not value
@@ -1742,6 +3509,23 @@ def _validate_runtime_environment_document(document: Any) -> None:
                 "localeEnvironment", "localeCategories", "timezoneEnvironment",
                 "timezoneNames", "utcOffsetSeconds", "nativeLoaderEnvironment",
             }
+            or not isinstance(locale_environment, dict)
+            or set(locale_environment) != {"LANG", "LC_ALL"}
+            or any(value is not None and not isinstance(value, str)
+                   for value in locale_environment.values())
+            or not isinstance(locale_categories, dict)
+            or set(locale_categories) != {
+                "collate", "ctype", "monetary", "numeric", "time"}
+            or any(not isinstance(value, str) or not value
+                   for value in locale_categories.values())
+            or (process.get("timezoneEnvironment") is not None
+                and not isinstance(process["timezoneEnvironment"], str))
+            or not isinstance(process.get("timezoneNames"), list)
+            or not process["timezoneNames"]
+            or any(not isinstance(value, str)
+                   for value in process["timezoneNames"])
+            or not isinstance(process.get("utcOffsetSeconds"), int)
+            or isinstance(process["utcOffsetSeconds"], bool)
             or not isinstance(native_loader_environment, dict)
             or any(not isinstance(name, str) or not isinstance(value, str)
                    or (name not in _NATIVE_LOADER_ENVIRONMENT_EXACT
@@ -1759,10 +3543,14 @@ def _validate_runtime_environment_document(document: Any) -> None:
             or not isinstance(path_entries, list)
             or any(not isinstance(item, dict)
                    or set(item) != {"index", "path", "classification"}
+                   or not isinstance(item.get("index"), int)
+                   or isinstance(item.get("index"), bool)
                    or item.get("index") != index
                    or item.get("classification") not in {
                        "PINNED_RUNTIME_IMAGE_ROOT", "LOCKED_DEPENDENCY_ROOT",
                        "REVIEWED_PROJECT_ROOT", "UNKNOWN"}
+                   or not isinstance(item.get("path"), str)
+                   or not Path(item["path"]).is_absolute()
                    for index, item in enumerate(path_entries))
             or not isinstance(modules, list)):
         raise RuntimeBundleError("Python import path observation is malformed")
@@ -1776,7 +3564,7 @@ def _validate_runtime_environment_document(document: Any) -> None:
         "name", "loader", "classification", "origin", "packageSearchPaths",
         "specSearchPaths",
         "contentDigest", "byteLength", "retainedComponent", "distributions",
-        "retainedParent",
+        "retainedParent", "originlessStateDigest",
     }
     module_names = []
     for module in modules:
@@ -1800,12 +3588,50 @@ def _validate_runtime_environment_document(document: Any) -> None:
                 or len(module.get("specSearchPaths", ())) !=
                 len(set(module.get("specSearchPaths", ())))):
             raise RuntimeBundleError("loaded Python module observation is malformed")
+        originless = module.get("classification") in {
+            "RETAINED_NAMESPACE", "REVIEWED_NATIVE_AUXILIARY"}
+        if (("originlessStateDigest" in module) != originless
+                or (originless and (
+                    type(module["originlessStateDigest"]) is not str
+                    or not _SHA256_RE.fullmatch(
+                        module["originlessStateDigest"])))):
+            raise RuntimeBundleError(
+                "loaded originless module state identity is malformed")
         if "contentDigest" in module and (
                 not isinstance(module["contentDigest"], str)
                 or not _SHA256_RE.fullmatch(module["contentDigest"])
                 or not isinstance(module.get("byteLength"), int)
+                or isinstance(module.get("byteLength"), bool)
                 or module["byteLength"] < 0):
             raise RuntimeBundleError("loaded Python module content identity is malformed")
+        if (("contentDigest" in module) != ("byteLength" in module)):
+            raise RuntimeBundleError(
+                "loaded Python module content identity is incomplete")
+        retained = module.get("retainedComponent")
+        if retained is not None and (
+                not isinstance(retained, dict)
+                or set(retained) != {"role", "logicalRef"}
+                or any(not isinstance(value, str) or not value
+                       for value in retained.values())):
+            raise RuntimeBundleError(
+                "loaded Python module retained component is malformed")
+        owners = module.get("distributions")
+        if owners is not None and (
+                not isinstance(owners, list)
+                or owners != sorted(set(owners))
+                or any(not isinstance(owner, str) or not owner
+                       for owner in owners)):
+            raise RuntimeBundleError(
+                "loaded Python module distribution ownership is malformed")
+        parent = module.get("retainedParent")
+        if parent is not None and (
+                not isinstance(parent, dict)
+                or set(parent) != {"name", "origin"}
+                or any(not isinstance(value, str) or not value
+                       for value in parent.values())
+                or not Path(parent["origin"]).is_absolute()):
+            raise RuntimeBundleError(
+                "loaded Python module retained parent is malformed")
         module_names.append(module["name"])
     if module_names != sorted(module_names) or len(module_names) != len(set(module_names)):
         raise RuntimeBundleError("loaded Python module inventory is not canonical")
@@ -1855,6 +3681,7 @@ def _validate_runtime_environment_document(document: Any) -> None:
                     or not isinstance(item.get("contentDigest"), str)
                     or not _SHA256_RE.fullmatch(item.get("contentDigest", ""))
                     or not isinstance(item.get("byteLength"), int)
+                    or isinstance(item.get("byteLength"), bool)
                     or item["byteLength"] < 0
                     or not isinstance(item.get("resolvedPath"), str)
                     or not Path(item["resolvedPath"]).is_absolute()):
@@ -1923,6 +3750,7 @@ def _validate_runtime_environment_document(document: Any) -> None:
                 or set(layer) != {"digest", "byteLength"}
                 or not _SHA256_RE.fullmatch(layer.get("digest", ""))
                 or not isinstance(layer.get("byteLength"), int)
+                or isinstance(layer.get("byteLength"), bool)
                 or layer["byteLength"] <= 0):
             raise RuntimeBundleError("native runtime image layer is malformed")
     loader = native.get("loaderConfiguration")
@@ -1953,9 +3781,12 @@ def _validate_runtime_environment_document(document: Any) -> None:
                 or not isinstance(entry.get("resolvedPath"), str)
                 or not Path(entry["resolvedPath"]).is_absolute()
                 or not re.fullmatch(r"[0-9a-f]+:[0-9a-f]+", entry.get("device", ""))
-                or not isinstance(entry.get("inode"), int) or entry["inode"] <= 0
+                or not isinstance(entry.get("inode"), int)
+                or isinstance(entry.get("inode"), bool)
+                or entry["inode"] <= 0
                 or not _SHA256_RE.fullmatch(entry.get("contentDigest", ""))
                 or not isinstance(entry.get("byteLength"), int)
+                or isinstance(entry.get("byteLength"), bool)
                 or entry["byteLength"] <= 0
                 or entry.get("classification") not in {
                     "PINNED_RUNTIME_IMAGE_FILE", "RETAINED_DISTRIBUTION_FILE",
@@ -1983,6 +3814,7 @@ def _validate_runtime_environment_document(document: Any) -> None:
                                "name", "version", "wheelArchiveDigest", "root"))
                 or not _SHA256_RE.fullmatch(distribution["wheelArchiveDigest"])
                 or not isinstance(distribution.get("wheelArchiveByteLength"), int)
+                or isinstance(distribution.get("wheelArchiveByteLength"), bool)
                 or distribution["wheelArchiveByteLength"] <= 0):
             raise RuntimeBundleError("Python distribution identity is malformed")
         validate_files(
@@ -2013,7 +3845,7 @@ def _runtime_environment_document(
         standard_files)
     meta_path, path_hooks = _import_infrastructure_observation()
     document = {
-        "schemaVersion": "ofarm.runtime-environment-observation.local.v3",
+        "schemaVersion": "ofarm.runtime-environment-observation.local.v4",
         "python": {
             "implementation": platform.python_implementation(),
             "version": platform.python_version(),
@@ -2025,6 +3857,10 @@ def _runtime_environment_document(
             "executableByteLength": executable_length,
             "flags": _python_flags_document(),
             "pycachePrefix": sys.pycache_prefix,
+            "pycachePrefixExists": (
+                Path(sys.pycache_prefix).exists()
+                if isinstance(sys.pycache_prefix, str) else None
+            ),
         },
         "platform": {
             "operatingSystem": platform.system(),
@@ -2074,6 +3910,1128 @@ def _runtime_environment_document(
     }
     _validate_runtime_environment_document(document)
     return document
+
+
+_STABLE_ENVIRONMENT_SCHEMA = "ofarm.runtime-environment-identity.local.v4"
+_STABLE_LOCATOR_RE = re.compile(
+    r"^(?P<root>PROJECT_ROOT|PINNED_IMAGE_ROOTFS|"
+    r"PINNED_IMAGE_FILE\[sha256:[0-9a-f]{64}\]|"
+    r"LOCKED_WHEEL_ROOT\[sha256:[0-9a-f]{64}\]|"
+    r"PINNED_IMAGE_ROOT\[sha256:[0-9a-f]{64}\])"
+    r"(?P<suffix>(?:/[^/\\\x00]+)*)$"
+)
+
+
+def _stable_root_locator(kind: str, identity: dict[str, Any]) -> str:
+    canonical = canonical_json(identity).encode("utf-8")
+    return f"{kind}[{sha256_bytes(canonical)}]"
+
+
+def _join_stable_locator(root: str, relative: PurePosixPath) -> str:
+    if relative == PurePosixPath("."):
+        return root
+    if (relative.is_absolute()
+            or any(part in {"", ".", ".."}
+                   or "\\" in part
+                   or any(ord(character) < 32 for character in part)
+                   for part in relative.parts)):
+        raise RuntimeBundleError(
+            f"runtime identity has an unsafe relative locator: {relative!s}")
+    return root + "/" + relative.as_posix()
+
+
+def _stable_locator_parts(locator: object) -> tuple[str, str] | None:
+    if not isinstance(locator, str):
+        return None
+    match = _STABLE_LOCATOR_RE.fullmatch(locator)
+    if match is None:
+        return None
+    suffix = match.group("suffix")
+    parts = suffix[1:].split("/") if suffix else []
+    if any(part in {"", ".", ".."}
+           or any(ord(character) < 32 for character in part)
+           for part in parts):
+        return None
+    return match.group("root"), suffix[1:] if suffix else ""
+
+
+def _stable_locator_root(locator: object) -> str | None:
+    parts = _stable_locator_parts(locator)
+    return parts[0] if parts is not None else None
+
+
+def _project_stable_runtime_environment_document(
+        live_document: Mapping[str, Any],
+        retained_components: Iterable[RuntimeComponent],
+) -> dict[str, Any]:
+    """Project one exact process observation onto a relocatable identity."""
+    _validate_runtime_environment_document(live_document)
+    retained_components = tuple(retained_components)
+    image_manifest = _runtime_image_manifest(retained_components)
+    document = copy.deepcopy(live_document)
+    imports = document["importPosture"]
+    project_root = Path(imports["projectRoot"])
+
+    distributions_by_root: dict[str, list[dict[str, str]]] = {}
+    for distribution in document["distributions"]:
+        distributions_by_root.setdefault(distribution["root"], []).append({
+            "name": distribution["name"],
+            "wheelArchiveDigest": distribution["wheelArchiveDigest"],
+        })
+    dependency_roots = {
+        raw_root: _stable_root_locator(
+            "LOCKED_WHEEL_ROOT",
+            {"distributions": sorted(members, key=lambda item: item["name"])},
+        )
+        for raw_root, members in distributions_by_root.items()
+    }
+
+    standard_roots = {}
+    for root in document["standardRuntime"]["roots"]:
+        identity = {
+            "directories": root["directories"],
+            "files": [{
+                "relativePath": item["path"],
+                "contentDigest": item["contentDigest"],
+                "byteLength": item["byteLength"],
+            } for item in root["files"]],
+        }
+        standard_roots[root["path"]] = _stable_root_locator(
+            "PINNED_IMAGE_ROOT", identity)
+
+    standalone_runtime_files: dict[str, str] = {}
+    standard = document["standardRuntime"]
+    for kind, entries in (
+            ("ARCHIVE", standard["archives"]),
+            ("SHARED_LIBRARY", (
+                [standard["sharedLibrary"]]
+                if standard["sharedLibrary"] is not None else []))):
+        for entry in entries:
+            standalone_runtime_files[entry["resolvedPath"]] = \
+                _stable_root_locator("PINNED_IMAGE_FILE", {
+                    "kind": kind,
+                    "contentDigest": entry["contentDigest"],
+                    "byteLength": entry["byteLength"],
+                })
+
+    _manifest_standard, manifest_native = \
+        _retained_runtime_image_maps(image_manifest)
+    del _manifest_standard
+    manifest_loader = {
+        entry["path"]: (entry["contentDigest"], entry["byteLength"])
+        for entry in image_manifest["python"]["loaderConfigurationFiles"]
+    }
+    retained_rootfs_files = {**manifest_native, **manifest_loader}
+    retained_absent_paths = set(
+        image_manifest["python"]["requiredAbsentPaths"])
+
+    def locate(
+            raw_path: str,
+            *,
+            expected_identity: tuple[str, int] | None = None,
+            allow_absent: bool = False,
+    ) -> str:
+        path = Path(raw_path)
+        if not path.is_absolute():
+            raise RuntimeBundleError(
+                f"physical runtime path is not absolute: {raw_path!r}")
+        # The retained wheel environment lives below the checkout in CI, so
+        # match the more specific owned roots before PROJECT_ROOT.
+        for raw_root, locator in sorted(
+                dependency_roots.items(), key=lambda item: len(item[0]), reverse=True):
+            try:
+                relative = path.relative_to(Path(raw_root))
+            except ValueError:
+                continue
+            return _join_stable_locator(locator, PurePosixPath(relative.as_posix()))
+        for raw_root, locator in sorted(
+                standard_roots.items(), key=lambda item: len(item[0]), reverse=True):
+            try:
+                relative = path.relative_to(Path(raw_root))
+            except ValueError:
+                continue
+            return _join_stable_locator(locator, PurePosixPath(relative.as_posix()))
+        for raw_root, locator in sorted(
+                standalone_runtime_files.items(),
+                key=lambda item: len(item[0]), reverse=True):
+            try:
+                relative = path.relative_to(Path(raw_root))
+            except ValueError:
+                continue
+            return _join_stable_locator(
+                locator, PurePosixPath(relative.as_posix()))
+        try:
+            relative = path.relative_to(project_root)
+        except ValueError:
+            relative = None
+        if relative is not None:
+            return _join_stable_locator(
+                "PROJECT_ROOT", PurePosixPath(relative.as_posix()))
+        retained_identity = retained_rootfs_files.get(raw_path)
+        if (retained_identity is None
+                and not (allow_absent and raw_path in retained_absent_paths)):
+            raise RuntimeBundleError(
+                "runtime identity path is outside every retained root or "
+                f"pinned-image inventory: {raw_path!r}")
+        if (expected_identity is not None
+                and retained_identity != expected_identity):
+            raise RuntimeBundleError(
+                "runtime identity path differs from its retained pinned-image "
+                f"content: {raw_path!r}")
+        return _join_stable_locator(
+            "PINNED_IMAGE_ROOTFS",
+            PurePosixPath(path.relative_to(path.anchor).as_posix()),
+        )
+
+    stable_modules = []
+    for module in imports["actualModules"]:
+        stable = {
+            "name": module["name"],
+            "loader": module["loader"],
+            "classification": module["classification"],
+            "originLocator": module["origin"],
+            "packageSearchLocators": [
+                locate(path) for path in module["packageSearchPaths"]],
+            "specSearchLocators": [
+                locate(path) for path in module["specSearchPaths"]],
+        }
+        origin = module["origin"]
+        if isinstance(origin, str) and origin not in {"built-in", "frozen"}:
+            stable["originLocator"] = locate(origin)
+        for key in (
+                "contentDigest", "byteLength", "retainedComponent", "distributions",
+                "originlessStateDigest"):
+            if key in module:
+                stable[key] = copy.deepcopy(module[key])
+        if "retainedParent" in module:
+            stable["retainedParent"] = {
+                "name": module["retainedParent"]["name"],
+                "originLocator": locate(module["retainedParent"]["origin"]),
+            }
+        stable_modules.append(stable)
+
+    stable_standard_roots = []
+    for root in document["standardRuntime"]["roots"]:
+        stable_standard_roots.append({
+            "rootLocator": standard_roots[root["path"]],
+            "directories": root["directories"],
+            "files": [{
+                "relativePath": item["path"],
+                "contentDigest": item["contentDigest"],
+                "byteLength": item["byteLength"],
+            } for item in root["files"]],
+        })
+    stable_standard_roots.sort(key=lambda item: item["rootLocator"])
+
+    def stable_file(entry: Mapping[str, Any]) -> dict[str, Any]:
+        return {
+            "originLocator": locate(entry["resolvedPath"]),
+            "contentDigest": entry["contentDigest"],
+            "byteLength": entry["byteLength"],
+        }
+
+    stable_archives = [stable_file(item) for item in standard["archives"]]
+    stable_archives.sort(key=lambda item: item["originLocator"])
+    stable_standard = {
+        "roots": stable_standard_roots,
+        "archives": stable_archives,
+        "sharedLibrary": (
+            stable_file(standard["sharedLibrary"])
+            if standard["sharedLibrary"] is not None else None
+        ),
+    }
+
+    stable_distributions = []
+    for distribution in document["distributions"]:
+        stable_distributions.append({
+            "name": distribution["name"],
+            "version": distribution["version"],
+            "wheelArchiveDigest": distribution["wheelArchiveDigest"],
+            "wheelArchiveByteLength": distribution["wheelArchiveByteLength"],
+            "rootLocator": dependency_roots[distribution["root"]],
+            "files": [{
+                "relativePath": item["path"],
+                "contentDigest": item["contentDigest"],
+                "byteLength": item["byteLength"],
+            } for item in distribution["files"]],
+        })
+
+    native = document["nativeRuntime"]
+    stable_native_images = [{
+        "originLocator": locate(
+            item["resolvedPath"],
+            expected_identity=(item["contentDigest"], item["byteLength"]),
+        ),
+        "contentDigest": item["contentDigest"],
+        "byteLength": item["byteLength"],
+        "classification": item["classification"],
+        "distributions": item["distributions"],
+    } for item in native["actualNativeImages"]]
+    stable_native_images.sort(key=lambda item: (
+        item["originLocator"], item["contentDigest"], item["classification"]))
+    stable_loader_files = [{
+        "originLocator": locate(
+            item["path"],
+            expected_identity=(item["contentDigest"], item["byteLength"]),
+        ),
+        "contentDigest": item["contentDigest"],
+        "byteLength": item["byteLength"],
+    } for item in native["loaderConfiguration"]["files"]]
+    stable_loader_files.sort(key=lambda item: item["originLocator"])
+
+    python = copy.deepcopy(document["python"])
+    pycache_prefix = python.pop("pycachePrefix")
+    pycache_prefix_exists = python.pop("pycachePrefixExists")
+    python["bytecodeCachePolicy"] = (
+        "ABSENT_ISOLATED_PREFIX"
+        if isinstance(pycache_prefix, str) and pycache_prefix
+        and pycache_prefix_exists is False
+        else "UNSATISFIED"
+    )
+    process = copy.deepcopy(document["process"])
+    loader_environment = process.pop("nativeLoaderEnvironment")
+    process["nativeLoaderEnvironmentPolicy"] = (
+        "FORBIDDEN_AND_ABSENT" if not loader_environment else "UNSATISFIED")
+    ambient = imports["ambientEnvironment"]
+    customization = imports["startupCustomizationModules"]
+    stable_imports = {
+        "projectRoot": "PROJECT_ROOT",
+        "ambientEnvironmentPolicy": {
+            "forbiddenNames": sorted(ambient),
+            "status": (
+                "ABSENT" if all(value is None for value in ambient.values())
+                else "PRESENT"
+            ),
+        },
+        "startupCustomizationPolicy": (
+            "FORBIDDEN_AND_ABSENT" if not customization else "UNSATISFIED"),
+        "dependencyRoots": sorted(set(dependency_roots.values())),
+        "sysPath": [{
+            "index": item["index"],
+            "rootLocator": locate(item["path"]),
+            "classification": item["classification"],
+        } for item in imports["sysPath"]],
+        "metaPath": copy.deepcopy(imports["metaPath"]),
+        "pathHooks": copy.deepcopy(imports["pathHooks"]),
+        "pathImporterCachePolicy": "EXACT_PROCESS_LOCAL_ACTIVATION_SEAL",
+        "actualModules": stable_modules,
+    }
+    stable_native = {
+        "imageIdentity": copy.deepcopy(native["imageIdentity"]),
+        "containerBoundary": (
+            "PINNED_READ_ONLY_IMAGE"
+            if native["containerMarkerPresent"] and native["imageFilesReadOnly"]
+            else "UNSATISFIED"
+        ),
+        "loaderConfiguration": {
+            "files": stable_loader_files,
+            "requiredAbsentLocators": sorted(
+                locate(path, allow_absent=True) for path in
+                native["loaderConfiguration"]["absentPaths"]),
+        },
+        "kernelExecutableMappingPolicy": "VDSO_VSYSCALL_ONLY",
+        "actualNativeImages": stable_native_images,
+    }
+    stable = {
+        "schemaVersion": _STABLE_ENVIRONMENT_SCHEMA,
+        "python": python,
+        "platform": copy.deepcopy(document["platform"]),
+        "process": process,
+        "importIdentity": stable_imports,
+        "standardRuntime": stable_standard,
+        "nativeRuntime": stable_native,
+        "distributions": stable_distributions,
+    }
+    _validate_stable_runtime_environment_document(
+        stable, retained_components)
+    return stable
+
+
+def _stable_runtime_environment_document(
+        live_document: Mapping[str, Any],
+        retained_components: Iterable[RuntimeComponent],
+) -> dict[str, Any]:
+    """Return a stable identity, normalizing malformed raw input failures."""
+    try:
+        return _project_stable_runtime_environment_document(
+            live_document, retained_components)
+    except RuntimeBundleError:
+        raise
+    except (AttributeError, LookupError, TypeError, ValueError) as exc:
+        raise RuntimeBundleError(
+            "Python runtime environment observation is malformed") from exc
+
+
+def _validate_stable_runtime_environment_document(
+        document: Any,
+        retained_components: Iterable[RuntimeComponent],
+) -> None:
+    """Validate the relocatable identity persisted in a RuntimeBundle."""
+    retained_components = tuple(retained_components)
+    image_manifest = _runtime_image_manifest(retained_components)
+
+    def malformed(label: str) -> None:
+        raise RuntimeBundleError(f"stable runtime {label} is malformed")
+
+    def exact_mapping(value: Any, keys: set[str], label: str) -> dict:
+        if not isinstance(value, dict) or set(value) != keys:
+            malformed(label)
+        return value
+
+    def nonempty_text(value: Any) -> bool:
+        return isinstance(value, str) and bool(value)
+
+    def valid_digest(value: Any) -> bool:
+        return isinstance(value, str) and bool(_SHA256_RE.fullmatch(value))
+
+    def relative_identity(value: Any) -> bool:
+        if (not nonempty_text(value) or "\\" in value
+                or any(ord(character) < 32 for character in value)):
+            return False
+        path = PurePosixPath(value)
+        return (not path.is_absolute()
+                and path.as_posix() == value
+                and all(part not in {"", ".", ".."} for part in path.parts))
+
+    locators: list[str] = []
+
+    def locator(value: Any, label: str) -> str:
+        root = _stable_locator_root(value)
+        if root is None:
+            malformed(label)
+        locators.append(value)
+        return root
+
+    def digest_file(value: Any, label: str) -> dict:
+        entry = exact_mapping(
+            value, {"originLocator", "contentDigest", "byteLength"}, label)
+        locator(entry["originLocator"], f"{label} locator")
+        if (not valid_digest(entry["contentDigest"])
+                or not isinstance(entry["byteLength"], int)
+                or isinstance(entry["byteLength"], bool)
+                or entry["byteLength"] < 0):
+            malformed(label)
+        return entry
+
+    top = exact_mapping(document, {
+        "schemaVersion", "python", "platform", "process", "importIdentity",
+        "standardRuntime", "nativeRuntime", "distributions",
+    }, "identity")
+    if top["schemaVersion"] != _STABLE_ENVIRONMENT_SCHEMA:
+        malformed("identity version")
+
+    python = exact_mapping(top["python"], {
+        "implementation", "version", "cacheTag", "soabi", "optimizationLevel",
+        "hashSeedEnvironment", "executableDigest", "executableByteLength",
+        "flags", "bytecodeCachePolicy",
+    }, "Python identity")
+    flags = exact_mapping(python["flags"], {
+        "isolated", "ignoreEnvironment", "noSite", "noUserSite", "safePath",
+        "dontWriteBytecode", "hashRandomization", "optimizationLevel",
+    }, "Python flag identity")
+    if (any(not nonempty_text(python[key]) for key in (
+            "implementation", "version", "cacheTag"))
+            or (python["soabi"] is not None and not nonempty_text(python["soabi"]))
+            or (python["hashSeedEnvironment"] is not None
+                and not isinstance(python["hashSeedEnvironment"], str))
+            or not isinstance(python["optimizationLevel"], int)
+            or isinstance(python["optimizationLevel"], bool)
+            or not valid_digest(python.get("executableDigest"))
+            or not isinstance(python["executableByteLength"], int)
+            or isinstance(python["executableByteLength"], bool)
+            or python["executableByteLength"] <= 0
+            or not isinstance(python["bytecodeCachePolicy"], str)
+            or python["bytecodeCachePolicy"] not in {
+                "ABSENT_ISOLATED_PREFIX", "UNSATISFIED"}
+            or type(flags["safePath"]) is not bool
+            or any(not isinstance(flags[key], int) or isinstance(flags[key], bool)
+                   for key in set(flags) - {"safePath"})):
+        malformed("Python identity")
+
+    platform_identity = exact_mapping(
+        top["platform"], {"operatingSystem", "machine"}, "platform identity")
+    if any(not nonempty_text(value) for value in platform_identity.values()):
+        malformed("platform identity")
+
+    process = exact_mapping(top["process"], {
+        "localeEnvironment", "localeCategories", "timezoneEnvironment",
+        "timezoneNames", "utcOffsetSeconds", "nativeLoaderEnvironmentPolicy",
+    }, "process identity")
+    locale_environment = exact_mapping(
+        process["localeEnvironment"], {"LANG", "LC_ALL"},
+        "locale environment identity")
+    locale_categories = exact_mapping(process["localeCategories"], {
+        "collate", "ctype", "monetary", "numeric", "time",
+    }, "locale category identity")
+    if (any(value is not None and not isinstance(value, str)
+            for value in locale_environment.values())
+            or any(not isinstance(value, str)
+                   for value in locale_categories.values())
+            or (process["timezoneEnvironment"] is not None
+                and not isinstance(process["timezoneEnvironment"], str))
+            or not isinstance(process["timezoneNames"], list)
+            or not process["timezoneNames"]
+            or any(not isinstance(value, str) for value in process["timezoneNames"])
+            or not isinstance(process["utcOffsetSeconds"], int)
+            or isinstance(process["utcOffsetSeconds"], bool)
+            or not isinstance(process["nativeLoaderEnvironmentPolicy"], str)
+            or process["nativeLoaderEnvironmentPolicy"] not in {
+                "FORBIDDEN_AND_ABSENT", "UNSATISFIED"}):
+        malformed("process identity")
+
+    imports = exact_mapping(top["importIdentity"], {
+        "projectRoot", "ambientEnvironmentPolicy", "startupCustomizationPolicy",
+        "dependencyRoots", "sysPath", "metaPath", "pathHooks",
+        "pathImporterCachePolicy", "actualModules",
+    }, "import identity")
+    ambient = exact_mapping(imports["ambientEnvironmentPolicy"], {
+        "forbiddenNames", "status",
+    }, "ambient import policy")
+    if (imports["projectRoot"] != "PROJECT_ROOT"
+            or imports["pathImporterCachePolicy"] !=
+            "EXACT_PROCESS_LOCAL_ACTIVATION_SEAL"
+            or not isinstance(imports["startupCustomizationPolicy"], str)
+            or imports["startupCustomizationPolicy"] not in {
+                "FORBIDDEN_AND_ABSENT", "UNSATISFIED"}
+            or ambient["forbiddenNames"] != sorted(_AMBIENT_IMPORT_ENVIRONMENT)
+            or not isinstance(ambient["status"], str)
+            or ambient["status"] not in {"ABSENT", "PRESENT"}):
+        malformed("import policy identity")
+
+    provider_keys = {
+        "objectKind", "providerModule", "providerQualname",
+        "typeModule", "typeQualname",
+    }
+    for field_name in ("metaPath", "pathHooks"):
+        providers = imports[field_name]
+        if not isinstance(providers, list) or not providers:
+            malformed(f"{field_name} identity")
+        for provider in providers:
+            provider = exact_mapping(
+                provider, provider_keys, f"{field_name} provider identity")
+            if (not isinstance(provider["objectKind"], str)
+                    or provider["objectKind"] not in {
+                        "CLASS", "FUNCTION", "INSTANCE"}
+                    or any(not nonempty_text(provider[key])
+                           for key in provider_keys - {"objectKind"})):
+                malformed(f"{field_name} provider identity")
+
+    distributions = top["distributions"]
+    if not isinstance(distributions, list):
+        malformed("distribution identity")
+    distribution_names = []
+    distribution_roots: dict[str, list[dict[str, str]]] = {}
+    distribution_files: dict[str, tuple[str, int, set[str]]] = {}
+    for distribution in distributions:
+        distribution = exact_mapping(distribution, {
+            "name", "version", "wheelArchiveDigest", "wheelArchiveByteLength",
+            "rootLocator", "files",
+        }, "distribution identity")
+        root = locator(distribution["rootLocator"], "distribution root locator")
+        if (not root.startswith("LOCKED_WHEEL_ROOT[")
+                or not nonempty_text(distribution["name"])
+                or not nonempty_text(distribution["version"])
+                or not valid_digest(distribution["wheelArchiveDigest"])
+                or not isinstance(distribution["wheelArchiveByteLength"], int)
+                or isinstance(distribution["wheelArchiveByteLength"], bool)
+                or distribution["wheelArchiveByteLength"] <= 0
+                or not isinstance(distribution["files"], list)):
+            malformed("distribution identity")
+        file_names = []
+        for item in distribution["files"]:
+            item = exact_mapping(item, {
+                "relativePath", "contentDigest", "byteLength",
+            }, "distribution file identity")
+            if (not relative_identity(item["relativePath"])
+                    or not valid_digest(item["contentDigest"])
+                    or not isinstance(item["byteLength"], int)
+                    or isinstance(item["byteLength"], bool)
+                    or item["byteLength"] < 0):
+                malformed("distribution file identity")
+            file_names.append(item["relativePath"])
+            file_locator = _join_stable_locator(
+                distribution["rootLocator"],
+                PurePosixPath(item["relativePath"]),
+            )
+            prior = distribution_files.get(file_locator)
+            identity = (item["contentDigest"], item["byteLength"])
+            if prior is not None and prior[:2] != identity:
+                malformed("distribution shared-file identity")
+            distribution_files[file_locator] = (
+                *identity,
+                {*(prior[2] if prior is not None else set()),
+                 distribution["name"]},
+            )
+        if file_names != sorted(set(file_names)):
+            malformed("distribution file inventory")
+        distribution_names.append(distribution["name"])
+        distribution_roots.setdefault(distribution["rootLocator"], []).append({
+            "name": distribution["name"],
+            "wheelArchiveDigest": distribution["wheelArchiveDigest"],
+        })
+    if distribution_names != sorted(set(distribution_names)):
+        malformed("distribution inventory")
+    for root, members in distribution_roots.items():
+        expected = _stable_root_locator(
+            "LOCKED_WHEEL_ROOT",
+            {"distributions": sorted(members, key=lambda item: item["name"])},
+        )
+        if root != expected:
+            malformed("distribution root content identity")
+    dependency_roots = imports["dependencyRoots"]
+    if (not isinstance(dependency_roots, list)
+            or dependency_roots != sorted(distribution_roots)
+            or any(locator(item, "dependency root locator") != item
+                   for item in dependency_roots)):
+        malformed("dependency root inventory")
+
+    standard = exact_mapping(top["standardRuntime"], {
+        "roots", "archives", "sharedLibrary",
+    }, "standard runtime identity")
+    if not isinstance(standard["roots"], list):
+        malformed("standard runtime root inventory")
+    standard_roots = []
+    standard_files: dict[str, tuple[str, int]] = {}
+    for root in standard["roots"]:
+        root = exact_mapping(root, {
+            "rootLocator", "directories", "files",
+        }, "standard runtime root identity")
+        root_locator = locator(
+            root["rootLocator"], "standard runtime root locator")
+        if (not root_locator.startswith("PINNED_IMAGE_ROOT[")
+                or not isinstance(root["directories"], list)
+                or any(not relative_identity(item) for item in root["directories"])
+                or root["directories"] != sorted(set(root["directories"]))
+                or not isinstance(root["files"], list)):
+            malformed("standard runtime root identity")
+        file_names = []
+        for item in root["files"]:
+            item = exact_mapping(item, {
+                "relativePath", "contentDigest", "byteLength",
+            }, "standard runtime file identity")
+            if (not relative_identity(item["relativePath"])
+                    or not valid_digest(item["contentDigest"])
+                    or not isinstance(item["byteLength"], int)
+                    or isinstance(item["byteLength"], bool)
+                    or item["byteLength"] < 0):
+                malformed("standard runtime file identity")
+            file_names.append(item["relativePath"])
+            standard_files[_join_stable_locator(
+                root["rootLocator"], PurePosixPath(item["relativePath"]),
+            )] = (item["contentDigest"], item["byteLength"])
+        if file_names != sorted(set(file_names)):
+            malformed("standard runtime file inventory")
+        expected = _stable_root_locator("PINNED_IMAGE_ROOT", {
+            "directories": root["directories"],
+            "files": root["files"],
+        })
+        if root["rootLocator"] != expected:
+            malformed("standard runtime root content identity")
+        standard_roots.append(root["rootLocator"])
+    if standard_roots != sorted(set(standard_roots)):
+        malformed("standard runtime root inventory")
+    if not isinstance(standard["archives"], list):
+        malformed("standard runtime archive inventory")
+    standalone_files: dict[str, tuple[str, int]] = {}
+
+    def standalone_file(value: Any, label: str, kind: str) -> dict:
+        entry = digest_file(value, label)
+        expected = _stable_root_locator("PINNED_IMAGE_FILE", {
+            "kind": kind,
+            "contentDigest": entry["contentDigest"],
+            "byteLength": entry["byteLength"],
+        })
+        if entry["originLocator"] != expected:
+            malformed(f"{label} content locator")
+        prior = standalone_files.get(expected)
+        identity = (entry["contentDigest"], entry["byteLength"])
+        if prior is not None and prior != identity:
+            malformed("standalone runtime file inventory")
+        standalone_files[expected] = identity
+        return entry
+
+    archive_locators = [
+        standalone_file(
+            item, "standard runtime archive identity", "ARCHIVE")
+        ["originLocator"]
+        for item in standard["archives"]
+    ]
+    if archive_locators != sorted(set(archive_locators)):
+        malformed("standard runtime archive inventory")
+    if standard["sharedLibrary"] is not None:
+        standalone_file(
+            standard["sharedLibrary"],
+            "standard shared-library identity",
+            "SHARED_LIBRARY",
+        )
+
+    path_entries = imports["sysPath"]
+    if not isinstance(path_entries, list):
+        malformed("sys.path identity")
+    path_classes = {
+        "PINNED_RUNTIME_IMAGE_ROOT", "LOCKED_DEPENDENCY_ROOT",
+        "REVIEWED_PROJECT_ROOT",
+    }
+    for index, item in enumerate(path_entries):
+        item = exact_mapping(
+            item, {"index", "rootLocator", "classification"},
+            "sys.path entry identity")
+        root = locator(item["rootLocator"], "sys.path root locator")
+        if (not isinstance(item["index"], int)
+                or isinstance(item["index"], bool)
+                or item["index"] != index
+                or not isinstance(item["classification"], str)
+                or item["classification"] not in path_classes):
+            malformed("sys.path entry identity")
+        if (item["classification"] == "REVIEWED_PROJECT_ROOT"
+                and item["rootLocator"] != "PROJECT_ROOT"):
+            malformed("project sys.path identity")
+        if (item["classification"] == "LOCKED_DEPENDENCY_ROOT"
+                and item["rootLocator"] not in distribution_roots):
+            malformed("dependency sys.path identity")
+        if (item["classification"] == "PINNED_RUNTIME_IMAGE_ROOT"
+                and root not in standard_roots):
+            malformed("runtime-image sys.path identity")
+
+    project_components = {
+        (component.role, component.logical_ref): component
+        for component in retained_components
+        if component.role in {
+            "RUNTIME_CODE", "RUNTIME_CATALOG_CODE", "PARSER_CODE"}
+        and component.repository_path.endswith(".py")
+    }
+    project_component_paths = {
+        component.repository_path for component in project_components.values()
+    }
+
+    def reviewed_project_path(relative: str, *, exact_file: bool) -> bool:
+        if relative in project_component_paths:
+            return True
+        if not exact_file and any(
+                path.startswith(relative + "/")
+                for path in project_component_paths):
+            return True
+        for prefix in _PROJECT_TEST_PATHS:
+            if prefix.endswith("/"):
+                base = prefix.rstrip("/")
+                if relative == base or relative.startswith(prefix):
+                    return True
+            elif relative == prefix:
+                return True
+        if not exact_file and relative in _PROJECT_TEST_NAMESPACE_PATHS:
+            return True
+        return False
+
+    modules = imports["actualModules"]
+    if not isinstance(modules, list):
+        malformed("module inventory")
+    module_names = []
+    module_classes = {
+        "BUILT_IN", "FROZEN", "RETAINED_PROJECT_COMPONENT",
+        "RETAINED_DISTRIBUTION_FILE", "PINNED_RUNTIME_IMAGE_FILE",
+        "NON_RUNTIME_TEST_HARNESS", "RETAINED_NAMESPACE",
+        "REVIEWED_NATIVE_AUXILIARY",
+    }
+    base_module_keys = {
+        "name", "loader", "classification", "originLocator",
+        "packageSearchLocators", "specSearchLocators",
+    }
+    optional_module_keys = {
+        "contentDigest", "byteLength", "retainedComponent", "distributions",
+        "retainedParent", "originlessStateDigest",
+    }
+    for module in modules:
+        if (not isinstance(module, dict)
+                or not base_module_keys <= set(module)
+                or set(module) - base_module_keys - optional_module_keys):
+            malformed("module identity")
+        if (not nonempty_text(module["name"])
+                or (module["loader"] is not None
+                    and not nonempty_text(module["loader"]))
+                or not isinstance(module["classification"], str)
+                or module["classification"] not in module_classes
+                or not isinstance(module["packageSearchLocators"], list)
+                or not isinstance(module["specSearchLocators"], list)):
+            malformed("module identity")
+        for field_name in ("packageSearchLocators", "specSearchLocators"):
+            values = module[field_name]
+            for value in values:
+                locator(value, "module search locator")
+            if len(values) != len(set(values)):
+                malformed("module search locator inventory")
+        origin = module["originLocator"]
+        if origin is not None and not isinstance(origin, str):
+            malformed("module origin locator")
+        origin_root = None
+        if origin not in {None, "built-in", "frozen"}:
+            origin_root = locator(origin, "module origin locator")
+        if (("contentDigest" in module) != ("byteLength" in module)
+                or ("contentDigest" in module
+                    and (not valid_digest(module["contentDigest"])
+                         or not isinstance(module["byteLength"], int)
+                         or isinstance(module["byteLength"], bool)
+                         or module["byteLength"] < 0))):
+            malformed("module content identity")
+        retained = module.get("retainedComponent")
+        if retained is not None:
+            retained = exact_mapping(
+                retained, {"role", "logicalRef"},
+                "retained module component identity")
+            if any(not nonempty_text(value) for value in retained.values()):
+                malformed("retained module component identity")
+        owners = module.get("distributions")
+        if owners is not None and (
+                not isinstance(owners, list)
+                or any(not nonempty_text(owner) for owner in owners)
+                or owners != sorted(set(owners))
+                or any(owner not in distribution_names for owner in owners)):
+            malformed("module distribution ownership")
+        parent = module.get("retainedParent")
+        parent_origin = None
+        if parent is not None:
+            parent = exact_mapping(parent, {
+                "name", "originLocator",
+            }, "module retained-parent identity")
+            if not nonempty_text(parent["name"]):
+                malformed("module retained-parent identity")
+            locator(parent["originLocator"], "module retained-parent locator")
+            parent_origin = parent["originLocator"]
+        classification = module["classification"]
+        originless_state = module.get("originlessStateDigest")
+        content_identity = (
+            (module["contentDigest"], module["byteLength"])
+            if "contentDigest" in module else None)
+        distribution_identity = (
+            distribution_files.get(origin) if isinstance(origin, str) else None)
+        standard_identity = (
+            standard_files.get(origin) if isinstance(origin, str) else None)
+        retained_component = (
+            project_components.get((
+                retained["role"], retained["logicalRef"]))
+            if retained is not None else None)
+        origin_parts = _stable_locator_parts(origin)
+        namespace_locators = [
+            *module["packageSearchLocators"], *module["specSearchLocators"]]
+        namespace_suffix = module["name"].replace(".", "/")
+        namespace_paths_match = all(
+            (parts := _stable_locator_parts(value)) is not None
+            and bool(parts[1])
+            and (parts[1] == namespace_suffix
+                 or parts[1].endswith("/" + namespace_suffix))
+            for value in namespace_locators
+        )
+        if ((classification == "BUILT_IN" and origin != "built-in")
+                or (classification == "FROZEN" and origin != "frozen")
+                or (classification in {
+                    "RETAINED_NAMESPACE", "REVIEWED_NATIVE_AUXILIARY"}
+                    and origin is not None)
+                or (classification == "RETAINED_NAMESPACE"
+                    and (not module["packageSearchLocators"]
+                         or module["packageSearchLocators"] !=
+                         module["specSearchLocators"]
+                         or not namespace_paths_match))
+                or ((originless_state is not None) !=
+                    (classification in {
+                        "RETAINED_NAMESPACE", "REVIEWED_NATIVE_AUXILIARY"}))
+                or (originless_state is not None
+                    and not valid_digest(originless_state))
+                or (classification == "RETAINED_PROJECT_COMPONENT"
+                    and (origin_root != "PROJECT_ROOT" or retained is None
+                         or content_identity is None
+                         or retained_component is None
+                         or origin_parts is None
+                         or origin_parts[1] !=
+                         retained_component.repository_path
+                         or content_identity != (
+                             retained_component.content_digest,
+                             len(retained_component.canonical_bytes))))
+                or (classification == "NON_RUNTIME_TEST_HARNESS"
+                    and (origin_root != "PROJECT_ROOT"
+                         or origin_parts is None
+                         or not reviewed_project_path(
+                             origin_parts[1], exact_file=True)))
+                or (classification == "RETAINED_DISTRIBUTION_FILE"
+                    and (origin_root not in distribution_roots or not owners
+                         or distribution_identity is None
+                         or content_identity != distribution_identity[:2]
+                         or owners != sorted(distribution_identity[2])))
+                or (classification == "PINNED_RUNTIME_IMAGE_FILE"
+                    and (origin_root not in standard_roots
+                         or standard_identity is None
+                         or content_identity != standard_identity))
+                or (classification == "REVIEWED_NATIVE_AUXILIARY"
+                    and (parent is None
+                         or _REVIEWED_ORIGINLESS_AUXILIARY_MODULES.get(
+                             module["name"]) != parent["name"]
+                         or (parent_origin not in distribution_files
+                             and parent_origin not in standard_files
+                             and not (
+                                 _stable_locator_root(parent_origin)
+                                 == "PROJECT_ROOT"
+                                 and _stable_locator_parts(parent_origin)
+                                 is not None
+                                 and reviewed_project_path(
+                                     _stable_locator_parts(parent_origin)[1],
+                                     exact_file=True)))))
+                or ((retained is not None)
+                    != (classification == "RETAINED_PROJECT_COMPONENT"))
+                or ((owners is not None)
+                    != (classification == "RETAINED_DISTRIBUTION_FILE"))):
+            malformed("module classification identity")
+        module_names.append(module["name"])
+    if module_names != sorted(set(module_names)):
+        malformed("module inventory")
+    modules_by_name = {module["name"]: module for module in modules}
+    for module in modules:
+        if module["classification"] != "REVIEWED_NATIVE_AUXILIARY":
+            continue
+        parent = module["retainedParent"]
+        parent_module = modules_by_name.get(parent["name"])
+        if (parent_module is None
+                or parent_module["classification"] not in {
+                    "RETAINED_PROJECT_COMPONENT",
+                    "RETAINED_DISTRIBUTION_FILE",
+                    "PINNED_RUNTIME_IMAGE_FILE",
+                    "NON_RUNTIME_TEST_HARNESS",
+                }
+                or parent_module["originLocator"] != parent["originLocator"]):
+            malformed("module retained-parent identity")
+
+    native = exact_mapping(top["nativeRuntime"], {
+        "imageIdentity", "containerBoundary", "loaderConfiguration",
+        "kernelExecutableMappingPolicy", "actualNativeImages",
+    }, "native runtime identity")
+    image = exact_mapping(native["imageIdentity"], {
+        "reference", "indexDigest", "platform", "platformManifestDigest",
+        "configDigest", "layers",
+    }, "runtime image identity")
+    if (not nonempty_text(image["reference"])
+            or image["platform"] != "linux/amd64"
+            or any(not valid_digest(image[key]) for key in (
+                "indexDigest", "platformManifestDigest", "configDigest"))
+            or not isinstance(image["layers"], list)
+            or not image["layers"]):
+        malformed("runtime image identity")
+    if image != image_manifest["image"]:
+        malformed("runtime image retained identity")
+    for layer in image["layers"]:
+        layer = exact_mapping(
+            layer, {"digest", "byteLength"}, "runtime image layer identity")
+        if (not valid_digest(layer["digest"])
+                or not isinstance(layer["byteLength"], int)
+                or isinstance(layer["byteLength"], bool)
+                or layer["byteLength"] <= 0):
+            malformed("runtime image layer identity")
+    if (not isinstance(native["containerBoundary"], str)
+            or native["containerBoundary"] not in {
+            "PINNED_READ_ONLY_IMAGE", "UNSATISFIED"}
+            or native["kernelExecutableMappingPolicy"] != "VDSO_VSYSCALL_ONLY"):
+        malformed("native runtime policy identity")
+    loader = exact_mapping(native["loaderConfiguration"], {
+        "files", "requiredAbsentLocators",
+    }, "native loader identity")
+    if (not isinstance(loader["files"], list)
+            or not isinstance(loader["requiredAbsentLocators"], list)):
+        malformed("native loader identity")
+    loader_locators = [
+        digest_file(item, "native loader file identity")["originLocator"]
+        for item in loader["files"]
+    ]
+    absent_locators = loader["requiredAbsentLocators"]
+    for item in absent_locators:
+        locator(item, "required-absent native locator")
+    if (loader_locators != sorted(set(loader_locators))
+            or absent_locators != sorted(set(absent_locators))):
+        malformed("native loader inventory")
+    images = native["actualNativeImages"]
+    if not isinstance(images, list):
+        malformed("native image inventory")
+    native_order = []
+    for item in images:
+        item = exact_mapping(item, {
+            "originLocator", "contentDigest", "byteLength", "classification",
+            "distributions",
+        }, "native image identity")
+        origin_root = locator(item["originLocator"], "native image locator")
+        if (not valid_digest(item["contentDigest"])
+                or not isinstance(item["byteLength"], int)
+                or isinstance(item["byteLength"], bool)
+                or item["byteLength"] <= 0
+                or not isinstance(item["classification"], str)
+                or item["classification"] not in {
+                    "PINNED_RUNTIME_IMAGE_FILE", "RETAINED_DISTRIBUTION_FILE",
+                }
+                or not isinstance(item["distributions"], list)
+                or any(not nonempty_text(owner)
+                       for owner in item["distributions"])
+                or item["distributions"] != sorted(set(item["distributions"]))
+                or any(owner not in distribution_names
+                       for owner in item["distributions"])
+                or (item["classification"] != "RETAINED_DISTRIBUTION_FILE"
+                    and item["distributions"])
+                or (item["classification"] == "RETAINED_DISTRIBUTION_FILE"
+                    and (origin_root not in distribution_roots
+                         or not item["distributions"]
+                         or item["originLocator"] not in distribution_files
+                         or (item["contentDigest"], item["byteLength"])
+                         != distribution_files[item["originLocator"]][:2]
+                         or item["distributions"] != sorted(
+                             distribution_files[item["originLocator"]][2])))
+                or (item["classification"] == "PINNED_RUNTIME_IMAGE_FILE"
+                    and (item["distributions"]
+                         or origin_root not in {
+                             *standard_roots, *standalone_files,
+                             "PINNED_IMAGE_ROOTFS"}
+                         or (origin_root in standard_roots
+                             and ((item["contentDigest"], item["byteLength"])
+                                  != standard_files.get(
+                                      item["originLocator"])))
+                         or (origin_root in standalone_files
+                             and ((item["contentDigest"], item["byteLength"])
+                                  != standalone_files.get(
+                                      item["originLocator"])))))):
+            malformed("native image identity")
+        native_order.append((
+            item["originLocator"], item["contentDigest"], item["classification"]))
+    if native_order != sorted(set(native_order)):
+        malformed("native image inventory")
+
+    manifest_rootfs_files: dict[str, tuple[str, int]] = {}
+
+    def retained_rootfs_locator(path: str) -> str:
+        physical = Path(path)
+        return _join_stable_locator(
+            "PINNED_IMAGE_ROOTFS",
+            PurePosixPath(physical.relative_to(physical.anchor).as_posix()),
+        )
+
+    manifest_python = image_manifest["python"]
+    manifest_entries = [
+        manifest_python["executable"],
+        manifest_python["sharedLibrary"],
+        *manifest_python["nativeFiles"],
+        *manifest_python["loaderConfigurationFiles"],
+        *manifest_python["requiredExecutables"],
+        *(entry
+          for root in manifest_python["standardLibraryRoots"]
+          for entry in root["files"]),
+    ]
+    for entry in manifest_entries:
+        retained_locator = retained_rootfs_locator(entry["path"])
+        identity = (entry["contentDigest"], entry["byteLength"])
+        prior = manifest_rootfs_files.get(retained_locator)
+        if prior is not None and prior != identity:
+            malformed("retained runtime image file inventory")
+        manifest_rootfs_files[retained_locator] = identity
+    manifest_absent_locators = {
+        retained_rootfs_locator(path)
+        for path in manifest_python["requiredAbsentPaths"]
+    }
+    expected_loader_files = sorted(({
+        "originLocator": retained_rootfs_locator(entry["path"]),
+        "contentDigest": entry["contentDigest"],
+        "byteLength": entry["byteLength"],
+    } for entry in manifest_python["loaderConfigurationFiles"]),
+        key=lambda entry: entry["originLocator"])
+    expected_absent_locators = sorted(manifest_absent_locators)
+    if native["containerBoundary"] == "PINNED_READ_ONLY_IMAGE":
+        if (loader["files"] != expected_loader_files
+                or absent_locators != expected_absent_locators
+                or not images):
+            malformed("retained native runtime inventory")
+    elif loader["files"] or absent_locators or images:
+        malformed("unsatisfied native runtime inventory")
+
+    for entry in loader["files"]:
+        if (_stable_locator_root(entry["originLocator"])
+                == "PINNED_IMAGE_ROOTFS"
+                and manifest_rootfs_files.get(entry["originLocator"]) != (
+                    entry["contentDigest"], entry["byteLength"])):
+            malformed("native loader retained-file identity")
+    for entry in images:
+        if (_stable_locator_root(entry["originLocator"])
+                == "PINNED_IMAGE_ROOTFS"
+                and manifest_rootfs_files.get(entry["originLocator"]) != (
+                    entry["contentDigest"], entry["byteLength"])):
+            malformed("native retained-image file identity")
+    if any(item not in manifest_absent_locators for item in absent_locators):
+        malformed("native required-absence retained identity")
+
+    declared_roots = {
+        "PROJECT_ROOT", "PINNED_IMAGE_ROOTFS",
+        *distribution_roots, *standard_roots, *standalone_files,
+    }
+
+    def inventory_contains_path(
+            value: str,
+            inventory: Mapping[str, object],
+    ) -> bool:
+        parts = _stable_locator_parts(value)
+        if parts is None:
+            return False
+        root, suffix = parts
+        if not suffix:
+            return True
+        for retained in inventory:
+            retained_parts = _stable_locator_parts(retained)
+            if retained_parts is None or retained_parts[0] != root:
+                continue
+            retained_suffix = retained_parts[1]
+            if retained_suffix == suffix \
+                    or retained_suffix.startswith(suffix + "/"):
+                return True
+        return False
+
+    for item in locators:
+        parts = _stable_locator_parts(item)
+        if parts is None or parts[0] not in declared_roots:
+            malformed("locator closure")
+        root = parts[0]
+        if (root in distribution_roots
+                and not inventory_contains_path(item, distribution_files)):
+            malformed("distribution locator inventory closure")
+        if (root in standard_roots
+                and not inventory_contains_path(item, standard_files)):
+            malformed("standard runtime locator inventory closure")
+        if (root == "PINNED_IMAGE_ROOTFS"
+                and item not in manifest_rootfs_files
+                and item not in manifest_absent_locators):
+            malformed("pinned-image rootfs locator inventory closure")
+        if (root == "PROJECT_ROOT" and parts[1]
+                and not reviewed_project_path(
+                    parts[1], exact_file=False)):
+            malformed("project locator inventory closure")
+        if root in standalone_files and parts[1]:
+            malformed("standalone runtime file locator closure")
+
+    forbidden_keys = {
+        "path", "resolvedPath", "root", "origin", "device", "inode",
+        "pycachePrefix", "pycachePrefixExists", "pathImporterCache",
+        "kernelExecutableMappings",
+    }
+
+    def inspect(value: Any) -> None:
+        if isinstance(value, dict):
+            if forbidden_keys.intersection(value):
+                raise RuntimeBundleError(
+                    "stable runtime identity contains a process-local field")
+            for key, item in value.items():
+                if not isinstance(key, str):
+                    malformed("identity key")
+                inspect(item)
+        elif isinstance(value, list):
+            for item in value:
+                inspect(item)
+        elif isinstance(value, str) and value.startswith("/"):
+            raise RuntimeBundleError(
+                "stable runtime identity contains an absolute physical path")
+
+    inspect(document)
+    try:
+        canonical_json(document)
+    except (TypeError, ValueError) as exc:
+        raise RuntimeBundleError(
+            "stable runtime identity is not canonical JSON") from exc
 
 
 def _bytecode_or_customization_findings(
@@ -2425,23 +5383,31 @@ def require_live_python_import_posture(
 
 def observed_runtime_environment_component(
     package_root: Path | None = None,
-    retained_components: Iterable[RuntimeComponent] = (),
+    retained_components: Iterable[RuntimeComponent] | None = None,
 ) -> RuntimeComponent:
     """Bind the bundle to flags, paths, imported origins, and runtime bytes."""
     package_root = (package_root or Path(__file__).resolve().parents[1]).resolve()
+    if retained_components is None:
+        retained_components = _locked_components(package_root)
+    retained_components = tuple(retained_components)
     return _runtime_environment_component_from_document(
-        _runtime_environment_document(package_root, tuple(retained_components)))
+        _runtime_environment_document(package_root, retained_components),
+        retained_components,
+    )
 
 
 def _runtime_environment_component_from_document(
     document: dict[str, Any],
+    retained_components: Iterable[RuntimeComponent],
 ) -> RuntimeComponent:
     _validate_runtime_environment_document(document)
-    canonical = canonical_json(document).encode("utf-8")
+    stable = _stable_runtime_environment_document(
+        document, retained_components)
+    canonical = canonical_json(stable).encode("utf-8")
     return RuntimeComponent(
         role="RUNTIME_ENVIRONMENT_OBSERVED",
         logical_ref=_OBSERVED_ENVIRONMENT_REF,
-        repository_path="runtime-observed/environment-v3",
+        repository_path="runtime-observed/environment-v4",
         canonicalization=JSON_CANONICALIZATION,
         content_digest=sha256_bytes(canonical),
         canonical_bytes=canonical,
@@ -2449,14 +5415,77 @@ def _runtime_environment_component_from_document(
     )
 
 
+def _decision_semantics_component_from_canonical(
+        canonical: bytes,
+) -> RuntimeComponent:
+    document = _strict_json_value(
+        canonical, "stable decision semantics identity")
+    _validate_stable_decision_semantics_document(document)
+    if canonical_json(document).encode("utf-8") != canonical:
+        raise RuntimeBundleError(
+            "stable decision semantics identity is not canonical")
+    return RuntimeComponent(
+        role="RUNTIME_ENVIRONMENT_OBSERVED",
+        logical_ref=_DECISION_SEMANTICS_REF,
+        repository_path="runtime-observed/decision-semantics-v1",
+        canonicalization=JSON_CANONICALIZATION,
+        content_digest=sha256_bytes(canonical),
+        canonical_bytes=canonical,
+        placement=GLOBAL_CONTENT_PLACEMENT,
+    )
+
+
+def observed_decision_semantics_component(
+        package_root: Path,
+) -> RuntimeComponent:
+    _require_decision_receipt_implementation()
+    selected = _capture_decision_semantics()
+    canonical = canonical_json(_stable_decision_semantics_document(
+        selected, package_root.resolve())).encode("utf-8")
+    _require_decision_receipt_implementation()
+    return _decision_semantics_component_from_canonical(canonical)
+
+
 def _module_origin_stat_signature(module: object) -> tuple[Any, ...]:
     spec = getattr(module, "__spec__", None)
     origin = getattr(spec, "origin", None) or getattr(module, "__file__", None)
     package_paths, spec_paths = _module_search_paths(module)
+    module_name = getattr(module, "__name__", None)
+    originless_state = None
+    originless_object_anchors: tuple[tuple[str, object], ...] = ()
+    if (isinstance(module_name, str)
+            and origin is None
+            and (package_paths
+                 or module_name in _REVIEWED_ORIGINLESS_AUXILIARY_MODULES)):
+        if package_paths and not _namespace_module_state_is_closed(
+                module_name, module):
+            raise RuntimeBundleError(
+                f"originless namespace module state changed: {module_name}")
+        originless_state = _originless_module_state_digest(
+            module_name, module, Path(__file__).resolve().parents[1])
+        originless_object_anchors = tuple(
+            (name, value) for name, value in sorted(vars(module).items())
+            if name not in _NAMESPACE_MODULE_METADATA
+            and type(value) is types.ModuleType
+        )
     import_state = (
+        module_name,
+        getattr(module, "__package__", None),
+        spec,
+        getattr(spec, "name", None),
+        getattr(spec, "parent", None),
+        getattr(spec, "origin", None),
+        getattr(spec, "has_location", None),
+        getattr(spec, "cached", None),
+        getattr(module, "__file__", None),
+        getattr(module, "__cached__", None),
         tuple(package_paths), tuple(spec_paths),
+        getattr(module, "__path__", None),
+        getattr(spec, "submodule_search_locations", None),
         getattr(module, "__loader__", None),
         getattr(spec, "loader", None),
+        originless_state,
+        originless_object_anchors,
     )
     if not isinstance(origin, str) or origin in {"built-in", "frozen"}:
         return (origin, *import_state)
@@ -2485,6 +5514,7 @@ def _loaded_module_objects() -> dict[str, tuple[object, tuple[Any, ...]]]:
 def _capture_runtime_environment_seal(
         bundle_digest: str, document: Mapping[str, Any],
 ) -> RuntimeEnvironmentSeal:
+    _require_decision_receipt_implementation()
     if (type(sys.modules) is not dict
             or type(sys.path_importer_cache) is not dict
             or type(sys.path) is not list
@@ -2512,6 +5542,14 @@ def _capture_runtime_environment_seal(
         (path, finder, finder_type, _file_finder_state(path, finder))
         for path, (finder, finder_type) in sorted(cache_objects.items())
     )
+    decision_semantics = _capture_decision_semantics()
+    decision_semantics_canonical = canonical_json(
+        _stable_decision_semantics_document(
+            decision_semantics,
+            Path(document["importPosture"]["projectRoot"]),
+        )
+    ).encode("utf-8")
+    _require_decision_receipt_implementation()
     return RuntimeEnvironmentSeal(
         bundle_digest=bundle_digest,
         flags=tuple(sorted(document["python"]["flags"].items())),
@@ -2544,6 +5582,10 @@ def _capture_runtime_environment_seal(
         modules=tuple(
             (name, module, signature)
             for name, (module, signature) in sorted(modules.items())),
+        decision_semantics=decision_semantics,
+        decision_callable_anchors=_decision_semantic_callable_anchors(
+            decision_semantics),
+        decision_semantics_canonical=decision_semantics_canonical,
         pycache_prefix=document["python"]["pycachePrefix"],
         project_root=document["importPosture"]["projectRoot"],
     )
@@ -2613,11 +5655,14 @@ def _require_sealed_import_object_identities(
 def _assert_live_import_growth_is_retained(
         bundle: "RuntimeBundle", seal: RuntimeEnvironmentSeal) -> None:
     """Require the activation-time module and importer sets without widening."""
+    _require_runtime_bundle_integrity(bundle)
+    _require_runtime_environment_seal_integrity(bundle, seal)
     if type(seal) is not RuntimeEnvironmentSeal or seal.bundle_digest != bundle.digest:
         raise RuntimeBundleError(
             "runtime environment seal does not belong to this RuntimeBundle")
     if tuple(sorted(_python_flags_document().items())) != seal.flags:
         raise RuntimeBundleError("live Python import flags changed after activation")
+    _require_decision_semantics(seal.decision_semantics)
     ambient = tuple(sorted(
         (name, os.environ.get(name)) for name in _AMBIENT_IMPORT_ENVIRONMENT))
     if ambient != seal.ambient:
@@ -2786,10 +5831,19 @@ def assert_runtime_environment_compatible(
         package_root, retained_components=bundle.components)
     observed = bundle.json_component(
         "RUNTIME_ENVIRONMENT_OBSERVED", _OBSERVED_ENVIRONMENT_REF)
-    _validate_runtime_environment_document(observed)
-    if current_document != observed:
+    _validate_stable_runtime_environment_document(observed, bundle.components)
+    if _stable_runtime_environment_document(
+            current_document, bundle.components) != observed:
         raise RuntimeBundleError(
             "observed interpreter, import posture, or runtime bytes changed after selection")
+    selected_semantics = bundle.component(
+        "RUNTIME_ENVIRONMENT_OBSERVED", _DECISION_SEMANTICS_REF)
+    _validate_stable_decision_semantics_document(_strict_json_value(
+        selected_semantics.canonical_bytes,
+        "selected stable decision semantics identity"))
+    if observed_decision_semantics_component(package_root) != selected_semantics:
+        raise RuntimeBundleError(
+            "observed decision semantics changed after RuntimeBundle selection")
     config_doc = bundle.json_component(
         "RUNTIME_ENVIRONMENT", "environment:conformance/review_baseline_config.json")
     required = config_doc.get("requiredEnvironment")
@@ -2851,13 +5905,17 @@ def assert_runtime_environment_compatible(
             "installed distribution set/versions differ from retained locks")
     final_document = require_live_python_import_posture(
         package_root, retained_components=bundle.components)
-    if final_document != observed:
+    if _stable_runtime_environment_document(
+            final_document, bundle.components) != observed:
         raise RuntimeBundleError(
             "Python runtime identity changed while activation was being sealed")
     seal = bundle._selection_environment_seal
     if type(seal) is not RuntimeEnvironmentSeal:
         raise RuntimeBundleError(
             "live RuntimeBundle has no selection-time runtime environment seal")
+    if seal.decision_semantics_canonical != selected_semantics.canonical_bytes:
+        raise RuntimeBundleError(
+            "live RuntimeBundle decision semantics receipt differs from its seal")
     require_runtime_environment_seal(
         bundle, seal, "RuntimeBundle activation")
     return required, seal
@@ -2876,13 +5934,27 @@ class SelectedReferenceIdentity:
     source_digest: str | None = None
 
     def __post_init__(self) -> None:
+        if (type(self.family_id) is not str
+                or type(self.snapshot_ref) is not str
+                or type(self.snapshot_payload_digest) is not str
+                or type(self.source_identities) is not tuple
+                or type(self.source_byte_status) is not str
+                or type(self.unavailable_source_identities) is not tuple
+                or (self.data_family is not None
+                    and type(self.data_family) is not str)
+                or (self.data_payload_digest is not None
+                    and type(self.data_payload_digest) is not str)
+                or (self.source_digest is not None
+                    and type(self.source_digest) is not str)):
+            raise RuntimeBundleError(
+                "selected-reference identity field types are malformed")
         if self.source_byte_status not in {"LOCKED", "PROVENANCE_LOCATOR_ONLY"}:
             raise RuntimeBundleError("unknown selected-reference source byte status")
         if (not isinstance(self.family_id, str) or not self.family_id
                 or not isinstance(self.snapshot_ref, str) or not self.snapshot_ref
-                or any(not isinstance(ref, str) or not ref
+                or any(type(ref) is not str or not ref
                        for ref in self.source_identities)
-                or any(not isinstance(ref, str) or not ref
+                or any(type(ref) is not str or not ref
                        for ref in self.unavailable_source_identities)):
             raise RuntimeBundleError("selected-reference identities are malformed")
         if (len(self.source_identities) != len(set(self.source_identities))
@@ -2939,6 +6011,13 @@ class RuntimeBundle:
     _live_selection_proof: InitVar[object | None] = None
 
     def __post_init__(self, _live_selection_proof) -> None:
+        if (type(self.digest) is not str
+                or type(self.bundle_ref) is not str
+                or type(self.canonical_document_bytes) is not bytes
+                or type(self.components) is not tuple
+                or type(self.selected_references) is not tuple
+                or type(self.construction_mode) is not str):
+            raise RuntimeBundleError("RuntimeBundle field types are not immutable")
         if self.construction_mode not in {"LIVE_CURRENT", "PERSISTED_AUDIT"}:
             raise RuntimeBundleError("RuntimeBundle construction mode is unverified")
         if ((self.construction_mode == "LIVE_CURRENT")
@@ -3018,9 +6097,22 @@ class RuntimeBundle:
         if environment_component is None:
             raise RuntimeBundleError(
                 "RuntimeBundle has no closed Python environment observation")
-        _validate_runtime_environment_document(_strict_json_value(
-            environment_component.canonical_bytes,
-            "RuntimeBundle Python environment observation"))
+        _validate_stable_runtime_environment_document(
+            _strict_json_value(
+                environment_component.canonical_bytes,
+                "RuntimeBundle Python environment observation"),
+            self.components,
+        )
+        semantics_component = component_map.get(
+            ("RUNTIME_ENVIRONMENT_OBSERVED", _DECISION_SEMANTICS_REF))
+        if (semantics_component is None
+                or semantics_component.repository_path !=
+                "runtime-observed/decision-semantics-v1"):
+            raise RuntimeBundleError(
+                "RuntimeBundle has no stable decision semantics identity")
+        _validate_stable_decision_semantics_document(_strict_json_value(
+            semantics_component.canonical_bytes,
+            "RuntimeBundle decision semantics identity"))
         snapshot_components = {
             logical_ref for role, logical_ref in component_map
             if role == "REFERENCE_SNAPSHOT"
@@ -3199,6 +6291,89 @@ class RuntimeBundle:
             reference.snapshot_ref: self.reference_payload(reference.snapshot_ref)
             for reference in self.selected_references
         })
+
+
+def _require_runtime_bundle_integrity(bundle: object) -> None:
+    """Re-run immutable bundle/component validation at every decision boundary."""
+    if type(bundle) is not RuntimeBundle:
+        raise RuntimeBundleError("governed runtime requires an exact RuntimeBundle")
+    bundle_fields = {item.name for item in dataclass_fields(RuntimeBundle)}
+    if set(vars(bundle)) != bundle_fields:
+        raise RuntimeBundleError("RuntimeBundle instance state is not closed")
+    for component in bundle.components:
+        if (type(component) is not RuntimeComponent
+                or set(vars(component)) != {
+                    item.name for item in dataclass_fields(RuntimeComponent)}):
+            raise RuntimeBundleError("RuntimeBundle component instance state is not closed")
+        RuntimeComponent.__post_init__(component)
+    for reference in bundle.selected_references:
+        if (type(reference) is not SelectedReferenceIdentity
+                or set(vars(reference)) != {
+                    item.name for item in dataclass_fields(
+                        SelectedReferenceIdentity)}):
+            raise RuntimeBundleError(
+                "RuntimeBundle selected-reference instance state is not closed")
+        SelectedReferenceIdentity.__post_init__(reference)
+    proof = (
+        _LIVE_SELECTION_PROOF
+        if bundle.construction_mode == "LIVE_CURRENT" else None)
+    RuntimeBundle.__post_init__(bundle, proof)
+
+
+def _require_runtime_environment_seal_integrity(
+        bundle: RuntimeBundle,
+        seal: RuntimeEnvironmentSeal,
+) -> None:
+    """Cross-check a mutable Python dataclass seal against retained bytes."""
+    tuple_fields = (
+        seal.flags, seal.ambient, seal.native_loader_environment,
+        seal.native_runtime_stat, seal.customization, seal.sys_path,
+        seal.meta_path, seal.path_hooks, seal.meta_path_objects,
+        seal.path_hook_objects, seal.path_importer_cache,
+        seal.path_importer_cache_objects, seal.import_callable_state,
+        seal.modules, seal.decision_semantics, seal.decision_callable_anchors,
+    )
+    if (type(seal) is not RuntimeEnvironmentSeal
+            or set(vars(seal)) != {
+                item.name for item in dataclass_fields(RuntimeEnvironmentSeal)}
+            or type(seal.bundle_digest) is not str
+            or type(seal.native_runtime) is not str
+            or any(type(value) is not tuple for value in tuple_fields)
+            or type(seal.decision_semantics_canonical) is not bytes
+            or type(seal.project_root) is not str
+            or (seal.pycache_prefix is not None
+                and type(seal.pycache_prefix) is not str)
+            or any(type(entry) is not tuple or len(entry) != 7
+                   or type(entry[3]) is not str
+                   for entry in seal.decision_semantics)
+            or any(type(entry) is not tuple or len(entry) != 2
+                   or type(entry[0]) is not types.FunctionType
+                   or type(entry[1]) is not types.CodeType
+                   for entry in seal.decision_callable_anchors)
+            or seal.bundle_digest != bundle.digest
+            or not seal.decision_semantics):
+        raise RuntimeBundleError(
+            "runtime environment seal structure differs from its RuntimeBundle")
+    _require_decision_receipt_implementation()
+    stable = canonical_json(_stable_decision_semantics_document(
+        seal.decision_semantics, Path(seal.project_root))).encode("utf-8")
+    selected = RuntimeBundle.component(
+        bundle, "RUNTIME_ENVIRONMENT_OBSERVED", _DECISION_SEMANTICS_REF)
+    if (stable != seal.decision_semantics_canonical
+            or stable != selected.canonical_bytes):
+        raise RuntimeBundleError(
+            "runtime environment seal semantics differ from retained bytes")
+    expected_anchors = _decision_semantic_callable_anchors(
+        seal.decision_semantics)
+    if (len(expected_anchors) != len(seal.decision_callable_anchors)
+            or any(
+                current_function is not selected_function
+                or current_code is not selected_code
+                for (current_function, current_code),
+                (selected_function, selected_code)
+                in zip(expected_anchors, seal.decision_callable_anchors))):
+        raise RuntimeBundleError(
+            "runtime environment seal callable anchors are incomplete")
 
 
 def _repository_relative(package_root: Path, path: Path) -> str:
@@ -3573,10 +6748,17 @@ def build_runtime_bundle(
             raise RuntimeBundleError(
                 "only live startup may supply a preverified Python environment")
         add_component(_runtime_environment_component_from_document(
-            _observed_python_environment))
+            _observed_python_environment, tuple(component_map.values())))
     else:
         add_component(observed_runtime_environment_component(
             package_root, tuple(component_map.values())))
+    if _selection_environment_seal is not None:
+        _require_decision_semantics(
+            _selection_environment_seal.decision_semantics)
+        add_component(_decision_semantics_component_from_canonical(
+            _selection_environment_seal.decision_semantics_canonical))
+    else:
+        add_component(observed_decision_semantics_component(package_root))
     if _database_environment is not None:
         add_component(database_runtime_environment_component(
             _database_environment))
