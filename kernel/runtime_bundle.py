@@ -1851,6 +1851,32 @@ _DECISION_SEQUENCE_ROOTS = (
     ("kernel.validators", "COMMON_SEQUENCE"),
     ("kernel.validators", "OPERATION_SEQUENCE"),
 )
+
+
+def _decision_semantic_root_module_names() -> tuple[str, ...]:
+    """Return the complete declared module inventory that must be preloaded.
+
+    Semantic capture is intentionally import-free: a missing required module
+    is an integrity error, and an optional root is sealed only when its module
+    was selected before activation.  Bootstrap therefore uses this inventory
+    to make that selection explicit and deterministic before constructing the
+    RuntimeBundle.
+    """
+    root_groups = (
+        _DECISION_DATA_ROOTS,
+        _DECISION_FUNCTION_ROOTS,
+        _DECISION_CLASS_ROOTS,
+        _DECISION_OPTIONAL_FUNCTION_ROOTS,
+        _DECISION_OPTIONAL_CLASS_ROOTS,
+        _DECISION_SEQUENCE_ROOTS,
+    )
+    return tuple(sorted({
+        module_name
+        for group in root_groups
+        for module_name, _names in group
+    }))
+
+
 _DECISION_EXTERNAL_MODULE_PREFIXES = (
     "calendar", "copy", "jsonschema", "referencing", "rpds",
     "rfc3339_validator", "idna",

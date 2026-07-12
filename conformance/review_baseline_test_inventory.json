@@ -531,6 +531,11 @@
       "sourcePath": "kernel/tests/test_m2_manifest.py"
     },
     {
+      "nodeid": "kernel/tests/test_m2_manifest.py::test_standalone_manifest_preloads_every_decision_semantic_root",
+      "sourceModule": "kernel.tests.test_m2_manifest",
+      "sourcePath": "kernel/tests/test_m2_manifest.py"
+    },
+    {
       "nodeid": "kernel/tests/test_m2_manifest.py::test_supported_adapter_preload_closes_dynamic_parser_imports",
       "sourceModule": "kernel.tests.test_m2_manifest",
       "sourcePath": "kernel/tests/test_m2_manifest.py"
@@ -2961,6 +2966,11 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_gate_dispatch_guard_accepts_slot_only_authority_evaluator",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_gate_entry_refuses_temporary_semantic_mutation_even_if_restored",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
@@ -3886,8 +3896,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "7f6a3a37c6e5a16b987efd034bad600e06e94d316cd8428e499626e3b3450e14",
-  "entryCount": 777,
+  "entriesSha256": "1b58bf8837f39dc2907d6c55f9e3a752da0cdb7e692e06d4bd25d6ddeebdedf4",
+  "entryCount": 779,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

@@ -48,6 +48,34 @@ if missing or added:
     assert proc.returncode == 0, proc.stdout + proc.stderr
 
 
+def test_standalone_manifest_preloads_every_decision_semantic_root():
+    script = """
+import sys
+from kernel import manifest, runtime_bundle
+
+modules = manifest.preload_runtime_import_surfaces()
+expected = runtime_bundle._decision_semantic_root_module_names()
+loaded = tuple(module.__name__ for module in modules)
+before = set(sys.modules)
+selected = runtime_bundle._capture_decision_semantics()
+runtime_bundle._require_decision_semantics(selected)
+added = sorted(set(sys.modules) - before)
+if loaded != expected or added:
+    raise SystemExit(
+        f"loaded={loaded!r}, expected={expected!r}, added={added!r}")
+"""
+    env = dict(os.environ)
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    proc = subprocess.run(
+        [sys.executable, "-B", "-c", script],
+        cwd=config.PACKAGE_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
 def test_manifest_declares_all_m2_import_surfaces(store):
     m = manifest.build_manifest(store)
     imports = {s["targetRef"]

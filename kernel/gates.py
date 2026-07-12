@@ -75,9 +75,15 @@ _RETAINED_GATE_ENTRY_CALLABLES = _GATE_ENTRY_CALLABLES
 
 def _has_instance_dispatch_override(instance) -> bool:
     """Reject an instance attribute that shadows executable class behavior."""
+    try:
+        namespace = object.__getattribute__(instance, "__dict__")
+    except AttributeError:
+        return False
+    if type(namespace) is not dict:
+        return True
     return any(
         callable(getattr(type(instance), name, None))
-        for name in vars(instance)
+        for name in namespace
     )
 
 

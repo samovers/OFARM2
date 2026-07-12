@@ -2274,6 +2274,23 @@ def test_authority_evaluator_has_no_instance_dispatch_shadow_seam():
             object.__setattr__(evaluator, name, lambda *_args: None)
 
 
+def test_gate_dispatch_guard_accepts_slot_only_authority_evaluator():
+    from kernel import gates as gates_module
+    from kernel.authority import AuthorityEvaluator
+
+    guard = gates_module._RETAINED_HAS_INSTANCE_DISPATCH_OVERRIDE
+    evaluator = object.__new__(AuthorityEvaluator)
+    assert guard(evaluator) is False
+
+    class ShadowableService:
+        def run(self):
+            return None
+
+    service = ShadowableService()
+    service.run = lambda: None
+    assert guard(service) is True
+
+
 def test_plain_transaction_cannot_mutate_or_upgrade_to_writer(fresh_env):
     store, _pipeline, _outputs = fresh_env
 

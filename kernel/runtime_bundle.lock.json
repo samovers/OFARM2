@@ -766,7 +766,7 @@
       "logicalRef": "python:kernel/gates.py",
       "path": "kernel/gates.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:819f92f6326b144b2e318989bed2759ec5b092b3718d9d32d256c06d5cca2df6",
+      "sha256": "sha256:08d863c503c73dad605271220cf8bc535cbc270c730ab71ca0f971184165ae41",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -774,7 +774,7 @@
       "logicalRef": "python:kernel/manifest.py",
       "path": "kernel/manifest.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:323283b4b65ebba1182f20911cf2a708b2fdaa2be218b532b0584dec98e1df7f",
+      "sha256": "sha256:75b815c514ec1ee6e68f0dc12e6678a58be0862475bcbdce707852b77c577b60",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -870,7 +870,7 @@
       "logicalRef": "python:kernel/runtime_bundle.py",
       "path": "kernel/runtime_bundle.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:72f78ee0238a77081ff6196d7dbd22a33b5fa784a5e92fce90e4d312a284d70e",
+      "sha256": "sha256:d474f0c492cd5cf9ea2594f4530efb2fc9f796d6b452b40c0385df27ded4ca00",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {

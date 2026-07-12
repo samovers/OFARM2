@@ -28,7 +28,9 @@ from .context import now_iso
 from .policy import (COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS,
                      COMMIT_CLASS_TO_FAMILY, NON_COMMIT_ACTION_CLASSES)
 from .runtime_bundle import (GLOBAL_CONTENT_PLACEMENT, JSON_CANONICALIZATION,
-                             RuntimeBundleError, require_store_runtime_bundle)
+                             RuntimeBundleError,
+                             _decision_semantic_root_module_names,
+                             require_store_runtime_bundle)
 
 MANIFEST_ID = "manifest:si.ffs.pilot.v0_1"
 MANIFEST_PATH = config.PROFILE_ROOT / "OFARM_Capability_Manifest_si_ffs_pilot_v0_1.json"
@@ -66,19 +68,57 @@ RUNTIME_DECISION_SURFACE_MODULES = (
     "kernel.profiles.si_ffs.si_bindings",
 )
 
+# Exact pre-selection module inventory for every declared decision-semantic
+# root, including roots that are optional only to low-level capture callers.
+# Keeping this explicit makes a new decision module a reviewed bootstrap
+# change; the runtime-owned inventory check below fails closed if the two lists
+# ever differ.
+RUNTIME_DECISION_SEMANTIC_MODULES = (
+    "kernel.adapters",
+    "kernel.auth_oidc",
+    "kernel.authority",
+    "kernel.context",
+    "kernel.contracts",
+    "kernel.emission",
+    "kernel.gates",
+    "kernel.materializer",
+    "kernel.policy",
+    "kernel.problems",
+    "kernel.profile_policy",
+    "kernel.profiles.si_ffs.ffsnaprave_adapter",
+    "kernel.profiles.si_ffs.gerk_adapter",
+    "kernel.profiles.si_ffs.regsr_adapter",
+    "kernel.profiles.si_ffs.si_bindings",
+    "kernel.runtime_bundle",
+    "kernel.stages",
+    "kernel.store",
+    "kernel.sufficiency",
+    "kernel.validators",
+    "kernel.views",
+    "re",
+    "rfc3339_validator",
+)
+
 
 def preload_runtime_import_surfaces() -> tuple[object, ...]:
-    """Load every reviewed adapter before RuntimeBundle environment selection."""
+    """Load every reviewed semantic surface before RuntimeBundle selection."""
     import_surface_modules = set(SUPPORTED_IMPORT_SURFACES.values())
-    module_names = import_surface_modules | set(
+    runtime_surface_modules = import_surface_modules | set(
         RUNTIME_DECISION_SURFACE_MODULES)
+    declared_semantic_modules = _decision_semantic_root_module_names()
+    if (RUNTIME_DECISION_SEMANTIC_MODULES != declared_semantic_modules
+            or not runtime_surface_modules.issubset(
+                RUNTIME_DECISION_SEMANTIC_MODULES)):
+        raise RuntimeError(
+            "reviewed decision-semantic module preload is not exact")
+    module_names = RUNTIME_DECISION_SEMANTIC_MODULES
     modules = tuple(
         importlib.import_module(module_name)
-        for module_name in sorted(module_names)
+        for module_name in module_names
     )
     if tuple(module.__name__ for module in modules) != tuple(
-            sorted(module_names)):
-        raise RuntimeError("reviewed runtime import-surface preload is not exact")
+            module_names):
+        raise RuntimeError("reviewed runtime semantic-surface preload is not exact")
     for module in modules:
         if module.__name__ not in import_surface_modules:
             continue
