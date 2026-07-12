@@ -165,6 +165,13 @@ class OutputGenerator:
     def _assert_runtime_composition(self) -> None:
         require_store_runtime_bundle(
             self.store, self.runtime_bundle, "OutputGenerator decision")
+        authority_namespace_missing = False
+        try:
+            authority_namespace = object.__getattribute__(
+                self.authority, "__dict__")
+        except AttributeError:
+            authority_namespace_missing = True
+            authority_namespace = None
         if (type(self) is not OutputGenerator
                 or type(self.store) is not Store
                 or type(self.authority) is not AuthorityEvaluator
@@ -187,8 +194,11 @@ class OutputGenerator:
                 or self.materializer.context._runtime_composition_sealed is not True
                 or any(callable(getattr(OutputGenerator, name, None))
                        for name in vars(self))
-                or any(callable(getattr(AuthorityEvaluator, name, None))
-                       for name in vars(self.authority))
+                or (not authority_namespace_missing
+                    and (type(authority_namespace) is not dict
+                         or any(callable(getattr(
+                             AuthorityEvaluator, name, None))
+                                for name in authority_namespace)))
                 or any(callable(getattr(Materializer, name, None))
                        for name in vars(self.materializer))
                 or any(callable(getattr(ContextAssembler, name, None))

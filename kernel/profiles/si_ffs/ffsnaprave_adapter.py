@@ -488,6 +488,14 @@ def invoke_ffsnaprave_register_method(
 
 def _require_retained_authority_evaluator(store, evaluator=None) -> None:
     try:
+        evaluator_namespace_missing = evaluator is None
+        evaluator_namespace = None
+        if evaluator is not None:
+            try:
+                evaluator_namespace = object.__getattribute__(
+                    evaluator, "__dict__")
+            except AttributeError:
+                evaluator_namespace_missing = True
         if (AuthorityEvaluator is not _RETAINED_AUTHORITY_EVALUATOR_TYPE
                 or vars(_RETAINED_AUTHORITY_EVALUATOR_TYPE).get("evaluate") is not
                 _RETAINED_AUTHORITY_EVALUATE
@@ -501,9 +509,12 @@ def _require_retained_authority_evaluator(store, evaluator=None) -> None:
                     and (type(evaluator) is not
                          _RETAINED_AUTHORITY_EVALUATOR_TYPE
                          or evaluator.store is not store
-                         or any(callable(getattr(
-                             _RETAINED_AUTHORITY_EVALUATOR_TYPE, name, None))
-                                for name in vars(evaluator))))):
+                         or (not evaluator_namespace_missing
+                             and (type(evaluator_namespace) is not dict
+                                  or any(callable(getattr(
+                                      _RETAINED_AUTHORITY_EVALUATOR_TYPE,
+                                      name, None))
+                                         for name in evaluator_namespace)))))):
             raise RuntimeBundleError(
                 "FFSNaprave authority decision dispatch changed")
         _RETAINED_FFS_STORE_TRANSACTION_POSTURE(store)

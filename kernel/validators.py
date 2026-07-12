@@ -1215,9 +1215,16 @@ def _require_retained_validator_run(
         _raise_validator_dispatch_error(
             ctx, "retained validator dispatch entry is malformed")
     owner, name, function, code = entry
+    namespace_missing = False
+    try:
+        namespace = object.__getattribute__(validator, "__dict__")
+    except AttributeError:
+        namespace_missing = True
+        namespace = None
     if (type(validator) is not owner
             or name != "run"
-            or name in vars(validator)
+            or (not namespace_missing
+                and (type(namespace) is not dict or name in namespace))
             or vars(owner).get(name) is not function
             or getattr(function, "__code__", None) is not code):
         _raise_validator_dispatch_error(

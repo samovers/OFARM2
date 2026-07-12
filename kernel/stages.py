@@ -78,8 +78,15 @@ def _require_retained_context_service(ctx, entry, service) -> None:
         _raise_context_service_dispatch_error(
             ctx, "retained context-service dispatch entry is malformed")
     owner, name, function, code = entry
+    namespace_missing = False
+    try:
+        namespace = object.__getattribute__(service, "__dict__")
+    except AttributeError:
+        namespace_missing = True
+        namespace = None
     if (type(service) is not owner
-            or name in vars(service)
+            or (not namespace_missing
+                and (type(namespace) is not dict or name in namespace))
             or vars(owner).get(name) is not function
             or getattr(function, "__code__", None) is not code):
         _raise_context_service_dispatch_error(

@@ -2276,11 +2276,16 @@ def test_authority_evaluator_has_no_instance_dispatch_shadow_seam():
 
 def test_gate_dispatch_guard_accepts_slot_only_authority_evaluator():
     from kernel import gates as gates_module
+    from kernel import stages as stages_module
     from kernel.authority import AuthorityEvaluator
+    from kernel.context import ContextAssembler
 
     guard = gates_module._RETAINED_HAS_INSTANCE_DISPATCH_OVERRIDE
     evaluator = object.__new__(AuthorityEvaluator)
     assert guard(evaluator) is False
+    ctx = types.SimpleNamespace(store=None)
+    stages_module._require_retained_context_service(
+        ctx, stages_module._AUTHORITY_EVALUATE, evaluator)
 
     class ShadowableService:
         def run(self):
@@ -2289,6 +2294,12 @@ def test_gate_dispatch_guard_accepts_slot_only_authority_evaluator():
     service = ShadowableService()
     service.run = lambda: None
     assert guard(service) is True
+
+    context_service = object.__new__(ContextAssembler)
+    context_service.assemble = lambda *_args, **_kwargs: None
+    with pytest.raises(RuntimeBundleError, match="callable changed"):
+        stages_module._require_retained_context_service(
+            ctx, stages_module._CONTEXT_ASSEMBLE, context_service)
 
 
 def test_plain_transaction_cannot_mutate_or_upgrade_to_writer(fresh_env):

@@ -838,7 +838,7 @@
       "logicalRef": "python:kernel/profiles/si_ffs/ffsnaprave_adapter.py",
       "path": "kernel/profiles/si_ffs/ffsnaprave_adapter.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:8bde03011cf9beb60923b9d48b3d875d69037f811778b897acfca5481dc0b3cb",
+      "sha256": "sha256:2e0f962da76d457dfe0a9467f056b483aaa13cb98059f9bb68cf08968462fb3e",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -886,7 +886,7 @@
       "logicalRef": "python:kernel/stages.py",
       "path": "kernel/stages.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:8c49b66c95ddd1d151044e6f1ebd6322efa877b88bfc59c37218976beccbf90d",
+      "sha256": "sha256:08c844729a542e02d8cab3032bf90641c09e297b19b31db0da5cfc177cd717e2",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -910,7 +910,7 @@
       "logicalRef": "python:kernel/validators.py",
       "path": "kernel/validators.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:6c0ffdaf93d059f38507a05161192f5480974359c738dbd3f7e81f60522089db",
+      "sha256": "sha256:b390eaf2117f0f25493806a1e3448bd7fff719a49d30c636da43ca9f4e884475",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -926,7 +926,7 @@
       "logicalRef": "python:kernel/views.py",
       "path": "kernel/views.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:394cd5a9b8d39695a9ccea3c65c99b74faa6269bb0e4353d3759f4f887c57a0d",
+      "sha256": "sha256:89db2884ae4373fe6470dcaf2a12f6b8bbdae2e59d1cf2e1ffad011ee9269962",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
