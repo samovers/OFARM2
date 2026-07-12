@@ -9,6 +9,8 @@ from __future__ import annotations
 import threading
 import time
 
+import psycopg
+
 from kernel import context
 from kernel.store import Store
 from kernel.views import OutputGenerator
@@ -21,11 +23,12 @@ __all__ = [
 ]
 
 
-def _require_advisory_lock_waiter(cur, waiting_pid, done, *, timeout=300):
+def _require_advisory_lock_waiter(
+        observer, holder_pid, waiting_pid, done, *, timeout=300):
     """Wait until PostgreSQL, not elapsed wall time, proves lock contention."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        cur.execute(
+        waiting = observer.execute(
             """
             SELECT EXISTS (
               SELECT 1
@@ -39,13 +42,13 @@ def _require_advisory_lock_waiter(cur, waiting_pid, done, *, timeout=300):
               WHERE waiter.locktype = 'advisory'
                 AND waiter.pid = %s
                 AND waiter.granted = false
-                AND holder.pid = pg_catalog.pg_backend_pid()
+                AND holder.pid = %s
                 AND holder.granted = true
             ) AS waiting
             """,
-            (waiting_pid,),
-        )
-        if cur.fetchone()["waiting"]:
+            (waiting_pid, holder_pid),
+        ).fetchone()[0]
+        if waiting:
             return
         if done.wait(timeout=0.05):
             raise AssertionError(
@@ -75,9 +78,13 @@ def test_g2_output_render_serializes_under_lock(store):
 
     t = threading.Thread(target=render)
     try:
-        with a.serialized_tx() as cur:
-            t.start()
-            _require_advisory_lock_waiter(cur, waiting_pid, done)
+        holder_pid = Store._raw_connection(a).info.backend_pid
+        with psycopg.connect(a.dsn, autocommit=True) as observer:
+            observer.execute("SET default_transaction_read_only = on")
+            with a.serialized_tx():
+                t.start()
+                _require_advisory_lock_waiter(
+                    observer, holder_pid, waiting_pid, done)
         assert done.wait(timeout=300), \
             "render did not complete after the writer lock was released"
         t.join(timeout=10)
@@ -109,9 +116,13 @@ def test_g2_freeze_serializes_under_lock(store):
 
     t = threading.Thread(target=freeze)
     try:
-        with a.serialized_tx() as cur:
-            t.start()
-            _require_advisory_lock_waiter(cur, waiting_pid, done)
+        holder_pid = Store._raw_connection(a).info.backend_pid
+        with psycopg.connect(a.dsn, autocommit=True) as observer:
+            observer.execute("SET default_transaction_read_only = on")
+            with a.serialized_tx():
+                t.start()
+                _require_advisory_lock_waiter(
+                    observer, holder_pid, waiting_pid, done)
         assert done.wait(timeout=300), \
             "freeze did not complete after the writer lock was released"
         t.join(timeout=10)
