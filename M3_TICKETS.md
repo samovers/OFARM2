@@ -8,6 +8,45 @@ Endpoint names in `M3_BRIEF.md` are implementation candidates only and do not cr
 
 E-006 remains deferred. M3 may display non-blocking warning result problems returned by governed calls, but it must not claim durable `ADVISORY_OUTPUT` records or PassportView `_advisory_flags` unless a separate trace-safe slice resolves E-006.
 
+## Forward-development conformance baseline
+
+These tickets are implementation control, not canonical OFARM law. Before an
+M3 runtime ticket starts, its design and acceptance evidence must remain
+conformant with the digest-pinned canonical material in `reference/` and with
+the package-local implementation decisions in `DECISIONS.md` and
+`docs/adr/0001-tenancy-and-schema-migrations.md` / `0002-valid-time-and-knowledge-time.md`.
+The ADRs narrow how this package implements canonical OFARM; they do not amend,
+promote, or replace canonical law.
+
+The forward tickets share these hard requirements:
+
+- Canonical truth remains assertion/history-first. Drafts, caches, imports,
+  projections, materializations, UI state, and generated outputs never become
+  truth merely because they exist.
+- Every authoritative or evidence-bearing tenant write is atomic inside one
+  tenant-scoped governed write batch after trusted tenant binding. No default,
+  request-chosen, or inferred tenant is allowed.
+- Tenant-owned and tenant-bearing derived state uses tenant-qualified identity,
+  references, idempotency, locks, traces, caches, and output keys. Cross-tenant
+  references and disclosure fail closed.
+- Historical or high-consequence reads bind both an authoritative valid-time
+  cut and a tenant knowledge position, plus the exact runtime and governed
+  context basis. Wall-clock record, capture, assertion, acceptance, or decision
+  time never substitutes for either axis.
+- Database schema readiness comes from immutable numbered migrations and their
+  migration ledger, not application-startup DDL or a record contract version.
+- Pre-tenant authentication or routing failures never enter tenant history.
+  They use only the separately governed operational-security lane defined by
+  ADR 0001; a ticket must stop if that lane is unavailable rather than invent a
+  default tenant or reuse a tenant table.
+- Claim limits remain record-keeping completeness for fictional/sandbox use:
+  no current-compliance, certification, official filing, production-readiness,
+  or capability-level claim follows from completing an M3 ticket.
+
+If an M3 ticket conflicts with this baseline, the ticket must be revised before
+implementation. Passing a UI or scenario test does not waive a canonical or
+package-architecture stop condition.
+
 ## How to work an M3 ticket
 
 1. One ticket should be one narrow PR unless the steward explicitly approves a split or merge.
@@ -125,6 +164,8 @@ Forbidden files:
 Read first:
 
 - `M3_BRIEF.md`
+- `docs/adr/0001-tenancy-and-schema-migrations.md`
+- `docs/adr/0002-valid-time-and-knowledge-time.md`
 - `kernel/api.py`
 - `kernel/gates.py`
 - `kernel/stages.py`
@@ -143,6 +184,11 @@ Required tests:
 - Facade endpoints do not create authoritative truth outside governed paths.
 - Rejected, retained, review-required, accepted, and warning outcomes are machine-readable.
 - Role claims without grants do not authorize farm-scoped actions.
+- A trusted tenant binding lasts exactly one request UnitOfWork; caller input
+  cannot choose or replace it, and tenant-scoped identifiers and idempotency do
+  not collide across tenants.
+- Durable endpoint outcomes share the request's governed batch and knowledge
+  position; pre-tenant failures create no tenant record, trace, or batch.
 
 Acceptance criteria:
 
@@ -159,6 +205,8 @@ Stop conditions:
 
 - Stop if an endpoint writes directly to projections, caches, materialization tables, or report stores.
 - Stop if request-chosen profile law or hidden profile selection is needed.
+- Stop if the required tenant binding, UnitOfWork, governed-batch, numbered-
+  migration, or pre-tenant audit foundations are not implemented and green.
 
 Validation:
 
@@ -196,6 +244,8 @@ Forbidden files:
 Read first:
 
 - `M3_BRIEF.md`
+- `docs/adr/0001-tenancy-and-schema-migrations.md`
+- `docs/adr/0002-valid-time-and-knowledge-time.md`
 - `profile_si_ffs/PROFILE.md`
 - `profile_si_ffs/UNSUPPORTED_SURFACES.md`
 - `kernel/api.py`
@@ -212,6 +262,9 @@ Required tests:
 - Cached reference data displays snapshot identity.
 - Retry state preserves the same idempotency key.
 - Draft edits after server acceptance create a new correction/supersession path instead of mutating server truth.
+- Local drafts, caches, and retry keys are partitioned by the trusted session's
+  tenant and principal context and are cleared or made inaccessible when that
+  context changes.
 
 Acceptance criteria:
 
@@ -228,6 +281,8 @@ Stop conditions:
 
 - Stop if local cache is treated as authoritative current state.
 - Stop if frontend code needs direct database/projection access.
+- Stop if tenant context is accepted from editable draft data or one tenant's
+  local state can be displayed or submitted under another tenant binding.
 
 Validation:
 
@@ -264,6 +319,8 @@ Forbidden files:
 Read first:
 
 - `M3_BRIEF.md`
+- `docs/adr/0001-tenancy-and-schema-migrations.md`
+- `docs/adr/0002-valid-time-and-knowledge-time.md`
 - `CAPTURE_MAPPING.md`
 - `profile_si_ffs/SI_RECORD_FIELDS.md`
 - `profile_si_ffs/PROFILE.md`
@@ -280,6 +337,9 @@ Required tests:
 
 - Routine spray draft can be prepared without required free-text fields beyond the five planned inputs.
 - Generated commit payload maps to expected contract destinations.
+- Generated payload selects the governed valid-time carrier for the represented
+  act; capture time, local persistence time, sync time, and server record time
+  cannot silently supply occurrence or effective time.
 - Five consecutive fictional records can be entered in 90 seconds or less, or the failure is recorded with UX findings.
 
 Acceptance criteria:
@@ -297,6 +357,8 @@ Stop conditions:
 
 - Stop if users must type KMG-MID, GERK, profile refs, policy refs, schema refs, or other governance fields per record.
 - Stop if event time, record time, assertion time, or effective time are collapsed.
+- Stop if a required valid-time carrier is absent, contradictory, or inferred
+  from capture, sync, ingestion, assertion, acceptance, decision, or record time.
 
 Validation:
 
@@ -333,6 +395,8 @@ Forbidden files:
 Read first:
 
 - `M3_BRIEF.md`
+- `docs/adr/0001-tenancy-and-schema-migrations.md`
+- `docs/adr/0002-valid-time-and-knowledge-time.md`
 - `kernel/problems.py`
 - `kernel/gates.py`
 - `kernel/sufficiency.py`
@@ -352,6 +416,9 @@ Required tests:
 - Reference snapshot drift routes to warning/review/refusal per policy, not silent acceptance.
 - Revoked worker sync denies or routes governably.
 - Advisory warning does not enter Compliance materialization.
+- A committed refusal, acceptance, or warning-bearing result is visible only
+  with its complete tenant batch; retries preserve tenant/principal-scoped
+  idempotency and never create a second knowledge position.
 
 Acceptance criteria:
 
@@ -404,6 +471,8 @@ Forbidden files:
 Read first:
 
 - `M3_BRIEF.md`
+- `docs/adr/0001-tenancy-and-schema-migrations.md`
+- `docs/adr/0002-valid-time-and-knowledge-time.md`
 - `docs/REVIEW_DISPUTE_SEMANTICS.md`
 - `kernel/tests/test_m2_review.py`
 - `kernel/stages.py`
@@ -420,6 +489,8 @@ Required tests:
 - Self-review works only within bounded policy.
 - Distinct reviewer is required where self-review is not allowed.
 - Reject/contest preserve append-only semantics and do not edit queued assertions or in-force consequences.
+- Review, correction, rejection, and contest outcomes preserve the original
+  valid-time meaning while receiving their own atomic tenant knowledge position.
 
 Acceptance criteria:
 
@@ -445,19 +516,19 @@ Validation:
 
 ---
 
-## M3.6 - Register views and frozen inspection export
+## M3.6 - Governed inspection-register output refusal
 
 Status: planned.
 
 Goal:
 
-- Show predefined PassportView register results.
-- Freeze a predefined inspection-register DocumentAssembly when freshness, basis, dispute, and output policy allow.
+- Return a governed unsupported/refusal outcome for the active SI inspection-register PassportView while its v0.1 WINDOW query/plan lacks ADR 0002's required carrier and window-meaning surfaces.
+- Return a governed unsupported/refusal outcome for inspection-register DocumentAssembly freeze/release while ADR 0002's required versioned contracts, temporal carrier/window semantics, qualification/release surfaces, and SI query/plan artifacts remain unavailable.
 - Refuse or disclose unsupported output states.
 
 Likely touched files:
 
-- PWA register/export views
+- PWA register/freeze refusal views
 - backend output facade tests
 - scenario fixtures for output qualification
 
@@ -473,6 +544,8 @@ Forbidden files:
 Read first:
 
 - `M3_BRIEF.md`
+- `docs/adr/0001-tenancy-and-schema-migrations.md`
+- `docs/adr/0002-valid-time-and-knowledge-time.md`
 - `PLATFORM.md`
 - `views/VIEWS.md`
 - `profile_si_ffs/views/VIEWS.md`
@@ -481,20 +554,18 @@ Read first:
 
 Behavior change:
 
-- Accepted spray records appear in governed register views with traceable basis/context/sufficiency refs.
-- Missing, stale, invalid, disputed, or incomplete basis refuses, recomputes, or discloses according to existing output policy.
+- SI inspection-register PassportView and DocumentAssembly freeze/release requests return governed unsupported/refusal outcomes without reinterpreting the v0.1 artifact identities.
 
 Required tests:
 
-- Accepted spray appears with materialization trace available.
-- Missing basis refuses.
-- STALE state bars clean export or triggers governed recompute/refusal.
-- Open dispute blocks clean frozen export.
-- Frozen document carries snapshot, basis, context, and sufficiency refs.
+- A register-view request does not render a clean PassportView or reinterpret the v0.1 query/plan identities.
+- A freeze request produces no DocumentAssembly, wrapper, receipt, enqueue, or released bytes and identifies the unmet ADR 0002 governance dependency.
+- Both outcomes identify the unmet dependency without claiming canonical, profile, or runtime conformance.
 
 Acceptance criteria:
 
-- The UI never renders a clean register when the governed output path refuses or qualifies it.
+- The UI renders neither a clean SI inspection register nor a frozen/released assembly while the governed output path refuses it.
+- Inspection-register view and freeze/release remain unavailable until a separate reviewed governance change provides and activates every ADR 0002 prerequisite.
 
 Non-goals:
 
@@ -504,8 +575,9 @@ Non-goals:
 
 Stop conditions:
 
-- Stop if output UI bypasses governed output qualification.
+- Stop if output UI bypasses the governed unsupported/refusal outcome.
 - Stop if stale, disputed, missing-basis, or incomplete states are hidden.
+- Stop if this ticket adds or reinterprets temporal fields, applies new semantics to the v0.1 query/plan identities, renders a clean SI inspection register, or emits any frozen/released artifact before the separate contract and active-artifact governance path is complete.
 
 Validation:
 
@@ -544,6 +616,8 @@ Forbidden files:
 Read first:
 
 - `M3_BRIEF.md`
+- `docs/adr/0001-tenancy-and-schema-migrations.md`
+- `docs/adr/0002-valid-time-and-knowledge-time.md`
 - `conformance/CONFORMANCE.md`
 - `conformance/evidence/README.md`
 - `kernel/demo.py`
@@ -551,20 +625,23 @@ Read first:
 
 Behavior change:
 
-- A repeatable local/sandbox scenario proves bootstrap, offline capture, sync, review, materialization, register view, export/refusal, replay, revoked delegation, binding mismatch, and privacy audit.
+- A repeatable local/sandbox scenario proves bootstrap, offline capture, sync, review, governed register/freeze refusals, replay, revoked delegation, binding mismatch, and privacy audit.
 
 Required tests:
 
 - Bootstrap fictional farm and cache refs.
 - Capture routine spray offline.
 - Sync and self-review to accepted.
-- Materialize register and render PassportView.
-- Freeze DocumentAssembly.
+- Request the SI inspection-register PassportView and receive the governed unsupported/refusal outcome without rendering a clean register.
+- Request DocumentAssembly freeze and receive the governed unsupported/refusal outcome with no artifact or released bytes.
 - Replay idempotency key without duplicate truth.
 - Revoked worker sync refuses or routes governably.
 - Product binding mismatch warns/reviews without compliance fact.
-- Missing/stale/disputed basis refuses clean export.
+- Missing/stale/disputed basis refuses a clean output.
 - Privacy audit finds no real identifiers or documents.
+- Isolation scenarios cover cross-tenant identifiers, references, idempotency,
+  caches, traces, and outputs; temporal scenarios replay the same valid and
+  knowledge cuts and obtain the same qualified result.
 
 Acceptance criteria:
 
@@ -581,6 +658,7 @@ Stop conditions:
 
 - Stop if demo output is mislabeled as conformance evidence, profile evidence, production evidence, or manifest grounding.
 - Stop if fixtures contain real personal/farm data.
+- Stop if the scenario claims a successful SI inspection-register view or freeze/release before ADR 0002's separately governed prerequisites are accepted and activated.
 
 Validation:
 
@@ -621,19 +699,24 @@ Read first:
 
 - `M3_BRIEF.md`
 - `README.md`
+- `docs/adr/0001-tenancy-and-schema-migrations.md`
+- `docs/adr/0002-valid-time-and-knowledge-time.md`
 - `kernel/README.md`
 - `profile_si_ffs/UNSUPPORTED_SURFACES.md`
 - existing local run scripts and docs
 
 Behavior change:
 
-- A fresh contributor can run the sandbox backend and PWA, load fictional data, capture/sync/review/export one record, and rerun baseline checks.
+- A fresh contributor can run the sandbox backend and PWA, load fictional data, capture/sync/review one record, exercise the governed register/freeze refusals, and rerun baseline checks.
 
 Required tests:
 
 - Fresh-run instructions are verified from a clean local checkout or equivalent clean environment.
 - Reset instructions remove only sandbox/generated local state.
 - Baseline backend checks pass after setup.
+- Startup refuses a missing, unknown, reordered, or digest-mismatched numbered
+  migration; application startup does not mutate the schema.
+- Sandbox reset cannot cross tenant boundaries or erase canonical source inputs.
 
 Acceptance criteria:
 
@@ -650,6 +733,8 @@ Stop conditions:
 
 - Stop if docs imply production operations or real-farm onboarding.
 - Stop if setup needs live registry integration or real personal/farm data.
+- Stop if setup relies on a default tenant, application-startup DDL, shared
+  tenant/audit credentials, or a database whose migration readiness is unknown.
 
 Validation:
 

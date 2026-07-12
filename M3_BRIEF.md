@@ -26,7 +26,7 @@ Assumed starting facts:
 
 M3 delivers the first usable platform MVP loop:
 
-> A farmer can enter a plant-protection spray record on a phone/PWA with five primary inputs, offline if needed; sync it to the governed OFARM backend; have the commit pass through authority, validation, profile applicability, evidence sufficiency, review/promotion, and materialization; then view or freeze an inspection register that either shows the governed record or refuses/discloses the exact gaps, warnings, stale basis, or disputes.
+> A farmer can enter a plant-protection spray record on a phone/PWA with five primary inputs, offline if needed; sync it to the governed OFARM backend; have the commit pass through authority, validation, profile applicability, evidence sufficiency, and review/promotion; then request the SI inspection-register view or freeze/release and receive an honest governed refusal until ADR 0002's contract and active-artifact prerequisites are accepted and activated.
 
 M3 is successful when this works end to end on a real device or browser profile against a local/sandbox deployment using fictional, format-true data.
 
@@ -65,7 +65,7 @@ M3 supports the following MVP users with fictional/synthetic identities:
 1. Farmer: asserts operation claims and performs bounded self-review for routine records.
 2. Family worker or contractor: submits via DelegationGrant; revocation is rechecked on sync.
 3. Advisor: sees exception/review queue for records that cannot self-accept.
-4. Read-only inspector/export recipient: receives a frozen DocumentAssembly or read-only view through SharingGrant when exercised.
+4. Read-only inspector/export recipient: may exercise SharingGrant, but the SI inspection-register view and frozen DocumentAssembly remain unsupported until the ADR 0002 prerequisites land.
 
 Real farmers/advisors/inspectors are M4/M5 scope unless the steward explicitly authorizes a privacy-safe shadow trial.
 
@@ -81,7 +81,7 @@ Real farmers/advisors/inspectors are M4/M5 scope unless the steward explicitly a
 - Display of `RuntimeProblem`s, warnings, retained-draft decisions, review-required decisions, and accepted decisions.
 - Deliberate “confirm & accept” self-review for routine operation claims.
 - Advisor exception queue sufficient to accept/reject/contest synthetic cases already supported by backend semantics.
-- PassportView and DocumentAssembly access through versioned, predefined outputs only.
+- PassportView and DocumentAssembly requests through versioned, predefined outputs only; the active SI inspection-register view and freeze/release remain governed refusals until ADR 0002's versioned contract, query/plan, qualification/release, and active-artifact prerequisites land.
 - Scenario tests proving offline, authority, binding, review, materialization, output, and refusal behavior.
 
 ### Out of scope
@@ -92,6 +92,9 @@ Real farmers/advisors/inspectors are M4/M5 scope unless the steward explicitly a
 - Real personal data or real farm documents.
 - Current-compliance decisions from registry snapshots.
 - Production auth hardening, backup/restore operations, support desk workflows, billing, multi-tenant administration, or production observability beyond MVP logs.
+- A multi-tenant administration product is out of scope, but tenant isolation,
+  trusted tenant binding, tenant-qualified persistence, and migration readiness
+  are mandatory runtime foundations rather than optional product features.
 - Official government filing/submission.
 - Second runtime profile activation or organic-on-top-of-SI composition.
 
@@ -100,6 +103,17 @@ Real farmers/advisors/inspectors are M4/M5 scope unless the steward explicitly a
 ### Backend
 
 Use the existing FastAPI/Python backend and PostgreSQL truth store. All state-affecting writes must enter through the governed commit/review paths. No UI endpoint may write directly to projections, caches, materialization tables, or report stores.
+
+M3 runtime work is downstream of the accepted package architecture in
+`docs/adr/0001-tenancy-and-schema-migrations.md` and
+`docs/adr/0002-valid-time-and-knowledge-time.md`. A request operates in one
+trusted tenant-bound UnitOfWork; every durable tenant outcome belongs to one
+atomic governed write batch and tenant knowledge position. Historical and
+high-consequence reads bind both valid time and knowledge position. Numbered
+migrations, tenant-qualified storage, and the separate pre-tenant operational
+security lane are prerequisites where the relevant M3 surface depends on them.
+These package-local decisions implement canonical OFARM constraints and do not
+amend or promote canonical law.
 
 The backend may add an M3 API façade, but that façade is only transport/product ergonomics. It must preserve canonical commit payloads and route all authoritative effects through `GatePipeline` or the existing governed review/output mechanisms.
 
@@ -124,7 +138,7 @@ M3 uses the existing OIDC/development principal binding path. Authentication ide
 
 ### Outputs
 
-Use predefined PassportView and DocumentAssembly behavior only. No public query authoring. Stale, disputed, missing-basis, or unresolved states must refuse, route to review, or disclose according to the existing output policy.
+Use predefined PassportView behavior only. No public query authoring. Stale, disputed, missing-basis, or unresolved states must refuse, route to review, or disclose according to the existing output policy. The active SI inspection-register PassportView and DocumentAssembly freeze/release must return the governed unsupported/refusal outcome until the ADR 0002 governance path is complete; M3 must not apply new temporal semantics to the existing v0.1 artifact identities.
 
 ### Advisory behavior
 
@@ -145,8 +159,8 @@ Minimum backend façade:
 - `GET /m3/sync-status/{idempotencyKey}` — returns replay/current sync status without creating new truth.
 - `POST /review/accept` or existing equivalent — records deliberate self-review/advisor acceptance through the governed review path.
 - `POST /review/reject` and `POST /review/contest` if existing backend support is exposed to the M3 exception queue.
-- `GET /m3/register/passport` — returns the predefined PassportView result or governed refusal/disclosure.
-- `POST /m3/register/document-assembly/freeze` — freezes a predefined inspection-register DocumentAssembly when policy allows.
+- `GET /m3/register/passport` — returns the governed unsupported/refusal outcome for the active SI inspection-register v0.1 artifacts while ADR 0002's prerequisites remain unmet.
+- `POST /m3/register/document-assembly/freeze` — returns the governed unsupported/refusal outcome while ADR 0002's contract and active-artifact prerequisites remain unmet; it may freeze only after those separately governed dependencies are accepted and activated.
 
 Stop if any endpoint requires new law, hidden profile selection, direct projection writes, request-chosen profile law, or a current-compliance claim.
 
@@ -267,21 +281,19 @@ Stop if:
 
 - “review” becomes a UI flag without `ReviewDecision`, authority trace, and PromotionTrace linkage.
 
-### M3.6 — Register views and frozen inspection export
+### M3.6 — Governed inspection-register output refusal
 
 Allowed change:
 
-- Show predefined PassportView for the farm/register scope.
-- Freeze predefined DocumentAssembly when freshness, basis, dispute, and output policy allow.
+- Return a governed unsupported/refusal outcome for the active SI inspection-register PassportView while its v0.1 WINDOW query/plan lacks ADR 0002's required carrier and window-meaning surfaces.
+- Return a governed unsupported/refusal outcome for inspection-register DocumentAssembly freeze/release while ADR 0002's required versioned contracts, temporal carrier/window semantics, qualification/release surfaces, and SI query/plan artifacts remain unavailable.
 - Display refusal/disclosure when basis is stale, invalid, disputed, or incomplete.
 
 Required proof:
 
-- Accepted spray appears with MaterializationBasis/ContextSnapshot trace available.
-- Missing basis refuses.
-- STALE state bars export or triggers governed recompute/refusal.
-- Open dispute blocks clean frozen export.
-- Frozen document carries snapshot/basis/context/sufficiency refs.
+- A register-view request does not render a clean PassportView or reinterpret the v0.1 query/plan identities.
+- A freeze request does not produce a DocumentAssembly, wrapper, receipt, or bytes.
+- Both outcomes identify the unmet ADR 0002 governance dependency without claiming conformance.
 
 Stop if:
 
@@ -299,12 +311,12 @@ Required scenarios:
 1. Bootstrap fictional farm and cache refs.
 2. Capture routine spray offline.
 3. Sync and self-review to accepted.
-4. Materialize register and render PassportView.
-5. Freeze DocumentAssembly.
+4. Request the SI inspection-register PassportView and receive the governed unsupported/refusal outcome without rendering a clean register.
+5. Request DocumentAssembly freeze and receive the governed unsupported/refusal outcome with no frozen artifact or released bytes.
 6. Replay same idempotency key without duplicate truth.
 7. Revoked worker sync refuses or routes governably.
 8. Product binding mismatch raises warning/review without creating a compliance fact.
-9. Missing/stale/disputed basis refuses clean export.
+9. Missing/stale/disputed basis refuses a clean output.
 10. Privacy audit passes: no real identifiers, names, document filenames, addresses, dates, or images.
 
 Stop if:
@@ -321,7 +333,7 @@ Allowed change:
 
 Required proof:
 
-- A fresh contributor can run the backend, load fictional data, open the PWA, capture/sync/review/export one record, and re-run the baseline checks.
+- A fresh contributor can run the backend, load fictional data, open the PWA, capture/sync/review one record, exercise the governed register/freeze refusals, and re-run the baseline checks.
 
 Stop if:
 
@@ -339,7 +351,7 @@ Stop if:
 | M3-T06 | Reference snapshot drift | Sync re-verifies against current snapshot and records discrepancy/review/warning, not silent accept. |
 | M3-T07 | Revoked delegation | Worker’s offline draft synced after revocation denies or routes governably. |
 | M3-T08 | Advisory boundary | Warning visible; no Advisory material enters Compliance materialization. |
-| M3-T09 | Stale/disputed output | PassportView/DocumentAssembly refuses, recomputes, or discloses per policy; no clean false export. |
+| M3-T09 | SI inspection-register output | PassportView and DocumentAssembly freeze/release return the governed unsupported/refusal outcome until ADR 0002's prerequisites are accepted and activated; no clean register or exported bytes. |
 | M3-T10 | Privacy audit | Fixtures and run records contain fictional, format-true data only. |
 | M3-T11 | No direct projection writes | Tests prove UI/API cannot write authoritative facts into derived tables/caches. |
 | M3-T12 | Claim honesty | Docs, UI labels, manifests, and evidence files do not claim production/current-compliance/certification readiness. |
@@ -404,7 +416,7 @@ M3 is done when all of the following are true:
 5. The draft can be captured offline, synced later, and retried idempotently.
 6. A routine record can pass through governed self-review and promote to accepted state.
 7. Exceptions are visible and route to retained draft, review, denial, or warning without silent acceptance.
-8. The register view and frozen inspection assembly render accepted records and refuse/disclose unsupported states.
+8. SI inspection-register view and freeze/release requests refuse honestly until ADR 0002's separately governed prerequisites are accepted and activated.
 9. The M3 scenario runner or manual acceptance script proves the end-to-end flow with fictional data.
 10. Baseline backend checks pass.
 11. Frontend tests/build pass once the PWA exists.
