@@ -2034,7 +2034,7 @@ def _freeze_semantic_value(
         value_states[id(value)] = (value, state)
         return state
     if isinstance(value, (type, types.ModuleType)):
-        state = ("IDENTITY", value)
+        state = ("IDENTITY", type(value), value)
         value_states[id(value)] = (value, state)
         return state
     object_fields = _semantic_object_fields(value)
@@ -2055,7 +2055,7 @@ def _freeze_semantic_value(
             active.remove(marker)
         value_states[id(value)] = (value, state)
         return state
-    state = ("IDENTITY", value)
+    state = ("IDENTITY", type(value), value)
     value_states[id(value)] = (value, state)
     return state
 
@@ -2082,7 +2082,7 @@ def _same_semantic_value(
     elif current[0] == "SCALAR":
         matches = current[1] is prior[1] and current[2] == prior[2]
     elif current[0] == "IDENTITY":
-        matches = current[1] is prior[1]
+        matches = current[1] is prior[1] and current[2] is prior[2]
     elif current[0] == "PATH":
         matches = (current[1] is prior[1]
                    and (not require_container_identity
@@ -2149,7 +2149,9 @@ def _semantic_function_state(
         traversal: _SemanticTraversal | None = None,
 ) -> tuple:
     if type(function) is not types.FunctionType:
-        return ("IDENTITY", function)
+        return (
+            "VALUE", function,
+            _freeze_semantic_value(function, traversal=traversal))
     if traversal is None:
         traversal = _new_semantic_traversal()
     function_states = traversal[1]
@@ -2183,8 +2185,10 @@ def _same_semantic_function(
 ) -> bool:
     if current[0] != prior[0]:
         return False
-    if current[0] == "IDENTITY":
-        return current[1] is prior[1]
+    if current[0] == "VALUE":
+        return (current[1] is prior[1]
+                and _same_semantic_value(
+                    current[2], prior[2], traversal=traversal))
     if traversal is None:
         traversal = _new_semantic_traversal()
     comparison_key = (id(current), id(prior))
@@ -2227,6 +2231,40 @@ def _semantic_descriptor_functions(descriptor: object) -> tuple[tuple[str, objec
     return ()
 
 
+def _semantic_class_behavior_name(name: str) -> bool:
+    """Return whether a non-Python class attribute participates in behavior."""
+    return name in (
+        "__abs__", "__abstractmethods__", "__add__", "__aenter__",
+        "__aexit__", "__aiter__", "__and__", "__anext__", "__await__",
+        "__bool__", "__buffer__", "__bytes__", "__call__", "__ceil__",
+        "__class_getitem__", "__complex__", "__contains__", "__copy__",
+        "__deepcopy__", "__del__", "__delattr__", "__delete__",
+        "__delitem__", "__dir__", "__divmod__", "__enter__", "__eq__",
+        "__exit__", "__float__", "__floor__", "__floordiv__", "__format__",
+        "__fspath__", "__ge__", "__get__", "__getattr__",
+        "__getattribute__", "__getformat__", "__getinitargs__",
+        "__getitem__", "__getnewargs__", "__getnewargs_ex__",
+        "__getstate__", "__gt__", "__hash__", "__iadd__", "__iand__",
+        "__ifloordiv__", "__ilshift__", "__imatmul__", "__imod__",
+        "__imul__", "__index__", "__init__", "__init_subclass__",
+        "__instancecheck__", "__int__", "__invert__", "__ior__", "__ipow__",
+        "__irshift__", "__isabstractmethod__", "__isub__", "__iter__",
+        "__itruediv__", "__ixor__", "__le__", "__len__",
+        "__length_hint__", "__lshift__", "__lt__", "__match_args__",
+        "__matmul__", "__missing__", "__mod__", "__mro_entries__", "__mul__",
+        "__ne__", "__neg__", "__new__", "__next__", "__or__", "__pos__",
+        "__pow__", "__prepare__", "__radd__", "__rand__", "__rdivmod__",
+        "__reduce__", "__reduce_ex__", "__release_buffer__", "__repr__",
+        "__reversed__", "__rfloordiv__", "__rlshift__", "__rmatmul__",
+        "__rmod__", "__rmul__", "__ror__", "__round__", "__rpow__",
+        "__rrshift__", "__rshift__", "__rsub__", "__rtruediv__", "__rxor__",
+        "__set__", "__set_name__", "__setattr__", "__setitem__",
+        "__setstate__", "__sizeof__", "__str__", "__sub__",
+        "__subclasscheck__", "__subclasshook__", "__subclasses__",
+        "__truediv__", "__trunc__", "__xor__",
+    )
+
+
 def _semantic_class_state(
         class_object: type,
         traversal: _SemanticTraversal | None = None,
@@ -2248,7 +2286,8 @@ def _semantic_class_state(
                 tuple((kind, _semantic_function_state(function, traversal))
                       for kind, function in functions),
             ))
-        elif not name.startswith("__"):
+        elif (not name.startswith("__")
+              or _semantic_class_behavior_name(name)):
             data.append((
                 name, descriptor,
                 _freeze_semantic_value(descriptor, traversal=traversal)))
@@ -2260,7 +2299,7 @@ def _semantic_class_state(
     state = (
         class_object, tuple(class_object.__mro__), tuple(descriptors),
         tuple(data), class_object.__module__, class_object.__name__,
-        class_object.__qualname__, base_states,
+        class_object.__qualname__, base_states, type(class_object),
     )
     class_states[id(class_object)] = (class_object, state)
     return state
@@ -2277,7 +2316,8 @@ def _same_semantic_class(
     comparison_key = (id(current), id(prior))
     if comparison_key in traversal[6]:
         return True
-    if current[0] is not prior[0] or len(current[1]) != len(prior[1]):
+    if (current[0] is not prior[0] or current[8] is not prior[8]
+            or len(current[1]) != len(prior[1])):
         return False
     if any(current_item is not prior_item
            for current_item, prior_item in zip(current[1], prior[1])):
@@ -2527,7 +2567,7 @@ def _same_live_semantic_value(
             and retained[0] is current and retained[1] is prior):
         return True
     if kind == "IDENTITY":
-        matches = current is prior[1]
+        matches = type(current) is prior[1] and current is prior[2]
     elif kind == "PATH":
         matches = (type(current) is prior[1]
                    and (not require_container_identity
@@ -2619,8 +2659,10 @@ def _same_live_semantic_function(
         proof: _SemanticLiveProof | None = None,
 ) -> bool:
     """Compare a live function directly with its retained function state."""
-    if prior[0] == "IDENTITY":
-        return type(current) is not types.FunctionType and current is prior[1]
+    if prior[0] == "VALUE":
+        return (current is prior[1]
+                and _same_live_semantic_value(
+                    current, prior[2], proof=proof))
     if prior[0] != "FUNCTION" or type(current) is not types.FunctionType:
         return False
     if proof is None:
@@ -2664,7 +2706,8 @@ def _same_live_semantic_class(
         proof: _SemanticLiveProof | None = None,
 ) -> bool:
     """Compare a live class directly with its retained class state."""
-    if not isinstance(current, type) or current is not prior[0]:
+    if (not isinstance(current, type) or current is not prior[0]
+            or type(current) is not prior[8]):
         return False
     if proof is None:
         proof = _new_semantic_live_proof()
@@ -2698,7 +2741,8 @@ def _same_live_semantic_class(
                     for (kind, function), (prior_kind, prior_function)
                     in zip(functions, prior_functions)):
                 return False
-        elif not name.startswith("__"):
+        elif (not name.startswith("__")
+              or _semantic_class_behavior_name(name)):
             if data_index >= len(prior[3]):
                 return False
             prior_name, prior_descriptor, prior_value = prior[3][data_index]
@@ -2941,11 +2985,19 @@ def _capture_decision_semantics() -> tuple[tuple[Any, ...], ...]:
         elif kind == "METHODCALLER":
             enqueue_value_state(state[3])
         elif kind == "IDENTITY":
-            value = state[1]
+            value = state[2]
+            # An identity-only singleton can still delegate decision behavior
+            # to its mutable source-backed class (for example policy.ABSENT).
+            # Seal that class body even when the instance has no retained
+            # fields of its own.
+            enqueue_identity_class(state[1])
             if isinstance(value, type):
                 enqueue_identity_class(value)
 
     def enqueue_function_state(state: tuple) -> None:
+        if state[0] == "VALUE":
+            enqueue_value_state(state[2])
+            return
         if state[0] != "FUNCTION":
             return
         for value_state in (state[4], state[6], state[9], state[11]):
@@ -2956,10 +3008,15 @@ def _capture_decision_semantics() -> tuple[tuple[Any, ...], ...]:
     def enqueue_class_state(state: tuple) -> None:
         for function in _semantic_class_functions(state):
             enqueue_function(function)
+        for _name, _descriptor, functions in state[2]:
+            for _kind, function_state in functions:
+                if function_state[0] == "VALUE":
+                    enqueue_function_state(function_state)
         for _name, _value, value_state in state[3]:
             enqueue_value_state(value_state)
         for _base, base_state in state[7]:
             enqueue_class_state(base_state)
+        enqueue_identity_class(state[8])
 
     for module_name, names in _DECISION_DATA_ROOTS:
         module = _decision_semantic_module(module_name)
@@ -3057,6 +3114,7 @@ def _capture_decision_semantics() -> tuple[tuple[Any, ...], ...]:
             if id(class_object) in captured_identity_classes:
                 continue
             captured_identity_classes.add(id(class_object))
+            enqueue_identity_class(type(class_object))
             module = sys.modules.get(class_object.__module__)
             if type(module) is not types.ModuleType:
                 raise RuntimeBundleError(
@@ -3249,10 +3307,11 @@ def _stable_frozen_semantic_value(
     if kind == "NONFINITE_FLOAT":
         return {"kind": "builtins.float", "nonFiniteValue": state[2]}
     if kind == "IDENTITY":
-        value = state[1]
+        value_type = state[1]
+        value = state[2]
         if isinstance(value, type):
             return {"kind": "CLASS_REF", "ref": _semantic_type_label(value)}
-        if type(value) is types.FunctionType:
+        if value_type is types.FunctionType:
             return {
                 "kind": "FUNCTION_REF",
                 "ref": f"{value.__module__}.{value.__qualname__}",
@@ -3265,9 +3324,9 @@ def _stable_frozen_semantic_value(
                     getattr(value, "__qualname__", None)
                     or getattr(value, "__name__", None)
                 ),
-                "type": _semantic_type_label(type(value)),
+                "type": _semantic_type_label(value_type),
             }
-        return {"kind": "OBJECT_REF", "type": _semantic_type_label(type(value))}
+        return {"kind": "OBJECT_REF", "type": _semantic_type_label(value_type)}
     if kind == "PATH":
         return {
             "kind": "PATH", "type": _semantic_type_label(state[1]),
@@ -3405,13 +3464,10 @@ def _stable_semantic_function_state(
     cached = cache.get(id(state)) if cache is not None else None
     if cached is not None and cached[0] is state:
         return cached[1]
-    if state[0] != "FUNCTION":
-        value = state[1]
-        result = {
-            "kind": "CALLABLE_REF",
-            "ref": f"{type(value).__module__}.{type(value).__qualname__}",
-        }
-    else:
+    if state[0] == "VALUE":
+        result = _stable_frozen_semantic_value(
+            state[2], package_root, projection)
+    elif state[0] == "FUNCTION":
         result = {
             "kind": "FUNCTION",
             "module": state[12],
@@ -3433,6 +3489,9 @@ def _stable_semantic_function_state(
             "attributes": _stable_frozen_semantic_value(
                 state[11], package_root, projection),
         }
+    else:
+        raise RuntimeBundleError(
+            f"unsupported semantic function state: {state[0]!r}")
     if cache is not None:
         cache[id(state)] = (state, result)
     return result
@@ -3451,6 +3510,7 @@ def _stable_semantic_class_state(
         "module": state[4],
         "name": state[5],
         "qualname": state[6],
+        "metaclass": _semantic_type_label(state[8]),
         "mro": [_semantic_type_label(item) for item in state[1]],
         "bases": [
             _stable_semantic_class_state(
@@ -3685,7 +3745,9 @@ def _decision_semantic_callable_anchors(
                 add_value(value)
 
     def add_function(state: tuple) -> None:
-        if state[0] == "FUNCTION":
+        if state[0] == "VALUE":
+            add_value(state[2])
+        elif state[0] == "FUNCTION":
             anchors[id(state[1])] = (state[1], state[2])
             for value in (state[4], state[6], state[9], state[11]):
                 add_value(value)
@@ -3846,6 +3908,7 @@ _DECISION_RECEIPT_IMPLEMENTATION_ANCHORS = tuple(
         _prepare_decision_semantic_caches,
         _semantic_function_state,
         _same_semantic_function,
+        _semantic_class_behavior_name,
         _semantic_class_state,
         _same_semantic_class,
         _semantic_object_fields,

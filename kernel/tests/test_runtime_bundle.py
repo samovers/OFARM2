@@ -158,6 +158,14 @@ class _BundleOnlyStore:
         self._runtime_environment_seal = bundle._selection_environment_seal
 
 
+class _StatefulSemanticCallable:
+    def __init__(self, result):
+        self.result = result
+
+    def __call__(self, *_args, **_kwargs):
+        return self.result
+
+
 def _test_database_environment() -> dict:
     return {
         "schemaVersion": "ofarm.runtime-database-observation.local.v1",
@@ -3723,22 +3731,105 @@ def test_inherited_jsonschema_error_behavior_changes_semantic_receipt():
 
 
 def test_reached_kernel_object_class_behavior_changes_semantic_receipt():
+    import operator
+
+    from kernel import authority
     from kernel import policy
 
+    class HostileAbsent:
+        __slots__ = ()
+
+        def __bool__(self):
+            return False
+
+    class HostileAuthorityMeta(type):
+        def __call__(cls, *_args, **_kwargs):
+            return "hostile"
+
+    identity = policy.ABSENT
     absent_class = type(policy.ABSENT)
+    authority_class = authority.AuthorityDecision
+    authority_metaclass = type(authority_class)
+    selected = _capture_decision_semantics()
     clean = observed_decision_semantics_component(config.PACKAGE_ROOT)
     had_equality = "__eq__" in vars(absent_class)
     original = vars(absent_class).get("__eq__")
+    changed_digests = []
+    for replacement in (
+            None, operator.eq,
+            staticmethod(operator.eq), staticmethod(operator.ne)):
+        try:
+            absent_class.__eq__ = replacement
+            with pytest.raises(
+                    RuntimeBundleError, match=r"kernel\.policy\._Absent"):
+                _require_decision_semantics(selected)
+            changed_digests.append(
+                observed_decision_semantics_component(
+                    config.PACKAGE_ROOT).content_digest)
+        finally:
+            if had_equality:
+                absent_class.__eq__ = original
+            else:
+                del absent_class.__eq__
+        _require_decision_semantics(selected)
+
     try:
-        absent_class.__eq__ = lambda _self, _other: True
-        changed = observed_decision_semantics_component(config.PACKAGE_ROOT)
+        identity.__class__ = HostileAbsent
+        assert policy.ABSENT is identity
+        assert not policy.ABSENT
+        with pytest.raises(
+                RuntimeBundleError, match=r"kernel\.policy\.ABSENT"):
+            _require_decision_semantics(selected)
+        changed_digests.append(
+            observed_decision_semantics_component(
+                config.PACKAGE_ROOT).content_digest)
     finally:
+        identity.__class__ = absent_class
+    assert policy.ABSENT is identity
+    assert bool(policy.ABSENT)
+    _require_decision_semantics(selected)
+
+    try:
+        type.__setattr__(
+            authority_class, "__class__", HostileAuthorityMeta)
+        assert authority_class() == "hostile"
+        with pytest.raises(
+                RuntimeBundleError,
+                match=r"kernel\.authority\.AuthorityDecision"):
+            _require_decision_semantics(selected)
+        changed_digests.append(
+            observed_decision_semantics_component(
+                config.PACKAGE_ROOT).content_digest)
+    finally:
+        type.__setattr__(
+            authority_class, "__class__", authority_metaclass)
+    assert type(authority_class) is authority_metaclass
+    _require_decision_semantics(selected)
+
+    stateful = _StatefulSemanticCallable(True)
+    absent_class.__eq__ = staticmethod(stateful)
+    try:
+        stateful_selected = _capture_decision_semantics()
+        stateful_clean = observed_decision_semantics_component(
+            config.PACKAGE_ROOT)
+        stateful.result = False
+        assert policy.ABSENT.__eq__(None) is False
+        with pytest.raises(
+                RuntimeBundleError, match=r"kernel\.policy\._Absent"):
+            _require_decision_semantics(stateful_selected)
+        stateful_changed = observed_decision_semantics_component(
+            config.PACKAGE_ROOT)
+    finally:
+        stateful.result = True
         if had_equality:
             absent_class.__eq__ = original
         else:
             del absent_class.__eq__
+    _require_decision_semantics(selected)
 
-    assert changed.content_digest != clean.content_digest
+    assert all(digest != clean.content_digest for digest in changed_digests)
+    assert len(set(changed_digests)) == 6
+    assert stateful_changed.content_digest != stateful_clean.content_digest
 
 
 def test_semantic_receipt_normalizes_relocated_kernel_module_file():
@@ -4200,9 +4291,8 @@ def test_runtime_service_composition_cannot_mutate_after_construction(fresh_env)
         outputs.materializer = Materializer(outputs.store)
 
 
-def test_gate_pipeline_rechecks_exact_policy_provider_identity():
-    bundle = _live_test_bundle()
-    pipeline = GatePipeline(_BundleOnlyStore(bundle), runtime_bundle=bundle)
+def test_gate_pipeline_rechecks_exact_policy_provider_identity(fresh_pipeline):
+    pipeline = fresh_pipeline
     provider = pipeline.policy_provider
     mutations = {
         "runtime_bundle": _variant_bundle(pipeline.runtime_bundle),
