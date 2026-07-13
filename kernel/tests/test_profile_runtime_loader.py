@@ -2415,7 +2415,7 @@ def test_descriptor_backed_validation_uses_provider_without_config_wrapper(
     assert result["decisionOutcome"] == "PROMOTE_ACCEPTED"
     assert pipeline.policy_provider.validation_policy() == \
         pipeline.runtime_bundle.json_component(
-            "PROFILE_POLICY", config.ACTIVE_PROFILE.validation_policy_ref)
+            "PROFILE_POLICY", config.ACTIVE_PROFILE.evidence_policy_ref)["validation"]
 
 
 def test_descriptor_backed_sufficiency_uses_provider_without_config_wrappers(
@@ -2432,6 +2432,10 @@ def test_descriptor_backed_sufficiency_uses_provider_without_config_wrappers(
     assert result["decisionOutcome"] == "PROMOTE_ACCEPTED"
     assert pipeline.policy_provider.policy_ref == \
         config.ACTIVE_PROFILE.evidence_policy_ref
+    assert pipeline.policy_provider.evidence_policy(
+        supported_checks=sufficiency.OPERATION_FLOOR_CHECKS,
+    ) == pipeline.runtime_bundle.json_component(
+        "PROFILE_POLICY", config.ACTIVE_PROFILE.evidence_policy_ref)
 
 
 def test_global_operation_sequence_uses_named_compatibility_constructors():
