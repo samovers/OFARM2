@@ -4780,19 +4780,38 @@ def test_runtime_bundle_live_bind_rejects_stale_executable_bytes(fresh_store):
         content_digest=sha256_bytes(changed_bytes),
         canonical_bytes=changed_bytes,
     )
-    components = tuple(changed if item == target else item for item in base.components)
+    environment = next(
+        item for item in base.components
+        if item.repository_path == "runtime-observed/environment-v4")
+    environment_document = json.loads(environment.canonical_bytes)
+    module = next(
+        item for item in environment_document["importIdentity"]["actualModules"]
+        if item.get("retainedComponent") == {
+            "role": target.role,
+            "logicalRef": target.logical_ref,
+        })
+    module["contentDigest"] = changed.content_digest
+    module["byteLength"] = len(changed.canonical_bytes)
+    environment_bytes = canonical_json(environment_document).encode("utf-8")
+    changed_environment = replace(
+        environment,
+        content_digest=sha256_bytes(environment_bytes),
+        canonical_bytes=environment_bytes,
+    )
+    components = tuple(
+        changed if item == target else
+        changed_environment if item == environment else item
+        for item in base.components)
     document = json.loads(base.canonical_document_bytes)
     document["components"] = [item.identity_document() for item in components]
     canonical = canonical_json(document).encode("utf-8")
     digest = sha256_bytes(canonical)
-    stale = replace(
-        base,
-        digest=digest,
-        bundle_ref=f"runtimebundle:{digest}",
+    stale = runtime_bundle_from_persisted(
+        descriptor=base.descriptor,
+        expected_digest=digest,
         canonical_document_bytes=canonical,
         components=components,
-        construction_mode="PERSISTED_AUDIT",
-        _selection_environment_seal=None,
+        package_root=config.PACKAGE_ROOT,
     )
     with pytest.raises(RuntimeBundleError, match="differs from current catalog"):
         require_current_runtime_catalog(stale, config.PACKAGE_ROOT)
