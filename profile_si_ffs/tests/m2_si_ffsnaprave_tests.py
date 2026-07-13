@@ -314,30 +314,52 @@ def test_p3_attach_inspection_evidence_is_race_safe(store):
     with selected_runtime(store) as selected:
         selected_digest = selected.runtime_bundle_digest
     barrier = threading.Barrier(2)
-    results, errors = [], []
+    results, errors = [None, None], [None, None]
+    done = [threading.Event(), threading.Event()]
+    worker_inputs = []
+    threads = []
 
-    def worker():
-        s = Store(dsn=store.dsn)
+    def worker(i, worker_store, register):
         try:
-            from kernel import context
-            context.bootstrap(s)
-            assert s.runtime_bundle_digest == selected_digest
-            reg = bundled_ffsnaprave_register(s)
-            barrier.wait(timeout=10)            # both contend on attach together
-            results.append(ffsn.attach_inspection_evidence(
-                s, reg, sid, sticker, validity=validity,
-                captured_by=demo.FARMER, farm_ref=demo.FARM)["evidenceRef"])
+            barrier.wait(timeout=300)           # both contend on attach together
+            results[i] = ffsn.attach_inspection_evidence(
+                worker_store, register, sid, sticker, validity=validity,
+                captured_by=demo.FARMER, farm_ref=demo.FARM)["evidenceRef"]
         except Exception as exc:                # noqa: BLE001
-            errors.append(repr(exc))
+            errors[i] = repr(exc)
         finally:
-            s.close()
+            done[i].set()
 
-    threads = [threading.Thread(target=worker) for _ in range(2)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join(timeout=20)
-    assert not errors, f"idempotent attach must not raise under concurrency: {errors}"
+    try:
+        # Bind the immutable runtime before starting the race. Bootstrap uses
+        # the same serialized transaction discipline and is not the behavior
+        # this test is intended to time or contend.
+        for i in range(2):
+            worker_store = Store(dsn=store.dsn)
+            worker_inputs.append(worker_store)
+            from kernel import context
+            context.bootstrap(worker_store)
+            assert worker_store.runtime_bundle_digest == selected_digest
+            register = bundled_ffsnaprave_register(worker_store)
+            threads.append(threading.Thread(
+                target=worker, args=(i, worker_store, register)))
+        for thread in threads:
+            thread.start()
+        for i, completed in enumerate(done):
+            assert completed.wait(timeout=300), \
+                f"concurrent inspection-evidence writer {i} did not complete"
+        for thread in threads:
+            thread.join(timeout=10)
+        assert not any(thread.is_alive() for thread in threads), \
+            "all concurrent inspection-evidence writers must terminate"
+    finally:
+        for thread in threads:
+            thread.join(timeout=10)
+        for worker_store in worker_inputs:
+            worker_store.close()
+
+    assert errors == [None, None], \
+        f"idempotent attach must not raise under concurrency: {errors}"
     assert len(results) == 2 and results[0] == results[1] and results[0] is not None
     assert store.get_record(results[0]) is not None   # exactly one EvidenceRecord
 

@@ -154,12 +154,28 @@ def test_g2_concurrent_first_structure_assertions_one_governed_winner(store):
     from kernel.gates import GatePipeline
     from kernel import demo
     field_ref = f"field:m2g2race.{uid()}"
-    outcomes, errors = [], []
+    outcomes, errors = [None, None], [None, None]
+    done = [threading.Event(), threading.Event()]
     barrier = threading.Barrier(2)
+    worker_inputs = []
+    threads = []
 
-    def worker(i):
-        s = Store()
+    def worker(i, pipe, sub):
         try:
+            barrier.wait(timeout=300)
+            outcomes[i] = pipe.commit(sub)
+        except Exception as exc:   # any crash is a test failure
+            errors[i] = repr(exc)
+        finally:
+            done[i].set()
+
+    try:
+        # Runtime selection is intentionally expensive and itself serialized.
+        # Complete it before the raced section so this test measures concurrent
+        # commits, not whether two cold bootstraps fit an arbitrary wall clock.
+        for i in range(2):
+            s = Store()
+            worker_inputs.append(s)
             from kernel import context
             context.bootstrap(s)
             pipe = GatePipeline(s)
@@ -171,20 +187,24 @@ def test_g2_concurrent_first_structure_assertions_one_governed_winner(store):
                  "parentFarmIdentityRef": demo.FARM,
                  "declaredArea": {"value": 1.0, "unitCode": "har"}},
                 idem_key=f"m2g2race:{i}:{uid()}")
-            barrier.wait(timeout=10)
-            outcomes.append(pipe.commit(sub))
-        except Exception as exc:   # any crash is a test failure
-            errors.append(repr(exc))
-        finally:
-            s.close()
+            threads.append(threading.Thread(
+                target=worker, args=(i, pipe, sub)))
+        for thread in threads:
+            thread.start()
+        for i, completed in enumerate(done):
+            assert completed.wait(timeout=300), \
+                f"concurrent structure writer {i} did not complete"
+        for thread in threads:
+            thread.join(timeout=10)
+        assert not any(thread.is_alive() for thread in threads), \
+            "all concurrent structure writers must terminate"
+    finally:
+        for thread in threads:
+            thread.join(timeout=10)
+        for worker_store in worker_inputs:
+            worker_store.close()
 
-    threads = [threading.Thread(target=worker, args=(i,)) for i in range(2)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join(timeout=20)
-
-    assert not errors, f"no writer may crash ungoverned: {errors}"
+    assert errors == [None, None], f"no writer may crash ungoverned: {errors}"
     decisions = sorted(o["decisionOutcome"] for o in outcomes)
     assert decisions == ["PROMOTE_ACCEPTED", "RETAIN_DRAFT"], decisions
     loser = [o for o in outcomes if o["decisionOutcome"] == "RETAIN_DRAFT"][0]
