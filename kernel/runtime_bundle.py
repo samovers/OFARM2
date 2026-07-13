@@ -1908,17 +1908,14 @@ _RE_PURGE_CODE = re.purge.__code__
 
 
 def _prepare_decision_semantic_caches() -> None:
-    """Reset derived caches whose contents must never become decision input."""
+    """Validate derived caches whose contents are never decision input."""
     if (re.purge is not _RE_PURGE
             or _RE_PURGE.__code__ is not _RE_PURGE_CODE):
-        raise RuntimeBundleError("regex cache reset semantics changed after import")
+        raise RuntimeBundleError("regex cache purge semantics changed after import")
     for name in ("_cache", "_cache2"):
         cache = vars(re).get(name, _MISSING)
         if cache is not _MISSING and type(cache) is not dict:
             raise RuntimeBundleError("regex cache structure is not exact")
-    _RE_PURGE()
-    if any(vars(re).get(name) for name in ("_cache", "_cache2")):
-        raise RuntimeBundleError("regex cache reset did not produce an empty cache")
 
 
 _SemanticStateCache = dict[int, tuple[object, tuple]]
@@ -2415,6 +2412,8 @@ def _semantic_binding_state(
         value: object,
         owner: types.ModuleType | None = None,
         traversal: _SemanticTraversal | None = None,
+        *,
+        name: str | None = None,
 ) -> tuple:
     if traversal is None:
         traversal = _new_semantic_traversal()
@@ -2426,6 +2425,11 @@ def _semantic_binding_state(
         return ("FUNCTION", _semantic_function_state(value, traversal))
     if isinstance(value, type):
         return ("CLASS", _semantic_class_state(value, traversal))
+    if owner is re and name in {"_cache", "_cache2"}:
+        # Compiled-pattern caches are process-global derived accelerators.
+        # Their exact dict identities remain sealed, but concurrent trusted
+        # regex use must not turn cache entries into decision semantics.
+        return ("DERIVED_CACHE", value, type(value))
     if owner is not None and not _stable_decision_namespace(owner.__name__):
         return ("IDENTITY_DATA", value, type(value))
     return ("DATA", _freeze_semantic_value(value, traversal=traversal))
@@ -2452,6 +2456,8 @@ def _same_semantic_binding(
         return _same_semantic_class(
             current[1], prior[1], traversal=traversal)
     if current[0] == "IDENTITY_DATA":
+        return current[1] is prior[1] and current[2] is prior[2]
+    if current[0] == "DERIVED_CACHE":
         return current[1] is prior[1] and current[2] is prior[2]
     return _same_semantic_value(
         current[1], prior[1], traversal=traversal)
@@ -2805,7 +2811,8 @@ def _capture_decision_semantics() -> tuple[tuple[Any, ...], ...]:
             present = name in namespace
             value = namespace[name] if present else _MISSING
             if key not in explicit:
-                state = _semantic_binding_state(value, owner, traversal)
+                state = _semantic_binding_state(
+                    value, owner, traversal, name=name)
                 append_entry(
                     "BINDING",
                     f"{_semantic_module_import_name(owner)}.{name}",
@@ -2863,7 +2870,8 @@ def _require_decision_semantics(
                 traversal=traversal)
         elif kind == "BINDING":
             matches = _same_semantic_binding(
-                _semantic_binding_state(current, module, traversal), prior_state,
+                _semantic_binding_state(
+                    current, module, traversal, name=name), prior_state,
                 traversal=traversal)
         else:
             raise RuntimeBundleError(
@@ -3221,6 +3229,13 @@ def _stable_semantic_binding_state(
         return {
             "kind": "EXTERNAL_DATA_REF",
             "module": owner.__name__,
+            "type": _semantic_type_label(state[2]),
+        }
+    if state[0] == "DERIVED_CACHE":
+        return {
+            "kind": "DERIVED_CACHE",
+            "module": owner.__name__,
+            "name": name,
             "type": _semantic_type_label(state[2]),
         }
     return _stable_frozen_semantic_value(

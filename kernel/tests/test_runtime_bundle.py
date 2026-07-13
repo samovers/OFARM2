@@ -3434,6 +3434,57 @@ def test_regex_cache_growth_does_not_change_semantic_receipt():
     assert after_cache_growth == clean
 
 
+def test_concurrent_regex_cache_growth_does_not_poison_semantic_proof():
+    from kernel import runtime_bundle as runtime_bundle_module
+
+    selected = _capture_decision_semantics()
+    release = threading.Event()
+    populated = threading.Event()
+    pattern = f"issue171-concurrent-derived-cache-{uuid.uuid4().hex}"
+
+    def populate_cache():
+        release.wait(timeout=10)
+        re.compile(pattern)
+        populated.set()
+
+    worker = threading.Thread(target=populate_cache)
+    prepare_code = runtime_bundle_module._prepare_decision_semantic_caches.__code__
+
+    def release_after_cache_validation(frame, event, _arg):
+        if event == "return" and frame.f_code is prepare_code:
+            release.set()
+            if not populated.wait(timeout=10):
+                raise AssertionError("concurrent regex cache growth did not run")
+        return release_after_cache_validation
+
+    worker.start()
+    sys.settrace(release_after_cache_validation)
+    try:
+        _require_decision_semantics(selected)
+    finally:
+        sys.settrace(None)
+        release.set()
+        worker.join(timeout=10)
+        re.purge()
+
+    assert populated.is_set()
+    assert not worker.is_alive()
+
+
+def test_regex_cache_mapping_replacement_remains_fail_closed():
+    selected = _capture_decision_semantics()
+    original = re._cache
+    try:
+        re._cache = {}
+        with pytest.raises(
+                RuntimeBundleError,
+                match=r"decision semantic root changed after activation: re\._cache"):
+            _require_decision_semantics(selected)
+    finally:
+        re._cache = original
+        re.purge()
+
+
 def test_nested_regex_compiler_mutation_is_in_semantic_closure():
     selected = _capture_decision_semantics()
     original = re._compiler.compile
