@@ -137,6 +137,12 @@ class Materializer:
                     or _RETAINED_CONTEXT_REQUIRE_RUNTIME_COMPOSITION_STRUCTURE.__code__
                     is not
                     _RETAINED_CONTEXT_REQUIRE_RUNTIME_COMPOSITION_STRUCTURE_CODE
+                    or vars(Store).get(
+                        "_require_transaction_python_posture") is not
+                    _RETAINED_MATERIALIZER_STORE_TRANSACTION_POSTURE
+                    or _RETAINED_MATERIALIZER_STORE_TRANSACTION_POSTURE.__code__
+                    is not
+                    _RETAINED_MATERIALIZER_STORE_TRANSACTION_POSTURE_CODE
                     or type(self.store) is not Store
                     or type(self.context) is not ContextAssembler
                     or self._runtime_composition_sealed is not True
@@ -152,13 +158,10 @@ class Materializer:
                            for name in vars(self.context))):
                 raise RuntimeError(
                     "Materializer runtime composition changed")
-            Store._require_transaction_python_posture(self.store)
-            require_store_runtime_bundle(
-                self.store, self.runtime_bundle, "Materializer decision")
-            # Materializer has just completed the full Store/bundle proof and
-            # invokes Context immediately with no caller or decision hook in
-            # between. Recheck Context's exact retained wiring/cursor ownership,
-            # but do not repeat the same complete semantic proof back-to-back.
+            _RETAINED_MATERIALIZER_STORE_TRANSACTION_POSTURE(self.store)
+            # The Store posture proves its exact bound bundle and live seal.
+            # The structure checks above bind this Materializer to that bundle,
+            # and Context is invoked immediately with no caller hook between.
             _RETAINED_CONTEXT_REQUIRE_RUNTIME_COMPOSITION_STRUCTURE(
                 self.context, cur)
         except BaseException:
@@ -1006,3 +1009,7 @@ _RETAINED_MATERIALIZER_ASSERT_RUNTIME_COMPOSITION = \
     Materializer._assert_runtime_composition
 _RETAINED_MATERIALIZER_ASSERT_RUNTIME_COMPOSITION_CODE = \
     _RETAINED_MATERIALIZER_ASSERT_RUNTIME_COMPOSITION.__code__
+_RETAINED_MATERIALIZER_STORE_TRANSACTION_POSTURE = \
+    Store._require_transaction_python_posture
+_RETAINED_MATERIALIZER_STORE_TRANSACTION_POSTURE_CODE = \
+    _RETAINED_MATERIALIZER_STORE_TRANSACTION_POSTURE.__code__

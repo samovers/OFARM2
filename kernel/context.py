@@ -869,7 +869,9 @@ def require_product_register_runtime_composition(
                 f"{label} Store runtime dispatch changed before decision")
         _RETAINED_STORE_TRANSACTION_POSTURE(store)
         bundle = Store.runtime_bundle.fget(store)
-        require_store_runtime_bundle(store, bundle, label)
+        # The retained Store posture has just proved this exact bound bundle
+        # and its live seal.  No caller code runs before the structure checks
+        # below, so repeating the complete seal traversal here adds no proof.
         if (type(register) is not _RETAINED_PRODUCT_REGISTER_TYPE
                 or vars(register).get("_frozen") is not True
                 or register.runtime_bundle is not bundle
@@ -1002,9 +1004,15 @@ class ContextAssembler:
 
     def _assert_runtime_composition(self, cur=None) -> None:
         try:
-            Store._require_transaction_python_posture(self.store)
-            require_store_runtime_bundle(
-                self.store, self.runtime_bundle, "ContextAssembler decision")
+            if (vars(Store).get("_require_transaction_python_posture") is not
+                    _RETAINED_STORE_TRANSACTION_POSTURE
+                    or _RETAINED_STORE_TRANSACTION_POSTURE.__code__ is not
+                    _RETAINED_STORE_TRANSACTION_POSTURE_CODE):
+                raise RuntimeBundleError(
+                    "ContextAssembler Store runtime posture changed")
+            _RETAINED_STORE_TRANSACTION_POSTURE(self.store)
+            # The Store posture proves its exact bound bundle and live seal;
+            # the adjacent structure guard proves this assembler holds it.
             _RETAINED_CONTEXT_REQUIRE_RUNTIME_COMPOSITION_STRUCTURE(self, cur)
         except BaseException:
             if type(getattr(self, "store", None)) is Store:

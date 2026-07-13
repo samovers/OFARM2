@@ -963,8 +963,8 @@ def test_profile_runtime_preconditions_pass_with_explicit_inventory_only():
     assert result.blocking_reason_codes == ()
 
 
-def test_profile_runtime_preconditions_are_passive_for_active_runtime(fresh_env):
-    store, pipeline, _ = fresh_env
+def test_profile_runtime_preconditions_are_passive_for_active_runtime(fresh_store, fresh_pipeline):
+    store, pipeline = fresh_store, fresh_pipeline
     before_profile = config.ACTIVE_PROFILE
     before_selected = config.ACTIVE_PROFILE_PACKAGE_NAMES
     evidence_dir = config.PACKAGE_ROOT / "conformance" / "evidence"
@@ -1580,8 +1580,8 @@ def _missing_family(required: bool) -> ReferenceFamily:
     )
 
 
-def test_optional_missing_reference_family_is_omitted(fresh_env):
-    store, _, _ = fresh_env
+def test_optional_missing_reference_family_is_omitted(fresh_store):
+    store = fresh_store
     descriptor = replace(
         config.ACTIVE_PROFILE,
         reference_families=config.ACTIVE_PROFILE.reference_families
@@ -1598,8 +1598,8 @@ def test_optional_missing_reference_family_is_omitted(fresh_env):
     )
 
 
-def test_required_missing_reference_family_refuses_context(fresh_env):
-    store, _, _ = fresh_env
+def test_required_missing_reference_family_refuses_context(fresh_store):
+    store = fresh_store
     descriptor = replace(
         config.ACTIVE_PROFILE,
         reference_families=config.ACTIVE_PROFILE.reference_families
@@ -1636,8 +1636,8 @@ def test_explicit_descriptor_bootstrap_matches_compatibility_wrapper():
     assert implicit == explicit == expected
 
 
-def test_explicit_descriptor_reference_snapshots_match_wrapper(fresh_env):
-    store, _, _ = fresh_env
+def test_explicit_descriptor_reference_snapshots_match_wrapper(fresh_store):
+    store = fresh_store
 
     explicit = context.context_reference_snapshots_for_descriptor(
         store,
@@ -1648,8 +1648,8 @@ def test_explicit_descriptor_reference_snapshots_match_wrapper(fresh_env):
     assert explicit == implicit
 
 
-def test_explicit_descriptor_context_assembly_matches_wrapper(fresh_env):
-    store, _, _ = fresh_env
+def test_explicit_descriptor_context_assembly_matches_wrapper(fresh_store):
+    store = fresh_store
 
     with store.serialized_tx() as cur:
         implicit = context.ContextAssembler(store).assemble(cur, demo.FARM)
@@ -1662,8 +1662,8 @@ def test_explicit_descriptor_context_assembly_matches_wrapper(fresh_env):
     assert explicit == implicit
 
 
-def test_explicit_descriptor_asof_context_matches_wrapper(fresh_env):
-    store, _, _ = fresh_env
+def test_explicit_descriptor_asof_context_matches_wrapper(fresh_store):
+    store = fresh_store
     policy = {"policyType": "AS_OF", "asOfTime": "2026-12-01T00:00:00Z"}
 
     with store.serialized_tx() as cur:
@@ -1685,8 +1685,8 @@ def test_explicit_descriptor_asof_context_matches_wrapper(fresh_env):
     assert explicit == implicit
 
 
-def test_explicit_descriptor_reference_family_change_requires_new_bundle(fresh_env):
-    store, _, _ = fresh_env
+def test_explicit_descriptor_reference_family_change_requires_new_bundle(fresh_store):
+    store = fresh_store
     active = replace(
         config.ACTIVE_PROFILE,
         reference_families=config.ACTIVE_PROFILE.reference_families
@@ -1697,8 +1697,8 @@ def test_explicit_descriptor_reference_family_change_requires_new_bundle(fresh_e
         context.ContextAssembler(store, active_profile=active)
 
 
-def test_explicit_descriptor_required_family_change_requires_new_bundle(fresh_env):
-    store, _, _ = fresh_env
+def test_explicit_descriptor_required_family_change_requires_new_bundle(fresh_store):
+    store = fresh_store
     active = replace(
         config.ACTIVE_PROFILE,
         reference_families=config.ACTIVE_PROFILE.reference_families
@@ -1709,8 +1709,8 @@ def test_explicit_descriptor_required_family_change_requires_new_bundle(fresh_en
         context.ContextAssembler(store, active_profile=active)
 
 
-def test_now_context_uses_descriptor_spine_not_later_store_rows(fresh_env):
-    store, _, _ = fresh_env
+def test_now_context_uses_descriptor_spine_not_later_store_rows(fresh_store):
+    store = fresh_store
     decoy = _insert_decoy_spine(store)
 
     with store.serialized_tx() as cur:
@@ -1725,8 +1725,8 @@ def test_now_context_uses_descriptor_spine_not_later_store_rows(fresh_env):
 
 
 def test_explicit_descriptor_now_context_uses_descriptor_spine_not_later_store_rows(
-        fresh_env):
-    store, _, _ = fresh_env
+        fresh_store):
+    store = fresh_store
     decoy = _insert_decoy_spine(store)
 
     with store.serialized_tx() as cur:
@@ -1744,8 +1744,8 @@ def test_explicit_descriptor_now_context_uses_descriptor_spine_not_later_store_r
 
 
 def test_explicit_descriptor_mismatched_spine_ref_fails_without_config_fallback(
-        fresh_env):
-    store, _, _ = fresh_env
+        fresh_store):
+    store = fresh_store
     active = replace(
         config.ACTIVE_PROFILE,
         active_artifact_set_ref="activeartifactset:si.ffs.not-selected.v0_1",
@@ -1795,8 +1795,8 @@ def test_now_context_refuses_descriptor_id_profile_wrong_pack_scope():
 
 
 def test_gate_pipeline_explicit_active_profile_matches_default_for_clean_operation(
-        fresh_env):
-    store, default_pipeline, _ = fresh_env
+        fresh_store, fresh_pipeline):
+    store, default_pipeline = fresh_store, fresh_pipeline
     explicit_pipeline = GatePipeline(store, active_profile=config.ACTIVE_PROFILE)
 
     default = default_pipeline.commit(demo.spray_submission(
@@ -1815,8 +1815,8 @@ def test_gate_pipeline_explicit_active_profile_matches_default_for_clean_operati
     assert default.get("problems", []) == explicit.get("problems", []) == []
 
 
-def test_gate_pipeline_default_sequence_remains_unrouted(fresh_env):
-    store, pipeline, _ = fresh_env
+def test_gate_pipeline_default_sequence_remains_unrouted(fresh_store, fresh_pipeline):
+    store, pipeline = fresh_store, fresh_pipeline
 
     result = pipeline.commit(demo.spray_submission(
         f"mp7-default:{_uid()}",
@@ -1832,8 +1832,8 @@ def test_gate_pipeline_default_sequence_remains_unrouted(fresh_env):
 
 
 def test_gate_pipeline_default_missing_farm_ref_still_fails_before_route(
-        fresh_env):
-    store, pipeline, _ = fresh_env
+        fresh_store, fresh_pipeline):
+    store, pipeline = fresh_store, fresh_pipeline
     sub = demo.spray_submission(
         f"mp7-default-missing-farm:{_uid()}",
         erp_id=f"erp:mp7.default.missing-farm.{_uid()}",
@@ -1864,8 +1864,8 @@ def test_gate_pipeline_partial_route_config_fails_closed(kwargs):
         GatePipeline(object(), **kwargs)
 
 
-def test_route_backed_gate_pipeline_accepts_clean_si_operation(fresh_env):
-    store, default_pipeline, _ = fresh_env
+def test_route_backed_gate_pipeline_accepts_clean_si_operation(fresh_store, fresh_pipeline):
+    store, default_pipeline = fresh_store, fresh_pipeline
     routed_pipeline = _route_pipeline(store)
 
     default = default_pipeline.commit(demo.spray_submission(
@@ -1891,8 +1891,8 @@ def test_route_backed_gate_pipeline_accepts_clean_si_operation(fresh_env):
     assert trace["gateSequence"][1]["outcome"] == "PROFILE_ROUTE_PASS"
 
 
-def test_route_backed_pipeline_freezes_caller_selection_sequences(fresh_env):
-    store, _, _ = fresh_env
+def test_route_backed_pipeline_freezes_caller_selection_sequences(fresh_store):
+    store = fresh_store
     routes = [_si_route()]
     selected = list(config.ACTIVE_PROFILE_PACKAGE_NAMES)
     pipeline = _route_pipeline(store, routes=routes, selected=selected)
@@ -1912,8 +1912,8 @@ def test_route_backed_pipeline_freezes_caller_selection_sequences(fresh_env):
     assert result["decisionOutcome"] == "PROMOTE_ACCEPTED"
 
 
-def test_route_backed_pipeline_rejects_same_digest_different_route(fresh_env):
-    store, _, _ = fresh_env
+def test_route_backed_pipeline_rejects_same_digest_different_route(fresh_store):
+    store = fresh_store
     pipeline = _route_pipeline(store)
     changed = replace(pipeline.profile_route_records[0], status="DRAFT")
     with pytest.raises(ProfileRuntimeError, match="differs from the RuntimeBundle"):
@@ -1931,8 +1931,8 @@ def test_route_backed_pipeline_rejects_same_digest_different_route(fresh_env):
     ([_si_route(), _si_route()], "multiple active overlapping"),
 ])
 def test_route_backed_gate_pipeline_refuses_route_resolution_failures(
-        fresh_env, routes, match):
-    store, _, _ = fresh_env
+        fresh_store, routes, match):
+    store = fresh_store
     pipeline = _route_pipeline(store, routes=routes)
 
     result = pipeline.commit(demo.spray_submission(
@@ -1947,8 +1947,8 @@ def test_route_backed_gate_pipeline_refuses_route_resolution_failures(
     _assert_profile_route_refusal(store, result)
 
 
-def test_route_backed_gate_pipeline_refuses_missing_farm_context(fresh_env):
-    store, _, _ = fresh_env
+def test_route_backed_gate_pipeline_refuses_missing_farm_context(fresh_store):
+    store = fresh_store
     pipeline = _route_pipeline(store)
     sub = demo.spray_submission(
         f"mp7-route-no-farm:{_uid()}",
@@ -1962,8 +1962,8 @@ def test_route_backed_gate_pipeline_refuses_missing_farm_context(fresh_env):
     _assert_profile_route_refusal(store, result)
 
 
-def test_route_backed_gate_pipeline_refuses_farm_ref_scope_mismatch(fresh_env):
-    store, _, _ = fresh_env
+def test_route_backed_gate_pipeline_refuses_farm_ref_scope_mismatch(fresh_store):
+    store = fresh_store
     pipeline = _route_pipeline(store)
     sub = demo.spray_submission(
         f"mp7-route-farm-mismatch:{_uid()}",
@@ -1991,8 +1991,8 @@ def test_route_backed_gate_pipeline_refuses_farm_ref_scope_mismatch(fresh_env):
     ],
 ])
 def test_route_backed_gate_pipeline_refuses_multiple_farm_scope_entries(
-        fresh_env, scopes):
-    store, _, _ = fresh_env
+        fresh_store, scopes):
+    store = fresh_store
     pipeline = _route_pipeline(store)
     sub = demo.spray_submission(
         f"mp7-route-multiple-farm:{_uid()}",
@@ -2012,8 +2012,8 @@ def test_route_backed_gate_pipeline_refuses_multiple_farm_scope_entries(
     {"scopeType": "FARM", "scopeRef": ""},
 ])
 def test_route_backed_gate_pipeline_counts_malformed_farm_scope_entries(
-        fresh_env, malformed_farm_scope):
-    store, _, _ = fresh_env
+        fresh_store, malformed_farm_scope):
+    store = fresh_store
     pipeline = _route_pipeline(store)
     sub = demo.spray_submission(
         f"mp7-route-malformed-farm:{_uid()}",
@@ -2039,8 +2039,8 @@ def test_route_backed_gate_pipeline_counts_malformed_farm_scope_entries(
 
 
 def test_route_backed_gate_pipeline_refuses_same_context_time_bounded_route(
-        fresh_env):
-    store, _, _ = fresh_env
+        fresh_store):
+    store = fresh_store
     pipeline = _route_pipeline(
         store,
         routes=[
@@ -2060,8 +2060,8 @@ def test_route_backed_gate_pipeline_refuses_same_context_time_bounded_route(
 
 
 def test_route_backed_gate_pipeline_accepts_time_bounded_operation_route(
-        fresh_env):
-    store, _, _ = fresh_env
+        fresh_store):
+    store = fresh_store
     route = _route_interval("06")
     pipeline = _route_pipeline(store, routes=[route])
 
@@ -2078,8 +2078,8 @@ def test_route_backed_gate_pipeline_accepts_time_bounded_operation_route(
 
 
 def test_route_backed_gate_pipeline_refuses_operation_outside_route_interval(
-        fresh_env):
-    store, _, _ = fresh_env
+        fresh_store):
+    store = fresh_store
     pipeline = _route_pipeline(store, routes=[_route_interval("05")])
 
     result = pipeline.commit(demo.spray_submission(
@@ -2093,8 +2093,8 @@ def test_route_backed_gate_pipeline_refuses_operation_outside_route_interval(
 
 
 def test_route_backed_gate_pipeline_refuses_missing_event_time_no_captured_fallback(
-        fresh_env):
-    store, _, _ = fresh_env
+        fresh_store):
+    store = fresh_store
     pipeline = _route_pipeline(store, routes=[_route_interval("06")])
     sub = demo.spray_submission(
         f"mp7-route-no-event:{_uid()}",
@@ -2111,8 +2111,8 @@ def test_route_backed_gate_pipeline_refuses_missing_event_time_no_captured_fallb
 
 
 def test_route_backed_gate_pipeline_refuses_unparseable_event_time_no_fallback(
-        fresh_env):
-    store, _, _ = fresh_env
+        fresh_store):
+    store = fresh_store
     pipeline = _route_pipeline(store, routes=[_route_interval("06")])
     sub = demo.spray_submission(
         f"mp7-route-bad-event:{_uid()}",
@@ -2128,8 +2128,8 @@ def test_route_backed_gate_pipeline_refuses_unparseable_event_time_no_fallback(
 
 
 def test_route_backed_gate_pipeline_refuses_operation_decision_time_fallback(
-        fresh_env):
-    store, _, _ = fresh_env
+        fresh_store):
+    store = fresh_store
     pipeline = _route_pipeline(store, routes=[_route_interval("06")])
     sub = demo.spray_submission(
         f"mp7-route-no-decision-fallback:{_uid()}",
@@ -2146,8 +2146,8 @@ def test_route_backed_gate_pipeline_refuses_operation_decision_time_fallback(
 
 
 def test_route_backed_gate_pipeline_refuses_unsupported_route_time_source(
-        fresh_env):
-    store, _, _ = fresh_env
+        fresh_store):
+    store = fresh_store
     pipeline = _route_pipeline(store, routes=[_route_interval("06")])
 
     result = pipeline.commit(_note_submission(
@@ -2158,8 +2158,8 @@ def test_route_backed_gate_pipeline_refuses_unsupported_route_time_source(
 
 
 def test_route_backed_gate_pipeline_operation_event_time_selects_half_open_route(
-        fresh_env):
-    store, _, _ = fresh_env
+        fresh_store):
+    store = fresh_store
     may = _route_interval("05", route_id=f"profileroute:test.si.may.{_uid()}")
     june = _route_interval("06", route_id=f"profileroute:test.si.june.{_uid()}")
     pipeline = _route_pipeline(store, routes=[may, june])
@@ -2186,8 +2186,8 @@ def test_route_backed_gate_pipeline_operation_event_time_selects_half_open_route
 
 
 def test_route_backed_gate_pipeline_ignores_other_farm_time_bounded_route(
-        fresh_env):
-    store, _, _ = fresh_env
+        fresh_store):
+    store = fresh_store
     t0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
     pipeline = _route_pipeline(
         store,
@@ -2207,8 +2207,8 @@ def test_route_backed_gate_pipeline_ignores_other_farm_time_bounded_route(
 
 
 def test_route_backed_gate_pipeline_rejects_other_tenant_route_storage(
-        fresh_env):
-    store, _, _ = fresh_env
+        fresh_store):
+    store = fresh_store
     t0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
     with pytest.raises(ProfileRuntimeError, match="another tenant's route"):
         _route_pipeline(
@@ -2221,8 +2221,8 @@ def test_route_backed_gate_pipeline_rejects_other_tenant_route_storage(
 
 
 def test_route_backed_gate_pipeline_ignores_inactive_time_bounded_route(
-        fresh_env):
-    store, _, _ = fresh_env
+        fresh_store):
+    store = fresh_store
     t0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
     pipeline = _route_pipeline(
         store,
@@ -2258,8 +2258,8 @@ def _governance_submission(idem_key: str, *, decision_time=None,
     return sub
 
 
-def test_route_backed_gate_pipeline_governance_uses_decision_time(fresh_env):
-    store, _, _ = fresh_env
+def test_route_backed_gate_pipeline_governance_uses_decision_time(fresh_store):
+    store = fresh_store
     pipeline = _route_pipeline(store, routes=[_route_interval("06")])
     # Queue and review under the same receipted route selection. Crossing from
     # the default bundle into this route bundle is an automatic migration and
@@ -2287,8 +2287,8 @@ def test_route_backed_gate_pipeline_governance_uses_decision_time(fresh_env):
     ("not-a-time", "decisionTime"),
 ])
 def test_route_backed_gate_pipeline_governance_requires_decision_time(
-        fresh_env, decision_time, match):
-    store, _, _ = fresh_env
+        fresh_store, decision_time, match):
+    store = fresh_store
     pipeline = _route_pipeline(store, routes=[_route_interval("06")])
 
     result = pipeline.commit(_governance_submission(
@@ -2302,8 +2302,8 @@ def test_route_backed_gate_pipeline_governance_requires_decision_time(
 
 
 def test_route_backed_gate_pipeline_governance_does_not_use_event_time_fallback(
-        fresh_env):
-    store, _, _ = fresh_env
+        fresh_store):
+    store = fresh_store
     pipeline = _route_pipeline(store, routes=[_route_interval("06")])
 
     result = pipeline.commit(_governance_submission(
@@ -2321,10 +2321,10 @@ def test_route_backed_gate_pipeline_governance_does_not_use_event_time_fallback(
     "profile_rs_organic_crop",
 ])
 def test_route_backed_gate_pipeline_refuses_design_only_route_target(
-        fresh_env, package_name):
+        fresh_store, package_name):
     if not (config.PACKAGE_ROOT / package_name).exists():
         pytest.skip(f"{package_name} is not present in this checkout")
-    store, _, _ = fresh_env
+    store = fresh_store
     pipeline = _route_pipeline(
         store,
         routes=[_si_route(profile_package_name=package_name)],
@@ -2346,8 +2346,8 @@ def test_route_backed_gate_pipeline_refuses_design_only_route_target(
 
 
 def test_route_backed_gate_pipeline_uses_descriptor_backed_policy_paths(
-        fresh_env):
-    store, _, _ = fresh_env
+        fresh_store):
+    store = fresh_store
     pipeline = _route_pipeline(store)
 
     submission = demo.spray_submission(
@@ -2362,8 +2362,8 @@ def test_route_backed_gate_pipeline_uses_descriptor_backed_policy_paths(
         profile_policy.DescriptorPolicyProvider
 
 
-def test_route_backed_handoff_binds_materializer_to_resolved_descriptor(fresh_env):
-    store, _, _ = fresh_env
+def test_route_backed_handoff_binds_materializer_to_resolved_descriptor(fresh_store):
+    store = fresh_store
     pipeline = _route_pipeline(store)
     sub = demo.spray_submission(
         f"mp7-route-bind:{_uid()}",
@@ -2387,8 +2387,8 @@ def test_route_backed_handoff_binds_materializer_to_resolved_descriptor(fresh_en
         context.SI_REFERENCE_BINDINGS.regsr_shipped_snapshot_ref
 
 
-def test_output_generator_explicit_descriptor_matches_default_profile_refs(fresh_env):
-    store, _, outputs = fresh_env
+def test_output_generator_explicit_descriptor_matches_default_profile_refs(fresh_store, fresh_outputs):
+    store, outputs = fresh_store, fresh_outputs
     explicit = OutputGenerator(store, active_descriptor=config.ACTIVE_PROFILE)
 
     default_view = outputs.passport_view(demo.FARM, demo.FARMER)
@@ -2402,8 +2402,8 @@ def test_output_generator_explicit_descriptor_matches_default_profile_refs(fresh
 
 
 def test_descriptor_backed_validation_uses_provider_without_config_wrapper(
-        fresh_env):
-    store, pipeline, _ = fresh_env
+        fresh_pipeline):
+    pipeline = fresh_pipeline
 
     submission = demo.spray_submission(
         f"mp3d-validation-provider:{_uid()}",
@@ -2419,8 +2419,8 @@ def test_descriptor_backed_validation_uses_provider_without_config_wrapper(
 
 
 def test_descriptor_backed_sufficiency_uses_provider_without_config_wrappers(
-        fresh_env):
-    store, pipeline, _ = fresh_env
+        fresh_pipeline):
+    pipeline = fresh_pipeline
 
     submission = demo.spray_submission(
         f"mp3d-sufficiency-provider:{_uid()}",
@@ -2450,8 +2450,8 @@ def test_global_operation_sequence_uses_named_compatibility_constructors():
 
 
 def test_acceptance_sufficiency_uses_descriptor_policy_ref_without_policy_body(
-        fresh_env):
-    store, pipeline, _ = fresh_env
+        fresh_store, fresh_pipeline):
+    store, pipeline = fresh_store, fresh_pipeline
     queued = pipeline.commit(demo.spray_submission(
         f"mp3d-accept-queued:{_uid()}",
         erp_id=f"erp:mp3d.accept.queued.{_uid()}",
@@ -2477,8 +2477,8 @@ def test_acceptance_sufficiency_uses_descriptor_policy_ref_without_policy_body(
         config.ACTIVE_PROFILE.evidence_policy_ref}
 
 
-def test_descriptor_validation_policy_failure_stops_at_validation(fresh_env):
-    store, pipeline, _ = fresh_env
+def test_descriptor_validation_policy_failure_stops_at_validation(fresh_store, fresh_pipeline):
+    store, pipeline = fresh_store, fresh_pipeline
 
     class FailingValidationPolicyProvider:
         @staticmethod
@@ -2513,8 +2513,8 @@ def test_descriptor_validation_policy_failure_stops_at_validation(fresh_env):
 
 
 def test_descriptor_sufficiency_policy_failure_happens_after_validation(
-        fresh_env):
-    store, pipeline, _ = fresh_env
+        fresh_store, fresh_pipeline):
+    store, pipeline = fresh_store, fresh_pipeline
 
     class FailingEvidencePolicyProvider:
         def __init__(self, provider):
@@ -2596,8 +2596,8 @@ def test_profile_applicability_missing_evidence_policy_is_governed_refusal():
 
 
 def test_profile_applicability_missing_descriptor_artifact_is_governed_refusal(
-        fresh_env):
-    store, _, _ = fresh_env
+        fresh_store):
+    store = fresh_store
     active = replace(
         config.ACTIVE_PROFILE,
         active_artifact_set_ref="activeartifactset:si.ffs.issue125.missing.v0_1",
@@ -2608,8 +2608,8 @@ def test_profile_applicability_missing_descriptor_artifact_is_governed_refusal(
 
 
 def test_profile_applicability_required_reference_family_is_governed_refusal(
-        fresh_env):
-    store, _, _ = fresh_env
+        fresh_store):
+    store = fresh_store
     active = replace(
         config.ACTIVE_PROFILE,
         reference_families=config.ACTIVE_PROFILE.reference_families
@@ -2728,8 +2728,8 @@ def test_product_register_load_from_store_uses_bindings_and_family_boundary(
     assert not register.has_snapshot(f"{bindings.regsr_snapshot_prefix}extra")
 
 
-def test_gate_pipeline_threads_si_reference_bindings(fresh_env):
-    _store, pipeline, _ = fresh_env
+def test_gate_pipeline_threads_si_reference_bindings(fresh_pipeline):
+    pipeline = fresh_pipeline
     sub = demo.spray_submission(
         f"issue127b-binding-context:{_uid()}",
         erp_id=f"erp:issue127b.binding.{_uid()}",
@@ -2743,8 +2743,8 @@ def test_gate_pipeline_threads_si_reference_bindings(fresh_env):
 
 
 def test_gate_pipeline_runtime_descriptor_cannot_change_after_construction(
-        fresh_env):
-    _store, pipeline, _ = fresh_env
+        fresh_pipeline):
+    pipeline = fresh_pipeline
     with pytest.raises(AttributeError, match="runtime composition is immutable"):
         pipeline.active_profile = replace(
             config.ACTIVE_PROFILE,
@@ -2798,8 +2798,8 @@ def test_registry_reverification_prefers_context_si_reference_bindings(
 
 
 def test_materializer_uses_active_descriptor_for_context_and_policy_freshness(
-        fresh_env):
-    store, pipeline, _ = fresh_env
+        fresh_store, fresh_pipeline):
+    store, pipeline = fresh_store, fresh_pipeline
 
     assert pipeline.materializer.active_profile is config.ACTIVE_PROFILE
     assert pipeline.materializer.context.active_profile is config.ACTIVE_PROFILE
@@ -2820,8 +2820,8 @@ def test_materializer_uses_active_descriptor_for_context_and_policy_freshness(
     }
 
 
-def test_materializer_policy_ref_change_requires_new_bundle(fresh_env):
-    store, _, _ = fresh_env
+def test_materializer_policy_ref_change_requires_new_bundle(fresh_store):
+    store = fresh_store
     policy_ref = f"policy:si.ffs.issue125.{_uid()}"
     active = replace(config.ACTIVE_PROFILE, evidence_policy_ref=policy_ref)
     with pytest.raises(ProfileRuntimeError, match="RuntimeBundle do not match exactly"):

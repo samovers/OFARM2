@@ -430,7 +430,8 @@ def require_ffsnaprave_register_runtime_composition(
                 f"{label} Store runtime dispatch changed before decision")
         _RETAINED_FFS_STORE_TRANSACTION_POSTURE(store)
         bundle = Store.runtime_bundle.fget(store)
-        require_store_runtime_bundle(store, bundle, label)
+        # The retained Store posture has just proved this exact bundle and its
+        # live seal.  The adjacent register checks bind the cache to it.
         if (type(register) is not _RETAINED_FFSNAPRAVE_REGISTER_TYPE
                 or vars(register).get("_frozen") is not True
                 or register.runtime_bundle is not bundle

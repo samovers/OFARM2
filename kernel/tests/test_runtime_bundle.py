@@ -284,8 +284,8 @@ def test_tenant_origin_reference_cannot_reuse_global_identity_even_if_equal():
         )
 
 
-def test_import_refuses_package_global_reference_identity_before_write(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_import_refuses_package_global_reference_identity_before_write(fresh_store):
+    store = fresh_store
     records = {"synthetic": "restart-safe collision probe"}
     result = ImportRunner(store).run_import(
         ParseResult(ok=True, sourceDigest=sha256_of(records), records=records),
@@ -385,8 +385,8 @@ def test_contract_registry_and_store_registry_binding_are_immutable():
         object.__setattr__(store, "_registry", registry)
 
 
-def test_bound_store_rejects_object_level_registry_replacement(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_bound_store_rejects_object_level_registry_replacement(fresh_store):
+    store = fresh_store
     assert store.runtime_bundle_digest
     original = store._registry
     poisoned = ContractRegistry()
@@ -1382,7 +1382,7 @@ def test_profile_register_frozen_methods_refuse_assignment_and_deletion():
 
 @pytest.mark.parametrize("register_kind", ("product", "gerk", "ffsnaprave"))
 def test_construction_seam_cache_cannot_be_upgraded_to_bundle_runtime(
-        fresh_env, register_kind):
+        fresh_store, register_kind):
     from kernel.context import require_product_register_runtime_composition
     from kernel.profiles.si_ffs.ffsnaprave_adapter import (
         require_ffsnaprave_register_runtime_composition,
@@ -1391,7 +1391,7 @@ def test_construction_seam_cache_cannot_be_upgraded_to_bundle_runtime(
         require_gerk_layer_runtime_composition,
     )
 
-    store, _pipeline, _outputs = fresh_env
+    store = fresh_store
     bundle = store.runtime_bundle
     if register_kind == "product":
         register = context.ProductRegister()
@@ -1427,7 +1427,7 @@ def test_construction_seam_cache_cannot_be_upgraded_to_bundle_runtime(
 
 @pytest.mark.parametrize("register_kind", ("product", "gerk", "ffsnaprave"))
 def test_profile_register_callable_shadow_poisons_active_transaction(
-        fresh_env, register_kind):
+        fresh_store, register_kind):
     from kernel.context import require_product_register_runtime_composition
     from kernel.profiles.si_ffs.ffsnaprave_adapter import (
         require_ffsnaprave_register_runtime_composition,
@@ -1436,7 +1436,7 @@ def test_profile_register_callable_shadow_poisons_active_transaction(
         require_gerk_layer_runtime_composition,
     )
 
-    store, _pipeline, _outputs = fresh_env
+    store = fresh_store
     bundle = store.runtime_bundle
     bindings = context.SIReferenceBindings.from_descriptor(
         bundle.descriptor, runtime_bundle=bundle)
@@ -1471,13 +1471,13 @@ def test_profile_register_callable_shadow_poisons_active_transaction(
 
 
 def test_si_resolvers_and_evidence_attachment_reject_duck_and_subclass_registers(
-        fresh_env):
+        fresh_store):
     from kernel.profiles.si_ffs import si_bindings
     from kernel.profiles.si_ffs.ffsnaprave_adapter import (
         attach_inspection_evidence,
     )
 
-    store, _pipeline, _outputs = fresh_env
+    store = fresh_store
     bundle = store.runtime_bundle
     bindings = context.SIReferenceBindings.from_descriptor(
         bundle.descriptor, runtime_bundle=bundle)
@@ -1567,8 +1567,8 @@ def test_runtime_bundle_post_start_source_mutation_has_no_filesystem_fallback(
         register.register_artifact("referencesnapshot:test.post-load", {"products": []})
 
 
-def test_runtime_bundle_stale_cache_and_live_rows_cannot_change_selection(fresh_env):
-    store, pipeline, _outputs = fresh_env
+def test_runtime_bundle_stale_cache_and_live_rows_cannot_change_selection(fresh_store, fresh_pipeline):
+    store, pipeline = fresh_store, fresh_pipeline
     selected = context.current_reference_snapshot(
         store, context.REGSR_SNAPSHOT_PREFIX)["referenceSnapshotId"]
     newer = f"referencesnapshot:si.uvhvvr.ffs-reg.bundle-stale-{uuid.uuid4().hex}"
@@ -1613,10 +1613,10 @@ def test_runtime_bundle_metadata_only_gerk_refuses_resolution():
         "referencesnapshot:test.gerk", "1234567")["area"] == "1.0"
 
 
-def test_runtime_bundle_metadata_only_reference_resolver_never_calls_lookup(fresh_env):
+def test_runtime_bundle_metadata_only_reference_resolver_never_calls_lookup(fresh_store):
     from kernel.verification import REFUSE, ReferenceResolver
 
-    store, _pipeline, _outputs = fresh_env
+    store = fresh_store
     called = False
 
     def lookup(_snapshot, _query):
@@ -1693,11 +1693,11 @@ def test_bundle_backed_resolvers_refuse_preload_injection():
 
 
 def test_runtime_bundle_manifest_response_ignores_post_start_file_mutation(
-        fresh_env, monkeypatch):
+        fresh_store, monkeypatch):
     from fastapi.testclient import TestClient
     from kernel.api import create_app
 
-    store, _pipeline, _outputs = fresh_env
+    store = fresh_store
     app = create_app(store, oidc=None)
     manifest_component = next(item for item in store.runtime_bundle.components
                               if item.role == "ACTIVE_MANIFEST")
@@ -1718,11 +1718,11 @@ def test_runtime_bundle_manifest_response_ignores_post_start_file_mutation(
     _assert_exact_http_receipt(response, store.runtime_bundle_digest)
 
 
-def test_commit_api_returns_self_contained_runtime_receipt_headers(fresh_env):
+def test_commit_api_returns_self_contained_runtime_receipt_headers(fresh_store):
     from fastapi.testclient import TestClient
     from kernel.api import create_app
 
-    store, _pipeline, _outputs = fresh_env
+    store = fresh_store
     response = TestClient(create_app(store, oidc=None)).post(
         "/commit",
         headers={"X-Acting-Party": demo.FARMER},
@@ -1735,11 +1735,11 @@ def test_commit_api_returns_self_contained_runtime_receipt_headers(fresh_env):
     _assert_exact_http_receipt(response, store.runtime_bundle_digest)
 
 
-def test_read_and_output_apis_receipt_exact_response_payloads(fresh_env):
+def test_read_and_output_apis_receipt_exact_response_payloads(fresh_store):
     from fastapi.testclient import TestClient
     from kernel.api import create_app
 
-    store, _pipeline, _outputs = fresh_env
+    store = fresh_store
     app = create_app(store, oidc=None)
     client = TestClient(app)
     commit = client.post(
@@ -1775,10 +1775,10 @@ def test_read_and_output_apis_receipt_exact_response_payloads(fresh_env):
         _assert_exact_http_receipt(response, store.runtime_bundle_digest)
 
 
-def test_record_api_blocks_authority_instance_dispatch_shadow(fresh_env):
+def test_record_api_blocks_authority_instance_dispatch_shadow(fresh_store):
     from kernel.api import create_app
 
-    store, _pipeline, _outputs = fresh_env
+    store = fresh_store
     app = create_app(store, oidc=None)
     called = False
 
@@ -1792,12 +1792,12 @@ def test_record_api_blocks_authority_instance_dispatch_shadow(fresh_env):
     assert called is False
 
 
-def test_health_and_api_refusals_receipt_exact_response_payloads(fresh_env):
+def test_health_and_api_refusals_receipt_exact_response_payloads(fresh_store):
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
     from kernel.api import _ReceiptedApplication, create_app
 
-    store, _pipeline, _outputs = fresh_env
+    store = fresh_store
     app = create_app(store, oidc=None)
     client = TestClient(app)
     responses = [
@@ -1878,11 +1878,11 @@ def test_health_and_api_refusals_receipt_exact_response_payloads(fresh_env):
     _assert_exact_http_receipt(unreceipted, store.runtime_bundle_digest)
 
 
-def test_http_graph_mutation_is_stopped_before_dispatch(fresh_env):
+def test_http_graph_mutation_is_stopped_before_dispatch(fresh_store):
     from fastapi.testclient import TestClient
     from kernel.api import create_app
 
-    store, _pipeline, _outputs = fresh_env
+    store = fresh_store
     app = create_app(store, oidc=None)
     with pytest.raises(AttributeError):
         app.get("/_test/late-route")(lambda: {"late": True})
@@ -1923,12 +1923,12 @@ def test_http_graph_mutation_is_stopped_before_dispatch(fresh_env):
 
 
 def test_http_graph_covers_regex_route_handle_router_stack_and_helpers(
-        fresh_env, monkeypatch):
+        fresh_store, monkeypatch):
     from fastapi.testclient import TestClient
     from kernel import api as api_runtime
     from kernel.api import create_app
 
-    store, _pipeline, _outputs = fresh_env
+    store = fresh_store
     app = create_app(store, oidc=None)
     client = TestClient(app, raise_server_exceptions=False)
     assert client.get("/health").status_code == 200
@@ -2022,8 +2022,8 @@ def test_http_wire_validator_rejects_duplicate_terminal_body_messages():
         messages, bundle_digest, "GET")
 
 
-def test_runtime_bundle_mixed_bundle_write_is_refused(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_runtime_bundle_mixed_bundle_write_is_refused(fresh_store):
+    store = fresh_store
     bundle_b = _variant_bundle(store.runtime_bundle)
     with pytest.raises(RuntimeError, match="different RuntimeBundle"):
         with store.serialized_tx() as cur:
@@ -2037,8 +2037,8 @@ def test_runtime_bundle_mixed_bundle_write_is_refused(fresh_env):
             }, runtime_bundle_digest=bundle_b.digest)
 
 
-def test_runtime_bundle_persists_components_in_exact_storage_carriers(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_runtime_bundle_persists_components_in_exact_storage_carriers(fresh_store):
+    store = fresh_store
     bundle = store.runtime_bundle
     with Store._raw_connection(store).cursor() as cur:
         cur.execute(
@@ -2075,16 +2075,16 @@ def test_runtime_bundle_persists_components_in_exact_storage_carriers(fresh_env)
         "contextsnapshot:si.ffs.pilot.compliance.demo.v0_1") is None
 
 
-def test_runtime_bundle_install_refuses_autocommit_cursor(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_runtime_bundle_install_refuses_autocommit_cursor(fresh_store):
+    store = fresh_store
     with Store._raw_connection(store).cursor() as cur:
         with pytest.raises(RuntimeError, match="exact active governed cursor"):
             store.install_runtime_bundle(cur, store.runtime_bundle)
 
 
 def test_runtime_bundle_each_transaction_restores_and_verifies_database_posture(
-        fresh_env):
-    store, _pipeline, _outputs = fresh_env
+        fresh_store):
+    store = fresh_store
     selected = store.runtime_bundle.component(
         "RUNTIME_DATABASE_OBSERVED", "environment:observed-postgresql.v1")
     mutations = (
@@ -2121,8 +2121,8 @@ def test_runtime_bundle_each_transaction_restores_and_verifies_database_posture(
 
 
 def test_runtime_bundle_late_database_posture_drift_rolls_back_current_transaction(
-        fresh_env):
-    store, _pipeline, _outputs = fresh_env
+        fresh_store):
+    store = fresh_store
     mutations = (
         ("TimeZone", "Europe/Ljubljana"),
         ("DateStyle", "SQL, DMY"),
@@ -2155,8 +2155,8 @@ def test_runtime_bundle_late_database_posture_drift_rolls_back_current_transacti
         assert store.get_record(party_id) is None
 
 
-def test_runtime_bundle_same_transaction_ddl_rolls_back_before_commit(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_runtime_bundle_same_transaction_ddl_rolls_back_before_commit(fresh_store):
+    store = fresh_store
     party_id = f"party:issue171.late-ddl.{uuid.uuid4().hex}"
     relation = f"issue171_late_ddl_{uuid.uuid4().hex}"
 
@@ -2184,8 +2184,8 @@ def test_runtime_bundle_same_transaction_ddl_rolls_back_before_commit(fresh_env)
         assert cur.fetchone()["relation"] is None
 
 
-def test_runtime_bundle_transaction_refuses_temporary_schema_shadow(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_runtime_bundle_transaction_refuses_temporary_schema_shadow(fresh_store):
+    store = fresh_store
     Store._raw_connection(store).execute(
         "CREATE TEMP TABLE kernel_record "
         "(LIKE public.kernel_record INCLUDING ALL)"
@@ -2198,8 +2198,8 @@ def test_runtime_bundle_transaction_refuses_temporary_schema_shadow(fresh_env):
             "DROP TABLE pg_temp.kernel_record")
 
 
-def test_runtime_bundle_outer_transaction_rechecks_live_catalog(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_runtime_bundle_outer_transaction_rechecks_live_catalog(fresh_store):
+    store = fresh_store
     entered = False
     Store._raw_connection(store).execute(
         "CREATE AGGREGATE public.hostile_runtime_sum(integer) "
@@ -2219,8 +2219,8 @@ def test_runtime_bundle_outer_transaction_rechecks_live_catalog(fresh_env):
 
 
 def test_runtime_bundle_outer_transaction_refuses_ambient_connection_state(
-        fresh_env):
-    store, _pipeline, _outputs = fresh_env
+        fresh_store):
+    store = fresh_store
 
     Store._raw_connection(store).execute(
         "BEGIN ISOLATION LEVEL REPEATABLE READ")
@@ -2238,8 +2238,8 @@ def test_runtime_bundle_outer_transaction_refuses_ambient_connection_state(
         Store._raw_connection(store).autocommit = True
 
 
-def test_governed_transaction_requires_exact_nested_ownership(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_governed_transaction_requires_exact_nested_ownership(fresh_store):
+    store = fresh_store
 
     for forged_depth in (True, "1", 1):
         store._transaction_state.depth = forged_depth
@@ -2263,8 +2263,8 @@ def test_governed_transaction_requires_exact_nested_ownership(fresh_env):
         Store._raw_connection(store).rollback()
 
 
-def test_governed_transaction_valid_nesting_and_cleanup(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_governed_transaction_valid_nesting_and_cleanup(fresh_store):
+    store = fresh_store
     with Store.tx(store) as outer:
         outer._execute_read("SELECT 1 AS outer_value")
         assert outer.fetchone()["outer_value"] == 1
@@ -2289,10 +2289,10 @@ def test_governed_transaction_valid_nesting_and_cleanup(fresh_env):
 
 
 def test_caught_runtime_integrity_failure_poison_rolls_back_transaction(
-        fresh_env):
+        fresh_store, fresh_pipeline):
     from kernel import policy
 
-    store, pipeline, _outputs = fresh_env
+    store, pipeline = fresh_store, fresh_pipeline
     party_id = f"party:issue171.rollback-only.{uuid.uuid4().hex}"
     marker = "ISSUE171_CAUGHT_SEMANTIC_MUTATION"
 
@@ -2324,8 +2324,8 @@ def test_caught_runtime_integrity_failure_poison_rolls_back_transaction(
 
 
 def test_context_structural_helper_cannot_self_restore_before_full_proof(
-        fresh_env):
-    store, _pipeline, outputs = fresh_env
+        fresh_store, fresh_outputs):
+    store, outputs = fresh_store, fresh_outputs
     assembler = outputs.materializer.context
     helper = context._RETAINED_CONTEXT_REQUIRE_RUNTIME_COMPOSITION_STRUCTURE
     original_code = helper.__code__
@@ -2375,8 +2375,8 @@ def test_context_structural_helper_cannot_self_restore_before_full_proof(
     "'session_replication_role', 'replica', true)",
 ))
 def test_governed_cursor_refuses_caught_commit_and_rolls_back(
-        fresh_env, forbidden_sql):
-    store, _pipeline, _outputs = fresh_env
+        fresh_store, forbidden_sql):
+    store = fresh_store
     party_id = f"party:issue171.cursor-commit.{uuid.uuid4().hex}"
 
     with pytest.raises(RuntimeBundleError, match="rollback-only"):
@@ -2397,8 +2397,8 @@ def test_governed_cursor_refuses_caught_commit_and_rolls_back(
 
 @pytest.mark.parametrize("forbidden_sql", ("COMMIT", "COMMIT AND CHAIN"))
 def test_governed_cursor_self_restoring_statement_guard_cannot_commit(
-        fresh_env, forbidden_sql):
-    store, _pipeline, _outputs = fresh_env
+        fresh_store, forbidden_sql):
+    store = fresh_store
     party_id = f"party:issue171.cursor-self-restore.{uuid.uuid4().hex}"
     hostile_guard_called = False
 
@@ -2433,8 +2433,8 @@ def test_governed_cursor_self_restoring_statement_guard_cannot_commit(
 
 
 def test_governed_cursor_transient_mutation_replacement_cannot_skip_write(
-        fresh_env):
-    store, _pipeline, _outputs = fresh_env
+        fresh_store):
+    store = fresh_store
     first_id = f"party:issue171.cursor-transient-first.{uuid.uuid4().hex}"
     skipped_id = f"party:issue171.cursor-transient-skip.{uuid.uuid4().hex}"
     replacement_called = False
@@ -2482,10 +2482,10 @@ def test_governed_cursor_transient_mutation_replacement_cannot_skip_write(
 
 
 def test_reference_resolver_rejects_noop_cursor_and_poisons_transaction(
-        fresh_env):
+        fresh_store):
     from kernel.verification import ReferenceResolver
 
-    store, _pipeline, _outputs = fresh_env
+    store = fresh_store
     party_id = f"party:issue171.fake-resolver-cursor.{uuid.uuid4().hex}"
 
     class NoOpCursor:
@@ -2522,10 +2522,10 @@ def test_reference_resolver_rejects_noop_cursor_and_poisons_transaction(
     assert store.get_record(party_id) is None
 
 
-def test_authority_evaluator_requires_active_serialized_cursor(fresh_env):
+def test_authority_evaluator_requires_active_serialized_cursor(fresh_store):
     from kernel.authority import AuthorityEvaluator
 
-    store, _pipeline, _outputs = fresh_env
+    store = fresh_store
     evaluator = AuthorityEvaluator(store)
     request = {
         "acting_party_ref": demo.FARMER,
@@ -2588,8 +2588,8 @@ def test_gate_dispatch_guard_accepts_slot_only_authority_evaluator():
             ctx, stages_module._CONTEXT_ASSEMBLE, context_service)
 
 
-def test_plain_transaction_cannot_mutate_or_upgrade_to_writer(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_plain_transaction_cannot_mutate_or_upgrade_to_writer(fresh_store):
+    store = fresh_store
 
     with pytest.raises(RuntimeBundleError, match="rollback-only"):
         with store.tx() as cur:
@@ -2605,10 +2605,10 @@ def test_plain_transaction_cannot_mutate_or_upgrade_to_writer(fresh_env):
 
 
 def test_closed_nested_cursor_cannot_authorize_inside_live_outer_transaction(
-        fresh_env):
+        fresh_store):
     from kernel.authority import AuthorityEvaluator
 
-    store, _pipeline, _outputs = fresh_env
+    store = fresh_store
     evaluator = AuthorityEvaluator(store)
     with pytest.raises(RuntimeBundleError, match="rollback-only"):
         with store.serialized_tx():
@@ -2658,10 +2658,10 @@ def test_authority_decision_is_immutable_and_detects_payload_mutation():
      TypeError),
 ])
 def test_authority_evaluator_rejects_unclosed_inputs(
-        fresh_env, field, value, error):
+        fresh_store, field, value, error):
     from kernel.authority import AuthorityEvaluator
 
-    store, _pipeline, _outputs = fresh_env
+    store = fresh_store
     evaluator = AuthorityEvaluator(store)
     request = {
         "acting_party_ref": demo.FARMER,
@@ -2676,10 +2676,10 @@ def test_authority_evaluator_rejects_unclosed_inputs(
             evaluator.evaluate(cur=cur, **request)
 
 
-def test_reference_resolver_rejects_cursor_from_another_store(fresh_env):
+def test_reference_resolver_rejects_cursor_from_another_store(fresh_store):
     from kernel.verification import ReferenceResolver
 
-    store, _pipeline, _outputs = fresh_env
+    store = fresh_store
     other_store = Store(dsn=store.dsn)
     party_id = f"party:issue171.foreign-resolver-cursor.{uuid.uuid4().hex}"
     try:
@@ -2713,8 +2713,8 @@ def test_reference_resolver_rejects_cursor_from_another_store(fresh_env):
     assert store.get_record(party_id) is None
 
 
-def test_governed_transaction_hides_direct_connection_commit(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_governed_transaction_hides_direct_connection_commit(fresh_store):
+    store = fresh_store
     party_id = f"party:issue171.connection-commit.{uuid.uuid4().hex}"
     retained_connection = store.conn
 
@@ -2735,8 +2735,8 @@ def test_governed_transaction_hides_direct_connection_commit(fresh_env):
     assert store.get_record(party_id) is None
 
 
-def test_governed_cursor_does_not_leak_raw_command_channels(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_governed_cursor_does_not_leak_raw_command_channels(fresh_store):
+    store = fresh_store
 
     with store.tx() as cur:
         assert iter(cur) is cur
@@ -2748,8 +2748,8 @@ def test_governed_cursor_does_not_leak_raw_command_channels(fresh_env):
             _ = cur.connection.pgconn
 
 
-def test_public_store_sql_facades_are_disabled(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_public_store_sql_facades_are_disabled(fresh_store):
+    store = fresh_store
     direct_id = f"party:issue171.direct-sql.{uuid.uuid4().hex}"
     statement = (
         "INSERT INTO kernel_record "
@@ -2771,8 +2771,8 @@ def test_public_store_sql_facades_are_disabled(fresh_env):
     assert store.get_record(direct_id) is None
 
 
-def test_governed_cursor_rejects_stateful_composable_without_rendering(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_governed_cursor_rejects_stateful_composable_without_rendering(fresh_store):
+    store = fresh_store
 
     class FlippingComposable(sql.Composable):
         def __init__(self):
@@ -2791,8 +2791,8 @@ def test_governed_cursor_rejects_stateful_composable_without_rendering(fresh_env
     assert statement.render_count == 0
 
 
-def test_governed_savepoint_cannot_escape_parent_transaction(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_governed_savepoint_cannot_escape_parent_transaction(fresh_store):
+    store = fresh_store
 
     with store.tx() as cur:
         escaped = cur.connection.transaction()
@@ -2801,8 +2801,8 @@ def test_governed_savepoint_cannot_escape_parent_transaction(fresh_env):
             pass
 
 
-def test_governed_cursor_cannot_escape_parent_transaction(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_governed_cursor_cannot_escape_parent_transaction(fresh_store):
+    store = fresh_store
 
     with store.tx() as escaped:
         escaped._execute_read("SELECT 1 AS value")
@@ -2811,8 +2811,8 @@ def test_governed_cursor_cannot_escape_parent_transaction(fresh_env):
         escaped._execute_read("SELECT 2 AS value")
 
 
-def test_governed_savepoint_preserves_database_error_and_recovers(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_governed_savepoint_preserves_database_error_and_recovers(fresh_store):
+    store = fresh_store
 
     with store.tx() as cur:
         with pytest.raises(psycopg.errors.DivisionByZero):
@@ -2822,8 +2822,8 @@ def test_governed_savepoint_preserves_database_error_and_recovers(fresh_env):
         assert cur.fetchone()["value"] == 1
 
 
-def test_public_maintenance_cursor_is_not_exposed(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_public_maintenance_cursor_is_not_exposed(fresh_store):
+    store = fresh_store
     with pytest.raises(RuntimeError, match="public Store cursors are forbidden"):
         store.conn.cursor()
     with pytest.raises(RuntimeError, match="public Store connection SQL"):
@@ -2831,8 +2831,8 @@ def test_public_maintenance_cursor_is_not_exposed(fresh_env):
 
 
 def test_runtime_bundle_outer_transaction_rechecks_live_python_posture(
-        fresh_env):
-    store, _pipeline, _outputs = fresh_env
+        fresh_store):
+    store = fresh_store
     original_codes = store._runtime_posture_verifier_codes
     try:
         with pytest.raises(RuntimeError, match="posture verifier changed"):
@@ -2847,8 +2847,8 @@ def test_runtime_bundle_outer_transaction_rechecks_live_python_posture(
             store, "_runtime_posture_verifier_codes", original_codes)
 
 
-def test_runtime_bundle_refuses_paired_posture_verifier_replacement(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_runtime_bundle_refuses_paired_posture_verifier_replacement(fresh_store):
+    store = fresh_store
     original_verifiers = store._runtime_posture_verifiers
     original_codes = store._runtime_posture_verifier_codes
 
@@ -2871,8 +2871,8 @@ def test_runtime_bundle_refuses_paired_posture_verifier_replacement(fresh_env):
             store, "_runtime_posture_verifier_codes", original_codes)
 
 
-def test_store_refuses_class_level_guard_replacement(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_store_refuses_class_level_guard_replacement(fresh_store):
+    store = fresh_store
     original = Store._require_transaction_python_posture
     Store._require_transaction_python_posture = lambda _self: None
     try:
@@ -2882,8 +2882,29 @@ def test_store_refuses_class_level_guard_replacement(fresh_env):
         Store._require_transaction_python_posture = original
 
 
-def test_caught_store_dispatch_drift_poison_rolls_back_transaction(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_composed_services_refuse_store_posture_helper_replacement(fresh_outputs):
+    services = (
+        fresh_outputs.materializer.context,
+        fresh_outputs.materializer,
+    )
+    for method_name in (
+            "_require_transaction_python_posture",
+            "_require_transaction_python_posture_unpoisoned"):
+        original = vars(Store)[method_name]
+        setattr(Store, method_name, lambda _self: None)
+        try:
+            for service in services:
+                with pytest.raises(
+                        (RuntimeBundleError, RuntimeError),
+                        match=("Store runtime posture|posture verifier|"
+                               "runtime composition")):
+                    type(service)._assert_runtime_composition(service)
+        finally:
+            setattr(Store, method_name, original)
+
+
+def test_caught_store_dispatch_drift_poison_rolls_back_transaction(fresh_store):
+    store = fresh_store
     party_id = f"party:issue171.dispatch-poison.{uuid.uuid4().hex}"
     original = Store._bundle_digest
 
@@ -2907,8 +2928,8 @@ def test_caught_store_dispatch_drift_poison_rolls_back_transaction(fresh_env):
     assert store.get_record(party_id) is None
 
 
-def test_store_refuses_registry_instance_validate_shadow(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_store_refuses_registry_instance_validate_shadow(fresh_store):
+    store = fresh_store
     store._registry.validate = lambda _payload: None
     try:
         with pytest.raises(RuntimeError, match="decision semantics"):
@@ -2917,8 +2938,8 @@ def test_store_refuses_registry_instance_validate_shadow(fresh_env):
         del store._registry.validate
 
 
-def test_store_read_cursor_instance_shadow_cannot_skip_guards(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_store_read_cursor_instance_shadow_cannot_skip_guards(fresh_store):
+    store = fresh_store
 
     @contextmanager
     def unguarded_cursor():
@@ -2933,8 +2954,8 @@ def test_store_read_cursor_instance_shadow_cannot_skip_guards(fresh_env):
 
 
 def test_runtime_bundle_late_python_drift_rolls_back_current_transaction(
-        fresh_env):
-    store, _pipeline, _outputs = fresh_env
+        fresh_store):
+    store = fresh_store
     party_id = f"party:issue171.late-import.{uuid.uuid4().hex}"
     module_name = f"_ofarm_late_transaction_{uuid.uuid4().hex}"
     module = types.ModuleType(module_name)
@@ -2955,12 +2976,12 @@ def test_runtime_bundle_late_python_drift_rolls_back_current_transaction(
     assert store.get_record(party_id) is None
 
 
-def test_runtime_bundle_refuses_mutable_decision_semantic_roots(fresh_env):
+def test_runtime_bundle_refuses_mutable_decision_semantic_roots(fresh_store, fresh_pipeline):
     from kernel import gates as gates_module
     from kernel import policy
     from kernel import runtime_bundle as runtime_bundle_module
 
-    store, _pipeline, _outputs = fresh_env
+    store, _pipeline = fresh_store, fresh_pipeline
 
     original_policy = policy.COMMIT_CLASS_TO_FAMILY
     policy.COMMIT_CLASS_TO_FAMILY = dict(original_policy)
@@ -3049,8 +3070,8 @@ def test_runtime_bundle_refuses_mutable_decision_semantic_roots(fresh_env):
     assert store.get_record(demo.FARMER) is not None
 
 
-def test_gate_pipeline_refuses_instance_level_dispatch_override(fresh_env):
-    _store, pipeline, _outputs = fresh_env
+def test_gate_pipeline_refuses_instance_level_dispatch_override(fresh_pipeline):
+    pipeline = fresh_pipeline
     with pytest.raises(AttributeError, match="runtime composition is immutable"):
         pipeline.authority.evaluate = lambda **_kwargs: None
 
@@ -3084,10 +3105,10 @@ def test_gate_pipeline_refuses_instance_level_dispatch_override(fresh_env):
 
 
 def test_gate_entry_refuses_temporary_semantic_mutation_even_if_restored(
-        fresh_env, monkeypatch):
+        fresh_store, fresh_pipeline, monkeypatch):
     from kernel import policy
 
-    store, pipeline, _outputs = fresh_env
+    store, pipeline = fresh_store, fresh_pipeline
     submission = demo.spray_submission(
         f"issue171-temporary-semantics:{uuid.uuid4().hex}",
         erp_id=f"erp:issue171.temporary-semantics.{uuid.uuid4().hex}",
@@ -3104,10 +3125,10 @@ def test_gate_entry_refuses_temporary_semantic_mutation_even_if_restored(
 
 
 def test_gate_uses_retained_stage_callable_during_temporary_class_mutation(
-        fresh_env):
+        fresh_store, fresh_pipeline):
     from kernel import gates as gates_module
 
-    store, pipeline, _outputs = fresh_env
+    store, pipeline = fresh_store, fresh_pipeline
     submission = demo.spray_submission(
         f"issue171-retained-stage:{uuid.uuid4().hex}",
         erp_id=f"erp:issue171.retained-stage.{uuid.uuid4().hex}",
@@ -3142,10 +3163,10 @@ def test_gate_uses_retained_stage_callable_during_temporary_class_mutation(
 
 
 def test_runtime_bundle_late_semantic_mutation_rolls_back_current_transaction(
-        fresh_env):
+        fresh_store):
     from kernel import policy
 
-    store, _pipeline, _outputs = fresh_env
+    store = fresh_store
     party_id = f"party:issue171.late-semantics.{uuid.uuid4().hex}"
     marker = "ISSUE171_HOSTILE_COMMIT_CLASS"
     try:
@@ -3757,8 +3778,8 @@ def test_semantic_receipt_refuses_projector_code_replacement():
         helper.__code__ = helper_original
 
 
-def test_runtime_bundle_refuses_new_module_claiming_retained_origin(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_runtime_bundle_refuses_new_module_claiming_retained_origin(fresh_store):
+    store = fresh_store
     module_name = f"_ofarm_fake_retained_origin_{uuid.uuid4().hex}"
     source = str(Path(json.__file__).resolve())
     loader = importlib.machinery.SourceFileLoader(module_name, source)
@@ -3775,8 +3796,8 @@ def test_runtime_bundle_refuses_new_module_claiming_retained_origin(fresh_env):
         del sys.modules[module_name]
 
 
-def test_runtime_bundle_refuses_existing_module_object_replacement(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_runtime_bundle_refuses_existing_module_object_replacement(fresh_store):
+    store = fresh_store
     original = sys.modules["typing.io"]
     sys.modules["typing.io"] = types.ModuleType("typing.io")
     try:
@@ -3786,8 +3807,8 @@ def test_runtime_bundle_refuses_existing_module_object_replacement(fresh_env):
         sys.modules["typing.io"] = original
 
 
-def test_runtime_bundle_refuses_same_module_loader_state_replacement(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_runtime_bundle_refuses_same_module_loader_state_replacement(fresh_store):
+    store = fresh_store
     module = json
     original_spec = module.__spec__
     original_loader = module.__loader__
@@ -3804,8 +3825,8 @@ def test_runtime_bundle_refuses_same_module_loader_state_replacement(fresh_env):
         module.__spec__ = original_spec
 
 
-def test_runtime_bundle_refuses_none_valued_module_set_growth(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_runtime_bundle_refuses_none_valued_module_set_growth(fresh_store):
+    store = fresh_store
     module_name = f"_ofarm_none_import_blocker_{uuid.uuid4().hex}"
     sys.modules[module_name] = None
     try:
@@ -3815,8 +3836,8 @@ def test_runtime_bundle_refuses_none_valued_module_set_growth(fresh_env):
         del sys.modules[module_name]
 
 
-def test_runtime_bundle_refuses_sys_modules_mapping_replacement(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_runtime_bundle_refuses_sys_modules_mapping_replacement(fresh_store):
+    store = fresh_store
     original = sys.modules
     sys.modules = dict(original)
     try:
@@ -3826,8 +3847,8 @@ def test_runtime_bundle_refuses_sys_modules_mapping_replacement(fresh_env):
         sys.modules = original
 
 
-def test_runtime_bundle_refuses_path_importer_cache_replacement(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_runtime_bundle_refuses_path_importer_cache_replacement(fresh_store):
+    store = fresh_store
     retained_root = str(config.PACKAGE_ROOT.resolve())
     original = sys.path_importer_cache[retained_root]
 
@@ -3842,8 +3863,8 @@ def test_runtime_bundle_refuses_path_importer_cache_replacement(fresh_env):
         sys.path_importer_cache[retained_root] = original
 
 
-def test_runtime_bundle_refuses_path_importer_cache_alias_key(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_runtime_bundle_refuses_path_importer_cache_alias_key(fresh_store):
+    store = fresh_store
     retained_root = str(config.PACKAGE_ROOT.resolve())
     finder = sys.path_importer_cache.pop(retained_root)
     alias = retained_root + "/."
@@ -3856,8 +3877,8 @@ def test_runtime_bundle_refuses_path_importer_cache_alias_key(fresh_env):
         sys.path_importer_cache[retained_root] = finder
 
 
-def test_runtime_bundle_refuses_file_finder_instance_method_override(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_runtime_bundle_refuses_file_finder_instance_method_override(fresh_store):
+    store = fresh_store
     retained_root = str(config.PACKAGE_ROOT.resolve())
     finder = sys.path_importer_cache[retained_root]
     finder.find_spec = lambda *args, **kwargs: None
@@ -3868,8 +3889,8 @@ def test_runtime_bundle_refuses_file_finder_instance_method_override(fresh_env):
         del finder.find_spec
 
 
-def test_runtime_bundle_refuses_sys_path_alias(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_runtime_bundle_refuses_sys_path_alias(fresh_store):
+    store = fresh_store
     retained_root = str(config.PACKAGE_ROOT.resolve())
     index = sys.path.index(retained_root)
     sys.path[index] = retained_root + "/."
@@ -3880,8 +3901,8 @@ def test_runtime_bundle_refuses_sys_path_alias(fresh_env):
         sys.path[index] = retained_root
 
 
-def test_runtime_bundle_refuses_import_provider_method_replacement(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_runtime_bundle_refuses_import_provider_method_replacement(fresh_store):
+    store = fresh_store
     provider = importlib.machinery.PathFinder
     original = vars(provider)["find_spec"]
 
@@ -3898,8 +3919,8 @@ def test_runtime_bundle_refuses_import_provider_method_replacement(fresh_env):
         provider.find_spec = original
 
 
-def test_store_runtime_activation_fields_reject_direct_replacement(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_store_runtime_activation_fields_reject_direct_replacement(fresh_store):
+    store = fresh_store
     for field_name in (
         "_runtime_bundle",
         "_runtime_environment_seal",
@@ -3924,8 +3945,8 @@ def test_store_runtime_activation_fields_reject_direct_replacement(fresh_env):
 
 @pytest.mark.skipif(sys.platform != "linux", reason="Linux executable mappings")
 def test_runtime_bundle_late_native_mapping_rolls_back_current_transaction(
-        fresh_env):
-    store, _pipeline, _outputs = fresh_env
+        fresh_store):
+    store = fresh_store
     party_id = f"party:issue171.late-native.{uuid.uuid4().hex}"
     mapped_path = (
         config.PACKAGE_ROOT / ".artifacts" /
@@ -3957,9 +3978,9 @@ def test_runtime_bundle_late_native_mapping_rolls_back_current_transaction(
 
 
 def test_runtime_bundle_shared_connection_serializes_complete_transactions(
-        fresh_env):
+        fresh_store):
     """A second sync FastAPI worker cannot join another worker's transaction."""
-    store, _pipeline, _outputs = fresh_env
+    store = fresh_store
     writer_entered = threading.Event()
     writer_done = threading.Event()
     release_writer = threading.Event()
@@ -4023,8 +4044,8 @@ def test_runtime_bundle_shared_connection_serializes_complete_transactions(
     assert result and result[0]["record_id"] == demo.FARMER
 
 
-def test_runtime_bundle_rejects_role_drift_before_governed_sql(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_runtime_bundle_rejects_role_drift_before_governed_sql(fresh_store):
+    store = fresh_store
     role_name = f"ofarm_issue171_role_{uuid.uuid4().hex[:12]}"
     party_id = f"party:issue171.role-drift.{uuid.uuid4().hex}"
     entered = False
@@ -4093,8 +4114,8 @@ def test_existing_incomplete_bundle_receipt_is_never_repaired():
             admin.execute(f'DROP DATABASE IF EXISTS "{dbname}"')
 
 
-def test_runtime_bundle_unbound_store_cannot_claim_persisted_digest(fresh_env):
-    store_a, _pipeline, _outputs = fresh_env
+def test_runtime_bundle_unbound_store_cannot_claim_persisted_digest(fresh_store):
+    store_a = fresh_store
     unbound = Store(dsn=store_a.dsn)
     try:
         with pytest.raises(
@@ -4113,8 +4134,8 @@ def test_runtime_bundle_unbound_store_cannot_claim_persisted_digest(fresh_env):
         unbound.close()
 
 
-def test_runtime_bundle_mixed_service_composition_is_refused(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_runtime_bundle_mixed_service_composition_is_refused(fresh_store):
+    store = fresh_store
     bundle_b = _variant_bundle(store.runtime_bundle)
     constructors = (
         lambda: context.ContextAssembler(store, runtime_bundle=bundle_b),
@@ -4178,8 +4199,8 @@ def test_gate_pipeline_rechecks_exact_policy_provider_identity():
     pipeline._assert_runtime_composition()
 
 
-def test_runtime_bundle_direct_caller_binding_is_forbidden(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_runtime_bundle_direct_caller_binding_is_forbidden(fresh_store):
+    store = fresh_store
     with pytest.raises(RuntimeError, match="direct RuntimeBundle binding is forbidden"):
         store.bind_runtime_bundle(store.runtime_bundle)
 
@@ -4190,8 +4211,8 @@ def test_runtime_bundle_direct_activation_without_prepare_is_forbidden():
         store._activate_prepared_runtime_bundle(object())
 
 
-def test_runtime_bundle_queue_crossing_refuses_without_migration(fresh_env):
-    store_a, pipeline_a, _outputs = fresh_env
+def test_runtime_bundle_queue_crossing_refuses_without_migration(fresh_store, fresh_pipeline):
+    store_a, pipeline_a = fresh_store, fresh_pipeline
     queued = pipeline_a.commit({
         "commitClass": "COMPLIANCE_ASSERTION",
         "actingPartyRef": demo.FARMER,
@@ -4246,8 +4267,8 @@ def test_runtime_bundle_queue_crossing_refuses_without_migration(fresh_env):
 
 
 def test_runtime_bundle_cold_rebuild_uses_persisted_bytes_and_rejects_drift(
-        fresh_env, monkeypatch):
-    store, _pipeline, _outputs = fresh_env
+        fresh_store, monkeypatch):
+    store = fresh_store
     expected = store.runtime_bundle
 
     def no_filesystem_bytes(_path):
@@ -4275,8 +4296,8 @@ def test_runtime_bundle_cold_rebuild_uses_persisted_bytes_and_rejects_drift(
         )
 
 
-def test_runtime_bundle_cold_rebuild_rejects_tampered_reference_identity(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_runtime_bundle_cold_rebuild_rejects_tampered_reference_identity(fresh_store):
+    store = fresh_store
     bundle = store.runtime_bundle
     document = json.loads(bundle.canonical_document_bytes)
     document["selectedReferenceIdentities"][0]["snapshotPayloadDigest"] = (
@@ -4302,8 +4323,8 @@ def test_runtime_bundle_cold_rebuild_rejects_tampered_reference_identity(fresh_e
         )
 
 
-def test_runtime_bundle_persisted_extra_component_is_refused(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_runtime_bundle_persisted_extra_component_is_refused(fresh_store):
+    store = fresh_store
     extra_bytes = b"issue-171-persisted-extra-component"
     extra_digest = sha256_bytes(extra_bytes)
     with pytest.raises(RuntimeError, match="component set is not exact"):
@@ -4514,8 +4535,8 @@ def test_si_reference_bindings_reject_mixed_descriptor_and_bundle():
         context.SIReferenceBindings.from_descriptor(other, runtime_bundle=bundle)
 
 
-def test_gate_pipeline_rejects_caller_supplied_product_register(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_gate_pipeline_rejects_caller_supplied_product_register(fresh_store):
+    store = fresh_store
     bindings = context.SIReferenceBindings.from_descriptor(
         store.runtime_bundle.descriptor, runtime_bundle=store.runtime_bundle)
     register = context.ProductRegister(
@@ -4525,10 +4546,10 @@ def test_gate_pipeline_rejects_caller_supplied_product_register(fresh_env):
         GatePipeline(store, product_register=register)
 
 
-def test_governed_import_refuses_post_start_parser_mutation(fresh_env, monkeypatch):
+def test_governed_import_refuses_post_start_parser_mutation(fresh_store, monkeypatch):
     from kernel.profiles.si_ffs import regsr_adapter as regsr
 
-    store, _pipeline, _outputs = fresh_env
+    store = fresh_store
     target = config.PACKAGE_ROOT / regsr.REGSR_PARSER_REF
     original_read_bytes = Path.read_bytes
     artifact = {
@@ -4580,8 +4601,8 @@ def test_runtime_bundle_same_document_cannot_swap_component_bytes():
         replace(bundle, components=components)
 
 
-def test_runtime_bundle_live_bind_rejects_stale_executable_bytes(fresh_env):
-    store, _pipeline, _outputs = fresh_env
+def test_runtime_bundle_live_bind_rejects_stale_executable_bytes(fresh_store):
+    store = fresh_store
     base = store.runtime_bundle
     target = next(item for item in base.components
                   if item.role == "RUNTIME_CODE")

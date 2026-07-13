@@ -742,7 +742,7 @@
       "logicalRef": "python:kernel/context.py",
       "path": "kernel/context.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:2d61ed3acdd100c967cdd9c907069707023cf08c03f97cf4d0e9dfc51bc7a740",
+      "sha256": "sha256:dc07bc8eaeddb72daa63c9c9b26d19e6d4a684f3e0ed00a535c9a98f8de53ab5",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -782,7 +782,7 @@
       "logicalRef": "python:kernel/materializer.py",
       "path": "kernel/materializer.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:9624b5e7c2f0496752d1af2538d7641e8e743dae62e223ca2d2e6cafa17eee99",
+      "sha256": "sha256:6c58b006d5257954bc6f4a314d5756e975028a67674be6a8bebe66dae22061f6",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -838,7 +838,7 @@
       "logicalRef": "python:kernel/profiles/si_ffs/ffsnaprave_adapter.py",
       "path": "kernel/profiles/si_ffs/ffsnaprave_adapter.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:2e0f962da76d457dfe0a9467f056b483aaa13cb98059f9bb68cf08968462fb3e",
+      "sha256": "sha256:14d5c6050a549464ef38c327539cb5b826a22670d10f73f179c6ae646fde4760",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -846,7 +846,7 @@
       "logicalRef": "python:kernel/profiles/si_ffs/gerk_adapter.py",
       "path": "kernel/profiles/si_ffs/gerk_adapter.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:d08f30af7ad45cce9fdcd102118ab92e9947ef8eb771a6ca7784a7c074dc6753",
+      "sha256": "sha256:3cdcd07d18ea0b4c535690f9e892cd9bacef2efc7300eb8e4b3f6c67712092f3",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -862,7 +862,7 @@
       "logicalRef": "python:kernel/profiles/si_ffs/si_bindings.py",
       "path": "kernel/profiles/si_ffs/si_bindings.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:6cb57cfe9ee5bb4b081932317970d527f69f46fdeeb1a464e5bb6a0ec80e8236",
+      "sha256": "sha256:322f05d2845c86f303725171610612b2e46f8186ee426f1ba8cf0c8469531396",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -870,7 +870,7 @@
       "logicalRef": "python:kernel/runtime_bundle.py",
       "path": "kernel/runtime_bundle.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:370f9b9c9725166b056b29124cb683ad100d630067e1babf930a7ab230d1d5f8",
+      "sha256": "sha256:e14260073dd328962580bbdedeb1011b42d1b5c7db8ce5c05c48f7d4cc1ba9b4",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -894,7 +894,7 @@
       "logicalRef": "python:kernel/store.py",
       "path": "kernel/store.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:fe5a824e103cf3ccb5192c25cb87e48a04c83535a40e3ac320b01421697b0715",
+      "sha256": "sha256:3a57c727e60d538a38b32e0a94a28ed548af9693a484af446cc1883048a14ee0",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {

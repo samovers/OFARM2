@@ -1018,7 +1018,18 @@ class Store:
     def _require_transaction_python_posture(self) -> None:
         """Re-prove executable Python state before every outer DB transaction."""
         try:
-            Store._require_transaction_python_posture_unpoisoned(self)
+            retained = globals().get(
+                "_RETAINED_STORE_TRANSACTION_POSTURE_UNPOISONED")
+            retained_code = globals().get(
+                "_RETAINED_STORE_TRANSACTION_POSTURE_UNPOISONED_CODE")
+            if (type(retained) is not types.FunctionType
+                    or retained.__code__ is not retained_code
+                    or vars(Store).get(
+                        "_require_transaction_python_posture_unpoisoned") is not
+                    retained):
+                raise RuntimeError(
+                    "Store runtime posture verifier changed after construction")
+            retained(self)
         except Exception:
             Store._mark_transaction_integrity_violation(self)
             raise
@@ -2284,4 +2295,8 @@ _RETAINED_TRANSACTION_INTEGRITY_MARKER = \
     Store._mark_transaction_integrity_violation
 _RETAINED_TRANSACTION_INTEGRITY_MARKER_CODE = \
     _RETAINED_TRANSACTION_INTEGRITY_MARKER.__code__
+_RETAINED_STORE_TRANSACTION_POSTURE_UNPOISONED = \
+    Store._require_transaction_python_posture_unpoisoned
+_RETAINED_STORE_TRANSACTION_POSTURE_UNPOISONED_CODE = \
+    _RETAINED_STORE_TRANSACTION_POSTURE_UNPOISONED.__code__
 _STORE_DISPATCH_ANCHORS = _STORE_DISPATCH_SNAPSHOTTER()

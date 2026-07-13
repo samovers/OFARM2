@@ -326,8 +326,8 @@ def _fresh_env_template(_seeded_environment):
 
 
 @pytest.fixture
-def fresh_env(_fresh_env_template):
-    """An isolated clone of one exact seed, yielding (store, pipeline, outputs).
+def fresh_store(_fresh_env_template):
+    """Yield one isolated Store activated from the exact immutable seed clone.
 
     Every clone re-proves the schema and live RuntimeBundle before use. The seed
     Store is closed before PostgreSQL copies it, and no test can write back into
@@ -343,10 +343,9 @@ def fresh_env(_fresh_env_template):
         _create_database(dbname, template=template_dbname)
         created = True
         isolated = Store(dsn=_store_database_dsn(dbname))
-        isolated.migrate()
         _activate_cloned_seed_runtime(
             isolated, template_runtime_bundle, template_environment_seal)
-        yield isolated, GatePipeline(isolated), OutputGenerator(isolated)
+        yield isolated
     finally:
         try:
             if isolated is not None:
@@ -354,6 +353,24 @@ def fresh_env(_fresh_env_template):
         finally:
             if created:
                 _drop_database(dbname)
+
+
+@pytest.fixture
+def fresh_pipeline(fresh_store):
+    """Construct the governed pipeline only for tests that exercise it."""
+    return GatePipeline(fresh_store)
+
+
+@pytest.fixture
+def fresh_outputs(fresh_store):
+    """Construct governed outputs only for tests that exercise them."""
+    return OutputGenerator(fresh_store)
+
+
+@pytest.fixture
+def fresh_env(fresh_store, fresh_pipeline, fresh_outputs):
+    """Compatibility tuple for tests that exercise both governed services."""
+    return fresh_store, fresh_pipeline, fresh_outputs
 
 
 def is_platform_mvp_evidence_report(report) -> bool:

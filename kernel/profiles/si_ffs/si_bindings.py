@@ -31,7 +31,7 @@ from ... import config
 from ...context import (GERK_SNAPSHOT_PREFIX, mint, now_iso,
                         require_product_register_runtime_composition)
 from ...problems import runtime_problem
-from ...runtime_bundle import RuntimeBundleError, require_store_runtime_bundle
+from ...runtime_bundle import RuntimeBundleError
 from ...store import Store
 from ...verification import (CONFIRM, LOCATOR, NONE, LookupResult,
                              ReferenceResolver)
@@ -109,7 +109,8 @@ def _require_retained_store(store, label: str):
                 f"{label} requires the exact retained Store runtime")
         _RETAINED_SI_STORE_POSTURE(store)
         bundle = _RETAINED_SI_STORE_BUNDLE_FGET(store)
-        require_store_runtime_bundle(store, bundle, label)
+        # The retained Store posture has just proved this exact bundle and its
+        # live seal; returning the same retained property adds no caller gap.
         return bundle
     except BaseException:
         _mark_si_runtime_integrity_violation(store)

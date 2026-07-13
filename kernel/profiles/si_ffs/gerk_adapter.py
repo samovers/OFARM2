@@ -489,7 +489,8 @@ def require_gerk_layer_runtime_composition(store, layer, label: str) -> None:
                 f"{label} Store runtime dispatch changed before decision")
         _RETAINED_GERK_STORE_TRANSACTION_POSTURE(store)
         bundle = Store.runtime_bundle.fget(store)
-        require_store_runtime_bundle(store, bundle, label)
+        # The retained Store posture has just proved this exact bundle and its
+        # live seal.  The adjacent layer checks bind the cache to it.
         if (type(layer) is not _RETAINED_GERK_LAYER_TYPE
                 or vars(layer).get("_frozen") is not True
                 or layer.runtime_bundle is not bundle

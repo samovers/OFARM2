@@ -2916,6 +2916,11 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_composed_services_refuse_store_posture_helper_replacement",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_concurrent_regex_cache_growth_does_not_poison_semantic_proof",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
@@ -3981,8 +3986,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "c2751002e490ed8446972046cdbaa4b9f8177581f751ef6e455886cf7d2343ed",
-  "entryCount": 796,
+  "entriesSha256": "288927c4cf6207ac7723ef6318c2d88d424e37effd5da3cc80b52f2e38399324",
+  "entryCount": 797,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

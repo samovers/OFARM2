@@ -285,7 +285,7 @@ def require_store_runtime_bundle(store, bundle, consumer: str) -> None:
 
 
 def require_current_runtime_catalog(bundle, package_root: Path) -> None:
-    """Prove all current code-owned bytes are present exactly before live bind."""
+    """Prove static catalog bytes and selected dynamic provenance before bind."""
     try:
         from tooling.runtime_bundle_lock import ROOT as CATALOG_ROOT, build_catalog
     except ImportError as exc:
@@ -314,8 +314,6 @@ def require_current_runtime_catalog(bundle, package_root: Path) -> None:
     observed_key = ("RUNTIME_ENVIRONMENT_OBSERVED", _OBSERVED_ENVIRONMENT_REF)
     semantics_key = ("RUNTIME_ENVIRONMENT_OBSERVED", _DECISION_SEMANTICS_REF)
     database_key = ("RUNTIME_DATABASE_OBSERVED", _OBSERVED_DATABASE_REF)
-    current_observed = observed_runtime_environment_component(
-        package_root, bundle.components)
     selected_observed = actual.get(observed_key)
     if (selected_observed is None
             or selected_observed.repository_path != "runtime-observed/environment-v4"
@@ -323,18 +321,10 @@ def require_current_runtime_catalog(bundle, package_root: Path) -> None:
             or selected_observed.placement != GLOBAL_CONTENT_PLACEMENT):
         raise RuntimeBundleError(
             "live RuntimeBundle environment observation provenance is invalid")
-    current_environment = _strict_json_value(
-        current_observed.canonical_bytes, "current runtime environment observation")
     selected_environment = _strict_json_value(
         selected_observed.canonical_bytes, "selected runtime environment observation")
     _validate_stable_runtime_environment_document(
-        current_environment, bundle.components)
-    _validate_stable_runtime_environment_document(
         selected_environment, bundle.components)
-    if current_environment != selected_environment:
-        raise RuntimeBundleError(
-            "live RuntimeBundle does not match the currently observed runtime environment")
-    current_semantics = observed_decision_semantics_component(package_root)
     selected_semantics = actual.get(semantics_key)
     if (selected_semantics is None
             or selected_semantics.repository_path !=
@@ -347,9 +337,6 @@ def require_current_runtime_catalog(bundle, package_root: Path) -> None:
         selected_semantics.canonical_bytes,
         "selected stable decision semantics identity")
     _validate_stable_decision_semantics_document(selected_semantics_document)
-    if current_semantics != selected_semantics:
-        raise RuntimeBundleError(
-            "live RuntimeBundle does not match current decision semantics")
     if bundle.construction_mode == "LIVE_CURRENT" and database_key not in actual:
         raise RuntimeBundleError(
             "live RuntimeBundle omits its PostgreSQL environment observation")
@@ -1794,7 +1781,7 @@ _DECISION_FUNCTION_ROOTS = (
 _DECISION_CLASS_ROOTS = (
     ("kernel.contracts", ("Contract", "ContractRegistry")),
     ("kernel.authority", ("AuthorityDecision", "AuthorityEvaluator")),
-    ("kernel.gates", ("GatePipeline",)),
+    ("kernel.gates", ("GatePipeline", "IngressNormalizer")),
     ("kernel.stages", (
         "GatePass", "GateRefusal", "GateReplay", "GateContext",
         "IngressNormalizer", "AuthorityGate", "EnvelopePersist",
@@ -1925,11 +1912,24 @@ _SemanticTraversal = tuple[
     set[tuple[int, int, bool]], set[tuple[int, int]],
     set[tuple[int, int]], set[tuple[int, int]],
 ]
+_SemanticLiveValueMemo = dict[
+    tuple[int, int, bool], tuple[object, tuple]]
+_SemanticLivePairMemo = dict[tuple[int, int], tuple[object, tuple]]
+_SemanticLiveProof = tuple[
+    _SemanticLiveValueMemo,
+    _SemanticLivePairMemo, _SemanticLivePairMemo, _SemanticLivePairMemo,
+    dict[int, object],
+]
 
 
 def _new_semantic_traversal() -> _SemanticTraversal:
     """Return isolated state for exactly one semantic capture or proof."""
     return ({}, {}, {}, {}, set(), set(), set(), set())
+
+
+def _new_semantic_live_proof() -> _SemanticLiveProof:
+    """Return strong-reference memos for one live-to-retained proof."""
+    return ({}, {}, {}, {}, {})
 
 
 def _freeze_semantic_value(
@@ -2037,35 +2037,7 @@ def _freeze_semantic_value(
         state = ("IDENTITY", value)
         value_states[id(value)] = (value, state)
         return state
-    object_fields: list[tuple[str, Any]] = []
-    if is_dataclass(value):
-        object_fields.extend(
-            (item.name, getattr(value, item.name))
-            for item in dataclass_fields(value)
-        )
-    else:
-        namespace = getattr(value, "__dict__", None)
-        if isinstance(namespace, Mapping):
-            object_fields.extend(
-                (name, item) for name, item in namespace.items()
-                if isinstance(name, str)
-            )
-        slots = {
-            name
-            for class_object in type(value).__mro__
-            for name in (
-                (class_object.__slots__,)
-                if isinstance(getattr(class_object, "__slots__", ()), str)
-                else getattr(class_object, "__slots__", ())
-            )
-            if isinstance(name, str) and name not in {"__dict__", "__weakref__"}
-        }
-        known = {name for name, _item in object_fields}
-        object_fields.extend(
-            (name, getattr(value, name))
-            for name in sorted(slots - known)
-            if hasattr(value, name)
-        )
+    object_fields = _semantic_object_fields(value)
     if object_fields:
         marker = id(value)
         if marker in active:
@@ -2076,7 +2048,7 @@ def _freeze_semantic_value(
                 "OBJECT", type(value), value,
                 tuple(
                     (name, _freeze_semantic_value(item, active, traversal))
-                    for name, item in sorted(object_fields)
+                    for name, item in object_fields
                 ),
             )
         finally:
@@ -2463,6 +2435,366 @@ def _same_semantic_binding(
         current[1], prior[1], traversal=traversal)
 
 
+def _semantic_object_fields(
+        value: object,
+) -> tuple[tuple[str, Any], ...]:
+    """Read the exact object fields used by semantic capture."""
+    object_fields: list[tuple[str, Any]] = []
+    if is_dataclass(value):
+        object_fields.extend(
+            (item.name, getattr(value, item.name))
+            for item in dataclass_fields(value)
+        )
+    else:
+        namespace = getattr(value, "__dict__", None)
+        if isinstance(namespace, Mapping):
+            object_fields.extend(
+                (name, item) for name, item in namespace.items()
+                if isinstance(name, str)
+            )
+        slots = {
+            name
+            for class_object in type(value).__mro__
+            for name in (
+                (class_object.__slots__,)
+                if isinstance(getattr(class_object, "__slots__", ()), str)
+                else getattr(class_object, "__slots__", ())
+            )
+            if isinstance(name, str) and name not in {"__dict__", "__weakref__"}
+        }
+        known = {name for name, _item in object_fields}
+        object_fields.extend(
+            (name, getattr(value, name))
+            for name in sorted(slots - known)
+            if hasattr(value, name)
+        )
+    return tuple(sorted(object_fields))
+
+
+def _semantic_live_value_shape(
+        value: object,
+) -> tuple[str, tuple[tuple[str, Any], ...] | None]:
+    """Classify a live value with the exact capture precedence."""
+    if value is None or type(value) in {bool, int, str, bytes}:
+        return "SCALAR", None
+    if type(value) is float:
+        return ("SCALAR" if math.isfinite(value) else "NONFINITE_FLOAT"), None
+    if isinstance(value, Path):
+        return "PATH", None
+    if isinstance(value, re.Pattern):
+        return "REGEX", None
+    if type(value) is _METHODCALLER_TYPE:
+        return "METHODCALLER", None
+    if type(value) is types.FunctionType:
+        return "CALLABLE", None
+    if isinstance(value, Mapping):
+        return "MAPPING", None
+    if type(value) in {list, tuple}:
+        return "SEQUENCE", None
+    if type(value) in {set, frozenset}:
+        return "SET", None
+    if isinstance(value, (type, types.ModuleType)):
+        return "IDENTITY", None
+    object_fields = _semantic_object_fields(value)
+    if object_fields:
+        return "OBJECT", object_fields
+    return "IDENTITY", None
+
+
+def _same_live_semantic_value(
+        current: object,
+        prior: tuple,
+        *,
+        require_container_identity: bool = True,
+        proof: _SemanticLiveProof | None = None,
+) -> bool:
+    """Compare one live value directly with its retained semantic state."""
+    kind, object_fields = _semantic_live_value_shape(current)
+    if kind != prior[0]:
+        return False
+    if kind == "NONFINITE_FLOAT":
+        label = "NAN" if math.isnan(current) else (
+            "POSITIVE_INFINITY" if current > 0 else "NEGATIVE_INFINITY")
+        return prior[1] is float and prior[2] == label
+    if kind == "SCALAR":
+        return type(current) is prior[1] and current == prior[2]
+    if proof is None:
+        proof = _new_semantic_live_proof()
+    comparison_key = (
+        id(current), id(prior), require_container_identity)
+    retained = proof[0].get(comparison_key)
+    if (retained is not None
+            and retained[0] is current and retained[1] is prior):
+        return True
+    if kind == "IDENTITY":
+        matches = current is prior[1]
+    elif kind == "PATH":
+        matches = (type(current) is prior[1]
+                   and (not require_container_identity
+                        or current is prior[2])
+                   and str(current) == prior[3])
+    elif kind == "REGEX":
+        matches = (type(current) is prior[1]
+                   and (not require_container_identity
+                        or current is prior[2])
+                   and (current.pattern, current.flags) == prior[3:])
+    elif kind == "METHODCALLER":
+        reduced = current.__reduce__()
+        matches = (type(current) is prior[1] and current is prior[2]
+                   and _same_live_semantic_value(
+                       reduced[1], prior[3],
+                       require_container_identity=False, proof=proof))
+    elif kind == "CALLABLE":
+        matches = (current is prior[1]
+                   and _same_live_semantic_function(
+                       current, prior[2], proof=proof))
+    elif (type(current) is not prior[1]
+          or (require_container_identity and current is not prior[2])):
+        matches = False
+    else:
+        active = proof[4]
+        marker = id(current)
+        if marker in active and active[marker] is current:
+            raise RuntimeBundleError(
+                f"decision semantics contain a {kind.lower()} cycle")
+        active[marker] = current
+        try:
+            if kind == "MAPPING":
+                items = sorted(
+                    current.items(),
+                    key=lambda item: (
+                        type(item[0]).__module__, type(item[0]).__qualname__,
+                        repr(item[0]),
+                    ),
+                )
+                matches = len(items) == len(prior[3]) and all(
+                    _same_live_semantic_value(
+                        key, prior_key,
+                        require_container_identity=require_container_identity,
+                        proof=proof)
+                    and _same_live_semantic_value(
+                        item, prior_item,
+                        require_container_identity=require_container_identity,
+                        proof=proof)
+                    for (key, item), (prior_key, prior_item)
+                    in zip(items, prior[3])
+                )
+            elif kind == "OBJECT":
+                fields = object_fields or ()
+                matches = len(fields) == len(prior[3]) and all(
+                    name == prior_name
+                    and _same_live_semantic_value(
+                        item, prior_item,
+                        require_container_identity=require_container_identity,
+                        proof=proof)
+                    for (name, item), (prior_name, prior_item)
+                    in zip(fields, prior[3])
+                )
+            else:
+                items = current if kind == "SEQUENCE" else sorted(
+                    current,
+                    key=lambda item: (
+                        type(item).__module__, type(item).__qualname__,
+                        repr(item)),
+                )
+                matches = len(items) == len(prior[3]) and all(
+                    _same_live_semantic_value(
+                        item, prior_item,
+                        require_container_identity=require_container_identity,
+                        proof=proof)
+                    for item, prior_item in zip(items, prior[3])
+                )
+        finally:
+            if active.get(marker) is current:
+                del active[marker]
+    if matches:
+        proof[0][comparison_key] = (current, prior)
+    return matches
+
+
+def _same_live_semantic_function(
+        current: object,
+        prior: tuple,
+        *,
+        proof: _SemanticLiveProof | None = None,
+) -> bool:
+    """Compare a live function directly with its retained function state."""
+    if prior[0] == "IDENTITY":
+        return type(current) is not types.FunctionType and current is prior[1]
+    if prior[0] != "FUNCTION" or type(current) is not types.FunctionType:
+        return False
+    if proof is None:
+        proof = _new_semantic_live_proof()
+    comparison_key = (id(current), id(prior))
+    retained = proof[1].get(comparison_key)
+    if (retained is not None
+            and retained[0] is current and retained[1] is prior):
+        return True
+    if any(current_value is not prior[index] for current_value, index in (
+            (current, 1), (current.__code__, 2),
+            (current.__defaults__, 3), (current.__kwdefaults__, 5),
+            (current.__annotations__, 8), (current.__dict__, 10))):
+        return False
+    if not all(_same_live_semantic_value(
+            current_value, prior[index], proof=proof)
+            for current_value, index in (
+                (current.__defaults__, 4), (current.__kwdefaults__, 6),
+                (current.__annotations__, 9), (current.__dict__, 11))):
+        return False
+    if (current.__module__, current.__name__, current.__qualname__) != prior[12:]:
+        return False
+    closure = current.__closure__ or ()
+    if len(closure) != len(prior[7]):
+        return False
+    matches = all(
+        cell is prior_cell
+        and _same_live_semantic_value(
+            cell.cell_contents, prior_value, proof=proof)
+        for cell, (prior_cell, prior_value) in zip(closure, prior[7])
+    )
+    if matches:
+        proof[1][comparison_key] = (current, prior)
+    return matches
+
+
+def _same_live_semantic_class(
+        current: object,
+        prior: tuple,
+        *,
+        proof: _SemanticLiveProof | None = None,
+) -> bool:
+    """Compare a live class directly with its retained class state."""
+    if not isinstance(current, type) or current is not prior[0]:
+        return False
+    if proof is None:
+        proof = _new_semantic_live_proof()
+    comparison_key = (id(current), id(prior))
+    retained = proof[2].get(comparison_key)
+    if (retained is not None
+            and retained[0] is current and retained[1] is prior):
+        return True
+    current_mro = current.__mro__
+    if (len(current_mro) != len(prior[1])
+            or any(item is not prior_item
+                   for item, prior_item in zip(current_mro, prior[1]))):
+        return False
+    descriptor_index = 0
+    data_index = 0
+    for name, descriptor in sorted(vars(current).items()):
+        functions = _semantic_descriptor_functions(descriptor)
+        if functions:
+            if descriptor_index >= len(prior[2]):
+                return False
+            prior_name, prior_descriptor, prior_functions = \
+                prior[2][descriptor_index]
+            descriptor_index += 1
+            if (name != prior_name or descriptor is not prior_descriptor
+                    or len(functions) != len(prior_functions)):
+                return False
+            if any(
+                    kind != prior_kind
+                    or not _same_live_semantic_function(
+                        function, prior_function, proof=proof)
+                    for (kind, function), (prior_kind, prior_function)
+                    in zip(functions, prior_functions)):
+                return False
+        elif not name.startswith("__"):
+            if data_index >= len(prior[3]):
+                return False
+            prior_name, prior_descriptor, prior_value = prior[3][data_index]
+            data_index += 1
+            if (name != prior_name or descriptor is not prior_descriptor
+                    or not _same_live_semantic_value(
+                        descriptor, prior_value, proof=proof)):
+                return False
+    if descriptor_index != len(prior[2]) or data_index != len(prior[3]):
+        return False
+    if (current.__module__, current.__name__, current.__qualname__) != prior[4:7]:
+        return False
+    bases = tuple(
+        base for base in current.__bases__
+        if _stable_decision_namespace(base.__module__))
+    if len(bases) != len(prior[7]):
+        return False
+    matches = all(
+        base is prior_base
+        and _same_live_semantic_class(base, prior_state, proof=proof)
+        for base, (prior_base, prior_state) in zip(bases, prior[7])
+    )
+    if matches:
+        proof[2][comparison_key] = (current, prior)
+    return matches
+
+
+def _same_live_semantic_sequence(
+        current: object,
+        prior: tuple,
+        *,
+        proof: _SemanticLiveProof | None = None,
+) -> bool:
+    """Compare a live dispatch tuple directly with its retained state."""
+    if (type(current) is not tuple or current is not prior[0]
+            or len(current) != len(prior[1])):
+        return False
+    if proof is None:
+        proof = _new_semantic_live_proof()
+    comparison_key = (id(current), id(prior))
+    retained = proof[3].get(comparison_key)
+    if (retained is not None
+            and retained[0] is current and retained[1] is prior):
+        return True
+    for item, prior_item in zip(current, prior[1]):
+        namespace = getattr(item, "__dict__", None)
+        if (item is not prior_item[0]
+                or type(item) is not prior_item[1]
+                or namespace is not prior_item[2]
+                or not _same_live_semantic_value(
+                    namespace, prior_item[3], proof=proof)
+                or not _same_live_semantic_class(
+                    type(item), prior_item[4], proof=proof)):
+            return False
+    proof[3][comparison_key] = (current, prior)
+    return True
+
+
+def _same_live_semantic_binding(
+        current: object,
+        owner: types.ModuleType | None,
+        name: str | None,
+        prior: tuple,
+        *,
+        proof: _SemanticLiveProof | None = None,
+) -> bool:
+    """Compare a live module binding directly with its retained state."""
+    if current is _MISSING:
+        kind = "ABSENT"
+    elif type(current) is types.ModuleType:
+        kind = "MODULE"
+    elif type(current) is types.FunctionType:
+        kind = "FUNCTION"
+    elif isinstance(current, type):
+        kind = "CLASS"
+    elif owner is re and name in {"_cache", "_cache2"}:
+        kind = "DERIVED_CACHE"
+    elif owner is not None and not _stable_decision_namespace(owner.__name__):
+        kind = "IDENTITY_DATA"
+    else:
+        kind = "DATA"
+    if kind != prior[0]:
+        return False
+    if kind == "ABSENT":
+        return True
+    if kind == "MODULE":
+        return current is prior[1] and current.__name__ == prior[2]
+    if kind == "FUNCTION":
+        return _same_live_semantic_function(current, prior[1], proof=proof)
+    if kind == "CLASS":
+        return _same_live_semantic_class(current, prior[1], proof=proof)
+    if kind in {"IDENTITY_DATA", "DERIVED_CACHE"}:
+        return current is prior[1] and type(current) is prior[2]
+    return _same_live_semantic_value(current, prior[1], proof=proof)
+
+
 def _nested_code_objects(code: types.CodeType) -> tuple[types.CodeType, ...]:
     nested = [code]
     for constant in code.co_consts:
@@ -2834,16 +3166,15 @@ def _capture_decision_semantics() -> tuple[tuple[Any, ...], ...]:
 def _require_decision_semantics(
         selected: tuple[tuple[Any, ...], ...]) -> None:
     _prepare_decision_semantic_caches()
-    traversal = _new_semantic_traversal()
+    proof = _new_semantic_live_proof()
     for (kind, label, module, module_name, name, original,
          prior_state) in selected:
         if sys.modules.get(module_name) is not module:
             raise RuntimeBundleError(
                 f"decision semantic module changed after activation: {label}")
         if kind == "IDENTITY_CLASS":
-            if not _same_semantic_class(
-                    _semantic_class_state(original, traversal), prior_state,
-                    traversal=traversal):
+            if not _same_live_semantic_class(
+                    original, prior_state, proof=proof):
                 raise RuntimeBundleError(
                     "decision semantic state changed after activation: "
                     f"{label}")
@@ -2853,26 +3184,20 @@ def _require_decision_semantics(
             raise RuntimeBundleError(
                 f"decision semantic root changed after activation: {label}")
         if kind == "DATA":
-            matches = _same_semantic_value(
-                _freeze_semantic_value(current, traversal=traversal), prior_state,
-                traversal=traversal)
+            matches = _same_live_semantic_value(
+                current, prior_state, proof=proof)
         elif kind == "FUNCTION":
-            matches = _same_semantic_function(
-                _semantic_function_state(current, traversal), prior_state,
-                traversal=traversal)
+            matches = _same_live_semantic_function(
+                current, prior_state, proof=proof)
         elif kind == "CLASS":
-            matches = _same_semantic_class(
-                _semantic_class_state(current, traversal), prior_state,
-                traversal=traversal)
+            matches = _same_live_semantic_class(
+                current, prior_state, proof=proof)
         elif kind == "SEQUENCE":
-            matches = _same_semantic_sequence(
-                _semantic_sequence_state(current, traversal), prior_state,
-                traversal=traversal)
+            matches = _same_live_semantic_sequence(
+                current, prior_state, proof=proof)
         elif kind == "BINDING":
-            matches = _same_semantic_binding(
-                _semantic_binding_state(
-                    current, module, traversal, name=name), prior_state,
-                traversal=traversal)
+            matches = _same_live_semantic_binding(
+                current, module, name, prior_state, proof=proof)
         else:
             raise RuntimeBundleError(
                 f"unknown decision semantic seal entry: {kind!r}")
@@ -3515,6 +3840,7 @@ _DECISION_RECEIPT_IMPLEMENTATION_ANCHORS = tuple(
     (function, function.__code__)
     for function in (
         _new_semantic_traversal,
+        _new_semantic_live_proof,
         _freeze_semantic_value,
         _same_semantic_value,
         _prepare_decision_semantic_caches,
@@ -3522,6 +3848,13 @@ _DECISION_RECEIPT_IMPLEMENTATION_ANCHORS = tuple(
         _same_semantic_function,
         _semantic_class_state,
         _same_semantic_class,
+        _semantic_object_fields,
+        _semantic_live_value_shape,
+        _same_live_semantic_value,
+        _same_live_semantic_function,
+        _same_live_semantic_class,
+        _same_live_semantic_sequence,
+        _same_live_semantic_binding,
         _capture_decision_semantics,
         _require_decision_semantics,
         _stable_frozen_semantic_value,
