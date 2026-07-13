@@ -2021,7 +2021,7 @@ def test_route_backed_gate_pipeline_counts_malformed_farm_scope_entries(
         confirm=True,
     )
 
-    with store.serialized_tx() as cur:
+    with pipeline.store.serialized_tx() as cur:
         ctx = pipeline._new_context(cur, sub)
         ctx.envelope = {
             "anchorScopes": [
@@ -2371,7 +2371,7 @@ def test_route_backed_handoff_binds_materializer_to_resolved_descriptor(fresh_st
         confirm=True,
     )
 
-    with store.serialized_tx() as cur:
+    with pipeline.store.serialized_tx() as cur:
         ctx = pipeline._new_context(cur, sub)
         ingress = IngressNormalizer().run(ctx)
         assert not hasattr(ingress, "result")
