@@ -723,6 +723,10 @@ def test_stable_runtime_identity_excludes_host_paths_and_inodes(monkeypatch):
         return value
 
     relocated = relocate(relocated)
+    relocated["importPosture"]["pathImporterCache"].sort(
+        key=lambda item: item["path"])
+    relocated["nativeRuntime"]["actualNativeImages"].sort(
+        key=lambda item: item["resolvedPath"])
     relocated["python"]["pycachePrefix"] = "/relocated/absent-pycache"
     for index, image in enumerate(
             relocated["nativeRuntime"]["actualNativeImages"]):
@@ -738,8 +742,27 @@ def test_stable_runtime_identity_excludes_host_paths_and_inodes(monkeypatch):
         relocated, retained_components) == \
         _runtime_environment_component_from_document(
             live, retained_components)
-    retained = canonical_json(stable)
-    assert all(root not in retained for root in physical_roots)
+
+    def retained_strings(value):
+        if isinstance(value, str):
+            yield value
+        elif isinstance(value, dict):
+            for key, item in value.items():
+                yield key
+                yield from retained_strings(item)
+        elif isinstance(value, list):
+            for item in value:
+                yield from retained_strings(item)
+
+    retained_absolute_paths = {
+        value for value in retained_strings(stable)
+        if Path(value).is_absolute()
+    }
+    assert not any(
+        Path(value).is_relative_to(Path(root))
+        for value in retained_absolute_paths
+        for root in physical_roots
+    )
     assert all(set(image) == {
         "originLocator", "contentDigest", "byteLength", "classification",
         "distributions",
@@ -848,14 +871,18 @@ def test_stable_runtime_identity_excludes_host_paths_and_inodes(monkeypatch):
 
     forged_namespace = copy.deepcopy(stable)
     namespace_module = forged_namespace["importIdentity"]["actualModules"][0]
+    namespace_name = namespace_module["name"]
+    namespace_locator = (
+        "PROJECT_ROOT/not-retained/" + namespace_name.replace(".", "/"))
     namespace_module.clear()
     namespace_module.update({
-        "name": stable["importIdentity"]["actualModules"][0]["name"],
+        "name": namespace_name,
         "loader": None,
         "classification": "RETAINED_NAMESPACE",
         "originLocator": None,
-        "packageSearchLocators": ["PROJECT_ROOT/not-retained"],
-        "specSearchLocators": [],
+        "packageSearchLocators": [namespace_locator],
+        "specSearchLocators": [namespace_locator],
+        "originlessStateDigest": "sha256:" + "0" * 64,
     })
     with pytest.raises(RuntimeBundleError, match="project locator"):
         _validate_stable_runtime_environment_document(
@@ -871,6 +898,7 @@ def test_stable_runtime_identity_excludes_host_paths_and_inodes(monkeypatch):
         "originLocator": None,
         "packageSearchLocators": ["PROJECT_ROOT"],
         "specSearchLocators": ["PROJECT_ROOT"],
+        "originlessStateDigest": "sha256:" + "0" * 64,
     })
     with pytest.raises(RuntimeBundleError, match="classification identity"):
         _validate_stable_runtime_environment_document(
@@ -1522,27 +1550,27 @@ def test_si_resolvers_and_evidence_attachment_reject_duck_and_subclass_registers
                 call(cur)
 
 
-def test_runtime_bundle_post_start_source_mutation_has_no_filesystem_fallback(
-        monkeypatch):
+def test_runtime_bundle_post_start_source_mutation_has_no_filesystem_fallback():
     bundle = _live_test_bundle()
     bindings = context.SIReferenceBindings.from_descriptor(
         config.ACTIVE_PROFILE, runtime_bundle=bundle)
     source_path = bindings.regsr_shipped_artifact_path.resolve()
-    original_read_bytes = Path.read_bytes
-    original_read_text = Path.read_text
 
-    def refuse_bytes(path):
-        if path.resolve() == source_path:
-            raise AssertionError("bundle-backed ProductRegister read the live source file")
-        return original_read_bytes(path)
+    class NoFilesystemPath(type(source_path)):
+        def __fspath__(self):
+            raise AssertionError(
+                "bundle-backed ProductRegister converted the live source path")
 
-    def refuse_text(path, *args, **kwargs):
-        if path.resolve() == source_path:
-            raise AssertionError("bundle-backed ProductRegister read the live source file")
-        return original_read_text(path, *args, **kwargs)
+        def exists(self):
+            raise AssertionError("bundle-backed ProductRegister tested the live source")
 
-    monkeypatch.setattr(Path, "read_bytes", refuse_bytes)
-    monkeypatch.setattr(Path, "read_text", refuse_text)
+        def open(self, *_args, **_kwargs):
+            raise AssertionError("bundle-backed ProductRegister opened the live source")
+
+    bindings = replace(
+        bindings,
+        regsr_shipped_artifact_path=NoFilesystemPath(source_path),
+    )
     register = context.ProductRegister(bindings, runtime_bundle=bundle)
 
     class NoLiveCache:
@@ -1692,30 +1720,41 @@ def test_bundle_backed_resolvers_refuse_preload_injection():
         )
 
 
-def test_runtime_bundle_manifest_response_ignores_post_start_file_mutation(
-        fresh_store, monkeypatch):
-    from fastapi.testclient import TestClient
-    from kernel.api import create_app
+def test_runtime_bundle_manifest_response_ignores_post_start_file_mutation():
+    from kernel import api as api_module
 
-    store = fresh_store
-    app = create_app(store, oidc=None)
-    manifest_component = next(item for item in store.runtime_bundle.components
-                              if item.role == "ACTIVE_MANIFEST")
-    expected = store.runtime_bundle.json_component(
-        "ACTIVE_MANIFEST", manifest_component.logical_ref)
-    manifest_path = config.PROFILE_ROOT / "OFARM_Capability_Manifest_si_ffs_pilot_v0_1.json"
-    original_read_text = Path.read_text
+    endpoint_codes = [
+        value for value in api_module.create_app.__code__.co_consts
+        if isinstance(value, types.CodeType) and value.co_name == "get_manifest"
+    ]
+    assert len(endpoint_codes) == 1
+    endpoint_code = endpoint_codes[0]
+    assert endpoint_code.co_freevars == (
+        "_invoke_retained_method",
+        "_receipt",
+        "_require_application_bindings",
+        "bound_runtime_bundle",
+        "runtime_bundle_json_component",
+        "runtime_bundle_json_component_code",
+        "runtime_bundle_type",
+    )
+    assert not ({"open", "Path", "config", "read_bytes", "read_text"}
+                & set(endpoint_code.co_names))
+    assert api_module._RUNTIME_BUNDLE_JSON_COMPONENT is \
+        RuntimeBundle.json_component
+    assert api_module._RUNTIME_BUNDLE_JSON_COMPONENT_CODE is \
+        RuntimeBundle.json_component.__code__
 
-    def changed_manifest(path, *args, **kwargs):
-        if path.resolve() == manifest_path.resolve():
-            raise AssertionError("manifest endpoint consulted the live filesystem")
-        return original_read_text(path, *args, **kwargs)
-
-    monkeypatch.setattr(Path, "read_text", changed_manifest)
-    response = TestClient(app).get("/manifest")
-    assert response.status_code == 200
-    assert response.json() == expected
-    _assert_exact_http_receipt(response, store.runtime_bundle_digest)
+    bundle = _live_test_bundle()
+    manifests = [
+        component for component in bundle.components
+        if component.role == "ACTIVE_MANIFEST"
+    ]
+    assert len(manifests) == 1
+    selected = bundle.json_component(
+        "ACTIVE_MANIFEST", manifests[0].logical_ref)
+    assert manifests[0].canonicalization == JSON_CANONICALIZATION
+    assert canonical_json(selected).encode("utf-8") == manifests[0].canonical_bytes
 
 
 def test_commit_api_returns_self_contained_runtime_receipt_headers(fresh_store):
@@ -4270,12 +4309,21 @@ def test_runtime_bundle_cold_rebuild_uses_persisted_bytes_and_rejects_drift(
         fresh_store, monkeypatch):
     store = fresh_store
     expected = store.runtime_bundle
+    persisted = store.persisted_runtime_bundle(expected.digest)
+    assert persisted is not None
+
+    class PersistedBytesOnlyStore:
+        def persisted_runtime_bundle(self, digest):
+            assert digest == expected.digest
+            return persisted
 
     def no_filesystem_bytes(_path):
         raise AssertionError("cold RuntimeBundle reconstruction consulted the filesystem")
 
-    monkeypatch.setattr(Path, "read_bytes", no_filesystem_bytes)
-    cold = store.cold_load_runtime_bundle(None, expected.digest)
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "read_bytes", no_filesystem_bytes)
+        cold = Store.cold_load_runtime_bundle(
+            PersistedBytesOnlyStore(), None, expected.digest)
     assert cold.digest == expected.digest
     assert cold.canonical_document_bytes == expected.canonical_document_bytes
     assert cold.components == expected.components
@@ -4546,15 +4594,19 @@ def test_gate_pipeline_rejects_caller_supplied_product_register(fresh_store):
         GatePipeline(store, product_register=register)
 
 
-def test_governed_import_refuses_post_start_parser_mutation(fresh_store, monkeypatch):
+def test_governed_import_refuses_post_start_parser_mutation(fresh_store):
     from kernel.profiles.si_ffs import regsr_adapter as regsr
 
     store = fresh_store
-    target = config.PACKAGE_ROOT / regsr.REGSR_PARSER_REF
-    original_read_bytes = Path.read_bytes
+    selected_parser = store.runtime_bundle.component(
+        "PARSER_CODE", regsr.REGSR_PARSER_COMPONENT_REF)
+    parser_path = os.path.realpath(
+        os.fspath(config.PACKAGE_ROOT / regsr.REGSR_PARSER_REF))
+    mutated_parser_digest = sha256_bytes(
+        selected_parser.canonical_bytes + b"\n# post-start mutation\n")
     artifact = {
         "snapshotKind": "SI_UVHVVR_FFS_REG_HTML_PARSE",
-        "parserCodeDigest": regsr.parser_code_digest(),
+        "parserCodeDigest": selected_parser.content_digest,
         "registerDay": "2099-12-31",
         "sourceUrl": regsr.REGSR_SOURCE_URL,
         "productCount": 1,
@@ -4564,23 +4616,40 @@ def test_governed_import_refuses_post_start_parser_mutation(fresh_store, monkeyp
         "inputs": [{"file": "fixture.html", "digest": "sha256:" + "2" * 64}],
     }
 
-    def mutated(path):
-        value = original_read_bytes(path)
-        return value + b"\n# post-start mutation\n" \
-            if path.resolve() == target.resolve() else value
+    audit_state = {"armed": True}
 
-    monkeypatch.setattr(Path, "read_bytes", mutated)
-    result = regsr.import_regsr_snapshot(store, artifact)
-    assert result["imported"] is False
-    assert result["disposition"] == "PARSER_BUNDLE_MISMATCH"
+    def refuse_one_live_parser_read(event, args):
+        if audit_state["armed"] and event == "open":
+            path = args[0]
+            if (isinstance(path, (str, bytes, os.PathLike))
+                    and os.path.realpath(os.fsdecode(path)) == parser_path):
+                # Restore the exact runtime before the governed refusal
+                # transaction rechecks the static catalog.
+                audit_state["armed"] = False
+                raise OSError("simulated post-start parser unavailability")
+
+    sys.addaudithook(refuse_one_live_parser_read)
+    unavailable = regsr.import_regsr_snapshot(store, artifact)
+    assert audit_state["armed"] is False
+
+    # Output from changed parser bytes carries a digest other than the exact
+    # parser component selected by this RuntimeBundle.
+    changed = regsr.import_regsr_snapshot(
+        store, {**artifact, "parserCodeDigest": mutated_parser_digest})
+    for result in (unavailable, changed):
+        assert result["imported"] is False
+        assert result["disposition"] == "PARSER_BUNDLE_MISMATCH"
     assert store.get_record(
         "referencesnapshot:si.uvhvvr.ffs-reg.2099-12-31") is None
     with Store._raw_connection(store).cursor() as cur:
         cur.execute(
             "SELECT outcome, reason_code FROM kernel_gate_log "
-            "WHERE gate = 'GOVERNED_IMPORT' ORDER BY entry_id DESC LIMIT 1")
-        row = cur.fetchone()
-    assert row == {"outcome": "REFUSED", "reason_code": "SOURCE_FIDELITY_LOSS"}
+            "WHERE gate = 'GOVERNED_IMPORT' ORDER BY entry_id DESC LIMIT 2")
+        rows = cur.fetchall()
+    assert rows == [
+        {"outcome": "REFUSED", "reason_code": "SOURCE_FIDELITY_LOSS"},
+        {"outcome": "REFUSED", "reason_code": "SOURCE_FIDELITY_LOSS"},
+    ]
 
 
 def test_runtime_bundle_same_document_cannot_swap_component_bytes():
