@@ -994,7 +994,6 @@ class Store:
         # Imported decision code is part of the pre-DB posture as well.  The
         # runtime_bundle helper validates module origins and bytes without
         # opening a PostgreSQL connection.
-        _REQUIRE_STORE_DISPATCH_INTEGRITY(self)
         Store._require_transaction_python_posture(self)
 
     def _mark_transaction_integrity_violation(self) -> None:
@@ -1069,7 +1068,6 @@ class Store:
         if self._runtime_bundle is None:
             pending = self._pending_runtime_bundle_activation
             if pending is not None:
-                require_decision_semantics(pending[2].decision_semantics)
                 require_runtime_environment_seal(
                     pending[1], pending[2],
                     "Store pending RuntimeBundle activation",
@@ -1077,8 +1075,6 @@ class Store:
                 return
             require_live_python_import_posture(config.PACKAGE_ROOT)
             return
-        require_decision_semantics(
-            self._runtime_environment_seal.decision_semantics)
         require_store_runtime_bundle(
             self, self._runtime_bundle, "Store governed transaction")
 
@@ -1458,7 +1454,6 @@ class Store:
         if self.conn.info.transaction_status != psycopg.pq.TransactionStatus.IDLE:
             raise RuntimeError(
                 "RuntimeBundle activation is allowed only after bootstrap commits")
-        _REQUIRE_STORE_DISPATCH_INTEGRITY(self)
         Store._require_transaction_python_posture(self)
         object.__setattr__(self, "_pending_runtime_bundle_activation", None)
         object.__setattr__(self, "_runtime_bundle", pending[1])
@@ -1913,7 +1908,6 @@ class Store:
                             # failure raises here and rolls the current decision
                             # back instead of deferring detection to the next
                             # transaction.
-                            _REQUIRE_STORE_DISPATCH_INTEGRITY(self)
                             Store._require_transaction_python_posture(self)
                             # Observe first, before schema classification can
                             # restore deterministic GUCs.  This makes a late

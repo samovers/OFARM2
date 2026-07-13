@@ -6743,6 +6743,73 @@ def _require_validated_stable_decision_semantics_value(
     _validated_stable_decision_semantics_value(canonical_bytes)
 
 
+class _DecisionSemanticsProofKey:
+    """Hash one retained immutable semantics tuple by exact object identity.
+
+    The tuple graph is immutable, but it contains retained references to live
+    dictionaries and other unhashable objects.  An identity key lets the
+    bounded pure-proof cache hold the exact tuple strongly (preventing id
+    reuse) without pretending that those live objects are hashable values.
+    """
+
+    __slots__ = (
+        "semantics", "project_root", "expected_canonical", "_hash")
+
+    def __init__(
+            self, semantics: tuple, project_root: str,
+            expected_canonical: bytes,
+    ) -> None:
+        if (type(semantics) is not tuple
+                or type(project_root) is not str
+                or type(expected_canonical) is not bytes):
+            raise RuntimeBundleError(
+                "decision semantics proof key is malformed")
+        object.__setattr__(self, "semantics", semantics)
+        object.__setattr__(self, "project_root", project_root)
+        object.__setattr__(self, "expected_canonical", expected_canonical)
+        object.__setattr__(
+            self, "_hash",
+            hash((id(semantics), project_root, id(expected_canonical))))
+
+    def __setattr__(self, _name, _value) -> None:
+        raise RuntimeBundleError("decision semantics proof key is immutable")
+
+    def __hash__(self) -> int:
+        return self._hash
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            type(other) is _DecisionSemanticsProofKey
+            and self.semantics is other.semantics
+            and self.project_root == other.project_root
+            and self.expected_canonical is other.expected_canonical
+        )
+
+
+@functools.lru_cache(maxsize=64, typed=True)
+def _validated_runtime_environment_seal_semantics(
+        key: _DecisionSemanticsProofKey,
+) -> tuple[bytes, tuple[tuple[types.FunctionType, types.CodeType], ...]]:
+    """Project one exact retained seal graph once, never its live state.
+
+    Current functions, classes, containers, modules, and native mappings are
+    still compared on every boundary by the uncached live posture proof.  This
+    cache removes only repeated canonicalization of the immutable selection-
+    time receipt.  A replacement semantics tuple has a new identity and must
+    earn a fresh proof.
+    """
+    _require_runtime_bundle_validation_implementation()
+    if type(key) is not _DecisionSemanticsProofKey:
+        raise RuntimeBundleError("decision semantics proof key type changed")
+    stable = canonical_json(_stable_decision_semantics_document(
+        key.semantics, Path(key.project_root))).encode("utf-8")
+    if stable != key.expected_canonical:
+        raise RuntimeBundleError(
+            "runtime environment seal semantics differ from retained bytes")
+    anchors = _decision_semantic_callable_anchors(key.semantics)
+    return stable, anchors
+
+
 _RUNTIME_BUNDLE_VALIDATION_CACHES = (
     (
         "_validated_runtime_component_value",
@@ -6770,6 +6837,13 @@ _RUNTIME_BUNDLE_VALIDATION_CACHES = (
         _validated_stable_decision_semantics_value,
         _validated_stable_decision_semantics_value.__wrapped__,
         _validated_stable_decision_semantics_value.cache_parameters,
+        (64, True),
+    ),
+    (
+        "_validated_runtime_environment_seal_semantics",
+        _validated_runtime_environment_seal_semantics,
+        _validated_runtime_environment_seal_semantics.__wrapped__,
+        _validated_runtime_environment_seal_semantics.cache_parameters,
         (64, True),
     ),
 )
@@ -6801,12 +6875,25 @@ _RUNTIME_BUNDLE_VALIDATION_METHOD_ANCHORS = (
      SelectedReferenceIdentity.__post_init__.__code__),
     (RuntimeBundle, "__post_init__", RuntimeBundle.__post_init__,
      RuntimeBundle.__post_init__.__code__),
+    (_DecisionSemanticsProofKey, "__init__",
+     _DecisionSemanticsProofKey.__init__,
+     _DecisionSemanticsProofKey.__init__.__code__),
+    (_DecisionSemanticsProofKey, "__setattr__",
+     _DecisionSemanticsProofKey.__setattr__,
+     _DecisionSemanticsProofKey.__setattr__.__code__),
+    (_DecisionSemanticsProofKey, "__hash__",
+     _DecisionSemanticsProofKey.__hash__,
+     _DecisionSemanticsProofKey.__hash__.__code__),
+    (_DecisionSemanticsProofKey, "__eq__",
+     _DecisionSemanticsProofKey.__eq__,
+     _DecisionSemanticsProofKey.__eq__.__code__),
 )
 _RUNTIME_BUNDLE_VALIDATION_CLASS_ANCHORS = (
     ("RuntimeEnvironmentSeal", RuntimeEnvironmentSeal),
     ("RuntimeComponent", RuntimeComponent),
     ("SelectedReferenceIdentity", SelectedReferenceIdentity),
     ("RuntimeBundle", RuntimeBundle),
+    ("_DecisionSemanticsProofKey", _DecisionSemanticsProofKey),
 )
 _RUNTIME_BUNDLE_VALIDATION_STATE_ANCHORS = (
     ("_RUNTIME_COMPONENT_STATE_FIELDS", _RUNTIME_COMPONENT_STATE_FIELDS),
@@ -6899,6 +6986,7 @@ def _require_runtime_environment_seal_integrity(
         seal: RuntimeEnvironmentSeal,
 ) -> None:
     """Cross-check a mutable Python dataclass seal against retained bytes."""
+    _require_runtime_bundle_validation_implementation()
     tuple_fields = (
         seal.flags, seal.ambient, seal.native_loader_environment,
         seal.native_runtime_stat, seal.customization, seal.sys_path,
@@ -6929,16 +7017,19 @@ def _require_runtime_environment_seal_integrity(
         raise RuntimeBundleError(
             "runtime environment seal structure differs from its RuntimeBundle")
     _require_decision_receipt_implementation()
-    stable = canonical_json(_stable_decision_semantics_document(
-        seal.decision_semantics, Path(seal.project_root))).encode("utf-8")
     selected = RuntimeBundle.component(
         bundle, "RUNTIME_ENVIRONMENT_OBSERVED", _DECISION_SEMANTICS_REF)
-    if (stable != seal.decision_semantics_canonical
-            or stable != selected.canonical_bytes):
+    if seal.decision_semantics_canonical != selected.canonical_bytes:
         raise RuntimeBundleError(
             "runtime environment seal semantics differ from retained bytes")
-    expected_anchors = _decision_semantic_callable_anchors(
-        seal.decision_semantics)
+    stable, expected_anchors = \
+        _validated_runtime_environment_seal_semantics(
+            _DecisionSemanticsProofKey(
+                seal.decision_semantics, seal.project_root,
+                selected.canonical_bytes))
+    if stable != seal.decision_semantics_canonical:
+        raise RuntimeBundleError(
+            "runtime environment seal semantics differ from retained bytes")
     if (len(expected_anchors) != len(seal.decision_callable_anchors)
             or any(
                 current_function is not selected_function

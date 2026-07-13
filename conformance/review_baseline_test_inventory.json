@@ -3656,6 +3656,11 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_runtime_environment_seal_integrity_cache_is_anchored",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_runtime_environment_seal_integrity_rejects_mutable_receipt_state",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
@@ -3976,8 +3981,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "7bc31d71dc8f83b2e3934190da54439fda52113efbb06df6cde00677e126c5bf",
-  "entryCount": 795,
+  "entriesSha256": "c2751002e490ed8446972046cdbaa4b9f8177581f751ef6e455886cf7d2343ed",
+  "entryCount": 796,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

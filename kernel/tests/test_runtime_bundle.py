@@ -67,6 +67,7 @@ from kernel.runtime_bundle import (
     _stable_runtime_environment_document,
     _validate_stable_runtime_environment_document,
     _validated_runtime_component_value,
+    _validated_runtime_environment_seal_semantics,
     _validated_selected_reference_value,
     _validated_stable_decision_semantics_value,
     _validated_stable_runtime_environment_value,
@@ -585,11 +586,28 @@ def test_runtime_bundle_integrity_value_cache_benchmark():
 def test_runtime_environment_seal_integrity_rejects_mutable_receipt_state():
     bundle = _live_test_bundle()
     seal = bundle._selection_environment_seal
+    _validated_runtime_environment_seal_semantics.cache_clear()
+
+    _require_runtime_environment_seal_integrity(bundle, seal)
+    cold_info = _validated_runtime_environment_seal_semantics.cache_info()
+    _require_runtime_environment_seal_integrity(bundle, seal)
+    warm_info = _validated_runtime_environment_seal_semantics.cache_info()
+    assert cold_info.misses == 1 and cold_info.currsize == 1
+    assert warm_info.hits == cold_info.hits + 1
+    assert warm_info.currsize == cold_info.currsize
 
     original_semantics = seal.decision_semantics
     object.__setattr__(seal, "decision_semantics", list(original_semantics))
     try:
         with pytest.raises(RuntimeBundleError, match="seal structure"):
+            _require_runtime_environment_seal_integrity(bundle, seal)
+    finally:
+        object.__setattr__(seal, "decision_semantics", original_semantics)
+    _require_runtime_environment_seal_integrity(bundle, seal)
+
+    object.__setattr__(seal, "decision_semantics", original_semantics[1:])
+    try:
+        with pytest.raises(RuntimeBundleError, match="semantics differ"):
             _require_runtime_environment_seal_integrity(bundle, seal)
     finally:
         object.__setattr__(seal, "decision_semantics", original_semantics)
@@ -617,6 +635,24 @@ def test_runtime_environment_seal_integrity_rejects_mutable_receipt_state():
         object.__setattr__(
             seal, "decision_semantics_canonical", original_canonical)
     _require_runtime_environment_seal_integrity(bundle, seal)
+
+
+def test_runtime_environment_seal_integrity_cache_is_anchored(monkeypatch):
+    from kernel import runtime_bundle as runtime_bundle_module
+
+    bundle = _live_test_bundle()
+    seal = bundle._selection_environment_seal
+    _require_runtime_environment_seal_integrity(bundle, seal)
+    monkeypatch.setattr(
+        runtime_bundle_module,
+        "_validated_runtime_environment_seal_semantics",
+        lambda _key: (
+            seal.decision_semantics_canonical,
+            seal.decision_callable_anchors,
+        ),
+    )
+    with pytest.raises(RuntimeBundleError, match="implementation changed"):
+        _require_runtime_environment_seal_integrity(bundle, seal)
 
 
 def test_observed_runtime_environment_change_is_detected(monkeypatch):

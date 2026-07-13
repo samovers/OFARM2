@@ -870,7 +870,7 @@
       "logicalRef": "python:kernel/runtime_bundle.py",
       "path": "kernel/runtime_bundle.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:4a38287d147c9fd14d691be5242f3eec408d2da5733c192124bb6fa97a50e341",
+      "sha256": "sha256:370f9b9c9725166b056b29124cb683ad100d630067e1babf930a7ab230d1d5f8",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -894,7 +894,7 @@
       "logicalRef": "python:kernel/store.py",
       "path": "kernel/store.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:23e225f002bb934dde13381c5eb25476e30cca3da5cff4c454d322acc318769a",
+      "sha256": "sha256:fe5a824e103cf3ccb5192c25cb87e48a04c83535a40e3ac320b01421697b0715",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
