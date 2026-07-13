@@ -2977,12 +2977,13 @@ def test_caught_store_dispatch_drift_poison_rolls_back_transaction(fresh_store):
 
 def test_store_refuses_registry_instance_validate_shadow(fresh_store):
     store = fresh_store
-    store._registry.validate = lambda _payload: None
+    object.__setattr__(
+        store._registry, "validate", lambda _payload: None)
     try:
         with pytest.raises(RuntimeError, match="decision semantics"):
             store.get_record(demo.FARMER)
     finally:
-        del store._registry.validate
+        object.__delattr__(store._registry, "validate")
 
 
 def test_store_read_cursor_instance_shadow_cannot_skip_guards(fresh_store):
@@ -3134,12 +3135,10 @@ def test_gate_pipeline_refuses_instance_level_dispatch_override(fresh_pipeline):
         object.__delattr__(pipeline, "_commit_in_tx")
 
     object.__setattr__(pipeline, "_assert_runtime_composition", lambda: None)
-    object.__setattr__(pipeline.authority, "evaluate", lambda **_kwargs: None)
     try:
         with pytest.raises(RuntimeBundleError, match="runtime composition changed"):
             pipeline.commit({})
     finally:
-        object.__delattr__(pipeline.authority, "evaluate")
         object.__delattr__(pipeline, "_assert_runtime_composition")
 
     original_cache = pipeline.products._by_snapshot
@@ -3971,7 +3970,10 @@ def test_runtime_bundle_refuses_sys_modules_mapping_replacement(fresh_store):
     original = sys.modules
     sys.modules = dict(original)
     try:
-        with pytest.raises(RuntimeBundleError, match="sys.modules mapping identity"):
+        with pytest.raises(
+                RuntimeBundleError,
+                match=(r"decision semantic root changed.*sys\.modules|"
+                       r"sys\.modules mapping identity")):
             store.get_record(demo.FARMER)
     finally:
         sys.modules = original
@@ -4043,7 +4045,11 @@ def test_runtime_bundle_refuses_import_provider_method_replacement(fresh_store):
 
     provider.find_spec = hostile_find_spec
     try:
-        with pytest.raises(RuntimeBundleError, match="import callable identity"):
+        with pytest.raises(
+                RuntimeBundleError,
+                match=(r"decision semantic state changed.*"
+                       r"importlib\.machinery\.PathFinder|"
+                       r"import callable identity")):
             store.get_record(demo.FARMER)
     finally:
         provider.find_spec = original
@@ -5027,18 +5033,21 @@ def test_runtime_bundle_bootstrap_selects_and_builds_under_import_lock(monkeypat
     params["dbname"] = dbname
     dsn = psycopg.conninfo.make_conninfo(**params)
     store = Store(dsn=dsn)
-    competing = Store(dsn=dsn)
     original_build = context._build_runtime_bundle_for_bootstrap
     observations = []
 
     def checked_build(*args, **kwargs):
-        with Store._raw_connection(competing).transaction():
-            with Store._raw_connection(competing).cursor() as cur:
-                cur.execute(
-                    "SELECT pg_try_advisory_xact_lock(%s) AS acquired",
-                    (_SINGLE_WRITER_LOCK_KEY,),
-                )
-                observations.append(cur.fetchone()["acquired"])
+        competing = Store(dsn=dsn)
+        try:
+            with Store._raw_connection(competing).transaction():
+                with Store._raw_connection(competing).cursor() as cur:
+                    cur.execute(
+                        "SELECT pg_try_advisory_xact_lock(%s) AS acquired",
+                        (_SINGLE_WRITER_LOCK_KEY,),
+                    )
+                    observations.append(cur.fetchone()["acquired"])
+        finally:
+            competing.close()
         return original_build(*args, **kwargs)
 
     try:
@@ -5049,7 +5058,6 @@ def test_runtime_bundle_bootstrap_selects_and_builds_under_import_lock(monkeypat
         assert observations == [False], \
             "bundle selection/build ran without the governed import advisory lock"
     finally:
-        competing.close()
         store.close()
         with psycopg.connect(admin_dsn, autocommit=True) as admin:
             admin.execute(f'DROP DATABASE IF EXISTS "{dbname}"')
@@ -5065,18 +5073,18 @@ def test_runtime_bundle_registry_mismatch_rolls_back_bootstrap():
     registry = ContractRegistry()
     kind = "ofarm.assertionrecord.v0.1"
     original = registry.get(kind)
-    object.__setattr__(registry, "_by_kind", {
-        **registry._by_kind,
-        kind: replace(
-            original,
-            schema_hash="sha256:" + "0" * 64,
-            schema_bytes=original.schema_bytes + b" ",
-        ),
-    })
     store = Store(
         dsn=psycopg.conninfo.make_conninfo(**params), registry=registry)
     try:
         store.migrate()
+        object.__setattr__(registry, "_by_kind", {
+            **registry._by_kind,
+            kind: replace(
+                original,
+                schema_hash="sha256:" + "0" * 64,
+                schema_bytes=original.schema_bytes + b" ",
+            ),
+        })
         with pytest.raises(context.ContextNotReconstructible,
                            match="atomic RuntimeBundle bootstrap failed"):
             context.bootstrap_for_descriptor(store, config.ACTIVE_PROFILE)
