@@ -63,6 +63,8 @@ _AUTHORITY_DECISION_ALLOWED = authority_decision_allowed
 _AUTHORITY_DECISION_ALLOWED_CODE = authority_decision_allowed.__code__
 _OIDC_VERIFY = auth_oidc.OidcConfig.verify
 _OIDC_VERIFY_CODE = _OIDC_VERIFY.__code__
+_OIDC_RUNTIME_GUARD = auth_oidc._require_oidc_runtime
+_OIDC_RUNTIME_GUARD_CODE = _OIDC_RUNTIME_GUARD.__code__
 _STORE_REQUIRE_TRANSACTION_POSTURE = Store._require_transaction_python_posture
 _STORE_REQUIRE_TRANSACTION_POSTURE_CODE = \
     _STORE_REQUIRE_TRANSACTION_POSTURE.__code__
@@ -797,6 +799,8 @@ def create_app(
     authority_decision_allowed_code = _AUTHORITY_DECISION_ALLOWED_CODE
     oidc_verify = _OIDC_VERIFY
     oidc_verify_code = _OIDC_VERIFY_CODE
+    oidc_runtime_guard = _OIDC_RUNTIME_GUARD
+    oidc_runtime_guard_code = _OIDC_RUNTIME_GUARD_CODE
     store_require_transaction_posture = _STORE_REQUIRE_TRANSACTION_POSTURE
     store_require_transaction_posture_code = \
         _STORE_REQUIRE_TRANSACTION_POSTURE_CODE
@@ -848,6 +852,7 @@ def create_app(
             (runtime_bundle_json_component,
              runtime_bundle_json_component_code),
             (exact_oidc_config_state, exact_oidc_config_state_code),
+            (oidc_runtime_guard, oidc_runtime_guard_code),
             (authority_decision_allowed_fn,
              authority_decision_allowed_code),
             (receipt_normalizer, receipt_normalizer_code),
@@ -888,6 +893,8 @@ def create_app(
                 bound_runtime_bundle_digest):
             raise RuntimeError(
                 "HTTP application RuntimeBundle changed after startup")
+        if bound_oidc is not None:
+            oidc_runtime_guard(bound_oidc)
         store_require_dispatch(bound_store)
         store_require_transaction_posture(bound_store)
         if any(function.__code__ is not code

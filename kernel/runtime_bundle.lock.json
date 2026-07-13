@@ -710,7 +710,7 @@
       "logicalRef": "python:kernel/api.py",
       "path": "kernel/api.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:a7f4df6a5d2cd8cd21b7c190845f159ef9188f53c0b640d06935567b2debc55c",
+      "sha256": "sha256:ae5d1fed09432c97dac0729fff0aa1d150c2e679a3d65cd7e4ca0d499c48b8c1",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
