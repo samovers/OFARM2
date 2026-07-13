@@ -3925,6 +3925,7 @@ def test_runtime_bundle_shared_connection_serializes_complete_transactions(
     """A second sync FastAPI worker cannot join another worker's transaction."""
     store, _pipeline, _outputs = fresh_env
     writer_entered = threading.Event()
+    writer_done = threading.Event()
     release_writer = threading.Event()
     reader_attempting = threading.Event()
     reader_done = threading.Event()
@@ -3937,14 +3938,16 @@ def test_runtime_bundle_shared_connection_serializes_complete_transactions(
                 cur._execute_read("SELECT 1 AS ok")
                 assert cur.fetchone()["ok"] == 1
                 writer_entered.set()
-                if not release_writer.wait(10):
+                if not release_writer.wait(300):
                     raise AssertionError("threaded transaction test timed out")
         except BaseException as exc:  # preserve thread failures for the test
             failures.append(exc)
+        finally:
+            writer_done.set()
 
     def reader():
         try:
-            if not writer_entered.wait(10):
+            if not writer_entered.wait(300):
                 raise AssertionError("writer did not enter its transaction")
             reader_attempting.set()
             result.append(store.get_record(demo.FARMER))
@@ -3955,14 +3958,29 @@ def test_runtime_bundle_shared_connection_serializes_complete_transactions(
 
     writer_thread = threading.Thread(target=writer)
     reader_thread = threading.Thread(target=reader)
-    writer_thread.start()
-    assert writer_entered.wait(10)
-    reader_thread.start()
-    assert reader_attempting.wait(10)
-    assert reader_done.wait(0.25) is False
-    release_writer.set()
-    writer_thread.join(10)
-    reader_thread.join(10)
+    try:
+        writer_thread.start()
+        assert writer_entered.wait(300), \
+            "writer did not enter its governed transaction"
+        reader_thread.start()
+        assert reader_attempting.wait(300), \
+            "reader did not attempt its governed transaction"
+        # This short wait is the assertion under test: the shared Store must
+        # keep the reader blocked for the complete writer transaction.
+        assert reader_done.wait(0.25) is False
+        release_writer.set()
+        assert writer_done.wait(300), \
+            "writer did not complete after release"
+        assert reader_done.wait(300), \
+            "reader did not complete after writer release"
+        writer_thread.join(10)
+        reader_thread.join(10)
+    finally:
+        release_writer.set()
+        if writer_thread.ident is not None:
+            writer_thread.join(10)
+        if reader_thread.ident is not None:
+            reader_thread.join(10)
     assert not writer_thread.is_alive()
     assert not reader_thread.is_alive()
     assert failures == []
