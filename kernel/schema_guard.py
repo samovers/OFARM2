@@ -51,7 +51,10 @@ _SCHEMA_TRANSACTION_SETTINGS = (
     ("bytea_output", "hex"),
 )
 _CATALOG_LOCK_ATTEMPTS = 100
-_CATALOG_LOCK_RETRY_DELAY_SECONDS = 0.01
+# Autovacuum can briefly hold one fingerprint catalog for longer than a second.
+# Keep every attempt non-blocking and the overall retry window bounded, while
+# allowing roughly ten seconds for ordinary catalog maintenance to finish.
+_CATALOG_LOCK_RETRY_DELAY_SECONDS = 0.1
 _CATALOG_LOCK_SAVEPOINT = "ofarm_catalog_lock_attempt"
 _FINGERPRINT_CATALOGS = (
     "pg_aggregate",

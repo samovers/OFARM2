@@ -24,7 +24,7 @@ __all__ = [
 
 
 def _require_advisory_lock_waiter(
-        observer, holder_pid, waiting_pid, done, *, timeout=300):
+        observer, holder_pid, waiting_pid, done, result_box, *, timeout=300):
     """Wait until PostgreSQL, not elapsed wall time, proves lock contention."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -51,6 +51,11 @@ def _require_advisory_lock_waiter(
         if waiting:
             return
         if done.wait(timeout=0.05):
+            if "err" in result_box:
+                raise AssertionError(
+                    "governed output failed before reaching the writer lock: "
+                    f"{result_box['err']}"
+                )
             raise AssertionError(
                 "governed output completed without waiting for the writer lock"
             )
@@ -84,7 +89,7 @@ def test_g2_output_render_serializes_under_lock(store):
             with a.serialized_tx():
                 t.start()
                 _require_advisory_lock_waiter(
-                    observer, holder_pid, waiting_pid, done)
+                    observer, holder_pid, waiting_pid, done, box)
         assert done.wait(timeout=300), \
             "render did not complete after the writer lock was released"
         t.join(timeout=10)
@@ -122,7 +127,7 @@ def test_g2_freeze_serializes_under_lock(store):
             with a.serialized_tx():
                 t.start()
                 _require_advisory_lock_waiter(
-                    observer, holder_pid, waiting_pid, done)
+                    observer, holder_pid, waiting_pid, done, box)
         assert done.wait(timeout=300), \
             "freeze did not complete after the writer lock was released"
         t.join(timeout=10)

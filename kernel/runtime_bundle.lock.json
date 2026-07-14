@@ -886,7 +886,7 @@
       "logicalRef": "python:kernel/schema_guard.py",
       "path": "kernel/schema_guard.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:03a590414c2b21b3b67d972aa0f833ad4ff4d9b4fffcd04e726d6919a50de0e3",
+      "sha256": "sha256:f8e2b1135da3ed4991b06c64cc7a52f56fe312df3d98542fee13277a4e4fe3c0",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
