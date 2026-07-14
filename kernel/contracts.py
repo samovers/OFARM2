@@ -44,6 +44,93 @@ class ContractDispatchError(RuntimeError):
     """Retained contract-validation code no longer matches class dispatch."""
 
 
+def copy_exact_json(
+        value,
+        _isfinite=math.isfinite,
+        _type=type,
+        _id=id,
+        _range=range,
+        _set_type=set,
+        _str_type=str,
+        _bool_type=bool,
+        _int_type=int,
+        _float_type=float,
+        _dict_type=dict,
+        _dict_items=dict.items,
+        _list_type=list,
+        _list_len=list.__len__,
+        _list_getitem=list.__getitem__,
+        _violation_type=ContractViolation,
+        _unicode_error=UnicodeEncodeError,
+        _runtime_error=RuntimeError,
+        _index_error=IndexError,
+        _recursion_error=RecursionError,
+):
+    """Return a private JSON tree without caller-owned container dispatch.
+
+    Contract validation, hashing, and persistence must all operate on one
+    exact-built-in snapshot.  Calling ordinary ``dict``/``list`` methods on a
+    subclass would let caller code change validation semantics after an
+    adjacent integrity check and restore them before the next check.
+    """
+    active: set[int] = _set_type()
+
+    def copy_value(item):
+        item_type = _type(item)
+        if item is None or item_type in {_str_type, _bool_type, _int_type}:
+            if item_type is _str_type:
+                try:
+                    item.encode("utf-8", errors="strict")
+                except _unicode_error as exc:
+                    raise _violation_type(
+                        "JSON payload contains a Unicode surrogate") from exc
+            return item
+        if item_type is _float_type:
+            if not _isfinite(item):
+                raise _violation_type(
+                    "JSON payload contains a non-finite number")
+            return item
+        if item_type not in {_dict_type, _list_type}:
+            raise _violation_type(
+                "payload must contain only exact built-in JSON values")
+
+        marker = _id(item)
+        if marker in active:
+            raise _violation_type("JSON payload contains a cyclic container")
+        active.add(marker)
+        try:
+            if item_type is _list_type:
+                return [
+                    copy_value(_list_getitem(item, index))
+                    for index in _range(_list_len(item))
+                ]
+            copied = {}
+            for key, nested in _dict_items(item):
+                if _type(key) is not _str_type:
+                    raise _violation_type(
+                        "JSON payload contains a non-string object key")
+                try:
+                    key.encode("utf-8", errors="strict")
+                except _unicode_error as exc:
+                    raise _violation_type(
+                        "JSON payload contains a Unicode surrogate") from exc
+                copied[key] = copy_value(nested)
+            return copied
+        except (_runtime_error, _index_error) as exc:
+            raise _violation_type(
+                "JSON payload changed while its snapshot was created") from exc
+        finally:
+            active.remove(marker)
+
+    try:
+        return copy_value(value)
+    except _recursion_error as exc:
+        raise _violation_type("JSON payload nesting is too deep") from exc
+
+
+_RETAINED_COPY_EXACT_JSON = copy_exact_json
+
+
 def _assert_portable_json(value, path: str = "<root>") -> None:
     """Reject values whose JSON spelling is non-portable or non-standard."""
     if isinstance(value, str):
@@ -264,6 +351,7 @@ class ContractRegistry:
 
     def validate(
             self, payload: dict,
+            _copy_exact_json=_RETAINED_COPY_EXACT_JSON,
             _json_loads=json.loads,
             _validator_type=jsonschema.Draft202012Validator,
             _format_checker_type=jsonschema.FormatChecker,
@@ -273,8 +361,10 @@ class ContractRegistry:
         Returns the matched Contract; raises ContractViolation/UnknownContract.
         Schema validation here is necessary, never sufficient (KERNEL.md).
         """
-        if not isinstance(payload, dict):
-            raise ContractViolation("payload is not a JSON object")
+        if type(payload) is not dict:
+            raise ContractViolation(
+                "payload must be an exact built-in JSON object")
+        payload = _copy_exact_json(payload)
         kind = payload.get("schemaVersion")
         if not isinstance(kind, str):
             raise ContractViolation("payload carries no schemaVersion")

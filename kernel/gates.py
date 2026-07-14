@@ -25,7 +25,6 @@ capture is not commitment (Kernel rule 3).
 from __future__ import annotations
 
 import json
-import math
 
 import psycopg
 
@@ -34,7 +33,12 @@ from .authority import AuthorityEvaluator
 from .callable_state import capture_callable_state, callable_state_matches
 from .context import (ContextAssembler, ProductRegister, SIReferenceBindings,
                       mint, now_iso, parse_ts)
-from .contracts import ContractViolation, canonical_json, sha256_of
+from .contracts import (
+    ContractViolation,
+    canonical_json,
+    copy_exact_json as _copy_exact_json,
+    sha256_of,
+)
 from .emission import PromotionTraceWriter, ReplayWriter
 from .materializer import Materializer
 from .problems import runtime_problem
@@ -81,51 +85,6 @@ _GATE_ENTRY_CALLABLES = (
 _RETAINED_GATE_ENTRY_CALLABLES = _GATE_ENTRY_CALLABLES
 
 
-def _copy_exact_json(value, active: set[int] | None = None):
-    """Copy a JSON tree without dispatching through caller-owned behavior."""
-    value_type = type(value)
-    if value is None or value_type in {str, bool, int}:
-        if value_type is str:
-            try:
-                value.encode("utf-8", errors="strict")
-            except UnicodeEncodeError as exc:
-                raise ContractViolation(
-                    "submission contains a Unicode surrogate") from exc
-        return value
-    if value_type is float:
-        if not _RETAINED_ISFINITE(value):
-            raise ContractViolation("submission contains a non-finite number")
-        return value
-    if value_type not in {dict, list}:
-        raise ContractViolation(
-            "submission must contain only exact built-in JSON values")
-
-    active = set() if active is None else active
-    marker = id(value)
-    if marker in active:
-        raise ContractViolation("submission contains a cyclic JSON container")
-    active.add(marker)
-    try:
-        if value_type is list:
-            return [
-                _RETAINED_COPY_EXACT_JSON(
-                    list.__getitem__(value, index), active)
-                for index in range(list.__len__(value))
-            ]
-        copied = {}
-        for key, item in dict.items(value):
-            if type(key) is not str:
-                raise ContractViolation(
-                    "submission contains a non-string object key")
-            copied[key] = _RETAINED_COPY_EXACT_JSON(item, active)
-        return copied
-    except (RuntimeError, IndexError) as exc:
-        raise ContractViolation(
-            "submission changed while its JSON snapshot was created") from exc
-    finally:
-        active.remove(marker)
-
-
 def _snapshot_submission(submission) -> tuple[str, str]:
     """Return immutable canonical bytes-as-text and the semantic source digest."""
     if type(submission) is not dict:
@@ -152,7 +111,6 @@ def _materialize_submission_snapshot(canonical: str) -> dict:
 
 _RETAINED_COPY_EXACT_JSON = _copy_exact_json
 _RETAINED_COPY_EXACT_JSON_CODE = _copy_exact_json.__code__
-_RETAINED_ISFINITE = math.isfinite
 _RETAINED_JSON_LOADS = json.loads
 _RETAINED_JSON_LOADS_CODE = json.loads.__code__
 _RETAINED_CANONICAL_JSON = canonical_json
@@ -474,7 +432,6 @@ class GatePipeline:
                 or _RETAINED_JSON_LOADS is not json.loads
                 or _RETAINED_JSON_LOADS.__code__ is not
                 _RETAINED_JSON_LOADS_CODE
-                or _RETAINED_ISFINITE is not math.isfinite
                 or _RETAINED_CANONICAL_JSON is not canonical_json
                 or _RETAINED_CANONICAL_JSON.__code__ is not
                 _RETAINED_CANONICAL_JSON_CODE

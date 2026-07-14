@@ -35,12 +35,15 @@ from .contracts import (
     ContractDispatchError,
     ContractRegistry,
     ContractViolation,
+    copy_exact_json,
     invoke_retained_contract_validation,
     sha256_of,
 )
 from .runtime_bundle import (
     RuntimeBundleError,
     _require_decision_semantics,
+    capture_contract_validation_decision_semantics,
+    require_contract_validation_decision_semantics,
     require_live_python_import_posture,
     require_runtime_environment_seal,
     require_store_runtime_bundle,
@@ -64,6 +67,22 @@ _RETAINED_CONTRACT_VALIDATION_CODE = \
     invoke_retained_contract_validation.__code__
 _RETAINED_CONTRACT_VALIDATION_STATE = capture_callable_state(
     _RETAINED_CONTRACT_VALIDATION)
+_RETAINED_EXACT_JSON_COPY = copy_exact_json
+_RETAINED_EXACT_JSON_COPY_CODE = copy_exact_json.__code__
+_RETAINED_EXACT_JSON_COPY_STATE = capture_callable_state(
+    _RETAINED_EXACT_JSON_COPY)
+_RETAINED_CONTRACT_SEMANTIC_PROOF = \
+    require_contract_validation_decision_semantics
+_RETAINED_CONTRACT_SEMANTIC_PROOF_CODE = \
+    require_contract_validation_decision_semantics.__code__
+_RETAINED_CONTRACT_SEMANTIC_PROOF_STATE = capture_callable_state(
+    _RETAINED_CONTRACT_SEMANTIC_PROOF)
+_RETAINED_CONTRACT_SEMANTIC_CAPTURE = \
+    capture_contract_validation_decision_semantics
+_RETAINED_CONTRACT_SEMANTIC_CAPTURE_CODE = \
+    capture_contract_validation_decision_semantics.__code__
+_RETAINED_CONTRACT_SEMANTIC_CAPTURE_STATE = capture_callable_state(
+    _RETAINED_CONTRACT_SEMANTIC_CAPTURE)
 
 
 def _detached_psycopg_adapter_context(template: AdaptersMap) -> AdaptersMap:
@@ -260,10 +279,18 @@ class _TransactionIntegrityLatch:
 
 def invoke_store_contract_validation(
         store, payload: dict,
+        *,
+        _include_snapshot: bool = False,
         _contracts_module=contracts_module,
+        _snapshot=_RETAINED_EXACT_JSON_COPY,
+        _snapshot_code=_RETAINED_EXACT_JSON_COPY_CODE,
+        _snapshot_state=_RETAINED_EXACT_JSON_COPY_STATE,
         _validation=_RETAINED_CONTRACT_VALIDATION,
         _validation_code=_RETAINED_CONTRACT_VALIDATION_CODE,
         _validation_state=_RETAINED_CONTRACT_VALIDATION_STATE,
+        _semantic_proof=_RETAINED_CONTRACT_SEMANTIC_PROOF,
+        _semantic_proof_code=_RETAINED_CONTRACT_SEMANTIC_PROOF_CODE,
+        _semantic_proof_state=_RETAINED_CONTRACT_SEMANTIC_PROOF_STATE,
         _state_matches=callable_state_matches,
         _latch_type=_TransactionIntegrityLatch,
         _type=type,
@@ -276,7 +303,15 @@ def invoke_store_contract_validation(
             "_RETAINED_STORE_VALIDATE_CONTRACT")
         retained_store_validator_state = globals().get(
             "_RETAINED_STORE_VALIDATE_CONTRACT_STATE")
-        if (vars(_contracts_module).get(
+        if (vars(_contracts_module).get("copy_exact_json") is not _snapshot
+                or type(_snapshot) is not types.FunctionType
+                or _snapshot.__code__ is not _snapshot_code
+                or not _state_matches(_snapshot, _snapshot_state)
+                or type(_semantic_proof) is not types.FunctionType
+                or _semantic_proof.__code__ is not _semantic_proof_code
+                or not _state_matches(
+                    _semantic_proof, _semantic_proof_state)
+                or vars(_contracts_module).get(
                 "invoke_retained_contract_validation") is not _validation
                 or type(_validation) is not types.FunctionType
                 or _validation.__code__ is not _validation_code
@@ -292,20 +327,51 @@ def invoke_store_contract_validation(
 
     try:
         require()
+        snapshot = _snapshot(payload)
+        environment_seal = _getattribute(store, "_runtime_environment_seal")
+        if environment_seal is None:
+            pending = _getattribute(
+                store, "_pending_runtime_bundle_activation")
+            if pending is not None:
+                environment_seal = pending[2]
+        if environment_seal is None:
+            bootstrap_bundle = _getattribute(store, "_bootstrap_bundle")
+            if bootstrap_bundle is not None:
+                environment_seal = _getattribute(
+                    bootstrap_bundle, "_selection_environment_seal")
+        if environment_seal is None:
+            selected_semantics = _getattribute(
+                store, "_contract_validation_decision_semantics")
+            full_semantics = None
+        else:
+            selected_semantics = _getattribute(
+                environment_seal,
+                "contract_validation_decision_semantics")
+            full_semantics = _getattribute(
+                environment_seal, "decision_semantics")
+        _semantic_proof(selected_semantics, full_semantics)
         try:
-            result = _validation(Store.registry.fget(store), payload)
+            result = _validation(Store.registry.fget(store), snapshot)
         except BaseException:
             require()
             raise
+        # The exact private snapshot cannot dispatch caller behavior while
+        # jsonschema runs.  One adjacent pre-execution semantic proof therefore
+        # closes the self-restoring same-thread seam; the governed transaction
+        # still performs its broad post-body proof before commit.
         require()
+        if _include_snapshot is True:
+            return result, snapshot
         return result
-    except ContractDispatchError as exc:
+    except (ContractDispatchError, RuntimeBundleError) as exc:
         # This failure path cannot dispatch through the mutable Store class:
         # the dispatch table is exactly what may have changed.  Poison the
         # retained one-way latch through private object mechanics instead.
         latch = _getattribute(store, "_active_transaction_integrity")
         if _type(latch) is _latch_type:
             _setattr(latch, "_TransactionIntegrityLatch__poisoned", True)
+        if _type(exc) is RuntimeBundleError:
+            raise
         raise RuntimeBundleError(str(exc)) from exc
 
 
@@ -984,6 +1050,7 @@ class Store:
         "_registry", "_registry_decision_identity", "_registry_sealed",
         "_verified_static_schema", "_transaction_lock", "_transaction_state",
         "_runtime_bundle", "_runtime_environment_seal", "_bootstrap_bundle",
+        "_contract_validation_decision_semantics",
         "_pending_runtime_bundle_activation", "_runtime_posture_verifiers",
         "_runtime_posture_verifier_codes", "_active_transaction_token",
         "_active_transaction_integrity", "_active_transaction_serialized",
@@ -1019,6 +1086,7 @@ class Store:
         self._conn: psycopg.Connection | None = None
         self._runtime_bundle = None
         self._runtime_environment_seal = None
+        self._contract_validation_decision_semantics = None
         self._bootstrap_bundle = None
         self._pending_runtime_bundle_activation = None
         self._active_transaction_token = None
@@ -1051,6 +1119,31 @@ class Store:
             raise RuntimeError(
                 "Store ContractRegistry decision semantics changed after construction")
         return registry
+
+    def _bind_contract_validation_decision_semantics(self) -> None:
+        """Bind the focused validator proof after reviewed imports are loaded."""
+        capture = _RETAINED_CONTRACT_SEMANTIC_CAPTURE
+        proof = _RETAINED_CONTRACT_SEMANTIC_PROOF
+        if (capture_contract_validation_decision_semantics is not capture
+                or capture.__code__ is not
+                _RETAINED_CONTRACT_SEMANTIC_CAPTURE_CODE
+                or not callable_state_matches(
+                    capture, _RETAINED_CONTRACT_SEMANTIC_CAPTURE_STATE)
+                or require_contract_validation_decision_semantics is not proof
+                or proof.__code__ is not
+                _RETAINED_CONTRACT_SEMANTIC_PROOF_CODE
+                or not callable_state_matches(
+                    proof, _RETAINED_CONTRACT_SEMANTIC_PROOF_STATE)):
+            raise RuntimeBundleError(
+                "contract-validation semantic binder changed")
+        selected = self._contract_validation_decision_semantics
+        if selected is None:
+            selected = capture()
+            proof(selected)
+            object.__setattr__(
+                self, "_contract_validation_decision_semantics", selected)
+            return
+        proof(selected)
 
     def bind_application_callables(self, callables) -> None:
         """Append exact post-bootstrap HTTP/dependency callable anchors."""
@@ -1485,6 +1578,7 @@ class Store:
             raise RuntimeError(
                 "RuntimeBundle binding preparation requires its verified bootstrap scope")
         Store._require_nested_transaction_ownership(self)
+        Store._bind_contract_validation_decision_semantics(self)
         from .runtime_bundle import (
             assert_runtime_environment_compatible,
             database_runtime_environment_component,
@@ -2124,7 +2218,8 @@ class Store:
         elif tenant_ref != bundle_tenant_ref:
             raise RuntimeError(
                 "kernel_record tenant must exactly match the verified RuntimeBundle tenant")
-        contract = _validate(self, payload)
+        contract, payload_snapshot = _validate(
+            self, payload, _include_snapshot=True)
         if contract.lane != "canonical":
             raise ContractViolation(
                 f"{contract.kind} is a draft-lane shape; draft records belong in "
@@ -2134,7 +2229,7 @@ class Store:
             raise ContractViolation(
                 f"{contract.kind} is an authored-artifact contract, not a store record"
             )
-        record_id = payload[contract.id_field]
+        record_id = payload_snapshot[contract.id_field]
         _RETAINED_GOVERNED_CURSOR_EXECUTE_MUTATION(cur,
             """
             INSERT INTO kernel_record
@@ -2142,8 +2237,9 @@ class Store:
                tenant_ref, runtime_bundle_digest)
             VALUES (%s, %s, 'canonical', %s, %s, %s, %s, %s)
             """,
-            (record_id, contract.kind, contract.schema_hash, Jsonb(payload),
-             sha256_of(payload), tenant_ref, self._bundle_digest(runtime_bundle_digest)),
+            (record_id, contract.kind, contract.schema_hash,
+             Jsonb(payload_snapshot), sha256_of(payload_snapshot), tenant_ref,
+             self._bundle_digest(runtime_bundle_digest)),
         )
         return record_id
 
@@ -2160,12 +2256,13 @@ class Store:
     ) -> str:
         """Append a draft-lane runtime evidence record (D16)."""
         Store._require_active_governed_cursor(self, cur)
-        contract = _validate(self, payload)
+        contract, payload_snapshot = _validate(
+            self, payload, _include_snapshot=True)
         if contract.lane != "draft":
             raise ContractViolation(
                 f"{contract.kind} is canonical-lane; use insert_record"
             )
-        trace_id = payload[contract.id_field]
+        trace_id = payload_snapshot[contract.id_field]
         _RETAINED_GOVERNED_CURSOR_EXECUTE_MUTATION(cur,
             """
             INSERT INTO runtime_trace
@@ -2173,7 +2270,8 @@ class Store:
                runtime_bundle_digest)
             VALUES (%s, %s, %s, %s, %s, %s)
             """,
-            (trace_id, contract.kind, contract.schema_hash, Jsonb(payload), sha256_of(payload),
+            (trace_id, contract.kind, contract.schema_hash,
+             Jsonb(payload_snapshot), sha256_of(payload_snapshot),
              self._bundle_digest(runtime_bundle_digest)),
         )
         return trace_id

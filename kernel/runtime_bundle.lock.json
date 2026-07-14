@@ -750,7 +750,7 @@
       "logicalRef": "python:kernel/context.py",
       "path": "kernel/context.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:55a47520998f04281b341c3aff286bd9edb6cb34da0bc3a4110ca107f461fa69",
+      "sha256": "sha256:635b4db05eaf90fb9c5c96b517c8664203988141dead45e10219c10d340fb623",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -758,7 +758,7 @@
       "logicalRef": "python:kernel/contracts.py",
       "path": "kernel/contracts.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:4f0ae0721d2b7689ac5819ec002da397beae3d0de43651b018d6d70d6a0c23fc",
+      "sha256": "sha256:794a6464f678ebd8fd0b45672d26e3bd1c7f88c55634e5cf0da45c37ef82c8f9",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -774,7 +774,7 @@
       "logicalRef": "python:kernel/gates.py",
       "path": "kernel/gates.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:1d670f5767f9ca2ac8feaedea22ac8efa83865743901b6b93aa9d78622e133aa",
+      "sha256": "sha256:e24c468cf4c345cfc31eb3f5182972bdc8887fb6f772ba46784e378ca735094f",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -782,7 +782,7 @@
       "logicalRef": "python:kernel/manifest.py",
       "path": "kernel/manifest.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:75b815c514ec1ee6e68f0dc12e6678a58be0862475bcbdce707852b77c577b60",
+      "sha256": "sha256:88f7aaa7ac863cceac1b2d6190e02be1fd00fae0da69b39efac8627db8065f95",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -878,7 +878,7 @@
       "logicalRef": "python:kernel/runtime_bundle.py",
       "path": "kernel/runtime_bundle.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:76862b0356c1d7e82ad5f19097539cb74f4a9dd1744c5b132557a0d6362f0950",
+      "sha256": "sha256:29534cc4c17bd3423473052d94b38894064611e8cff12e69ad40769c7cdc5b00",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -902,7 +902,7 @@
       "logicalRef": "python:kernel/store.py",
       "path": "kernel/store.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:9c86ef36eb53c07e5ee118f1d06e29402f160d71e8c9a80fda91177c8ff9555d",
+      "sha256": "sha256:6dfec2f13dc65e671459f5c3b2e8d17e89c0e5ecbcb48793b74213920a6932c5",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {

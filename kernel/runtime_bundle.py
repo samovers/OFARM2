@@ -116,6 +116,7 @@ class RuntimeEnvironmentSeal:
     sys_modules_mapping: object
     modules: tuple[tuple[str, object, tuple[Any, ...]], ...]
     decision_semantics: tuple[tuple[Any, ...], ...]
+    contract_validation_decision_semantics: tuple[tuple[Any, ...], ...]
     decision_callable_anchors: tuple[tuple[types.FunctionType, types.CodeType], ...]
     decision_semantics_canonical: bytes
     pycache_prefix: str | None
@@ -1781,7 +1782,13 @@ _DECISION_FUNCTION_ROOTS = (
         "assert_runtime_environment_compatible",
     )),
 )
-_DECISION_CLASS_ROOTS = (
+_CONTRACT_VALIDATION_CLASS_ROOTS = (
+    # ContractRegistry.validate retains these exact classes as point-of-use
+    # defaults. Their class identities alone are insufficient: validation also
+    # executes mutable Python helpers reached through their class data.
+    ("jsonschema", ("Draft202012Validator", "FormatChecker")),
+)
+_DECISION_CLASS_ROOTS = _CONTRACT_VALIDATION_CLASS_ROOTS + (
     ("kernel.contracts", ("Contract", "ContractRegistry")),
     ("kernel.authority", ("AuthorityDecision", "AuthorityEvaluator")),
     ("kernel.gates", ("GatePipeline", "IngressNormalizer")),
@@ -2958,8 +2965,30 @@ def _semantic_class_functions(class_state: tuple) -> tuple[types.FunctionType, .
     return direct + inherited
 
 
-def _capture_decision_semantics() -> tuple[tuple[Any, ...], ...]:
+def _capture_decision_semantics(
+        *,
+        data_roots: tuple[tuple[str, tuple[str, ...]], ...] | None = None,
+        function_roots: tuple[tuple[str, tuple[str, ...]], ...] | None = None,
+        class_roots: tuple[tuple[str, tuple[str, ...]], ...] | None = None,
+        optional_function_roots:
+            tuple[tuple[str, tuple[str, ...]], ...] | None = None,
+        optional_class_roots:
+            tuple[tuple[str, tuple[str, ...]], ...] | None = None,
+        sequence_roots: tuple[tuple[str, str], ...] | None = None,
+) -> tuple[tuple[Any, ...], ...]:
     """Capture declared roots plus their exact runtime global-binding closure."""
+    if data_roots is None:
+        data_roots = _DECISION_DATA_ROOTS
+    if function_roots is None:
+        function_roots = _DECISION_FUNCTION_ROOTS
+    if class_roots is None:
+        class_roots = _DECISION_CLASS_ROOTS
+    if optional_function_roots is None:
+        optional_function_roots = _DECISION_OPTIONAL_FUNCTION_ROOTS
+    if optional_class_roots is None:
+        optional_class_roots = _DECISION_OPTIONAL_CLASS_ROOTS
+    if sequence_roots is None:
+        sequence_roots = _DECISION_SEQUENCE_ROOTS
     _prepare_decision_semantic_caches()
     traversal = _new_semantic_traversal()
     entries: list[tuple[Any, ...]] = []
@@ -3052,7 +3081,7 @@ def _capture_decision_semantics() -> tuple[tuple[Any, ...], ...]:
             enqueue_class_state(base_state)
         enqueue_identity_class(state[8])
 
-    for module_name, names in _DECISION_DATA_ROOTS:
+    for module_name, names in data_roots:
         module = _decision_semantic_module(module_name)
         for name in names:
             value = vars(module).get(name, _MISSING)
@@ -3065,7 +3094,7 @@ def _capture_decision_semantics() -> tuple[tuple[Any, ...], ...]:
                 state,
             )
             enqueue_value_state(state)
-    for module_name, names in _DECISION_FUNCTION_ROOTS:
+    for module_name, names in function_roots:
         module = _decision_semantic_module(module_name)
         for name in names:
             function = vars(module).get(name, _MISSING)
@@ -3078,7 +3107,7 @@ def _capture_decision_semantics() -> tuple[tuple[Any, ...], ...]:
                 state,
             )
             enqueue_function(function)
-    for module_name, names in _DECISION_OPTIONAL_FUNCTION_ROOTS:
+    for module_name, names in optional_function_roots:
         module = sys.modules.get(module_name)
         if module is None:
             continue
@@ -3096,7 +3125,7 @@ def _capture_decision_semantics() -> tuple[tuple[Any, ...], ...]:
                 state,
             )
             enqueue_function(function)
-    for module_name, names in _DECISION_CLASS_ROOTS:
+    for module_name, names in class_roots:
         module = _decision_semantic_module(module_name)
         for name in names:
             class_object = vars(module).get(name, _MISSING)
@@ -3109,7 +3138,7 @@ def _capture_decision_semantics() -> tuple[tuple[Any, ...], ...]:
                 state,
             )
             enqueue_class_state(state)
-    for module_name, names in _DECISION_OPTIONAL_CLASS_ROOTS:
+    for module_name, names in optional_class_roots:
         module = sys.modules.get(module_name)
         if module is None:
             continue
@@ -3127,7 +3156,7 @@ def _capture_decision_semantics() -> tuple[tuple[Any, ...], ...]:
                 state,
             )
             enqueue_class_state(state)
-    for module_name, name in _DECISION_SEQUENCE_ROOTS:
+    for module_name, name in sequence_roots:
         module = _decision_semantic_module(module_name)
         sequence = vars(module).get(name, _MISSING)
         state = _semantic_sequence_state(sequence, traversal)
@@ -3298,6 +3327,124 @@ def _require_decision_semantics(
         if not matches:
             raise RuntimeBundleError(
                 f"decision semantic state changed after activation: {label}")
+
+
+class _ContractValidationSemanticSelection(tuple):
+    """Opaque immutable holder for the focused point-of-use proof.
+
+    ``capture_callable_state`` intentionally walks exact tuples.  Keeping this
+    large semantic selection in an exact function-default tuple would make the
+    small adjacent callable guard reinterpret semantic caches as mutable
+    dispatch tables.  A tuple subclass remains immutable but opaque to that
+    generic guard; the proof below copies it through retained builtin tuple
+    iteration before doing the semantic-aware comparison.
+    """
+
+    __slots__ = ()
+
+
+_REQUIRED_CONTRACT_VALIDATION_SEMANTIC_LABELS = frozenset({
+    "bisect.bisect_right",
+    "jsonschema.Draft202012Validator",
+    "jsonschema.FormatChecker",
+    "jsonschema._keywords.ensure_list",
+    "jsonschema.exceptions._Error",
+})
+
+
+def capture_contract_validation_decision_semantics(
+        _capture=_capture_decision_semantics,
+        _selection_type=_ContractValidationSemanticSelection,
+        _class_roots=_CONTRACT_VALIDATION_CLASS_ROOTS,
+) -> tuple[tuple[Any, ...], ...]:
+    """Capture the validation closure after reviewed imports are preloaded."""
+    return _selection_type(_capture(
+        data_roots=(),
+        function_roots=(),
+        class_roots=_class_roots,
+        optional_function_roots=(),
+        optional_class_roots=(),
+        sequence_roots=(),
+    ))
+
+
+_CONTRACT_VALIDATION_SEMANTIC_LABELS = frozenset(
+    entry[1] for entry in capture_contract_validation_decision_semantics())
+if not _REQUIRED_CONTRACT_VALIDATION_SEMANTIC_LABELS.issubset(
+        _CONTRACT_VALIDATION_SEMANTIC_LABELS):
+    raise RuntimeBundleError(
+        "contract-validation semantic inventory is incomplete")
+
+
+def _contract_validation_decision_semantics_from_full(
+        full_selection: tuple[tuple[Any, ...], ...],
+        _labels=_CONTRACT_VALIDATION_SEMANTIC_LABELS,
+        _selection_type=_ContractValidationSemanticSelection,
+) -> tuple[tuple[Any, ...], ...]:
+    """Select the focused closure using exact entries from the full seal."""
+    selected = _selection_type(
+        entry for entry in full_selection
+        if entry[1] in _labels)
+    if (len(selected) != len(_labels)
+            or frozenset(entry[1] for entry in selected) != _labels):
+        raise RuntimeBundleError(
+            "contract-validation semantics are absent from the full seal")
+    return selected
+
+
+def require_contract_validation_decision_semantics(
+        selected: tuple[tuple[Any, ...], ...],
+        full_selection: tuple[tuple[Any, ...], ...] | None = None,
+        _selection_type=_ContractValidationSemanticSelection,
+        _required_labels=_REQUIRED_CONTRACT_VALIDATION_SEMANTIC_LABELS,
+        _all_labels=_CONTRACT_VALIDATION_SEMANTIC_LABELS,
+        _require=_require_decision_semantics,
+        _tuple=tuple,
+        _tuple_iter=tuple.__iter__,
+        _frozenset=frozenset,
+        _type=type,
+        _str=str,
+        _len=len,
+        _id=id,
+        _any=any,
+) -> None:
+    """Prove the complete third-party validation closure at point of use."""
+    exact_selected = (
+        _tuple(_tuple_iter(selected))
+        if _type(selected) is _selection_type else ())
+    if (not exact_selected
+            or _any(
+                _type(entry) is not _tuple
+                or _len(entry) != 7
+                or _type(entry[1]) is not _str
+                for entry in exact_selected)):
+        raise RuntimeBundleError(
+            "contract-validation semantic selection is malformed")
+    labels = _frozenset(entry[1] for entry in exact_selected)
+    if (_len(exact_selected) != _len(_all_labels)
+            or labels != _all_labels
+            or not _required_labels.issubset(labels)):
+        raise RuntimeBundleError(
+            "contract-validation semantic selection is malformed")
+    if full_selection is not None:
+        if (_type(full_selection) is not _tuple
+                or _any(
+                    _type(entry) is not _tuple or _len(entry) != 7
+                    or _type(entry[1]) is not _str
+                    for entry in full_selection)):
+            raise RuntimeBundleError(
+                "full decision semantic selection is malformed")
+        if _len(_frozenset(
+                entry[1] for entry in full_selection)) != _len(full_selection):
+            raise RuntimeBundleError(
+                "full decision semantic selection is malformed")
+        full_entries = {_id(entry): entry for entry in full_selection}
+        if _any(
+                full_entries.get(_id(entry)) is not entry
+                for entry in exact_selected):
+            raise RuntimeBundleError(
+                "contract-validation semantics do not belong to the full seal")
+    _require(exact_selected)
 
 
 def _semantic_type_label(value: type) -> str:
@@ -3961,6 +4108,9 @@ _DECISION_RECEIPT_IMPLEMENTATION_ANCHORS = tuple(
         _same_live_semantic_binding,
         _capture_decision_semantics,
         _require_decision_semantics,
+        capture_contract_validation_decision_semantics,
+        _contract_validation_decision_semantics_from_full,
+        require_contract_validation_decision_semantics,
         _stable_frozen_semantic_value,
         _stable_code_constant,
         _stable_code_document,
@@ -6290,6 +6440,8 @@ def _capture_runtime_environment_seal(
         for path, (finder, finder_type) in sorted(cache_objects.items())
     )
     decision_semantics = _capture_decision_semantics()
+    contract_validation_decision_semantics = \
+        _contract_validation_decision_semantics_from_full(decision_semantics)
     decision_semantics_canonical = canonical_json(
         _stable_decision_semantics_document(
             decision_semantics,
@@ -6330,6 +6482,8 @@ def _capture_runtime_environment_seal(
             (name, module, signature)
             for name, (module, signature) in sorted(modules.items())),
         decision_semantics=decision_semantics,
+        contract_validation_decision_semantics=
+            contract_validation_decision_semantics,
         decision_callable_anchors=_decision_semantic_callable_anchors(
             decision_semantics),
         decision_semantics_canonical=decision_semantics_canonical,
@@ -7421,6 +7575,11 @@ def _require_runtime_bundle_integrity(bundle: object) -> None:
 def _require_runtime_environment_seal_integrity(
         bundle: RuntimeBundle,
         seal: RuntimeEnvironmentSeal,
+        _contract_labels=_CONTRACT_VALIDATION_SEMANTIC_LABELS,
+        _contract_selection_type=_ContractValidationSemanticSelection,
+        _tuple=tuple,
+        _tuple_iter=tuple.__iter__,
+        _frozenset=frozenset,
 ) -> None:
     """Cross-check a mutable Python dataclass seal against retained bytes."""
     _require_runtime_bundle_validation_implementation()
@@ -7439,10 +7598,13 @@ def _require_runtime_environment_seal_integrity(
             or type(seal.native_runtime) is not str
             or any(type(value) is not tuple for value in tuple_fields)
             or type(seal.decision_semantics_canonical) is not bytes
+            or type(seal.contract_validation_decision_semantics) is not
+            _contract_selection_type
             or type(seal.project_root) is not str
             or (seal.pycache_prefix is not None
                 and type(seal.pycache_prefix) is not str)
             or any(type(entry) is not tuple or len(entry) != 7
+                   or type(entry[1]) is not str
                    or type(entry[3]) is not str
                    for entry in seal.decision_semantics)
             or any(type(entry) is not tuple or len(entry) != 2
@@ -7453,6 +7615,27 @@ def _require_runtime_environment_seal_integrity(
             or not seal.decision_semantics):
         raise RuntimeBundleError(
             "runtime environment seal structure differs from its RuntimeBundle")
+    focused_selection = _tuple(_tuple_iter(
+        seal.contract_validation_decision_semantics))
+    if (len({entry[1] for entry in seal.decision_semantics}) !=
+            len(seal.decision_semantics)):
+        raise RuntimeBundleError(
+            "runtime environment semantic labels are not unique")
+    focused_entries = {
+        id(entry): entry for entry in seal.decision_semantics}
+    if (not focused_selection
+            or any(
+                type(entry) is not tuple or len(entry) != 7
+                or type(entry[1]) is not str
+                for entry in focused_selection)
+            or len(focused_selection) != len(_contract_labels)
+            or _frozenset(
+                entry[1] for entry in focused_selection) != _contract_labels
+            or any(
+                focused_entries.get(id(entry)) is not entry
+                for entry in focused_selection)):
+        raise RuntimeBundleError(
+            "contract-validation semantics do not belong to the runtime seal")
     _require_decision_receipt_implementation()
     selected = RuntimeBundle.component(
         bundle, "RUNTIME_ENVIRONMENT_OBSERVED", _DECISION_SEMANTICS_REF)

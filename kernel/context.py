@@ -299,6 +299,7 @@ def bootstrap_for_descriptor(
     # governed imports must execute within a zero-growth module seal.
     from .manifest import preload_runtime_import_surfaces
     preload_runtime_import_surfaces()
+    Store._bind_contract_validation_decision_semantics(store)
     active_profile = _require_active_profile(active_profile)
     bound_bundle = getattr(store, "_runtime_bundle", None)
     if bound_bundle is not None:

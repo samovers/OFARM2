@@ -74,6 +74,7 @@ RUNTIME_DECISION_SURFACE_MODULES = (
 # change; the runtime-owned inventory check below fails closed if the two lists
 # ever differ.
 RUNTIME_DECISION_SEMANTIC_MODULES = (
+    "jsonschema",
     "kernel.adapters",
     "kernel.auth_oidc",
     "kernel.authority",

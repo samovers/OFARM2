@@ -79,15 +79,17 @@ from kernel.runtime_bundle import (
     _validated_stable_runtime_environment_value,
     assert_runtime_environment_compatible,
     build_runtime_bundle,
+    capture_contract_validation_decision_semantics,
     database_runtime_environment_component,
     observed_decision_semantics_component,
+    require_contract_validation_decision_semantics,
     require_current_runtime_catalog,
     require_live_python_import_posture,
     runtime_bundle_from_persisted,
     sha256_bytes,
     strict_json_bytes,
 )
-from kernel.store import Store
+from kernel.store import Store, invoke_store_contract_validation
 from kernel.store import _SINGLE_WRITER_LOCK_KEY
 from kernel.views import OutputGenerator
 from kernel.tests.conftest import _admin_dsn
@@ -3785,6 +3787,141 @@ def test_store_refuses_self_restoring_contract_validator_substitution(
     assert store.get_record(party_id) is None
     assert store.get_record(hostile_party_id) is None
 
+    from jsonschema import _keywords
+
+    original_ensure_list = _keywords.ensure_list
+    helper_called = False
+    retained_party_id = (
+        f"party:issue171.contract-helper-retained.{uuid.uuid4().hex}")
+    invalid_party_id = (
+        f"party:issue171.contract-helper-hostile.{uuid.uuid4().hex}")
+
+    def hostile_ensure_list(value):
+        nonlocal helper_called
+        helper_called = True
+        _keywords.ensure_list = original_ensure_list
+        if value == "string":
+            return ["string", "integer"]
+        return original_ensure_list(value)
+
+    retained_store_selection = \
+        store._contract_validation_decision_semantics
+    object.__setattr__(
+        store, "_contract_validation_decision_semantics",
+        type(retained_store_selection)())
+    try:
+        with pytest.raises(RuntimeBundleError, match="rollback-only"):
+            with store.serialized_tx() as cur:
+                store.insert_record(cur, {
+                    "schemaVersion": "ofarm.party.v0.1",
+                    "partyId": retained_party_id,
+                    "partyClass": "NATURAL_PERSON",
+                    "displayName": "Issue 171 nested helper test (fictional)",
+                    "partyState": "ACTIVE",
+                    "recordedAt": context.now_iso(),
+                })
+                _keywords.ensure_list = hostile_ensure_list
+                try:
+                    with pytest.raises(
+                            RuntimeBundleError,
+                            match=r"jsonschema\._keywords\.ensure_list"):
+                        store.insert_record(cur, {
+                            "schemaVersion": "ofarm.party.v0.1",
+                            "partyId": invalid_party_id,
+                            "partyClass": "NATURAL_PERSON",
+                            "displayName": 7,
+                            "partyState": "ACTIVE",
+                            "recordedAt": context.now_iso(),
+                        })
+                finally:
+                    _keywords.ensure_list = original_ensure_list
+    finally:
+        object.__setattr__(
+            store, "_contract_validation_decision_semantics",
+            retained_store_selection)
+
+    assert helper_called is False
+    assert store.get_record(retained_party_id) is None
+    assert store.get_record(invalid_party_id) is None
+
+    environment_seal = store._runtime_environment_seal
+    retained_seal_selection = \
+        environment_seal.contract_validation_decision_semantics
+    minimal_labels = {
+        "bisect.bisect_right",
+        "jsonschema.Draft202012Validator",
+        "jsonschema.FormatChecker",
+        "jsonschema._keywords.ensure_list",
+        "jsonschema.exceptions._Error",
+    }
+    minimal_seal_selection = type(retained_seal_selection)(
+        entry for entry in retained_seal_selection
+        if entry[1] in minimal_labels)
+    assert {entry[1] for entry in minimal_seal_selection} == minimal_labels
+    retained_selection_party_id = (
+        f"party:issue171.contract-selection-retained.{uuid.uuid4().hex}")
+    rejected_selection_party_id = (
+        f"party:issue171.contract-selection-rejected.{uuid.uuid4().hex}")
+    with pytest.raises(RuntimeBundleError, match="rollback-only"):
+        with store.serialized_tx() as cur:
+            store.insert_record(cur, {
+                "schemaVersion": "ofarm.party.v0.1",
+                "partyId": retained_selection_party_id,
+                "partyClass": "NATURAL_PERSON",
+                "displayName": "Issue 171 selection test (fictional)",
+                "partyState": "ACTIVE",
+                "recordedAt": context.now_iso(),
+            })
+            object.__setattr__(
+                environment_seal,
+                "contract_validation_decision_semantics",
+                minimal_seal_selection)
+            try:
+                with pytest.raises(
+                        RuntimeBundleError,
+                        match="selection is malformed"):
+                    store.insert_record(cur, {
+                        "schemaVersion": "ofarm.party.v0.1",
+                        "partyId": rejected_selection_party_id,
+                        "partyClass": "NATURAL_PERSON",
+                        "displayName": "Issue 171 selection test (fictional)",
+                        "partyState": "ACTIVE",
+                        "recordedAt": context.now_iso(),
+                    })
+            finally:
+                object.__setattr__(
+                    environment_seal,
+                    "contract_validation_decision_semantics",
+                    retained_seal_selection)
+    assert store.get_record(retained_selection_party_id) is None
+    assert store.get_record(rejected_selection_party_id) is None
+
+    behavior_called = False
+
+    class BehavioralPayload(dict):
+        def get(self, *_args, **_kwargs):
+            nonlocal behavior_called
+            behavior_called = True
+            _keywords.ensure_list = hostile_ensure_list
+            return dict.get(self, *_args, **_kwargs)
+
+    behavioral_party_id = (
+        f"party:issue171.contract-behavioral.{uuid.uuid4().hex}")
+    behavioral_payload = BehavioralPayload({
+        "schemaVersion": "ofarm.party.v0.1",
+        "partyId": behavioral_party_id,
+        "partyClass": "NATURAL_PERSON",
+        "displayName": "Issue 171 behavioral payload test (fictional)",
+        "partyState": "ACTIVE",
+        "recordedAt": context.now_iso(),
+    })
+    with store.serialized_tx() as cur:
+        with pytest.raises(ContractViolation, match="exact built-in JSON"):
+            store.insert_record(cur, behavioral_payload)
+    assert behavior_called is False
+    assert _keywords.ensure_list is original_ensure_list
+    assert store.get_record(behavioral_party_id) is None
+
 
 def test_gate_uses_retained_stage_callable_during_temporary_class_mutation(
         fresh_store, fresh_pipeline):
@@ -4211,16 +4348,111 @@ def test_runtime_module_lifetime_signature_seals_module_spec_name():
 
 def test_nested_jsonschema_helper_mutation_changes_semantic_receipt():
     from jsonschema import _keywords
+    from kernel import runtime_bundle as runtime_bundle_module
+    from kernel import store as store_module
 
     clean = observed_decision_semantics_component(config.PACKAGE_ROOT)
+    selected = _capture_decision_semantics()
+    focused = capture_contract_validation_decision_semantics()
+    require_contract_validation_decision_semantics(focused)
+    with pytest.raises(RuntimeBundleError, match="selection is malformed"):
+        require_contract_validation_decision_semantics(type(focused)())
+    minimal_labels = {
+        "bisect.bisect_right",
+        "jsonschema.Draft202012Validator",
+        "jsonschema.FormatChecker",
+        "jsonschema._keywords.ensure_list",
+        "jsonschema.exceptions._Error",
+    }
+    minimal_focused = type(focused)(
+        entry for entry in selected if entry[1] in minimal_labels)
+    assert {entry[1] for entry in minimal_focused} == minimal_labels
+    with pytest.raises(RuntimeBundleError, match="selection is malformed"):
+        require_contract_validation_decision_semantics(
+            minimal_focused, selected)
+    focused_labels = {entry[1] for entry in focused}
+    full_focused = type(focused)(
+        entry for entry in selected if entry[1] in focused_labels)
+    require_contract_validation_decision_semantics(full_focused, selected)
+    retained_roots = runtime_bundle_module._CONTRACT_VALIDATION_CLASS_ROOTS
+    runtime_bundle_module._CONTRACT_VALIDATION_CLASS_ROOTS = ()
+    try:
+        rebound_capture = capture_contract_validation_decision_semantics()
+    finally:
+        runtime_bundle_module._CONTRACT_VALIDATION_CLASS_ROOTS = retained_roots
+    assert {entry[1] for entry in rebound_capture}.issuperset({
+        "jsonschema.Draft202012Validator",
+        "jsonschema.FormatChecker",
+        "jsonschema._keywords.ensure_list",
+    })
+    assert store_module._STORE_DISPATCH_MATCHER(
+        store_module._STORE_DISPATCH_ANCHORS)
+    re.compile(f"issue171-focused-semantic-cache-{uuid.uuid4().hex}")
+    require_contract_validation_decision_semantics(focused)
+    assert store_module._STORE_DISPATCH_MATCHER(
+        store_module._STORE_DISPATCH_ANCHORS)
+
+    registry = ContractRegistry()
+    detached_store = Store.__new__(Store)
+    object.__setattr__(detached_store, "_registry", registry)
+    object.__setattr__(
+        detached_store, "_registry_decision_identity",
+        registry.decision_identity())
+    object.__setattr__(
+        detached_store, "_active_transaction_integrity", None)
+    detached_seal = types.SimpleNamespace(
+        contract_validation_decision_semantics=full_focused,
+        decision_semantics=selected,
+    )
+    object.__setattr__(detached_store, "_runtime_environment_seal", None)
+    object.__setattr__(
+        detached_store, "_pending_runtime_bundle_activation", None)
+    object.__setattr__(detached_store, "_bootstrap_bundle", None)
+    object.__setattr__(
+        detached_store, "_contract_validation_decision_semantics",
+        type(focused)())
+    object.__setattr__(
+        detached_store, "_runtime_environment_seal", detached_seal)
+    payload = {
+        "schemaVersion": "ofarm.party.v0.1",
+        "partyId": "party:issue171.contract-return-shape",
+        "partyClass": "NATURAL_PERSON",
+        "displayName": "Issue 171 return-shape test (fictional)",
+        "partyState": "ACTIVE",
+        "recordedAt": "2026-07-14T00:00:00Z",
+    }
+    contract = invoke_store_contract_validation(detached_store, payload)
+    assert contract.kind == "ofarm.party.v0.1"
+    selected_contract, snapshot = invoke_store_contract_validation(
+        detached_store, payload, _include_snapshot=True)
+    assert selected_contract is contract
+    assert snapshot == payload
+    assert snapshot is not payload
+    detached_seal.contract_validation_decision_semantics = minimal_focused
+    try:
+        with pytest.raises(RuntimeBundleError, match="selection is malformed"):
+            invoke_store_contract_validation(detached_store, payload)
+    finally:
+        detached_seal.contract_validation_decision_semantics = full_focused
+
     original = _keywords.ensure_list
     try:
         _keywords.ensure_list = lambda _value: ["integer"]
+        with pytest.raises(
+                RuntimeBundleError,
+                match=r"jsonschema\._keywords\.ensure_list"):
+            _require_decision_semantics(selected)
+        with pytest.raises(
+                RuntimeBundleError,
+                match=r"jsonschema\._keywords\.ensure_list"):
+            require_contract_validation_decision_semantics(focused)
         changed = observed_decision_semantics_component(config.PACKAGE_ROOT)
     finally:
         _keywords.ensure_list = original
 
     assert changed.content_digest != clean.content_digest
+    _require_decision_semantics(selected)
+    require_contract_validation_decision_semantics(focused)
 
 
 def test_si_binding_resolver_mutation_is_in_semantic_closure():
