@@ -24,13 +24,17 @@ capture is not commitment (Kernel rule 3).
 """
 from __future__ import annotations
 
+import json
+import math
+
 import psycopg
 
 from . import profile_policy
 from .authority import AuthorityEvaluator
+from .callable_state import capture_callable_state, callable_state_matches
 from .context import (ContextAssembler, ProductRegister, SIReferenceBindings,
                       mint, now_iso, parse_ts)
-from .contracts import sha256_of
+from .contracts import ContractViolation, canonical_json, sha256_of
 from .emission import PromotionTraceWriter, ReplayWriter
 from .materializer import Materializer
 from .problems import runtime_problem
@@ -63,14 +67,103 @@ CHAIN = (
 
 _GATE_ENTRY_CALLABLES = (
     (IngressNormalizer, "run", IngressNormalizer.run,
-     IngressNormalizer.run.__code__),
+     IngressNormalizer.run.__code__,
+     capture_callable_state(IngressNormalizer.run)),
     (MaterializationGate, "run", MaterializationGate.run,
-     MaterializationGate.run.__code__),
+     MaterializationGate.run.__code__,
+     capture_callable_state(MaterializationGate.run)),
     (PromotionTraceWriter, "write", PromotionTraceWriter.write,
-     PromotionTraceWriter.write.__code__),
-    (ReplayWriter, "write", ReplayWriter.write, ReplayWriter.write.__code__),
+     PromotionTraceWriter.write.__code__,
+     capture_callable_state(PromotionTraceWriter.write)),
+    (ReplayWriter, "write", ReplayWriter.write, ReplayWriter.write.__code__,
+     capture_callable_state(ReplayWriter.write)),
 )
 _RETAINED_GATE_ENTRY_CALLABLES = _GATE_ENTRY_CALLABLES
+
+
+def _copy_exact_json(value, active: set[int] | None = None):
+    """Copy a JSON tree without dispatching through caller-owned behavior."""
+    value_type = type(value)
+    if value is None or value_type in {str, bool, int}:
+        if value_type is str:
+            try:
+                value.encode("utf-8", errors="strict")
+            except UnicodeEncodeError as exc:
+                raise ContractViolation(
+                    "submission contains a Unicode surrogate") from exc
+        return value
+    if value_type is float:
+        if not _RETAINED_ISFINITE(value):
+            raise ContractViolation("submission contains a non-finite number")
+        return value
+    if value_type not in {dict, list}:
+        raise ContractViolation(
+            "submission must contain only exact built-in JSON values")
+
+    active = set() if active is None else active
+    marker = id(value)
+    if marker in active:
+        raise ContractViolation("submission contains a cyclic JSON container")
+    active.add(marker)
+    try:
+        if value_type is list:
+            return [
+                _RETAINED_COPY_EXACT_JSON(
+                    list.__getitem__(value, index), active)
+                for index in range(list.__len__(value))
+            ]
+        copied = {}
+        for key, item in dict.items(value):
+            if type(key) is not str:
+                raise ContractViolation(
+                    "submission contains a non-string object key")
+            copied[key] = _RETAINED_COPY_EXACT_JSON(item, active)
+        return copied
+    except (RuntimeError, IndexError) as exc:
+        raise ContractViolation(
+            "submission changed while its JSON snapshot was created") from exc
+    finally:
+        active.remove(marker)
+
+
+def _snapshot_submission(submission) -> tuple[str, str]:
+    """Return immutable canonical bytes-as-text and the semantic source digest."""
+    if type(submission) is not dict:
+        raise ContractViolation(
+            "submission must be an exact built-in JSON object")
+    try:
+        copied = _RETAINED_COPY_EXACT_JSON(submission)
+    except RecursionError as exc:
+        raise ContractViolation("submission JSON nesting is too deep") from exc
+    semantic = {
+        key: value for key, value in dict.items(copied)
+        if key != "sourcePayloadDigest"
+    }
+    return _RETAINED_CANONICAL_JSON(copied), _RETAINED_SHA256_OF(semantic)
+
+
+def _materialize_submission_snapshot(canonical: str) -> dict:
+    """Create one private exact-built-in tree from the immutable snapshot."""
+    materialized = _RETAINED_JSON_LOADS(canonical)
+    if type(materialized) is not dict:
+        raise ContractViolation("submission snapshot is not a JSON object")
+    return materialized
+
+
+_RETAINED_COPY_EXACT_JSON = _copy_exact_json
+_RETAINED_COPY_EXACT_JSON_CODE = _copy_exact_json.__code__
+_RETAINED_ISFINITE = math.isfinite
+_RETAINED_JSON_LOADS = json.loads
+_RETAINED_JSON_LOADS_CODE = json.loads.__code__
+_RETAINED_CANONICAL_JSON = canonical_json
+_RETAINED_CANONICAL_JSON_CODE = canonical_json.__code__
+_RETAINED_SHA256_OF = sha256_of
+_RETAINED_SHA256_OF_CODE = sha256_of.__code__
+_RETAINED_SNAPSHOT_SUBMISSION = _snapshot_submission
+_RETAINED_SNAPSHOT_SUBMISSION_CODE = _snapshot_submission.__code__
+_RETAINED_MATERIALIZE_SUBMISSION = _materialize_submission_snapshot
+_RETAINED_MATERIALIZE_SUBMISSION_CODE = \
+    _materialize_submission_snapshot.__code__
 
 
 def _has_instance_dispatch_override(instance) -> bool:
@@ -87,52 +180,72 @@ def _has_instance_dispatch_override(instance) -> bool:
     )
 
 
-def _raise_retained_gate_dispatch_error(store, message: str) -> None:
+def _raise_retained_gate_dispatch_error(
+        store, message: str,
+        _mark_integrity=Store._mark_transaction_integrity_violation,
+) -> None:
     """Poison an active write transaction before reporting dispatch drift."""
     if type(store) is Store:
-        Store._mark_transaction_integrity_violation(store)
+        _mark_integrity(store)
     raise RuntimeBundleError(message)
 
 
-def _require_retained_gate_callable(store, entry, instance) -> None:
-    if type(entry) is not tuple or len(entry) != 4:
-        _RETAINED_RAISE_GATE_DISPATCH_ERROR(
+def _require_retained_gate_callable(
+        store, entry, instance,
+        _has_override=_has_instance_dispatch_override,
+        _raise=_raise_retained_gate_dispatch_error,
+        _state_matches=callable_state_matches,
+) -> None:
+    if type(entry) is not tuple or len(entry) != 5:
+        _raise(
             store, "retained gate dispatch entry is malformed")
-    owner, name, function, code = entry
+    owner, name, function, code, callable_state = entry
     if (type(instance) is not owner
-            or _RETAINED_HAS_INSTANCE_DISPATCH_OVERRIDE(instance)
+            or _has_override(instance)
             or vars(owner).get(name) is not function
-            or getattr(function, "__code__", None) is not code):
-        _RETAINED_RAISE_GATE_DISPATCH_ERROR(
+            or getattr(function, "__code__", None) is not code
+            or not _state_matches(function, callable_state)):
+        _raise(
             store, "retained gate callable changed before invocation")
 
 
-def _invoke_retained_gate_callable(store, entry, instance, *args):
+def _invoke_retained_gate_callable(
+        store, entry, instance, *args,
+        _require=_require_retained_gate_callable,
+):
     """Invoke one retained function with immediate pre/post code checks."""
-    _RETAINED_REQUIRE_GATE_CALLABLE(store, entry, instance)
+    _require(store, entry, instance)
     function = entry[2]
     try:
         result = function(instance, *args)
     except BaseException:
-        _RETAINED_REQUIRE_GATE_CALLABLE(store, entry, instance)
+        _require(store, entry, instance)
         raise
-    _RETAINED_REQUIRE_GATE_CALLABLE(store, entry, instance)
+    _require(store, entry, instance)
     return result
 
 
-def _invoke_gate_entry(store, index: int, *args):
-    entry = _RETAINED_GATE_ENTRY_CALLABLES[index]
-    return _RETAINED_INVOKE_GATE_CALLABLE(
+def _invoke_gate_entry(
+        store, index: int, *args,
+        _entries=_GATE_ENTRY_CALLABLES,
+        _invoke=_invoke_retained_gate_callable,
+):
+    entry = _entries[index]
+    return _invoke(
         store, entry, object.__new__(entry[0]), *args)
 
 
-def _invoke_retained_stage(store, stage_dispatch, ctx):
-    if type(stage_dispatch) is not tuple or len(stage_dispatch) != 4:
-        _RETAINED_RAISE_GATE_DISPATCH_ERROR(
+def _invoke_retained_stage(
+        store, stage_dispatch, ctx,
+        _raise=_raise_retained_gate_dispatch_error,
+        _invoke=_invoke_retained_gate_callable,
+):
+    if type(stage_dispatch) is not tuple or len(stage_dispatch) != 5:
+        _raise(
             store, "retained stage dispatch entry is malformed")
-    stage, owner, function, code = stage_dispatch
-    return _RETAINED_INVOKE_GATE_CALLABLE(
-        store, (owner, "run", function, code), stage, ctx)
+    stage, owner, function, code, callable_state = stage_dispatch
+    return _invoke(
+        store, (owner, "run", function, code, callable_state), stage, ctx)
 
 
 _RETAINED_HAS_INSTANCE_DISPATCH_OVERRIDE = _has_instance_dispatch_override
@@ -152,20 +265,35 @@ _RETAINED_INVOKE_GATE_ENTRY_CODE = _RETAINED_INVOKE_GATE_ENTRY.__code__
 _RETAINED_INVOKE_STAGE = _invoke_retained_stage
 _RETAINED_INVOKE_STAGE_CODE = _RETAINED_INVOKE_STAGE.__code__
 _GATE_HELPER_ANCHORS = (
+    ("_copy_exact_json", _RETAINED_COPY_EXACT_JSON,
+     _RETAINED_COPY_EXACT_JSON_CODE,
+     capture_callable_state(_RETAINED_COPY_EXACT_JSON)),
+    ("_snapshot_submission", _RETAINED_SNAPSHOT_SUBMISSION,
+     _RETAINED_SNAPSHOT_SUBMISSION_CODE,
+     capture_callable_state(_RETAINED_SNAPSHOT_SUBMISSION)),
+    ("_materialize_submission_snapshot", _RETAINED_MATERIALIZE_SUBMISSION,
+     _RETAINED_MATERIALIZE_SUBMISSION_CODE,
+     capture_callable_state(_RETAINED_MATERIALIZE_SUBMISSION)),
     ("_has_instance_dispatch_override",
      _RETAINED_HAS_INSTANCE_DISPATCH_OVERRIDE,
-     _RETAINED_HAS_INSTANCE_DISPATCH_OVERRIDE_CODE),
+     _RETAINED_HAS_INSTANCE_DISPATCH_OVERRIDE_CODE,
+     capture_callable_state(_RETAINED_HAS_INSTANCE_DISPATCH_OVERRIDE)),
     ("_raise_retained_gate_dispatch_error",
      _RETAINED_RAISE_GATE_DISPATCH_ERROR,
-     _RETAINED_RAISE_GATE_DISPATCH_ERROR_CODE),
+     _RETAINED_RAISE_GATE_DISPATCH_ERROR_CODE,
+     capture_callable_state(_RETAINED_RAISE_GATE_DISPATCH_ERROR)),
     ("_require_retained_gate_callable", _RETAINED_REQUIRE_GATE_CALLABLE,
-     _RETAINED_REQUIRE_GATE_CALLABLE_CODE),
+     _RETAINED_REQUIRE_GATE_CALLABLE_CODE,
+     capture_callable_state(_RETAINED_REQUIRE_GATE_CALLABLE)),
     ("_invoke_retained_gate_callable", _RETAINED_INVOKE_GATE_CALLABLE,
-     _RETAINED_INVOKE_GATE_CALLABLE_CODE),
+     _RETAINED_INVOKE_GATE_CALLABLE_CODE,
+     capture_callable_state(_RETAINED_INVOKE_GATE_CALLABLE)),
     ("_invoke_gate_entry", _RETAINED_INVOKE_GATE_ENTRY,
-     _RETAINED_INVOKE_GATE_ENTRY_CODE),
+     _RETAINED_INVOKE_GATE_ENTRY_CODE,
+     capture_callable_state(_RETAINED_INVOKE_GATE_ENTRY)),
     ("_invoke_retained_stage", _RETAINED_INVOKE_STAGE,
-     _RETAINED_INVOKE_STAGE_CODE),
+     _RETAINED_INVOKE_STAGE_CODE,
+     capture_callable_state(_RETAINED_INVOKE_STAGE)),
 )
 
 
@@ -287,7 +415,8 @@ class GatePipeline:
         self.products.freeze()
         self.chain = CHAIN
         self._stage_dispatch = tuple(
-            (stage, type(stage), type(stage).run, type(stage).run.__code__)
+            (stage, type(stage), type(stage).run, type(stage).run.__code__,
+             capture_callable_state(type(stage).run))
             for stage in self.chain)
         self._runtime_composition_sealed = True
 
@@ -338,25 +467,46 @@ class GatePipeline:
                        for service in services)
                 or self.chain is not CHAIN
                 or len(self._stage_dispatch) != len(self.chain)
+                or _RETAINED_COPY_EXACT_JSON is not _copy_exact_json
+                or _RETAINED_SNAPSHOT_SUBMISSION is not _snapshot_submission
+                or _RETAINED_MATERIALIZE_SUBMISSION is not
+                _materialize_submission_snapshot
+                or _RETAINED_JSON_LOADS is not json.loads
+                or _RETAINED_JSON_LOADS.__code__ is not
+                _RETAINED_JSON_LOADS_CODE
+                or _RETAINED_ISFINITE is not math.isfinite
+                or _RETAINED_CANONICAL_JSON is not canonical_json
+                or _RETAINED_CANONICAL_JSON.__code__ is not
+                _RETAINED_CANONICAL_JSON_CODE
+                or _RETAINED_SHA256_OF is not sha256_of
+                or _RETAINED_SHA256_OF.__code__ is not
+                _RETAINED_SHA256_OF_CODE
                 or _GATE_ENTRY_CALLABLES is not
                 _RETAINED_GATE_ENTRY_CALLABLES
                 or any(
                     globals().get(name) is not function
                     or function.__code__ is not code
-                    for name, function, code in _GATE_HELPER_ANCHORS)
+                    or not callable_state_matches(function, callable_state)
+                    for name, function, code, callable_state
+                    in _GATE_HELPER_ANCHORS)
                 or any(
                     selected_stage is not stage
                     or selected_type is not type(stage)
                     or selected_function is not vars(selected_type).get("run")
                     or getattr(selected_function, "__code__", None) is not
                     selected_code
+                    or not callable_state_matches(
+                        selected_function, selected_callable_state)
                     for stage, (selected_stage, selected_type,
-                                selected_function, selected_code)
+                                selected_function, selected_code,
+                                selected_callable_state)
                     in zip(self.chain, self._stage_dispatch))
                 or any(
                     vars(owner).get(name) is not function
                     or getattr(function, "__code__", None) is not code
-                    for owner, name, function, code in _GATE_ENTRY_CALLABLES)
+                    or not callable_state_matches(function, callable_state)
+                    for owner, name, function, code, callable_state
+                    in _GATE_ENTRY_CALLABLES)
                 or any(_RETAINED_HAS_INSTANCE_DISPATCH_OVERRIDE(stage)
                        for stage in self.chain)
                 or self.policy_provider.descriptor != self.active_profile
@@ -392,10 +542,20 @@ class GatePipeline:
     def commit(self, submission: dict) -> dict:
         """Run one capture through the full chain. Returns the
         CommitIngressResult payload. One call = one transaction (D3)."""
+        if type(submission) is not dict:
+            raise ContractViolation(
+                "submission must be an exact built-in JSON object")
+        GatePipeline._assert_runtime_composition(self)
+        canonical_submission, source_digest = \
+            _RETAINED_SNAPSHOT_SUBMISSION(submission)
         GatePipeline._assert_runtime_composition(self)
         try:
             with Store.serialized_tx(self.store) as cur:
-                result = GatePipeline._commit_in_tx(self, cur, submission)
+                result = GatePipeline._commit_in_tx(
+                    self, cur,
+                    _RETAINED_MATERIALIZE_SUBMISSION(canonical_submission),
+                    source_digest=source_digest,
+                )
                 return result
         except psycopg.errors.UniqueViolation:
             # a concurrent commit won the idempotency-key race; our transaction
@@ -403,12 +563,16 @@ class GatePipeline:
             # (Under the single-writer lock — M2 G2 — writers serialize, so this
             # backstop is now reached only across connections that bypass it.)
             with Store.serialized_tx(self.store) as cur:
+                retry_submission = \
+                    _RETAINED_MATERIALIZE_SUBMISSION(canonical_submission)
                 prior = Store.idempotency_lookup(
                     self.store,
-                    cur, submission["idempotencyKey"])
+                    cur, retry_submission["idempotencyKey"])
                 if prior is None:
                     raise
-                ctx = GatePipeline._new_context(self, cur, submission)
+                ctx = GatePipeline._new_context(
+                    self, cur, retry_submission,
+                    source_digest=source_digest)
                 result = _RETAINED_INVOKE_GATE_ENTRY(
                     self.store, 3, ctx, prior)
                 GatePipeline._assert_runtime_composition(self)
@@ -420,10 +584,11 @@ class GatePipeline:
         submission. A caller-supplied sourcePayloadDigest is evidence metadata
         at most — it never participates in idempotency decisions. Payload-less
         classes digest their full submission, never the constant digest of {}."""
-        return sha256_of(
-            {k: v for k, v in sub.items() if k != "sourcePayloadDigest"})
+        return _RETAINED_SNAPSHOT_SUBMISSION(sub)[1]
 
-    def _new_context(self, cur, sub: dict) -> GateContext:
+    def _new_context(
+            self, cur, sub: dict, *, source_digest: str | None = None,
+    ) -> GateContext:
         policy_provider = (
             self.policy_provider
             if self.active_profile == self.policy_provider.descriptor
@@ -443,7 +608,8 @@ class GatePipeline:
             si_reference_bindings=si_reference_bindings,
             sub=sub,
             request_id=mint("cir"), ingested_at=now_iso(),
-            source_digest=GatePipeline._source_digest(sub),
+            source_digest=(source_digest if source_digest is not None
+                           else GatePipeline._source_digest(sub)),
             commit_class=sub["commitClass"], farm_ref=sub["farmRef"],
             acting_party=sub["actingPartyRef"], idem_key=sub["idempotencyKey"],
             event_id=mint("event"), assertion_id=mint("assert"))
@@ -545,9 +711,12 @@ class GatePipeline:
                 refs=[resolution.route.route_id, resolution.descriptor.profile_ref])
         return None
 
-    def _commit_in_tx(self, cur, sub: dict) -> dict:
+    def _commit_in_tx(
+            self, cur, sub: dict, *, source_digest: str | None = None,
+    ) -> dict:
         GatePipeline._assert_runtime_composition(self)
-        ctx = GatePipeline._new_context(self, cur, sub)
+        ctx = GatePipeline._new_context(
+            self, cur, sub, source_digest=source_digest)
 
         ingress = _RETAINED_INVOKE_GATE_ENTRY(self.store, 0, ctx)
         if isinstance(ingress, GateReplay):

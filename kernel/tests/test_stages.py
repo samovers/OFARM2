@@ -10,7 +10,11 @@ end to end.
 from __future__ import annotations
 
 import re
+import uuid
 from contextlib import contextmanager
+from types import MappingProxyType, SimpleNamespace
+
+import pytest
 
 from kernel import config, policy, sufficiency
 from kernel.stages import GateContext, GateRefusal
@@ -59,6 +63,40 @@ def test_policy_tables_are_closed_and_consistent():
         assert policy.COMMIT_CLASS_TO_PROMOTION_TARGET[commit_class] == target
     # D8: self-acceptance scope is exactly routine operation claims
     assert policy.SELF_ACCEPTABLE_ASSERTION_TYPES == {"OPERATION_CLAIM_ASSERTION"}
+
+
+def test_decision_policy_tables_are_deeply_immutable():
+    tables = (
+        policy.COMMIT_CLASS_TO_FAMILY,
+        policy.COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS,
+        policy.COMMIT_CLASS_TO_ASSERTION_TYPE,
+        policy.COMMIT_CLASS_TO_PROMOTION_TARGET,
+        policy.PROMOTION_TARGET_TO_CONSEQUENCE_TYPE,
+        policy.ACCEPTANCE_BY_ASSERTION_TYPE,
+        policy.REVIEW_ACTION_AUTHORITY,
+        policy.STRUCTURE_PAYLOAD_IDENTITY_TYPE,
+        policy.STRUCTURE_PAYLOAD_REF_FIELDS,
+        policy.STRUCTURE_REF_CATEGORY_KIND,
+        policy.NON_PROMOTING_RETAIN_REASONS,
+        policy.ROUTE_REASON_TO_INSUFFICIENCY,
+        policy.USE_CLASS_TO_CANONICAL,
+        policy.FRESHNESS_USE_POLICY,
+    )
+
+    def require_frozen(value):
+        assert type(value) not in {dict, list, set}
+        if type(value) is MappingProxyType:
+            for nested in value.values():
+                require_frozen(nested)
+        elif type(value) in {tuple, frozenset}:
+            for nested in value:
+                require_frozen(nested)
+
+    for table in tables:
+        assert type(table) is MappingProxyType
+        require_frozen(table)
+        with pytest.raises(TypeError):
+            table["__mutation_probe__"] = "forbidden"
 
 
 def test_freshness_use_policy_truth_table():
@@ -146,20 +184,80 @@ def test_temporal_validator_contract(store):
         assert ctx2.review_route_reasons[0]["severity"] == "WARNING"
 
 
-def test_promotion_target_validator_contract(store):
-    with scratch_tx(store) as cur:
-        ctx = _ctx(store, cur, {"commitClass": "OBSERVATION_ASSERTION",
-                                "eventTime": "2026-06-10T09:00:00Z"})
-        ctx.requested_target = "COMPLIANCE_FACT"   # unlawful for observations
-        refusal = PromotionTargetValidator().run(ctx)
-        assert isinstance(refusal, GateRefusal)
-        assert refusal.problems[0]["reasonCode"] == "HIGH_CONSEQUENCE_BLOCKED"
+def test_promotion_target_validator_contract():
+    from kernel import validators as validators_module
 
-        ctx2 = _ctx(store, cur, {"commitClass": "OPERATION_CLAIM",
-                                 "subjectType": "OTHER", "subjectRef": "x:y"})
-        refusal2 = PromotionTargetValidator().run(ctx2)
-        assert isinstance(refusal2, GateRefusal)
-        assert refusal2.problems[0]["reasonCode"] == "IDENTITY_UNRESOLVED"
+    def context(commit_class, requested_target=None, subject_type="FARM"):
+        return SimpleNamespace(
+            commit_class=commit_class,
+            requested_target=requested_target,
+            sub={"subjectType": subject_type},
+            log=lambda *_args, **_kwargs: None,
+        )
+
+    ctx = context("OBSERVATION_ASSERTION", "COMPLIANCE_FACT")
+    refusal = PromotionTargetValidator().run(ctx)
+    assert isinstance(refusal, GateRefusal)
+    assert refusal.problems[0]["reasonCode"] == "HIGH_CONSEQUENCE_BLOCKED"
+
+    ctx2 = context("OPERATION_CLAIM", subject_type="OTHER")
+    refusal2 = PromotionTargetValidator().run(ctx2)
+    assert isinstance(refusal2, GateRefusal)
+    assert refusal2.problems[0]["reasonCode"] == "IDENTITY_UNRESOLVED"
+
+    # A one-shot, self-restoring module replacement after preflight must
+    # never intercept the validator's refusal decision.
+    original_refusal = validators_module._refusal
+    hostile_called = False
+
+    def hostile_refusal(*args, **kwargs):
+        nonlocal hostile_called
+        hostile_called = True
+        validators_module._refusal = original_refusal
+        return original_refusal(*args, **kwargs)
+
+    validators_module._refusal = hostile_refusal
+    try:
+        refusal3 = PromotionTargetValidator().run(
+            context("OBSERVATION_ASSERTION", "COMPLIANCE_FACT"))
+    finally:
+        validators_module._refusal = original_refusal
+
+    assert isinstance(refusal3, GateRefusal)
+    assert refusal3.problems[0]["reasonCode"] == "HIGH_CONSEQUENCE_BLOCKED"
+    assert hostile_called is False
+
+    # Governance contest dispatch likewise retains the standalone helper;
+    # replacing its module name cannot steer the branch through hostile code.
+    original_contest = validators_module._validate_governance_contest
+    hostile_contest_called = False
+
+    def hostile_contest(_ctx):
+        nonlocal hostile_contest_called
+        hostile_contest_called = True
+        validators_module._validate_governance_contest = original_contest
+        return None
+
+    contest_ctx = SimpleNamespace(
+        commit_class="GOVERNANCE_DECISION",
+        review_action="CONTEST",
+        review_outcome="CONTESTED",
+        review_branch=None,
+        acceptance_target=None,
+        log=lambda *_args, **_kwargs: None,
+    )
+    validators_module._validate_governance_contest = hostile_contest
+    try:
+        contest_refusal = validators_module.GovernanceAcceptanceValidator().run(
+            contest_ctx,
+            _invoke_policy=lambda _ctx, _entry, *_args: "CONTEST",
+        )
+    finally:
+        validators_module._validate_governance_contest = original_contest
+
+    assert isinstance(contest_refusal, GateRefusal)
+    assert contest_refusal.problems[0]["reasonCode"] == "EVIDENCE_INSUFFICIENT"
+    assert hostile_contest_called is False
 
 
 def test_scope_containment_validator_contract(store):
@@ -251,3 +349,222 @@ def test_compliance_claim_recovery_fails_closed(store):
     then fails closed."""
     assert sufficiency.recover_compliance_claim(
         store, "assert:does.not.exist") is None
+
+
+# =========================================================================
+# retained decision semantics: hostile post-preflight mutation is inert
+# =========================================================================
+
+def test_review_branch_default_mutation_is_rejected_before_equality_executes(
+        fresh_store):
+    from kernel import validators as validators_module
+    from kernel.runtime_bundle import RuntimeBundleError
+
+    original_defaults = policy.review_branch.__defaults__
+    equality_called = False
+
+    class OneShotAbsent:
+        def __eq__(self, _other):
+            nonlocal equality_called
+            equality_called = True
+            policy.review_branch.__defaults__ = original_defaults
+            return True
+
+    with pytest.raises(RuntimeBundleError, match="rollback-only"):
+        with fresh_store.serialized_tx() as cur:
+            ctx = _ctx(fresh_store, cur, {
+                "commitClass": "GOVERNANCE_DECISION",
+            })
+            policy.review_branch.__defaults__ = (OneShotAbsent(),)
+            try:
+                with pytest.raises(RuntimeBundleError, match="review_branch"):
+                    validators_module._invoke_retained_policy_function(
+                        ctx,
+                        validators_module._RETAINED_POLICY_FUNCTIONS[0],
+                        "REVIEW_ACCEPT",
+                        None,
+                    )
+            finally:
+                policy.review_branch.__defaults__ = original_defaults
+
+    assert equality_called is False
+
+
+def test_store_outer_contract_validation_swap_is_rejected_and_rolls_back(
+        fresh_store):
+    from kernel import context as context_module
+    from kernel.runtime_bundle import RuntimeBundleError
+    from kernel.store import Store
+
+    original = Store._validate_contract
+    original_integrity_marker = Store._mark_transaction_integrity_violation
+    hostile_called = False
+    hostile_integrity_marker_called = False
+    retained_party_id = (
+        f"party:issue171.store-outer-retained.{uuid.uuid4().hex}")
+    hostile_party_id = (
+        f"party:issue171.store-outer-hostile.{uuid.uuid4().hex}")
+
+    def party_payload(party_id: str) -> dict:
+        return {
+            "schemaVersion": "ofarm.party.v0.1",
+            "partyId": party_id,
+            "partyClass": "NATURAL_PERSON",
+            "displayName": "Issue 171 Store dispatch test (fictional)",
+            "partyState": "ACTIVE",
+            "recordedAt": context_module.now_iso(),
+        }
+
+    def hostile_validate(self, payload):
+        nonlocal hostile_called
+        hostile_called = True
+        Store._validate_contract = original
+        return original(self, payload)
+
+    def hostile_integrity_marker(_self):
+        nonlocal hostile_integrity_marker_called
+        hostile_integrity_marker_called = True
+        Store._mark_transaction_integrity_violation = \
+            original_integrity_marker
+
+    with pytest.raises(RuntimeBundleError, match="rollback-only"):
+        with fresh_store.serialized_tx() as cur:
+            fresh_store.insert_record(cur, party_payload(retained_party_id))
+            Store._validate_contract = hostile_validate
+            Store._mark_transaction_integrity_violation = \
+                hostile_integrity_marker
+            try:
+                with pytest.raises(RuntimeBundleError):
+                    fresh_store.insert_record(
+                        cur, party_payload(hostile_party_id))
+                assert hostile_integrity_marker_called is False
+                assert fresh_store._active_transaction_integrity.poisoned is True
+            finally:
+                Store._validate_contract = original
+                Store._mark_transaction_integrity_violation = \
+                    original_integrity_marker
+
+    assert hostile_called is False
+    assert hostile_integrity_marker_called is False
+    assert fresh_store.get_record(retained_party_id) is None
+    assert fresh_store.get_record(hostile_party_id) is None
+
+
+def test_authority_stage_uses_retained_action_map_after_gate_preflight(
+        fresh_store, fresh_pipeline):
+    from kernel import stages as stages_module
+    from kernel.gates import GatePipeline
+    from kernel.stages import AuthorityGate, GatePass
+
+    original = stages_module._COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS
+    hostile_consumed = False
+    selected_actions = []
+    recorded_decisions = []
+
+    class OneShotAuthorityMap(dict):
+        def __getitem__(self, key):
+            nonlocal hostile_consumed
+            hostile_consumed = True
+            stages_module._COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS = original
+            return "OBSERVE_CREATE_OBSERVATION"
+
+    def invoke_context_service(_ctx, _entry, _service, **kwargs):
+        action_class = kwargs["action_class"]
+        selected_actions.append(action_class)
+        return SimpleNamespace(
+            outcome="ALLOW",
+            request_payload={
+                "requestId": "authzreq:stage-retained-map",
+                "actionClass": action_class,
+            },
+            result_payload={
+                "resultId": "authzres:stage-retained-map",
+                "reasonSummary": "retained map test",
+            },
+            trace_payload={"traceId": "authztrace:stage-retained-map"},
+            problems=[],
+        )
+
+    def invoke_decision(_ctx, _entry, *args):
+        return "DENY" if len(args) == 2 else True
+
+    sub = demo.spray_submission(
+        f"issue171-stage-retained-map:{uuid.uuid4().hex}",
+        erp_id=f"erp:issue171.stage-retained-map.{uuid.uuid4().hex}",
+        confirm=False,
+    )
+    with fresh_store.serialized_tx() as cur:
+        GatePipeline._assert_runtime_composition(fresh_pipeline)
+        ctx = _ctx(fresh_store, cur, sub)
+        ctx.authority = object()
+        ctx.record_authority_decision = recorded_decisions.append
+        ctx.log = lambda *_args, **_kwargs: None
+        stage, stage_type, retained_run, _code, _state = \
+            fresh_pipeline._stage_dispatch[0]
+        assert stage_type is AuthorityGate
+
+        hostile = OneShotAuthorityMap(original)
+        stages_module._COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS = hostile
+        try:
+            outcome = retained_run(
+                stage,
+                ctx,
+                _invoke_context_service=invoke_context_service,
+                _invoke_decision=invoke_decision,
+            )
+            assert isinstance(outcome, GatePass)
+            assert selected_actions == ["ASSERT_OPERATION_CLAIM"]
+            assert recorded_decisions == [ctx.authz_decision]
+            assert ctx.authz_decision.request_payload["actionClass"] == \
+                "ASSERT_OPERATION_CLAIM"
+            assert hostile_consumed is False
+            assert stages_module._COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS is hostile
+        finally:
+            stages_module._COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS = original
+
+
+def test_actor_attribution_uses_retained_authority_predicate():
+    from kernel import authority as authority_module
+    from kernel.runtime_bundle import RuntimeBundleError
+    from kernel.store import Store
+    from kernel.validators import ActorAttributionValidator
+
+    original = authority_module.authority_decision_allowed
+    hostile_called = False
+    store = object.__new__(Store)
+    object.__setattr__(store, "_active_transaction_integrity", None)
+    basis = SimpleNamespace(
+        result_payload={"resultId": "authzres:retained-attribution"},
+    )
+    ctx = SimpleNamespace(
+        store=store,
+        sub={"payload": {"actor": {"actorPartyRef": "party:named-actor"}}},
+        acting_party="party:submitter",
+        authority=object(),
+        cur=object(),
+        farm_ref=demo.FARM,
+        review_route_reasons=[],
+        record_authority_decision=lambda _basis: None,
+    )
+
+    def hostile_predicate(_basis):
+        nonlocal hostile_called
+        hostile_called = True
+        authority_module.authority_decision_allowed = original
+        return True
+
+    def invoke_context(_ctx, _entry, _service, **_kwargs):
+        return basis
+
+    authority_module.authority_decision_allowed = hostile_predicate
+    try:
+        with pytest.raises(
+                RuntimeBundleError,
+                match="authority_decision_allowed changed"):
+            ActorAttributionValidator().run(
+                ctx, _invoke_context=invoke_context)
+    finally:
+        authority_module.authority_decision_allowed = original
+
+    assert hostile_called is False
+    assert ctx.review_route_reasons == []

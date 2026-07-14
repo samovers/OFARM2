@@ -9,9 +9,51 @@ first, demanded by the formal hostile re-review).
 from __future__ import annotations
 
 from . import config, policy, profile_policy
+from .callable_state import capture_callable_state, callable_state_matches
 from .context import mint as _mint, now_iso
 from .problems import runtime_problem
+from .runtime_bundle import RuntimeBundleError
+from .store import Store
 
+_COMPLIANCE_ASSERTED_STATUSES = policy.COMPLIANCE_ASSERTED_STATUSES
+_IS_RESOLVED_UCUM_UNIT = policy.is_resolved_ucum_unit
+_IS_RESOLVED_UCUM_UNIT_CODE = policy.is_resolved_ucum_unit.__code__
+_IS_RESOLVED_UCUM_UNIT_STATE = capture_callable_state(
+    _IS_RESOLVED_UCUM_UNIT)
+_NEEDS_EVIDENCE_CODES = policy.NEEDS_EVIDENCE_CODES
+_ROUTE_REASON_TO_INSUFFICIENCY = policy.ROUTE_REASON_TO_INSUFFICIENCY
+_ROUTE_REASON_INSUFFICIENCY_DEFAULT = \
+    policy.ROUTE_REASON_INSUFFICIENCY_DEFAULT
+
+
+def _invoke_retained_unit_policy(
+        store, unit_ref,
+        _policy_module=policy,
+        _function=_IS_RESOLVED_UCUM_UNIT,
+        _code=_IS_RESOLVED_UCUM_UNIT_CODE,
+        _state=_IS_RESOLVED_UCUM_UNIT_STATE,
+        _state_matches=callable_state_matches,
+        _mark_integrity=Store._mark_transaction_integrity_violation,
+        _store_type=Store,
+        _runtime_bundle_error=RuntimeBundleError,
+):
+    def require() -> None:
+        if (vars(_policy_module).get("is_resolved_ucum_unit") is not _function
+                or _function.__code__ is not _code
+                or not _state_matches(_function, _state)):
+            if type(store) is _store_type:
+                _mark_integrity(store)
+            raise _runtime_bundle_error(
+                "retained sufficiency unit policy function changed")
+
+    require()
+    try:
+        result = _function(unit_ref)
+    except BaseException:
+        require()
+        raise
+    require()
+    return result
 
 BINDING_KIND = "ofarm.agronomicidentitybinding.v0.1"
 OPERATION_FLOOR_CHECKS = frozenset({
@@ -24,18 +66,24 @@ OPERATION_FLOOR_CHECKS = frozenset({
 })
 
 
-def durable_evidence(store, refs: list[str]) -> list[str]:
+def durable_evidence(
+        store, refs: list[str],
+        _record_kind="ofarm.evidencerecord.v0.1",
+) -> list[str]:
     """Refs that resolve to actual EvidenceRecords — the durable proof
     bundle. A ref to some other record is not evidence of execution."""
     out = []
     for ref in refs or []:
         rec = store.get_record(ref)
-        if rec and rec["record_kind"] == "ofarm.evidencerecord.v0.1":
+        if rec and rec["record_kind"] == _record_kind:
             out.append(ref)
     return out
 
 
-def resolved_bindings(store, refs: list[str]) -> list[dict]:
+def resolved_bindings(
+        store, refs: list[str],
+        _binding_kind=BINDING_KIND,
+) -> list[dict]:
     """Payloads of refs that resolve to actual AgronomicIdentityBinding
     records. A ref to any other kind is NOT a binding (wrong-kind refs are
     refused at validation); kind-filtering here keeps every downstream
@@ -44,12 +92,15 @@ def resolved_bindings(store, refs: list[str]) -> list[dict]:
     out = []
     for ref in refs or []:
         row = store.get_record(ref)
-        if row and row["record_kind"] == BINDING_KIND:
+        if row and row["record_kind"] == _binding_kind:
             out.append(row["payload"])
     return out
 
 
-def recover_compliance_claim(store, assertion_id: str) -> dict | None:
+def recover_compliance_claim(
+        store, assertion_id: str,
+        _schema_version="ofarm.complianceclaim.v0.1",
+) -> dict | None:
     """The structured claim captured verbatim with the original event, as a
     durable ComplianceClaim record reached via the COMPLIANCE_CLAIM edge
     (steward review of PR #4 finding 3 — references are edges, never a
@@ -59,7 +110,7 @@ def recover_compliance_claim(store, assertion_id: str) -> dict | None:
                                            "COMPLIANCE_CLAIM"):
             payload = store.get_payload(claim_edge["dst_record_id"])
             if payload and payload.get(
-                    "schemaVersion") == "ofarm.complianceclaim.v0.1":
+                    "schemaVersion") == _schema_version:
                 return payload
     return None
 
@@ -80,10 +131,21 @@ def build_case_from_checks(store, farm_ref, assertion_id, erp_id,
                            checks, hard, soft, evidence_refs, *,
                            policy_ref: str,
                            claim_statement: str | None = None,
-                           display: dict | None = None) -> tuple[dict, list[dict]]:
+                           display: dict | None = None,
+                           _durable_evidence=durable_evidence,
+                           _floor_rule_ref=profile_policy.floor_item_rule_ref,
+                           _floor_insufficiency_reason_code=
+                           profile_policy.floor_item_insufficiency_reason_code,
+                           _floor_review_reason_code=
+                           profile_policy.floor_item_review_reason_code,
+                           _format_display_template=
+                           profile_policy.format_display_template,
+                           _runtime_problem=runtime_problem,
+                           _mint_id=_mint,
+                           _now=now_iso) -> tuple[dict, list[dict]]:
     arguments = []
     for name, ok in checks.items():
-        rule_ref = (profile_policy.floor_item_rule_ref(display, name)
+        rule_ref = (_floor_rule_ref(display, name)
                     if display else f"rule:si.ffs.floor.{name}")
         arguments.append({
             "argumentId": f"arg:{assertion_id.split(':')[-1]}:{name}",
@@ -95,19 +157,19 @@ def build_case_from_checks(store, farm_ref, assertion_id, erp_id,
         })
     hard_missing = [n for n in hard if not checks[n]]
     soft_missing = [n for n in soft if not checks[n]]
-    durable = durable_evidence(store, evidence_refs)
+    durable = _durable_evidence(store, evidence_refs)
     if hard_missing or not durable:
         decision = "REFUSE"
         missing = hard_missing or [
             display["durableProofBundleLabel"] if display else "durable proof bundle"]
-        rationale = (profile_policy.format_display_template(
+        rationale = (_format_display_template(
             display, "hardMissingRationaleTemplate", missing=missing)
             if display else
             f"evidence floor unmet: missing {missing}; the claim lacks the required "
             "durable proof for governed promotion")
     elif soft_missing:
         decision = "REQUIRE_REVIEW"
-        rationale = (profile_policy.format_display_template(
+        rationale = (_format_display_template(
             display, "softMissingRationaleTemplate", missing=soft_missing)
             if display else f"floor items need review: {soft_missing}")
     else:
@@ -117,8 +179,8 @@ def build_case_from_checks(store, farm_ref, assertion_id, erp_id,
 
     case = {
         "schemaVersion": "ofarm.evidencesufficiencycase.v0.2",
-        "sufficiencyCaseId": _mint("suffcase"),
-        "generatedAt": now_iso(),
+        "sufficiencyCaseId": _mint_id("suffcase"),
+        "generatedAt": _now(),
         "caseClass": "COMPLIANCE_ASSERTION",
         "targetTwin": "COMPLIANCE",
         "anchorScopes": [{"scopeType": "FARM", "scopeRef": farm_ref}],
@@ -155,7 +217,7 @@ def build_case_from_checks(store, farm_ref, assertion_id, erp_id,
             insufficiency_codes.append("MISSING_PROVENANCE_LINK")
         if display:
             for name in soft_missing:
-                code = profile_policy.floor_item_insufficiency_reason_code(display, name)
+                code = _floor_insufficiency_reason_code(display, name)
                 if code and code not in insufficiency_codes:
                     insufficiency_codes.append(code)
         elif "product-binding" in soft_missing:
@@ -170,29 +232,13 @@ def build_case_from_checks(store, farm_ref, assertion_id, erp_id,
         if display:
             for name in soft_missing:
                 reason_code = (
-                    profile_policy.floor_item_review_reason_code(display, name)
+                    _floor_review_reason_code(display, name)
                     or reason_code)
                 if reason_code != "IDENTITY_UNRESOLVED":
                     break
-        failures = [runtime_problem(
+        failures = [_runtime_problem(
             reason_code, "Floor item requires review", rationale, severity="WARNING")]
     return case, failures
-
-
-def build_floor_case(store, sub, commit_class, farm_ref, assertion_id,
-                     erp_id) -> tuple[dict, list[dict]]:
-    """Floor case for an OPERATION_CLAIM or COMPLIANCE_ASSERTION commit."""
-    evidence_policy = profile_policy.load_evidence_review_policy(
-        supported_checks=OPERATION_FLOOR_CHECKS if commit_class == "OPERATION_CLAIM"
-        else None)
-    return build_floor_case_with_policy(
-        store, sub, commit_class, farm_ref, assertion_id, erp_id,
-        evidence_policy=evidence_policy,
-        policy_ref=config.EVIDENCE_POLICY_REF,
-        recognized_rule_refs={
-            config.EVIDENCE_POLICY_REF, config.PROFILE_REF,
-            config.PACK_REF, config.CODE_BINDING_PROFILE_REF,
-        })
 
 
 def build_floor_case_with_policy(
@@ -206,6 +252,11 @@ def build_floor_case_with_policy(
     evidence_policy,
     policy_ref,
     recognized_rule_refs=None,
+    _invoke_unit_policy=_invoke_retained_unit_policy,
+    _durable_evidence=durable_evidence,
+    _resolved_bindings=resolved_bindings,
+    _build_case=build_case_from_checks,
+    _asserted_statuses=_COMPLIANCE_ASSERTED_STATUSES,
 ) -> tuple[dict, list[dict]]:
     """Floor case using an explicit evidence-review policy document."""
     payload = sub.get("payload") or {}
@@ -221,22 +272,23 @@ def build_floor_case_with_policy(
             "claim-statement": bool(isinstance(claim.get("statement"), str)
                                     and claim.get("statement", "").strip()),
             "asserted-status": claim.get("assertedStatus")
-                               in policy.COMPLIANCE_ASSERTED_STATUSES,
+                               in _asserted_statuses,
             "governing-rules": bool(claim.get("governingRuleRefs")) and all(
                 r in recognized or store.record_exists(r)
                 for r in claim.get("governingRuleRefs", [])),
             "subject-resolves": bool(claim.get("subjectScopeRef"))
                 and store.record_exists(claim.get("subjectScopeRef", "")),
-            "evidence-bundle": bool(durable_evidence(store, evidence_refs)),
+            "evidence-bundle": bool(_durable_evidence(store, evidence_refs)),
         }
-        return build_case_from_checks(
+        return _build_case(
             store, farm_ref, assertion_id, erp_id, checks, tuple(checks),
             (), evidence_refs, policy_ref=policy_ref,
             claim_statement=claim.get("statement")
             or "compliance assertion (no statement supplied)")
 
     # OPERATION_CLAIM: the SI floor (policy.OPERATION_FLOOR_*)
-    bindings = resolved_bindings(store, payload.get("agronomicIdentityBindingRefs", []))
+    bindings = _resolved_bindings(
+        store, payload.get("agronomicIdentityBindingRefs", []))
     checks = {
         "product-binding": any(
             b.get("bindingRole") == "CROP_PROTECTION_PRODUCT"
@@ -244,7 +296,7 @@ def build_floor_case_with_policy(
             and b.get("referenceSnapshotRefs") for b in bindings),
         "dose-unit": any(
             p["parameterRole"] in ("DOSE", "RATE")
-            and policy.is_resolved_ucum_unit(p.get("unitRef"))
+            and _invoke_unit_policy(store, p.get("unitRef"))
             for p in payload.get("actualQuantityParameters", [])),
         "parcel": payload.get("executionExtent", {}).get("targetScope", {})
                         .get("scopeType") in ("FIELD", "ZONE"),
@@ -264,30 +316,40 @@ def build_floor_case_with_policy(
         tuple(floor["softItems"]),
         evidence_policy["display"],
     )
-    return build_case_from_checks(
+    return _build_case(
         store, farm_ref, assertion_id, erp_id, checks, hard, soft, evidence_refs,
         policy_ref=policy_ref, display=display)
 
 
-def operation_advisories(store, sub) -> list[dict]:
-    """Non-blocking advisory-twin warnings for an OPERATION_CLAIM (M2 P5),
-    computed from the active profile's advisory rules (policy:si.ffs.evidence-
-    review.v0_1 'advisories'): authorisation-mismatch (a resolved product binding
-    that maps non-EXACTly) and dose-range (a DOSE/RATE value outside the advisory
-    plausibility range). These are surfaced as WARNING-severity problems on the
-    commit result — visible, NEVER blocking, never routed to review, never a
-    compliance fact and never an accepted consequence (PROFILE.md 'Advisory rule';
-    Kernel rule 4). Reason codes reuse the closest registry family pending a
-    dedicated advisory family (ERRATA E-006); the advisory posture is in the title
-    and detail. Returns [] on a malformed policy (the floor path fails closed)."""
-    try:
-        evidence_policy = profile_policy.load_evidence_review_policy()
-    except profile_policy.ProfilePolicyError:
-        return []
-    return operation_advisories_with_policy(store, sub, evidence_policy)
+def build_floor_case(
+        store, sub, commit_class, farm_ref, assertion_id, erp_id,
+        _build_with_policy=build_floor_case_with_policy,
+        _load_policy=profile_policy.load_evidence_review_policy,
+        _operation_floor_checks=OPERATION_FLOOR_CHECKS,
+        _evidence_policy_ref=config.EVIDENCE_POLICY_REF,
+        _profile_ref=config.PROFILE_REF,
+        _pack_ref=config.PACK_REF,
+        _code_binding_profile_ref=config.CODE_BINDING_PROFILE_REF,
+) -> tuple[dict, list[dict]]:
+    """Floor case for an OPERATION_CLAIM or COMPLIANCE_ASSERTION commit."""
+    evidence_policy = _load_policy(
+        supported_checks=_operation_floor_checks
+        if commit_class == "OPERATION_CLAIM" else None)
+    return _build_with_policy(
+        store, sub, commit_class, farm_ref, assertion_id, erp_id,
+        evidence_policy=evidence_policy,
+        policy_ref=_evidence_policy_ref,
+        recognized_rule_refs={
+            _evidence_policy_ref, _profile_ref,
+            _pack_ref, _code_binding_profile_ref,
+        })
 
 
-def operation_advisories_with_policy(store, sub, evidence_policy) -> list[dict]:
+def operation_advisories_with_policy(
+        store, sub, evidence_policy,
+        _resolved_bindings=resolved_bindings,
+        _runtime_problem=runtime_problem,
+) -> list[dict]:
     """Non-blocking advisory warnings using an explicit evidence-review policy."""
     rules = evidence_policy.get("advisories", {}) if isinstance(evidence_policy, dict) else {}
     payload = sub.get("payload") or {}
@@ -295,7 +357,8 @@ def operation_advisories_with_policy(store, sub, evidence_policy) -> list[dict]:
 
     auth = rules.get("authorisationMismatch", {})
     if auth.get("enabled") and auth.get("exactMappingRequired"):
-        for b in resolved_bindings(store, payload.get("agronomicIdentityBindingRefs", [])):
+        for b in _resolved_bindings(
+                store, payload.get("agronomicIdentityBindingRefs", [])):
             mapping = b.get("bindingValue", {}).get("mappingRelation")
             # only a RESOLVED (VERIFIED) product binding that maps non-EXACTly: an
             # unresolved/unverified binding is already a soft-floor route to the
@@ -305,7 +368,7 @@ def operation_advisories_with_policy(store, sub, evidence_policy) -> list[dict]:
                     and b.get("referenceSnapshotRefs")
                     and mapping not in (None, "EXACT")):
                 bid = b.get("agronomicIdentityBindingId", "?")
-                out.append(runtime_problem(
+                out.append(_runtime_problem(
                     "PRODUCT_BINDING_UNRESOLVED", "Authorisation-mismatch advisory",
                     f"ADVISORY (non-blocking): product binding {bid} resolves with a non-exact "
                     f"mapping ({mapping}); the recorded product may not exactly "
@@ -327,7 +390,7 @@ def operation_advisories_with_policy(store, sub, evidence_policy) -> list[dict]:
             if isinstance(v, bool) or not isinstance(v, (int, float)):
                 continue
             if (lo is not None and v < lo) or (hi is not None and v > hi):
-                out.append(runtime_problem(
+                out.append(_runtime_problem(
                     "EVIDENCE_INSUFFICIENT", "Dose-range advisory",
                     f"ADVISORY (non-blocking): dose {v} {p.get('unitRef', '')} is outside the "
                     f"advisory plausibility range [{lo}, {hi}]. The operation outcome is "
@@ -339,6 +402,29 @@ def operation_advisories_with_policy(store, sub, evidence_policy) -> list[dict]:
     return out
 
 
+def operation_advisories(
+        store, sub,
+        _with_policy=operation_advisories_with_policy,
+        _load_policy=profile_policy.load_evidence_review_policy,
+        _policy_error=profile_policy.ProfilePolicyError,
+) -> list[dict]:
+    """Non-blocking advisory-twin warnings for an OPERATION_CLAIM (M2 P5),
+    computed from the active profile's advisory rules (policy:si.ffs.evidence-
+    review.v0_1 'advisories'): authorisation-mismatch (a resolved product binding
+    that maps non-EXACTly) and dose-range (a DOSE/RATE value outside the advisory
+    plausibility range). These are surfaced as WARNING-severity problems on the
+    commit result — visible, NEVER blocking, never routed to review, never a
+    compliance fact and never an accepted consequence (PROFILE.md 'Advisory rule';
+    Kernel rule 4). Reason codes reuse the closest registry family pending a
+    dedicated advisory family (ERRATA E-006); the advisory posture is in the title
+    and detail. Returns [] on a malformed policy (the floor path fails closed)."""
+    try:
+        evidence_policy = _load_policy()
+    except _policy_error:
+        return []
+    return _with_policy(store, sub, evidence_policy)
+
+
 def build_acceptance_case(
     store,
     sub,
@@ -346,6 +432,12 @@ def build_acceptance_case(
     target,
     *,
     policy_ref: str = config.EVIDENCE_POLICY_REF,
+    _durable_evidence=durable_evidence,
+    _route_reasons_for=route_reasons_for,
+    _recover_compliance_claim=recover_compliance_claim,
+    _build_case=build_case_from_checks,
+    _needs_evidence_codes=_NEEDS_EVIDENCE_CODES,
+    _asserted_statuses=_COMPLIANCE_ASSERTED_STATUSES,
 ) -> dict:
     """Case for a queue acceptance: evaluates the TARGET assertion's durable
     evidence (and, for compliance claims, the claim captured with its event)
@@ -353,11 +445,13 @@ def build_acceptance_case(
     is a governed resolution, never a thin 'approve anyway'."""
     target_id = target["assertionRecordId"]
     evidence_refs = target.get("evidenceRefs", [])
-    checks = {"durable-evidence": bool(durable_evidence(store, evidence_refs))}
-    route_reasons = route_reasons_for(store, target_id)
+    checks = {"durable-evidence": bool(
+        _durable_evidence(store, evidence_refs))}
+    route_reasons = _route_reasons_for(store, target_id)
     needs_new_evidence = [r for r in route_reasons
-                          if r.get("reasonCode") in policy.NEEDS_EVIDENCE_CODES]
-    review_evidence = durable_evidence(store, sub.get("reviewEvidenceRefs") or [])
+                          if r.get("reasonCode") in _needs_evidence_codes]
+    review_evidence = _durable_evidence(
+        store, sub.get("reviewEvidenceRefs") or [])
     # routed insufficiencies are resolved by NEW reviewer-attached durable
     # evidence; the distinct review act itself resolves only the routing
     # reasons that demanded a distinct human
@@ -365,23 +459,27 @@ def build_acceptance_case(
                                         or bool(review_evidence))
     claim_statement = None
     if target["assertionType"] == "COMPLIANCE_ASSERTION":
-        claim = recover_compliance_claim(store, target_id)
+        claim = _recover_compliance_claim(store, target_id)
         checks["claim-recoverable"] = claim is not None
         checks["claim-statement"] = bool(
             claim and isinstance(claim.get("statement"), str)
             and claim["statement"].strip())
         checks["asserted-status"] = bool(claim) and claim.get("assertedStatus") \
-            in policy.COMPLIANCE_ASSERTED_STATUSES
+            in _asserted_statuses
         claim_statement = (claim or {}).get("statement")
     erp_ref = (target.get("executionRecordPayloadRefs") or [None])[0]
-    case, _ = build_case_from_checks(
+    case, _ = _build_case(
         store, farm_ref, target_id, erp_ref, checks, tuple(checks), (),
         evidence_refs, policy_ref=policy_ref,
         claim_statement=claim_statement)
     return case
 
 
-def amend_case_for_routing(case: dict, route_reasons: list[dict]) -> dict:
+def amend_case_for_routing(
+        case: dict, route_reasons: list[dict],
+        _reason_map=_ROUTE_REASON_TO_INSUFFICIENCY,
+        _default_reason=_ROUTE_REASON_INSUFFICIENCY_DEFAULT,
+) -> dict:
     """The stored case must explain the review routing coherently — never
     assert 'all floor items satisfied' while routing to the queue."""
     case["outcome"] = {
@@ -390,8 +488,7 @@ def amend_case_for_routing(case: dict, route_reasons: list[dict]) -> dict:
             p["title"] for p in route_reasons),
         "attestationAllowed": False,
         "insufficiencyReasonCodes": sorted({
-            policy.ROUTE_REASON_TO_INSUFFICIENCY.get(
-                p["reasonCode"], policy.ROUTE_REASON_INSUFFICIENCY_DEFAULT)
+            _reason_map.get(p["reasonCode"], _default_reason)
             for p in route_reasons}),
     }
     case["evidenceBundles"][0]["bundleStatus"] = "PARTIAL"

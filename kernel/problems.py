@@ -11,7 +11,7 @@ from __future__ import annotations
 import itertools
 
 # Registry codes this runtime may emit (verbatim from the RFC).
-REGISTERED_REASON_CODES = {
+REGISTERED_REASON_CODES = frozenset({
     # authority
     "AUTHORITY_DENIED",
     "HUMAN_APPROVAL_REQUIRED",
@@ -50,7 +50,7 @@ REGISTERED_REASON_CODES = {
     # import / source fidelity (M2 G2 governed import mechanism)
     "SOURCE_FIDELITY_LOSS",
     "DUPLICATE_IMPORT_AMBIGUOUS",
-}
+})
 
 _counter = itertools.count(1)
 

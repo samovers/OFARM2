@@ -11,11 +11,13 @@ reference/ and DECISIONS.md.
 """
 from __future__ import annotations
 
+from types import MappingProxyType
+
 # ---------------------------------------------------------------------------
 # commit-class vocabulary bindings
 # ---------------------------------------------------------------------------
 
-COMMIT_CLASS_TO_FAMILY = {
+COMMIT_CLASS_TO_FAMILY = MappingProxyType({
     "NOTE": "ObservationEvent",
     "OBSERVATION_ASSERTION": "ObservationEvent",
     "HYPOTHESIS_ASSERTION": "ObservationEvent",
@@ -25,7 +27,7 @@ COMMIT_CLASS_TO_FAMILY = {
     "COMPLIANCE_ASSERTION": "GovernanceEvent",
     "GOVERNANCE_DECISION": "GovernanceEvent",
     "ADVISORY_OUTPUT": "GovernanceEvent",
-}
+})
 
 # commitClass is ingress vocabulary; authority is evaluated in the accepted
 # Authority Action Matrix vocabulary (reference/rfcs/OFARM_Authority_Action_
@@ -33,7 +35,7 @@ COMMIT_CLASS_TO_FAMILY = {
 # accepted names, never a parallel runtime dialect. ADVISORY_OUTPUT maps to
 # the observe/report capture class: the matrix defines no advisory-output
 # action, and advisory outputs never promote (least-authority fit).
-COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS = {
+COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS = MappingProxyType({
     "NOTE": "OBSERVE_CREATE_OBSERVATION",
     "OBSERVATION_ASSERTION": "OBSERVE_CREATE_OBSERVATION",
     "HYPOTHESIS_ASSERTION": "OBSERVE_CREATE_OBSERVATION",
@@ -46,39 +48,39 @@ COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS = {
     # entry is the table-closure default + manifest/grounding anchor for the class.
     "GOVERNANCE_DECISION": "REVIEW_ACCEPT",
     "ADVISORY_OUTPUT": "OBSERVE_CREATE_OBSERVATION",
-}
+})
 
-COMMIT_CLASS_TO_ASSERTION_TYPE = {
+COMMIT_CLASS_TO_ASSERTION_TYPE = MappingProxyType({
     "OBSERVATION_ASSERTION": "OBSERVATION_ASSERTION",
     "STRUCTURE_ASSERTION": "STRUCTURE_ASSERTION",
     "OPERATION_CLAIM": "OPERATION_CLAIM_ASSERTION",
     "COMPLIANCE_ASSERTION": "COMPLIANCE_ASSERTION",
-}
+})
 
-COMMIT_CLASS_TO_PROMOTION_TARGET = {
+COMMIT_CLASS_TO_PROMOTION_TARGET = MappingProxyType({
     "OPERATION_CLAIM": "ACCEPTED_EXECUTED_INTERVENTION_CONSEQUENCE",
     "STRUCTURE_ASSERTION": "ACCEPTED_STRUCTURAL_STATE",
     "OBSERVATION_ASSERTION": "ACCEPTED_OBSERVATION_OCCURRENCE_STATE",
     "COMPLIANCE_ASSERTION": "COMPLIANCE_FACT",
-}
+})
 
-PROMOTION_TARGET_TO_CONSEQUENCE_TYPE = {
+PROMOTION_TARGET_TO_CONSEQUENCE_TYPE = MappingProxyType({
     "ACCEPTED_EXECUTED_INTERVENTION_CONSEQUENCE": "EXECUTION_CONFIRMED",
     "ACCEPTED_STRUCTURAL_STATE": "STATE_CHANGE_ACCEPTED",
     "ACCEPTED_OBSERVATION_OCCURRENCE_STATE": "STATE_CHANGE_ACCEPTED",
     "COMPLIANCE_FACT": "COMPLIANCE_STATUS_ACCEPTED",
-}
+})
 
 # what a queued assertion promotes to when a reviewer accepts it via a
 # GOVERNANCE_DECISION commit (the reviewer's own governed act)
-ACCEPTANCE_BY_ASSERTION_TYPE = {
+ACCEPTANCE_BY_ASSERTION_TYPE = MappingProxyType({
     "OPERATION_CLAIM_ASSERTION": ("ACCEPTED_EXECUTED_INTERVENTION_CONSEQUENCE",
                                   "EXECUTION_CONFIRMED"),
     "COMPLIANCE_ASSERTION": ("COMPLIANCE_FACT", "COMPLIANCE_STATUS_ACCEPTED"),
     "STRUCTURE_ASSERTION": ("ACCEPTED_STRUCTURAL_STATE", "STATE_CHANGE_ACCEPTED"),
     "OBSERVATION_ASSERTION": ("ACCEPTED_OBSERVATION_OCCURRENCE_STATE",
                               "STATE_CHANGE_ACCEPTED"),
-}
+})
 
 # action classes the runtime evaluates OUTSIDE the commit-class map:
 # review acceptance, publication approval/filing, and read access. One
@@ -100,10 +102,10 @@ NON_COMMIT_ACTION_CLASSES = frozenset({
 # the other). An unrecognized verb maps to no action and the AuthorityGate
 # default-denies (Kernel rule 2). REVIEW_SUPERSEDE / REVIEW_REQUEST are not wired
 # in G5 and so are absent here (they refuse the same way).
-REVIEW_ACTION_AUTHORITY = {
+REVIEW_ACTION_AUTHORITY = MappingProxyType({
     "REVIEW_ACCEPT": "REVIEW_ACCEPT",
     "REVIEW_REJECT_OR_CONTEST": "REVIEW_REJECT_OR_CONTEST",
-}
+})
 
 
 class _Absent:
@@ -118,7 +120,9 @@ class _Absent:
 ABSENT = _Absent()
 
 
-def review_branch(review_action, decision_outcome) -> str | None:
+def review_branch(
+        review_action, decision_outcome, _absent=ABSENT,
+) -> str | None:
     """The emission branch for a normalized review-decision pair, or None to
     refuse FAIL-CLOSED (docs/REVIEW_DISPUTE_SEMANTICS.md §3.1). Returns 'ACCEPT'
     or 'REJECT'. There is NO truthiness default: an *absent* field arrives as the
@@ -130,7 +134,7 @@ def review_branch(review_action, decision_outcome) -> str | None:
     / false / number / list / unsupported string refuse. REVIEW_REJECT_OR_CONTEST
     splits on the outcome: 'REJECTED' -> 'REJECT' (G5-2), 'CONTESTED' -> 'CONTEST'
     (G5-4)."""
-    if review_action == "REVIEW_ACCEPT" and decision_outcome in (ABSENT, "ACCEPTED"):
+    if review_action == "REVIEW_ACCEPT" and decision_outcome in (_absent, "ACCEPTED"):
         return "ACCEPT"
     if review_action == "REVIEW_REJECT_OR_CONTEST" and decision_outcome == "REJECTED":
         return "REJECT"
@@ -155,13 +159,13 @@ CONSEQUENCE_SUBJECT_TYPES = frozenset({
 # mapped type, and the identity registry materializes the current payload per
 # identity. Adding an identity type here is the ONLY change needed to support
 # committing it — the gate chain stays generic (no per-type branches).
-STRUCTURE_PAYLOAD_IDENTITY_TYPE = {
+STRUCTURE_PAYLOAD_IDENTITY_TYPE = MappingProxyType({
     "ofarm.farmidentitypayload.v0.1": "FARM",
     "ofarm.fieldidentitypayload.v0.1": "FIELD",
     "ofarm.cropcycleidentitypayload.v0.1": "CROP_CYCLE",
     "ofarm.equipmentidentitypayload.v0.1": "EQUIPMENT",
     "ofarm.appliedresourceidentitypayload.v0.1": "APPLIED_RESOURCE",
-}
+})
 
 # Payload-internal references the structure semantic validator governs (D17):
 # because a structure assertion's subject is always the farm, the payload's own
@@ -171,34 +175,37 @@ STRUCTURE_PAYLOAD_IDENTITY_TYPE = {
 #   PARENT_FARM   -> must be the authorized farm itself
 #   PARENT_SCOPE  -> must resolve to a farm-contained IdentityRecord
 #   PARTY/EVIDENCE/BINDING/REFERENCE_SNAPSHOT -> must resolve to that kind
-STRUCTURE_PAYLOAD_REF_FIELDS = {
-    "ofarm.farmidentitypayload.v0.1": [
-        ("operatorPartyRef", "PARTY", False)],
-    "ofarm.fieldidentitypayload.v0.1": [
+STRUCTURE_PAYLOAD_REF_FIELDS = MappingProxyType({
+    "ofarm.farmidentitypayload.v0.1": (
+        ("operatorPartyRef", "PARTY", False),),
+    "ofarm.fieldidentitypayload.v0.1": (
         ("parentFarmIdentityRef", "PARENT_FARM", False),
-        ("geometryEvidenceRef", "EVIDENCE", False)],
-    "ofarm.cropcycleidentitypayload.v0.1": [
+        ("geometryEvidenceRef", "EVIDENCE", False),),
+    "ofarm.cropcycleidentitypayload.v0.1": (
         ("parentScopeRefs", "PARENT_SCOPE", True),
-        ("cropBindingRefs", "BINDING", True)],
-    "ofarm.equipmentidentitypayload.v0.1": [
+        ("cropBindingRefs", "BINDING", True),),
+    "ofarm.equipmentidentitypayload.v0.1": (
         ("ownerPartyRef", "PARTY", False),
         ("inspectionEvidenceRefs", "EVIDENCE", True),
-        ("identityBindingRefs", "BINDING", True)],
-    "ofarm.appliedresourceidentitypayload.v0.1": [
+        ("identityBindingRefs", "BINDING", True),),
+    "ofarm.appliedresourceidentitypayload.v0.1": (
         ("identityBindingRefs", "BINDING", True),
-        ("referenceSnapshotRefs", "REFERENCE_SNAPSHOT", True)],
-}
+        ("referenceSnapshotRefs", "REFERENCE_SNAPSHOT", True),),
+})
 
 # ref category -> the record kind a resolvable ref of that category must be
-STRUCTURE_REF_CATEGORY_KIND = {
+STRUCTURE_REF_CATEGORY_KIND = MappingProxyType({
     "PARTY": "ofarm.party.v0.1",
     "EVIDENCE": "ofarm.evidencerecord.v0.1",
     "BINDING": "ofarm.agronomicidentitybinding.v0.1",
     "REFERENCE_SNAPSHOT": "ofarm.referencesnapshot.v0.1",
-}
+})
 
 
-def structure_self_acceptable(payload_kind: str) -> bool:
+def structure_self_acceptable(
+        payload_kind: str,
+        _identity_types=STRUCTURE_PAYLOAD_IDENTITY_TYPE,
+) -> bool:
     """D17 (bounded self-acceptance): a STRUCTURE_ASSERTION may take the
     self-review (confirm-accept) promotion path ONLY when it carries one of the
     recognized G1 farm-owned identity payloads. Anything else (a future
@@ -207,7 +214,7 @@ def structure_self_acceptable(payload_kind: str) -> bool:
     ASSERT_STRUCTURE + REVIEW_ACCEPT authority, the semantic validation, and the
     explicit-supersession rule (D18) are enforced by the gates; this function is
     the named bounded-class gate the review stage consults."""
-    return payload_kind in STRUCTURE_PAYLOAD_IDENTITY_TYPE
+    return payload_kind in _identity_types
 
 # scope types that are never commitable claim targets on the farm-anchored
 # commit path (hostile review: no tenant/deployment escape hatch)
@@ -256,11 +263,11 @@ EXTENT_CARRIER_DRIVEN_PROMOTIONS = frozenset({
 
 # why a non-promoting commit class retains its draft at REVIEW_PROMOTION —
 # wording pinned by the inherited gate-sequencing fixtures
-NON_PROMOTING_RETAIN_REASONS = {
+NON_PROMOTING_RETAIN_REASONS = MappingProxyType({
     "NOTE": "No declared safe promotion path exists from note to compliance fact.",
     "ADVISORY_OUTPUT": "Advisory output may raise review attention but may not "
                        "directly create a compliance fact.",
-}
+})
 NON_PROMOTING_DEFAULT_REASON = "this commit class has no promotion path"
 
 # ---------------------------------------------------------------------------
@@ -278,14 +285,16 @@ DOSE_SANITY_MAX = 10000.0
 UCUM_SCHEME_PREFIX = "scheme:ucum:"
 
 
-def is_resolved_ucum_unit(unit_ref: str | None) -> bool:
+def is_resolved_ucum_unit(
+        unit_ref: str | None, _prefix=UCUM_SCHEME_PREFIX,
+) -> bool:
     """True only for a well-formed scheme:ucum:<code> reference with a
     non-empty code. (Code-level validation against a profile-pinned UCUM
     allow-list is a further hardening; this closes the bare/empty/substring
     holes that let a meaningless unit promote.)"""
-    if not unit_ref or not unit_ref.startswith(UCUM_SCHEME_PREFIX):
+    if not unit_ref or not unit_ref.startswith(_prefix):
         return False
-    return bool(unit_ref[len(UCUM_SCHEME_PREFIX):].strip())
+    return bool(unit_ref[len(_prefix):].strip())
 
 # The SI evidence floor (which named checks are hard vs soft) MOVED to package
 # content in M2 P5: it is policy:si.ffs.evidence-review.v0_1, read generically by
@@ -310,13 +319,13 @@ NEEDS_EVIDENCE_CODES = frozenset({
 
 # review-route reason code -> EvidenceSufficiencyCase insufficiency code,
 # so the stored case explains the routing in the case schema's vocabulary
-ROUTE_REASON_TO_INSUFFICIENCY = {
+ROUTE_REASON_TO_INSUFFICIENCY = MappingProxyType({
     "PRODUCT_BINDING_UNRESOLVED": "AMBIGUOUS_PRODUCT_ID",
     "SUPERSEDED_RECORD_USED": "CONFLICTING_EVIDENCE",
     "EVIDENCE_INSUFFICIENT": "TIMESTAMP_INCOMPLETE",
     "IDENTITY_UNRESOLVED": "MISSING_REQUIRED_EVIDENCE",
     "HUMAN_APPROVAL_REQUIRED": "ATTESTATION_AUTHORITY_MISSING",
-}
+})
 ROUTE_REASON_INSUFFICIENCY_DEFAULT = "SOURCE_QUALITY_LOW"
 
 
@@ -335,14 +344,14 @@ def revocation_disposition(commit_class: str, ingress_channel: str) -> str:
 # ---------------------------------------------------------------------------
 
 # draft MaterializationKey useClass -> canonical MaterializationRequest useClass
-USE_CLASS_TO_CANONICAL = {
+USE_CLASS_TO_CANONICAL = MappingProxyType({
     "OPERATIONAL_DASHBOARD": "EXPLORATORY",
     "EXPLORATORY_VIEW": "EXPLORATORY",
     "COMPLIANCE_DECISION_SUPPORT": "HIGH_CONSEQUENCE",
     "ATTESTED_OUTPUT": "ATTESTED_OUTPUT",
     "FORMAL_SUBMISSION": "ATTESTED_OUTPUT",
     "FORENSIC_AUDIT": "AUDIT_EXPLANATION",
-}
+})
 
 # requirement -> freshness states that satisfy it. INVALID never satisfies
 # anything (the MaterializationResult contract forbids satisfied=true on an
@@ -352,11 +361,11 @@ USE_CLASS_TO_CANONICAL = {
 # candidate contracts (defined nowhere in reference/ — ERRATA E-003), and
 # its no-current-state intent is honored at the QueryPlanIR step layer
 # instead (declared in profile_si_ffs/UNSUPPORTED_SURFACES.md).
-FRESHNESS_USE_POLICY = {
+FRESHNESS_USE_POLICY = MappingProxyType({
     "REQUIRE_FRESH": frozenset({"FRESH"}),
     "ALLOW_STALE_EXPLORATORY": frozenset({"FRESH", "STALE"}),
     "NO_CURRENT_STATE_DEPENDENCY": frozenset({"FRESH", "STALE"}),
-}
+})
 
 
 def effective_freshness_requirement(required: str, high_consequence: bool) -> str:
@@ -364,17 +373,22 @@ def effective_freshness_requirement(required: str, high_consequence: bool) -> st
     return "REQUIRE_FRESH" if high_consequence else required
 
 
-def freshness_satisfied(required: str, high_consequence: bool,
-                        freshness_state: str) -> bool:
-    effective = effective_freshness_requirement(required, high_consequence)
-    return freshness_state in FRESHNESS_USE_POLICY.get(effective, frozenset())
+def freshness_satisfied(
+        required: str, high_consequence: bool, freshness_state: str,
+        _effective=effective_freshness_requirement,
+        _policy=FRESHNESS_USE_POLICY,
+) -> bool:
+    effective = _effective(required, high_consequence)
+    return freshness_state in _policy.get(effective, frozenset())
 
 
-def reuse_reason_summary(freshness_state: str, required: str,
-                         high_consequence: bool) -> str:
+def reuse_reason_summary(
+        freshness_state: str, required: str, high_consequence: bool,
+        _effective=effective_freshness_requirement,
+) -> str:
     """The reason never overstates freshness: a stale reuse says so."""
     if freshness_state == "FRESH":
         return "reused FRESH materialization"
-    effective = effective_freshness_requirement(required, high_consequence)
+    effective = _effective(required, high_consequence)
     return (f"reused STALE materialization under {effective}; "
             "high-consequence use barred")

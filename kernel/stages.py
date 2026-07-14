@@ -18,8 +18,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from . import authority as authority_module
 from . import policy, profile_policy, sufficiency
 from .authority import AuthorityEvaluator, authority_decision_allowed
+from .callable_state import capture_callable_state, callable_state_matches
 from .context import ContextAssembler, ContextNotReconstructible, mint, parse_ts
 from .contracts import ContractViolation
 from .emission import PromotionEmitter, ReplayWriter, submission_evidence_refs
@@ -34,6 +36,7 @@ _AUTHORITY_EVALUATE = (
     "evaluate",
     AuthorityEvaluator.evaluate,
     AuthorityEvaluator.evaluate.__code__,
+    capture_callable_state(AuthorityEvaluator.evaluate),
 )
 _AUTHORITY_DECISION_ALLOWED = authority_decision_allowed
 _AUTHORITY_DECISION_ALLOWED_CODE = authority_decision_allowed.__code__
@@ -42,42 +45,133 @@ _CONTEXT_ASSEMBLE = (
     "assemble",
     ContextAssembler.assemble,
     ContextAssembler.assemble.__code__,
+    capture_callable_state(ContextAssembler.assemble),
 )
 _MATERIALIZER_INVALIDATE_FOR_SOURCES = (
     Materializer,
     "invalidate_for_sources",
     Materializer.invalidate_for_sources,
     Materializer.invalidate_for_sources.__code__,
+    capture_callable_state(Materializer.invalidate_for_sources),
 )
 _MATERIALIZER_RECOMPUTE = (
     Materializer,
     "recompute",
     Materializer.recompute,
     Materializer.recompute.__code__,
+    capture_callable_state(Materializer.recompute),
+)
+_REPLAY_WRITE = (
+    ReplayWriter,
+    "write",
+    ReplayWriter.write,
+    ReplayWriter.write.__code__,
+    capture_callable_state(ReplayWriter.write),
 )
 _RETAINED_CONTEXT_SERVICE_CALLABLES = (
     _AUTHORITY_EVALUATE,
     _CONTEXT_ASSEMBLE,
     _MATERIALIZER_INVALIDATE_FOR_SOURCES,
     _MATERIALIZER_RECOMPUTE,
+    _REPLAY_WRITE,
+)
+
+# Decision policy is selected once with the reviewed stage code.  The tables
+# are deeply immutable; point-of-use code never reloads a public module binding
+# after the transaction preflight.
+_COMMIT_CLASS_TO_FAMILY = policy.COMMIT_CLASS_TO_FAMILY
+_COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS = \
+    policy.COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS
+_COMMIT_CLASS_TO_PROMOTION_TARGET = policy.COMMIT_CLASS_TO_PROMOTION_TARGET
+_REVIEW_ACTION_AUTHORITY = policy.REVIEW_ACTION_AUTHORITY
+_NON_PROMOTING_RETAIN_REASONS = policy.NON_PROMOTING_RETAIN_REASONS
+_NON_PROMOTING_DEFAULT_REASON = policy.NON_PROMOTING_DEFAULT_REASON
+_ABSENT = policy.ABSENT
+_OPERATION_FLOOR_CHECKS = sufficiency.OPERATION_FLOOR_CHECKS
+
+_REVOCATION_DISPOSITION = (
+    policy, "revocation_disposition", policy.revocation_disposition,
+    policy.revocation_disposition.__code__,
+    capture_callable_state(policy.revocation_disposition),
+)
+_AUTHORITY_DECISION_ALLOWED_FUNCTION = (
+    authority_module, "authority_decision_allowed",
+    _AUTHORITY_DECISION_ALLOWED, _AUTHORITY_DECISION_ALLOWED_CODE,
+    capture_callable_state(_AUTHORITY_DECISION_ALLOWED),
+)
+_STRUCTURE_SELF_ACCEPTABLE = (
+    policy, "structure_self_acceptable", policy.structure_self_acceptable,
+    policy.structure_self_acceptable.__code__,
+    capture_callable_state(policy.structure_self_acceptable),
+)
+_BUILD_ACCEPTANCE_CASE = (
+    sufficiency, "build_acceptance_case", sufficiency.build_acceptance_case,
+    sufficiency.build_acceptance_case.__code__,
+    capture_callable_state(sufficiency.build_acceptance_case),
+)
+_BUILD_FLOOR_CASE = (
+    sufficiency, "build_floor_case", sufficiency.build_floor_case,
+    sufficiency.build_floor_case.__code__,
+    capture_callable_state(sufficiency.build_floor_case),
+)
+_BUILD_FLOOR_CASE_WITH_POLICY = (
+    sufficiency, "build_floor_case_with_policy",
+    sufficiency.build_floor_case_with_policy,
+    sufficiency.build_floor_case_with_policy.__code__,
+    capture_callable_state(sufficiency.build_floor_case_with_policy),
+)
+_OPERATION_ADVISORIES = (
+    sufficiency, "operation_advisories", sufficiency.operation_advisories,
+    sufficiency.operation_advisories.__code__,
+    capture_callable_state(sufficiency.operation_advisories),
+)
+_OPERATION_ADVISORIES_WITH_POLICY = (
+    sufficiency, "operation_advisories_with_policy",
+    sufficiency.operation_advisories_with_policy,
+    sufficiency.operation_advisories_with_policy.__code__,
+    capture_callable_state(sufficiency.operation_advisories_with_policy),
+)
+_DURABLE_EVIDENCE = (
+    sufficiency, "durable_evidence", sufficiency.durable_evidence,
+    sufficiency.durable_evidence.__code__,
+    capture_callable_state(sufficiency.durable_evidence),
+)
+_RETAINED_DECISION_FUNCTIONS = (
+    _AUTHORITY_DECISION_ALLOWED_FUNCTION,
+    _REVOCATION_DISPOSITION,
+    _STRUCTURE_SELF_ACCEPTABLE,
+    _BUILD_ACCEPTANCE_CASE,
+    _BUILD_FLOOR_CASE,
+    _BUILD_FLOOR_CASE_WITH_POLICY,
+    _OPERATION_ADVISORIES,
+    _OPERATION_ADVISORIES_WITH_POLICY,
+    _DURABLE_EVIDENCE,
 )
 
 
-def _raise_context_service_dispatch_error(ctx, message: str) -> None:
+def _raise_context_service_dispatch_error(
+        ctx, message: str,
+        _mark_integrity=Store._mark_transaction_integrity_violation,
+) -> None:
     """Poison the active transaction before reporting service-code drift."""
     if type(ctx.store) is Store:
-        Store._mark_transaction_integrity_violation(ctx.store)
+        _mark_integrity(ctx.store)
     raise RuntimeBundleError(message)
 
 
-def _require_retained_context_service(ctx, entry, service) -> None:
+def _require_retained_context_service(
+        ctx, entry, service,
+        _retained=_RETAINED_CONTEXT_SERVICE_CALLABLES,
+        _raise=_raise_context_service_dispatch_error,
+        _state_matches=callable_state_matches,
+) -> None:
     """Require the exact retained service method immediately around a call."""
     if (type(entry) is not tuple
-            or len(entry) != 4
-            or entry not in _RETAINED_CONTEXT_SERVICE_CALLABLES):
-        _raise_context_service_dispatch_error(
+            or len(entry) != 5
+            or entry not in _retained):
+        _raise(
             ctx, "retained context-service dispatch entry is malformed")
-    owner, name, function, code = entry
+    owner, name, function, code, callable_state = entry
     namespace_missing = False
     try:
         namespace = object.__getattribute__(service, "__dict__")
@@ -88,21 +182,58 @@ def _require_retained_context_service(ctx, entry, service) -> None:
             or (not namespace_missing
                 and (type(namespace) is not dict or name in namespace))
             or vars(owner).get(name) is not function
-            or getattr(function, "__code__", None) is not code):
-        _raise_context_service_dispatch_error(
+            or getattr(function, "__code__", None) is not code
+            or not _state_matches(function, callable_state)):
+        _raise(
             ctx, f"retained {owner.__name__}.{name} callable changed")
 
 
-def _invoke_retained_context_service(ctx, entry, service, *args, **kwargs):
+def _invoke_retained_context_service(
+        ctx, entry, service, *args,
+        _require=_require_retained_context_service,
+        **kwargs,
+):
     """Call retained service code with adjacent pre/post integrity checks."""
-    _require_retained_context_service(ctx, entry, service)
+    _require(ctx, entry, service)
     function = entry[2]
     try:
         result = function(service, *args, **kwargs)
     except BaseException:
-        _require_retained_context_service(ctx, entry, service)
+        _require(ctx, entry, service)
         raise
-    _require_retained_context_service(ctx, entry, service)
+    _require(ctx, entry, service)
+    return result
+
+
+def _invoke_retained_decision_function(
+        ctx, entry, *args,
+        _retained=_RETAINED_DECISION_FUNCTIONS,
+        _raise=_raise_context_service_dispatch_error,
+        _state_matches=callable_state_matches,
+        **kwargs,
+):
+    """Invoke retained pure decision code with adjacent integrity checks."""
+    if (type(entry) is not tuple
+            or len(entry) != 5
+            or entry not in _retained):
+        _raise(
+            ctx, "retained decision-function dispatch entry is malformed")
+    module, name, function, code, callable_state = entry
+
+    def require() -> None:
+        if (vars(module).get(name) is not function
+                or getattr(function, "__code__", None) is not code
+                or not _state_matches(function, callable_state)):
+            _raise(
+                ctx, f"retained decision function {name} changed")
+
+    require()
+    try:
+        result = function(*args, **kwargs)
+    except BaseException:
+        require()
+        raise
+    require()
     return result
 
 
@@ -230,15 +361,23 @@ class IngressNormalizer:
     replays. Capture is not commitment (Kernel rule 3): this is where a
     device draft becomes a governed submission."""
 
-    def run(self, ctx: GateContext) -> GatePass | GateReplay:
+    def run(
+            self, ctx: GateContext,
+            _commit_class_to_family=_COMMIT_CLASS_TO_FAMILY,
+            _absent=_ABSENT,
+            _invoke_context_service=_invoke_retained_context_service,
+            _replay_write=_REPLAY_WRITE,
+            _replay_writer_type=ReplayWriter,
+    ) -> GatePass | GateReplay:
         sub = ctx.sub
         prior = ctx.store.idempotency_lookup(ctx.cur, ctx.idem_key)
         if prior is not None:
-            return GateReplay(ReplayWriter().write(ctx, prior))
+            return GateReplay(_invoke_context_service(
+                ctx, _replay_write, _replay_writer_type(), ctx, prior))
 
-        if ctx.commit_class not in policy.COMMIT_CLASS_TO_FAMILY:
+        if ctx.commit_class not in _commit_class_to_family:
             raise ContractViolation(f"unknown commit class {ctx.commit_class!r}")
-        ctx.family = policy.COMMIT_CLASS_TO_FAMILY[ctx.commit_class]
+        ctx.family = _commit_class_to_family[ctx.commit_class]
 
         event_time = sub.get("eventTime")
         captured_at = sub.get("capturedAt") or ctx.ingested_at
@@ -325,7 +464,7 @@ class IngressNormalizer:
             # ABSENT (sentinel) is the only outcome that defaults to accept
             # (PR #18 decisionOutcomeState blocker)
             ctx.review_outcome = (sub["decisionOutcomeState"]
-                                  if "decisionOutcomeState" in sub else policy.ABSENT)
+                                  if "decisionOutcomeState" in sub else _absent)
         ctx.store.insert_record(ctx.cur, ingress_request)
         ctx.log("INGRESS_NORMALIZATION", "NORMALIZED_DRAFT")
         return GatePass()
@@ -336,7 +475,16 @@ class IngressNormalizer:
 # ---------------------------------------------------------------------------
 
 class AuthorityGate:
-    def run(self, ctx: GateContext) -> GatePass | GateRefusal:
+    def run(
+            self, ctx: GateContext,
+            _review_action_authority=_REVIEW_ACTION_AUTHORITY,
+            _commit_class_authority=_COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS,
+            _invoke_context_service=_invoke_retained_context_service,
+            _authority_evaluate=_AUTHORITY_EVALUATE,
+            _invoke_decision=_invoke_retained_decision_function,
+            _revocation_disposition=_REVOCATION_DISPOSITION,
+            _authority_allowed=_AUTHORITY_DECISION_ALLOWED_FUNCTION,
+    ) -> GatePass | GateRefusal:
         sub = ctx.sub
         # A GOVERNANCE_DECISION's authority action is selected by the review verb
         # (G5): REVIEW_ACCEPT vs the distinct REVIEW_REJECT_OR_CONTEST. An
@@ -347,7 +495,7 @@ class AuthorityGate:
             # unrecognized, not accept — isinstance keeps the lookup from
             # raising on an unhashable value and routes it to default-deny (B1)
             ra = ctx.review_action
-            action_class = (policy.REVIEW_ACTION_AUTHORITY.get(ra)
+            action_class = (_review_action_authority.get(ra)
                             if isinstance(ra, str) else None)
             if action_class is None:
                 problem = runtime_problem(
@@ -359,9 +507,9 @@ class AuthorityGate:
                 ctx.final_outcome = "DENY"
                 return GateRefusal("AUTHORITY", "DENY", "DENY", [problem])
         else:
-            action_class = policy.COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS[ctx.commit_class]
-        decision = _invoke_retained_context_service(
-            ctx, _AUTHORITY_EVALUATE, ctx.authority,
+            action_class = _commit_class_authority[ctx.commit_class]
+        decision = _invoke_context_service(
+            ctx, _authority_evaluate, ctx.authority,
             cur=ctx.cur,
             acting_party_ref=ctx.acting_party,
             action_class=action_class,
@@ -370,14 +518,11 @@ class AuthorityGate:
             acting_agent_ref=sub.get("actingAgentRef"),
             ai_assistance=sub.get("aiAssistance"),
             revocation_check_required=True,
-            revocation_disposition=policy.revocation_disposition(
+            revocation_disposition=_invoke_decision(
+                ctx, _revocation_disposition,
                 ctx.commit_class, sub.get("ingressChannel", "MANUAL_UI")),
         )
-        allowed = _AUTHORITY_DECISION_ALLOWED(decision)
-        if _AUTHORITY_DECISION_ALLOWED.__code__ is not \
-                _AUTHORITY_DECISION_ALLOWED_CODE:
-            _raise_context_service_dispatch_error(
-                ctx, "authority decision predicate changed")
+        allowed = _invoke_decision(ctx, _authority_allowed, decision)
         outcome = object.__getattribute__(decision, "outcome")
         ctx.record_authority_decision(decision)
         ctx.authz_decision = decision
@@ -466,10 +611,14 @@ class EnvelopePersist:
 # ---------------------------------------------------------------------------
 
 class ProfileApplicabilityGate:
-    def run(self, ctx: GateContext) -> GatePass | GateRefusal:
+    def run(
+            self, ctx: GateContext,
+            _invoke_context_service=_invoke_retained_context_service,
+            _context_assemble=_CONTEXT_ASSEMBLE,
+    ) -> GatePass | GateRefusal:
         try:
-            snapshot = _invoke_retained_context_service(
-                ctx, _CONTEXT_ASSEMBLE, ctx.context_assembler,
+            snapshot = _invoke_context_service(
+                ctx, _context_assemble, ctx.context_assembler,
                 ctx.cur, ctx.farm_ref)
         except ContextNotReconstructible as exc:
             ctx.log("PACK_PROFILE_APPLICABILITY", "NOT_APPLICABLE",
@@ -492,7 +641,21 @@ class ProfileApplicabilityGate:
 # ---------------------------------------------------------------------------
 
 class EvidenceSufficiencyGate:
-    def run(self, ctx: GateContext) -> GatePass | GateRefusal:
+    def run(
+            self, ctx: GateContext,
+            _invoke_decision=_invoke_retained_decision_function,
+            _build_acceptance_case=_BUILD_ACCEPTANCE_CASE,
+            _build_floor_case=_BUILD_FLOOR_CASE,
+            _build_floor_case_with_policy=_BUILD_FLOOR_CASE_WITH_POLICY,
+            _operation_advisories=_OPERATION_ADVISORIES,
+            _operation_advisories_with_policy=
+            _OPERATION_ADVISORIES_WITH_POLICY,
+            _durable_evidence=_DURABLE_EVIDENCE,
+            _operation_floor_checks=_OPERATION_FLOOR_CHECKS,
+            _commit_class_to_promotion_target=
+            _COMMIT_CLASS_TO_PROMOTION_TARGET,
+            _submission_evidence_refs=submission_evidence_refs,
+    ) -> GatePass | GateRefusal:
         # The acceptance sufficiency case is an ACCEPT-only promotion guard: it
         # demands NEW reviewer evidence to overcome a NEEDS_EVIDENCE routing and
         # records a fresh acceptance-oriented case. A REJECT inherits neither
@@ -506,7 +669,8 @@ class EvidenceSufficiencyGate:
                 kwargs["policy_ref"] = ctx.policy_provider.policy_ref
             elif ctx.active_profile is not None:
                 kwargs["policy_ref"] = ctx.active_profile.evidence_policy_ref
-            case = sufficiency.build_acceptance_case(
+            case = _invoke_decision(
+                ctx, _build_acceptance_case,
                 ctx.store, ctx.sub, ctx.farm_ref, ctx.acceptance_payload,
                 **kwargs)
             if case["outcome"]["decision"] == "REFUSE":
@@ -532,18 +696,20 @@ class EvidenceSufficiencyGate:
         if ctx.commit_class in ("OPERATION_CLAIM", "COMPLIANCE_ASSERTION"):
             try:
                 if ctx.policy_provider is None:
-                    case, floor_failures = sufficiency.build_floor_case(
+                    case, floor_failures = _invoke_decision(
+                        ctx, _build_floor_case,
                         ctx.store, ctx.sub, ctx.commit_class, ctx.farm_ref,
                         ctx.assertion_id, ctx.erp_id)
                     evidence_policy = None
                 else:
                     evidence_policy = ctx.policy_provider.evidence_policy(
                         supported_checks=(
-                            sufficiency.OPERATION_FLOOR_CHECKS
+                            _operation_floor_checks
                             if ctx.commit_class == "OPERATION_CLAIM"
                             else None),
                     )
-                    case, floor_failures = sufficiency.build_floor_case_with_policy(
+                    case, floor_failures = _invoke_decision(
+                        ctx, _build_floor_case_with_policy,
                         ctx.store, ctx.sub, ctx.commit_class, ctx.farm_ref,
                         ctx.assertion_id, ctx.erp_id,
                         evidence_policy=evidence_policy,
@@ -580,9 +746,11 @@ class EvidenceSufficiencyGate:
             # outcome. A clean claim still promotes even when an advisory is raised.
             if ctx.commit_class == "OPERATION_CLAIM":
                 if ctx.policy_provider is None:
-                    advisories = sufficiency.operation_advisories(ctx.store, ctx.sub)
+                    advisories = _invoke_decision(
+                        ctx, _operation_advisories, ctx.store, ctx.sub)
                 else:
-                    advisories = sufficiency.operation_advisories_with_policy(
+                    advisories = _invoke_decision(
+                        ctx, _operation_advisories_with_policy,
                         ctx.store, ctx.sub, evidence_policy)
                 ctx.problems.extend(advisories)
             ctx.log("EVIDENCE_SUFFICIENCY", "SATISFIED")
@@ -596,9 +764,10 @@ class EvidenceSufficiencyGate:
         # check lives here: a self-reference to the captured event, a dangling
         # ref, or a wrong-kind ref is fake evidence, not proof. Any of them
         # keeps the claim a draft (Kernel rule 4 / rule 7).
-        if ctx.commit_class in policy.COMMIT_CLASS_TO_PROMOTION_TARGET:
-            refs = submission_evidence_refs(ctx.sub)
-            durable = sufficiency.durable_evidence(ctx.store, refs)
+        if ctx.commit_class in _commit_class_to_promotion_target:
+            refs = _submission_evidence_refs(ctx.sub)
+            durable = _invoke_decision(
+                ctx, _durable_evidence, ctx.store, refs)
             if not refs or len(durable) != len(refs):
                 ctx.log("EVIDENCE_SUFFICIENCY", "INSUFFICIENT",
                         reason_code="EVIDENCE_INSUFFICIENT",
@@ -627,8 +796,20 @@ class EvidenceSufficiencyGate:
 # ---------------------------------------------------------------------------
 
 class ReviewPromotionGate:
-    def run(self, ctx: GateContext) -> GatePass | GateRefusal:
-        emitter = PromotionEmitter(ctx)
+    def run(
+            self, ctx: GateContext,
+            _invoke_decision=_invoke_retained_decision_function,
+            _structure_self_acceptable=_STRUCTURE_SELF_ACCEPTABLE,
+            _commit_class_to_promotion_target=
+            _COMMIT_CLASS_TO_PROMOTION_TARGET,
+            _non_promoting_retain_reasons=_NON_PROMOTING_RETAIN_REASONS,
+            _non_promoting_default_reason=_NON_PROMOTING_DEFAULT_REASON,
+            _invoke_context_service=_invoke_retained_context_service,
+            _authority_evaluate=_AUTHORITY_EVALUATE,
+            _authority_allowed=_AUTHORITY_DECISION_ALLOWED_FUNCTION,
+            _emitter_type=PromotionEmitter,
+    ) -> GatePass | GateRefusal:
+        emitter = _emitter_type(ctx)
         sub = ctx.sub
 
         # D8 scopes self-review to ROUTINE OPERATION CLAIMS. A compliance
@@ -651,7 +832,8 @@ class ReviewPromotionGate:
         # are the other D17 conditions, enforced by those gates.
         if (ctx.commit_class == "STRUCTURE_ASSERTION" and sub.get("confirmAccept")
                 and sub.get("reviewerPartyRef", ctx.acting_party) == ctx.acting_party
-                and not policy.structure_self_acceptable(
+                and not _invoke_decision(
+                    ctx, _structure_self_acceptable,
                     (sub.get("payload") or {}).get("schemaVersion", ""))):
             ctx.review_route_reasons.append(runtime_problem(
                 "HUMAN_APPROVAL_REQUIRED", "Structure self-review out of bounded class",
@@ -671,7 +853,7 @@ class ReviewPromotionGate:
                 "acceptance); a reviewer named inside the submitter's request "
                 "is forgeable and never promotes", severity="WARNING"))
 
-        promotes = ctx.commit_class in policy.COMMIT_CLASS_TO_PROMOTION_TARGET
+        promotes = ctx.commit_class in _commit_class_to_promotion_target
 
         if ctx.acceptance_target:
             # the GovernanceAcceptanceValidator already resolved + validated the
@@ -687,8 +869,8 @@ class ReviewPromotionGate:
             return GatePass()
 
         if not promotes:
-            reason = policy.NON_PROMOTING_RETAIN_REASONS.get(
-                ctx.commit_class, policy.NON_PROMOTING_DEFAULT_REASON)
+            reason = _non_promoting_retain_reasons.get(
+                ctx.commit_class, _non_promoting_default_reason)
             ctx.log("REVIEW_PROMOTION", "RETAIN_DRAFT", rationale=reason)
             ctx.final_outcome = "RETAIN_DRAFT"
             return GatePass()
@@ -715,13 +897,14 @@ class ReviewPromotionGate:
         # SELF-review only: the reviewer is the transport-bound acting party.
         # REVIEW_ACCEPT authority is checked mechanically; self-review cannot
         # bypass the gates above.
-        review_auth = _invoke_retained_context_service(
-            ctx, _AUTHORITY_EVALUATE, ctx.authority,
+        review_auth = _invoke_context_service(
+            ctx, _authority_evaluate, ctx.authority,
             cur=ctx.cur,
             acting_party_ref=ctx.acting_party, action_class="REVIEW_ACCEPT",
             action_stage="PROMOTION",
             scope={"scopeType": "FARM", "scopeRef": ctx.farm_ref})
-        review_allowed = _AUTHORITY_DECISION_ALLOWED(review_auth)
+        review_allowed = _invoke_decision(
+            ctx, _authority_allowed, review_auth)
         ctx.record_authority_decision(review_auth)
         if not review_allowed:
             ctx.log("REVIEW_PROMOTION", "REQUIRE_REVIEW",
@@ -740,16 +923,21 @@ class ReviewPromotionGate:
 # ---------------------------------------------------------------------------
 
 class MaterializationGate:
-    def run(self, ctx: GateContext) -> GatePass:
-        _invoke_retained_context_service(
-            ctx, _MATERIALIZER_INVALIDATE_FOR_SOURCES, ctx.materializer,
+    def run(
+            self, ctx: GateContext,
+            _invoke_context_service=_invoke_retained_context_service,
+            _invalidate_for_sources=_MATERIALIZER_INVALIDATE_FOR_SOURCES,
+            _recompute=_MATERIALIZER_RECOMPUTE,
+    ) -> GatePass:
+        _invoke_context_service(
+            ctx, _invalidate_for_sources, ctx.materializer,
             ctx.cur, ctx.invalidation_sources or [ctx.trigger_source],
             trigger_family="BASIS_ADVANCED",
             trigger_source_ref=ctx.trigger_source,
             farm_scope_ref=ctx.farm_ref,
             reason_code="TRUTH_BASIS_ADVANCED")
-        mat = _invoke_retained_context_service(
-            ctx, _MATERIALIZER_RECOMPUTE, ctx.materializer,
+        mat = _invoke_context_service(
+            ctx, _recompute, ctx.materializer,
             ctx.cur, ctx.farm_ref)
         # NOTE: no materializationResultRef on the trace — the commit-time
         # recompute emits Basis+Snapshot, not a boundary Result; those

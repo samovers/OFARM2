@@ -29,7 +29,15 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from . import config
-from .contracts import ContractRegistry, ContractViolation, sha256_of
+from . import contracts as contracts_module
+from .callable_state import capture_callable_state, callable_state_matches
+from .contracts import (
+    ContractDispatchError,
+    ContractRegistry,
+    ContractViolation,
+    invoke_retained_contract_validation,
+    sha256_of,
+)
 from .runtime_bundle import (
     RuntimeBundleError,
     _require_decision_semantics,
@@ -50,6 +58,12 @@ _PSYCOPG_ADAPTER_MAP_FIELDS = frozenset({
     "_dumpers", "_own_dumpers", "_dumpers_by_oid",
     "_own_dumpers_by_oid", "_loaders", "_own_loaders", "types",
 })
+
+_RETAINED_CONTRACT_VALIDATION = invoke_retained_contract_validation
+_RETAINED_CONTRACT_VALIDATION_CODE = \
+    invoke_retained_contract_validation.__code__
+_RETAINED_CONTRACT_VALIDATION_STATE = capture_callable_state(
+    _RETAINED_CONTRACT_VALIDATION)
 
 
 def _detached_psycopg_adapter_context(template: AdaptersMap) -> AdaptersMap:
@@ -242,6 +256,57 @@ class _TransactionIntegrityLatch:
     def poison(self) -> None:
         object.__setattr__(
             self, "_TransactionIntegrityLatch__poisoned", True)
+
+
+def invoke_store_contract_validation(
+        store, payload: dict,
+        _contracts_module=contracts_module,
+        _validation=_RETAINED_CONTRACT_VALIDATION,
+        _validation_code=_RETAINED_CONTRACT_VALIDATION_CODE,
+        _validation_state=_RETAINED_CONTRACT_VALIDATION_STATE,
+        _state_matches=callable_state_matches,
+        _latch_type=_TransactionIntegrityLatch,
+        _type=type,
+        _getattribute=object.__getattribute__,
+        _setattr=object.__setattr__,
+):
+    """Validate through retained code without mutable Store method dispatch."""
+    def require() -> None:
+        retained_store_validator = globals().get(
+            "_RETAINED_STORE_VALIDATE_CONTRACT")
+        retained_store_validator_state = globals().get(
+            "_RETAINED_STORE_VALIDATE_CONTRACT_STATE")
+        if (vars(_contracts_module).get(
+                "invoke_retained_contract_validation") is not _validation
+                or type(_validation) is not types.FunctionType
+                or _validation.__code__ is not _validation_code
+                or not _state_matches(_validation, _validation_state)
+                or type(retained_store_validator) is not types.FunctionType
+                or vars(Store).get("_validate_contract") is not
+                retained_store_validator
+                or not _state_matches(
+                    retained_store_validator,
+                    retained_store_validator_state)):
+            raise ContractDispatchError(
+                "retained contract-validation helper changed")
+
+    try:
+        require()
+        try:
+            result = _validation(Store.registry.fget(store), payload)
+        except BaseException:
+            require()
+            raise
+        require()
+        return result
+    except ContractDispatchError as exc:
+        # This failure path cannot dispatch through the mutable Store class:
+        # the dispatch table is exactly what may have changed.  Poison the
+        # retained one-way latch through private object mechanics instead.
+        latch = _getattribute(store, "_active_transaction_integrity")
+        if _type(latch) is _latch_type:
+            _setattr(latch, "_TransactionIntegrityLatch__poisoned", True)
+        raise RuntimeBundleError(str(exc)) from exc
 
 
 class _GovernedSavepoint:
@@ -776,26 +841,7 @@ def _store_callable_state(
         value: object, active: set[int] | None = None) -> tuple[object, ...]:
     if type(value) is not types.FunctionType:
         return ("IDENTITY", value)
-    active = set() if active is None else active
-    marker = id(value)
-    if marker in active:
-        return ("FUNCTION_REF", value)
-    active.add(marker)
-    try:
-        closure = tuple(
-            (cell, cell.cell_contents,
-             _store_callable_state(cell.cell_contents, active)
-             if type(cell.cell_contents) is types.FunctionType else None)
-            for cell in (value.__closure__ or ()))
-        wrapped = getattr(value, "__wrapped__", None)
-        return (
-            "FUNCTION", value, value.__code__, value.__defaults__,
-            value.__kwdefaults__, closure,
-            (_store_callable_state(wrapped, active)
-             if type(wrapped) is types.FunctionType else None),
-        )
-    finally:
-        active.remove(marker)
+    return ("FUNCTION", capture_callable_state(value, active))
 
 
 _STORE_CALLABLE_STATE = _store_callable_state
@@ -828,6 +874,50 @@ _STORE_DISPATCH_SNAPSHOTTER = _store_dispatch_snapshot
 _STORE_DISPATCH_SNAPSHOTTER_CODE = _store_dispatch_snapshot.__code__
 
 
+def _store_dispatch_matches(
+        anchors,
+        _state_matches=callable_state_matches,
+) -> bool:
+    if type(anchors) is not tuple:
+        return False
+
+    def state_matches(value, state) -> bool:
+        if type(state) is not tuple or len(state) != 2:
+            return False
+        if state[0] == "IDENTITY":
+            return value is state[1]
+        return (state[0] == "FUNCTION"
+                and _state_matches(value, state[1]))
+
+    for entry in anchors:
+        if type(entry) is not tuple or len(entry) < 4:
+            return False
+        owner, name, kind = entry[:3]
+        current = vars(owner).get(name)
+        if kind == "FUNCTION":
+            if len(entry) != 4 or not state_matches(current, entry[3]):
+                return False
+        elif kind == "PROPERTY":
+            if (len(entry) != 7
+                    or current is not entry[3]
+                    or not state_matches(current.fget, entry[4])
+                    or not state_matches(current.fset, entry[5])
+                    or not state_matches(current.fdel, entry[6])):
+                return False
+        elif kind in {"classmethod", "staticmethod"}:
+            if (len(entry) != 5
+                    or current is not entry[3]
+                    or not state_matches(current.__func__, entry[4])):
+                return False
+        else:
+            return False
+    return True
+
+
+_STORE_DISPATCH_MATCHER = _store_dispatch_matches
+_STORE_DISPATCH_MATCHER_CODE = _store_dispatch_matches.__code__
+
+
 def _require_store_dispatch_integrity(store: object) -> None:
     try:
         if (_require_store_dispatch_integrity.__code__ is not
@@ -842,6 +932,10 @@ def _require_store_dispatch_integrity(store: object) -> None:
                 _STORE_CALLABLE_STATE
                 or globals().get("_store_dispatch_snapshot") is not
                 _STORE_DISPATCH_SNAPSHOTTER
+                or globals().get("_store_dispatch_matches") is not
+                _STORE_DISPATCH_MATCHER
+                or _STORE_DISPATCH_MATCHER.__code__ is not
+                _STORE_DISPATCH_MATCHER_CODE
                 or globals().get("_governed_query_text") is not
                 _RETAINED_GOVERNED_QUERY_TEXT
                 or _RETAINED_GOVERNED_QUERY_TEXT.__code__ is not
@@ -857,7 +951,7 @@ def _require_store_dispatch_integrity(store: object) -> None:
                 _RETAINED_STORE_REQUIRE_ACTIVE_SERIALIZED_CURSOR_CODE
                 or type(store) is not Store
                 or getattr(store, "_registry_sealed", None) is not True
-                or _STORE_DISPATCH_SNAPSHOTTER() != _STORE_DISPATCH_ANCHORS
+                or not _STORE_DISPATCH_MATCHER(_STORE_DISPATCH_ANCHORS)
                 or any(callable(getattr(Store, name, None))
                        for name in vars(store))):
             raise RuntimeError(
@@ -2010,8 +2104,18 @@ class Store:
 
     # -- canonical record writes ----------------------------------------------
 
-    def insert_record(self, cur, payload: dict, *, tenant_ref: str | None = None,
-                      runtime_bundle_digest: str | None = None) -> str:
+    def _validate_contract(
+            self, payload: dict,
+            _validate=invoke_store_contract_validation,
+    ):
+        """Validate through the retained ContractRegistry function anchor."""
+        return _validate(self, payload)
+
+    def insert_record(
+            self, cur, payload: dict, *, tenant_ref: str | None = None,
+            runtime_bundle_digest: str | None = None,
+            _validate=invoke_store_contract_validation,
+    ) -> str:
         """Validate against the package contract and append. Returns record id."""
         Store._require_active_governed_cursor(self, cur)
         bundle_tenant_ref = self._bundle_tenant_ref()
@@ -2020,7 +2124,7 @@ class Store:
         elif tenant_ref != bundle_tenant_ref:
             raise RuntimeError(
                 "kernel_record tenant must exactly match the verified RuntimeBundle tenant")
-        contract = ContractRegistry.validate(self.registry, payload)
+        contract = _validate(self, payload)
         if contract.lane != "canonical":
             raise ContractViolation(
                 f"{contract.kind} is a draft-lane shape; draft records belong in "
@@ -2049,11 +2153,14 @@ class Store:
                 "SELECT 1 FROM ONLY runtime_trace WHERE trace_id = %s", (trace_id,))
             return cur.fetchone() is not None
 
-    def insert_runtime_trace(self, cur, payload: dict, *,
-                             runtime_bundle_digest: str | None = None) -> str:
+    def insert_runtime_trace(
+            self, cur, payload: dict, *,
+            runtime_bundle_digest: str | None = None,
+            _validate=invoke_store_contract_validation,
+    ) -> str:
         """Append a draft-lane runtime evidence record (D16)."""
         Store._require_active_governed_cursor(self, cur)
-        contract = ContractRegistry.validate(self.registry, payload)
+        contract = _validate(self, payload)
         if contract.lane != "draft":
             raise ContractViolation(
                 f"{contract.kind} is canonical-lane; use insert_record"
@@ -2299,4 +2406,7 @@ _RETAINED_STORE_TRANSACTION_POSTURE_UNPOISONED = \
     Store._require_transaction_python_posture_unpoisoned
 _RETAINED_STORE_TRANSACTION_POSTURE_UNPOISONED_CODE = \
     _RETAINED_STORE_TRANSACTION_POSTURE_UNPOISONED.__code__
+_RETAINED_STORE_VALIDATE_CONTRACT = Store._validate_contract
+_RETAINED_STORE_VALIDATE_CONTRACT_STATE = capture_callable_state(
+    _RETAINED_STORE_VALIDATE_CONTRACT)
 _STORE_DISPATCH_ANCHORS = _STORE_DISPATCH_SNAPSHOTTER()

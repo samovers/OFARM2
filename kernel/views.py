@@ -32,6 +32,7 @@ from .store import (
     Store,
     _RETAINED_GOVERNED_CURSOR_EXECUTE_MUTATION as _CURSOR_EXECUTE_MUTATION,
     _RETAINED_GOVERNED_CURSOR_EXECUTE_READ as _CURSOR_EXECUTE_READ,
+    invoke_store_contract_validation as _VALIDATE_CONTRACT,
 )
 
 _RETAINED_AUTHORITY_EVALUATE = AuthorityEvaluator.evaluate
@@ -328,8 +329,11 @@ class OutputGenerator:
 
     # ----------------------------------------------------------- PassportView --
 
-    def passport_view(self, farm_ref: str, requesting_party_ref: str, *,
-                      allow_recompute: bool = True) -> dict:
+    def passport_view(
+            self, farm_ref: str, requesting_party_ref: str, *,
+            allow_recompute: bool = True,
+            _validate_contract=_VALIDATE_CONTRACT,
+    ) -> dict:
         """allow_recompute=False is a real render mode (cheap/offline serve):
         a STALE materialization renders only with the banner and is barred
         from export; a missing basis refuses (views/VIEWS.md)."""
@@ -429,8 +433,8 @@ class OutputGenerator:
                 "completeness": CLAIM_STATEMENT,
             }
             # outputs validate against their contracts before leaving the gate
-            self.store.registry.validate(metadata)
-            self.store.registry.validate(qualification)
+            _validate_contract(self.store, metadata)
+            _validate_contract(self.store, qualification)
             return {"refused": False, "metadata": metadata, "body": body,
                     "qualification": qualification,
                     "runtimeReceipt": self._runtime_receipt(
@@ -438,9 +442,12 @@ class OutputGenerator:
 
     # ------------------------------------------------------- DocumentAssembly --
 
-    def freeze_inspection_register(self, farm_ref: str, requesting_party_ref: str,
-                                   window_start: str, window_end: str, *,
-                                   as_submission: bool = False) -> dict:
+    def freeze_inspection_register(
+            self, farm_ref: str, requesting_party_ref: str,
+            window_start: str, window_end: str, *,
+            as_submission: bool = False,
+            _validate_contract=_VALIDATE_CONTRACT,
+    ) -> dict:
         """Freeze the exportable inspection register for a period.
 
         as_submission=True files it as a SUBMISSION_ASSEMBLY export artifact.
@@ -706,7 +713,7 @@ class OutputGenerator:
             # artifact lets a later inspection verify the handed-over document
             # against the store (views/VIEWS.md "Identification")
             self.store.insert_record(cur, metadata)
-            self.store.registry.validate(qualification)
+            _validate_contract(self.store, qualification)
             _CURSOR_EXECUTE_READ(cur,
                 "SELECT digest, metadata_record_id, document, runtime_bundle_digest "
                 "FROM ONLY export_artifact WHERE artifact_ref = %s", (durable_ref,))

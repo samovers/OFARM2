@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import config
-from .contracts import ContractRegistry, UnknownContract, canonical_json
+from .contracts import UnknownContract, canonical_json
 from .profile_runtime import ProfileRuntimeError, resolve_active_descriptor
 from .runtime_bundle import (
     TENANT_CONTENT_PLACEMENT,
@@ -31,13 +31,14 @@ from .runtime_bundle import (
 from .store import (
     Store,
     _RETAINED_GOVERNED_CURSOR_EXECUTE_READ as _CURSOR_EXECUTE_READ,
+    invoke_store_contract_validation as _VALIDATE_CONTRACT,
 )
 
 # Private module seam so the lock/atomic-selection regression can observe the
 # exact builder call without exporting live-selection authority as a public API.
 _build_runtime_bundle_for_bootstrap = _build_live_runtime_bundle
 
-PROFILE_INSTANCE_FILES = list(config.ACTIVE_PROFILE.profile_instance_files)
+PROFILE_INSTANCE_FILES = tuple(config.ACTIVE_PROFILE.profile_instance_files)
 
 SI_REGSR_FAMILY_ID = "si.uvhvvr.ffs-reg"
 SI_GERK_FAMILY_ID = "si.mkgp.gerk-layer"
@@ -285,7 +286,9 @@ def _profile_payloads_from_bundle(store, active_profile, bundle):
 
 
 def bootstrap_for_descriptor(
-        store, active_profile, *, profile_route_selection: dict | None = None) -> list[str]:
+        store, active_profile, *, profile_route_selection: dict | None = None,
+        _validate_contract=_VALIDATE_CONTRACT,
+) -> list[str]:
     """Atomically install one verified bundle and its shipped profile instances.
 
     Reusing an identifier is permitted only for canonically equal content. A
@@ -356,8 +359,7 @@ def bootstrap_for_descriptor(
                     for prefix in family_prefixes)
             ]
             for row in additional_reference_rows:
-                contract = ContractRegistry.validate(
-                    store.registry, row["payload"])
+                contract = _validate_contract(store, row["payload"])
                 if contract.kind != "ofarm.referencesnapshot.v0.1":
                     raise ContextNotReconstructible(
                         "stored ReferenceSnapshot row resolves to the wrong contract")
@@ -440,8 +442,7 @@ def bootstrap_for_descriptor(
                 if selected:
                     additional_profile_rows.append(row)
             for row in additional_profile_rows:
-                contract = ContractRegistry.validate(
-                    store.registry, row["payload"])
+                contract = _validate_contract(store, row["payload"])
                 if contract.kind not in {
                     "ofarm.activeartifactset.v0.1",
                     "ofarm.packactivationset.v0.1",

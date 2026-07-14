@@ -17,6 +17,7 @@ from contextlib import contextmanager
 from dataclasses import replace
 from datetime import datetime
 from pathlib import Path, PurePosixPath
+from types import MappingProxyType
 
 import pytest
 import psycopg
@@ -37,6 +38,11 @@ from kernel.gates import GatePipeline
 from kernel.materializer import Materializer
 from kernel.profiles.si_ffs.gerk_adapter import GerkLayer
 from kernel.profiles.si_ffs.ffsnaprave_adapter import FFSNapraveRegister
+from kernel.profile_runtime import (
+    ProfileRouteRecord,
+    load_profile_descriptor_registry,
+    profile_route_selection_document,
+)
 from kernel.schema_guard import SchemaGuardError
 from kernel.runtime_bundle import (
     GLOBAL_CONTENT_PLACEMENT,
@@ -244,6 +250,14 @@ def test_runtime_bundle_component_placement_map_is_exact():
         == TENANT_CONTENT_PLACEMENT
     assert placement[("TENANT_BINDING", "tenant-binding:active")] \
         == TENANT_CONTENT_PLACEMENT
+    assert placement[(
+        "RUNTIME_ENVIRONMENT_OBSERVED",
+        "environment:stable-decision-semantics.v1",
+    )] == TENANT_CONTENT_PLACEMENT
+    assert placement[(
+        "RUNTIME_ENVIRONMENT_OBSERVED",
+        "environment:stable-python-execution.v4",
+    )] == GLOBAL_CONTENT_PLACEMENT
     assert all(item.placement == TENANT_CONTENT_PLACEMENT
                for item in bundle.components if item.role == "QUERY_PLAN")
     assert placement[("PROFILE_INSTANCE", config.ACTIVE_PROFILE.code_binding_profile_ref)] \
@@ -260,6 +274,352 @@ def test_runtime_bundle_component_placement_map_is_exact():
     assert gerk.source_byte_status == "PROVENANCE_LOCATOR_ONLY"
     assert all(ref.startswith(("archive:", "surface:"))
                for ref in gerk.unavailable_source_identities)
+
+
+def test_two_tenant_selection_never_changes_global_runtime_content():
+    from kernel import store as store_module
+
+    seed = build_runtime_bundle(config.ACTIVE_PROFILE)
+    registry = load_profile_descriptor_registry(
+        config.PACKAGE_ROOT,
+        allowed_profile_package_names=
+        config.ALLOWED_ACTIVE_PROFILE_PACKAGE_NAMES,
+    )
+
+    def route_selection(tenant_ref: str) -> dict:
+        route = ProfileRouteRecord(
+            route_id="profileroute:issue171.active",
+            tenant_ref=tenant_ref,
+            farm_ref=demo.FARM,
+            profile_package_name="profile_si_ffs",
+            profile_ref=config.ACTIVE_PROFILE.profile_ref,
+            pack_ref=config.ACTIVE_PROFILE.pack_ref,
+            pack_activation_set_ref=
+            config.ACTIVE_PROFILE.pack_activation_set_ref,
+            active_artifact_set_ref=
+            config.ACTIVE_PROFILE.active_artifact_set_ref,
+            runtime_bundle_digest=seed.digest,
+        )
+        return profile_route_selection_document(
+            registry,
+            config.ACTIVE_PROFILE_PACKAGE_NAMES,
+            [route],
+            tenant_ref=tenant_ref,
+        )
+
+    # Start from a complete bundle assembled by the real builder, including
+    # the active route. The package fixture is intentionally bound to one demo
+    # tenant, so alternate tenant selections are reconstructed and passed
+    # through the complete persisted-bundle validator below.
+    base = build_runtime_bundle(
+        config.ACTIVE_PROFILE,
+        _profile_route_selection=route_selection(config.TENANT_REF),
+    )
+    original_tenant = config.TENANT_REF
+    original_lock_key = store_module._SINGLE_WRITER_LOCK_KEY
+
+    def with_json(component: RuntimeComponent, payload: dict) -> RuntimeComponent:
+        canonical = canonical_json(payload).encode("utf-8")
+        return replace(
+            component,
+            canonical_bytes=canonical,
+            content_digest=sha256_bytes(canonical),
+        )
+
+    def complete_tenant_bundle(tenant_ref: str) -> RuntimeBundle:
+        config.TENANT_REF = tenant_ref
+        store_module._SINGLE_WRITER_LOCK_KEY = int.from_bytes(
+            hashlib.sha256(tenant_ref.encode("utf-8")).digest()[:8],
+            "big", signed=True)
+
+        components = {
+            (component.role, component.logical_ref): component
+            for component in base.components
+        }
+        for key, component in tuple(components.items()):
+            if component.canonicalization != JSON_CANONICALIZATION:
+                continue
+            payload = json.loads(component.canonical_bytes)
+            schema_version = payload.get("schemaVersion")
+            if schema_version == "ofarm.runtime-tenant-binding.local.v1":
+                payload["tenantRef"] = tenant_ref
+            elif schema_version == "ofarm.activeartifactset.v0.1":
+                payload["deploymentScope"] = {
+                    "scopeType": "TENANT", "scopeRef": tenant_ref}
+            elif schema_version == "ofarm.packactivationset.v0.1":
+                payload["targetScope"] = {
+                    "scopeType": "TENANT", "scopeRef": tenant_ref}
+            elif schema_version == "ofarm.contextsnapshot.v0.1":
+                payload["anchorScopes"] = [{
+                    "scopeType": "TENANT", "scopeRef": tenant_ref}]
+            elif schema_version == "ofarm.capabilitymanifest.v0.1":
+                payload["deploymentScope"] = {
+                    "scopeType": "TENANT", "scopeRef": tenant_ref}
+            else:
+                continue
+            components[key] = with_json(component, payload)
+
+        semantics = observed_decision_semantics_component(config.PACKAGE_ROOT)
+        components[(semantics.role, semantics.logical_ref)] = semantics
+        route_key = (
+            "PROFILE_ROUTE_SELECTION", "profile-route-selection:active")
+        components[route_key] = with_json(
+            components[route_key], route_selection(tenant_ref))
+
+        ordered = tuple(sorted(
+            components.values(),
+            key=lambda component: (component.role, component.logical_ref),
+        ))
+        document = json.loads(base.canonical_document_bytes)
+        document["tenantRef"] = tenant_ref
+        document["components"] = [
+            component.identity_document() for component in ordered]
+        canonical = canonical_json(document).encode("utf-8")
+        digest = sha256_bytes(canonical)
+        return runtime_bundle_from_persisted(
+            descriptor=config.ACTIVE_PROFILE,
+            expected_digest=digest,
+            canonical_document_bytes=canonical,
+            components=ordered,
+        )
+
+    try:
+        bundles = (
+            complete_tenant_bundle("tenant:issue171.alpha"),
+            complete_tenant_bundle("tenant:issue171.beta"),
+        )
+    finally:
+        config.TENANT_REF = original_tenant
+        store_module._SINGLE_WRITER_LOCK_KEY = original_lock_key
+
+    component_maps = tuple({
+        (component.role, component.logical_ref): component
+        for component in bundle.components
+    } for bundle in bundles)
+    assert component_maps[0].keys() == component_maps[1].keys()
+    global_maps = tuple({
+        key: component for key, component in components.items()
+        if component.placement == GLOBAL_CONTENT_PLACEMENT
+    } for components in component_maps)
+    assert global_maps[0] == global_maps[1]
+
+    differing = {
+        key for key in component_maps[0]
+        if component_maps[0][key] != component_maps[1][key]
+    }
+    assert differing == {
+        ("ACTIVE_MANIFEST", "manifest:si.ffs.pilot.v0_1"),
+        ("PROFILE_INSTANCE", "activeartifactset:si.ffs.pilot.v0_1"),
+        ("PROFILE_INSTANCE",
+         "contextsnapshot:si.ffs.pilot.compliance.demo.v0_1"),
+        ("PROFILE_INSTANCE", "packactivationset:si.ffs.pilot.v0_1"),
+        ("TENANT_BINDING", "tenant-binding:active"),
+        ("RUNTIME_ENVIRONMENT_OBSERVED",
+         "environment:stable-decision-semantics.v1"),
+        ("PROFILE_ROUTE_SELECTION", "profile-route-selection:active"),
+    }
+    assert all(
+        component_maps[0][key].placement == component_maps[1][key].placement ==
+        TENANT_CONTENT_PLACEMENT
+        for key in differing
+    )
+
+    semantics_key = (
+        "RUNTIME_ENVIRONMENT_OBSERVED",
+        "environment:stable-decision-semantics.v1",
+    )
+    first_entries = {
+        entry["label"]: entry["stateDigest"]
+        for entry in json.loads(
+            component_maps[0][semantics_key].canonical_bytes)["entries"]
+    }
+    second_entries = {
+        entry["label"]: entry["stateDigest"]
+        for entry in json.loads(
+            component_maps[1][semantics_key].canonical_bytes)["entries"]
+    }
+    for retained_binding in ("kernel.config.TENANT_REF",
+                             "kernel.store._SINGLE_WRITER_LOCK_KEY"):
+        labels = [
+            label for label in first_entries
+            if retained_binding in label
+        ]
+        assert labels, f"semantic receipt omitted {retained_binding}"
+        assert any(
+            first_entries[label] != second_entries[label]
+            for label in labels
+        )
+
+    for bundle, expected_tenant in zip(
+            bundles,
+            ("tenant:issue171.alpha", "tenant:issue171.beta"),
+            strict=True):
+        assert bundle.tenant_ref == expected_tenant
+        binding = bundle.json_component(
+            "TENANT_BINDING", "tenant-binding:active")
+        assert binding["tenantRef"] == expected_tenant
+        selection = bundle.json_component(
+            "PROFILE_ROUTE_SELECTION", "profile-route-selection:active")
+        assert selection["tenantRef"] == expected_tenant
+        assert len(selection["routes"]) == 1
+        assert selection["routes"][0]["tenantRef"] == expected_tenant
+        assert selection["routes"][0]["status"] == "ACTIVE"
+
+
+def test_callable_state_covers_defaults_keyword_defaults_and_closure_cells():
+    from kernel import callable_state as callable_state_module
+    from kernel import contracts as contracts_module
+    from kernel import emission as emission_module
+    from kernel import sufficiency as sufficiency_module
+    from kernel.callable_state import (
+        callable_state_matches,
+        capture_callable_state,
+    )
+    from kernel.contracts import invoke_retained_contract_validation
+
+    marker = object()
+    closure_value = marker
+    equality_called = False
+
+    class HostileValue:
+        def __eq__(self, _other):
+            nonlocal equality_called
+            equality_called = True
+            return True
+
+    def retained(positional=marker, *, options={"marker": marker}):
+        return positional, options, closure_value
+
+    state = capture_callable_state(retained)
+    assert callable_state_matches(retained, state)
+
+    original_defaults = retained.__defaults__
+    retained.__defaults__ = (HostileValue(),)
+    assert callable_state_matches(retained, state) is False
+    retained.__defaults__ = original_defaults
+
+    helper_called = False
+
+    def hostile_matcher(*_args):
+        nonlocal helper_called
+        helper_called = True
+        retained.__defaults__ = original_defaults
+        return True
+
+    callable_state_module._value_matches = hostile_matcher
+    retained.__defaults__ = (HostileValue(),)
+    try:
+        assert callable_state_matches(retained, state) is False
+    finally:
+        retained.__defaults__ = original_defaults
+        del callable_state_module._value_matches
+    assert helper_called is False
+
+    options = retained.__kwdefaults__["options"]
+    options["marker"] = HostileValue()
+    assert callable_state_matches(retained, state) is False
+    options["marker"] = marker
+
+    closure_cell = retained.__closure__[0]
+    closure_cell.cell_contents = HostileValue()
+    assert callable_state_matches(retained, state) is False
+    closure_cell.cell_contents = marker
+
+    assert callable_state_matches(retained, state)
+    assert equality_called is False
+
+    # A retained outer builder binds its reviewed nested helper before any
+    # caller-owned Store behavior can run. A one-shot module replacement must
+    # therefore remain inert instead of restoring itself after one decision.
+    original_durable_evidence = sufficiency_module.durable_evidence
+    hostile_helper_called = False
+
+    def hostile_durable_evidence(*_args, **_kwargs):
+        nonlocal hostile_helper_called
+        hostile_helper_called = True
+        sufficiency_module.durable_evidence = original_durable_evidence
+        return []
+
+    class EvidenceStore:
+        @staticmethod
+        def get_record(ref):
+            if ref == "evidence:issue171.retained-helper":
+                return {"record_kind": "ofarm.evidencerecord.v0.1"}
+            return None
+
+    sufficiency_module.durable_evidence = hostile_durable_evidence
+    try:
+        case, failures = sufficiency_module.build_case_from_checks(
+            EvidenceStore(), "farm:issue171", "assert:issue171", None,
+            {"durable-proof": True}, ("durable-proof",), (),
+            ["evidence:issue171.retained-helper"],
+            policy_ref="policy:issue171.retained-helper",
+        )
+    finally:
+        sufficiency_module.durable_evidence = original_durable_evidence
+
+    assert case["outcome"]["decision"] == "ALLOW"
+    assert failures == []
+    assert hostile_helper_called is False
+
+    original_assertion_types = \
+        emission_module._COMMIT_CLASS_TO_ASSERTION_TYPE
+    hostile_map_called = False
+
+    class OneShotAssertionTypes(dict):
+        def get(self, key, default=None):
+            nonlocal hostile_map_called
+            hostile_map_called = True
+            emission_module._COMMIT_CLASS_TO_ASSERTION_TYPE = \
+                original_assertion_types
+            return "OTHER_ASSERTION"
+
+    emitter = emission_module.PromotionEmitter(types.SimpleNamespace(
+        sub={},
+        assertion_id="assert:issue171.retained-emission-map",
+        commit_class="OPERATION_CLAIM",
+        farm_ref="farm:issue171",
+        acting_party="party:issue171",
+        erp_id=None,
+    ))
+    emission_module._COMMIT_CLASS_TO_ASSERTION_TYPE = \
+        OneShotAssertionTypes(original_assertion_types)
+    try:
+        assertion = emitter._build_assertion("IN_FORCE")
+    finally:
+        emission_module._COMMIT_CLASS_TO_ASSERTION_TYPE = \
+            original_assertion_types
+
+    assert assertion["assertionType"] == "OPERATION_CLAIM_ASSERTION"
+    assert hostile_map_called is False
+
+    original_validator_type = contracts_module.jsonschema.Draft202012Validator
+    hostile_validator_called = False
+
+    class PermissiveValidator:
+        @staticmethod
+        def iter_errors(_payload):
+            return ()
+
+    def hostile_validator_type(*_args, **_kwargs):
+        nonlocal hostile_validator_called
+        hostile_validator_called = True
+        contracts_module.jsonschema.Draft202012Validator = \
+            original_validator_type
+        return PermissiveValidator()
+
+    contracts_module.jsonschema.Draft202012Validator = hostile_validator_type
+    try:
+        with pytest.raises(ContractViolation):
+            invoke_retained_contract_validation(ContractRegistry(), {
+                "schemaVersion": "ofarm.party.v0.1",
+                "partyId": "party:issue171.invalid-contract",
+            })
+    finally:
+        contracts_module.jsonschema.Draft202012Validator = \
+            original_validator_type
+
+    assert hostile_validator_called is False
 
 
 def test_tenant_origin_reference_snapshot_never_enters_global_placement():
@@ -2109,6 +2469,24 @@ def test_runtime_bundle_persists_components_in_exact_storage_carriers(fresh_stor
                 assert row["global_content_digest"] is None
                 assert row["tenant_content_digest"] == component.content_digest
 
+        semantics = bundle.component(
+            "RUNTIME_ENVIRONMENT_OBSERVED",
+            "environment:stable-decision-semantics.v1")
+        semantics_row = rows[(semantics.role, semantics.logical_ref)]
+        assert semantics_row["tenant_content_digest"] == semantics.content_digest
+        assert semantics_row["global_content_digest"] is None
+        cur.execute(
+            "SELECT canonical_bytes FROM runtime_tenant_content_blob "
+            "WHERE tenant_ref = %s AND content_digest = %s",
+            (config.TENANT_REF, semantics.content_digest),
+        )
+        assert cur.fetchone()["canonical_bytes"] == semantics.canonical_bytes
+        cur.execute(
+            "SELECT 1 FROM runtime_content_blob WHERE content_digest = %s",
+            (semantics.content_digest,),
+        )
+        assert cur.fetchone() is None
+
     # Tenant-neutral package/reference content is selected through the global
     # carrier and never copied into tenant canonical truth.
     assert store.get_record(config.ACTIVE_PROFILE.code_binding_profile_ref) is None
@@ -2342,6 +2720,7 @@ def test_caught_runtime_integrity_failure_poison_rolls_back_transaction(
     store, pipeline = fresh_store, fresh_pipeline
     party_id = f"party:issue171.rollback-only.{uuid.uuid4().hex}"
     marker = "ISSUE171_CAUGHT_SEMANTIC_MUTATION"
+    original_policy = policy.COMMIT_CLASS_TO_FAMILY
 
     with pytest.raises(RuntimeBundleError, match="rollback-only"):
         with store.serialized_tx() as cur:
@@ -2353,13 +2732,14 @@ def test_caught_runtime_integrity_failure_poison_rolls_back_transaction(
                 "partyState": "ACTIVE",
                 "recordedAt": context.now_iso(),
             })
-            policy.COMMIT_CLASS_TO_FAMILY[marker] = "HOSTILE_EVENT"
+            policy.COMMIT_CLASS_TO_FAMILY = MappingProxyType({
+                **original_policy, marker: "HOSTILE_EVENT"})
             try:
                 with pytest.raises(
                         RuntimeBundleError, match="decision semantic state"):
                     GatePipeline._assert_runtime_composition(pipeline)
             finally:
-                policy.COMMIT_CLASS_TO_FAMILY.pop(marker, None)
+                policy.COMMIT_CLASS_TO_FAMILY = original_policy
             latch = store._active_transaction_integrity
             with pytest.raises(AttributeError, match="one-way"):
                 latch.poisoned = False
@@ -3170,6 +3550,101 @@ def test_gate_entry_refuses_temporary_semantic_mutation_even_if_restored(
                 GatePipeline._commit_in_tx(pipeline, cur, submission)
 
 
+def test_commit_rejects_behavioral_json_before_self_restoring_authority_swap(
+        fresh_pipeline):
+    from kernel import policy
+
+    pipeline = fresh_pipeline
+    original = policy.COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS
+    behavior_called = False
+
+    class OneShotAuthorityMap(dict):
+        def __getitem__(self, key):
+            policy.COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS = original
+            return "OBSERVE_CREATE_OBSERVATION"
+
+    class BehavioralSubmission(dict):
+        def items(self):
+            nonlocal behavior_called
+            behavior_called = True
+            policy.COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS = \
+                OneShotAuthorityMap(original)
+            return dict.items(self)
+
+    submission = BehavioralSubmission(demo.spray_submission(
+        f"issue171-behavioral-submission:{uuid.uuid4().hex}",
+        erp_id=f"erp:issue171.behavioral-submission.{uuid.uuid4().hex}",
+        confirm=False,
+    ))
+    try:
+        with pytest.raises(ContractViolation, match="exact built-in JSON"):
+            pipeline.commit(submission)
+    finally:
+        policy.COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS = original
+
+    assert behavior_called is False
+    assert policy.COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS is original
+
+    nested_behavior_called = False
+
+    class BehavioralList(list):
+        def __iter__(self):
+            nonlocal nested_behavior_called
+            nested_behavior_called = True
+            raise AssertionError("behavioral nested container executed")
+
+    nested = demo.spray_submission(
+        f"issue171-behavioral-nested:{uuid.uuid4().hex}",
+        erp_id=f"erp:issue171.behavioral-nested.{uuid.uuid4().hex}",
+        confirm=False,
+    )
+    nested["evidenceRefs"] = BehavioralList(nested.get("evidenceRefs", []))
+    with pytest.raises(ContractViolation, match="exact built-in JSON"):
+        pipeline.commit(nested)
+    assert nested_behavior_called is False
+
+
+def test_store_refuses_self_restoring_contract_validator_substitution(
+        fresh_store):
+    store = fresh_store
+    original = ContractRegistry.validate
+    hostile_called = False
+    party_id = f"party:issue171.contract-self-restore.{uuid.uuid4().hex}"
+    hostile_party_id = (
+        f"party:issue171.contract-hostile.{uuid.uuid4().hex}")
+
+    def hostile_validate(self, payload):
+        nonlocal hostile_called
+        hostile_called = True
+        ContractRegistry.validate = original
+        return ContractRegistry.get(self, payload["schemaVersion"])
+
+    with pytest.raises(RuntimeBundleError, match="rollback-only"):
+        with store.serialized_tx() as cur:
+            store.insert_record(cur, {
+                "schemaVersion": "ofarm.party.v0.1",
+                "partyId": party_id,
+                "partyClass": "NATURAL_PERSON",
+                "displayName": "Issue 171 contract dispatch test (fictional)",
+                "partyState": "ACTIVE",
+                "recordedAt": context.now_iso(),
+            })
+            ContractRegistry.validate = hostile_validate
+            try:
+                with pytest.raises(
+                        RuntimeBundleError, match="validation dispatch"):
+                    store.insert_record(cur, {
+                        "schemaVersion": "ofarm.party.v0.1",
+                        "partyId": hostile_party_id,
+                    })
+            finally:
+                ContractRegistry.validate = original
+
+    assert hostile_called is False
+    assert store.get_record(party_id) is None
+    assert store.get_record(hostile_party_id) is None
+
+
 def test_gate_uses_retained_stage_callable_during_temporary_class_mutation(
         fresh_store, fresh_pipeline):
     from kernel import gates as gates_module
@@ -3195,9 +3670,11 @@ def test_gate_uses_retained_stage_callable_during_temporary_class_mutation(
             ctx = GatePipeline._new_context(pipeline, cur, submission)
             ingress_run = gates_module._GATE_ENTRY_CALLABLES[0][2]
             ingress_run(gates_module.IngressNormalizer(), ctx)
-            stage, stage_type, retained_run, retained_code = \
+            stage, stage_type, retained_run, retained_code, retained_state = \
                 pipeline._stage_dispatch[0]
             assert retained_run.__code__ is retained_code
+            assert gates_module.callable_state_matches(
+                retained_run, retained_state)
             original = stage_type.run
             stage_type.run = hostile_run
             try:
@@ -3215,6 +3692,7 @@ def test_runtime_bundle_late_semantic_mutation_rolls_back_current_transaction(
     store = fresh_store
     party_id = f"party:issue171.late-semantics.{uuid.uuid4().hex}"
     marker = "ISSUE171_HOSTILE_COMMIT_CLASS"
+    original_policy = policy.COMMIT_CLASS_TO_FAMILY
     try:
         with pytest.raises(RuntimeBundleError, match="decision semantic state"):
             with store.serialized_tx() as cur:
@@ -3226,9 +3704,10 @@ def test_runtime_bundle_late_semantic_mutation_rolls_back_current_transaction(
                     "partyState": "ACTIVE",
                     "recordedAt": context.now_iso(),
                 })
-                policy.COMMIT_CLASS_TO_FAMILY[marker] = "HOSTILE_EVENT"
+                policy.COMMIT_CLASS_TO_FAMILY = MappingProxyType({
+                    **original_policy, marker: "HOSTILE_EVENT"})
     finally:
-        policy.COMMIT_CLASS_TO_FAMILY.pop(marker, None)
+        policy.COMMIT_CLASS_TO_FAMILY = original_policy
     assert store.get_record(party_id) is None
 
 
@@ -3237,11 +3716,13 @@ def test_preselection_semantic_mutation_changes_runtime_bundle_digest():
 
     clean = build_runtime_bundle(config.ACTIVE_PROFILE)
     marker = "ISSUE171_PRESELECTION_SEMANTIC_MUTATION"
+    original_policy = policy.COMMIT_CLASS_TO_FAMILY
     try:
-        policy.COMMIT_CLASS_TO_FAMILY[marker] = "HOSTILE_EVENT"
+        policy.COMMIT_CLASS_TO_FAMILY = MappingProxyType({
+            **original_policy, marker: "HOSTILE_EVENT"})
         changed = build_runtime_bundle(config.ACTIVE_PROFILE)
     finally:
-        policy.COMMIT_CLASS_TO_FAMILY.pop(marker, None)
+        policy.COMMIT_CLASS_TO_FAMILY = original_policy
 
     clean_semantics = clean.component(
         "RUNTIME_ENVIRONMENT_OBSERVED",
@@ -3402,14 +3883,16 @@ def test_semantic_proof_rechecks_mutation_after_restore():
 
     selected = _capture_decision_semantics()
     marker = "ISSUE171_REPEATED_SEMANTIC_MUTATION"
+    original_policy = policy.COMMIT_CLASS_TO_FAMILY
     _require_decision_semantics(selected)
     for _index in range(2):
-        policy.COMMIT_CLASS_TO_FAMILY[marker] = "HOSTILE_EVENT"
+        policy.COMMIT_CLASS_TO_FAMILY = MappingProxyType({
+            **original_policy, marker: "HOSTILE_EVENT"})
         try:
             with pytest.raises(RuntimeBundleError, match="decision semantic state"):
                 _require_decision_semantics(selected)
         finally:
-            policy.COMMIT_CLASS_TO_FAMILY.pop(marker)
+            policy.COMMIT_CLASS_TO_FAMILY = original_policy
         _require_decision_semantics(selected)
 
 

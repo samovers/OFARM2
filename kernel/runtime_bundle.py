@@ -330,7 +330,7 @@ def require_current_runtime_catalog(bundle, package_root: Path) -> None:
             or selected_semantics.repository_path !=
             "runtime-observed/decision-semantics-v1"
             or selected_semantics.canonicalization != JSON_CANONICALIZATION
-            or selected_semantics.placement != GLOBAL_CONTENT_PLACEMENT):
+            or selected_semantics.placement != TENANT_CONTENT_PLACEMENT):
         raise RuntimeBundleError(
             "live RuntimeBundle decision semantics provenance is invalid")
     selected_semantics_document = _strict_json_value(
@@ -466,6 +466,9 @@ def component_placement(
     tenant carrier even though the RuntimeBundle digest covers them together
     with the global execution content.
     """
+    if (role == "RUNTIME_ENVIRONMENT_OBSERVED"
+            and repository_path == "runtime-observed/decision-semantics-v1"):
+        return TENANT_CONTENT_PLACEMENT
     if (repository_path.startswith("database/")
             and role in {"PROFILE_INSTANCE", "REFERENCE_SNAPSHOT", "REFERENCE_DATA"}):
         return TENANT_CONTENT_PLACEMENT
@@ -6137,7 +6140,7 @@ def _decision_semantics_component_from_canonical(
         canonicalization=JSON_CANONICALIZATION,
         content_digest=sha256_bytes(canonical),
         canonical_bytes=canonical,
-        placement=GLOBAL_CONTENT_PLACEMENT,
+        placement=TENANT_CONTENT_PLACEMENT,
     )
 
 

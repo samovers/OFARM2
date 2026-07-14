@@ -12,8 +12,10 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+from . import authority as authority_module
 from . import config, policy, profile_policy, sufficiency
 from .authority import authority_decision_allowed
+from .callable_state import capture_callable_state, callable_state_matches
 from .context import (REGSR_SNAPSHOT_PREFIX, current_reference_snapshot,
                       invoke_product_register_identities, parse_ts)
 from .contracts import ContractViolation, UnknownContract, sha256_of
@@ -27,9 +29,72 @@ from .stages import (
     _invoke_retained_context_service,
 )
 from .store import Store
+from .store import invoke_store_contract_validation as _VALIDATE_CONTRACT
 
 
 _CONFIG_BACKED_POLICY = object()
+
+_NON_COMMITABLE_SCOPE_TYPES = policy.NON_COMMITABLE_SCOPE_TYPES
+_EXTENT_CARRIER_USABLE_STATES = policy.EXTENT_CARRIER_USABLE_STATES
+_EXTENT_CARRIER_DRIVEN_PROMOTIONS = policy.EXTENT_CARRIER_DRIVEN_PROMOTIONS
+_EVENT_TIME_PLAUSIBILITY_FUTURE_HOURS = \
+    policy.EVENT_TIME_PLAUSIBILITY_FUTURE_HOURS
+_EVENT_TIME_PLAUSIBILITY_PAST_DAYS = policy.EVENT_TIME_PLAUSIBILITY_PAST_DAYS
+_COMMIT_CLASS_TO_PROMOTION_TARGET = policy.COMMIT_CLASS_TO_PROMOTION_TARGET
+_CONSEQUENCE_SUBJECT_TYPES = policy.CONSEQUENCE_SUBJECT_TYPES
+_REVIEW_BRANCH = policy.review_branch
+_REVIEW_BRANCH_CODE = policy.review_branch.__code__
+_ACCEPTANCE_BY_ASSERTION_TYPE = policy.ACCEPTANCE_BY_ASSERTION_TYPE
+_SELF_ACCEPTABLE_ASSERTION_TYPES = policy.SELF_ACCEPTABLE_ASSERTION_TYPES
+_COMPLIANCE_ASSERTED_STATUSES = policy.COMPLIANCE_ASSERTED_STATUSES
+_STRUCTURE_PAYLOAD_IDENTITY_TYPE = policy.STRUCTURE_PAYLOAD_IDENTITY_TYPE
+_STRUCTURE_PAYLOAD_REF_FIELDS = policy.STRUCTURE_PAYLOAD_REF_FIELDS
+_STRUCTURE_REF_CATEGORY_KIND = policy.STRUCTURE_REF_CATEGORY_KIND
+_IS_RESOLVED_UCUM_UNIT = policy.is_resolved_ucum_unit
+_IS_RESOLVED_UCUM_UNIT_CODE = policy.is_resolved_ucum_unit.__code__
+_DOSE_SANITY_MAX = policy.DOSE_SANITY_MAX
+_NON_WHOLE_EXTENT_CLASSES = policy.NON_WHOLE_EXTENT_CLASSES
+_ALLOWED_EXTENT_BOUND_KINDS = policy.ALLOWED_EXTENT_BOUND_KINDS
+_RETAINED_POLICY_FUNCTIONS = (
+    (policy, "review_branch", _REVIEW_BRANCH, _REVIEW_BRANCH_CODE,
+     capture_callable_state(_REVIEW_BRANCH)),
+    (policy, "is_resolved_ucum_unit", _IS_RESOLVED_UCUM_UNIT,
+     _IS_RESOLVED_UCUM_UNIT_CODE,
+     capture_callable_state(_IS_RESOLVED_UCUM_UNIT)),
+    (authority_module, "authority_decision_allowed",
+     authority_decision_allowed, authority_decision_allowed.__code__,
+     capture_callable_state(authority_decision_allowed)),
+)
+
+
+def _invoke_retained_policy_function(
+        ctx, entry, *args,
+        _retained=_RETAINED_POLICY_FUNCTIONS,
+        _mark_integrity=Store._mark_transaction_integrity_violation,
+        _state_matches=callable_state_matches,
+):
+    if type(entry) is not tuple or entry not in _retained:
+        _mark_integrity(ctx.store)
+        raise RuntimeBundleError(
+            "retained validator policy dispatch entry is malformed")
+    module, name, function, code, callable_state = entry
+
+    def require() -> None:
+        if (vars(module).get(name) is not function
+                or function.__code__ is not code
+                or not _state_matches(function, callable_state)):
+            _mark_integrity(ctx.store)
+            raise RuntimeBundleError(
+                f"retained validator policy function {name} changed")
+
+    require()
+    try:
+        result = function(*args)
+    except BaseException:
+        require()
+        raise
+    require()
+    return result
 
 
 def _refusal(ctx: GateContext, outcome: str, problem: dict,
@@ -44,7 +109,11 @@ def _refusal(ctx: GateContext, outcome: str, problem: dict,
     return GateRefusal("VALIDATION", outcome, final, [problem])
 
 
-def _validation_policy_refusal(ctx: GateContext, detail) -> GateRefusal:
+def _validation_policy_refusal(
+        ctx: GateContext, detail,
+        _refuse=_refusal,
+) -> GateRefusal:
+    _refusal = _refuse
     return _refusal(ctx, "FAIL_PROFILE_POLICY", runtime_problem(
         "PROFILE_NOT_ACTIVE", "Validation policy unavailable",
         f"the active profile's validation policy could not be loaded ({detail}); "
@@ -56,7 +125,9 @@ def _validation_policy_or_refusal(
     validation_policy=_CONFIG_BACKED_POLICY,
     *,
     required_path: tuple[str, ...] = (),
+    _policy_refusal=_validation_policy_refusal,
 ) -> tuple[dict | None, GateRefusal | None]:
+    _validation_policy_refusal = _policy_refusal
     if validation_policy is _CONFIG_BACKED_POLICY:
         try:
             validation = profile_policy.validation_policy()
@@ -82,13 +153,17 @@ def _validation_policy_or_refusal(
     return validation, None
 
 
-def _assert_contained(ctx: GateContext, scope_type: str, scope_ref: str,
-                      where: str) -> GateRefusal | None:
+def _assert_contained(
+        ctx: GateContext, scope_type: str, scope_ref: str, where: str,
+        _non_commitable_scope_types=_NON_COMMITABLE_SCOPE_TYPES,
+        _refuse=_refusal,
+) -> GateRefusal | None:
     """Farm containment with no escape hatches: a FARM-typed ref must BE the
     authorized farm; TENANT/DEPLOYMENT are not commitable claim scopes; any
     other governed scope ref must RESOLVE, BE an IdentityRecord, and be
     anchored on the authorized farm."""
-    if scope_type in policy.NON_COMMITABLE_SCOPE_TYPES:
+    _refusal = _refuse
+    if scope_type in _non_commitable_scope_types:
         return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
             "SCOPE_NOT_AUTHORIZED", "Non-farm claim scope refused",
             f"{where} uses scope type {scope_type}; commit-path claims are "
@@ -122,10 +197,13 @@ def _assert_contained(ctx: GateContext, scope_type: str, scope_ref: str,
     return None
 
 
-def _assert_parent_scope_contained(ctx: GateContext, ref: str,
-                                   where: str) -> GateRefusal | None:
+def _assert_parent_scope_contained(
+        ctx: GateContext, ref: str, where: str,
+        _refuse=_refusal,
+) -> GateRefusal | None:
     """A structure payload's parent scope ref must resolve to a farm-contained
     IdentityRecord (or be the authorized farm itself)."""
+    _refusal = _refuse
     if ref == ctx.farm_ref:
         return None
     row = ctx.store.get_record(ref)
@@ -176,18 +254,25 @@ def _structure_target_identity(ctx: GateContext, assertion_ref: str) -> str | No
     return payload.get("identityRecordRef") if payload else None
 
 
-def _verified_product_binding(ctx: GateContext) -> dict | None:
+def _verified_product_binding(
+        ctx: GateContext,
+        _resolved_bindings=sufficiency.resolved_bindings,
+) -> dict | None:
     """The carrier's first CROP_PROTECTION_PRODUCT binding, if any. Resolves
     binding refs kind-checked (a wrong-kind ref is not a binding and never a
     KeyError); CodeBindingValidator refuses wrong-kind refs governably first."""
-    bindings = sufficiency.resolved_bindings(
+    bindings = _resolved_bindings(
         ctx.store, ctx.sub["payload"].get("agronomicIdentityBindingRefs", []))
     product_bindings = [b for b in bindings
                         if b.get("bindingRole") == "CROP_PROTECTION_PRODUCT"]
     return product_bindings[0] if product_bindings else None
 
 
-def _carrier_admits_bound(payload: dict) -> bool:
+def _carrier_admits_bound(
+        payload: dict,
+        _usable_states=_EXTENT_CARRIER_USABLE_STATES,
+        _driven_promotions=_EXTENT_CARRIER_DRIVEN_PROMOTIONS,
+) -> bool:
     """Whether a resolved extent-carrier (PartialExtent) admits being the bound of
     a promoting, materializing operation-claim. Honors the carrier's OWN declared
     boundary (Kernel rule 4), never overrides it: the carrier must be in a usable
@@ -198,12 +283,12 @@ def _carrier_admits_bound(payload: dict) -> bool:
     (policy.EXTENT_CARRIER_DRIVEN_PROMOTIONS: the accepted consequence, the
     materialized extent, the derived current state, and the PassportView it backs).
     A draft / disputed / superseded or self-forbidding carrier is not a bound."""
-    if payload.get("extentState") not in policy.EXTENT_CARRIER_USABLE_STATES:
+    if payload.get("extentState") not in _usable_states:
         return False
     boundary = payload.get("promotionBoundary", {})
     if not boundary.get("mayDriveMaterialization", False):
         return False
-    if set(boundary.get("mustNotPromoteTo", [])) & policy.EXTENT_CARRIER_DRIVEN_PROMOTIONS:
+    if set(boundary.get("mustNotPromoteTo", [])) & _driven_promotions:
         return False
     return True
 
@@ -216,7 +301,13 @@ class TemporalConformanceValidator:
     """Junk event times refuse; implausible windows route to review
     (no temporal reason code exists in the registry — ERRATA E-001)."""
 
-    def run(self, ctx: GateContext) -> GateRefusal | None:
+    def run(
+            self, ctx: GateContext,
+            _future_hours=_EVENT_TIME_PLAUSIBILITY_FUTURE_HOURS,
+            _past_days=_EVENT_TIME_PLAUSIBILITY_PAST_DAYS,
+            _refuse=_refusal,
+    ) -> GateRefusal | None:
+        _refusal = _refuse
         if ctx.temporal_problem is not None:
             return _refusal(ctx, "FAIL_TEMPORAL", ctx.temporal_problem)
         event_time = ctx.event_time or ctx.captured_at
@@ -230,8 +321,8 @@ class TemporalConformanceValidator:
                 f"event time {event_time!r} is not a valid timestamp (ERRATA "
                 "E-001: no temporal-conformance reason code exists in the registry)"))
         now = datetime.now(timezone.utc)
-        if et > now + timedelta(hours=policy.EVENT_TIME_PLAUSIBILITY_FUTURE_HOURS) or \
-           et < now - timedelta(days=policy.EVENT_TIME_PLAUSIBILITY_PAST_DAYS):
+        if et > now + timedelta(hours=_future_hours) or \
+           et < now - timedelta(days=_past_days):
             ctx.review_route_reasons.append(runtime_problem(
                 "EVIDENCE_INSUFFICIENT", "Event time outside plausibility window",
                 f"event time {event_time} is outside the plausibility window; "
@@ -246,10 +337,16 @@ class PromotionTargetValidator:
     classes pass and are stopped at REVIEW_PROMOTION instead, exactly as the
     inherited gate-sequencing fixtures pin it."""
 
-    def run(self, ctx: GateContext) -> GateRefusal | None:
-        promoting = ctx.commit_class in policy.COMMIT_CLASS_TO_PROMOTION_TARGET
+    def run(
+            self, ctx: GateContext,
+            _promotion_targets=_COMMIT_CLASS_TO_PROMOTION_TARGET,
+            _consequence_subject_types=_CONSEQUENCE_SUBJECT_TYPES,
+            _refuse=_refusal,
+    ) -> GateRefusal | None:
+        _refusal = _refuse
+        promoting = ctx.commit_class in _promotion_targets
         if ctx.requested_target and promoting:
-            lawful = policy.COMMIT_CLASS_TO_PROMOTION_TARGET[ctx.commit_class]
+            lawful = _promotion_targets[ctx.commit_class]
             if ctx.requested_target != lawful:
                 return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
                     "HIGH_CONSEQUENCE_BLOCKED", "Unlawful promotion target",
@@ -258,7 +355,7 @@ class PromotionTargetValidator:
                     "(no shortcut to truth)"))
         if promoting:
             subject_type = ctx.sub.get("subjectType", "FARM")
-            if subject_type not in policy.CONSEQUENCE_SUBJECT_TYPES:
+            if subject_type not in _consequence_subject_types:
                 return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
                     "IDENTITY_UNRESOLVED", "Subject type cannot promote",
                     f"subjectType {subject_type} is not promotable to an accepted "
@@ -269,16 +366,20 @@ class PromotionTargetValidator:
 class ScopeContainmentValidator:
     """Farm containment over the submission's own scope-bearing fields."""
 
-    def run(self, ctx: GateContext) -> GateRefusal | None:
-        if ctx.commit_class in policy.COMMIT_CLASS_TO_PROMOTION_TARGET:
-            refusal = _assert_contained(
+    def run(
+            self, ctx: GateContext,
+            _promotion_targets=_COMMIT_CLASS_TO_PROMOTION_TARGET,
+            _contained=_assert_contained,
+    ) -> GateRefusal | None:
+        if ctx.commit_class in _promotion_targets:
+            refusal = _contained(
                 ctx, ctx.sub.get("subjectType", "FARM"),
                 ctx.sub.get("subjectRef", ctx.farm_ref), "subject")
             if refusal:
                 return refusal
         for s in ctx.sub.get("targetScopes") or []:
-            refusal = _assert_contained(ctx, s["scopeType"], s["scopeRef"],
-                                        "targetScopes")
+            refusal = _contained(
+                ctx, s["scopeType"], s["scopeRef"], "targetScopes")
             if refusal:
                 return refusal
         return None
@@ -288,7 +389,11 @@ class SupersessionValidator:
     """A correction must name a real, in-force consequence on THIS farm —
     an unvalidated ref could knock another farm's truth out of force."""
 
-    def run(self, ctx: GateContext) -> GateRefusal | None:
+    def run(
+            self, ctx: GateContext,
+            _refuse=_refusal,
+    ) -> GateRefusal | None:
+        _refusal = _refuse
         supersedes = ctx.sub.get("supersedesConsequenceRef")
         if not supersedes:
             return None
@@ -316,19 +421,80 @@ class SupersessionValidator:
         return None
 
 
+def _validate_governance_contest(
+        ctx: GateContext,
+        _refuse=_refusal,
+) -> GateRefusal | None:
+    """Validate a contest against an in-force consequence."""
+    target_ref = ctx.acceptance_target
+    if not target_ref:
+        return _refuse(ctx, "FAIL_SEMANTIC", runtime_problem(
+            "EVIDENCE_INSUFFICIENT", "Contest without target",
+            "a contest requires reviewTargetConsequenceRef"))
+    row = ctx.store.get_record(target_ref)
+    if row is None or row["record_kind"] != "ofarm.acceptedeventconsequence.v0.1":
+        return _refuse(ctx, "FAIL_REFERENCE_RESOLUTION", runtime_problem(
+            "EVIDENCE_REFERENCE_UNAVAILABLE", "Contest target unresolved",
+            f"{target_ref} does not resolve to a stored AcceptedEventConsequence"))
+    consequence = row["payload"]
+    ctx.acceptance_payload = consequence
+    if {"scopeType": "FARM", "scopeRef": ctx.farm_ref} \
+            not in consequence["anchorScopes"]:
+        return _refuse(ctx, "FAIL_SEMANTIC", runtime_problem(
+            "SCOPE_NOT_AUTHORIZED", "Cross-farm contest refused",
+            f"{target_ref} is not anchored on {ctx.farm_ref}"))
+    if (consequence.get("inForceState") != "IN_FORCE"
+            or ctx.store.is_superseded(target_ref)):
+        return _refuse(ctx, "FAIL_SEMANTIC", runtime_problem(
+            "SUPERSEDED_RECORD_USED", "Contest target not in force",
+            f"{target_ref} is not an in-force consequence; only current state "
+            "can be disputed (a superseded/withdrawn record is already out of force)"))
+    if ctx.store.edges_from(target_ref, "DISPUTE"):
+        return _refuse(ctx, "FAIL_SEMANTIC", runtime_problem(
+            "SUPERSEDED_RECORD_USED", "Target already disputed",
+            f"{target_ref} already carries an open dispute"))
+    rationale_text = ctx.sub.get("reviewRationale")
+    if not (isinstance(rationale_text, str) and rationale_text.strip()):
+        return _refuse(ctx, "FAIL_SEMANTIC", runtime_problem(
+            "EVIDENCE_INSUFFICIENT", "Contest without rationale",
+            "a contest must state its dispute rationale"))
+    for ref in ctx.sub.get("reviewEvidenceRefs") or []:
+        evidence_row = ctx.store.get_record(ref)
+        if (evidence_row is None
+                or evidence_row["record_kind"] != "ofarm.evidencerecord.v0.1"):
+            return _refuse(ctx, "FAIL_REFERENCE_RESOLUTION", runtime_problem(
+                "EVIDENCE_REFERENCE_UNAVAILABLE", "Contest evidence unresolved",
+                f"contest evidence {ref} does not resolve to a durable EvidenceRecord"))
+    ctx.log("VALIDATION", "PASS")
+    return None
+
+
 class GovernanceAcceptanceValidator:
     """A review acceptance names a real, queued, farm-contained, unreviewed
     assertion; D8 holds at the queue door; the act carries its rationale and
     durable review evidence."""
 
-    def run(self, ctx: GateContext) -> GateRefusal | None:
+    def run(
+            self, ctx: GateContext,
+            _invoke_policy=_invoke_retained_policy_function,
+            _review_branch_entry=_RETAINED_POLICY_FUNCTIONS[0],
+            _acceptance_by_assertion_type=_ACCEPTANCE_BY_ASSERTION_TYPE,
+            _self_acceptable_types=_SELF_ACCEPTABLE_ASSERTION_TYPES,
+            _structure_target=_structure_target_identity,
+            _in_force_structures=_in_force_structural_consequences_for,
+            _validate_contest=_validate_governance_contest,
+            _refuse=_refusal,
+    ) -> GateRefusal | None:
+        _refusal = _refuse
         if ctx.commit_class != "GOVERNANCE_DECISION":
             return None
         # Resolve the review-decision verb fail-closed (G5 §3.1): the
         # (reviewAction, decisionOutcomeState) pair must name a supported branch.
         # CONTESTED (deferred to G5-3), a mismatched outcome, or any unsupported
         # combination refuses here — never silently treated as accept or reject.
-        branch = policy.review_branch(ctx.review_action, ctx.review_outcome)
+        branch = _invoke_policy(
+            ctx, _review_branch_entry,
+            ctx.review_action, ctx.review_outcome)
         if branch is None:
             return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
                 "EVIDENCE_INSUFFICIENT", "Unsupported review decision",
@@ -339,7 +505,7 @@ class GovernanceAcceptanceValidator:
         if branch == "CONTEST":
             # CONTEST targets an in-force CONSEQUENCE, not a queued assertion
             # (G5-4 / spec §6.3) — wholly separate validity guards
-            return self._validate_contest(ctx)
+            return _validate_contest(ctx)
         is_reject = branch == "REJECT"
         target_ref = ctx.sub.get("reviewTargetAssertionRef")
         if not target_ref:
@@ -376,8 +542,9 @@ class GovernanceAcceptanceValidator:
         # the acceptance-path type gate is a PROMOTION guard — a reject promotes
         # nothing, so REJECT is NOT type-gated (G5 §3.3): a reviewer may decline a
         # queued claim of any kind, including one with no acceptance path.
-        if not is_reject \
-                and target["assertionType"] not in policy.ACCEPTANCE_BY_ASSERTION_TYPE:
+        if (not is_reject
+                and target["assertionType"] not in
+                _acceptance_by_assertion_type):
             return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
                 "IDENTITY_UNRESOLVED", "Assertion type not acceptable",
                 f"{target['assertionType']} has no acceptance path"))
@@ -386,7 +553,7 @@ class GovernanceAcceptanceValidator:
         # (G5 §3.2 reuses the distinct-reviewer bound for reject)
         if (target["assertedByPartyRef"] == ctx.acting_party
                 and target["assertionType"]
-                not in policy.SELF_ACCEPTABLE_ASSERTION_TYPES):
+                not in _self_acceptable_types):
             return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
                 "HUMAN_APPROVAL_REQUIRED", "Self-review out of scope",
                 f"self-review covers routine operation claims only (D8); "
@@ -404,8 +571,8 @@ class GovernanceAcceptanceValidator:
             intent_edges = ctx.store.edges_from(target_ref, "LINEAGE_SUPERSEDES_INTENT")
             intent = intent_edges[0]["dst_record_id"] if intent_edges else None
             if target["assertionType"] == "STRUCTURE_ASSERTION":
-                identity_ref = _structure_target_identity(ctx, target_ref)
-                in_force = (_in_force_structural_consequences_for(ctx, identity_ref)
+                identity_ref = _structure_target(ctx, target_ref)
+                in_force = (_in_force_structures(ctx, identity_ref)
                             if identity_ref else [])
                 if len(in_force) > 1:
                     return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
@@ -448,51 +615,6 @@ class GovernanceAcceptanceValidator:
         ctx.log("VALIDATION", "PASS")
         return None
 
-    def _validate_contest(self, ctx: GateContext) -> GateRefusal | None:
-        """A CONTEST names a real, in-force, farm-contained, not-already-disputed
-        AcceptedEventConsequence; the act carries its rationale and (optional)
-        validated evidence (spec §6.3). Inherits no acceptance promotion guard —
-        a dispute promotes and retires nothing."""
-        target_ref = ctx.acceptance_target   # the in-force consequence ref
-        if not target_ref:
-            return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
-                "EVIDENCE_INSUFFICIENT", "Contest without target",
-                "a contest requires reviewTargetConsequenceRef"))
-        row = ctx.store.get_record(target_ref)
-        if row is None or row["record_kind"] != "ofarm.acceptedeventconsequence.v0.1":
-            return _refusal(ctx, "FAIL_REFERENCE_RESOLUTION", runtime_problem(
-                "EVIDENCE_REFERENCE_UNAVAILABLE", "Contest target unresolved",
-                f"{target_ref} does not resolve to a stored AcceptedEventConsequence"))
-        conseq = row["payload"]
-        ctx.acceptance_payload = conseq   # fetched once; emission reuses it
-        if {"scopeType": "FARM", "scopeRef": ctx.farm_ref} not in conseq["anchorScopes"]:
-            return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
-                "SCOPE_NOT_AUTHORIZED", "Cross-farm contest refused",
-                f"{target_ref} is not anchored on {ctx.farm_ref}"))
-        if conseq.get("inForceState") != "IN_FORCE" or ctx.store.is_superseded(target_ref):
-            return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
-                "SUPERSEDED_RECORD_USED", "Contest target not in force",
-                f"{target_ref} is not an in-force consequence; only current state "
-                "can be disputed (a superseded/withdrawn record is already out of force)"))
-        if ctx.store.edges_from(target_ref, "DISPUTE"):
-            return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
-                "SUPERSEDED_RECORD_USED", "Target already disputed",
-                f"{target_ref} already carries an open dispute"))
-        rationale_text = ctx.sub.get("reviewRationale")
-        if not (isinstance(rationale_text, str) and rationale_text.strip()):
-            return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
-                "EVIDENCE_INSUFFICIENT", "Contest without rationale",
-                "a contest must state its dispute rationale"))
-        for ref in ctx.sub.get("reviewEvidenceRefs") or []:
-            ev_row = ctx.store.get_record(ref)
-            if ev_row is None or ev_row["record_kind"] != "ofarm.evidencerecord.v0.1":
-                return _refusal(ctx, "FAIL_REFERENCE_RESOLUTION", runtime_problem(
-                    "EVIDENCE_REFERENCE_UNAVAILABLE", "Contest evidence unresolved",
-                    f"contest evidence {ref} does not resolve to a durable EvidenceRecord"))
-        ctx.log("VALIDATION", "PASS")
-        return None
-
-
 class ComplianceClaimValidator:
     """A compliance assertion carries a minimal STRUCTURED claim — statement,
     asserted status, recognized governing rules, resolvable farm-contained
@@ -508,7 +630,13 @@ class ComplianceClaimValidator:
             else frozenset(recognized_rule_refs)
         )
 
-    def run(self, ctx: GateContext) -> GateRefusal | None:
+    def run(
+            self, ctx: GateContext,
+            _assert_scope=_assert_contained,
+            _asserted_statuses=_COMPLIANCE_ASSERTED_STATUSES,
+            _refuse=_refusal,
+    ) -> GateRefusal | None:
+        _refusal = _refuse
         if ctx.commit_class != "COMPLIANCE_ASSERTION":
             return None
         payload = ctx.sub.get("payload")
@@ -525,7 +653,7 @@ class ComplianceClaimValidator:
                 "complianceClaim.statement must state what is being claimed"))
         status = claim.get("assertedStatus")
         if not isinstance(status, str) \
-                or status not in policy.COMPLIANCE_ASSERTED_STATUSES:
+                or status not in _asserted_statuses:
             return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
                 "EVIDENCE_INSUFFICIENT", "Compliance claim without asserted status",
                 "complianceClaim.assertedStatus must be one of CLAIMED_COMPLIANT, "
@@ -564,7 +692,7 @@ class ComplianceClaimValidator:
                 "be IdentityRecords"))
         # a FARM identity's record id IS the farm ref, so the FARM branch
         # of _assert_contained compares it directly against ctx.farm_ref
-        refusal = _assert_contained(
+        refusal = _assert_scope(
             ctx, subject_row["payload"]["identityType"],
             subject_ref, "complianceClaim.subjectScopeRef")
         if refusal:
@@ -581,7 +709,13 @@ class StructureCarrierValidator:
     (Kernel rule 4: no shortcut to truth; rule 7: refuse over pretend). Generic
     over identity type — no scheme logic, no per-type branch."""
 
-    def run(self, ctx: GateContext) -> GateRefusal | None:
+    def run(
+            self, ctx: GateContext,
+            _validate_contract=_VALIDATE_CONTRACT,
+            _identity_types=_STRUCTURE_PAYLOAD_IDENTITY_TYPE,
+            _refuse=_refusal,
+    ) -> GateRefusal | None:
+        _refusal = _refuse
         payload = ctx.sub.get("payload")
         if not isinstance(payload, dict):
             return _refusal(ctx, "FAIL_CARRIER", runtime_problem(
@@ -590,17 +724,17 @@ class StructureCarrierValidator:
                 "(Farm/Field/CropCycle/Equipment/AppliedResource); the claim stays "
                 "a draft"))
         try:
-            contract = ctx.store.registry.validate(payload)
+            contract = _validate_contract(ctx.store, payload)
         except (ContractViolation, UnknownContract) as exc:
             # an unknown or malformed carrier schema is a governed refusal,
             # never an unrecorded crash (mirrors CarrierSchemaValidator)
             return _refusal(ctx, "FAIL_SCHEMA", runtime_problem(
                 "EVIDENCE_INSUFFICIENT", "Structure payload schema violation", str(exc)))
-        if contract.kind not in policy.STRUCTURE_PAYLOAD_IDENTITY_TYPE:
+        if contract.kind not in _identity_types:
             return _refusal(ctx, "FAIL_CARRIER", runtime_problem(
                 "EVIDENCE_INSUFFICIENT", "Wrong structure carrier",
                 f"structure assertions carry a typed identity payload "
-                f"(one of {sorted(policy.STRUCTURE_PAYLOAD_IDENTITY_TYPE)}), got "
+                f"(one of {sorted(_identity_types)}), got "
                 f"{contract.kind}; the claim stays a draft"))
         # validated; the carrier id rides to EnvelopePersist (storage + edge)
         # and to the promotion emitter (IdentityRecord creation). PASS is logged
@@ -619,10 +753,19 @@ class StructureSemanticsValidator:
     identity's current structural consequence — never a silent latest-wins.
     Generic over identity type; no scheme logic."""
 
-    def run(self, ctx: GateContext) -> GateRefusal | None:
+    def run(
+            self, ctx: GateContext,
+            _identity_types=_STRUCTURE_PAYLOAD_IDENTITY_TYPE,
+            _ref_fields=_STRUCTURE_PAYLOAD_REF_FIELDS,
+            _ref_category_kinds=_STRUCTURE_REF_CATEGORY_KIND,
+            _assert_parent=_assert_parent_scope_contained,
+            _in_force_structures=_in_force_structural_consequences_for,
+            _refuse=_refusal,
+    ) -> GateRefusal | None:
+        _refusal = _refuse
         payload = ctx.sub["payload"]
         kind = payload["schemaVersion"]
-        identity_type = policy.STRUCTURE_PAYLOAD_IDENTITY_TYPE[kind]
+        identity_type = _identity_types[kind]
         identity_ref = payload["identityRecordRef"]
 
         # a Farm identity payload may only assert the authorized farm itself
@@ -653,7 +796,7 @@ class StructureSemanticsValidator:
                     f"identityRecordRef {identity_ref} is not anchored on {ctx.farm_ref}"))
 
         # payload-internal refs resolve to the right kinds / are farm-contained
-        for field, category, is_list in policy.STRUCTURE_PAYLOAD_REF_FIELDS.get(kind, []):
+        for field, category, is_list in _ref_fields.get(kind, ()):
             val = payload.get(field)
             if val is None:
                 continue
@@ -664,11 +807,11 @@ class StructureSemanticsValidator:
                             "SCOPE_NOT_AUTHORIZED", "Parent farm mismatch",
                             f"{field} must be the authorized farm {ctx.farm_ref}, not {ref}"))
                 elif category == "PARENT_SCOPE":
-                    refusal = _assert_parent_scope_contained(ctx, ref, field)
+                    refusal = _assert_parent(ctx, ref, field)
                     if refusal:
                         return refusal
                 else:
-                    expected = policy.STRUCTURE_REF_CATEGORY_KIND[category]
+                    expected = _ref_category_kinds[category]
                     row = ctx.store.get_record(ref)
                     if row is None or row["record_kind"] != expected:
                         return _refusal(ctx, "FAIL_REFERENCE_RESOLUTION", runtime_problem(
@@ -693,7 +836,7 @@ class StructureSemanticsValidator:
         # first assertions for one identityRecordRef could both pass here before
         # either commits. G2's serialized write path closes that race (see the
         # G2 ticket's folded-in hardening) — it is not a single-writer hole.
-        in_force = _in_force_structural_consequences_for(ctx, identity_ref)
+        in_force = _in_force_structures(ctx, identity_ref)
         supersedes = ctx.sub.get("supersedesConsequenceRef")
         if len(in_force) > 1:
             return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
@@ -730,14 +873,19 @@ class CarrierSchemaValidator:
     may never self-declare an accepted/corrected/disputed record class
     (an operation claim is not an accepted execution — Kernel rule 4)."""
 
-    def run(self, ctx: GateContext) -> GateRefusal | None:
+    def run(
+            self, ctx: GateContext,
+            _validate_contract=_VALIDATE_CONTRACT,
+            _refuse=_refusal,
+    ) -> GateRefusal | None:
+        _refusal = _refuse
         payload = ctx.sub.get("payload")
         if not isinstance(payload, dict):
             return _refusal(ctx, "FAIL_SCHEMA", runtime_problem(
                 "EVIDENCE_INSUFFICIENT", "Missing carrier payload",
                 "an operation claim requires an ExecutionRecordPayload carrier"))
         try:
-            contract = ctx.store.registry.validate(payload)
+            contract = _validate_contract(ctx.store, payload)
         except (ContractViolation, UnknownContract) as exc:
             # UnknownContract too: an unknown carrier schemaVersion is a
             # governed refusal, never an unrecorded crash (pride review)
@@ -768,7 +916,18 @@ class CarrierSemanticsValidator:
     def from_config_for_legacy_tests(cls):
         return cls(_CONFIG_BACKED_POLICY)
 
-    def run(self, ctx: GateContext) -> GateRefusal | None:
+    def run(
+            self, ctx: GateContext,
+            _invoke_policy=_invoke_retained_policy_function,
+            _unit_entry=_RETAINED_POLICY_FUNCTIONS[1],
+            _dose_max=_DOSE_SANITY_MAX,
+            _policy_or_refusal=_validation_policy_or_refusal,
+            _policy_refusal=_validation_policy_refusal,
+            _refuse=_refusal,
+    ) -> GateRefusal | None:
+        _validation_policy_or_refusal = _policy_or_refusal
+        _validation_policy_refusal = _policy_refusal
+        _refusal = _refuse
         payload = ctx.sub["payload"]
         validation, refusal = _validation_policy_or_refusal(
             ctx, self.validation_policy, required_path=("quantityAndUnit",))
@@ -791,14 +950,16 @@ class CarrierSemanticsValidator:
         dose_params = [p for p in params if p["parameterRole"] in ("DOSE", "RATE")]
         if require_quantity:
             bad_units = [p for p in dose_params
-                         if not policy.is_resolved_ucum_unit(p.get("unitRef"))
+                         if not _invoke_policy(
+                             ctx, _unit_entry,
+                             p.get("unitRef"))
                          or not p.get("quantityKindRef")]
             if not dose_params or bad_units:
                 return _refusal(ctx, "FAIL_CARRIER", runtime_problem(
                     unresolved_reason, unresolved_title, unresolved_detail),
                     rationale=unresolved_rationale)
         for p in dose_params:
-            if not (0 < p["value"] <= policy.DOSE_SANITY_MAX):
+            if not (0 < p["value"] <= _dose_max):
                 ctx.review_route_reasons.append(runtime_problem(
                     implausible_reason,
                     implausible_title,
@@ -830,7 +991,18 @@ class ExecutionExtentValidator:
     def from_config_for_legacy_tests(cls):
         return cls(_CONFIG_BACKED_POLICY)
 
-    def run(self, ctx: GateContext) -> GateRefusal | None:
+    def run(
+            self, ctx: GateContext,
+            _non_whole_classes=_NON_WHOLE_EXTENT_CLASSES,
+            _allowed_bound_kinds=_ALLOWED_EXTENT_BOUND_KINDS,
+            _admits_bound=_carrier_admits_bound,
+            _policy_or_refusal=_validation_policy_or_refusal,
+            _policy_refusal=_validation_policy_refusal,
+            _refuse=_refusal,
+    ) -> GateRefusal | None:
+        _validation_policy_or_refusal = _policy_or_refusal
+        _validation_policy_refusal = _policy_refusal
+        _refusal = _refuse
         validation, refusal = _validation_policy_or_refusal(
             ctx, self.validation_policy,
             required_path=("recordFields", "nonWholeExtentBound"))
@@ -847,7 +1019,7 @@ class ExecutionExtentValidator:
             return _validation_policy_refusal(
                 ctx, f"validation policy malformed: {exc}")
         extent = ctx.sub["payload"].get("executionExtent", {})
-        if extent.get("extentClass") not in policy.NON_WHOLE_EXTENT_CLASSES:
+        if extent.get("extentClass") not in _non_whole_classes:
             return None
         present_refs = [r for r in (extent.get("geometryRef"),
                                     extent.get("extentRef"),
@@ -871,9 +1043,9 @@ class ExecutionExtentValidator:
         invalid, unusable = [], []
         for ref in present_refs:
             row = ctx.store.get_record(ref)
-            if row is None or row["record_kind"] not in policy.ALLOWED_EXTENT_BOUND_KINDS:
+            if row is None or row["record_kind"] not in _allowed_bound_kinds:
                 invalid.append(ref)
-            elif not _carrier_admits_bound(row["payload"]):
+            elif not _admits_bound(row["payload"]):
                 unusable.append(ref)
         if invalid:
             return _refusal(ctx, "FAIL_REFERENCE_RESOLUTION", runtime_problem(
@@ -904,7 +1076,12 @@ class ReferenceResolutionValidator:
     """Every package-local ref in the carrier resolves, and every scope-
     bearing carrier field is contained in the authorized farm."""
 
-    def run(self, ctx: GateContext) -> GateRefusal | None:
+    def run(
+            self, ctx: GateContext,
+            _assert_scope=_assert_contained,
+            _refuse=_refusal,
+    ) -> GateRefusal | None:
+        _refusal = _refuse
         payload = ctx.sub["payload"]
         dangling = []
         for ref in ([payload["actor"]["actorPartyRef"]]
@@ -929,7 +1106,7 @@ class ReferenceResolutionValidator:
                   "executionExtent.targetScope")]
                 + [(s["scopeType"], s["scopeRef"], "carrier anchorScopes")
                    for s in payload.get("anchorScopes", [])]):
-            refusal = _assert_contained(ctx, scope_type, scope_ref, where)
+            refusal = _assert_scope(ctx, scope_type, scope_ref, where)
             if refusal:
                 return refusal
         return None
@@ -942,19 +1119,25 @@ class ActorAttributionValidator:
     to the advisor queue. The attribution decision is stored and linked
     (second AUTHORITY_BASIS edge; surfaced on the trace)."""
 
-    def run(self, ctx: GateContext) -> GateRefusal | None:
+    def run(
+            self, ctx: GateContext,
+            _invoke_context=_invoke_retained_context_service,
+            _authority_evaluate=_AUTHORITY_EVALUATE,
+            _invoke_policy=_invoke_retained_policy_function,
+            _authority_allowed=_RETAINED_POLICY_FUNCTIONS[2],
+    ) -> GateRefusal | None:
         payload = ctx.sub["payload"]
         named_actor = payload["actor"]["actorPartyRef"]
         if named_actor == ctx.acting_party:
             return None
-        basis = _invoke_retained_context_service(
-            ctx, _AUTHORITY_EVALUATE, ctx.authority,
+        basis = _invoke_context(
+            ctx, _authority_evaluate, ctx.authority,
             cur=ctx.cur,
             acting_party_ref=named_actor,
             action_class="ASSERT_OPERATION_CLAIM",
             action_stage="DRAFT_PREPARATION",
             scope={"scopeType": "FARM", "scopeRef": ctx.farm_ref})
-        allowed = authority_decision_allowed(basis)
+        allowed = _invoke_policy(ctx, _authority_allowed, basis)
         ctx.record_authority_decision(basis)
         ctx.attribution_ref = basis.result_payload["resultId"]
         if not allowed:
@@ -980,7 +1163,17 @@ class CodeBindingValidator:
     def from_config_for_legacy_tests(cls):
         return cls(_CONFIG_BACKED_POLICY)
 
-    def run(self, ctx: GateContext) -> GateRefusal | None:
+    def run(
+            self, ctx: GateContext,
+            _binding_kind=sufficiency.BINDING_KIND,
+            _resolved_bindings=sufficiency.resolved_bindings,
+            _policy_or_refusal=_validation_policy_or_refusal,
+            _policy_refusal=_validation_policy_refusal,
+            _refuse=_refusal,
+    ) -> GateRefusal | None:
+        _validation_policy_or_refusal = _policy_or_refusal
+        _validation_policy_refusal = _policy_refusal
+        _refusal = _refuse
         validation, refusal = _validation_policy_or_refusal(
             ctx, self.validation_policy, required_path=("bindings",))
         if refusal:
@@ -1015,13 +1208,13 @@ class CodeBindingValidator:
         # refs are already caught by ReferenceResolutionValidator upstream.)
         wrong_kind = [r for r in refs
                       if (row := ctx.store.get_record(r)) is not None
-                      and row["record_kind"] != sufficiency.BINDING_KIND]
+                      and row["record_kind"] != _binding_kind]
         if wrong_kind:
             return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
                 wrong_reason, wrong_title,
                 profile_policy.format_validation_template(
                     wrong_template, refs=wrong_kind)))
-        bindings = sufficiency.resolved_bindings(ctx.store, refs)
+        bindings = _resolved_bindings(ctx.store, refs)
         crop_bindings = [b for b in bindings
                          if b.get("bindingRole") == crop_role]
         product_bindings = [b for b in bindings
@@ -1058,8 +1251,11 @@ class RegistryReverificationValidator:
     snapshot advance is identity-grade only where the snapshot carries
     decision-number data; anything weaker routes to review."""
 
-    def run(self, ctx: GateContext) -> GateRefusal | None:
-        product_binding = _verified_product_binding(ctx)
+    def run(
+            self, ctx: GateContext,
+            _verified_binding=_verified_product_binding,
+    ) -> GateRefusal | None:
+        product_binding = _verified_binding(ctx)
         if not (product_binding and product_binding["bindingState"] == "VERIFIED"):
             return None
         regsr_snapshot_prefix = (
@@ -1109,7 +1305,11 @@ class CarrierStore:
     carrier id with DIFFERENT content is a refused conflict — promoted truth
     never silently diverges from the validated submission."""
 
-    def run(self, ctx: GateContext) -> GateRefusal | None:
+    def run(
+            self, ctx: GateContext,
+            _refuse=_refusal,
+    ) -> GateRefusal | None:
+        _refusal = _refuse
         payload = ctx.sub["payload"]
         erp_id = payload["executionRecordPayloadId"]
         existing = ctx.store.get_record(erp_id)
@@ -1176,7 +1376,8 @@ def _operation_sequence_for_validation_policy(validation_policy: dict) -> tuple:
 
 
 _RETAINED_VALIDATOR_RUNS = tuple(
-    (owner, "run", owner.run, owner.run.__code__)
+    (owner, "run", owner.run, owner.run.__code__,
+     capture_callable_state(owner.run))
     for owner in (
         TemporalConformanceValidator,
         PromotionTargetValidator,
@@ -1198,10 +1399,13 @@ _RETAINED_VALIDATOR_RUNS = tuple(
 )
 
 
-def _raise_validator_dispatch_error(ctx: GateContext, message: str) -> None:
+def _raise_validator_dispatch_error(
+        ctx: GateContext, message: str,
+        _mark_integrity=Store._mark_transaction_integrity_violation,
+) -> None:
     """Poison the active transaction before reporting validator-code drift."""
     if type(ctx.store) is Store:
-        Store._mark_transaction_integrity_violation(ctx.store)
+        _mark_integrity(ctx.store)
     raise RuntimeBundleError(message)
 
 
@@ -1209,12 +1413,14 @@ def _require_retained_validator_run(
     ctx: GateContext,
     entry,
     validator,
+    _raise=_raise_validator_dispatch_error,
+    _state_matches=callable_state_matches,
 ) -> None:
     """Require an exact validator instance, class binding, and code object."""
-    if type(entry) is not tuple or len(entry) != 4:
-        _raise_validator_dispatch_error(
+    if type(entry) is not tuple or len(entry) != 5:
+        _raise(
             ctx, "retained validator dispatch entry is malformed")
-    owner, name, function, code = entry
+    owner, name, function, code, callable_state = entry
     namespace_missing = False
     try:
         namespace = object.__getattribute__(validator, "__dict__")
@@ -1226,36 +1432,45 @@ def _require_retained_validator_run(
             or (not namespace_missing
                 and (type(namespace) is not dict or name in namespace))
             or vars(owner).get(name) is not function
-            or getattr(function, "__code__", None) is not code):
-        _raise_validator_dispatch_error(
+            or getattr(function, "__code__", None) is not code
+            or not _state_matches(function, callable_state)):
+        _raise(
             ctx, f"retained {owner.__name__}.run callable changed")
 
 
-def _retained_validator_run_entry(ctx: GateContext, validator):
+def _retained_validator_run_entry(
+        ctx: GateContext, validator,
+        _retained_runs=_RETAINED_VALIDATOR_RUNS,
+        _raise=_raise_validator_dispatch_error,
+):
     matches = []
-    for entry in _RETAINED_VALIDATOR_RUNS:
-        if type(entry) is not tuple or len(entry) != 4:
-            _raise_validator_dispatch_error(
+    for entry in _retained_runs:
+        if type(entry) is not tuple or len(entry) != 5:
+            _raise(
                 ctx, "retained validator dispatch table is malformed")
         if type(validator) is entry[0]:
             matches.append(entry)
     if len(matches) != 1:
-        _raise_validator_dispatch_error(
+        _raise(
             ctx, "validator has no unique retained run callable")
     return matches[0]
 
 
-def _invoke_retained_validator(ctx: GateContext, validator):
+def _invoke_retained_validator(
+        ctx: GateContext, validator,
+        _entry_for=_retained_validator_run_entry,
+        _require=_require_retained_validator_run,
+):
     """Invoke retained validator code with adjacent pre/post checks."""
-    entry = _retained_validator_run_entry(ctx, validator)
-    _require_retained_validator_run(ctx, entry, validator)
+    entry = _entry_for(ctx, validator)
+    _require(ctx, entry, validator)
     function = entry[2]
     try:
         result = function(validator, ctx)
     except BaseException:
-        _require_retained_validator_run(ctx, entry, validator)
+        _require(ctx, entry, validator)
         raise
-    _require_retained_validator_run(ctx, entry, validator)
+    _require(ctx, entry, validator)
     return result
 
 
@@ -1266,9 +1481,19 @@ class ValidationGate:
     return GateRefusal | None; the gate itself speaks the chain's typed
     contract (GatePass | GateRefusal)."""
 
-    def run(self, ctx: GateContext) -> GatePass | GateRefusal:
-        for validator in COMMON_SEQUENCE:
-            refusal = _invoke_retained_validator(ctx, validator)
+    def run(
+            self, ctx: GateContext,
+            _invoke_validator=_invoke_retained_validator,
+            _common_sequence=COMMON_SEQUENCE,
+            _operation_sequence=OPERATION_SEQUENCE,
+            _operation_sequence_for_policy=
+            _operation_sequence_for_validation_policy,
+            _descriptor_rule_refs=_descriptor_recognized_rule_refs,
+            _policy_refusal=_validation_policy_refusal,
+    ) -> GatePass | GateRefusal:
+        _validation_policy_refusal = _policy_refusal
+        for validator in _common_sequence:
+            refusal = _invoke_validator(ctx, validator)
             if refusal:
                 return refusal
 
@@ -1277,47 +1502,47 @@ class ValidationGate:
         # operation sequence logs one PASS here so the attribution ref can
         # ride the single VALIDATION entry
         if ctx.commit_class == "GOVERNANCE_DECISION":
-            return _invoke_retained_validator(
+            return _invoke_validator(
                 ctx, GovernanceAcceptanceValidator()) or GatePass()
         if ctx.commit_class == "COMPLIANCE_ASSERTION":
             if ctx.policy_provider is not None:
                 recognized_refs = ctx.policy_provider.recognized_rule_refs
             else:
                 recognized_refs = (
-                    _descriptor_recognized_rule_refs(ctx.active_profile)
+                    _descriptor_rule_refs(ctx.active_profile)
                     if ctx.active_profile is not None else None)
-            return _invoke_retained_validator(
+            return _invoke_validator(
                 ctx,
                 ComplianceClaimValidator(
                     recognized_rule_refs=recognized_refs),
             ) or GatePass()
         if ctx.commit_class == "STRUCTURE_ASSERTION":
-            refusal = _invoke_retained_validator(
+            refusal = _invoke_validator(
                 ctx, StructureCarrierValidator())
             if refusal:
                 return refusal
-            return _invoke_retained_validator(
+            return _invoke_validator(
                 ctx, StructureSemanticsValidator()) or GatePass()
         if ctx.commit_class != "OPERATION_CLAIM":
             ctx.log("VALIDATION", "PASS")
             return GatePass()
 
         if ctx.policy_provider is None:
-            operation_sequence = OPERATION_SEQUENCE
+            operation_sequence = _operation_sequence
         else:
             try:
                 validation_policy = ctx.policy_provider.validation_policy()
             except profile_policy.ProfilePolicyError as exc:
                 return _validation_policy_refusal(ctx, exc)
-            operation_sequence = _operation_sequence_for_validation_policy(
+            operation_sequence = _operation_sequence_for_policy(
                 validation_policy)
 
         for validator in operation_sequence:
-            refusal = _invoke_retained_validator(ctx, validator)
+            refusal = _invoke_validator(ctx, validator)
             if refusal:
                 return refusal
         # the trace's VALIDATION entry surfaces the attribution decision so
         # both authority decisions are visible on the promotion path
         ctx.log("VALIDATION", "PASS",
                 refs=[ctx.attribution_ref] if ctx.attribution_ref else None)
-        return _invoke_retained_validator(ctx, CarrierStore()) or GatePass()
+        return _invoke_validator(ctx, CarrierStore()) or GatePass()

@@ -17,6 +17,13 @@ from .context import mint, now_iso
 from .materializer import Materializer
 from .problems import runtime_problem
 
+_COMMIT_CLASS_TO_ASSERTION_TYPE = policy.COMMIT_CLASS_TO_ASSERTION_TYPE
+_STRUCTURE_PAYLOAD_IDENTITY_TYPE = policy.STRUCTURE_PAYLOAD_IDENTITY_TYPE
+_COMMIT_CLASS_TO_PROMOTION_TARGET = policy.COMMIT_CLASS_TO_PROMOTION_TARGET
+_PROMOTION_TARGET_TO_CONSEQUENCE_TYPE = \
+    policy.PROMOTION_TARGET_TO_CONSEQUENCE_TYPE
+_ACCEPTANCE_BY_ASSERTION_TYPE = policy.ACCEPTANCE_BY_ASSERTION_TYPE
+
 if TYPE_CHECKING:   # type-only: keeps stages -> emission imports acyclic
     from .stages import GateContext
 
@@ -40,15 +47,20 @@ class PromotionEmitter:
 
     # ---------------------------------------------------------------- build --
 
-    def _submission_evidence_refs(self) -> list:
-        return submission_evidence_refs(self.ctx.sub)
+    def _submission_evidence_refs(
+            self, _submission_refs=submission_evidence_refs,
+    ) -> list:
+        return _submission_refs(self.ctx.sub)
 
-    def _build_assertion(self, claim_state: str) -> dict:
+    def _build_assertion(
+            self, claim_state: str,
+            _assertion_types=_COMMIT_CLASS_TO_ASSERTION_TYPE,
+    ) -> dict:
         ctx, sub = self.ctx, self.ctx.sub
         assertion = {
             "schemaVersion": "ofarm.assertionrecord.v0.1",
             "assertionRecordId": ctx.assertion_id,
-            "assertionType": policy.COMMIT_CLASS_TO_ASSERTION_TYPE.get(
+            "assertionType": _assertion_types.get(
                 ctx.commit_class, "OTHER_ASSERTION"),
             "subject": {"subjectType": sub.get("subjectType", "FARM"),
                         "subjectRef": sub.get("subjectRef", ctx.farm_ref)},
@@ -90,18 +102,24 @@ class PromotionEmitter:
         ctx.emitted["assertions"].append(ctx.assertion_id)
         self._link_assertion()
 
-    def _store_case(self, amend_for_routing: bool) -> None:
+    def _store_case(
+            self, amend_for_routing: bool,
+            _amend_case_for_routing=sufficiency.amend_case_for_routing,
+    ) -> None:
         ctx = self.ctx
         if not ctx.case_payload:
             return
         if amend_for_routing:
-            sufficiency.amend_case_for_routing(ctx.case_payload,
-                                               ctx.review_route_reasons)
+            _amend_case_for_routing(
+                ctx.case_payload, ctx.review_route_reasons)
         ctx.store.insert_record(ctx.cur, ctx.case_payload)
         ctx.trace_refs["evidenceSufficiencyCaseRef"] = \
             ctx.case_payload["sufficiencyCaseId"]
 
-    def _ensure_identity_record(self, event_ref: str) -> None:
+    def _ensure_identity_record(
+            self, event_ref: str,
+            _identity_types=_STRUCTURE_PAYLOAD_IDENTITY_TYPE,
+    ) -> None:
         """At promotion, materialize the durable IdentityRecord for a structure
         assertion from its typed payload carrier (event -> STRUCTURE_PAYLOAD ->
         payload, linked at EnvelopePersist). Created only on acceptance, so a
@@ -122,7 +140,7 @@ class PromotionEmitter:
         identity_ref = payload["identityRecordRef"]
         if ctx.store.record_exists(identity_ref):
             return   # revision/supersession: the identity is already durable
-        identity_type = policy.STRUCTURE_PAYLOAD_IDENTITY_TYPE[payload["schemaVersion"]]
+        identity_type = _identity_types[payload["schemaVersion"]]
         # the structure AssertionRecord that introduced the identity, via the
         # event's EVENT_SOURCE edge (resolves on both promotion flavors)
         creators = [e["src_record_id"]
@@ -167,7 +185,11 @@ class PromotionEmitter:
             self.ctx.store.add_edge(self.ctx.cur, "LINEAGE_SUPERSEDES_INTENT",
                                     self.ctx.assertion_id, superseded)
 
-    def emit_self_review_promotion(self) -> None:
+    def emit_self_review_promotion(
+            self,
+            _promotion_targets=_COMMIT_CLASS_TO_PROMOTION_TARGET,
+            _consequence_types=_PROMOTION_TARGET_TO_CONSEQUENCE_TYPE,
+    ) -> None:
         """The deliberate confirm-accept step is the review act (D8):
         assertion IN_FORCE, ReviewDecision by the transport-bound submitter,
         AcceptedEventConsequence, supersession lineage, all edge-linked."""
@@ -194,13 +216,12 @@ class PromotionEmitter:
         ctx.emitted["reviews"].append(review_id)
         ctx.store.add_edge(ctx.cur, "REVIEW", ctx.assertion_id, review_id)
 
-        target = ctx.requested_target or \
-            policy.COMMIT_CLASS_TO_PROMOTION_TARGET[ctx.commit_class]
+        target = ctx.requested_target or _promotion_targets[ctx.commit_class]
         consequence_id = mint("conseq")
         consequence = {
             "schemaVersion": "ofarm.acceptedeventconsequence.v0.1",
             "acceptedEventConsequenceId": consequence_id,
-            "consequenceType": policy.PROMOTION_TARGET_TO_CONSEQUENCE_TYPE.get(
+            "consequenceType": _consequence_types.get(
                 target, "OTHER_CONSEQUENCE"),
             "sourceEventRef": ctx.event_id,
             "acceptedByReviewDecisionRef": review_id,
@@ -236,7 +257,10 @@ class PromotionEmitter:
         ctx.trigger_source = consequence_id
         ctx.invalidation_sources = [superseded] if superseded else [consequence_id]
 
-    def emit_queue_acceptance(self) -> None:
+    def emit_queue_acceptance(
+            self,
+            _acceptance_types=_ACCEPTANCE_BY_ASSERTION_TYPE,
+    ) -> None:
         """Queue acceptance: the reviewer's OWN governed act. REVIEW_ACCEPT
         was already evaluated for the transport-bound acting party at the
         AUTHORITY gate; this promotes the TARGET assertion's consequence
@@ -269,7 +293,7 @@ class PromotionEmitter:
         event_edges = ctx.store.edges_from(ctx.acceptance_target, "EVENT_SOURCE")
         orig_event = (event_edges[0]["dst_record_id"] if event_edges
                       else ctx.event_id)
-        category, ctype = policy.ACCEPTANCE_BY_ASSERTION_TYPE[
+        category, ctype = _acceptance_types[
             target_payload["assertionType"]]
         consequence_id = mint("conseq")
         consequence = {

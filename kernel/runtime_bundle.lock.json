@@ -702,7 +702,7 @@
       "logicalRef": "python:kernel/adapters.py",
       "path": "kernel/adapters.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:b1667b4521160c538825a262b997dc7e6ae4769f100e03c9b44cc1dc86a8c796",
+      "sha256": "sha256:a1d5322e77c9bd78f085a70c8e16329925ef03ffd7e74782aa5a9abd9b6955a1",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -731,6 +731,14 @@
     },
     {
       "role": "RUNTIME_CODE",
+      "logicalRef": "python:kernel/callable_state.py",
+      "path": "kernel/callable_state.py",
+      "canonicalization": "EXACT_BYTES_V1",
+      "sha256": "sha256:6ecc9a727e5d9ae99076c38b295a3ca4cea15774dd17c2415e0ac9d59c52b64a",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
+    },
+    {
+      "role": "RUNTIME_CODE",
       "logicalRef": "python:kernel/config.py",
       "path": "kernel/config.py",
       "canonicalization": "EXACT_BYTES_V1",
@@ -742,7 +750,7 @@
       "logicalRef": "python:kernel/context.py",
       "path": "kernel/context.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:dc07bc8eaeddb72daa63c9c9b26d19e6d4a684f3e0ed00a535c9a98f8de53ab5",
+      "sha256": "sha256:55a47520998f04281b341c3aff286bd9edb6cb34da0bc3a4110ca107f461fa69",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -750,7 +758,7 @@
       "logicalRef": "python:kernel/contracts.py",
       "path": "kernel/contracts.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:e2a6e721bab83d0eea70c551162dfc78098873e6bfa146ef45f7318f16562443",
+      "sha256": "sha256:4f0ae0721d2b7689ac5819ec002da397beae3d0de43651b018d6d70d6a0c23fc",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -758,7 +766,7 @@
       "logicalRef": "python:kernel/emission.py",
       "path": "kernel/emission.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:95610a2cfb7a1f3baa06fb62f21a0af2f1d0cf8a940d36f700972d19d35f698d",
+      "sha256": "sha256:ec46aadf2a9ac976205525f8760bc5001549209d5bb062b3f314ddd12e911afd",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -766,7 +774,7 @@
       "logicalRef": "python:kernel/gates.py",
       "path": "kernel/gates.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:08d863c503c73dad605271220cf8bc535cbc270c730ab71ca0f971184165ae41",
+      "sha256": "sha256:1d670f5767f9ca2ac8feaedea22ac8efa83865743901b6b93aa9d78622e133aa",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -782,7 +790,7 @@
       "logicalRef": "python:kernel/materializer.py",
       "path": "kernel/materializer.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:6c58b006d5257954bc6f4a314d5756e975028a67674be6a8bebe66dae22061f6",
+      "sha256": "sha256:4e2bb7bb0aebe9b179c9a1e3c599e243743674b1531e7e168be527cedd2552a3",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -790,7 +798,7 @@
       "logicalRef": "python:kernel/policy.py",
       "path": "kernel/policy.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:883f342ef5251d208e3ae504ea500324cdef0047448b843c5077859d84c3f4e3",
+      "sha256": "sha256:f6695015e37105b0ca1078a25d5fa5ef8b737c2bdac0899d45b71b2a0ee87251",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -798,7 +806,7 @@
       "logicalRef": "python:kernel/problems.py",
       "path": "kernel/problems.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:c4a3a3520f53e2aca1246ce637de78aa2fdefba3bb57f1bd8fe711dd69dca0fe",
+      "sha256": "sha256:830aed6b66252bca0960b9a4aa73ed021c30912b216e3dbd6d84ee376bebd9b1",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -870,7 +878,7 @@
       "logicalRef": "python:kernel/runtime_bundle.py",
       "path": "kernel/runtime_bundle.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:f8fedd0d4de31f4a7c72c80033b690db15c5c2e299ac891e941a25f2e9478073",
+      "sha256": "sha256:401e8d3bc61a4f2fdb52de025d96ba2afd6b9b7770a08ff9b34f4ff1eb07620a",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -886,7 +894,7 @@
       "logicalRef": "python:kernel/stages.py",
       "path": "kernel/stages.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:08c844729a542e02d8cab3032bf90641c09e297b19b31db0da5cfc177cd717e2",
+      "sha256": "sha256:35ffe09350fdeefdb7e327a58e500452df8687948f2289b164fb13b9e2053d98",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -894,7 +902,7 @@
       "logicalRef": "python:kernel/store.py",
       "path": "kernel/store.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:3a57c727e60d538a38b32e0a94a28ed548af9693a484af446cc1883048a14ee0",
+      "sha256": "sha256:9c86ef36eb53c07e5ee118f1d06e29402f160d71e8c9a80fda91177c8ff9555d",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -902,7 +910,7 @@
       "logicalRef": "python:kernel/sufficiency.py",
       "path": "kernel/sufficiency.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:81bc9bd538226beb68c1368743c4a46024493cdd6448cc8653b7cbea6134ca13",
+      "sha256": "sha256:2e42dfe9f666049d3953c0e4f41d75888e595e0ed62d2a4b6c944eb93e0ea2a0",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -910,7 +918,7 @@
       "logicalRef": "python:kernel/validators.py",
       "path": "kernel/validators.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:b390eaf2117f0f25493806a1e3448bd7fff719a49d30c636da43ca9f4e884475",
+      "sha256": "sha256:d340dac4e1f5c21eab7c1ddbb8a7dbf481550154f7eeb93d66ed1dcc048af68f",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -926,7 +934,7 @@
       "logicalRef": "python:kernel/views.py",
       "path": "kernel/views.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:89db2884ae4373fe6470dcaf2a12f6b8bbdae2e59d1cf2e1ffad011ee9269962",
+      "sha256": "sha256:dfa4bf3c5f975bad121dc45baaf324c7f82b6beaf5a1c444a8e15cd64c853e50",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {

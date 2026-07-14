@@ -25,6 +25,7 @@ from types import MappingProxyType
 import jsonschema
 
 from . import config
+from .callable_state import capture_callable_state, callable_state_matches
 
 
 class ContractViolation(Exception):
@@ -37,6 +38,10 @@ class ContractViolation(Exception):
 
 class UnknownContract(Exception):
     """A payload carries a schemaVersion no package contract declares."""
+
+
+class ContractDispatchError(RuntimeError):
+    """Retained contract-validation code no longer matches class dispatch."""
 
 
 def _assert_portable_json(value, path: str = "<root>") -> None:
@@ -158,7 +163,7 @@ class Contract:
 # The property that names each record. Explicit, not guessed: identifier
 # collisions across contracts (requestId, resultId) are avoided by minting
 # prefixed ids at creation time, not by schema magic.
-_ID_FIELDS = {
+_ID_FIELDS = MappingProxyType({
     "ofarm.party.v0.1": "partyId",
     "ofarm.roleassignment.v0.1": "roleAssignmentId",
     "ofarm.authoritygrant.v0.1": "authorityGrantId",
@@ -186,7 +191,7 @@ _ID_FIELDS = {
     "ofarm.materializationbasis.v0.1": "basisId",
     "ofarm.materializationsnapshot.v0.1": "snapshotId",
     "ofarm.contextsnapshot.v0.1": "contextSnapshotId",
-}
+})
 
 
 def _fallback_id_field(kind: str, schema: dict) -> str | None:
@@ -257,7 +262,12 @@ class ContractRegistry:
             for kind, contract in sorted(self._by_kind.items())
         )
 
-    def validate(self, payload: dict) -> Contract:
+    def validate(
+            self, payload: dict,
+            _json_loads=json.loads,
+            _validator_type=jsonschema.Draft202012Validator,
+            _format_checker_type=jsonschema.FormatChecker,
+    ) -> Contract:
         """Validate a payload against its declared contract.
 
         Returns the matched Contract; raises ContractViolation/UnknownContract.
@@ -268,13 +278,17 @@ class ContractRegistry:
         kind = payload.get("schemaVersion")
         if not isinstance(kind, str):
             raise ContractViolation("payload carries no schemaVersion")
-        contract = self.get(kind)
+        try:
+            contract = self._by_kind[kind]
+        except KeyError:
+            raise UnknownContract(
+                f"no package contract declares schemaVersion {kind!r}") from None
         # Reparse the exact immutable bytes on every validation. Contract.schema
         # is intentionally a defensive view, so mutation after bundle binding
         # cannot alter decision semantics behind an unchanged schema digest.
-        schema = json.loads(contract.schema_bytes.decode("utf-8"))
-        validator = jsonschema.Draft202012Validator(
-            schema, format_checker=jsonschema.FormatChecker())
+        schema = _json_loads(contract.schema_bytes.decode("utf-8"))
+        validator = _validator_type(
+            schema, format_checker=_format_checker_type())
         errors = sorted(validator.iter_errors(payload), key=lambda e: list(e.absolute_path))
         if errors:
             details = [
@@ -291,3 +305,54 @@ class ContractRegistry:
                     f"payload {kind} carries no usable id in field {contract.id_field!r}"
                 )
         return contract
+
+
+_RETAINED_CONTRACT_REGISTRY_GET = ContractRegistry.get
+_RETAINED_CONTRACT_REGISTRY_GET_CODE = ContractRegistry.get.__code__
+_RETAINED_CONTRACT_REGISTRY_GET_STATE = capture_callable_state(
+    _RETAINED_CONTRACT_REGISTRY_GET)
+_RETAINED_CONTRACT_REGISTRY_VALIDATE = ContractRegistry.validate
+_RETAINED_CONTRACT_REGISTRY_VALIDATE_CODE = ContractRegistry.validate.__code__
+_RETAINED_CONTRACT_REGISTRY_VALIDATE_STATE = capture_callable_state(
+    _RETAINED_CONTRACT_REGISTRY_VALIDATE)
+
+
+def invoke_retained_contract_validation(
+        registry: ContractRegistry, payload: dict,
+        _get=_RETAINED_CONTRACT_REGISTRY_GET,
+        _get_code=_RETAINED_CONTRACT_REGISTRY_GET_CODE,
+        _get_state=_RETAINED_CONTRACT_REGISTRY_GET_STATE,
+        _validate=_RETAINED_CONTRACT_REGISTRY_VALIDATE,
+        _validate_code=_RETAINED_CONTRACT_REGISTRY_VALIDATE_CODE,
+        _validate_state=_RETAINED_CONTRACT_REGISTRY_VALIDATE_STATE,
+        _state_matches=callable_state_matches,
+) -> Contract:
+    """Invoke the reviewed validator directly, never mutable method dispatch."""
+    def require() -> None:
+        try:
+            namespace = object.__getattribute__(registry, "__dict__")
+        except AttributeError:
+            namespace = None
+        if (type(registry) is not ContractRegistry
+                or type(namespace) is not dict
+                or "validate" in namespace
+                or "get" in namespace
+                or vars(ContractRegistry).get("get") is not
+                _get
+                or _get.__code__ is not _get_code
+                or not _state_matches(_get, _get_state)
+                or vars(ContractRegistry).get("validate") is not
+                _validate
+                or _validate.__code__ is not _validate_code
+                or not _state_matches(_validate, _validate_state)):
+            raise ContractDispatchError(
+                "ContractRegistry validation dispatch changed")
+
+    require()
+    try:
+        result = _validate(registry, payload)
+    except BaseException:
+        require()
+        raise
+    require()
+    return result

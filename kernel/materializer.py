@@ -17,7 +17,10 @@ an undeterminable dependency boundary broadens invalidation, never narrows it.
 """
 from __future__ import annotations
 
+from types import MappingProxyType
+
 from . import config, policy
+from .callable_state import capture_callable_state, callable_state_matches
 from .context import (ContextAssembler, ContextNotReconstructible,
                     _RETAINED_CONTEXT_ASSEMBLE,
                     _RETAINED_CONTEXT_ASSEMBLE_CODE,
@@ -28,7 +31,11 @@ from .context import (ContextAssembler, ContextNotReconstructible,
                       mint as _mint, now_iso, parse_ts)
 from .contracts import canonical_json
 from .profile_runtime import ProfileRuntimeError, resolve_active_descriptor
-from .runtime_bundle import require_store_runtime_bundle, sha256_bytes
+from .runtime_bundle import (
+    RuntimeBundleError,
+    require_store_runtime_bundle,
+    sha256_bytes,
+)
 from .store import (
     Store,
     _RETAINED_GOVERNED_CURSOR_EXECUTE_MUTATION as _CURSOR_EXECUTE_MUTATION,
@@ -51,7 +58,7 @@ INVALIDATION_TRACE_KIND = ("ofarm.explainableCurrentStateEvidence."
 # INDEX_CORRUPTION_DETECTED is deliberately absent: the result enum has no
 # family for it and the M1 runtime never emits it — an unknown family raises
 # loudly rather than guessing (the problems.py posture).
-_TRIGGER_TO_RESULT_FAMILY = {
+_TRIGGER_TO_RESULT_FAMILY = MappingProxyType({
     "BASIS_ADVANCED": "TRUTH_BASIS",
     "IDENTITY_CHANGED": "IDENTITY_LIFECYCLE",
     "CONTEXT_CHANGED": "CONTEXT",
@@ -59,11 +66,59 @@ _TRIGGER_TO_RESULT_FAMILY = {
     "POLICY_CHANGED": "CONTEXT",
     "TIME_BOUNDARY_REACHED": "TIME_POLICY",
     "ADVISORY_INPUT_CHANGED": "TWIN_SPECIFIC",
-}
+})
 RUNTIME_VERSION = config.RUNTIME_VERSION
 
 # use-class mapping is policy, not materializer code (issue #3)
 _USE_CLASS_MAP = policy.USE_CLASS_TO_CANONICAL
+_STRUCTURE_PAYLOAD_IDENTITY_TYPE = policy.STRUCTURE_PAYLOAD_IDENTITY_TYPE
+_FRESHNESS_SATISFIED = policy.freshness_satisfied
+_FRESHNESS_SATISFIED_CODE = policy.freshness_satisfied.__code__
+_REUSE_REASON_SUMMARY = policy.reuse_reason_summary
+_REUSE_REASON_SUMMARY_CODE = policy.reuse_reason_summary.__code__
+_RETAINED_MATERIALIZER_POLICY_FUNCTIONS = (
+    ("freshness_satisfied", _FRESHNESS_SATISFIED,
+     _FRESHNESS_SATISFIED_CODE,
+     capture_callable_state(_FRESHNESS_SATISFIED)),
+    ("reuse_reason_summary", _REUSE_REASON_SUMMARY,
+     _REUSE_REASON_SUMMARY_CODE,
+     capture_callable_state(_REUSE_REASON_SUMMARY)),
+)
+
+
+def _invoke_retained_materializer_policy(
+        store, entry, *args,
+        _policy_module=policy,
+        _retained=_RETAINED_MATERIALIZER_POLICY_FUNCTIONS,
+        _state_matches=callable_state_matches,
+        _mark_integrity=Store._mark_transaction_integrity_violation,
+):
+    if (type(entry) is not tuple
+            or len(entry) != 4
+            or entry not in _retained):
+        if type(store) is Store:
+            _mark_integrity(store)
+        raise RuntimeBundleError(
+            "retained materializer policy entry is malformed")
+    name, function, code, callable_state = entry
+
+    def require() -> None:
+        if (vars(_policy_module).get(name) is not function
+                or function.__code__ is not code
+                or not _state_matches(function, callable_state)):
+            if type(store) is Store:
+                _mark_integrity(store)
+            raise RuntimeBundleError(
+                f"retained materializer policy function {name} changed")
+
+    require()
+    try:
+        result = function(*args)
+    except BaseException:
+        require()
+        raise
+    require()
+    return result
 
 
 def _full_digest(obj) -> str:
@@ -114,7 +169,10 @@ class Materializer:
             runtime_bundle=self.runtime_bundle)
         self._runtime_composition_sealed = True
 
-    def _assert_runtime_composition(self, cur=None) -> None:
+    def _assert_runtime_composition(
+            self, cur=None,
+            _mark_integrity=Store._mark_transaction_integrity_violation,
+    ) -> None:
         try:
             if (type(self) is not Materializer
                     or vars(Materializer).get(
@@ -166,7 +224,7 @@ class Materializer:
                 self.context, cur)
         except BaseException:
             if type(getattr(self, "store", None)) is Store:
-                Store._mark_transaction_integrity_violation(self.store)
+                _mark_integrity(self.store)
             raise
 
     # ------------------------------------------------------------------ key --
@@ -532,7 +590,7 @@ class Materializer:
                 assertion_set.update(cand["assertionRefs"])
             kind = cands[0]["payload"]["schemaVersion"]
             itype = (cands[0]["identity"] or {}).get("identityType") \
-                or policy.STRUCTURE_PAYLOAD_IDENTITY_TYPE.get(kind)
+                or _STRUCTURE_PAYLOAD_IDENTITY_TYPE.get(kind)
             if len(cands) == 1:
                 cand = cands[0]
                 entries.append({
@@ -842,12 +900,17 @@ class Materializer:
             families.add(family)
         return sorted(families)
 
-    def resolve_for_use(self, cur, farm_ref: str, *, twin: str = "COMPLIANCE",
-                        use_class: str = "OPERATIONAL_DASHBOARD",
-                        time_policy: dict | None = None,
-                        required_freshness: str = "REQUIRE_FRESH",
-                        high_consequence: bool = False,
-                        recompute_if_needed: bool = True) -> dict:
+    def resolve_for_use(
+            self, cur, farm_ref: str, *, twin: str = "COMPLIANCE",
+            use_class: str = "OPERATIONAL_DASHBOARD",
+            time_policy: dict | None = None,
+            required_freshness: str = "REQUIRE_FRESH",
+            high_consequence: bool = False,
+            recompute_if_needed: bool = True,
+            _invoke_policy=_invoke_retained_materializer_policy,
+            _freshness_entry=_RETAINED_MATERIALIZER_POLICY_FUNCTIONS[0],
+            _reuse_reason_entry=_RETAINED_MATERIALIZER_POLICY_FUNCTIONS[1],
+    ) -> dict:
         """Current-state use evaluation: reuse, recompute, or refuse — never
         silently serve stale state for high-consequence use (RFC §8)."""
         _RETAINED_MATERIALIZER_ASSERT_RUNTIME_COMPOSITION(self, cur)
@@ -922,8 +985,9 @@ class Materializer:
         # NO_CURRENT_STATE_DEPENDENCY is kernel-narrowed to stale-allowed
         # here (profile_si_ffs/UNSUPPORTED_SURFACES.md; ERRATA E-003).
         def requirement_satisfied(freshness_state: str) -> bool:
-            return policy.freshness_satisfied(required_freshness,
-                                              high_consequence, freshness_state)
+            return _invoke_policy(
+                self.store, _freshness_entry,
+                required_freshness, high_consequence, freshness_state)
 
         recomputed = False
         problems = []
@@ -985,8 +1049,9 @@ class Materializer:
             # the reason never overstates freshness: a stale reuse says so
             # (wording is policy — kernel/policy.py)
             "reasonSummary": (
-                policy.reuse_reason_summary(freshness, required_freshness,
-                                            high_consequence)
+                _invoke_policy(
+                    self.store, _reuse_reason_entry,
+                    freshness, required_freshness, high_consequence)
                 if decision == "ALLOW_REUSE"
                 else "recomputed for this use" if recomputed
                 else "refused: not demonstrably FRESH"),

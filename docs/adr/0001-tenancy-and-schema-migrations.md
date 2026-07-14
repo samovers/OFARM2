@@ -144,7 +144,7 @@ the initial migration rather than preserve the prototype's unqualified tables.
 | principal_binding_current | Optional derived/disposable global control projection and reservation | A unique (equality_policy, issuer, subject) row points to the computed active version and lifecycle head, or records the computed inactive state. It serializes transitions and accelerates lookup, but is rebuildable and never authoritative. |
 | tenant_binding_context | Protected disposable transaction operational metadata | An UNLOGGED migration-owned relation stores the one-use challenge and verified TenantBinding for exactly one database-derived backend identity and full xid8. Exact backend-start/full-transaction matching makes a physically retained row unusable after commit, rollback, backend restart, or pool reuse. Only hardened functions may read or write it; the application role has no table privileges. |
 | runtime_content_blob | Globally governed immutable tenant-neutral content | Stores only exact tenant-neutral bytes under a closed content class and canonicalization identity. Primary identity is the full content digest; an equal digest is reusable only after exact class, canonicalization, byte-length, and byte equality. It has no tenant, Party, farm, activation, selection, batch, knowledge, bundle, or component back-reference. |
-| runtime_tenant_content_blob | Tenant-owned immutable RuntimeBundle content | Primary identity is (tenant_id, content_digest). It retains exact canonical bytes for tenant-scoped activation/context instances and selected tenant reference data. Every key and reference is tenant-qualified, forced RLS applies, and an equal digest within one tenant is reusable only after exact class, canonicalization, byte-length, and byte equality. Bytes are never promoted or deduplicated into the global carrier merely because another tenant has the same digest. |
+| runtime_tenant_content_blob | Tenant-owned immutable RuntimeBundle content | Primary identity is (tenant_id, content_digest). It retains exact canonical bytes for tenant-scoped activation/context instances, selected tenant reference data, and the stable decision-semantic closure because that closure includes the tenant reference and advisory-lock key. Every key and reference is tenant-qualified, forced RLS applies, and an equal digest within one tenant is reusable only after exact class, canonicalization, byte-length, and byte equality. Bytes are never promoted or deduplicated into the global carrier merely because another tenant has the same digest. |
 | runtime_bundle | Tenant-owned immutable runtime-selection receipt | Primary identity is (tenant_id, bundle_digest). Its canonical receipt binds that tenant, the exact closed component inventory, every global content identity, and every tenant-scoped active-instance/reference-selection identity and digest. It carries the governed batch that created it. It is append-only, forced-RLS protected, and cannot be selected before trusted tenant binding. |
 | runtime_bundle_component | Tenant-owned immutable RuntimeBundle membership | Primary identity is (tenant_id, bundle_digest, component_role, logical_ref). A closed storage-lane discriminator and exactly-one target bind each member either to one global `runtime_content_blob` digest or to one same-tenant `runtime_tenant_content_blob` composite key; unverified polymorphic text is forbidden. Membership is exact, append-only, forced-RLS protected, and cannot point into another tenant. |
 | operational_security_event | Database-global operational security metadata, explicitly non-tenant | Append-only, bounded pre-tenant failure events plus audit-access, retention, and declared-gap maintenance events for this lane. It carries no tenant_id, tenant_ref, Party/farm/role identity, governed batch, knowledge position, or request-supplied attribution. It lives only in the separately provisioned audit PostgreSQL service's protected `ofarm_security` schema and is never read as tenant history. |
@@ -414,9 +414,10 @@ The placement map is:
 
 | Content or state | Placement | Binding rule |
 |---|---|---|
-| Profile candidate metadata that does not select tenant state, evidence policy, contracts and contract manifest, Kernel/runtime/validator/adapter/parser/output code, query specifications, runtime schema/environment/catalog inputs, and tenant-neutral AgronomicCodeBindingProfile bytes | Global `runtime_content_blob` | The reviewed release catalog classifies each item as tenant-neutral and pins its exact canonicalization, bytes, length, and full digest. Candidate metadata may describe packages but cannot select a tenant-local activation, context, manifest, route, plan, or reference-data row. |
+| Profile candidate metadata that does not select tenant state, evidence policy, contracts and contract manifest, Kernel/runtime/validator/adapter/parser/output code, query specifications, runtime schema, stable interpreter/import environment, catalog inputs, and tenant-neutral AgronomicCodeBindingProfile bytes | Global `runtime_content_blob` | The reviewed release catalog classifies each item as tenant-neutral and pins its exact canonicalization, bytes, length, and full digest. Candidate metadata may describe packages but cannot select a tenant-local activation, context, manifest, route, plan, or reference-data row. |
 | Tenant-neutral authored ReferenceSnapshot metadata and genuinely global retained reference-source bytes | Global `runtime_content_blob` | Global placement is allowed only when neither the metadata nor retained bytes contain tenant truth. A tenant bundle names the exact global content identities it selects; the global rows never point back to the tenant or bundle. |
 | Active runtime descriptor, tenant binding, route-selection preimage, selection-bearing query plans, and package PackActivationSet, ActiveArtifactSet, or ContextSnapshot instances | Tenant-owned `runtime_tenant_content_blob`; governed PAS/AAS and derived ContextSnapshots also use tenant `kernel_record` | Package files are fixtures/templates, not global activation authority. The active descriptor and plans currently contain tenant selection pointers, so they stay tenant-side. A route preimage pins registry/package/route status, farm, interval, and target fields but excludes the completed bundle digest to avoid a hash cycle; every supplied route must then receipt that completed digest exactly. |
+| Stable decision-semantic closure | Tenant-owned `runtime_tenant_content_blob` | The closure receipts tenant-derived runtime bindings, including the active tenant reference and advisory-lock key. Moving only the tenant-neutral subset into the global carrier requires a separately reviewed split receipt; this release keeps the whole closure tenant-owned. |
 | A Capability Manifest or any other authored instance whose deployment or target scope is `TENANT` | Tenant-owned state | Its package presence does not make it global and does not activate or raise a capability. Selection pins its exact tenant record identity/payload digest and tenant bundle digest. |
 | Imported or selected tenant ReferenceSnapshot state and canonical bytes derived from `reference_snapshot_data` | Tenant-owned `kernel_record`/selection state and `runtime_tenant_content_blob` | The selected bytes, data family, source identity, payload digest, and owning tenant are fixed in the bundle. Derived bytes are never copied into `runtime_content_blob`; #185 still owns durable source-byte closure before the separate cache may be treated as rebuildable. |
 | Farm, Party, route, activation, selection, ContextSnapshot, request, output, or other tenant truth | Tenant relations only | It is never global bundle content. Every durable consumer uses the trusted tenant key and pins the exact tenant bundle digest in its governed batch. |
@@ -429,6 +430,13 @@ The tenant-neutral code-binding profile and tenant-neutral reference metadata
 may be global content. A descriptor or process-global cache cannot use
 `tenant_ref`, a demo default, or rows from `kernel_record` to construct a global
 content identity.
+
+The RuntimeBundle is a post-authentication decision boundary, not the
+authentication boundary. #172 owns verifier behavior and the principal-binding
+lifecycle. Where the post-authentication runtime requires them, the bundle may
+carry only tenant-scoped, non-secret verifier or principal-binding identity
+digests. Raw credentials, tokens, symmetric secrets, and private signing
+material never enter the bundle or its receipts.
 
 `runtime_bundle` and `runtime_bundle_component` are tenant-owned even though
 their digests are content-addressed. The #171 prototype, which necessarily
@@ -521,8 +529,12 @@ identity, the `sys.modules` mapping (including `None` entries), every module
 object and loader state, the `sys.path`/meta-path/path-hook containers and
 providers, and every canonical `sys.path_importer_cache` key, `FileFinder`
 object, loader configuration, mutable finder cache, physical origin, and
-device/inode signature. A second stable component receipts the declared
-decision-semantic roots and their referenced global-binding closure. Its
+device/inode signature. The stable interpreter/import observation remains
+tenant-neutral global content. A second stable component receipts the declared
+decision-semantic roots and their referenced global-binding closure. That
+semantic component is tenant-owned because the closure includes tenant-derived
+bindings such as `TENANT_REF` and the advisory-lock key; it must never enter the
+global content carrier. Its
 per-root digests cover mutable policy data, function bytecode/defaults/closure
 state, class descriptors and class data, ordered gate/validator instances, and
 the Store verification path. A pre-selection mutation therefore changes the

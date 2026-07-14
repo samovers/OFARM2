@@ -31,6 +31,7 @@ from .problems import runtime_problem
 from .store import (
     Store,
     _RETAINED_GOVERNED_CURSOR_EXECUTE_READ as _CURSOR_EXECUTE_READ,
+    invoke_store_contract_validation as _VALIDATE_CONTRACT,
 )
 
 _FULL_SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -81,8 +82,11 @@ class ImportRunner:
                                 related_refs=[snapshot_id] if snapshot_id else None)
         return {"imported": False, "snapshotRef": None, "problem": problem}
 
-    def run_import(self, parse_result: ParseResult, snapshot_meta: dict,
-                   *, data_family: str | None = None) -> dict:
+    def run_import(
+            self, parse_result: ParseResult, snapshot_meta: dict,
+            *, data_family: str | None = None,
+            _validate_contract=_VALIDATE_CONTRACT,
+    ) -> dict:
         """Import a parsed reference source as a dated `ReferenceSnapshot`.
 
         Returns `{imported, snapshotRef, disposition, problem}`. One serialized
@@ -190,7 +194,7 @@ class ImportRunner:
         # 3. a malformed import record is a governed refusal, never a late
         #    ContractViolation that aborts the transaction ungoverned
         try:
-            self.store.registry.validate(snapshot)
+            _validate_contract(self.store, snapshot)
         except (ContractViolation, UnknownContract) as exc:
             return {**ImportRunner._refuse(self,
                 request_id, snapshot_id, "SOURCE_FIDELITY_LOSS", "Import record malformed",

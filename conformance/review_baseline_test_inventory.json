@@ -2891,6 +2891,11 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_callable_state_covers_defaults_keyword_defaults_and_closure_cells",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_caught_runtime_integrity_failure_poison_rolls_back_transaction",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
@@ -2912,6 +2917,11 @@
     },
     {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_commit_api_returns_self_contained_runtime_receipt_headers",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_commit_rejects_behavioral_json_before_self_restoring_authority_swap",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
@@ -3771,6 +3781,11 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_store_refuses_self_restoring_contract_validator_substitution",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_store_rejects_unreceipted_registry_decision_semantics[changes0]",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
@@ -3797,6 +3812,11 @@
     },
     {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_tenant_origin_reference_snapshot_never_enters_global_placement",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_two_tenant_selection_never_changes_global_runtime_content",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
@@ -3936,6 +3956,16 @@
       "sourcePath": "kernel/tests/test_schema_guard.py"
     },
     {
+      "nodeid": "kernel/tests/test_stages.py::test_actor_attribution_uses_retained_authority_predicate",
+      "sourceModule": "kernel.tests.test_stages",
+      "sourcePath": "kernel/tests/test_stages.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_stages.py::test_authority_stage_uses_retained_action_map_after_gate_preflight",
+      "sourceModule": "kernel.tests.test_stages",
+      "sourcePath": "kernel/tests/test_stages.py"
+    },
+    {
       "nodeid": "kernel/tests/test_stages.py::test_carrier_schema_validator_refuses_unknown_contract",
       "sourceModule": "kernel.tests.test_stages",
       "sourcePath": "kernel/tests/test_stages.py"
@@ -3947,6 +3977,11 @@
     },
     {
       "nodeid": "kernel/tests/test_stages.py::test_compliance_claim_validator_refuses_non_identity_subject",
+      "sourceModule": "kernel.tests.test_stages",
+      "sourcePath": "kernel/tests/test_stages.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_stages.py::test_decision_policy_tables_are_deeply_immutable",
       "sourceModule": "kernel.tests.test_stages",
       "sourcePath": "kernel/tests/test_stages.py"
     },
@@ -3971,7 +4006,17 @@
       "sourcePath": "kernel/tests/test_stages.py"
     },
     {
+      "nodeid": "kernel/tests/test_stages.py::test_review_branch_default_mutation_is_rejected_before_equality_executes",
+      "sourceModule": "kernel.tests.test_stages",
+      "sourcePath": "kernel/tests/test_stages.py"
+    },
+    {
       "nodeid": "kernel/tests/test_stages.py::test_scope_containment_validator_contract",
+      "sourceModule": "kernel.tests.test_stages",
+      "sourcePath": "kernel/tests/test_stages.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_stages.py::test_store_outer_contract_validation_swap_is_rejected_and_rolls_back",
       "sourceModule": "kernel.tests.test_stages",
       "sourcePath": "kernel/tests/test_stages.py"
     },
@@ -3986,8 +4031,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "288927c4cf6207ac7723ef6318c2d88d424e37effd5da3cc80b52f2e38399324",
-  "entryCount": 797,
+  "entriesSha256": "03e5a167224fe9d4b07f06045105cdd44e5b4f386243c6a1acfc4fc6da6146ce",
+  "entryCount": 806,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

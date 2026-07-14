@@ -553,7 +553,7 @@ def test_descriptor_drives_existing_si_config_without_tenant_binding():
     assert active.code_binding_profile_ref == config.CODE_BINDING_PROFILE_REF
     assert active.evidence_policy_path == config.EVIDENCE_POLICY_PATH
     assert active.context_snapshot_id_prefix == "contextsnapshot:si.ffs"
-    assert context.PROFILE_INSTANCE_FILES == list(active.profile_instance_files)
+    assert context.PROFILE_INSTANCE_FILES == tuple(active.profile_instance_files)
     assert context.REGSR_SNAPSHOT_PREFIX == active.reference_family(
         "si.uvhvvr.ffs-reg").snapshot_prefix
     assert context.GERK_SNAPSHOT_PREFIX == active.reference_family(
