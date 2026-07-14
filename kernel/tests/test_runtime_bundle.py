@@ -3576,7 +3576,11 @@ def test_runtime_bundle_refuses_mutable_decision_semantic_roots(fresh_store, fre
     original_code = original_validate.__code__
     original_validate.__code__ = hostile_validate.__code__
     try:
-        with pytest.raises(RuntimeBundleError, match="decision semantic state"):
+        # The adjacent Store guard reaches this retained function and rejects
+        # its in-place code mutation before the broader semantic proof runs.
+        with pytest.raises(
+                RuntimeError,
+                match="Store runtime dispatch changed after construction"):
             store.get_record(demo.FARMER)
     finally:
         original_validate.__code__ = original_code
