@@ -32,7 +32,14 @@ def _evidence(*, clean=True, started="2026-07-10T00:00:00Z", outcome="passed"):
             "end": dict(git_state),
             "unchanged": True,
         },
-        "environment": {"ci": {"runId": "1", "runAttempt": "1"}},
+        "environment": {
+            "ci": {"runId": "1", "runAttempt": "1"},
+            "postgresql": {
+                "sameServer": True,
+                "admin": {"systemIdentifier": "cluster-left"},
+                "testStore": {"systemIdentifier": "cluster-left"},
+            },
+        },
         "tests": {"summary": {"passed": 1}},
     }
 
@@ -77,6 +84,57 @@ def test_authoritative_target_requires_linux_x86_64_cpython():
         "rootFilesystem": "READ_ONLY",
     }
     assert required["testDatabaseName"] == "ofarm_kernel_test"
+
+    workflow = (
+        baseline.ROOT / ".github" / "workflows" / "conformance.yml"
+    ).read_text(encoding="utf-8")
+    review, remainder = workflow.split("  review_baseline:\n", 1)[1].split(
+        "  review_baseline_equivalence:\n", 1
+    )
+    equivalence, remainder = remainder.split("  platform_evidence:\n", 1)
+    platform_lane, final = remainder.split("  conformance:\n", 1)
+    python_image = (
+        "python:3.12.13-bookworm@sha256:"
+        "c36262cd12ed3eb4c32146f5268ea5037e04c688ccf32cdb04b6084671845541"
+    )
+    postgresql_image = (
+        "postgres@sha256:"
+        "5f050f770b427fbd477edee6c3968a72e5c6be97e050a7e368b2b74a9494a285"
+    )
+
+    assert "    needs:" not in review
+    assert "        run: [1, 2]" in review
+    assert "      fail-fast: false" in review
+    assert python_image in review
+    assert postgresql_image in review
+    assert "run-${{ matrix.run }}" in review
+    assert "id: baseline-evidence" in review
+    assert "name: review-baseline-run-${{ matrix.run }}" in review
+    assert "steps.baseline-evidence.outcome != 'skipped'" in review
+
+    download_pin = (
+        "actions/download-artifact@"
+        "634f93cb2916e3fdff6788551b99b062d0335ce0"
+    )
+    assert equivalence.count(download_pin) == 2
+    assert "    needs: review_baseline" in equivalence
+    assert "id: equivalence-evidence" in equivalence
+    assert "steps.equivalence-evidence.outcome != 'skipped'" in equivalence
+    assert "name: review-baseline\n" in equivalence
+    assert "path: .artifacts/review-baseline/" in equivalence
+
+    assert "    needs:" not in platform_lane
+    assert python_image in platform_lane
+    assert postgresql_image in platform_lane
+    assert "id: platform-evidence" in platform_lane
+    assert "steps.platform-evidence.outcome != 'skipped'" in platform_lane
+
+    assert "    name: conformance" in final
+    assert (
+        "    needs: [review_baseline_equivalence, platform_evidence]" in final
+    )
+    assert "    if: always()" in final
+    assert python_image in final
 
 
 def test_dirty_or_missing_git_state_fails_preflight():
@@ -185,10 +243,25 @@ def test_plugin_terminal_outcomes_are_not_collapsed(phases, expected):
 
 
 def test_normalization_changes_only_the_fixed_volatile_fields():
+    assert baseline.NORMALIZATION_POLICY == "ofarm.review-baseline-normalization.v3"
+    assert baseline.VOLATILE_POINTERS == (
+        "/run/startedAt",
+        "/run/finishedAt",
+        "/environment/ci/runId",
+        "/environment/ci/runAttempt",
+        "/environment/postgresql/admin/systemIdentifier",
+        "/environment/postgresql/testStore/systemIdentifier",
+    )
     left = _evidence(started="2026-07-10T00:00:00Z")
     right = _evidence(started="2026-07-10T00:00:01Z")
     right["environment"]["ci"]["runId"] = "2"
     right["environment"]["ci"]["runAttempt"] = "2"
+    right["environment"]["postgresql"]["admin"][
+        "systemIdentifier"
+    ] = "cluster-right"
+    right["environment"]["postgresql"]["testStore"][
+        "systemIdentifier"
+    ] = "cluster-right"
 
     assert baseline._normalised_evidence(left) == baseline._normalised_evidence(right)
 
@@ -211,13 +284,38 @@ def test_normalization_refuses_when_a_required_volatile_field_is_missing():
     with pytest.raises(ValueError, match="normalization pointer missing"):
         baseline._normalised_evidence(evidence)
 
+    invalid_postgresql_identities = (
+        (False, "cluster", "cluster", "sameServer is true"),
+        (None, "cluster", "cluster", "sameServer is true"),
+        (True, "", "", "nonempty strings"),
+        (True, None, "cluster", "nonempty strings"),
+        (True, "cluster-a", "cluster-b", "identifiers differ"),
+    )
+    for (same_server, admin_identifier,
+         test_identifier, message) in invalid_postgresql_identities:
+        evidence = _evidence()
+        postgresql = evidence["environment"]["postgresql"]
+        postgresql["sameServer"] = same_server
+        postgresql["admin"]["systemIdentifier"] = admin_identifier
+        postgresql["testStore"]["systemIdentifier"] = test_identifier
+
+        with pytest.raises(ValueError, match=message):
+            baseline._normalised_evidence(evidence)
+
 
 def test_compare_proves_clean_equivalence_and_records_raw_digests(tmp_path):
     left = tmp_path / "left.json"
     right = tmp_path / "right.json"
     proof = tmp_path / "proof.json"
     _write(left, _evidence(started="2026-07-10T00:00:00Z"))
-    _write(right, _evidence(started="2026-07-10T00:00:01Z"))
+    right_payload = _evidence(started="2026-07-10T00:00:01Z")
+    right_payload["environment"]["postgresql"]["admin"][
+        "systemIdentifier"
+    ] = "cluster-right"
+    right_payload["environment"]["postgresql"]["testStore"][
+        "systemIdentifier"
+    ] = "cluster-right"
+    _write(right, right_payload)
 
     assert baseline.compare_evidence(str(left), str(right), str(proof)) == 0
     result = json.loads(proof.read_text(encoding="utf-8"))

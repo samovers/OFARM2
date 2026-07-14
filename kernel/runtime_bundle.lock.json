@@ -878,7 +878,7 @@
       "logicalRef": "python:kernel/runtime_bundle.py",
       "path": "kernel/runtime_bundle.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:401e8d3bc61a4f2fdb52de025d96ba2afd6b9b7770a08ff9b34f4ff1eb07620a",
+      "sha256": "sha256:76862b0356c1d7e82ad5f19097539cb74f4a9dd1744c5b132557a0d6362f0950",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -942,7 +942,7 @@
       "logicalRef": "environment:.github/workflows/conformance.yml",
       "path": ".github/workflows/conformance.yml",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:27e21a13bfc1fb483f024ec99bdb0cedf46d93efafcfcc37b2453a928994214a",
+      "sha256": "sha256:b6c980f7a2f206a7b5836c100737f8d1dd1d8d737e1a43e3dcc2606fdf9a53c1",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {

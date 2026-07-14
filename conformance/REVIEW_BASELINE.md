@@ -151,7 +151,14 @@ all test outcomes, step outcomes, and produced/verified artifact digests.
 
 ## Clean-run equivalence
 
-CI runs the complete command twice in fresh subprocesses and compares the two
+CI runs the complete command in a two-entry matrix. Each entry gets its own
+hosted runner, checkout, locked virtual environment, and pinned PostgreSQL
+service, so the two complete Kernel baselines run concurrently and neither
+shares process or database state with the other. Each job uploads a separate
+`review-baseline-run-1` or `review-baseline-run-2` artifact.
+
+After both matrix entries pass, a separate equivalence job downloads those two
+artifacts with the pinned `actions/download-artifact` action and compares the
 envelopes:
 
 ```bash
@@ -162,24 +169,38 @@ envelopes:
   --output .artifacts/review-baseline/equivalence.json
 ```
 
-The comparator refuses dirty, mutated, or failing runs. Its fixed v2 policy
-removes only these four volatile JSON pointers:
+The comparator refuses dirty, mutated, or failing runs. Its fixed v3 policy
+removes only these six volatile JSON pointers:
 
 - `/run/startedAt`
 - `/run/finishedAt`
 - `/environment/ci/runId`
 - `/environment/ci/runAttempt`
+- `/environment/postgresql/admin/systemIdentifier`
+- `/environment/postgresql/testStore/systemIdentifier`
 
-The policy cannot be broadened by an input envelope. Test inventories,
-outcomes, warnings, Git state, versions, schema and lock digests, installed-set
-digest, and produced artifact digests all remain comparison inputs. The proof
-records raw and normalized envelope SHA-256 digests.
+The last two values identify the independently created PostgreSQL service
+clusters. They are removed only after the comparator proves, separately for
+each raw envelope, that `sameServer` is exactly `true` and that the admin and
+test-store identifiers are nonempty strings with the same value. A false
+claim, missing identifier, or intra-envelope mismatch is refused before
+normalization. The policy cannot be broadened by an input envelope.
+
+Test inventories, outcomes, warnings, Git state, versions, schema and lock
+digests, installed-set digest, and produced artifact digests all remain
+comparison inputs. The separate run artifacts retain both raw PostgreSQL
+identifiers, and the proof records each raw and normalized envelope SHA-256
+digest. The equivalence job uploads the two raw run directories and proof
+together under the established `review-baseline` artifact name.
 
 ## Existing platform evidence lane
 
 The historical platform-MVP writer remains narrower and duration-bearing: it
 records 23 root conformance call phases and structured runtime details. It is
-not used for deterministic equivalence. After the two complete baseline runs,
-CI runs `kernel/tests/test_conformance.py` separately and redirects that legacy
-JSON into `.artifacts/platform-evidence/`, so no timestamped evidence pollutes
-the worktree and no historical evidence directory is uploaded by accident.
+not used for deterministic equivalence. CI runs
+`kernel/tests/test_conformance.py` in an independent pinned job alongside the
+two baseline matrix entries and redirects that legacy JSON into
+`.artifacts/platform-evidence/`, so no timestamped evidence pollutes the
+worktree and no historical evidence directory is uploaded by accident. A
+small final `conformance` job preserves the established required-check name and
+succeeds only when both the equivalence and platform-evidence jobs succeed.

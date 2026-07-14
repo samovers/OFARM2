@@ -1842,6 +1842,18 @@ _DECISION_SEQUENCE_ROOTS = (
     ("kernel.validators", "OPERATION_SEQUENCE"),
 )
 
+# These exact tuples are import-time, immutable guard indexes. Their complete
+# frozen contents still enter the stable receipt and still seed the transitive
+# function/class closure below. During a live proof, however, re-walking the
+# captured callable-state snapshots is redundant: the tuple binding cannot be
+# changed in place, and every reached behavior-bearing value has its own seal
+# entry plus its point-of-use guard.
+_IMMUTABLE_GUARD_TABLE_BINDINGS = frozenset({
+    ("kernel.gates", "_GATE_ENTRY_CALLABLES"),
+    ("kernel.gates", "_GATE_HELPER_ANCHORS"),
+    ("kernel.store", "_STORE_DISPATCH_ANCHORS"),
+})
+
 
 def _decision_semantic_root_module_names() -> tuple[str, ...]:
     """Return the complete declared module inventory that must be preloaded.
@@ -2445,6 +2457,16 @@ def _semantic_binding_state(
         # Their exact dict identities remain sealed, but concurrent trusted
         # regex use must not turn cache entries into decision semantics.
         return ("DERIVED_CACHE", value, type(value))
+    if (owner is not None
+            and (owner.__name__, name) in _IMMUTABLE_GUARD_TABLE_BINDINGS):
+        if type(value) is not tuple:
+            raise RuntimeBundleError(
+                f"immutable guard table is not an exact tuple: "
+                f"{owner.__name__}.{name}")
+        return (
+            "IMMUTABLE_GUARD_TABLE", value,
+            _freeze_semantic_value(value, traversal=traversal),
+        )
     if owner is not None and not _stable_decision_namespace(owner.__name__):
         return ("IDENTITY_DATA", value, type(value))
     return ("DATA", _freeze_semantic_value(value, traversal=traversal))
@@ -2470,6 +2492,10 @@ def _same_semantic_binding(
     if current[0] == "CLASS":
         return _same_semantic_class(
             current[1], prior[1], traversal=traversal)
+    if current[0] == "IMMUTABLE_GUARD_TABLE":
+        return (current[1] is prior[1]
+                and _same_semantic_value(
+                    current[2], prior[2], traversal=traversal))
     if current[0] == "IDENTITY_DATA":
         return current[1] is prior[1] and current[2] is prior[2]
     if current[0] == "DERIVED_CACHE":
@@ -2823,6 +2849,9 @@ def _same_live_semantic_binding(
         kind = "CLASS"
     elif owner is re and name in {"_cache", "_cache2"}:
         kind = "DERIVED_CACHE"
+    elif (owner is not None
+          and (owner.__name__, name) in _IMMUTABLE_GUARD_TABLE_BINDINGS):
+        kind = "IMMUTABLE_GUARD_TABLE"
     elif owner is not None and not _stable_decision_namespace(owner.__name__):
         kind = "IDENTITY_DATA"
     else:
@@ -2837,6 +2866,8 @@ def _same_live_semantic_binding(
         return _same_live_semantic_function(current, prior[1], proof=proof)
     if kind == "CLASS":
         return _same_live_semantic_class(current, prior[1], proof=proof)
+    if kind == "IMMUTABLE_GUARD_TABLE":
+        return current is prior[1] and type(current) is tuple
     if kind in {"IDENTITY_DATA", "DERIVED_CACHE"}:
         return current is prior[1] and type(current) is prior[2]
     return _same_live_semantic_value(current, prior[1], proof=proof)
@@ -3216,6 +3247,8 @@ def _capture_decision_semantics() -> tuple[tuple[Any, ...], ...]:
                     enqueue_class_state(state[1])
                 elif state[0] == "DATA":
                     enqueue_value_state(state[1])
+                elif state[0] == "IMMUTABLE_GUARD_TABLE":
+                    enqueue_value_state(state[2])
             if type(value) is types.FunctionType:
                 enqueue_function(value)
             elif (isinstance(value, type)
@@ -3601,6 +3634,11 @@ def _stable_semantic_binding_state(
             "module": class_state[4],
             "qualname": class_state[6],
         }
+    if state[0] == "IMMUTABLE_GUARD_TABLE":
+        # Project the complete frozen tuple exactly as the former DATA path
+        # did. Only repeated live comparison is compacted.
+        return _stable_frozen_semantic_value(
+            state[2], package_root, projection)
     if state[0] == "IDENTITY_DATA":
         value = state[1]
         if callable(value):

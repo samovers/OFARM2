@@ -23,13 +23,15 @@ CONFIG_PATH = ROOT / "conformance" / "review_baseline_config.json"
 ISOLATED_LAUNCHER = ROOT / "tooling" / "ofarm_isolated.py"
 EVIDENCE_SCHEMA = "ofarm.review-baseline-evidence.v2"
 COMPARISON_SCHEMA = "ofarm.review-baseline-comparison.v2"
-NORMALIZATION_POLICY = "ofarm.review-baseline-normalization.v2"
+NORMALIZATION_POLICY = "ofarm.review-baseline-normalization.v3"
 INVENTORY_SCHEMA = "ofarm.review-baseline-test-inventory.v1"
 VOLATILE_POINTERS = (
     "/run/startedAt",
     "/run/finishedAt",
     "/environment/ci/runId",
     "/environment/ci/runAttempt",
+    "/environment/postgresql/admin/systemIdentifier",
+    "/environment/postgresql/testStore/systemIdentifier",
 )
 ALLOWED_OFARM_ENV = {"OFARM_PG_ADMIN_DSN"}
 
@@ -827,11 +829,41 @@ def _normalization_policy() -> dict[str, Any]:
     return {**body, "sha256": _sha256_bytes(_canonical_bytes(body))}
 
 
+def _require_normalizable_postgresql_identity(evidence: dict[str, Any]) -> None:
+    environment = evidence.get("environment")
+    postgresql = environment.get("postgresql") if isinstance(environment, dict) else None
+    if not isinstance(postgresql, dict) or postgresql.get("sameServer") is not True:
+        raise ValueError(
+            "PostgreSQL system identifiers may be normalized only when "
+            "sameServer is true"
+        )
+    admin = postgresql.get("admin")
+    test_store = postgresql.get("testStore")
+    if not isinstance(admin, dict) or not isinstance(test_store, dict):
+        raise ValueError("PostgreSQL identity records required for normalization")
+    admin_identifier = admin.get("systemIdentifier")
+    test_store_identifier = test_store.get("systemIdentifier")
+    if (
+        not isinstance(admin_identifier, str)
+        or not admin_identifier
+        or not isinstance(test_store_identifier, str)
+        or not test_store_identifier
+    ):
+        raise ValueError(
+            "PostgreSQL system identifiers must be nonempty strings before normalization"
+        )
+    if admin_identifier != test_store_identifier:
+        raise ValueError(
+            "PostgreSQL admin and test-store system identifiers differ before normalization"
+        )
+
+
 def _normalised_evidence(evidence: dict[str, Any]) -> bytes:
     policy = evidence.get("normalizationPolicy")
     expected = _normalization_policy()
     if policy != expected:
         raise ValueError("evidence normalization policy is not the fixed policy")
+    _require_normalizable_postgresql_identity(evidence)
     value = copy.deepcopy(evidence)
     for pointer in VOLATILE_POINTERS:
         _remove_pointer(value, pointer)

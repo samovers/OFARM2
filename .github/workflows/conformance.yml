@@ -8,9 +8,14 @@ on:
   pull_request:
 
 jobs:
-  conformance:
+  review_baseline:
+    name: Complete Kernel baseline run ${{ matrix.run }}
     runs-on: ubuntu-24.04
     timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        run: [1, 2]
     container:
       # Complete Python, stdlib, libc/loader, and native dependency identity.
       # The root stays immutable; only runner mounts and the explicit tmpfs
@@ -57,28 +62,108 @@ jobs:
           .review-venv/bin/python -m pip check
           find .review-venv -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
           find .review-venv -depth -type d -name __pycache__ -empty -delete
-      - name: Complete Kernel baseline run 1
+      - name: Complete Kernel baseline run ${{ matrix.run }}
+        id: baseline-evidence
         env:
           OFARM_PG_ADMIN_DSN: "host=postgres port=5432 dbname=postgres user=ofarm password=ofarm"
         run: >-
           .review-venv/bin/python -I -B -S tooling/ofarm_isolated.py
           --venv-root .review-venv -m conformance.run_review_baseline
-          run --output-dir .artifacts/review-baseline/run-1
-      - name: Complete Kernel baseline run 2
-        env:
-          OFARM_PG_ADMIN_DSN: "host=postgres port=5432 dbname=postgres user=ofarm password=ofarm"
-        run: >-
-          .review-venv/bin/python -I -B -S tooling/ofarm_isolated.py
-          --venv-root .review-venv -m conformance.run_review_baseline
-          run --output-dir .artifacts/review-baseline/run-2
+          run --output-dir .artifacts/review-baseline/run-${{ matrix.run }}
+      - name: Upload Kernel baseline run ${{ matrix.run }}
+        if: always() && steps.baseline-evidence.outcome != 'skipped'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: review-baseline-run-${{ matrix.run }}
+          path: .artifacts/review-baseline/run-${{ matrix.run }}/
+          include-hidden-files: true
+          if-no-files-found: error
+
+  review_baseline_equivalence:
+    name: Prove clean-run equivalence
+    needs: review_baseline
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    container:
+      image: python:3.12.13-bookworm@sha256:c36262cd12ed3eb4c32146f5268ea5037e04c688ccf32cdb04b6084671845541
+      options: --read-only --tmpfs /tmp:rw,noexec,nosuid,nodev,size=256m
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - name: Create isolated locked environment
+        run: |
+          python -m venv .review-venv
+          mkdir -p .review-venv/.ofarm-wheelhouse
+          .review-venv/bin/python -m pip download --require-hashes --only-binary=:all: --no-deps --dest .review-venv/.ofarm-wheelhouse --requirement requirements-review-pip.lock
+          .review-venv/bin/python -m pip install --no-compile --no-index --find-links .review-venv/.ofarm-wheelhouse --require-hashes --only-binary=:all: --no-deps --requirement requirements-review-pip.lock
+          .review-venv/bin/python -m pip download --require-hashes --only-binary=:all: --no-deps --dest .review-venv/.ofarm-wheelhouse --requirement requirements-review-baseline.lock
+          .review-venv/bin/python -m pip install --no-compile --no-index --find-links .review-venv/.ofarm-wheelhouse --require-hashes --only-binary=:all: --no-deps --requirement requirements-review-baseline.lock
+          .review-venv/bin/python -m pip check
+          find .review-venv -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
+          find .review-venv -depth -type d -name __pycache__ -empty -delete
+      - name: Download Kernel baseline run 1
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: review-baseline-run-1
+          path: .artifacts/review-baseline/run-1
+      - name: Download Kernel baseline run 2
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: review-baseline-run-2
+          path: .artifacts/review-baseline/run-2
       - name: Prove clean-run equivalence
+        id: equivalence-evidence
         run: >-
           .review-venv/bin/python -I -B -S tooling/ofarm_isolated.py
           --venv-root .review-venv -m conformance.run_review_baseline compare
           .artifacts/review-baseline/run-1/review-baseline-evidence.json
           .artifacts/review-baseline/run-2/review-baseline-evidence.json
           --output .artifacts/review-baseline/equivalence.json
+      - name: Upload combined deterministic review baseline
+        if: always() && steps.equivalence-evidence.outcome != 'skipped'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          # Preserve the artifact name and directory layout used by reviewers.
+          name: review-baseline
+          path: .artifacts/review-baseline/
+          include-hidden-files: true
+          if-no-files-found: error
+
+  platform_evidence:
+    name: Preserve root platform MVP evidence lane
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    container:
+      image: python:3.12.13-bookworm@sha256:c36262cd12ed3eb4c32146f5268ea5037e04c688ccf32cdb04b6084671845541
+      options: --read-only --tmpfs /tmp:rw,noexec,nosuid,nodev,size=256m
+    services:
+      postgres:
+        image: postgres@sha256:5f050f770b427fbd477edee6c3968a72e5c6be97e050a7e368b2b74a9494a285
+        env:
+          POSTGRES_USER: ofarm
+          POSTGRES_PASSWORD: ofarm
+          POSTGRES_DB: ofarm_kernel
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ofarm -d ofarm_kernel"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - name: Create isolated locked environment
+        run: |
+          python -m venv .review-venv
+          mkdir -p .review-venv/.ofarm-wheelhouse
+          .review-venv/bin/python -m pip download --require-hashes --only-binary=:all: --no-deps --dest .review-venv/.ofarm-wheelhouse --requirement requirements-review-pip.lock
+          .review-venv/bin/python -m pip install --no-compile --no-index --find-links .review-venv/.ofarm-wheelhouse --require-hashes --only-binary=:all: --no-deps --requirement requirements-review-pip.lock
+          .review-venv/bin/python -m pip download --require-hashes --only-binary=:all: --no-deps --dest .review-venv/.ofarm-wheelhouse --requirement requirements-review-baseline.lock
+          .review-venv/bin/python -m pip install --no-compile --no-index --find-links .review-venv/.ofarm-wheelhouse --require-hashes --only-binary=:all: --no-deps --requirement requirements-review-baseline.lock
+          .review-venv/bin/python -m pip check
+          find .review-venv -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
+          find .review-venv -depth -type d -name __pycache__ -empty -delete
       - name: Preserve root platform MVP evidence lane
+        id: platform-evidence
         env:
           OFARM_PG_DSN: "host=postgres port=5432 dbname=ofarm_kernel_test user=ofarm password=ofarm"
           OFARM_PG_ADMIN_DSN: "host=postgres port=5432 dbname=postgres user=ofarm password=ofarm"
@@ -93,19 +178,36 @@ jobs:
           --venv-root .review-venv -m pytest
           kernel/tests/test_conformance.py -q --assert=plain
           --import-mode=importlib -p no:cacheprovider
-      - name: Upload deterministic review baseline
-        if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
-        with:
-          name: review-baseline
-          path: .artifacts/review-baseline/
-          include-hidden-files: true
-          if-no-files-found: error
       - name: Upload root platform MVP evidence
-        if: always()
+        if: always() && steps.platform-evidence.outcome != 'skipped'
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: platform-mvp-evidence
           path: .artifacts/platform-evidence/
           include-hidden-files: true
           if-no-files-found: error
+
+  # Keep the established required check and the launcher parser's exact job id.
+  conformance:
+    name: conformance
+    needs: [review_baseline_equivalence, platform_evidence]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    container:
+      image: python:3.12.13-bookworm@sha256:c36262cd12ed3eb4c32146f5268ea5037e04c688ccf32cdb04b6084671845541
+      options: --read-only --tmpfs /tmp:rw,noexec,nosuid,nodev,size=256m
+    steps:
+      - name: Require deterministic baseline and platform evidence
+        env:
+          BASELINE_EQUIVALENCE_RESULT: ${{ needs.review_baseline_equivalence.result }}
+          PLATFORM_EVIDENCE_RESULT: ${{ needs.platform_evidence.result }}
+        run: |
+          if [ "$BASELINE_EQUIVALENCE_RESULT" != success ]; then
+            echo "review baseline equivalence: $BASELINE_EQUIVALENCE_RESULT"
+            exit 1
+          fi
+          if [ "$PLATFORM_EVIDENCE_RESULT" != success ]; then
+            echo "platform evidence: $PLATFORM_EVIDENCE_RESULT"
+            exit 1
+          fi

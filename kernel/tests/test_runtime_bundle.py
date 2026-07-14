@@ -256,7 +256,7 @@ def test_runtime_bundle_component_placement_map_is_exact():
     )] == TENANT_CONTENT_PLACEMENT
     assert placement[(
         "RUNTIME_ENVIRONMENT_OBSERVED",
-        "environment:stable-python-execution.v4",
+        "environment:stable-runtime.v4",
     )] == GLOBAL_CONTENT_PLACEMENT
     assert all(item.placement == TENANT_CONTENT_PLACEMENT
                for item in bundle.components if item.role == "QUERY_PLAN")
@@ -3752,6 +3752,10 @@ def test_preselection_method_mutation_changes_semantic_receipt():
 
 
 def test_decision_semantic_seal_is_self_consistent_without_mutation():
+    from kernel import gates as gates_module
+    from kernel import runtime_bundle as runtime_bundle_module
+    from kernel import store as store_module
+
     selected = _capture_decision_semantics()
     control_pattern = next(
         entry for entry in selected
@@ -3761,6 +3765,135 @@ def test_decision_semantic_seal_is_self_consistent_without_mutation():
     assert control_pattern[5] is _C0_CONTROL_RE
     assert control_pattern[6][0] == "DATA"
     assert control_pattern[6][1][0] == "REGEX"
+    _require_decision_semantics(selected)
+
+    guard_tables = {
+        ("kernel.gates", "_GATE_ENTRY_CALLABLES"):
+            gates_module._GATE_ENTRY_CALLABLES,
+        ("kernel.gates", "_GATE_HELPER_ANCHORS"):
+            gates_module._GATE_HELPER_ANCHORS,
+        ("kernel.store", "_STORE_DISPATCH_ANCHORS"):
+            store_module._STORE_DISPATCH_ANCHORS,
+    }
+    assert runtime_bundle_module._IMMUTABLE_GUARD_TABLE_BINDINGS == \
+        frozenset(guard_tables)
+
+    guard_labels = {
+        f"{module_name}.{name}" for module_name, name in guard_tables
+    }
+    guard_entries = {
+        entry[1]: entry for entry in selected if entry[1] in guard_labels
+    }
+    assert guard_entries.keys() == guard_labels
+    for label, entry in guard_entries.items():
+        _kind, _label, owner, _module_name, name, original, state = entry
+        assert state[0] == "IMMUTABLE_GUARD_TABLE"
+        assert original is guard_tables[(owner.__name__, name)]
+        assert state[1] is original
+        assert state[2][0] == "SEQUENCE"
+        assert runtime_bundle_module._stable_semantic_binding_state(
+            state, config.PACKAGE_ROOT, owner, name,
+        ) == runtime_bundle_module._stable_frozen_semantic_value(
+            state[2], config.PACKAGE_ROOT,
+        ), label
+
+    # The optimized live proof checks the exact tuple identity instead of
+    # repeatedly walking its retained callable-state snapshots. Prove that
+    # replacement is refused and that every behavior-bearing object reached
+    # through those tuples is also sealed independently of the tuple entries.
+    for (module_name, name), original in guard_tables.items():
+        owner = sys.modules[module_name]
+        replacement = tuple(list(original))
+        assert replacement == original and replacement is not original
+        setattr(owner, name, replacement)
+        try:
+            with pytest.raises(RuntimeBundleError, match="decision semantic root"):
+                _require_decision_semantics(selected)
+        finally:
+            setattr(owner, name, original)
+
+    seen: set[int] = set()
+    functions: dict[int, types.FunctionType] = {}
+    classes: dict[int, type] = {}
+
+    def retain_behavior(value):
+        if id(value) in seen:
+            return
+        seen.add(id(value))
+        module_name = getattr(value, "__module__", "")
+        if type(value) is types.FunctionType:
+            if module_name == "kernel" or module_name.startswith("kernel."):
+                functions[id(value)] = value
+            return
+        if isinstance(value, type):
+            if module_name == "kernel" or module_name.startswith("kernel."):
+                classes[id(value)] = value
+            return
+        if type(value) in {tuple, list, set, frozenset}:
+            for item in value:
+                retain_behavior(item)
+        elif type(value) in {dict, MappingProxyType}:
+            for key, item in value.items():
+                retain_behavior(key)
+                retain_behavior(item)
+
+    for value in guard_tables.values():
+        retain_behavior(value)
+    anchored_functions = {
+        id(function)
+        for function, _code in
+        runtime_bundle_module._decision_semantic_callable_anchors(selected)
+    }
+    assert functions
+    assert classes
+    assert functions.keys() <= anchored_functions
+
+    without_guard_tables = tuple(
+        entry for entry in selected if entry[1] not in guard_labels
+    )
+    retained_state_ids: set[int] = set()
+    sealed_functions: set[int] = set()
+    sealed_classes: set[int] = set()
+
+    def retain_independent_seals(value):
+        if id(value) in retained_state_ids:
+            return
+        retained_state_ids.add(id(value))
+        if (type(value) is tuple and len(value) == 15
+                and value[0] == "FUNCTION"
+                and type(value[1]) is types.FunctionType):
+            sealed_functions.add(id(value[1]))
+        if (type(value) is tuple and len(value) == 9
+                and isinstance(value[0], type)
+                and value[8] is type(value[0])):
+            sealed_classes.add(id(value[0]))
+        if type(value) in {tuple, list, set, frozenset}:
+            for item in value:
+                retain_independent_seals(item)
+        elif type(value) in {dict, MappingProxyType}:
+            for key, item in value.items():
+                retain_independent_seals(key)
+                retain_independent_seals(item)
+
+    for entry in without_guard_tables:
+        retain_independent_seals(entry[6])
+    assert functions.keys() <= sealed_functions
+    assert classes.keys() <= sealed_classes
+
+    marker = f"_issue171_guard_table_probe_{uuid.uuid4().hex}"
+    function = gates_module._invoke_gate_entry
+    setattr(function, marker, True)
+    try:
+        with pytest.raises(RuntimeBundleError, match="decision semantic state"):
+            _require_decision_semantics(without_guard_tables)
+    finally:
+        delattr(function, marker)
+    setattr(Store, marker, True)
+    try:
+        with pytest.raises(RuntimeBundleError, match="decision semantic state"):
+            _require_decision_semantics(without_guard_tables)
+    finally:
+        delattr(Store, marker)
     _require_decision_semantics(selected)
 
 
@@ -3889,7 +4022,9 @@ def test_semantic_proof_rechecks_mutation_after_restore():
         policy.COMMIT_CLASS_TO_FAMILY = MappingProxyType({
             **original_policy, marker: "HOSTILE_EVENT"})
         try:
-            with pytest.raises(RuntimeBundleError, match="decision semantic state"):
+            with pytest.raises(
+                    RuntimeBundleError,
+                    match=r"decision semantic (?:root|state)"):
                 _require_decision_semantics(selected)
         finally:
             policy.COMMIT_CLASS_TO_FAMILY = original_policy
