@@ -1112,7 +1112,9 @@ def test_runtime_environment_seal_integrity_rejects_mutable_receipt_state():
 
     object.__setattr__(seal, "decision_semantics", original_semantics[1:])
     try:
-        with pytest.raises(RuntimeBundleError, match="semantics differ"):
+        with pytest.raises(
+                RuntimeBundleError,
+                match="contract-validation semantics do not belong"):
             _require_runtime_environment_seal_integrity(bundle, seal)
     finally:
         object.__setattr__(seal, "decision_semantics", original_semantics)
