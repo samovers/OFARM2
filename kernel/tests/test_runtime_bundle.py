@@ -492,11 +492,25 @@ def test_callable_state_covers_defaults_keyword_defaults_and_closure_cells():
 
     state = capture_callable_state(retained)
     assert callable_state_matches(retained, state)
+    assert callable_state_matches(retained, ()) is False
+    assert callable_state_matches(
+        retained, (state[0], retained, (), (), ())) is False
+    assert callable_state_matches(
+        retained, (HostileValue(), *state[1:])) is False
+    assert equality_called is False
 
     original_defaults = retained.__defaults__
     retained.__defaults__ = (HostileValue(),)
     assert callable_state_matches(retained, state) is False
     retained.__defaults__ = original_defaults
+
+    original_keyword_defaults = retained.__kwdefaults__
+    retained.__kwdefaults__ = dict(original_keyword_defaults)
+    try:
+        assert retained.__kwdefaults__ is not original_keyword_defaults
+        assert callable_state_matches(retained, state) is False
+    finally:
+        retained.__kwdefaults__ = original_keyword_defaults
 
     helper_called = False
 
@@ -526,6 +540,127 @@ def test_callable_state_covers_defaults_keyword_defaults_and_closure_cells():
     closure_cell.cell_contents = marker
 
     assert callable_state_matches(retained, state)
+    assert equality_called is False
+
+    retained.__dict__["issue171Probe"] = HostileValue()
+    try:
+        assert callable_state_matches(retained, state) is False
+    finally:
+        del retained.__dict__["issue171Probe"]
+    assert callable_state_matches(retained, state)
+    assert equality_called is False
+
+    # Repeated references in defaults used to copy and re-walk the same
+    # callable graph many times. The flat plan retains each function, mutable
+    # dict, and immutable tuple exactly once while still rejecting mutation at
+    # every behavior-bearing descendant.
+    nested_options = {"marker": marker}
+
+    def nested_helper(options=nested_options):
+        return options["marker"]
+
+    def closure_pair():
+        shared_closure = marker
+
+        def left():
+            return shared_closure
+
+        def right():
+            return shared_closure
+
+        return left, right
+
+    left, right = closure_pair()
+    left_closure = dict(zip(
+        left.__code__.co_freevars, left.__closure__))["shared_closure"]
+    right_closure = dict(zip(
+        right.__code__.co_freevars, right.__closure__))["shared_closure"]
+    assert left_closure is right_closure
+
+    tuple_dict_cycle = {}
+    cyclic_tuple = (tuple_dict_cycle,)
+    tuple_dict_cycle["tuple"] = cyclic_tuple
+    aliases = (nested_helper, nested_helper, left, right)
+    registry = {"primary": nested_helper, "secondary": nested_helper}
+
+    def retained_graph(
+            primary=nested_helper, repeated=aliases, cyclic=cyclic_tuple, *,
+            helpers=registry):
+        return primary(), repeated, cyclic, helpers
+
+    graph_state = capture_callable_state(retained_graph)
+    assert graph_state[0] == "CALLABLE_GUARD_PLAN_V1"
+    assert callable_state_matches(retained_graph, graph_state)
+    assert sum(
+        anchor[0] is nested_helper for anchor in graph_state[2]) == 1
+    assert len({id(anchor[0]) for anchor in graph_state[2]}) == \
+        len(graph_state[2])
+    assert len({id(anchor[0]) for anchor in graph_state[3]}) == \
+        len(graph_state[3])
+    assert len({id(anchor[0]) for anchor in graph_state[4]}) == \
+        len(graph_state[4])
+    assert sum(
+        anchor[0] is left_closure for anchor in graph_state[4]) == 1
+
+    original_graph_defaults = retained_graph.__defaults__
+    retained_graph.__defaults__ = tuple(list(original_graph_defaults))
+    try:
+        assert retained_graph.__defaults__ == original_graph_defaults
+        assert retained_graph.__defaults__ is not original_graph_defaults
+        assert callable_state_matches(retained_graph, graph_state) is False
+    finally:
+        retained_graph.__defaults__ = original_graph_defaults
+
+    original_nested_defaults = nested_helper.__defaults__
+    nested_helper.__defaults__ = (HostileValue(),)
+    try:
+        assert callable_state_matches(retained_graph, graph_state) is False
+    finally:
+        nested_helper.__defaults__ = original_nested_defaults
+
+    nested_options["marker"] = HostileValue()
+    try:
+        assert callable_state_matches(retained_graph, graph_state) is False
+    finally:
+        nested_options["marker"] = marker
+
+    nested_helper.__dict__["issue171NestedProbe"] = HostileValue()
+    try:
+        assert callable_state_matches(retained_graph, graph_state) is False
+    finally:
+        del nested_helper.__dict__["issue171NestedProbe"]
+
+    original_primary = registry["primary"]
+    registry["primary"] = HostileValue()
+    try:
+        assert callable_state_matches(retained_graph, graph_state) is False
+    finally:
+        registry["primary"] = original_primary
+
+    selected_items = tuple(registry.items())
+    primary = registry.pop("primary")
+    registry["primary"] = primary
+    try:
+        assert tuple(registry.items()) != selected_items
+        assert callable_state_matches(retained_graph, graph_state) is False
+    finally:
+        dict.clear(registry)
+        for key, value in selected_items:
+            dict.__setitem__(registry, key, value)
+
+    tuple_dict_cycle["hostile"] = HostileValue()
+    try:
+        assert callable_state_matches(retained_graph, graph_state) is False
+    finally:
+        del tuple_dict_cycle["hostile"]
+
+    left_closure.cell_contents = HostileValue()
+    try:
+        assert callable_state_matches(retained_graph, graph_state) is False
+    finally:
+        left_closure.cell_contents = marker
+
+    assert callable_state_matches(retained_graph, graph_state)
     assert equality_called is False
 
     # A retained outer builder binds its reviewed nested helper before any
@@ -2736,7 +2871,9 @@ def test_caught_runtime_integrity_failure_poison_rolls_back_transaction(
                 **original_policy, marker: "HOSTILE_EVENT"})
             try:
                 with pytest.raises(
-                        RuntimeBundleError, match="decision semantic state"):
+                        RuntimeBundleError,
+                        match=(r"decision semantic root changed after activation: "
+                               r"kernel\.policy\.COMMIT_CLASS_TO_FAMILY")):
                     GatePipeline._assert_runtime_composition(pipeline)
             finally:
                 policy.COMMIT_CLASS_TO_FAMILY = original_policy
@@ -3694,7 +3831,10 @@ def test_runtime_bundle_late_semantic_mutation_rolls_back_current_transaction(
     marker = "ISSUE171_HOSTILE_COMMIT_CLASS"
     original_policy = policy.COMMIT_CLASS_TO_FAMILY
     try:
-        with pytest.raises(RuntimeBundleError, match="decision semantic state"):
+        with pytest.raises(
+                RuntimeBundleError,
+                match=(r"decision semantic root changed after activation: "
+                       r"kernel\.policy\.COMMIT_CLASS_TO_FAMILY")):
             with store.serialized_tx() as cur:
                 store.insert_record(cur, {
                     "schemaVersion": "ofarm.party.v0.1",
@@ -4024,7 +4164,8 @@ def test_semantic_proof_rechecks_mutation_after_restore():
         try:
             with pytest.raises(
                     RuntimeBundleError,
-                    match=r"decision semantic (?:root|state)"):
+                    match=(r"decision semantic root changed after activation: "
+                           r"kernel\.policy\.COMMIT_CLASS_TO_FAMILY")):
                 _require_decision_semantics(selected)
         finally:
             policy.COMMIT_CLASS_TO_FAMILY = original_policy

@@ -734,7 +734,7 @@
       "logicalRef": "python:kernel/callable_state.py",
       "path": "kernel/callable_state.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:6ecc9a727e5d9ae99076c38b295a3ca4cea15774dd17c2415e0ac9d59c52b64a",
+      "sha256": "sha256:e65212ac95b6b7795696de6299b5a7b7a0ac613e240abd7675cd8edae599fd61",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
