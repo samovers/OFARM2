@@ -4123,6 +4123,458 @@ def test_gate_uses_retained_stage_callable_during_temporary_class_mutation(
             raise RollbackProbe
 
 
+def test_review_rejection_emitter_swap_cannot_promote_and_rolls_back(
+        fresh_store, fresh_pipeline):
+    from kernel import emission as emission_module
+    from kernel import gates as gates_module
+    from kernel.stages import GatePass
+
+    store, pipeline = fresh_store, fresh_pipeline
+    queued = pipeline.commit(demo.spray_submission(
+        f"issue171-emitter-queued:{uuid.uuid4().hex}",
+        erp_id=f"erp:issue171.emitter.queued.{uuid.uuid4().hex}",
+        confirm=False,
+    ))
+    target = queued["emittedAssertionRecordRefs"][0]
+    submission = {
+        "commitClass": "GOVERNANCE_DECISION",
+        "actingPartyRef": demo.ADVISOR,
+        "farmRef": demo.FARM,
+        "idempotencyKey": f"issue171-emitter-reject:{uuid.uuid4().hex}",
+        "decisionTime": context.now_iso(),
+        "reviewTargetAssertionRef": target,
+        "reviewAction": "REVIEW_REJECT_OR_CONTEST",
+        "decisionOutcomeState": "REJECTED",
+        "reviewRationale": "the queued claim is rejected on its evidence",
+    }
+    marker_id = f"party:issue171.emitter-rollback.{uuid.uuid4().hex}"
+    original_rejection = emission_module.PromotionEmitter.emit_queue_rejection
+    original_acceptance = emission_module.PromotionEmitter.emit_queue_acceptance
+    hostile_called = False
+    reviews_before = {
+        row["record_id"] for row in
+        store.find_by_kind("ofarm.reviewdecision.v0.1")
+    }
+    consequences_before = {
+        row["record_id"] for row in
+        store.find_by_kind("ofarm.acceptedeventconsequence.v0.1")
+    }
+
+    def hostile_rejection(emitter):
+        nonlocal hostile_called
+        hostile_called = True
+        emission_module.PromotionEmitter.emit_queue_rejection = \
+            original_rejection
+        return original_acceptance(emitter)
+
+    with pytest.raises(RuntimeBundleError, match="rollback-only"):
+        with store.serialized_tx() as cur:
+            store.insert_record(cur, {
+                "schemaVersion": "ofarm.party.v0.1",
+                "partyId": marker_id,
+                "partyClass": "NATURAL_PERSON",
+                "displayName": "Issue 171 emitter rollback marker (fictional)",
+                "partyState": "ACTIVE",
+                "recordedAt": context.now_iso(),
+            })
+            GatePipeline._assert_runtime_composition(pipeline)
+            ctx = GatePipeline._new_context(pipeline, cur, submission)
+            ingress = gates_module._GATE_ENTRY_CALLABLES[0][2](
+                gates_module.IngressNormalizer(), ctx)
+            assert isinstance(ingress, GatePass)
+            for dispatch in pipeline._stage_dispatch[:-1]:
+                assert isinstance(
+                    gates_module._RETAINED_INVOKE_STAGE(
+                        store, dispatch, ctx),
+                    GatePass,
+                )
+            assert ctx.review_branch == "REJECT"
+            assert ctx.acceptance_target == target
+
+            emission_module.PromotionEmitter.emit_queue_rejection = \
+                hostile_rejection
+            try:
+                with pytest.raises(
+                        RuntimeBundleError,
+                        match="PromotionEmitter.emit_queue_rejection"):
+                    gates_module._RETAINED_INVOKE_STAGE(
+                        store, pipeline._stage_dispatch[-1], ctx)
+                assert store._active_transaction_integrity.poisoned is True
+            finally:
+                emission_module.PromotionEmitter.emit_queue_rejection = \
+                    original_rejection
+
+    assert hostile_called is False
+    assert store.get_record(marker_id) is None
+    assert store.get_record(target)["payload"]["claimState"] == "PENDING_REVIEW"
+    assert {row["record_id"] for row in
+            store.find_by_kind("ofarm.reviewdecision.v0.1")} == reviews_before
+    assert {row["record_id"] for row in store.find_by_kind(
+        "ofarm.acceptedeventconsequence.v0.1")} == consequences_before
+
+
+def test_review_rejection_emitter_dunder_swap_cannot_promote_and_rolls_back(
+        fresh_store, fresh_pipeline):
+    from kernel import emission as emission_module
+    from kernel import gates as gates_module
+    from kernel import stages as stages_module
+    from kernel.stages import GatePass
+
+    store, pipeline = fresh_store, fresh_pipeline
+    queued = pipeline.commit(demo.spray_submission(
+        f"issue171-emitter-dunder-queued:{uuid.uuid4().hex}",
+        erp_id=f"erp:issue171.emitter.dunder.queued.{uuid.uuid4().hex}",
+        confirm=False,
+    ))
+    target = queued["emittedAssertionRecordRefs"][0]
+    submission = {
+        "commitClass": "GOVERNANCE_DECISION",
+        "actingPartyRef": demo.ADVISOR,
+        "farmRef": demo.FARM,
+        "idempotencyKey": f"issue171-emitter-dunder:{uuid.uuid4().hex}",
+        "decisionTime": context.now_iso(),
+        "reviewTargetAssertionRef": target,
+        "reviewAction": "REVIEW_REJECT_OR_CONTEST",
+        "decisionOutcomeState": "REJECTED",
+        "reviewRationale": "the queued claim is rejected on its evidence",
+    }
+    marker_id = f"party:issue171.emitter-dunder.{uuid.uuid4().hex}"
+    original_acceptance = emission_module.PromotionEmitter.emit_queue_acceptance
+    hostile_called = False
+    reviews_before = {
+        row["record_id"] for row in
+        store.find_by_kind("ofarm.reviewdecision.v0.1")
+    }
+    consequences_before = {
+        row["record_id"] for row in
+        store.find_by_kind("ofarm.acceptedeventconsequence.v0.1")
+    }
+
+    def hostile_getattribute(emitter, name):
+        nonlocal hostile_called
+        if name == "ctx":
+            hostile_called = True
+            del emission_module.PromotionEmitter.__getattribute__
+            original_acceptance(emitter)
+        return object.__getattribute__(emitter, name)
+
+    with pytest.raises(RuntimeBundleError, match="rollback-only"):
+        with store.serialized_tx() as cur:
+            store.insert_record(cur, {
+                "schemaVersion": "ofarm.party.v0.1",
+                "partyId": marker_id,
+                "partyClass": "NATURAL_PERSON",
+                "displayName": "Issue 171 emitter-dunder marker (fictional)",
+                "partyState": "ACTIVE",
+                "recordedAt": context.now_iso(),
+            })
+            GatePipeline._assert_runtime_composition(pipeline)
+            ctx = GatePipeline._new_context(pipeline, cur, submission)
+            ingress = gates_module._GATE_ENTRY_CALLABLES[0][2](
+                gates_module.IngressNormalizer(), ctx)
+            assert isinstance(ingress, GatePass)
+            for dispatch in pipeline._stage_dispatch[:-1]:
+                assert isinstance(
+                    gates_module._RETAINED_INVOKE_STAGE(
+                        store, dispatch, ctx),
+                    GatePass,
+                )
+            assert ctx.review_branch == "REJECT"
+            assert ctx.acceptance_target == target
+
+            emitter = object.__new__(emission_module.PromotionEmitter)
+            stages_module._invoke_retained_promotion_emitter(
+                ctx, stages_module._PROMOTION_EMITTER_INIT, emitter, ctx)
+            emission_module.PromotionEmitter.__getattribute__ = \
+                hostile_getattribute
+            try:
+                with pytest.raises(
+                        RuntimeBundleError,
+                        match="PromotionEmitter dispatch surface changed"):
+                    stages_module._invoke_retained_promotion_emitter(
+                        ctx,
+                        stages_module._PROMOTION_EMITTER_QUEUE_REJECTION,
+                        emitter,
+                    )
+                assert store._active_transaction_integrity.poisoned is True
+            finally:
+                if "__getattribute__" in vars(emission_module.PromotionEmitter):
+                    del emission_module.PromotionEmitter.__getattribute__
+
+    assert hostile_called is False
+    assert store.get_record(marker_id) is None
+    assert store.get_record(target)["payload"]["claimState"] == "PENDING_REVIEW"
+    assert {row["record_id"] for row in
+            store.find_by_kind("ofarm.reviewdecision.v0.1")} == reviews_before
+    assert {row["record_id"] for row in store.find_by_kind(
+        "ofarm.acceptedeventconsequence.v0.1")} == consequences_before
+
+
+def test_review_rejection_emitter_ctx_descriptor_cannot_promote(
+        fresh_store, fresh_pipeline):
+    from kernel import emission as emission_module
+
+    store, pipeline = fresh_store, fresh_pipeline
+    queued = pipeline.commit(demo.spray_submission(
+        f"issue171-emitter-ctx-queued:{uuid.uuid4().hex}",
+        erp_id=f"erp:issue171.emitter.ctx.queued.{uuid.uuid4().hex}",
+        confirm=False,
+    ))
+    target = queued["emittedAssertionRecordRefs"][0]
+    submission = {
+        "commitClass": "GOVERNANCE_DECISION",
+        "actingPartyRef": demo.ADVISOR,
+        "farmRef": demo.FARM,
+        "idempotencyKey": f"issue171-emitter-ctx:{uuid.uuid4().hex}",
+        "decisionTime": context.now_iso(),
+        "reviewTargetAssertionRef": target,
+        "reviewAction": "REVIEW_REJECT_OR_CONTEST",
+        "decisionOutcomeState": "REJECTED",
+        "reviewRationale": "the queued claim is rejected on its evidence",
+    }
+    original_acceptance = emission_module.PromotionEmitter.emit_queue_acceptance
+    hostile_called = False
+    reviews_before = {
+        row["record_id"] for row in
+        store.find_by_kind("ofarm.reviewdecision.v0.1")
+    }
+    consequences_before = {
+        row["record_id"] for row in
+        store.find_by_kind("ofarm.acceptedeventconsequence.v0.1")
+    }
+
+    class HostileContextDescriptor:
+        def __set__(self, emitter, value):
+            dict.__setitem__(
+                object.__getattribute__(emitter, "__dict__"), "ctx", value)
+
+        def __get__(self, emitter, _owner):
+            nonlocal hostile_called
+            if emitter is None:
+                return self
+            hostile_called = True
+            del emission_module.PromotionEmitter.ctx
+            original_acceptance(emitter)
+            return dict.__getitem__(
+                object.__getattribute__(emitter, "__dict__"), "ctx")
+
+    emission_module.PromotionEmitter.ctx = HostileContextDescriptor()
+    try:
+        with pytest.raises(
+                RuntimeBundleError,
+                match="PromotionEmitter dispatch surface changed"):
+            pipeline.commit(submission)
+    finally:
+        if "ctx" in vars(emission_module.PromotionEmitter):
+            del emission_module.PromotionEmitter.ctx
+
+    assert hostile_called is False
+    assert store.get_record(target)["payload"]["claimState"] == "PENDING_REVIEW"
+    assert {row["record_id"] for row in
+            store.find_by_kind("ofarm.reviewdecision.v0.1")} == reviews_before
+    assert {row["record_id"] for row in store.find_by_kind(
+        "ofarm.acceptedeventconsequence.v0.1")} == consequences_before
+
+
+def test_validation_policy_swap_is_rejected_at_point_of_use_and_rolls_back(
+        fresh_store, fresh_pipeline):
+    from kernel import gates as gates_module
+    from kernel import profile_policy as profile_policy_module
+    from kernel.stages import GatePass
+
+    store, pipeline = fresh_store, fresh_pipeline
+    submission = demo.spray_submission(
+        f"issue171-validation-policy:{uuid.uuid4().hex}",
+        erp_id=f"erp:issue171.validation-policy.{uuid.uuid4().hex}",
+        confirm=True,
+    )
+    marker_id = f"party:issue171.validation-policy.{uuid.uuid4().hex}"
+    provider_type = profile_policy_module.DescriptorPolicyProvider
+    original = provider_type.validation_policy
+    hostile_called = False
+
+    def hostile_validation_policy(provider):
+        nonlocal hostile_called
+        hostile_called = True
+        provider_type.validation_policy = original
+        return {}
+
+    with pytest.raises(RuntimeBundleError, match="rollback-only"):
+        with store.serialized_tx() as cur:
+            store.insert_record(cur, {
+                "schemaVersion": "ofarm.party.v0.1",
+                "partyId": marker_id,
+                "partyClass": "NATURAL_PERSON",
+                "displayName": "Issue 171 validation-policy marker (fictional)",
+                "partyState": "ACTIVE",
+                "recordedAt": context.now_iso(),
+            })
+            GatePipeline._assert_runtime_composition(pipeline)
+            ctx = GatePipeline._new_context(pipeline, cur, submission)
+            assert isinstance(
+                gates_module._GATE_ENTRY_CALLABLES[0][2](
+                    gates_module.IngressNormalizer(), ctx),
+                GatePass,
+            )
+            assert isinstance(
+                gates_module._RETAINED_INVOKE_STAGE(
+                    store, pipeline._stage_dispatch[0], ctx),
+                GatePass,
+            )
+
+            provider_type.validation_policy = hostile_validation_policy
+            try:
+                with pytest.raises(
+                        RuntimeBundleError,
+                        match="DescriptorPolicyProvider.validation_policy"):
+                    gates_module._RETAINED_INVOKE_STAGE(
+                        store, pipeline._stage_dispatch[1], ctx)
+                assert store._active_transaction_integrity.poisoned is True
+            finally:
+                provider_type.validation_policy = original
+
+    assert hostile_called is False
+    assert store.get_record(marker_id) is None
+
+
+def test_evidence_policy_swap_is_rejected_at_point_of_use_and_rolls_back(
+        fresh_store, fresh_pipeline):
+    from kernel import gates as gates_module
+    from kernel import profile_policy as profile_policy_module
+    from kernel.stages import GatePass
+
+    store, pipeline = fresh_store, fresh_pipeline
+    submission = demo.spray_submission(
+        f"issue171-evidence-policy:{uuid.uuid4().hex}",
+        erp_id=f"erp:issue171.evidence-policy.{uuid.uuid4().hex}",
+        confirm=True,
+    )
+    marker_id = f"party:issue171.evidence-policy.{uuid.uuid4().hex}"
+    provider_type = profile_policy_module.DescriptorPolicyProvider
+    original = provider_type.evidence_policy
+    hostile_called = False
+
+    def hostile_evidence_policy(provider, supported_checks=None):
+        nonlocal hostile_called
+        hostile_called = True
+        provider_type.evidence_policy = original
+        weakened = original(provider, supported_checks=supported_checks)
+        weakened["operationFloor"]["hardItems"] = []
+        return weakened
+
+    with pytest.raises(RuntimeBundleError, match="rollback-only"):
+        with store.serialized_tx() as cur:
+            store.insert_record(cur, {
+                "schemaVersion": "ofarm.party.v0.1",
+                "partyId": marker_id,
+                "partyClass": "NATURAL_PERSON",
+                "displayName": "Issue 171 evidence-policy marker (fictional)",
+                "partyState": "ACTIVE",
+                "recordedAt": context.now_iso(),
+            })
+            GatePipeline._assert_runtime_composition(pipeline)
+            ctx = GatePipeline._new_context(pipeline, cur, submission)
+            assert isinstance(
+                gates_module._GATE_ENTRY_CALLABLES[0][2](
+                    gates_module.IngressNormalizer(), ctx),
+                GatePass,
+            )
+            for dispatch in pipeline._stage_dispatch[:4]:
+                assert isinstance(
+                    gates_module._RETAINED_INVOKE_STAGE(
+                        store, dispatch, ctx),
+                    GatePass,
+                )
+
+            provider_type.evidence_policy = hostile_evidence_policy
+            try:
+                with pytest.raises(
+                        RuntimeBundleError,
+                        match="DescriptorPolicyProvider.evidence_policy"):
+                    gates_module._RETAINED_INVOKE_STAGE(
+                        store, pipeline._stage_dispatch[4], ctx)
+                assert store._active_transaction_integrity.poisoned is True
+            finally:
+                provider_type.evidence_policy = original
+
+    assert hostile_called is False
+    assert store.get_record(marker_id) is None
+
+
+def test_policy_data_descriptor_cannot_weaken_evidence_floor_and_rolls_back(
+        fresh_store, fresh_pipeline):
+    from kernel import gates as gates_module
+    from kernel import profile_policy as profile_policy_module
+    from kernel.stages import GatePass
+
+    store, pipeline = fresh_store, fresh_pipeline
+    submission = demo.spray_submission(
+        f"issue171-policy-document:{uuid.uuid4().hex}",
+        erp_id=f"erp:issue171.policy-document.{uuid.uuid4().hex}",
+        confirm=True,
+    )
+    marker_id = f"party:issue171.policy-document.{uuid.uuid4().hex}"
+    provider_type = profile_policy_module.DescriptorPolicyProvider
+    provider = pipeline.policy_provider
+    retained_bytes = object.__getattribute__(provider, "__dict__")[
+        "_policy_document_bytes"]
+    hostile_called = False
+
+    class HostilePolicyBytes:
+        def __get__(self, _instance, _owner):
+            nonlocal hostile_called
+            hostile_called = True
+            del provider_type._policy_document_bytes
+            weakened = json.loads(retained_bytes)
+            removed = tuple(weakened["operationFloor"]["hardItems"])
+            weakened["operationFloor"]["hardItems"] = []
+            for item in removed:
+                weakened["display"]["floorItems"].pop(item, None)
+            return canonical_json(weakened).encode("utf-8")
+
+        def __set__(self, _instance, _value):
+            raise AssertionError("hostile policy descriptor accepted a write")
+
+    with pytest.raises(RuntimeBundleError, match="rollback-only"):
+        with store.serialized_tx() as cur:
+            store.insert_record(cur, {
+                "schemaVersion": "ofarm.party.v0.1",
+                "partyId": marker_id,
+                "partyClass": "NATURAL_PERSON",
+                "displayName": "Issue 171 policy-document marker (fictional)",
+                "partyState": "ACTIVE",
+                "recordedAt": context.now_iso(),
+            })
+            GatePipeline._assert_runtime_composition(pipeline)
+            ctx = GatePipeline._new_context(pipeline, cur, submission)
+            assert isinstance(
+                gates_module._GATE_ENTRY_CALLABLES[0][2](
+                    gates_module.IngressNormalizer(), ctx),
+                GatePass,
+            )
+            for dispatch in pipeline._stage_dispatch[:4]:
+                assert isinstance(
+                    gates_module._RETAINED_INVOKE_STAGE(
+                        store, dispatch, ctx),
+                    GatePass,
+                )
+
+            provider_type._policy_document_bytes = HostilePolicyBytes()
+            try:
+                with pytest.raises(
+                        RuntimeBundleError,
+                        match="DescriptorPolicyProvider data surface changed"):
+                    gates_module._RETAINED_INVOKE_STAGE(
+                        store, pipeline._stage_dispatch[4], ctx)
+                assert store._active_transaction_integrity.poisoned is True
+            finally:
+                if "_policy_document_bytes" in vars(provider_type):
+                    del provider_type._policy_document_bytes
+
+    assert hostile_called is False
+    assert store.get_record(marker_id) is None
+
+
 def test_runtime_bundle_late_semantic_mutation_rolls_back_current_transaction(
         fresh_store):
     from kernel import policy

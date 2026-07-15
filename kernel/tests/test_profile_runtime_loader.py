@@ -2387,6 +2387,268 @@ def test_route_backed_handoff_binds_materializer_to_resolved_descriptor(fresh_st
         context.SI_REFERENCE_BINDINGS.regsr_shipped_snapshot_ref
 
 
+def test_route_resolver_swap_cannot_bypass_effective_time_and_rolls_back(
+        fresh_store):
+    from kernel import gates as gates_module
+    from kernel.runtime_bundle import RuntimeBundleError
+
+    pipeline = _route_pipeline(
+        fresh_store,
+        routes=[_route_interval("05")],
+    )
+    store = pipeline.store
+    submission = demo.spray_submission(
+        f"issue171-route-resolver:{_uid()}",
+        erp_id=f"erp:issue171.route-resolver.{_uid()}",
+        confirm=True,
+    )
+    marker_id = f"party:issue171.route-resolver.{_uid()}"
+    original = gates_module.resolve_profile_route
+    hostile_called = False
+    ctx = None
+
+    def hostile_resolver(*args, **kwargs):
+        nonlocal hostile_called
+        hostile_called = True
+        gates_module.resolve_profile_route = original
+        kwargs["effective_time"] = datetime(
+            2026, 5, 15, tzinfo=timezone.utc)
+        return original(*args, **kwargs)
+
+    with pytest.raises(RuntimeBundleError, match="rollback-only"):
+        with store.serialized_tx() as cur:
+            store.insert_record(cur, {
+                "schemaVersion": "ofarm.party.v0.1",
+                "partyId": marker_id,
+                "partyClass": "NATURAL_PERSON",
+                "displayName": "Issue 171 route rollback marker (fictional)",
+                "partyState": "ACTIVE",
+                "recordedAt": context.now_iso(),
+            })
+            GatePipeline._assert_runtime_composition(pipeline)
+            ctx = GatePipeline._new_context(pipeline, cur, submission)
+            assert isinstance(IngressNormalizer().run(ctx), GatePass)
+
+            gates_module.resolve_profile_route = hostile_resolver
+            try:
+                with pytest.raises(
+                        RuntimeBundleError,
+                        match="retained profile route resolver changed"):
+                    GatePipeline._resolve_profile_route(pipeline, ctx)
+                assert store._active_transaction_integrity.poisoned is True
+            finally:
+                gates_module.resolve_profile_route = original
+
+    assert hostile_called is False
+    assert ctx is not None
+    assert ctx.profile_route_resolution is None
+    assert store.get_record(marker_id) is None
+
+
+def test_route_wrapper_swap_cannot_skip_retained_resolution_and_rolls_back(
+        fresh_store):
+    from kernel import gates as gates_module
+    from kernel.runtime_bundle import RuntimeBundleError
+
+    pipeline = _route_pipeline(
+        fresh_store,
+        routes=[_route_interval("06")],
+    )
+    store = pipeline.store
+    submission = demo.spray_submission(
+        f"issue171-route-wrapper:{_uid()}",
+        erp_id=f"erp:issue171.route-wrapper.{_uid()}",
+        confirm=True,
+    )
+    marker_id = f"party:issue171.route-wrapper.{_uid()}"
+    original = GatePipeline._resolve_profile_route
+    hostile_called = False
+    ctx = None
+
+    def hostile_wrapper(instance, context_value):
+        nonlocal hostile_called
+        hostile_called = True
+        GatePipeline._resolve_profile_route = original
+        return None
+
+    with pytest.raises(RuntimeBundleError, match="rollback-only"):
+        with store.serialized_tx() as cur:
+            store.insert_record(cur, {
+                "schemaVersion": "ofarm.party.v0.1",
+                "partyId": marker_id,
+                "partyClass": "NATURAL_PERSON",
+                "displayName": "Issue 171 route-wrapper marker (fictional)",
+                "partyState": "ACTIVE",
+                "recordedAt": context.now_iso(),
+            })
+            GatePipeline._assert_runtime_composition(pipeline)
+            ctx = GatePipeline._new_context(pipeline, cur, submission)
+            assert isinstance(IngressNormalizer().run(ctx), GatePass)
+
+            GatePipeline._resolve_profile_route = hostile_wrapper
+            try:
+                with pytest.raises(
+                        RuntimeBundleError,
+                        match="retained gate callable changed"):
+                    gates_module._RETAINED_INVOKE_GATE_CALLABLE(
+                        store, pipeline._route_dispatch[0], pipeline, ctx)
+                assert store._active_transaction_integrity.poisoned is True
+            finally:
+                GatePipeline._resolve_profile_route = original
+
+    assert hostile_called is False
+    assert ctx is not None
+    assert ctx.profile_route_resolution is None
+    assert store.get_record(marker_id) is None
+
+
+def test_forged_exact_route_resolution_is_rejected_and_rolls_back(fresh_store):
+    from kernel import gates as gates_module
+    from kernel.runtime_bundle import RuntimeBundleError
+
+    pipeline = _route_pipeline(
+        fresh_store,
+        routes=[_route_interval("06")],
+    )
+    store = pipeline.store
+    submission = demo.spray_submission(
+        f"issue171-forged-route:{_uid()}",
+        erp_id=f"erp:issue171.forged-route.{_uid()}",
+        confirm=True,
+    )
+    marker_id = f"party:issue171.forged-route.{_uid()}"
+    ctx = None
+
+    with pytest.raises(RuntimeBundleError, match="rollback-only"):
+        with store.serialized_tx() as cur:
+            store.insert_record(cur, {
+                "schemaVersion": "ofarm.party.v0.1",
+                "partyId": marker_id,
+                "partyClass": "NATURAL_PERSON",
+                "displayName": "Issue 171 forged-route marker (fictional)",
+                "partyState": "ACTIVE",
+                "recordedAt": context.now_iso(),
+            })
+            GatePipeline._assert_runtime_composition(pipeline)
+            ctx = GatePipeline._new_context(pipeline, cur, submission)
+            assert isinstance(IngressNormalizer().run(ctx), GatePass)
+            farm_ref = GatePipeline._route_farm_ref(ctx)
+            effective_time = GatePipeline._route_effective_time(ctx)
+            genuine = gates_module._PROFILE_ROUTE_RESOLVER[2](
+                pipeline.profile_route_registry,
+                pipeline.selected_profile_package_names,
+                pipeline.profile_route_records,
+                tenant_ref=pipeline.tenant_ref,
+                farm_ref=farm_ref,
+                effective_time=effective_time,
+                runtime_bundle_digest=pipeline.runtime_bundle.digest,
+            )
+            forged = replace(
+                genuine,
+                effective_time=datetime(2026, 5, 15, tzinfo=timezone.utc),
+            )
+
+            with pytest.raises(
+                    RuntimeBundleError,
+                    match="resolved profile route differs"):
+                gates_module._RETAINED_INVOKE_GATE_CALLABLE(
+                    store, pipeline._route_dispatch[1], pipeline, ctx, forged,
+                    farm_ref=farm_ref,
+                    effective_time=effective_time,
+                )
+            assert store._active_transaction_integrity.poisoned is True
+
+    assert ctx is not None
+    assert ctx.profile_route_resolution is None
+    assert store.get_record(marker_id) is None
+
+
+def test_route_model_descriptors_cannot_change_bound_profile(fresh_store):
+    from kernel import gates as gates_module
+    from kernel import profile_runtime as profile_runtime_module
+
+    pipeline = _route_pipeline(
+        fresh_store,
+        routes=[_route_interval("06")],
+    )
+    store = pipeline.store
+    submission = demo.spray_submission(
+        f"issue171-route-descriptor:{_uid()}",
+        erp_id=f"erp:issue171.route-descriptor.{_uid()}",
+        confirm=True,
+    )
+    marker_id = f"party:issue171.route-descriptor.{_uid()}"
+    foreign_descriptor = replace(
+        pipeline.active_profile,
+        evidence_policy_ref="policy:issue171.hostile-route",
+    )
+    candidate_type = profile_runtime_module.ProfileDescriptorCandidate
+    descriptor_type = profile_runtime_module.ProfileRuntimeDescriptor
+    original_equality = descriptor_type.__eq__
+    descriptor_called = False
+    equality_called = False
+    ctx = None
+
+    class HostileCandidateDescriptor:
+        def __get__(self, candidate, _owner):
+            nonlocal descriptor_called
+            if candidate is None:
+                return self
+            descriptor_called = True
+            del candidate_type.descriptor
+            return foreign_descriptor
+
+        def __set__(self, candidate, value):
+            dict.__setitem__(
+                object.__getattribute__(candidate, "__dict__"),
+                "descriptor", value)
+
+    def hostile_equality(_left, _right):
+        nonlocal equality_called
+        equality_called = True
+        descriptor_type.__eq__ = original_equality
+        return True
+
+    class RollbackProbe(Exception):
+        pass
+
+    with pytest.raises(RollbackProbe):
+        with store.serialized_tx() as cur:
+            store.insert_record(cur, {
+                "schemaVersion": "ofarm.party.v0.1",
+                "partyId": marker_id,
+                "partyClass": "NATURAL_PERSON",
+                "displayName": "Issue 171 route-descriptor marker (fictional)",
+                "partyState": "ACTIVE",
+                "recordedAt": context.now_iso(),
+            })
+            GatePipeline._assert_runtime_composition(pipeline)
+            ctx = GatePipeline._new_context(pipeline, cur, submission)
+            assert isinstance(IngressNormalizer().run(ctx), GatePass)
+
+            candidate_type.descriptor = HostileCandidateDescriptor()
+            descriptor_type.__eq__ = hostile_equality
+            try:
+                assert gates_module._RETAINED_INVOKE_GATE_CALLABLE(
+                    store, pipeline._route_dispatch[0], pipeline, ctx) is None
+                assert ctx.active_profile is pipeline.active_profile
+                resolution_namespace = object.__getattribute__(
+                    ctx.profile_route_resolution, "__dict__")
+                assert dict.__getitem__(
+                    resolution_namespace, "descriptor") is pipeline.active_profile
+            finally:
+                if "descriptor" in vars(candidate_type):
+                    del candidate_type.descriptor
+                descriptor_type.__eq__ = original_equality
+            raise RollbackProbe
+
+    assert descriptor_called is False
+    assert equality_called is False
+    assert ctx is not None
+    assert ctx.active_profile is pipeline.active_profile
+    assert store.get_record(marker_id) is None
+
+
 def test_output_generator_explicit_descriptor_matches_default_profile_refs(fresh_store, fresh_outputs):
     store, outputs = fresh_store, fresh_outputs
     explicit = OutputGenerator(store, active_descriptor=config.ACTIVE_PROFILE)

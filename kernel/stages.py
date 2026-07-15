@@ -15,6 +15,8 @@ pin.
 """
 from __future__ import annotations
 
+import json
+
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -23,11 +25,11 @@ from . import policy, profile_policy, sufficiency
 from .authority import AuthorityEvaluator, authority_decision_allowed
 from .callable_state import capture_callable_state, callable_state_matches
 from .context import ContextAssembler, ContextNotReconstructible, mint, parse_ts
-from .contracts import ContractViolation
+from .contracts import ContractViolation, canonical_json, copy_exact_json
 from .emission import PromotionEmitter, ReplayWriter, submission_evidence_refs
 from .materializer import Materializer
 from .problems import runtime_problem
-from .runtime_bundle import RuntimeBundleError
+from .runtime_bundle import RuntimeBundle, RuntimeBundleError, RuntimeComponent
 from .store import Store
 
 
@@ -68,12 +70,155 @@ _REPLAY_WRITE = (
     ReplayWriter.write.__code__,
     capture_callable_state(ReplayWriter.write),
 )
+_DESCRIPTOR_POLICY_EVIDENCE = (
+    profile_policy.DescriptorPolicyProvider,
+    "evidence_policy",
+    profile_policy.DescriptorPolicyProvider.evidence_policy,
+    profile_policy.DescriptorPolicyProvider.evidence_policy.__code__,
+    capture_callable_state(
+        profile_policy.DescriptorPolicyProvider.evidence_policy),
+)
+_DESCRIPTOR_POLICY_VALIDATION = (
+    profile_policy.DescriptorPolicyProvider,
+    "validation_policy",
+    profile_policy.DescriptorPolicyProvider.validation_policy,
+    profile_policy.DescriptorPolicyProvider.validation_policy.__code__,
+    capture_callable_state(
+        profile_policy.DescriptorPolicyProvider.validation_policy),
+)
+_DESCRIPTOR_POLICY_CALLABLES = (
+    _DESCRIPTOR_POLICY_EVIDENCE,
+    _DESCRIPTOR_POLICY_VALIDATION,
+)
+_DESCRIPTOR_POLICY_MISSING_CLASS_MEMBER = object()
+_DESCRIPTOR_POLICY_DATA_SURFACE = tuple(
+    (
+        name,
+        vars(profile_policy.DescriptorPolicyProvider).get(
+            name, _DESCRIPTOR_POLICY_MISSING_CLASS_MEMBER),
+    )
+    for name in (
+        "descriptor", "runtime_bundle", "policy_ref",
+        "_policy_document_bytes", "_validation_policy_bytes",
+        "__getattribute__", "__getattr__", "__setattr__", "__delattr__",
+    )
+)
+_PROMOTION_EMITTER_INIT = (
+    PromotionEmitter,
+    "__init__",
+    PromotionEmitter.__init__,
+    PromotionEmitter.__init__.__code__,
+    capture_callable_state(PromotionEmitter.__init__),
+)
+_PROMOTION_EMITTER_SUBMISSION_REFS = (
+    PromotionEmitter,
+    "_submission_evidence_refs",
+    PromotionEmitter._submission_evidence_refs,
+    PromotionEmitter._submission_evidence_refs.__code__,
+    capture_callable_state(PromotionEmitter._submission_evidence_refs),
+)
+_PROMOTION_EMITTER_BUILD_ASSERTION = (
+    PromotionEmitter,
+    "_build_assertion",
+    PromotionEmitter._build_assertion,
+    PromotionEmitter._build_assertion.__code__,
+    capture_callable_state(PromotionEmitter._build_assertion),
+)
+_PROMOTION_EMITTER_LINK_ASSERTION = (
+    PromotionEmitter,
+    "_link_assertion",
+    PromotionEmitter._link_assertion,
+    PromotionEmitter._link_assertion.__code__,
+    capture_callable_state(PromotionEmitter._link_assertion),
+)
+_PROMOTION_EMITTER_EMIT_ASSERTION = (
+    PromotionEmitter,
+    "_emit_assertion",
+    PromotionEmitter._emit_assertion,
+    PromotionEmitter._emit_assertion.__code__,
+    capture_callable_state(PromotionEmitter._emit_assertion),
+)
+_PROMOTION_EMITTER_STORE_CASE = (
+    PromotionEmitter,
+    "_store_case",
+    PromotionEmitter._store_case,
+    PromotionEmitter._store_case.__code__,
+    capture_callable_state(PromotionEmitter._store_case),
+)
+_PROMOTION_EMITTER_ENSURE_IDENTITY = (
+    PromotionEmitter,
+    "_ensure_identity_record",
+    PromotionEmitter._ensure_identity_record,
+    PromotionEmitter._ensure_identity_record.__code__,
+    capture_callable_state(PromotionEmitter._ensure_identity_record),
+)
+_PROMOTION_EMITTER_PENDING_ASSERTION = (
+    PromotionEmitter,
+    "emit_pending_assertion",
+    PromotionEmitter.emit_pending_assertion,
+    PromotionEmitter.emit_pending_assertion.__code__,
+    capture_callable_state(PromotionEmitter.emit_pending_assertion),
+)
+_PROMOTION_EMITTER_SELF_REVIEW = (
+    PromotionEmitter,
+    "emit_self_review_promotion",
+    PromotionEmitter.emit_self_review_promotion,
+    PromotionEmitter.emit_self_review_promotion.__code__,
+    capture_callable_state(PromotionEmitter.emit_self_review_promotion),
+)
+_PROMOTION_EMITTER_QUEUE_ACCEPTANCE = (
+    PromotionEmitter,
+    "emit_queue_acceptance",
+    PromotionEmitter.emit_queue_acceptance,
+    PromotionEmitter.emit_queue_acceptance.__code__,
+    capture_callable_state(PromotionEmitter.emit_queue_acceptance),
+)
+_PROMOTION_EMITTER_QUEUE_REJECTION = (
+    PromotionEmitter,
+    "emit_queue_rejection",
+    PromotionEmitter.emit_queue_rejection,
+    PromotionEmitter.emit_queue_rejection.__code__,
+    capture_callable_state(PromotionEmitter.emit_queue_rejection),
+)
+_PROMOTION_EMITTER_QUEUE_CONTEST = (
+    PromotionEmitter,
+    "emit_queue_contest",
+    PromotionEmitter.emit_queue_contest,
+    PromotionEmitter.emit_queue_contest.__code__,
+    capture_callable_state(PromotionEmitter.emit_queue_contest),
+)
+_PROMOTION_EMITTER_CALLABLES = (
+    _PROMOTION_EMITTER_INIT,
+    _PROMOTION_EMITTER_SUBMISSION_REFS,
+    _PROMOTION_EMITTER_BUILD_ASSERTION,
+    _PROMOTION_EMITTER_LINK_ASSERTION,
+    _PROMOTION_EMITTER_EMIT_ASSERTION,
+    _PROMOTION_EMITTER_STORE_CASE,
+    _PROMOTION_EMITTER_ENSURE_IDENTITY,
+    _PROMOTION_EMITTER_PENDING_ASSERTION,
+    _PROMOTION_EMITTER_SELF_REVIEW,
+    _PROMOTION_EMITTER_QUEUE_ACCEPTANCE,
+    _PROMOTION_EMITTER_QUEUE_REJECTION,
+    _PROMOTION_EMITTER_QUEUE_CONTEST,
+)
+_PROMOTION_EMITTER_MISSING_CLASS_MEMBER = object()
+_PROMOTION_EMITTER_DISPATCH_SURFACE = tuple(
+    (
+        name,
+        vars(PromotionEmitter).get(
+            name, _PROMOTION_EMITTER_MISSING_CLASS_MEMBER),
+    )
+    for name in (
+        "ctx", "__getattribute__", "__getattr__", "__setattr__", "__delattr__")
+)
 _RETAINED_CONTEXT_SERVICE_CALLABLES = (
     _AUTHORITY_EVALUATE,
     _CONTEXT_ASSEMBLE,
     _MATERIALIZER_INVALIDATE_FOR_SOURCES,
     _MATERIALIZER_RECOMPUTE,
     _REPLAY_WRITE,
+    *_DESCRIPTOR_POLICY_CALLABLES,
+    *_PROMOTION_EMITTER_CALLABLES,
 )
 
 # Decision policy is selected once with the reviewed stage code.  The tables
@@ -202,6 +347,197 @@ def _invoke_retained_context_service(
         _require(ctx, entry, service)
         raise
     _require(ctx, entry, service)
+    return result
+
+
+def _descriptor_policy_expected_bytes(
+        ctx, provider,
+        _loads=json.loads,
+        _canonical=canonical_json,
+        _copy=copy_exact_json,
+        _getattribute=object.__getattribute__,
+        _getitem=dict.__getitem__,
+        _raise=_raise_context_service_dispatch_error,
+) -> tuple[bytes, bytes]:
+    """Derive exact policy outputs from immutable RuntimeBundle bytes."""
+    try:
+        provider_namespace = _getattribute(provider, "__dict__")
+        ctx_namespace = _getattribute(ctx, "__dict__")
+        if type(provider_namespace) is not dict or type(ctx_namespace) is not dict:
+            _raise(ctx, "retained descriptor policy namespace is malformed")
+        runtime_bundle = _getitem(provider_namespace, "runtime_bundle")
+        policy_ref = _getitem(provider_namespace, "policy_ref")
+        retained_runtime_bundle = _getitem(ctx_namespace, "runtime_bundle")
+        if (type(runtime_bundle) is not RuntimeBundle
+                or runtime_bundle is not retained_runtime_bundle
+                or type(policy_ref) is not str):
+            _raise(ctx, "retained descriptor policy bundle identity changed")
+        bundle_namespace = _getattribute(runtime_bundle, "__dict__")
+        if type(bundle_namespace) is not dict:
+            _raise(ctx, "retained RuntimeBundle namespace is malformed")
+        components = _getitem(bundle_namespace, "components")
+        if type(components) is not tuple:
+            _raise(ctx, "retained RuntimeBundle components are malformed")
+        matches = [
+            component for component in components
+            if (type(component) is RuntimeComponent
+                and type(_getattribute(component, "__dict__")) is dict
+                and _getitem(
+                    _getattribute(component, "__dict__"), "role") ==
+                "PROFILE_POLICY"
+                and _getitem(
+                    _getattribute(component, "__dict__"), "logical_ref") ==
+                policy_ref)
+        ]
+        if len(matches) != 1:
+            _raise(
+                ctx, "retained descriptor policy component is not unique")
+        component_namespace = _getattribute(matches[0], "__dict__")
+        policy_bytes = _getitem(component_namespace, "canonical_bytes")
+        document = _loads(policy_bytes)
+        validation_bytes = _canonical(
+            _copy(document["validation"])).encode("utf-8")
+        provider_policy_bytes = _getitem(
+            provider_namespace, "_policy_document_bytes")
+        provider_validation_bytes = _getitem(
+            provider_namespace, "_validation_policy_bytes")
+    except RuntimeBundleError:
+        raise
+    except (AttributeError, ContractViolation, KeyError, TypeError, ValueError,
+            UnicodeError, RecursionError) as exc:
+        _raise(ctx, f"retained descriptor policy snapshot is malformed: {exc}")
+    if (type(policy_bytes) is not bytes
+            or type(validation_bytes) is not bytes
+            or provider_policy_bytes != policy_bytes
+            or provider_validation_bytes != validation_bytes):
+        _raise(
+            ctx, "retained descriptor policy snapshot changed before invocation")
+    return policy_bytes, validation_bytes
+
+
+def _invoke_retained_descriptor_policy(
+        ctx, entry, provider, *args,
+        _callables=_DESCRIPTOR_POLICY_CALLABLES,
+        _data_surface=_DESCRIPTOR_POLICY_DATA_SURFACE,
+        _missing=_DESCRIPTOR_POLICY_MISSING_CLASS_MEMBER,
+        _require=_require_retained_context_service,
+        _expected_bytes=_descriptor_policy_expected_bytes,
+        _copy=copy_exact_json,
+        _canonical=canonical_json,
+        _raise=_raise_context_service_dispatch_error,
+        **kwargs,
+):
+    """Invoke policy access while guarding the complete provider surface.
+
+    ``validation_policy`` retains the evidence-policy implementation it
+    delegates to.  Requiring both public bindings immediately before and after
+    either call prevents a transient replacement of one method from steering a
+    decision while the other method remains unchanged.
+    """
+    if (type(entry) is not tuple
+            or not any(entry is retained for retained in _callables)):
+        _raise(
+            ctx, "retained descriptor-policy dispatch entry is malformed")
+
+    def require_all() -> None:
+        for retained in _callables:
+            _require(ctx, retained, provider)
+
+    def require_data_surface() -> None:
+        namespace = vars(profile_policy.DescriptorPolicyProvider)
+        if any(namespace.get(name, _missing) is not expected
+               for name, expected in _data_surface):
+            _raise(
+                ctx, "DescriptorPolicyProvider data surface changed")
+
+    require_all()
+    require_data_surface()
+    expected_before = _expected_bytes(ctx, provider)
+    function = entry[2]
+    try:
+        result = function(provider, *args, **kwargs)
+    except BaseException:
+        require_all()
+        require_data_surface()
+        _expected_bytes(ctx, provider)
+        raise
+    try:
+        verified_result = _copy(result)
+        actual_bytes = _canonical(verified_result).encode("utf-8")
+    except (ContractViolation, TypeError, ValueError, UnicodeError,
+            RecursionError) as exc:
+        _raise(
+            ctx, f"descriptor policy returned non-exact decision data: {exc}")
+    expected_index = 0 if entry is _callables[0] else 1
+    expected_after = _expected_bytes(ctx, provider)
+    if (expected_after != expected_before
+            or actual_bytes != expected_before[expected_index]):
+        _raise(
+            ctx, "descriptor policy returned data outside retained RuntimeBundle bytes")
+    require_all()
+    require_data_surface()
+    return verified_result
+
+
+def _invoke_retained_promotion_emitter(
+        ctx, entry, emitter, *args,
+        _callables=_PROMOTION_EMITTER_CALLABLES,
+        _dispatch_surface=_PROMOTION_EMITTER_DISPATCH_SURFACE,
+        _missing=_PROMOTION_EMITTER_MISSING_CLASS_MEMBER,
+        _require=_require_retained_context_service,
+        _getattribute=object.__getattribute__,
+        **kwargs,
+):
+    """Invoke one emitter endpoint while guarding its complete method graph."""
+    if (type(entry) is not tuple
+            or not any(entry is retained for retained in _callables)):
+        _raise_context_service_dispatch_error(
+            ctx, "retained PromotionEmitter dispatch entry is malformed")
+
+    def require_all() -> None:
+        for retained in _callables:
+            _require(ctx, retained, emitter)
+
+    def require_dispatch_surface() -> None:
+        namespace = vars(PromotionEmitter)
+        if any(namespace.get(name, _missing) is not expected
+               for name, expected in _dispatch_surface):
+            _raise_context_service_dispatch_error(
+                ctx, "PromotionEmitter dispatch surface changed")
+
+    def require_instance_namespace(*, before_init: bool) -> None:
+        try:
+            namespace = _getattribute(emitter, "__dict__")
+        except AttributeError:
+            namespace = None
+        if before_init:
+            valid = type(namespace) is dict and dict.__len__(namespace) == 0
+        else:
+            valid = (
+                type(namespace) is dict
+                and dict.__len__(namespace) == 1
+                and dict.__contains__(namespace, "ctx")
+                and dict.__getitem__(namespace, "ctx") is ctx
+            )
+        if not valid:
+            _raise_context_service_dispatch_error(
+                ctx, "PromotionEmitter instance context changed")
+
+    is_constructor = entry is _callables[0]
+    require_all()
+    require_dispatch_surface()
+    require_instance_namespace(before_init=is_constructor)
+    function = entry[2]
+    try:
+        result = function(emitter, *args, **kwargs)
+    except BaseException:
+        require_all()
+        require_dispatch_surface()
+        require_instance_namespace(before_init=False)
+        raise
+    require_all()
+    require_dispatch_surface()
+    require_instance_namespace(before_init=False)
     return result
 
 
@@ -644,6 +980,8 @@ class EvidenceSufficiencyGate:
     def run(
             self, ctx: GateContext,
             _invoke_decision=_invoke_retained_decision_function,
+            _invoke_descriptor_policy=_invoke_retained_descriptor_policy,
+            _evidence_policy=_DESCRIPTOR_POLICY_EVIDENCE,
             _build_acceptance_case=_BUILD_ACCEPTANCE_CASE,
             _build_floor_case=_BUILD_FLOOR_CASE,
             _build_floor_case_with_policy=_BUILD_FLOOR_CASE_WITH_POLICY,
@@ -702,7 +1040,8 @@ class EvidenceSufficiencyGate:
                         ctx.assertion_id, ctx.erp_id)
                     evidence_policy = None
                 else:
-                    evidence_policy = ctx.policy_provider.evidence_policy(
+                    evidence_policy = _invoke_descriptor_policy(
+                        ctx, _evidence_policy, ctx.policy_provider,
                         supported_checks=(
                             _operation_floor_checks
                             if ctx.commit_class == "OPERATION_CLAIM"
@@ -808,8 +1147,17 @@ class ReviewPromotionGate:
             _authority_evaluate=_AUTHORITY_EVALUATE,
             _authority_allowed=_AUTHORITY_DECISION_ALLOWED_FUNCTION,
             _emitter_type=PromotionEmitter,
+            _allocate_emitter=object.__new__,
+            _invoke_emitter=_invoke_retained_promotion_emitter,
+            _emitter_init=_PROMOTION_EMITTER_INIT,
+            _emit_pending_assertion=_PROMOTION_EMITTER_PENDING_ASSERTION,
+            _emit_self_review=_PROMOTION_EMITTER_SELF_REVIEW,
+            _emit_queue_acceptance=_PROMOTION_EMITTER_QUEUE_ACCEPTANCE,
+            _emit_queue_rejection=_PROMOTION_EMITTER_QUEUE_REJECTION,
+            _emit_queue_contest=_PROMOTION_EMITTER_QUEUE_CONTEST,
     ) -> GatePass | GateRefusal:
-        emitter = _emitter_type(ctx)
+        emitter = _allocate_emitter(_emitter_type)
+        _invoke_emitter(ctx, _emitter_init, emitter, ctx)
         sub = ctx.sub
 
         # D8 scopes self-review to ROUTINE OPERATION CLAIMS. A compliance
@@ -861,11 +1209,14 @@ class ReviewPromotionGate:
             # branch; accept promotes a consequence, reject appends a terminal
             # decline with none (G5; docs/REVIEW_DISPUTE_SEMANTICS.md §3).
             if ctx.review_branch == "REJECT":
-                emitter.emit_queue_rejection()
+                _invoke_emitter(
+                    ctx, _emit_queue_rejection, emitter)
             elif ctx.review_branch == "CONTEST":
-                emitter.emit_queue_contest()
+                _invoke_emitter(
+                    ctx, _emit_queue_contest, emitter)
             else:
-                emitter.emit_queue_acceptance()
+                _invoke_emitter(
+                    ctx, _emit_queue_acceptance, emitter)
             return GatePass()
 
         if not promotes:
@@ -877,7 +1228,9 @@ class ReviewPromotionGate:
 
         if ctx.review_route_reasons:
             # exceptions route to the advisor queue (D8) — never silent accept
-            emitter.emit_pending_assertion(amend_case_for_routing=True)
+            _invoke_emitter(
+                ctx, _emit_pending_assertion, emitter,
+                amend_case_for_routing=True)
             ctx.problems.extend(ctx.review_route_reasons)
             ctx.log("REVIEW_PROMOTION", "REQUIRE_REVIEW",
                     reason_code=ctx.review_route_reasons[0]["reasonCode"],
@@ -887,7 +1240,9 @@ class ReviewPromotionGate:
             return GatePass()
 
         if not sub.get("confirmAccept"):
-            emitter.emit_pending_assertion(amend_case_for_routing=False)
+            _invoke_emitter(
+                ctx, _emit_pending_assertion, emitter,
+                amend_case_for_routing=False)
             ctx.log("REVIEW_PROMOTION", "RETAIN_DRAFT",
                     rationale="no review act: capture is not commitment (Kernel rule 3)")
             ctx.final_outcome = "RETAIN_DRAFT"
@@ -914,7 +1269,8 @@ class ReviewPromotionGate:
             return GateRefusal("REVIEW_PROMOTION", "REQUIRE_REVIEW",
                                "REQUIRE_REVIEW", review_auth.problems)
 
-        emitter.emit_self_review_promotion()
+        _invoke_emitter(
+            ctx, _emit_self_review, emitter)
         return GatePass()
 
 

@@ -38,25 +38,43 @@ def submission_evidence_refs(sub: dict) -> list:
             or sub.get("evidenceRefs") or [])
 
 
+def _promotion_emitter_context(
+        emitter,
+        _getattribute=object.__getattribute__,
+        _getitem=dict.__getitem__,
+):
+    """Read the retained context without invoking a class data descriptor."""
+    return _getitem(_getattribute(emitter, "__dict__"), "ctx")
+
+
 class PromotionEmitter:
     """Owns AssertionRecord / ReviewDecision / AcceptedEventConsequence
     creation and the edges required for traceability."""
 
-    def __init__(self, ctx: "GateContext"):
-        self.ctx = ctx
+    def __init__(
+            self, ctx: "GateContext",
+            _getattribute=object.__getattribute__,
+            _setitem=dict.__setitem__,
+    ):
+        _setitem(_getattribute(self, "__dict__"), "ctx", ctx)
 
     # ---------------------------------------------------------------- build --
 
     def _submission_evidence_refs(
             self, _submission_refs=submission_evidence_refs,
+            _context=_promotion_emitter_context,
     ) -> list:
-        return _submission_refs(self.ctx.sub)
+        ctx = _context(self)
+        return _submission_refs(ctx.sub)
 
     def _build_assertion(
             self, claim_state: str,
             _assertion_types=_COMMIT_CLASS_TO_ASSERTION_TYPE,
+            _submission_refs=_submission_evidence_refs,
+            _context=_promotion_emitter_context,
     ) -> dict:
-        ctx, sub = self.ctx, self.ctx.sub
+        ctx = _context(self)
+        sub = ctx.sub
         assertion = {
             "schemaVersion": "ofarm.assertionrecord.v0.1",
             "assertionRecordId": ctx.assertion_id,
@@ -68,7 +86,7 @@ class PromotionEmitter:
             "assertedByPartyRef": ctx.acting_party,
             "assertedAt": now_iso(),
             "claimState": claim_state,
-            "evidenceRefs": self._submission_evidence_refs(),
+            "evidenceRefs": _submission_refs(self),
         }
         if sub.get("eventTime"):
             assertion["occurrenceTime"] = sub["eventTime"]
@@ -81,8 +99,12 @@ class PromotionEmitter:
         # sufficiency gate before emission, so evidenceRefs is non-empty here.
         return assertion
 
-    def _link_assertion(self) -> None:
-        ctx = self.ctx
+    def _link_assertion(
+            self,
+            _submission_refs=_submission_evidence_refs,
+            _context=_promotion_emitter_context,
+    ) -> None:
+        ctx = _context(self)
         ctx.store.add_edge(ctx.cur, "EVENT_SOURCE", ctx.assertion_id, ctx.event_id)
         ctx.store.add_edge(ctx.cur, "AUTHORITY_BASIS", ctx.assertion_id,
                            ctx.trace_refs["authorizationDecisionResultRef"])
@@ -91,22 +113,28 @@ class PromotionEmitter:
             # reachable from the assertion exactly like submitter authority
             ctx.store.add_edge(ctx.cur, "AUTHORITY_BASIS", ctx.assertion_id,
                                ctx.attribution_ref)
-        for ev in self._submission_evidence_refs():
+        for ev in _submission_refs(self):
             if ctx.store.record_exists(ev):
                 ctx.store.add_edge(ctx.cur, "EVIDENCE", ctx.assertion_id, ev)
 
-    def _emit_assertion(self, claim_state: str) -> None:
-        ctx = self.ctx
-        assertion = self._build_assertion(claim_state)
+    def _emit_assertion(
+            self, claim_state: str,
+            _build_assertion=_build_assertion,
+            _link_assertion=_link_assertion,
+            _context=_promotion_emitter_context,
+    ) -> None:
+        ctx = _context(self)
+        assertion = _build_assertion(self, claim_state)
         ctx.store.insert_record(ctx.cur, assertion)
         ctx.emitted["assertions"].append(ctx.assertion_id)
-        self._link_assertion()
+        _link_assertion(self)
 
     def _store_case(
             self, amend_for_routing: bool,
             _amend_case_for_routing=sufficiency.amend_case_for_routing,
+            _context=_promotion_emitter_context,
     ) -> None:
-        ctx = self.ctx
+        ctx = _context(self)
         if not ctx.case_payload:
             return
         if amend_for_routing:
@@ -119,6 +147,7 @@ class PromotionEmitter:
     def _ensure_identity_record(
             self, event_ref: str,
             _identity_types=_STRUCTURE_PAYLOAD_IDENTITY_TYPE,
+            _context=_promotion_emitter_context,
     ) -> None:
         """At promotion, materialize the durable IdentityRecord for a structure
         assertion from its typed payload carrier (event -> STRUCTURE_PAYLOAD ->
@@ -129,7 +158,7 @@ class PromotionEmitter:
         in-force structural consequences, never editing the prior record
         (Kernel rule 1). Generic over identity type (policy map); no scheme
         logic. A no-op for any non-structure promotion (no such edge)."""
-        ctx = self.ctx
+        ctx = _context(self)
         edges = ctx.store.edges_from(event_ref, "STRUCTURE_PAYLOAD")
         if not edges:
             return
@@ -173,29 +202,40 @@ class PromotionEmitter:
 
     # ------------------------------------------------------- emission flows --
 
-    def emit_pending_assertion(self, *, amend_case_for_routing: bool) -> None:
+    def emit_pending_assertion(
+            self, *, amend_case_for_routing: bool,
+            _emit_assertion=_emit_assertion,
+            _store_case=_store_case,
+            _context=_promotion_emitter_context,
+    ) -> None:
         """The claim lands in the queue (or stays a captured draft)."""
-        self._emit_assertion("PENDING_REVIEW")
-        self._store_case(amend_for_routing=amend_case_for_routing)
+        _emit_assertion(self, "PENDING_REVIEW")
+        _store_case(self, amend_for_routing=amend_case_for_routing)
         # a queued CORRECTION remembers its supersession target so the eventual
         # reviewer acceptance can retire the prior consequence — supersession
         # takes effect on acceptance, never while the claim is only pending
-        superseded = self.ctx.sub.get("supersedesConsequenceRef")
+        ctx = _context(self)
+        superseded = ctx.sub.get("supersedesConsequenceRef")
         if superseded:
-            self.ctx.store.add_edge(self.ctx.cur, "LINEAGE_SUPERSEDES_INTENT",
-                                    self.ctx.assertion_id, superseded)
+            ctx.store.add_edge(ctx.cur, "LINEAGE_SUPERSEDES_INTENT",
+                               ctx.assertion_id, superseded)
 
     def emit_self_review_promotion(
             self,
             _promotion_targets=_COMMIT_CLASS_TO_PROMOTION_TARGET,
             _consequence_types=_PROMOTION_TARGET_TO_CONSEQUENCE_TYPE,
+            _emit_assertion=_emit_assertion,
+            _store_case=_store_case,
+            _ensure_identity_record=_ensure_identity_record,
+            _context=_promotion_emitter_context,
     ) -> None:
         """The deliberate confirm-accept step is the review act (D8):
         assertion IN_FORCE, ReviewDecision by the transport-bound submitter,
         AcceptedEventConsequence, supersession lineage, all edge-linked."""
-        ctx, sub = self.ctx, self.ctx.sub
-        self._emit_assertion("IN_FORCE")
-        self._store_case(amend_for_routing=False)
+        ctx = _context(self)
+        sub = ctx.sub
+        _emit_assertion(self, "IN_FORCE")
+        _store_case(self, amend_for_routing=False)
 
         review_id = mint("review")
         review = {
@@ -248,7 +288,7 @@ class PromotionEmitter:
 
         # a structure assertion materializes its durable IdentityRecord here —
         # only on acceptance, never for a refused or queued capture (G1)
-        self._ensure_identity_record(ctx.event_id)
+        _ensure_identity_record(self, ctx.event_id)
 
         ctx.log("REVIEW_PROMOTION", "PROMOTE_ACCEPTED", refs=[review_id])
         ctx.final_outcome = "PROMOTE_ACCEPTED"
@@ -260,12 +300,15 @@ class PromotionEmitter:
     def emit_queue_acceptance(
             self,
             _acceptance_types=_ACCEPTANCE_BY_ASSERTION_TYPE,
+            _ensure_identity_record=_ensure_identity_record,
+            _context=_promotion_emitter_context,
     ) -> None:
         """Queue acceptance: the reviewer's OWN governed act. REVIEW_ACCEPT
         was already evaluated for the transport-bound acting party at the
         AUTHORITY gate; this promotes the TARGET assertion's consequence
         carrying the reviewer's resolution rationale and evidence."""
-        ctx, sub = self.ctx, self.ctx.sub
+        ctx = _context(self)
+        sub = ctx.sub
         target_payload = ctx.acceptance_payload
         review_id = mint("review")
         review = {
@@ -328,7 +371,7 @@ class PromotionEmitter:
 
         # a queued structure assertion materializes its IdentityRecord at the
         # reviewer's acceptance, from the ORIGINAL event's payload carrier (G1)
-        self._ensure_identity_record(orig_event)
+        _ensure_identity_record(self, orig_event)
 
         ctx.log("REVIEW_PROMOTION", "PROMOTE_ACCEPTED", refs=[review_id])
         ctx.final_outcome = "PROMOTE_ACCEPTED"
@@ -337,7 +380,10 @@ class PromotionEmitter:
         ctx.trigger_source = consequence_id
         ctx.invalidation_sources = [superseded] if superseded else [consequence_id]
 
-    def emit_queue_rejection(self) -> None:
+    def emit_queue_rejection(
+            self,
+            _context=_promotion_emitter_context,
+    ) -> None:
         """Queue rejection (M2 G5-2): the reviewer's OWN governed decline. The
         append-only mirror of emit_queue_acceptance MINUS the consequence —
         appends a ReviewDecision (REVIEW_REJECT_OR_CONTEST / REJECTED) + a REVIEW
@@ -349,7 +395,8 @@ class PromotionEmitter:
         generic PromotionTraceWriter carries it as a receipt (D3); the queued
         assertion is never edited — its terminal REJECTED disposition is derived
         from this REVIEW edge. Commit outcome is RETAIN_DRAFT (nothing promoted)."""
-        ctx, sub = self.ctx, self.ctx.sub
+        ctx = _context(self)
+        sub = ctx.sub
         review_id = mint("review")
         review = {
             "schemaVersion": "ofarm.reviewdecision.v0.1",
@@ -376,7 +423,11 @@ class PromotionEmitter:
         ctx.log("REVIEW_PROMOTION", "RETAIN_DRAFT", refs=[review_id])
         ctx.final_outcome = "RETAIN_DRAFT"
 
-    def emit_queue_contest(self) -> None:
+    def emit_queue_contest(
+            self,
+            _invalidate_for_sources=Materializer.invalidate_for_sources,
+            _context=_promotion_emitter_context,
+    ) -> None:
         """Queue contest (M2 G5-4): a reviewer's append-only dispute against an
         ALREADY IN-FORCE consequence. Appends a ReviewDecision (CONTESTED) + a
         DISPUTE edge (consequence -> decision); emits NO consequence and NO
@@ -386,7 +437,8 @@ class PromotionEmitter:
         disputeStatus. Resolution is later, by a CORRECTION that supersedes the
         consequence (spec §6). Commit outcome RETAIN_DRAFT; the decision registers
         in ctx.emitted['reviews'] for the generic PromotionTrace receipt (D3)."""
-        ctx, sub = self.ctx, self.ctx.sub
+        ctx = _context(self)
+        sub = ctx.sub
         target = ctx.acceptance_target   # the in-force consequence
         review_id = mint("review")
         review = {
@@ -414,7 +466,7 @@ class PromotionEmitter:
         # recompute and re-qualify disputed on the next read (spec §6.6). The
         # dispute is recorded authoritatively on the DISPUTE edge; this trace only
         # propagates staleness (BASIS_ADVANCED family, dispute-specific reason).
-        Materializer.invalidate_for_sources(
+        _invalidate_for_sources(
             ctx.materializer, ctx.cur, [target],
             trigger_family="BASIS_ADVANCED",
             trigger_source_ref=review_id,

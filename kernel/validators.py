@@ -23,9 +23,11 @@ from .problems import runtime_problem
 from .runtime_bundle import RuntimeBundleError
 from .stages import (
     _AUTHORITY_EVALUATE,
+    _DESCRIPTOR_POLICY_VALIDATION,
     GateContext,
     GatePass,
     GateRefusal,
+    _invoke_retained_descriptor_policy,
     _invoke_retained_context_service,
 )
 from .store import Store
@@ -1484,6 +1486,8 @@ class ValidationGate:
     def run(
             self, ctx: GateContext,
             _invoke_validator=_invoke_retained_validator,
+            _invoke_descriptor_policy=_invoke_retained_descriptor_policy,
+            _descriptor_validation_policy=_DESCRIPTOR_POLICY_VALIDATION,
             _common_sequence=COMMON_SEQUENCE,
             _operation_sequence=OPERATION_SEQUENCE,
             _operation_sequence_for_policy=
@@ -1531,7 +1535,9 @@ class ValidationGate:
             operation_sequence = _operation_sequence
         else:
             try:
-                validation_policy = ctx.policy_provider.validation_policy()
+                validation_policy = _invoke_descriptor_policy(
+                    ctx, _descriptor_validation_policy,
+                    ctx.policy_provider)
             except profile_policy.ProfilePolicyError as exc:
                 return _validation_policy_refusal(ctx, exc)
             operation_sequence = _operation_sequence_for_policy(

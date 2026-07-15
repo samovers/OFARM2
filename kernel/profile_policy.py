@@ -22,6 +22,7 @@ import string
 from pathlib import Path
 
 from . import config
+from .contracts import canonical_json
 from .problems import REGISTERED_REASON_CODES
 
 
@@ -388,11 +389,37 @@ class DescriptorPolicyProvider:
     def __init__(self, descriptor, *, runtime_bundle):
         self.descriptor = descriptor
         self.runtime_bundle = runtime_bundle
-        if runtime_bundle.descriptor != descriptor:
+        if dict.__getitem__(
+                object.__getattribute__(runtime_bundle, "__dict__"),
+                "descriptor") is not descriptor:
             raise ProfilePolicyError(
                 "policy descriptor and RuntimeBundle do not match exactly")
         self.policy_ref = descriptor.evidence_policy_ref
         self.recognized_rule_refs = self.expected_recognized_rule_refs(descriptor)
+        policy_components = [
+            component for component in runtime_bundle.components
+            if (component.role == "PROFILE_POLICY"
+                and component.logical_ref == self.policy_ref)
+        ]
+        if len(policy_components) != 1:
+            raise ProfilePolicyError(
+                "RuntimeBundle lacks exactly one retained evidence-review policy")
+        policy_bytes = policy_components[0].canonical_bytes
+        try:
+            policy_document = _validated_evidence_review_policy(
+                json.loads(policy_bytes),
+                expected_policy_ref=self.policy_ref,
+            )
+        except (json.JSONDecodeError, TypeError, UnicodeDecodeError) as exc:
+            raise ProfilePolicyError(
+                "retained evidence-review policy bytes are malformed") from exc
+        # Immutable decision snapshots are authenticated again at point of use.
+        # The full document remains the authority for evidence decisions; the
+        # validation subsection has its own exact snapshot because that method
+        # deliberately returns only the subsection.
+        self._policy_document_bytes = policy_bytes
+        self._validation_policy_bytes = canonical_json(
+            policy_document["validation"]).encode("utf-8")
         self._runtime_composition_sealed = True
 
     @staticmethod
@@ -401,19 +428,34 @@ class DescriptorPolicyProvider:
             return None
         return tuple(supported_checks)
 
-    def evidence_policy(self, supported_checks=None) -> dict:
-        # RuntimeBundle.policy_document() reparses immutable retained bytes and
-        # returns a fresh object. Revalidating that fresh object avoids a mutable
-        # process-local cache becoming an unreceipted policy authority.
-        key = self._supported_checks_key(supported_checks)
+    def evidence_policy(
+            self, supported_checks=None,
+            _supported_checks_key=_supported_checks_key.__func__,
+            _getattribute=object.__getattribute__,
+            _getitem=dict.__getitem__,
+            _loads=json.loads,
+    ) -> dict:
+        # Reparse the constructor-authenticated private bytes directly from the
+        # exact instance dictionary.  ``object.__getattribute__(self, name)``
+        # still honors a transient class data descriptor, so it is not an
+        # authority-safe way to read these decision bytes.
+        key = _supported_checks_key(supported_checks)
+        namespace = _getattribute(self, "__dict__")
         return _validated_evidence_review_policy(
-            self.runtime_bundle.policy_document(),
+            _loads(_getitem(namespace, "_policy_document_bytes")),
             supported_checks=key,
-            expected_policy_ref=self.policy_ref,
+            expected_policy_ref=_getitem(namespace, "policy_ref"),
         )
 
-    def validation_policy(self) -> dict:
-        return self.evidence_policy()["validation"]
+    def validation_policy(
+            self,
+            _evidence_policy=evidence_policy,
+    ) -> dict:
+        # Bind the exact evidence-policy implementation when this method is
+        # defined.  Governed callers retain and guard both class bindings, so a
+        # transient replacement cannot make validation consume a different
+        # policy and then restore itself before the transaction postflight.
+        return _evidence_policy(self)["validation"]
 
 
 def _validated_evidence_review_policy(
