@@ -726,7 +726,7 @@
       "logicalRef": "python:kernel/authority.py",
       "path": "kernel/authority.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:c102b7aa730a84bff665c20dad025c6aeb4414596a0ab35a881cd9e7e4159a0b",
+      "sha256": "sha256:7ef8e62a1b3fa8f0b67d6913f4b6e7c5a3066db3ae1611e5894719b939e18b0a",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {

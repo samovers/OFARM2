@@ -3244,6 +3244,159 @@ def test_authority_evaluator_rejects_unclosed_inputs(
             evaluator.evaluate(cur=cur, **request)
 
 
+def test_authority_rejects_self_restoring_time_valid_swap_and_rolls_back(
+        fresh_store):
+    from kernel import authority as authority_module
+    from kernel.authority import AuthorityEvaluator
+
+    store = fresh_store
+    evaluator = AuthorityEvaluator(store)
+    suffix = uuid.uuid4().hex
+    party_id = f"party:issue171.expired-grant.{suffix}"
+    grant_id = f"grant:issue171.expired.{suffix}"
+    original = authority_module._time_valid
+    hostile_called = False
+    decision = None
+
+    def hostile_time_valid(_grant, _at):
+        nonlocal hostile_called
+        hostile_called = True
+        authority_module._time_valid = original
+        return True
+
+    with pytest.raises(RuntimeBundleError, match="rollback-only"):
+        with store.serialized_tx() as cur:
+            store.insert_record(cur, {
+                "schemaVersion": "ofarm.party.v0.1",
+                "partyId": party_id,
+                "partyClass": "NATURAL_PERSON",
+                "displayName": "Issue 171 expired grant test (fictional)",
+                "partyState": "ACTIVE",
+                "recordedAt": context.now_iso(),
+            })
+            store.insert_record(cur, {
+                "schemaVersion": "ofarm.authoritygrant.v0.1",
+                "authorityGrantId": grant_id,
+                "grantedByPartyRef": demo.FARMER,
+                "grantTarget": {
+                    "targetKind": "PARTY", "targetRef": party_id,
+                },
+                "targetScope": {
+                    "scopeType": "FARM", "scopeRef": demo.FARM,
+                },
+                "authorityActionClasses": ["ASSERT_OPERATION_CLAIM"],
+                "validFrom": demo.VALID_FROM,
+                "validUntil": "2026-02-01T00:00:00Z",
+                "inheritanceMode": "EXACT_ONLY",
+                "grantState": "ACTIVE",
+            })
+            authority_module._time_valid = hostile_time_valid
+            try:
+                with pytest.raises(
+                        RuntimeError,
+                        match="AuthorityEvaluator runtime composition changed"):
+                    decision = evaluator.evaluate(
+                        cur=cur,
+                        acting_party_ref=party_id,
+                        action_class="ASSERT_OPERATION_CLAIM",
+                        action_stage="PROMOTION",
+                        scope={
+                            "scopeType": "FARM", "scopeRef": demo.FARM,
+                        },
+                    )
+            finally:
+                authority_module._time_valid = original
+            assert decision is None
+
+    assert hostile_called is False
+    assert store.get_record(party_id) is None
+    assert store.get_record(grant_id) is None
+
+
+def test_authority_rejects_self_restoring_revocation_swap_and_rolls_back(
+        fresh_store):
+    from kernel import authority as authority_module
+    from kernel.authority import AuthorityEvaluator
+
+    store = fresh_store
+    evaluator = AuthorityEvaluator(store)
+    suffix = uuid.uuid4().hex
+    party_id = f"party:issue171.revoked-grant.{suffix}"
+    grant_id = f"grant:issue171.revoked.{suffix}"
+    revocation_id = f"revoke:issue171.effective.{suffix}"
+    original = authority_module._revocation_effective
+    hostile_called = False
+    decision = None
+
+    def hostile_revocation_effective(_revocation, _at):
+        nonlocal hostile_called
+        hostile_called = True
+        authority_module._revocation_effective = original
+        return False
+
+    with pytest.raises(RuntimeBundleError, match="rollback-only"):
+        with store.serialized_tx() as cur:
+            store.insert_record(cur, {
+                "schemaVersion": "ofarm.party.v0.1",
+                "partyId": party_id,
+                "partyClass": "NATURAL_PERSON",
+                "displayName": "Issue 171 effective revocation test (fictional)",
+                "partyState": "ACTIVE",
+                "recordedAt": context.now_iso(),
+            })
+            store.insert_record(cur, {
+                "schemaVersion": "ofarm.authoritygrant.v0.1",
+                "authorityGrantId": grant_id,
+                "grantedByPartyRef": demo.FARMER,
+                "grantTarget": {
+                    "targetKind": "PARTY", "targetRef": party_id,
+                },
+                "targetScope": {
+                    "scopeType": "FARM", "scopeRef": demo.FARM,
+                },
+                "authorityActionClasses": ["ASSERT_OPERATION_CLAIM"],
+                "validFrom": demo.VALID_FROM,
+                "inheritanceMode": "EXACT_ONLY",
+                "grantState": "ACTIVE",
+            })
+            store.insert_record(cur, {
+                "schemaVersion": "ofarm.revocationdecision.v0.1",
+                "revocationDecisionId": revocation_id,
+                "revokesArtifactFamily": "AUTHORITY_GRANT",
+                "revokesArtifactRef": grant_id,
+                "decidedByPartyRef": demo.FARMER,
+                "decidedAt": "2026-02-01T00:00:00Z",
+                "effectiveFrom": "2026-02-01T00:00:00Z",
+                "revocationMode": "TERMINATE",
+                "targetScope": {
+                    "scopeType": "FARM", "scopeRef": demo.FARM,
+                },
+            })
+            authority_module._revocation_effective = \
+                hostile_revocation_effective
+            try:
+                with pytest.raises(
+                        RuntimeError,
+                        match="AuthorityEvaluator runtime composition changed"):
+                    decision = evaluator.evaluate(
+                        cur=cur,
+                        acting_party_ref=party_id,
+                        action_class="ASSERT_OPERATION_CLAIM",
+                        action_stage="PROMOTION",
+                        scope={
+                            "scopeType": "FARM", "scopeRef": demo.FARM,
+                        },
+                    )
+            finally:
+                authority_module._revocation_effective = original
+            assert decision is None
+
+    assert hostile_called is False
+    assert store.get_record(party_id) is None
+    assert store.get_record(grant_id) is None
+    assert store.get_record(revocation_id) is None
+
+
 def test_reference_resolver_rejects_cursor_from_another_store(fresh_store):
     from kernel.verification import ReferenceResolver
 

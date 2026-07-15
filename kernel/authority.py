@@ -13,11 +13,17 @@ import types
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
+from .callable_state import capture_callable_state, callable_state_matches
 from .context import mint as _mint, now_iso
 from .contracts import canonical_json
 from .problems import runtime_problem
 from .store import Store
 
+_RETAINED_AUTHORITY_STORE_TYPE = Store
+_RETAINED_STORE_MARK_TRANSACTION_INTEGRITY_VIOLATION = \
+    Store._mark_transaction_integrity_violation
+_RETAINED_STORE_MARK_TRANSACTION_INTEGRITY_VIOLATION_CODE = \
+    _RETAINED_STORE_MARK_TRANSACTION_INTEGRITY_VIOLATION.__code__
 _RETAINED_STORE_REQUIRE_ACTIVE_SERIALIZED_CURSOR = \
     Store._require_active_serialized_cursor
 _RETAINED_STORE_REQUIRE_ACTIVE_SERIALIZED_CURSOR_CODE = \
@@ -28,12 +34,34 @@ _RETAINED_STORE_GET_RECORD = Store.get_record
 _RETAINED_STORE_GET_RECORD_CODE = _RETAINED_STORE_GET_RECORD.__code__
 _RETAINED_STORE_GET_PAYLOAD = Store.get_payload
 _RETAINED_STORE_GET_PAYLOAD_CODE = _RETAINED_STORE_GET_PAYLOAD.__code__
+_RETAINED_AUTHORITY_DATETIME = datetime
+_RETAINED_AUTHORITY_TIMEZONE = timezone
+_RETAINED_AUTHORITY_UTC = timezone.utc
+_RETAINED_AUTHORITY_BOOL = bool
+_RETAINED_AUTHORITY_DICT = dict
+_RETAINED_AUTHORITY_NOW_ISO = now_iso
+_RETAINED_AUTHORITY_MINT = _mint
+_RETAINED_AUTHORITY_RUNTIME_PROBLEM = runtime_problem
+_RETAINED_AUTHORITY_CALLABLE_STATE_MATCHES = callable_state_matches
+_RETAINED_AUTHORITY_CALLABLE_STATE_MATCHES_CODE = \
+    callable_state_matches.__code__
+_RETAINED_AUTHORITY_NOW_ISO_GLOBALS = now_iso.__globals__
+_RETAINED_AUTHORITY_NOW_ISO_DATETIME = \
+    _RETAINED_AUTHORITY_NOW_ISO_GLOBALS["datetime"]
+_RETAINED_AUTHORITY_NOW_ISO_TIMEZONE = \
+    _RETAINED_AUTHORITY_NOW_ISO_GLOBALS["timezone"]
+_RETAINED_AUTHORITY_RUNTIME_PROBLEM_GLOBALS = runtime_problem.__globals__
+_RETAINED_AUTHORITY_PROBLEM_REASON_CODES = \
+    _RETAINED_AUTHORITY_RUNTIME_PROBLEM_GLOBALS["REGISTERED_REASON_CODES"]
+_RETAINED_AUTHORITY_PROBLEM_COUNTER = \
+    _RETAINED_AUTHORITY_RUNTIME_PROBLEM_GLOBALS["_counter"]
 
 # Scope types a FARM-scoped grant covers under DESCENDANT_SCOPES
 _FARM_DESCENDANTS = frozenset({
     "FARM", "SITE", "FIELD", "ZONE", "CROP_CYCLE", "LOT", "FACILITY",
     "OPERATION",
 })
+_RETAINED_AUTHORITY_FARM_DESCENDANTS = _FARM_DESCENDANTS
 
 _ACTION_STAGE_VALUES = (
     "DRAFT_PREPARATION",
@@ -219,22 +247,24 @@ def authority_decision_allowed(decision) -> bool:
                 "ALLOW", "DENY", "REQUIRE_REVIEW",
                 "REQUIRE_HUMAN_APPROVAL",
             )
-            or type(request) is not dict
-            or type(result) is not dict
-            or type(trace) is not dict
+            or type(request) is not _RETAINED_AUTHORITY_DICT
+            or type(result) is not _RETAINED_AUTHORITY_DICT
+            or type(trace) is not _RETAINED_AUTHORITY_DICT
             or type(problems) is not list
             or type(canonical_state) is not str
             or canonical_state !=
             _RETAINED_CANONICAL_AUTHORITY_DECISION_STATE(
                 outcome, request, result, trace, problems)
-            or type(allowed) is not bool
+            or type(allowed) is not _RETAINED_AUTHORITY_BOOL
             or type(result.get("decisionOutcome")) is not str
             or result.get("decisionOutcome") != outcome
             or type(trace.get("decisionOutcome")) is not str
             or trace.get("decisionOutcome") != outcome
-            or type(result.get("finalActionPermitted")) is not bool
+            or type(result.get("finalActionPermitted")) is not
+            _RETAINED_AUTHORITY_BOOL
             or result.get("finalActionPermitted") is not allowed
-            or type(result.get("humanApprovalRequired")) is not bool
+            or type(result.get("humanApprovalRequired")) is not
+            _RETAINED_AUTHORITY_BOOL
             or result.get("humanApprovalRequired") is not
             (outcome == "REQUIRE_HUMAN_APPROVAL")
             or result.get("problems") is not problems):
@@ -266,7 +296,7 @@ def _copy_evaluate_inputs(
     if (type(acting_party_ref) is not str
             or type(action_class) is not str
             or type(action_stage) is not str
-            or type(revocation_check_required) is not bool
+            or type(revocation_check_required) is not _RETAINED_AUTHORITY_BOOL
             or type(revocation_disposition) is not str
             or (acting_agent_ref is not None
                 and type(acting_agent_ref) is not str)
@@ -281,7 +311,7 @@ def _copy_evaluate_inputs(
             _RETAINED_REVOCATION_DISPOSITION_VALUES:
         raise ValueError(
             "AuthorityEvaluator revocation_disposition is not closed")
-    if (type(scope) is not dict
+    if (type(scope) is not _RETAINED_AUTHORITY_DICT
             or set(scope) != {"scopeType", "scopeRef"}
             or any(type(key) is not str for key in scope)
             or type(scope.get("scopeType")) is not str
@@ -300,11 +330,12 @@ def _copy_evaluate_inputs(
         allowed_keys = {
             "assisted", "assistantRef", "assistantRoleFamily", "suggestionMode",
         }
-        if (type(ai_assistance) is not dict
+        if (type(ai_assistance) is not _RETAINED_AUTHORITY_DICT
                 or any(type(key) is not str for key in ai_assistance)
                 or not set(ai_assistance) <= allowed_keys
                 or "assisted" not in ai_assistance
-                or type(ai_assistance.get("assisted")) is not bool
+                or type(ai_assistance.get("assisted")) is not
+                _RETAINED_AUTHORITY_BOOL
                 or ("assistantRef" in ai_assistance
                     and type(ai_assistance["assistantRef"]) is not str)
                 or ("assistantRoleFamily" in ai_assistance
@@ -345,43 +376,111 @@ _RETAINED_COPY_EVALUATE_INPUTS_CODE = _copy_evaluate_inputs.__code__
 def _parse_dt(value: str) -> datetime | None:
     """Timezone-aware parse; returns None (never a guess) on bad input."""
     try:
-        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        dt = _RETAINED_AUTHORITY_DATETIME.fromisoformat(
+            value.replace("Z", "+00:00"))
     except (ValueError, AttributeError, TypeError):
         return None
-    return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+    return dt if dt.tzinfo is not None else dt.replace(
+        tzinfo=_RETAINED_AUTHORITY_UTC)
+
+
+_RETAINED_AUTHORITY_PARSE_DT = _parse_dt
 
 
 def _time_valid(grant: dict, at: str) -> bool:
     """Fail closed: an unparseable validity bound never widens authority
     (lexicographic string comparison is fail-open across timezone formats)."""
-    now = _parse_dt(at)
+    now = _RETAINED_AUTHORITY_PARSE_DT(at)
     if now is None:
         return False
     if grant.get("validFrom"):
-        start = _parse_dt(grant["validFrom"])
+        start = _RETAINED_AUTHORITY_PARSE_DT(grant["validFrom"])
         if start is None or now < start:
             return False
     if grant.get("validUntil"):
-        end = _parse_dt(grant["validUntil"])
+        end = _RETAINED_AUTHORITY_PARSE_DT(grant["validUntil"])
         if end is None or now >= end:
             return False
     return True
 
 
+_RETAINED_AUTHORITY_TIME_VALID = _time_valid
+
+
 def _revocation_effective(revocation: dict, at: str) -> bool:
     """Fail closed: an unparseable effectiveFrom counts as effective."""
-    now = _parse_dt(at)
-    eff = _parse_dt(revocation.get("effectiveFrom", ""))
+    now = _RETAINED_AUTHORITY_PARSE_DT(at)
+    eff = _RETAINED_AUTHORITY_PARSE_DT(
+        revocation.get("effectiveFrom", ""))
     if now is None or eff is None:
         return True
     return eff <= now
+
+
+_RETAINED_AUTHORITY_REVOCATION_EFFECTIVE = _revocation_effective
+
+
+_AUTHORITY_SEMANTIC_FUNCTION_ANCHORS = (
+    (("now_iso", "_RETAINED_AUTHORITY_NOW_ISO"),
+     _RETAINED_AUTHORITY_NOW_ISO,
+     _RETAINED_AUTHORITY_NOW_ISO.__code__,
+     capture_callable_state(_RETAINED_AUTHORITY_NOW_ISO)),
+    (("_mint", "_RETAINED_AUTHORITY_MINT"),
+     _RETAINED_AUTHORITY_MINT,
+     _RETAINED_AUTHORITY_MINT.__code__,
+     capture_callable_state(_RETAINED_AUTHORITY_MINT)),
+    (("runtime_problem", "_RETAINED_AUTHORITY_RUNTIME_PROBLEM"),
+     _RETAINED_AUTHORITY_RUNTIME_PROBLEM,
+     _RETAINED_AUTHORITY_RUNTIME_PROBLEM.__code__,
+     capture_callable_state(_RETAINED_AUTHORITY_RUNTIME_PROBLEM)),
+    (("_parse_dt", "_RETAINED_AUTHORITY_PARSE_DT"),
+     _RETAINED_AUTHORITY_PARSE_DT,
+     _RETAINED_AUTHORITY_PARSE_DT.__code__,
+     capture_callable_state(_RETAINED_AUTHORITY_PARSE_DT)),
+    (("_time_valid", "_RETAINED_AUTHORITY_TIME_VALID"),
+     _RETAINED_AUTHORITY_TIME_VALID,
+     _RETAINED_AUTHORITY_TIME_VALID.__code__,
+     capture_callable_state(_RETAINED_AUTHORITY_TIME_VALID)),
+    (("_revocation_effective",
+      "_RETAINED_AUTHORITY_REVOCATION_EFFECTIVE"),
+     _RETAINED_AUTHORITY_REVOCATION_EFFECTIVE,
+     _RETAINED_AUTHORITY_REVOCATION_EFFECTIVE.__code__,
+     capture_callable_state(_RETAINED_AUTHORITY_REVOCATION_EFFECTIVE)),
+)
+_RETAINED_AUTHORITY_SEMANTIC_FUNCTION_ANCHORS = \
+    _AUTHORITY_SEMANTIC_FUNCTION_ANCHORS
+_AUTHORITY_SEMANTIC_DATA_ANCHORS = (
+    (("_RETAINED_AUTHORITY_BOOL",), _RETAINED_AUTHORITY_BOOL),
+    (("_RETAINED_AUTHORITY_DICT",), _RETAINED_AUTHORITY_DICT),
+    (("datetime", "_RETAINED_AUTHORITY_DATETIME"),
+     _RETAINED_AUTHORITY_DATETIME),
+    (("timezone", "_RETAINED_AUTHORITY_TIMEZONE"),
+     _RETAINED_AUTHORITY_TIMEZONE),
+    (("_RETAINED_AUTHORITY_UTC",), _RETAINED_AUTHORITY_UTC),
+    (("_FARM_DESCENDANTS", "_RETAINED_AUTHORITY_FARM_DESCENDANTS"),
+     _RETAINED_AUTHORITY_FARM_DESCENDANTS),
+)
+_RETAINED_AUTHORITY_SEMANTIC_DATA_ANCHORS = \
+    _AUTHORITY_SEMANTIC_DATA_ANCHORS
+_AUTHORITY_TRANSITIVE_DATA_ANCHORS = (
+    (_RETAINED_AUTHORITY_NOW_ISO_GLOBALS, "datetime",
+     _RETAINED_AUTHORITY_NOW_ISO_DATETIME),
+    (_RETAINED_AUTHORITY_NOW_ISO_GLOBALS, "timezone",
+     _RETAINED_AUTHORITY_NOW_ISO_TIMEZONE),
+    (_RETAINED_AUTHORITY_RUNTIME_PROBLEM_GLOBALS,
+     "REGISTERED_REASON_CODES", _RETAINED_AUTHORITY_PROBLEM_REASON_CODES),
+    (_RETAINED_AUTHORITY_RUNTIME_PROBLEM_GLOBALS,
+     "_counter", _RETAINED_AUTHORITY_PROBLEM_COUNTER),
+)
+_RETAINED_AUTHORITY_TRANSITIVE_DATA_ANCHORS = \
+    _AUTHORITY_TRANSITIVE_DATA_ANCHORS
 
 
 class AuthorityEvaluator:
     __slots__ = ("store",)
 
     def __init__(self, store):
-        if type(store) is not Store:
+        if type(store) is not _RETAINED_AUTHORITY_STORE_TYPE:
             raise TypeError("AuthorityEvaluator requires the exact Store runtime")
         object.__setattr__(self, "store", store)
 
@@ -399,7 +498,8 @@ class AuthorityEvaluator:
         return [
             r["payload"] for r in _RETAINED_STORE_FIND_BY_KIND(
                 self.store, "ofarm.roleassignment.v0.1")
-            if r["payload"]["partyRef"] == party_ref and _time_valid(r["payload"], at)
+            if r["payload"]["partyRef"] == party_ref
+            and _RETAINED_AUTHORITY_TIME_VALID(r["payload"], at)
         ]
 
     def _revocations_for(self, artifact_ref: str, at: str) -> list[dict]:
@@ -407,7 +507,7 @@ class AuthorityEvaluator:
             r["payload"] for r in _RETAINED_STORE_FIND_BY_KIND(
                 self.store, "ofarm.revocationdecision.v0.1")
             if r["payload"]["revokesArtifactRef"] == artifact_ref
-            and _revocation_effective(r["payload"], at)
+            and _RETAINED_AUTHORITY_REVOCATION_EFFECTIVE(r["payload"], at)
         ]
 
     def _scope_covers(self, grant_scope: dict, inheritance_mode: str, target: dict) -> bool:
@@ -416,7 +516,9 @@ class AuthorityEvaluator:
         if inheritance_mode in ("DESCENDANT_SCOPES", "DERIVED_LINEAGE_SCOPES"):
             if grant_scope["scopeType"] == "TENANT":
                 return True
-            if grant_scope["scopeType"] == "FARM" and target["scopeType"] in _FARM_DESCENDANTS:
+            if (grant_scope["scopeType"] == "FARM"
+                    and target["scopeType"] in
+                    _RETAINED_AUTHORITY_FARM_DESCENDANTS):
                 if target["scopeType"] == "FARM":
                     return target["scopeRef"] == grant_scope["scopeRef"]
                 # descendant containment is real, not assumed: the target
@@ -444,7 +546,8 @@ class AuthorityEvaluator:
             targets_role = target["targetKind"] == "ROLE_ASSIGNMENT" and target["targetRef"] in roles
             if not (targets_party or targets_role):
                 continue
-            if g["grantState"] != "ACTIVE" or not _time_valid(g, at):
+            if (g["grantState"] != "ACTIVE"
+                    or not _RETAINED_AUTHORITY_TIME_VALID(g, at)):
                 continue
             if action_class not in g["authorityActionClasses"]:
                 continue
@@ -486,7 +589,8 @@ class AuthorityEvaluator:
                             and target["targetRef"] in delegator_roles))
             if not controls:
                 continue
-            if g["grantState"] != "ACTIVE" or not _time_valid(g, at):
+            if (g["grantState"] != "ACTIVE"
+                    or not _RETAINED_AUTHORITY_TIME_VALID(g, at)):
                 continue
             if action_class not in g["authorityActionClasses"]:
                 continue
@@ -514,7 +618,8 @@ class AuthorityEvaluator:
             d = row["payload"]
             if d["delegatePartyRef"] != party_ref:
                 continue
-            if d["delegationState"] != "ACTIVE" or not _time_valid(d, at):
+            if (d["delegationState"] != "ACTIVE"
+                    or not _RETAINED_AUTHORITY_TIME_VALID(d, at)):
                 continue
             if action_class not in d["authorityActionClasses"]:
                 continue
@@ -580,10 +685,10 @@ class AuthorityEvaluator:
             use_purpose=use_purpose,
         )
         _RETAINED_AUTHORITY_RUNTIME_GUARD(self, cur)
-        at = now_iso()
-        request_id = _mint("authzreq")
-        trace_id = _mint("authztrace")
-        result_id = _mint("authzres")
+        at = _RETAINED_AUTHORITY_NOW_ISO()
+        request_id = _RETAINED_AUTHORITY_MINT("authzreq")
+        trace_id = _RETAINED_AUTHORITY_MINT("authztrace")
+        result_id = _RETAINED_AUTHORITY_MINT("authzres")
         problems: list[dict] = []
 
         request = {
@@ -605,7 +710,7 @@ class AuthorityEvaluator:
             request["usePurpose"] = use_purpose
 
         party = _RETAINED_AUTHORITY_PARTY(self, acting_party_ref)
-        non_human = bool(acting_agent_ref) or (
+        non_human = _RETAINED_AUTHORITY_BOOL(acting_agent_ref) or (
             party is not None and party.get("partyClass") == "SOFTWARE_AGENT"
         )
         request["nonHumanActor"] = non_human
@@ -645,7 +750,7 @@ class AuthorityEvaluator:
             outcome = "DENY"
             revocation_result = "NONE_APPLICABLE"
             reason = f"acting party {acting_party_ref} is not a recorded Party"
-            problems.append(runtime_problem(
+            problems.append(_RETAINED_AUTHORITY_RUNTIME_PROBLEM(
                 "ACTOR_BINDING_UNRESOLVED", "Unknown acting party", reason))
         elif party.get("partyState") != "ACTIVE":
             # party lifecycle fails closed: an INACTIVE party with otherwise
@@ -655,13 +760,13 @@ class AuthorityEvaluator:
             reason = (f"acting party {acting_party_ref} is "
                       f"{party.get('partyState')}, not ACTIVE — no authority path "
                       "is evaluated for a non-active party")
-            problems.append(runtime_problem(
+            problems.append(_RETAINED_AUTHORITY_RUNTIME_PROBLEM(
                 "AUTHORITY_DENIED", "Party not active", reason))
         elif revoked_only:
             outcome = revocation_disposition  # DENY or REQUIRE_REVIEW (schema allOf 4)
             revocation_result = "ACTIVE_REVOCATION_FOUND"
             reason = "the only matching authority basis is revoked; revocation re-check failed"
-            problems.append(runtime_problem(
+            problems.append(_RETAINED_AUTHORITY_RUNTIME_PROBLEM(
                 "DELEGATION_REVOKED" if revoked_delegations else "AUTHORITY_DENIED",
                 "Authority basis revoked",
                 reason, related_refs=revocation_refs or None,
@@ -674,7 +779,7 @@ class AuthorityEvaluator:
             revocation_result = "NO_ACTIVE_REVOCATION"
             reason = ("a non-human actor may prepare but not finalize promotion-stage "
                       "actions; explicit human approval is required")
-            problems.append(runtime_problem(
+            problems.append(_RETAINED_AUTHORITY_RUNTIME_PROBLEM(
                 "HUMAN_APPROVAL_REQUIRED", "Human approval required", reason,
                 suggested_remediation="route to the accountable human's review queue"))
         elif live_grants or live_delegations:
@@ -686,7 +791,7 @@ class AuthorityEvaluator:
             revocation_result = "NONE_APPLICABLE"
             reason = (f"no grant or delegation gives {acting_party_ref} action "
                       f"{action_class} on {scope['scopeType']} {scope['scopeRef']} (default deny)")
-            problems.append(runtime_problem(
+            problems.append(_RETAINED_AUTHORITY_RUNTIME_PROBLEM(
                 "AUTHORITY_DENIED", "No authority path", reason,
                 suggested_remediation="request a grant or delegation from the holding farmer"))
 
@@ -746,7 +851,7 @@ class AuthorityEvaluator:
         sharing are re-evaluated per request at the sharing gate, never via
         materialization staleness (PLATFORM.md invalidation posture)."""
         _RETAINED_AUTHORITY_RUNTIME_GUARD(self, cur)
-        at = now_iso()
+        at = _RETAINED_AUTHORITY_NOW_ISO()
         scope = {"scopeType": "FARM", "scopeRef": farm_ref}
         # RECEIVE_READ_DATA per the accepted Authority Action Matrix
         direct = _RETAINED_AUTHORITY_EVALUATE(
@@ -777,7 +882,8 @@ class AuthorityEvaluator:
                 continue
             if g["targetScope"] != scope or g["sharedArtifactFamily"] != artifact_family:
                 continue
-            if g["sharingState"] != "ACTIVE" or not _time_valid(g, at):
+            if (g["sharingState"] != "ACTIVE"
+                    or not _RETAINED_AUTHORITY_TIME_VALID(g, at)):
                 continue
             revs = _RETAINED_AUTHORITY_REVOCATIONS_FOR(
                 self, g["sharingGrantId"], at)
@@ -789,8 +895,8 @@ class AuthorityEvaluator:
         decision = direct
         if sharing_basis:
             problems = []
-            result = dict(direct.result_payload)
-            trace = dict(direct.trace_payload)
+            result = _RETAINED_AUTHORITY_DICT(direct.result_payload)
+            trace = _RETAINED_AUTHORITY_DICT(direct.trace_payload)
             result.update(
                 decisionOutcome="ALLOW", finalActionPermitted=True,
                 humanApprovalRequired=False, sharingBasisUsed=sharing_basis,
@@ -806,12 +912,12 @@ class AuthorityEvaluator:
             decision = _RETAINED_AUTHORITY_DECISION_TYPE(
                 "ALLOW", direct.request_payload, result, trace, problems)
         elif revocation_refs:
-            problems = [runtime_problem(
+            problems = [_RETAINED_AUTHORITY_RUNTIME_PROBLEM(
                 "PERMISSION_REDACTED", "Sharing revoked",
                 "the sharing grant backing this read was revoked; revocation "
                 "cuts access on the next request, it erases nothing")]
-            result = dict(direct.result_payload)
-            trace = dict(direct.trace_payload)
+            result = _RETAINED_AUTHORITY_DICT(direct.result_payload)
+            trace = _RETAINED_AUTHORITY_DICT(direct.trace_payload)
             result.update(
                 revocationResult="ACTIVE_REVOCATION_FOUND",
                 reasonSummary="sharing grant revoked; access cut on this request",
@@ -829,6 +935,7 @@ class AuthorityEvaluator:
         return decision
 
 
+_RETAINED_AUTHORITY_EVALUATOR_TYPE = AuthorityEvaluator
 _RETAINED_AUTHORITY_ROLE_ASSIGNMENTS = AuthorityEvaluator._role_assignments
 _RETAINED_AUTHORITY_REVOCATIONS_FOR = AuthorityEvaluator._revocations_for
 _RETAINED_AUTHORITY_SCOPE_COVERS = AuthorityEvaluator._scope_covers
@@ -850,13 +957,16 @@ _AUTHORITY_HELPER_ALIAS_ANCHORS = (
      _RETAINED_AUTHORITY_MATCHING_DELEGATIONS),
     ("_RETAINED_AUTHORITY_PARTY", _RETAINED_AUTHORITY_PARTY),
 )
+_RETAINED_AUTHORITY_HELPER_ALIAS_ANCHORS = \
+    _AUTHORITY_HELPER_ALIAS_ANCHORS
 
 
 _AUTHORITY_METHOD_ANCHORS = tuple(
-    (name, value, value.__code__)
+    (name, value, value.__code__, capture_callable_state(value))
     for name, value in vars(AuthorityEvaluator).items()
     if type(value) is types.FunctionType
 )
+_RETAINED_AUTHORITY_METHOD_ANCHORS = _AUTHORITY_METHOD_ANCHORS
 _RETAINED_AUTHORITY_EVALUATE = AuthorityEvaluator.evaluate
 _RETAINED_AUTHORITY_EVALUATE_CODE = _RETAINED_AUTHORITY_EVALUATE.__code__
 _RETAINED_AUTHORITY_EVALUATE_READ = AuthorityEvaluator.evaluate_read
@@ -866,19 +976,25 @@ _RETAINED_AUTHORITY_EVALUATE_READ_CODE = \
 
 def _require_authority_runtime(evaluator, cur) -> None:
     store = object.__getattribute__(evaluator, "store") \
-        if type(evaluator) is AuthorityEvaluator else None
+        if type(evaluator) is _RETAINED_AUTHORITY_EVALUATOR_TYPE else None
+    if (globals().get("_require_authority_decision_type") is not
+            _RETAINED_REQUIRE_AUTHORITY_DECISION_TYPE
+            or _RETAINED_REQUIRE_AUTHORITY_DECISION_TYPE.__code__ is not
+            _RETAINED_REQUIRE_AUTHORITY_DECISION_TYPE_CODE):
+        if type(store) is _RETAINED_AUTHORITY_STORE_TYPE:
+            _RETAINED_STORE_MARK_TRANSACTION_INTEGRITY_VIOLATION(store)
+        raise RuntimeError("AuthorityEvaluator runtime composition changed")
     try:
         _RETAINED_REQUIRE_AUTHORITY_DECISION_TYPE()
     except BaseException:
-        if type(store) is Store:
-            Store._mark_transaction_integrity_violation(store)
+        if type(store) is _RETAINED_AUTHORITY_STORE_TYPE:
+            _RETAINED_STORE_MARK_TRANSACTION_INTEGRITY_VIOLATION(store)
         raise
-    if (type(evaluator) is not AuthorityEvaluator
-            or type(store) is not Store
-            or globals().get("_require_authority_decision_type") is not
-            _RETAINED_REQUIRE_AUTHORITY_DECISION_TYPE
-            or _RETAINED_REQUIRE_AUTHORITY_DECISION_TYPE.__code__ is not
-            _RETAINED_REQUIRE_AUTHORITY_DECISION_TYPE_CODE
+    if (type(evaluator) is not _RETAINED_AUTHORITY_EVALUATOR_TYPE
+            or globals().get("AuthorityEvaluator") is not
+            _RETAINED_AUTHORITY_EVALUATOR_TYPE
+            or globals().get("Store") is not _RETAINED_AUTHORITY_STORE_TYPE
+            or type(store) is not _RETAINED_AUTHORITY_STORE_TYPE
             or globals().get("authority_decision_allowed") is not
             _RETAINED_AUTHORITY_DECISION_ALLOWED
             or _RETAINED_AUTHORITY_DECISION_ALLOWED.__code__ is not
@@ -903,40 +1019,85 @@ def _require_authority_runtime(evaluator, cur) -> None:
             _RETAINED_AI_ASSISTANT_ROLE_VALUES
             or _AI_SUGGESTION_MODE_VALUES is not
             _RETAINED_AI_SUGGESTION_MODE_VALUES
-            or Store._require_active_serialized_cursor is not
+            or globals().get("callable_state_matches") is not
+            _RETAINED_AUTHORITY_CALLABLE_STATE_MATCHES
+            or _RETAINED_AUTHORITY_CALLABLE_STATE_MATCHES.__code__ is not
+            _RETAINED_AUTHORITY_CALLABLE_STATE_MATCHES_CODE
+            or vars(_RETAINED_AUTHORITY_STORE_TYPE).get(
+                "_mark_transaction_integrity_violation") is not
+            _RETAINED_STORE_MARK_TRANSACTION_INTEGRITY_VIOLATION
+            or _RETAINED_STORE_MARK_TRANSACTION_INTEGRITY_VIOLATION.__code__
+            is not _RETAINED_STORE_MARK_TRANSACTION_INTEGRITY_VIOLATION_CODE
+            or vars(_RETAINED_AUTHORITY_STORE_TYPE).get(
+                "_require_active_serialized_cursor") is not
             _RETAINED_STORE_REQUIRE_ACTIVE_SERIALIZED_CURSOR
             or _RETAINED_STORE_REQUIRE_ACTIVE_SERIALIZED_CURSOR.__code__ is not
             _RETAINED_STORE_REQUIRE_ACTIVE_SERIALIZED_CURSOR_CODE
-            or Store.find_by_kind is not _RETAINED_STORE_FIND_BY_KIND
+            or vars(_RETAINED_AUTHORITY_STORE_TYPE).get("find_by_kind") is not
+            _RETAINED_STORE_FIND_BY_KIND
             or _RETAINED_STORE_FIND_BY_KIND.__code__ is not
             _RETAINED_STORE_FIND_BY_KIND_CODE
-            or Store.get_record is not _RETAINED_STORE_GET_RECORD
+            or vars(_RETAINED_AUTHORITY_STORE_TYPE).get("get_record") is not
+            _RETAINED_STORE_GET_RECORD
             or _RETAINED_STORE_GET_RECORD.__code__ is not
             _RETAINED_STORE_GET_RECORD_CODE
-            or Store.get_payload is not _RETAINED_STORE_GET_PAYLOAD
+            or vars(_RETAINED_AUTHORITY_STORE_TYPE).get("get_payload") is not
+            _RETAINED_STORE_GET_PAYLOAD
             or _RETAINED_STORE_GET_PAYLOAD.__code__ is not
             _RETAINED_STORE_GET_PAYLOAD_CODE
+            or _AUTHORITY_SEMANTIC_FUNCTION_ANCHORS is not
+            _RETAINED_AUTHORITY_SEMANTIC_FUNCTION_ANCHORS
+            or _AUTHORITY_SEMANTIC_DATA_ANCHORS is not
+            _RETAINED_AUTHORITY_SEMANTIC_DATA_ANCHORS
+            or _AUTHORITY_TRANSITIVE_DATA_ANCHORS is not
+            _RETAINED_AUTHORITY_TRANSITIVE_DATA_ANCHORS
+            or any(
+                any(globals().get(name) is not function for name in names)
+                or function.__code__ is not code
+                or not _RETAINED_AUTHORITY_CALLABLE_STATE_MATCHES(
+                    function, callable_state)
+                for names, function, code, callable_state in
+                _RETAINED_AUTHORITY_SEMANTIC_FUNCTION_ANCHORS)
+            or any(
+                any(globals().get(name) is not value for name in names)
+                for names, value in
+                _RETAINED_AUTHORITY_SEMANTIC_DATA_ANCHORS)
+            or any(
+                type(namespace) is not _RETAINED_AUTHORITY_DICT
+                or namespace.get(name) is not value
+                for namespace, name, value in
+                _RETAINED_AUTHORITY_TRANSITIVE_DATA_ANCHORS)
             or globals().get("_require_authority_runtime") is not
             _RETAINED_AUTHORITY_RUNTIME_GUARD
             or _RETAINED_AUTHORITY_RUNTIME_GUARD.__code__ is not
             _RETAINED_AUTHORITY_RUNTIME_GUARD_CODE
-            or vars(AuthorityEvaluator).get("evaluate") is not
+            or vars(_RETAINED_AUTHORITY_EVALUATOR_TYPE).get("evaluate") is not
             _RETAINED_AUTHORITY_EVALUATE
             or _RETAINED_AUTHORITY_EVALUATE.__code__ is not
             _RETAINED_AUTHORITY_EVALUATE_CODE
-            or vars(AuthorityEvaluator).get("evaluate_read") is not
+            or vars(_RETAINED_AUTHORITY_EVALUATOR_TYPE).get(
+                "evaluate_read") is not
             _RETAINED_AUTHORITY_EVALUATE_READ
             or _RETAINED_AUTHORITY_EVALUATE_READ.__code__ is not
             _RETAINED_AUTHORITY_EVALUATE_READ_CODE
+            or _AUTHORITY_METHOD_ANCHORS is not
+            _RETAINED_AUTHORITY_METHOD_ANCHORS
+            or _AUTHORITY_HELPER_ALIAS_ANCHORS is not
+            _RETAINED_AUTHORITY_HELPER_ALIAS_ANCHORS
             or any(
-                vars(AuthorityEvaluator).get(name) is not function
+                vars(_RETAINED_AUTHORITY_EVALUATOR_TYPE).get(name) is not
+                function
                 or function.__code__ is not code
-                for name, function, code in _AUTHORITY_METHOD_ANCHORS)
+                or not _RETAINED_AUTHORITY_CALLABLE_STATE_MATCHES(
+                    function, callable_state)
+                for name, function, code, callable_state in
+                _RETAINED_AUTHORITY_METHOD_ANCHORS)
             or any(
                 globals().get(name) is not function
-                for name, function in _AUTHORITY_HELPER_ALIAS_ANCHORS)):
-        if type(store) is Store:
-            Store._mark_transaction_integrity_violation(store)
+                for name, function in
+                _RETAINED_AUTHORITY_HELPER_ALIAS_ANCHORS)):
+        if type(store) is _RETAINED_AUTHORITY_STORE_TYPE:
+            _RETAINED_STORE_MARK_TRANSACTION_INTEGRITY_VIOLATION(store)
         raise RuntimeError("AuthorityEvaluator runtime composition changed")
     _RETAINED_STORE_REQUIRE_ACTIVE_SERIALIZED_CURSOR(store, cur)
 
