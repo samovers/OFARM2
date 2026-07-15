@@ -131,6 +131,11 @@
       "sourcePath": "kernel/tests/test_conformance.py"
     },
     {
+      "nodeid": "kernel/tests/test_m2_adapters.py::test_g2_behavioral_records_cannot_split_import_snapshot_identity",
+      "sourceModule": "kernel.tests.test_m2_adapters",
+      "sourcePath": "kernel/tests/test_m2_adapters.py"
+    },
+    {
       "nodeid": "kernel/tests/test_m2_adapters.py::test_g2_concurrent_first_structure_assertions_one_governed_winner",
       "sourceModule": "kernel.tests.test_m2_adapters",
       "sourcePath": "kernel/tests/test_m2_adapters.py"
@@ -156,6 +161,11 @@
       "sourcePath": "kernel/tests/test_m2_adapters.py"
     },
     {
+      "nodeid": "kernel/tests/test_m2_adapters.py::test_g2_nested_behavioral_snapshot_metadata_is_rejected_before_execution",
+      "sourceModule": "kernel.tests.test_m2_adapters",
+      "sourcePath": "kernel/tests/test_m2_adapters.py"
+    },
+    {
       "nodeid": "kernel/tests/test_m2_adapters.py::test_g2_output_render_serializes_under_lock",
       "sourceModule": "profile_si_ffs.tests.m2_si_output_lock_tests",
       "sourcePath": "profile_si_ffs/tests/m2_si_output_lock_tests.py"
@@ -166,7 +176,17 @@
       "sourcePath": "kernel/tests/test_m2_adapters.py"
     },
     {
+      "nodeid": "kernel/tests/test_m2_adapters.py::test_g2_post_capture_input_mutation_cannot_diverge_import_chain",
+      "sourceModule": "kernel.tests.test_m2_adapters",
+      "sourcePath": "kernel/tests/test_m2_adapters.py"
+    },
+    {
       "nodeid": "kernel/tests/test_m2_adapters.py::test_g2_single_writer_lock_is_mutually_exclusive",
+      "sourceModule": "kernel.tests.test_m2_adapters",
+      "sourcePath": "kernel/tests/test_m2_adapters.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_m2_adapters.py::test_g2_store_reference_data_snapshots_before_jsonb_and_digest",
       "sourceModule": "kernel.tests.test_m2_adapters",
       "sourcePath": "kernel/tests/test_m2_adapters.py"
     },
@@ -4031,8 +4051,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "03e5a167224fe9d4b07f06045105cdd44e5b4f386243c6a1acfc4fc6da6146ce",
-  "entryCount": 806,
+  "entriesSha256": "443059c00cfa895449f3afa6e2a396e744fb1f64a70953298b6875aaee7e11ac",
+  "entryCount": 810,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

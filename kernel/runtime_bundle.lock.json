@@ -702,7 +702,7 @@
       "logicalRef": "python:kernel/adapters.py",
       "path": "kernel/adapters.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:a1d5322e77c9bd78f085a70c8e16329925ef03ffd7e74782aa5a9abd9b6955a1",
+      "sha256": "sha256:abd5c6a3db3bc89da4f96e34e579b8d00e39d20b18aff6abdddb2146074b45b7",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
@@ -902,7 +902,7 @@
       "logicalRef": "python:kernel/store.py",
       "path": "kernel/store.py",
       "canonicalization": "EXACT_BYTES_V1",
-      "sha256": "sha256:6dfec2f13dc65e671459f5c3b2e8d17e89c0e5ecbcb48793b74213920a6932c5",
+      "sha256": "sha256:1dfdcc8e858a1aa952b0670630cb92295d96d8261f887eaf30f77493be3706ee",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {

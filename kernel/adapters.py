@@ -24,9 +24,17 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from types import FunctionType
 
+from .callable_state import capture_callable_state, callable_state_matches
 from .context import mint
-from .contracts import ContractViolation, UnknownContract, sha256_of
+from .contracts import (
+    ContractDispatchError,
+    ContractViolation,
+    UnknownContract,
+    copy_exact_json,
+    sha256_of,
+)
 from .problems import runtime_problem
 from .store import (
     Store,
@@ -35,6 +43,70 @@ from .store import (
 )
 
 _FULL_SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
+_PARSE_RESULT_FIELDS = frozenset({
+    "ok", "sourceDigest", "artifactRef", "recordCount", "error", "records",
+})
+_RETAINED_EXACT_JSON_COPY = copy_exact_json
+_RETAINED_EXACT_JSON_COPY_CODE = copy_exact_json.__code__
+_RETAINED_EXACT_JSON_COPY_STATE = capture_callable_state(copy_exact_json)
+
+
+def _capture_import_input(
+        parse_result: ParseResult, snapshot_meta: dict,
+        data_family: str | None,
+        _copy=_RETAINED_EXACT_JSON_COPY,
+        _copy_code=_RETAINED_EXACT_JSON_COPY_CODE,
+        _copy_state=_RETAINED_EXACT_JSON_COPY_STATE,
+        _state_matches=callable_state_matches,
+        _getattribute=object.__getattribute__,
+) -> dict:
+    """Capture one private exact-JSON import envelope before any derivation."""
+    if (type(_copy) is not FunctionType
+            or _copy.__code__ is not _copy_code
+            or not _state_matches(_copy, _copy_state)):
+        raise ContractDispatchError("retained import snapshot helper changed")
+    parse_fields = _getattribute(parse_result, "__dict__")
+    if type(parse_fields) is not dict:
+        raise RuntimeError("ParseResult storage identity is not exact")
+    captured = _copy({
+        "parseResult": parse_fields,
+        "snapshotMeta": snapshot_meta,
+        "dataFamily": data_family,
+    })
+    if (type(_copy) is not FunctionType
+            or _copy.__code__ is not _copy_code
+            or not _state_matches(_copy, _copy_state)):
+        raise ContractDispatchError("retained import snapshot helper changed")
+    parsed = captured["parseResult"]
+    if set(parsed) != _PARSE_RESULT_FIELDS:
+        raise RuntimeError("ParseResult field identity is not exact")
+    if (type(parsed["ok"]) is not bool
+            or (parsed["sourceDigest"] is not None
+                and type(parsed["sourceDigest"]) is not str)
+            or (parsed["artifactRef"] is not None
+                and type(parsed["artifactRef"]) is not str)
+            or (parsed["recordCount"] is not None
+                and type(parsed["recordCount"]) is not int)
+            or (parsed["error"] is not None
+                and type(parsed["error"]) is not str)
+            or (captured["dataFamily"] is not None
+                and type(captured["dataFamily"]) is not str)):
+        raise ContractViolation(
+            "ImportRunner fields must use exact built-in JSON primitives")
+    return captured
+
+
+_RETAINED_CAPTURE_IMPORT_INPUT = _capture_import_input
+_RETAINED_CAPTURE_IMPORT_INPUT_CODE = _capture_import_input.__code__
+_RETAINED_CAPTURE_IMPORT_INPUT_STATE = capture_callable_state(
+    _capture_import_input)
+_RETAINED_SHA256_OF = sha256_of
+_RETAINED_SHA256_OF_CODE = sha256_of.__code__
+_RETAINED_SHA256_OF_STATE = capture_callable_state(sha256_of)
+_RETAINED_VALIDATE_CONTRACT = _VALIDATE_CONTRACT
+_RETAINED_VALIDATE_CONTRACT_CODE = _VALIDATE_CONTRACT.__code__
+_RETAINED_VALIDATE_CONTRACT_STATE = capture_callable_state(
+    _VALIDATE_CONTRACT)
 
 
 @dataclass
@@ -59,9 +131,31 @@ class ImportRunner:
     def __init__(self, store):
         self.store = store
 
-    def _assert_runtime_composition(self) -> None:
+    def _assert_runtime_composition(self) -> tuple[FunctionType, ...]:
+        capture_input = _RETAINED_CAPTURE_IMPORT_INPUT
+        digest = _RETAINED_SHA256_OF
+        validate_contract = _RETAINED_VALIDATE_CONTRACT
         if (type(self) is not ImportRunner
                 or type(self.store) is not Store
+                or capture_input is not _capture_import_input
+                or type(capture_input) is not FunctionType
+                or capture_input.__code__ is not
+                _RETAINED_CAPTURE_IMPORT_INPUT_CODE
+                or not callable_state_matches(
+                    capture_input,
+                    _RETAINED_CAPTURE_IMPORT_INPUT_STATE)
+                or digest is not sha256_of
+                or type(digest) is not FunctionType
+                or digest.__code__ is not _RETAINED_SHA256_OF_CODE
+                or not callable_state_matches(
+                    digest, _RETAINED_SHA256_OF_STATE)
+                or validate_contract is not _VALIDATE_CONTRACT
+                or type(validate_contract) is not FunctionType
+                or validate_contract.__code__ is not
+                _RETAINED_VALIDATE_CONTRACT_CODE
+                or not callable_state_matches(
+                    validate_contract,
+                    _RETAINED_VALIDATE_CONTRACT_STATE)
                 or any(callable(getattr(ImportRunner, name, None))
                        for name in vars(self))):
             if type(self.store) is Store:
@@ -70,6 +164,7 @@ class ImportRunner:
                 "ImportRunner runtime composition changed after construction")
         Store._require_runtime_dispatch_integrity(self.store)
         Store._require_transaction_python_posture(self.store)
+        return capture_input, digest, validate_contract
 
     def _refuse(self, request_id: str, snapshot_id: str | None, reason_code: str,
                 title: str, detail: str, *, remediation: str | None = None) -> dict:
@@ -85,7 +180,6 @@ class ImportRunner:
     def run_import(
             self, parse_result: ParseResult, snapshot_meta: dict,
             *, data_family: str | None = None,
-            _validate_contract=_VALIDATE_CONTRACT,
     ) -> dict:
         """Import a parsed reference source as a dated `ReferenceSnapshot`.
 
@@ -100,17 +194,30 @@ class ImportRunner:
         later resolve the imported snapshot's content from the store. Generic:
         `records`/`data_family` are opaque here; no scheme literals (M2 P1).
         """
-        ImportRunner._assert_runtime_composition(self)
+        capture_input, digest, validate_contract = \
+            ImportRunner._assert_runtime_composition(self)
         if type(parse_result) is not ParseResult or type(snapshot_meta) is not dict:
             raise RuntimeError("ImportRunner input identity is not exact")
+        captured = capture_input(
+            parse_result, snapshot_meta, data_family)
+        ImportRunner._assert_runtime_composition(self)
+        parsed = captured["parseResult"]
+        parse_ok = parsed["ok"]
+        source_digest = parsed["sourceDigest"]
+        artifact_ref = parsed["artifactRef"]
+        record_count = parsed["recordCount"]
+        parse_error = parsed["error"]
+        records = parsed["records"]
+        snapshot_meta = captured["snapshotMeta"]
+        data_family = captured["dataFamily"]
         request_id = mint("import")
         snapshot_id = snapshot_meta.get("referenceSnapshotId")
 
         # 1. a failed / partial parse imports nothing
-        if not parse_result.ok or not parse_result.sourceDigest:
+        if not parse_ok or not source_digest:
             return {**ImportRunner._refuse(self,
                 request_id, snapshot_id, "SOURCE_FIDELITY_LOSS", "Import parse failed",
-                parse_result.error or "the parser did not produce a complete, "
+                parse_error or "the parser did not produce a complete, "
                 "digestible source; no snapshot was written",
                 remediation="fix the source/parse and re-run; the prior in-force "
                 "snapshot remains current"), "disposition": "PARSE_FAILED"}
@@ -150,26 +257,27 @@ class ImportRunner:
         # source digest is acceptable only when it is a full SHA-256 of those
         # exact retained bytes. An `artifact:` ref without supplied/retained raw
         # bytes would be provenance theatre and would poison the next bundle.
+        records_digest = (
+            digest(records) if records is not None else None)
         metadata_artifact_refs = [
             ref for ref in snapshot_meta.get("sourceArtifactRefs", [])
             if isinstance(ref, str) and ref.startswith("artifact:")
         ]
-        expected_digest_ref = f"digest:{parse_result.sourceDigest}"
+        expected_digest_ref = f"digest:{source_digest}"
         metadata_digest_refs = [
             ref for ref in snapshot_meta.get("sourceArtifactRefs", [])
             if isinstance(ref, str) and ref.startswith("digest:")
         ]
-        if (not _FULL_SHA256.fullmatch(parse_result.sourceDigest)
-                or (parse_result.artifactRef is not None
-                    and (not isinstance(parse_result.artifactRef, str)
-                         or not parse_result.artifactRef
-                         or parse_result.artifactRef.startswith(
+        if (not _FULL_SHA256.fullmatch(source_digest)
+                or (artifact_ref is not None
+                    and (not artifact_ref
+                         or artifact_ref.startswith(
                              ("artifact:", "digest:"))))
                 or metadata_artifact_refs
                 or any(ref != expected_digest_ref for ref in metadata_digest_refs)
                 or not data_family
-                or parse_result.records is None
-                or sha256_of(parse_result.records) != parse_result.sourceDigest):
+                or records is None
+                or records_digest != source_digest):
             return {**ImportRunner._refuse(self,
                 request_id, snapshot_id, "SOURCE_FIDELITY_LOSS",
                 "Import source bytes are not retained",
@@ -184,9 +292,9 @@ class ImportRunner:
         snapshot = dict(snapshot_meta)
         snapshot["schemaVersion"] = "ofarm.referencesnapshot.v0.1"
         refs = list(snapshot.get("sourceArtifactRefs", []))
-        digest_ref = f"digest:{parse_result.sourceDigest}"
-        if parse_result.artifactRef and parse_result.artifactRef not in refs:
-            refs.insert(0, parse_result.artifactRef)
+        digest_ref = f"digest:{source_digest}"
+        if artifact_ref and artifact_ref not in refs:
+            refs.insert(0, artifact_ref)
         if digest_ref not in refs:
             refs.append(digest_ref)
         snapshot["sourceArtifactRefs"] = refs
@@ -194,7 +302,7 @@ class ImportRunner:
         # 3. a malformed import record is a governed refusal, never a late
         #    ContractViolation that aborts the transaction ungoverned
         try:
-            _validate_contract(self.store, snapshot)
+            validate_contract(self.store, snapshot)
         except (ContractViolation, UnknownContract) as exc:
             return {**ImportRunner._refuse(self,
                 request_id, snapshot_id, "SOURCE_FIDELITY_LOSS", "Import record malformed",
@@ -207,14 +315,15 @@ class ImportRunner:
             if existing is not None:
                 snapshot_contract = self.store.registry.get(
                     "ofarm.referencesnapshot.v0.1")
-                expected_snapshot_digest = sha256_of(snapshot)
+                expected_snapshot_digest = digest(snapshot)
                 exact_snapshot = (
                     existing["record_kind"] == "ofarm.referencesnapshot.v0.1"
                     and existing["tenant_ref"] ==
                     self.store.runtime_bundle.tenant_ref
                     and existing["schema_hash"] == snapshot_contract.schema_hash
                     and existing["payload_sha256"] == expected_snapshot_digest
-                    and sha256_of(existing["payload"]) == expected_snapshot_digest
+                    and digest(existing["payload"]) ==
+                    expected_snapshot_digest
                     and existing["payload"] == snapshot
                 )
                 if exact_snapshot:
@@ -235,12 +344,12 @@ class ImportRunner:
                     data_row = next((row for row in data_rows
                                      if row["data_family"] == data_family), None)
                     expected_data = (
-                        parse_result.artifactRef,
-                        parse_result.sourceDigest,
+                        artifact_ref,
+                        source_digest,
                         snapshot.get("canonicalVersionLabel"),
-                        parse_result.recordCount,
-                        parse_result.records,
-                        sha256_of(parse_result.records),
+                        record_count,
+                        records,
+                        records_digest,
                     )
                     if any(row["data_family"] != data_family for row in data_rows):
                         problem = runtime_problem(
@@ -258,11 +367,11 @@ class ImportRunner:
                         }
                     if data_row is None:
                         self.store.insert_reference_data(
-                            cur, snapshot_id, data_family, parse_result.records,
-                            artifact_ref=parse_result.artifactRef,
-                            source_digest=parse_result.sourceDigest,
+                            cur, snapshot_id, data_family, records,
+                            artifact_ref=artifact_ref,
+                            source_digest=source_digest,
                             parser_label=snapshot.get("canonicalVersionLabel"),
-                            record_count=parse_result.recordCount)
+                            record_count=record_count)
                     else:
                         actual_data = (
                             data_row["artifact_ref"], data_row["source_digest"],
@@ -316,19 +425,19 @@ class ImportRunner:
             # scheme reader can resolve this snapshot's content from the store;
             # same serialized transaction as the snapshot + gate-log (M2 P1).
             # Opaque here — `records` and `data_family` are passed through.
-            if data_family and parse_result.records is not None:
+            if data_family and records is not None:
                 self.store.insert_reference_data(
-                    cur, snapshot_id, data_family, parse_result.records,
-                    artifact_ref=parse_result.artifactRef,
-                    source_digest=parse_result.sourceDigest,
+                    cur, snapshot_id, data_family, records,
+                    artifact_ref=artifact_ref,
+                    source_digest=source_digest,
                     parser_label=snapshot.get("canonicalVersionLabel"),
-                    record_count=parse_result.recordCount)
+                    record_count=record_count)
             self.store.log_gate(
                 cur, request_id, self.GATE, "IMPORTED",
                 rationale=f"{snapshot.get('referenceClass')} snapshot effective "
                           f"{snapshot.get('effectiveFrom')}"
-                          + (f"; {parse_result.recordCount} records"
-                             if parse_result.recordCount is not None else ""),
+                          + (f"; {record_count} records"
+                             if record_count is not None else ""),
                 related_refs=[snapshot_id, digest_ref])
         return {"imported": True, "snapshotRef": snapshot_id,
                 "disposition": "IMPORTED", "problem": None}

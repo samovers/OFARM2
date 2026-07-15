@@ -71,6 +71,9 @@ _RETAINED_EXACT_JSON_COPY = copy_exact_json
 _RETAINED_EXACT_JSON_COPY_CODE = copy_exact_json.__code__
 _RETAINED_EXACT_JSON_COPY_STATE = capture_callable_state(
     _RETAINED_EXACT_JSON_COPY)
+_RETAINED_SHA256_OF = sha256_of
+_RETAINED_SHA256_OF_CODE = sha256_of.__code__
+_RETAINED_SHA256_OF_STATE = capture_callable_state(_RETAINED_SHA256_OF)
 _RETAINED_CONTRACT_SEMANTIC_PROOF = \
     require_contract_validation_decision_semantics
 _RETAINED_CONTRACT_SEMANTIC_PROOF_CODE = \
@@ -83,6 +86,45 @@ _RETAINED_CONTRACT_SEMANTIC_CAPTURE_CODE = \
     capture_contract_validation_decision_semantics.__code__
 _RETAINED_CONTRACT_SEMANTIC_CAPTURE_STATE = capture_callable_state(
     _RETAINED_CONTRACT_SEMANTIC_CAPTURE)
+
+
+def _snapshot_reference_data_payload(
+        payload,
+        _contracts_module=contracts_module,
+        _snapshot=_RETAINED_EXACT_JSON_COPY,
+        _snapshot_code=_RETAINED_EXACT_JSON_COPY_CODE,
+        _snapshot_state=_RETAINED_EXACT_JSON_COPY_STATE,
+        _digest=_RETAINED_SHA256_OF,
+        _digest_code=_RETAINED_SHA256_OF_CODE,
+        _digest_state=_RETAINED_SHA256_OF_STATE,
+        _state_matches=callable_state_matches,
+) -> tuple[object, str]:
+    """Capture and digest retained data through pinned exact callables."""
+    def require() -> None:
+        if (vars(_contracts_module).get("copy_exact_json") is not _snapshot
+                or type(_snapshot) is not types.FunctionType
+                or _snapshot.__code__ is not _snapshot_code
+                or not _state_matches(_snapshot, _snapshot_state)
+                or vars(_contracts_module).get("sha256_of") is not _digest
+                or type(_digest) is not types.FunctionType
+                or _digest.__code__ is not _digest_code
+                or not _state_matches(_digest, _digest_state)):
+            raise ContractDispatchError(
+                "retained reference-data snapshot helper changed")
+
+    require()
+    payload_snapshot = _snapshot(payload)
+    require()
+    payload_digest = _digest(payload_snapshot)
+    require()
+    return payload_snapshot, payload_digest
+
+
+_RETAINED_REFERENCE_DATA_SNAPSHOT = _snapshot_reference_data_payload
+_RETAINED_REFERENCE_DATA_SNAPSHOT_CODE = \
+    _snapshot_reference_data_payload.__code__
+_RETAINED_REFERENCE_DATA_SNAPSHOT_STATE = capture_callable_state(
+    _RETAINED_REFERENCE_DATA_SNAPSHOT)
 
 
 def _detached_psycopg_adapter_context(template: AdaptersMap) -> AdaptersMap:
@@ -2287,6 +2329,26 @@ class Store:
         imported snapshot's content from the store. The payload is opaque here;
         one row per (snapshot_ref, data_family)."""
         Store._require_active_governed_cursor(self, cur)
+        try:
+            snapshot_helper = _RETAINED_REFERENCE_DATA_SNAPSHOT
+            if (snapshot_helper is not _snapshot_reference_data_payload
+                    or type(snapshot_helper) is not
+                    types.FunctionType
+                    or snapshot_helper.__code__ is not
+                    _RETAINED_REFERENCE_DATA_SNAPSHOT_CODE
+                    or not callable_state_matches(
+                        snapshot_helper,
+                        _RETAINED_REFERENCE_DATA_SNAPSHOT_STATE)):
+                raise ContractDispatchError(
+                    "retained reference-data snapshot helper changed")
+            payload_snapshot, payload_digest = \
+                snapshot_helper(payload)
+        except ContractDispatchError:
+            Store._mark_transaction_integrity_violation(self)
+            raise
+        if type(source_digest) is not str or source_digest != payload_digest:
+            raise ContractViolation(
+                "reference-data source digest must match captured payload")
         _RETAINED_GOVERNED_CURSOR_EXECUTE_MUTATION(cur,
             """
             INSERT INTO reference_snapshot_data
@@ -2296,7 +2358,7 @@ class Store:
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (snapshot_ref, data_family, artifact_ref, source_digest, parser_label,
-             record_count, Jsonb(payload), sha256_of(payload),
+             record_count, Jsonb(payload_snapshot), payload_digest,
              self._bundle_digest(runtime_bundle_digest)),
         )
 
