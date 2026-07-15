@@ -4774,7 +4774,8 @@ def test_reached_kernel_object_class_behavior_changes_semantic_receipt():
         assert policy.ABSENT is identity
         assert not policy.ABSENT
         with pytest.raises(
-                RuntimeBundleError, match=r"kernel\.policy\.ABSENT"):
+                RuntimeBundleError,
+                match=r"decision semantic state changed after activation"):
             _require_decision_semantics(selected)
         changed_digests.append(
             observed_decision_semantics_component(
