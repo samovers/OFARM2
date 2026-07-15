@@ -1891,6 +1891,11 @@
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_forged_exact_route_resolution_is_rejected_and_rolls_back",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_gate_pipeline_default_missing_farm_ref_still_fails_before_route",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
@@ -2372,6 +2377,21 @@
     },
     {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_pipeline_rejects_same_digest_different_route",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_model_descriptors_cannot_change_bound_profile",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_resolver_swap_cannot_bypass_effective_time_and_rolls_back",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_wrapper_swap_cannot_skip_retained_resolution_and_rolls_back",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
@@ -3016,6 +3036,11 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_evidence_policy_swap_is_rejected_at_point_of_use_and_rolls_back",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_existing_incomplete_bundle_receipt_is_never_repaired",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
@@ -3231,6 +3256,11 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_policy_data_descriptor_cannot_weaken_evidence_floor_and_rolls_back",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_preselection_method_mutation_changes_semantic_receipt",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
@@ -3322,6 +3352,21 @@
     },
     {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_retained_psycopg_adapters_survive_lazy_connection_resolution",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_review_rejection_emitter_ctx_descriptor_cannot_promote",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_review_rejection_emitter_dunder_swap_cannot_promote_and_rolls_back",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_review_rejection_emitter_swap_cannot_promote_and_rolls_back",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
@@ -3856,6 +3901,11 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_validation_policy_swap_is_rejected_at_point_of_use_and_rolls_back",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_image_manifest.py::test_committed_runtime_image_manifest_passes_runtime_validation",
       "sourceModule": "kernel.tests.test_runtime_image_manifest",
       "sourcePath": "kernel/tests/test_runtime_image_manifest.py"
@@ -4061,8 +4111,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "e4b3271c43374e8c6bf6edd749da7a07cfc68ac99d52ec14ecb48695bde2e64e",
-  "entryCount": 812,
+  "entriesSha256": "fbee0f6d86ca67998e6a387c74fb5c6e501e737e5e3b6af8188693833be8a703",
+  "entryCount": 822,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
