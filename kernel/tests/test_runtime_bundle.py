@@ -1110,7 +1110,12 @@ def test_runtime_environment_seal_integrity_rejects_mutable_receipt_state():
         object.__setattr__(seal, "decision_semantics", original_semantics)
     _require_runtime_environment_seal_integrity(bundle, seal)
 
-    object.__setattr__(seal, "decision_semantics", original_semantics[1:])
+    focused_semantic = seal.contract_validation_decision_semantics[0]
+    missing_focused_semantics = tuple(
+        entry for entry in original_semantics
+        if entry is not focused_semantic)
+    object.__setattr__(
+        seal, "decision_semantics", missing_focused_semantics)
     try:
         with pytest.raises(
                 RuntimeBundleError,
