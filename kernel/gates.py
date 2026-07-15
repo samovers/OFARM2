@@ -462,14 +462,15 @@ def _authenticated_profile_route(
         if len(selected_candidates) != 1:
             integrity("resolved profile candidate identity is not retained")
         candidate = selected_candidates[0]
-        descriptor = _field(candidate, "descriptor")
         bundle_descriptor = _field(runtime_bundle, "descriptor")
         if (dict.__getitem__(selected_candidate_document, "enabled") is not True
-                or descriptor is not bundle_descriptor
-                or descriptor is not active_profile
+                or type(bundle_descriptor) is not _model_bindings[0][1]
+                or bundle_descriptor is not active_profile
+                or not descriptor_matches_document(
+                    bundle_descriptor, selected_candidate_document)
                 or any(
                     _field(route, route_field) !=
-                    _field(descriptor, descriptor_field)
+                    _field(bundle_descriptor, descriptor_field)
                     for route_field, descriptor_field in (
                         ("profile_ref", "profile_ref"),
                         ("pack_ref", "pack_ref"),
@@ -477,7 +478,7 @@ def _authenticated_profile_route(
                         ("active_artifact_set_ref", "active_artifact_set_ref"),
                     ))):
             integrity("resolved profile descriptor differs from retained runtime")
-        return route, candidate, descriptor
+        return route, candidate, bundle_descriptor
     except RuntimeBundleError:
         raise
     except ProfileRuntimeError:

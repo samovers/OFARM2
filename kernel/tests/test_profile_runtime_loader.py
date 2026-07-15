@@ -2365,6 +2365,13 @@ def test_route_backed_gate_pipeline_uses_descriptor_backed_policy_paths(
 def test_route_backed_handoff_binds_materializer_to_resolved_descriptor(fresh_store):
     store = fresh_store
     pipeline = _route_pipeline(store)
+    candidate_descriptor = next(
+        candidate.descriptor
+        for candidate in pipeline.profile_route_registry.descriptor_candidates
+        if candidate.package_name == "profile_si_ffs"
+    )
+    assert candidate_descriptor == pipeline.active_profile
+    assert candidate_descriptor is not pipeline.active_profile
     sub = demo.spray_submission(
         f"mp7-route-bind:{_uid()}",
         erp_id=f"erp:mp7.route.bind.{_uid()}",
@@ -2377,12 +2384,12 @@ def test_route_backed_handoff_binds_materializer_to_resolved_descriptor(fresh_st
         assert not hasattr(ingress, "result")
         assert pipeline._resolve_profile_route(ctx) is None
 
-    assert ctx.profile_route_resolution.descriptor == config.ACTIVE_PROFILE
-    assert ctx.active_profile == ctx.profile_route_resolution.descriptor
-    assert ctx.materializer.active_profile == ctx.profile_route_resolution.descriptor
-    assert ctx.materializer.context.active_profile == ctx.profile_route_resolution.descriptor
-    assert ctx.context_assembler.active_profile == ctx.profile_route_resolution.descriptor
-    assert ctx.policy_provider.descriptor == ctx.profile_route_resolution.descriptor
+    assert ctx.profile_route_resolution.descriptor is pipeline.runtime_bundle.descriptor
+    assert ctx.active_profile is ctx.profile_route_resolution.descriptor
+    assert ctx.materializer.active_profile is ctx.profile_route_resolution.descriptor
+    assert ctx.materializer.context.active_profile is ctx.profile_route_resolution.descriptor
+    assert ctx.context_assembler.active_profile is ctx.profile_route_resolution.descriptor
+    assert ctx.policy_provider.descriptor is ctx.profile_route_resolution.descriptor
     assert ctx.si_reference_bindings.regsr_shipped_snapshot_ref == \
         context.SI_REFERENCE_BINDINGS.regsr_shipped_snapshot_ref
 
@@ -2545,6 +2552,7 @@ def test_forged_exact_route_resolution_is_rejected_and_rolls_back(fresh_store):
             )
             forged = replace(
                 genuine,
+                descriptor=pipeline.runtime_bundle.descriptor,
                 effective_time=datetime(2026, 5, 15, tzinfo=timezone.utc),
             )
 
