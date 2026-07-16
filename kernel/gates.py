@@ -34,7 +34,7 @@ from .contracts import sha256_of
 from .emission import PromotionTraceWriter, ReplayWriter
 from .materializer import Materializer
 from .problems import runtime_problem
-from .profile_runtime import (ProfileRuntimeError, resolve_active_descriptor,
+from .profile_runtime import (ProfileRuntimeError, resolve_bound_descriptor,
                               resolve_profile_route)
 from .stages import (AuthorityGate, EnvelopePersist, EvidenceSufficiencyGate,
                      GateContext, GateRefusal, GateReplay, IngressNormalizer,
@@ -60,7 +60,6 @@ class GatePipeline:
     def __init__(
         self,
         store,
-        product_register: ProductRegister | None = None,
         *,
         active_descriptor=None,
         active_profile=None,
@@ -82,18 +81,19 @@ class GatePipeline:
                 "route-backed GatePipeline requires profile_route_records, "
                 "profile_route_registry, selected_profile_package_names, and "
                 "tenant_ref")
+        if self.route_backed and tenant_ref != store.tenant_ref:
+            raise ProfileRuntimeError(
+                "route-backed GatePipeline tenant_ref must match Store tenant_ref")
         self.profile_route_records = profile_route_records
         self.profile_route_registry = profile_route_registry
         self.selected_profile_package_names = selected_profile_package_names
         self.tenant_ref = tenant_ref
-        if (active_descriptor is not None and active_profile is not None
-                and active_descriptor != active_profile):
-            raise ProfileRuntimeError(
-                "active_descriptor and active_profile refer to different descriptors")
-        self.active_profile = resolve_active_descriptor(
-            active_descriptor if active_descriptor is not None else active_profile,
-            allow_config_default=True,
+        self.active_profile = resolve_bound_descriptor(
+            store,
+            active_descriptor=active_descriptor,
+            active_profile=active_profile,
         )
+        self.runtime_bundle = store.runtime_bundle
         self.policy_provider = profile_policy.DescriptorPolicyProvider(
             self.active_profile)
         self.si_reference_bindings = SIReferenceBindings.from_descriptor(
@@ -102,7 +102,7 @@ class GatePipeline:
         self.authority = AuthorityEvaluator(store)
         self.context = ContextAssembler(store, active_descriptor=self.active_profile)
         self.materializer = Materializer(store, active_descriptor=self.active_profile)
-        self.products = product_register or ProductRegister(self.si_reference_bindings)
+        self.products = ProductRegister(self.si_reference_bindings)
         self.products.load_from_store(store)
 
     # ======================================================================
@@ -211,20 +211,17 @@ class GatePipeline:
         return parsed
 
     def _bind_route_resolution(self, ctx: GateContext, resolution) -> None:
-        descriptor = resolution.descriptor
-        bindings = SIReferenceBindings.from_descriptor(descriptor)
-        products = ProductRegister(bindings)
-        products.load_from_store(ctx.store)
+        descriptor = resolve_bound_descriptor(
+            ctx.store,
+            active_descriptor=resolution.descriptor,
+        )
         ctx.profile_route_resolution = resolution
         ctx.active_profile = descriptor
-        ctx.policy_provider = profile_policy.DescriptorPolicyProvider(descriptor)
-        ctx.context_assembler = ContextAssembler(
-            ctx.store,
-            active_descriptor=descriptor,
-        )
-        ctx.materializer = Materializer(ctx.store, active_descriptor=descriptor)
-        ctx.products = products
-        ctx.si_reference_bindings = bindings
+        ctx.policy_provider = self.policy_provider
+        ctx.context_assembler = self.context
+        ctx.materializer = self.materializer
+        ctx.products = self.products
+        ctx.si_reference_bindings = self.si_reference_bindings
 
     def _resolve_profile_route(self, ctx: GateContext):
         try:
@@ -238,6 +235,7 @@ class GatePipeline:
                 farm_ref=farm_ref,
                 effective_time=effective_time,
             )
+            self._bind_route_resolution(ctx, resolution)
         except ProfileRuntimeError as exc:
             ctx.log("PACK_PROFILE_APPLICABILITY", "PROFILE_ROUTE_REFUSE",
                     reason_code="PROFILE_NOT_ACTIVE",
@@ -252,7 +250,6 @@ class GatePipeline:
                     suggested_remediation="restore an explicit active "
                     "tenant/farm profile route before resubmitting")])
         ctx.farm_ref = farm_ref
-        self._bind_route_resolution(ctx, resolution)
         ctx.log("PACK_PROFILE_APPLICABILITY", "PROFILE_ROUTE_PASS",
                 rationale="PROFILE_ROUTE: resolved active profile route",
                 refs=[resolution.route.route_id, resolution.descriptor.profile_ref])

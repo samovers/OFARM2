@@ -41,6 +41,32 @@ def _validation_policy_refusal(ctx: GateContext, detail) -> GateRefusal:
         "the claim stays a draft (fail closed)"))
 
 
+def _review_record_or_refusal(
+    ctx: GateContext,
+    record_ref: str,
+    expected_kind: str,
+) -> tuple[dict | None, GateRefusal | None]:
+    """Resolve review inputs inside the active tenant without an existence oracle."""
+    row = ctx.store.get_record(record_ref)
+    if row is not None and row["record_kind"] == expected_kind:
+        return row, None
+    return None, _refusal(ctx, "FAIL_REFERENCE_RESOLUTION", runtime_problem(
+        "EVIDENCE_REFERENCE_UNAVAILABLE", "Review reference unavailable",
+        f"{record_ref} is not available to this review"))
+
+
+def _review_evidence_refusal(ctx: GateContext) -> GateRefusal | None:
+    for evidence_ref in ctx.sub.get("reviewEvidenceRefs") or []:
+        _, refusal = _review_record_or_refusal(
+            ctx,
+            evidence_ref,
+            "ofarm.evidencerecord.v0.1",
+        )
+        if refusal is not None:
+            return refusal
+    return None
+
+
 def _validation_policy_or_refusal(
     ctx: GateContext,
     validation_policy=_CONFIG_BACKED_POLICY,
@@ -336,11 +362,24 @@ class GovernanceAcceptanceValidator:
             return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
                 "EVIDENCE_INSUFFICIENT", "Acceptance without target",
                 "a governance-decision commit requires reviewTargetAssertionRef"))
-        row = ctx.store.get_record(target_ref)
-        if row is None or row["record_kind"] != "ofarm.assertionrecord.v0.1":
-            return _refusal(ctx, "FAIL_REFERENCE_RESOLUTION", runtime_problem(
-                "EVIDENCE_REFERENCE_UNAVAILABLE", "Acceptance target unresolved",
-                f"{target_ref} does not resolve to a stored AssertionRecord"))
+        row, refusal = _review_record_or_refusal(
+            ctx,
+            target_ref,
+            "ofarm.assertionrecord.v0.1",
+        )
+        if refusal is not None:
+            return refusal
+        if not is_reject and (
+            row["runtime_bundle_digest"] != ctx.store.runtime_bundle_digest
+        ):
+            return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
+                "PACK_CONFLICT", "Cross-bundle acceptance refused",
+                f"{target_ref} was evaluated under bundle "
+                f"{row['runtime_bundle_digest']}, while this process is bound to "
+                f"{ctx.store.runtime_bundle_digest}; resubmit the claim for a new "
+                "evaluation under the active bundle rather than promoting prepared "
+                "state across runtimes",
+                related_refs=[target_ref]))
         target = row["payload"]
         ctx.acceptance_payload = target   # fetched once; later stages reuse it
         if {"scopeType": "FARM", "scopeRef": ctx.farm_ref} \
@@ -421,13 +460,9 @@ class GovernanceAcceptanceValidator:
             return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
                 "EVIDENCE_INSUFFICIENT", "Review decision without rationale",
                 "a review decision must state its rationale"))
-        for ref in ctx.sub.get("reviewEvidenceRefs") or []:
-            ev_row = ctx.store.get_record(ref)
-            if ev_row is None or ev_row["record_kind"] != "ofarm.evidencerecord.v0.1":
-                return _refusal(ctx, "FAIL_REFERENCE_RESOLUTION", runtime_problem(
-                    "EVIDENCE_REFERENCE_UNAVAILABLE", "Review evidence unresolved",
-                    f"review evidence {ref} does not resolve to a durable "
-                    "EvidenceRecord"))
+        evidence_refusal = _review_evidence_refusal(ctx)
+        if evidence_refusal is not None:
+            return evidence_refusal
         ctx.log("VALIDATION", "PASS")
         return None
 
@@ -441,11 +476,13 @@ class GovernanceAcceptanceValidator:
             return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
                 "EVIDENCE_INSUFFICIENT", "Contest without target",
                 "a contest requires reviewTargetConsequenceRef"))
-        row = ctx.store.get_record(target_ref)
-        if row is None or row["record_kind"] != "ofarm.acceptedeventconsequence.v0.1":
-            return _refusal(ctx, "FAIL_REFERENCE_RESOLUTION", runtime_problem(
-                "EVIDENCE_REFERENCE_UNAVAILABLE", "Contest target unresolved",
-                f"{target_ref} does not resolve to a stored AcceptedEventConsequence"))
+        row, refusal = _review_record_or_refusal(
+            ctx,
+            target_ref,
+            "ofarm.acceptedeventconsequence.v0.1",
+        )
+        if refusal is not None:
+            return refusal
         conseq = row["payload"]
         ctx.acceptance_payload = conseq   # fetched once; emission reuses it
         if {"scopeType": "FARM", "scopeRef": ctx.farm_ref} not in conseq["anchorScopes"]:
@@ -466,12 +503,9 @@ class GovernanceAcceptanceValidator:
             return _refusal(ctx, "FAIL_SEMANTIC", runtime_problem(
                 "EVIDENCE_INSUFFICIENT", "Contest without rationale",
                 "a contest must state its dispute rationale"))
-        for ref in ctx.sub.get("reviewEvidenceRefs") or []:
-            ev_row = ctx.store.get_record(ref)
-            if ev_row is None or ev_row["record_kind"] != "ofarm.evidencerecord.v0.1":
-                return _refusal(ctx, "FAIL_REFERENCE_RESOLUTION", runtime_problem(
-                    "EVIDENCE_REFERENCE_UNAVAILABLE", "Contest evidence unresolved",
-                    f"contest evidence {ref} does not resolve to a durable EvidenceRecord"))
+        evidence_refusal = _review_evidence_refusal(ctx)
+        if evidence_refusal is not None:
+            return evidence_refusal
         ctx.log("VALIDATION", "PASS")
         return None
 

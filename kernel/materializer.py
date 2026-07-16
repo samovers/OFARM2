@@ -23,7 +23,7 @@ from . import config, policy
 from .context import (ContextAssembler, ContextNotReconstructible,
                       mint as _mint, now_iso, parse_ts)
 from .contracts import canonical_json
-from .profile_runtime import ProfileRuntimeError, resolve_active_descriptor
+from .profile_runtime import resolve_bound_descriptor
 from psycopg.types.json import Jsonb
 
 MATERIALIZATION_POLICY_REF = "policy:si.ffs.materialization.v0_1"
@@ -56,21 +56,23 @@ RUNTIME_VERSION = config.RUNTIME_VERSION
 _USE_CLASS_MAP = policy.USE_CLASS_TO_CANONICAL
 
 
-def _digest12(obj) -> str:
-    return hashlib.sha256(canonical_json(obj).encode()).hexdigest()[:12]
+class MaterializationIdentityError(RuntimeError):
+    """A content-addressed materialization key was reused unequally."""
+
+
+def _digest(obj) -> str:
+    return hashlib.sha256(canonical_json(obj).encode()).hexdigest()
 
 
 class Materializer:
     def __init__(self, store, *, active_descriptor=None, active_profile=None):
         self.store = store
-        if (active_descriptor is not None and active_profile is not None
-                and active_descriptor != active_profile):
-            raise ProfileRuntimeError(
-                "active_descriptor and active_profile refer to different descriptors")
-        self.active_profile = resolve_active_descriptor(
-            active_descriptor if active_descriptor is not None else active_profile,
-            allow_config_default=True,
+        self.active_profile = resolve_bound_descriptor(
+            store,
+            active_descriptor=active_descriptor,
+            active_profile=active_profile,
         )
+        self.runtime_bundle = store.runtime_bundle
         self.context = ContextAssembler(store, active_descriptor=self.active_profile)
 
     # ------------------------------------------------------------------ key --
@@ -79,7 +81,8 @@ class Materializer:
                   time_policy: dict, context_snapshot_ref: str,
                   result_shape_family: str = RESULT_SHAPE_FAMILY) -> dict:
         key_core = {
-            "deploymentScope": {"scopeType": "TENANT", "scopeRef": config.TENANT_REF},
+            "deploymentScope": {
+                "scopeType": "TENANT", "scopeRef": self.store.tenant_ref},
             "twin": twin,
             "anchorScopes": [{"scopeType": "FARM", "scopeRef": farm_ref}],
             "evaluationTimePolicy": time_policy,
@@ -89,7 +92,11 @@ class Materializer:
             "resultShapeFamily": result_shape_family,
             "policyVersionRef": MATERIALIZATION_POLICY_REF,
         }
-        key_id = f"matkey:{_digest12(key_core)}"
+        key_identity = {
+            **key_core,
+            "runtimeBundleDigest": self.runtime_bundle.digest,
+        }
+        key_id = f"matkey:{_digest(key_identity)}"
         return {
             "schemaVersion": "ofarm.explainableCurrentStateEvidence.materializationKey.v0.1-draft",
             "artifactType": "MaterializationKey",
@@ -100,13 +107,46 @@ class Materializer:
             **key_core,
         }
 
+    def _require_exact_key_reuse(self, cur, key: dict) -> None:
+        """Verify every retained carrier before reusing a full key digest."""
+        key_id = key["materializationKeyId"]
+        expected_receipt = (self.store.tenant_ref, self.store.runtime_bundle_digest)
+        cur.execute(
+            "SELECT materialization_key, tenant_ref, runtime_bundle_digest "
+            "FROM derived_materialization WHERE key_digest = %s",
+            (key_id,),
+        )
+        for row in cur.fetchall():
+            if (
+                row["materialization_key"] != key
+                or (row["tenant_ref"], row["runtime_bundle_digest"])
+                != expected_receipt
+            ):
+                raise MaterializationIdentityError(
+                    f"MaterializationKey identity {key_id} was reused unequally")
+        cur.execute(
+            "SELECT payload, tenant_ref, runtime_bundle_digest "
+            "FROM runtime_trace WHERE trace_id = %s",
+            (key_id,),
+        )
+        trace = cur.fetchone()
+        if trace is not None and (
+            trace["payload"] != key
+            or (trace["tenant_ref"], trace["runtime_bundle_digest"])
+            != expected_receipt
+        ):
+            raise MaterializationIdentityError(
+                f"MaterializationKey identity {key_id} was reused unequally")
+
     # ------------------------------------------------------- freshness vector --
 
     def _watermark(self, kind: str) -> str:
         with self.store.conn.cursor() as cur:
             cur.execute(
                 "SELECT count(*) AS n, coalesce(max(record_time)::text, 'none') AS t "
-                "FROM kernel_record WHERE record_kind = %s", (kind,))
+                "FROM kernel_record WHERE record_kind = %s AND tenant_ref = %s",
+                (kind, self.store.tenant_ref),
+            )
             row = cur.fetchone()
             return f"{row['n']}@{row['t']}"
 
@@ -167,6 +207,7 @@ class Materializer:
         reference_refs = ctx.get("referenceSnapshotRefs", [])
         key = self.build_key(farm_ref, twin=twin, use_class=use_class,
                              time_policy=time_policy, context_snapshot_ref=ctx_ref)
+        self._require_exact_key_reuse(cur, key)
         key_id = key["materializationKeyId"]
 
         # ---- gather in-force substrate (Compliance twin: hard truth only) ----
@@ -305,30 +346,40 @@ class Materializer:
         # ---- supersede prior live materialization for this key ----
         cur.execute(
             "SELECT materialization_id FROM derived_materialization "
-            "WHERE key_digest = %s AND superseded_by IS NULL", (key_id,))
+            "WHERE key_digest = %s AND tenant_ref = %s "
+            "AND runtime_bundle_digest = %s AND superseded_by IS NULL",
+            (key_id, self.store.tenant_ref, self.store.runtime_bundle_digest))
         for prior in cur.fetchall():
             cur.execute(
                 "UPDATE derived_materialization SET superseded_by = %s "
-                "WHERE materialization_id = %s", (mat_id, prior["materialization_id"]))
+                "WHERE materialization_id = %s AND tenant_ref = %s "
+                "AND runtime_bundle_digest = %s",
+                (mat_id, prior["materialization_id"], self.store.tenant_ref,
+                 self.store.runtime_bundle_digest))
 
         cur.execute(
             """
             INSERT INTO derived_materialization
               (materialization_id, key_digest, materialization_key, target_twin,
                anchor_scope_ref, time_policy, use_class, freshness, current_state,
-               basis_record_id, snapshot_record_id, context_snapshot_ref, freshness_vector)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, 'FRESH', %s, %s, %s, %s, %s)
+               basis_record_id, snapshot_record_id, context_snapshot_ref, freshness_vector,
+               tenant_ref, runtime_bundle_digest)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, 'FRESH', %s, %s, %s, %s, %s,
+                    %s, %s)
             """,
             (mat_id, key_id, Jsonb(key), twin, farm_ref, Jsonb(time_policy), use_class,
-             Jsonb(current_state), basis_id, snapshot_id, ctx_ref, Jsonb(vector)))
+             Jsonb(current_state), basis_id, snapshot_id, ctx_ref, Jsonb(vector),
+             self.store.tenant_ref, self.store.runtime_bundle_digest))
         # fast-lookup rows mirroring the dependency-index entries (derived only)
         for entry in dep_index["entries"]:
             cur.execute(
                 "INSERT INTO derived_dependency_index "
-                "(dependency_source_ref, dependency_source_family, key_digest, entry) "
-                "VALUES (%s, %s, %s, %s)",
+                "(dependency_source_ref, dependency_source_family, key_digest, entry, "
+                " tenant_ref, runtime_bundle_digest) "
+                "VALUES (%s, %s, %s, %s, %s, %s)",
                 (entry["dependencySourceRef"], entry["dependencySourceFamily"],
-                 key_id, Jsonb(entry)))
+                 key_id, Jsonb(entry), self.store.tenant_ref,
+                 self.store.runtime_bundle_digest))
 
         return {
             "materializationId": mat_id,
@@ -365,6 +416,7 @@ class Materializer:
         key = self.build_key(farm_ref, twin=twin, use_class=use_class,
                              time_policy=time_policy, context_snapshot_ref=ctx_ref,
                              result_shape_family=IDENTITY_REGISTRY_SHAPE_FAMILY)
+        self._require_exact_key_reuse(cur, key)
         key_id = key["materializationKeyId"]
 
         as_of = (time_policy.get("asOfTime")
@@ -507,29 +559,38 @@ class Materializer:
         # ---- supersede the prior live registry for this key ----
         cur.execute(
             "SELECT materialization_id FROM derived_materialization "
-            "WHERE key_digest = %s AND superseded_by IS NULL", (key_id,))
+            "WHERE key_digest = %s AND tenant_ref = %s "
+            "AND runtime_bundle_digest = %s AND superseded_by IS NULL",
+            (key_id, self.store.tenant_ref, self.store.runtime_bundle_digest))
         for prior in cur.fetchall():
             cur.execute(
                 "UPDATE derived_materialization SET superseded_by = %s "
-                "WHERE materialization_id = %s", (mat_id, prior["materialization_id"]))
+                "WHERE materialization_id = %s AND tenant_ref = %s "
+                "AND runtime_bundle_digest = %s",
+                (mat_id, prior["materialization_id"], self.store.tenant_ref,
+                 self.store.runtime_bundle_digest))
 
         cur.execute(
             """
             INSERT INTO derived_materialization
               (materialization_id, key_digest, materialization_key, target_twin,
                anchor_scope_ref, time_policy, use_class, freshness, current_state,
-               basis_record_id, snapshot_record_id, context_snapshot_ref, freshness_vector)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+               basis_record_id, snapshot_record_id, context_snapshot_ref, freshness_vector,
+               tenant_ref, runtime_bundle_digest)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (mat_id, key_id, Jsonb(key), twin, farm_ref, Jsonb(time_policy), use_class,
-             freshness, Jsonb(current_state), basis_id, snapshot_id, ctx_ref, Jsonb(vector)))
+             freshness, Jsonb(current_state), basis_id, snapshot_id, ctx_ref, Jsonb(vector),
+             self.store.tenant_ref, self.store.runtime_bundle_digest))
         for entry in dep_index["entries"]:
             cur.execute(
                 "INSERT INTO derived_dependency_index "
-                "(dependency_source_ref, dependency_source_family, key_digest, entry) "
-                "VALUES (%s, %s, %s, %s)",
+                "(dependency_source_ref, dependency_source_family, key_digest, entry, "
+                " tenant_ref, runtime_bundle_digest) "
+                "VALUES (%s, %s, %s, %s, %s, %s)",
                 (entry["dependencySourceRef"], entry["dependencySourceFamily"],
-                 key_id, Jsonb(entry)))
+                 key_id, Jsonb(entry), self.store.tenant_ref,
+                 self.store.runtime_bundle_digest))
 
         return {
             "materializationId": mat_id,
@@ -611,7 +672,8 @@ class Materializer:
         """
         cur.execute(
             "SELECT dependency_source_ref, key_digest FROM derived_dependency_index "
-            "WHERE dependency_source_ref = ANY(%s)", (source_refs,))
+            "WHERE dependency_source_ref = ANY(%s) AND tenant_ref = %s",
+            (source_refs, self.store.tenant_ref))
         rows = cur.fetchall()
         key_ids = sorted({r["key_digest"] for r in rows})
         resolved_sources = {r["dependency_source_ref"] for r in rows}
@@ -623,20 +685,26 @@ class Materializer:
             # not under-invalidate just because some triggers resolved
             cur.execute(
                 "SELECT DISTINCT key_digest FROM derived_materialization "
-                "WHERE anchor_scope_ref = %s AND superseded_by IS NULL", (farm_scope_ref,))
+                "WHERE anchor_scope_ref = %s AND tenant_ref = %s "
+                "AND superseded_by IS NULL",
+                (farm_scope_ref, self.store.tenant_ref))
             key_ids = sorted(set(key_ids) | {r["key_digest"] for r in cur.fetchall()})
             broadened = (f"farm-scope broadening applied for {len(unresolved)} "
                          "trigger(s) with no dependency entry (uncertain boundary)")
 
         cur.execute(
-            "SELECT count(*) AS n FROM derived_materialization WHERE superseded_by IS NULL")
+            "SELECT count(*) AS n FROM derived_materialization "
+            "WHERE tenant_ref = %s AND superseded_by IS NULL",
+            (self.store.tenant_ref,))
         considered = cur.fetchone()["n"]
         marked = 0
         for key_id in key_ids:
             cur.execute(
                 "UPDATE derived_materialization SET freshness = 'STALE' "
-                "WHERE key_digest = %s AND superseded_by IS NULL AND freshness = 'FRESH' "
-                "RETURNING materialization_id", (key_id,))
+                "WHERE key_digest = %s AND tenant_ref = %s "
+                "AND superseded_by IS NULL AND freshness = 'FRESH' "
+                "RETURNING materialization_id",
+                (key_id, self.store.tenant_ref))
             changed = cur.fetchall()
             if not changed:
                 continue
@@ -689,8 +757,9 @@ class Materializer:
             "FROM runtime_trace WHERE trace_kind = %s "
             "AND payload ->> 'evaluatedMaterializationKeyRef' = %s "
             "AND payload ->> 'statusAfter' = 'STALE' "
-            "AND record_time > %s",
-            (INVALIDATION_TRACE_KIND, key_digest, generated_at))
+            "AND record_time > %s AND tenant_ref = %s",
+            (INVALIDATION_TRACE_KIND, key_digest, generated_at,
+             self.store.tenant_ref))
         families = set()
         for row in cur.fetchall():
             family = _TRIGGER_TO_RESULT_FAMILY.get(row["family"])
@@ -763,8 +832,11 @@ class Materializer:
                              context_snapshot_ref=ctx["contextSnapshotId"])
         cur.execute(
             "SELECT * FROM derived_materialization "
-            "WHERE key_digest = %s AND superseded_by IS NULL "
-            "ORDER BY generated_at DESC LIMIT 1", (key["materializationKeyId"],))
+            "WHERE key_digest = %s AND tenant_ref = %s "
+            "AND runtime_bundle_digest = %s AND superseded_by IS NULL "
+            "ORDER BY generated_at DESC LIMIT 1",
+            (key["materializationKeyId"], self.store.tenant_ref,
+             self.store.runtime_bundle_digest))
         live = cur.fetchone()
 
         # Freshness is purpose-sensitive (Current-State RFC §6.4 — the RFC
@@ -787,8 +859,11 @@ class Materializer:
                                     time_policy=time_policy)
             recomputed = True
             decision = "RECOMPUTE_REQUIRED"
-            cur.execute("SELECT * FROM derived_materialization WHERE materialization_id = %s",
-                        (result["materializationId"],))
+            cur.execute(
+                "SELECT * FROM derived_materialization WHERE materialization_id = %s "
+                "AND tenant_ref = %s AND runtime_bundle_digest = %s",
+                (result["materializationId"], self.store.tenant_ref,
+                 self.store.runtime_bundle_digest))
             mat = cur.fetchone()
         else:
             from .problems import runtime_problem
@@ -799,6 +874,11 @@ class Materializer:
                 "the materialization is not demonstrably FRESH for this use and "
                 "recomputation was not permitted; refusing rather than pretending "
                 "(Kernel rule 7)"))
+
+        # Recompute owns the same exact-key check before it writes.  The other
+        # paths only need it when they actually consume a retained row.
+        if live is not None and not recomputed:
+            self._require_exact_key_reuse(cur, key)
 
         freshness = mat["freshness"] if mat else "INVALID"
         satisfied = mat is not None and requirement_satisfied(freshness)

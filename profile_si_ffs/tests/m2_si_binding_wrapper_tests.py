@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import uuid
 
+from kernel import context
 from kernel.context import ProductRegister
 from kernel.profiles.si_ffs import ffsnaprave_adapter as ffsn
 from kernel.profiles.si_ffs import si_bindings as sib
@@ -18,7 +19,6 @@ from profile_si_ffs.test_fixtures import demo
 from profile_si_ffs.tests.m2_si_binding_fixtures import (
     import_ffsnaprave_snapshot,
     import_gerk_snapshot,
-    import_regsr_snapshot,
     uid,
 )
 
@@ -26,29 +26,28 @@ from profile_si_ffs.tests.m2_si_binding_fixtures import (
 __all__ = [
     "test_p4_regsr_product_authorisation_is_identity_grade",
     "test_p4_regsr_unknown_product_routes_to_review_unresolved",
-    "test_p4_gerk_parcel_is_locator_only_review",
-    "test_p4_ffsnaprave_equipment_is_locator_only_review",
-    "test_p4_ffsnaprave_composite_key_validity_recorded_not_collapsed",
+    "test_p4_unselected_gerk_candidate_is_not_activated",
+    "test_p4_unselected_ffsnaprave_candidate_is_not_activated",
+    "test_p4_unselected_ffsnaprave_validities_remain_inactive",
     "test_p4_ffsnaprave_no_match_records_no_fabricated_validity",
     "test_p4_kmg_mid_holding_is_unresolved_advisory",
     "test_p4_ffs_izkaznica_operator_is_unresolved_advisory",
     "test_p4_no_in_force_snapshot_yields_unresolved_committable_binding",
     "test_p4_only_identity_grade_confirm_yields_verified",
     "test_p4_verified_regsr_binding_records_scheme_version",
-    "test_p4_ffsnaprave_ambiguous_sticker_surfaces_multiple_candidates",
+    "test_p4_unselected_ffsnaprave_ambiguity_remains_inactive",
 ]
 
 
 def test_p4_regsr_product_authorisation_is_identity_grade(store):
-    decision = f"U9{uid()[:4]}-50/26/1"
-    import_regsr_snapshot(store, "2099-04-01", decision)
+    decision = "U34330-50/23/16"
     pr = ProductRegister()
     pr.load_from_store(store)
     with store.serialized_tx() as cur:
         r = sib.resolve_product_authorisation(store, cur, pr, decision,
                                               "input:demo.account", created_by=demo.FARMER,
                                               evidence_ref=demo.ONBOARDING_EVIDENCE,
-                                              as_of="2099-04-01T12:00:00Z")
+                                              as_of="2026-06-12T12:00:00Z")
         store.insert_record(cur, r["binding"])
     assert r["verdict"] == CONFIRM
     b = r["binding"]
@@ -62,14 +61,13 @@ def test_p4_regsr_product_authorisation_is_identity_grade(store):
 
 
 def test_p4_regsr_unknown_product_routes_to_review_unresolved(store):
-    import_regsr_snapshot(store, "2099-04-02", f"U9{uid()[:4]}-50/26/known")
     pr = ProductRegister()
     pr.load_from_store(store)
     with store.serialized_tx() as cur:
         r = sib.resolve_product_authorisation(store, cur, pr, "U00000-00/00/0",
                                               "input:demo.unknown", created_by=demo.FARMER,
                                               evidence_ref=demo.ONBOARDING_EVIDENCE,
-                                              as_of="2099-04-02T12:00:00Z")
+                                              as_of="2026-06-12T12:00:00Z")
         store.insert_record(cur, r["binding"])
     assert r["verdict"] == REVIEW, "an unconfirmable product never becomes identity"
     b = r["binding"]
@@ -79,9 +77,9 @@ def test_p4_regsr_unknown_product_routes_to_review_unresolved(store):
     assert b["promotionBoundary"]["highConsequenceUse"] == "REVIEW_REQUIRED"
 
 
-def test_p4_gerk_parcel_is_locator_only_review(store):
+def test_p4_unselected_gerk_candidate_is_not_activated(store):
     pid = str(uuid.uuid4().int)[:7]
-    import_gerk_snapshot(store, "2099-04-03", pid)
+    candidate = import_gerk_snapshot(store, "2099-04-03", pid)
     layer = GerkLayer()
     layer.load_from_store(store)
     with store.serialized_tx() as cur:
@@ -89,15 +87,17 @@ def test_p4_gerk_parcel_is_locator_only_review(store):
                                created_by=demo.FARMER, evidence_ref=demo.ONBOARDING_EVIDENCE,
                                as_of="2099-04-03T12:00:00Z")
         store.insert_record(cur, r["binding"])
-    assert r["verdict"] == REVIEW and r["grade"] == "LOCATOR"
+    assert r["verdict"] == REVIEW and r["grade"] != "LOCATOR"
     b = r["binding"]
     assert b["bindingState"] == "PROVISIONAL"
-    assert b["bindingValue"]["mappingRelation"] == "LOCAL_ONLY"
+    assert b["bindingValue"]["mappingRelation"] == "UNRESOLVED"
     assert b["promotionBoundary"]["maySupportPromotion"] is False
-    assert r["advisory"] and "locator-only" in r["advisory"]
+    selected = context.current_reference_snapshot(store, context.GERK_SNAPSHOT_PREFIX)
+    assert r["trace"]["snapshotRefs"] == [selected["referenceSnapshotId"]]
+    assert candidate not in r["trace"]["snapshotRefs"]
 
 
-def test_p4_ffsnaprave_equipment_is_locator_only_review(store):
+def test_p4_unselected_ffsnaprave_candidate_is_not_activated(store):
     sticker, validity = str(uuid.uuid4().int)[:6], "2027-12-31"
     import_ffsnaprave_snapshot(store, "2099-04-04", sticker, validity)
     reg = FFSNapraveRegister()
@@ -107,16 +107,15 @@ def test_p4_ffsnaprave_equipment_is_locator_only_review(store):
                                   created_by=demo.FARMER, evidence_ref=demo.ONBOARDING_EVIDENCE,
                                   validity=validity, as_of="2099-04-04T12:00:00Z")
         store.insert_record(cur, r["binding"])
-    assert r["verdict"] == REVIEW and r["grade"] == "LOCATOR"
+    assert r["verdict"] == REFUSE and r["grade"] != "LOCATOR"
     b = r["binding"]
     assert b["bindingState"] == "PROVISIONAL"
-    assert b["bindingValue"]["mappingRelation"] == "LOCAL_ONLY"
+    assert b["bindingValue"]["mappingRelation"] == "UNRESOLVED"
     assert b["promotionBoundary"]["maySupportPromotion"] is False
-    assert validity in b["bindingValue"]["notes"]
-    assert r["trace"]["datesObserved"]["statusEffectiveUntil"] == f"{validity}T00:00:00Z"
+    assert r["trace"] is None
 
 
-def test_p4_ffsnaprave_composite_key_validity_recorded_not_collapsed(store):
+def test_p4_unselected_ffsnaprave_validities_remain_inactive(store):
     sticker = str(uuid.uuid4().int)[:6]
     art = {
         "snapshotKind": "SI_UVHVVR_FFS_NAPRAVE_PARSE", "fileDate": "2099-04-08",
@@ -138,12 +137,9 @@ def test_p4_ffsnaprave_composite_key_validity_recorded_not_collapsed(store):
         r2 = sib.resolve_equipment(store, cur, reg, sticker, "equip:e", created_by=demo.FARMER,
                                    evidence_ref=demo.ONBOARDING_EVIDENCE, validity="2027-12-31",
                                    as_of="2099-04-08T12:00:00Z")
-    assert r1["resolvedValidity"] == "2025-12-31T00:00:00Z"
-    assert r2["resolvedValidity"] == "2027-12-31T00:00:00Z"
-    assert "2025-12-31" in r1["binding"]["bindingValue"]["notes"]
-    assert "2027-12-31" in r2["binding"]["bindingValue"]["notes"]
-    assert r1["trace"]["datesObserved"]["statusEffectiveUntil"] != \
-        r2["trace"]["datesObserved"]["statusEffectiveUntil"], "not collapsed to one validity"
+    assert r1["verdict"] == r2["verdict"] == REFUSE
+    assert r1["resolvedValidity"] is r2["resolvedValidity"] is None
+    assert r1["trace"] is r2["trace"] is None
 
 
 def test_p4_ffsnaprave_no_match_records_no_fabricated_validity(store):
@@ -156,7 +152,7 @@ def test_p4_ffsnaprave_no_match_records_no_fabricated_validity(store):
                                   created_by=demo.FARMER, evidence_ref=demo.ONBOARDING_EVIDENCE,
                                   as_of="2099-04-09T12:00:00Z")
         store.insert_record(cur, r["binding"])
-    assert r["verdict"] == REVIEW and r["grade"] != "LOCATOR"
+    assert r["verdict"] == REFUSE and r["grade"] != "LOCATOR"
     notes = r["binding"]["bindingValue"]["notes"]
     assert "None" not in notes and "unresolved" in notes
     assert r["binding"]["bindingValue"]["mappingRelation"] == "UNRESOLVED"
@@ -207,15 +203,14 @@ def test_p4_no_in_force_snapshot_yields_unresolved_committable_binding(store):
 
 
 def test_p4_only_identity_grade_confirm_yields_verified(store):
-    decision = f"U9{uid()[:4]}-50/26/9"
-    import_regsr_snapshot(store, "2099-04-05", decision)
+    decision = "U34330-50/23/16"
     pr = ProductRegister()
     pr.load_from_store(store)
     with store.serialized_tx() as cur:
         confirmed = sib.resolve_product_authorisation(store, cur, pr, decision,
                                                       "input:x", created_by=demo.FARMER,
                                                       evidence_ref=demo.ONBOARDING_EVIDENCE,
-                                                      as_of="2099-04-05T12:00:00Z")
+                                                      as_of="2026-06-12T12:00:00Z")
     holding = sib.resolve_holding(store, "100000002", "farm:y", evidence_ref=demo.ONBOARDING_EVIDENCE,
                                   created_by=demo.FARMER)
     assert confirmed["binding"]["bindingState"] == "VERIFIED"
@@ -225,23 +220,24 @@ def test_p4_only_identity_grade_confirm_yields_verified(store):
 
 
 def test_p4_verified_regsr_binding_records_scheme_version(store):
-    decision = f"U9{uid()[:4]}-50/26/v"
-    import_regsr_snapshot(store, "2099-04-10", decision)
+    decision = "U34330-50/23/16"
     pr = ProductRegister()
     pr.load_from_store(store)
     with store.serialized_tx() as cur:
         r = sib.resolve_product_authorisation(store, cur, pr, decision, "resource:v",
                                               created_by=demo.FARMER,
                                               evidence_ref=demo.ONBOARDING_EVIDENCE,
-                                              as_of="2099-04-10T12:00:00Z")
+                                              as_of="2026-06-12T12:00:00Z")
         store.insert_record(cur, r["binding"])
     b = r["binding"]
     assert b["bindingState"] == "VERIFIED" and b["promotionBoundary"]["maySupportPromotion"] is True
     sv = b["externalScheme"].get("schemeVersion")
-    assert sv and "2099-04-10" in sv, "VERIFIED binding must record the register vintage as schemeVersion"
+    selected = context.current_reference_snapshot(store, context.REGSR_SNAPSHOT_PREFIX)
+    assert sv == selected["canonicalVersionLabel"], \
+        "VERIFIED binding must record the selected register vintage as schemeVersion"
 
 
-def test_p4_ffsnaprave_ambiguous_sticker_surfaces_multiple_candidates(store):
+def test_p4_unselected_ffsnaprave_ambiguity_remains_inactive(store):
     sticker = str(uuid.uuid4().int)[:6]
     art = {
         "snapshotKind": "SI_UVHVVR_FFS_NAPRAVE_PARSE", "fileDate": "2099-04-13",
@@ -260,12 +256,11 @@ def test_p4_ffsnaprave_ambiguous_sticker_surfaces_multiple_candidates(store):
         r = sib.resolve_equipment(store, cur, reg, sticker, "equip:amb", created_by=demo.FARMER,
                                   evidence_ref=demo.ONBOARDING_EVIDENCE, validity=None,
                                   as_of="2099-04-13T12:00:00Z")
-    t = r["trace"]
-    assert r["verdict"] == REVIEW
-    assert t["candidateCount"] == 2 and t["statusObserved"] == "MULTIPLE_CANDIDATES"
-    assert t["discrepancies"] and "disambiguate" in t["discrepancies"][0]["note"]
+    assert r["verdict"] == REFUSE
+    assert r["trace"] is None
     with store.serialized_tx() as cur:
         r2 = sib.resolve_equipment(store, cur, reg, "0000000", "equip:absent", created_by=demo.FARMER,
                                    evidence_ref=demo.ONBOARDING_EVIDENCE, validity=None,
                                    as_of="2099-04-13T12:00:00Z")
-    assert r2["trace"]["candidateCount"] == 0 and r2["trace"]["statusObserved"] == "NOT_FOUND"
+    assert r2["verdict"] == REFUSE
+    assert r2["trace"] is None

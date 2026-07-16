@@ -101,7 +101,7 @@
       "sourcePath": "kernel/tests/test_conformance.py"
     },
     {
-      "nodeid": "kernel/tests/test_conformance.py::test_98_stale_registry_snapshot_recheck",
+      "nodeid": "kernel/tests/test_conformance.py::test_98_reference_snapshot_candidate_does_not_hot_activate",
       "sourceModule": "kernel.tests.test_conformance",
       "sourcePath": "kernel/tests/test_conformance.py"
     },
@@ -221,7 +221,7 @@
       "sourcePath": "kernel/tests/test_m2_bindings.py"
     },
     {
-      "nodeid": "kernel/tests/test_m2_bindings.py::test_g3_future_effective_snapshot_is_not_current",
+      "nodeid": "kernel/tests/test_m2_bindings.py::test_g3_future_unselected_candidate_is_never_current",
       "sourceModule": "kernel.tests.test_m2_bindings",
       "sourcePath": "kernel/tests/test_m2_bindings.py"
     },
@@ -706,27 +706,7 @@
       "sourcePath": "profile_si_ffs/tests/m2_si_binding_wrapper_tests.py"
     },
     {
-      "nodeid": "kernel/tests/test_m2_si_bindings.py::test_p4_ffsnaprave_ambiguous_sticker_surfaces_multiple_candidates",
-      "sourceModule": "profile_si_ffs.tests.m2_si_binding_wrapper_tests",
-      "sourcePath": "profile_si_ffs/tests/m2_si_binding_wrapper_tests.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_m2_si_bindings.py::test_p4_ffsnaprave_composite_key_validity_recorded_not_collapsed",
-      "sourceModule": "profile_si_ffs.tests.m2_si_binding_wrapper_tests",
-      "sourcePath": "profile_si_ffs/tests/m2_si_binding_wrapper_tests.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_m2_si_bindings.py::test_p4_ffsnaprave_equipment_is_locator_only_review",
-      "sourceModule": "profile_si_ffs.tests.m2_si_binding_wrapper_tests",
-      "sourcePath": "profile_si_ffs/tests/m2_si_binding_wrapper_tests.py"
-    },
-    {
       "nodeid": "kernel/tests/test_m2_si_bindings.py::test_p4_ffsnaprave_no_match_records_no_fabricated_validity",
-      "sourceModule": "profile_si_ffs.tests.m2_si_binding_wrapper_tests",
-      "sourcePath": "profile_si_ffs/tests/m2_si_binding_wrapper_tests.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_m2_si_bindings.py::test_p4_gerk_parcel_is_locator_only_review",
       "sourceModule": "profile_si_ffs.tests.m2_si_binding_wrapper_tests",
       "sourcePath": "profile_si_ffs/tests/m2_si_binding_wrapper_tests.py"
     },
@@ -759,6 +739,26 @@
       "nodeid": "kernel/tests/test_m2_si_bindings.py::test_p4_resolved_binding_attaches_to_committed_appliedresource_identity",
       "sourceModule": "kernel.tests.test_m2_si_bindings",
       "sourcePath": "kernel/tests/test_m2_si_bindings.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_m2_si_bindings.py::test_p4_unselected_ffsnaprave_ambiguity_remains_inactive",
+      "sourceModule": "profile_si_ffs.tests.m2_si_binding_wrapper_tests",
+      "sourcePath": "profile_si_ffs/tests/m2_si_binding_wrapper_tests.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_m2_si_bindings.py::test_p4_unselected_ffsnaprave_candidate_is_not_activated",
+      "sourceModule": "profile_si_ffs.tests.m2_si_binding_wrapper_tests",
+      "sourcePath": "profile_si_ffs/tests/m2_si_binding_wrapper_tests.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_m2_si_bindings.py::test_p4_unselected_ffsnaprave_validities_remain_inactive",
+      "sourceModule": "profile_si_ffs.tests.m2_si_binding_wrapper_tests",
+      "sourcePath": "profile_si_ffs/tests/m2_si_binding_wrapper_tests.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_m2_si_bindings.py::test_p4_unselected_gerk_candidate_is_not_activated",
+      "sourceModule": "profile_si_ffs.tests.m2_si_binding_wrapper_tests",
+      "sourcePath": "profile_si_ffs/tests/m2_si_binding_wrapper_tests.py"
     },
     {
       "nodeid": "kernel/tests/test_m2_si_bindings.py::test_p4_verified_regsr_binding_records_scheme_version",
@@ -817,6 +817,11 @@
     },
     {
       "nodeid": "kernel/tests/test_m2_si_ffsnaprave.py::test_p3_import_writes_snapshot_and_store_backed_data",
+      "sourceModule": "profile_si_ffs.tests.m2_si_ffsnaprave_tests",
+      "sourcePath": "profile_si_ffs/tests/m2_si_ffsnaprave_tests.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_m2_si_ffsnaprave.py::test_p3_manual_registration_cannot_bypass_bundle_selection",
       "sourceModule": "profile_si_ffs.tests.m2_si_ffsnaprave_tests",
       "sourcePath": "profile_si_ffs/tests/m2_si_ffsnaprave_tests.py"
     },
@@ -1071,12 +1076,7 @@
       "sourcePath": "profile_si_ffs/tests/m2_si_gerk_tests.py"
     },
     {
-      "nodeid": "kernel/tests/test_m2_si_gerk.py::test_p2_exact_duplicate_pid_imports_as_one_parcel",
-      "sourceModule": "profile_si_ffs.tests.m2_si_gerk_tests",
-      "sourcePath": "profile_si_ffs/tests/m2_si_gerk_tests.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_m2_si_gerk.py::test_p2_gerk_layer_resolves_pid_to_area_and_use",
+      "nodeid": "kernel/tests/test_m2_si_gerk.py::test_p2_exact_duplicate_pid_imports_and_indexes_as_one_parcel",
       "sourceModule": "profile_si_ffs.tests.m2_si_gerk_tests",
       "sourcePath": "profile_si_ffs/tests/m2_si_gerk_tests.py"
     },
@@ -1136,17 +1136,12 @@
       "sourcePath": "profile_si_ffs/tests/m2_si_gerk_tests.py"
     },
     {
-      "nodeid": "kernel/tests/test_m2_si_regsr.py::test_p1_ambiguous_decision_number_routes_to_review_not_pass",
-      "sourceModule": "profile_si_ffs.tests.m2_si_regsr_tests",
-      "sourcePath": "profile_si_ffs/tests/m2_si_regsr_tests.py"
+      "nodeid": "kernel/tests/test_m2_si_gerk.py::test_p2_unselected_candidate_is_not_loaded_but_lookup_unit_resolves",
+      "sourceModule": "profile_si_ffs.tests.m2_si_gerk_tests",
+      "sourcePath": "profile_si_ffs/tests/m2_si_gerk_tests.py"
     },
     {
       "nodeid": "kernel/tests/test_m2_si_regsr.py::test_p1_changed_detail_same_list_digest_refuses_as_conflict",
-      "sourceModule": "profile_si_ffs.tests.m2_si_regsr_tests",
-      "sourcePath": "profile_si_ffs/tests/m2_si_regsr_tests.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_m2_si_regsr.py::test_p1_composite_key_disambiguates_to_confirm",
       "sourceModule": "profile_si_ffs.tests.m2_si_regsr_tests",
       "sourcePath": "profile_si_ffs/tests/m2_si_regsr_tests.py"
     },
@@ -1161,11 +1156,6 @@
       "sourcePath": "profile_si_ffs/tests/m2_si_regsr_tests.py"
     },
     {
-      "nodeid": "kernel/tests/test_m2_si_regsr.py::test_p1_import_load_verify_confirms_end_to_end",
-      "sourceModule": "profile_si_ffs.tests.m2_si_regsr_tests",
-      "sourcePath": "profile_si_ffs/tests/m2_si_regsr_tests.py"
-    },
-    {
       "nodeid": "kernel/tests/test_m2_si_regsr.py::test_p1_import_with_no_register_day_refuses_no_snapshot_no_data",
       "sourceModule": "profile_si_ffs.tests.m2_si_regsr_tests",
       "sourcePath": "profile_si_ffs/tests/m2_si_regsr_tests.py"
@@ -1176,12 +1166,22 @@
       "sourcePath": "profile_si_ffs/tests/m2_si_regsr_tests.py"
     },
     {
+      "nodeid": "kernel/tests/test_m2_si_regsr.py::test_p1_imported_candidate_does_not_hot_activate_for_verification",
+      "sourceModule": "profile_si_ffs.tests.m2_si_regsr_tests",
+      "sourcePath": "profile_si_ffs/tests/m2_si_regsr_tests.py"
+    },
+    {
       "nodeid": "kernel/tests/test_m2_si_regsr.py::test_p1_parse_regsr_html_reuses_tooling_parser",
       "sourceModule": "profile_si_ffs.tests.m2_si_regsr_tests",
       "sourcePath": "profile_si_ffs/tests/m2_si_regsr_tests.py"
     },
     {
-      "nodeid": "kernel/tests/test_m2_si_regsr.py::test_p1_product_register_loads_imported_data_from_store",
+      "nodeid": "kernel/tests/test_m2_si_regsr.py::test_p1_product_register_excludes_unselected_imported_data",
+      "sourceModule": "profile_si_ffs.tests.m2_si_regsr_tests",
+      "sourcePath": "profile_si_ffs/tests/m2_si_regsr_tests.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_m2_si_regsr.py::test_p1_regsr_lookup_composite_key_disambiguates",
       "sourceModule": "profile_si_ffs.tests.m2_si_regsr_tests",
       "sourcePath": "profile_si_ffs/tests/m2_si_regsr_tests.py"
     },
@@ -1191,7 +1191,12 @@
       "sourcePath": "profile_si_ffs/tests/m2_si_regsr_tests.py"
     },
     {
-      "nodeid": "kernel/tests/test_m2_si_regsr.py::test_p1_true_duplicate_same_validity_is_one_identity_confirm",
+      "nodeid": "kernel/tests/test_m2_si_regsr.py::test_p1_regsr_lookup_reports_ambiguous_decision_number",
+      "sourceModule": "profile_si_ffs.tests.m2_si_regsr_tests",
+      "sourcePath": "profile_si_ffs/tests/m2_si_regsr_tests.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_m2_si_regsr.py::test_p1_regsr_lookup_true_duplicate_is_one_identity",
       "sourceModule": "profile_si_ffs.tests.m2_si_regsr_tests",
       "sourcePath": "profile_si_ffs/tests/m2_si_regsr_tests.py"
     },
@@ -1506,12 +1511,17 @@
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_api_commit_returns_governed_profile_applicability_refusal_not_500",
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_api_startup_refuses_non_exact_selected_profile_instance",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_config_declares_explicit_single_active_profile_selection",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_context_assembler_refuses_descriptor_outside_store_selection",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
@@ -1547,6 +1557,16 @@
     },
     {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_policy_provider_recognized_rule_refs_are_descriptor_derived",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_reference_selection_omits_optional_missing_family",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_reference_selection_refuses_required_missing_family",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
@@ -1726,27 +1746,12 @@
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_explicit_descriptor_mismatched_spine_ref_fails_without_config_fallback",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_explicit_descriptor_now_context_uses_descriptor_spine_not_later_store_rows",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_explicit_descriptor_optional_missing_reference_family_is_omitted",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_explicit_descriptor_reference_snapshots_match_wrapper",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_explicit_descriptor_required_missing_reference_family_refuses",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
@@ -1806,7 +1811,7 @@
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_materializer_dependency_index_uses_descriptor_policy_ref_and_invalidates",
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_materializer_dependency_index_uses_bound_policy_and_invalidates",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
@@ -1841,11 +1846,6 @@
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_optional_missing_reference_family_is_omitted",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_output_generator_explicit_descriptor_matches_default_profile_refs",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
@@ -1871,17 +1871,7 @@
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_applicability_missing_descriptor_artifact_is_governed_refusal",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_applicability_missing_evidence_policy_is_governed_refusal",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_applicability_required_reference_family_is_governed_refusal",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
@@ -2066,11 +2056,6 @@
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_required_missing_reference_family_refuses_context",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_resolve_active_descriptor_explicit_does_not_import_config",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
@@ -2202,6 +2187,11 @@
     },
     {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_refuses_same_context_time_bounded_route",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_refuses_tenant_mismatch_before_writes",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
@@ -2981,6 +2971,151 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_application_bootstrap_rolls_back_schema_and_bundle_on_refusal",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_applied_receipt_schema_requires_validated_composite_foreign_keys",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_context_snapshot_reuse_requires_exact_identity_inputs",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_cross_bundle_idempotency_replay_is_blocked",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_cross_bundle_identical_import_rebuilds_current_parsed_cache",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_cross_bundle_materialization_recomputes_and_reuses_only_its_own_cache",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_cross_bundle_queue_acceptance_refuses_but_rejection_can_close_history",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_cross_tenant_assertion_review_is_redacted_and_atomic[accept]",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_cross_tenant_assertion_review_is_redacted_and_atomic[reject]",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_cross_tenant_consequence_contest_is_redacted_and_atomic",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_cross_tenant_edge_is_refused_without_mutation",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_cross_tenant_review_evidence_is_redacted_and_atomic[accept]",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_cross_tenant_review_evidence_is_redacted_and_atomic[contest]",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_cross_tenant_review_evidence_is_redacted_and_atomic[reject]",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_every_operational_carrier_has_the_exact_runtime_receipt",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_foreign_tenant_history_cannot_enter_materialization_or_output",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_foreign_tenant_party_and_grant_do_not_bind_local_authority",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_idempotency_keys_are_tenant_qualified",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_imported_reference_snapshot_remains_inactive_under_current_bundle",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_materialization_key_reuse_requires_exact_identity_inputs",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_profile_bootstrap_refuses_changed_path_absent_from_bound_bundle",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_profile_bootstrap_refuses_non_exact_existing_selected_instance",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_reference_snapshot_cache_is_append_only",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_reference_snapshot_cache_read_verifies_payload_digest",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_same_bundle_parsed_cache_refuses_metadata_only_mismatch",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_same_bundle_parsed_cache_refuses_unequal_reuse",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_same_tenant_history_remains_visible_after_bundle_change",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_store_refuses_descriptor_observation_outside_selected_bundle",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_store_requires_explicit_tenant_and_bundle_pairing",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle_repository.py::test_changed_bytes_behind_a_stable_ref_create_a_new_auditable_bundle",
       "sourceModule": "kernel.tests.test_runtime_bundle_repository",
       "sourcePath": "kernel/tests/test_runtime_bundle_repository.py"
@@ -3131,8 +3266,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "f8f1e06594a355172efdfd4251fe47b8ad8bd7c3b56ed0848858d948beb11a93",
-  "entryCount": 626,
+  "entriesSha256": "6e9033501ab63ac9a255b22fad29314c45567a5c347da8da047487c1d8a546ce",
+  "entryCount": 653,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

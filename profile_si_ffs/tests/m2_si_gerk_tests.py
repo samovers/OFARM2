@@ -3,12 +3,14 @@
 Engineering tests, NOT part of the named conformance suite. They pin the SI GERK
 adapter riding the generic G2 import mechanism + the store-backed reference-data
 cache: an OPSI .dbf/.csv attribute parse imports as a dated GERK ReferenceSnapshot
-AND its parsed parcels persist to the store; GerkLayer loads that data FROM THE
-STORE and resolves a GERK-PID to its area / use code; a missing PID is surfaced
+AND its parsed parcels persist to the store as an auditable candidate. Runtime
+lookup loads only snapshots selected by the startup RuntimeBundle; importing a
+new candidate never hot-activates it. GerkLayer's pure lookup resolves a selected
+artifact's GERK-PID to its area / use code, while a missing PID is surfaced
 honestly (None), never fabricated; failed / conflicting / identical re-imports
-behave; the tooling iterators are REUSED (no fork). Test isolation: fixtures use
-far-future (2099) layer vintages so they never become a NOW-current GERK snapshot
-for other tests (as P1). All PID / area / use values fictional and format-true.
+behave; the tooling iterators are REUSED (no fork). Fixtures use unselected
+far-future (2099) layer vintages. All PID / area / use values fictional and
+format-true.
 """
 from __future__ import annotations
 
@@ -87,19 +89,29 @@ def test_p2_import_writes_snapshot_and_store_backed_data(store):
 
 
 # ---------------------------------------------------------------------------
-# (2) GerkLayer loads from the STORE and resolves a PID to its area / use code
+# (2) an imported candidate persists but does not enter runtime lookup under the
+#     current bundle; the pure lookup still resolves explicitly registered data
 # ---------------------------------------------------------------------------
 
-def test_p2_gerk_layer_resolves_pid_to_area_and_use(store):
+def test_p2_unselected_candidate_is_not_loaded_but_lookup_unit_resolves(store):
     pid = pid7()
     art = _fixture_layer(layer_date="2099-06-29",
                          features=[{"gerkPid": pid, "rabaId": "1300", "area": "0.7531",
                                     "opisRabe": "trajni travnik (fictional)"}])
     sid = gerk.import_gerk_snapshot(store, art)["snapshotRef"]
+
+    # The governed import persists an auditable candidate, but runtime authority
+    # remains fixed by the startup RuntimeBundle.
+    assert _data_row(store, sid) is not None
     layer = GerkLayer()
     layer.load_from_store(store)
+    assert layer.lookup(sid, pid) is None
+
+    # Adapter lookup itself is a pure unit law. Explicit registration represents
+    # the data after a future RuntimeBundle has selected this snapshot.
+    layer.register_artifact(sid, art)
     parcel = layer.lookup(sid, pid)
-    assert parcel is not None, "imported parcel must load from the store, not only package files"
+    assert parcel is not None
     assert parcel["area"] == "0.7531"
     assert parcel["rabaId"] == "1300"
     assert parcel["opisRabe"] == "trajni travnik (fictional)"
@@ -116,7 +128,7 @@ def test_p2_missing_pid_is_governable_none(store):
                                     "opisRabe": "njiva (fictional)"}])
     sid = gerk.import_gerk_snapshot(store, art)["snapshotRef"]
     layer = GerkLayer()
-    layer.load_from_store(store)
+    layer.register_artifact(sid, art)
     assert layer.lookup(sid, "0000000") is None, "absent PID is None, never fabricated"
     assert layer.lookup(f"{GERK_SNAPSHOT_PREFIX}.2099-01-01", "0000000") is None, \
         "absent snapshot resolves to None, not a crash"
@@ -290,7 +302,7 @@ def test_p2_header_only_layer_refuses_no_parcels(store, tmp_path):
 
 # ---------------------------------------------------------------------------
 # (PR #13 B1) a duplicate GERK-PID with CONFLICTING attributes refuses import —
-# never silent last-wins; an EXACT duplicate is benign and imports as one parcel
+# never silent last-wins; an EXACT duplicate is benign and indexes as one parcel
 # ---------------------------------------------------------------------------
 
 def test_p2_conflicting_duplicate_pid_refuses_import(store):
@@ -309,14 +321,20 @@ def test_p2_conflicting_duplicate_pid_refuses_import(store):
     assert _data_row(store, f"{GERK_SNAPSHOT_PREFIX}.2099-05-01") is None
 
 
-def test_p2_exact_duplicate_pid_imports_as_one_parcel(store):
+def test_p2_exact_duplicate_pid_imports_and_indexes_as_one_parcel(store):
     pid = pid7()
     feat = {"gerkPid": pid, "rabaId": "1300", "area": "0.5000", "opisRabe": "trajni travnik"}
     art = _fixture_layer(layer_date="2099-05-02", features=[dict(feat), dict(feat)])  # EXACT dup
     result = gerk.import_gerk_snapshot(store, art)
     assert result["imported"] is True, "an exact duplicate is benign, not a conflict"
+
+    # The candidate remains inactive under the current RuntimeBundle.
     layer = GerkLayer()
     layer.load_from_store(store)
+    assert layer.lookup(result["snapshotRef"], pid) is None
+
+    # Exact duplicate rows collapse to the same PID in the adapter's pure index.
+    layer.register_artifact(result["snapshotRef"], art)
     parcel = layer.lookup(result["snapshotRef"], pid)
     assert parcel is not None and parcel["area"] == "0.5000"
 

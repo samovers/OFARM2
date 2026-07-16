@@ -35,6 +35,7 @@ REGISTERED_REASON_CODES = {
     "PUBLICATION_BASIS_INCOMPLETE",
     # pack/profile
     "PROFILE_NOT_ACTIVE",
+    "PACK_CONFLICT",
     # retry/idempotency
     "RETRY_CONFLICT",
     "IDEMPOTENCY_REPLAY_REUSED",
@@ -83,4 +84,3 @@ def runtime_problem(
     if suggested_remediation:
         problem["suggestedRemediation"] = suggested_remediation
     return problem
-

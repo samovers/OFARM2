@@ -476,8 +476,20 @@ class ReplayWriter:
     across the ingress seam."""
 
     def write(self, ctx: GateContext, prior: dict) -> dict:
-        stored = ctx.store.get_payload(prior["result_record_id"])
-        conflicting = (prior["source_payload_digest"] or "") != (ctx.source_digest or "")
+        stored_row = ctx.store.get_record(prior["result_record_id"])
+        if stored_row is None:
+            raise RuntimeError(
+                f"idempotency result {prior['result_record_id']} is missing")
+        stored = stored_row["payload"]
+        bundle_conflict = (
+            prior["tenant_ref"] != ctx.store.tenant_ref
+            or stored_row["tenant_ref"] != ctx.store.tenant_ref
+            or prior["runtime_bundle_digest"] != ctx.store.runtime_bundle_digest
+            or stored_row["runtime_bundle_digest"] != ctx.store.runtime_bundle_digest
+        )
+        conflicting = bundle_conflict or (
+            (prior["source_payload_digest"] or "") != (ctx.source_digest or "")
+        )
         event_ref = stored["semanticEventRef"]
 
         replay_request = {
@@ -495,7 +507,18 @@ class ReplayWriter:
             "sourcePayloadDigest": ctx.source_digest,
         }
         ctx.store.insert_record(ctx.cur, replay_request)
-        if conflicting:
+        if bundle_conflict:
+            disposition, outcome = "CONFLICTING_REPLAY_BLOCKED", "DENY"
+            problem = runtime_problem(
+                "PACK_CONFLICT", "Cross-bundle replay blocked",
+                f"idempotency key {ctx.idem_key} belongs to tenant/bundle "
+                f"{prior['tenant_ref']}/{prior['runtime_bundle_digest']}, while this "
+                f"process is bound to {ctx.store.tenant_ref}/"
+                f"{ctx.store.runtime_bundle_digest}; an earlier runtime's result "
+                "cannot be reused as a decision by the active runtime")
+            ctx.log("INGRESS_NORMALIZATION", "CONFLICTING_REPLAY_BLOCKED",
+                    reason_code="PACK_CONFLICT")
+        elif conflicting:
             disposition, outcome = "CONFLICTING_REPLAY_BLOCKED", "DENY"
             problem = runtime_problem(
                 "IDEMPOTENCY_REPLAY_CONFLICT", "Conflicting replay blocked",

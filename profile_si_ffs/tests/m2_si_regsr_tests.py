@@ -1,25 +1,14 @@
 """M2 P1 — SI REGSR scheduled snapshot import (package content).
 
 Engineering tests, NOT part of the named conformance suite. They pin the SI
-REGSR adapter riding the generic G2 import + G3 verification mechanisms, with the
-store-backed reference-data cache (D-store decision, PR review): a parsed artifact
-imports as a dated REGSR ReferenceSnapshot AND its parsed data is persisted to the
-store; ProductRegister loads that data FROM THE STORE (not a committed file); a
-decision number (Številka odločbe, D9) then drives an identity-grade verify
-end-to-end; an unknown decision routes to review; failed/conflicting/identical
-re-imports behave; the weekly cadence is declared; and the tooling parser is
-REUSED (no fork). All product/decision values fictional and format-true.
-
-Test isolation (PR-review FIX): these tests import into the REAL, shared REGSR
-family (REGSR_SNAPSHOT_PREFIX) in the session-scoped store, so they MUST NOT
-leave a snapshot that becomes the NOW-current REGSR vintage — otherwise an
-unrelated test (e.g. conformance product verification) resolving the current
-REGSR snapshot would silently pick up a fixture and break under a different
-collection order. So every imported snapshot is dated FAR in the future (2099):
-the in-force resolver (G3) excludes future-effective snapshots from every NOW
-and every 2026-era as_of, so these fixtures are invisible to all other tests;
-test 3 verifies its own snapshot via a far-future as_of where it is the
-deterministic max of the REGSR family.
+REGSR adapter riding the generic G2 import + G3 verification mechanisms, with
+the store-backed reference-data cache. A parsed artifact imports as a dated
+REGSR ReferenceSnapshot and its parsed data is persisted as auditable candidate
+data. That candidate cannot become verification authority until a new
+RuntimeBundle selects it at startup. The tests also cover unknown decisions,
+failed/conflicting/identical re-imports, D9 composite-key grading, the declared
+weekly cadence, and reuse of the tooling parser. All product and decision values
+are fictional and format-true.
 """
 from __future__ import annotations
 
@@ -28,7 +17,7 @@ import uuid
 from kernel.context import (ProductRegister, REGSR_DATA_FAMILY,
                             REGSR_SNAPSHOT_PREFIX, current_reference_snapshot)
 from kernel.profiles.si_ffs import regsr_adapter as regsr
-from kernel.verification import CONFIRM, IDENTITY, NONE, REVIEW
+from kernel.verification import IDENTITY, NONE, REVIEW
 
 
 def uid():
@@ -92,32 +81,31 @@ def test_p1_import_writes_snapshot_and_store_backed_data(store):
 
 
 # ---------------------------------------------------------------------------
-# (2) ProductRegister loads the imported data FROM THE STORE (not a disk file)
+# (2) imported candidate data stays outside the active ProductRegister
 # ---------------------------------------------------------------------------
 
-def test_p1_product_register_loads_imported_data_from_store(store):
+def test_p1_product_register_excludes_unselected_imported_data(store):
     decision = f"U9{uid()[:4]}-50/26/2"
     art = _fixture_artifact(register_day="2099-01-13", decision=decision)
     sid = regsr.import_regsr_snapshot(store, art)["snapshotRef"]
-    # the imported snapshot carries NO "artifact:" file ref, so the disk-fallback
-    # path cannot load it — finding its data proves it was loaded from the store
+    assert _data_row(store, sid) is not None
+    # The candidate carries no packaged fallback and is not selected by the
+    # active RuntimeBundle. Loading a fresh register must not hot-activate it.
     assert not any(r.startswith("artifact:")
                    for r in store.get_record(sid)["payload"]["sourceArtifactRefs"])
     pr = ProductRegister()
     pr.load_from_store(store)
-    assert pr.lookup_by_decision(sid, decision) is not None, \
-        "imported snapshot data must load from the store, not only from package files"
+    assert pr.lookup_by_decision(sid, decision) is None
 
 
 # ---------------------------------------------------------------------------
-# (3) end-to-end: import -> store -> load -> G3 identity-grade verify (CONFIRM)
+# (3) end-to-end: an imported candidate cannot change bundle-selected authority
 # ---------------------------------------------------------------------------
 
-def test_p1_import_load_verify_confirms_end_to_end(store):
+def test_p1_imported_candidate_does_not_hot_activate_for_verification(store):
+    selected_before = current_reference_snapshot(store, REGSR_SNAPSHOT_PREFIX)
+    assert selected_before is not None
     decision = f"U9{uid()[:4]}-50/26/3"
-    # far-future date (the max REGSR vintage among these tests) so it never
-    # becomes a NOW-current fixture for other tests; verify as-of just after it
-    # is effective, where it is the deterministic max of the REGSR family
     art = _fixture_artifact(register_day="2099-06-17", decision=decision)
     sid = regsr.import_regsr_snapshot(store, art)["snapshotRef"]
     pr = ProductRegister()
@@ -125,13 +113,16 @@ def test_p1_import_load_verify_confirms_end_to_end(store):
     with store.serialized_tx() as cur:
         r = regsr.verify_product_authorisation(store, cur, pr, decision,
                                                as_of="2099-06-17T12:00:00Z")
-    assert r["snapshotRef"] == sid, "verify must resolve the imported snapshot"
-    assert r["verdict"] == CONFIRM
+    assert _data_row(store, sid) is not None
+    assert sid not in store.selected_reference_snapshot_refs
+    assert r["snapshotRef"] == selected_before["referenceSnapshotId"]
+    assert r["verdict"] == REVIEW
     t = r["trace"]
-    assert t["finalOutcome"] == "PASS"
+    assert t["finalOutcome"] == "REVIEW_REQUIRED"
     assert t["verificationPurpose"] == "PRODUCT_AUTHORISATION_IDENTITY"
-    assert t["selectedExternalId"] == {"externalId": decision,
-                                       "externalIdRole": "AUTHORISATION_NUMBER"}
+    assert t["candidateCount"] == 0
+    assert t["snapshotRefs"] == [selected_before["referenceSnapshotId"]]
+    assert sid not in t["snapshotRefs"]
 
 
 def test_p1_unknown_decision_routes_to_review(store):
@@ -243,10 +234,8 @@ def test_p1_changed_detail_same_list_digest_refuses_as_conflict(store):
 
 
 # ---------------------------------------------------------------------------
-# (8) D9 composite identity (decision number + validity dates): a duplicate
-#     decision number with DIFFERING validity is ambiguous -> REVIEW, never a
-#     collapsed PASS; the full composite query disambiguates -> CONFIRM; a true
-#     duplicate (same validity) stays one identity -> CONFIRM (hostile B2)
+# (8) D9 composite identity grading is tested directly, without making a
+#     synthetic imported candidate active runtime authority (hostile B2)
 # ---------------------------------------------------------------------------
 
 def _ambiguous_artifact(*, register_day, decision, issued_a="2024-01-01",
@@ -268,59 +257,62 @@ def _ambiguous_artifact(*, register_day, decision, issued_a="2024-01-01",
     return art
 
 
-def test_p1_ambiguous_decision_number_routes_to_review_not_pass(store):
+def test_p1_regsr_lookup_reports_ambiguous_decision_number(store):
     decision = f"U9{uid()[:4]}-50/26/9"
-    regsr.import_regsr_snapshot(store, _ambiguous_artifact(register_day="2099-03-01", decision=decision))
+    sid = f"{REGSR_SNAPSHOT_PREFIX}.lookup-ambiguous-{uid()}"
     pr = ProductRegister()
-    pr.load_from_store(store)
-    with store.serialized_tx() as cur:
-        r = regsr.verify_product_authorisation(store, cur, pr, decision,
-                                               as_of="2099-03-01T12:00:00Z")
-    assert r["verdict"] == REVIEW, "an ambiguous composite key must never CONFIRM/PASS"
-    assert r["problem"]["reasonCode"] == "PRODUCT_BINDING_UNRESOLVED"
-    t = r["trace"]
-    assert t["finalOutcome"] == "REVIEW_REQUIRED"
-    assert t["candidateCount"] == 2
-    assert t["statusObserved"] == "MULTIPLE_CANDIDATES"
-    assert t["selectedExternalId"]["externalIdRole"] == "NONE"
-    assert t["discrepancies"] and "ambiguous" in t["discrepancies"][0]["note"]
+    pr.register_artifact(
+        sid,
+        _ambiguous_artifact(register_day="2099-03-01", decision=decision),
+    )
+    result = regsr.regsr_lookup(pr)(sid, decision)
+    assert result.grade == NONE
+    assert result.candidate_count == 2
+    assert result.status_observed == "MULTIPLE_CANDIDATES"
+    assert result.discrepancies
+    assert "ambiguous" in result.discrepancies[0]["note"]
 
 
-def test_p1_composite_key_disambiguates_to_confirm(store):
+def test_p1_regsr_lookup_composite_key_disambiguates(store):
     decision = f"U9{uid()[:4]}-50/26/10"
-    regsr.import_regsr_snapshot(store, _ambiguous_artifact(register_day="2099-03-02", decision=decision))
+    sid = f"{REGSR_SNAPSHOT_PREFIX}.lookup-composite-{uid()}"
     pr = ProductRegister()
-    pr.load_from_store(store)
-    # the SAME ambiguous decision number, now with the full D9 composite key,
-    # resolves to exactly one identity -> CONFIRM the right validity window
-    with store.serialized_tx() as cur:
-        r = regsr.verify_product_authorisation(store, cur, pr, decision,
-                                               issued="2024-01-01", valid_until="2028-08-15",
-                                               as_of="2099-03-02T12:00:00Z")
-    assert r["verdict"] == CONFIRM
-    t = r["trace"]
-    assert t["finalOutcome"] == "PASS"
-    assert t["candidateCount"] == 1
-    assert t["selectedExternalId"] == {"externalId": decision, "externalIdRole": "AUTHORISATION_NUMBER"}
-    assert t["datesObserved"]["statusEffectiveUntil"] == "2028-08-15T00:00:00Z"
-    assert t["datesObserved"]["statusEffectiveFrom"] == "2024-01-01T00:00:00Z"
+    pr.register_artifact(
+        sid,
+        _ambiguous_artifact(register_day="2099-03-02", decision=decision),
+    )
+    result = regsr.regsr_lookup(
+        pr, issued="2024-01-01", valid_until="2028-08-15"
+    )(sid, decision)
+    assert result.grade == IDENTITY
+    assert result.candidate_count == 1
+    assert result.external_id == decision
+    assert result.dates_observed == {
+        "statusEffectiveFrom": "2024-01-01T00:00:00Z",
+        "statusEffectiveUntil": "2028-08-15T00:00:00Z",
+    }
 
 
-def test_p1_true_duplicate_same_validity_is_one_identity_confirm(store):
+def test_p1_regsr_lookup_true_duplicate_is_one_identity(store):
     # a decision number repeated with the SAME validity window is ONE identity,
     # not an ambiguity — it must still CONFIRM (no over-flagging of duplicates)
     decision = f"U9{uid()[:4]}-50/26/11"
-    regsr.import_regsr_snapshot(store, _ambiguous_artifact(
-        register_day="2099-03-03", decision=decision,
-        issued_a="2024-01-01", until_a="2028-08-15",
-        issued_b="2024-01-01", until_b="2028-08-15"))
+    sid = f"{REGSR_SNAPSHOT_PREFIX}.lookup-duplicate-{uid()}"
     pr = ProductRegister()
-    pr.load_from_store(store)
-    with store.serialized_tx() as cur:
-        r = regsr.verify_product_authorisation(store, cur, pr, decision,
-                                               as_of="2099-03-03T12:00:00Z")
-    assert r["verdict"] == CONFIRM, "a true duplicate (same validity) is one identity"
-    assert r["trace"]["candidateCount"] == 1
+    pr.register_artifact(
+        sid,
+        _ambiguous_artifact(
+            register_day="2099-03-03",
+            decision=decision,
+            issued_a="2024-01-01",
+            until_a="2028-08-15",
+            issued_b="2024-01-01",
+            until_b="2028-08-15",
+        ),
+    )
+    result = regsr.regsr_lookup(pr)(sid, decision)
+    assert result.grade == IDENTITY
+    assert result.candidate_count == 1
 
 
 # ---------------------------------------------------------------------------

@@ -22,7 +22,18 @@ __all__ = [
 def test_g2_output_render_serializes_under_lock(store):
     # While connection A holds serialized_tx, a passport render on connection B
     # must block until A releases, not interleave with the write lock.
-    a, b = Store(), Store()
+    a = Store(
+        dsn=store.dsn,
+        tenant_ref=store.tenant_ref,
+        runtime_bundle=store.runtime_bundle,
+        active_descriptor=store.active_descriptor,
+    )
+    b = Store(
+        dsn=store.dsn,
+        tenant_ref=store.tenant_ref,
+        runtime_bundle=store.runtime_bundle,
+        active_descriptor=store.active_descriptor,
+    )
     done = threading.Event()
     box = {}
 
@@ -53,7 +64,18 @@ def test_g2_output_render_serializes_under_lock(store):
 def test_g2_freeze_serializes_under_lock(store):
     # While connection A holds serialized_tx, an inspection-register freeze on
     # connection B must block until A releases.
-    a, b = Store(), Store()
+    a = Store(
+        dsn=store.dsn,
+        tenant_ref=store.tenant_ref,
+        runtime_bundle=store.runtime_bundle,
+        active_descriptor=store.active_descriptor,
+    )
+    b = Store(
+        dsn=store.dsn,
+        tenant_ref=store.tenant_ref,
+        runtime_bundle=store.runtime_bundle,
+        active_descriptor=store.active_descriptor,
+    )
     done = threading.Event()
     box = {}
 

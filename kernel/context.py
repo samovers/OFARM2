@@ -16,8 +16,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import config
-from .contracts import UnknownContract, canonical_json
-from .profile_runtime import ProfileRuntimeError, resolve_active_descriptor
+from .contracts import ContractViolation, UnknownContract, canonical_json, sha256_of
+from .profile_runtime import ProfileRuntimeError, resolve_bound_descriptor
+from .runtime_bundle import RuntimeComponentRole
 
 PROFILE_INSTANCE_FILES = list(config.ACTIVE_PROFILE.profile_instance_files)
 
@@ -209,7 +210,7 @@ def _require_active_profile(active_profile):
 def bootstrap_for_descriptor(store, active_profile) -> list[str]:
     """Load an explicit profile descriptor's shipped instances into the store."""
     active_profile = _require_active_profile(active_profile)
-    inserted = []
+    prepared = []
     for path in active_profile.profile_instance_paths:
         try:
             payload = json.loads(path.read_text())
@@ -221,17 +222,56 @@ def bootstrap_for_descriptor(store, active_profile) -> list[str]:
             raise ContextNotReconstructible(
                 f"active profile instance at {path} must be a JSON object")
         try:
-            contract = store.registry.get(payload["schemaVersion"])
+            contract = store.registry.validate(payload)
             record_id = payload[contract.id_field]
-        except (KeyError, TypeError, UnknownContract) as exc:
+        except (ContractViolation, KeyError, TypeError, UnknownContract) as exc:
             raise ContextNotReconstructible(
                 f"active profile instance malformed at {path}: {exc}"
             ) from exc
-        if store.record_exists(record_id):
-            continue
-        with store.tx() as cur:
+        selected_bytes = canonical_json(payload).encode("utf-8")
+        selected_payload_digest = sha256_of(payload)
+        matching_components = [
+            component for component in store.runtime_bundle.components
+            if component.logical_ref == record_id
+            and component.role in {
+                RuntimeComponentRole.PROFILE_INSTANCE,
+                RuntimeComponentRole.REFERENCE_SNAPSHOT,
+            }
+        ]
+        if (
+            len(matching_components) != 1
+            or matching_components[0].canonical_bytes != selected_bytes
+            or matching_components[0].content_digest != selected_payload_digest
+        ):
+            raise ContextNotReconstructible(
+                f"active profile instance {record_id} is not the exact content "
+                "selected by the Store RuntimeBundle"
+            )
+        prepared.append((payload, contract, record_id, selected_payload_digest))
+
+    inserted = []
+    with store.tx() as cur:
+        missing = []
+        for payload, contract, record_id, selected_payload_digest in prepared:
+            existing = store.get_record(record_id)
+            if existing is None:
+                missing.append((payload, record_id))
+                continue
+            if (
+                existing["tenant_ref"] != store.tenant_ref
+                or existing["lane"] != "canonical"
+                or existing["record_kind"] != contract.kind
+                or existing["schema_hash"] != contract.schema_hash
+                or existing["payload_sha256"] != selected_payload_digest
+                or existing["payload"] != payload
+            ):
+                raise ContextNotReconstructible(
+                    f"existing active profile instance {record_id} is not the "
+                    "exact selected contract and payload"
+                )
+        for payload, record_id in missing:
             store.insert_record(cur, payload)
-        inserted.append(record_id)
+            inserted.append(record_id)
     return inserted
 
 
@@ -241,7 +281,7 @@ def bootstrap(store) -> list[str]:
     These are package-validated instances (conformance self-check), inserted
     verbatim — never edited (AGENTS.md rule 4).
     """
-    return bootstrap_for_descriptor(store, config.ACTIVE_PROFILE)
+    return bootstrap_for_descriptor(store, store.active_descriptor)
 
 
 def current_reference_snapshot(store, prefix: str,
@@ -250,15 +290,16 @@ def current_reference_snapshot(store, prefix: str,
     that is actually IN FORCE at the selection bound.
 
     The bound is `as_of` (AS_OF) or the current time (NOW). A snapshot is in
-    force at the bound iff `effectiveFrom <= bound` AND (no `effectiveUntil`, or
-    `bound < effectiveUntil`). So a future-effective vintage is never selected
-    as current — for NOW or for an earlier AS_OF — and an expired snapshot is
-    never in force (PR #11 review). `prefix` is a FAMILY boundary, matched at the
-    family root or its '.' delimiter (not a bare string prefix), so a sibling
-    family that shares leading characters never collides. None means no snapshot
-    of this family was in force at that moment. An unparseable bound (junk
-    as_of) selects nothing (fail closed)."""
+    force at the bound iff it is selected by the Store's RuntimeBundle,
+    `effectiveFrom <= bound`, and (no `effectiveUntil`, or `bound <
+    effectiveUntil`). A governed import can retain a candidate snapshot, but it
+    cannot hot-activate it under the current bundle; selection changes require a
+    new bundle. `prefix` is a FAMILY boundary, matched at the family root or its
+    '.' delimiter (not a bare string prefix), so a sibling family that shares
+    leading characters never collides. None means no selected snapshot of this
+    family was in force at that moment. An unparseable bound selects nothing."""
     rows = store.find_by_kind("ofarm.referencesnapshot.v0.1")
+    selected_refs = store.selected_reference_snapshot_refs
     bound = parse_ts(as_of) if as_of else parse_ts(now_iso())
     if bound is None:
         return None   # unparseable as_of: refuse to guess
@@ -266,6 +307,8 @@ def current_reference_snapshot(store, prefix: str,
     for r in rows:
         p = r["payload"]
         sid = p["referenceSnapshotId"]
+        if sid not in selected_refs:
+            continue
         # family boundary (PR #11 review): a sibling family must not collide by
         # shared leading characters — '...ffs-reg' must not match
         # '...ffs-regression'. Match the family root exactly or up to its '.'
@@ -317,7 +360,7 @@ def context_reference_snapshots(store, as_of: str | None = None) -> list[dict]:
     """Reference snapshots required by the active profile descriptor."""
     return context_reference_snapshots_for_descriptor(
         store,
-        config.ACTIVE_PROFILE,
+        store.active_descriptor,
         as_of=as_of,
     )
 
@@ -364,21 +407,25 @@ class ProductRegister:
         }
 
     def load_from_store(self, store) -> None:
-        """Resolve register data for the REGSR snapshots.
+        """Resolve register data for bundle-selected REGSR snapshots.
 
         Two sources, in order: (1) store-backed reference data persisted by a
-        governed import (M2 P1) — so a SCHEDULED-import snapshot's content is
-        resolvable from the store, not only from committed package files; then
-        (2) the committed package-file fallback for shipped snapshots, which
-        names its artifact in sourceArtifactRefs. The runtime never guesses."""
+        governed import, when that snapshot is selected by this RuntimeBundle;
+        then (2) the committed package-file fallback for selected shipped
+        snapshots, which names its artifact in sourceArtifactRefs. Unselected
+        imported candidates remain auditable but inactive. The runtime never
+        guesses or hot-activates them."""
+        selected_refs = store.selected_reference_snapshot_refs
         for row in store.reference_data(self.bindings.regsr_data_family):
             sid = row["snapshot_ref"]
-            if sid not in self._by_snapshot:
+            if sid in selected_refs and sid not in self._by_snapshot:
                 self.register_artifact(sid, row["payload"])
         for row in store.find_by_kind("ofarm.referencesnapshot.v0.1"):
             payload = row["payload"]
             sid = payload["referenceSnapshotId"]
-            if not _snapshot_matches_family(sid, self.bindings.regsr_snapshot_prefix) \
+            if sid not in selected_refs \
+                    or not _snapshot_matches_family(
+                        sid, self.bindings.regsr_snapshot_prefix) \
                     or sid in self._by_snapshot:
                 continue
             for ref in payload.get("sourceArtifactRefs", []):
@@ -445,15 +492,14 @@ class ContextAssembler:
 
     def __init__(self, store, *, active_descriptor=None, active_profile=None):
         self.store = store
-        if (active_descriptor is not None and active_profile is not None
-                and active_descriptor != active_profile):
-            raise ProfileRuntimeError(
-                "active_descriptor and active_profile refer to different descriptors")
         self.active_profile = _require_active_profile(
-            resolve_active_descriptor(
-                active_descriptor if active_descriptor is not None else active_profile,
-                allow_config_default=True,
-            ))
+            resolve_bound_descriptor(
+                store,
+                active_descriptor=active_descriptor,
+                active_profile=active_profile,
+            )
+        )
+        self.runtime_bundle = store.runtime_bundle
 
     def _spine(self, as_of: str | None = None) -> dict:
         artifact_sets = self.store.find_by_kind("ofarm.activeartifactset.v0.1")
@@ -646,40 +692,58 @@ class ContextAssembler:
         reference_refs = [p["referenceSnapshotId"] for p in reference_snapshots]
 
         material_basis = {
+            "schemaVersion": "ofarm.contextsnapshot.v0.1",
             "targetTwin": target_twin,
-            "farm": farm_ref,
-            "policy": policy,
+            "anchorScopes": [{"scopeType": "FARM", "scopeRef": farm_ref}],
+            "evaluationTimePolicy": policy,
             "activeArtifactSetRef": spine["artifact_set"]["activeArtifactSetId"],
             "sourcePackActivationSetRefs": [spine["activation_set"]["packActivationSetId"]],
             "activePackRefs": spine["activation_set"]["activePackRefs"],
             "activeProfileRefs": spine["activation_set"]["activeProfileRefs"],
+            "relevantPrecedenceClasses": ["JURISDICTION_LAW_SAFETY"],
             "referenceSnapshotRefs": reference_refs,
             "evidencePolicyRefs": [self.active_profile.evidence_policy_ref],
         }
-        digest = hashlib.sha256(canonical_json(material_basis).encode()).hexdigest()[:12]
+        identity_basis = {
+            **material_basis,
+            "runtimeBundleDigest": self.runtime_bundle.digest,
+        }
+        digest = hashlib.sha256(
+            canonical_json(identity_basis).encode()
+        ).hexdigest()
         snapshot_id = (
             f"{self.active_profile.context_snapshot_id_prefix}."
             f"{_local(farm_ref)}.{target_twin.lower()}.{digest}"
         )
 
-        existing = self.store.get_payload(snapshot_id)
+        existing = self.store.get_record(snapshot_id)
         if existing:
-            return existing  # basis-preserving reuse (ContextSnapshot Closure RFC §2.4)
+            if (
+                existing["tenant_ref"] != self.store.tenant_ref
+                or existing["runtime_bundle_digest"] != self.runtime_bundle.digest
+            ):
+                raise ContextNotReconstructible(
+                    f"ContextSnapshot identity {snapshot_id} belongs to another "
+                    "RuntimeBundle; refusing cross-bundle reuse")
+            observed_basis = {
+                field: existing["payload"].get(field)
+                for field in material_basis
+            }
+            if (
+                existing["record_kind"] != material_basis["schemaVersion"]
+                or existing["payload"].get("contextSnapshotId") != snapshot_id
+                or observed_basis != material_basis
+            ):
+                raise ContextNotReconstructible(
+                    f"ContextSnapshot identity {snapshot_id} was reused with "
+                    "unequal canonical identity inputs"
+                )
+            return existing["payload"]  # basis-preserving reuse (Closure RFC §2.4)
 
         payload = {
-            "schemaVersion": "ofarm.contextsnapshot.v0.1",
+            **material_basis,
             "contextSnapshotId": snapshot_id,
             "generatedAt": now_iso(),
-            "targetTwin": target_twin,
-            "anchorScopes": [{"scopeType": "FARM", "scopeRef": farm_ref}],
-            "evaluationTimePolicy": policy,
-            "activeArtifactSetRef": material_basis["activeArtifactSetRef"],
-            "sourcePackActivationSetRefs": material_basis["sourcePackActivationSetRefs"],
-            "activePackRefs": material_basis["activePackRefs"],
-            "activeProfileRefs": material_basis["activeProfileRefs"],
-            "relevantPrecedenceClasses": ["JURISDICTION_LAW_SAFETY"],
-            "referenceSnapshotRefs": reference_refs,
-            "evidencePolicyRefs": [self.active_profile.evidence_policy_ref],
             "notes": "Per-farm Compliance-twin snapshot assembled from the shipped SI pilot spine.",
         }
         self.store.insert_record(cur, payload)

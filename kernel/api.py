@@ -16,6 +16,7 @@ from . import auth_oidc, config, context, manifest as manifest_mod
 from .contracts import ContractViolation
 from .problems import runtime_problem
 from .gates import GatePipeline
+from .runtime_bundle import RuntimeBundleBuilder
 from .store import Store
 from .views import OutputGenerator
 
@@ -63,12 +64,33 @@ def create_app(store: Store | None = None, *, oidc=_FROM_ENV) -> FastAPI:
                     "current-compliance, certification, or production readiness.",
         version="m1.0",
     )
-    app.state.store = store or Store()
-    app.state.store.migrate()
-    context.bootstrap(app.state.store)
-    app.state.pipeline = GatePipeline(app.state.store)
-    app.state.outputs = OutputGenerator(app.state.store)
+    if store is None:
+        selected_bundle = RuntimeBundleBuilder.from_manifest(
+            config.PACKAGE_ROOT
+        ).build()
+        store = Store(
+            tenant_ref=config.TENANT_REF,
+            runtime_bundle=selected_bundle,
+            active_descriptor=config.ACTIVE_PROFILE,
+        )
+    app.state.store = store
+    # Schema installation, bundle persistence, and selected-profile bootstrap
+    # are one startup transaction. Any refusal rolls back the whole bootstrap.
+    with app.state.store.conn.transaction():
+        app.state.store.migrate()
+        context.bootstrap(app.state.store)
+    app.state.pipeline = GatePipeline(
+        app.state.store, active_descriptor=app.state.store.active_descriptor)
+    app.state.outputs = OutputGenerator(
+        app.state.store, active_descriptor=app.state.store.active_descriptor)
     app.state.oidc = config.oidc_config_from_env() if oidc is _FROM_ENV else oidc
+
+    @app.middleware("http")
+    async def runtime_bundle_receipt_header(request, call_next):
+        response = await call_next(request)
+        response.headers["X-OFARM-Runtime-Bundle-Digest"] = \
+            app.state.store.runtime_bundle_digest
+        return response
 
     def _deny(title: str, detail: str, pid: str):
         raise HTTPException(status_code=401, detail=runtime_problem(
@@ -114,6 +136,7 @@ def create_app(store: Store | None = None, *, oidc=_FROM_ENV) -> FastAPI:
     @app.get("/health")
     def health():
         return {"status": "ok",
+                "runtimeBundleDigest": app.state.store.runtime_bundle_digest,
                 "unreachableAuthoritativeRecords":
                     app.state.store.unreachable_authoritative_records()}
 
@@ -301,7 +324,9 @@ def create_app(store: Store | None = None, *, oidc=_FROM_ENV) -> FastAPI:
                     deny()
         return {"recordId": row["record_id"], "recordKind": row["record_kind"],
                 "schemaHash": row["schema_hash"], "payloadSha256": row["payload_sha256"],
-                "recordTime": row["record_time"].isoformat(), "payload": payload}
+                "recordTime": row["record_time"].isoformat(),
+                "runtimeBundleDigest": row["runtime_bundle_digest"],
+                "payload": payload}
 
     @app.get("/views/passport/{farm_ref}")
     def passport(farm_ref: str, principal: str = Depends(get_principal)):

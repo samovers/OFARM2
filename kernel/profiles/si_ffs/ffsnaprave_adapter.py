@@ -245,11 +245,16 @@ class FFSNapraveRegister:
         self._by_snapshot[snapshot_id] = {"byKey": by_key, "bySticker": by_sticker}
 
     def load_from_store(self, store) -> None:
-        """Load store-backed inspections persisted by a governed import (M2 P3),
-        so a scheduled-import file's inspections resolve from the store."""
+        """Load store-backed inspections for bundle-selected snapshots.
+
+        Governed imports persist candidate data, but an unselected candidate
+        stays inactive until a new RuntimeBundle selects it."""
         for row in store.reference_data(FFSNAPRAVE_DATA_FAMILY):
             sid = row["snapshot_ref"]
-            if sid not in self._by_snapshot:
+            if (
+                sid in store.selected_reference_snapshot_refs
+                and sid not in self._by_snapshot
+            ):
                 self.register_artifact(sid, row["payload"])
 
     def validity_windows(self, snapshot_id: str, sticker_number: str) -> list:
@@ -279,11 +284,16 @@ class FFSNapraveRegister:
 
 def attach_inspection_evidence(store, register, snapshot_id, sticker_number, *,
                                captured_by, farm_ref, validity=None) -> dict:
-    """Match a farm sprayer's inspection sticker against a dated FFSNaprave snapshot
-    and, on an AUTHORISED match, CAPTURE a `REGISTRY_EXTRACT` `EvidenceRecord`
-    recording that the inspection exists in the register. Returns
+    """Match a farm sprayer's inspection sticker against a bundle-selected,
+    dated FFSNaprave snapshot and, on an AUTHORISED match, CAPTURE a
+    `REGISTRY_EXTRACT` `EvidenceRecord` recording that the inspection exists in
+    the register. Returns
     `{attached, evidenceRef, disposition, problem}`:
 
+      * snapshot is not selected by the
+        active bundle, or is outside the
+        FFSNaprave family                 -> attached False,
+                                           SNAPSHOT_NOT_SELECTED;
       * NO match                      -> attached False, NO_MATCH (advisory: the
                                          equipment is recorded WITHOUT inspection
                                          evidence, never a silent pass-as-compliant);
@@ -303,6 +313,25 @@ def attach_inspection_evidence(store, register, snapshot_id, sticker_number, *,
     SNAPSHOT-SCOPED (vintage + sticker + validity) so a later vintage never reuses an
     older one's evidence (B1); the existence re-check is UNDER the single-writer lock
     so concurrent captures are idempotent (B2)."""
+    in_family = (
+        snapshot_id == FFSNAPRAVE_SNAPSHOT_PREFIX
+        or snapshot_id.startswith(FFSNAPRAVE_SNAPSHOT_PREFIX + ".")
+    )
+    if (
+        snapshot_id not in store.selected_reference_snapshot_refs
+        or not in_family
+    ):
+        return {
+            "attached": False,
+            "evidenceRef": None,
+            "disposition": "SNAPSHOT_NOT_SELECTED",
+            "problem": runtime_problem(
+                "EVIDENCE_REFERENCE_UNAVAILABLE",
+                "Inspection snapshot unavailable",
+                "the requested FFSNaprave snapshot is not selected by the "
+                "active RuntimeBundle; evidence capture requires a new bundle",
+            ),
+        }
     inspection = register.match(snapshot_id, sticker_number, validity)
     if inspection is None:
         return {"attached": False, "evidenceRef": None, "disposition": "NO_MATCH",

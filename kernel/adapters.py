@@ -114,10 +114,64 @@ class ImportRunner:
         with self.store.serialized_tx() as cur:
             existing = self.store.get_record(snapshot_id)
             if existing is not None:
-                if existing["payload_sha256"] == sha256_of(snapshot):
-                    # idempotent re-import of identical content: a governed no-op
+                if (
+                    existing["payload_sha256"] == sha256_of(snapshot)
+                    and existing["payload"] == snapshot
+                ):
+                    # Canonical truth is reused, but parsed cache state is scoped
+                    # to the active RuntimeBundle. A new process/bundle must
+                    # rebuild that derived input before reporting successful
+                    # reuse; it may never read another bundle's parser output.
+                    if data_family and parse_result.records is not None:
+                        cur.execute(
+                            "SELECT snapshot_ref, data_family, artifact_ref, source_digest, "
+                            "parser_label, record_count, payload, payload_sha256, tenant_ref, "
+                            "runtime_bundle_digest FROM reference_snapshot_data "
+                            "WHERE snapshot_ref = %s AND data_family = %s "
+                            "AND tenant_ref = %s AND runtime_bundle_digest = %s",
+                            (snapshot_id, data_family, self.store.tenant_ref,
+                             self.store.runtime_bundle_digest),
+                        )
+                        cached = cur.fetchone()
+                        parsed_digest = sha256_of(parse_result.records)
+                        expected_cache = {
+                            "snapshot_ref": snapshot_id,
+                            "data_family": data_family,
+                            "artifact_ref": parse_result.artifactRef,
+                            "source_digest": parse_result.sourceDigest,
+                            "parser_label": snapshot.get("canonicalVersionLabel"),
+                            "record_count": parse_result.recordCount,
+                            "payload": parse_result.records,
+                            "payload_sha256": parsed_digest,
+                            "tenant_ref": self.store.tenant_ref,
+                            "runtime_bundle_digest": self.store.runtime_bundle_digest,
+                        }
+                        if cached is None:
+                            self.store.insert_reference_data(
+                                cur, snapshot_id, data_family, parse_result.records,
+                                artifact_ref=parse_result.artifactRef,
+                                source_digest=parse_result.sourceDigest,
+                                parser_label=snapshot.get("canonicalVersionLabel"),
+                                record_count=parse_result.recordCount)
+                        elif cached != expected_cache:
+                            problem = runtime_problem(
+                                "DUPLICATE_IMPORT_AMBIGUOUS",
+                                "Conflicting parsed cache",
+                                f"referenceSnapshotId {snapshot_id} already has "
+                                "different parsed data under the active RuntimeBundle; "
+                                "refused rather than replacing derived input silently")
+                            self.store.log_gate(
+                                cur, request_id, self.GATE, "REFUSED",
+                                reason_code="DUPLICATE_IMPORT_AMBIGUOUS",
+                                rationale=problem["detail"],
+                                related_refs=[snapshot_id])
+                            return {"imported": False, "snapshotRef": None,
+                                    "disposition": "CONFLICT", "problem": problem}
+                    # Idempotent canonical re-import, with the current bundle's
+                    # derived cache now verified or rebuilt.
                     self.store.log_gate(cur, request_id, self.GATE, "REPLAY_REUSED",
-                                        rationale="identical snapshot already imported",
+                                        rationale="identical snapshot already imported; "
+                                                  "active RuntimeBundle cache verified",
                                         related_refs=[snapshot_id])
                     return {"imported": True, "snapshotRef": snapshot_id,
                             "disposition": "ALREADY_IMPORTED", "problem": None}
@@ -132,16 +186,10 @@ class ImportRunner:
                 return {"imported": False, "snapshotRef": None,
                         "disposition": "CONFLICT", "problem": problem}
 
-            # Invalidation posture (M2 G2, PR #10 review H2): the runner does NOT
-            # broad-stale existing materializations on import. It relies on
-            # context-key DRIFT — a new in-force ReferenceSnapshot changes the
-            # ContextSnapshot (ContextAssembler folds the current reference
-            # snapshots into the context basis), hence the MaterializationKey,
-            # so a post-import NOW materialization never reuses a pre-import row
-            # (D12). For G2's fixture scheme there is no SI context to stale at
-            # all. P1/P2 (real scheduled REGSR/GERK imports) must confirm this
-            # suffices or add an explicit broad-stale (invalidate_for_sources with
-            # a farm/reference-family scope) — see the P1/P2 tickets.
+            # A governed import retains a candidate ReferenceSnapshot and its
+            # parsed data, but does not hot-activate it. Runtime selection stays
+            # frozen to the active RuntimeBundle; selecting a newer snapshot
+            # requires a new bundle (issue #171, no automatic migration).
             self.store.insert_record(cur, snapshot)
             # store-backed reference DATA (index cache, not OFARM truth) so a
             # scheme reader can resolve this snapshot's content from the store;

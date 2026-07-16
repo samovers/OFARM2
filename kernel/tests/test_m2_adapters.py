@@ -105,7 +105,18 @@ def test_g2_idempotent_reimport_reused(store):
 def test_g2_single_writer_lock_is_mutually_exclusive(store):
     # two independent connections: while A holds the serialized-write lock, B
     # cannot acquire it; once A releases (at commit), B can.
-    a, b = Store(), Store()
+    a = Store(
+        dsn=store.dsn,
+        tenant_ref=store.tenant_ref,
+        runtime_bundle=store.runtime_bundle,
+        active_descriptor=store.active_descriptor,
+    )
+    b = Store(
+        dsn=store.dsn,
+        tenant_ref=store.tenant_ref,
+        runtime_bundle=store.runtime_bundle,
+        active_descriptor=store.active_descriptor,
+    )
     try:
         with b.conn.cursor() as cb:
             with a.serialized_tx():
@@ -132,7 +143,12 @@ def test_g2_concurrent_first_structure_assertions_one_governed_winner(store):
     barrier = threading.Barrier(2)
 
     def worker(i):
-        s = Store()
+        s = Store(
+            dsn=store.dsn,
+            tenant_ref=store.tenant_ref,
+            runtime_bundle=store.runtime_bundle,
+            active_descriptor=store.active_descriptor,
+        )
         try:
             pipe = GatePipeline(s)
             sub = demo.structure_submission(

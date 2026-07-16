@@ -438,11 +438,17 @@ def verify_generated_artifacts(store) -> list[str]:
 
 def _bootstrapped_store_for_verify():
     from . import context
+    from .runtime_bundle import RuntimeBundleBuilder
     from .store import Store
 
-    store = Store()
-    store.migrate()
-    context.bootstrap(store)
+    store = Store(
+        tenant_ref=config.TENANT_REF,
+        runtime_bundle=RuntimeBundleBuilder.from_manifest(config.PACKAGE_ROOT).build(),
+        active_descriptor=config.ACTIVE_PROFILE,
+    )
+    with store.conn.transaction():
+        store.migrate()
+        context.bootstrap(store)
     return store
 
 
