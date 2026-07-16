@@ -294,6 +294,7 @@ def _authenticated_profile_route(
         _field=_exact_instance_field,
         _selection=_retained_route_selection_document,
         _parse_ts=parse_ts,
+        _sorted=sorted,
         _raise=_raise_retained_gate_dispatch_error,
 ):
     """Select a route only from authenticated bytes and exact object fields."""
@@ -328,10 +329,17 @@ def _authenticated_profile_route(
             integrity("live profile route selection differs from retained bytes")
 
         registry_candidates = _field(registry, "descriptor_candidates")
+        registry_discoverable = _field(
+            registry, "discoverable_package_names")
+        registry_enabled = _field(registry, "enabled_package_names")
         if (type(registry_candidates) is not tuple
-                or list(_field(registry, "discoverable_package_names")) !=
+                or type(registry_discoverable) is not tuple
+                or type(registry_enabled) is not tuple
+                or any(type(name) is not str for name in (
+                    *registry_discoverable, *registry_enabled))
+                or list(_sorted(registry_discoverable)) !=
                 dict.__getitem__(registry_document, "discoverablePackageNames")
-                or list(_field(registry, "enabled_package_names")) !=
+                or list(_sorted(registry_enabled)) !=
                 dict.__getitem__(registry_document, "enabledPackageNames")
                 or len(registry_candidates) != len(candidate_documents)
                 or len(route_records) != len(route_documents)):
@@ -446,13 +454,21 @@ def _authenticated_profile_route(
         route = selected_routes[0]
         package_name = dict.__getitem__(
             selected_route_document, "profilePackageName")
-        if package_name not in selected_profile_package_names:
-            integrity("resolved profile package is not retained as selected")
+        bundle_descriptor = _field(runtime_bundle, "descriptor")
+        if (type(bundle_descriptor) is not _model_bindings[0][1]
+                or bundle_descriptor is not active_profile):
+            integrity("resolved profile authority differs from retained runtime")
         selected_candidate_documents = [
             candidate_document for candidate_document in candidate_documents
             if dict.__getitem__(candidate_document, "packageName") == package_name
         ]
-        if len(selected_candidate_documents) != 1:
+        route_id = dict.__getitem__(selected_route_document, "routeId")
+        if not selected_candidate_documents:
+            raise ProfileRuntimeError(
+                f"profile route {route_id!r} targets package "
+                f"{package_name!r} with no runtime_profile_descriptor.json; "
+                "design-only profile slices are not active runtime profiles")
+        if len(selected_candidate_documents) > 1:
             integrity("resolved profile candidate is not unique")
         selected_candidate_document = selected_candidate_documents[0]
         selected_candidates = [
@@ -462,11 +478,19 @@ def _authenticated_profile_route(
         if len(selected_candidates) != 1:
             integrity("resolved profile candidate identity is not retained")
         candidate = selected_candidates[0]
-        bundle_descriptor = _field(runtime_bundle, "descriptor")
-        if (dict.__getitem__(selected_candidate_document, "enabled") is not True
-                or type(bundle_descriptor) is not _model_bindings[0][1]
-                or bundle_descriptor is not active_profile
-                or not descriptor_matches_document(
+        candidate_enabled = dict.__getitem__(
+            selected_candidate_document, "enabled")
+        if type(candidate_enabled) is not bool:
+            integrity("retained profile candidate enabled state is malformed")
+        if candidate_enabled is not True:
+            raise ProfileRuntimeError(
+                f"profile route {route_id!r} targets package "
+                f"{package_name!r} that is not enabled for this runtime")
+        if package_name not in selected_profile_package_names:
+            raise ProfileRuntimeError(
+                f"profile route {route_id!r} targets package "
+                f"{package_name!r} that is not selected for this runtime")
+        if (not descriptor_matches_document(
                     bundle_descriptor, selected_candidate_document)
                 or any(
                     _field(route, route_field) !=
