@@ -4362,7 +4362,8 @@ def test_review_rejection_emitter_ctx_descriptor_cannot_promote(
     try:
         with pytest.raises(
                 RuntimeBundleError,
-                match="PromotionEmitter dispatch surface changed"):
+                match=(r"decision semantic state changed after activation: "
+                       r"kernel\.emission\.PromotionEmitter")):
             pipeline.commit(submission)
     finally:
         if "ctx" in vars(emission_module.PromotionEmitter):
