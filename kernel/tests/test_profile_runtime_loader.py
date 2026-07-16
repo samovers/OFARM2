@@ -2754,11 +2754,9 @@ def test_acceptance_sufficiency_uses_descriptor_policy_ref_without_policy_body(
 def test_descriptor_validation_policy_failure_stops_at_validation(fresh_store, fresh_pipeline):
     store, pipeline = fresh_store, fresh_pipeline
 
-    class FailingValidationPolicyProvider:
-        @staticmethod
-        def validation_policy():
-            raise profile_policy.ProfilePolicyError(
-                "descriptor validation unavailable")
+    def failing_validation_policy(_ctx, _entry, _provider):
+        raise profile_policy.ProfilePolicyError(
+            "descriptor validation unavailable")
 
     submission = demo.spray_submission(
         f"mp3d-validation-fail:{_uid()}",
@@ -2770,8 +2768,10 @@ def test_descriptor_validation_policy_failure_stops_at_validation(fresh_store, f
             ctx = pipeline._new_context(cur, submission)
             assert isinstance(IngressNormalizer().run(ctx), GatePass)
             assert isinstance(AuthorityGate().run(ctx), GatePass)
-            ctx.policy_provider = FailingValidationPolicyProvider()
-            refusal = validators.ValidationGate().run(ctx)
+            refusal = validators.ValidationGate().run(
+                ctx,
+                _invoke_descriptor_policy=failing_validation_policy,
+            )
             raise RuntimeError("rollback-only stage probe")
 
     assert isinstance(refusal, GateRefusal)
@@ -2790,15 +2790,9 @@ def test_descriptor_sufficiency_policy_failure_happens_after_validation(
         fresh_store, fresh_pipeline):
     store, pipeline = fresh_store, fresh_pipeline
 
-    class FailingEvidencePolicyProvider:
-        def __init__(self, provider):
-            self.policy_ref = provider.policy_ref
-            self.recognized_rule_refs = provider.recognized_rule_refs
-
-        @staticmethod
-        def evidence_policy(*_args, **_kwargs):
-            raise profile_policy.ProfilePolicyError(
-                "descriptor floor unavailable")
+    def failing_evidence_policy(_ctx, _entry, _provider, **_kwargs):
+        raise profile_policy.ProfilePolicyError(
+            "descriptor floor unavailable")
 
     submission = demo.spray_submission(
         f"mp3d-sufficiency-fail:{_uid()}",
@@ -2815,8 +2809,10 @@ def test_descriptor_sufficiency_policy_failure_happens_after_validation(
                 ProfileApplicabilityGate(),
             ):
                 assert isinstance(stage.run(ctx), GatePass)
-            ctx.policy_provider = FailingEvidencePolicyProvider(ctx.policy_provider)
-            refusal = EvidenceSufficiencyGate().run(ctx)
+            refusal = EvidenceSufficiencyGate().run(
+                ctx,
+                _invoke_descriptor_policy=failing_evidence_policy,
+            )
             raise RuntimeError("rollback-only stage probe")
 
     assert isinstance(refusal, GateRefusal)
