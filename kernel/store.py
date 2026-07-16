@@ -33,6 +33,12 @@ from .runtime_bundle import (
     strict_json_document,
 )
 from .runtime_bundle_repository import RuntimeBundleRepository
+from .schema_posture import (
+    DatabaseObservation,
+    configure_session,
+    install_or_verify_schema,
+    verify_transaction_posture,
+)
 
 # Single-writer advisory-lock key (M2 G2): a stable signed-64-bit derived from
 # the tenant ref. Every governed WRITE entry point (user commit + scheduled
@@ -50,7 +56,7 @@ AUTHORITATIVE_KINDS = (
     "ofarm.acceptedeventconsequence.v0.1",
 )
 
-_SCHEMA_SQL = (config.PACKAGE_ROOT / "kernel" / "schema.sql").read_text()
+_SCHEMA_SQL_BYTES = (config.PACKAGE_ROOT / "kernel" / "schema.sql").read_bytes()
 _RECEIPT_TABLES = (
     "kernel_record",
     "kernel_edge",
@@ -118,6 +124,7 @@ class Store:
     def conn(self) -> psycopg.Connection:
         if self._conn is None or self._conn.closed:
             self._conn = psycopg.connect(self.dsn, row_factory=dict_row, autocommit=True)
+            configure_session(self._conn)
         return self._conn
 
     @property
@@ -222,7 +229,7 @@ class Store:
                 "applied operational schema lacks exact tenant-qualified "
                 "RuntimeBundle foreign keys")
 
-    def migrate(self) -> None:
+    def migrate(self) -> DatabaseObservation:
         """Apply the schema and install this Store's exact bundle atomically.
 
         ``runtime_bundle=None`` is reserved for the isolated RuntimeBundle
@@ -231,11 +238,17 @@ class Store:
         """
         with self.conn.transaction():
             with self.conn.cursor() as cur:
-                cur.execute(_SCHEMA_SQL)
+                posture = verify_transaction_posture(cur)
+                schema_digest = install_or_verify_schema(cur, _SCHEMA_SQL_BYTES)
                 self._verify_receipt_schema(cur)
                 if self._runtime_bundle is not None:
                     RuntimeBundleRepository().persist(
                         cur, self.tenant_ref, self.runtime_bundle)
+                observation = DatabaseObservation(
+                    schema_digest=schema_digest,
+                    **posture,
+                )
+        return observation
 
     def close(self) -> None:
         if self._conn is not None and not self._conn.closed:

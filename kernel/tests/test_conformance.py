@@ -1918,10 +1918,37 @@ def test_97_review_driven_regressions(store, pipeline):
     from kernel.api import create_app
     client = TestClient(create_app(store, oidc=None))
     trace_ref = first["promotionTraceRef"]
+    receipt_kinds = (
+        "ofarm.authorizationdecisionrequest.v0.1",
+        "ofarm.authorizationdecisiontrace.v0.1",
+        "ofarm.authorizationdecisionresult.v0.1",
+    )
+
+    def read_receipts():
+        rows = store.conn.execute(
+            "SELECT record_id, record_kind, tenant_ref, runtime_bundle_digest "
+            "FROM kernel_record WHERE record_kind = ANY(%s)",
+            (list(receipt_kinds),),
+        ).fetchall()
+        return {
+            (
+                row["record_id"], row["record_kind"], row["tenant_ref"],
+                row["runtime_bundle_digest"],
+            )
+            for row in rows
+        }
+
+    receipts_before = read_receipts()
     resp = client.get(f"/records/{trace_ref}",
                       headers={"x-acting-party": "party:demo.software.agent"})
     assert resp.status_code == 403
     assert resp.json()["detail"]["reasonCode"] == "PERMISSION_REDACTED"
+    denied_receipts = read_receipts() - receipts_before
+    assert {row[1] for row in denied_receipts} == set(receipt_kinds)
+    assert all(
+        row[2:] == (store.tenant_ref, store.runtime_bundle_digest)
+        for row in denied_receipts
+    ), "a denied read must commit all three exact RuntimeBundle receipts"
     ok = client.get(f"/records/{trace_ref}",
                     headers={"x-acting-party": demo.FARMER})
     assert ok.status_code == 200

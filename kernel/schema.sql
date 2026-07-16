@@ -22,6 +22,22 @@ CREATE OR REPLACE FUNCTION kernel_valid_tenant_ref(value text) RETURNS boolean A
   SELECT value ~ '^tenant:[A-Za-z0-9._:-]{1,248}$'
 $$ LANGUAGE sql IMMUTABLE STRICT;
 
+-- Exact bytes of this schema.sql are selected once at startup. The fixed,
+-- append-only identity separates database deployment posture from RuntimeBundle
+-- identity and prevents a restart from silently repairing a different schema.
+CREATE TABLE IF NOT EXISTS runtime_schema_identity (
+  identity_key text COLLATE "C" PRIMARY KEY CHECK (
+    identity_key = 'ofarm-kernel-schema'),
+  schema_digest text COLLATE "C" NOT NULL CHECK (
+    schema_digest ~ '^sha256:[0-9a-f]{64}$')
+);
+
+DROP TRIGGER IF EXISTS trg_runtime_schema_identity_append_only
+  ON runtime_schema_identity;
+CREATE TRIGGER trg_runtime_schema_identity_append_only
+  BEFORE UPDATE OR DELETE OR TRUNCATE ON runtime_schema_identity
+  FOR EACH STATEMENT EXECUTE FUNCTION kernel_forbid_mutation();
+
 -- ---------------------------------------------------------------------------
 -- Immutable, content-addressed RuntimeBundles (issue #171). These tables are
 -- implementation receipts, not promoted contracts. They retain exact bytes
@@ -69,7 +85,8 @@ CREATE TABLE IF NOT EXISTS runtime_bundle_component (
   component_role   text COLLATE "C" NOT NULL CHECK (component_role IN (
     'PROFILE_DESCRIPTOR', 'ACTIVE_MANIFEST', 'PROFILE_INSTANCE',
     'PROFILE_POLICY', 'QUERY_SPECIFICATION', 'QUERY_PLAN', 'VIEW_BINDING',
-    'CONTRACT_SCHEMA', 'VALIDATOR_SOURCE', 'ADAPTER_SOURCE',
+    'CONTRACT_SCHEMA', 'DRAFT_CONTRACT_SCHEMA', 'VALIDATOR_SOURCE',
+    'ADAPTER_SOURCE',
     'QUERY_OUTPUT_SOURCE', 'REFERENCE_SNAPSHOT', 'REFERENCE_SOURCE')),
   logical_ref      text COLLATE "C" NOT NULL CHECK (length(logical_ref) BETWEEN 1 AND 1024),
   canonicalization text COLLATE "C" NOT NULL CHECK (canonicalization IN (

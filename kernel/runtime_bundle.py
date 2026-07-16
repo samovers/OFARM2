@@ -47,6 +47,7 @@ class RuntimeComponentRole(str, Enum):
     QUERY_PLAN = "QUERY_PLAN"
     VIEW_BINDING = "VIEW_BINDING"
     CONTRACT_SCHEMA = "CONTRACT_SCHEMA"
+    DRAFT_CONTRACT_SCHEMA = "DRAFT_CONTRACT_SCHEMA"
     VALIDATOR_SOURCE = "VALIDATOR_SOURCE"
     ADAPTER_SOURCE = "ADAPTER_SOURCE"
     QUERY_OUTPUT_SOURCE = "QUERY_OUTPUT_SOURCE"
@@ -110,7 +111,6 @@ _EXACT_GLOBAL_COMPONENT_ROLES = frozenset({
     RuntimeComponentRole.QUERY_OUTPUT_SOURCE,
 })
 _ACTIVE_REF_ROLES = {
-    "contract": RuntimeComponentRole.CONTRACT_SCHEMA,
     "queryspec": RuntimeComponentRole.QUERY_SPECIFICATION,
     "queryplan": RuntimeComponentRole.QUERY_PLAN,
     "view": RuntimeComponentRole.VIEW_BINDING,
@@ -119,12 +119,19 @@ _ACTIVE_REF_ROLES = {
     "referencesnapshot": RuntimeComponentRole.REFERENCE_SNAPSHOT,
     "manifest": RuntimeComponentRole.ACTIVE_MANIFEST,
 }
+_DRAFT_CONTRACT_DIRECTORY = (
+    "contracts/drafts_reference/explainable_current_state_evidence"
+)
 _CONTRACT_REGISTRY_DIRECTORIES = (
     "contracts/kernel",
     "contracts/core",
     "contracts/platform",
-    "contracts/drafts_reference/explainable_current_state_evidence",
+    _DRAFT_CONTRACT_DIRECTORY,
 )
+_CONTRACT_SCHEMA_ROLES = frozenset({
+    RuntimeComponentRole.CONTRACT_SCHEMA,
+    RuntimeComponentRole.DRAFT_CONTRACT_SCHEMA,
+})
 _VIEW_BINDING_FIELDS = {
     "schemaVersion",
     "viewRef",
@@ -289,13 +296,13 @@ def _validate_runtime_component_semantics(
             )
         return
 
-    if role is RuntimeComponentRole.CONTRACT_SCHEMA:
+    if role in _CONTRACT_SCHEMA_ROLES:
         if (
             canonicalization is not Canonicalization.EXACT_BYTES
             or placement is not ContentPlacement.GLOBAL
         ):
             raise RuntimeBundleError(
-                "CONTRACT_SCHEMA must use exact bytes and global placement"
+                f"{role.value} must use exact bytes and global placement"
             )
         document, _canonical = strict_json_document(
             canonical_bytes, f"contract component {logical_ref!r}"
@@ -499,6 +506,14 @@ def _canonical_component_documents(
 def _validate_runtime_bundle_semantics(
     components: tuple[RuntimeComponent, ...],
 ) -> str | None:
+    contract_refs = [
+        component.logical_ref for component in components
+        if component.role in _CONTRACT_SCHEMA_ROLES
+    ]
+    if len(contract_refs) != len(set(contract_refs)):
+        raise RuntimeBundleError(
+            "contract schemaVersion is selected more than once across lanes"
+        )
     descriptor_components = tuple(
         component for component in components
         if component.role is RuntimeComponentRole.PROFILE_DESCRIPTOR
@@ -586,10 +601,15 @@ def _validate_active_selection(
     selected = {(component.role, component.logical_ref) for component in components}
     for ref in active_refs:
         prefix = ref.split(":", 1)[0]
-        expected_role = _ACTIVE_REF_ROLES.get(prefix)
-        if expected_role is None or (expected_role, ref) not in selected:
+        if prefix == "contract":
+            retained = (RuntimeComponentRole.CONTRACT_SCHEMA, ref) in selected
+        else:
+            expected_role = _ACTIVE_REF_ROLES.get(prefix)
+            retained = expected_role is not None and (expected_role, ref) in selected
+        if not retained:
             raise RuntimeBundleError(
-                f"active artifact ref {ref!r} has no retained component"
+                f"active artifact ref {ref!r} has no retained component "
+                "eligible for activation"
             )
 
     required_active_refs = {
@@ -1190,7 +1210,11 @@ class RuntimeBundleBuilder:
             document, f"contract schema {relative_path!r}"
         )
         return RuntimeComponent.from_selected_bytes(
-            role=RuntimeComponentRole.CONTRACT_SCHEMA,
+            role=(
+                RuntimeComponentRole.DRAFT_CONTRACT_SCHEMA
+                if relative_path.startswith(_DRAFT_CONTRACT_DIRECTORY + "/")
+                else RuntimeComponentRole.CONTRACT_SCHEMA
+            ),
             logical_ref=f"contract:{schema_version}",
             canonicalization=Canonicalization.EXACT_BYTES,
             placement=ContentPlacement.GLOBAL,

@@ -15,6 +15,8 @@ import psycopg
 import pytest
 
 os.environ.setdefault("OFARM_PG_DBNAME", "ofarm_kernel_test")
+TEST_DEPLOYMENT_IMAGE_DIGEST = "sha256:" + "a" * 64
+os.environ.setdefault("OFARM_DEPLOYMENT_IMAGE_DIGEST", TEST_DEPLOYMENT_IMAGE_DIGEST)
 
 from kernel import config, context, demo, manifest  # noqa: E402
 from kernel.gates import GatePipeline  # noqa: E402
