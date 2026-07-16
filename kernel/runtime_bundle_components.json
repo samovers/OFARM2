@@ -1,0 +1,234 @@
+{
+  "manifestVersion": "ofarm.runtime-component-catalog.local.v1",
+  "components": [
+    {
+      "role": "PROFILE_DESCRIPTOR",
+      "logicalRef": "profile:si.ffs.recordkeeping.v0_1",
+      "path": "profile_si_ffs/runtime_profile_descriptor.json",
+      "canonicalization": "OFARM_CANONICAL_JSON_V1",
+      "placement": "TENANT_RUNTIME_SELECTION"
+    },
+    {
+      "role": "PROFILE_POLICY",
+      "logicalRef": "policy:si.ffs.evidence-review.v0_1",
+      "path": "profile_si_ffs/evidence_review_policy_v0_1.json",
+      "canonicalization": "OFARM_CANONICAL_JSON_V1",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
+    },
+    {
+      "role": "PROFILE_INSTANCE",
+      "logicalRef": "codebindingprofile:si.ffs.v0_1",
+      "path": "profile_si_ffs/OFARM_AgronomicCodeBindingProfile_si_ffs_v0_1.json",
+      "canonicalization": "OFARM_CANONICAL_JSON_V1",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
+    },
+    {
+      "role": "PROFILE_INSTANCE",
+      "logicalRef": "packactivationset:si.ffs.pilot.v0_1",
+      "path": "profile_si_ffs/OFARM_PackActivationSet_example_si_ffs_pilot_v0_1.json",
+      "canonicalization": "OFARM_CANONICAL_JSON_V1",
+      "placement": "TENANT_RUNTIME_SELECTION"
+    },
+    {
+      "role": "PROFILE_INSTANCE",
+      "logicalRef": "activeartifactset:si.ffs.pilot.v0_1",
+      "path": "profile_si_ffs/OFARM_ActiveArtifactSet_example_si_ffs_pilot_v0_1.json",
+      "canonicalization": "OFARM_CANONICAL_JSON_V1",
+      "placement": "TENANT_RUNTIME_SELECTION"
+    },
+    {
+      "role": "PROFILE_INSTANCE",
+      "logicalRef": "contextsnapshot:si.ffs.pilot.compliance.demo.v0_1",
+      "path": "profile_si_ffs/OFARM_ContextSnapshot_example_si_ffs_pilot_compliance_v0_1.json",
+      "canonicalization": "OFARM_CANONICAL_JSON_V1",
+      "placement": "TENANT_RUNTIME_SELECTION"
+    },
+    {
+      "role": "REFERENCE_SNAPSHOT",
+      "logicalRef": "referencesnapshot:si.uvhvvr.ffs-reg.2026-06-11",
+      "path": "profile_si_ffs/OFARM_ReferenceSnapshot_example_si_uvhvvr_ffs_reg_2026-06-11.json",
+      "canonicalization": "OFARM_CANONICAL_JSON_V1",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
+    },
+    {
+      "role": "REFERENCE_SNAPSHOT",
+      "logicalRef": "referencesnapshot:si.mkgp.gerk-layer.2025-06-30",
+      "path": "profile_si_ffs/OFARM_ReferenceSnapshot_example_si_gerk_layer_2025-06-30.json",
+      "canonicalization": "OFARM_CANONICAL_JSON_V1",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
+    },
+    {
+      "role": "ACTIVE_MANIFEST",
+      "logicalRef": "manifest:si.ffs.pilot.v0_1",
+      "path": "profile_si_ffs/OFARM_Capability_Manifest_si_ffs_pilot_v0_1.json",
+      "canonicalization": "OFARM_CANONICAL_JSON_V1",
+      "placement": "TENANT_RUNTIME_SELECTION"
+    },
+    {
+      "role": "QUERY_SPECIFICATION",
+      "logicalRef": "queryspec:si.ffs.inspection-register.documentassembly.v0_1",
+      "path": "profile_si_ffs/views/OFARM_QuerySpecification_si_ffs_inspection_register_documentassembly_v0_1.json",
+      "canonicalization": "OFARM_CANONICAL_JSON_V1",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
+    },
+    {
+      "role": "QUERY_SPECIFICATION",
+      "logicalRef": "queryspec:si.ffs.spray-register.passportview.v0_1",
+      "path": "profile_si_ffs/views/OFARM_QuerySpecification_si_ffs_spray_register_passportview_v0_1.json",
+      "canonicalization": "OFARM_CANONICAL_JSON_V1",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
+    },
+    {
+      "role": "QUERY_PLAN",
+      "logicalRef": "queryplan:si.ffs.inspection-register.documentassembly.v0_1",
+      "path": "profile_si_ffs/views/OFARM_QueryPlanIR_si_ffs_inspection_register_documentassembly_v0_1.json",
+      "canonicalization": "OFARM_CANONICAL_JSON_V1",
+      "placement": "TENANT_RUNTIME_SELECTION"
+    },
+    {
+      "role": "QUERY_PLAN",
+      "logicalRef": "queryplan:si.ffs.spray-register.passportview.v0_1",
+      "path": "profile_si_ffs/views/OFARM_QueryPlanIR_si_ffs_spray_register_passportview_v0_1.json",
+      "canonicalization": "OFARM_CANONICAL_JSON_V1",
+      "placement": "TENANT_RUNTIME_SELECTION"
+    },
+    {
+      "role": "REFERENCE_SOURCE",
+      "logicalRef": "artifact:regsr_snapshot_2026-06-12.json",
+      "path": "profile_si_ffs/examples/regsr_snapshot_2026-06-12.json",
+      "canonicalization": "EXACT_BYTES_V1",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT",
+      "expectedContentDigest": "sha256:609a6eb35e21371056ba74b835951ea9104dd20353d535ca043746a970919474"
+    },
+    {
+      "role": "VALIDATOR_SOURCE",
+      "logicalRef": "python:ofarm2-kernel-m1.0:validators",
+      "path": "kernel/validators.py",
+      "canonicalization": "EXACT_BYTES_V1",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
+    },
+    {
+      "role": "ADAPTER_SOURCE",
+      "logicalRef": "python:profile-si-ffs-v0_1:regsr-adapter",
+      "path": "kernel/profiles/si_ffs/regsr_adapter.py",
+      "canonicalization": "EXACT_BYTES_V1",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
+    },
+    {
+      "role": "ADAPTER_SOURCE",
+      "logicalRef": "python:profile-si-ffs-v0_1:gerk-adapter",
+      "path": "kernel/profiles/si_ffs/gerk_adapter.py",
+      "canonicalization": "EXACT_BYTES_V1",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
+    },
+    {
+      "role": "ADAPTER_SOURCE",
+      "logicalRef": "python:profile-si-ffs-v0_1:ffsnaprave-adapter",
+      "path": "kernel/profiles/si_ffs/ffsnaprave_adapter.py",
+      "canonicalization": "EXACT_BYTES_V1",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
+    },
+    {
+      "role": "ADAPTER_SOURCE",
+      "logicalRef": "python:profile-si-ffs-v0_1:bindings",
+      "path": "kernel/profiles/si_ffs/si_bindings.py",
+      "canonicalization": "EXACT_BYTES_V1",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
+    },
+    {
+      "role": "ADAPTER_SOURCE",
+      "logicalRef": "python:profile-si-ffs-v0_1:regsr-parser",
+      "path": "tooling/regsr_snapshot/parse_regsr.py",
+      "canonicalization": "EXACT_BYTES_V1",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
+    },
+    {
+      "role": "ADAPTER_SOURCE",
+      "logicalRef": "python:profile-si-ffs-v0_1:gerk-parser",
+      "path": "tooling/gerk_roundtrip/gerk_roundtrip.py",
+      "canonicalization": "EXACT_BYTES_V1",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
+    },
+    {
+      "role": "QUERY_OUTPUT_SOURCE",
+      "logicalRef": "python:ofarm2-kernel-m1.0:query-output",
+      "path": "kernel/views.py",
+      "canonicalization": "EXACT_BYTES_V1",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
+    },
+    {
+      "role": "RUNTIME_SCHEMA",
+      "logicalRef": "sql:ofarm2-kernel-m1.0:schema",
+      "path": "kernel/schema.sql",
+      "canonicalization": "EXACT_BYTES_V1",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
+    }
+  ],
+  "contractSchemas": [
+    "contracts/core/OFARM_AgronomicCodeBindingProfile_schema_v0_1.json",
+    "contracts/core/OFARM_AgronomicIdentityBinding_schema_v0_1.json",
+    "contracts/core/OFARM_AgronomicObservationContext_schema_v0_1.json",
+    "contracts/core/OFARM_AppliedResourceIdentityPayload_schema_v0_1.json",
+    "contracts/core/OFARM_CropCycleIdentityPayload_schema_v0_1.json",
+    "contracts/core/OFARM_EquipmentIdentityPayload_schema_v0_1.json",
+    "contracts/core/OFARM_ExecutionRecordPayload_schema_v0_1.json",
+    "contracts/core/OFARM_ExternalRegistryVerificationTrace_schema_v0_1.json",
+    "contracts/core/OFARM_FarmIdentityPayload_schema_v0_1.json",
+    "contracts/core/OFARM_FieldIdentityPayload_schema_v0_1.json",
+    "contracts/core/OFARM_InterventionIntentPayload_schema_v0_1.json",
+    "contracts/core/OFARM_MeasurementEvidence_schema_v0_1.json",
+    "contracts/core/OFARM_NarrativeObservation_schema_v0_1.json",
+    "contracts/core/OFARM_PartialExtent_schema_v0_1.json",
+    "contracts/core/OFARM_PlannedIntervention_schema_v0_1.json",
+    "contracts/core/OFARM_ReferenceSnapshot_schema_v0_1.json",
+    "contracts/kernel/OFARM_AcceptedEventConsequence_schema_v0_1.json",
+    "contracts/kernel/OFARM_AssertionRecord_schema_v0_1.json",
+    "contracts/kernel/OFARM_AuthorityGrant_schema_v0_1.json",
+    "contracts/kernel/OFARM_AuthorizationDecisionRequest_schema_v0_1.json",
+    "contracts/kernel/OFARM_AuthorizationDecisionResult_schema_v0_1.json",
+    "contracts/kernel/OFARM_AuthorizationDecisionTrace_schema_v0_1.json",
+    "contracts/kernel/OFARM_CommitIngressRequest_schema_v0_1.json",
+    "contracts/kernel/OFARM_CommitIngressResult_schema_v0_1.json",
+    "contracts/kernel/OFARM_ComplianceClaim_schema_v0_1.json",
+    "contracts/kernel/OFARM_ContextSnapshot_schema_v0_1.json",
+    "contracts/kernel/OFARM_DelegationGrant_schema_v0_1.json",
+    "contracts/kernel/OFARM_EvidenceRecord_schema_v0_1.json",
+    "contracts/kernel/OFARM_EvidenceSufficiencyCase_schema_v0_2.json",
+    "contracts/kernel/OFARM_IdentityLifecycleChange_schema_v0_1.json",
+    "contracts/kernel/OFARM_IdentityRecord_schema_v0_1.json",
+    "contracts/kernel/OFARM_MaterializationBasis_schema_v0_1.json",
+    "contracts/kernel/OFARM_MaterializationRequest_schema_v0_1.json",
+    "contracts/kernel/OFARM_MaterializationResult_schema_v0_1.json",
+    "contracts/kernel/OFARM_MaterializationSnapshot_schema_v0_1.json",
+    "contracts/kernel/OFARM_Party_schema_v0_1.json",
+    "contracts/kernel/OFARM_PromotionTrace_schema_v0_1.json",
+    "contracts/kernel/OFARM_ReviewDecision_schema_v0_1.json",
+    "contracts/kernel/OFARM_RevocationDecision_schema_v0_1.json",
+    "contracts/kernel/OFARM_RoleAssignment_schema_v0_1.json",
+    "contracts/kernel/OFARM_RuntimeProblem_schema_v0_1.json",
+    "contracts/kernel/OFARM_SemanticEventEnvelope_schema_v0_1.json",
+    "contracts/kernel/OFARM_SharingGrant_schema_v0_1.json",
+    "contracts/platform/OFARM_ActiveArtifactSet_schema_v0_1.json",
+    "contracts/platform/OFARM_Capability_Manifest_schema_v0_1.json",
+    "contracts/platform/OFARM_DocumentAssemblyMetadata_schema_v0_1.json",
+    "contracts/platform/OFARM_PackActivationSet_schema_v0_1.json",
+    "contracts/platform/OFARM_PassportViewMetadata_schema_v0_1.json",
+    "contracts/platform/OFARM_PublicationAssemblyRequest_schema_v0_1.json",
+    "contracts/platform/OFARM_PublicationAssemblyResult_schema_v0_1.json",
+    "contracts/platform/OFARM_QueryPlanIR_schema_v0_1.json",
+    "contracts/platform/OFARM_QuerySpecification_schema_v0_1.json",
+    "contracts/platform/OFARM_ResultQualificationEnvelope_schema_v0_1.json",
+    "contracts/drafts_reference/explainable_current_state_evidence/OFARM_ExplainableCurrentStateCapabilityClaim_schema_v0_1.json",
+    "contracts/drafts_reference/explainable_current_state_evidence/OFARM_InvalidationEvaluationTrace_schema_v0_1.json",
+    "contracts/drafts_reference/explainable_current_state_evidence/OFARM_MaterializationCostProfile_schema_v0_1.json",
+    "contracts/drafts_reference/explainable_current_state_evidence/OFARM_MaterializationDependencyIndex_schema_v0_1.json",
+    "contracts/drafts_reference/explainable_current_state_evidence/OFARM_MaterializationFreshnessVector_schema_v0_1.json",
+    "contracts/drafts_reference/explainable_current_state_evidence/OFARM_MaterializationKey_schema_v0_1.json",
+    "contracts/drafts_reference/explainable_current_state_evidence/OFARM_RuntimeMaterializationBenchmarkRun_schema_v0_1.json",
+    "contracts/drafts_reference/explainable_current_state_evidence/OFARM_RuntimeQueryMixProfile_schema_v0_1.json",
+    "contracts/drafts_reference/explainable_current_state_evidence/OFARM_RuntimeStorageAmplificationReport_schema_v0_1.json",
+    "contracts/drafts_reference/explainable_current_state_evidence/OFARM_TraceExpansionPolicy_schema_v0_1.json",
+    "contracts/drafts_reference/explainable_current_state_evidence/OFARM_TraceExpansionRequest_schema_v0_1.json",
+    "contracts/drafts_reference/explainable_current_state_evidence/OFARM_TraceExpansionResult_schema_v0_1.json"
+  ]
+}
