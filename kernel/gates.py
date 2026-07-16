@@ -548,24 +548,6 @@ def _require_retained_profile_route_resolver(
         _raise(store, "retained profile route resolver changed before invocation")
 
 
-def _invoke_retained_profile_route_resolver(
-        store, *args,
-        _entry=_PROFILE_ROUTE_RESOLVER,
-        _require=_require_retained_profile_route_resolver,
-        **kwargs,
-):
-    """Resolve a route with adjacent checks and rollback-only drift handling."""
-    _require(store, _entry)
-    function = _entry[2]
-    try:
-        result = function(*args, **kwargs)
-    except BaseException:
-        _require(store, _entry)
-        raise
-    _require(store, _entry)
-    return result
-
-
 _RETAINED_HAS_INSTANCE_DISPATCH_OVERRIDE = _has_instance_dispatch_override
 _RETAINED_HAS_INSTANCE_DISPATCH_OVERRIDE_CODE = \
     _RETAINED_HAS_INSTANCE_DISPATCH_OVERRIDE.__code__
@@ -586,10 +568,6 @@ _RETAINED_REQUIRE_PROFILE_ROUTE_RESOLVER = \
     _require_retained_profile_route_resolver
 _RETAINED_REQUIRE_PROFILE_ROUTE_RESOLVER_CODE = \
     _RETAINED_REQUIRE_PROFILE_ROUTE_RESOLVER.__code__
-_RETAINED_INVOKE_PROFILE_ROUTE_RESOLVER = \
-    _invoke_retained_profile_route_resolver
-_RETAINED_INVOKE_PROFILE_ROUTE_RESOLVER_CODE = \
-    _RETAINED_INVOKE_PROFILE_ROUTE_RESOLVER.__code__
 _GATE_HELPER_ANCHORS = (
     ("_copy_exact_json", _RETAINED_COPY_EXACT_JSON,
      _RETAINED_COPY_EXACT_JSON_CODE,
@@ -626,10 +604,6 @@ _GATE_HELPER_ANCHORS = (
      _RETAINED_REQUIRE_PROFILE_ROUTE_RESOLVER,
      _RETAINED_REQUIRE_PROFILE_ROUTE_RESOLVER_CODE,
      capture_callable_state(_RETAINED_REQUIRE_PROFILE_ROUTE_RESOLVER)),
-    ("_invoke_retained_profile_route_resolver",
-     _RETAINED_INVOKE_PROFILE_ROUTE_RESOLVER,
-     _RETAINED_INVOKE_PROFILE_ROUTE_RESOLVER_CODE,
-     capture_callable_state(_RETAINED_INVOKE_PROFILE_ROUTE_RESOLVER)),
     ("_exact_instance_field", _exact_instance_field,
      _exact_instance_field.__code__,
      capture_callable_state(_exact_instance_field)),
