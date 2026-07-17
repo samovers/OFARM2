@@ -1,0 +1,7 @@
+{
+  "schemaVersion": "ofarm.runtime-view-binding.local.v1",
+  "viewRef": "view:si.ffs.inspection-register.documentassembly.v0_1",
+  "querySpecificationRef": "queryspec:si.ffs.inspection-register.documentassembly.v0_1",
+  "queryPlanRef": "queryplan:si.ffs.inspection-register.documentassembly.v0_1",
+  "queryOutputSourceRef": "python:ofarm2-kernel-m1.0:query-output"
+}

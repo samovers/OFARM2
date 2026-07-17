@@ -16,18 +16,82 @@ from kernel.runtime_bundle import (
     RuntimeBundle,
     RuntimeBundleBuilder,
     RuntimeBundleError,
+    RuntimeComponent,
     RuntimeComponentRole,
     RuntimeComponentSpec,
-    canonical_json_bytes,
-    sha256_bytes,
+    require_tenant_ref,
     strict_json_document,
 )
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
-TENANT_REF = "tenant:test.runtime-bundle"
 POLICY_REF = "policy:test.runtime-bundle.v1"
 SOURCE_REF = "python:test.runtime-bundle:adapter"
+TENANT_SCOPE_LOCATIONS = (
+    (
+        "profile_si_ffs/OFARM_PackActivationSet_example_si_ffs_pilot_v0_1.json",
+        ("targetScope",),
+    ),
+    (
+        "profile_si_ffs/OFARM_ActiveArtifactSet_example_si_ffs_pilot_v0_1.json",
+        ("deploymentScope",),
+    ),
+    (
+        "profile_si_ffs/OFARM_Capability_Manifest_si_ffs_pilot_v0_1.json",
+        ("deploymentScope",),
+    ),
+    (
+        "profile_si_ffs/OFARM_ContextSnapshot_example_si_ffs_pilot_compliance_v0_1.json",
+        ("anchorScopes", 0),
+    ),
+)
+EXPECTED_EXECUTABLE_SOURCE_SELECTION = {
+    (
+        RuntimeComponentRole.VALIDATOR_SOURCE,
+        "python:ofarm2-kernel-m1.0:validators",
+        "kernel/validators.py",
+    ),
+    (
+        RuntimeComponentRole.ADAPTER_SOURCE,
+        "python:ofarm2-kernel-m1.0:adapters",
+        "kernel/adapters.py",
+    ),
+    (
+        RuntimeComponentRole.ADAPTER_SOURCE,
+        "python:profile-si-ffs-v0_1:regsr-adapter",
+        "kernel/profiles/si_ffs/regsr_adapter.py",
+    ),
+    (
+        RuntimeComponentRole.ADAPTER_SOURCE,
+        "python:profile-si-ffs-v0_1:gerk-adapter",
+        "kernel/profiles/si_ffs/gerk_adapter.py",
+    ),
+    (
+        RuntimeComponentRole.ADAPTER_SOURCE,
+        "python:profile-si-ffs-v0_1:ffsnaprave-adapter",
+        "kernel/profiles/si_ffs/ffsnaprave_adapter.py",
+    ),
+    (
+        RuntimeComponentRole.ADAPTER_SOURCE,
+        "python:profile-si-ffs-v0_1:bindings",
+        "kernel/profiles/si_ffs/si_bindings.py",
+    ),
+    (
+        RuntimeComponentRole.ADAPTER_SOURCE,
+        "python:profile-si-ffs-v0_1:regsr-parser",
+        "tooling/regsr_snapshot/parse_regsr.py",
+    ),
+    (
+        RuntimeComponentRole.ADAPTER_SOURCE,
+        "python:profile-si-ffs-v0_1:gerk-parser",
+        "tooling/gerk_roundtrip/gerk_roundtrip.py",
+    ),
+    (
+        RuntimeComponentRole.QUERY_OUTPUT_SOURCE,
+        "python:ofarm2-kernel-m1.0:query-output",
+        "kernel/views.py",
+    ),
+}
 
 
 def _write(root: Path, relative_path: str, raw: bytes) -> Path:
@@ -73,7 +137,7 @@ def _selected_root(
 
 def _build(root: Path, specs=None):
     selected = _selected_specs() if specs is None else specs
-    return RuntimeBundleBuilder(root, selected).build(TENANT_REF)
+    return RuntimeBundleBuilder(root, selected).build()
 
 
 def test_identical_selected_content_is_stable_across_clean_locations(tmp_path):
@@ -86,6 +150,7 @@ def test_identical_selected_content_is_stable_across_clean_locations(tmp_path):
     assert left.digest == right.digest
     assert left.canonical_document_bytes == right.canonical_document_bytes
     assert left.components == right.components
+    assert left.selected_tenant_ref is None
     for root in (left_root, right_root):
         assert str(root.resolve()).encode("utf-8") not in left.canonical_document_bytes
     for spec in _selected_specs():
@@ -212,27 +277,190 @@ def test_canonical_json_logical_ref_must_match_intrinsic_identity(tmp_path):
         _build(root)
 
 
-def test_runtime_bundle_create_rejects_non_component_without_attribute_error():
-    with pytest.raises(RuntimeBundleError, match="non-component"):
-        RuntimeBundle.create(TENANT_REF, [object()])
-
-
-@pytest.mark.parametrize("invalid_length", (True, 1.0), ids=("boolean", "float"))
-def test_runtime_bundle_document_requires_type_exact_component_identity(
-    tmp_path,
-    invalid_length,
+@pytest.mark.parametrize(
+    (
+        "role",
+        "logical_ref",
+        "canonicalization",
+        "placement",
+        "selected_bytes",
+        "message",
+    ),
+    (
+        (
+            RuntimeComponentRole.ACTIVE_MANIFEST,
+            "manifest:test.direct.v1",
+            Canonicalization.EXACT_BYTES,
+            ContentPlacement.GLOBAL,
+            b"not-json",
+            "must use canonical JSON",
+        ),
+        (
+            RuntimeComponentRole.ACTIVE_MANIFEST,
+            "manifest:test.direct.v1",
+            Canonicalization.CANONICAL_JSON,
+            ContentPlacement.GLOBAL,
+            (
+                b'{"manifestId":"manifest:test.direct.v1",'
+                b'"schemaVersion":"ofarm.capabilitymanifest.v0.1"}'
+            ),
+            "invalid content placement",
+        ),
+        (
+            RuntimeComponentRole.ACTIVE_MANIFEST,
+            "manifest:test.direct.v1",
+            Canonicalization.CANONICAL_JSON,
+            ContentPlacement.TENANT,
+            (
+                b'{"manifestId":"manifest:test.direct.v1",'
+                b'"schemaVersion":"ofarm.queryplanir.v0.1"}'
+            ),
+            "unsupported schemaVersion",
+        ),
+        (
+            RuntimeComponentRole.PROFILE_POLICY,
+            "policy:test.expected.v1",
+            Canonicalization.CANONICAL_JSON,
+            ContentPlacement.GLOBAL,
+            b'{"policyId":"policy:test.different.v1"}',
+            "does not declare policyId",
+        ),
+        (
+            RuntimeComponentRole.VIEW_BINDING,
+            "view:test.direct.v1",
+            Canonicalization.CANONICAL_JSON,
+            ContentPlacement.GLOBAL,
+            (
+                b'{"extra":true,"queryOutputSourceRef":"python:test:output",'
+                b'"queryPlanRef":"queryplan:test.direct.v1",'
+                b'"querySpecificationRef":"queryspec:test.direct.v1",'
+                b'"schemaVersion":"ofarm.runtime-view-binding.local.v1",'
+                b'"viewRef":"view:test.direct.v1"}'
+            ),
+            "invalid shape",
+        ),
+    ),
+    ids=(
+        "wrong-canonicalization",
+        "wrong-placement",
+        "wrong-role-schema",
+        "mismatched-intrinsic-identity",
+        "open-view-binding-shape",
+    ),
+)
+def test_direct_component_construction_enforces_role_semantics(
+    role,
+    logical_ref,
+    canonicalization,
+    placement,
+    selected_bytes,
+    message,
 ):
-    bundle = _build(_selected_root(tmp_path / "checkout", source=b"x"))
-    document = json.loads(bundle.canonical_document_bytes)
-    document["components"][0]["byteLength"] = invalid_length
-    malformed_bytes = canonical_json_bytes(document)
+    with pytest.raises(RuntimeBundleError, match=message):
+        RuntimeComponent.from_selected_bytes(
+            role=role,
+            logical_ref=logical_ref,
+            canonicalization=canonicalization,
+            placement=placement,
+            selected_bytes=selected_bytes,
+        )
 
-    with pytest.raises(RuntimeBundleError, match="exact canonical component identity"):
-        RuntimeBundle(
-            tenant_ref=bundle.tenant_ref,
-            components=bundle.components,
-            canonical_document_bytes=malformed_bytes,
-            digest=sha256_bytes(malformed_bytes),
+
+@pytest.mark.parametrize(
+    ("field_path", "wrong_value", "message"),
+    (
+        (
+            ("deploymentScope", "scopeRef"),
+            "tenant:other",
+            "tenant scopes do not identify one tenant",
+        ),
+        (
+            ("registryRelation", "activeArtifactSetRef"),
+            "activeartifactset:other.v0_1",
+            "deployment identity",
+        ),
+    ),
+    ids=("mixed-tenant", "mismatched-deployment"),
+)
+def test_direct_bundle_construction_enforces_selected_runtime_closure(
+    field_path,
+    wrong_value,
+    message,
+):
+    bundle = RuntimeBundleBuilder.from_manifest(PACKAGE_ROOT).build()
+    manifest = next(
+        component for component in bundle.components
+        if component.role is RuntimeComponentRole.ACTIVE_MANIFEST
+    )
+    document = json.loads(manifest.canonical_bytes)
+    parent = document
+    for field in field_path[:-1]:
+        parent = parent[field]
+    parent[field_path[-1]] = wrong_value
+    changed_manifest = RuntimeComponent.from_selected_bytes(
+        role=manifest.role,
+        logical_ref=manifest.logical_ref,
+        canonicalization=manifest.canonicalization,
+        placement=manifest.placement,
+        selected_bytes=json.dumps(document).encode("utf-8"),
+    )
+
+    with pytest.raises(RuntimeBundleError, match=message):
+        RuntimeBundle.create(
+            changed_manifest if component is manifest else component
+            for component in bundle.components
+        )
+
+
+def test_direct_bundle_construction_requires_descriptor_selected_policy():
+    bundle = RuntimeBundleBuilder.from_manifest(PACKAGE_ROOT).build()
+
+    with pytest.raises(RuntimeBundleError, match="exact profile policy component"):
+        RuntimeBundle.create(
+            component for component in bundle.components
+            if component.role is not RuntimeComponentRole.PROFILE_POLICY
+        )
+
+
+def test_direct_bundle_construction_closes_manifest_contract_claims():
+    bundle = RuntimeBundleBuilder.from_manifest(PACKAGE_ROOT).build()
+
+    with pytest.raises(
+        RuntimeBundleError,
+        match="supported artifact type is not retained as a canonical contract",
+    ):
+        RuntimeBundle.create(
+            component for component in bundle.components
+            if not (
+                component.role is RuntimeComponentRole.CONTRACT_SCHEMA
+                and component.logical_ref == "contract:ofarm.party.v0.1"
+            )
+        )
+
+
+def test_canonical_numeric_profile_refuses_a_lossy_float_collision():
+    accepted = RuntimeComponent.from_selected_bytes(
+        role=RuntimeComponentRole.PROFILE_POLICY,
+        logical_ref="policy:test.numeric.v1",
+        canonicalization=Canonicalization.CANONICAL_JSON,
+        placement=ContentPlacement.GLOBAL,
+        selected_bytes=(
+            b'{"policyId":"policy:test.numeric.v1",'
+            b'"value":9007199254740992.0}'
+        ),
+    )
+    RuntimeBundle.create((accepted,))
+
+    with pytest.raises(RuntimeBundleError, match="not preserved"):
+        RuntimeComponent.from_selected_bytes(
+            role=RuntimeComponentRole.PROFILE_POLICY,
+            logical_ref="policy:test.numeric.v1",
+            canonicalization=Canonicalization.CANONICAL_JSON,
+            placement=ContentPlacement.GLOBAL,
+            selected_bytes=(
+                b'{"policyId":"policy:test.numeric.v1",'
+                b'"value":9007199254740993.0}'
+            ),
         )
 
 
@@ -283,6 +511,30 @@ def _write_manifest(root: Path, document: dict) -> None:
         root,
         "kernel/runtime_bundle_components.json",
         json.dumps(document, separators=(",", ":")).encode("utf-8"),
+    )
+
+
+def _copy_checked_selection(root: Path, *, include_catalog: bool = False):
+    checked_in = RuntimeBundleBuilder.from_manifest(PACKAGE_ROOT)
+    relative_paths = {
+        spec.relative_path for spec in checked_in.component_specs
+    } | set(checked_in.contract_schema_paths)
+    if include_catalog:
+        relative_paths.add("kernel/runtime_bundle_components.json")
+    for relative_path in relative_paths:
+        destination = root / relative_path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(PACKAGE_ROOT / relative_path, destination)
+    return checked_in
+
+
+def _copied_checked_builder(root: Path, checked_in=None):
+    selected = checked_in or _copy_checked_selection(root)
+    return RuntimeBundleBuilder(
+        root,
+        selected.component_specs,
+        selected.contract_schema_paths,
+        require_profile_descriptor=True,
     )
 
 
@@ -361,44 +613,38 @@ def test_missing_manifest_root_uses_runtime_bundle_error(tmp_path):
         RuntimeBundleBuilder.from_manifest(tmp_path / "missing-checkout")
 
 
-def test_manifest_expected_digest_refuses_changed_selected_content(tmp_path):
-    root = tmp_path / "checkout"
-    root.mkdir()
-    _write(
-        root,
-        "selected/policy.json",
-        b'{"alpha":1,"policyId":"policy:test.runtime-bundle.v1"}',
-    )
-    document = _manifest_document()
-    document["components"][0]["expectedContentDigest"] = "sha256:" + "0" * 64
-    _write_manifest(root, document)
+def test_full_checked_selection_is_stable_when_relocated(tmp_path):
+    expected = RuntimeBundleBuilder.from_manifest(PACKAGE_ROOT).build()
+    root = tmp_path / "nested" / "relocated-release"
+    _copy_checked_selection(root, include_catalog=True)
 
-    builder = RuntimeBundleBuilder.from_manifest(root)
-    with pytest.raises(RuntimeBundleError, match="digest is .* expected"):
-        builder.build(TENANT_REF)
+    actual = RuntimeBundleBuilder.from_manifest(root).build()
+
+    assert actual == expected
+    assert str(root.resolve()).encode("utf-8") not in actual.canonical_document_bytes
 
 
 def test_descriptor_declared_files_are_exact_catalog_closure(tmp_path):
-    checked_in = RuntimeBundleBuilder.from_manifest(PACKAGE_ROOT)
     root = tmp_path / "checkout"
-    selected_specs = tuple(
-        spec for spec in checked_in.component_specs
-        if spec.canonicalization is Canonicalization.CANONICAL_JSON
+    checked_in = _copy_checked_selection(root)
+    descriptor_path = root / "profile_si_ffs/runtime_profile_descriptor.json"
+    descriptor = json.loads(descriptor_path.read_text(encoding="utf-8"))
+    context_name = (
+        "OFARM_ContextSnapshot_example_si_ffs_pilot_compliance_v0_1.json"
     )
-    for spec in selected_specs:
-        source = PACKAGE_ROOT / spec.relative_path
-        destination = root / spec.relative_path
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, destination)
-
-    incomplete_specs = tuple(
-        spec for spec in selected_specs
-        if spec.logical_ref != "contextsnapshot:si.ffs.pilot.compliance.demo.v0_1"
+    duplicate_name = "OFARM_ContextSnapshot_duplicate_v0_1.json"
+    shutil.copy2(
+        root / "profile_si_ffs" / context_name,
+        root / "profile_si_ffs" / duplicate_name,
     )
-    builder = RuntimeBundleBuilder(root, incomplete_specs)
+    descriptor["profileInstanceFiles"] = [
+        duplicate_name if name == context_name else name
+        for name in descriptor["profileInstanceFiles"]
+    ]
+    descriptor_path.write_text(json.dumps(descriptor), encoding="utf-8")
 
     with pytest.raises(RuntimeBundleError, match="exactly retain profileInstanceFiles"):
-        builder.build("tenant:si.ffs.pilot.demo")
+        _copied_checked_builder(root, checked_in).build()
 
 
 def test_contract_registry_schema_omitted_from_catalog_refuses(tmp_path):
@@ -418,7 +664,7 @@ def test_contract_registry_schema_omitted_from_catalog_refuses(tmp_path):
     builder = RuntimeBundleBuilder(root, _selected_specs())
 
     with pytest.raises(RuntimeBundleError, match="exactly retain ContractRegistry"):
-        builder.build(TENANT_REF)
+        builder.build()
 
 
 def _checked_builder_with_specs(specs, *, require_profile_descriptor=False):
@@ -440,7 +686,7 @@ def test_catalog_cannot_relabel_manifest_as_exact_bytes():
     )
 
     with pytest.raises(RuntimeBundleError, match="ACTIVE_MANIFEST must use canonical JSON"):
-        _checked_builder_with_specs(specs).build("tenant:si.ffs.pilot.demo")
+        _checked_builder_with_specs(specs).build()
 
 
 def test_catalog_cannot_place_tenant_manifest_in_global_content():
@@ -452,7 +698,7 @@ def test_catalog_cannot_place_tenant_manifest_in_global_content():
     )
 
     with pytest.raises(RuntimeBundleError, match="invalid content placement"):
-        _checked_builder_with_specs(specs).build("tenant:si.ffs.pilot.demo")
+        _checked_builder_with_specs(specs).build()
 
 
 def test_manifest_role_requires_the_manifest_schema_version(tmp_path):
@@ -473,7 +719,7 @@ def test_manifest_role_requires_the_manifest_schema_version(tmp_path):
     )
 
     with pytest.raises(RuntimeBundleError, match="unsupported schemaVersion"):
-        RuntimeBundleBuilder(root, (spec,)).build(TENANT_REF)
+        RuntimeBundleBuilder(root, (spec,)).build()
 
 
 def test_active_profile_catalog_cannot_omit_descriptor():
@@ -484,7 +730,18 @@ def test_active_profile_catalog_cannot_omit_descriptor():
     )
 
     with pytest.raises(RuntimeBundleError, match="require one profile descriptor"):
-        _checked_builder_with_specs(specs).build("tenant:si.ffs.pilot.demo")
+        _checked_builder_with_specs(specs).build()
+
+
+def test_active_profile_catalog_cannot_omit_descriptor_selected_policy():
+    checked_in = RuntimeBundleBuilder.from_manifest(PACKAGE_ROOT)
+    specs = tuple(
+        spec for spec in checked_in.component_specs
+        if spec.role is not RuntimeComponentRole.PROFILE_POLICY
+    )
+
+    with pytest.raises(RuntimeBundleError, match="exact profile policy component"):
+        _checked_builder_with_specs(specs).build()
 
 
 def test_active_artifact_set_ref_cannot_be_omitted_from_catalog():
@@ -496,25 +753,202 @@ def test_active_artifact_set_ref_cannot_be_omitted_from_catalog():
     )
 
     with pytest.raises(RuntimeBundleError, match="has no retained component"):
-        _checked_builder_with_specs(specs).build("tenant:si.ffs.pilot.demo")
+        _checked_builder_with_specs(specs).build()
 
 
-def test_checked_in_tenant_selection_cannot_be_owned_by_another_tenant():
-    with pytest.raises(RuntimeBundleError, match="does not match RuntimeBundle tenant_ref"):
-        RuntimeBundleBuilder.from_manifest(PACKAGE_ROOT).build("tenant:other")
+def test_active_artifact_set_cannot_select_an_unbound_view(tmp_path):
+    root = tmp_path / "checkout"
+    checked_in = _copy_checked_selection(root)
+    path = (
+        root
+        / "profile_si_ffs/OFARM_ActiveArtifactSet_example_si_ffs_pilot_v0_1.json"
+    )
+    document = json.loads(path.read_text(encoding="utf-8"))
+    view_index = next(
+        index for index, ref in enumerate(document["activeArtifactRefs"])
+        if ref.startswith("view:")
+    )
+    document["activeArtifactRefs"][view_index] = "view:unbound.v0_1"
+    path.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(RuntimeBundleError, match="has no retained component"):
+        _copied_checked_builder(root, checked_in).build()
+
+
+@pytest.mark.parametrize(
+    ("field", "unretained_ref"),
+    (
+        (
+            "querySpecificationRef",
+            "queryspec:unretained.v0_1",
+        ),
+        (
+            "queryPlanRef",
+            "queryplan:si.ffs.inspection-register.documentassembly.v0_1",
+        ),
+        (
+            "queryOutputSourceRef",
+            "python:unretained:query-output",
+        ),
+    ),
+    ids=("query-specification", "query-plan", "query-output-source"),
+)
+def test_view_binding_must_match_retained_query_artifacts(
+    tmp_path,
+    field,
+    unretained_ref,
+):
+    root = tmp_path / "checkout"
+    checked_in = _copy_checked_selection(root)
+    path = (
+        root
+        / "profile_si_ffs/views/"
+        "OFARM_RuntimeViewBinding_si_ffs_spray_register_passportview_v0_1.json"
+    )
+    document = json.loads(path.read_text(encoding="utf-8"))
+    document[field] = unretained_ref
+    path.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(RuntimeBundleError, match="does not exactly retain"):
+        _copied_checked_builder(root, checked_in).build()
+
+
+def test_view_bindings_must_cover_selected_query_artifacts(tmp_path):
+    root = tmp_path / "checkout"
+    checked_in = _copy_checked_selection(root)
+    path = (
+        root
+        / "profile_si_ffs/views/"
+        "OFARM_RuntimeViewBinding_si_ffs_spray_register_passportview_v0_1.json"
+    )
+    document = json.loads(path.read_text(encoding="utf-8"))
+    document.update({
+        "querySpecificationRef": (
+            "queryspec:si.ffs.inspection-register.documentassembly.v0_1"
+        ),
+        "queryPlanRef": (
+            "queryplan:si.ffs.inspection-register.documentassembly.v0_1"
+        ),
+    })
+    path.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(RuntimeBundleError, match="do not exactly cover"):
+        _copied_checked_builder(root, checked_in).build()
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "scope_path"),
+    TENANT_SCOPE_LOCATIONS,
+    ids=("pack", "active-artifacts", "manifest", "context"),
+)
+def test_selected_tenant_scopes_must_identify_one_tenant(
+    tmp_path,
+    relative_path,
+    scope_path,
+):
+    root = tmp_path / "checkout"
+    checked_in = _copy_checked_selection(root)
+    path = root / relative_path
+    document = json.loads(path.read_text(encoding="utf-8"))
+    scope = document
+    for key in scope_path:
+        scope = scope[key]
+    scope["scopeRef"] = "tenant:other"
+    path.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(
+        RuntimeBundleError,
+        match="selected tenant scopes do not identify one tenant",
+    ):
+        _copied_checked_builder(root, checked_in).build()
+
+
+@pytest.mark.parametrize(
+    "invalid_tenant_ref",
+    ("", "tenant:", "farm:not-a-tenant"),
+)
+def test_selected_tenant_scope_ref_must_be_valid(tmp_path, invalid_tenant_ref):
+    root = tmp_path / "checkout"
+    checked_in = _copy_checked_selection(root)
+    for relative_path, scope_path in TENANT_SCOPE_LOCATIONS:
+        path = root / relative_path
+        document = json.loads(path.read_text(encoding="utf-8"))
+        scope = document
+        for key in scope_path:
+            scope = scope[key]
+        scope["scopeRef"] = invalid_tenant_ref
+        path.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(RuntimeBundleError, match="tenant scope|tenant anchor"):
+        _copied_checked_builder(root, checked_in).build()
+
+
+def test_tenant_ref_has_one_closed_bounded_syntax():
+    assert require_tenant_ref("tenant:a") == "tenant:a"
+    assert require_tenant_ref("tenant:" + "a" * 248) == "tenant:" + "a" * 248
+    for invalid in (
+        "x",
+        "farm:x",
+        "tenant:",
+        "tenant:bad/path",
+        "tenant:bad#fragment",
+        "tenant:" + "a" * 249,
+    ):
+        with pytest.raises(RuntimeBundleError, match="tenant:"):
+            require_tenant_ref(invalid)
+
+
+@pytest.mark.parametrize(
+    ("field_path", "wrong_value"),
+    (
+        (
+            ("registryRelation", "activeArtifactSetRef"),
+            "activeartifactset:other.v0_1",
+        ),
+        (
+            ("registryRelation", "artifactRegistryRef"),
+            "registry:other.v0_1",
+        ),
+        (
+            ("capabilitySections", "packSupport", "activePackRefs"),
+            ["pack:other.v0_1"],
+        ),
+        (
+            ("capabilitySections", "packSupport", "activeProfileRefs"),
+            ["profile:other.v0_1"],
+        ),
+    ),
+    ids=("artifact-set", "registry", "pack", "profile"),
+)
+def test_manifest_must_match_selected_deployment_identity(
+    tmp_path,
+    field_path,
+    wrong_value,
+):
+    root = tmp_path / "checkout"
+    checked_in = _copy_checked_selection(root)
+    path = root / "profile_si_ffs/OFARM_Capability_Manifest_si_ffs_pilot_v0_1.json"
+    document = json.loads(path.read_text(encoding="utf-8"))
+    parent = document
+    for key in field_path[:-1]:
+        parent = parent[key]
+    parent[field_path[-1]] = wrong_value
+    path.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(RuntimeBundleError, match="deployment identity"):
+        _copied_checked_builder(root, checked_in).build()
 
 
 def test_checked_in_selection_is_stable_when_catalog_order_is_reversed():
     checked_in = RuntimeBundleBuilder.from_manifest(PACKAGE_ROOT)
-    tenant_ref = "tenant:si.ffs.pilot.demo"
-    forward = checked_in.build(tenant_ref)
+    forward = checked_in.build()
     reversed_builder = RuntimeBundleBuilder(
         PACKAGE_ROOT,
         reversed(checked_in.component_specs),
         reversed(checked_in.contract_schema_paths),
     )
 
-    assert reversed_builder.build(tenant_ref).digest == forward.digest
+    assert reversed_builder.build().digest == forward.digest
 
 
 def test_production_catalog_cannot_remove_the_whole_profile_selection():
@@ -525,7 +959,6 @@ def test_production_catalog_cannot_remove_the_whole_profile_selection():
         RuntimeComponentRole.VALIDATOR_SOURCE,
         RuntimeComponentRole.ADAPTER_SOURCE,
         RuntimeComponentRole.QUERY_OUTPUT_SOURCE,
-        RuntimeComponentRole.RUNTIME_SCHEMA,
     }
     specs = tuple(
         spec for spec in checked_in.component_specs
@@ -535,7 +968,7 @@ def test_production_catalog_cannot_remove_the_whole_profile_selection():
     with pytest.raises(RuntimeBundleError, match="requires one profile descriptor"):
         _checked_builder_with_specs(
             specs, require_profile_descriptor=True
-        ).build("tenant:si.ffs.pilot.demo")
+        ).build()
 
 
 def test_shipped_artifact_source_cannot_be_omitted_from_catalog():
@@ -546,36 +979,121 @@ def test_shipped_artifact_source_cannot_be_omitted_from_catalog():
     )
 
     with pytest.raises(RuntimeBundleError, match="artifact source refs"):
-        _checked_builder_with_specs(specs).build("tenant:si.ffs.pilot.demo")
+        _checked_builder_with_specs(specs).build()
 
 
-def test_reference_source_path_must_match_profile_artifact_resolution():
-    checked_in = RuntimeBundleBuilder.from_manifest(PACKAGE_ROOT)
+def test_reference_snapshot_digest_must_bind_retained_source_bytes(tmp_path):
+    root = tmp_path / "checkout"
+    checked_in = _copy_checked_selection(root)
+    path = (
+        root
+        / "profile_si_ffs/"
+        "OFARM_ReferenceSnapshot_example_si_uvhvvr_ffs_reg_2026-06-11.json"
+    )
+    document = json.loads(path.read_text(encoding="utf-8"))
+    document["sourceArtifactRefs"] = [
+        "digest:sha256:" + "0" * 64 if ref.startswith("digest:") else ref
+        for ref in document["sourceArtifactRefs"]
+    ]
+    path.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(RuntimeBundleError, match="does not exactly bind"):
+        _copied_checked_builder(root, checked_in).build()
+
+
+def test_reference_snapshot_digest_detects_exact_source_byte_change(tmp_path):
+    root = tmp_path / "checkout"
+    checked_in = _copy_checked_selection(root)
+    path = root / "profile_si_ffs/examples/regsr_snapshot_2026-06-12.json"
+    path.write_bytes(path.read_bytes() + b"\n")
+
+    with pytest.raises(RuntimeBundleError, match="does not exactly bind"):
+        _copied_checked_builder(root, checked_in).build()
+
+
+def test_reference_source_path_must_match_profile_artifact_resolution(tmp_path):
+    root = tmp_path / "checkout"
+    checked_in = _copy_checked_selection(root)
+    misplaced_path = "selected/regsr_snapshot_2026-06-12.json"
+    _write(
+        root,
+        misplaced_path,
+        (root / "profile_si_ffs/examples/regsr_snapshot_2026-06-12.json").read_bytes(),
+    )
     specs = tuple(
         replace(
             spec,
-            relative_path="kernel/validators.py",
-            expected_content_digest=None,
+            relative_path=misplaced_path,
         )
         if spec.role is RuntimeComponentRole.REFERENCE_SOURCE else spec
         for spec in checked_in.component_specs
     )
 
     with pytest.raises(RuntimeBundleError, match="source path does not match"):
-        _checked_builder_with_specs(specs).build("tenant:si.ffs.pilot.demo")
+        RuntimeBundleBuilder(
+            root,
+            specs,
+            checked_in.contract_schema_paths,
+            require_profile_descriptor=True,
+        ).build()
+
+
+def test_catalog_retains_the_reviewed_executable_source_selection():
+    checked_in = RuntimeBundleBuilder.from_manifest(PACKAGE_ROOT)
+    source_specs = {
+        spec for spec in checked_in.component_specs
+        if spec.role in {
+            RuntimeComponentRole.VALIDATOR_SOURCE,
+            RuntimeComponentRole.ADAPTER_SOURCE,
+            RuntimeComponentRole.QUERY_OUTPUT_SOURCE,
+        }
+    }
+
+    assert {
+        (spec.role, spec.logical_ref, spec.relative_path)
+        for spec in source_specs
+    } == EXPECTED_EXECUTABLE_SOURCE_SELECTION
+    assert all(
+        spec.canonicalization is Canonicalization.EXACT_BYTES
+        and spec.placement is ContentPlacement.GLOBAL
+        for spec in source_specs
+    )
+
+
+@pytest.mark.parametrize(
+    "role",
+    (
+        RuntimeComponentRole.VALIDATOR_SOURCE,
+        RuntimeComponentRole.ADAPTER_SOURCE,
+        RuntimeComponentRole.QUERY_OUTPUT_SOURCE,
+    ),
+)
+def test_catalog_cannot_omit_selected_executable_source_role(role):
+    checked_in = RuntimeBundleBuilder.from_manifest(PACKAGE_ROOT)
+    specs = tuple(
+        spec for spec in checked_in.component_specs
+        if spec.role is not role
+    )
+
+    with pytest.raises(RuntimeBundleError, match="runtime source selection is incomplete"):
+        _checked_builder_with_specs(specs).build()
+
+
+def test_selected_adapter_byte_change_changes_bundle_identity(tmp_path):
+    root = tmp_path / "relocated-release"
+    _copy_checked_selection(root, include_catalog=True)
+    original = RuntimeBundleBuilder.from_manifest(root).build()
+    path = root / "kernel/adapters.py"
+    path.write_bytes(path.read_bytes() + b"\n# changed selected runtime bytes\n")
+
+    changed = RuntimeBundleBuilder.from_manifest(root).build()
+
+    assert changed.digest != original.digest
 
 
 def test_context_snapshot_cannot_name_an_unretained_reference(tmp_path):
-    checked_in = RuntimeBundleBuilder.from_manifest(PACKAGE_ROOT)
     root = tmp_path / "checkout"
-    selected_paths = {
-        spec.relative_path for spec in checked_in.component_specs
-    } | set(checked_in.contract_schema_paths)
-    for relative_path in selected_paths:
-        source = PACKAGE_ROOT / relative_path
-        destination = root / relative_path
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, destination)
+    checked_in = _copy_checked_selection(root)
     context_path = (
         root / "profile_si_ffs"
         / "OFARM_ContextSnapshot_example_si_ffs_pilot_compliance_v0_1.json"
@@ -591,12 +1109,16 @@ def test_context_snapshot_cannot_name_an_unretained_reference(tmp_path):
         require_profile_descriptor=True,
     )
     with pytest.raises(RuntimeBundleError, match="ContextSnapshot basis"):
-        builder.build("tenant:si.ffs.pilot.demo")
+        builder.build()
 
 
 def test_checked_in_component_catalog_builds_the_reviewed_closed_set():
-    bundle = RuntimeBundleBuilder.from_manifest(PACKAGE_ROOT).build(
-        "tenant:si.ffs.pilot.demo")
+    bundle = RuntimeBundleBuilder.from_manifest(PACKAGE_ROOT).build()
+
+    assert bundle.selected_tenant_ref == "tenant:si.ffs.pilot.demo"
+    assert bundle.digest == (
+        "sha256:03290d2d38d96a1a7934c7439bd94a8b8037411c661ece455ec2011ec183e847"
+    )
 
     expected_catalog_roles = {
         RuntimeComponentRole.ACTIVE_MANIFEST,
@@ -610,16 +1132,13 @@ def test_checked_in_component_catalog_builds_the_reviewed_closed_set():
         RuntimeComponentRole.QUERY_SPECIFICATION,
         RuntimeComponentRole.REFERENCE_SNAPSHOT,
         RuntimeComponentRole.REFERENCE_SOURCE,
-        RuntimeComponentRole.RUNTIME_SCHEMA,
         RuntimeComponentRole.VALIDATOR_SOURCE,
-    }
-    expected_vocabulary = expected_catalog_roles | {
-        RuntimeComponentRole.RELEASE_MANIFEST,
+        RuntimeComponentRole.VIEW_BINDING,
     }
 
-    assert len(bundle.components) == 88
+    assert len(bundle.components) == 90
     assert {component.role for component in bundle.components} == expected_catalog_roles
-    assert set(RuntimeComponentRole) == expected_vocabulary
+    assert set(RuntimeComponentRole) == expected_catalog_roles
     identities = [
         (component.role.value, component.logical_ref)
         for component in bundle.components

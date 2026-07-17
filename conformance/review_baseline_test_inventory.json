@@ -2566,6 +2566,11 @@
       "sourcePath": "kernel/tests/test_review_fixes.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_active_artifact_set_cannot_select_an_unbound_view",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_active_artifact_set_ref_cannot_be_omitted_from_catalog",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
@@ -2576,7 +2581,32 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_active_profile_catalog_cannot_omit_descriptor_selected_policy",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_canonical_json_logical_ref_must_match_intrinsic_identity",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_canonical_numeric_profile_refuses_a_lossy_float_collision",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_catalog_cannot_omit_selected_executable_source_role[ADAPTER_SOURCE]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_catalog_cannot_omit_selected_executable_source_role[QUERY_OUTPUT_SOURCE]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_catalog_cannot_omit_selected_executable_source_role[VALIDATOR_SOURCE]",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
@@ -2591,17 +2621,17 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_catalog_retains_the_reviewed_executable_source_selection",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_checked_in_component_catalog_builds_the_reviewed_closed_set",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_checked_in_selection_is_stable_when_catalog_order_is_reversed",
-      "sourceModule": "kernel.tests.test_runtime_bundle",
-      "sourcePath": "kernel/tests/test_runtime_bundle.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_runtime_bundle.py::test_checked_in_tenant_selection_cannot_be_owned_by_another_tenant",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
@@ -2676,12 +2706,62 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_direct_bundle_construction_closes_manifest_contract_claims",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_direct_bundle_construction_enforces_selected_runtime_closure[mismatched-deployment]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_direct_bundle_construction_enforces_selected_runtime_closure[mixed-tenant]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_direct_bundle_construction_requires_descriptor_selected_policy",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_direct_component_construction_enforces_role_semantics[mismatched-intrinsic-identity]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_direct_component_construction_enforces_role_semantics[open-view-binding-shape]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_direct_component_construction_enforces_role_semantics[wrong-canonicalization]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_direct_component_construction_enforces_role_semantics[wrong-placement]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_direct_component_construction_enforces_role_semantics[wrong-role-schema]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_duplicate_component_identity_refuses_bundle_construction",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_exact_byte_change_changes_component_and_bundle_digest",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_full_checked_selection_is_stable_when_relocated",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
@@ -2696,7 +2776,22 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
-      "nodeid": "kernel/tests/test_runtime_bundle.py::test_manifest_expected_digest_refuses_changed_selected_content",
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_manifest_must_match_selected_deployment_identity[artifact-set]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_manifest_must_match_selected_deployment_identity[pack]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_manifest_must_match_selected_deployment_identity[profile]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_manifest_must_match_selected_deployment_identity[registry]",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
@@ -2721,22 +2816,57 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_reference_snapshot_digest_detects_exact_source_byte_change",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_reference_snapshot_digest_must_bind_retained_source_bytes",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_reference_source_path_must_match_profile_artifact_resolution",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
-      "nodeid": "kernel/tests/test_runtime_bundle.py::test_runtime_bundle_create_rejects_non_component_without_attribute_error",
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_selected_adapter_byte_change_changes_bundle_identity",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
-      "nodeid": "kernel/tests/test_runtime_bundle.py::test_runtime_bundle_document_requires_type_exact_component_identity[boolean]",
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_selected_tenant_scope_ref_must_be_valid[]",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
-      "nodeid": "kernel/tests/test_runtime_bundle.py::test_runtime_bundle_document_requires_type_exact_component_identity[float]",
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_selected_tenant_scope_ref_must_be_valid[farm:not-a-tenant]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_selected_tenant_scope_ref_must_be_valid[tenant:]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_selected_tenant_scopes_must_identify_one_tenant[active-artifacts]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_selected_tenant_scopes_must_identify_one_tenant[context]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_selected_tenant_scopes_must_identify_one_tenant[manifest]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_selected_tenant_scopes_must_identify_one_tenant[pack]",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
@@ -2777,6 +2907,31 @@
     },
     {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_strict_json_rejects_ambiguous_or_nonportable_input[utf8-bom]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_tenant_ref_has_one_closed_bounded_syntax",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_view_binding_must_match_retained_query_artifacts[query-output-source]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_view_binding_must_match_retained_query_artifacts[query-plan]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_view_binding_must_match_retained_query_artifacts[query-specification]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_view_bindings_must_cover_selected_query_artifacts",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
@@ -2831,8 +2986,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "81dd6d240f823b10863d977b8d8dcd77174da87c0d34265a32e8750c7fe7f30c",
-  "entryCount": 566,
+  "entriesSha256": "a052197b8e07753e2d762f20ce54a93ae8032ddfdba9553f2520a9296221aab1",
+  "entryCount": 597,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

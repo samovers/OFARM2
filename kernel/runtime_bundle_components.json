@@ -93,17 +93,37 @@
       "placement": "TENANT_RUNTIME_SELECTION"
     },
     {
+      "role": "VIEW_BINDING",
+      "logicalRef": "view:si.ffs.inspection-register.documentassembly.v0_1",
+      "path": "profile_si_ffs/views/OFARM_RuntimeViewBinding_si_ffs_inspection_register_documentassembly_v0_1.json",
+      "canonicalization": "OFARM_CANONICAL_JSON_V1",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
+    },
+    {
+      "role": "VIEW_BINDING",
+      "logicalRef": "view:si.ffs.spray-register.passportview.v0_1",
+      "path": "profile_si_ffs/views/OFARM_RuntimeViewBinding_si_ffs_spray_register_passportview_v0_1.json",
+      "canonicalization": "OFARM_CANONICAL_JSON_V1",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
+    },
+    {
       "role": "REFERENCE_SOURCE",
       "logicalRef": "artifact:regsr_snapshot_2026-06-12.json",
       "path": "profile_si_ffs/examples/regsr_snapshot_2026-06-12.json",
       "canonicalization": "EXACT_BYTES_V1",
-      "placement": "GLOBAL_IMMUTABLE_CONTENT",
-      "expectedContentDigest": "sha256:609a6eb35e21371056ba74b835951ea9104dd20353d535ca043746a970919474"
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
     {
       "role": "VALIDATOR_SOURCE",
       "logicalRef": "python:ofarm2-kernel-m1.0:validators",
       "path": "kernel/validators.py",
+      "canonicalization": "EXACT_BYTES_V1",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
+    },
+    {
+      "role": "ADAPTER_SOURCE",
+      "logicalRef": "python:ofarm2-kernel-m1.0:adapters",
+      "path": "kernel/adapters.py",
       "canonicalization": "EXACT_BYTES_V1",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     },
@@ -153,13 +173,6 @@
       "role": "QUERY_OUTPUT_SOURCE",
       "logicalRef": "python:ofarm2-kernel-m1.0:query-output",
       "path": "kernel/views.py",
-      "canonicalization": "EXACT_BYTES_V1",
-      "placement": "GLOBAL_IMMUTABLE_CONTENT"
-    },
-    {
-      "role": "RUNTIME_SCHEMA",
-      "logicalRef": "sql:ofarm2-kernel-m1.0:schema",
-      "path": "kernel/schema.sql",
       "canonicalization": "EXACT_BYTES_V1",
       "placement": "GLOBAL_IMMUTABLE_CONTENT"
     }
