@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import os
+import queue
+import threading
+import time
 import uuid
 from pathlib import Path
 
@@ -285,6 +288,123 @@ def test_exact_reinstall_is_idempotent_and_blobs_are_reused_across_roles(
     assert _count(store, "runtime_tenant_content_blob") == 0
     assert _count(store, "runtime_bundle") == 2
     assert _count(store, "runtime_bundle_component") == 3
+
+
+def test_concurrent_exact_persist_waits_for_repository_lock_and_is_idempotent(
+    migrated_store,
+):
+    store = migrated_store
+    repository = RuntimeBundleRepository()
+    component = _component(
+        RuntimeComponentRole.ADAPTER_SOURCE,
+        "python:test.runtime-bundle-repository:concurrent-exact-reinstall",
+        b"one exact retained component\n",
+    )
+    bundle = _bundle(component)
+    second_backend_pids: queue.Queue[int] = queue.Queue()
+    second_errors: queue.Queue[BaseException] = queue.Queue()
+    second_finished = threading.Event()
+    first_install_snapshot = None
+
+    def install_on_second_connection() -> None:
+        try:
+            with psycopg.connect(
+                store.dsn,
+                row_factory=psycopg.rows.dict_row,
+                autocommit=True,
+            ) as connection:
+                second_backend_pids.put(connection.info.backend_pid)
+                with connection.transaction():
+                    with connection.cursor() as cur:
+                        repository.persist(cur, TENANT_REF, bundle)
+        except BaseException as exc:
+            second_errors.put(exc)
+        finally:
+            second_finished.set()
+
+    second_thread = None
+    try:
+        with store.tx() as first_cur:
+            repository.persist(first_cur, TENANT_REF, bundle)
+
+            second_thread = threading.Thread(target=install_on_second_connection)
+            second_thread.start()
+            second_pid = second_backend_pids.get(timeout=5)
+
+            expected_lock_state = {
+                "holder_mode": "ExclusiveLock",
+                "waiter_mode": "ExclusiveLock",
+                "wait_event_type": "Lock",
+                "wait_event": "advisory",
+            }
+            lock_state = None
+            deadline = time.monotonic() + 5
+            while lock_state != expected_lock_state and time.monotonic() < deadline:
+                first_cur.execute(
+                    """
+                    SELECT holder.mode AS holder_mode,
+                           waiter.mode AS waiter_mode,
+                           activity.wait_event_type,
+                           activity.wait_event
+                    FROM pg_locks AS holder
+                    JOIN pg_locks AS waiter
+                      ON waiter.locktype = holder.locktype
+                     AND waiter.database IS NOT DISTINCT FROM holder.database
+                     AND waiter.classid IS NOT DISTINCT FROM holder.classid
+                     AND waiter.objid IS NOT DISTINCT FROM holder.objid
+                     AND waiter.objsubid IS NOT DISTINCT FROM holder.objsubid
+                    JOIN pg_stat_activity AS activity ON activity.pid = waiter.pid
+                    WHERE holder.pid = pg_backend_pid()
+                      AND holder.locktype = 'advisory'
+                      AND holder.granted
+                      AND waiter.pid = %s
+                      AND NOT waiter.granted
+                    """,
+                    (second_pid,),
+                )
+                lock_state = first_cur.fetchone()
+
+            assert lock_state == expected_lock_state
+            assert not second_finished.is_set()
+            first_install_snapshot = _snapshot_runtime_tables(store)
+    finally:
+        if second_thread is not None:
+            assert second_finished.wait(timeout=5)
+            second_thread.join(timeout=5)
+            assert not second_thread.is_alive()
+
+    try:
+        second_error = second_errors.get_nowait()
+    except queue.Empty:
+        pass
+    else:
+        raise second_error
+
+    with store.tx() as cur:
+        audit = repository.load_for_audit(cur, TENANT_REF, bundle.digest)
+
+    assert first_install_snapshot is not None
+    assert _snapshot_runtime_tables(store) == first_install_snapshot
+    assert audit is not None
+    assert audit.tenant_ref == TENANT_REF
+    assert audit.digest == bundle.digest
+    assert audit.bundle_ref == bundle.bundle_ref
+    assert audit.canonical_document_bytes == bundle.canonical_document_bytes
+    assert audit.components == (
+        AuditRuntimeComponent(
+            role=component.role.value,
+            logical_ref=component.logical_ref,
+            canonicalization=component.canonicalization.value,
+            placement=component.placement.value,
+            canonical_bytes=component.canonical_bytes,
+            byte_length=component.byte_length,
+            content_digest=component.content_digest,
+        ),
+    )
+    assert _count(store, "runtime_content_blob") == 1
+    assert _count(store, "runtime_tenant_content_blob") == 0
+    assert _count(store, "runtime_bundle") == 1
+    assert _count(store, "runtime_bundle_component") == 1
 
 
 def test_changed_bytes_behind_a_stable_ref_create_a_new_auditable_bundle(

@@ -2981,6 +2981,101 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle_repository.py::test_changed_bytes_behind_a_stable_ref_create_a_new_auditable_bundle",
+      "sourceModule": "kernel.tests.test_runtime_bundle_repository",
+      "sourcePath": "kernel/tests/test_runtime_bundle_repository.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_repository.py::test_checked_in_bundle_persists_every_selected_role",
+      "sourceModule": "kernel.tests.test_runtime_bundle_repository",
+      "sourcePath": "kernel/tests/test_runtime_bundle_repository.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_repository.py::test_cold_audit_refuses_a_raw_bundle_stored_under_another_tenant",
+      "sourceModule": "kernel.tests.test_runtime_bundle_repository",
+      "sourcePath": "kernel/tests/test_runtime_bundle_repository.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_repository.py::test_cold_audit_refuses_an_incomplete_persisted_component_set",
+      "sourceModule": "kernel.tests.test_runtime_bundle_repository",
+      "sourcePath": "kernel/tests/test_runtime_bundle_repository.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_repository.py::test_cold_audit_refuses_cross_carrier_component_digest_byte_reuse",
+      "sourceModule": "kernel.tests.test_runtime_bundle_repository",
+      "sourcePath": "kernel/tests/test_runtime_bundle_repository.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_repository.py::test_cold_audit_refuses_cross_tenant_bundle_digest_byte_reuse",
+      "sourceModule": "kernel.tests.test_runtime_bundle_repository",
+      "sourcePath": "kernel/tests/test_runtime_bundle_repository.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_repository.py::test_cold_audit_refuses_semantically_incomplete_persisted_bundle",
+      "sourceModule": "kernel.tests.test_runtime_bundle_repository",
+      "sourcePath": "kernel/tests/test_runtime_bundle_repository.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_repository.py::test_cold_audit_refuses_structurally_valid_semantically_invalid_component",
+      "sourceModule": "kernel.tests.test_runtime_bundle_repository",
+      "sourcePath": "kernel/tests/test_runtime_bundle_repository.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_repository.py::test_concurrent_exact_persist_waits_for_repository_lock_and_is_idempotent",
+      "sourceModule": "kernel.tests.test_runtime_bundle_repository",
+      "sourcePath": "kernel/tests/test_runtime_bundle_repository.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_repository.py::test_content_conflict_rolls_back_partial_rows_but_not_the_caller_transaction",
+      "sourceModule": "kernel.tests.test_runtime_bundle_repository",
+      "sourcePath": "kernel/tests/test_runtime_bundle_repository.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_repository.py::test_exact_reinstall_is_idempotent_and_blobs_are_reused_across_roles",
+      "sourceModule": "kernel.tests.test_runtime_bundle_repository",
+      "sourcePath": "kernel/tests/test_runtime_bundle_repository.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_repository.py::test_persist_and_cold_audit_load_use_only_retained_bytes_and_are_inert",
+      "sourceModule": "kernel.tests.test_runtime_bundle_repository",
+      "sourcePath": "kernel/tests/test_runtime_bundle_repository.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_repository.py::test_persist_refuses_a_bundle_under_another_tenant_without_writes",
+      "sourceModule": "kernel.tests.test_runtime_bundle_repository",
+      "sourcePath": "kernel/tests/test_runtime_bundle_repository.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_repository.py::test_persist_requires_an_active_caller_transaction",
+      "sourceModule": "kernel.tests.test_runtime_bundle_repository",
+      "sourcePath": "kernel/tests/test_runtime_bundle_repository.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_repository.py::test_repository_and_sql_refuse_non_tenant_storage_keys",
+      "sourceModule": "kernel.tests.test_runtime_bundle_repository",
+      "sourcePath": "kernel/tests/test_runtime_bundle_repository.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_repository.py::test_runtime_bundle_tables_refuse_update_delete_and_truncate[runtime_bundle]",
+      "sourceModule": "kernel.tests.test_runtime_bundle_repository",
+      "sourcePath": "kernel/tests/test_runtime_bundle_repository.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_repository.py::test_runtime_bundle_tables_refuse_update_delete_and_truncate[runtime_bundle_component]",
+      "sourceModule": "kernel.tests.test_runtime_bundle_repository",
+      "sourcePath": "kernel/tests/test_runtime_bundle_repository.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_repository.py::test_runtime_bundle_tables_refuse_update_delete_and_truncate[runtime_content_blob]",
+      "sourceModule": "kernel.tests.test_runtime_bundle_repository",
+      "sourcePath": "kernel/tests/test_runtime_bundle_repository.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_repository.py::test_runtime_bundle_tables_refuse_update_delete_and_truncate[runtime_tenant_content_blob]",
+      "sourceModule": "kernel.tests.test_runtime_bundle_repository",
+      "sourcePath": "kernel/tests/test_runtime_bundle_repository.py"
+    },
+    {
       "nodeid": "kernel/tests/test_stages.py::test_carrier_schema_validator_refuses_unknown_contract",
       "sourceModule": "kernel.tests.test_stages",
       "sourcePath": "kernel/tests/test_stages.py"
@@ -3031,8 +3126,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "49aea0e6fbdc41edaf977908b84377a86f7822bfea9786572d212805fb37f171",
-  "entryCount": 606,
+  "entriesSha256": "0767e0ac043ba6a8db8f63f134609e4cf861a6eaba44c5a1bfea9e4b69bbdfb9",
+  "entryCount": 625,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
