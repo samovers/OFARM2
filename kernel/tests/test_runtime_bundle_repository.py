@@ -1,6 +1,7 @@
 """PostgreSQL persistence tests for issue #171 RuntimeBundles."""
 from __future__ import annotations
 
+import json
 import os
 import queue
 import threading
@@ -185,6 +186,85 @@ def _seed_raw_persisted_bundle(
                 global_digest,
                 tenant_digest,
                 identity["byteLength"],
+            ),
+        )
+    return bundle_digest
+
+
+def _seed_raw_bundle_with_replaced_tenant_component(
+    store: Store,
+    bundle: RuntimeBundle,
+    component: RuntimeComponent,
+    replacement_bytes: bytes,
+) -> str:
+    """Retain one malformed tenant component without invoking the model."""
+    replacement_digest = sha256_bytes(replacement_bytes)
+    identity_document = json.loads(bundle.canonical_document_bytes)
+    identity = next(
+        item for item in identity_document["components"]
+        if (
+            item["role"] == component.role.value
+            and item["logicalRef"] == component.logical_ref
+        )
+    )
+    identity["contentDigest"] = replacement_digest
+    identity["byteLength"] = len(replacement_bytes)
+    canonical_document_bytes = canonical_json_bytes(identity_document)
+    bundle_digest = sha256_bytes(canonical_document_bytes)
+
+    with store.tx() as cur:
+        cur.execute(
+            """
+            INSERT INTO runtime_tenant_content_blob
+              (tenant_ref, content_digest, canonical_bytes, byte_length)
+            VALUES (%s, %s, %s, %s)
+            """,
+            (
+                SELECTED_TENANT_REF,
+                replacement_digest,
+                replacement_bytes,
+                len(replacement_bytes),
+            ),
+        )
+        cur.execute(
+            """
+            INSERT INTO runtime_bundle
+              (tenant_ref, bundle_digest, bundle_ref, canonical_bytes, byte_length)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            (
+                SELECTED_TENANT_REF,
+                bundle_digest,
+                f"runtimebundle:{bundle_digest}",
+                canonical_document_bytes,
+                len(canonical_document_bytes),
+            ),
+        )
+        cur.execute(
+            """
+            INSERT INTO runtime_bundle_component
+              (tenant_ref, bundle_digest, component_role, logical_ref,
+               canonicalization, content_placement, global_content_digest,
+               tenant_content_digest, byte_length)
+            SELECT tenant_ref, %s, component_role, logical_ref,
+                   canonicalization, content_placement, global_content_digest,
+                   CASE WHEN component_role = %s AND logical_ref = %s
+                        THEN %s ELSE tenant_content_digest END,
+                   CASE WHEN component_role = %s AND logical_ref = %s
+                        THEN %s ELSE byte_length END
+            FROM runtime_bundle_component
+            WHERE tenant_ref = %s AND bundle_digest = %s
+            """,
+            (
+                bundle_digest,
+                component.role.value,
+                component.logical_ref,
+                replacement_digest,
+                component.role.value,
+                component.logical_ref,
+                len(replacement_bytes),
+                SELECTED_TENANT_REF,
+                bundle.digest,
             ),
         )
     return bundle_digest
@@ -565,6 +645,54 @@ def test_cold_audit_refuses_semantically_incomplete_persisted_bundle(
     ):
         with store.tx() as cur:
             repository.load_for_audit(cur, TENANT_REF, bundle_digest)
+
+
+def test_cold_audit_refuses_malformed_context_anchor_scope_members(
+    migrated_store,
+):
+    store = migrated_store
+    repository = RuntimeBundleRepository()
+    bundle = RuntimeBundleBuilder.from_manifest(PACKAGE_ROOT).build()
+    _persist(store, bundle, SELECTED_TENANT_REF)
+    context = next(
+        component for component in bundle.components
+        if (
+            component.role is RuntimeComponentRole.PROFILE_INSTANCE
+            and component.logical_ref.startswith("contextsnapshot:")
+        )
+    )
+    context_document = json.loads(context.canonical_bytes)
+    context_document["anchorScopes"] = [
+        17,
+        {
+            "scopeType": "TENANT",
+            "scopeRef": SELECTED_TENANT_REF,
+        },
+    ]
+    malformed_digest = _seed_raw_bundle_with_replaced_tenant_component(
+        store,
+        bundle,
+        context,
+        canonical_json_bytes(context_document),
+    )
+    before_audit = _snapshot_runtime_tables(store)
+
+    with store.tx() as cur:
+        with pytest.raises(
+            RuntimeBundleRepositoryError,
+            match=(
+                "persisted RuntimeBundle model is invalid: "
+                "ContextSnapshot anchorScopes are malformed"
+            ),
+        ):
+            repository.load_for_audit(
+                cur,
+                SELECTED_TENANT_REF,
+                malformed_digest,
+            )
+        cur.execute("SELECT 1")
+
+    assert _snapshot_runtime_tables(store) == before_audit
 
 
 def test_persist_requires_an_active_caller_transaction(migrated_store):

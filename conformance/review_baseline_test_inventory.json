@@ -3011,6 +3011,11 @@
       "sourcePath": "kernel/tests/test_runtime_bundle_repository.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle_repository.py::test_cold_audit_refuses_malformed_context_anchor_scope_members",
+      "sourceModule": "kernel.tests.test_runtime_bundle_repository",
+      "sourcePath": "kernel/tests/test_runtime_bundle_repository.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle_repository.py::test_cold_audit_refuses_semantically_incomplete_persisted_bundle",
       "sourceModule": "kernel.tests.test_runtime_bundle_repository",
       "sourcePath": "kernel/tests/test_runtime_bundle_repository.py"
@@ -3126,8 +3131,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "0767e0ac043ba6a8db8f63f134609e4cf861a6eaba44c5a1bfea9e4b69bbdfb9",
-  "entryCount": 625,
+  "entriesSha256": "f8f1e06594a355172efdfd4251fe47b8ad8bd7c3b56ed0848858d948beb11a93",
+  "entryCount": 626,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
