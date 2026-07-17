@@ -416,6 +416,7 @@ def test_concurrent_exact_persist_waits_for_repository_lock_and_is_idempotent(
                 "waiter_mode": "ExclusiveLock",
                 "wait_event_type": "Lock",
                 "wait_event": "advisory",
+                "runtime_relation_locks": 0,
             }
             lock_state = None
             deadline = time.monotonic() + 5
@@ -425,7 +426,19 @@ def test_concurrent_exact_persist_waits_for_repository_lock_and_is_idempotent(
                     SELECT holder.mode AS holder_mode,
                            waiter.mode AS waiter_mode,
                            activity.wait_event_type,
-                           activity.wait_event
+                           activity.wait_event,
+                           (
+                               SELECT count(*)
+                               FROM pg_locks AS relation_lock
+                               JOIN pg_class AS relation
+                                 ON relation.oid = relation_lock.relation
+                               WHERE relation_lock.pid = waiter.pid
+                                 AND relation_lock.locktype = 'relation'
+                                 AND relation_lock.granted
+                                 AND relation.relnamespace =
+                                     current_schema()::regnamespace
+                                 AND relation.relname = ANY(%s)
+                           ) AS runtime_relation_locks
                     FROM pg_locks AS holder
                     JOIN pg_locks AS waiter
                       ON waiter.locktype = holder.locktype
@@ -440,7 +453,7 @@ def test_concurrent_exact_persist_waits_for_repository_lock_and_is_idempotent(
                       AND waiter.pid = %s
                       AND NOT waiter.granted
                     """,
-                    (second_pid,),
+                    (list(RUNTIME_TABLE_KEYS), second_pid),
                 )
                 lock_state = first_cur.fetchone()
 
