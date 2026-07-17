@@ -438,6 +438,66 @@ def test_direct_bundle_construction_closes_manifest_contract_claims():
         )
 
 
+@pytest.mark.parametrize(
+    "anchor_scopes",
+    (
+        17,
+        [],
+        [17, {
+            "scopeType": "TENANT",
+            "scopeRef": "tenant:si.ffs.pilot.demo",
+        }],
+        [{
+            "scopeType": "TENANT",
+            "scopeRef": "tenant:si.ffs.pilot.demo",
+            "extra": True,
+        }],
+        [{
+            "scopeType": 17,
+            "scopeRef": "tenant:si.ffs.pilot.demo",
+        }],
+        [{
+            "scopeType": "TENANT",
+            "scopeRef": 17,
+        }],
+    ),
+    ids=(
+        "scalar",
+        "empty",
+        "mixed-member-types",
+        "open-scope-object",
+        "untyped-scope-type",
+        "untyped-scope-ref",
+    ),
+)
+def test_direct_bundle_construction_rejects_malformed_context_anchor_scopes(
+    anchor_scopes,
+):
+    bundle = RuntimeBundleBuilder.from_manifest(PACKAGE_ROOT).build()
+    context = next(
+        component for component in bundle.components
+        if (
+            component.role is RuntimeComponentRole.PROFILE_INSTANCE
+            and component.logical_ref.startswith("contextsnapshot:")
+        )
+    )
+    document = json.loads(context.canonical_bytes)
+    document["anchorScopes"] = anchor_scopes
+    changed_context = RuntimeComponent.from_selected_bytes(
+        role=context.role,
+        logical_ref=context.logical_ref,
+        canonicalization=context.canonicalization,
+        placement=context.placement,
+        selected_bytes=json.dumps(document).encode("utf-8"),
+    )
+
+    with pytest.raises(RuntimeBundleError, match="anchorScopes"):
+        RuntimeBundle.create(
+            changed_context if component is context else component
+            for component in bundle.components
+        )
+
+
 def test_canonical_numeric_profile_refuses_a_lossy_float_collision():
     accepted = RuntimeComponent.from_selected_bytes(
         role=RuntimeComponentRole.PROFILE_POLICY,
@@ -474,6 +534,10 @@ def test_canonical_numeric_profile_refuses_a_lossy_float_collision():
         (b'\xef\xbb\xbf{"value":1}', "UTF-8 BOM"),
         (b'{"value":"\xff"}', "strict UTF-8 JSON"),
         (b'{"value":"\\ud800"}', "outside canonical JSON"),
+        (
+            b'{"value":1e-9999999999999999999}',
+            "outside the canonical numeric profile",
+        ),
     ),
     ids=(
         "duplicate-key",
@@ -483,6 +547,7 @@ def test_canonical_numeric_profile_refuses_a_lossy_float_collision():
         "utf8-bom",
         "invalid-utf8",
         "lone-surrogate",
+        "extreme-exponent",
     ),
 )
 def test_strict_json_rejects_ambiguous_or_nonportable_input(raw, message):

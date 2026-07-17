@@ -8,7 +8,7 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass, field
-from decimal import Decimal
+from decimal import Decimal, DecimalException
 from enum import Enum
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable
@@ -19,6 +19,19 @@ COMPONENT_CATALOG_VERSION = "ofarm.runtime-component-catalog.local.v1"
 _SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _LOGICAL_REF_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/#-]{0,1023}$")
 _TENANT_REF_RE = re.compile(r"^tenant:[A-Za-z0-9._:-]{1,248}$")
+_CONTEXT_SCOPE_REF_RE = re.compile(r"^[A-Za-z0-9._:-]+$")
+_CONTEXT_SCOPE_TYPES = frozenset({
+    "FARM",
+    "SITE",
+    "FIELD",
+    "ZONE",
+    "CROP_CYCLE",
+    "LOT",
+    "FACILITY",
+    "OPERATION",
+    "DEPLOYMENT",
+    "TENANT",
+})
 
 
 class RuntimeBundleError(RuntimeError):
@@ -149,7 +162,14 @@ def _parse_canonical_float(token: str) -> float:
         raise RuntimeBundleError(
             f"JSON number {token} is outside the canonical numeric profile"
         ) from exc
-    if Decimal(token) != Decimal(canonical_token):
+    try:
+        source_decimal = Decimal(token)
+        canonical_decimal = Decimal(canonical_token)
+    except DecimalException as exc:
+        raise RuntimeBundleError(
+            f"JSON number {token} is outside the canonical numeric profile"
+        ) from exc
+    if source_decimal != canonical_decimal:
         raise RuntimeBundleError(
             f"JSON number {token} is not preserved by the canonical numeric profile"
         )
@@ -812,9 +832,25 @@ def _validate_active_selection(
             raise RuntimeBundleError(
                 "ContextSnapshot basis does not match retained active selection"
             )
+        anchor_scopes = document.get("anchorScopes")
+        if (
+            type(anchor_scopes) is not list
+            or not anchor_scopes
+            or any(
+                type(scope) is not dict
+                or set(scope) != {"scopeType", "scopeRef"}
+                or scope.get("scopeType") not in _CONTEXT_SCOPE_TYPES
+                or type(scope.get("scopeRef")) is not str
+                or _CONTEXT_SCOPE_REF_RE.fullmatch(scope["scopeRef"]) is None
+                for scope in anchor_scopes
+            )
+        ):
+            raise RuntimeBundleError(
+                "ContextSnapshot anchorScopes are malformed"
+            )
         tenant_refs = [
-            scope.get("scopeRef") for scope in document.get("anchorScopes", [])
-            if type(scope) is dict and scope.get("scopeType") == "TENANT"
+            scope["scopeRef"] for scope in anchor_scopes
+            if scope["scopeType"] == "TENANT"
         ]
         if len(tenant_refs) != 1:
             raise RuntimeBundleError(
