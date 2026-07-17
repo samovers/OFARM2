@@ -122,9 +122,14 @@ class Store:
 
     @property
     def conn(self) -> psycopg.Connection:
-        if self._conn is None or self._conn.closed:
+        if self._conn is None:
             self._conn = psycopg.connect(self.dsn, row_factory=dict_row, autocommit=True)
             configure_session(self._conn)
+        elif self._conn.closed:
+            raise RuntimeBundleBindingError(
+                "this Store's verified database connection is closed; a fresh "
+                "Store and process startup are required before further use"
+            )
         return self._conn
 
     @property

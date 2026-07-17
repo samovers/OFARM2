@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 
+import psycopg
 import pytest
 from fastapi.testclient import TestClient
 
@@ -13,6 +14,7 @@ from kernel.runtime_activation import (
     RuntimeActivationError,
 )
 from kernel.runtime_bundle import RuntimeComponentRole, sha256_bytes
+from kernel.store import RuntimeBundleBindingError
 from kernel.tests.conftest import TEST_DEPLOYMENT_IMAGE_DIGEST
 
 
@@ -94,3 +96,37 @@ def test_manifest_endpoint_matches_the_selected_bundle_bytes(fresh_env):
 
     assert response.status_code == 200
     assert response.json() == json.loads(component.canonical_bytes)
+
+
+def test_closed_verified_connection_refuses_before_governed_mutation(fresh_env):
+    store, _, _ = fresh_env
+    app = create_app(
+        store,
+        oidc=None,
+        deployment_image_digest=TEST_DEPLOYMENT_IMAGE_DIGEST,
+    )
+    marker = "request:test-closed-verified-connection"
+
+    with psycopg.connect(store.dsn, autocommit=True) as observer:
+        assert observer.execute(
+            "SELECT count(*) FROM kernel_gate_log WHERE request_id = %s",
+            (marker,),
+        ).fetchone()[0] == 0
+
+        store.close()
+        with pytest.raises(
+            RuntimeBundleBindingError,
+            match="verified database connection is closed",
+        ):
+            with app.state.store.serialized_tx() as cur:
+                app.state.store.log_gate(
+                    cur,
+                    marker,
+                    "CONNECTION_LIFECYCLE",
+                    "REFUSE",
+                )
+
+        assert observer.execute(
+            "SELECT count(*) FROM kernel_gate_log WHERE request_id = %s",
+            (marker,),
+        ).fetchone()[0] == 0
