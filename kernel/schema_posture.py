@@ -203,6 +203,41 @@ def live_schema_catalog(cur) -> dict:
              ORDER BY c.relname, t.tgname
             """,
         ),
+        "internalConstraintTriggers": _catalog_rows(
+            cur,
+            """
+            SELECT constraint_relation.relname AS constraint_relation_name,
+                   con.conname AS constraint_name,
+                   trigger_relation.relname AS trigger_relation_name,
+                   p.proname AS trigger_function_name,
+                   t.tgtype::integer AS trigger_type,
+                   t.tgenabled AS enabled,
+                   t.tgdeferrable AS deferrable,
+                   t.tginitdeferred AS initially_deferred,
+                   count(*)::integer AS trigger_count
+              FROM pg_catalog.pg_trigger AS t
+              JOIN pg_catalog.pg_constraint AS con
+                ON con.oid = t.tgconstraint
+              JOIN pg_catalog.pg_class AS constraint_relation
+                ON constraint_relation.oid = con.conrelid
+              JOIN pg_catalog.pg_namespace AS constraint_namespace
+                ON constraint_namespace.oid = constraint_relation.relnamespace
+              JOIN pg_catalog.pg_class AS trigger_relation
+                ON trigger_relation.oid = t.tgrelid
+              JOIN pg_catalog.pg_namespace AS trigger_namespace
+                ON trigger_namespace.oid = trigger_relation.relnamespace
+              JOIN pg_catalog.pg_proc AS p ON p.oid = t.tgfoid
+             WHERE t.tgisinternal
+               AND constraint_namespace.nspname = 'public'
+               AND trigger_namespace.nspname = 'public'
+             GROUP BY constraint_relation.relname, con.conname,
+                      trigger_relation.relname, p.proname, t.tgtype,
+                      t.tgenabled, t.tgdeferrable, t.tginitdeferred
+             ORDER BY constraint_relation.relname, con.conname,
+                      trigger_relation.relname, p.proname, t.tgtype,
+                      t.tgenabled, t.tgdeferrable, t.tginitdeferred
+            """,
+        ),
     }
 
 
