@@ -9,7 +9,6 @@ from __future__ import annotations
 import uuid
 
 from kernel import context
-from kernel.context import ProductRegister
 from kernel.profiles.si_ffs import ffsnaprave_adapter as ffsn
 from kernel.profiles.si_ffs import si_bindings as sib
 from kernel.profiles.si_ffs.ffsnaprave_adapter import FFSNapraveRegister
@@ -41,10 +40,8 @@ __all__ = [
 
 def test_p4_regsr_product_authorisation_is_identity_grade(store):
     decision = "U34330-50/23/16"
-    pr = ProductRegister()
-    pr.load_from_store(store)
     with store.serialized_tx() as cur:
-        r = sib.resolve_product_authorisation(store, cur, pr, decision,
+        r = sib.resolve_product_authorisation(store, cur, decision,
                                               "input:demo.account", created_by=demo.FARMER,
                                               evidence_ref=demo.ONBOARDING_EVIDENCE,
                                               as_of="2026-06-12T12:00:00Z")
@@ -61,10 +58,8 @@ def test_p4_regsr_product_authorisation_is_identity_grade(store):
 
 
 def test_p4_regsr_unknown_product_routes_to_review_unresolved(store):
-    pr = ProductRegister()
-    pr.load_from_store(store)
     with store.serialized_tx() as cur:
-        r = sib.resolve_product_authorisation(store, cur, pr, "U00000-00/00/0",
+        r = sib.resolve_product_authorisation(store, cur, "U00000-00/00/0",
                                               "input:demo.unknown", created_by=demo.FARMER,
                                               evidence_ref=demo.ONBOARDING_EVIDENCE,
                                               as_of="2026-06-12T12:00:00Z")
@@ -186,10 +181,8 @@ def test_p4_ffs_izkaznica_operator_is_unresolved_advisory(store):
 
 
 def test_p4_no_in_force_snapshot_yields_unresolved_committable_binding(store):
-    pr = ProductRegister()
-    pr.load_from_store(store)
     with store.serialized_tx() as cur:
-        r = sib.resolve_product_authorisation(store, cur, pr, "U12345-50/20/1",
+        r = sib.resolve_product_authorisation(store, cur, "U12345-50/20/1",
                                               "input:demo.early", created_by=demo.FARMER,
                                               evidence_ref=demo.ONBOARDING_EVIDENCE,
                                               as_of="2020-01-01T00:00:00Z")
@@ -204,10 +197,8 @@ def test_p4_no_in_force_snapshot_yields_unresolved_committable_binding(store):
 
 def test_p4_only_identity_grade_confirm_yields_verified(store):
     decision = "U34330-50/23/16"
-    pr = ProductRegister()
-    pr.load_from_store(store)
     with store.serialized_tx() as cur:
-        confirmed = sib.resolve_product_authorisation(store, cur, pr, decision,
+        confirmed = sib.resolve_product_authorisation(store, cur, decision,
                                                       "input:x", created_by=demo.FARMER,
                                                       evidence_ref=demo.ONBOARDING_EVIDENCE,
                                                       as_of="2026-06-12T12:00:00Z")
@@ -221,10 +212,8 @@ def test_p4_only_identity_grade_confirm_yields_verified(store):
 
 def test_p4_verified_regsr_binding_records_scheme_version(store):
     decision = "U34330-50/23/16"
-    pr = ProductRegister()
-    pr.load_from_store(store)
     with store.serialized_tx() as cur:
-        r = sib.resolve_product_authorisation(store, cur, pr, decision, "resource:v",
+        r = sib.resolve_product_authorisation(store, cur, decision, "resource:v",
                                               created_by=demo.FARMER,
                                               evidence_ref=demo.ONBOARDING_EVIDENCE,
                                               as_of="2026-06-12T12:00:00Z")

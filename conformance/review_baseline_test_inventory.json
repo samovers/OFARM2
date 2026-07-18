@@ -696,6 +696,11 @@
       "sourcePath": "kernel/tests/test_m2_si_bindings.py"
     },
     {
+      "nodeid": "kernel/tests/test_m2_si_bindings.py::test_p4_caller_fabricated_selected_register_cannot_mint_verified_binding",
+      "sourceModule": "kernel.tests.test_m2_si_bindings",
+      "sourcePath": "kernel/tests/test_m2_si_bindings.py"
+    },
+    {
       "nodeid": "kernel/tests/test_m2_si_bindings.py::test_p4_fake_evidence_ref_produces_no_binding",
       "sourceModule": "kernel.tests.test_m2_si_bindings",
       "sourcePath": "kernel/tests/test_m2_si_bindings.py"
@@ -2971,7 +2976,7 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
-      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_application_bootstrap_rolls_back_schema_and_bundle_on_refusal",
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_application_bootstrap_uses_bundle_selected_bytes_not_profile_paths",
       "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
       "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
     },
@@ -3071,7 +3076,22 @@
       "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_product_authorisation_uses_only_bundle_selected_regsr_source_bytes",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_profile_bootstrap_inserts_every_bundle_selected_canonical_instance",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_profile_bootstrap_refuses_changed_path_absent_from_bound_bundle",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_profile_bootstrap_refuses_extra_selected_snapshot_mismatch_atomically",
       "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
       "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
     },
@@ -3266,8 +3286,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "124fcece94f7fdd2c1003185539babd5d622fc9c071348cf622ce06acf6724ea",
-  "entryCount": 653,
+  "entriesSha256": "531f9b4add056889d3e06672be7bd2f26db31dd0be1b2aac8cee98096facc97f",
+  "entryCount": 657,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

@@ -20,6 +20,7 @@ from kernel.authority import AuthorityEvaluator
 from kernel.contracts import sha256_of
 from kernel.gates import GatePipeline
 from kernel.materializer import MaterializationIdentityError, Materializer
+from kernel.profiles.si_ffs import si_bindings as sib
 from kernel.runtime_bundle import (
     Canonicalization,
     ContentPlacement,
@@ -95,6 +96,117 @@ def _variant_bundle(base: RuntimeBundle) -> RuntimeBundle:
         selected_bytes=b"# alternate verified runtime selection for issue 171\n",
     )
     return RuntimeBundle.create((*base.components, marker))
+
+
+def _bundle_with_extra_selected_snapshot(
+    base: RuntimeBundle,
+) -> tuple[RuntimeBundle, RuntimeComponent]:
+    """Build a valid bundle with one selected snapshot outside the descriptor paths."""
+    snapshot_id = "referencesnapshot:si.uvhvvr.ffs-reg.bootstrap-extra.2099-01-01"
+    artifact_ref = "artifact:test.bootstrap-extra-regsr.json"
+    source = RuntimeComponent.from_selected_bytes(
+        role=RuntimeComponentRole.REFERENCE_SOURCE,
+        logical_ref=artifact_ref,
+        canonicalization=Canonicalization.EXACT_BYTES,
+        placement=ContentPlacement.GLOBAL,
+        selected_bytes=canonical_json_bytes({
+            "fixture": "bundle-selected bootstrap source",
+        }),
+    )
+    template = next(
+        component for component in base.components
+        if component.role is RuntimeComponentRole.REFERENCE_SNAPSHOT
+        and component.logical_ref.startswith("referencesnapshot:si.uvhvvr.ffs-reg.")
+    )
+    snapshot_payload = json.loads(template.canonical_bytes)
+    snapshot_payload.update({
+        "referenceSnapshotId": snapshot_id,
+        "canonicalVersionLabel": "bootstrap-extra-2099-01-01",
+        "effectiveFrom": "2099-01-01T00:00:00Z",
+        "sourceArtifactRefs": [
+            artifact_ref,
+            f"digest:{source.content_digest}",
+        ],
+        "notes": "Fictional bundle-selected snapshot for bootstrap regression coverage.",
+    })
+    snapshot = RuntimeComponent.from_selected_bytes(
+        role=RuntimeComponentRole.REFERENCE_SNAPSHOT,
+        logical_ref=snapshot_id,
+        canonicalization=Canonicalization.CANONICAL_JSON,
+        placement=ContentPlacement.GLOBAL,
+        selected_bytes=canonical_json_bytes(snapshot_payload),
+    )
+
+    components = []
+    for component in base.components:
+        if component.role is RuntimeComponentRole.PROFILE_INSTANCE:
+            payload = json.loads(component.canonical_bytes)
+            if payload.get("schemaVersion") == "ofarm.activeartifactset.v0.1":
+                payload["activeArtifactRefs"] = [
+                    *payload["activeArtifactRefs"], snapshot_id]
+                component = RuntimeComponent.from_selected_bytes(
+                    role=component.role,
+                    logical_ref=component.logical_ref,
+                    canonicalization=component.canonicalization,
+                    placement=component.placement,
+                    selected_bytes=canonical_json_bytes(payload),
+                )
+            elif payload.get("schemaVersion") == "ofarm.contextsnapshot.v0.1":
+                payload["referenceSnapshotRefs"] = [
+                    *payload["referenceSnapshotRefs"], snapshot_id]
+                component = RuntimeComponent.from_selected_bytes(
+                    role=component.role,
+                    logical_ref=component.logical_ref,
+                    canonicalization=component.canonicalization,
+                    placement=component.placement,
+                    selected_bytes=canonical_json_bytes(payload),
+                )
+        components.append(component)
+    return RuntimeBundle.create((*components, source, snapshot)), snapshot
+
+
+def _bundle_with_alternate_regsr_source(
+    base: RuntimeBundle,
+    artifact: dict,
+) -> RuntimeBundle:
+    snapshot = next(
+        component for component in base.components
+        if component.role is RuntimeComponentRole.REFERENCE_SNAPSHOT
+        and component.logical_ref.startswith(context.REGSR_SNAPSHOT_PREFIX + ".")
+    )
+    snapshot_payload = json.loads(snapshot.canonical_bytes)
+    artifact_refs = [
+        ref for ref in snapshot_payload["sourceArtifactRefs"]
+        if ref.startswith("artifact:")
+    ]
+    assert len(artifact_refs) == 1
+    source = RuntimeComponent.from_selected_bytes(
+        role=RuntimeComponentRole.REFERENCE_SOURCE,
+        logical_ref=artifact_refs[0],
+        canonicalization=Canonicalization.EXACT_BYTES,
+        placement=ContentPlacement.GLOBAL,
+        selected_bytes=canonical_json_bytes(artifact),
+    )
+    snapshot_payload["sourceArtifactRefs"] = [
+        f"digest:{source.content_digest}" if ref.startswith("digest:") else ref
+        for ref in snapshot_payload["sourceArtifactRefs"]
+    ]
+    selected_snapshot = RuntimeComponent.from_selected_bytes(
+        role=snapshot.role,
+        logical_ref=snapshot.logical_ref,
+        canonicalization=snapshot.canonicalization,
+        placement=snapshot.placement,
+        selected_bytes=canonical_json_bytes(snapshot_payload),
+    )
+    return RuntimeBundle.create(
+        source
+        if component.role is RuntimeComponentRole.REFERENCE_SOURCE
+        and component.logical_ref == source.logical_ref
+        else selected_snapshot
+        if component is snapshot
+        else component
+        for component in base.components
+    )
 
 
 def _bundle_for_tenant(base: RuntimeBundle, tenant_ref: str) -> RuntimeBundle:
@@ -407,6 +519,75 @@ def test_profile_bootstrap_refuses_non_exact_existing_selected_instance():
             context.bootstrap_for_descriptor(store, config.ACTIVE_PROFILE)
 
 
+def test_profile_bootstrap_inserts_every_bundle_selected_canonical_instance():
+    with _isolated_store("complete_selected_bootstrap") as source_store:
+        selected_bundle, extra_snapshot = _bundle_with_extra_selected_snapshot(
+            source_store.runtime_bundle)
+        selected_store = Store(
+            dsn=source_store.dsn,
+            tenant_ref=source_store.tenant_ref,
+            runtime_bundle=selected_bundle,
+            active_descriptor=source_store.active_descriptor,
+        )
+        try:
+            create_app(selected_store, oidc=None)
+
+            selected_components = [
+                component for component in selected_bundle.components
+                if component.role in {
+                    RuntimeComponentRole.PROFILE_INSTANCE,
+                    RuntimeComponentRole.REFERENCE_SNAPSHOT,
+                }
+            ]
+            assert extra_snapshot in selected_components
+            for component in selected_components:
+                row = selected_store.get_record(component.logical_ref)
+                assert row is not None
+                assert row["payload"] == json.loads(component.canonical_bytes)
+                assert row["payload_sha256"] == component.content_digest
+        finally:
+            selected_store.close()
+
+
+def test_profile_bootstrap_refuses_extra_selected_snapshot_mismatch_atomically():
+    with _isolated_store("extra_selected_mismatch") as seed_store:
+        seed_store.migrate()
+        selected_bundle, extra_snapshot = _bundle_with_extra_selected_snapshot(
+            seed_store.runtime_bundle)
+        unequal = json.loads(extra_snapshot.canonical_bytes)
+        unequal["notes"] += " Pre-existing unequal payload."
+        with seed_store.tx() as cur:
+            seed_store.insert_record(cur, unequal)
+
+        refusing_store = Store(
+            dsn=seed_store.dsn,
+            tenant_ref=seed_store.tenant_ref,
+            runtime_bundle=selected_bundle,
+            active_descriptor=seed_store.active_descriptor,
+        )
+        try:
+            with pytest.raises(
+                context.ContextNotReconstructible,
+                match="not the exact selected contract and payload",
+            ):
+                create_app(refusing_store, oidc=None)
+
+            assert seed_store.conn.execute(
+                "SELECT COUNT(*) AS count FROM runtime_bundle "
+                "WHERE tenant_ref = %s AND bundle_digest = %s",
+                (seed_store.tenant_ref, selected_bundle.digest),
+            ).fetchone()["count"] == 0
+            rows = seed_store.conn.execute(
+                "SELECT record_id, payload FROM kernel_record ORDER BY record_id"
+            ).fetchall()
+            assert rows == [{
+                "record_id": extra_snapshot.logical_ref,
+                "payload": unequal,
+            }]
+        finally:
+            refusing_store.close()
+
+
 def test_profile_bootstrap_refuses_changed_path_absent_from_bound_bundle(tmp_path):
     selected = next(
         path for path in config.ACTIVE_PROFILE.profile_instance_paths
@@ -426,7 +607,7 @@ def test_profile_bootstrap_refuses_changed_path_absent_from_bound_bundle(tmp_pat
         store.migrate()
         with pytest.raises(
             context.ContextNotReconstructible,
-            match="not the exact content selected by the Store RuntimeBundle",
+            match="not the Store startup selection",
         ):
             context.bootstrap_for_descriptor(store, descriptor)
         selected_ids = []
@@ -437,7 +618,7 @@ def test_profile_bootstrap_refuses_changed_path_absent_from_bound_bundle(tmp_pat
         assert all(store.get_record(record_id) is None for record_id in selected_ids)
 
 
-def test_application_bootstrap_rolls_back_schema_and_bundle_on_refusal():
+def test_application_bootstrap_uses_bundle_selected_bytes_not_profile_paths():
     with _isolated_store("atomic_app") as store:
         selected = next(
             component for component in store.runtime_bundle.components
@@ -465,14 +646,11 @@ def test_application_bootstrap_rolls_back_schema_and_bundle_on_refusal():
             active_descriptor=store.active_descriptor,
         )
         try:
-            with pytest.raises(
-                context.ContextNotReconstructible,
-                match="not the exact content selected by the Store RuntimeBundle",
-            ):
-                create_app(refusing_store, oidc=None)
-            assert refusing_store.conn.execute(
-                "SELECT to_regclass('runtime_bundle') AS relation"
-            ).fetchone()["relation"] is None
+            create_app(refusing_store, oidc=None)
+            row = refusing_store.get_record(changed.logical_ref)
+            assert row is not None
+            assert row["payload"] == changed_payload
+            assert row["payload_sha256"] == changed.content_digest
         finally:
             refusing_store.close()
 
@@ -1153,6 +1331,79 @@ def test_cross_bundle_identical_import_rebuilds_current_parsed_cache(fresh_env):
             store_a.runtime_bundle_digest, store_b.runtime_bundle_digest}
     finally:
         store_b.close()
+
+
+def test_product_authorisation_uses_only_bundle_selected_regsr_source_bytes():
+    selected_decision = f"U9{_uid()[:4]}-50/26/s"
+    release_path_decision = "U34330-50/23/16"
+    selected_artifact = {
+        "products": [],
+        "productDetails": [{
+            "name": "FIKTIV SELECTED (fictional)",
+            "decisions": [{
+                "decisionType": "Registracija",
+                "decisionNumber": selected_decision,
+                "issued": "2026-01-01",
+                "validUntil": "2028-08-15",
+            }],
+        }],
+    }
+
+    with _isolated_store("selected_regsr_source") as source_store:
+        selected_bundle = _bundle_with_alternate_regsr_source(
+            source_store.runtime_bundle,
+            selected_artifact,
+        )
+        selected_store = Store(
+            dsn=source_store.dsn,
+            tenant_ref=source_store.tenant_ref,
+            runtime_bundle=selected_bundle,
+            active_descriptor=source_store.active_descriptor,
+        )
+        try:
+            create_app(selected_store, oidc=None)
+            evidence = next(
+                payload for payload in demo.substrate_records()
+                if payload.get("evidenceRecordId") == demo.ONBOARDING_EVIDENCE
+            )
+            with selected_store.tx() as cur:
+                selected_store.insert_record(cur, evidence)
+
+            with selected_store.serialized_tx() as cur:
+                selected = sib.resolve_product_authorisation(
+                    selected_store,
+                    cur,
+                    selected_decision,
+                    f"resource:selected.{_uid()}",
+                    created_by=demo.FARMER,
+                    evidence_ref=demo.ONBOARDING_EVIDENCE,
+                    as_of="2026-06-12T12:00:00Z",
+                )
+            with selected_store.serialized_tx() as cur:
+                release_path = sib.resolve_product_authorisation(
+                    selected_store,
+                    cur,
+                    release_path_decision,
+                    f"resource:path.{_uid()}",
+                    created_by=demo.FARMER,
+                    evidence_ref=demo.ONBOARDING_EVIDENCE,
+                    as_of="2026-06-12T12:00:00Z",
+                )
+
+            assert selected["verdict"] == "CONFIRM"
+            assert selected["trace"]["finalOutcome"] == "PASS"
+            assert selected["binding"]["bindingState"] == "VERIFIED"
+            assert selected["binding"]["promotionBoundary"][
+                "maySupportPromotion"
+            ] is True
+            assert release_path["verdict"] != "CONFIRM"
+            assert release_path["trace"]["finalOutcome"] != "PASS"
+            assert release_path["binding"]["bindingState"] != "VERIFIED"
+            assert release_path["binding"]["promotionBoundary"][
+                "maySupportPromotion"
+            ] is False
+        finally:
+            selected_store.close()
 
 
 def test_imported_reference_snapshot_remains_inactive_under_current_bundle(

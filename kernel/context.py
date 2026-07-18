@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import config
-from .contracts import ContractViolation, UnknownContract, canonical_json, sha256_of
+from .contracts import ContractViolation, UnknownContract, canonical_json
 from .profile_runtime import ProfileRuntimeError, resolve_bound_descriptor
 from .runtime_bundle import RuntimeComponentRole
 
@@ -208,46 +208,33 @@ def _require_active_profile(active_profile):
 
 
 def bootstrap_for_descriptor(store, active_profile) -> list[str]:
-    """Load an explicit profile descriptor's shipped instances into the store."""
+    """Load the Store's bundle-selected canonical instances atomically."""
     active_profile = _require_active_profile(active_profile)
+    try:
+        resolve_bound_descriptor(store, active_descriptor=active_profile)
+    except ProfileRuntimeError as exc:
+        raise ContextNotReconstructible(
+            f"active profile descriptor is not the Store startup selection: {exc}"
+        ) from exc
+
     prepared = []
-    for path in active_profile.profile_instance_paths:
-        try:
-            payload = json.loads(path.read_text())
-        except (OSError, ValueError) as exc:
-            raise ContextNotReconstructible(
-                f"active profile instance unreadable or malformed at {path}: {exc}"
-            ) from exc
-        if not isinstance(payload, dict):
-            raise ContextNotReconstructible(
-                f"active profile instance at {path} must be a JSON object")
+    selected_roles = {
+        RuntimeComponentRole.PROFILE_INSTANCE,
+        RuntimeComponentRole.REFERENCE_SNAPSHOT,
+    }
+    for component in store.runtime_bundle.components:
+        if component.role not in selected_roles:
+            continue
+        payload = json.loads(component.canonical_bytes)
         try:
             contract = store.registry.validate(payload)
             record_id = payload[contract.id_field]
         except (ContractViolation, KeyError, TypeError, UnknownContract) as exc:
             raise ContextNotReconstructible(
-                f"active profile instance malformed at {path}: {exc}"
+                f"bundle-selected canonical instance {component.logical_ref!r} "
+                f"is not a valid Store record: {exc}"
             ) from exc
-        selected_bytes = canonical_json(payload).encode("utf-8")
-        selected_payload_digest = sha256_of(payload)
-        matching_components = [
-            component for component in store.runtime_bundle.components
-            if component.logical_ref == record_id
-            and component.role in {
-                RuntimeComponentRole.PROFILE_INSTANCE,
-                RuntimeComponentRole.REFERENCE_SNAPSHOT,
-            }
-        ]
-        if (
-            len(matching_components) != 1
-            or matching_components[0].canonical_bytes != selected_bytes
-            or matching_components[0].content_digest != selected_payload_digest
-        ):
-            raise ContextNotReconstructible(
-                f"active profile instance {record_id} is not the exact content "
-                "selected by the Store RuntimeBundle"
-            )
-        prepared.append((payload, contract, record_id, selected_payload_digest))
+        prepared.append((payload, contract, record_id, component.content_digest))
 
     inserted = []
     with store.tx() as cur:
@@ -411,10 +398,12 @@ class ProductRegister:
 
         Two sources, in order: (1) store-backed reference data persisted by a
         governed import, when that snapshot is selected by this RuntimeBundle;
-        then (2) the committed package-file fallback for selected shipped
-        snapshots, which names its artifact in sourceArtifactRefs. Unselected
+        then (2) exact REFERENCE_SOURCE bytes selected by the RuntimeBundle.
+        Constructor-loaded package data is a compatibility surface for direct
+        register use; Store-bound runtime loading discards it. Unselected
         imported candidates remain auditable but inactive. The runtime never
         guesses or hot-activates them."""
+        self._by_snapshot.clear()
         selected_refs = store.selected_reference_snapshot_refs
         for row in store.reference_data(self.bindings.regsr_data_family):
             sid = row["snapshot_ref"]
@@ -430,14 +419,14 @@ class ProductRegister:
                 continue
             for ref in payload.get("sourceArtifactRefs", []):
                 if isinstance(ref, str) and ref.startswith("artifact:"):
-                    path = _resolve_profile_example_artifact(
-                        self.bindings.si_profile_root,
-                        ref.split(":", 1)[1],
-                        required=False,
-                        label=f"REGSR source artifact for {sid!r}",
+                    component = store.runtime_bundle.component(
+                        RuntimeComponentRole.REFERENCE_SOURCE,
+                        ref,
                     )
-                    if path is not None:
-                        self.register_artifact(sid, json.loads(path.read_text()))
+                    self.register_artifact(
+                        sid,
+                        json.loads(component.canonical_bytes),
+                    )
 
     def identities_by_decision(self, snapshot_id: str, decision_number: str) -> list[dict]:
         """The DISTINCT D9 identities for a decision number — one record per

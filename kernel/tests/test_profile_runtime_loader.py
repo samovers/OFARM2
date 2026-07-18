@@ -43,7 +43,13 @@ from kernel.profile_runtime import (
     resolve_profile_route,
     resolve_active_descriptor,
 )
-from kernel.runtime_bundle import RuntimeBundleBuilder
+from kernel.runtime_bundle import (
+    Canonicalization,
+    ContentPlacement,
+    RuntimeBundleBuilder,
+    RuntimeComponent,
+    RuntimeComponentRole,
+)
 from kernel.stages import IngressNormalizer
 from kernel.store import Store
 from kernel.views import OutputGenerator
@@ -321,13 +327,15 @@ def _fresh_unbootstrapped_store():
             admin.execute(f'DROP DATABASE IF EXISTS "{dbname}"')
 
 
-def _expected_profile_instance_ids(store, active_profile) -> list[str]:
-    expected = []
-    for path in active_profile.profile_instance_paths:
-        payload = json.loads(path.read_text())
-        contract = store.registry.get(payload["schemaVersion"])
-        expected.append(payload[contract.id_field])
-    return expected
+def _expected_profile_instance_ids(store, _active_profile) -> list[str]:
+    return [
+        component.logical_ref
+        for component in store.runtime_bundle.components
+        if component.role in {
+            RuntimeComponentRole.PROFILE_INSTANCE,
+            RuntimeComponentRole.REFERENCE_SNAPSHOT,
+        }
+    ]
 
 
 def _bootstrap_demo_substrate_only(store) -> None:
@@ -2610,19 +2618,36 @@ def test_product_register_uses_explicit_si_reference_bindings(tmp_path):
 
 def test_product_register_load_from_store_uses_bindings_and_family_boundary(
         tmp_path):
-    descriptor, _, _decision = _custom_si_descriptor_with_regsr_artifact(tmp_path)
+    descriptor, _, constructor_decision = _custom_si_descriptor_with_regsr_artifact(
+        tmp_path)
     bindings = context.SIReferenceBindings.from_descriptor(descriptor)
-    file_decision = f"U9{_uid()[:4]}-50/26/f"
-    file_artifact = bindings.si_profile_root / "examples" / "store_file_regsr.json"
-    file_artifact.write_text(json.dumps(_regsr_artifact(decision=file_decision)),
-                             encoding="utf-8")
+    bundle_decision = f"U9{_uid()[:4]}-50/26/b"
     store_decision = f"U9{_uid()[:4]}-50/26/s"
+    artifact_ref = "artifact:bundle-selected-regsr.json"
+    selected_source = RuntimeComponent.from_selected_bytes(
+        role=RuntimeComponentRole.REFERENCE_SOURCE,
+        logical_ref=artifact_ref,
+        canonicalization=Canonicalization.EXACT_BYTES,
+        placement=ContentPlacement.GLOBAL,
+        selected_bytes=json.dumps(
+            _regsr_artifact(decision=bundle_decision)
+        ).encode("utf-8"),
+    )
+
+    class FakeRuntimeBundle:
+        def component(self, role, logical_ref):
+            assert (role, logical_ref) == (
+                RuntimeComponentRole.REFERENCE_SOURCE,
+                artifact_ref,
+            )
+            return selected_source
 
     class FakeStore:
         requested_families: list[str] = []
+        runtime_bundle = FakeRuntimeBundle()
         selected_reference_snapshot_refs = frozenset({
             f"{bindings.regsr_snapshot_prefix}.store",
-            f"{bindings.regsr_snapshot_prefix}.file",
+            f"{bindings.regsr_snapshot_prefix}.bundle",
         })
 
         def reference_data(self, family):
@@ -2638,13 +2663,19 @@ def test_product_register_load_from_store_uses_bindings_and_family_boundary(
                 {
                     "payload": {
                         "referenceSnapshotId": f"{bindings.regsr_snapshot_prefix}extra",
-                        "sourceArtifactRefs": [f"artifact:{file_artifact.name}"],
+                        "sourceArtifactRefs": [artifact_ref],
                     }
                 },
                 {
                     "payload": {
-                        "referenceSnapshotId": f"{bindings.regsr_snapshot_prefix}.file",
-                        "sourceArtifactRefs": [f"artifact:{file_artifact.name}"],
+                        "referenceSnapshotId": f"{bindings.regsr_snapshot_prefix}.store",
+                        "sourceArtifactRefs": [artifact_ref],
+                    }
+                },
+                {
+                    "payload": {
+                        "referenceSnapshotId": f"{bindings.regsr_snapshot_prefix}.bundle",
+                        "sourceArtifactRefs": [artifact_ref],
                     }
                 },
             ]
@@ -2659,9 +2690,18 @@ def test_product_register_load_from_store_uses_bindings_and_family_boundary(
         store_decision,
     ) is not None
     assert register.lookup_by_decision(
-        f"{bindings.regsr_snapshot_prefix}.file",
-        file_decision,
+        f"{bindings.regsr_snapshot_prefix}.store",
+        bundle_decision,
+    ) is None
+    assert register.lookup_by_decision(
+        f"{bindings.regsr_snapshot_prefix}.bundle",
+        bundle_decision,
     ) is not None
+    assert not register.has_snapshot(bindings.regsr_shipped_snapshot_ref)
+    assert register.lookup_by_decision(
+        bindings.regsr_shipped_snapshot_ref,
+        constructor_decision,
+    ) is None
     assert not register.has_snapshot(f"{bindings.regsr_snapshot_prefix}extra")
 
 

@@ -28,7 +28,13 @@ generic resolver / validators carry no per-scheme branch.
 from __future__ import annotations
 
 from ... import config
-from ...context import GERK_SNAPSHOT_PREFIX, mint, now_iso
+from ...context import (
+    GERK_SNAPSHOT_PREFIX,
+    ProductRegister,
+    SIReferenceBindings,
+    mint,
+    now_iso,
+)
 from ...problems import runtime_problem
 from ...verification import (CONFIRM, LOCATOR, NONE, REVIEW, LookupResult,
                              ReferenceResolver)
@@ -124,11 +130,15 @@ def _locator_lookup(find):
 # REGSR — AppliedResource product-authorisation identity (IDENTITY-grade, D9)
 # ---------------------------------------------------------------------------
 
-def resolve_product_authorisation(store, cur, product_register, decision_number,
-                                  subject_ref, *, created_by, evidence_ref, issued=None,
+def resolve_product_authorisation(store, cur, decision_number, subject_ref, *,
+                                  created_by, evidence_ref, issued=None,
                                   valid_until=None, as_of=None) -> dict:
     if not _evidence_ok(store, evidence_ref):
         return _evidence_refused(REGSR_SCHEME_REF, evidence_ref)
+    product_register = ProductRegister(
+        SIReferenceBindings.from_descriptor(store.active_descriptor)
+    )
+    product_register.load_from_store(store)
     res = regsr.verify_product_authorisation(
         store, cur, product_register, decision_number, issued=issued,
         valid_until=valid_until, as_of=as_of, created_by=created_by)
