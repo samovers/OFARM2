@@ -282,7 +282,7 @@ class FFSNapraveRegister:
         return next(iter(distinct.values())) if len(distinct) == 1 else None
 
 
-def attach_inspection_evidence(store, register, snapshot_id, sticker_number, *,
+def attach_inspection_evidence(store, snapshot_id, sticker_number, *,
                                captured_by, farm_ref, validity=None) -> dict:
     """Match a farm sprayer's inspection sticker against a bundle-selected,
     dated FFSNaprave snapshot and, on an AUTHORISED match, CAPTURE a
@@ -332,6 +332,10 @@ def attach_inspection_evidence(store, register, snapshot_id, sticker_number, *,
                 "active RuntimeBundle; evidence capture requires a new bundle",
             ),
         }
+    # Store.reference_data qualifies rows by tenant + RuntimeBundle and verifies
+    # their payload digests before authority evaluation or evidence writes.
+    register = FFSNapraveRegister()
+    register.load_from_store(store)
     inspection = register.match(snapshot_id, sticker_number, validity)
     if inspection is None:
         return {"attached": False, "evidenceRef": None, "disposition": "NO_MATCH",

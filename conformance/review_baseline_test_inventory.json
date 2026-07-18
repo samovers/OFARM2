@@ -821,11 +821,6 @@
       "sourcePath": "profile_si_ffs/tests/m2_si_ffsnaprave_tests.py"
     },
     {
-      "nodeid": "kernel/tests/test_m2_si_ffsnaprave.py::test_p3_manual_registration_cannot_bypass_bundle_selection",
-      "sourceModule": "profile_si_ffs.tests.m2_si_ffsnaprave_tests",
-      "sourcePath": "profile_si_ffs/tests/m2_si_ffsnaprave_tests.py"
-    },
-    {
       "nodeid": "kernel/tests/test_m2_si_ffsnaprave.py::test_p3_no_inspections_refuses_governed",
       "sourceModule": "profile_si_ffs.tests.m2_si_ffsnaprave_tests",
       "sourcePath": "profile_si_ffs/tests/m2_si_ffsnaprave_tests.py"
@@ -872,6 +867,11 @@
     },
     {
       "nodeid": "kernel/tests/test_m2_si_ffsnaprave.py::test_p3_unauthorized_capture_refuses_no_evidence",
+      "sourceModule": "profile_si_ffs.tests.m2_si_ffsnaprave_tests",
+      "sourcePath": "profile_si_ffs/tests/m2_si_ffsnaprave_tests.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_m2_si_ffsnaprave.py::test_p3_unselected_snapshot_cannot_bypass_bundle_selection",
       "sourceModule": "profile_si_ffs.tests.m2_si_ffsnaprave_tests",
       "sourcePath": "profile_si_ffs/tests/m2_si_ffsnaprave_tests.py"
     },
@@ -3266,7 +3266,7 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "6e9033501ab63ac9a255b22fad29314c45567a5c347da8da047487c1d8a546ce",
+  "entriesSha256": "124fcece94f7fdd2c1003185539babd5d622fc9c071348cf622ce06acf6724ea",
   "entryCount": 653,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"

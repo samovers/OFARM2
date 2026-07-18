@@ -286,10 +286,8 @@ def test_p3_sticker_match_attaches_inspection_evidence_to_equipment(store):
                             inspections=[_inspection(sticker=sticker, validity=validity)])
     with _selected_ffsnaprave_store(store, art) as (selected, snapshot_refs):
         sid = snapshot_refs[0]
-        reg = FFSNapraveRegister()
-        reg.load_from_store(selected)
         r = ffsn.attach_inspection_evidence(
-            selected, reg, sid, sticker, validity=validity,
+            selected, sid, sticker, validity=validity,
             captured_by=demo.FARMER, farm_ref=demo.FARM)
         assert r["attached"] is True and r["disposition"] == "CAPTURED"
         eid = r["evidenceRef"]
@@ -335,10 +333,8 @@ def test_p3_no_match_equipment_recorded_without_inspection_evidence(store):
                             inspections=[_inspection(sticker=sticker_num(), validity="2027-12-31")])
     with _selected_ffsnaprave_store(store, art) as (selected, snapshot_refs):
         sid = snapshot_refs[0]
-        reg = FFSNapraveRegister()
-        reg.load_from_store(selected)
         nm = ffsn.attach_inspection_evidence(
-            selected, reg, sid, "0000000", validity="2027-12-31",
+            selected, sid, "0000000", validity="2027-12-31",
             captured_by=demo.FARMER, farm_ref=demo.FARM)
         assert nm["attached"] is False
         assert nm["disposition"] == "NO_MATCH" and nm["evidenceRef"] is None
@@ -360,13 +356,11 @@ def test_p3_unauthorized_capture_refuses_no_evidence(store):
                             inspections=[_inspection(sticker=sticker, validity=validity)])
     with _selected_ffsnaprave_store(store, art) as (selected, snapshot_refs):
         sid = snapshot_refs[0]
-        reg = FFSNapraveRegister()
-        reg.load_from_store(selected)
         vintage = sid.split(f"{ffsn.FFSNAPRAVE_SNAPSHOT_PREFIX}.", 1)[-1]
         eid = f"evidence:si.ffs-naprave.{vintage}.{sticker}.{validity}"
         # INSPECTOR is recorded but holds no grant -> AUTHORITY_DENIED.
         r = ffsn.attach_inspection_evidence(
-            selected, reg, sid, sticker, validity=validity,
+            selected, sid, sticker, validity=validity,
             captured_by=demo.INSPECTOR, farm_ref=demo.FARM)
         assert r["attached"] is False and r["disposition"] == "UNAUTHORIZED"
         assert r["evidenceRef"] is None
@@ -375,30 +369,28 @@ def test_p3_unauthorized_capture_refuses_no_evidence(store):
             "unauthorized capture must create no EvidenceRecord"
         # A nonexistent acting party is likewise refused, still with no record.
         r2 = ffsn.attach_inspection_evidence(
-            selected, reg, sid, sticker, validity=validity,
+            selected, sid, sticker, validity=validity,
             captured_by="party:does.not.exist", farm_ref=demo.FARM)
         assert r2["attached"] is False and r2["disposition"] == "UNAUTHORIZED"
         assert selected.get_record(eid) is None
         # The authorised holder can then capture it (the gate is not a blanket deny).
         ok = ffsn.attach_inspection_evidence(
-            selected, reg, sid, sticker, validity=validity,
+            selected, sid, sticker, validity=validity,
             captured_by=demo.FARMER, farm_ref=demo.FARM)
         assert ok["attached"] is True
         assert selected.get_record(ok["evidenceRef"]) is not None
 
 
-def test_p3_manual_registration_cannot_bypass_bundle_selection(store):
+def test_p3_unselected_snapshot_cannot_bypass_bundle_selection(store):
     sticker, validity = sticker_num(), "2027-12-31"
     art = _fixture_artifact(file_date="2099-05-01",
                             inspections=[_inspection(sticker=sticker, validity=validity)])
     sid = ffsn.import_ffsnaprave_snapshot(store, art)["snapshotRef"]
     assert sid not in store.selected_reference_snapshot_refs
-    reg = FFSNapraveRegister()
-    reg.register_artifact(sid, art)
     before = _writer_state(store)
 
     refused = ffsn.attach_inspection_evidence(
-        store, reg, sid, sticker, validity=validity,
+        store, sid, sticker, validity=validity,
         captured_by=demo.FARMER, farm_ref=demo.FARM)
 
     assert refused["attached"] is False and refused["evidenceRef"] is None
@@ -408,14 +400,13 @@ def test_p3_manual_registration_cannot_bypass_bundle_selection(store):
         "selection refusal must precede lookup, authority evaluation, and all writes"
 
     # Selection alone is insufficient: a selected reference from another family
-    # is also refused before the injected register can influence the writer.
+    # is also refused before lookup or authority evaluation can influence the writer.
     wrong_family = next(
         ref for ref in store.selected_reference_snapshot_refs
         if ref.startswith("referencesnapshot:si.mkgp.gerk-layer"))
-    reg.register_artifact(wrong_family, art)
     before_wrong_family = _writer_state(store)
     wrong = ffsn.attach_inspection_evidence(
-        store, reg, wrong_family, sticker, validity=validity,
+        store, wrong_family, sticker, validity=validity,
         captured_by=demo.FARMER, farm_ref=demo.FARM)
     assert wrong["attached"] is False and wrong["evidenceRef"] is None
     assert wrong["disposition"] == "SNAPSHOT_NOT_SELECTED"
@@ -429,13 +420,11 @@ def test_p3_attach_inspection_evidence_is_idempotent(store):
                             inspections=[_inspection(sticker=sticker, validity=validity)])
     with _selected_ffsnaprave_store(store, art) as (selected, snapshot_refs):
         sid = snapshot_refs[0]
-        reg = FFSNapraveRegister()
-        reg.load_from_store(selected)
         a = ffsn.attach_inspection_evidence(
-            selected, reg, sid, sticker, validity=validity,
+            selected, sid, sticker, validity=validity,
             captured_by=demo.FARMER, farm_ref=demo.FARM)
         b = ffsn.attach_inspection_evidence(
-            selected, reg, sid, sticker, validity=validity,
+            selected, sid, sticker, validity=validity,
             captured_by=demo.FARMER, farm_ref=demo.FARM)
         assert a["evidenceRef"] == b["evidenceRef"]
         assert a["evidenceRef"] is not None
@@ -455,13 +444,11 @@ def test_p3_evidence_id_is_snapshot_scoped_no_cross_vintage_reuse(store):
         _inspection(sticker=sticker, validity=validity, conformance="NE", DatumPregleda="2026-01-01")])
     with _selected_ffsnaprave_store(store, a, b) as (selected, snapshot_refs):
         sid_a, sid_b = snapshot_refs
-        reg = FFSNapraveRegister()
-        reg.load_from_store(selected)
         eid_a = ffsn.attach_inspection_evidence(
-            selected, reg, sid_a, sticker, validity=validity,
+            selected, sid_a, sticker, validity=validity,
             captured_by=demo.FARMER, farm_ref=demo.FARM)["evidenceRef"]
         eid_b = ffsn.attach_inspection_evidence(
-            selected, reg, sid_b, sticker, validity=validity,
+            selected, sid_b, sticker, validity=validity,
             captured_by=demo.FARMER, farm_ref=demo.FARM)["evidenceRef"]
         assert eid_a != eid_b, \
             "evidence id must be snapshot-scoped — no cross-vintage reuse"
@@ -495,11 +482,9 @@ def test_p3_attach_inspection_evidence_is_race_safe(store):
                 active_descriptor=selected.active_descriptor,
             )
             try:
-                reg = FFSNapraveRegister()
-                reg.load_from_store(worker_store)
                 barrier.wait(timeout=10)        # both contend on attach together
                 results.append(ffsn.attach_inspection_evidence(
-                    worker_store, reg, sid, sticker, validity=validity,
+                    worker_store, sid, sticker, validity=validity,
                     captured_by=demo.FARMER, farm_ref=demo.FARM)["evidenceRef"])
             except Exception as exc:            # noqa: BLE001
                 errors.append(repr(exc))
