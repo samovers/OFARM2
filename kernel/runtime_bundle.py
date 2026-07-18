@@ -839,6 +839,7 @@ def _validate_active_selection(
             or any(
                 type(scope) is not dict
                 or set(scope) != {"scopeType", "scopeRef"}
+                or type(scope.get("scopeType")) is not str
                 or scope.get("scopeType") not in _CONTEXT_SCOPE_TYPES
                 or type(scope.get("scopeRef")) is not str
                 or _CONTEXT_SCOPE_REF_RE.fullmatch(scope["scopeRef"]) is None

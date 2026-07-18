@@ -457,6 +457,14 @@ def test_direct_bundle_construction_closes_manifest_contract_claims():
             "scopeRef": "tenant:si.ffs.pilot.demo",
         }],
         [{
+            "scopeType": [],
+            "scopeRef": "tenant:si.ffs.pilot.demo",
+        }],
+        [{
+            "scopeType": {},
+            "scopeRef": "tenant:si.ffs.pilot.demo",
+        }],
+        [{
             "scopeType": "TENANT",
             "scopeRef": 17,
         }],
@@ -467,6 +475,8 @@ def test_direct_bundle_construction_closes_manifest_contract_claims():
         "mixed-member-types",
         "open-scope-object",
         "untyped-scope-type",
+        "unhashable-list-scope-type",
+        "unhashable-object-scope-type",
         "untyped-scope-ref",
     ),
 )

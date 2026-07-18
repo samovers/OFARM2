@@ -2741,6 +2741,16 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_direct_bundle_construction_rejects_malformed_context_anchor_scopes[unhashable-list-scope-type]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_direct_bundle_construction_rejects_malformed_context_anchor_scopes[unhashable-object-scope-type]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_direct_bundle_construction_rejects_malformed_context_anchor_scopes[untyped-scope-ref]",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
@@ -3021,8 +3031,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "1186e3642474c3df6c8a4bbec0fee1832ee59ea33ccb03d1d9adaa851d346f66",
-  "entryCount": 604,
+  "entriesSha256": "49aea0e6fbdc41edaf977908b84377a86f7822bfea9786572d212805fb37f171",
+  "entryCount": 606,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
