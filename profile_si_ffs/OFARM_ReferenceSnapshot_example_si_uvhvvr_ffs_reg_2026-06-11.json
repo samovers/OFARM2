@@ -9,7 +9,7 @@
   "effectiveFrom": "2026-06-11T00:00:00Z",
   "sourceArtifactRefs": [
     "artifact:regsr_snapshot_2026-06-12.json",
-    "digest:sha256-609a6eb35e213710",
+    "digest:sha256:609a6eb35e21371056ba74b835951ea9104dd20353d535ca043746a970919474",
     "surface:spletni2.furs.gov.si.FFS.REGSR.FFS_RegSezn.asp"
   ],
   "codeBindingRefs": [],

@@ -520,37 +520,14 @@ def load_profile_runtime_descriptor(
         doc = json.loads(path.read_text())
     except (OSError, ValueError) as exc:
         raise ProfileRuntimeError(f"profile runtime descriptor unreadable at {path}: {exc}") from exc
-    if not isinstance(doc, dict):
-        raise ProfileRuntimeError("profile runtime descriptor must be a JSON object")
-
-    _reject_unknown(doc, _DESCRIPTOR_KEYS, "descriptor")
-    _require(doc, _DESCRIPTOR_REQUIRED, "descriptor")
-    if doc["descriptorVersion"] != DESCRIPTOR_VERSION:
-        raise ProfileRuntimeError(
-            f"unsupported descriptorVersion {doc['descriptorVersion']!r}; "
-            f"expected {DESCRIPTOR_VERSION!r}")
-
-    for field in (
-        "profileRef",
-        "packRef",
-        "packActivationSetRef",
-        "activeArtifactSetRef",
-        "codeBindingProfileRef",
-        "evidencePolicyRef",
-        "contextSnapshotIdPrefix",
-    ):
-        _validate_ref(doc[field], field)
+    profile_instance_files, families = _validated_descriptor_document(doc)
 
     evidence_policy_path = _existing_profile_file(root, doc["evidencePolicyPath"], "evidencePolicyPath")
-    profile_instance_files = _string_list(doc["profileInstanceFiles"], "profileInstanceFiles")
-    if len(profile_instance_files) != len(set(profile_instance_files)):
-        raise ProfileRuntimeError("profileInstanceFiles contains duplicate entries")
     profile_instance_paths = tuple(
         _existing_profile_file(root, rel, f"profileInstanceFiles[{i}]")
         for i, rel in enumerate(profile_instance_files)
     )
 
-    families = _reference_families(doc["referenceFamilies"])
     _validate_policy_ref(evidence_policy_path, doc["evidencePolicyRef"])
     payloads = _load_profile_instance_payloads(
         profile_instance_files,
@@ -575,6 +552,51 @@ def load_profile_runtime_descriptor(
         reference_families=families,
         context_snapshot_id_prefix=doc["contextSnapshotIdPrefix"],
     )
+
+
+def validate_profile_runtime_selection_documents(
+    descriptor_document: Any,
+    profile_instance_documents: Sequence[Any],
+) -> None:
+    """Validate the path-independent active spine retained by a runtime bundle."""
+    _files, families = _validated_descriptor_document(descriptor_document)
+    try:
+        payloads = list(profile_instance_documents)
+    except TypeError as exc:
+        raise ProfileRuntimeError(
+            "profile instance documents must be a sequence"
+        ) from exc
+    if any(not isinstance(payload, dict) for payload in payloads):
+        raise ProfileRuntimeError("profile instance documents must be JSON objects")
+    _validate_active_spine(descriptor_document, payloads)
+    _validate_shipped_reference_refs(families, payloads)
+
+
+def _validated_descriptor_document(
+    doc: Any,
+) -> tuple[list[str], tuple[ReferenceFamily, ...]]:
+    if not isinstance(doc, dict):
+        raise ProfileRuntimeError("profile runtime descriptor must be a JSON object")
+    _reject_unknown(doc, _DESCRIPTOR_KEYS, "descriptor")
+    _require(doc, _DESCRIPTOR_REQUIRED, "descriptor")
+    if doc["descriptorVersion"] != DESCRIPTOR_VERSION:
+        raise ProfileRuntimeError(
+            f"unsupported descriptorVersion {doc['descriptorVersion']!r}; "
+            f"expected {DESCRIPTOR_VERSION!r}")
+    for field in (
+        "profileRef",
+        "packRef",
+        "packActivationSetRef",
+        "activeArtifactSetRef",
+        "codeBindingProfileRef",
+        "evidencePolicyRef",
+        "contextSnapshotIdPrefix",
+    ):
+        _validate_ref(doc[field], field)
+    files = _string_list(doc["profileInstanceFiles"], "profileInstanceFiles")
+    if len(files) != len(set(files)):
+        raise ProfileRuntimeError("profileInstanceFiles contains duplicate entries")
+    return files, _reference_families(doc["referenceFamilies"])
 
 
 def _discoverable_profile_packages(package_root: Path) -> tuple[tuple[str, Path], ...]:
