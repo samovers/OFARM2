@@ -1016,7 +1016,6 @@ def test_93_governed_acceptance_semantics(store, pipeline):
 # =========================================================================
 
 def test_94_second_hostile_regressions(store, pipeline, materializer, outputs):
-    import json as _json
     closed = {}
 
     def structured_claim():
@@ -1148,8 +1147,8 @@ def test_94_second_hostile_regressions(store, pipeline, materializer, outputs):
         "SCOPE_NOT_AUTHORIZED")
     closed["3-containment-hardened"] = legs
 
-    # (4) AS_OF context: a register snapshot appended after asOfTime must not
-    # enter the AS_OF ContextSnapshot — context is as-of-aware, not current
+    # (4) A newer imported snapshot is retained as a candidate but cannot enter
+    # either AS_OF or NOW context until a new RuntimeBundle selects it.
     as_of_t = context.now_iso()
     old_regsr = context.current_reference_snapshot(
         store, context.REGSR_SNAPSHOT_PREFIX)["referenceSnapshotId"]
@@ -1164,9 +1163,6 @@ def test_94_second_hostile_regressions(store, pipeline, materializer, outputs):
             "canonicalVersionLabel": f"hr2-newer-{uid()}",
             "effectiveFrom": context.now_iso(),
             "sourceArtifactRefs": ["artifact:regsr_snapshot_2026-06-12.json"]})
-    real = _json.loads((config.PROFILE_ROOT / "examples" /
-                        "regsr_snapshot_2026-06-12.json").read_text())
-    pipeline.products.register_artifact(newer, real)
     with store.tx() as cur:
         as_of_res = materializer.resolve_for_use(
             cur, demo.FARM, time_policy={"policyType": "AS_OF", "asOfTime": as_of_t})
@@ -1175,9 +1171,15 @@ def test_94_second_hostile_regressions(store, pipeline, materializer, outputs):
     now_ctx = store.get_payload(now_res["materialization"]["context_snapshot_ref"])
     assert old_regsr in as_of_ctx["referenceSnapshotRefs"]
     assert newer not in as_of_ctx["referenceSnapshotRefs"], \
-        "AS_OF must not silently apply a future register vintage"
-    assert newer in now_ctx["referenceSnapshotRefs"]
-    closed["4-as-of-context"] = {"asOfKeeps": old_regsr, "nowUses": newer}
+        "AS_OF must not silently apply an unselected register vintage"
+    assert old_regsr in now_ctx["referenceSnapshotRefs"]
+    assert newer not in now_ctx["referenceSnapshotRefs"], \
+        "NOW must not hot-activate an imported reference candidate"
+    closed["4-bundle-pinned-context"] = {
+        "asOfKeeps": old_regsr,
+        "nowKeeps": old_regsr,
+        "candidateInactive": newer,
+    }
 
     # (5) sharing never resurrects an inactive party
     ghost_inspector = f"party:hr2.ghost.inspector.{uid()}"
@@ -1245,9 +1247,7 @@ def test_94_second_hostile_regressions(store, pipeline, materializer, outputs):
                 "decidedByPartyRef": demo.FARMER,
                 "decidedAt": context.now_iso(),
                 "decisionOutcomeState": "ACCEPTED"})
-            cur.execute(
-                "INSERT INTO kernel_edge (edge_type, src_record_id, dst_record_id) "
-                "VALUES ('PROMOTION_EMITS', %s, %s)", (empty_trace, orphan))
+            store.add_edge(cur, "PROMOTION_EMITS", empty_trace, orphan)
     assert "not listed in the payload" in str(exc.value)
     closed["7-trace-payload-consistency"] = True
 
@@ -1476,10 +1476,19 @@ def test_95_hostile_review_regressions(store, pipeline, materializer):
                 "decidedByPartyRef": demo.FARMER,
                 "decidedAt": context.now_iso(),
                 "decisionOutcomeState": "ACCEPTED"})
+            orphan = cur.execute(
+                "SELECT record_id FROM kernel_record "
+                "WHERE record_id LIKE 'review:hr.orphan%' LIMIT 1"
+            ).fetchone()["record_id"]
+            # Bypass Store's endpoint boundary deliberately: this leg verifies
+            # the independent deferred database invariant against raw SQL.
             cur.execute(
-                "INSERT INTO kernel_edge (edge_type, src_record_id, dst_record_id) "
-                "VALUES ('PROMOTION_EMITS', 'fake:trace', "
-                "(SELECT record_id FROM kernel_record WHERE record_id LIKE 'review:hr.orphan%' LIMIT 1))")
+                "INSERT INTO kernel_edge "
+                "(edge_type, src_record_id, dst_record_id, tenant_ref, "
+                "runtime_bundle_digest) VALUES (%s, %s, %s, %s, %s)",
+                ("PROMOTION_EMITS", "fake:trace", orphan, store.tenant_ref,
+                 store.runtime_bundle_digest),
+            )
     assert "not a stored PromotionTrace" in str(exc.value)
     closed["b5-fake-trace-edge-rejected"] = True
 
@@ -1922,23 +1931,16 @@ def test_97_review_driven_regressions(store, pipeline):
 
 
 # =========================================================================
-# 6. Stale registry snapshot recheck — runs LAST: it advances the in-force
-#    register snapshot for the whole tenant (then restores it honestly by
-#    appending a newer snapshot — append-only, no deletions).
+# 6. Imported reference candidates cannot hot-activate under the current
+#    RuntimeBundle. Selection changes require a new bundle (#171).
 # =========================================================================
 
-def test_98_stale_registry_snapshot_recheck(store, pipeline):
-    # Each appended snapshot is effective at its own insert time (now) — they are
-    # inserted sequentially with a commit between, so their effectiveFrom values
-    # are monotonic and each is the newest IN-FORCE REGSR row at its commit
-    # (current_reference_snapshot now treats a snapshot as current only once
-    # effectiveFrom <= now — PR #11: a future vintage is never "current").
-    def ts(_seconds):
-        return context.now_iso()
-    old_snapshot = demo.REGSR_SNAPSHOT
+def test_98_reference_snapshot_candidate_does_not_hot_activate(store, pipeline):
+    old_snapshot = context.current_reference_snapshot(
+        store, context.REGSR_SNAPSHOT_PREFIX
+    )["referenceSnapshotId"]
+    assert old_snapshot == demo.REGSR_SNAPSHOT
 
-    # Branch A — identity confirmable by decision number (D9), authorisation
-    # ended: discrepancy recorded, routed to review
     synthetic = "referencesnapshot:si.uvhvvr.ffs-reg.2026-06-12-synthetic-test"
     with store.tx() as cur:
         store.insert_record(cur, {
@@ -1948,78 +1950,32 @@ def test_98_stale_registry_snapshot_recheck(store, pipeline):
             "domain": "SYNTHETIC TEST register snapshot (fictional change: decision "
                       "U34330-50/23/16 validity ended) — conformance test 6 only",
             "canonicalVersionLabel": "synthetic-test-2026-06-12",
-            "effectiveFrom": ts(1),
+            "effectiveFrom": context.now_iso(),
             "sourceArtifactRefs": ["artifact:synthetic-test-snapshot"]})
-    pipeline.products.register_artifact(synthetic, {
-        "products": [{"regsrCode": "1646", "name": "ACCOUNT",
-                      "registrationValidUntil": "2026-01-01"}],
-        "productDetails": [{"regsrCode": "1646",
-                            "decisions": [{"decisionType": "Registracija",
-                                           "decisionNumber": "U34330-50/23/16",
-                                           "validUntil": "2026-01-01"}]}]})
+
+    selected_after_import = context.current_reference_snapshot(
+        store, context.REGSR_SNAPSHOT_PREFIX
+    )["referenceSnapshotId"]
+    assert selected_after_import == old_snapshot
+
     sub = demo.spray_submission(f"device-demo-4:q-{uid()}",
                                 erp_id=f"erp:demo.spray.{uid()}",
                                 channel="OFFLINE_SYNC_REPLAY")
     sub["capturedAgainstSnapshotRef"] = old_snapshot
     result = pipeline.commit(sub)
-    assert result["decisionOutcome"] == "REQUIRE_REVIEW", \
-        "changed authorisation after offline capture routes to review, never silent accept"
-    codes_a = {p["reasonCode"] for p in result["problems"]}
-    assert "SUPERSEDED_RECORD_USED" in codes_a
-
-    # Branch B — identity NOT confirmable (snapshot surface carries no
-    # decision-number data): regsrCode is a locator, never identity (D9) —
-    # routed to review instead of a silent locator-joined verdict
-    locator_only = "referencesnapshot:si.uvhvvr.ffs-reg.2026-06-12-locator-only-test"
-    with store.tx() as cur:
-        store.insert_record(cur, {
-            "schemaVersion": "ofarm.referencesnapshot.v0.1",
-            "referenceSnapshotId": locator_only,
-            "referenceClass": "CODE_LIST",
-            "domain": "SYNTHETIC TEST register snapshot (list rows only, no decision "
-                      "numbers) — conformance test 6 branch B only",
-            "canonicalVersionLabel": "locator-only-test-2026-06-12",
-            "effectiveFrom": ts(2),
-            "sourceArtifactRefs": ["artifact:synthetic-locator-only-snapshot"]})
-    pipeline.products.register_artifact(locator_only, {
-        "products": [{"regsrCode": "1646", "name": "ACCOUNT",
-                      "registrationValidUntil": "2027-08-15"}],
-        "productDetails": []})
-    sub_b = demo.spray_submission(f"device-demo-4:q-{uid()}",
-                                  erp_id=f"erp:demo.spray.{uid()}",
-                                  channel="OFFLINE_SYNC_REPLAY")
-    sub_b["capturedAgainstSnapshotRef"] = old_snapshot
-    result_b = pipeline.commit(sub_b)
-    assert result_b["decisionOutcome"] == "REQUIRE_REVIEW"
-    codes_b = {p["reasonCode"] for p in result_b["problems"]}
-    assert "PRODUCT_BINDING_UNRESOLVED" in codes_b, \
-        "locator-only surfaces must route to review, never silently re-verify (D9)"
+    assert result["decisionOutcome"] == "PROMOTE_ACCEPTED"
+    reason_codes = {problem["reasonCode"] for problem in result["problems"]}
+    assert "SUPERSEDED_RECORD_USED" not in reason_codes
+    assert "PRODUCT_BINDING_UNRESOLVED" not in reason_codes
 
     record_detail("test_06", {
         "capturedAgainst": old_snapshot,
-        "branchA": {"currentAtSync": synthetic, "outcome": result["decisionOutcome"],
-                    "reasonCodes": sorted(codes_a),
-                    "identity": "confirmed by decision number; validity ended"},
-        "branchB": {"currentAtSync": locator_only, "outcome": result_b["decisionOutcome"],
-                    "reasonCodes": sorted(codes_b),
-                    "identity": "not confirmable: list surface carries no decision numbers"},
+        "candidateRetained": synthetic,
+        "selectedByBundle": selected_after_import,
+        "outcome": result["decisionOutcome"],
+        "reasonCodes": sorted(reason_codes),
+        "selectionLaw": "candidate inactive until selected by a new RuntimeBundle",
     })
-
-    # restore: append a newer snapshot carrying the real parsed data again
-    restored = "referencesnapshot:si.uvhvvr.ffs-reg.2026-06-12-restored-test"
-    with store.tx() as cur:
-        store.insert_record(cur, {
-            "schemaVersion": "ofarm.referencesnapshot.v0.1",
-            "referenceSnapshotId": restored,
-            "referenceClass": "CODE_LIST",
-            "domain": "restore row for conformance suite (real parsed data re-pinned)",
-            "canonicalVersionLabel": "restored-test-2026-06-12",
-            "effectiveFrom": ts(3),
-            "sourceArtifactRefs": ["artifact:regsr_snapshot_2026-06-12.json"]})
-    import json as _json
-    real = _json.loads((config.PROFILE_ROOT / "examples" /
-                        "regsr_snapshot_2026-06-12.json").read_text())
-    pipeline.products.register_artifact(restored, real)
 
 
 # =========================================================================

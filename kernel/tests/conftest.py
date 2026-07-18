@@ -19,6 +19,7 @@ os.environ.setdefault("OFARM_PG_DBNAME", "ofarm_kernel_test")
 from kernel import config, context, demo, manifest  # noqa: E402
 from kernel.gates import GatePipeline  # noqa: E402
 from kernel.materializer import Materializer  # noqa: E402
+from kernel.runtime_bundle import RuntimeBundleBuilder  # noqa: E402
 from kernel.store import Store  # noqa: E402
 from kernel.views import OutputGenerator  # noqa: E402
 
@@ -43,13 +44,23 @@ def _admin_dsn() -> str:
     return f"host={socket_dir} port={port} dbname=postgres user={user}"
 
 
+def _bound_store(dsn: str | None = None) -> Store:
+    """Create a test Store from one explicit checked-in bundle selection."""
+    return Store(
+        dsn=dsn,
+        tenant_ref=config.TENANT_REF,
+        runtime_bundle=RuntimeBundleBuilder.from_manifest(config.PACKAGE_ROOT).build(),
+        active_descriptor=config.ACTIVE_PROFILE,
+    )
+
+
 @pytest.fixture(scope="session")
 def store():
     dbname = os.environ["OFARM_PG_DBNAME"]
     with psycopg.connect(_admin_dsn(), autocommit=True) as admin:
         admin.execute(f'DROP DATABASE IF EXISTS "{dbname}"')
         admin.execute(f'CREATE DATABASE "{dbname}"')
-    s = Store()
+    s = _bound_store()
     s.migrate()
     context.bootstrap(s)
     demo.bootstrap(s)
@@ -92,7 +103,7 @@ def fresh_env():
     # would silently connect to the shared DB (no isolation).
     params = psycopg.conninfo.conninfo_to_dict(_admin_dsn())
     params["dbname"] = dbname
-    s = Store(dsn=psycopg.conninfo.make_conninfo(**params))
+    s = _bound_store(psycopg.conninfo.make_conninfo(**params))
     s.migrate()
     context.bootstrap(s)
     demo.bootstrap(s)

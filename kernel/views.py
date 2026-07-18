@@ -25,7 +25,7 @@ from .contracts import canonical_json
 from .materializer import Materializer
 from .problems import runtime_problem
 from .context import mint as _mint, now_iso, parse_ts
-from .profile_runtime import ProfileRuntimeError, resolve_active_descriptor
+from .profile_runtime import resolve_bound_descriptor
 
 PASSPORT_VIEW_REF = "view:si.ffs.spray-register.passportview.v0_1"
 DOCASM_VIEW_REF = "view:si.ffs.inspection-register.documentassembly.v0_1"
@@ -80,25 +80,42 @@ def _qualification(*, surface_class: str, staleness: str, sufficiency: str,
     return env
 
 
-def _refusal_response(problem: dict, qualification: dict | None = None) -> dict:
-    return {"refused": True, "problem": problem, "qualification": qualification}
-
-
 class OutputGenerator:
     def __init__(self, store, *, active_descriptor=None, active_profile=None):
         self.store = store
-        if (active_descriptor is not None and active_profile is not None
-                and active_descriptor != active_profile):
-            raise ProfileRuntimeError(
-                "active_descriptor and active_profile refer to different descriptors")
-        self.active_profile = resolve_active_descriptor(
-            active_descriptor if active_descriptor is not None else active_profile,
-            allow_config_default=True,
+        self.active_profile = resolve_bound_descriptor(
+            store,
+            active_descriptor=active_descriptor,
+            active_profile=active_profile,
         )
+        self.runtime_bundle = store.runtime_bundle
         self.authority = AuthorityEvaluator(store)
         self.materializer = Materializer(store, active_descriptor=self.active_profile)
 
     # ---------------------------------------------------------------- shared --
+
+    def _runtime_receipt(self, **payloads: dict) -> dict:
+        return {
+            "runtimeBundleDigest": self.runtime_bundle.digest,
+            "payloadDigests": {
+                name: "sha256:" + hashlib.sha256(
+                    canonical_json(payload).encode()
+                ).hexdigest()
+                for name, payload in sorted(payloads.items())
+                if payload is not None
+            },
+        }
+
+    def _refusal_response(
+        self, problem: dict, qualification: dict | None = None
+    ) -> dict:
+        return {
+            "refused": True,
+            "problem": problem,
+            "qualification": qualification,
+            "runtimeReceipt": self._runtime_receipt(
+                problem=problem, qualification=qualification),
+        }
 
     def _dispute_status(self, basis_record_id: str, presented_refs=()) -> str:
         """Derive disputeStatus (spec §6.5) from a materialization's basis members.
@@ -211,7 +228,7 @@ class OutputGenerator:
             self.store.insert_record(cur, access.trace_payload)
             self.store.insert_record(cur, access.result_payload)
             if not access.allowed:
-                return _refusal_response(
+                return self._refusal_response(
                     access.problems[0] if access.problems else runtime_problem(
                         "AUTHORITY_DENIED", "Read denied", "no read path to this farm"))
 
@@ -226,7 +243,7 @@ class OutputGenerator:
                 recompute_if_needed=allow_recompute)
             mat = resolution["materialization"]
             if mat is None:
-                return _refusal_response(runtime_problem(
+                return self._refusal_response(runtime_problem(
                     "MATERIALIZATION_BASIS_MISSING", "View refuses",
                     "the materialization basis cannot be produced; the view refuses "
                     "rather than rendering unreceipted state (views/VIEWS.md)"))
@@ -287,8 +304,14 @@ class OutputGenerator:
             # outputs validate against their contracts before leaving the gate
             self.store.registry.validate(metadata)
             self.store.registry.validate(qualification)
-            return {"refused": False, "metadata": metadata, "body": body,
-                    "qualification": qualification}
+            return {
+                "refused": False,
+                "metadata": metadata,
+                "body": body,
+                "qualification": qualification,
+                "runtimeReceipt": self._runtime_receipt(
+                    metadata=metadata, body=body, qualification=qualification),
+            }
 
     # ------------------------------------------------------- DocumentAssembly --
 
@@ -362,7 +385,7 @@ class OutputGenerator:
                 problem = decision.problems[0] if decision.problems else runtime_problem(
                     "AUTHORITY_DENIED", "Export denied", "no export authority")
                 publication_result("DENIED", [problem], "export authority denied")
-                return _refusal_response(problem)
+                return self._refusal_response(problem)
 
             # an invalid window must never freeze a valid-looking empty
             # register: refuse before any materialization, with no durable
@@ -375,7 +398,7 @@ class OutputGenerator:
                     "inverted; a frozen register over an invalid period would be a "
                     "valid-looking lie (no temporal reason code exists — ERRATA E-001)")
                 publication_result("DENIED", [problem], "invalid window")
-                return _refusal_response(problem)
+                return self._refusal_response(problem)
 
             # high-consequence: freeze only from a demonstrably FRESH window
             # materialization — recompute, refuse, or review; never silently
@@ -393,7 +416,7 @@ class OutputGenerator:
                     "window; generation refuses rather than emitting a degraded "
                     "document silently (views/VIEWS.md)")
                 publication_result("DENIED", [problem], "not demonstrably FRESH")
-                return _refusal_response(problem)
+                return self._refusal_response(problem)
 
             # the freeze refuses on the DISPUTE axis, INDEPENDENT of freshness
             # (spec §6.6): the window materialization may be FRESH yet rest on a
@@ -411,7 +434,7 @@ class OutputGenerator:
                     "high-consequence output until the dispute is resolved by "
                     "correction (docs/REVIEW_DISPUTE_SEMANTICS.md §6.6)")
                 publication_result("DENIED", [problem], "disputed basis")
-                return _refusal_response(problem)
+                return self._refusal_response(problem)
 
             entries = mat["current_state"]["entries"]
             annex = self._pending_claims(farm_ref)
@@ -431,7 +454,7 @@ class OutputGenerator:
                 "subject": {"subjectType": ("SUBMISSION_ASSEMBLY" if as_submission
                                             else "DOCUMENT_ASSEMBLY"),
                             "subjectRef": doc_id},
-                "governingPolicyRefs": [config.EVIDENCE_POLICY_REF],
+                "governingPolicyRefs": [self.active_profile.evidence_policy_ref],
                 "materializationBasisRef": mat["basis_record_id"],
                 "materializationSnapshotRef": mat["snapshot_record_id"],
                 "claims": [{
@@ -445,7 +468,7 @@ class OutputGenerator:
                 "arguments": [{
                     "argumentId": "arg:freeze:basis",
                     "supportsClaimIds": ["claim:freeze"],
-                    "policyRef": config.EVIDENCE_POLICY_REF,
+                    "policyRef": self.active_profile.evidence_policy_ref,
                     "ruleRef": "rule:si.ffs.freeze.fresh-basis",
                     "conclusion": "SUPPORTED",
                 }],
@@ -494,6 +517,7 @@ class OutputGenerator:
                                   f"{len(gaps)} known gap(s) enumerated, not hidden"),
                 },
                 "receipts": {
+                    "runtimeBundleDigest": self.runtime_bundle.digest,
                     "materializationBasisRef": mat["basis_record_id"],
                     "materializationSnapshotRef": mat["snapshot_record_id"],
                     "contextSnapshotRef": mat["context_snapshot_ref"],
@@ -505,7 +529,7 @@ class OutputGenerator:
             }
             digest = "sha256:" + hashlib.sha256(
                 canonical_json(document).encode()).hexdigest()
-            durable_ref = f"document:si.ffs.inspection-register.{digest[7:19]}"
+            durable_ref = f"document:si.ffs.inspection-register.{digest[7:]}"
             version_label = f"si.ffs.inspection-register.{window_start[:10]}.{window_end[:10]}"
 
             metadata = {
@@ -554,14 +578,23 @@ class OutputGenerator:
             self.store.insert_record(cur, metadata)
             self.store.registry.validate(qualification)
             cur.execute(
-                "INSERT INTO export_artifact (artifact_ref, digest, metadata_record_id, document) "
-                "VALUES (%s, %s, %s, %s)",
-                (durable_ref, digest, doc_id, Jsonb(document)))
+                "INSERT INTO export_artifact "
+                "(artifact_ref, digest, metadata_record_id, document, tenant_ref, "
+                " runtime_bundle_digest) VALUES (%s, %s, %s, %s, %s, %s)",
+                (durable_ref, digest, doc_id, Jsonb(document), self.store.tenant_ref,
+                 self.store.runtime_bundle_digest))
 
             publication_result(final_outcome, [],
                                (f"filed locally as {durable_ref}; the state registry "
                                 "interface does not exist yet (D13), no external "
                                 "transmission is claimed" if as_submission else
                                 f"frozen as {durable_ref} ({version_label})"), case_id)
-            return {"refused": False, "metadata": metadata, "document": document,
-                    "digest": digest, "qualification": qualification}
+            return {
+                "refused": False,
+                "metadata": metadata,
+                "document": document,
+                "digest": digest,
+                "qualification": qualification,
+                "runtimeReceipt": self._runtime_receipt(
+                    metadata=metadata, document=document, qualification=qualification),
+            }

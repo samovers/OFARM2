@@ -135,7 +135,10 @@ CREATE TABLE IF NOT EXISTS kernel_record (
   payload        jsonb NOT NULL,
   payload_sha256 text NOT NULL,
   record_time    timestamptz NOT NULL DEFAULT now(),
-  tenant_ref     text NOT NULL DEFAULT 'tenant:si.ffs.pilot.demo'
+  tenant_ref     text COLLATE "C" NOT NULL,
+  runtime_bundle_digest text COLLATE "C" NOT NULL,
+  FOREIGN KEY (tenant_ref, runtime_bundle_digest)
+    REFERENCES runtime_bundle(tenant_ref, bundle_digest)
 );
 CREATE INDEX IF NOT EXISTS ix_kernel_record_kind ON kernel_record (record_kind);
 
@@ -166,7 +169,11 @@ CREATE TABLE IF NOT EXISTS kernel_edge (
                 )),
   src_record_id text NOT NULL,
   dst_record_id text NOT NULL,
-  record_time   timestamptz NOT NULL DEFAULT now()
+  record_time   timestamptz NOT NULL DEFAULT now(),
+  tenant_ref    text COLLATE "C" NOT NULL,
+  runtime_bundle_digest text COLLATE "C" NOT NULL,
+  FOREIGN KEY (tenant_ref, runtime_bundle_digest)
+    REFERENCES runtime_bundle(tenant_ref, bundle_digest)
 );
 -- CREATE TABLE IF NOT EXISTS never updates an existing CHECK: refresh the
 -- edge vocabulary idempotently so pre-existing databases pick up new types
@@ -279,7 +286,11 @@ CREATE TABLE IF NOT EXISTS kernel_gate_log (
   reason_code  text,
   rationale    text,
   related_refs jsonb,
-  record_time  timestamptz NOT NULL DEFAULT now()
+  record_time  timestamptz NOT NULL DEFAULT now(),
+  tenant_ref   text COLLATE "C" NOT NULL,
+  runtime_bundle_digest text COLLATE "C" NOT NULL,
+  FOREIGN KEY (tenant_ref, runtime_bundle_digest)
+    REFERENCES runtime_bundle(tenant_ref, bundle_digest)
 );
 CREATE INDEX IF NOT EXISTS ix_kernel_gate_log_request ON kernel_gate_log (request_id);
 
@@ -294,11 +305,16 @@ CREATE TRIGGER trg_kernel_gate_log_append_only
 -- a key is claimed once; replays read, never rewrite.
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS kernel_idempotency (
-  idempotency_key       text PRIMARY KEY,
+  idempotency_key       text NOT NULL,
   request_id            text NOT NULL,
   source_payload_digest text,
   result_record_id      text NOT NULL,
-  record_time           timestamptz NOT NULL DEFAULT now()
+  record_time           timestamptz NOT NULL DEFAULT now(),
+  tenant_ref            text COLLATE "C" NOT NULL,
+  runtime_bundle_digest text COLLATE "C" NOT NULL,
+  PRIMARY KEY (tenant_ref, idempotency_key),
+  FOREIGN KEY (tenant_ref, runtime_bundle_digest)
+    REFERENCES runtime_bundle(tenant_ref, bundle_digest)
 );
 
 DROP TRIGGER IF EXISTS trg_kernel_idempotency_append_only ON kernel_idempotency;
@@ -332,9 +348,14 @@ CREATE TABLE IF NOT EXISTS derived_materialization (
   context_snapshot_ref text NOT NULL,
   freshness_vector     jsonb NOT NULL,       -- draft MaterializationFreshnessVector (D16)
   generated_at         timestamptz NOT NULL DEFAULT now(),
-  superseded_by        text
+  superseded_by        text,
+  tenant_ref           text COLLATE "C" NOT NULL,
+  runtime_bundle_digest text COLLATE "C" NOT NULL,
+  FOREIGN KEY (tenant_ref, runtime_bundle_digest)
+    REFERENCES runtime_bundle(tenant_ref, bundle_digest)
 );
-CREATE INDEX IF NOT EXISTS ix_derived_mat_key ON derived_materialization (key_digest);
+CREATE INDEX IF NOT EXISTS ix_derived_mat_key
+  ON derived_materialization (tenant_ref, runtime_bundle_digest, key_digest);
 
 -- derived: dependency index entries (draft MaterializationDependencyIndex
 -- shape, D16). Connects basis changes to affected materialization keys
@@ -345,7 +366,11 @@ CREATE TABLE IF NOT EXISTS derived_dependency_index (
   dependency_source_family text NOT NULL,
   key_digest               text NOT NULL,
   entry                    jsonb NOT NULL,
-  generated_at             timestamptz NOT NULL DEFAULT now()
+  generated_at             timestamptz NOT NULL DEFAULT now(),
+  tenant_ref               text COLLATE "C" NOT NULL,
+  runtime_bundle_digest    text COLLATE "C" NOT NULL,
+  FOREIGN KEY (tenant_ref, runtime_bundle_digest)
+    REFERENCES runtime_bundle(tenant_ref, bundle_digest)
 );
 CREATE INDEX IF NOT EXISTS ix_derived_dep_source ON derived_dependency_index (dependency_source_ref);
 CREATE INDEX IF NOT EXISTS ix_derived_dep_key ON derived_dependency_index (key_digest);
@@ -361,7 +386,8 @@ CREATE INDEX IF NOT EXISTS ix_derived_dep_key ON derived_dependency_index (key_d
 -- e.g. ProductRegister, interprets it). Scheme-agnostic: data_family is a
 -- parameter, never a hardcoded scheme. One row per (snapshot_ref, data_family);
 -- a conflicting re-import is refused at the snapshot gate, so this never
--- overwrites. Recomputable from the source, hence outside the append-only rule.
+-- overwrites. Retain it append-only until durable source bytes and deterministic
+-- rebuildability are proven.
 CREATE TABLE IF NOT EXISTS reference_snapshot_data (
   snapshot_ref   text NOT NULL,
   data_family    text NOT NULL,
@@ -372,9 +398,19 @@ CREATE TABLE IF NOT EXISTS reference_snapshot_data (
   payload        jsonb NOT NULL,
   payload_sha256 text NOT NULL,
   record_time    timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (snapshot_ref, data_family)
+  tenant_ref     text COLLATE "C" NOT NULL,
+  runtime_bundle_digest text COLLATE "C" NOT NULL,
+  PRIMARY KEY (tenant_ref, runtime_bundle_digest, snapshot_ref, data_family),
+  FOREIGN KEY (tenant_ref, runtime_bundle_digest)
+    REFERENCES runtime_bundle(tenant_ref, bundle_digest)
 );
 CREATE INDEX IF NOT EXISTS ix_reference_snapshot_data_family ON reference_snapshot_data (data_family);
+
+DROP TRIGGER IF EXISTS trg_reference_snapshot_data_append_only
+  ON reference_snapshot_data;
+CREATE TRIGGER trg_reference_snapshot_data_append_only
+  BEFORE UPDATE OR DELETE OR TRUNCATE ON reference_snapshot_data
+  FOR EACH STATEMENT EXECUTE FUNCTION kernel_forbid_mutation();
 
 -- runtime evidence lane: draft-shape traces (InvalidationEvaluationTrace …)
 -- recorded append-only but OUTSIDE the canonical record table — implemented
@@ -386,7 +422,11 @@ CREATE TABLE IF NOT EXISTS runtime_trace (
   schema_hash    text NOT NULL,
   payload        jsonb NOT NULL,
   payload_sha256 text NOT NULL,
-  record_time    timestamptz NOT NULL DEFAULT now()
+  record_time    timestamptz NOT NULL DEFAULT now(),
+  tenant_ref     text COLLATE "C" NOT NULL,
+  runtime_bundle_digest text COLLATE "C" NOT NULL,
+  FOREIGN KEY (tenant_ref, runtime_bundle_digest)
+    REFERENCES runtime_bundle(tenant_ref, bundle_digest)
 );
 
 DROP TRIGGER IF EXISTS trg_runtime_trace_append_only ON runtime_trace;
@@ -402,7 +442,11 @@ CREATE TABLE IF NOT EXISTS export_artifact (
   digest             text NOT NULL,
   metadata_record_id text NOT NULL,
   document           jsonb NOT NULL,
-  record_time        timestamptz NOT NULL DEFAULT now()
+  record_time        timestamptz NOT NULL DEFAULT now(),
+  tenant_ref         text COLLATE "C" NOT NULL,
+  runtime_bundle_digest text COLLATE "C" NOT NULL,
+  FOREIGN KEY (tenant_ref, runtime_bundle_digest)
+    REFERENCES runtime_bundle(tenant_ref, bundle_digest)
 );
 
 DROP TRIGGER IF EXISTS trg_export_artifact_append_only ON export_artifact;

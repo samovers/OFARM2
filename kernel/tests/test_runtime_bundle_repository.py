@@ -59,7 +59,10 @@ def migrated_store():
         admin.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(dbname)))
     params = psycopg.conninfo.conninfo_to_dict(admin_dsn)
     params["dbname"] = dbname
-    store = Store(dsn=psycopg.conninfo.make_conninfo(**params))
+    store = Store(
+        dsn=psycopg.conninfo.make_conninfo(**params),
+        runtime_bundle=None,
+    )
     try:
         store.migrate()
         yield store

@@ -268,12 +268,17 @@ class GerkLayer:
         self._by_snapshot[snapshot_id] = {f["gerkPid"]: f for f in features if f.get("gerkPid")}
 
     def load_from_store(self, store) -> None:
-        """Load store-backed GERK parcels persisted by a governed import (M2 P2),
-        so a scheduled-import layer's parcels are resolvable from the store, not
-        only from committed package files. The runtime never guesses."""
+        """Load store-backed GERK parcels for bundle-selected snapshots.
+
+        Governed imports persist candidate data, but an unselected candidate
+        stays inactive until a new RuntimeBundle selects it. The runtime never
+        guesses or hot-activates a newer layer."""
         for row in store.reference_data(GERK_DATA_FAMILY):
             sid = row["snapshot_ref"]
-            if sid not in self._by_snapshot:
+            if (
+                sid in store.selected_reference_snapshot_refs
+                and sid not in self._by_snapshot
+            ):
                 self.register_artifact(sid, row["payload"])
 
     def lookup(self, snapshot_id: str, gerk_pid: str) -> dict | None:

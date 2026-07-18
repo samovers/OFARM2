@@ -255,6 +255,30 @@ def resolve_active_descriptor(
     return config.ACTIVE_PROFILE
 
 
+def resolve_bound_descriptor(
+    store,
+    *,
+    active_descriptor=None,
+    active_profile=None,
+) -> ProfileRuntimeDescriptor:
+    """Return the one startup-selected descriptor bound to ``store``."""
+    if (
+        active_descriptor is not None
+        and active_profile is not None
+        and active_descriptor != active_profile
+    ):
+        raise ProfileRuntimeError(
+            "active_descriptor and active_profile refer to different descriptors"
+        )
+    candidate = active_descriptor if active_descriptor is not None else active_profile
+    selected = store.active_descriptor
+    if candidate is not None and candidate != selected:
+        raise ProfileRuntimeError(
+            "active descriptor is not the startup selection bound to this Store"
+        )
+    return selected
+
+
 def profile_runtime_descriptor_identity(
     descriptor: ProfileRuntimeDescriptor,
 ) -> str:
