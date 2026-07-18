@@ -18,6 +18,105 @@ BEGIN
 END
 $$ LANGUAGE plpgsql;
 
+CREATE OR REPLACE FUNCTION kernel_valid_tenant_ref(value text) RETURNS boolean AS $$
+  SELECT value ~ '^tenant:[A-Za-z0-9._:-]{1,248}$'
+$$ LANGUAGE sql IMMUTABLE STRICT;
+
+-- ---------------------------------------------------------------------------
+-- Immutable, content-addressed RuntimeBundles (issue #171). These tables are
+-- implementation receipts, not promoted contracts. They retain exact bytes
+-- by placement and verify exact equality whenever a content identity is reused.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS runtime_content_blob (
+  content_digest  text COLLATE "C" PRIMARY KEY CHECK (
+    content_digest ~ '^sha256:[0-9a-f]{64}$'),
+  canonical_bytes bytea NOT NULL,
+  byte_length bigint NOT NULL CHECK (
+    byte_length >= 0 AND byte_length = octet_length(canonical_bytes))
+);
+
+CREATE TABLE IF NOT EXISTS runtime_tenant_content_blob (
+  tenant_ref      text COLLATE "C" NOT NULL CHECK (kernel_valid_tenant_ref(tenant_ref)),
+  content_digest  text COLLATE "C" NOT NULL CHECK (
+    content_digest ~ '^sha256:[0-9a-f]{64}$'),
+  canonical_bytes bytea NOT NULL,
+  byte_length bigint NOT NULL CHECK (
+    byte_length >= 0 AND byte_length = octet_length(canonical_bytes)),
+  PRIMARY KEY (tenant_ref, content_digest)
+);
+CREATE INDEX IF NOT EXISTS ix_runtime_tenant_content_digest
+  ON runtime_tenant_content_blob (content_digest);
+
+CREATE TABLE IF NOT EXISTS runtime_bundle (
+  tenant_ref      text COLLATE "C" NOT NULL CHECK (kernel_valid_tenant_ref(tenant_ref)),
+  bundle_digest   text COLLATE "C" NOT NULL CHECK (
+    bundle_digest ~ '^sha256:[0-9a-f]{64}$'),
+  bundle_ref      text COLLATE "C" NOT NULL,
+  canonical_bytes bytea NOT NULL,
+  byte_length     bigint NOT NULL CHECK (
+    byte_length >= 0 AND byte_length = octet_length(canonical_bytes)),
+  record_time     timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_ref, bundle_digest),
+  UNIQUE (tenant_ref, bundle_ref),
+  CHECK (bundle_ref = 'runtimebundle:' || bundle_digest)
+);
+CREATE INDEX IF NOT EXISTS ix_runtime_bundle_digest
+  ON runtime_bundle (bundle_digest);
+
+CREATE TABLE IF NOT EXISTS runtime_bundle_component (
+  tenant_ref       text COLLATE "C" NOT NULL CHECK (kernel_valid_tenant_ref(tenant_ref)),
+  bundle_digest    text COLLATE "C" NOT NULL,
+  component_role   text COLLATE "C" NOT NULL CHECK (component_role IN (
+    'PROFILE_DESCRIPTOR', 'ACTIVE_MANIFEST', 'PROFILE_INSTANCE',
+    'PROFILE_POLICY', 'QUERY_SPECIFICATION', 'QUERY_PLAN', 'VIEW_BINDING',
+    'CONTRACT_SCHEMA', 'VALIDATOR_SOURCE', 'ADAPTER_SOURCE',
+    'QUERY_OUTPUT_SOURCE', 'REFERENCE_SNAPSHOT', 'REFERENCE_SOURCE')),
+  logical_ref      text COLLATE "C" NOT NULL CHECK (length(logical_ref) BETWEEN 1 AND 1024),
+  canonicalization text COLLATE "C" NOT NULL CHECK (canonicalization IN (
+    'OFARM_CANONICAL_JSON_V1', 'EXACT_BYTES_V1')),
+  content_placement text COLLATE "C" NOT NULL CHECK (content_placement IN (
+    'GLOBAL_IMMUTABLE_CONTENT', 'TENANT_RUNTIME_SELECTION')),
+  global_content_digest text COLLATE "C" REFERENCES runtime_content_blob(content_digest),
+  tenant_content_digest text COLLATE "C",
+  byte_length      bigint NOT NULL CHECK (byte_length >= 0),
+  PRIMARY KEY (tenant_ref, bundle_digest, component_role, logical_ref),
+  FOREIGN KEY (tenant_ref, bundle_digest)
+    REFERENCES runtime_bundle(tenant_ref, bundle_digest),
+  FOREIGN KEY (tenant_ref, tenant_content_digest)
+    REFERENCES runtime_tenant_content_blob(tenant_ref, content_digest),
+  CHECK (
+    (content_placement = 'GLOBAL_IMMUTABLE_CONTENT'
+      AND global_content_digest IS NOT NULL
+      AND tenant_content_digest IS NULL)
+    OR
+    (content_placement = 'TENANT_RUNTIME_SELECTION'
+      AND global_content_digest IS NULL
+      AND tenant_content_digest IS NOT NULL))
+);
+
+DROP TRIGGER IF EXISTS trg_runtime_content_blob_append_only
+  ON runtime_content_blob;
+CREATE TRIGGER trg_runtime_content_blob_append_only
+  BEFORE UPDATE OR DELETE OR TRUNCATE ON runtime_content_blob
+  FOR EACH STATEMENT EXECUTE FUNCTION kernel_forbid_mutation();
+
+DROP TRIGGER IF EXISTS trg_runtime_tenant_content_blob_append_only
+  ON runtime_tenant_content_blob;
+CREATE TRIGGER trg_runtime_tenant_content_blob_append_only
+  BEFORE UPDATE OR DELETE OR TRUNCATE ON runtime_tenant_content_blob
+  FOR EACH STATEMENT EXECUTE FUNCTION kernel_forbid_mutation();
+
+DROP TRIGGER IF EXISTS trg_runtime_bundle_append_only ON runtime_bundle;
+CREATE TRIGGER trg_runtime_bundle_append_only
+  BEFORE UPDATE OR DELETE OR TRUNCATE ON runtime_bundle
+  FOR EACH STATEMENT EXECUTE FUNCTION kernel_forbid_mutation();
+
+DROP TRIGGER IF EXISTS trg_runtime_bundle_component_append_only
+  ON runtime_bundle_component;
+CREATE TRIGGER trg_runtime_bundle_component_append_only
+  BEFORE UPDATE OR DELETE OR TRUNCATE ON runtime_bundle_component
+  FOR EACH STATEMENT EXECUTE FUNCTION kernel_forbid_mutation();
+
 -- ---------------------------------------------------------------------------
 -- kernel_record: one row per governed contract record. JSONB payload is
 -- validated against the package contracts on write (application layer);
