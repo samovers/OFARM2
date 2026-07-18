@@ -746,6 +746,11 @@
       "sourcePath": "kernel/tests/test_m2_si_bindings.py"
     },
     {
+      "nodeid": "kernel/tests/test_m2_si_bindings.py::test_p4_store_bound_resolvers_use_alternate_descriptor_selection",
+      "sourceModule": "kernel.tests.test_m2_si_bindings",
+      "sourcePath": "kernel/tests/test_m2_si_bindings.py"
+    },
+    {
       "nodeid": "kernel/tests/test_m2_si_bindings.py::test_p4_unselected_ffsnaprave_ambiguity_remains_inactive",
       "sourceModule": "profile_si_ffs.tests.m2_si_binding_wrapper_tests",
       "sourcePath": "profile_si_ffs/tests/m2_si_binding_wrapper_tests.py"
@@ -1861,27 +1866,12 @@
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_product_register_load_from_store_uses_bindings_and_family_boundary",
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_product_register_load_from_store_uses_only_selected_source_data",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_product_register_uses_explicit_si_reference_bindings",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_applicability_missing_context_spine_is_governed_refusal",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_applicability_missing_evidence_policy_is_governed_refusal",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_applicability_wrong_pack_profile_is_governed_refusal",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
@@ -2561,6 +2551,71 @@
       "sourcePath": "kernel/tests/test_review_fixes.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_activation.py::test_closed_verified_connection_refuses_before_governed_mutation",
+      "sourceModule": "kernel.tests.test_runtime_activation",
+      "sourcePath": "kernel/tests/test_runtime_activation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_activation.py::test_deployment_observation_does_not_change_runtime_bundle_identity",
+      "sourceModule": "kernel.tests.test_runtime_activation",
+      "sourcePath": "kernel/tests/test_runtime_activation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_activation.py::test_failed_repeat_startup_preserves_prior_committed_readiness",
+      "sourceModule": "kernel.tests.test_runtime_activation",
+      "sourcePath": "kernel/tests/test_runtime_activation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_activation.py::test_failed_store_startup_does_not_publish_service_readiness",
+      "sourceModule": "kernel.tests.test_runtime_activation",
+      "sourcePath": "kernel/tests/test_runtime_activation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_activation.py::test_health_reports_committed_bundle_deployment_and_schema_observations",
+      "sourceModule": "kernel.tests.test_runtime_activation",
+      "sourcePath": "kernel/tests/test_runtime_activation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_activation.py::test_high_level_services_require_committed_store_startup",
+      "sourceModule": "kernel.tests.test_runtime_activation",
+      "sourcePath": "kernel/tests/test_runtime_activation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_activation.py::test_invalid_deployment_identity_refuses_before_database_access[None]",
+      "sourceModule": "kernel.tests.test_runtime_activation",
+      "sourcePath": "kernel/tests/test_runtime_activation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_activation.py::test_invalid_deployment_identity_refuses_before_database_access[]",
+      "sourceModule": "kernel.tests.test_runtime_activation",
+      "sourcePath": "kernel/tests/test_runtime_activation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_activation.py::test_invalid_deployment_identity_refuses_before_database_access[sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA]",
+      "sourceModule": "kernel.tests.test_runtime_activation",
+      "sourcePath": "kernel/tests/test_runtime_activation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_activation.py::test_invalid_deployment_identity_refuses_before_database_access[sha256:abc]",
+      "sourceModule": "kernel.tests.test_runtime_activation",
+      "sourcePath": "kernel/tests/test_runtime_activation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_activation.py::test_invalid_deployment_identity_refuses_before_database_access[sha512:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa]",
+      "sourceModule": "kernel.tests.test_runtime_activation",
+      "sourcePath": "kernel/tests/test_runtime_activation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_activation.py::test_manifest_endpoint_matches_the_selected_bundle_bytes",
+      "sourceModule": "kernel.tests.test_runtime_activation",
+      "sourcePath": "kernel/tests/test_runtime_activation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_active_artifact_set_cannot_activate_a_retained_draft_contract",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_active_artifact_set_cannot_select_an_unbound_view",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
@@ -2691,6 +2746,11 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_contract_lane_changes_bundle_identity_for_identical_schema_bytes",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_contract_registry_schema_omitted_from_catalog_refuses",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
@@ -2757,6 +2817,16 @@
     },
     {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_direct_bundle_construction_requires_descriptor_selected_policy",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_direct_bundle_refuses_same_contract_version_across_lanes",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_direct_component_construction_enforces_role_semantics[draft-contract-logical-ref]",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
@@ -2862,6 +2932,11 @@
     },
     {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_reference_source_path_must_match_profile_artifact_resolution",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_same_contract_schema_version_cannot_be_selected_from_both_lanes",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
@@ -2981,7 +3056,7 @@
       "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
     },
     {
-      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_applied_receipt_schema_requires_validated_composite_foreign_keys",
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_cold_restart_uses_same_selected_regsr_bytes_without_cache",
       "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
       "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
     },
@@ -3071,6 +3146,11 @@
       "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_live_schema_catalog_requires_validated_composite_foreign_keys",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_materialization_key_reuse_requires_exact_identity_inputs",
       "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
       "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
@@ -3126,12 +3206,27 @@
       "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_selected_gerk_without_retained_source_refuses_operational_load",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_selected_regsr_lookup_is_unchanged_by_governed_cache_fill",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_store_refuses_descriptor_observation_outside_selected_bundle",
       "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
       "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
     },
     {
       "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_store_requires_explicit_tenant_and_bundle_pairing",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_unequal_regsr_cache_cannot_override_selected_source",
       "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
       "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
     },
@@ -3236,6 +3331,51 @@
       "sourcePath": "kernel/tests/test_runtime_bundle_repository.py"
     },
     {
+      "nodeid": "kernel/tests/test_schema_posture.py::test_different_schema_bytes_refuse_before_bundle_or_record_mutation",
+      "sourceModule": "kernel.tests.test_schema_posture",
+      "sourcePath": "kernel/tests/test_schema_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_schema_posture.py::test_disabled_internal_foreign_key_trigger_refuses_before_mutation",
+      "sourceModule": "kernel.tests.test_schema_posture",
+      "sourcePath": "kernel/tests/test_schema_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_schema_posture.py::test_healthy_restart_exactly_reuses_the_installed_schema_catalog",
+      "sourceModule": "kernel.tests.test_schema_posture",
+      "sourcePath": "kernel/tests/test_schema_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_schema_posture.py::test_live_schema_drift_refuses_before_bundle_or_profile_mutation",
+      "sourceModule": "kernel.tests.test_schema_posture",
+      "sourcePath": "kernel/tests/test_schema_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_schema_posture.py::test_schema_catalog_is_stable_across_independent_oid_allocations",
+      "sourceModule": "kernel.tests.test_schema_posture",
+      "sourcePath": "kernel/tests/test_schema_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_schema_posture.py::test_schema_identity_is_append_only[DELETE FROM runtime_schema_identity]",
+      "sourceModule": "kernel.tests.test_schema_posture",
+      "sourcePath": "kernel/tests/test_schema_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_schema_posture.py::test_schema_identity_is_append_only[TRUNCATE runtime_schema_identity]",
+      "sourceModule": "kernel.tests.test_schema_posture",
+      "sourcePath": "kernel/tests/test_schema_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_schema_posture.py::test_schema_identity_is_append_only[UPDATE runtime_schema_identity SET schema_digest = schema_digest]",
+      "sourceModule": "kernel.tests.test_schema_posture",
+      "sourcePath": "kernel/tests/test_schema_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_schema_posture.py::test_schema_identity_is_the_digest_of_exact_schema_sql_bytes",
+      "sourceModule": "kernel.tests.test_schema_posture",
+      "sourcePath": "kernel/tests/test_schema_posture.py"
+    },
+    {
       "nodeid": "kernel/tests/test_stages.py::test_carrier_schema_validator_refuses_unknown_contract",
       "sourceModule": "kernel.tests.test_stages",
       "sourcePath": "kernel/tests/test_stages.py"
@@ -3286,8 +3426,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "531f9b4add056889d3e06672be7bd2f26db31dd0be1b2aac8cee98096facc97f",
-  "entryCount": 657,
+  "entriesSha256": "0ad297ee70b6487ea5a71ddbb20f6875a7d5ecd11d7ffce817a353b82bd27698",
+  "entryCount": 685,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

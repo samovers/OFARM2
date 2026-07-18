@@ -4,10 +4,10 @@
 Wires the open GERK layer to the GENERIC mechanisms: it parses the OPSI
 `.dbf`/`.csv` attribute table (reusing tooling/gerk_roundtrip/gerk_roundtrip.py
 as a library — never forked), imports the parse as a dated GERK
-`ReferenceSnapshot` through the generic G2 `ImportRunner`, persists the parsed
-parcels store-backed, and resolves a GERK-PID to its layer attributes (the raw
-`area` value + use code). ALL GERK specifics live HERE; kernel/adapters.py and
-the generic kernel stay scheme-agnostic.
+`ReferenceSnapshot` through the generic G2 `ImportRunner`, retains the parsed
+parcels as candidate/audit data, and resolves a GERK-PID only from exact source
+bytes selected by the RuntimeBundle. ALL GERK specifics live HERE;
+kernel/adapters.py and the generic kernel stay scheme-agnostic.
 
 Scope (PR #13 B3 — claim narrowed): this is the GERK ATTRIBUTE precursor. It
 provides parcel existence, the raw `area` attribute (the per-PID extent SOURCE),
@@ -34,7 +34,7 @@ from pathlib import Path
 
 from ... import config
 from ...adapters import ImportRunner, ParseResult
-from ...context import GERK_SNAPSHOT_PREFIX
+from ...context import SIReferenceBindings
 from ...contracts import sha256_of
 
 # GERK scheme constants (SI-specific). The parcel identity is the GERK-PID; the
@@ -161,10 +161,11 @@ def import_gerk_snapshot(store, artifact, *, layer_date=None, version_label=None
                          source_artifact_ref=None) -> dict:
     """Import a parsed GERK layer as a dated GERK `ReferenceSnapshot` via the
     generic G2 ImportRunner. The effective date is the layer vintage; the source
-    digest + surface ride sourceArtifactRefs; the parsed parcels are persisted
-    store-backed (an index cache, NOT OFARM truth) so `GerkLayer` can resolve a
-    PID from the store. A parse with no datable vintage is REFUSED through the
-    governed path (no snapshot, no data)."""
+    digest + surface ride sourceArtifactRefs; the parsed parcels are retained as
+    candidate/audit data, NOT OFARM truth or operational lookup authority. A
+    parse with no datable vintage is REFUSED through the governed path (no
+    snapshot, no data)."""
+    bindings = SIReferenceBindings.from_runtime_descriptor(store.active_descriptor)
     layer_date = layer_date or artifact.get("layerDate")
 
     def _refuse(error: str, disposition: str) -> dict:
@@ -175,7 +176,7 @@ def import_gerk_snapshot(store, artifact, *, layer_date=None, version_label=None
         # (the vintage dates it), so the refusal carries no related ref.
         result = ImportRunner(store).run_import(
             ParseResult(ok=False, error=error),
-            {"referenceSnapshotId": None}, data_family=GERK_DATA_FAMILY)
+            {"referenceSnapshotId": None}, data_family=bindings.gerk_data_family)
         return {**result, "disposition": disposition, "layerDate": layer_date}
 
     if not layer_date:
@@ -211,7 +212,7 @@ def import_gerk_snapshot(store, artifact, *, layer_date=None, version_label=None
             f"GERK-PID {conflict} appears with conflicting attributes (area/use); "
             "the layer cannot be reduced to one parcel per PID — refuse rather "
             "than silently pick last-wins", "CONFLICTING_DUPLICATE_PID")
-    sid = f"{GERK_SNAPSHOT_PREFIX}.{layer_date}"
+    sid = f"{bindings.gerk_snapshot_prefix}.{layer_date}"
     # Digest the WHOLE parsed artifact (every parcel + attribute), never just the
     # input file digest, so any content change re-imports as a CONFLICT and never
     # a silent ALREADY_IMPORTED replay that leaves stale parcels (PR #12 B1).
@@ -234,7 +235,7 @@ def import_gerk_snapshot(store, artifact, *, layer_date=None, version_label=None
     result = ImportRunner(store).run_import(
         ParseResult(ok=True, sourceDigest=digest, artifactRef=source_artifact_ref,
                     recordCount=artifact.get("featureCount"), records=artifact),
-        meta, data_family=GERK_DATA_FAMILY)
+        meta, data_family=bindings.gerk_data_family)
     return {**result, "layerDate": layer_date}
 
 
@@ -268,18 +269,19 @@ class GerkLayer:
         self._by_snapshot[snapshot_id] = {f["gerkPid"]: f for f in features if f.get("gerkPid")}
 
     def load_from_store(self, store) -> None:
-        """Load store-backed GERK parcels for bundle-selected snapshots.
+        """Load exact GERK source bytes selected by the RuntimeBundle.
 
-        Governed imports persist candidate data, but an unselected candidate
-        stays inactive until a new RuntimeBundle selects it. The runtime never
-        guesses or hot-activates a newer layer."""
-        for row in store.reference_data(GERK_DATA_FAMILY):
-            sid = row["snapshot_ref"]
-            if (
-                sid in store.selected_reference_snapshot_refs
-                and sid not in self._by_snapshot
-            ):
-                self.register_artifact(sid, row["payload"])
+        Governed import cache rows remain candidate/audit data. They cannot
+        become an operational parcel layer until a later bundle retains and
+        selects the corresponding source artifact.
+        """
+        bindings = SIReferenceBindings.from_runtime_descriptor(
+            store.active_descriptor
+        )
+        for row in store.selected_reference_source_data(
+            bindings.gerk_snapshot_prefix
+        ):
+            self.register_artifact(row["snapshot_ref"], row["payload"])
 
     def lookup(self, snapshot_id: str, gerk_pid: str) -> dict | None:
         """The parcel record (gerkPid / rabaId / area / opisRabe) for a GERK-PID

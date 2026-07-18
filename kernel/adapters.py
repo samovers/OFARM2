@@ -49,6 +49,7 @@ class ImportRunner:
     GATE = "GOVERNED_IMPORT"
 
     def __init__(self, store):
+        store.require_startup_complete("ImportRunner")
         self.store = store
 
     def _refuse(self, request_id: str, snapshot_id: str | None, reason_code: str,
@@ -70,11 +71,12 @@ class ImportRunner:
         snapshot (refuse over pretend — the prior in-force snapshot stays current).
 
         If `data_family` is given AND the parse carries `records`, the parsed
-        DATA is persisted as store-backed reference-data (an index cache, NOT
-        OFARM truth) keyed by (snapshot id, data_family), in the SAME serialized
-        transaction as the snapshot + gate-log entry — so a scheme reader can
-        later resolve the imported snapshot's content from the store. Generic:
-        `records`/`data_family` are opaque here; no scheme literals (M2 P1).
+        DATA is persisted as store-backed candidate/audit data keyed by
+        (snapshot id, data_family), in the SAME serialized transaction as the
+        snapshot + gate-log entry. It is never runtime-selection authority;
+        operational use requires a later RuntimeBundle retaining the exact
+        source bytes. Generic: `records`/`data_family` are opaque here; no scheme
+        literals (M2 P1).
         """
         request_id = mint("import")
         snapshot_id = snapshot_meta.get("referenceSnapshotId")
@@ -118,10 +120,9 @@ class ImportRunner:
                     existing["payload_sha256"] == sha256_of(snapshot)
                     and existing["payload"] == snapshot
                 ):
-                    # Canonical truth is reused, but parsed cache state is scoped
-                    # to the active RuntimeBundle. A new process/bundle must
-                    # rebuild that derived input before reporting successful
-                    # reuse; it may never read another bundle's parser output.
+                    # Canonical truth is reused. Parsed candidate/audit data is
+                    # bundle-scoped provenance only; operational readers never
+                    # activate it or another bundle's parser output.
                     if data_family and parse_result.records is not None:
                         cur.execute(
                             "SELECT snapshot_ref, data_family, artifact_ref, source_digest, "
@@ -159,7 +160,7 @@ class ImportRunner:
                                 "Conflicting parsed cache",
                                 f"referenceSnapshotId {snapshot_id} already has "
                                 "different parsed data under the active RuntimeBundle; "
-                                "refused rather than replacing derived input silently")
+                                "refused rather than replacing audit data silently")
                             self.store.log_gate(
                                 cur, request_id, self.GATE, "REFUSED",
                                 reason_code="DUPLICATE_IMPORT_AMBIGUOUS",
@@ -167,11 +168,11 @@ class ImportRunner:
                                 related_refs=[snapshot_id])
                             return {"imported": False, "snapshotRef": None,
                                     "disposition": "CONFLICT", "problem": problem}
-                    # Idempotent canonical re-import, with the current bundle's
-                    # derived cache now verified or rebuilt.
+                    # Idempotent canonical re-import, with this bundle-qualified
+                    # candidate/audit row now verified or recorded.
                     self.store.log_gate(cur, request_id, self.GATE, "REPLAY_REUSED",
                                         rationale="identical snapshot already imported; "
-                                                  "active RuntimeBundle cache verified",
+                                                  "bundle-qualified audit data verified",
                                         related_refs=[snapshot_id])
                     return {"imported": True, "snapshotRef": snapshot_id,
                             "disposition": "ALREADY_IMPORTED", "problem": None}
@@ -191,10 +192,10 @@ class ImportRunner:
             # frozen to the active RuntimeBundle; selecting a newer snapshot
             # requires a new bundle (issue #171, no automatic migration).
             self.store.insert_record(cur, snapshot)
-            # store-backed reference DATA (index cache, not OFARM truth) so a
-            # scheme reader can resolve this snapshot's content from the store;
-            # same serialized transaction as the snapshot + gate-log (M2 P1).
-            # Opaque here — `records` and `data_family` are passed through.
+            # Store-backed candidate/audit DATA, not OFARM truth and never
+            # runtime-selection authority; same serialized transaction as the
+            # snapshot + gate-log (M2 P1). Opaque here — `records` and
+            # `data_family` are passed through.
             if data_family and parse_result.records is not None:
                 self.store.insert_reference_data(
                     cur, snapshot_id, data_family, parse_result.records,

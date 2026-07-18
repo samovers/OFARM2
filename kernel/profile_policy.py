@@ -3,15 +3,17 @@
 The SI evidence FLOOR (which named checks are hard vs soft), its display
 metadata, and the advisory rules are PROFILE / PACKAGE content, not generic
 Kernel/Core law — the kernel provides the generic, Core-payload-shaped check
-logic (kernel/sufficiency.py) and reads profile-owned policy data from the
-active profile through this loader. Per the M2 mechanism-boundary stop rule, no
-Slovenia-specific floor value lives in kernel/*.py; it lives in the profile
-policy file (config.EVIDENCE_POLICY_PATH) and is read here.
+logic (kernel/sufficiency.py) and reads profile-owned policy data through this
+loader. Per the M2 mechanism-boundary stop rule, no Slovenia-specific floor
+value lives in kernel/*.py; it lives in profile-owned policy content.
 
 Fail closed: a missing or malformed policy raises ProfilePolicyError, which the
 gate turns into a governed RuntimeProblem (never a silent permissive default,
-never a crash). The policy is read fresh per call so the active profile's policy
-file is authoritative — changing it changes behavior without touching kernel/.
+never a crash). Configuration-only compatibility loaders may read their path on
+each call. A governed runtime instead uses its bundle-bound descriptor to create
+a validated policy provider; production composition retains its cached policy
+for the process lifetime. Changing policy bytes requires selecting a new
+RuntimeBundle at process startup; policy files are not a hot-reload authority.
 """
 from __future__ import annotations
 

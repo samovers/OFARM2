@@ -93,10 +93,11 @@ class GatePipeline:
             active_descriptor=active_descriptor,
             active_profile=active_profile,
         )
+        store.require_startup_complete("GatePipeline")
         self.runtime_bundle = store.runtime_bundle
         self.policy_provider = profile_policy.DescriptorPolicyProvider(
             self.active_profile)
-        self.si_reference_bindings = SIReferenceBindings.from_descriptor(
+        self.si_reference_bindings = SIReferenceBindings.from_runtime_descriptor(
             self.active_profile)
         self.si_reference_bindings_descriptor = self.active_profile
         self.authority = AuthorityEvaluator(store)

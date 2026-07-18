@@ -20,7 +20,9 @@ from kernel.authority import AuthorityEvaluator
 from kernel.contracts import sha256_of
 from kernel.gates import GatePipeline
 from kernel.materializer import MaterializationIdentityError, Materializer
+from kernel.profiles.si_ffs.gerk_adapter import GerkLayer
 from kernel.profiles.si_ffs import si_bindings as sib
+from kernel.profile_runtime import load_profile_runtime_descriptor
 from kernel.runtime_bundle import (
     Canonicalization,
     ContentPlacement,
@@ -30,6 +32,8 @@ from kernel.runtime_bundle import (
     RuntimeComponentRole,
     canonical_json_bytes,
 )
+from kernel.runtime_activation import complete_store_startup
+from kernel.schema_posture import SchemaPostureError
 from kernel.store import RuntimeBundleBindingError, Store
 from kernel.tests.conftest import _admin_dsn
 from kernel.views import OutputGenerator
@@ -249,6 +253,37 @@ def _selected_bundle() -> RuntimeBundle:
     return RuntimeBundleBuilder.from_manifest(config.PACKAGE_ROOT).build()
 
 
+def _selected_regsr_source(store: Store) -> tuple[dict, RuntimeComponent, str]:
+    prefix = context.SIReferenceBindings.from_runtime_descriptor(
+        store.active_descriptor
+    ).regsr_snapshot_prefix
+    snapshot_component = next(
+        component for component in store.runtime_bundle.components
+        if component.role is RuntimeComponentRole.REFERENCE_SNAPSHOT
+        and (
+            component.logical_ref == prefix
+            or component.logical_ref.startswith(prefix + ".")
+        )
+    )
+    snapshot = json.loads(snapshot_component.canonical_bytes)
+    artifact_ref = next(
+        ref for ref in snapshot["sourceArtifactRefs"]
+        if ref.startswith("artifact:")
+    )
+    source = store.runtime_bundle.component(
+        RuntimeComponentRole.REFERENCE_SOURCE,
+        artifact_ref,
+    )
+    artifact = json.loads(source.canonical_bytes)
+    decision = next(
+        decision["decisionNumber"]
+        for detail in artifact["productDetails"]
+        for decision in detail.get("decisions", [])
+        if decision.get("decisionNumber")
+    )
+    return snapshot, source, decision
+
+
 def _second_store(first: Store) -> Store:
     store = Store(
         dsn=first.dsn,
@@ -256,7 +291,7 @@ def _second_store(first: Store) -> Store:
         runtime_bundle=_variant_bundle(first.runtime_bundle),
         active_descriptor=first.active_descriptor,
     )
-    store.migrate()
+    complete_store_startup(store)
     return store
 
 
@@ -472,7 +507,7 @@ def test_store_refuses_descriptor_observation_outside_selected_bundle():
         )
 
 
-def test_applied_receipt_schema_requires_validated_composite_foreign_keys():
+def test_live_schema_catalog_requires_validated_composite_foreign_keys():
     with _isolated_store("not_valid_fk") as store:
         store.migrate()
         row = store.conn.execute(
@@ -498,7 +533,10 @@ def test_applied_receipt_schema_requires_validated_composite_foreign_keys():
                     "(tenant_ref, bundle_digest) NOT VALID"
                 )
 
-        with pytest.raises(RuntimeBundleBindingError, match="foreign keys"):
+        with pytest.raises(
+            SchemaPostureError,
+            match="live database schema catalog does not match",
+        ):
             store.migrate()
 
 
@@ -1333,6 +1371,174 @@ def test_cross_bundle_identical_import_rebuilds_current_parsed_cache(fresh_env):
             store_a.runtime_bundle_digest, store_b.runtime_bundle_digest}
     finally:
         store_b.close()
+
+
+def test_selected_regsr_lookup_is_unchanged_by_governed_cache_fill(fresh_env):
+    store, _, _ = fresh_env
+    bindings = context.SIReferenceBindings.from_runtime_descriptor(
+        store.active_descriptor
+    )
+    snapshot, source, selected_decision = _selected_regsr_source(store)
+    injected_decision = f"FICTIONAL-CACHE-{_uid()}"
+    injected = {
+        "products": [],
+        "productDetails": [{
+            "name": "FICTIONAL CACHE INPUT",
+            "decisions": [{
+                "decisionNumber": injected_decision,
+                "issued": "2026-01-01",
+                "validUntil": "2099-01-01",
+            }],
+        }],
+    }
+    before = context.ProductRegister(bindings)
+    before.load_from_store(store)
+    expected = before.lookup_by_decision(
+        snapshot["referenceSnapshotId"], selected_decision
+    )
+    assert expected is not None
+
+    replay = ImportRunner(store).run_import(
+        ParseResult(
+            ok=True,
+            sourceDigest=source.content_digest,
+            artifactRef=source.logical_ref,
+            recordCount=1,
+            records=injected,
+        ),
+        snapshot,
+        data_family=bindings.regsr_data_family,
+    )
+
+    assert replay["disposition"] == "ALREADY_IMPORTED"
+    assert any(
+        row["snapshot_ref"] == snapshot["referenceSnapshotId"]
+        and row["payload"] == injected
+        for row in store.reference_data(bindings.regsr_data_family)
+    )
+    after = context.ProductRegister(bindings)
+    after.load_from_store(store)
+    assert after.lookup_by_decision(
+        snapshot["referenceSnapshotId"], selected_decision
+    ) == expected
+    assert after.lookup_by_decision(
+        snapshot["referenceSnapshotId"], injected_decision
+    ) is None
+
+
+def test_unequal_regsr_cache_cannot_override_selected_source(fresh_env):
+    store, _, _ = fresh_env
+    bindings = context.SIReferenceBindings.from_runtime_descriptor(
+        store.active_descriptor
+    )
+    snapshot, source, selected_decision = _selected_regsr_source(store)
+    injected_decision = f"FICTIONAL-UNEQUAL-{_uid()}"
+    unequal = {
+        "products": [],
+        "productDetails": [{
+            "name": "FICTIONAL UNEQUAL CACHE",
+            "decisions": [{"decisionNumber": injected_decision}],
+        }],
+    }
+    with store.tx() as cur:
+        store.insert_reference_data(
+            cur,
+            snapshot["referenceSnapshotId"],
+            bindings.regsr_data_family,
+            unequal,
+            artifact_ref=source.logical_ref,
+            source_digest=source.content_digest,
+            parser_label=snapshot["canonicalVersionLabel"],
+            record_count=1,
+        )
+
+    register = context.ProductRegister(bindings)
+    register.load_from_store(store)
+    assert register.lookup_by_decision(
+        snapshot["referenceSnapshotId"], selected_decision
+    ) is not None
+    assert register.lookup_by_decision(
+        snapshot["referenceSnapshotId"], injected_decision
+    ) is None
+
+
+def test_selected_gerk_without_retained_source_refuses_operational_load(
+    fresh_env,
+):
+    store, _, _ = fresh_env
+    bindings = context.SIReferenceBindings.from_runtime_descriptor(
+        store.active_descriptor
+    )
+    snapshot_ref = next(
+        ref for ref in store.selected_reference_snapshot_refs
+        if ref == bindings.gerk_snapshot_prefix
+        or ref.startswith(bindings.gerk_snapshot_prefix + ".")
+    )
+    cache_payload = {
+        "features": [{
+            "gerkPid": "9999999",
+            "rabaId": "1300",
+            "area": "1.0000",
+            "opisRabe": "fictional cache-only parcel",
+        }],
+    }
+    with store.tx() as cur:
+        store.insert_reference_data(
+            cur,
+            snapshot_ref,
+            bindings.gerk_data_family,
+            cache_payload,
+            artifact_ref="archive:fictional-cache-only-gerk.zip",
+            source_digest="sha256:" + "f" * 64,
+            parser_label="fictional-cache-only",
+            record_count=1,
+        )
+
+    with pytest.raises(
+        RuntimeBundleBindingError,
+        match="has no exact operational source",
+    ):
+        GerkLayer().load_from_store(store)
+
+
+def test_cold_restart_uses_same_selected_regsr_bytes_without_cache(fresh_env):
+    first, _, _ = fresh_env
+    bindings = context.SIReferenceBindings.from_runtime_descriptor(
+        first.active_descriptor
+    )
+    snapshot, _source, selected_decision = _selected_regsr_source(first)
+    assert first.reference_data(bindings.regsr_data_family) == []
+    first_register = context.ProductRegister(bindings)
+    first_register.load_from_store(first)
+    expected = first_register.lookup_by_decision(
+        snapshot["referenceSnapshotId"], selected_decision
+    )
+
+    reconstructed_bundle = _selected_bundle()
+    reconstructed_descriptor = load_profile_runtime_descriptor(
+        config.ACTIVE_PROFILE.profile_root,
+        descriptor_path=config.ACTIVE_PROFILE.descriptor_path,
+    )
+    assert reconstructed_bundle is not first.runtime_bundle
+    assert reconstructed_bundle.digest == first.runtime_bundle_digest
+    assert reconstructed_descriptor is not first.active_descriptor
+    assert reconstructed_descriptor == first.active_descriptor
+    restarted = Store(
+        dsn=first.dsn,
+        tenant_ref=first.tenant_ref,
+        runtime_bundle=reconstructed_bundle,
+        active_descriptor=reconstructed_descriptor,
+    )
+    try:
+        complete_store_startup(restarted)
+        assert restarted.reference_data(bindings.regsr_data_family) == []
+        restarted_register = context.ProductRegister(bindings)
+        restarted_register.load_from_store(restarted)
+        assert restarted_register.lookup_by_decision(
+            snapshot["referenceSnapshotId"], selected_decision
+        ) == expected
+    finally:
+        restarted.close()
 
 
 def test_product_authorisation_uses_only_bundle_selected_regsr_source_bytes():

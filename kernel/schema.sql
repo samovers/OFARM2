@@ -22,6 +22,26 @@ CREATE OR REPLACE FUNCTION kernel_valid_tenant_ref(value text) RETURNS boolean A
   SELECT value ~ '^tenant:[A-Za-z0-9._:-]{1,248}$'
 $$ LANGUAGE sql IMMUTABLE STRICT;
 
+-- Exact bytes of this schema.sql are selected once at startup. The fixed,
+-- append-only identity also retains the canonical live-catalog manifest created
+-- by those bytes, so restart verifies current objects instead of trusting install
+-- history. Database deployment posture remains separate from RuntimeBundle identity.
+CREATE TABLE IF NOT EXISTS runtime_schema_identity (
+  identity_key text COLLATE "C" PRIMARY KEY CHECK (
+    identity_key = 'ofarm-kernel-schema'),
+  schema_digest text COLLATE "C" NOT NULL CHECK (
+    schema_digest ~ '^sha256:[0-9a-f]{64}$'),
+  catalog_manifest jsonb NOT NULL,
+  catalog_digest text COLLATE "C" NOT NULL CHECK (
+    catalog_digest ~ '^sha256:[0-9a-f]{64}$')
+);
+
+DROP TRIGGER IF EXISTS trg_runtime_schema_identity_append_only
+  ON runtime_schema_identity;
+CREATE TRIGGER trg_runtime_schema_identity_append_only
+  BEFORE UPDATE OR DELETE OR TRUNCATE ON runtime_schema_identity
+  FOR EACH STATEMENT EXECUTE FUNCTION kernel_forbid_mutation();
+
 -- ---------------------------------------------------------------------------
 -- Immutable, content-addressed RuntimeBundles (issue #171). These tables are
 -- implementation receipts, not promoted contracts. They retain exact bytes
@@ -69,7 +89,8 @@ CREATE TABLE IF NOT EXISTS runtime_bundle_component (
   component_role   text COLLATE "C" NOT NULL CHECK (component_role IN (
     'PROFILE_DESCRIPTOR', 'ACTIVE_MANIFEST', 'PROFILE_INSTANCE',
     'PROFILE_POLICY', 'QUERY_SPECIFICATION', 'QUERY_PLAN', 'VIEW_BINDING',
-    'CONTRACT_SCHEMA', 'VALIDATOR_SOURCE', 'ADAPTER_SOURCE',
+    'CONTRACT_SCHEMA', 'DRAFT_CONTRACT_SCHEMA', 'VALIDATOR_SOURCE',
+    'ADAPTER_SOURCE',
     'QUERY_OUTPUT_SOURCE', 'REFERENCE_SNAPSHOT', 'REFERENCE_SOURCE')),
   logical_ref      text COLLATE "C" NOT NULL CHECK (length(logical_ref) BETWEEN 1 AND 1024),
   canonicalization text COLLATE "C" NOT NULL CHECK (canonicalization IN (
@@ -375,19 +396,17 @@ CREATE TABLE IF NOT EXISTS derived_dependency_index (
 CREATE INDEX IF NOT EXISTS ix_derived_dep_source ON derived_dependency_index (dependency_source_ref);
 CREATE INDEX IF NOT EXISTS ix_derived_dep_key ON derived_dependency_index (key_digest);
 
--- derived: store-backed external reference-data cache (M2 P1). When a governed
+-- derived: store-backed external reference candidate/audit data (M2 P1). When a governed
 -- import (kernel/adapters.py) is given a data payload, it persists the parsed
 -- source DATA here, keyed by ReferenceSnapshot id + data_family, in the SAME
 -- serialized transaction as the snapshot + gate-log entry. This is NOT OFARM
--- truth: it is an external artifact/index cache so a verification register can
--- resolve an imported snapshot's content from the store (not only from committed
--- package files). The ReferenceSnapshot remains the canonical governed import
--- record; the payload is opaque to the generic runner (a scheme-specific reader,
--- e.g. ProductRegister, interprets it). Scheme-agnostic: data_family is a
--- parameter, never a hardcoded scheme. One row per (snapshot_ref, data_family);
--- a conflicting re-import is refused at the snapshot gate, so this never
--- overwrites. Retain it append-only until durable source bytes and deterministic
--- rebuildability are proven.
+-- truth and never runtime-selection authority. Operational readers consume only
+-- exact REFERENCE_SOURCE bytes selected by their RuntimeBundle; a later import
+-- remains auditable here until a new bundle selects its retained source. The
+-- ReferenceSnapshot remains the canonical governed import record; the payload
+-- is opaque to the generic runner. Scheme-agnostic: data_family is a parameter,
+-- never a hardcoded scheme. One row per (snapshot_ref, data_family); a conflicting
+-- re-import is refused at the snapshot gate, so this never overwrites.
 CREATE TABLE IF NOT EXISTS reference_snapshot_data (
   snapshot_ref   text NOT NULL,
   data_family    text NOT NULL,

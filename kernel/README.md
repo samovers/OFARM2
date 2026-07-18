@@ -25,6 +25,7 @@ PGBIN=$(dirname "$(which initdb)")        # e.g. /opt/homebrew/opt/postgresql@17
 "$PGBIN/createdb" -h "$(pwd)/.pgrun" -p 54317 -U ofarm ofarm_kernel
 
 # 3. the API (migrates + bootstraps the SI context spine on startup)
+export OFARM_DEPLOYMENT_IMAGE_DIGEST="$VERIFIED_OFARM_IMAGE_DIGEST"
 .venv/bin/uvicorn --factory kernel.api:create_app --port 8800
 
 # 4. the test suites: root conformance (tests 1-15 + regressions + the
@@ -41,6 +42,11 @@ Environment overrides: `OFARM_PG_DSN` (full DSN) or `OFARM_PG_SOCKET_DIR` /
 `OFARM_PG_PORT` / `OFARM_PG_DBNAME` / `OFARM_PG_USER`; the test harness
 additionally honors `OFARM_PG_ADMIN_DSN` (admin connection used to recreate
 the test database, e.g. a CI service container).
+
+`OFARM_DEPLOYMENT_IMAGE_DIGEST` must be the externally verified, full lowercase
+OCI digest (`sha256:` plus 64 hexadecimal digits). It is reported as a
+process-local activation observation and never enters RuntimeBundle identity or
+semantic receipts.
 
 ## Client surface
 
@@ -63,7 +69,7 @@ is a complete `ExecutionRecordPayload` per `contracts/core/`.
 
 | Module | Role |
 |---|---|
-| `schema.sql` | DDL: append-only record/edge/gate-log tables (statement-level mutation triggers), reachability constraint trigger (deferred, same-transaction — D3), derived materialization tables, draft-lane `runtime_trace` |
+| `schema.sql` / `schema_posture.py` | DDL plus startup-only exact source digest, canonical live-catalog identity, and transaction-posture verification; no per-request schema probes |
 | `contracts.py` | contract registry: every write validated against `contracts/` (canonical lane) or `contracts/drafts_reference/` (draft lane, D16) |
 | `profile_runtime.py` | active profile runtime descriptor loader: validates profile-local runtime inputs fail-closed while keeping tenant/demo binding outside the descriptor |
 | `store.py` | the append-only truth store; edges, gate log, idempotency, in-force queries, reachability check |

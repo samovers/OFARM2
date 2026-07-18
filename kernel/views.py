@@ -88,6 +88,7 @@ class OutputGenerator:
             active_descriptor=active_descriptor,
             active_profile=active_profile,
         )
+        store.require_startup_complete("OutputGenerator")
         self.runtime_bundle = store.runtime_bundle
         self.authority = AuthorityEvaluator(store)
         self.materializer = Materializer(store, active_descriptor=self.active_profile)

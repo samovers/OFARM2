@@ -12,11 +12,17 @@ import json
 from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
-from . import auth_oidc, config, context, manifest as manifest_mod
+from . import auth_oidc, config
 from .contracts import ContractViolation
 from .problems import runtime_problem
 from .gates import GatePipeline
-from .runtime_bundle import RuntimeBundleBuilder
+from .runtime_activation import (
+    RuntimeActivationObservation,
+    complete_store_startup,
+    deployment_image_digest_from_env,
+    require_deployment_image_digest,
+)
+from .runtime_bundle import RuntimeBundleBuilder, RuntimeComponentRole
 from .store import Store
 from .views import OutputGenerator
 
@@ -56,7 +62,17 @@ class ReviewAcceptBody(BaseModel):
     idempotencyKey: str | None = None
 
 
-def create_app(store: Store | None = None, *, oidc=_FROM_ENV) -> FastAPI:
+def create_app(
+    store: Store | None = None,
+    *,
+    oidc=_FROM_ENV,
+    deployment_image_digest=_FROM_ENV,
+) -> FastAPI:
+    selected_image_digest = (
+        deployment_image_digest_from_env()
+        if deployment_image_digest is _FROM_ENV
+        else require_deployment_image_digest(deployment_image_digest)
+    )
     app = FastAPI(
         title="OFARM2 Kernel (M1)",
         description="Implementation and conformance packaging profile — not OFARM "
@@ -73,12 +89,20 @@ def create_app(store: Store | None = None, *, oidc=_FROM_ENV) -> FastAPI:
             runtime_bundle=selected_bundle,
             active_descriptor=config.ACTIVE_PROFILE,
         )
+    selected_manifest = json.loads(next(
+        component.canonical_bytes
+        for component in store.runtime_bundle.components
+        if component.role is RuntimeComponentRole.ACTIVE_MANIFEST
+    ))
     app.state.store = store
-    # Schema installation, bundle persistence, and selected-profile bootstrap
-    # are one startup transaction. Any refusal rolls back the whole bootstrap.
-    with app.state.store.conn.transaction():
-        app.state.store.migrate()
-        context.bootstrap(app.state.store)
+    database_observation = complete_store_startup(app.state.store)
+    app.state.runtime_activation = RuntimeActivationObservation(
+        tenant_ref=app.state.store.tenant_ref,
+        active_profile_ref=app.state.store.active_descriptor.profile_ref,
+        runtime_bundle_digest=app.state.store.runtime_bundle_digest,
+        deployment_image_digest=selected_image_digest,
+        database=database_observation,
+    )
     app.state.pipeline = GatePipeline(
         app.state.store, active_descriptor=app.state.store.active_descriptor)
     app.state.outputs = OutputGenerator(
@@ -137,6 +161,7 @@ def create_app(store: Store | None = None, *, oidc=_FROM_ENV) -> FastAPI:
     def health():
         return {"status": "ok",
                 "runtimeBundleDigest": app.state.store.runtime_bundle_digest,
+                "runtimeActivation": app.state.runtime_activation.as_dict(),
                 "unreachableAuthoritativeRecords":
                     app.state.store.unreachable_authoritative_records()}
 
@@ -339,8 +364,6 @@ def create_app(store: Store | None = None, *, oidc=_FROM_ENV) -> FastAPI:
 
     @app.get("/manifest")
     def get_manifest():
-        if manifest_mod.MANIFEST_PATH.exists():
-            return json.loads(manifest_mod.MANIFEST_PATH.read_text())
-        return manifest_mod.build_manifest(app.state.store)
+        return selected_manifest
 
     return app

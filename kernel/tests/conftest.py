@@ -15,10 +15,13 @@ import psycopg
 import pytest
 
 os.environ.setdefault("OFARM_PG_DBNAME", "ofarm_kernel_test")
+TEST_DEPLOYMENT_IMAGE_DIGEST = "sha256:" + "a" * 64
+os.environ.setdefault("OFARM_DEPLOYMENT_IMAGE_DIGEST", TEST_DEPLOYMENT_IMAGE_DIGEST)
 
-from kernel import config, context, demo, manifest  # noqa: E402
+from kernel import config, demo, manifest  # noqa: E402
 from kernel.gates import GatePipeline  # noqa: E402
 from kernel.materializer import Materializer  # noqa: E402
+from kernel.runtime_activation import complete_store_startup  # noqa: E402
 from kernel.runtime_bundle import RuntimeBundleBuilder  # noqa: E402
 from kernel.store import Store  # noqa: E402
 from kernel.views import OutputGenerator  # noqa: E402
@@ -61,8 +64,7 @@ def store():
         admin.execute(f'DROP DATABASE IF EXISTS "{dbname}"')
         admin.execute(f'CREATE DATABASE "{dbname}"')
     s = _bound_store()
-    s.migrate()
-    context.bootstrap(s)
+    complete_store_startup(s)
     demo.bootstrap(s)
     yield s
     s.close()
@@ -104,8 +106,7 @@ def fresh_env():
     params = psycopg.conninfo.conninfo_to_dict(_admin_dsn())
     params["dbname"] = dbname
     s = _bound_store(psycopg.conninfo.make_conninfo(**params))
-    s.migrate()
-    context.bootstrap(s)
+    complete_store_startup(s)
     demo.bootstrap(s)
     yield s, GatePipeline(s), OutputGenerator(s)
     s.close()

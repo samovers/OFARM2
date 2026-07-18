@@ -20,6 +20,7 @@ from kernel.runtime_bundle import (
     RuntimeComponentRole,
     RuntimeComponentSpec,
     require_tenant_ref,
+    canonical_json_bytes,
     strict_json_document,
 )
 
@@ -339,6 +340,20 @@ def test_canonical_json_logical_ref_must_match_intrinsic_identity(tmp_path):
             ),
             "invalid shape",
         ),
+        (
+            RuntimeComponentRole.DRAFT_CONTRACT_SCHEMA,
+            "contract:ofarm.test.expected-draft.v0.1",
+            Canonicalization.EXACT_BYTES,
+            ContentPlacement.GLOBAL,
+            canonical_json_bytes({
+                "properties": {
+                    "schemaVersion": {
+                        "const": "ofarm.test.different-draft.v0.1",
+                    },
+                },
+            }),
+            "does not declare its logical ref",
+        ),
     ),
     ids=(
         "wrong-canonicalization",
@@ -346,6 +361,7 @@ def test_canonical_json_logical_ref_must_match_intrinsic_identity(tmp_path):
         "wrong-role-schema",
         "mismatched-intrinsic-identity",
         "open-view-binding-shape",
+        "draft-contract-logical-ref",
     ),
 )
 def test_direct_component_construction_enforces_role_semantics(
@@ -831,6 +847,38 @@ def test_active_artifact_set_ref_cannot_be_omitted_from_catalog():
         _checked_builder_with_specs(specs).build()
 
 
+def test_active_artifact_set_cannot_activate_a_retained_draft_contract():
+    bundle = RuntimeBundleBuilder.from_manifest(PACKAGE_ROOT).build()
+    draft_ref = next(
+        component.logical_ref for component in bundle.components
+        if component.role is RuntimeComponentRole.DRAFT_CONTRACT_SCHEMA
+    )
+    active_set = next(
+        component for component in bundle.components
+        if component.role is RuntimeComponentRole.PROFILE_INSTANCE
+        and component.logical_ref.startswith("activeartifactset:")
+    )
+    document = json.loads(active_set.canonical_bytes)
+    document["activeArtifactRefs"].append(draft_ref)
+    changed_active_set = RuntimeComponent.from_selected_bytes(
+        role=active_set.role,
+        logical_ref=active_set.logical_ref,
+        canonicalization=active_set.canonicalization,
+        placement=active_set.placement,
+        selected_bytes=canonical_json_bytes(document),
+    )
+    active_identity = (active_set.role, active_set.logical_ref)
+    components = tuple(
+        changed_active_set
+        if (component.role, component.logical_ref) == active_identity
+        else component
+        for component in bundle.components
+    )
+
+    with pytest.raises(RuntimeBundleError, match="eligible for activation"):
+        RuntimeBundle.create(components)
+
+
 def test_active_artifact_set_cannot_select_an_unbound_view(tmp_path):
     root = tmp_path / "checkout"
     checked_in = _copy_checked_selection(root)
@@ -1192,13 +1240,14 @@ def test_checked_in_component_catalog_builds_the_reviewed_closed_set():
 
     assert bundle.selected_tenant_ref == "tenant:si.ffs.pilot.demo"
     assert bundle.digest == (
-        "sha256:5e0fbd2c0a44b63bdcb4887b89597f5814cf03b547e5ca90f902f06489fe1195"
+        "sha256:91fa5380fd2a735c776b0224edab3dbc2299b485717114f5e8a352d567670c7a"
     )
 
     expected_catalog_roles = {
         RuntimeComponentRole.ACTIVE_MANIFEST,
         RuntimeComponentRole.ADAPTER_SOURCE,
         RuntimeComponentRole.CONTRACT_SCHEMA,
+        RuntimeComponentRole.DRAFT_CONTRACT_SCHEMA,
         RuntimeComponentRole.PROFILE_DESCRIPTOR,
         RuntimeComponentRole.PROFILE_INSTANCE,
         RuntimeComponentRole.PROFILE_POLICY,
@@ -1223,8 +1272,104 @@ def test_checked_in_component_catalog_builds_the_reviewed_closed_set():
     retained_contract_refs = {
         component.logical_ref
         for component in bundle.components
-        if component.role is RuntimeComponentRole.CONTRACT_SCHEMA
+        if component.role in {
+            RuntimeComponentRole.CONTRACT_SCHEMA,
+            RuntimeComponentRole.DRAFT_CONTRACT_SCHEMA,
+        }
     }
     assert retained_contract_refs == {
         f"contract:{kind}" for kind in ContractRegistry().kinds()
     }
+
+
+def test_contract_lane_changes_bundle_identity_for_identical_schema_bytes(tmp_path):
+    schema = canonical_json_bytes({
+        "type": "object",
+        "properties": {
+            "schemaVersion": {"const": "ofarm.test.registry-lane.v0.1"},
+            "fixtureId": {"type": "string"},
+        },
+        "required": ["schemaVersion", "fixtureId"],
+    })
+    roots_and_paths = (
+        (tmp_path / "canonical", "contracts/kernel/fixture.json"),
+        (
+            tmp_path / "draft",
+            "contracts/drafts_reference/"
+            "explainable_current_state_evidence/fixture.json",
+        ),
+    )
+    bundles = []
+    for root, relative_path in roots_and_paths:
+        for directory in (
+            "contracts/kernel", "contracts/core", "contracts/platform",
+            "contracts/drafts_reference/explainable_current_state_evidence",
+        ):
+            (root / directory).mkdir(parents=True, exist_ok=True)
+        _write(root, relative_path, schema)
+        bundles.append(RuntimeBundleBuilder(
+            root, (), (relative_path,)
+        ).build())
+
+    first_schema = next(component for component in bundles[0].components
+                        if component.role is RuntimeComponentRole.CONTRACT_SCHEMA)
+    second_schema = next(component for component in bundles[1].components
+                         if component.role is RuntimeComponentRole.DRAFT_CONTRACT_SCHEMA)
+    assert first_schema.logical_ref == second_schema.logical_ref
+    assert first_schema.canonical_bytes == second_schema.canonical_bytes
+    assert first_schema.content_digest == second_schema.content_digest
+    assert first_schema.role is not second_schema.role
+    assert bundles[0].digest != bundles[1].digest
+
+
+def test_direct_bundle_refuses_same_contract_version_across_lanes():
+    schema_version = "ofarm.test.direct-duplicate-lane.v0.1"
+    schema = canonical_json_bytes({
+        "properties": {
+            "schemaVersion": {"const": schema_version},
+        },
+    })
+    components = tuple(
+        RuntimeComponent.from_selected_bytes(
+            role=role,
+            logical_ref=f"contract:{schema_version}",
+            canonicalization=Canonicalization.EXACT_BYTES,
+            placement=ContentPlacement.GLOBAL,
+            selected_bytes=schema,
+        )
+        for role in (
+            RuntimeComponentRole.CONTRACT_SCHEMA,
+            RuntimeComponentRole.DRAFT_CONTRACT_SCHEMA,
+        )
+    )
+
+    with pytest.raises(RuntimeBundleError, match="more than once across lanes"):
+        RuntimeBundle.create(components)
+
+
+def test_same_contract_schema_version_cannot_be_selected_from_both_lanes(tmp_path):
+    root = tmp_path / "duplicate-lanes"
+    canonical_path = "contracts/kernel/fixture.json"
+    draft_path = (
+        "contracts/drafts_reference/"
+        "explainable_current_state_evidence/fixture.json"
+    )
+    for directory in (
+        "contracts/kernel", "contracts/core", "contracts/platform",
+        "contracts/drafts_reference/explainable_current_state_evidence",
+    ):
+        (root / directory).mkdir(parents=True, exist_ok=True)
+    schema = canonical_json_bytes({
+        "type": "object",
+        "properties": {
+            "schemaVersion": {"const": "ofarm.test.duplicate-lane.v0.1"},
+        },
+        "required": ["schemaVersion"],
+    })
+    _write(root, canonical_path, schema)
+    _write(root, draft_path, schema)
+
+    with pytest.raises(RuntimeBundleError, match="more than once across lanes"):
+        RuntimeBundleBuilder(
+            root, (), (canonical_path, draft_path)
+        ).build()
