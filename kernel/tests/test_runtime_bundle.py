@@ -1240,7 +1240,7 @@ def test_checked_in_component_catalog_builds_the_reviewed_closed_set():
 
     assert bundle.selected_tenant_ref == "tenant:si.ffs.pilot.demo"
     assert bundle.digest == (
-        "sha256:8f830237c64e30e7be20e5362f212d7e4ee1c011464ecd43d235a7b674d01f09"
+        "sha256:f03654be91646ae8e62b5e2caa75e690eb2340f1b33e772f1005a563db8db3fa"
     )
 
     expected_catalog_roles = {

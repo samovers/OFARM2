@@ -3401,8 +3401,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "c585dddde3565aaa020ba53b50300464e4f29e5d23f879f8811723794502f3e8",
-  "entryCount": 676,
+  "entriesSha256": "e9a21e30ca9ddac311f7d89adf02542f109dc8bad91dc1a7697fd0c3b0182633",
+  "entryCount": 680,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
