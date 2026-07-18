@@ -172,7 +172,9 @@ def _bundle_with_alternate_regsr_source(
     snapshot = next(
         component for component in base.components
         if component.role is RuntimeComponentRole.REFERENCE_SNAPSHOT
-        and component.logical_ref.startswith(context.REGSR_SNAPSHOT_PREFIX + ".")
+        and component.logical_ref.startswith(
+            context.SI_REFERENCE_BINDINGS.regsr_snapshot_prefix + "."
+        )
     )
     snapshot_payload = json.loads(snapshot.canonical_bytes)
     artifact_refs = [
