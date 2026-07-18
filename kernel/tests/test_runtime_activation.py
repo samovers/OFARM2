@@ -8,14 +8,18 @@ import pytest
 from fastapi.testclient import TestClient
 
 from kernel import config
+from kernel.adapters import ImportRunner
 from kernel.api import create_app
+from kernel.gates import GatePipeline
 from kernel.runtime_activation import (
     DEPLOYMENT_IMAGE_DIGEST_ENV,
     RuntimeActivationError,
+    complete_store_startup,
 )
 from kernel.runtime_bundle import RuntimeComponentRole, sha256_bytes
-from kernel.store import RuntimeBundleBindingError
+from kernel.store import RuntimeBundleBindingError, Store
 from kernel.tests.conftest import TEST_DEPLOYMENT_IMAGE_DIGEST
+from kernel.views import OutputGenerator
 
 
 class _NoDatabaseAccess:
@@ -98,6 +102,73 @@ def test_manifest_endpoint_matches_the_selected_bundle_bytes(fresh_env):
     assert response.json() == json.loads(component.canonical_bytes)
 
 
+def test_high_level_services_require_committed_store_startup(fresh_env):
+    ready, _, _ = fresh_env
+    store = Store(
+        dsn=ready.dsn,
+        tenant_ref=ready.tenant_ref,
+        runtime_bundle=ready.runtime_bundle,
+        active_descriptor=ready.active_descriptor,
+    )
+    try:
+        store.conn
+        for service in (GatePipeline, ImportRunner, OutputGenerator):
+            with pytest.raises(
+                RuntimeBundleBindingError,
+                match="requires completed schema, bundle, and profile startup",
+            ):
+                service(store)
+
+        complete_store_startup(store)
+        GatePipeline(store)
+        ImportRunner(store)
+        OutputGenerator(store)
+    finally:
+        store.close()
+
+
+def test_failed_store_startup_does_not_publish_service_readiness(
+    fresh_env, monkeypatch
+):
+    ready, _, _ = fresh_env
+    store = Store(
+        dsn=ready.dsn,
+        tenant_ref=ready.tenant_ref,
+        runtime_bundle=ready.runtime_bundle,
+        active_descriptor=ready.active_descriptor,
+    )
+
+    def refuse_bootstrap(_store):
+        raise RuntimeError("fictional startup refusal")
+
+    monkeypatch.setattr("kernel.context.bootstrap", refuse_bootstrap)
+    try:
+        with pytest.raises(RuntimeError, match="fictional startup refusal"):
+            complete_store_startup(store)
+        for service in (GatePipeline, ImportRunner, OutputGenerator):
+            with pytest.raises(RuntimeBundleBindingError):
+                service(store)
+    finally:
+        store.close()
+
+
+def test_failed_repeat_startup_preserves_prior_committed_readiness(
+    fresh_env, monkeypatch
+):
+    store, _, _ = fresh_env
+
+    def refuse_bootstrap(_store):
+        raise RuntimeError("fictional repeat startup refusal")
+
+    monkeypatch.setattr("kernel.context.bootstrap", refuse_bootstrap)
+    with pytest.raises(RuntimeError, match="fictional repeat startup refusal"):
+        complete_store_startup(store)
+
+    GatePipeline(store)
+    ImportRunner(store)
+    OutputGenerator(store)
+
+
 def test_closed_verified_connection_refuses_before_governed_mutation(fresh_env):
     store, _, _ = fresh_env
     app = create_app(
@@ -116,7 +187,7 @@ def test_closed_verified_connection_refuses_before_governed_mutation(fresh_env):
         store.close()
         with pytest.raises(
             RuntimeBundleBindingError,
-            match="verified database connection is closed",
+            match="database connection is closed",
         ):
             with app.state.store.serialized_tx() as cur:
                 app.state.store.log_gate(

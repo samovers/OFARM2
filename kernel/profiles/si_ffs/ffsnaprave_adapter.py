@@ -4,10 +4,11 @@ inspection register (`SI:FFS-NAPRAVE`, `spletni2.furs.gov.si/FFS/FFSNaprave/`).
 Wires the official yearly inspection download to the GENERIC mechanisms: it
 parses the delimited file (the official TXT, semicolon-delimited, 20-field
 dictionary), imports it as a dated FFSNaprave `ReferenceSnapshot` through the
-generic G2 `ImportRunner`, persists the parsed inspections store-backed, and lets
-a farm sprayer MATCH by its inspection-sticker number — the D9-style composite
-key `StevilkaZnaka` (sticker number) + `VeljavnostZnaka` (sticker validity). A
-match captures a `REGISTRY_EXTRACT` `EvidenceRecord` (capture != commitment,
+generic G2 `ImportRunner`, retains the parsed inspections as candidate/audit
+data, and lets a farm sprayer MATCH bundle-selected exact source bytes by its
+inspection-sticker number — the D9-style composite key `StevilkaZnaka` (sticker
+number) + `VeljavnostZnaka` (sticker validity). A match captures a
+`REGISTRY_EXTRACT` `EvidenceRecord` (capture != commitment,
 Kernel rule 3) whose id populates `EquipmentIdentityPayload.inspectionEvidenceRefs`
 on the Equipment identity committed through G1. ALL FFSNaprave specifics live
 HERE; kernel/adapters.py and the generic kernel stay scheme-agnostic.
@@ -32,7 +33,7 @@ from pathlib import Path
 
 from ...adapters import ImportRunner, ParseResult
 from ...authority import AuthorityEvaluator
-from ...context import now_iso
+from ...context import SIReferenceBindings, now_iso
 from ...contracts import sha256_of
 from ...problems import runtime_problem
 
@@ -154,8 +155,10 @@ def import_ffsnaprave_snapshot(store, artifact, *, file_date=None, version_label
     """Import a parsed FFSNaprave file as a dated FFSNaprave `ReferenceSnapshot`
     via the generic G2 ImportRunner. The effective date is the yearly vintage; the
     source digest + surface ride sourceArtifactRefs; the parsed inspections are
-    persisted store-backed (an index cache, NOT OFARM truth). Every parse/fidelity
-    failure is a governed refusal (no snapshot, no data)."""
+    persisted as candidate/audit data, NOT OFARM truth or operational lookup
+    authority. Every parse/fidelity failure is a governed refusal (no snapshot,
+    no data)."""
+    bindings = SIReferenceBindings.from_runtime_descriptor(store.active_descriptor)
     file_date = file_date or artifact.get("fileDate")
 
     def _refuse(error: str, disposition: str) -> dict:
@@ -165,7 +168,9 @@ def import_ffsnaprave_snapshot(store, artifact, *, file_date=None, version_label
         # reference (the vintage dates it), so the refusal carries no related ref.
         result = ImportRunner(store).run_import(
             ParseResult(ok=False, error=error),
-            {"referenceSnapshotId": None}, data_family=FFSNAPRAVE_DATA_FAMILY)
+            {"referenceSnapshotId": None},
+            data_family=bindings.ffsnaprave_data_family,
+        )
         return {**result, "disposition": disposition, "fileDate": file_date}
 
     if not file_date:
@@ -190,7 +195,7 @@ def import_ffsnaprave_snapshot(store, artifact, *, file_date=None, version_label
             "inspection detail; the register cannot be reduced to one inspection per "
             "(sticker, validity) — refuse rather than silently pick last-wins",
             "CONFLICTING_INSPECTION")
-    sid = f"{FFSNAPRAVE_SNAPSHOT_PREFIX}.{file_date}"
+    sid = f"{bindings.ffsnaprave_snapshot_prefix}.{file_date}"
     # Digest the WHOLE parsed artifact (every inspection + attribute), never just
     # the input file digest, so any content change re-imports as a CONFLICT, never
     # a silent ALREADY_IMPORTED replay that leaves stale inspections (PR #12 B1).
@@ -212,7 +217,7 @@ def import_ffsnaprave_snapshot(store, artifact, *, file_date=None, version_label
     result = ImportRunner(store).run_import(
         ParseResult(ok=True, sourceDigest=digest, artifactRef=source_artifact_ref,
                     recordCount=artifact.get("inspectionCount"), records=artifact),
-        meta, data_family=FFSNAPRAVE_DATA_FAMILY)
+        meta, data_family=bindings.ffsnaprave_data_family)
     return {**result, "fileDate": file_date}
 
 
@@ -245,17 +250,18 @@ class FFSNapraveRegister:
         self._by_snapshot[snapshot_id] = {"byKey": by_key, "bySticker": by_sticker}
 
     def load_from_store(self, store) -> None:
-        """Load store-backed inspections for bundle-selected snapshots.
+        """Load exact inspection source bytes selected by the RuntimeBundle.
 
-        Governed imports persist candidate data, but an unselected candidate
-        stays inactive until a new RuntimeBundle selects it."""
-        for row in store.reference_data(FFSNAPRAVE_DATA_FAMILY):
-            sid = row["snapshot_ref"]
-            if (
-                sid in store.selected_reference_snapshot_refs
-                and sid not in self._by_snapshot
-            ):
-                self.register_artifact(sid, row["payload"])
+        Governed import cache rows remain candidate/audit data and cannot
+        become operational lookup input under an already-selected bundle.
+        """
+        bindings = SIReferenceBindings.from_runtime_descriptor(
+            store.active_descriptor
+        )
+        for row in store.selected_reference_source_data(
+            bindings.ffsnaprave_snapshot_prefix
+        ):
+            self.register_artifact(row["snapshot_ref"], row["payload"])
 
     def validity_windows(self, snapshot_id: str, sticker_number: str) -> list:
         """The distinct VeljavnostZnaka windows recorded for a sticker in a snapshot.
@@ -313,9 +319,13 @@ def attach_inspection_evidence(store, snapshot_id, sticker_number, *,
     SNAPSHOT-SCOPED (vintage + sticker + validity) so a later vintage never reuses an
     older one's evidence (B1); the existence re-check is UNDER the single-writer lock
     so concurrent captures are idempotent (B2)."""
+    bindings = SIReferenceBindings.from_runtime_descriptor(
+        store.active_descriptor
+    )
+    snapshot_prefix = bindings.ffsnaprave_snapshot_prefix
     in_family = (
-        snapshot_id == FFSNAPRAVE_SNAPSHOT_PREFIX
-        or snapshot_id.startswith(FFSNAPRAVE_SNAPSHOT_PREFIX + ".")
+        snapshot_id == snapshot_prefix
+        or snapshot_id.startswith(snapshot_prefix + ".")
     )
     if (
         snapshot_id not in store.selected_reference_snapshot_refs
@@ -332,8 +342,7 @@ def attach_inspection_evidence(store, snapshot_id, sticker_number, *,
                 "active RuntimeBundle; evidence capture requires a new bundle",
             ),
         }
-    # Store.reference_data qualifies rows by tenant + RuntimeBundle and verifies
-    # their payload digests before authority evaluation or evidence writes.
+    # Runtime lookup consumes only exact source bytes selected by the bundle.
     register = FFSNapraveRegister()
     register.load_from_store(store)
     inspection = register.match(snapshot_id, sticker_number, validity)
@@ -347,7 +356,7 @@ def attach_inspection_evidence(store, snapshot_id, sticker_number, *,
         action_stage="PROMOTION", scope=scope)
 
     v = inspection.get(VALIDITY_FIELD)
-    vintage = snapshot_id.split(f"{FFSNAPRAVE_SNAPSHOT_PREFIX}.", 1)[-1]
+    vintage = snapshot_id.split(f"{snapshot_prefix}.", 1)[-1]
     eid = f"evidence:si.ffs-naprave.{_safe(vintage)}.{_safe(sticker_number)}.{_safe(v)}"
     # capturedAt = the register vintage the extract was taken from (the snapshot's
     # effectiveFrom); recordedAt = now (mirrors the demo's REGISTRY_EXTRACT split).

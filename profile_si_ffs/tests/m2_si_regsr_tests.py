@@ -15,7 +15,8 @@ from __future__ import annotations
 import uuid
 
 from kernel.context import (ProductRegister, REGSR_DATA_FAMILY,
-                            REGSR_SNAPSHOT_PREFIX, current_reference_snapshot)
+                            REGSR_SNAPSHOT_PREFIX, SIReferenceBindings,
+                            current_reference_snapshot)
 from kernel.profiles.si_ffs import regsr_adapter as regsr
 from kernel.verification import IDENTITY, NONE, REVIEW
 
@@ -110,9 +111,12 @@ def test_p1_imported_candidate_does_not_hot_activate_for_verification(store):
     sid = regsr.import_regsr_snapshot(store, art)["snapshotRef"]
     pr = ProductRegister()
     pr.load_from_store(store)
+    bindings = SIReferenceBindings.from_descriptor(store.active_descriptor)
     with store.serialized_tx() as cur:
         r = regsr.verify_product_authorisation(store, cur, pr, decision,
-                                               as_of="2099-06-17T12:00:00Z")
+                                               as_of="2099-06-17T12:00:00Z",
+                                               snapshot_prefix=bindings.regsr_snapshot_prefix,
+                                               profile_ref=store.active_descriptor.code_binding_profile_ref)
     assert _data_row(store, sid) is not None
     assert sid not in store.selected_reference_snapshot_refs
     assert r["snapshotRef"] == selected_before["referenceSnapshotId"]
@@ -128,8 +132,12 @@ def test_p1_imported_candidate_does_not_hot_activate_for_verification(store):
 def test_p1_unknown_decision_routes_to_review(store):
     pr = ProductRegister()
     pr.load_from_store(store)
+    bindings = SIReferenceBindings.from_descriptor(store.active_descriptor)
     with store.serialized_tx() as cur:
-        r = regsr.verify_product_authorisation(store, cur, pr, "U00000-00/00/0")
+        r = regsr.verify_product_authorisation(
+            store, cur, pr, "U00000-00/00/0",
+            snapshot_prefix=bindings.regsr_snapshot_prefix,
+            profile_ref=store.active_descriptor.code_binding_profile_ref)
     assert r["verdict"] == REVIEW, "an unconfirmable decision routes to review, never confirms"
     assert r["problem"]["reasonCode"] == "PRODUCT_BINDING_UNRESOLVED"
     assert r["trace"]["finalOutcome"] == "REVIEW_REQUIRED"

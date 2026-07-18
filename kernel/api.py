@@ -12,12 +12,13 @@ import json
 from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
-from . import auth_oidc, config, context
+from . import auth_oidc, config
 from .contracts import ContractViolation
 from .problems import runtime_problem
 from .gates import GatePipeline
 from .runtime_activation import (
     RuntimeActivationObservation,
+    complete_store_startup,
     deployment_image_digest_from_env,
     require_deployment_image_digest,
 )
@@ -94,11 +95,7 @@ def create_app(
         if component.role is RuntimeComponentRole.ACTIVE_MANIFEST
     ))
     app.state.store = store
-    # Schema installation, bundle persistence, and selected-profile bootstrap
-    # are one startup transaction. Any refusal rolls back the whole bootstrap.
-    with app.state.store.conn.transaction():
-        database_observation = app.state.store.migrate()
-        context.bootstrap(app.state.store)
+    database_observation = complete_store_startup(app.state.store)
     app.state.runtime_activation = RuntimeActivationObservation(
         tenant_ref=app.state.store.tenant_ref,
         active_profile_ref=app.state.store.active_descriptor.profile_ref,

@@ -4,10 +4,11 @@ Engineering tests, NOT part of the named conformance suite. They pin the SI GERK
 adapter riding the generic G2 import mechanism + the store-backed reference-data
 cache: an OPSI .dbf/.csv attribute parse imports as a dated GERK ReferenceSnapshot
 AND its parsed parcels persist to the store as an auditable candidate. Runtime
-lookup loads only snapshots selected by the startup RuntimeBundle; importing a
-new candidate never hot-activates it. GerkLayer's pure lookup resolves a selected
-artifact's GERK-PID to its area / use code, while a missing PID is surfaced
-honestly (None), never fabricated; failed / conflicting / identical re-imports
+lookup loads only exact source bytes retained by the startup RuntimeBundle;
+importing a new candidate never hot-activates it. GerkLayer's pure lookup resolves
+an explicitly registered artifact's GERK-PID to its area / use code, while a
+missing PID is surfaced honestly (None), never fabricated; failed / conflicting
+and identical re-imports
 behave; the tooling iterators are REUSED (no fork). Fixtures use unselected
 far-future (2099) layer vintages. All PID / area / use values fictional and
 format-true.
@@ -21,6 +22,7 @@ import pytest
 from kernel.context import GERK_SNAPSHOT_PREFIX
 from kernel.profiles.si_ffs import gerk_adapter as gerk
 from kernel.profiles.si_ffs.gerk_adapter import GERK_DATA_FAMILY, GerkLayer
+from kernel.store import RuntimeBundleBindingError
 
 
 def uid():
@@ -101,11 +103,12 @@ def test_p2_unselected_candidate_is_not_loaded_but_lookup_unit_resolves(store):
     sid = gerk.import_gerk_snapshot(store, art)["snapshotRef"]
 
     # The governed import persists an auditable candidate, but runtime authority
-    # remains fixed by the startup RuntimeBundle.
+    # remains fixed by the startup RuntimeBundle. The selected metadata-only
+    # GERK snapshot has no retained source bytes, so operational loading refuses.
     assert _data_row(store, sid) is not None
     layer = GerkLayer()
-    layer.load_from_store(store)
-    assert layer.lookup(sid, pid) is None
+    with pytest.raises(RuntimeBundleBindingError, match="no exact operational source"):
+        layer.load_from_store(store)
 
     # Adapter lookup itself is a pure unit law. Explicit registration represents
     # the data after a future RuntimeBundle has selected this snapshot.
@@ -330,8 +333,8 @@ def test_p2_exact_duplicate_pid_imports_and_indexes_as_one_parcel(store):
 
     # The candidate remains inactive under the current RuntimeBundle.
     layer = GerkLayer()
-    layer.load_from_store(store)
-    assert layer.lookup(result["snapshotRef"], pid) is None
+    with pytest.raises(RuntimeBundleBindingError, match="no exact operational source"):
+        layer.load_from_store(store)
 
     # Exact duplicate rows collapse to the same PID in the adapter's pure index.
     layer.register_artifact(result["snapshotRef"], art)

@@ -4,8 +4,8 @@ Engineering tests, NOT part of the named conformance suite. They pin the SI
 FFSNaprave adapter riding the generic G2 import + the store-backed reference-data
 cache, and its G1 integration: a yearly delimited file imports as a dated
 FFSNaprave ReferenceSnapshot AND its inspections persist store-backed as a
-candidate; startup RuntimeBundle selection, not import timing, determines which
-cache rows runtime loaders may activate. Pure register laws use explicit
+candidate. Operational loaders use exact source bytes retained by the startup
+RuntimeBundle, never these cache rows. Pure register laws use explicit
 ``register_artifact`` setup; evidence writers run only against a semantically
 complete bundle-selected test store. A farm sprayer matches by the composite
 sticker key (StevilkaZnaka + VeljavnostZnaka); a match CAPTURES a
@@ -42,6 +42,7 @@ from kernel.runtime_bundle import (
     RuntimeComponentRole,
     canonical_json_bytes,
 )
+from kernel.runtime_activation import complete_store_startup
 from kernel.store import Store
 from profile_si_ffs.test_fixtures import demo
 
@@ -190,17 +191,7 @@ def _selected_ffsnaprave_store(source_store, *artifacts):
         active_descriptor=source_store.active_descriptor,
     )
     try:
-        selected.migrate()
-        # Seed the canonical activation spine from the bundle itself. Loading the
-        # checked-in files would reintroduce the base ActiveArtifactSet/Context
-        # bytes and make this fixture only superficially selected.
-        with selected.tx() as cur:
-            for component in bundle.components:
-                if component.role in {
-                    RuntimeComponentRole.PROFILE_INSTANCE,
-                    RuntimeComponentRole.REFERENCE_SNAPSHOT,
-                }:
-                    selected.insert_record(cur, json.loads(component.canonical_bytes))
+        complete_store_startup(selected)
         kernel_demo.bootstrap(selected)
         snapshot_refs = []
         for sid, artifact_ref, artifact, _source_bytes, _snapshot in selections:

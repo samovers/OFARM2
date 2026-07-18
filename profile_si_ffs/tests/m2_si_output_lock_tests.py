@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import threading
 
+from kernel.runtime_activation import complete_store_startup
 from kernel.store import Store
 from kernel.views import OutputGenerator
 from profile_si_ffs.test_fixtures import demo
@@ -36,6 +37,7 @@ def test_g2_output_render_serializes_under_lock(store):
     )
     done = threading.Event()
     box = {}
+    complete_store_startup(b)
 
     def render():
         try:
@@ -78,6 +80,7 @@ def test_g2_freeze_serializes_under_lock(store):
     )
     done = threading.Event()
     box = {}
+    complete_store_startup(b)
 
     def freeze():
         try:

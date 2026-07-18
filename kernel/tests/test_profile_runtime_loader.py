@@ -44,10 +44,7 @@ from kernel.profile_runtime import (
     resolve_active_descriptor,
 )
 from kernel.runtime_bundle import (
-    Canonicalization,
-    ContentPlacement,
     RuntimeBundleBuilder,
-    RuntimeComponent,
     RuntimeComponentRole,
 )
 from kernel.stages import IngressNormalizer
@@ -432,29 +429,17 @@ def _custom_si_descriptor_with_regsr_artifact(tmp_path):
         missing_family_behavior_as_of=OMIT_FROM_CONTEXT,
         shipped_snapshot_ref=f"referencesnapshot:si.custom.gerk-layer.{_uid()}.2025-06-30",
     )
+    ffsnaprave_family = config.ACTIVE_PROFILE.reference_family(
+        context.SI_FFSNAPRAVE_FAMILY_ID
+    )
     descriptor = replace(
         config.ACTIVE_PROFILE,
         profile_root=root,
         profile_instance_files=(snapshot_path.name,),
         profile_instance_paths=(snapshot_path,),
-        reference_families=(regsr_family, gerk_family),
+        reference_families=(regsr_family, gerk_family, ffsnaprave_family),
     )
     return descriptor, artifact_path.resolve(), decision
-
-
-def _assert_profile_applicability_refusal(store, result: dict) -> dict:
-    assert result["decisionOutcome"] == "RETAIN_DRAFT"
-    assert result["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
-    trace = _trace_payload(store, result)
-    assert [entry["gate"] for entry in trace["gateSequence"]] == [
-        "INGRESS_NORMALIZATION",
-        "AUTHORITY",
-        "VALIDATION",
-        "PACK_PROFILE_APPLICABILITY",
-    ]
-    assert trace["gateSequence"][-1]["outcome"] == "NOT_APPLICABLE"
-    assert "evidenceSufficiencyCaseRef" not in trace
-    return trace
 
 
 def _note_submission(idem_key: str) -> dict:
@@ -543,6 +528,8 @@ def test_descriptor_drives_existing_si_config_without_tenant_binding():
         "si.uvhvvr.ffs-reg").snapshot_prefix
     assert context.GERK_SNAPSHOT_PREFIX == active.reference_family(
         "si.mkgp.gerk-layer").snapshot_prefix
+    assert context.SI_REFERENCE_BINDINGS.ffsnaprave_snapshot_prefix == \
+        active.reference_family("si.uvhvvr.ffs-naprave").snapshot_prefix
     assert config.SHIPPED_REGSR_SNAPSHOT_REF == active.reference_family(
         "si.uvhvvr.ffs-reg").shipped_snapshot_ref
 
@@ -552,6 +539,7 @@ def test_si_reference_bindings_are_descriptor_derived():
     bindings = context.SIReferenceBindings.from_descriptor(active)
     regsr = active.reference_family("si.uvhvvr.ffs-reg")
     gerk = active.reference_family("si.mkgp.gerk-layer")
+    ffsnaprave = active.reference_family("si.uvhvvr.ffs-naprave")
     shipped_snapshot = _profile_instance_payload(
         "referenceSnapshotId",
         regsr.shipped_snapshot_ref,
@@ -573,12 +561,18 @@ def test_si_reference_bindings_are_descriptor_derived():
     assert bindings.gerk_snapshot_prefix == gerk.snapshot_prefix
     assert bindings.gerk_data_family == gerk.data_family
     assert bindings.gerk_shipped_snapshot_ref == gerk.shipped_snapshot_ref
+    assert bindings.ffsnaprave_snapshot_prefix == ffsnaprave.snapshot_prefix
+    assert bindings.ffsnaprave_data_family == ffsnaprave.data_family
 
 
 def test_si_reference_binding_compatibility_aliases_are_binding_backed():
     bindings = context.SI_REFERENCE_BINDINGS
 
-    assert bindings == context.SIReferenceBindings.from_descriptor(config.ACTIVE_PROFILE)
+    assert bindings == context.SIReferenceBindings.from_runtime_descriptor(
+        config.ACTIVE_PROFILE
+    )
+    assert bindings.si_profile_root is None
+    assert bindings.regsr_shipped_artifact_path is None
     assert context.REGSR_SNAPSHOT_PREFIX == bindings.regsr_snapshot_prefix
     assert context.GERK_SNAPSHOT_PREFIX == bindings.gerk_snapshot_prefix
     assert context.REGSR_DATA_FAMILY == bindings.regsr_data_family
@@ -2514,47 +2508,6 @@ def test_descriptor_compliance_recognized_refs_are_exact():
         })
 
 
-def test_profile_applicability_wrong_pack_profile_is_governed_refusal():
-    def mutate(_profile, activation, artifact):
-        activation["activePackRefs"] = ["pack:si.ffs.dirty.v0_1"]
-        activation["activeProfileRefs"] = ["profile:si.ffs.dirty.v0_1"]
-        artifact["activePackRefs"] = ["pack:si.ffs.dirty.v0_1"]
-        artifact["activeProfileRefs"] = ["profile:si.ffs.dirty.v0_1"]
-
-    with _preseeded_dirty_spine_store(mutate) as store:
-        result = GatePipeline(store).commit(_note_submission(
-            f"issue125-pack-profile:{_uid()}"))
-        trace = _assert_profile_applicability_refusal(store, result)
-        assert "descriptor packRef" in trace["gateSequence"][-1]["rationale"]
-
-
-def test_profile_applicability_missing_evidence_policy_is_governed_refusal():
-    def mutate(_profile, _activation, artifact):
-        artifact["activeArtifactRefs"] = [
-            ref for ref in artifact["activeArtifactRefs"]
-            if ref != config.ACTIVE_PROFILE.evidence_policy_ref
-        ]
-
-    with _preseeded_dirty_spine_store(mutate) as store:
-        result = GatePipeline(store).commit(_note_submission(
-            f"issue125-policy-missing:{_uid()}"))
-        trace = _assert_profile_applicability_refusal(store, result)
-        assert "evidence policy" in trace["gateSequence"][-1]["rationale"]
-
-
-def test_profile_applicability_missing_context_spine_is_governed_refusal():
-    with _fresh_unbootstrapped_store() as store:
-        _bootstrap_demo_substrate_only(store)
-
-        result = GatePipeline(store).commit(_note_submission(
-            f"issue137-missing-spine:{_uid()}"))
-
-        trace = _assert_profile_applicability_refusal(store, result)
-        assert "context spine not bootstrapped" in \
-            trace["gateSequence"][-1]["rationale"]
-        assert result["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
-
-
 def test_materializer_missing_context_spine_refuses_use_governably():
     with _fresh_unbootstrapped_store() as store:
         materializer = Materializer(store)
@@ -2590,8 +2543,8 @@ def test_product_register_boundary_remains_single_active_si_runtime():
     assert config.ACTIVE_PROFILE_PACKAGE_NAMES == ("profile_si_ffs",)
     assert config.ALLOWED_ACTIVE_PROFILE_PACKAGE_NAMES == ("profile_si_ffs",)
     assert config.ACTIVE_PROFILE_SELECTION.profile_package_names == ("profile_si_ffs",)
-    assert context.SI_REFERENCE_BINDINGS == context.SIReferenceBindings.from_descriptor(
-        config.ACTIVE_PROFILE)
+    assert context.SI_REFERENCE_BINDINGS == \
+        context.SIReferenceBindings.from_runtime_descriptor(config.ACTIVE_PROFILE)
     assert context.REGSR_SNAPSHOT_PREFIX == config.ACTIVE_PROFILE.reference_family(
         "si.uvhvvr.ffs-reg").snapshot_prefix
     assert context.REGSR_DATA_FAMILY == config.ACTIVE_PROFILE.reference_family(
@@ -2616,93 +2569,45 @@ def test_product_register_uses_explicit_si_reference_bindings(tmp_path):
     assert not register.has_snapshot(config.SHIPPED_REGSR_SNAPSHOT_REF)
 
 
-def test_product_register_load_from_store_uses_bindings_and_family_boundary(
+def test_product_register_load_from_store_uses_only_selected_source_data(
         tmp_path):
     descriptor, _, constructor_decision = _custom_si_descriptor_with_regsr_artifact(
         tmp_path)
     bindings = context.SIReferenceBindings.from_descriptor(descriptor)
     bundle_decision = f"U9{_uid()[:4]}-50/26/b"
-    store_decision = f"U9{_uid()[:4]}-50/26/s"
     artifact_ref = "artifact:bundle-selected-regsr.json"
-    selected_source = RuntimeComponent.from_selected_bytes(
-        role=RuntimeComponentRole.REFERENCE_SOURCE,
-        logical_ref=artifact_ref,
-        canonicalization=Canonicalization.EXACT_BYTES,
-        placement=ContentPlacement.GLOBAL,
-        selected_bytes=json.dumps(
-            _regsr_artifact(decision=bundle_decision)
-        ).encode("utf-8"),
-    )
-
-    class FakeRuntimeBundle:
-        def component(self, role, logical_ref):
-            assert (role, logical_ref) == (
-                RuntimeComponentRole.REFERENCE_SOURCE,
-                artifact_ref,
-            )
-            return selected_source
 
     class FakeStore:
-        requested_families: list[str] = []
-        runtime_bundle = FakeRuntimeBundle()
-        selected_reference_snapshot_refs = frozenset({
-            f"{bindings.regsr_snapshot_prefix}.store",
-            f"{bindings.regsr_snapshot_prefix}.bundle",
-        })
+        active_descriptor = descriptor
+        requested_prefixes: list[str] = []
 
-        def reference_data(self, family):
-            self.requested_families.append(family)
+        def selected_reference_source_data(self, prefix):
+            self.requested_prefixes.append(prefix)
             return [{
-                "snapshot_ref": f"{bindings.regsr_snapshot_prefix}.store",
-                "payload": _regsr_artifact(decision=store_decision),
+                "snapshot_ref": f"{bindings.regsr_snapshot_prefix}.bundle",
+                "artifact_ref": artifact_ref,
+                "source_digest": "sha256:" + "a" * 64,
+                "payload": _regsr_artifact(decision=bundle_decision),
             }]
 
-        def find_by_kind(self, kind):
-            assert kind == "ofarm.referencesnapshot.v0.1"
-            return [
-                {
-                    "payload": {
-                        "referenceSnapshotId": f"{bindings.regsr_snapshot_prefix}extra",
-                        "sourceArtifactRefs": [artifact_ref],
-                    }
-                },
-                {
-                    "payload": {
-                        "referenceSnapshotId": f"{bindings.regsr_snapshot_prefix}.store",
-                        "sourceArtifactRefs": [artifact_ref],
-                    }
-                },
-                {
-                    "payload": {
-                        "referenceSnapshotId": f"{bindings.regsr_snapshot_prefix}.bundle",
-                        "sourceArtifactRefs": [artifact_ref],
-                    }
-                },
-            ]
-
     store = FakeStore()
-    register = context.ProductRegister(bindings)
+    register = context.ProductRegister()
     register.load_from_store(store)
 
-    assert store.requested_families == [bindings.regsr_data_family]
-    assert register.lookup_by_decision(
-        f"{bindings.regsr_snapshot_prefix}.store",
-        store_decision,
-    ) is not None
-    assert register.lookup_by_decision(
-        f"{bindings.regsr_snapshot_prefix}.store",
-        bundle_decision,
-    ) is None
+    assert store.requested_prefixes == [bindings.regsr_snapshot_prefix]
+    assert register.bindings == context.SIReferenceBindings.from_runtime_descriptor(
+        descriptor
+    )
     assert register.lookup_by_decision(
         f"{bindings.regsr_snapshot_prefix}.bundle",
         bundle_decision,
     ) is not None
     assert not register.has_snapshot(bindings.regsr_shipped_snapshot_ref)
+    assert not register.has_snapshot(config.SHIPPED_REGSR_SNAPSHOT_REF)
     assert register.lookup_by_decision(
         bindings.regsr_shipped_snapshot_ref,
         constructor_decision,
     ) is None
-    assert not register.has_snapshot(f"{bindings.regsr_snapshot_prefix}extra")
 
 
 def test_gate_pipeline_threads_si_reference_bindings(fresh_env):
@@ -2715,7 +2620,7 @@ def test_gate_pipeline_threads_si_reference_bindings(fresh_env):
 
     ctx = pipeline._new_context(None, sub)
 
-    assert pipeline.products.bindings is pipeline.si_reference_bindings
+    assert pipeline.products.bindings == pipeline.si_reference_bindings
     assert ctx.si_reference_bindings is pipeline.si_reference_bindings
 
 

@@ -34,6 +34,21 @@ def deployment_image_digest_from_env() -> str:
     return require_deployment_image_digest(value)
 
 
+def complete_store_startup(store) -> DatabaseObservation:
+    """Verify and install one Store startup unit, then publish readiness.
+
+    Schema posture, RuntimeBundle persistence, and canonical profile bootstrap
+    share one outer transaction. The Store becomes usable by high-level runtime
+    services only after that transaction commits.
+    """
+    from . import context
+
+    with store._startup_transaction():
+        observation = store.migrate()
+        context.bootstrap(store)
+    return observation
+
+
 @dataclass(frozen=True, slots=True)
 class RuntimeActivationObservation:
     """Non-digested activation facts, separate from stable RuntimeBundle identity."""

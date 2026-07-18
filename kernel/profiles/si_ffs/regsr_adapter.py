@@ -22,7 +22,7 @@ from pathlib import Path
 
 from ... import config
 from ...adapters import ImportRunner, ParseResult
-from ...context import REGSR_DATA_FAMILY, REGSR_SNAPSHOT_PREFIX, now_iso
+from ...context import SIReferenceBindings, now_iso
 from ...contracts import sha256_of
 from ...verification import IDENTITY, NONE, LookupResult, ReferenceResolver
 
@@ -31,7 +31,6 @@ from ...verification import IDENTITY, NONE, LookupResult, ReferenceResolver
 # record numbers are locators, never identity.
 REGSR_AUTHORITY_REF = "party:si.uvhvvr"
 REGSR_JURISDICTION_REF = "jurisdiction:SI"
-REGSR_PROFILE_REF = config.CODE_BINDING_PROFILE_REF
 REGSR_SCHEME = "SI:UVHVVR-FFS-REG"
 REGSR_KEY_FIELD = "stevilka-odlocbe"          # the decision number (identity key, D9)
 REGSR_DOMAIN = ("SI crop-protection product authorisation register "
@@ -92,6 +91,7 @@ def import_regsr_snapshot(store, artifact, *, register_day=None,
     generic G2 ImportRunner. The effective date is the register day; the source
     digest and surface ride the snapshot's sourceArtifactRefs. A malformed/partial
     parse is refused by the generic runner (no snapshot)."""
+    bindings = SIReferenceBindings.from_runtime_descriptor(store.active_descriptor)
     register_day = register_day or artifact.get("registerDay")
     if not register_day:
         # A parse with no datable register day is a source-fidelity loss. Route
@@ -104,9 +104,9 @@ def import_regsr_snapshot(store, artifact, *, register_day=None,
         result = ImportRunner(store).run_import(
             ParseResult(ok=False, error="REGSR parse carries no register day; "
                         "cannot date a snapshot"),
-            {"referenceSnapshotId": None}, data_family=REGSR_DATA_FAMILY)
+            {"referenceSnapshotId": None}, data_family=bindings.regsr_data_family)
         return {**result, "disposition": "NO_REGISTER_DAY", "registerDay": None}
-    sid = f"{REGSR_SNAPSHOT_PREFIX}.{register_day}"
+    sid = f"{bindings.regsr_snapshot_prefix}.{register_day}"
     # The import basis digests the WHOLE parsed artifact — list AND detail pages,
     # parsed products and decisions — not just inputs[0] (the list page). Detail
     # pages carry the decision-number identity evidence (D9), so a detail change
@@ -129,7 +129,7 @@ def import_regsr_snapshot(store, artifact, *, register_day=None,
     result = ImportRunner(store).run_import(
         ParseResult(ok=True, sourceDigest=digest, artifactRef=source_artifact_ref,
                     recordCount=len(artifact.get("products", [])), records=artifact),
-        meta, data_family=REGSR_DATA_FAMILY)
+        meta, data_family=bindings.regsr_data_family)
     return {**result, "registerDay": register_day}
 
 
@@ -184,17 +184,23 @@ def regsr_lookup(product_register, *, issued=None, valid_until=None):
 
 def verify_product_authorisation(store, cur, product_register, decision_number, *,
                                  issued=None, valid_until=None,
-                                 as_of=None, created_by=None) -> dict:
+                                 as_of=None, created_by=None,
+                                 snapshot_prefix, profile_ref) -> dict:
     """Verify a product's authorisation identity by its REGSR decision number
     through the generic G3 resolver, recording an ExternalRegistryVerificationTrace.
     Identity-grade only where the D9 composite key (decision number + validity)
     resolves unambiguously; an ambiguous or absent key routes to review
     (PRODUCT_BINDING_UNRESOLVED) — free text never becomes identity (D9). Pass
-    `issued`/`valid_until` to disambiguate an otherwise-ambiguous decision number."""
+    `issued`/`valid_until` to disambiguate an otherwise-ambiguous decision number.
+
+    Store-bound callers must pass their startup-selected snapshot prefix and
+    code-binding profile explicitly. The module constants remain a compatibility
+    surface for Store-free adapter helpers, never resolver-selection defaults.
+    """
     return ReferenceResolver(store).verify(
-        cur, query_value=decision_number, snapshot_prefix=REGSR_SNAPSHOT_PREFIX,
+        cur, query_value=decision_number, snapshot_prefix=snapshot_prefix,
         lookup=regsr_lookup(product_register, issued=issued, valid_until=valid_until),
-        profile_ref=REGSR_PROFILE_REF, authority_ref=REGSR_AUTHORITY_REF,
+        profile_ref=profile_ref, authority_ref=REGSR_AUTHORITY_REF,
         jurisdiction_ref=REGSR_JURISDICTION_REF, scheme=REGSR_SCHEME,
         key_field=REGSR_KEY_FIELD, purpose="PRODUCT_AUTHORISATION_IDENTITY",
         lookup_surface=REGSR_LOOKUP_SURFACE, external_id_role="AUTHORISATION_NUMBER",

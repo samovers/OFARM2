@@ -396,19 +396,17 @@ CREATE TABLE IF NOT EXISTS derived_dependency_index (
 CREATE INDEX IF NOT EXISTS ix_derived_dep_source ON derived_dependency_index (dependency_source_ref);
 CREATE INDEX IF NOT EXISTS ix_derived_dep_key ON derived_dependency_index (key_digest);
 
--- derived: store-backed external reference-data cache (M2 P1). When a governed
+-- derived: store-backed external reference candidate/audit data (M2 P1). When a governed
 -- import (kernel/adapters.py) is given a data payload, it persists the parsed
 -- source DATA here, keyed by ReferenceSnapshot id + data_family, in the SAME
 -- serialized transaction as the snapshot + gate-log entry. This is NOT OFARM
--- truth: it is an external artifact/index cache so a verification register can
--- resolve an imported snapshot's content from the store (not only from committed
--- package files). The ReferenceSnapshot remains the canonical governed import
--- record; the payload is opaque to the generic runner (a scheme-specific reader,
--- e.g. ProductRegister, interprets it). Scheme-agnostic: data_family is a
--- parameter, never a hardcoded scheme. One row per (snapshot_ref, data_family);
--- a conflicting re-import is refused at the snapshot gate, so this never
--- overwrites. Retain it append-only until durable source bytes and deterministic
--- rebuildability are proven.
+-- truth and never runtime-selection authority. Operational readers consume only
+-- exact REFERENCE_SOURCE bytes selected by their RuntimeBundle; a later import
+-- remains auditable here until a new bundle selects its retained source. The
+-- ReferenceSnapshot remains the canonical governed import record; the payload
+-- is opaque to the generic runner. Scheme-agnostic: data_family is a parameter,
+-- never a hardcoded scheme. One row per (snapshot_ref, data_family); a conflicting
+-- re-import is refused at the snapshot gate, so this never overwrites.
 CREATE TABLE IF NOT EXISTS reference_snapshot_data (
   snapshot_ref   text NOT NULL,
   data_family    text NOT NULL,

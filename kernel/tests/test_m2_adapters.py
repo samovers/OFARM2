@@ -17,6 +17,7 @@ import uuid
 
 from kernel.adapters import ImportRunner, ParseResult
 from kernel.context import now_iso
+from kernel.runtime_activation import complete_store_startup
 from kernel.store import Store, _SINGLE_WRITER_LOCK_KEY
 from profile_si_ffs.tests.m2_si_output_lock_tests import *  # noqa: F401,F403
 
@@ -150,6 +151,7 @@ def test_g2_concurrent_first_structure_assertions_one_governed_winner(store):
             active_descriptor=store.active_descriptor,
         )
         try:
+            complete_store_startup(s)
             pipe = GatePipeline(s)
             sub = demo.structure_submission(
                 {"schemaVersion": "ofarm.fieldidentitypayload.v0.1",

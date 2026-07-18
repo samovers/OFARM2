@@ -106,6 +106,7 @@ class Store:
         if runtime_bundle is not None:
             self._verify_active_descriptor_binding()
         self._conn: psycopg.Connection | None = None
+        self._startup_complete = False
 
     # -- connection / lifecycle ------------------------------------------------
 
@@ -116,8 +117,8 @@ class Store:
             configure_session(self._conn)
         elif self._conn.closed:
             raise RuntimeBundleBindingError(
-                "this Store's verified database connection is closed; a fresh "
-                "Store and process startup are required before further use"
+                "this Store's database connection is closed; a fresh Store and "
+                "completed process startup are required before further use"
             )
         return self._conn
 
@@ -193,6 +194,27 @@ class Store:
                     **posture,
                 )
         return observation
+
+    @contextmanager
+    def _startup_transaction(self):
+        """Publish readiness only after the complete startup unit commits."""
+        prior_readiness = self._startup_complete
+        self._startup_complete = False
+        try:
+            with self.conn.transaction():
+                yield
+        except BaseException:
+            self._startup_complete = prior_readiness
+            raise
+        else:
+            self._startup_complete = True
+
+    def require_startup_complete(self, consumer: str) -> None:
+        """Refuse high-level runtime services before verified startup commits."""
+        if not self._startup_complete:
+            raise RuntimeBundleBindingError(
+                f"{consumer} requires completed schema, bundle, and profile startup"
+            )
 
     def close(self) -> None:
         if self._conn is not None and not self._conn.closed:
@@ -302,9 +324,8 @@ class Store:
                               parser_label: str | None = None,
                               record_count: int | None = None) -> None:
         """Persist store-backed external reference-data for a snapshot (M2 P1) —
-        an index cache (NOT OFARM truth) so a scheme reader can resolve an
-        imported snapshot's content from the store. The payload is opaque here;
-        one row per (snapshot_ref, data_family)."""
+        candidate/audit data, NOT OFARM truth or runtime-selection authority.
+        The payload is opaque here; one row per (snapshot_ref, data_family)."""
         tenant_ref, bundle_digest = self._receipt()
         cur.execute(
             """
@@ -320,8 +341,13 @@ class Store:
         )
 
     def reference_data(self, data_family: str) -> list[dict]:
-        """Store-backed reference-data rows of a family (snapshot_ref + payload),
-        for a scheme reader to load into its lookup index."""
+        """Candidate/audit reference-data rows for one family.
+
+        These rows are bundle-qualified and self-digest-checked, but they are not
+        runtime-selection authority. Operational readers must use
+        ``selected_reference_source_data`` so a cache fill cannot change lookup
+        behavior under an already-selected RuntimeBundle.
+        """
         tenant_ref, bundle_digest = self._receipt()
         with self.conn.cursor() as cur:
             cur.execute(
@@ -342,6 +368,60 @@ class Store:
             {"snapshot_ref": row["snapshot_ref"], "payload": row["payload"]}
             for row in rows
         ]
+
+    def selected_reference_source_data(self, snapshot_family: str) -> list[dict]:
+        """Return exact bundle-selected JSON inputs for one snapshot family.
+
+        A selected ReferenceSnapshot is operational only when it names exactly
+        one retained ``REFERENCE_SOURCE`` artifact in this RuntimeBundle. The
+        database reference cache is deliberately not consulted here: imports
+        remain auditable candidates until a later bundle selects their exact
+        source bytes.
+        """
+        selected = []
+        for snapshot_component in self.runtime_bundle.components:
+            if snapshot_component.role is not RuntimeComponentRole.REFERENCE_SNAPSHOT:
+                continue
+            snapshot_ref = snapshot_component.logical_ref
+            if not (
+                snapshot_ref == snapshot_family
+                or snapshot_ref.startswith(snapshot_family + ".")
+            ):
+                continue
+            try:
+                snapshot, _canonical = strict_json_document(
+                    snapshot_component.canonical_bytes,
+                    f"selected reference snapshot {snapshot_ref!r}",
+                )
+                artifact_refs = [
+                    ref for ref in snapshot.get("sourceArtifactRefs", [])
+                    if isinstance(ref, str) and ref.startswith("artifact:")
+                ]
+                if len(artifact_refs) != 1:
+                    raise RuntimeBundleError(
+                        "operational reference snapshots must retain exactly one "
+                        "artifact source"
+                    )
+                source = self.runtime_bundle.component(
+                    RuntimeComponentRole.REFERENCE_SOURCE,
+                    artifact_refs[0],
+                )
+                payload, _canonical = strict_json_document(
+                    source.canonical_bytes,
+                    f"selected reference source {artifact_refs[0]!r}",
+                )
+            except RuntimeBundleError as exc:
+                raise RuntimeBundleBindingError(
+                    f"selected reference snapshot {snapshot_ref!r} has no exact "
+                    f"operational source: {exc}"
+                ) from exc
+            selected.append({
+                "snapshot_ref": snapshot_ref,
+                "artifact_ref": artifact_refs[0],
+                "source_digest": source.content_digest,
+                "payload": payload,
+            })
+        return sorted(selected, key=lambda row: row["snapshot_ref"])
 
     def add_edge(self, cur, edge_type: str, src_record_id: str, dst_record_id: str) -> None:
         tenant_ref, bundle_digest = self._receipt()

@@ -24,35 +24,54 @@ PROFILE_INSTANCE_FILES = list(config.ACTIVE_PROFILE.profile_instance_files)
 
 SI_REGSR_FAMILY_ID = "si.uvhvvr.ffs-reg"
 SI_GERK_FAMILY_ID = "si.mkgp.gerk-layer"
+SI_FFSNAPRAVE_FAMILY_ID = "si.uvhvvr.ffs-naprave"
 
 
 @dataclass(frozen=True)
 class SIReferenceBindings:
-    """Active SI REGSR/GERK runtime bindings.
+    """Active SI REGSR, GERK, and FFSNaprave runtime bindings.
 
     This is deliberately SI-shaped. It makes the current active runtime's
     country/profile reference seams explicit without introducing a generic
     country abstraction.
     """
-    si_profile_root: Path
+    si_profile_root: Path | None
     regsr_snapshot_prefix: str
     regsr_data_family: str
     regsr_shipped_snapshot_ref: str
-    regsr_shipped_artifact_path: Path
+    regsr_shipped_artifact_path: Path | None
     gerk_snapshot_prefix: str
     gerk_data_family: str
     gerk_shipped_snapshot_ref: str
+    ffsnaprave_snapshot_prefix: str
+    ffsnaprave_data_family: str
 
     @classmethod
     def from_descriptor(cls, descriptor) -> "SIReferenceBindings":
-        try:
-            si_profile_root = Path(descriptor.profile_root).resolve(strict=True)
-        except (OSError, TypeError) as exc:
-            raise ProfileRuntimeError(
-                "active SI profile root is unavailable or unreadable") from exc
+        """Compatibility bindings that retain the shipped release-path artifact."""
+        return cls._from_descriptor(descriptor, include_compatibility_path=True)
+
+    @classmethod
+    def from_runtime_descriptor(cls, descriptor) -> "SIReferenceBindings":
+        """Runtime bindings with no filesystem reference-data authority."""
+        return cls._from_descriptor(descriptor, include_compatibility_path=False)
+
+    @classmethod
+    def _from_descriptor(
+        cls, descriptor, *, include_compatibility_path: bool
+    ) -> "SIReferenceBindings":
+        si_profile_root = None
+        if include_compatibility_path:
+            try:
+                si_profile_root = Path(descriptor.profile_root).resolve(strict=True)
+            except (OSError, TypeError) as exc:
+                raise ProfileRuntimeError(
+                    "active SI profile root is unavailable or unreadable"
+                ) from exc
 
         regsr_family = descriptor.reference_family(SI_REGSR_FAMILY_ID)
         gerk_family = descriptor.reference_family(SI_GERK_FAMILY_ID)
+        ffsnaprave_family = descriptor.reference_family(SI_FFSNAPRAVE_FAMILY_ID)
 
         regsr_data_family = _required_binding_value(
             regsr_family.data_family, "REGSR data family")
@@ -62,8 +81,14 @@ class SIReferenceBindings:
             gerk_family.data_family, "GERK data family")
         gerk_shipped_snapshot_ref = _required_binding_value(
             gerk_family.shipped_snapshot_ref, "GERK shipped snapshot ref")
-        regsr_artifact_path = _regsr_shipped_artifact_path(
-            descriptor, si_profile_root, regsr_shipped_snapshot_ref)
+        ffsnaprave_data_family = _required_binding_value(
+            ffsnaprave_family.data_family, "FFSNaprave data family")
+        regsr_artifact_path = (
+            _regsr_shipped_artifact_path(
+                descriptor, si_profile_root, regsr_shipped_snapshot_ref
+            )
+            if include_compatibility_path else None
+        )
 
         return cls(
             si_profile_root=si_profile_root,
@@ -74,6 +99,8 @@ class SIReferenceBindings:
             gerk_snapshot_prefix=gerk_family.snapshot_prefix,
             gerk_data_family=gerk_data_family,
             gerk_shipped_snapshot_ref=gerk_shipped_snapshot_ref,
+            ffsnaprave_snapshot_prefix=ffsnaprave_family.snapshot_prefix,
+            ffsnaprave_data_family=ffsnaprave_data_family,
         )
 
 
@@ -146,18 +173,14 @@ def _resolve_profile_example_artifact(
     return candidate
 
 
-def _snapshot_matches_family(snapshot_id: str, prefix: str) -> bool:
-    return snapshot_id == prefix or snapshot_id.startswith(prefix + ".")
-
-
-SI_REFERENCE_BINDINGS = SIReferenceBindings.from_descriptor(config.ACTIVE_PROFILE)
+SI_REFERENCE_BINDINGS = SIReferenceBindings.from_runtime_descriptor(
+    config.ACTIVE_PROFILE
+)
 REGSR_SNAPSHOT_PREFIX = SI_REFERENCE_BINDINGS.regsr_snapshot_prefix
 GERK_SNAPSHOT_PREFIX = SI_REFERENCE_BINDINGS.gerk_snapshot_prefix
-# store-backed reference-data family for REGSR parsed product data (M2 P1): the
-# data_family a governed REGSR import tags its parsed data with, and the family
-# ProductRegister loads from the store. ProductRegister is already REGSR-shaped
-# (lookup_by_decision, D9), so this REGSR-specific alias remains compatibility
-# surface over the explicit SI binding object.
+# Candidate/audit data family a governed REGSR import tags (M2 P1).
+# ProductRegister's Store-bound path reads exact bundle source bytes instead;
+# this alias remains compatibility surface over the explicit SI binding object.
 REGSR_DATA_FAMILY = SI_REFERENCE_BINDINGS.regsr_data_family
 
 _ACTIVE_PROFILE_REQUIRED_FIELDS = (
@@ -362,11 +385,13 @@ class ProductRegister:
     """
 
     def __init__(self, bindings: SIReferenceBindings | None = None):
-        self.bindings = bindings or SI_REFERENCE_BINDINGS
+        self.bindings = bindings or SIReferenceBindings.from_descriptor(
+            config.ACTIVE_PROFILE
+        )
         self._by_snapshot: dict[str, dict] = {}
         # the shipped real parse (623 products, fictional-free: public register data)
         shipped = self.bindings.regsr_shipped_artifact_path
-        if shipped.exists():
+        if shipped is not None and shipped.exists():
             self.register_artifact(
                 self.bindings.regsr_shipped_snapshot_ref,
                 json.loads(shipped.read_text()),
@@ -394,39 +419,22 @@ class ProductRegister:
         }
 
     def load_from_store(self, store) -> None:
-        """Resolve register data for bundle-selected REGSR snapshots.
+        """Resolve exact bundle-selected REGSR source data.
 
-        Two sources, in order: (1) store-backed reference data persisted by a
-        governed import, when that snapshot is selected by this RuntimeBundle;
-        then (2) exact REFERENCE_SOURCE bytes selected by the RuntimeBundle.
         Constructor-loaded package data is a compatibility surface for direct
-        register use; Store-bound runtime loading discards it. Unselected
-        imported candidates remain auditable but inactive. The runtime never
-        guesses or hot-activates them."""
+        register use; Store-bound runtime loading discards it. Database cache
+        rows remain candidate/audit data and never override the source bytes
+        selected by the RuntimeBundle.
+        """
+        runtime_bindings = SIReferenceBindings.from_runtime_descriptor(
+            store.active_descriptor
+        )
+        self.bindings = runtime_bindings
         self._by_snapshot.clear()
-        selected_refs = store.selected_reference_snapshot_refs
-        for row in store.reference_data(self.bindings.regsr_data_family):
-            sid = row["snapshot_ref"]
-            if sid in selected_refs and sid not in self._by_snapshot:
-                self.register_artifact(sid, row["payload"])
-        for row in store.find_by_kind("ofarm.referencesnapshot.v0.1"):
-            payload = row["payload"]
-            sid = payload["referenceSnapshotId"]
-            if sid not in selected_refs \
-                    or not _snapshot_matches_family(
-                        sid, self.bindings.regsr_snapshot_prefix) \
-                    or sid in self._by_snapshot:
-                continue
-            for ref in payload.get("sourceArtifactRefs", []):
-                if isinstance(ref, str) and ref.startswith("artifact:"):
-                    component = store.runtime_bundle.component(
-                        RuntimeComponentRole.REFERENCE_SOURCE,
-                        ref,
-                    )
-                    self.register_artifact(
-                        sid,
-                        json.loads(component.canonical_bytes),
-                    )
+        for row in store.selected_reference_source_data(
+            runtime_bindings.regsr_snapshot_prefix
+        ):
+            self.register_artifact(row["snapshot_ref"], row["payload"])
 
     def identities_by_decision(self, snapshot_id: str, decision_number: str) -> list[dict]:
         """The DISTINCT D9 identities for a decision number — one record per

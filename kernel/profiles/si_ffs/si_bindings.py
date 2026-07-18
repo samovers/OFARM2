@@ -27,9 +27,7 @@ generic resolver / validators carry no per-scheme branch.
 """
 from __future__ import annotations
 
-from ... import config
 from ...context import (
-    GERK_SNAPSHOT_PREFIX,
     ProductRegister,
     SIReferenceBindings,
     mint,
@@ -40,8 +38,8 @@ from ...verification import (CONFIRM, LOCATOR, NONE, REVIEW, LookupResult,
                              ReferenceResolver)
 from . import regsr_adapter as regsr
 from .ffsnaprave_adapter import (FFSNAPRAVE_AUTHORITY_REF, FFSNAPRAVE_SCHEME,
-                                 FFSNAPRAVE_SNAPSHOT_PREFIX, VALIDITY_FIELD)
-from .gerk_adapter import GERK_AUTHORITY_REF, GERK_SCHEME
+                                 FFSNapraveRegister, VALIDITY_FIELD)
+from .gerk_adapter import GERK_AUTHORITY_REF, GERK_SCHEME, GerkLayer
 
 # the profile standardRefs (profile_si_ffs/OFARM_AgronomicCodeBindingProfile_si_ffs_v0_1.json)
 REGSR_SCHEME_REF = "scheme:si.uvhvvr.ffs-reg"
@@ -135,13 +133,15 @@ def resolve_product_authorisation(store, cur, decision_number, subject_ref, *,
                                   valid_until=None, as_of=None) -> dict:
     if not _evidence_ok(store, evidence_ref):
         return _evidence_refused(REGSR_SCHEME_REF, evidence_ref)
-    product_register = ProductRegister(
-        SIReferenceBindings.from_descriptor(store.active_descriptor)
-    )
+    descriptor = store.active_descriptor
+    bindings = SIReferenceBindings.from_runtime_descriptor(descriptor)
+    product_register = ProductRegister(bindings)
     product_register.load_from_store(store)
     res = regsr.verify_product_authorisation(
         store, cur, product_register, decision_number, issued=issued,
-        valid_until=valid_until, as_of=as_of, created_by=created_by)
+        valid_until=valid_until, as_of=as_of, created_by=created_by,
+        snapshot_prefix=bindings.regsr_snapshot_prefix,
+        profile_ref=descriptor.code_binding_profile_ref)
     confirmed = res["verdict"] == CONFIRM
     trace = res.get("trace")
     snapshot_ref = res.get("snapshotRef")
@@ -168,14 +168,20 @@ def resolve_product_authorisation(store, cur, decision_number, subject_ref, *,
 # GERK — Field parcel (LOCATOR-only: PID existence, not field<->parcel binding)
 # ---------------------------------------------------------------------------
 
-def resolve_parcel(store, cur, gerk_layer, gerk_pid, subject_ref, *, created_by,
+def resolve_parcel(store, cur, gerk_pid, subject_ref, *, created_by,
                    evidence_ref, as_of=None) -> dict:
     if not _evidence_ok(store, evidence_ref):
         return _evidence_refused(GERK_SCHEME_REF, evidence_ref)
+    descriptor = store.active_descriptor
+    bindings = SIReferenceBindings.from_runtime_descriptor(descriptor)
+    gerk_layer = GerkLayer()
+    gerk_layer.load_from_store(store)
     res = ReferenceResolver(store).verify(
-        cur, query_value=gerk_pid, snapshot_prefix=GERK_SNAPSHOT_PREFIX,
+        cur, query_value=gerk_pid,
+        snapshot_prefix=bindings.gerk_snapshot_prefix,
         lookup=_locator_lookup(gerk_layer.lookup),
-        profile_ref=config.CODE_BINDING_PROFILE_REF, authority_ref=GERK_AUTHORITY_REF,
+        profile_ref=descriptor.code_binding_profile_ref,
+        authority_ref=GERK_AUTHORITY_REF,
         jurisdiction_ref=SI_JURISDICTION_REF, scheme=GERK_SCHEME, key_field="gerk-pid",
         purpose="OTHER", lookup_surface="OTHER", external_id_role="OTHER",
         review_reason_code="IDENTITY_UNRESOLVED", as_of=as_of, created_by=created_by)
@@ -228,14 +234,20 @@ def _ffsnaprave_lookup(register, validity):
     return lookup
 
 
-def resolve_equipment(store, cur, ffsnaprave_register, sticker_number, subject_ref, *,
+def resolve_equipment(store, cur, sticker_number, subject_ref, *,
                       created_by, evidence_ref, validity=None, as_of=None) -> dict:
     if not _evidence_ok(store, evidence_ref):
         return _evidence_refused(FFSNAPRAVE_SCHEME_REF, evidence_ref)
+    descriptor = store.active_descriptor
+    bindings = SIReferenceBindings.from_runtime_descriptor(descriptor)
+    ffsnaprave_register = FFSNapraveRegister()
+    ffsnaprave_register.load_from_store(store)
     res = ReferenceResolver(store).verify(
-        cur, query_value=sticker_number, snapshot_prefix=FFSNAPRAVE_SNAPSHOT_PREFIX,
+        cur, query_value=sticker_number,
+        snapshot_prefix=bindings.ffsnaprave_snapshot_prefix,
         lookup=_ffsnaprave_lookup(ffsnaprave_register, validity),
-        profile_ref=config.CODE_BINDING_PROFILE_REF, authority_ref=FFSNAPRAVE_AUTHORITY_REF,
+        profile_ref=descriptor.code_binding_profile_ref,
+        authority_ref=FFSNAPRAVE_AUTHORITY_REF,
         jurisdiction_ref=SI_JURISDICTION_REF, scheme=FFSNAPRAVE_SCHEME,
         key_field="stevilka-znaka", purpose="OTHER", lookup_surface="OTHER",
         external_id_role="OTHER", review_reason_code="IDENTITY_UNRESOLVED",
