@@ -57,17 +57,6 @@ AUTHORITATIVE_KINDS = (
 )
 
 _SCHEMA_SQL_BYTES = (config.PACKAGE_ROOT / "kernel" / "schema.sql").read_bytes()
-_RECEIPT_TABLES = (
-    "kernel_record",
-    "kernel_edge",
-    "kernel_gate_log",
-    "kernel_idempotency",
-    "derived_materialization",
-    "derived_dependency_index",
-    "reference_snapshot_data",
-    "runtime_trace",
-    "export_artifact",
-)
 
 
 class RuntimeBundleBindingError(RuntimeError):
@@ -185,55 +174,6 @@ class Store:
     def _receipt(self) -> tuple[str, str]:
         return self.tenant_ref, self.runtime_bundle_digest
 
-    @staticmethod
-    def _verify_receipt_schema(cur) -> None:
-        cur.execute(
-            "SELECT table_name, column_name, is_nullable "
-            "FROM information_schema.columns WHERE table_schema = current_schema() "
-            "AND table_name = ANY(%s) "
-            "AND column_name IN ('tenant_ref', 'runtime_bundle_digest')",
-            (list(_RECEIPT_TABLES),),
-        )
-        observed = {
-            (row["table_name"], row["column_name"], row["is_nullable"])
-            for row in cur.fetchall()
-        }
-        expected = {
-            (table, column, "NO")
-            for table in _RECEIPT_TABLES
-            for column in ("tenant_ref", "runtime_bundle_digest")
-        }
-        if observed != expected:
-            raise RuntimeBundleBindingError(
-                "applied operational schema lacks exact non-null RuntimeBundle receipts")
-
-        cur.execute(
-            "SELECT rel.relname AS table_name, convalidated, "
-            "ARRAY(SELECT att.attname FROM unnest(conkey) WITH ORDINALITY "
-            "AS key(attnum, position) JOIN pg_attribute att "
-            "ON att.attrelid = conrelid AND att.attnum = key.attnum "
-            "ORDER BY key.position) AS local_columns, "
-            "ARRAY(SELECT att.attname FROM unnest(confkey) WITH ORDINALITY "
-            "AS key(attnum, position) JOIN pg_attribute att "
-            "ON att.attrelid = confrelid AND att.attnum = key.attnum "
-            "ORDER BY key.position) AS referenced_columns "
-            "FROM pg_constraint JOIN pg_class rel ON rel.oid = conrelid "
-            "WHERE contype = 'f' AND confrelid = 'runtime_bundle'::regclass "
-            "AND rel.relnamespace = current_schema()::regnamespace"
-        )
-        foreign_keys = {
-            row["table_name"]
-            for row in cur.fetchall()
-            if row["table_name"] in _RECEIPT_TABLES
-            and row["convalidated"]
-            and row["local_columns"] == ["tenant_ref", "runtime_bundle_digest"]
-            and row["referenced_columns"] == ["tenant_ref", "bundle_digest"]
-        }
-        if foreign_keys != set(_RECEIPT_TABLES):
-            raise RuntimeBundleBindingError(
-                "applied operational schema lacks exact tenant-qualified "
-                "RuntimeBundle foreign keys")
-
     def migrate(self) -> DatabaseObservation:
         """Apply the schema and install this Store's exact bundle atomically.
 
@@ -245,7 +185,6 @@ class Store:
             with self.conn.cursor() as cur:
                 posture = verify_transaction_posture(cur)
                 schema_digest = install_or_verify_schema(cur, _SCHEMA_SQL_BYTES)
-                self._verify_receipt_schema(cur)
                 if self._runtime_bundle is not None:
                     RuntimeBundleRepository().persist(
                         cur, self.tenant_ref, self.runtime_bundle)

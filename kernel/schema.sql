@@ -23,13 +23,17 @@ CREATE OR REPLACE FUNCTION kernel_valid_tenant_ref(value text) RETURNS boolean A
 $$ LANGUAGE sql IMMUTABLE STRICT;
 
 -- Exact bytes of this schema.sql are selected once at startup. The fixed,
--- append-only identity separates database deployment posture from RuntimeBundle
--- identity and prevents a restart from silently repairing a different schema.
+-- append-only identity also retains the canonical live-catalog manifest created
+-- by those bytes, so restart verifies current objects instead of trusting install
+-- history. Database deployment posture remains separate from RuntimeBundle identity.
 CREATE TABLE IF NOT EXISTS runtime_schema_identity (
   identity_key text COLLATE "C" PRIMARY KEY CHECK (
     identity_key = 'ofarm-kernel-schema'),
   schema_digest text COLLATE "C" NOT NULL CHECK (
-    schema_digest ~ '^sha256:[0-9a-f]{64}$')
+    schema_digest ~ '^sha256:[0-9a-f]{64}$'),
+  catalog_manifest jsonb NOT NULL,
+  catalog_digest text COLLATE "C" NOT NULL CHECK (
+    catalog_digest ~ '^sha256:[0-9a-f]{64}$')
 );
 
 DROP TRIGGER IF EXISTS trg_runtime_schema_identity_append_only

@@ -3051,11 +3051,6 @@
       "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
     },
     {
-      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_applied_receipt_schema_requires_validated_composite_foreign_keys",
-      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
-      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
-    },
-    {
       "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_context_snapshot_reuse_requires_exact_identity_inputs",
       "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
       "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
@@ -3137,6 +3132,11 @@
     },
     {
       "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_imported_reference_snapshot_remains_inactive_under_current_bundle",
+      "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
+      "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_receipts.py::test_live_schema_catalog_requires_validated_composite_foreign_keys",
       "sourceModule": "kernel.tests.test_runtime_bundle_receipts",
       "sourcePath": "kernel/tests/test_runtime_bundle_receipts.py"
     },
@@ -3311,6 +3311,16 @@
       "sourcePath": "kernel/tests/test_schema_posture.py"
     },
     {
+      "nodeid": "kernel/tests/test_schema_posture.py::test_healthy_restart_exactly_reuses_the_installed_schema_catalog",
+      "sourceModule": "kernel.tests.test_schema_posture",
+      "sourcePath": "kernel/tests/test_schema_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_schema_posture.py::test_live_schema_drift_refuses_before_bundle_or_profile_mutation",
+      "sourceModule": "kernel.tests.test_schema_posture",
+      "sourcePath": "kernel/tests/test_schema_posture.py"
+    },
+    {
       "nodeid": "kernel/tests/test_schema_posture.py::test_schema_identity_is_append_only[DELETE FROM runtime_schema_identity]",
       "sourceModule": "kernel.tests.test_schema_posture",
       "sourcePath": "kernel/tests/test_schema_posture.py"
@@ -3381,8 +3391,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "19b26036bbecafe3cd36161875bee36b709662dc79e14a4d4eb06335a86fdc22",
-  "entryCount": 672,
+  "entriesSha256": "062d41b7a1792b7664feaca5f983a867da97f9e2c55135ce858302d25591a9fe",
+  "entryCount": 674,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

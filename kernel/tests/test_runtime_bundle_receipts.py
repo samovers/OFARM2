@@ -30,6 +30,7 @@ from kernel.runtime_bundle import (
     RuntimeComponentRole,
     canonical_json_bytes,
 )
+from kernel.schema_posture import SchemaPostureError
 from kernel.store import RuntimeBundleBindingError, Store
 from kernel.tests.conftest import _admin_dsn
 from kernel.views import OutputGenerator
@@ -472,7 +473,7 @@ def test_store_refuses_descriptor_observation_outside_selected_bundle():
         )
 
 
-def test_applied_receipt_schema_requires_validated_composite_foreign_keys():
+def test_live_schema_catalog_requires_validated_composite_foreign_keys():
     with _isolated_store("not_valid_fk") as store:
         store.migrate()
         row = store.conn.execute(
@@ -498,7 +499,10 @@ def test_applied_receipt_schema_requires_validated_composite_foreign_keys():
                     "(tenant_ref, bundle_digest) NOT VALID"
                 )
 
-        with pytest.raises(RuntimeBundleBindingError, match="foreign keys"):
+        with pytest.raises(
+            SchemaPostureError,
+            match="live database schema catalog does not match",
+        ):
             store.migrate()
 
 

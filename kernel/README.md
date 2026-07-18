@@ -69,7 +69,7 @@ is a complete `ExecutionRecordPayload` per `contracts/core/`.
 
 | Module | Role |
 |---|---|
-| `schema.sql` | DDL: append-only record/edge/gate-log tables (statement-level mutation triggers), reachability constraint trigger (deferred, same-transaction — D3), derived materialization tables, draft-lane `runtime_trace` |
+| `schema.sql` / `schema_posture.py` | DDL plus startup-only exact source digest, canonical live-catalog identity, and transaction-posture verification; no per-request schema probes |
 | `contracts.py` | contract registry: every write validated against `contracts/` (canonical lane) or `contracts/drafts_reference/` (draft lane, D16) |
 | `profile_runtime.py` | active profile runtime descriptor loader: validates profile-local runtime inputs fail-closed while keeping tenant/demo binding outside the descriptor |
 | `store.py` | the append-only truth store; edges, gate log, idempotency, in-force queries, reachability check |
