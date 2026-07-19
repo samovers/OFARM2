@@ -623,7 +623,7 @@ def _consume_tenant_initial_owner_sealer(
         """
         SELECT namespace.nspname::text,
                routine.proname::text,
-               pg_catalog.pg_get_function_identity_arguments(routine.oid),
+               pg_catalog.oidvectortypes(routine.proargtypes),
                owner.rolname::text
         FROM pg_catalog.pg_proc AS routine
         JOIN pg_catalog.pg_namespace AS namespace

@@ -484,7 +484,7 @@ def test_provisioning_specs_freeze_distinct_service_and_role_boundaries():
     ).hexdigest() == \
         "17e431e33221426151a6ceb3eb2214b1abc51a7b9390d508603f233742deca28"
     assert tenant.digest == \
-        "sha256:a7c69cd270aac75efef0419e3eadf2ae37722abfc14dbd4b639ee653ad21680f"
+        "sha256:c222bbe5c4ea6c640a73179a70a0f3c657db8190dcc96772edd82c97437da06c"
     assert audit.digest == \
         "sha256:770165332bbdb7a5e67e468f021d9fe82df817a2aee1a8a70191a08e869c307a"
     assert next(
@@ -541,6 +541,7 @@ def test_tenant_write_lock_owner_and_one_time_owner_sealer_are_closed():
     tenant = TENANT_PROVISIONING_SPEC
     audit = SECURITY_AUDIT_PROVISIONING_SPEC
     tenant_lock = tenant.tenant_write_lock
+    admission_lock = tenant.tenant_admission_lock
     sealer = tenant.tenant_initial_owner_sealer
 
     assert tenant_lock is not None
@@ -563,6 +564,33 @@ def test_tenant_write_lock_owner_and_one_time_owner_sealer_are_closed():
         for edge in tenant.memberships
     )
 
+    assert admission_lock is not None
+    assert (
+        admission_lock.shared_owner_role,
+        admission_lock.exclusive_owner_role,
+        admission_lock.key_class_id,
+        admission_lock.key_object_id,
+    ) == (
+        "ofarm_binder",
+        "ofarm_admission_lock_owner",
+        1330004306,
+        1413694001,
+    )
+    for owner_name in (
+        admission_lock.shared_owner_role,
+        admission_lock.exclusive_owner_role,
+    ):
+        owner = next(role for role in tenant.roles if role.name == owner_name)
+        assert (
+            owner.login,
+            owner.inherit,
+            owner.connection_limit,
+        ) == (False, False, -1)
+        assert all(
+            owner_name not in (edge.granted_role, edge.member_role)
+            for edge in tenant.memberships
+        )
+
     assert sealer is not None
     assert (
         sealer.qualified_function,
@@ -577,6 +605,73 @@ def test_tenant_write_lock_owner_and_one_time_owner_sealer_are_closed():
         (item.qualified_identity, item.owner_role) for item in sealer.transfers
     } == {
         ("ofarm.create_tenant_challenge()", "ofarm_binder"),
+        ("ofarm.bind_tenant_capability(text)", "ofarm_binder"),
+        ("ofarm.current_tenant_context()", "ofarm_binder"),
+        (
+            "ofarm.verify_tenant_capability_preflight(bytea, bytea)",
+            "ofarm_binder",
+        ),
+        (
+            "ofarm.fold_principal_binding_authority(text, text, text)",
+            "ofarm_admission_lock_owner",
+        ),
+        (
+            "ofarm.fold_tenant_capability_key_lifecycle(text)",
+            "ofarm_admission_lock_owner",
+        ),
+        (
+            "ofarm.transition_principal_binding("
+            "text, text, text, uuid, text, uuid, text, text, uuid, text, "
+            "uuid, text, uuid, text, text, text, text, text, text, text, "
+            "timestamp with time zone, timestamp with time zone, uuid, "
+            "timestamp with time zone, timestamp with time zone, text, text)",
+            "ofarm_admission_lock_owner",
+        ),
+        (
+            "ofarm.rebuild_principal_binding_current()",
+            "ofarm_admission_lock_owner",
+        ),
+        (
+            "ofarm.register_tenant_capability_key(bytea, text, text)",
+            "ofarm_admission_lock_owner",
+        ),
+        (
+            "ofarm.verify_tenant_capability_candidate_preflight(text, bytea)",
+            "ofarm_admission_lock_owner",
+        ),
+        (
+            "ofarm.activate_tenant_capability_key("
+            "text, uuid, text, text, text, text, text)",
+            "ofarm_admission_lock_owner",
+        ),
+        (
+            "ofarm.rotate_tenant_capability_key("
+            "text, text, uuid, text, text, text, text, text)",
+            "ofarm_admission_lock_owner",
+        ),
+        (
+            "ofarm.close_tenant_capability_admission("
+            "uuid, text, text, text, text, text)",
+            "ofarm_admission_lock_owner",
+        ),
+        (
+            "ofarm.revoke_tenant_capability_key("
+            "text, uuid, text, uuid, uuid, text, text, text)",
+            "ofarm_admission_lock_owner",
+        ),
+        (
+            "ofarm.resume_tenant_capability_admission("
+            "uuid, text, uuid, uuid, text, text, text)",
+            "ofarm_admission_lock_owner",
+        ),
+        (
+            "ofarm.rebuild_tenant_capability_keyring()",
+            "ofarm_admission_lock_owner",
+        ),
+        (
+            "ofarm.observe_tenant_capability_key(text)",
+            "ofarm_admission_lock_owner",
+        ),
         ("ofarm.current_tenant_id()", "ofarm_binder"),
         ("ofarm.current_backend_start()", "ofarm_backend_observer"),
         (
@@ -598,8 +693,8 @@ def test_tenant_write_lock_owner_and_one_time_owner_sealer_are_closed():
     )
     assert sealer.source.startswith(
         "BEGIN GRANT CREATE ON SCHEMA ofarm TO "
-        "ofarm_binder, ofarm_backend_observer, ofarm_graph_validator, "
-        "ofarm_tenant_lock_owner;"
+        "ofarm_binder, ofarm_admission_lock_owner, ofarm_backend_observer, "
+        "ofarm_graph_validator, ofarm_tenant_lock_owner;"
     )
     assert sealer.source.endswith(
         "REVOKE CREATE ON SCHEMA ofarm_infrastructure FROM ofarm_migrator; END"
@@ -787,6 +882,13 @@ def test_binder_and_runtime_memberships_are_closed():
             False,
         ),
         (
+            "ofarm_capability_key_controller",
+            "ofarm_capability_key_control_login",
+            True,
+            False,
+            False,
+        ),
+        (
             "pg_read_all_stats",
             "ofarm_backend_observer",
             True,
@@ -820,8 +922,10 @@ def test_binder_and_runtime_memberships_are_closed():
         "ofarm_tenant_migration_lock_owner",
         "ofarm_tenant_lock_owner",
         "ofarm_binder",
+        "ofarm_admission_lock_owner",
         "ofarm_backend_observer",
         "ofarm_graph_validator",
+        "ofarm_crypto_installer",
     )
 
 

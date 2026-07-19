@@ -67,12 +67,13 @@ class RoleSpec:
     connection_limit: int
     password_required: bool = False
     settings: tuple[RoleSetting, ...] = ()
+    superuser: bool = False
 
     def manifest(self) -> dict[str, object]:
         return {
             "name": self.name,
             "login": self.login,
-            "superuser": False,
+            "superuser": self.superuser,
             "createDatabase": False,
             "createRole": False,
             "replication": False,
@@ -101,6 +102,45 @@ class MembershipSpec:
             "inherit": self.inherit,
             "set": self.set_role,
             "admin": self.admin,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class NativeVerifierSpec:
+    """One pre-ledger, provisioning-owned verification-only extension."""
+
+    schema_name: str
+    installer_role: str
+    extension_name: str
+    extension_version: str
+    module_pathname: str
+    function_name: str
+
+    def manifest(self) -> dict[str, object]:
+        return {
+            "schema": self.schema_name,
+            "schemaOwner": self.installer_role,
+            "extension": self.extension_name,
+            "version": self.extension_version,
+            "modulePathname": self.module_pathname,
+            "installerRole": self.installer_role,
+            "installerSuperuser": True,
+            "installerLogin": False,
+            "trusted": False,
+            "relocatable": False,
+            "requires": [],
+            "sqlCallableSurface": [
+                {
+                    "name": self.function_name,
+                    "argumentTypes": ["bytea", "bytea", "bytea"],
+                    "returnType": "boolean",
+                    "security": "INVOKER",
+                    "strict": True,
+                    "volatility": "IMMUTABLE",
+                    "parallelSafety": "UNSAFE",
+                    "leakproof": False,
+                }
+            ],
         }
 
 
@@ -411,6 +451,35 @@ class TenantWriteLockSpec:
 
 
 @dataclass(frozen=True, slots=True)
+class TenantAdmissionLockSpec:
+    """Closed owners for the fixed shared/exclusive admission lock pair."""
+
+    shared_owner_role: str
+    exclusive_owner_role: str
+    key_class_id: int
+    key_object_id: int
+
+    def manifest(self) -> dict[str, object]:
+        return {
+            "key": [self.key_class_id, self.key_object_id],
+            "callerSelectableKey": False,
+            "transactionScoped": True,
+            "sharedRoutineOwnerGrant": {
+                "schema": "pg_catalog",
+                "name": "pg_advisory_xact_lock_shared",
+                "argumentTypes": ["integer", "integer"],
+                "grantee": self.shared_owner_role,
+            },
+            "exclusiveRoutineOwnerGrant": {
+                "schema": "pg_catalog",
+                "name": "pg_advisory_xact_lock",
+                "argumentTypes": ["integer", "integer"],
+                "grantee": self.exclusive_owner_role,
+            },
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class TenantInitialOwnerSealerSpec:
     """Provisioning-superuser capsule consumed by tenant migration 0001."""
 
@@ -497,7 +566,9 @@ class ProvisioningSpec:
     readiness_role_name: str
     migration_lock: MigrationLockSpec
     tenant_write_lock: TenantWriteLockSpec | None
+    tenant_admission_lock: TenantAdmissionLockSpec | None
     tenant_initial_owner_sealer: TenantInitialOwnerSealerSpec | None
+    native_verifier: NativeVerifierSpec | None
     roles: tuple[RoleSpec, ...]
     memberships: tuple[MembershipSpec, ...]
     database_connect_roles: tuple[str, ...]
@@ -544,11 +615,20 @@ class ProvisioningSpec:
         owners = [self.schema_owner, self.migration_lock.owner_role]
         if self.tenant_write_lock is not None:
             owners.append(self.tenant_write_lock.owner_role)
+        if self.tenant_admission_lock is not None:
+            owners.extend(
+                (
+                    self.tenant_admission_lock.shared_owner_role,
+                    self.tenant_admission_lock.exclusive_owner_role,
+                )
+            )
         if self.tenant_initial_owner_sealer is not None:
             owners.extend(
                 transfer.owner_role
                 for transfer in self.tenant_initial_owner_sealer.transfers
             )
+        if self.native_verifier is not None:
+            owners.append(self.native_verifier.installer_role)
         return tuple(dict.fromkeys(owners))
 
     def manifest_without_digest(self) -> dict[str, object]:
@@ -587,11 +667,23 @@ class ProvisioningSpec:
                     if self.tenant_initial_owner_sealer is None
                     else self.tenant_initial_owner_sealer.manifest()
                 ),
+                **(
+                    {"nativeVerifier": self.native_verifier.manifest()}
+                    if self.native_verifier is not None
+                    else {}
+                ),
             },
             "tenantWriteLock": (
                 None
                 if self.tenant_write_lock is None
                 else self.tenant_write_lock.manifest()
+            ),
+            **(
+                {
+                    "tenantAdmissionLock": self.tenant_admission_lock.manifest()
+                }
+                if self.tenant_admission_lock is not None
+                else {}
             ),
             "roles": [role.manifest() for role in self.roles],
             **(
@@ -1124,6 +1216,13 @@ _TENANT_WRITE_LOCK = TenantWriteLockSpec(
     owner_role="ofarm_tenant_lock_owner",
 )
 
+_TENANT_ADMISSION_LOCK = TenantAdmissionLockSpec(
+    shared_owner_role="ofarm_binder",
+    exclusive_owner_role="ofarm_admission_lock_owner",
+    key_class_id=1330004306,
+    key_object_id=1413694001,
+)
+
 _TENANT_INITIAL_OWNER_SEALER = TenantInitialOwnerSealerSpec(
     schema_name="ofarm_infrastructure",
     function_name="seal_tenant_routine_owners",
@@ -1132,6 +1231,114 @@ _TENANT_INITIAL_OWNER_SEALER = TenantInitialOwnerSealerSpec(
     transfers=(
         RoutineOwnerTransfer(
             "ofarm", "create_tenant_challenge", (), "ofarm_binder"
+        ),
+        RoutineOwnerTransfer(
+            "ofarm",
+            "bind_tenant_capability",
+            ("text",),
+            "ofarm_binder",
+        ),
+        RoutineOwnerTransfer(
+            "ofarm", "current_tenant_context", (), "ofarm_binder"
+        ),
+        RoutineOwnerTransfer(
+            "ofarm",
+            "verify_tenant_capability_preflight",
+            ("bytea", "bytea"),
+            "ofarm_binder",
+        ),
+        RoutineOwnerTransfer(
+            "ofarm",
+            "fold_principal_binding_authority",
+            ("text", "text", "text"),
+            "ofarm_admission_lock_owner",
+        ),
+        RoutineOwnerTransfer(
+            "ofarm",
+            "fold_tenant_capability_key_lifecycle",
+            ("text",),
+            "ofarm_admission_lock_owner",
+        ),
+        RoutineOwnerTransfer(
+            "ofarm",
+            "transition_principal_binding",
+            (
+                "text", "text", "text", "uuid", "text", "uuid", "text",
+                "text", "uuid", "text", "uuid", "text", "uuid", "text",
+                "text", "text", "text", "text", "text", "text",
+                "timestamp with time zone", "timestamp with time zone",
+                "uuid", "timestamp with time zone",
+                "timestamp with time zone", "text", "text",
+            ),
+            "ofarm_admission_lock_owner",
+        ),
+        RoutineOwnerTransfer(
+            "ofarm",
+            "rebuild_principal_binding_current",
+            (),
+            "ofarm_admission_lock_owner",
+        ),
+        RoutineOwnerTransfer(
+            "ofarm",
+            "register_tenant_capability_key",
+            ("bytea", "text", "text"),
+            "ofarm_admission_lock_owner",
+        ),
+        RoutineOwnerTransfer(
+            "ofarm",
+            "verify_tenant_capability_candidate_preflight",
+            ("text", "bytea"),
+            "ofarm_admission_lock_owner",
+        ),
+        RoutineOwnerTransfer(
+            "ofarm",
+            "activate_tenant_capability_key",
+            ("text", "uuid", "text", "text", "text", "text", "text"),
+            "ofarm_admission_lock_owner",
+        ),
+        RoutineOwnerTransfer(
+            "ofarm",
+            "rotate_tenant_capability_key",
+            (
+                "text", "text", "uuid", "text", "text", "text", "text",
+                "text",
+            ),
+            "ofarm_admission_lock_owner",
+        ),
+        RoutineOwnerTransfer(
+            "ofarm",
+            "close_tenant_capability_admission",
+            ("uuid", "text", "text", "text", "text", "text"),
+            "ofarm_admission_lock_owner",
+        ),
+        RoutineOwnerTransfer(
+            "ofarm",
+            "revoke_tenant_capability_key",
+            (
+                "text", "uuid", "text", "uuid", "uuid", "text", "text",
+                "text",
+            ),
+            "ofarm_admission_lock_owner",
+        ),
+        RoutineOwnerTransfer(
+            "ofarm",
+            "resume_tenant_capability_admission",
+            (
+                "uuid", "text", "uuid", "uuid", "text", "text", "text",
+            ),
+            "ofarm_admission_lock_owner",
+        ),
+        RoutineOwnerTransfer(
+            "ofarm",
+            "rebuild_tenant_capability_keyring",
+            (),
+            "ofarm_admission_lock_owner",
+        ),
+        RoutineOwnerTransfer(
+            "ofarm",
+            "observe_tenant_capability_key",
+            ("text",),
+            "ofarm_admission_lock_owner",
         ),
         RoutineOwnerTransfer("ofarm", "current_tenant_id", (), "ofarm_binder"),
         RoutineOwnerTransfer(
@@ -1165,6 +1372,16 @@ _TENANT_INITIAL_OWNER_SEALER = TenantInitialOwnerSealerSpec(
 )
 
 
+_TENANT_NATIVE_VERIFIER = NativeVerifierSpec(
+    schema_name="ofarm_crypto",
+    installer_role="ofarm_crypto_installer",
+    extension_name="ofarm_ed25519",
+    extension_version="1.0",
+    module_pathname="$libdir/ofarm_ed25519",
+    function_name="ed25519_verify",
+)
+
+
 TENANT_PROVISIONING_SPEC = ProvisioningSpec(
     identity="ofarm.tenant-postgresql-provisioning.v1",
     migration_service=TENANT_SERVICE,
@@ -1185,13 +1402,24 @@ TENANT_PROVISIONING_SPEC = ProvisioningSpec(
         key_object_id=_MIGRATION_LOCK_KEY[1],
     ),
     tenant_write_lock=_TENANT_WRITE_LOCK,
+    tenant_admission_lock=_TENANT_ADMISSION_LOCK,
     tenant_initial_owner_sealer=_TENANT_INITIAL_OWNER_SEALER,
+    native_verifier=_TENANT_NATIVE_VERIFIER,
     roles=(
         RoleSpec("ofarm_owner", False, False, False, -1),
         RoleSpec(
             "ofarm_tenant_migration_lock_owner", False, False, False, -1
         ),
         RoleSpec("ofarm_tenant_lock_owner", False, False, False, -1),
+        RoleSpec("ofarm_admission_lock_owner", False, False, False, -1),
+        RoleSpec(
+            "ofarm_crypto_installer",
+            False,
+            False,
+            False,
+            -1,
+            superuser=True,
+        ),
         RoleSpec(
             "ofarm_migrator", True, False, False, 2, True, _MIGRATOR_SETTINGS
         ),
@@ -1225,6 +1453,18 @@ TENANT_PROVISIONING_SPEC = ProvisioningSpec(
             _CONTROL_SETTINGS,
         ),
         RoleSpec("ofarm_binder", False, False, True, -1),
+        RoleSpec(
+            "ofarm_capability_key_controller", False, False, False, -1
+        ),
+        RoleSpec(
+            "ofarm_capability_key_control_login",
+            True,
+            True,
+            False,
+            1,
+            True,
+            _CONTROL_SETTINGS,
+        ),
         RoleSpec("ofarm_backend_observer", False, True, False, -1),
         RoleSpec("ofarm_graph_validator", False, False, False, -1),
     ),
@@ -1245,6 +1485,13 @@ TENANT_PROVISIONING_SPEC = ProvisioningSpec(
             False,
         ),
         MembershipSpec(
+            "ofarm_capability_key_controller",
+            "ofarm_capability_key_control_login",
+            True,
+            False,
+            False,
+        ),
+        MembershipSpec(
             "pg_read_all_stats",
             "ofarm_backend_observer",
             True,
@@ -1259,6 +1506,7 @@ TENANT_PROVISIONING_SPEC = ProvisioningSpec(
         "ofarm_readiness",
         "ofarm_tenant_registrar",
         "ofarm_identity_writer",
+        "ofarm_capability_key_controller",
     ),
     schema_usage_roles=(
         "ofarm_app",
@@ -1267,6 +1515,8 @@ TENANT_PROVISIONING_SPEC = ProvisioningSpec(
         "ofarm_tenant_registrar",
         "ofarm_identity_writer",
         "ofarm_binder",
+        "ofarm_admission_lock_owner",
+        "ofarm_capability_key_controller",
         "ofarm_graph_validator",
         "ofarm_tenant_lock_owner",
     ),
@@ -1306,7 +1556,9 @@ SECURITY_AUDIT_PROVISIONING_SPEC = ProvisioningSpec(
         key_object_id=_MIGRATION_LOCK_KEY[1],
     ),
     tenant_write_lock=None,
+    tenant_admission_lock=None,
     tenant_initial_owner_sealer=None,
+    native_verifier=None,
     roles=(
         RoleSpec("ofarm_security_audit_owner", False, False, False, -1),
         RoleSpec(
@@ -1529,6 +1781,10 @@ def _validate_spec(spec: ProvisioningSpec) -> None:
         _validate_identifier(role.name, "role name")
         if not role.name.startswith("ofarm_"):
             raise ProvisioningSpecError("every governed role must use the ofarm_ prefix")
+        if role.superuser != (role.name == "ofarm_crypto_installer"):
+            raise ProvisioningSpecError(
+                "only the exact crypto installer may be a governed superuser"
+            )
         if role.login != role.password_required:
             raise ProvisioningSpecError(
                 f"role {role.name} must require a password exactly when it can LOGIN"
@@ -1588,16 +1844,61 @@ def _validate_spec(spec: ProvisioningSpec) -> None:
         raise ProvisioningSpecError("migration-lock caller must be a declared LOGIN")
 
     tenant_lock = spec.tenant_write_lock
+    admission_lock = spec.tenant_admission_lock
     sealer = spec.tenant_initial_owner_sealer
+    native_verifier = spec.native_verifier
     if spec == TENANT_PROVISIONING_SPEC:
         if tenant_lock != _TENANT_WRITE_LOCK:
             raise ProvisioningSpecError("tenant write-lock boundary is not exact")
+        if admission_lock != _TENANT_ADMISSION_LOCK:
+            raise ProvisioningSpecError("tenant admission-lock boundary is not exact")
         if sealer != _TENANT_INITIAL_OWNER_SEALER:
             raise ProvisioningSpecError("tenant initial owner sealer is not exact")
-    elif tenant_lock is not None or sealer is not None:
+        if native_verifier != _TENANT_NATIVE_VERIFIER:
+            raise ProvisioningSpecError("tenant native verifier boundary is not exact")
+    elif (
+        tenant_lock is not None
+        or admission_lock is not None
+        or sealer is not None
+        or native_verifier is not None
+    ):
         raise ProvisioningSpecError(
             "the security-audit service must not carry tenant capsules"
         )
+
+    if native_verifier is not None:
+        for value, label in (
+            (native_verifier.schema_name, "crypto schema"),
+            (native_verifier.installer_role, "crypto installer"),
+            (native_verifier.extension_name, "crypto extension"),
+            (native_verifier.function_name, "crypto verifier function"),
+        ):
+            _validate_identifier(value, label)
+        if (
+            native_verifier.schema_name,
+            native_verifier.installer_role,
+            native_verifier.extension_name,
+            native_verifier.extension_version,
+            native_verifier.module_pathname,
+            native_verifier.function_name,
+        ) != (
+            "ofarm_crypto",
+            "ofarm_crypto_installer",
+            "ofarm_ed25519",
+            "1.0",
+            "$libdir/ofarm_ed25519",
+            "ed25519_verify",
+        ):
+            raise ProvisioningSpecError("native verifier identity differs")
+        installer = role_map.get(native_verifier.installer_role)
+        if installer is None or (
+            installer.login,
+            installer.inherit,
+            installer.bypass_rls,
+            installer.connection_limit,
+            installer.superuser,
+        ) != (False, False, False, -1, True):
+            raise ProvisioningSpecError("crypto installer attributes differ")
 
     if tenant_lock is not None:
         _validate_identifier(tenant_lock.schema_name, "tenant-lock schema name")
@@ -1619,6 +1920,33 @@ def _validate_spec(spec: ProvisioningSpec) -> None:
             raise ProvisioningSpecError(
                 "tenant-lock owner must be closed NOLOGIN/NOINHERIT/NOBYPASSRLS"
             )
+
+    if admission_lock is not None:
+        if (
+            admission_lock.shared_owner_role,
+            admission_lock.exclusive_owner_role,
+            admission_lock.key_class_id,
+            admission_lock.key_object_id,
+        ) != (
+            "ofarm_binder",
+            "ofarm_admission_lock_owner",
+            1330004306,
+            1413694001,
+        ):
+            raise ProvisioningSpecError("tenant admission-lock identity differs")
+        for owner_name in (
+            admission_lock.shared_owner_role,
+            admission_lock.exclusive_owner_role,
+        ):
+            owner = role_map.get(owner_name)
+            if owner is None or (
+                owner.login,
+                owner.inherit,
+                owner.connection_limit,
+            ) != (False, False, -1):
+                raise ProvisioningSpecError(
+                    "tenant admission-lock owner must be unassumable"
+                )
 
     if sealer is not None:
         _validate_identifier(sealer.schema_name, "owner-sealer schema name")
@@ -1668,6 +1996,7 @@ def _validate_spec(spec: ProvisioningSpec) -> None:
                 "ofarm_binder",
                 "ofarm_graph_validator",
                 "ofarm_tenant_lock_owner",
+                "ofarm_admission_lock_owner",
             }:
                 raise ProvisioningSpecError("tenant sealer target owner differs")
             if any(
@@ -1710,6 +2039,15 @@ def _validate_spec(spec: ProvisioningSpec) -> None:
             )
         if tenant_lock is not None and tenant_lock.owner_role in edge:
             raise ProvisioningSpecError("tenant-lock owner must have no membership edge")
+        if admission_lock is not None and (
+            admission_lock.shared_owner_role in edge
+            or admission_lock.exclusive_owner_role in edge
+        ):
+            raise ProvisioningSpecError(
+                "admission-lock owners must have no membership edge"
+            )
+        if native_verifier is not None and native_verifier.installer_role in edge:
+            raise ProvisioningSpecError("crypto installer must have no membership edge")
 
     if "ofarm_binder" in role_map:
         binder = role_map["ofarm_binder"]

@@ -1,0 +1,499 @@
+{
+  "audiencePolicy": {
+    "comparison": "exact-case-sensitive-ASCII-bytes",
+    "grammar": "audience = ASCII(\"urn:ofarm:tenant-binder:v1:\") || lowercase-canonical-non-nil-UUID",
+    "source": "database-generated-immutable-binder-instance-UUID"
+  },
+  "claimBoundary": "package-local framing, validation, public-key, lifecycle, and database binder contract; no signer, KMS orchestration, deployment, recovery, service-readiness, or production claim",
+  "digestPolicy": "SHA-256 over these exact checked-in UTF-8 bytes; this artifact contains no self-digest field and no domain prefix is prepended",
+  "entryPoints": [
+    {
+      "argumentTypes": [],
+      "identity": "ofarm.create_tenant_challenge()",
+      "name": "create_tenant_challenge",
+      "schema": "ofarm"
+    },
+    {
+      "argumentTypes": [
+        "text"
+      ],
+      "identity": "ofarm.bind_tenant_capability(text)",
+      "name": "bind_tenant_capability",
+      "schema": "ofarm"
+    },
+    {
+      "argumentTypes": [],
+      "identity": "ofarm.current_tenant_context()",
+      "name": "current_tenant_context",
+      "schema": "ofarm"
+    },
+    {
+      "argumentTypes": [],
+      "identity": "ofarm.current_tenant_id()",
+      "name": "current_tenant_id",
+      "schema": "ofarm"
+    },
+    {
+      "argumentTypes": [],
+      "identity": "ofarm.take_tenant_write_lock()",
+      "name": "take_tenant_write_lock",
+      "schema": "ofarm"
+    }
+  ],
+  "envelope": {
+    "algorithm": "Ed25519",
+    "base64url": "RFC-4648-URL-safe-unpadded-canonical-with-zero-trailing-bits",
+    "maximumTokenBytes": 8192,
+    "protectedHeaderTemplate": "{\"alg\":\"Ed25519\",\"kid\":\"<43-byte-kid>\",\"typ\":\"ofarm-tenant-capability+jws\"}",
+    "serialization": "JWS Compact with exactly three non-empty ASCII segments",
+    "signatureBytes": 64,
+    "type": "ofarm-tenant-capability+jws"
+  },
+  "identity": "ofarm.tenant-capability-and-binder.v1",
+  "kmsPublicKeyResponse": {
+    "api": "google.cloud.kms.v1.KeyManagementService.GetPublicKey",
+    "checksum": "CRC-32C/Castagnoli over exact decoded DER octets, present uint32 0..4294967295",
+    "fieldMapping": {
+      "algorithm": "exact EC_SIGN_ED25519",
+      "name": "exact configured canonical CryptoKeyVersion resource",
+      "protectionLevel": "exact HSM",
+      "publicKey.crc32cChecksum": "canonical unsigned decimal REST string",
+      "publicKey.data": "canonical padded standard-base64 REST text decoded once to DER",
+      "publicKeyFormat": "exact DER"
+    },
+    "forbiddenRepresentations": [
+      "default-or-PUBLIC_KEY_FORMAT_UNSPECIFIED",
+      "PEM",
+      "pem",
+      "pemCrc32c",
+      "digest",
+      "empty-or-second-key-representation",
+      "unknown-or-duplicate-JSON-field"
+    ],
+    "keyVersionResourceGrammar": "^projects/[a-z][a-z0-9-]{4,28}[a-z0-9]/locations/[a-z0-9]([a-z0-9-]*[a-z0-9])?/keyRings/[A-Za-z0-9_-]{1,63}/cryptoKeys/[A-Za-z0-9_-]{1,63}/cryptoKeyVersions/[1-9][0-9]*$",
+    "request": "exact key-version name and explicit publicKeyFormat=DER",
+    "retry": "bounded retry fetches one wholly new response; fields from different responses are never mixed"
+  },
+  "limits": {
+    "capabilityLifetimeMicroseconds": 60000000,
+    "challengeLifetimeMicroseconds": 60000000,
+    "futureSkewMicroseconds": 5000000,
+    "keyIssuanceMicroseconds": 7776000000000,
+    "keyVerificationTailMicroseconds": 65000000
+  },
+  "ownership": {
+    "databaseVerifierAndBinder": 174,
+    "productionKmsSignerAndMinting": 172,
+    "transactionIntegration": 173
+  },
+  "payload": {
+    "contractDigest": "raw 32-byte SHA-256 of this exact artifact",
+    "domainHex": "4f4641524d5f54454e414e545f4341504142494c4954595f563100",
+    "fieldFraming": "each field is unsigned-32-bit-big-endian byte length followed by exact bytes",
+    "fields": [
+      {
+        "encoding": "sha256",
+        "name": "contractDigest"
+      },
+      {
+        "encoding": "uuid",
+        "name": "challengeId"
+      },
+      {
+        "encoding": "ascii",
+        "name": "audience"
+      },
+      {
+        "encoding": "ascii",
+        "name": "keyId"
+      },
+      {
+        "encoding": "ascii",
+        "name": "equalityPolicy"
+      },
+      {
+        "encoding": "utf8",
+        "name": "issuer"
+      },
+      {
+        "encoding": "ascii",
+        "name": "subject"
+      },
+      {
+        "encoding": "uuid",
+        "name": "bindingVersionId"
+      },
+      {
+        "encoding": "sha256",
+        "name": "bindingVersionDigest"
+      },
+      {
+        "encoding": "uuid",
+        "name": "lifecycleHeadId"
+      },
+      {
+        "encoding": "sha256",
+        "name": "lifecycleHeadDigest"
+      },
+      {
+        "encoding": "uuid",
+        "name": "tenantId"
+      },
+      {
+        "encoding": "sha256",
+        "name": "tenantRegistrationDigest"
+      },
+      {
+        "encoding": "ascii",
+        "name": "partyRef"
+      },
+      {
+        "encoding": "ascii",
+        "name": "partyRecordKind"
+      },
+      {
+        "encoding": "ascii",
+        "name": "partyRecordId"
+      },
+      {
+        "encoding": "sha256",
+        "name": "partySchemaDigest"
+      },
+      {
+        "encoding": "sha256",
+        "name": "partyPayloadDigest"
+      },
+      {
+        "encoding": "int64",
+        "name": "issuedAt"
+      },
+      {
+        "encoding": "int64",
+        "name": "notBefore"
+      },
+      {
+        "encoding": "int64",
+        "name": "expiresAt"
+      },
+      {
+        "encoding": "uuid",
+        "name": "nonce"
+      }
+    ],
+    "fixedValues": {
+      "equalityPolicy": "OIDC_EXACT_UTF8_V1",
+      "partyRecordId": "must equal partyRef",
+      "partyRecordKind": "ofarm.party.v0.1",
+      "payloadKeyId": "must equal protected-header kid"
+    },
+    "forbidden": "field count, delimiter joining, optional or unknown fields, trailing bytes, JSON payload, implicit casts, floating-point time, normalization, and rewriting"
+  },
+  "principalPolicy": {
+    "issuer": {
+      "comparison": "exact-case-sensitive-ASCII-bytes-without-normalization",
+      "grammar": "issuer = https:// host [:port] path; host = dot-separated 1..63-byte ASCII alnum/hyphen labels beginning and ending alnum, total <=253; port = nonzero digit followed by <=4 digits, no leading zero, value <=65535; path = zero or more slash segments of ASCII unreserved/sub-delims/colon/at or exact percent HEXDIG HEXDIG; no userinfo, IP brackets, query, fragment, backslash, control, NUL, malformed escape, or non-ASCII",
+      "identity": "OFARM_OIDC_ISSUER_ASCII_HTTPS_V1",
+      "maximumBytes": 2048,
+      "minimumBytes": 1
+    },
+    "subject": {
+      "comparison": "exact-case-sensitive-ASCII-bytes-without-normalization",
+      "grammar": "1..255 bytes, every byte ASCII %x21-7E",
+      "maximumBytes": 255,
+      "minimumBytes": 1
+    }
+  },
+  "publicKey": {
+    "algorithm": "Ed25519",
+    "digest": "SHA-256 over exact raw 32-byte key",
+    "jwkThumbprintInput": "{\"crv\":\"Ed25519\",\"kty\":\"OKP\",\"x\":\"<unpadded-base64url-raw-key>\"}",
+    "kid": "RFC-7638 SHA-256 unpadded-base64url JWK thumbprint",
+    "privateMaterialInDatabase": false,
+    "rawBytes": 32,
+    "rfc8410ExactDer": "302a300506032b6570032100 || raw-key; exactly 44 bytes with absent parameters and zero BIT STRING unused bits",
+    "rfc8410PrefixHex": "302a300506032b6570032100"
+  },
+  "schemaVersion": "ofarm.postgresql-tenant-capability-contract.v1",
+  "sharedVectors": {
+    "audience": {
+      "accept": [
+        "urn:ofarm:tenant-binder:v1:a58b7238-5019-49e2-9aaf-530287e5a6ee"
+      ],
+      "refuse": [
+        "",
+        "urn:ofarm:tenant-binder:v1:00000000-0000-0000-0000-000000000000",
+        "urn:ofarm:tenant-binder:v1:A58B7238-5019-49E2-9AAF-530287E5A6EE",
+        "urn:ofarm:tenant-binder:v2:a58b7238-5019-49e2-9aaf-530287e5a6ee",
+        "a58b7238-5019-49e2-9aaf-530287e5a6ee"
+      ]
+    },
+    "base64url": {
+      "accept": [
+        {
+          "decodedHex": "00",
+          "encoded": "AA"
+        },
+        {
+          "decodedHex": "ff",
+          "encoded": "_w"
+        }
+      ],
+      "refuse": [
+        "",
+        "AA=",
+        "AA==",
+        "A",
+        "+w",
+        "_w\n"
+      ]
+    },
+    "fieldEncodings": {
+      "digest": {
+        "acceptHexLengths": [
+          64
+        ],
+        "refuseHexLengths": [
+          0,
+          62,
+          66
+        ]
+      },
+      "int64": {
+        "accept": [
+          {
+            "hex": "8000000000000000",
+            "value": -9223372036854775808
+          },
+          {
+            "hex": "0000000000000000",
+            "value": 0
+          },
+          {
+            "hex": "7fffffffffffffff",
+            "value": 9223372036854775807
+          }
+        ],
+        "refuseByteLengths": [
+          0,
+          7,
+          9
+        ]
+      },
+      "uuid": {
+        "networkOrderHex": "a58b7238501949e29aaf530287e5a6ee",
+        "text": "a58b7238-5019-49e2-9aaf-530287e5a6ee"
+      }
+    },
+    "framing": {
+      "lp32Accept": [
+        {
+          "framedHex": "00000000",
+          "valueHex": ""
+        },
+        {
+          "framedHex": "0000000200ff",
+          "valueHex": "00ff"
+        }
+      ],
+      "lp32Refuse": [
+        "00000002ff",
+        "0000000100ff",
+        "ffffffff"
+      ]
+    },
+    "header": {
+      "accept": "{\"alg\":\"Ed25519\",\"kid\":\"kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k\",\"typ\":\"ofarm-tenant-capability+jws\"}",
+      "refuse": [
+        "{\"alg\":\"EdDSA\",\"kid\":\"kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k\",\"typ\":\"ofarm-tenant-capability+jws\"}",
+        "{\"kid\":\"kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k\",\"alg\":\"Ed25519\",\"typ\":\"ofarm-tenant-capability+jws\"}",
+        "{\"alg\": \"Ed25519\",\"kid\":\"kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k\",\"typ\":\"ofarm-tenant-capability+jws\"}",
+        "{\"alg\":\"Ed25519\",\"kid\":\"kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k\",\"typ\":\"ofarm-tenant-capability+jws\",\"jku\":\"https://example.test/key\"}"
+      ]
+    },
+    "issuer": {
+      "accept": [
+        "https://issuer.example.test",
+        "https://issuer.example.test/tenant",
+        "https://issuer.example.test:443/tenant/v1",
+        "https://localhost",
+        "https://127.0.0.1:8443/oidc",
+        "https://issuer.example.test/a%2Fb",
+        "https://issuer.example.test/a%2fb",
+        "https://issuer.example.test/a'b",
+        "https://issuer.test:1",
+        "https://issuer.test:65535",
+        "https://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.test"
+      ],
+      "refuse": [
+        "",
+        "http://issuer.example.test",
+        "https://",
+        "https://issuer.example.test?query=1",
+        "https://issuer.example.test#fragment",
+        "https://user@issuer.example.test",
+        "https://issuer.example.test:0",
+        "https://issuer.example.test:01",
+        "https://issuer.example.test:65536",
+        "https://issuer.example.test:70000",
+        "https://issuer.example.test:not-a-port",
+        "https://[invalid",
+        "https://[2001:db8::1]",
+        "https://-issuer.example.test",
+        "https://issuer-.example.test",
+        "https://issuer..example.test",
+        "https://issuer.example.test.",
+        "https://issuer.example.test/white space",
+        "https://issuer.example.test/path\\segment",
+        "https://issuer.example.test/%",
+        "https://issuer.example.test/%0",
+        "https://issuer.example.test/%GG",
+        "https://issuer.example.test/\u017e",
+        "https://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.test"
+      ]
+    },
+    "kmsKeyVersionResource": {
+      "accept": [
+        "projects/example/locations/europe-west1/keyRings/ofarm/cryptoKeys/tenant-capability/cryptoKeyVersions/1",
+        "projects/a1234z/locations/global/keyRings/r/cryptoKeys/k/cryptoKeyVersions/999",
+        "projects/a1111111111111111111111111111z/locations/a/keyRings/RING_1/cryptoKeys/KEY-1/cryptoKeyVersions/1"
+      ],
+      "refuse": [
+        "",
+        "projects/a123z/locations/global/keyRings/r/cryptoKeys/k/cryptoKeyVersions/1",
+        "projects/Example/locations/global/keyRings/r/cryptoKeys/k/cryptoKeyVersions/1",
+        "projects/example/locations//keyRings/r/cryptoKeys/k/cryptoKeyVersions/1",
+        "projects/example/locations/-/keyRings/r/cryptoKeys/k/cryptoKeyVersions/1",
+        "projects/example/locations/-global/keyRings/r/cryptoKeys/k/cryptoKeyVersions/1",
+        "projects/example/locations/global-/keyRings/r/cryptoKeys/k/cryptoKeyVersions/1",
+        "projects/example/locations/GLOBAL/keyRings/r/cryptoKeys/k/cryptoKeyVersions/1",
+        "projects/example/locations/global/keyRings//cryptoKeys/k/cryptoKeyVersions/1",
+        "projects/example/locations/global/keyRings/rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr/cryptoKeys/k/cryptoKeyVersions/1",
+        "projects/example/locations/global/keyRings/r/cryptoKeys//cryptoKeyVersions/1",
+        "projects/example/locations/global/keyRings/r/cryptoKeys/k/cryptoKeyVersions/0",
+        "projects/example/locations/global/keyRings/r/cryptoKeys/k/cryptoKeyVersions/01",
+        "projects/example/locations/global/keyRings/r/cryptoKeys/k/cryptoKeyVersions/x",
+        "projects/example/locations/global/keyRings/r/cryptoKeys/k/cryptoKeyVersions/1/"
+      ]
+    },
+    "kmsPublicKey": {
+      "crc32c": 3927069631,
+      "derHex": "302a300506032b6570032100d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+      "kid": "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k",
+      "name": "projects/example/locations/europe-west1/keyRings/ofarm/cryptoKeys/tenant-capability/cryptoKeyVersions/1",
+      "rawKeyHex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+      "rawKeySha256": "21fe31dfa154a261626bf854046fd2271b7bed4b6abe45aa58877ef47f9721b9",
+      "transportBase64": "MCowBQYDK2VwAyEA11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=",
+      "x": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo"
+    },
+    "nonce": {
+      "accept": [
+        "c913ee18-55c8-4a42-a2f4-71e01d23389f"
+      ],
+      "refuse": [
+        "00000000-0000-0000-0000-000000000000",
+        "c913ee18-55c8-5a42-a2f4-71e01d23389f",
+        "c913ee18-55c8-4a42-72f4-71e01d23389f"
+      ]
+    },
+    "subject": {
+      "accept": [
+        "!",
+        "subject-tenant-01",
+        "~",
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      ],
+      "refuse": [
+        "",
+        " ",
+        "subject with space",
+        "subject\u0000value",
+        "\u017e",
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      ]
+    },
+    "time": [
+      {
+        "challengeCreatedAt": 0,
+        "expiresAt": 60000000,
+        "id": "future-skew-equality-accept",
+        "issuedAt": 5000000,
+        "notBefore": 5000000,
+        "now": 0,
+        "result": "accept"
+      },
+      {
+        "challengeCreatedAt": 0,
+        "expiresAt": 60000000,
+        "id": "future-skew-plus-one-refuse",
+        "issuedAt": 5000001,
+        "notBefore": 5000001,
+        "now": 0,
+        "result": "refuse"
+      },
+      {
+        "challengeCreatedAt": 0,
+        "expiresAt": 60000000,
+        "id": "expiry-equality-refuse",
+        "issuedAt": 0,
+        "notBefore": 0,
+        "now": 60000000,
+        "result": "refuse"
+      },
+      {
+        "challengeCreatedAt": 0,
+        "expiresAt": 60000000,
+        "id": "challenge-equality-refuse",
+        "issuedAt": 0,
+        "notBefore": 0,
+        "now": 60000000,
+        "result": "refuse"
+      },
+      {
+        "challengeCreatedAt": 5000000,
+        "expiresAt": 60000000,
+        "id": "issued-at-lower-skew-equality-accept",
+        "issuedAt": 0,
+        "notBefore": 0,
+        "now": 0,
+        "result": "accept"
+      },
+      {
+        "challengeCreatedAt": 5000001,
+        "expiresAt": 60000000,
+        "id": "issued-at-lower-skew-plus-one-refuse",
+        "issuedAt": 0,
+        "notBefore": 0,
+        "now": 0,
+        "result": "refuse"
+      },
+      {
+        "challengeCreatedAt": 0,
+        "expiresAt": 60000001,
+        "id": "lifetime-plus-one-refuse",
+        "issuedAt": 0,
+        "notBefore": 0,
+        "now": 0,
+        "result": "refuse"
+      }
+    ]
+  },
+  "timeRules": {
+    "arithmetic": "checked signed-int64 microseconds; range checks precede addition or subtraction; no floating point",
+    "clock": "one database clock_timestamp observation after all waits and authority reads",
+    "inequalities": [
+      "issued_at <= not_before",
+      "not_before < expires_at",
+      "expires_at - issued_at <= 60000000",
+      "challenge_created_at - 5000000 <= issued_at",
+      "issued_at <= now + 5000000",
+      "not_before <= now + 5000000",
+      "now < expires_at",
+      "expires_at <= challenge_created_at + 60000000",
+      "now < challenge_created_at + 60000000"
+    ]
+  },
+  "uuidPolicy": {
+    "allUuidFields": "exact 16-byte RFC-4122 network order equal to PostgreSQL uuid_send; all-zero forbidden",
+    "nonce": "cryptographically random RFC-4122 variant UUID version 4"
+  }
+}

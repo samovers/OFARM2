@@ -349,7 +349,7 @@ def _create_role(
         sql.SQL("LOGIN" if role.login else "NOLOGIN"),
         sql.SQL("INHERIT" if role.inherit else "NOINHERIT"),
         sql.SQL("BYPASSRLS" if role.bypass_rls else "NOBYPASSRLS"),
-        sql.SQL("NOSUPERUSER"),
+        sql.SQL("SUPERUSER" if role.superuser else "NOSUPERUSER"),
         sql.SQL("NOCREATEDB"),
         sql.SQL("NOCREATEROLE"),
         sql.SQL("NOREPLICATION"),
@@ -487,6 +487,26 @@ def _configure_target(
                     sql.Identifier(spec.schema_owner),
                 )
             )
+            if spec.native_verifier is not None:
+                verifier = spec.native_verifier
+                target.execute(
+                    sql.SQL("CREATE SCHEMA {} AUTHORIZATION {}").format(
+                        sql.Identifier(verifier.schema_name),
+                        sql.Identifier(verifier.installer_role),
+                    )
+                )
+                target.execute(
+                    sql.SQL("SET LOCAL ROLE {}").format(
+                        sql.Identifier(verifier.installer_role)
+                    )
+                )
+                target.execute(
+                    sql.SQL("CREATE EXTENSION {} VERSION {}").format(
+                        sql.Identifier(verifier.extension_name),
+                        sql.Literal(verifier.extension_version),
+                    )
+                )
+                target.execute("RESET ROLE")
             target.execute(
                 sql.SQL("CREATE SCHEMA {} AUTHORIZATION {}").format(
                     sql.Identifier(spec.migration_lock.schema_name),
@@ -507,6 +527,49 @@ def _configure_target(
                     sql.Identifier(spec.schema_name)
                 )
             )
+            if spec.native_verifier is not None:
+                verifier = spec.native_verifier
+                target.execute(
+                    sql.SQL(
+                        "REVOKE ALL PRIVILEGES ON SCHEMA {} FROM PUBLIC"
+                    ).format(sql.Identifier(verifier.schema_name))
+                )
+                if spec.tenant_admission_lock is None:
+                    raise ProvisioningTargetError(
+                        "native verifier requires the tenant admission owner"
+                    )
+                verifier_callers = (
+                    spec.tenant_admission_lock.shared_owner_role,
+                )
+                for verifier_caller in verifier_callers:
+                    target.execute(
+                        sql.SQL("GRANT USAGE ON SCHEMA {} TO {}").format(
+                            sql.Identifier(verifier.schema_name),
+                            sql.Identifier(verifier_caller),
+                        )
+                    )
+                target.execute(
+                    sql.SQL(
+                        "REVOKE ALL PRIVILEGES ON FUNCTION {}.{}("
+                        "pg_catalog.bytea, pg_catalog.bytea, pg_catalog.bytea) "
+                        "FROM PUBLIC"
+                    ).format(
+                        sql.Identifier(verifier.schema_name),
+                        sql.Identifier(verifier.function_name),
+                    )
+                )
+                for verifier_caller in verifier_callers:
+                    target.execute(
+                        sql.SQL(
+                            "GRANT EXECUTE ON FUNCTION {}.{}("
+                            "pg_catalog.bytea, pg_catalog.bytea, pg_catalog.bytea) "
+                            "TO {}"
+                        ).format(
+                            sql.Identifier(verifier.schema_name),
+                            sql.Identifier(verifier.function_name),
+                            sql.Identifier(verifier_caller),
+                        )
+                    )
             target.execute(
                 sql.SQL("REVOKE ALL PRIVILEGES ON SCHEMA {} FROM PUBLIC").format(
                     sql.Identifier(spec.migration_lock.schema_name)
@@ -548,6 +611,29 @@ def _configure_target(
                     "pg_catalog.int4, pg_catalog.int4) TO {}"
                 ).format(sql.Identifier(spec.migration_lock.owner_role))
             )
+            if spec.tenant_admission_lock is not None:
+                target.execute(
+                    sql.SQL(
+                        "GRANT EXECUTE ON FUNCTION "
+                        "pg_catalog.pg_advisory_xact_lock_shared("
+                        "pg_catalog.int4, pg_catalog.int4) TO {}"
+                    ).format(
+                        sql.Identifier(
+                            spec.tenant_admission_lock.shared_owner_role
+                        )
+                    )
+                )
+                target.execute(
+                    sql.SQL(
+                        "GRANT EXECUTE ON FUNCTION "
+                        "pg_catalog.pg_advisory_xact_lock("
+                        "pg_catalog.int4, pg_catalog.int4) TO {}"
+                    ).format(
+                        sql.Identifier(
+                            spec.tenant_admission_lock.exclusive_owner_role
+                        )
+                    )
+                )
             if spec.tenant_write_lock is not None:
                 target.execute(
                     sql.SQL(
@@ -686,7 +772,7 @@ def _role_surface_differences(
         if row is None:
             continue
         expected = (
-            False,
+            role.superuser,
             role.inherit,
             False,
             False,
@@ -998,14 +1084,17 @@ def _namespace_and_acl_differences(
         """
     ).fetchall()
     differences: list[str] = []
-    if {row[0] for row in schemas} != {
+    expected_schemas = {
         "information_schema",
         spec.migration_lock.schema_name,
         spec.schema_name,
         "pg_catalog",
         "pg_toast",
         "public",
-    }:
+    }
+    if spec.native_verifier is not None:
+        expected_schemas.add(spec.native_verifier.schema_name)
+    if {row[0] for row in schemas} != expected_schemas:
         differences.append("database user-schema inventory or ownership differs")
     observed_schema_owners = {row[0]: (row[1], row[2]) for row in schemas}
     if observed_schema_owners.get(spec.schema_name) != (spec.schema_owner, False):
@@ -1015,6 +1104,10 @@ def _namespace_and_acl_differences(
         False,
     ):
         differences.append("migration-lock infrastructure schema owner differs")
+    if spec.native_verifier is not None and observed_schema_owners.get(
+        spec.native_verifier.schema_name
+    ) != (spec.native_verifier.installer_role, True):
+        differences.append("native-verifier schema owner differs")
     if observed_schema_owners.get("public") != ("pg_database_owner", False):
         differences.append("schema public owner differs")
     for system_schema in ("information_schema", "pg_catalog", "pg_toast"):
@@ -1022,6 +1115,7 @@ def _namespace_and_acl_differences(
         if owner is None or owner[1] is not True or owner[0].startswith("ofarm_"):
             differences.append(f"schema {system_schema} owner is not the external DBA")
 
+    non_superuser_roles = [role.name for role in spec.roles if not role.superuser]
     governed_system_schema_privileges = target.execute(
         """
         SELECT role.rolname::text,
@@ -1038,13 +1132,13 @@ def _namespace_and_acl_differences(
           AND namespace.nspname = 'pg_catalog'
         ORDER BY 1, 2
         """,
-        (list(spec.role_names),),
+        (non_superuser_roles,),
     ).fetchall()
     if any(
         has_usage is not True or has_create is not False
         for _role, _schema, has_usage, has_create
         in governed_system_schema_privileges
-    ) or len(governed_system_schema_privileges) != len(spec.role_names):
+    ) or len(governed_system_schema_privileges) != len(non_superuser_roles):
         differences.append("governed role system-schema privileges differ")
 
     for system_schema, public_usage in (
@@ -1118,12 +1212,254 @@ def _namespace_and_acl_differences(
     if infrastructure_schema_acl != expected_infrastructure_schema_acl:
         differences.append("migration-lock infrastructure schema ACL differs")
 
+    if spec.native_verifier is not None:
+        verifier_schema_acl = _acl_rows(
+            target, "schema", spec.native_verifier.schema_name
+        )
+        expected_verifier_schema_acl = {
+            (
+                spec.native_verifier.installer_role,
+                spec.native_verifier.installer_role,
+                "CREATE",
+                False,
+            ),
+            (
+                spec.native_verifier.installer_role,
+                spec.native_verifier.installer_role,
+                "USAGE",
+                False,
+            ),
+            (
+                "ofarm_binder",
+                spec.native_verifier.installer_role,
+                "USAGE",
+                False,
+            ),
+        }
+        if verifier_schema_acl != expected_verifier_schema_acl:
+            differences.append("native-verifier schema ACL differs")
+
     public_schema_acl = _acl_rows(target, "schema", "public")
     if public_schema_acl != {
         ("pg_database_owner", "pg_database_owner", "CREATE", False),
         ("pg_database_owner", "pg_database_owner", "USAGE", False),
     }:
         differences.append("schema public ACL differs")
+    return differences
+
+
+def _native_verifier_differences(
+    target: psycopg.Connection, spec: ProvisioningSpec
+) -> list[str]:
+    """Authenticate the exact pre-ledger verification-only extension surface."""
+
+    verifier = spec.native_verifier
+    if verifier is None:
+        rows = target.execute(
+            """
+            SELECT extension.extname::text
+            FROM pg_catalog.pg_extension AS extension
+            WHERE extension.extname <> 'plpgsql'
+            ORDER BY extension.extname
+            """
+        ).fetchall()
+        return [] if rows == [] else ["unexpected extension is installed"]
+    if spec.tenant_admission_lock is None:
+        return ["native verifier has no admission-lock owner"]
+
+    extension_rows = target.execute(
+        """
+        SELECT extension.extname::text,
+               extension.extversion::text,
+               namespace.nspname::text,
+               owner.rolname::text,
+               extension.extrelocatable,
+               extension.extconfig,
+               extension.extcondition
+        FROM pg_catalog.pg_extension AS extension
+        JOIN pg_catalog.pg_namespace AS namespace
+          ON namespace.oid = extension.extnamespace
+        JOIN pg_catalog.pg_roles AS owner ON owner.oid = extension.extowner
+        WHERE extension.extname <> 'plpgsql'
+        ORDER BY extension.extname
+        """
+    ).fetchall()
+    expected_extension = [
+        (
+            verifier.extension_name,
+            verifier.extension_version,
+            verifier.schema_name,
+            verifier.installer_role,
+            False,
+            None,
+            None,
+        )
+    ]
+    differences: list[str] = []
+    if extension_rows != expected_extension:
+        differences.append("native-verifier extension identity differs")
+
+    function_rows = target.execute(
+        """
+        SELECT routine.proname::text,
+               pg_catalog.pg_get_function_identity_arguments(routine.oid),
+               pg_catalog.format_type(routine.prorettype, NULL),
+               owner.rolname::text,
+               language.lanname::text,
+               routine.prosecdef,
+               routine.proisstrict,
+               routine.proleakproof,
+               routine.provolatile,
+               routine.proparallel,
+               routine.probin,
+               routine.prosrc,
+               routine.pronargs,
+               routine.pronargdefaults,
+               routine.prokind,
+               routine.proconfig,
+               routine.procost,
+               routine.prorows,
+               routine.prosupport = 0,
+               routine.provariadic = 0,
+               routine.proallargtypes,
+               routine.proargmodes,
+               routine.proargnames,
+               routine.prosqlbody IS NULL,
+               dependency.deptype,
+               extension.extname::text
+        FROM pg_catalog.pg_proc AS routine
+        JOIN pg_catalog.pg_namespace AS namespace
+          ON namespace.oid = routine.pronamespace
+        JOIN pg_catalog.pg_roles AS owner ON owner.oid = routine.proowner
+        JOIN pg_catalog.pg_language AS language ON language.oid = routine.prolang
+        LEFT JOIN pg_catalog.pg_depend AS dependency
+          ON dependency.classid = 'pg_catalog.pg_proc'::pg_catalog.regclass
+         AND dependency.objid = routine.oid
+         AND dependency.deptype = 'e'
+        LEFT JOIN pg_catalog.pg_extension AS extension
+          ON extension.oid = dependency.refobjid
+         AND dependency.refclassid =
+             'pg_catalog.pg_extension'::pg_catalog.regclass
+        WHERE namespace.nspname = %s
+        ORDER BY routine.proname,
+                 pg_catalog.pg_get_function_identity_arguments(routine.oid)
+        """,
+        (verifier.schema_name,),
+    ).fetchall()
+    expected_function = [
+        (
+            verifier.function_name,
+            "public_key bytea, signed_bytes bytea, signature bytea",
+            "boolean",
+            verifier.installer_role,
+            "c",
+            False,
+            True,
+            False,
+            "i",
+            "u",
+            verifier.module_pathname,
+            "ofarm_ed25519_verify",
+            3,
+            0,
+            "f",
+            None,
+            1.0,
+            0.0,
+            True,
+            True,
+            None,
+            None,
+            ["public_key", "signed_bytes", "signature"],
+            True,
+            "e",
+            verifier.extension_name,
+        )
+    ]
+    if function_rows != expected_function:
+        differences.append("native-verifier SQL function identity differs")
+
+    extension_members = target.execute(
+        """
+        SELECT dependency.classid::pg_catalog.regclass::pg_catalog.text,
+               dependency.objsubid,
+               dependency.deptype,
+               identified.type,
+               identified.schema,
+               identified.name,
+               identified.identity
+        FROM pg_catalog.pg_depend AS dependency
+        JOIN pg_catalog.pg_extension AS extension
+          ON extension.oid = dependency.refobjid
+        CROSS JOIN LATERAL pg_catalog.pg_identify_object(
+            dependency.classid, dependency.objid, dependency.objsubid
+        ) AS identified
+        WHERE dependency.refclassid =
+                'pg_catalog.pg_extension'::pg_catalog.regclass
+          AND extension.extname = %s
+        ORDER BY 1, 2, 3, 4, 5, 6, 7
+        """,
+        (verifier.extension_name,),
+    ).fetchall()
+    if extension_members != [
+        (
+            "pg_proc",
+            0,
+            "e",
+            "function",
+            verifier.schema_name,
+            None,
+            (
+                f"{verifier.schema_name}.{verifier.function_name}"
+                "(pg_catalog.bytea,pg_catalog.bytea,pg_catalog.bytea)"
+            ),
+        )
+    ]:
+        differences.append("native-verifier extension membership differs")
+
+    schema_rows = target.execute(
+        f"""
+        WITH target_names(schema_name) AS (VALUES (%s::text))
+        {SCHEMA_LOCAL_OBJECT_SELECTS_SQL}
+        ORDER BY 1, 2, 3
+        """,
+        (verifier.schema_name,),
+    ).fetchall()
+    if schema_rows != [("routine", verifier.schema_name, verifier.function_name)]:
+        differences.append("native-verifier schema object inventory differs")
+
+    acl_rows = target.execute(
+        """
+        SELECT CASE WHEN acl.grantee = 0 THEN 'PUBLIC'
+                    ELSE grantee.rolname::text END,
+               grantor.rolname::text,
+               acl.privilege_type,
+               acl.is_grantable
+        FROM pg_catalog.pg_proc AS routine
+        JOIN pg_catalog.pg_namespace AS namespace
+          ON namespace.oid = routine.pronamespace
+        JOIN pg_catalog.pg_roles AS owner ON owner.oid = routine.proowner
+        CROSS JOIN LATERAL pg_catalog.aclexplode(
+            COALESCE(
+                routine.proacl,
+                pg_catalog.acldefault('f', routine.proowner)
+            )
+        ) AS acl
+        LEFT JOIN pg_catalog.pg_roles AS grantee ON grantee.oid = acl.grantee
+        JOIN pg_catalog.pg_roles AS grantor ON grantor.oid = acl.grantor
+        WHERE namespace.nspname = %s
+          AND routine.proname = %s
+          AND pg_catalog.pg_get_function_identity_arguments(routine.oid) =
+              'public_key bytea, signed_bytes bytea, signature bytea'
+        ORDER BY 1, 2, 3, 4
+        """,
+        (verifier.schema_name, verifier.function_name),
+    ).fetchall()
+    if acl_rows != [
+        ("ofarm_binder", verifier.installer_role, "EXECUTE", False),
+        (verifier.installer_role, verifier.installer_role, "EXECUTE", False),
+    ]:
+        differences.append("native-verifier function ACL differs")
     return differences
 
 
@@ -1554,6 +1890,10 @@ def _routine_acl_differences(
         "integer, integer",
     )
     tenant_lock_identity = ("pg_advisory_xact_lock", "bigint")
+    admission_shared_identity = (
+        "pg_advisory_xact_lock_shared",
+        "integer, integer",
+    )
     for identity in sorted(expected_identities):
         owner = observed_owners.get(identity)
         if owner is None:
@@ -1563,6 +1903,27 @@ def _routine_acl_differences(
             expected_acl.add(
                 (
                     spec.migration_lock.owner_role,
+                    owner,
+                    "EXECUTE",
+                    False,
+                )
+            )
+            if spec.tenant_admission_lock is not None:
+                expected_acl.add(
+                    (
+                        spec.tenant_admission_lock.exclusive_owner_role,
+                        owner,
+                        "EXECUTE",
+                        False,
+                    )
+                )
+        if (
+            identity == admission_shared_identity
+            and spec.tenant_admission_lock is not None
+        ):
+            expected_acl.add(
+                (
+                    spec.tenant_admission_lock.shared_owner_role,
                     owner,
                     "EXECUTE",
                     False,
@@ -2391,6 +2752,16 @@ def _unmigrated_object_differences(
             unexpected_rows.remove(expected_sealer_routine)
         except ValueError:
             pass
+    if spec.native_verifier is not None:
+        expected_extension = (
+            "extension",
+            spec.native_verifier.schema_name,
+            spec.native_verifier.extension_name,
+        )
+        try:
+            unexpected_rows.remove(expected_extension)
+        except ValueError:
+            pass
     differences: list[str] = []
     if ledger_present and not allow_migration_objects:
         differences.append(
@@ -2459,6 +2830,7 @@ def migration_locked_differences(
     differences.extend(_parameter_acl_differences(target, spec))
     differences.extend(_database_differences(target, spec))
     differences.extend(_namespace_and_acl_differences(target, spec))
+    differences.extend(_native_verifier_differences(target, spec))
     differences.extend(_setting_differences(target, spec))
     differences.extend(_default_acl_differences(target, spec))
     differences.extend(_routine_acl_differences(target, spec))
@@ -2505,6 +2877,7 @@ def _verify_locked(
             differences.extend(_parameter_acl_differences(target, spec))
             differences.extend(_database_differences(target, spec))
             differences.extend(_namespace_and_acl_differences(target, spec))
+            differences.extend(_native_verifier_differences(target, spec))
             differences.extend(_setting_differences(target, spec))
             differences.extend(_default_acl_differences(target, spec))
             differences.extend(_routine_acl_differences(target, spec))

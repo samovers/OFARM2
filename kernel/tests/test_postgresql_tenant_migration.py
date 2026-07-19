@@ -36,8 +36,19 @@ from deployment.postgresql.tenant_contract import (
     OIDC_ISSUER_EQUALITY_POLICY,
     OIDC_ISSUER_INVALID_VECTORS,
     OIDC_ISSUER_VALID_VECTORS,
+    TENANT_CAPABILITY_CONTRACT,
+    TENANT_CAPABILITY_PREFLIGHT_PROBE,
     TENANT_CONTEXT_CONTRACT,
+    TenantCapability,
+    derive_ed25519_key_id,
     valid_oidc_issuer,
+)
+from kernel.tests.tenant_capability_fixture import (
+    RFC8032_TEST_PUBLIC_KEY,
+    RFC8032_TEST_SEED,
+    public_key_from_seed,
+    sign,
+    sign_capability,
 )
 from kernel.tests.test_postgresql_migration_runner import (
     _assert_clean_service,
@@ -102,6 +113,26 @@ class TenantAuthority:
     batch_id: str
 
 
+@dataclass(frozen=True, slots=True)
+class CapabilityKeyAuthority:
+    kid: str
+    candidate_id: UUID
+    candidate_digest: str
+    head_id: UUID
+    head_digest: str
+    activated_at_unix_microseconds: int
+
+
+@dataclass(frozen=True, slots=True)
+class CapabilityKeyCandidate:
+    seed: bytes
+    public_key: bytes
+    kid: str
+    candidate_id: UUID
+    candidate_digest: str
+    preflight_receipt_digest: str
+
+
 def _admin_dsn() -> str:
     value = os.environ.get(ADMIN_ENV)
     if not value:
@@ -155,6 +186,11 @@ def tenant_target() -> TenantTarget:
 
 def _sha256_id(value: bytes) -> str:
     return "sha256:" + hashlib.sha256(value).hexdigest()
+
+
+def _raw_sha256(value: str) -> bytes:
+    assert value.startswith("sha256:")
+    return bytes.fromhex(value.removeprefix("sha256:"))
 
 
 def _canonical_json(value: object) -> bytes:
@@ -481,6 +517,145 @@ def authority(
     )
 
 
+def _register_capability_key_candidate(
+    controller: psycopg.Connection,
+    *,
+    seed: bytes,
+    label: str,
+) -> CapabilityKeyCandidate:
+    public_key = public_key_from_seed(seed)
+    kms_attestation_digest = _sha256_id(
+        f"{label}-hsm-attestation-v1".encode("ascii")
+    )
+    probe_signature = sign(seed, TENANT_CAPABILITY_PREFLIGHT_PROBE)
+    candidate_id, kid, candidate_digest = controller.execute(
+        """
+        SELECT *
+        FROM ofarm.register_tenant_capability_key(%s, %s, %s)
+        """,
+        (
+            public_key,
+            (
+                "projects/example/locations/europe-west1/keyRings/ofarm/"
+                f"cryptoKeys/{label}/cryptoKeyVersions/1"
+            ),
+            kms_attestation_digest,
+        ),
+    ).fetchone()
+    controller.commit()
+    assert controller.execute(
+        """
+        SELECT ofarm.verify_tenant_capability_candidate_preflight(%s, %s)
+        """,
+        (kid, probe_signature),
+    ).fetchone() == (True,)
+    controller.commit()
+    preflight_receipt_digest = _sha256_id(
+        f"{label}-preflight-removal-receipt-v1".encode("ascii")
+    )
+    return CapabilityKeyCandidate(
+        seed=seed,
+        public_key=public_key,
+        kid=kid,
+        candidate_id=candidate_id,
+        candidate_digest=candidate_digest,
+        preflight_receipt_digest=preflight_receipt_digest,
+    )
+
+
+@pytest.fixture(scope="module")
+def capability_key(
+    tenant_target: TenantTarget,
+) -> CapabilityKeyAuthority:
+    """Install and activate the RFC-vector key through the real controller."""
+
+    kms_evidence_digest = _sha256_id(b"rfc8032-kms-enable-evidence-v1")
+    iam_evidence_digest = _sha256_id(b"rfc8032-iam-removal-evidence-v1")
+    with psycopg.connect(
+        tenant_target.role_dsn("ofarm_capability_key_control_login")
+    ) as controller:
+        candidate = _register_capability_key_candidate(
+            controller,
+            seed=RFC8032_TEST_SEED,
+            label="tenant-capability",
+        )
+        head_id, head_digest, activated_at = controller.execute(
+            """
+            SELECT *
+            FROM ofarm.activate_tenant_capability_key(
+                %s, NULL, NULL, %s, %s, %s, 'INITIAL_ACTIVATION'
+            )
+            """,
+            (
+                candidate.kid,
+                candidate.preflight_receipt_digest,
+                kms_evidence_digest,
+                iam_evidence_digest,
+            ),
+        ).fetchone()
+    assert candidate.public_key == RFC8032_TEST_PUBLIC_KEY
+    assert candidate.kid == derive_ed25519_key_id(RFC8032_TEST_PUBLIC_KEY)
+    with psycopg.connect(
+        tenant_target.role_dsn("ofarm_capability_key_control_login")
+    ) as controller:
+        with pytest.raises(psycopg.errors.InvalidAuthorizationSpecification):
+            controller.execute(
+                """
+                SELECT ofarm.verify_tenant_capability_candidate_preflight(
+                    %s, %s
+                )
+                """,
+                (
+                    candidate.kid,
+                    sign(candidate.seed, TENANT_CAPABILITY_PREFLIGHT_PROBE),
+                ),
+            )
+    return CapabilityKeyAuthority(
+        kid=candidate.kid,
+        candidate_id=candidate.candidate_id,
+        candidate_digest=candidate.candidate_digest,
+        head_id=head_id,
+        head_digest=head_digest,
+        activated_at_unix_microseconds=activated_at,
+    )
+
+
+def _tenant_capability(
+    *,
+    authority: TenantAuthority,
+    key: CapabilityKeyAuthority,
+    challenge_id: UUID,
+    audience: str,
+    now_unix_microseconds: int,
+) -> TenantCapability:
+    return TenantCapability(
+        contract_digest=TENANT_CAPABILITY_CONTRACT.raw_digest,
+        challenge_id=challenge_id,
+        audience=audience,
+        key_id=key.kid,
+        equality_policy=OIDC_ISSUER_EQUALITY_POLICY,
+        issuer=ISSUER,
+        subject=authority.subject,
+        binding_version_id=authority.binding_version_id,
+        binding_version_digest=_raw_sha256(authority.binding_version_digest),
+        lifecycle_head_id=authority.lifecycle_head_id,
+        lifecycle_head_digest=_raw_sha256(authority.lifecycle_head_digest),
+        tenant_id=authority.tenant_id,
+        tenant_registration_digest=_raw_sha256(
+            authority.tenant_registration_digest
+        ),
+        party_ref=authority.party_ref,
+        party_record_kind=PARTY_KIND,
+        party_record_id=authority.party_ref,
+        party_schema_digest=_raw_sha256(authority.party_schema_digest),
+        party_payload_digest=_raw_sha256(authority.party_payload_digest),
+        issued_at_unix_microseconds=now_unix_microseconds,
+        not_before_unix_microseconds=now_unix_microseconds,
+        expires_at_unix_microseconds=now_unix_microseconds + 30_000_000,
+        nonce=uuid4(),
+    )
+
+
 @pytest.fixture(scope="module")
 def other_authority(
     tenant_target: TenantTarget,
@@ -642,9 +817,10 @@ def _install_test_bound_context(
 ) -> None:
     """Install a privileged test-only context for RLS/graph tests.
 
-    Production binding is deliberately absent until issue #172.  These #174
-    tests still need to exercise the protected storage primitives, so a target
-    administrator supplies the already-verified transaction context directly.
+    The production binder is covered separately with exact signed capabilities.
+    These storage-focused tests avoid coupling every RLS/graph assertion to a
+    signer fixture, so a target administrator installs the equivalent verified
+    transaction context directly.
     """
 
     backend_pid, full_xid = connection.execute(
@@ -680,6 +856,8 @@ def _install_test_bound_context(
                 tenant_id, tenant_registration_digest,
                 party_ref, party_record_kind, party_record_id,
                 party_schema_digest, party_payload_digest,
+                capability_key_id, capability_key_lifecycle_head_id,
+                capability_key_lifecycle_head_digest,
                 capability_nonce, bound_at
             ) VALUES (
                 %s, %s, %s::pg_catalog.xid8,
@@ -690,6 +868,7 @@ def _install_test_bound_context(
                 %s, %s,
                 %s, %s, %s,
                 %s, %s,
+                %s, %s, %s,
                 %s, pg_catalog.clock_timestamp()
             )
             """,
@@ -712,6 +891,9 @@ def _install_test_bound_context(
                 authority.party_ref,
                 authority.party_schema_digest,
                 authority.party_payload_digest,
+                derive_ed25519_key_id(RFC8032_TEST_PUBLIC_KEY),
+                uuid4(),
+                SHA256_ZERO,
                 uuid4(),
             ),
         )
@@ -740,7 +922,7 @@ def test_authoritative_source_ledger_contract_and_apply_noop(
     assert source.count(b"SET quote_all_identifiers = off") == 1
     assert b"FROM pg_catalog.pg_largeobject_metadata" in source
     assert TENANT_CONTEXT_CONTRACT.digest == (
-        "sha256:4e0acd383a1c44142043c51f2bca26fbddc0f191dcf511c2aa97d212d3a6cb62"
+        "sha256:d6c16891e263420c55b80f17674cda3c2895652cd2ff8d45937f8b80300567ca"
     )
     assert tenant_target.first_report.applied_versions == (1,)
     assert tenant_target.noop_report.applied_versions == ()
@@ -888,7 +1070,7 @@ def test_shared_application_role_cannot_observe_peer_backend_statistics(
             attacker.rollback()
 
         challenge_id = attacker.execute(
-            "SELECT ofarm.create_tenant_challenge()"
+            "SELECT * FROM ofarm.create_tenant_challenge()"
         ).fetchone()[0]
         assert isinstance(challenge_id, UUID)
         attacker.rollback()
@@ -897,41 +1079,867 @@ def test_shared_application_role_cannot_observe_peer_backend_statistics(
         attacker.close()
 
 
-def test_production_binding_is_fail_closed_pending_issue_172(
+def test_key_registration_refuses_null_candidate_evidence(
+    tenant_target: TenantTarget,
+) -> None:
+    resource = (
+        "projects/example/locations/europe-west1/keyRings/ofarm/"
+        "cryptoKeys/null-refusal/cryptoKeyVersions/1"
+    )
+    attestation = _sha256_id(b"null-refusal-attestation")
+    with psycopg.connect(
+        tenant_target.role_dsn("ofarm_capability_key_control_login")
+    ) as controller:
+        for arguments in (
+            (None, resource, attestation),
+            (RFC8032_TEST_PUBLIC_KEY, None, attestation),
+            (RFC8032_TEST_PUBLIC_KEY, resource, None),
+        ):
+            with pytest.raises(psycopg.errors.InvalidParameterValue):
+                with controller.transaction():
+                    controller.execute(
+                        """
+                        SELECT *
+                        FROM ofarm.register_tenant_capability_key(
+                            %s, %s, %s
+                        )
+                        """,
+                        arguments,
+                    )
+
+
+def test_candidate_preflight_refuses_unknown_wrong_or_malformed_input(
+    tenant_target: TenantTarget,
+) -> None:
+    unknown_kid = derive_ed25519_key_id(bytes(range(32)))
+    valid_signature = sign(
+        RFC8032_TEST_SEED, TENANT_CAPABILITY_PREFLIGHT_PROBE
+    )
+    with psycopg.connect(
+        tenant_target.role_dsn("ofarm_capability_key_control_login")
+    ) as controller:
+        candidate = _register_capability_key_candidate(
+            controller,
+            seed=hashlib.sha256(b"ofarm-preflight-refusal").digest(),
+            label="preflight-refusal",
+        )
+        wrong_signature = bytearray(
+            sign(candidate.seed, TENANT_CAPABILITY_PREFLIGHT_PROBE)
+        )
+        wrong_signature[-1] ^= 1
+        assert controller.execute(
+            """
+            SELECT ofarm.verify_tenant_capability_candidate_preflight(%s, %s)
+            """,
+            (candidate.kid, bytes(wrong_signature)),
+        ).fetchone() == (False,)
+        controller.commit()
+        with pytest.raises(psycopg.errors.InvalidAuthorizationSpecification):
+            controller.execute(
+                """
+                SELECT ofarm.verify_tenant_capability_candidate_preflight(
+                    %s, %s
+                )
+                """,
+                (unknown_kid, valid_signature),
+            )
+        controller.rollback()
+        for arguments in ((None, valid_signature), (unknown_kid, None)):
+            with pytest.raises(psycopg.errors.InvalidParameterValue):
+                controller.execute(
+                    """
+                    SELECT ofarm.verify_tenant_capability_candidate_preflight(
+                        %s, %s
+                    )
+                    """,
+                    arguments,
+                )
+            controller.rollback()
+
+
+def test_candidate_preflight_serializes_with_lifecycle_mutation_lock(
+    tenant_target: TenantTarget,
+) -> None:
+    seed = hashlib.sha256(b"ofarm-preflight-lock-order").digest()
+    probe_signature = sign(seed, TENANT_CAPABILITY_PREFLIGHT_PROBE)
+    with psycopg.connect(
+        tenant_target.role_dsn("ofarm_capability_key_control_login")
+    ) as controller:
+        candidate = _register_capability_key_candidate(
+            controller,
+            seed=seed,
+            label="preflight-lock-order",
+        )
+
+    preflight_pid: list[int] = []
+    preflight_connected = threading.Event()
+
+    def attempt_preflight() -> tuple[bool]:
+        with psycopg.connect(
+            tenant_target.role_dsn("ofarm_capability_key_control_login")
+        ) as controller:
+            preflight_pid.append(controller.info.backend_pid)
+            preflight_connected.set()
+            return controller.execute(
+                """
+                SELECT ofarm.verify_tenant_capability_candidate_preflight(
+                    %s, %s
+                )
+                """,
+                (candidate.kid, probe_signature),
+            ).fetchone()
+
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        admin.execute(
+            "SELECT pg_catalog.pg_advisory_xact_lock(%s, %s)",
+            (1330004306, 1413694001),
+        )
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            preflight_future = executor.submit(attempt_preflight)
+            try:
+                assert preflight_connected.wait(timeout=5)
+                waiting_for_exclusive_lock = False
+                for _attempt in range(100):
+                    waiting_for_exclusive_lock = admin.execute(
+                        """
+                        SELECT pg_catalog.count(*) = 1
+                        FROM pg_catalog.pg_locks AS lock
+                        WHERE lock.pid = %s
+                          AND lock.locktype = 'advisory'
+                          AND lock.classid = 1330004306
+                          AND lock.objid = 1413694001
+                          AND lock.mode = 'ExclusiveLock'
+                          AND NOT lock.granted
+                        """,
+                        (preflight_pid[0],),
+                    ).fetchone()[0]
+                    if waiting_for_exclusive_lock:
+                        break
+                    threading.Event().wait(0.01)
+                assert waiting_for_exclusive_lock
+                assert not preflight_future.done()
+            finally:
+                admin.rollback()
+            assert preflight_future.result(timeout=5) == (True,)
+
+
+def test_key_controller_refuses_every_missing_lifecycle_evidence_field(
+    tenant_target: TenantTarget,
+    capability_key: CapabilityKeyAuthority,
+) -> None:
+    preflight = _sha256_id(b"null-lifecycle-preflight")
+    kms = _sha256_id(b"null-lifecycle-kms")
+    iam = _sha256_id(b"null-lifecycle-iam")
+    incident_id = uuid4()
+    close_receipt_id = uuid4()
+    calls: list[tuple[str, tuple[object, ...]]] = []
+    for missing in range(3):
+        evidence: list[str | None] = [preflight, kms, iam]
+        evidence[missing] = None
+        calls.append(
+            (
+                """
+                SELECT * FROM ofarm.activate_tenant_capability_key(
+                    %s, %s, %s, %s, %s, %s, 'COMPROMISE_REPLACEMENT'
+                )
+                """,
+                (
+                    capability_key.kid,
+                    capability_key.head_id,
+                    capability_key.head_digest,
+                    *evidence,
+                ),
+            )
+        )
+        calls.append(
+            (
+                """
+                SELECT * FROM ofarm.rotate_tenant_capability_key(
+                    %s, %s, %s, %s, %s, %s, %s, 'GRACEFUL_ROTATION'
+                )
+                """,
+                (
+                    capability_key.kid,
+                    capability_key.kid,
+                    capability_key.head_id,
+                    capability_key.head_digest,
+                    *evidence,
+                ),
+            )
+        )
+    for missing in range(2):
+        evidence = [kms, iam]
+        evidence[missing] = None
+        calls.extend(
+            (
+                (
+                    """
+                    SELECT * FROM ofarm.close_tenant_capability_admission(
+                        %s, %s, %s, %s, %s, 'COMPROMISE'
+                    )
+                    """,
+                    (
+                        capability_key.head_id,
+                        capability_key.head_digest,
+                        capability_key.kid,
+                        *evidence,
+                    ),
+                ),
+                (
+                    """
+                    SELECT * FROM ofarm.revoke_tenant_capability_key(
+                        %s, %s, %s, %s, %s, %s, %s, 'COMPROMISE'
+                    )
+                    """,
+                    (
+                        capability_key.kid,
+                        capability_key.head_id,
+                        capability_key.head_digest,
+                        incident_id,
+                        close_receipt_id,
+                        *evidence,
+                    ),
+                ),
+                (
+                    """
+                    SELECT * FROM ofarm.resume_tenant_capability_admission(
+                        %s, %s, %s, %s, %s, %s, 'COMPROMISE_RESOLVED'
+                    )
+                    """,
+                    (
+                        capability_key.head_id,
+                        capability_key.head_digest,
+                        incident_id,
+                        close_receipt_id,
+                        *evidence,
+                    ),
+                ),
+            )
+        )
+
+    with psycopg.connect(
+        tenant_target.role_dsn("ofarm_capability_key_control_login")
+    ) as controller:
+        for statement, parameters in calls:
+            with pytest.raises(psycopg.errors.InvalidParameterValue):
+                with controller.transaction():
+                    controller.execute(statement, parameters)
+
+        with pytest.raises(psycopg.errors.InvalidParameterValue) as refused:
+            with controller.transaction():
+                controller.execute(
+                    """
+                    SELECT * FROM ofarm.revoke_tenant_capability_key(
+                        NULL, %s, %s, %s, %s, %s, %s, 'COMPROMISE'
+                    )
+                    """,
+                    (
+                        capability_key.head_id,
+                        capability_key.head_digest,
+                        incident_id,
+                        close_receipt_id,
+                        kms,
+                        iam,
+                    ),
+                )
+        assert refused.value.diag.message_primary == (
+            "key revocation arguments differ"
+        )
+
+
+def test_capability_crypto_and_control_role_matrix_is_exact(
     tenant_target: TenantTarget,
 ) -> None:
     with psycopg.connect(tenant_target.target_admin_dsn) as admin:
-        forbidden_relations = admin.execute(
+        assert admin.execute(
             """
-            SELECT pg_catalog.to_regclass('ofarm.tenant_capability_key_schedule')
+            SELECT role_name,
+                   pg_catalog.has_function_privilege(
+                       role_name,
+                       'ofarm_crypto.ed25519_verify(bytea,bytea,bytea)',
+                       'EXECUTE'
+                   ),
+                   pg_catalog.has_function_privilege(
+                       role_name,
+                       'ofarm.verify_tenant_capability_preflight(bytea,bytea)',
+                       'EXECUTE'
+                   ),
+                   pg_catalog.has_function_privilege(
+                       role_name,
+                       'ofarm.verify_tenant_capability_candidate_preflight(text,bytea)',
+                       'EXECUTE'
+                   )
+            FROM pg_catalog.unnest(%s::pg_catalog.text[]) AS roles(role_name)
+            ORDER BY role_name
+            """,
+            (
+                [
+                    "ofarm_admission_lock_owner",
+                    "ofarm_binder",
+                    "ofarm_capability_key_control_login",
+                ],
+            ),
+        ).fetchall() == [
+            ("ofarm_admission_lock_owner", False, True, True),
+            ("ofarm_binder", True, True, False),
+            ("ofarm_capability_key_control_login", False, False, True),
+        ]
+        assert admin.execute(
             """
-        ).fetchone()
-        forbidden_routines = admin.execute(
-            """
-            SELECT routine.proname
-            FROM pg_catalog.pg_proc AS routine
-            JOIN pg_catalog.pg_namespace AS namespace
-              ON namespace.oid = routine.pronamespace
-            WHERE namespace.nspname = 'ofarm'
-              AND routine.proname IN (
-                  'bind_tenant_capability',
-                  'frame_tenant_capability',
-                  'hmac_sha256',
-                  'secure_bytea_equal',
-                  'install_tenant_capability_key'
-              )
-            """
-        ).fetchall()
-    assert forbidden_relations == (None,)
-    assert forbidden_routines == []
+            SELECT login_role, target_role,
+                   pg_catalog.pg_has_role(login_role, target_role, 'SET'),
+                   pg_catalog.has_function_privilege(
+                       login_role,
+                       'pg_catalog.pg_advisory_xact_lock(integer,integer)',
+                       'EXECUTE'
+                   ),
+                   pg_catalog.has_function_privilege(
+                       login_role,
+                       'pg_catalog.pg_advisory_xact_lock_shared(integer,integer)',
+                       'EXECUTE'
+                   )
+            FROM pg_catalog.unnest(%s::pg_catalog.text[]) AS logins(login_role)
+            CROSS JOIN pg_catalog.unnest(%s::pg_catalog.text[])
+                AS targets(target_role)
+            ORDER BY login_role, target_role
+            """,
+            (
+                list(TENANT_PROVISIONING_SPEC.login_role_names),
+                ["ofarm_admission_lock_owner", "ofarm_binder"],
+            ),
+        ).fetchall() == [
+            (login_role, target_role, False, False, False)
+            for login_role in sorted(TENANT_PROVISIONING_SPEC.login_role_names)
+            for target_role in (
+                "ofarm_admission_lock_owner",
+                "ofarm_binder",
+            )
+        ]
 
+
+def test_production_binding_accepts_only_the_exact_signed_capability(
+    tenant_target: TenantTarget,
+    authority: TenantAuthority,
+    capability_key: CapabilityKeyAuthority,
+) -> None:
     with psycopg.connect(tenant_target.role_dsn("ofarm_app")) as application:
-        challenge_id = application.execute(
-            "SELECT ofarm.create_tenant_challenge()"
-        ).fetchone()[0]
+        challenge_id, audience = application.execute(
+            "SELECT * FROM ofarm.create_tenant_challenge()"
+        ).fetchone()
         assert isinstance(challenge_id, UUID)
-        with pytest.raises(psycopg.errors.InsufficientPrivilege):
-            application.execute("SELECT ofarm.current_tenant_id()")
+        now_us = application.execute(
+            """
+            SELECT (extract(epoch FROM pg_catalog.clock_timestamp()) *
+                    1000000)::pg_catalog.int8
+            """
+        ).fetchone()[0]
+        capability = _tenant_capability(
+            authority=authority,
+            key=capability_key,
+            challenge_id=challenge_id,
+            audience=audience,
+            now_unix_microseconds=now_us,
+        )
+        token = sign_capability(capability)
+        application.execute(
+            "SELECT ofarm.bind_tenant_capability(%s)",
+            (token,),
+        )
+        context = application.execute(
+            "SELECT * FROM ofarm.current_tenant_context()"
+        ).fetchone()
+        assert context[0:3] == (
+            OIDC_ISSUER_EQUALITY_POLICY,
+            ISSUER,
+            authority.subject,
+        )
+        assert context[7] == authority.tenant_id
+        assert context[9] == authority.party_ref
+        assert context[14] == capability_key.kid
+        assert context[17] == capability.nonce
+        assert application.execute(
+            "SELECT ofarm.current_tenant_id()"
+        ).fetchone() == (authority.tenant_id,)
+
+    with psycopg.connect(tenant_target.role_dsn("ofarm_worker")) as worker:
+        stale_challenge_id, _ = worker.execute(
+            "SELECT * FROM ofarm.create_tenant_challenge()"
+        ).fetchone()
+        assert stale_challenge_id != challenge_id
+        with pytest.raises(psycopg.errors.InvalidAuthorizationSpecification):
+            worker.execute(
+                "SELECT ofarm.bind_tenant_capability(%s)",
+                (token,),
+            )
+
+    with psycopg.connect(tenant_target.role_dsn("ofarm_worker")) as worker:
+        challenge_id, audience = worker.execute(
+            "SELECT * FROM ofarm.create_tenant_challenge()"
+        ).fetchone()
+        now_us = worker.execute(
+            """
+            SELECT (extract(epoch FROM pg_catalog.clock_timestamp()) *
+                    1000000)::pg_catalog.int8
+            """
+        ).fetchone()[0]
+        token = sign_capability(
+            _tenant_capability(
+                authority=authority,
+                key=capability_key,
+                challenge_id=challenge_id,
+                audience=audience,
+                now_unix_microseconds=now_us,
+            )
+        )
+        header, payload, signature = token.split(".")
+        corrupt_signature = ("A" if signature[0] != "A" else "B") + signature[1:]
+        with pytest.raises(psycopg.errors.InvalidAuthorizationSpecification):
+            worker.execute(
+                "SELECT ofarm.bind_tenant_capability(%s)",
+                (f"{header}.{payload}.{corrupt_signature}",),
+            )
+
+
+def test_capability_close_waits_for_bound_transaction_shared_lock(
+    tenant_target: TenantTarget,
+    authority: TenantAuthority,
+    capability_key: CapabilityKeyAuthority,
+) -> None:
+    controller_pid: list[int] = []
+    controller_connected = threading.Event()
+    kms = _sha256_id(b"close-lock-kms-evidence")
+    iam = _sha256_id(b"close-lock-iam-evidence")
+
+    with psycopg.connect(
+        tenant_target.role_dsn("ofarm_app")
+    ) as application:
+        challenge_id, audience = application.execute(
+            "SELECT * FROM ofarm.create_tenant_challenge()"
+        ).fetchone()
+        now_us = application.execute(
+            """
+            SELECT (extract(epoch FROM pg_catalog.clock_timestamp()) *
+                    1000000)::pg_catalog.int8
+            """
+        ).fetchone()[0]
+        token = sign_capability(
+            _tenant_capability(
+                authority=authority,
+                key=capability_key,
+                challenge_id=challenge_id,
+                audience=audience,
+                now_unix_microseconds=now_us,
+            )
+        )
+        application.execute(
+            "SELECT ofarm.bind_tenant_capability(%s)",
+            (token,),
+        )
+
+        def attempt_close() -> tuple[object, ...]:
+            with psycopg.connect(
+                tenant_target.role_dsn(
+                    "ofarm_capability_key_control_login"
+                )
+            ) as controller:
+                controller_pid.append(controller.info.backend_pid)
+                controller_connected.set()
+                row = controller.execute(
+                    """
+                    SELECT * FROM ofarm.close_tenant_capability_admission(
+                        %s, %s, %s, %s, %s, 'COMPROMISE'
+                    )
+                    """,
+                    (
+                        capability_key.head_id,
+                        capability_key.head_digest,
+                        capability_key.kid,
+                        kms,
+                        iam,
+                    ),
+                ).fetchone()
+                controller.rollback()
+                return row
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            close_future = executor.submit(attempt_close)
+            try:
+                assert controller_connected.wait(timeout=5)
+                waiting_for_exclusive_lock = False
+                with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+                    for _attempt in range(100):
+                        waiting_for_exclusive_lock = admin.execute(
+                            """
+                            SELECT pg_catalog.count(*) = 1
+                            FROM pg_catalog.pg_locks AS lock
+                            WHERE lock.pid = %s
+                              AND lock.locktype = 'advisory'
+                              AND lock.classid = 1330004306
+                              AND lock.objid = 1413694001
+                              AND lock.mode = 'ExclusiveLock'
+                              AND NOT lock.granted
+                            """,
+                            (controller_pid[0],),
+                        ).fetchone()[0]
+                        if waiting_for_exclusive_lock:
+                            break
+                        threading.Event().wait(0.01)
+                assert waiting_for_exclusive_lock
+                assert not close_future.done()
+            finally:
+                application.rollback()
+            assert len(close_future.result(timeout=5)) == 5
+
+
+def test_keyring_projection_tamper_refuses_then_rebuilds_exactly(
+    tenant_target: TenantTarget,
+    authority: TenantAuthority,
+    capability_key: CapabilityKeyAuthority,
+) -> None:
+    def assert_bind_refuses() -> None:
+        with psycopg.connect(tenant_target.role_dsn("ofarm_app")) as application:
+            challenge_id, audience = application.execute(
+                "SELECT * FROM ofarm.create_tenant_challenge()"
+            ).fetchone()
+            now_us = application.execute(
+                """
+                SELECT (extract(epoch FROM pg_catalog.clock_timestamp()) *
+                        1000000)::pg_catalog.int8
+                """
+            ).fetchone()[0]
+            token = sign_capability(
+                _tenant_capability(
+                    authority=authority,
+                    key=capability_key,
+                    challenge_id=challenge_id,
+                    audience=audience,
+                    now_unix_microseconds=now_us,
+                )
+            )
+            with pytest.raises(psycopg.Error):
+                application.execute(
+                    "SELECT ofarm.bind_tenant_capability(%s)", (token,)
+                )
+
+    def assert_projection_matches_authority() -> None:
+        with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+            projection = admin.execute(
+                """
+                SELECT projected_head_sequence, projected_head_id,
+                       projected_head_digest::pg_catalog.text,
+                       projected_admission_state, projected_issuing_kid,
+                       projected_issuing_candidate_digest::pg_catalog.text,
+                       unresolved_incident_id, close_act_id, close_receipt_id
+                FROM ofarm.tenant_capability_keyring
+                WHERE audience = (
+                    SELECT audience FROM ofarm.tenant_binder_instance
+                    WHERE singleton
+                )
+                """
+            ).fetchone()
+            authority_row = admin.execute(
+                """
+                SELECT head_sequence, head_id, head_digest, admission_state,
+                       issuing_kid, issuing_candidate_digest,
+                       unresolved_incident_id, close_act_id, close_receipt_id
+                FROM ofarm.fold_tenant_capability_key_lifecycle(NULL)
+                """
+            ).fetchone()
+        assert projection == authority_row
+
+    controller_dsn = tenant_target.role_dsn(
+        "ofarm_capability_key_control_login"
+    )
+    try:
+        with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+            admin.execute(
+                """
+                UPDATE ofarm.tenant_capability_keyring
+                SET audience = 'https://extra.invalid/ofarm'
+                """
+            )
+        assert_bind_refuses()
+        with psycopg.connect(controller_dsn) as controller:
+            with pytest.raises(psycopg.Error):
+                _register_capability_key_candidate(
+                    controller,
+                    seed=hashlib.sha256(b"projection-missing-key").digest(),
+                    label="projection-missing",
+                )
+            controller.rollback()
+            assert controller.execute(
+                "SELECT * FROM ofarm.rebuild_tenant_capability_keyring()"
+            ).fetchone() == (1, 1)
+        assert_projection_matches_authority()
+
+        with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+            admin.execute(
+                """
+                UPDATE ofarm.tenant_capability_keyring
+                SET projected_admission_state = 'CLOSED'
+                """
+            )
+        assert_bind_refuses()
+        with psycopg.connect(controller_dsn) as controller:
+            with pytest.raises(psycopg.Error):
+                _register_capability_key_candidate(
+                    controller,
+                    seed=hashlib.sha256(b"projection-corrupt-key").digest(),
+                    label="projection-corrupt",
+                )
+            controller.rollback()
+            assert controller.execute(
+                "SELECT * FROM ofarm.rebuild_tenant_capability_keyring()"
+            ).fetchone() == (0, 1)
+        assert_projection_matches_authority()
+    finally:
+        with psycopg.connect(controller_dsn) as controller:
+            controller.execute(
+                "SELECT * FROM ofarm.rebuild_tenant_capability_keyring()"
+            )
+
+
+def test_capability_key_lifecycle_handoff_and_compromise_are_fail_closed(
+    tenant_target: TenantTarget,
+    capability_key: CapabilityKeyAuthority,
+) -> None:
+    controller_dsn = tenant_target.role_dsn(
+        "ofarm_capability_key_control_login"
+    )
+    kms = _sha256_id(b"lifecycle-kms-evidence")
+    iam = _sha256_id(b"lifecycle-iam-evidence")
+
+    def committed(
+        controller: psycopg.Connection,
+        statement: str,
+        parameters: tuple[object, ...],
+    ) -> tuple[object, ...]:
+        row = controller.execute(statement, parameters).fetchone()
+        controller.commit()
+        return row
+
+    def refused(
+        controller: psycopg.Connection,
+        statement: str,
+        parameters: tuple[object, ...],
+    ) -> None:
+        with pytest.raises(psycopg.Error):
+            controller.execute(statement, parameters)
+        controller.rollback()
+
+    with psycopg.connect(controller_dsn) as controller:
+        candidates = []
+        for suffix in ("b", "c", "d"):
+            candidate = _register_capability_key_candidate(
+                controller,
+                seed=hashlib.sha256(
+                    f"ofarm-lifecycle-{suffix}".encode("ascii")
+                ).digest(),
+                label=f"lifecycle-{suffix}",
+            )
+            controller.commit()
+            candidates.append(candidate)
+        key_b, key_c, key_d = candidates
+
+        refused(
+            controller,
+            """
+            SELECT * FROM ofarm.close_tenant_capability_admission(
+                %s, %s, %s, %s, %s, 'ROTATION_HANDOFF'
+            )
+            """,
+            (
+                capability_key.head_id,
+                capability_key.head_digest,
+                capability_key.kid,
+                kms,
+                iam,
+            ),
+        )
+        rotate_ab = committed(
+            controller,
+            """
+            SELECT * FROM ofarm.rotate_tenant_capability_key(
+                %s, %s, %s, %s, %s, %s, %s, 'GRACEFUL_ROTATION'
+            )
+            """,
+            (
+                capability_key.kid,
+                key_b.kid,
+                capability_key.head_id,
+                capability_key.head_digest,
+                key_b.preflight_receipt_digest,
+                kms,
+                iam,
+            ),
+        )
+        refused(
+            controller,
+            """
+            SELECT * FROM ofarm.rotate_tenant_capability_key(
+                %s, %s, %s, %s, %s, %s, %s, 'GRACEFUL_ROTATION'
+            )
+            """,
+            (
+                key_b.kid,
+                key_c.kid,
+                rotate_ab[0],
+                rotate_ab[1],
+                key_c.preflight_receipt_digest,
+                kms,
+                iam,
+            ),
+        )
+        assert controller.execute(
+            """
+            SELECT head_id, head_kind, admission_state
+            FROM ofarm.observe_tenant_capability_key(%s)
+            """,
+            (key_b.kid,),
+        ).fetchone() == (rotate_ab[0], "ROTATE", "OPEN")
+        controller.commit()
+
+        close_a = committed(
+            controller,
+            """
+            SELECT * FROM ofarm.close_tenant_capability_admission(
+                %s, %s, %s, %s, %s, 'COMPROMISE'
+            )
+            """,
+            (rotate_ab[0], rotate_ab[1], capability_key.kid, kms, iam),
+        )
+        revoke_a = committed(
+            controller,
+            """
+            SELECT * FROM ofarm.revoke_tenant_capability_key(
+                %s, %s, %s, %s, %s, %s, %s, 'COMPROMISE'
+            )
+            """,
+            (
+                capability_key.kid,
+                close_a[0],
+                close_a[1],
+                close_a[2],
+                close_a[3],
+                kms,
+                iam,
+            ),
+        )
+        resume_b = committed(
+            controller,
+            """
+            SELECT * FROM ofarm.resume_tenant_capability_admission(
+                %s, %s, %s, %s, %s, %s, 'COMPROMISE_RESOLVED'
+            )
+            """,
+            (
+                revoke_a[0],
+                revoke_a[1],
+                close_a[2],
+                close_a[3],
+                kms,
+                iam,
+            ),
+        )
+        rotate_bc = committed(
+            controller,
+            """
+            SELECT * FROM ofarm.rotate_tenant_capability_key(
+                %s, %s, %s, %s, %s, %s, %s, 'GRACEFUL_ROTATION'
+            )
+            """,
+            (
+                key_b.kid,
+                key_c.kid,
+                resume_b[0],
+                resume_b[1],
+                key_c.preflight_receipt_digest,
+                kms,
+                iam,
+            ),
+        )
+        close_c = committed(
+            controller,
+            """
+            SELECT * FROM ofarm.close_tenant_capability_admission(
+                %s, %s, %s, %s, %s, 'COMPROMISE'
+            )
+            """,
+            (rotate_bc[0], rotate_bc[1], key_c.kid, kms, iam),
+        )
+        refused(
+            controller,
+            """
+            SELECT * FROM ofarm.resume_tenant_capability_admission(
+                %s, %s, %s, %s, %s, %s, 'COMPROMISE_RESOLVED'
+            )
+            """,
+            (close_c[0], close_c[1], close_c[2], close_c[3], kms, iam),
+        )
+        revoke_c = committed(
+            controller,
+            """
+            SELECT * FROM ofarm.revoke_tenant_capability_key(
+                %s, %s, %s, %s, %s, %s, %s, 'COMPROMISE'
+            )
+            """,
+            (
+                key_c.kid,
+                close_c[0],
+                close_c[1],
+                close_c[2],
+                close_c[3],
+                kms,
+                iam,
+            ),
+        )
+        activate_d = committed(
+            controller,
+            """
+            SELECT * FROM ofarm.activate_tenant_capability_key(
+                %s, %s, %s, %s, %s, %s, 'COMPROMISE_REPLACEMENT'
+            )
+            """,
+            (
+                key_d.kid,
+                revoke_c[0],
+                revoke_c[1],
+                key_d.preflight_receipt_digest,
+                kms,
+                iam,
+            ),
+        )
+        refused(
+            controller,
+            """
+            SELECT * FROM ofarm.resume_tenant_capability_admission(
+                %s, %s, %s, %s, %s, %s, 'COMPROMISE_RESOLVED'
+            )
+            """,
+            (
+                activate_d[0],
+                activate_d[1],
+                close_c[2],
+                close_c[3],
+                kms,
+                iam,
+            ),
+        )
+        assert controller.execute(
+            """
+            SELECT head_id, head_kind, admission_state, issuing_kid,
+                   close_target_kid, close_target_revoked
+            FROM ofarm.observe_tenant_capability_key(%s)
+            """,
+            (key_d.kid,),
+        ).fetchone() == (
+            activate_d[0],
+            "ACTIVATE",
+            "CLOSED",
+            key_d.kid,
+            key_c.kid,
+            True,
+        )
 
 
 def test_live_postgresql_and_python_share_exact_issuer_vectors(
@@ -1168,7 +2176,9 @@ def test_context_storage_rls_copy_search_path_and_lock_namespace(
 
         with pytest.raises(psycopg.errors.ObjectNotInPrerequisiteState):
             with application.transaction():
-                application.execute("SELECT ofarm.create_tenant_challenge()")
+                application.execute(
+                    "SELECT * FROM ofarm.create_tenant_challenge()"
+                )
 
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             with application.transaction():
@@ -1369,14 +2379,14 @@ def test_stale_purge_preserves_two_live_backend_incarnations(
         bound_peer.rollback()
 
         challenge_id = challenge_peer.execute(
-            "SELECT ofarm.create_tenant_challenge()"
+            "SELECT * FROM ofarm.create_tenant_challenge()"
         ).fetchone()[0]
         challenge_pid = challenge_peer.execute(
             "SELECT pg_catalog.pg_backend_pid()"
         ).fetchone()[0]
         challenge_peer.commit()
 
-        observer_peer.execute("SELECT ofarm.create_tenant_challenge()")
+        observer_peer.execute("SELECT * FROM ofarm.create_tenant_challenge()")
         observer_peer.commit()
         with psycopg.connect(tenant_target.target_admin_dsn) as admin:
             live_rows = admin.execute(
@@ -1392,7 +2402,7 @@ def test_stale_purge_preserves_two_live_backend_incarnations(
 
         bound_peer.close()
         purger_peer = psycopg.connect(tenant_target.role_dsn("ofarm_app"))
-        purger_peer.execute("SELECT ofarm.create_tenant_challenge()")
+        purger_peer.execute("SELECT * FROM ofarm.create_tenant_challenge()")
         purger_peer.commit()
         with psycopg.connect(tenant_target.target_admin_dsn) as admin:
             assert admin.execute(
@@ -2691,7 +3701,7 @@ def test_complete_catalog_fingerprint_refuses_function_constraint_index_policy_a
             assert pristine[0] is True
             assert pristine[2] == 0
             assert pristine[3] == (
-                "sha256:4f83efabac8f4039f9ee678fc8c6f0491daac73a2c0aa08f9aa62bc36f6a2d67"
+                "sha256:0733675e55923ec5b4102dea7f57d4735b4c827b9ab64d648a9b4b70a9bc0531"
             )
         finally:
             migrator.rollback()
@@ -3104,7 +4114,7 @@ def test_readiness_observation_is_complete_after_commit(
     assert row[1] == TENANT_CONTEXT_CONTRACT.digest
     assert row[2] == 0
     assert row[3] == (
-        "sha256:4f83efabac8f4039f9ee678fc8c6f0491daac73a2c0aa08f9aa62bc36f6a2d67"
+        "sha256:0733675e55923ec5b4102dea7f57d4735b4c827b9ab64d648a9b4b70a9bc0531"
     )
     assert row[5] == TENANT_PROVISIONING_SPEC.digest
     assert row[6] == TENANT_SERVICE.identity
