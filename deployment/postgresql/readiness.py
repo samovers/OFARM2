@@ -32,6 +32,8 @@ from deployment.postgresql.provisioning_specs import (
     SECURITY_AUDIT_PROVISIONING_SPEC,
     TENANT_PROVISIONING_SPEC,
     ProvisioningSpec,
+    ProvisioningSpecError,
+    require_frozen_tenant_native_verifier_authority,
 )
 from deployment.postgresql.version_policy import (
     SUPPORTED_POSTGRESQL_SERVER_VERSION,
@@ -522,6 +524,11 @@ def verify_tenant_structural_compatibility(
     package_root: Path = _PACKAGE_ROOT,
 ) -> PostgreSQLStructuralCompatibilityReport:
     """Verify only the tenant database's exact structural contract."""
+
+    try:
+        require_frozen_tenant_native_verifier_authority()
+    except ProvisioningSpecError as exc:
+        raise _refuse(str(exc)) from exc
 
     return _verify_lane_structural_compatibility(
         structural_dsn=tenant_structural_dsn,

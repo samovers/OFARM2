@@ -97,7 +97,7 @@ def _capability(**changes: object) -> TenantCapability:
 def test_manifest_freezes_the_accepted_asymmetric_boundary() -> None:
     manifest = TENANT_CAPABILITY_CONTRACT.manifest()
     assert TENANT_CAPABILITY_CONTRACT.digest == (
-        "sha256:d6c16891e263420c55b80f17674cda3c2895652cd2ff8d45937f8b80300567ca"
+        "sha256:39e979fa296122cb66d42eae5e2d7c6dc797ac77ef4324515ae1ab6020088d83"
     )
     assert manifest["envelope"]["algorithm"] == TENANT_CAPABILITY_ALGORITHM
     assert manifest["envelope"]["type"] == TENANT_CAPABILITY_TYPE

@@ -1536,6 +1536,13 @@ BEGIN
         v_differences := v_differences + 1;
     END IF;
 
+    -- PREPARED_TRANSACTION_STARTUP_POSTURE_V1
+    IF pg_catalog.current_setting(
+           'max_prepared_transactions'
+       )::pg_catalog.int4 <> 0 THEN
+        v_differences := v_differences + 1;
+    END IF;
+
     SELECT pg_catalog.array_agg(class.relname::pg_catalog.text
             ORDER BY class.relname::pg_catalog.text)
     INTO v_names
@@ -2362,13 +2369,12 @@ BEGIN
         CROSS JOIN LATERAL pg_catalog.unnest(
             role_setting.setconfig
         ) AS setting(value)
-        WHERE (
-            role_setting.setdatabase = 0
-            OR database.datname = 'ofarm_security_audit'
-        ) AND (
-            role_setting.setrole = 0
-            OR role.rolname OPERATOR(pg_catalog.~) '^ofarm_'
-        )
+        WHERE database.datname = 'ofarm_security_audit'
+           OR role.rolname OPERATOR(pg_catalog.~) '^ofarm_'
+           OR (
+                role_setting.setdatabase = 0
+                AND role_setting.setrole = 0
+           )
 
         UNION ALL
         SELECT
@@ -2421,6 +2427,7 @@ BEGIN
                 tablespace.spcname,
                 class.relrowsecurity,
                 class.relforcerowsecurity,
+                class.relhasrules,
                 class.relreplident,
                 class.relispartition,
                 class.reloptions,
@@ -2438,6 +2445,29 @@ BEGIN
         WHERE namespace.nspname IN (
             'ofarm_security', 'ofarm_infrastructure', 'public'
         )
+
+        UNION ALL
+        -- GOVERNED_RELATION_REWRITE_RULE_V1
+        SELECT
+            'rewrite-rule',
+            namespace.nspname::pg_catalog.text || '.' ||
+                class.relname::pg_catalog.text || ':' ||
+                rewrite_rule.rulename::pg_catalog.text,
+            pg_catalog.jsonb_build_array(
+                rewrite_rule.ev_type,
+                rewrite_rule.ev_enabled,
+                rewrite_rule.is_instead,
+                pg_catalog.pg_get_ruledef(rewrite_rule.oid, false)
+            )::pg_catalog.text
+        FROM pg_catalog.pg_rewrite AS rewrite_rule
+        JOIN pg_catalog.pg_class AS class
+          ON class.oid = rewrite_rule.ev_class
+        JOIN pg_catalog.pg_namespace AS namespace
+          ON namespace.oid = class.relnamespace
+        WHERE namespace.nspname IN (
+            'ofarm_security', 'ofarm_infrastructure', 'public'
+        )
+          AND class.relkind IN ('r', 'p', 'v', 'm', 'f')
 
         UNION ALL
         SELECT

@@ -585,7 +585,7 @@ CREATE TABLE ofarm.tenant_binder_instance (
     ),
     CONSTRAINT tenant_binder_instance_contract_check CHECK (
         contract_digest::pg_catalog.text =
-        'sha256:d6c16891e263420c55b80f17674cda3c2895652cd2ff8d45937f8b80300567ca'
+        'sha256:39e979fa296122cb66d42eae5e2d7c6dc797ac77ef4324515ae1ab6020088d83'
     ),
     CONSTRAINT tenant_binder_instance_audience_check CHECK (
         audience = 'urn:ofarm:tenant-binder:v1:' || instance_id::pg_catalog.text
@@ -619,7 +619,7 @@ WITH identity AS (
     SELECT instance_id,
            'urn:ofarm:tenant-binder:v1:' ||
                instance_id::pg_catalog.text AS audience,
-           'sha256:d6c16891e263420c55b80f17674cda3c2895652cd2ff8d45937f8b80300567ca'
+           'sha256:39e979fa296122cb66d42eae5e2d7c6dc797ac77ef4324515ae1ab6020088d83'
                AS contract_digest,
            pg_catalog.current_database()::pg_catalog.text AS database_name,
            created_at
@@ -4071,16 +4071,14 @@ AS 'DECLARE
             RAISE EXCEPTION USING ERRCODE = ''22023'',
                 MESSAGE = ''admission close arguments differ'';
         END IF;
-        PERFORM pg_catalog.pg_advisory_xact_lock(1330004306, 1413694001);
-        SELECT ring.* INTO STRICT keyring
-          FROM ofarm.tenant_capability_keyring AS ring
-         FOR UPDATE;
-        SELECT key.* INTO STRICT candidate
-          FROM ofarm.tenant_capability_verification_key AS key
-         WHERE key.kid = affected_key
-         FOR UPDATE;
         SELECT * INTO STRICT authority
           FROM ofarm.fold_tenant_capability_key_lifecycle(affected_key);
+        SELECT key.* INTO STRICT candidate
+          FROM ofarm.tenant_capability_verification_key AS key
+         WHERE key.kid = affected_key;
+        SELECT ring.* INTO STRICT keyring
+          FROM ofarm.tenant_capability_keyring AS ring
+         WHERE ring.audience = candidate.audience;
         IF keyring.audience IS DISTINCT FROM candidate.audience
            OR keyring.projected_head_id IS DISTINCT FROM authority.head_id
            OR keyring.projected_head_digest::pg_catalog.text
@@ -5246,6 +5244,35 @@ AS 'DECLARE
         RETURN QUERY SELECT generated_challenge_id, protected_audience;
     END';
 
+CREATE FUNCTION ofarm.valid_tenant_capability_time_window(
+    issued_at_us pg_catalog.int8,
+    not_before_us pg_catalog.int8,
+    expires_at_us pg_catalog.int8,
+    observed_now_us pg_catalog.int8,
+    challenge_created_at_us pg_catalog.int8
+)
+RETURNS pg_catalog.bool
+LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE SECURITY INVOKER
+SET search_path = pg_catalog, pg_temp
+AS 'SELECT observed_now_us <= 9223372036849775807
+           AND challenge_created_at_us >= -9223372036849775808
+           AND challenge_created_at_us <= 9223372036794775807
+           AND issued_at_us <= not_before_us
+           AND not_before_us < expires_at_us
+           AND expires_at_us::pg_catalog.numeric -
+                issued_at_us::pg_catalog.numeric <= 60000000
+           AND issued_at_us::pg_catalog.numeric >=
+                challenge_created_at_us::pg_catalog.numeric - 5000000
+           AND issued_at_us::pg_catalog.numeric <=
+                observed_now_us::pg_catalog.numeric + 5000000
+           AND not_before_us::pg_catalog.numeric <=
+                observed_now_us::pg_catalog.numeric + 5000000
+           AND observed_now_us < expires_at_us
+           AND expires_at_us::pg_catalog.numeric <=
+                challenge_created_at_us::pg_catalog.numeric + 60000000
+           AND observed_now_us::pg_catalog.numeric <
+                challenge_created_at_us::pg_catalog.numeric + 60000000';
+
 CREATE FUNCTION ofarm.bind_tenant_capability(
     serialized_capability pg_catalog.text
 )
@@ -5450,7 +5477,7 @@ AS 'DECLARE
                 MESSAGE = ''tenant capability digest field length differs'';
         END IF;
         IF payload_fields.contract_digest_bytes <> pg_catalog.decode(
-                ''d6c16891e263420c55b80f17674cda3c2895652cd2ff8d45937f8b80300567ca'',
+                ''39e979fa296122cb66d42eae5e2d7c6dc797ac77ef4324515ae1ab6020088d83'',
                 ''hex''
            ) THEN
             RAISE EXCEPTION USING ERRCODE = ''22023'',
@@ -5638,24 +5665,13 @@ AS 'DECLARE
             extract(epoch FROM protected_context.challenge_created_at) *
             1000000
         )::pg_catalog.int8;
-        IF payload_issued_at_us::pg_catalog.numeric >
-                payload_not_before_us::pg_catalog.numeric
-           OR payload_not_before_us::pg_catalog.numeric >=
-                payload_expires_at_us::pg_catalog.numeric
-           OR payload_expires_at_us::pg_catalog.numeric -
-                payload_issued_at_us::pg_catalog.numeric > 60000000
-           OR payload_issued_at_us::pg_catalog.numeric <
-                challenge_created_at_us::pg_catalog.numeric - 5000000
-           OR payload_issued_at_us::pg_catalog.numeric >
-                observed_now_us::pg_catalog.numeric + 5000000
-           OR payload_not_before_us::pg_catalog.numeric >
-                observed_now_us::pg_catalog.numeric + 5000000
-           OR observed_now_us::pg_catalog.numeric >=
-                payload_expires_at_us::pg_catalog.numeric
-           OR payload_expires_at_us::pg_catalog.numeric >
-                challenge_created_at_us::pg_catalog.numeric + 60000000
-           OR observed_now_us::pg_catalog.numeric >=
-                challenge_created_at_us::pg_catalog.numeric + 60000000
+        IF ofarm.valid_tenant_capability_time_window(
+                payload_issued_at_us,
+                payload_not_before_us,
+                payload_expires_at_us,
+                observed_now_us,
+                challenge_created_at_us
+           ) IS DISTINCT FROM true
            OR payload_issued_at_us::pg_catalog.numeric <
                 key_authority.selected_activated_at_us::pg_catalog.numeric - 5000000
            OR payload_issued_at_us::pg_catalog.numeric >
@@ -6170,6 +6186,15 @@ AS 'DECLARE
         IF unexpected_global_object_count <> 0 THEN
             differences := pg_catalog.array_append(
                 differences, ''unexpected database or cluster object is present''
+            );
+        END IF;
+
+        -- PREPARED_TRANSACTION_STARTUP_POSTURE_V1
+        IF pg_catalog.current_setting(
+                ''max_prepared_transactions''
+           )::pg_catalog.int4 <> 0 THEN
+            differences := pg_catalog.array_append(
+                differences, ''prepared transaction capacity differs''
             );
         END IF;
 
@@ -6989,7 +7014,7 @@ AS 'DECLARE
            OR observed_head_version <> 1
            OR observed_service_identity <> ''ofarm.tenant-postgresql.v1''
            OR observed_provisioning_digest <>
-                ''sha256:6444de573c2d5e4ab3b83d644ebade5d40368b69c9716f145d731b81f7ee3c45''
+                ''sha256:8e892076a54b7c5e807c1cf6f155d08ceb926e86e8e7e9ce2be5e4edb769faee''
            OR observed_prefix_digest !~ ''^sha256:[0-9a-f]{64}$'' THEN
             differences := pg_catalog.array_append(
                 differences, ''migration 0001 ledger identity differs''
@@ -7088,18 +7113,26 @@ AS 'DECLARE
             UNION ALL
             SELECT
                 ''role-setting'',
-                database.datname::pg_catalog.text || '':'' ||
-                    role.rolname::pg_catalog.text || '':'' || setting.value,
+                CASE WHEN role_setting.setdatabase = 0 THEN ''ALL_DATABASES''
+                     ELSE database.datname::pg_catalog.text END || '':'' ||
+                    CASE WHEN role_setting.setrole = 0 THEN ''ALL_ROLES''
+                         ELSE role.rolname::pg_catalog.text END || '':'' ||
+                    setting.value,
                 ''[]''::pg_catalog.text
               FROM pg_catalog.pg_db_role_setting AS role_setting
-              JOIN pg_catalog.pg_database AS database
+              LEFT JOIN pg_catalog.pg_database AS database
                 ON database.oid = role_setting.setdatabase
-              JOIN pg_catalog.pg_roles AS role
+              LEFT JOIN pg_catalog.pg_roles AS role
                 ON role.oid = role_setting.setrole
               CROSS JOIN LATERAL pg_catalog.unnest(
                     role_setting.setconfig
               ) AS setting(value)
              WHERE database.datname = ''ofarm_tenant''
+                OR role.rolname OPERATOR(pg_catalog.~) ''^ofarm_''
+                OR (
+                    role_setting.setdatabase = 0
+                    AND role_setting.setrole = 0
+                )
 
             UNION ALL
             SELECT
@@ -7109,7 +7142,7 @@ AS 'DECLARE
               FROM pg_catalog.pg_namespace AS namespace
               JOIN pg_catalog.pg_roles AS owner ON owner.oid = namespace.nspowner
              WHERE namespace.nspname IN (
-                    ''ofarm'', ''ofarm_infrastructure'', ''public''
+                    ''ofarm'', ''ofarm_crypto'', ''ofarm_infrastructure'', ''public''
              )
 
             UNION ALL
@@ -7133,7 +7166,7 @@ AS 'DECLARE
               LEFT JOIN pg_catalog.pg_roles AS grantee ON grantee.oid = acl.grantee
               JOIN pg_catalog.pg_roles AS grantor ON grantor.oid = acl.grantor
              WHERE namespace.nspname IN (
-                    ''ofarm'', ''ofarm_infrastructure'', ''public''
+                    ''ofarm'', ''ofarm_crypto'', ''ofarm_infrastructure'', ''public''
              )
 
             UNION ALL
@@ -7171,7 +7204,7 @@ AS 'DECLARE
                 ON namespace.oid = type.typnamespace
               JOIN pg_catalog.pg_roles AS owner ON owner.oid = type.typowner
              WHERE namespace.nspname IN (
-                    ''ofarm'', ''ofarm_infrastructure'', ''public''
+                    ''ofarm'', ''ofarm_crypto'', ''ofarm_infrastructure'', ''public''
              )
 
             UNION ALL
@@ -7196,7 +7229,7 @@ AS 'DECLARE
               JOIN pg_catalog.pg_roles AS owner
                 ON owner.oid = governed_collation.collowner
              WHERE namespace.nspname IN (
-                    ''ofarm'', ''ofarm_infrastructure'', ''public''
+                    ''ofarm'', ''ofarm_crypto'', ''ofarm_infrastructure'', ''public''
              )
 
             UNION ALL
@@ -7222,7 +7255,7 @@ AS 'DECLARE
               JOIN pg_catalog.pg_roles AS owner
                 ON owner.oid = governed_operator.oprowner
              WHERE namespace.nspname IN (
-                    ''ofarm'', ''ofarm_infrastructure'', ''public''
+                    ''ofarm'', ''ofarm_crypto'', ''ofarm_infrastructure'', ''public''
              )
 
             UNION ALL
@@ -7252,7 +7285,7 @@ AS 'DECLARE
               JOIN pg_catalog.pg_namespace AS operator_family_namespace
                 ON operator_family_namespace.oid = operator_family.opfnamespace
              WHERE namespace.nspname IN (
-                    ''ofarm'', ''ofarm_infrastructure'', ''public''
+                    ''ofarm'', ''ofarm_crypto'', ''ofarm_infrastructure'', ''public''
              )
 
             UNION ALL
@@ -7270,7 +7303,7 @@ AS 'DECLARE
               JOIN pg_catalog.pg_am AS access_method
                 ON access_method.oid = operator_family.opfmethod
              WHERE namespace.nspname IN (
-                    ''ofarm'', ''ofarm_infrastructure'', ''public''
+                    ''ofarm'', ''ofarm_crypto'', ''ofarm_infrastructure'', ''public''
              )
 
             UNION ALL
@@ -7290,7 +7323,7 @@ AS 'DECLARE
                 ON namespace.oid = conversion.connamespace
               JOIN pg_catalog.pg_roles AS owner ON owner.oid = conversion.conowner
              WHERE namespace.nspname IN (
-                    ''ofarm'', ''ofarm_infrastructure'', ''public''
+                    ''ofarm'', ''ofarm_crypto'', ''ofarm_infrastructure'', ''public''
              )
 
             UNION ALL
@@ -7312,7 +7345,7 @@ AS 'DECLARE
               JOIN pg_catalog.pg_namespace AS parser_namespace
                 ON parser_namespace.oid = parser.prsnamespace
              WHERE namespace.nspname IN (
-                    ''ofarm'', ''ofarm_infrastructure'', ''public''
+                    ''ofarm'', ''ofarm_crypto'', ''ofarm_infrastructure'', ''public''
              )
 
             UNION ALL
@@ -7335,7 +7368,7 @@ AS 'DECLARE
               JOIN pg_catalog.pg_namespace AS template_namespace
                 ON template_namespace.oid = template.tmplnamespace
              WHERE namespace.nspname IN (
-                    ''ofarm'', ''ofarm_infrastructure'', ''public''
+                    ''ofarm'', ''ofarm_crypto'', ''ofarm_infrastructure'', ''public''
              )
 
             UNION ALL
@@ -7354,7 +7387,7 @@ AS 'DECLARE
               JOIN pg_catalog.pg_namespace AS namespace
                 ON namespace.oid = parser.prsnamespace
              WHERE namespace.nspname IN (
-                    ''ofarm'', ''ofarm_infrastructure'', ''public''
+                    ''ofarm'', ''ofarm_crypto'', ''ofarm_infrastructure'', ''public''
              )
 
             UNION ALL
@@ -7370,7 +7403,7 @@ AS 'DECLARE
               JOIN pg_catalog.pg_namespace AS namespace
                 ON namespace.oid = template.tmplnamespace
              WHERE namespace.nspname IN (
-                    ''ofarm'', ''ofarm_infrastructure'', ''public''
+                    ''ofarm'', ''ofarm_crypto'', ''ofarm_infrastructure'', ''public''
              )
 
             UNION ALL
@@ -7392,7 +7425,7 @@ AS 'DECLARE
                 ON namespace.oid = statistics.stxnamespace
               JOIN pg_catalog.pg_roles AS owner ON owner.oid = statistics.stxowner
              WHERE namespace.nspname IN (
-                    ''ofarm'', ''ofarm_infrastructure'', ''public''
+                    ''ofarm'', ''ofarm_crypto'', ''ofarm_infrastructure'', ''public''
              )
 
             UNION ALL
@@ -7406,6 +7439,7 @@ AS 'DECLARE
                     class.relpersistence,
                     class.relrowsecurity,
                     class.relforcerowsecurity,
+                    class.relhasrules,
                     class.relreplident,
                     class.reloptions
                 )::pg_catalog.text
@@ -7414,9 +7448,32 @@ AS 'DECLARE
                 ON namespace.oid = class.relnamespace
               JOIN pg_catalog.pg_roles AS owner ON owner.oid = class.relowner
              WHERE namespace.nspname IN (
-                    ''ofarm'', ''ofarm_infrastructure'', ''public''
+                    ''ofarm'', ''ofarm_crypto'', ''ofarm_infrastructure'', ''public''
              )
                AND class.relkind IN (''r'', ''p'', ''S'', ''v'', ''m'', ''f'')
+
+            UNION ALL
+            -- GOVERNED_RELATION_REWRITE_RULE_V1
+            SELECT
+                ''rewrite-rule'',
+                namespace.nspname::pg_catalog.text || ''.'' ||
+                    class.relname::pg_catalog.text || '':'' ||
+                    rewrite_rule.rulename::pg_catalog.text,
+                pg_catalog.jsonb_build_array(
+                    rewrite_rule.ev_type,
+                    rewrite_rule.ev_enabled,
+                    rewrite_rule.is_instead,
+                    pg_catalog.pg_get_ruledef(rewrite_rule.oid, false)
+                )::pg_catalog.text
+              FROM pg_catalog.pg_rewrite AS rewrite_rule
+              JOIN pg_catalog.pg_class AS class
+                ON class.oid = rewrite_rule.ev_class
+              JOIN pg_catalog.pg_namespace AS namespace
+                ON namespace.oid = class.relnamespace
+             WHERE namespace.nspname IN (
+                    ''ofarm'', ''ofarm_crypto'', ''ofarm_infrastructure'', ''public''
+             )
+               AND class.relkind IN (''r'', ''p'', ''v'', ''m'', ''f'')
 
             UNION ALL
             SELECT
@@ -7446,7 +7503,7 @@ AS 'DECLARE
                 ON default_value.adrelid = attribute.attrelid
                AND default_value.adnum = attribute.attnum
              WHERE namespace.nspname IN (
-                    ''ofarm'', ''ofarm_infrastructure'', ''public''
+                    ''ofarm'', ''ofarm_crypto'', ''ofarm_infrastructure'', ''public''
              )
                AND class.relkind IN (''r'', ''p'', ''S'', ''v'', ''m'', ''f'')
                AND attribute.attnum > 0
@@ -7478,7 +7535,7 @@ AS 'DECLARE
               JOIN pg_catalog.pg_namespace AS namespace
                 ON namespace.oid = governed_constraint.connamespace
              WHERE namespace.nspname IN (
-                    ''ofarm'', ''ofarm_infrastructure'', ''public''
+                    ''ofarm'', ''ofarm_crypto'', ''ofarm_infrastructure'', ''public''
              )
 
             UNION ALL
@@ -7510,7 +7567,7 @@ AS 'DECLARE
                 ON namespace.oid = table_class.relnamespace
               JOIN pg_catalog.pg_roles AS owner ON owner.oid = index_class.relowner
              WHERE namespace.nspname IN (
-                    ''ofarm'', ''ofarm_infrastructure'', ''public''
+                    ''ofarm'', ''ofarm_crypto'', ''ofarm_infrastructure'', ''public''
              )
 
             UNION ALL
@@ -7530,7 +7587,7 @@ AS 'DECLARE
               JOIN pg_catalog.pg_namespace AS namespace
                 ON namespace.oid = class.relnamespace
              WHERE namespace.nspname IN (
-                    ''ofarm'', ''ofarm_infrastructure'', ''public''
+                    ''ofarm'', ''ofarm_crypto'', ''ofarm_infrastructure'', ''public''
              )
                AND NOT trigger.tgisinternal
 
@@ -7562,7 +7619,7 @@ AS 'DECLARE
               JOIN pg_catalog.pg_namespace AS namespace
                 ON namespace.oid = class.relnamespace
              WHERE namespace.nspname IN (
-                    ''ofarm'', ''ofarm_infrastructure'', ''public''
+                    ''ofarm'', ''ofarm_crypto'', ''ofarm_infrastructure'', ''public''
              )
 
             UNION ALL
@@ -7609,7 +7666,7 @@ AS 'DECLARE
               JOIN pg_catalog.pg_roles AS owner ON owner.oid = routine.proowner
               JOIN pg_catalog.pg_language AS language ON language.oid = routine.prolang
              WHERE namespace.nspname IN (
-                    ''ofarm'', ''ofarm_infrastructure'', ''public''
+                    ''ofarm'', ''ofarm_crypto'', ''ofarm_infrastructure'', ''public''
              )
 
             UNION ALL
@@ -7637,7 +7694,7 @@ AS 'DECLARE
               LEFT JOIN pg_catalog.pg_roles AS grantee ON grantee.oid = acl.grantee
               JOIN pg_catalog.pg_roles AS grantor ON grantor.oid = acl.grantor
              WHERE namespace.nspname IN (
-                    ''ofarm'', ''ofarm_infrastructure'', ''public''
+                    ''ofarm'', ''ofarm_crypto'', ''ofarm_infrastructure'', ''public''
              )
 
             UNION ALL
@@ -7664,7 +7721,7 @@ AS 'DECLARE
               LEFT JOIN pg_catalog.pg_roles AS grantee ON grantee.oid = acl.grantee
               JOIN pg_catalog.pg_roles AS grantor ON grantor.oid = acl.grantor
              WHERE namespace.nspname IN (
-                    ''ofarm'', ''ofarm_infrastructure'', ''public''
+                    ''ofarm'', ''ofarm_crypto'', ''ofarm_infrastructure'', ''public''
              )
 
             UNION ALL
@@ -7695,7 +7752,7 @@ AS 'DECLARE
               LEFT JOIN pg_catalog.pg_roles AS grantee ON grantee.oid = acl.grantee
               JOIN pg_catalog.pg_roles AS grantor ON grantor.oid = acl.grantor
              WHERE namespace.nspname IN (
-                    ''ofarm'', ''ofarm_infrastructure'', ''public''
+                    ''ofarm'', ''ofarm_crypto'', ''ofarm_infrastructure'', ''public''
              )
                AND class.relkind IN (''r'', ''p'', ''S'', ''v'', ''m'', ''f'')
 
@@ -7720,7 +7777,7 @@ AS 'DECLARE
               LEFT JOIN pg_catalog.pg_roles AS grantee ON grantee.oid = acl.grantee
               JOIN pg_catalog.pg_roles AS grantor ON grantor.oid = acl.grantor
              WHERE namespace.nspname IN (
-                    ''ofarm'', ''ofarm_infrastructure'', ''public''
+                    ''ofarm'', ''ofarm_crypto'', ''ofarm_infrastructure'', ''public''
              )
                AND attribute.attnum > 0
                AND NOT attribute.attisdropped
@@ -7747,7 +7804,7 @@ AS 'DECLARE
               JOIN pg_catalog.pg_roles AS grantor ON grantor.oid = acl.grantor
              WHERE owner.rolname OPERATOR(pg_catalog.~) ''^ofarm_''
                 OR namespace.nspname IN (
-                    ''ofarm'', ''ofarm_infrastructure'', ''public''
+                    ''ofarm'', ''ofarm_crypto'', ''ofarm_infrastructure'', ''public''
                 )
 
             UNION ALL
@@ -7782,6 +7839,40 @@ AS 'DECLARE
               JOIN pg_catalog.pg_roles AS owner ON owner.oid = extension.extowner
               JOIN pg_catalog.pg_namespace AS namespace
                 ON namespace.oid = extension.extnamespace
+
+            UNION ALL
+            SELECT
+                ''extension-dependency'',
+                extension.extname::pg_catalog.text || '':'' ||
+                    identified.type || '':'' ||
+                    COALESCE(identified.schema, '''') || '':'' ||
+                    COALESCE(identified.name, '''') || '':'' ||
+                    identified.identity,
+                pg_catalog.jsonb_build_array(
+                    dependency.classid::pg_catalog.regclass::pg_catalog.text,
+                    dependency.objsubid,
+                    dependency.refobjsubid,
+                    dependency.deptype
+                )::pg_catalog.text
+              FROM pg_catalog.pg_depend AS dependency
+              JOIN pg_catalog.pg_extension AS extension
+                ON extension.oid = dependency.refobjid
+              CROSS JOIN LATERAL pg_catalog.pg_identify_object(
+                    dependency.classid,
+                    dependency.objid,
+                    dependency.objsubid
+              ) AS identified(type, schema, name, identity)
+             WHERE dependency.refclassid =
+                    ''pg_catalog.pg_extension''::pg_catalog.regclass
+               AND (
+                    extension.extname = ''ofarm_ed25519''
+                    OR identified.schema IN (
+                        ''ofarm'',
+                        ''ofarm_crypto'',
+                        ''ofarm_infrastructure'',
+                        ''public''
+                    )
+               )
 
             UNION ALL
             SELECT
@@ -8150,7 +8241,7 @@ AS 'DECLARE
 
         RETURN QUERY SELECT
             pg_catalog.cardinality(differences) = 0,
-            ''sha256:d6c16891e263420c55b80f17674cda3c2895652cd2ff8d45937f8b80300567ca''::pg_catalog.text,
+            ''sha256:39e979fa296122cb66d42eae5e2d7c6dc797ac77ef4324515ae1ab6020088d83''::pg_catalog.text,
             pg_catalog.cardinality(differences),
             observed_structural_catalog_digest,
             observed_relation_inventory,

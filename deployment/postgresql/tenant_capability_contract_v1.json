@@ -474,6 +474,51 @@
         "notBefore": 0,
         "now": 0,
         "result": "refuse"
+      },
+      {
+        "challengeCreatedAt": 9223372036794775807,
+        "expiresAt": 9223372036854775807,
+        "id": "int64-upper-exact-arithmetic-bounds-accept",
+        "issuedAt": 9223372036849775807,
+        "notBefore": 9223372036849775807,
+        "now": 9223372036849775807,
+        "result": "accept"
+      },
+      {
+        "challengeCreatedAt": 9223372036794775807,
+        "expiresAt": 9223372036854775807,
+        "id": "database-time-add-skew-int64-overflow-refuse",
+        "issuedAt": 9223372036850775807,
+        "notBefore": 9223372036850775807,
+        "now": 9223372036850775807,
+        "result": "refuse"
+      },
+      {
+        "challengeCreatedAt": -9223372036849775808,
+        "expiresAt": -9223372036794775808,
+        "id": "int64-lower-exact-arithmetic-bound-accept",
+        "issuedAt": -9223372036854775808,
+        "notBefore": -9223372036854775808,
+        "now": -9223372036854775808,
+        "result": "accept"
+      },
+      {
+        "challengeCreatedAt": -9223372036850775808,
+        "expiresAt": -9223372036794775808,
+        "id": "challenge-time-subtract-skew-int64-overflow-refuse",
+        "issuedAt": -9223372036854775808,
+        "notBefore": -9223372036854775808,
+        "now": -9223372036854775808,
+        "result": "refuse"
+      },
+      {
+        "challengeCreatedAt": 9223372036794775808,
+        "expiresAt": 9223372036854775807,
+        "id": "challenge-time-add-lifetime-int64-overflow-refuse",
+        "issuedAt": 9223372036794775808,
+        "notBefore": 9223372036794775808,
+        "now": 9223372036794775808,
+        "result": "refuse"
       }
     ]
   },

@@ -28,22 +28,31 @@ with the exact builder, Actions run, source commit, build pins, and evidence
 authority source inventory. Actions artifacts are explicitly temporary inputs.
 The durable archive location is a deterministic GitHub Release tag derived from
 the release-identity digest, with one exact asset name and URL per platform.
-Only archives downloaded back from those URLs and independently checked against
-the candidate may promote the receipt from `candidate` to `frozen`.
+Repository release immutability must be enabled before this tag is created. The
+release operator first proves that the tag and release are absent, creates a
+draft prerelease targeted to the candidate's exact build commit, uploads exactly
+the two candidate assets without replacement, verifies the draft, and only then
+publishes it. Publication must make the release, tag, and assets immutable.
 
-The final verification command accepts the two independently downloaded Release
-assets and writes the canonical frozen receipt; it refuses a wrong filename,
-size, or digest:
+The final verification command uses the exact supported trusted GitHub CLI. It
+queries the fixed repository and requires its stable identity and immutable
+release setting, the exact published prerelease and peeled tag commit, and the
+exact two asset identities. It downloads both assets into a fresh temporary
+directory and requires GitHub's signed release and per-asset verification before
+writing the canonical frozen receipt. A wrong release, tag, target, filename,
+size, digest, download, attestation, or pre-existing different output refuses:
 
 ```sh
 python3 ../native_evidence.py finalize-evidence-receipt \
   --release-identity native_release_identity.json \
   --candidate-receipt native_evidence_receipt.candidate.json \
   --source-directory . --repository-root ../../.. \
-  --amd64-download ofarm-ed25519-linux-amd64.oci.tar \
-  --arm64-download ofarm-ed25519-linux-arm64.oci.tar \
-  --output native_evidence_receipt.json
+  --output native_evidence_receipt.frozen.json
 ```
+
+The reviewed frozen bytes replace the checked
+`native_evidence_receipt.json`; the finalizer does not overwrite a different
+existing file.
 
 The build has a closed `linux/amd64`/`linux/arm64` input set. It uses pinned
 Dockerfile-frontend, GCC-builder, and PostgreSQL-runtime manifest digests. The

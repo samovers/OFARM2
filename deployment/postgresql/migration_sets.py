@@ -159,15 +159,15 @@ TENANT_AUTHORITATIVE_MIGRATION_SET = AuthoritativeMigrationSet(
             version=1,
             filename="0001_initial.sql",
             source_sha256=(
-                "sha256:b889a003a919f3ff44aee293f78efae78d46773a1235f55dfe93177ed93c533a"
+                "sha256:7bcbebd9cf6df61f3ff35c614079d87fc97cfdd22c27752f485b94d5f921d4cb"
             ),
-            byte_length=381056,
+            byte_length=385382,
             applied_prefix_digest=(
-                "sha256:3fa762ec273f3c8f32176e9a8b6deab49016d3a3cd40d065d5f29a47768ab082"
+                "sha256:866dabdcd81dbbcd31df86e2784ae14d840f9ad7bc95beeb69390b7a0c817be0"
             ),
         ),
     ),
-    digest="sha256:3fa762ec273f3c8f32176e9a8b6deab49016d3a3cd40d065d5f29a47768ab082",
+    digest="sha256:866dabdcd81dbbcd31df86e2784ae14d840f9ad7bc95beeb69390b7a0c817be0",
 )
 
 SECURITY_AUDIT_AUTHORITATIVE_MIGRATION_SET = AuthoritativeMigrationSet(
@@ -177,15 +177,15 @@ SECURITY_AUDIT_AUTHORITATIVE_MIGRATION_SET = AuthoritativeMigrationSet(
             version=1,
             filename="0001_initial.sql",
             source_sha256=(
-                "sha256:d807461a22b98c107c9881637b13399763fd06a85b6a5c38e198a3e5deda783d"
+                "sha256:4bc5f67eb5c28f2d7b7261c1b52192ca4474ddac1cbb7a243e76b5eb695d6dc3"
             ),
-            byte_length=146365,
+            byte_length=147553,
             applied_prefix_digest=(
-                "sha256:67213ae5890c8907f3cbadb2fdb6cb397c14d023f94d34205bfea24ed09c476b"
+                "sha256:d14b8d625246de172f22d30421b749e3b583e96c16cc4a958f53dd75b2edc179"
             ),
         ),
     ),
-    digest="sha256:67213ae5890c8907f3cbadb2fdb6cb397c14d023f94d34205bfea24ed09c476b",
+    digest="sha256:d14b8d625246de172f22d30421b749e3b583e96c16cc4a958f53dd75b2edc179",
 )
 
 AUTHORITATIVE_MIGRATION_SETS = (
@@ -494,6 +494,19 @@ def preflight_main(service: MigrationService, argv: Sequence[str] | None = None)
         )
     )
     parser.parse_args(argv)
+    if service == TENANT_SERVICE:
+        # Keep this import local: provisioning specs depend on migration-set
+        # identities, while only the operator-facing tenant preflight needs
+        # the final native release gate.
+        from deployment.postgresql.provisioning_specs import (
+            ProvisioningSpecError,
+            require_frozen_tenant_native_verifier_authority,
+        )
+
+        try:
+            require_frozen_tenant_native_verifier_authority()
+        except ProvisioningSpecError as exc:
+            parser.exit(1, f"migration preflight refused: {exc}\n")
     try:
         migration_set = load_authoritative_migration_set(_PACKAGE_ROOT, service)
     except MigrationSetError as exc:

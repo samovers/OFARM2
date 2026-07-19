@@ -12,9 +12,13 @@ import base64
 import binascii
 import hashlib
 import json
+import os
 import re
+import shutil
 import stat
+import subprocess
 import tarfile
+import tempfile
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -22,6 +26,15 @@ try:
     from deployment.postgresql.native_release_identity import (
         CURRENT_NATIVE_ACTION_PINS,
         CURRENT_NATIVE_BUILD_PINS,
+        GITHUB_PROVIDER_VERIFICATION_SCHEMA,
+        NATIVE_RELEASE_GITHUB_API_VERSION,
+        NATIVE_RELEASE_GITHUB_CLI_VERSION,
+        NATIVE_RELEASE_GITHUB_CLI_VERSION_OUTPUT,
+        NATIVE_RELEASE_REPOSITORY,
+        NATIVE_RELEASE_REPOSITORY_API_URL,
+        NATIVE_RELEASE_REPOSITORY_ID,
+        NATIVE_RELEASE_REPOSITORY_NODE_ID,
+        NATIVE_RELEASE_REPOSITORY_URL,
         NativeReleaseIdentityError,
         candidate_evidence_receipt_document,
         canonical_json_bytes as release_canonical_json_bytes,
@@ -29,12 +42,22 @@ try:
         frozen_identity_document,
         load_native_evidence_receipt,
         load_native_release_identity,
+        validate_github_release_command_document,
         validate_native_release_identity,
     )
 except ModuleNotFoundError:  # Direct execution from this source directory.
     from native_release_identity import (  # type: ignore[no-redef]
         CURRENT_NATIVE_ACTION_PINS,
         CURRENT_NATIVE_BUILD_PINS,
+        GITHUB_PROVIDER_VERIFICATION_SCHEMA,
+        NATIVE_RELEASE_GITHUB_API_VERSION,
+        NATIVE_RELEASE_GITHUB_CLI_VERSION,
+        NATIVE_RELEASE_GITHUB_CLI_VERSION_OUTPUT,
+        NATIVE_RELEASE_REPOSITORY,
+        NATIVE_RELEASE_REPOSITORY_API_URL,
+        NATIVE_RELEASE_REPOSITORY_ID,
+        NATIVE_RELEASE_REPOSITORY_NODE_ID,
+        NATIVE_RELEASE_REPOSITORY_URL,
         NativeReleaseIdentityError,
         candidate_evidence_receipt_document,
         canonical_json_bytes as release_canonical_json_bytes,
@@ -42,6 +65,7 @@ except ModuleNotFoundError:  # Direct execution from this source directory.
         frozen_identity_document,
         load_native_evidence_receipt,
         load_native_release_identity,
+        validate_github_release_command_document,
         validate_native_release_identity,
     )
 
@@ -56,6 +80,13 @@ MAX_MANIFEST_BYTES = 8 * 1024 * 1024
 MAX_SBOM_BYTES = 8 * 1024 * 1024
 MAX_PROVENANCE_BYTES = 2 * 1024 * 1024
 MAX_CONTAINERFILE_BYTES = 128 * 1024
+MAX_GITHUB_JSON_BYTES = 64 * 1024
+MAX_GITHUB_COMMAND_OUTPUT_BYTES = 128 * 1024
+MAX_GITHUB_ARGUMENT_BYTES = 8 * 1024
+MAX_GITHUB_ARGUMENTS = 32
+MAX_GITHUB_COMMAND_BYTES = 32 * 1024
+GITHUB_API_TIMEOUT_SECONDS = 60
+GITHUB_DOWNLOAD_TIMEOUT_SECONDS = 15 * 60
 
 SHA256_PATTERN = re.compile(r"sha256:[0-9a-f]{64}\Z")
 COMMIT_PATTERN = re.compile(r"[0-9a-f]{40}\Z")
@@ -191,11 +222,173 @@ def _canonical_json_bytes(value: Any) -> bytes:
     ).encode("utf-8")
 
 
+def _github_cli_path() -> Path:
+    executable = shutil.which("gh")
+    if executable is None:
+        raise NativeEvidenceError("the trusted GitHub CLI is unavailable")
+    try:
+        resolved = Path(executable).resolve(strict=True)
+        file_stat = resolved.stat()
+    except OSError as exc:
+        raise NativeEvidenceError("the trusted GitHub CLI is unavailable") from exc
+    if not stat.S_ISREG(file_stat.st_mode) or not os.access(resolved, os.X_OK):
+        raise NativeEvidenceError("the trusted GitHub CLI is not executable")
+    return resolved
+
+
+def _github_environment() -> dict[str, str]:
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "CLICOLOR": "0",
+            "GH_HOST": "github.com",
+            "GH_PAGER": "cat",
+            "GH_PROMPT_DISABLED": "1",
+            "GH_REPO": NATIVE_RELEASE_REPOSITORY,
+            "NO_COLOR": "1",
+            "PAGER": "cat",
+        }
+    )
+    return environment
+
+
+def _run_github_cli(
+    arguments: tuple[str, ...],
+    *,
+    label: str,
+    timeout_seconds: int = GITHUB_API_TIMEOUT_SECONDS,
+    github_cli: Path | None = None,
+) -> bytes:
+    if not arguments or len(arguments) > MAX_GITHUB_ARGUMENTS:
+        raise NativeEvidenceError("GitHub CLI arguments are not exact")
+    if (
+        any(
+            type(argument) is not str
+            or not argument
+            or len(argument) > MAX_GITHUB_ARGUMENT_BYTES
+            or not argument.isascii()
+            or any(
+                ord(character) < 0x20 or ord(character) > 0x7E
+                for character in argument
+            )
+            for argument in arguments
+        )
+        or sum(len(argument) for argument in arguments) > MAX_GITHUB_COMMAND_BYTES
+    ):
+        raise NativeEvidenceError("GitHub CLI arguments are not exact")
+    executable = _github_cli_path() if github_cli is None else github_cli
+    if not isinstance(executable, Path) or not executable.is_absolute():
+        raise NativeEvidenceError("GitHub CLI path is not exact")
+    command = (str(executable), *arguments)
+    try:
+        completed = subprocess.run(
+            command,
+            check=False,
+            shell=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout_seconds,
+            env=_github_environment(),
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise NativeEvidenceError(f"{label} could not execute") from exc
+    if (
+        len(completed.stdout) > MAX_GITHUB_COMMAND_OUTPUT_BYTES
+        or len(completed.stderr) > MAX_GITHUB_COMMAND_OUTPUT_BYTES
+    ):
+        raise NativeEvidenceError(f"{label} output exceeds its byte limit")
+    if completed.returncode != 0:
+        raise NativeEvidenceError(f"{label} refused")
+    if completed.stderr:
+        raise NativeEvidenceError(f"{label} wrote to standard error")
+    return completed.stdout
+
+
+def _run_github_json(
+    arguments: tuple[str, ...],
+    *,
+    label: str,
+    github_cli: Path | None = None,
+) -> Any:
+    data = _run_github_cli(arguments, label=label, github_cli=github_cli)
+    if not data or len(data) > MAX_GITHUB_JSON_BYTES:
+        raise NativeEvidenceError(f"{label} JSON has an invalid size")
+    return _load_json_bytes(data, f"{label} JSON")
+
+
+def _provider_command_result(
+    document: Any,
+    label: str,
+    *,
+    tag: str,
+    source_commit: str,
+    release_id: int,
+    platforms: list[dict[str, Any]],
+) -> dict[str, Any]:
+    try:
+        validate_github_release_command_document(
+            document,
+            tag=tag,
+            source_commit=source_commit,
+            release_id=release_id,
+            platforms=platforms,
+            label=label,
+        )
+    except NativeReleaseIdentityError as exc:
+        raise NativeEvidenceError(str(exc)) from exc
+    canonical = release_canonical_json_bytes(document)
+    if not canonical or len(canonical) > MAX_GITHUB_JSON_BYTES:
+        raise NativeEvidenceError(f"{label} canonical JSON has an invalid size")
+    return {
+        "canonicalDigest": _sha256(canonical),
+        "document": document,
+        "size": len(canonical),
+    }
+
+
 def _write_regular(path: Path, data: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    if path.exists() and (path.is_symlink() or not path.is_file()):
+    if path.is_symlink() or (path.exists() and not path.is_file()):
         raise NativeEvidenceError("evidence output path is not a regular file")
     path.write_bytes(data)
+
+
+def _publish_regular_no_clobber(path: Path, data: bytes, label: str) -> None:
+    """Atomically publish one complete file, or accept identical existing bytes."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        descriptor, temporary_name = tempfile.mkstemp(
+            dir=path.parent,
+            prefix=f".{path.name}.",
+        )
+    except OSError as exc:
+        raise NativeEvidenceError(f"{label} cannot be staged") from exc
+    temporary_path = Path(temporary_name)
+    try:
+        try:
+            with os.fdopen(descriptor, "wb") as stream:
+                stream.write(data)
+                stream.flush()
+                os.fsync(stream.fileno())
+        except OSError as exc:
+            raise NativeEvidenceError(f"{label} cannot be staged") from exc
+        try:
+            os.link(temporary_path, path, follow_symlinks=False)
+        except FileExistsError:
+            try:
+                existing = _read_bounded(path, len(data), f"existing {label}")
+            except NativeEvidenceError as exc:
+                raise NativeEvidenceError(f"existing {label} differs") from exc
+            if existing != data:
+                raise NativeEvidenceError(f"existing {label} differs")
+        except OSError as exc:
+            raise NativeEvidenceError(f"{label} cannot be published") from exc
+    finally:
+        try:
+            temporary_path.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def metadata_child_identity(path: Path, label: str) -> tuple[str, str]:
@@ -740,6 +933,117 @@ def _authenticate_attestations(
     return evidence
 
 
+def _inspect_oci_archive(
+    *,
+    archive_path: Path,
+    platform: str,
+    source_commit: str,
+    containerfile_path: Path,
+    builder_id: str,
+    label: str,
+) -> tuple[dict[str, Any], dict[str, bytes]]:
+    """Authenticate one bounded archive without trusting a prior CI report."""
+
+    platform = _require_platform(platform)
+    source_commit = _require_source_commit(source_commit)
+    if not builder_id.startswith("https://github.com/") or len(builder_id) > 512:
+        raise NativeEvidenceError("builder id must be one bounded GitHub HTTPS identity")
+    containerfile_bytes = _read_bounded(
+        containerfile_path,
+        MAX_CONTAINERFILE_BYTES,
+        f"{label} reviewed Containerfile",
+    )
+
+    archive = _OciArchive(archive_path)
+    try:
+        layout = _require_object(
+            _load_json_bytes(
+                archive.read_member("oci-layout", 4 * 1024, "OCI layout"),
+                "OCI layout",
+            ),
+            "OCI layout",
+        )
+        if layout != {"imageLayoutVersion": "1.0.0"}:
+            raise NativeEvidenceError("OCI layout version is not exactly 1.0.0")
+        index = _require_object(
+            _load_json_bytes(
+                archive.read_member("index.json", MAX_MANIFEST_BYTES, "OCI index"),
+                "OCI index",
+            ),
+            "OCI index",
+        )
+        image_descriptors, image_index_digest = _resolve_attested_image_index(
+            archive, index
+        )
+        runtime_descriptor, attestation_descriptor = _select_oci_descriptors(
+            image_descriptors, platform
+        )
+        runtime_digest = _require_digest(
+            runtime_descriptor.get("digest"), "runtime child digest"
+        )
+        runtime_size = runtime_descriptor.get("size")
+        if (
+            not isinstance(runtime_size, int)
+            or isinstance(runtime_size, bool)
+            or not 0 < runtime_size <= MAX_MANIFEST_BYTES
+        ):
+            raise NativeEvidenceError("runtime child descriptor size is invalid")
+        runtime_manifest = _load_manifest(
+            archive, runtime_descriptor, "runtime manifest"
+        )
+        runtime_config_digest = _authenticate_runtime_manifest(
+            archive, runtime_manifest
+        )
+        attestation_manifest = _load_manifest(
+            archive, attestation_descriptor, "attestation manifest"
+        )
+        attestations = _authenticate_attestations(
+            archive,
+            attestation_manifest,
+            runtime_digest,
+            platform,
+            containerfile_bytes,
+            builder_id,
+        )
+        attestation_digest = _require_digest(
+            attestation_descriptor.get("digest"), "attestation manifest digest"
+        )
+        attestation_size = attestation_descriptor.get("size")
+        if (
+            not isinstance(attestation_size, int)
+            or isinstance(attestation_size, bool)
+            or not 0 < attestation_size <= MAX_MANIFEST_BYTES
+        ):
+            raise NativeEvidenceError("attestation manifest size is invalid")
+        archive.require_no_unreferenced_blobs()
+    finally:
+        archive.close()
+
+    report = {
+        "platform": platform,
+        "source_commit": source_commit,
+        "builder_id": builder_id,
+        "runtime_child_digest": runtime_digest,
+        "runtime_child_size": runtime_size,
+        "runtime_config_digest": runtime_config_digest,
+        "image_index_digest": image_index_digest,
+        "attestation_manifest_digest": attestation_digest,
+        "attestation_manifest_size": attestation_size,
+        "oci_archive": {"sha256": archive.sha256, "size": archive.size},
+        "sbom": {
+            "predicate_type": SBOM_PREDICATE_TYPE,
+            "sha256": _sha256(attestations[SBOM_PREDICATE_TYPE]),
+            "size": len(attestations[SBOM_PREDICATE_TYPE]),
+        },
+        "provenance": {
+            "predicate_type": PROVENANCE_PREDICATE_TYPE,
+            "sha256": _sha256(attestations[PROVENANCE_PREDICATE_TYPE]),
+            "size": len(attestations[PROVENANCE_PREDICATE_TYPE]),
+        },
+    }
+    return report, attestations
+
+
 def collect_oci_evidence(
     *,
     archive_path: Path,
@@ -754,11 +1058,6 @@ def collect_oci_evidence(
 
     platform = _require_platform(platform)
     source_commit = _require_source_commit(source_commit)
-    if not builder_id.startswith("https://github.com/") or len(builder_id) > 512:
-        raise NativeEvidenceError("builder id must be one bounded GitHub HTTPS identity")
-    containerfile_bytes = _read_bounded(
-        containerfile_path, MAX_CONTAINERFILE_BYTES, "reviewed Containerfile"
-    )
     reproducibility = _require_object(
         _load_json_file(
             reproducibility_path,
@@ -807,78 +1106,22 @@ def collect_oci_evidence(
             f"reproducibility artifact {expected_name} digest",
         )
 
-    archive = _OciArchive(archive_path)
-    try:
-        layout = _require_object(
-            _load_json_bytes(
-                archive.read_member("oci-layout", 4 * 1024, "OCI layout"),
-                "OCI layout",
-            ),
-            "OCI layout",
+    observed, attestations = _inspect_oci_archive(
+        archive_path=archive_path,
+        platform=platform,
+        source_commit=source_commit,
+        containerfile_path=containerfile_path,
+        builder_id=builder_id,
+        label="hosted OCI evidence",
+    )
+    if observed["runtime_child_digest"] != reproducible_digest:
+        raise NativeEvidenceError(
+            "attested runtime child differs from the two clean builds"
         )
-        if layout != {"imageLayoutVersion": "1.0.0"}:
-            raise NativeEvidenceError("OCI layout version is not exactly 1.0.0")
-        index = _require_object(
-            _load_json_bytes(
-                archive.read_member("index.json", MAX_MANIFEST_BYTES, "OCI index"),
-                "OCI index",
-            ),
-            "OCI index",
+    if observed["runtime_config_digest"] != reproducible_config_digest:
+        raise NativeEvidenceError(
+            "attested runtime config differs from the two clean builds"
         )
-        image_descriptors, image_index_digest = _resolve_attested_image_index(
-            archive, index
-        )
-        runtime_descriptor, attestation_descriptor = _select_oci_descriptors(
-            image_descriptors, platform
-        )
-        runtime_digest = _require_digest(
-            runtime_descriptor.get("digest"), "runtime child digest"
-        )
-        runtime_size = runtime_descriptor.get("size")
-        if (
-            not isinstance(runtime_size, int)
-            or isinstance(runtime_size, bool)
-            or not 0 < runtime_size <= MAX_MANIFEST_BYTES
-        ):
-            raise NativeEvidenceError("runtime child descriptor size is invalid")
-        if runtime_digest != reproducible_digest:
-            raise NativeEvidenceError(
-                "attested runtime child differs from the two clean builds"
-            )
-        runtime_manifest = _load_manifest(
-            archive, runtime_descriptor, "runtime manifest"
-        )
-        runtime_config_digest = _authenticate_runtime_manifest(
-            archive, runtime_manifest
-        )
-        if runtime_config_digest != reproducible_config_digest:
-            raise NativeEvidenceError(
-                "attested runtime config differs from the two clean builds"
-            )
-        attestation_manifest = _load_manifest(
-            archive, attestation_descriptor, "attestation manifest"
-        )
-        attestations = _authenticate_attestations(
-            archive,
-            attestation_manifest,
-            runtime_digest,
-            platform,
-            containerfile_bytes,
-            builder_id,
-        )
-        attestation_digest = _require_digest(
-            attestation_descriptor.get("digest"), "attestation manifest digest"
-        )
-        attestation_size = attestation_descriptor.get("size")
-        if (
-            not isinstance(attestation_size, int)
-            or isinstance(attestation_size, bool)
-            or not 0 < attestation_size <= MAX_MANIFEST_BYTES
-        ):
-            raise NativeEvidenceError("attestation manifest size is invalid")
-        archive.require_no_unreferenced_blobs()
-    finally:
-        archive.close()
 
     output_directory.mkdir(parents=True, exist_ok=True)
     sbom_path = output_directory / "sbom.spdx.in-toto.json"
@@ -887,30 +1130,8 @@ def collect_oci_evidence(
     _write_regular(provenance_path, attestations[PROVENANCE_PREDICATE_TYPE])
     report = {
         "schema": "ofarm.native-oci-evidence.v1",
-        "platform": platform,
-        "source_commit": source_commit,
-        "builder_id": builder_id,
-        "runtime_child_digest": runtime_digest,
-        "runtime_child_size": runtime_size,
-        "runtime_config_digest": runtime_config_digest,
+        **observed,
         "artifacts": reproducible_artifacts,
-        "image_index_digest": image_index_digest,
-        "attestation_manifest_digest": attestation_digest,
-        "attestation_manifest_size": attestation_size,
-        "oci_archive": {
-            "sha256": archive.sha256,
-            "size": archive.size,
-        },
-        "sbom": {
-            "predicate_type": SBOM_PREDICATE_TYPE,
-            "sha256": _sha256(attestations[SBOM_PREDICATE_TYPE]),
-            "size": len(attestations[SBOM_PREDICATE_TYPE]),
-        },
-        "provenance": {
-            "predicate_type": PROVENANCE_PREDICATE_TYPE,
-            "sha256": _sha256(attestations[PROVENANCE_PREDICATE_TYPE]),
-            "size": len(attestations[PROVENANCE_PREDICATE_TYPE]),
-        },
     }
     _write_regular(output_directory / "oci-evidence.json", _canonical_json_bytes(report))
     return report
@@ -1199,6 +1420,20 @@ def prepare_release_identity(
         raise NativeEvidenceError(
             "hosted native result differs from the frozen release identity"
         )
+    if checked.status == "frozen":
+        if checked_receipt.status != "frozen":
+            raise NativeEvidenceError(
+                "frozen native identity has no frozen evidence receipt"
+            )
+        _write_regular(candidate_output, checked.canonical_bytes)
+        _write_regular(candidate_receipt_output, checked_receipt.canonical_bytes)
+        return {
+            "checked_status": checked.status,
+            "checked_receipt_status": checked_receipt.status,
+            "candidate_digest": checked.digest,
+            "candidate_index_digest": checked.index_digest,
+            "candidate_receipt_digest": checked_receipt.digest,
+        }
     try:
         candidate_identity = validate_native_release_identity(
             candidate,
@@ -1244,14 +1479,441 @@ def _bounded_file_identity(path: Path, maximum: int, label: str) -> dict[str, An
     return {"sha256": "sha256:" + digest.hexdigest(), "size": file_stat.st_size}
 
 
+def _github_api_arguments(endpoint: str, projection: str) -> tuple[str, ...]:
+    if endpoint != "repos/samovers/OFARM2" and not endpoint.startswith(
+        "repos/samovers/OFARM2/"
+    ):
+        raise NativeEvidenceError("GitHub API endpoint is outside the fixed repository")
+    return (
+        "api",
+        "--hostname",
+        "github.com",
+        "--method",
+        "GET",
+        "--header",
+        "Accept: application/vnd.github+json",
+        "--header",
+        f"X-GitHub-Api-Version: {NATIVE_RELEASE_GITHUB_API_VERSION}",
+        endpoint,
+        "--jq",
+        projection,
+    )
+
+
+def _positive_integer(value: Any, label: str) -> int:
+    if (
+        type(value) is not int
+        or value <= 0
+        or value > 2**63 - 1
+    ):
+        raise NativeEvidenceError(f"{label} is invalid")
+    return value
+
+
+def _bounded_ascii(value: Any, maximum: int, label: str) -> str:
+    if (
+        type(value) is not str
+        or not value
+        or len(value) > maximum
+        or not value.isascii()
+        or any(ord(character) < 0x20 or ord(character) > 0x7E for character in value)
+    ):
+        raise NativeEvidenceError(f"{label} is invalid")
+    return value
+
+
+def _authenticate_github_release(
+    *,
+    candidate: Any,
+    identity: Any,
+    source_directory: Path,
+    download_directory: Path,
+) -> dict[str, Any]:
+    github_cli = _github_cli_path()
+    version_output = _run_github_cli(
+        ("version",),
+        label="GitHub CLI version",
+        github_cli=github_cli,
+    )
+    if version_output != NATIVE_RELEASE_GITHUB_CLI_VERSION_OUTPUT:
+        raise NativeEvidenceError("GitHub CLI version is not exact")
+
+    repository = _run_github_json(
+        _github_api_arguments(
+            "repos/samovers/OFARM2",
+            (
+                "{apiUrl:.url,id:.id,nodeId:.node_id,"
+                "name:.full_name,url:.html_url}"
+            ),
+        ),
+        label="GitHub repository identity",
+        github_cli=github_cli,
+    )
+    if repository != {
+        "apiUrl": NATIVE_RELEASE_REPOSITORY_API_URL,
+        "id": NATIVE_RELEASE_REPOSITORY_ID,
+        "name": NATIVE_RELEASE_REPOSITORY,
+        "nodeId": NATIVE_RELEASE_REPOSITORY_NODE_ID,
+        "url": NATIVE_RELEASE_REPOSITORY_URL,
+    }:
+        raise NativeEvidenceError("GitHub repository identity is not exact")
+
+    def observe_immutable_releases() -> Any:
+        return _run_github_json(
+            _github_api_arguments(
+                "repos/samovers/OFARM2/immutable-releases",
+                "{enabled:.enabled,enforcedByOwner:.enforced_by_owner}",
+            ),
+            label="GitHub immutable-release setting",
+            github_cli=github_cli,
+        )
+
+    immutable_releases = observe_immutable_releases()
+    if (
+        not isinstance(immutable_releases, dict)
+        or set(immutable_releases) != {"enabled", "enforcedByOwner"}
+        or immutable_releases.get("enabled") is not True
+        or type(immutable_releases.get("enforcedByOwner")) is not bool
+    ):
+        raise NativeEvidenceError("GitHub immutable releases are not enabled")
+
+    identity_digest = candidate.document["releaseIdentityDigest"]
+    tag = "native-verifier-" + identity_digest.removeprefix("sha256:")
+    source_commit = candidate.document["buildRun"]["sourceCommit"]
+    expected_release_url = f"{NATIVE_RELEASE_REPOSITORY_URL}/releases/tag/{tag}"
+
+    def observe_release() -> Any:
+        return _run_github_json(
+            _github_api_arguments(
+                f"repos/samovers/OFARM2/releases/tags/{tag}",
+                (
+                    "{apiUrl:.url,id:.id,nodeId:.node_id,tagName:.tag_name,"
+                    "targetCommitish:.target_commitish,htmlUrl:.html_url,"
+                    "draft:.draft,prerelease:.prerelease,immutable:.immutable,"
+                    "assets:[.assets[]|{apiUrl:.url,id:.id,nodeId:.node_id,"
+                    "name:.name,state:.state,size:.size,sha256:.digest,"
+                    "url:.browser_download_url}]}"
+                ),
+            ),
+            label="GitHub immutable prerelease",
+            github_cli=github_cli,
+        )
+
+    release = observe_release()
+    if not isinstance(release, dict) or set(release) != {
+        "apiUrl",
+        "assets",
+        "draft",
+        "htmlUrl",
+        "id",
+        "immutable",
+        "nodeId",
+        "prerelease",
+        "tagName",
+        "targetCommitish",
+    }:
+        raise NativeEvidenceError("GitHub release fields are not exact")
+    release_id = _positive_integer(release.get("id"), "GitHub release id")
+    release_node_id = _bounded_ascii(
+        release.get("nodeId"), 256, "GitHub release node id"
+    )
+    if release != {
+        **release,
+        "apiUrl": f"{NATIVE_RELEASE_REPOSITORY_API_URL}/releases/{release_id}",
+        "draft": False,
+        "htmlUrl": expected_release_url,
+        "immutable": True,
+        "nodeId": release_node_id,
+        "prerelease": True,
+        "tagName": tag,
+        "targetCommitish": source_commit,
+    }:
+        raise NativeEvidenceError("GitHub release identity is inconsistent")
+
+    def observe_peeled_tag() -> Any:
+        return _run_github_json(
+            _github_api_arguments(
+                f"repos/samovers/OFARM2/commits/{tag}",
+                "{sha:.sha}",
+            ),
+            label="GitHub release tag commit",
+            github_cli=github_cli,
+        )
+
+    peeled = observe_peeled_tag()
+    if peeled != {"sha": source_commit}:
+        raise NativeEvidenceError("GitHub release tag target is inconsistent")
+
+    raw_assets = release.get("assets")
+    if not isinstance(raw_assets, list) or len(raw_assets) != 2:
+        raise NativeEvidenceError("GitHub release asset set is not exact")
+    expected_platforms = candidate.document["platforms"]
+    expected_assets = candidate.document["preservation"]["assets"]
+    assets_by_name: dict[str, dict[str, Any]] = {}
+    for raw_asset in raw_assets:
+        if not isinstance(raw_asset, dict) or set(raw_asset) != {
+            "apiUrl",
+            "id",
+            "name",
+            "nodeId",
+            "sha256",
+            "size",
+            "state",
+            "url",
+        }:
+            raise NativeEvidenceError("GitHub release asset fields are not exact")
+        name = raw_asset.get("name")
+        if type(name) is not str or name in assets_by_name:
+            raise NativeEvidenceError("GitHub release asset names are not unique")
+        assets_by_name[name] = raw_asset
+
+    normalized_assets: list[dict[str, Any]] = []
+    asset_names: list[str] = []
+    for platform_value, expected_asset in zip(
+        expected_platforms, expected_assets, strict=True
+    ):
+        platform = platform_value["platform"]
+        name = expected_asset["name"]
+        raw_asset = assets_by_name.get(name)
+        if raw_asset is None:
+            raise NativeEvidenceError(f"{platform} GitHub release asset is absent")
+        asset_id = _positive_integer(raw_asset.get("id"), f"{platform} GitHub asset id")
+        asset_node_id = _bounded_ascii(
+            raw_asset.get("nodeId"), 256, f"{platform} GitHub asset node id"
+        )
+        normalized = {
+            "apiUrl": (
+                f"{NATIVE_RELEASE_REPOSITORY_API_URL}/releases/assets/{asset_id}"
+            ),
+            "id": asset_id,
+            "name": name,
+            "nodeId": asset_node_id,
+            "platform": platform,
+            "sha256": expected_asset["sha256"],
+            "size": expected_asset["size"],
+            "state": "uploaded",
+            "url": expected_asset["url"],
+        }
+        if raw_asset != {key: value for key, value in normalized.items() if key != "platform"}:
+            raise NativeEvidenceError(
+                f"{platform} GitHub release asset identity is inconsistent"
+            )
+        normalized_assets.append(normalized)
+        asset_names.append(name)
+    if set(assets_by_name) != set(asset_names) or len(
+        {asset["id"] for asset in normalized_assets}
+    ) != 2 or len({asset["nodeId"] for asset in normalized_assets}) != 2:
+        raise NativeEvidenceError("GitHub release asset identities are not exact")
+
+    release_attestation = _provider_command_result(
+        _run_github_json(
+            (
+                "release",
+                "verify",
+                tag,
+                "--repo",
+                NATIVE_RELEASE_REPOSITORY,
+                "--format",
+                "json",
+            ),
+            label="GitHub release attestation",
+            github_cli=github_cli,
+        ),
+        "GitHub release attestation",
+        tag=tag,
+        source_commit=source_commit,
+        release_id=release_id,
+        platforms=expected_platforms,
+    )
+
+    try:
+        if (
+            download_directory.is_symlink()
+            or not download_directory.is_dir()
+            or any(download_directory.iterdir())
+        ):
+            raise NativeEvidenceError(
+                "GitHub release download directory is not one fresh directory"
+            )
+    except OSError as exc:
+        raise NativeEvidenceError(
+            "GitHub release download directory is unreadable"
+        ) from exc
+    _run_github_cli(
+        (
+            "release",
+            "download",
+            tag,
+            "--repo",
+            NATIVE_RELEASE_REPOSITORY,
+            "--dir",
+            str(download_directory),
+            "--pattern",
+            asset_names[0],
+            "--pattern",
+            asset_names[1],
+        ),
+        label="GitHub release asset download",
+        timeout_seconds=GITHUB_DOWNLOAD_TIMEOUT_SECONDS,
+        github_cli=github_cli,
+    )
+    try:
+        downloaded_names = sorted(path.name for path in download_directory.iterdir())
+    except OSError as exc:
+        raise NativeEvidenceError("GitHub release download directory is unreadable") from exc
+    if downloaded_names != sorted(asset_names):
+        raise NativeEvidenceError("GitHub release download set is not exact")
+
+    asset_attestations: list[dict[str, Any]] = []
+    identity_platforms = identity.document["platforms"]
+    builder_id = candidate.document["buildRun"]["builderId"]
+    for platform_value, identity_platform, expected_asset in zip(
+        expected_platforms,
+        identity_platforms,
+        expected_assets,
+        strict=True,
+    ):
+        platform = platform_value["platform"]
+        path = download_directory / expected_asset["name"]
+        observed = _bounded_file_identity(
+            path,
+            MAX_OCI_ARCHIVE_BYTES,
+            f"{platform} immutable GitHub Release download",
+        )
+        if observed != platform_value["ociArchive"] or observed != {
+            "sha256": expected_asset["sha256"],
+            "size": expected_asset["size"],
+        }:
+            raise NativeEvidenceError(
+                f"{platform} immutable GitHub Release download differs"
+            )
+        archive_observation, _attestations = _inspect_oci_archive(
+            archive_path=path,
+            platform=platform,
+            source_commit=source_commit,
+            containerfile_path=source_directory / "Containerfile",
+            builder_id=builder_id,
+            label=f"{platform} immutable GitHub Release",
+        )
+        expected_observation = {
+            "platform": platform,
+            "source_commit": source_commit,
+            "builder_id": builder_id,
+            "runtime_child_digest": identity_platform["runtimeChildDigest"],
+            "runtime_child_size": identity_platform["runtimeChildSize"],
+            "runtime_config_digest": identity_platform["runtimeConfigDigest"],
+            "image_index_digest": platform_value["sourceImageIndexDigest"],
+            "attestation_manifest_digest": platform_value[
+                "attestationManifest"
+            ]["sha256"],
+            "attestation_manifest_size": platform_value[
+                "attestationManifest"
+            ]["size"],
+            "oci_archive": platform_value["ociArchive"],
+            "sbom": {
+                "predicate_type": platform_value["sbom"]["predicateType"],
+                "sha256": platform_value["sbom"]["sha256"],
+                "size": platform_value["sbom"]["size"],
+            },
+            "provenance": {
+                "predicate_type": platform_value["provenance"][
+                    "predicateType"
+                ],
+                "sha256": platform_value["provenance"]["sha256"],
+                "size": platform_value["provenance"]["size"],
+            },
+        }
+        if archive_observation != expected_observation or (
+            platform_value["runtimeChildDigest"]
+            != identity_platform["runtimeChildDigest"]
+            or platform_value["runtimeChildSize"]
+            != identity_platform["runtimeChildSize"]
+            or platform_value["runtimeConfigDigest"]
+            != identity_platform["runtimeConfigDigest"]
+            or platform_value["artifacts"] != identity_platform["artifacts"]
+        ):
+            raise NativeEvidenceError(
+                f"{platform} immutable GitHub Release OCI evidence differs "
+                "from the candidate receipt or frozen identity"
+            )
+        verification = _provider_command_result(
+            _run_github_json(
+                (
+                    "release",
+                    "verify-asset",
+                    tag,
+                    str(path),
+                    "--repo",
+                    NATIVE_RELEASE_REPOSITORY,
+                    "--format",
+                    "json",
+                ),
+                label=f"{platform} GitHub release asset attestation",
+                github_cli=github_cli,
+            ),
+            f"{platform} GitHub release asset attestation",
+            tag=tag,
+            source_commit=source_commit,
+            release_id=release_id,
+            platforms=expected_platforms,
+        )
+        if verification["document"] != release_attestation["document"]:
+            raise NativeEvidenceError(
+                f"{platform} GitHub asset attestation differs from the "
+                "verified release attestation"
+            )
+        asset_attestations.append(
+            {"platform": platform, "verification": verification}
+        )
+
+    final_immutable_releases = observe_immutable_releases()
+    final_release = observe_release()
+    final_peeled = observe_peeled_tag()
+    if (
+        final_immutable_releases != immutable_releases
+        or final_release != release
+        or final_peeled != peeled
+    ):
+        raise NativeEvidenceError(
+            "GitHub immutable release state changed during verification"
+        )
+
+    metadata = {
+        "repository": repository,
+        "githubCli": {
+            "version": NATIVE_RELEASE_GITHUB_CLI_VERSION,
+            "versionOutputSha256": _sha256(version_output),
+        },
+        "immutableReleases": immutable_releases,
+        "release": {
+            "apiUrl": release["apiUrl"],
+            "assets": normalized_assets,
+            "draft": False,
+            "htmlUrl": expected_release_url,
+            "id": release_id,
+            "immutable": True,
+            "nodeId": release_node_id,
+            "peeledTagCommit": source_commit,
+            "prerelease": True,
+            "tagName": tag,
+            "targetCommitish": source_commit,
+        },
+        "releaseAttestation": release_attestation,
+        "assetAttestations": asset_attestations,
+    }
+    return {
+        "schemaVersion": GITHUB_PROVIDER_VERIFICATION_SCHEMA,
+        "canonicalDigest": _sha256(release_canonical_json_bytes(metadata)),
+        "metadata": metadata,
+    }
+
+
 def finalize_evidence_receipt(
     *,
     release_identity_path: Path,
     candidate_receipt_path: Path,
     source_directory: Path,
     repository_root: Path,
-    amd64_download: Path,
-    arm64_download: Path,
     output: Path,
 ) -> dict[str, Any]:
     """Freeze a receipt after independently downloaded Release assets verify."""
@@ -1275,39 +1937,28 @@ def finalize_evidence_receipt(
         raise NativeEvidenceError(
             "receipt finalization requires frozen identity and candidate receipt"
         )
-    downloads = [amd64_download, arm64_download]
-    for path, platform, asset in zip(
-        downloads,
-        candidate.document["platforms"],
-        candidate.document["preservation"]["assets"],
-        strict=True,
-    ):
-        if path.name != asset["name"]:
-            raise NativeEvidenceError(
-                f"{platform['platform']} Release download name is not exact"
-            )
-        observed = _bounded_file_identity(
-            path,
-            MAX_OCI_ARCHIVE_BYTES,
-            f"{platform['platform']} Release download",
+    with tempfile.TemporaryDirectory(prefix="ofarm-native-release-") as temporary:
+        provider_verification = _authenticate_github_release(
+            candidate=candidate,
+            identity=identity,
+            source_directory=source_directory,
+            download_directory=Path(temporary),
         )
-        if observed != platform["ociArchive"] or observed != {
-            "sha256": asset["sha256"],
-            "size": asset["size"],
-        }:
-            raise NativeEvidenceError(
-                f"{platform['platform']} Release download differs from candidate receipt"
-            )
     try:
         frozen = frozen_evidence_receipt_document(
             candidate_receipt=candidate,
             release_identity=identity,
+            provider_verification=provider_verification,
             repository_root=repository_root,
         )
     except NativeReleaseIdentityError as exc:
         raise NativeEvidenceError(str(exc)) from exc
     frozen_bytes = release_canonical_json_bytes(frozen)
-    _write_regular(output, frozen_bytes)
+    _publish_regular_no_clobber(
+        output,
+        frozen_bytes,
+        "frozen native evidence receipt",
+    )
     return {
         "status": "frozen",
         "release_identity_digest": identity.digest,
@@ -1421,8 +2072,6 @@ def _parser() -> argparse.ArgumentParser:
     finalize.add_argument("--candidate-receipt", type=Path, required=True)
     finalize.add_argument("--source-directory", type=Path, required=True)
     finalize.add_argument("--repository-root", type=Path, required=True)
-    finalize.add_argument("--amd64-download", type=Path, required=True)
-    finalize.add_argument("--arm64-download", type=Path, required=True)
     finalize.add_argument("--output", type=Path, required=True)
 
     environment = subparsers.add_parser("conformance-environment")
@@ -1484,8 +2133,6 @@ def main(argv: list[str] | None = None) -> int:
                 candidate_receipt_path=args.candidate_receipt,
                 source_directory=args.source_directory,
                 repository_root=args.repository_root,
-                amd64_download=args.amd64_download,
-                arm64_download=args.arm64_download,
                 output=args.output,
             )
         else:

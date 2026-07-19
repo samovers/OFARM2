@@ -45,6 +45,8 @@ from deployment.postgresql.provisioning_specs import (
     SECURITY_AUDIT_PROVISIONING_SPEC,
     TENANT_PROVISIONING_SPEC,
     ProvisioningSpec,
+    ProvisioningSpecError,
+    require_frozen_tenant_native_verifier_authority,
 )
 from deployment.postgresql.tenant_contract import TENANT_CONTEXT_CONTRACT
 from deployment.postgresql.version_policy import (
@@ -170,6 +172,11 @@ def _quoted_literal(value: str) -> str:
 def _require_fixed_pair(spec: ProvisioningSpec, migration_set: MigrationSet) -> None:
     if spec not in (TENANT_PROVISIONING_SPEC, SECURITY_AUDIT_PROVISIONING_SPEC):
         raise MigrationInputError("spec must be one checked-in PostgreSQL service")
+    if spec == TENANT_PROVISIONING_SPEC:
+        try:
+            require_frozen_tenant_native_verifier_authority()
+        except ProvisioningSpecError as exc:
+            raise MigrationInputError(str(exc)) from exc
     try:
         revalidate_migration_set(migration_set)
     except MigrationSetError as exc:
@@ -555,7 +562,10 @@ def _ledger_oid(connection: psycopg.Connection, spec: ProvisioningSpec) -> int |
 def _locked_boundary_differences(
     connection: psycopg.Connection, spec: ProvisioningSpec
 ) -> list[str]:
-    return migration_locked_differences(connection, spec)
+    try:
+        return migration_locked_differences(connection, spec)
+    except ProvisioningError as exc:
+        raise MigrationTargetError(str(exc)) from exc
 
 
 def _schema_object_rows(

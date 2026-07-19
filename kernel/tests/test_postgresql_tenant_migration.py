@@ -5,9 +5,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Mapping
 from uuid import UUID, uuid4
@@ -40,8 +41,10 @@ from deployment.postgresql.tenant_contract import (
     TENANT_CAPABILITY_PREFLIGHT_PROBE,
     TENANT_CONTEXT_CONTRACT,
     TenantCapability,
+    TenantCapabilityContractError,
     derive_ed25519_key_id,
     valid_oidc_issuer,
+    validate_tenant_capability,
 )
 from kernel.tests.tenant_capability_fixture import (
     RFC8032_TEST_PUBLIC_KEY,
@@ -656,6 +659,73 @@ def _tenant_capability(
     )
 
 
+ADMISSION_LOCK_CLASS_ID = 1330004306
+ADMISSION_LOCK_OBJECT_ID = 1413694001
+
+
+def _signed_capability_for_new_challenge(
+    connection: psycopg.Connection,
+    *,
+    authority: TenantAuthority,
+    key: CapabilityKeyAuthority,
+) -> str:
+    challenge_id, audience = connection.execute(
+        "SELECT * FROM ofarm.create_tenant_challenge()"
+    ).fetchone()
+    now_us = connection.execute(
+        """
+        SELECT (extract(epoch FROM pg_catalog.clock_timestamp()) *
+                1000000)::pg_catalog.int8
+        """
+    ).fetchone()[0]
+    return sign_capability(
+        _tenant_capability(
+            authority=authority,
+            key=key,
+            challenge_id=challenge_id,
+            audience=audience,
+            now_unix_microseconds=now_us,
+        )
+    )
+
+
+def _admission_locks(
+    admin: psycopg.Connection,
+    *backend_pids: int,
+) -> set[tuple[int, str, bool]]:
+    return set(
+        admin.execute(
+            """
+            SELECT lock.pid, lock.mode, lock.granted
+            FROM pg_catalog.pg_locks AS lock
+            WHERE lock.pid = ANY(%s::pg_catalog.int4[])
+              AND lock.locktype = 'advisory'
+              AND lock.classid = %s
+              AND lock.objid = %s
+            """,
+            (
+                list(backend_pids),
+                ADMISSION_LOCK_CLASS_ID,
+                ADMISSION_LOCK_OBJECT_ID,
+            ),
+        ).fetchall()
+    )
+
+
+def _wait_for_admission_locks(
+    admin: psycopg.Connection,
+    expected: set[tuple[int, str, bool]],
+) -> None:
+    observed: set[tuple[int, str, bool]] = set()
+    backend_pids = tuple(pid for pid, _mode, _granted in expected)
+    for _attempt in range(500):
+        observed = _admission_locks(admin, *backend_pids)
+        if expected <= observed:
+            return
+        threading.Event().wait(0.01)
+    assert expected <= observed, (expected, observed)
+
+
 @pytest.fixture(scope="module")
 def other_authority(
     tenant_target: TenantTarget,
@@ -922,7 +992,7 @@ def test_authoritative_source_ledger_contract_and_apply_noop(
     assert source.count(b"SET quote_all_identifiers = off") == 1
     assert b"FROM pg_catalog.pg_largeobject_metadata" in source
     assert TENANT_CONTEXT_CONTRACT.digest == (
-        "sha256:d6c16891e263420c55b80f17674cda3c2895652cd2ff8d45937f8b80300567ca"
+        "sha256:39e979fa296122cb66d42eae5e2d7c6dc797ac77ef4324515ae1ab6020088d83"
     )
     assert tenant_target.first_report.applied_versions == (1,)
     assert tenant_target.noop_report.applied_versions == ()
@@ -961,6 +1031,54 @@ def test_tenant_catalog_fingerprint_has_exact_shared_schema_class_parity() -> No
         assert f"FROM pg_catalog.{item.catalog_name} AS" in fingerprint
         assert f".{item.namespace_column}" in fingerprint
         assert f".{item.name_column}" in fingerprint
+    assert fingerprint.count("''rewrite-rule''") == 1
+    assert "FROM pg_catalog.pg_rewrite AS rewrite_rule" in fingerprint
+    assert "pg_get_ruledef(rewrite_rule.oid, false)" in fingerprint
+    assert "rewrite_rule.ev_qual" not in fingerprint
+    assert "rewrite_rule.ev_action" not in fingerprint
+    assert "class.relhasrules" in fingerprint
+    assert "''ofarm'', ''ofarm_infrastructure'', ''public''" not in fingerprint
+    assert "''ofarm_crypto''" in fingerprint
+    assert fingerprint.count("''extension-dependency''") == 1
+    assert "FROM pg_catalog.pg_depend AS dependency" in fingerprint
+    assert "pg_catalog.pg_identify_object(" in fingerprint
+    assert "dependency.classid::pg_catalog.regclass" in fingerprint
+    assert "dependency.objsubid" in fingerprint
+    assert "dependency.refobjsubid" in fingerprint
+    assert "dependency.deptype = ''e''" not in fingerprint
+    assert "extension.extname = ''ofarm_ed25519''" in fingerprint
+    assert "OR identified.schema IN (" in fingerprint
+
+
+def test_native_verifier_preflight_checks_complete_extension_dependency_set() -> None:
+    source = (
+        PACKAGE_ROOT / "deployment" / "postgresql" / "provisioning.py"
+    ).read_text(encoding="utf-8")
+    preflight = source.split("def _native_verifier_differences(", 1)[1].split(
+        "\ndef _cluster_database_access_differences(", 1
+    )[0]
+
+    assert "dependency.objsubid," in preflight
+    assert "dependency.refobjsubid," in preflight
+    assert "dependency.deptype," in preflight
+    assert "dependency.refclassid =" in preflight
+    assert "'pg_catalog.pg_extension'::pg_catalog.regclass" in preflight
+    assert "AND dependency.deptype = 'e'" not in preflight
+
+
+def test_tenant_observer_requires_zero_prepared_transaction_capacity() -> None:
+    source = MIGRATION_PATH.read_text(encoding="utf-8")
+    marker = "-- PREPARED_TRANSACTION_STARTUP_POSTURE_V1"
+    gate = (
+        "pg_catalog.current_setting(\n"
+        "                ''max_prepared_transactions''\n"
+        "           )::pg_catalog.int4 <> 0"
+    )
+
+    assert source.count(marker) == 1
+    assert source.count(gate) == 1
+    assert source.count("FROM pg_catalog.pg_prepared_xacts") == 1
+    assert "''prepared transaction capacity differs''" in source
 
 
 def test_shared_application_role_cannot_observe_peer_backend_statistics(
@@ -1500,95 +1618,919 @@ def test_production_binding_accepts_only_the_exact_signed_capability(
             )
 
 
-def test_capability_close_waits_for_bound_transaction_shared_lock(
+def test_capability_revoke_cancellation_disconnect_and_anti_barging(
     tenant_target: TenantTarget,
     authority: TenantAuthority,
     capability_key: CapabilityKeyAuthority,
 ) -> None:
-    controller_pid: list[int] = []
-    controller_connected = threading.Event()
     kms = _sha256_id(b"close-lock-kms-evidence")
     iam = _sha256_id(b"close-lock-iam-evidence")
+    original_ring: tuple[object, ...]
+    close_result: tuple[object, ...] | None = None
+    revoke_result: tuple[object, ...] | None = None
+    successful_revoke = None
+
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        original_ring = admin.execute(
+            """
+            SELECT audience, projected_head_sequence, projected_head_id,
+                   projected_head_digest::pg_catalog.text,
+                   projected_admission_state, projected_issuing_kid,
+                   projected_issuing_candidate_digest::pg_catalog.text,
+                   unresolved_incident_id, close_act_id, close_receipt_id,
+                   rebuilt_at
+            FROM ofarm.tenant_capability_keyring
+            """
+        ).fetchone()
+    assert original_ring[2:5] == (
+        capability_key.head_id,
+        capability_key.head_digest,
+        "OPEN",
+    )
+    application = psycopg.connect(tenant_target.role_dsn("ofarm_app"))
+    executor = ThreadPoolExecutor(max_workers=2)
+
+    def attempt_revoke(
+        connected: threading.Event,
+        backend_pid: list[int],
+    ) -> tuple[str, object]:
+        controller = psycopg.connect(
+            tenant_target.role_dsn("ofarm_capability_key_control_login"),
+            connect_timeout=5,
+        )
+        try:
+            controller.execute("SET LOCAL statement_timeout = '10s'")
+            controller.execute("SET LOCAL lock_timeout = '8s'")
+            backend_pid.append(controller.info.backend_pid)
+            connected.set()
+            assert close_result is not None
+            try:
+                row = controller.execute(
+                    """
+                    SELECT * FROM ofarm.revoke_tenant_capability_key(
+                        %s, %s, %s, %s, %s, %s, %s, 'COMPROMISE'
+                    )
+                    """,
+                    (
+                        capability_key.kid,
+                        close_result[0],
+                        close_result[1],
+                        close_result[2],
+                        close_result[3],
+                        kms,
+                        iam,
+                    ),
+                ).fetchone()
+            except psycopg.Error as exc:
+                return "error", exc.sqlstate or type(exc).__name__
+            controller.commit()
+            return "committed", row
+        finally:
+            controller.close()
+
+    def assert_close_survives_without_revoke() -> None:
+        assert close_result is not None
+        with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+            assert admin.execute(
+                """
+                SELECT pg_catalog.count(*)
+                FROM ofarm.tenant_capability_key_lifecycle
+                WHERE prior_act_id = %s AND act_kind = 'REVOKE'
+                """,
+                (close_result[0],),
+            ).fetchone() == (0,)
+            authority_state = admin.execute(
+                """
+                SELECT head_id, head_digest, admission_state,
+                       unresolved_incident_id, close_act_id, close_receipt_id
+                FROM ofarm.fold_tenant_capability_key_lifecycle(%s)
+                """,
+                (capability_key.kid,),
+            ).fetchone()
+            projection_state = admin.execute(
+                """
+                SELECT projected_head_id,
+                       projected_head_digest::pg_catalog.text,
+                       projected_admission_state, unresolved_incident_id,
+                       close_act_id, close_receipt_id
+                FROM ofarm.tenant_capability_keyring
+                """
+            ).fetchone()
+        expected = (
+            close_result[0],
+            close_result[1],
+            "CLOSED",
+            close_result[2],
+            close_result[0],
+            close_result[3],
+        )
+        assert authority_state == expected
+        assert projection_state == expected
+
+    try:
+        application.execute("SET LOCAL statement_timeout = '10s'")
+        application.execute("SET LOCAL lock_timeout = '8s'")
+        application_pid = application.info.backend_pid
+        application.execute(
+            "SELECT ofarm.bind_tenant_capability(%s)",
+            (
+                _signed_capability_for_new_challenge(
+                    application,
+                    authority=authority,
+                    key=capability_key,
+                ),
+            ),
+        )
+        with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+            _wait_for_admission_locks(
+                admin,
+                {(application_pid, "ShareLock", True)},
+            )
+
+        # CLOSE_ADMISSION is deliberately durable and lock-free.  It closes
+        # admission without waiting for an already-bound transaction.
+        with psycopg.connect(
+            tenant_target.role_dsn("ofarm_capability_key_control_login")
+        ) as controller:
+            controller.execute("SET LOCAL statement_timeout = '5s'")
+            close_result = controller.execute(
+                """
+                SELECT * FROM ofarm.close_tenant_capability_admission(
+                    %s, %s, %s, %s, %s, 'COMPROMISE'
+                )
+                """,
+                (
+                    capability_key.head_id,
+                    capability_key.head_digest,
+                    capability_key.kid,
+                    kms,
+                    iam,
+                ),
+            ).fetchone()
+            controller.commit()
+        assert len(close_result) == 5
+        assert application.execute(
+            "SELECT ofarm.current_tenant_id()"
+        ).fetchone() == (authority.tenant_id,)
+
+        # A bind that begins after the close, but before any revocation waiter,
+        # observes the durable close and refuses immediately.
+        with psycopg.connect(
+            tenant_target.role_dsn("ofarm_worker")
+        ) as later_worker:
+            later_worker.execute("SET LOCAL statement_timeout = '5s'")
+            later_token = _signed_capability_for_new_challenge(
+                later_worker,
+                authority=authority,
+                key=capability_key,
+            )
+            with pytest.raises(
+                psycopg.errors.InvalidAuthorizationSpecification
+            ):
+                later_worker.execute(
+                    "SELECT ofarm.bind_tenant_capability(%s)",
+                    (later_token,),
+                )
+
+        # A canceled exclusive waiter never becomes lifecycle authority.
+        cancel_connected = threading.Event()
+        cancel_pid: list[int] = []
+        cancel_future = executor.submit(
+            attempt_revoke, cancel_connected, cancel_pid
+        )
+        assert cancel_connected.wait(timeout=5)
+        with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+            _wait_for_admission_locks(
+                admin,
+                {
+                    (application_pid, "ShareLock", True),
+                    (cancel_pid[0], "ExclusiveLock", False),
+                },
+            )
+            assert admin.execute(
+                "SELECT pg_catalog.pg_cancel_backend(%s)",
+                (cancel_pid[0],),
+            ).fetchone() == (True,)
+        assert cancel_future.result(timeout=5) == ("error", "57014")
+        assert_close_survives_without_revoke()
+
+        # A killed controller is also only a failed attempt: its transaction
+        # disappears and the committed close remains the exact head.
+        terminate_connected = threading.Event()
+        terminate_pid: list[int] = []
+        terminate_future = executor.submit(
+            attempt_revoke, terminate_connected, terminate_pid
+        )
+        assert terminate_connected.wait(timeout=5)
+        with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+            _wait_for_admission_locks(
+                admin,
+                {
+                    (application_pid, "ShareLock", True),
+                    (terminate_pid[0], "ExclusiveLock", False),
+                },
+            )
+            assert admin.execute(
+                "SELECT pg_catalog.pg_terminate_backend(%s)",
+                (terminate_pid[0],),
+            ).fetchone() == (True,)
+        terminate_outcome = terminate_future.result(timeout=5)
+        assert terminate_outcome[0] == "error"
+        assert terminate_outcome[1] in {"57P01", "OperationalError"}
+        assert_close_survives_without_revoke()
+
+        # Once an exclusive revoke is queued, a later shared binder cannot
+        # barge ahead of it and join the earlier bound application.
+        revoke_connected = threading.Event()
+        revoke_pid: list[int] = []
+        successful_revoke = executor.submit(
+            attempt_revoke, revoke_connected, revoke_pid
+        )
+        assert revoke_connected.wait(timeout=5)
+        with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+            _wait_for_admission_locks(
+                admin,
+                {
+                    (application_pid, "ShareLock", True),
+                    (revoke_pid[0], "ExclusiveLock", False),
+                },
+            )
+
+        binder_connected = threading.Event()
+        binder_pid: list[int] = []
+
+        def attempt_later_bind() -> tuple[str, str | None]:
+            worker = psycopg.connect(
+                tenant_target.role_dsn("ofarm_worker"),
+                connect_timeout=5,
+            )
+            try:
+                worker.execute("SET LOCAL statement_timeout = '10s'")
+                worker.execute("SET LOCAL lock_timeout = '8s'")
+                token = _signed_capability_for_new_challenge(
+                    worker,
+                    authority=authority,
+                    key=capability_key,
+                )
+                binder_pid.append(worker.info.backend_pid)
+                binder_connected.set()
+                try:
+                    worker.execute(
+                        "SELECT ofarm.bind_tenant_capability(%s)",
+                        (token,),
+                    )
+                except psycopg.Error as exc:
+                    return "error", exc.sqlstate or type(exc).__name__
+                worker.commit()
+                return "bound", None
+            finally:
+                worker.close()
+
+        binder_future = executor.submit(attempt_later_bind)
+        assert binder_connected.wait(timeout=5)
+        with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+            _wait_for_admission_locks(
+                admin,
+                {
+                    (application_pid, "ShareLock", True),
+                    (revoke_pid[0], "ExclusiveLock", False),
+                    (binder_pid[0], "ShareLock", False),
+                },
+            )
+
+        application.commit()
+        revoke_outcome = successful_revoke.result(timeout=5)
+        assert revoke_outcome[0] == "committed"
+        assert isinstance(revoke_outcome[1], tuple)
+        revoke_result = revoke_outcome[1]
+        assert len(revoke_result) == 3
+        assert binder_future.result(timeout=5) == ("error", "28000")
+
+        with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+            assert admin.execute(
+                """
+                SELECT prior_act_id, act_kind, incident_id, close_receipt_id
+                FROM ofarm.tenant_capability_key_lifecycle
+                WHERE act_id = %s
+                """,
+                (revoke_result[0],),
+            ).fetchone() == (
+                close_result[0],
+                "REVOKE",
+                close_result[2],
+                close_result[3],
+            )
+            assert admin.execute(
+                """
+                SELECT projected_head_id,
+                       projected_head_digest::pg_catalog.text,
+                       projected_admission_state, projected_issuing_kid
+                FROM ofarm.tenant_capability_keyring
+                """
+            ).fetchone() == (
+                revoke_result[0],
+                revoke_result[1],
+                "CLOSED",
+                None,
+            )
+    finally:
+        active_error = sys.exc_info()[1]
+        cleanup_failures: list[BaseException] = []
+        try:
+            if not application.closed:
+                application.rollback()
+        except BaseException as exc:
+            cleanup_failures.append(exc)
+        finally:
+            try:
+                application.close()
+            except BaseException as exc:
+                cleanup_failures.append(exc)
+        try:
+            # Every submitted database call has a statement and lock timeout.
+            # Releasing the application first lets any queued future finish.
+            executor.shutdown(wait=True)
+        except BaseException as exc:
+            cleanup_failures.append(exc)
+
+        close_rows: list[tuple[object, ...]] = []
+        descendants: list[tuple[object, ...]] = []
+        try:
+            with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+                close_rows = admin.execute(
+                    """
+                    SELECT act_id
+                    FROM ofarm.tenant_capability_key_lifecycle
+                    WHERE prior_act_id = %s
+                      AND prior_act_digest::pg_catalog.text = %s
+                      AND act_kind = 'CLOSE_ADMISSION'
+                      AND old_kid = %s
+                      AND old_candidate_digest::pg_catalog.text = %s
+                      AND kms_evidence_digest::pg_catalog.text = %s
+                      AND iam_evidence_digest::pg_catalog.text = %s
+                      AND reason = 'COMPROMISE'
+                    """,
+                    (
+                        original_ring[2],
+                        original_ring[3],
+                        capability_key.kid,
+                        capability_key.candidate_digest,
+                        kms,
+                        iam,
+                    ),
+                ).fetchall()
+                if close_rows:
+                    descendants = admin.execute(
+                        """
+                        WITH RECURSIVE owned AS (
+                            SELECT lifecycle.*
+                            FROM ofarm.tenant_capability_key_lifecycle
+                                AS lifecycle
+                            WHERE lifecycle.act_id = ANY(
+                                %s::pg_catalog.uuid[]
+                            )
+                            UNION ALL
+                            SELECT child.*
+                            FROM ofarm.tenant_capability_key_lifecycle AS child
+                            JOIN owned AS parent
+                              ON child.prior_act_id = parent.act_id
+                        )
+                        SELECT stream_sequence, act_id,
+                               act_digest::pg_catalog.text, prior_act_id,
+                               prior_act_digest::pg_catalog.text, act_kind,
+                               old_kid,
+                               old_candidate_digest::pg_catalog.text,
+                               incident_id, close_receipt_id,
+                               kms_evidence_digest::pg_catalog.text,
+                               iam_evidence_digest::pg_catalog.text, reason
+                        FROM owned
+                        ORDER BY stream_sequence
+                        """,
+                        ([row[0] for row in close_rows],),
+                    ).fetchall()
+                    projected = admin.execute(
+                        """
+                        SELECT projected_head_sequence, projected_head_id,
+                               projected_head_digest::pg_catalog.text,
+                               projected_admission_state
+                        FROM ofarm.tenant_capability_keyring
+                        WHERE audience = %s
+                        """,
+                        (original_ring[0],),
+                    ).fetchone()
+                    try:
+                        assert len(close_rows) == 1
+                        assert 1 <= len(descendants) <= 2
+                        assert descendants[0][3:13] == (
+                            original_ring[2],
+                            original_ring[3],
+                            "CLOSE_ADMISSION",
+                            capability_key.kid,
+                            capability_key.candidate_digest,
+                            descendants[0][8],
+                            descendants[0][9],
+                            kms,
+                            iam,
+                            "COMPROMISE",
+                        )
+                        if close_result is not None:
+                            assert descendants[0][1:3] == close_result[0:2]
+                            assert descendants[0][8:10] == close_result[2:4]
+                        if len(descendants) == 2:
+                            assert descendants[1][3:13] == (
+                                descendants[0][1],
+                                descendants[0][2],
+                                "REVOKE",
+                                capability_key.kid,
+                                capability_key.candidate_digest,
+                                descendants[0][8],
+                                descendants[0][9],
+                                kms,
+                                iam,
+                                "COMPROMISE",
+                            )
+                            if revoke_result is not None:
+                                assert descendants[1][1:3] == revoke_result[0:2]
+                        assert projected == (
+                            descendants[-1][0],
+                            descendants[-1][1],
+                            descendants[-1][2],
+                            "CLOSED",
+                        )
+                    except AssertionError as exc:
+                        cleanup_failures.append(exc)
+        except BaseException as exc:
+            cleanup_failures.append(exc)
+
+        restored_count: int | None = None
+        removed_count: int | None = None
+        try:
+            with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+                exact_roots = admin.execute(
+                    """
+                    SELECT act_id
+                    FROM ofarm.tenant_capability_key_lifecycle
+                    WHERE prior_act_id = %s
+                      AND prior_act_digest::pg_catalog.text = %s
+                      AND act_kind = 'CLOSE_ADMISSION'
+                      AND old_kid = %s
+                      AND old_candidate_digest::pg_catalog.text = %s
+                      AND kms_evidence_digest::pg_catalog.text = %s
+                      AND iam_evidence_digest::pg_catalog.text = %s
+                      AND reason = 'COMPROMISE'
+                    """,
+                    (
+                        original_ring[2],
+                        original_ring[3],
+                        capability_key.kid,
+                        capability_key.candidate_digest,
+                        kms,
+                        iam,
+                    ),
+                ).fetchall()
+                if exact_roots:
+                    admin.execute(
+                        "SET LOCAL session_replication_role = 'replica'"
+                    )
+                    restored = admin.execute(
+                        """
+                        UPDATE ofarm.tenant_capability_keyring
+                        SET projected_head_sequence = %s,
+                            projected_head_id = %s,
+                            projected_head_digest = %s,
+                            projected_admission_state = %s,
+                            projected_issuing_kid = %s,
+                            projected_issuing_candidate_digest = %s,
+                            unresolved_incident_id = %s,
+                            close_act_id = %s,
+                            close_receipt_id = %s,
+                            rebuilt_at = %s
+                        WHERE audience = %s
+                        """,
+                        (
+                            original_ring[1],
+                            original_ring[2],
+                            original_ring[3],
+                            original_ring[4],
+                            original_ring[5],
+                            original_ring[6],
+                            original_ring[7],
+                            original_ring[8],
+                            original_ring[9],
+                            original_ring[10],
+                            original_ring[0],
+                        ),
+                    )
+                    removed = admin.execute(
+                        """
+                        WITH RECURSIVE owned AS (
+                            SELECT lifecycle.act_id
+                            FROM ofarm.tenant_capability_key_lifecycle
+                                AS lifecycle
+                            WHERE lifecycle.act_id = ANY(
+                                %s::pg_catalog.uuid[]
+                            )
+                            UNION ALL
+                            SELECT child.act_id
+                            FROM ofarm.tenant_capability_key_lifecycle AS child
+                            JOIN owned AS parent
+                              ON child.prior_act_id = parent.act_id
+                        )
+                        DELETE FROM ofarm.tenant_capability_key_lifecycle
+                        WHERE act_id IN (SELECT act_id FROM owned)
+                        """,
+                        ([row[0] for row in exact_roots],),
+                    )
+                    restored_count = restored.rowcount
+                    removed_count = removed.rowcount
+            if exact_roots:
+                assert restored_count == 1
+                if descendants:
+                    assert removed_count == len(descendants)
+                else:
+                    assert removed_count is not None and removed_count >= 1
+        except BaseException as exc:
+            cleanup_failures.append(exc)
+
+        try:
+            with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+                restored_ring = admin.execute(
+                    """
+                    SELECT audience, projected_head_sequence,
+                           projected_head_id,
+                           projected_head_digest::pg_catalog.text,
+                           projected_admission_state, projected_issuing_kid,
+                           projected_issuing_candidate_digest::pg_catalog.text,
+                           unresolved_incident_id, close_act_id,
+                           close_receipt_id, rebuilt_at
+                    FROM ofarm.tenant_capability_keyring
+                    """
+                ).fetchone()
+                remaining = admin.execute(
+                    """
+                    SELECT pg_catalog.count(*)
+                    FROM ofarm.tenant_capability_key_lifecycle
+                    WHERE prior_act_id = %s
+                      AND prior_act_digest::pg_catalog.text = %s
+                      AND act_kind = 'CLOSE_ADMISSION'
+                      AND old_kid = %s
+                      AND old_candidate_digest::pg_catalog.text = %s
+                      AND kms_evidence_digest::pg_catalog.text = %s
+                      AND iam_evidence_digest::pg_catalog.text = %s
+                      AND reason = 'COMPROMISE'
+                    """,
+                    (
+                        original_ring[2],
+                        original_ring[3],
+                        capability_key.kid,
+                        capability_key.candidate_digest,
+                        kms,
+                        iam,
+                    ),
+                ).fetchone()
+            assert restored_ring == original_ring
+            assert remaining == (0,)
+        except BaseException as exc:
+            cleanup_failures.append(exc)
+
+        if cleanup_failures:
+            details = "; ".join(
+                f"{type(exc).__name__}: {exc}" for exc in cleanup_failures
+            )
+            if active_error is not None:
+                active_error.add_note(f"cleanup failures: {details}")
+            else:
+                failure = cleanup_failures[0]
+                for extra in cleanup_failures[1:]:
+                    failure.add_note(
+                        f"additional cleanup failure: "
+                        f"{type(extra).__name__}: {extra}"
+                    )
+                raise failure
+
+
+def test_principal_revoke_anti_barging_after_savepoint_retry(
+    tenant_target: TenantTarget,
+    authority: TenantAuthority,
+    capability_key: CapabilityKeyAuthority,
+) -> None:
+    subject = "subject-principal-savepoint-race"
+    activation_reason = "savepoint-race-activation"
+    revoke_reason = "savepoint-race-revoke"
 
     with psycopg.connect(
-        tenant_target.role_dsn("ofarm_app")
-    ) as application:
-        challenge_id, audience = application.execute(
+        tenant_target.role_dsn("ofarm_identity_control_login")
+    ) as identity:
+        initial = _initial_transition_values(
+            identity,
+            authority,
+            subject=subject,
+            reason=activation_reason,
+        )
+        _transition(
+            identity,
+            subject=subject,
+            expected_head_id=None,
+            expected_head_digest=None,
+            act_id=initial["act_id"],
+            act_digest=initial["act_digest"],
+            act_kind="ACTIVATE",
+            binding_version_id=initial["binding_version_id"],
+            binding_version_digest=initial["binding_digest"],
+            candidate_version_id=initial["binding_version_id"],
+            candidate_version_digest=initial["binding_digest"],
+            tenant_id=authority.tenant_id,
+            tenant_registration_digest=authority.tenant_registration_digest,
+            party_ref=authority.party_ref,
+            party_schema_digest=authority.party_schema_digest,
+            party_payload_digest=authority.party_payload_digest,
+            valid_from=initial["valid_from"],
+            valid_until=initial["valid_until"],
+            predecessor_version_id=None,
+            effective_at=initial["effective_at"],
+            decided_at=initial["decided_at"],
+            reason=activation_reason,
+        )
+
+    principal_authority = replace(
+        authority,
+        subject=subject,
+        binding_version_id=initial["binding_version_id"],
+        binding_version_digest=initial["binding_digest"],
+        lifecycle_head_id=initial["act_id"],
+        lifecycle_head_digest=initial["act_digest"],
+    )
+
+    revoke_act_id = uuid4()
+    with psycopg.connect(
+        tenant_target.role_dsn("ofarm_identity_control_login")
+    ) as identity:
+        revoke_effective_at, revoke_decided_at = identity.execute(
+            """
+            SELECT
+                pg_catalog.date_trunc(
+                    'microseconds',
+                    pg_catalog.clock_timestamp() - INTERVAL '2 seconds'
+                ),
+                pg_catalog.date_trunc(
+                    'microseconds',
+                    pg_catalog.clock_timestamp() - INTERVAL '1 second'
+                )
+            """
+        ).fetchone()
+        revoke_act_digest = _compute_act_digest(
+            identity,
+            subject=subject,
+            stream_sequence=2,
+            act_id=revoke_act_id,
+            act_kind="REVOKE",
+            binding_version_id=principal_authority.binding_version_id,
+            binding_version_digest=principal_authority.binding_version_digest,
+            prior_act_id=principal_authority.lifecycle_head_id,
+            prior_act_digest=principal_authority.lifecycle_head_digest,
+            successor_version_id=None,
+            successor_version_digest=None,
+            effective_at=revoke_effective_at,
+            decided_at=revoke_decided_at,
+            reason=revoke_reason,
+        )
+
+    holder = psycopg.connect(tenant_target.role_dsn("ofarm_app"))
+    retrying = psycopg.connect(tenant_target.role_dsn("ofarm_worker"))
+    executor = ThreadPoolExecutor(max_workers=2)
+    transition_future = None
+    retry_future = None
+    try:
+        holder.execute("SET LOCAL statement_timeout = '10s'")
+        holder.execute("SET LOCAL lock_timeout = '8s'")
+        holder.execute(
+            "SELECT ofarm.bind_tenant_capability(%s)",
+            (
+                _signed_capability_for_new_challenge(
+                    holder,
+                    authority=principal_authority,
+                    key=capability_key,
+                ),
+            ),
+        )
+        holder_pid = holder.info.backend_pid
+
+        retrying.execute("SET LOCAL statement_timeout = '10s'")
+        retrying.execute("SET LOCAL lock_timeout = '8s'")
+        retry_challenge, retry_audience = retrying.execute(
             "SELECT * FROM ofarm.create_tenant_challenge()"
         ).fetchone()
-        now_us = application.execute(
+        retry_now_us = retrying.execute(
             """
             SELECT (extract(epoch FROM pg_catalog.clock_timestamp()) *
                     1000000)::pg_catalog.int8
             """
         ).fetchone()[0]
-        token = sign_capability(
-            _tenant_capability(
-                authority=authority,
-                key=capability_key,
-                challenge_id=challenge_id,
-                audience=audience,
-                now_unix_microseconds=now_us,
-            )
+        retry_capability = _tenant_capability(
+            authority=principal_authority,
+            key=capability_key,
+            challenge_id=retry_challenge,
+            audience=retry_audience,
+            now_unix_microseconds=retry_now_us,
         )
-        application.execute(
-            "SELECT ofarm.bind_tenant_capability(%s)",
-            (token,),
+        valid_retry_token = sign_capability(retry_capability)
+        invalid_retry_token = sign_capability(
+            replace(retry_capability, lifecycle_head_digest=bytes(32))
         )
+        retry_pid = retrying.info.backend_pid
 
-        def attempt_close() -> tuple[object, ...]:
-            with psycopg.connect(
-                tenant_target.role_dsn(
-                    "ofarm_capability_key_control_login"
+        # This correctly signed token fails only after the shared admission
+        # lock is taken and principal authority is folded.  Rolling back its
+        # savepoint must release that shared lock while preserving CHALLENGE.
+        with pytest.raises(
+            psycopg.errors.InvalidAuthorizationSpecification
+        ):
+            with retrying.transaction():
+                retrying.execute(
+                    "SELECT ofarm.bind_tenant_capability(%s)",
+                    (invalid_retry_token,),
                 )
-            ) as controller:
-                controller_pid.append(controller.info.backend_pid)
-                controller_connected.set()
-                row = controller.execute(
-                    """
-                    SELECT * FROM ofarm.close_tenant_capability_admission(
-                        %s, %s, %s, %s, %s, 'COMPROMISE'
-                    )
-                    """,
-                    (
-                        capability_key.head_id,
-                        capability_key.head_digest,
-                        capability_key.kid,
-                        kms,
-                        iam,
-                    ),
-                ).fetchone()
-                controller.rollback()
-                return row
+        with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+            assert _admission_locks(admin, retry_pid) == set()
 
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            close_future = executor.submit(attempt_close)
+        # A successful bind performed inside a savepoint is also completely
+        # undone by rollback: BOUND disappears, CHALLENGE returns, and its
+        # transaction-level shared lock is gone.
+        with pytest.raises(RuntimeError, match="rollback bound savepoint"):
+            with retrying.transaction():
+                retrying.execute(
+                    "SELECT ofarm.bind_tenant_capability(%s)",
+                    (valid_retry_token,),
+                )
+                assert retrying.execute(
+                    "SELECT ofarm.current_tenant_id()"
+                ).fetchone() == (authority.tenant_id,)
+                with psycopg.connect(
+                    tenant_target.target_admin_dsn
+                ) as admin:
+                    _wait_for_admission_locks(
+                        admin,
+                        {(retry_pid, "ShareLock", True)},
+                    )
+                raise RuntimeError("rollback bound savepoint")
+        with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+            assert _admission_locks(admin, retry_pid) == set()
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            with retrying.transaction():
+                retrying.execute("SELECT ofarm.current_tenant_id()")
+        with pytest.raises(psycopg.errors.ObjectNotInPrerequisiteState):
+            with retrying.transaction():
+                retrying.execute(
+                    "SELECT * FROM ofarm.create_tenant_challenge()"
+                )
+
+        transition_connected = threading.Event()
+        transition_pid: list[int] = []
+
+        def commit_principal_revoke() -> UUID:
+            identity = psycopg.connect(
+                tenant_target.role_dsn("ofarm_identity_control_login"),
+                connect_timeout=5,
+            )
             try:
-                assert controller_connected.wait(timeout=5)
-                waiting_for_exclusive_lock = False
-                with psycopg.connect(tenant_target.target_admin_dsn) as admin:
-                    for _attempt in range(100):
-                        waiting_for_exclusive_lock = admin.execute(
-                            """
-                            SELECT pg_catalog.count(*) = 1
-                            FROM pg_catalog.pg_locks AS lock
-                            WHERE lock.pid = %s
-                              AND lock.locktype = 'advisory'
-                              AND lock.classid = 1330004306
-                              AND lock.objid = 1413694001
-                              AND lock.mode = 'ExclusiveLock'
-                              AND NOT lock.granted
-                            """,
-                            (controller_pid[0],),
-                        ).fetchone()[0]
-                        if waiting_for_exclusive_lock:
-                            break
-                        threading.Event().wait(0.01)
-                assert waiting_for_exclusive_lock
-                assert not close_future.done()
+                identity.execute("SET LOCAL statement_timeout = '10s'")
+                identity.execute("SET LOCAL lock_timeout = '8s'")
+                transition_pid.append(identity.info.backend_pid)
+                transition_connected.set()
+                _transition(
+                    identity,
+                    subject=subject,
+                    expected_head_id=principal_authority.lifecycle_head_id,
+                    expected_head_digest=(
+                        principal_authority.lifecycle_head_digest
+                    ),
+                    act_id=revoke_act_id,
+                    act_digest=revoke_act_digest,
+                    act_kind="REVOKE",
+                    binding_version_id=(
+                        principal_authority.binding_version_id
+                    ),
+                    binding_version_digest=(
+                        principal_authority.binding_version_digest
+                    ),
+                    candidate_version_id=None,
+                    candidate_version_digest=None,
+                    tenant_id=None,
+                    tenant_registration_digest=None,
+                    party_ref=None,
+                    party_schema_digest=None,
+                    party_payload_digest=None,
+                    valid_from=None,
+                    valid_until=None,
+                    predecessor_version_id=None,
+                    effective_at=revoke_effective_at,
+                    decided_at=revoke_decided_at,
+                    reason=revoke_reason,
+                )
+                identity.commit()
+                return revoke_act_id
             finally:
-                application.rollback()
-            assert len(close_future.result(timeout=5)) == 5
+                identity.close()
+
+        transition_future = executor.submit(commit_principal_revoke)
+        assert transition_connected.wait(timeout=5)
+        with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+            _wait_for_admission_locks(
+                admin,
+                {
+                    (holder_pid, "ShareLock", True),
+                    (transition_pid[0], "ExclusiveLock", False),
+                },
+            )
+
+        retry_started = threading.Event()
+
+        def retry_after_exclusive_waiter() -> tuple[str, str | None]:
+            retry_started.set()
+            try:
+                with retrying.transaction():
+                    retrying.execute(
+                        "SELECT ofarm.bind_tenant_capability(%s)",
+                        (valid_retry_token,),
+                    )
+            except psycopg.Error as exc:
+                return "error", exc.sqlstate or type(exc).__name__
+            return "bound", None
+
+        retry_future = executor.submit(retry_after_exclusive_waiter)
+        assert retry_started.wait(timeout=5)
+        with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+            _wait_for_admission_locks(
+                admin,
+                {
+                    (holder_pid, "ShareLock", True),
+                    (transition_pid[0], "ExclusiveLock", False),
+                    (retry_pid, "ShareLock", False),
+                },
+            )
+
+        holder.commit()
+        assert transition_future.result(timeout=5) == revoke_act_id
+        assert retry_future.result(timeout=5) == ("error", "28000")
+
+        with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+            assert admin.execute(
+                """
+                SELECT current_state, binding_version_id,
+                       lifecycle_head_id, lifecycle_head_digest
+                FROM ofarm.principal_binding_current
+                WHERE equality_policy = %s AND issuer = %s AND subject = %s
+                """,
+                (OIDC_ISSUER_EQUALITY_POLICY, ISSUER, subject),
+            ).fetchone() == (
+                "INACTIVE",
+                None,
+                revoke_act_id,
+                revoke_act_digest,
+            )
+    finally:
+        active_error = sys.exc_info()[1]
+        cleanup_failures: list[BaseException] = []
+        try:
+            if not holder.closed:
+                holder.rollback()
+        except BaseException as exc:
+            cleanup_failures.append(exc)
+        finally:
+            try:
+                holder.close()
+            except BaseException as exc:
+                cleanup_failures.append(exc)
+        try:
+            # Closing the holder releases the shared lock.  Both submitted
+            # statements are timeout-bounded, so joining cannot retain it.
+            executor.shutdown(wait=True)
+        except BaseException as exc:
+            cleanup_failures.append(exc)
+        try:
+            if not retrying.closed:
+                retrying.rollback()
+        except BaseException as exc:
+            cleanup_failures.append(exc)
+        finally:
+            try:
+                retrying.close()
+            except BaseException as exc:
+                cleanup_failures.append(exc)
+        if cleanup_failures:
+            details = "; ".join(
+                f"{type(exc).__name__}: {exc}" for exc in cleanup_failures
+            )
+            if active_error is not None:
+                active_error.add_note(f"cleanup failures: {details}")
+            else:
+                failure = cleanup_failures[0]
+                for extra in cleanup_failures[1:]:
+                    failure.add_note(
+                        f"additional cleanup failure: "
+                        f"{type(extra).__name__}: {extra}"
+                    )
+                raise failure
 
 
 def test_keyring_projection_tamper_refuses_then_rebuilds_exactly(
@@ -1942,8 +2884,10 @@ def test_capability_key_lifecycle_handoff_and_compromise_are_fail_closed(
         )
 
 
-def test_live_postgresql_and_python_share_exact_issuer_vectors(
+def test_live_postgresql_and_python_share_exact_contract_vectors(
     tenant_target: TenantTarget,
+    authority: TenantAuthority,
+    capability_key: CapabilityKeyAuthority,
 ) -> None:
     vectors = tuple((value, True) for value in OIDC_ISSUER_VALID_VECTORS) + tuple(
         (value, False) for value in OIDC_ISSUER_INVALID_VECTORS
@@ -1955,6 +2899,58 @@ def test_live_postgresql_and_python_share_exact_issuer_vectors(
             ).fetchone()[0]
             assert database_result is expected
             assert valid_oidc_issuer(issuer) is expected
+
+        audience = admin.execute(
+            """
+            SELECT audience
+            FROM ofarm.tenant_binder_instance
+            WHERE singleton
+            """
+        ).fetchone()[0]
+        time_cases = TENANT_CAPABILITY_CONTRACT.manifest_without_digest()[
+            "sharedVectors"
+        ]["time"]
+        for case in time_cases:
+            database_result = admin.execute(
+                """
+                SELECT ofarm.valid_tenant_capability_time_window(
+                    %s, %s, %s, %s, %s
+                )
+                """,
+                (
+                    case["issuedAt"],
+                    case["notBefore"],
+                    case["expiresAt"],
+                    case["now"],
+                    case["challengeCreatedAt"],
+                ),
+            ).fetchone()[0]
+            capability = replace(
+                _tenant_capability(
+                    authority=authority,
+                    key=capability_key,
+                    challenge_id=uuid4(),
+                    audience=audience,
+                    now_unix_microseconds=case["issuedAt"],
+                ),
+                issued_at_unix_microseconds=case["issuedAt"],
+                not_before_unix_microseconds=case["notBefore"],
+                expires_at_unix_microseconds=case["expiresAt"],
+            )
+            try:
+                validate_tenant_capability(
+                    capability,
+                    now_unix_microseconds=case["now"],
+                    challenge_created_at_unix_microseconds=case[
+                        "challengeCreatedAt"
+                    ],
+                )
+                python_result = True
+            except TenantCapabilityContractError:
+                python_result = False
+            expected = case["result"] == "accept"
+            assert database_result is expected, case["id"]
+            assert python_result is expected, case["id"]
 
 
 def test_runtime_component_logical_ref_has_exact_ascii_octet_bound(
@@ -4098,6 +5094,267 @@ def test_post_migration_schema_local_collation_tamper_refuses_every_gate(
         with psycopg.connect(tenant_target.target_admin_dsn) as admin:
             admin.execute("SET LOCAL ROLE ofarm_owner")
             admin.execute("DROP COLLATION ofarm.rogue")
+
+    with psycopg.connect(tenant_target.migrator_dsn) as migrator:
+        assert _verify(migrator)[0] is True
+
+
+@pytest.mark.parametrize(
+    ("tamper_statement", "cleanup_statement"),
+    (
+        (
+            "CREATE COLLATION ofarm_crypto.rogue "
+            "(provider = builtin, locale = 'C')",
+            "DROP COLLATION ofarm_crypto.rogue",
+        ),
+        (
+            "GRANT CREATE ON SCHEMA ofarm_crypto TO ofarm_app",
+            "REVOKE CREATE ON SCHEMA ofarm_crypto FROM ofarm_app",
+        ),
+    ),
+    ids=("crypto-object", "crypto-acl"),
+)
+def test_post_migration_crypto_schema_tamper_refuses_every_gate(
+    tenant_target: TenantTarget,
+    tamper_statement: str,
+    cleanup_statement: str,
+) -> None:
+    with psycopg.connect(
+        tenant_target.target_admin_dsn, autocommit=True
+    ) as admin:
+        admin.execute("SET ROLE ofarm_crypto_installer")
+        admin.execute(tamper_statement)
+    try:
+        with psycopg.connect(tenant_target.migrator_dsn) as migrator:
+            verifier_row = _verify(migrator)
+        assert verifier_row[0] is False
+        assert verifier_row[2] >= 1
+
+        with psycopg.connect(
+            tenant_target.role_dsn("ofarm_readiness")
+        ) as readiness:
+            observer_row = readiness.execute(
+                "SELECT * FROM ofarm.observe_tenant_contract()"
+            ).fetchone()
+        assert observer_row[0] is False
+        assert observer_row[2] >= 1
+
+        with pytest.raises(MigrationDirtyError):
+            migrate_service(
+                admin_dsn=tenant_target.admin_dsn,
+                migrator_dsn=tenant_target.migrator_dsn,
+                spec=TENANT_PROVISIONING_SPEC,
+                migration_set=tenant_target.migration_set,
+                release_identity=RELEASE_IDENTITY,
+                execution_id=uuid4(),
+            )
+    finally:
+        with psycopg.connect(
+            tenant_target.target_admin_dsn, autocommit=True
+        ) as admin:
+            admin.execute("SET ROLE ofarm_crypto_installer")
+            admin.execute(cleanup_statement)
+
+    with psycopg.connect(tenant_target.migrator_dsn) as migrator:
+        assert _verify(migrator)[0] is True
+
+
+def test_post_migration_native_extension_membership_tamper_refuses_every_gate(
+    tenant_target: TenantTarget,
+) -> None:
+    function_identity = (
+        "ofarm_crypto.ed25519_verify(bytea, bytea, bytea)"
+    )
+    with psycopg.connect(
+        tenant_target.target_admin_dsn, autocommit=True
+    ) as admin:
+        admin.execute("SET ROLE ofarm_crypto_installer")
+        admin.execute(
+            "ALTER EXTENSION ofarm_ed25519 DROP FUNCTION "
+            + function_identity
+        )
+    try:
+        with psycopg.connect(tenant_target.migrator_dsn) as migrator:
+            verifier_row = _verify(migrator)
+        assert verifier_row[0] is False
+        assert verifier_row[2] >= 1
+
+        with psycopg.connect(
+            tenant_target.role_dsn("ofarm_readiness")
+        ) as readiness:
+            observer_row = readiness.execute(
+                "SELECT * FROM ofarm.observe_tenant_contract()"
+            ).fetchone()
+        assert observer_row[0] is False
+        assert observer_row[2] >= 1
+
+        with pytest.raises(MigrationDirtyError):
+            migrate_service(
+                admin_dsn=tenant_target.admin_dsn,
+                migrator_dsn=tenant_target.migrator_dsn,
+                spec=TENANT_PROVISIONING_SPEC,
+                migration_set=tenant_target.migration_set,
+                release_identity=RELEASE_IDENTITY,
+                execution_id=uuid4(),
+            )
+    finally:
+        with psycopg.connect(
+            tenant_target.target_admin_dsn, autocommit=True
+        ) as admin:
+            admin.execute("SET ROLE ofarm_crypto_installer")
+            admin.execute(
+                "ALTER EXTENSION ofarm_ed25519 ADD FUNCTION "
+                + function_identity
+            )
+
+    with psycopg.connect(tenant_target.migrator_dsn) as migrator:
+        assert _verify(migrator)[0] is True
+
+
+def test_post_migration_native_extension_dependency_tamper_refuses_every_gate(
+    tenant_target: TenantTarget,
+) -> None:
+    function_identity = (
+        "ofarm_crypto.ed25519_verify(bytea, bytea, bytea)"
+    )
+    with psycopg.connect(
+        tenant_target.target_admin_dsn, autocommit=True
+    ) as admin:
+        admin.execute("SET ROLE ofarm_crypto_installer")
+        admin.execute(
+            "ALTER FUNCTION "
+            + function_identity
+            + " DEPENDS ON EXTENSION plpgsql"
+        )
+    try:
+        with psycopg.connect(tenant_target.migrator_dsn) as migrator:
+            verifier_row = _verify(migrator)
+        assert verifier_row[0] is False
+        assert verifier_row[2] >= 1
+
+        with psycopg.connect(
+            tenant_target.role_dsn("ofarm_readiness")
+        ) as readiness:
+            observer_row = readiness.execute(
+                "SELECT * FROM ofarm.observe_tenant_contract()"
+            ).fetchone()
+        assert observer_row[0] is False
+        assert observer_row[2] >= 1
+
+        with pytest.raises(MigrationDirtyError):
+            migrate_service(
+                admin_dsn=tenant_target.admin_dsn,
+                migrator_dsn=tenant_target.migrator_dsn,
+                spec=TENANT_PROVISIONING_SPEC,
+                migration_set=tenant_target.migration_set,
+                release_identity=RELEASE_IDENTITY,
+                execution_id=uuid4(),
+            )
+    finally:
+        with psycopg.connect(
+            tenant_target.target_admin_dsn, autocommit=True
+        ) as admin:
+            admin.execute("SET ROLE ofarm_crypto_installer")
+            admin.execute(
+                "ALTER FUNCTION "
+                + function_identity
+                + " NO DEPENDS ON EXTENSION plpgsql"
+            )
+
+    with psycopg.connect(tenant_target.migrator_dsn) as migrator:
+        assert _verify(migrator)[0] is True
+
+
+def test_post_migration_rewrite_rule_tamper_refuses_every_gate(
+    tenant_target: TenantTarget,
+) -> None:
+    with psycopg.connect(
+        tenant_target.target_admin_dsn, autocommit=True
+    ) as admin:
+        admin.execute("SET ROLE ofarm_owner")
+        admin.execute(
+            "CREATE RULE rogue AS ON INSERT TO ofarm.kernel_record "
+            "DO INSTEAD NOTHING"
+        )
+    try:
+        with psycopg.connect(tenant_target.migrator_dsn) as migrator:
+            verifier_row = _verify(migrator)
+        assert verifier_row[0] is False
+        assert verifier_row[2] >= 1
+
+        with psycopg.connect(
+            tenant_target.role_dsn("ofarm_readiness")
+        ) as readiness:
+            observer_row = readiness.execute(
+                "SELECT * FROM ofarm.observe_tenant_contract()"
+            ).fetchone()
+        assert observer_row[0] is False
+        assert observer_row[2] >= 1
+
+        with pytest.raises(MigrationDirtyError):
+            migrate_service(
+                admin_dsn=tenant_target.admin_dsn,
+                migrator_dsn=tenant_target.migrator_dsn,
+                spec=TENANT_PROVISIONING_SPEC,
+                migration_set=tenant_target.migration_set,
+                release_identity=RELEASE_IDENTITY,
+                execution_id=uuid4(),
+            )
+    finally:
+        with psycopg.connect(
+            tenant_target.target_admin_dsn, autocommit=True
+        ) as admin:
+            admin.execute("SET ROLE ofarm_owner")
+            admin.execute("DROP RULE rogue ON ofarm.kernel_record")
+
+    with psycopg.connect(tenant_target.migrator_dsn) as migrator:
+        assert _verify(migrator)[0] is True
+
+
+def test_post_migration_database_wide_setting_refuses_every_gate(
+    tenant_target: TenantTarget,
+) -> None:
+    with psycopg.connect(
+        tenant_target.target_admin_dsn, autocommit=True
+    ) as admin:
+        admin.execute("SET ROLE ofarm_owner")
+        admin.execute(
+            "ALTER DATABASE ofarm_tenant "
+            "SET default_transaction_read_only = on"
+        )
+    try:
+        with psycopg.connect(tenant_target.migrator_dsn) as migrator:
+            verifier_row = _verify(migrator)
+        assert verifier_row[0] is False
+        assert verifier_row[2] >= 1
+
+        with psycopg.connect(
+            tenant_target.role_dsn("ofarm_readiness")
+        ) as readiness:
+            observer_row = readiness.execute(
+                "SELECT * FROM ofarm.observe_tenant_contract()"
+            ).fetchone()
+        assert observer_row[0] is False
+        assert observer_row[2] >= 1
+
+        with pytest.raises(MigrationDirtyError):
+            migrate_service(
+                admin_dsn=tenant_target.admin_dsn,
+                migrator_dsn=tenant_target.migrator_dsn,
+                spec=TENANT_PROVISIONING_SPEC,
+                migration_set=tenant_target.migration_set,
+                release_identity=RELEASE_IDENTITY,
+                execution_id=uuid4(),
+            )
+    finally:
+        with psycopg.connect(
+            tenant_target.target_admin_dsn, autocommit=True
+        ) as admin:
+            admin.execute("SET default_transaction_read_only = off")
+            admin.execute(
+                "ALTER DATABASE ofarm_tenant "
+                "RESET default_transaction_read_only"
+            )
 
     with psycopg.connect(tenant_target.migrator_dsn) as migrator:
         assert _verify(migrator)[0] is True

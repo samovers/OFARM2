@@ -527,6 +527,126 @@ def test_public_structural_observation_refuses_post_migration_rogue_collation(
         assert restored.service_identity == SECURITY_AUDIT_SERVICE.identity
 
 
+@pytest.mark.parametrize("lane", ("tenant", "security-audit"))
+def test_public_structural_observation_refuses_post_migration_rewrite_rule(
+    structural_pair: _StructuralPair,
+    lane: str,
+):
+    if lane == "tenant":
+        target_dsn = structural_pair.tenant_target_admin_dsn
+        structural_dsn = structural_pair.tenant_readiness_dsn
+        owner_role = "ofarm_owner"
+        schema_name = "ofarm"
+        relation_name = "kernel_record"
+    else:
+        target_dsn = structural_pair.audit_target_admin_dsn
+        structural_dsn = structural_pair.audit_readiness_dsn
+        owner_role = "ofarm_security_audit_owner"
+        schema_name = "ofarm_security"
+        relation_name = "operational_security_event"
+
+    qualified_relation = sql.SQL("{}.{}").format(
+        sql.Identifier(schema_name),
+        sql.Identifier(relation_name),
+    )
+    try:
+        with psycopg.connect(target_dsn, autocommit=True) as admin:
+            admin.execute(
+                sql.SQL("SET ROLE {}").format(sql.Identifier(owner_role))
+            )
+            admin.execute(
+                sql.SQL(
+                    "CREATE RULE {} AS ON INSERT TO {} DO INSTEAD NOTHING"
+                ).format(sql.Identifier("rogue"), qualified_relation)
+            )
+            admin.execute("RESET ROLE")
+
+        with pytest.raises(PostgreSQLVerificationError):
+            if lane == "tenant":
+                verify_tenant_structural_compatibility(
+                    tenant_structural_dsn=structural_dsn
+                )
+            else:
+                verify_security_audit_structural_compatibility(
+                    audit_structural_dsn=structural_dsn
+                )
+    finally:
+        with psycopg.connect(target_dsn, autocommit=True) as admin:
+            admin.execute(
+                sql.SQL("DROP RULE IF EXISTS {} ON {}").format(
+                    sql.Identifier("rogue"), qualified_relation
+                )
+            )
+
+    if lane == "tenant":
+        restored = verify_tenant_structural_compatibility(
+            tenant_structural_dsn=structural_dsn
+        )
+        assert restored.service_identity == TENANT_SERVICE.identity
+    else:
+        restored = verify_security_audit_structural_compatibility(
+            audit_structural_dsn=structural_dsn
+        )
+        assert restored.service_identity == SECURITY_AUDIT_SERVICE.identity
+
+
+@pytest.mark.parametrize("lane", ("tenant", "security-audit"))
+def test_public_structural_observation_refuses_database_wide_setting(
+    structural_pair: _StructuralPair,
+    lane: str,
+):
+    if lane == "tenant":
+        target_dsn = structural_pair.tenant_target_admin_dsn
+        structural_dsn = structural_pair.tenant_readiness_dsn
+        owner_role = "ofarm_owner"
+        database_name = "ofarm_tenant"
+    else:
+        target_dsn = structural_pair.audit_target_admin_dsn
+        structural_dsn = structural_pair.audit_readiness_dsn
+        owner_role = "ofarm_security_audit_owner"
+        database_name = "ofarm_security_audit"
+
+    try:
+        with psycopg.connect(target_dsn, autocommit=True) as admin:
+            admin.execute(
+                sql.SQL("SET ROLE {}").format(sql.Identifier(owner_role))
+            )
+            admin.execute(
+                sql.SQL(
+                    "ALTER DATABASE {} SET default_transaction_read_only = on"
+                ).format(sql.Identifier(database_name))
+            )
+
+        with pytest.raises(PostgreSQLVerificationError):
+            if lane == "tenant":
+                verify_tenant_structural_compatibility(
+                    tenant_structural_dsn=structural_dsn
+                )
+            else:
+                verify_security_audit_structural_compatibility(
+                    audit_structural_dsn=structural_dsn
+                )
+    finally:
+        with psycopg.connect(target_dsn, autocommit=True) as admin:
+            admin.execute("SET default_transaction_read_only = off")
+            admin.execute(
+                sql.SQL(
+                    "ALTER DATABASE {} RESET default_transaction_read_only"
+                ).format(sql.Identifier(database_name))
+            )
+
+    if lane == "tenant":
+        restored = verify_tenant_structural_compatibility(
+            tenant_structural_dsn=structural_dsn
+        )
+        assert restored.service_identity == TENANT_SERVICE.identity
+    else:
+        restored = verify_security_audit_structural_compatibility(
+            audit_structural_dsn=structural_dsn
+        )
+        assert restored.service_identity == SECURITY_AUDIT_SERVICE.identity
+
+
 def _lane_routes(
     structural_pair: _StructuralPair,
     lane: str,

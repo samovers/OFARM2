@@ -1,9 +1,11 @@
-"""Live hostile evidence for the V1 physical-restore boundary.
+"""Live hostile evidence for V1 physical-restore and postmaster boundaries.
 
 This test deliberately proves the limit of issue #174's result.  A physical
 standby copied from a fully migrated tenant cluster retains the source system
 identifier and migration ledger.  Promotion makes ``pg_is_in_recovery()``
 false, but the only result issue #174 may return is structural compatibility.
+The same disposable-container harness also proves that both structural lanes
+refuse PostgreSQL with prepared-transaction capacity enabled.
 """
 
 from __future__ import annotations
@@ -25,13 +27,19 @@ import pytest
 
 from deployment.postgresql.migration_runner import migrate_service
 from deployment.postgresql.migration_sets import (
+    SECURITY_AUDIT_SERVICE,
     TENANT_SERVICE,
     load_authoritative_migration_set,
 )
 from deployment.postgresql.provisioning import provision_service
-from deployment.postgresql.provisioning_specs import TENANT_PROVISIONING_SPEC
+from deployment.postgresql.provisioning_specs import (
+    SECURITY_AUDIT_PROVISIONING_SPEC,
+    TENANT_PROVISIONING_SPEC,
+)
 from deployment.postgresql.readiness import (
     PostgreSQLStructuralCompatibilityReport,
+    PostgreSQLVerificationError,
+    verify_security_audit_structural_compatibility,
     verify_tenant_structural_compatibility,
 )
 from deployment.postgresql.native_evidence import metadata_child_identity
@@ -201,6 +209,33 @@ def _wait_for_postgres(
     raise AssertionError(
         "PostgreSQL did not reach the expected recovery state"
     ) from last_error
+
+
+def _enable_prepared_transactions(
+    container_name: str,
+    admin_dsn: str,
+) -> None:
+    with psycopg.connect(admin_dsn, autocommit=True) as connection:
+        posture = connection.execute(
+            "SELECT setting::integer, context::text "
+            "FROM pg_catalog.pg_settings "
+            "WHERE name = 'max_prepared_transactions'"
+        ).fetchone()
+        assert posture == (0, "postmaster")
+        connection.execute(
+            "ALTER SYSTEM SET max_prepared_transactions = '1'"
+        )
+
+    _docker("restart", container_name)
+    _wait_for_postgres(admin_dsn, expected_recovery=False)
+
+    with psycopg.connect(admin_dsn, autocommit=True) as connection:
+        posture = connection.execute(
+            "SELECT setting::integer, context::text "
+            "FROM pg_catalog.pg_settings "
+            "WHERE name = 'max_prepared_transactions'"
+        ).fetchone()
+    assert posture == (1, "postmaster")
 
 
 def _system_identifier(admin_dsn: str) -> str:
@@ -405,19 +440,130 @@ def test_promoted_physical_clone_yields_only_structural_compatibility():
         assert _system_identifier(clone_admin_dsn) == source_identifier
         assert _migration_ledger(clone_target_dsn) == source_ledger
 
+        tenant_readiness_dsn = _dsn(
+            clone_port,
+            TENANT_PROVISIONING_SPEC.database_name,
+            "ofarm_readiness",
+            tenant_passwords["ofarm_readiness"],
+        )
         report = verify_tenant_structural_compatibility(
-            tenant_structural_dsn=_dsn(
-                clone_port,
-                TENANT_PROVISIONING_SPEC.database_name,
-                "ofarm_readiness",
-                tenant_passwords["ofarm_readiness"],
-            )
+            tenant_structural_dsn=tenant_readiness_dsn,
         )
         assert report.service_identity == TENANT_SERVICE.identity
         _assert_structural_only_result(report)
+
+        _enable_prepared_transactions(clone_name, clone_admin_dsn)
+        with psycopg.connect(
+            tenant_readiness_dsn,
+            autocommit=True,
+        ) as readiness:
+            structural = readiness.execute(
+                "SELECT structurally_compatible, difference_count "
+                "FROM ofarm.verify_tenant_structure()"
+            ).fetchone()
+        assert structural == (False, 1)
+        with pytest.raises(
+            PostgreSQLVerificationError,
+            match="tenant contract observation differs",
+        ):
+            verify_tenant_structural_compatibility(
+                tenant_structural_dsn=tenant_readiness_dsn,
+            )
     finally:
         _remove_container(helper_name)
         _remove_container(clone_name)
         _remove_container(source_name)
         _docker("volume", "rm", "--force", clone_volume, check=False)
         _docker("network", "rm", network_name, check=False)
+
+
+def test_security_audit_observer_refuses_prepared_transaction_capacity():
+    """Audit structural compatibility refuses a nonzero postmaster setting."""
+
+    postgres_image = _require_exact_pinned_image()
+    nonce = uuid4().hex
+    container_name = f"ofarm174-audit-posture-{nonce}"
+
+    try:
+        _docker(
+            "run",
+            "--detach",
+            "--name",
+            container_name,
+            "--publish",
+            "127.0.0.1::5432",
+            "--env",
+            f"POSTGRES_USER={POSTGRES_SUPERUSER}",
+            "--env",
+            f"POSTGRES_PASSWORD={POSTGRES_SUPERUSER_PASSWORD}",
+            "--env",
+            "POSTGRES_DB=postgres",
+            postgres_image,
+        )
+        audit_port = _published_port(container_name)
+        audit_admin_dsn = _dsn(
+            audit_port,
+            "postgres",
+            POSTGRES_SUPERUSER,
+            POSTGRES_SUPERUSER_PASSWORD,
+        )
+        _wait_for_postgres(audit_admin_dsn, expected_recovery=False)
+
+        audit_passwords = {
+            role_name: f"audit-posture-{index}-{secrets.token_urlsafe(32)}"
+            for index, role_name in enumerate(
+                SECURITY_AUDIT_PROVISIONING_SPEC.required_password_role_names
+            )
+        }
+        provision_service(
+            audit_admin_dsn,
+            SECURITY_AUDIT_PROVISIONING_SPEC,
+            login_passwords=audit_passwords,
+        )
+        migrate_service(
+            admin_dsn=audit_admin_dsn,
+            migrator_dsn=_dsn(
+                audit_port,
+                SECURITY_AUDIT_PROVISIONING_SPEC.database_name,
+                "ofarm_migrator",
+                audit_passwords["ofarm_migrator"],
+            ),
+            spec=SECURITY_AUDIT_PROVISIONING_SPEC,
+            migration_set=load_authoritative_migration_set(
+                PACKAGE_ROOT,
+                SECURITY_AUDIT_SERVICE,
+            ),
+            release_identity="issue-174-audit-postmaster-hostile-test",
+            execution_id=uuid4(),
+        )
+        audit_readiness_dsn = _dsn(
+            audit_port,
+            SECURITY_AUDIT_PROVISIONING_SPEC.database_name,
+            "ofarm_security_audit_readiness_login",
+            audit_passwords["ofarm_security_audit_readiness_login"],
+        )
+        report = verify_security_audit_structural_compatibility(
+            audit_structural_dsn=audit_readiness_dsn,
+        )
+        assert report.service_identity == SECURITY_AUDIT_SERVICE.identity
+        _assert_structural_only_result(report)
+
+        _enable_prepared_transactions(container_name, audit_admin_dsn)
+        with psycopg.connect(
+            audit_readiness_dsn,
+            autocommit=True,
+        ) as readiness:
+            structural = readiness.execute(
+                "SELECT * FROM "
+                "ofarm_security.verify_security_audit_structure()"
+            ).fetchone()
+        assert structural == (False, 1, False)
+        with pytest.raises(
+            PostgreSQLVerificationError,
+            match="security-audit contract observation differs",
+        ):
+            verify_security_audit_structural_compatibility(
+                audit_structural_dsn=audit_readiness_dsn,
+            )
+    finally:
+        _remove_container(container_name)

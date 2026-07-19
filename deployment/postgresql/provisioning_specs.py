@@ -1,10 +1,14 @@
 """Closed PostgreSQL service provisioning specifications for issue #174.
 
-The specifications in this module contain no credentials and perform no I/O.
-They freeze the database, namespace, role, membership, and database-scoped
-setting posture that the one-time infrastructure provisioner must create or
-verify.  Runtime processes and migration runners consume observations of this
-posture; they never reconcile it.
+The specifications in this module contain no credentials.  Importing them is
+free of native-authority file I/O, so the independent security-audit lane does
+not depend on tenant release artifacts.  Each tenant manifest or digest loads
+and fully validates the current checked native-verifier identity and evidence
+receipt before embedding their complete canonical content.  The
+specifications otherwise freeze the database, namespace, role, membership,
+and database-scoped setting posture that the one-time infrastructure
+provisioner must create or verify.  Runtime processes and migration runners
+consume observations of this posture; they never reconcile it.
 """
 
 from __future__ import annotations
@@ -13,11 +17,23 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass
+from pathlib import Path
 
 from deployment.postgresql.migration_sets import (
     SECURITY_AUDIT_SERVICE,
     TENANT_SERVICE,
     MigrationService,
+)
+from deployment.postgresql.native_release_identity import (
+    EVIDENCE_RECEIPT_PATH,
+    IDENTITY_PATH,
+    PACKAGE_ROOT,
+    SOURCE_DIRECTORY,
+    NativeEvidenceReceipt,
+    NativeReleaseIdentity,
+    NativeReleaseIdentityError,
+    load_native_evidence_receipt,
+    load_native_release_identity,
 )
 from deployment.postgresql.tenant_contract import TENANT_CONTEXT_ROUTINE_SIGNATURES
 
@@ -116,7 +132,26 @@ class NativeVerifierSpec:
     module_pathname: str
     function_name: str
 
+    def require_frozen_release_authority(self) -> None:
+        """Refuse until hosted evidence and durable preservation are frozen."""
+
+        identity, receipt = _load_current_native_verifier_authority()
+        preservation = receipt.document["preservation"]
+        if (
+            identity.status != "frozen"
+            or identity.index_digest is None
+            or receipt.status != "frozen"
+            or not isinstance(preservation, dict)
+            or preservation.get("status") != "verified"
+        ):
+            raise ProvisioningSpecError(
+                "tenant native verifier release authority is not frozen"
+            )
+
     def manifest(self) -> dict[str, object]:
+        identity, receipt = _load_current_native_verifier_authority()
+        source_input = identity.document["sourceInput"]
+        receipt_authority = receipt.document["evidenceAuthorityInput"]
         return {
             "schema": self.schema_name,
             "schemaOwner": self.installer_role,
@@ -129,6 +164,21 @@ class NativeVerifierSpec:
             "trusted": False,
             "relocatable": False,
             "requires": [],
+            "checkedReleaseAuthority": {
+                "releaseIdentity": {
+                    "canonicalDigest": identity.digest,
+                    "status": identity.status,
+                    "sourceInputDigest": source_input["digest"],
+                    "indexDigest": identity.index_digest,
+                    "document": identity.manifest(),
+                },
+                "evidenceReceipt": {
+                    "canonicalDigest": receipt.digest,
+                    "status": receipt.status,
+                    "evidenceAuthorityInputDigest": receipt_authority["digest"],
+                    "document": receipt.manifest(),
+                },
+            },
             "sqlCallableSurface": [
                 {
                     "name": self.function_name,
@@ -748,7 +798,10 @@ class ProvisioningSpec:
 
     def manifest(self) -> dict[str, object]:
         value = self.manifest_without_digest()
-        value["provisioningSpecDigest"] = self.digest
+        source = _SPEC_DIGEST_DOMAIN + _canonical_json(value)
+        value["provisioningSpecDigest"] = (
+            "sha256:" + hashlib.sha256(source).hexdigest()
+        )
         return value
 
     def canonical_manifest_bytes(self) -> bytes:
@@ -1236,6 +1289,12 @@ _TENANT_INITIAL_OWNER_SEALER = TenantInitialOwnerSealerSpec(
             "ofarm",
             "bind_tenant_capability",
             ("text",),
+            "ofarm_binder",
+        ),
+        RoutineOwnerTransfer(
+            "ofarm",
+            "valid_tenant_capability_time_window",
+            ("bigint", "bigint", "bigint", "bigint", "bigint"),
             "ofarm_binder",
         ),
         RoutineOwnerTransfer(
@@ -1732,6 +1791,43 @@ SECURITY_AUDIT_PROVISIONING_SPEC = ProvisioningSpec(
         "ofarm_security_audit_restore_operator",
     ),
 )
+
+
+def require_frozen_tenant_native_verifier_authority() -> None:
+    """Final release gate; intentionally not enabled during hosted bootstrap."""
+
+    verifier = TENANT_PROVISIONING_SPEC.native_verifier
+    if verifier is None:
+        raise ProvisioningSpecError("tenant native verifier is absent")
+    verifier.require_frozen_release_authority()
+
+
+def _load_current_native_verifier_authority(
+    *,
+    identity_path: Path = IDENTITY_PATH,
+    evidence_receipt_path: Path = EVIDENCE_RECEIPT_PATH,
+    source_directory: Path = SOURCE_DIRECTORY,
+    repository_root: Path = PACKAGE_ROOT,
+) -> tuple[NativeReleaseIdentity, NativeEvidenceReceipt]:
+    """Load both checked documents through their complete current schemas."""
+
+    try:
+        identity = load_native_release_identity(
+            identity_path,
+            verify_current_sources=True,
+            source_directory=source_directory,
+        )
+        receipt = load_native_evidence_receipt(
+            evidence_receipt_path,
+            release_identity=identity,
+            verify_current_authority=True,
+            repository_root=repository_root,
+        )
+    except (NativeReleaseIdentityError, OSError) as exc:
+        raise ProvisioningSpecError(
+            "checked tenant native-verifier authority is invalid or stale"
+        ) from exc
+    return identity, receipt
 
 
 def _validate_identifier(value: str, label: str) -> None:

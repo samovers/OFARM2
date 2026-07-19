@@ -97,6 +97,7 @@ from .provisioning_specs import (
     TenantInitialOwnerSealerSpec,
     TenantAdmissionLockSpec,
     TenantWriteLockSpec,
+    require_frozen_tenant_native_verifier_authority,
 )
 from .tenant_contract import (
     BINDER_AUDIENCE_INVALID_VECTORS,
@@ -222,6 +223,7 @@ __all__ = (
     "TenantInitialOwnerSealerSpec",
     "TenantAdmissionLockSpec",
     "TenantWriteLockSpec",
+    "require_frozen_tenant_native_verifier_authority",
     "ClusterLineageReport",
     "CatalogIdentityError",
     "CatalogIdentityObservation",

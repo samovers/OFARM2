@@ -19,22 +19,31 @@ neither is a service or runtime decision.
 
 Use the exact checked-in release in this order:
 
-1. Provision or verify the tenant infrastructure with
+1. Before any tenant release action, require the checked
+   `native_release_identity.json` and `native_evidence_receipt.json` to pass
+   their complete validators with `frozen` status and verified durable
+   preservation. `TENANT_PROVISIONING_SPEC` embeds both complete canonical
+   documents, not only their digests. Tenant provisioning, tenant migration
+   preflight, the tenant migration runner, and tenant structural readiness all
+   refuse provisional, incomplete, stale, or otherwise invalid native
+   authority. This gate does not claim that a production KMS signer or its IAM
+   controls have been deployed.
+2. Provision or verify the tenant infrastructure with
    `TENANT_PROVISIONING_SPEC` and externally supplied SCRAM passwords.
-2. Provision or verify the security-audit infrastructure with
+3. Provision or verify the security-audit infrastructure with
    `SECURITY_AUDIT_PROVISIONING_SPEC` and different externally supplied SCRAM
    passwords.
-3. Call `verify_provisioned_cluster_lineages` with both administrator routes.
+4. Call `verify_provisioned_cluster_lineages` with both administrator routes.
    It requires the pinned PostgreSQL build
    `17.10 (Debian 17.10-1.pgdg13+1)` and distinct system identifiers.
-4. Preflight both immutable migration sets without connecting to PostgreSQL:
+5. Preflight both immutable migration sets without connecting to PostgreSQL:
 
    ```bash
    python -m deployment.postgresql.preflight_tenant_migrations
    python -m deployment.postgresql.preflight_security_audit_migrations
    ```
 
-5. Run the two migrations as separate release steps. The commands accept no
+6. Run the two migrations as separate release steps. The commands accept no
    service, database, schema, or migration-directory selector:
 
    ```bash
@@ -51,7 +60,7 @@ Use the exact checked-in release in this order:
      --execution-id '<canonical-non-nil-uuid>'
    ```
 
-6. Observe each migrated lane independently:
+7. Observe each migrated lane independently:
 
    - the #173 application integration may call
      `verify_tenant_structural_compatibility` with only the tenant structural
@@ -61,7 +70,7 @@ Use the exact checked-in release in this order:
      structural route.
 
    Neither call opens, loads, or makes a policy decision for the other lane.
-7. Where deployment evidence needs a fresh pair check, call
+8. Where deployment evidence needs a fresh pair check, call
    `verify_postgresql_service_separation` with both structural routes. Its only
    claim is that the fixed tenant and audit routes expose different PostgreSQL
    system identifiers.
@@ -154,9 +163,24 @@ The tenant migration establishes:
 - a rebuildable current-binding projection that is never authority by itself;
 - one exact, shared Python/PostgreSQL issuer-storage grammar and exact UTF-8
   issuer equality;
+- one immutable binder installation identity and derived audience, immutable
+  Ed25519 public-key candidates, an append-only digest-chained key/admission
+  lifecycle, and a rebuildable keyring projection that is never authority by
+  itself;
+- closed key-control entry points for candidate registration and preflight,
+  activation, rotation, durable admission close, revocation, controlled
+  resumption, projection rebuild, and observation;
+- the exact compact-JWS header, canonical binary payload, time bounds, and
+  shared Python/PostgreSQL contract vectors accepted by ADR 0003;
 - a protected UNLOGGED context keyed by database-derived PID, backend start,
-  and full `xid8`, with storage for one challenge or one externally verified
-  bound context per transaction;
+  and full `xid8`, with storage for one database-created challenge or one
+  database-binder-verified bound context per transaction;
+- a hardened `create_tenant_challenge()` and `bind_tenant_capability(text)`
+  path. The binder uses the provisioned verification-only native extension,
+  then checks the protected challenge and audience, backend incarnation and
+  transaction, exact time window, authoritative key/admission and principal
+  folds, tenant registration, and pinned Party tuple before the one-way
+  `CHALLENGE`-to-`BOUND` transition;
 - a privileged NOLOGIN backend observer that cannot be inherited or assumed by
   a LOGIN role and exposes only current-incarnation and exact liveness helper
   results to the isolated NOLOGIN context-function owner, plus a NOLOGIN graph
@@ -170,20 +194,31 @@ The tenant migration establishes:
 - exact catalog and contract observers available only to the appropriate
   migration/readiness roles.
 
-The `0001` baseline intentionally installs no production capability binder,
-cryptographic algorithm or framing, signing secret, key schedule, validity
-window, rotation, or revocation policy. The challenge and protected context
-storage therefore remain fail-closed: application and worker SQL cannot
-publish a `BOUND` context through `SET`, request data, a raw tenant identifier,
-or a default. Cross-tenant keys, joins, references, and continuations still
-fail at the database boundary when a trusted test or later accepted verifier
-supplies an already-verified transaction context.
+The `0001` baseline now installs ADR 0003's database verifier, binder, public-key
+registry, and database lifecycle rules. It stores no signing secret and cannot
+mint a capability. The keyring projection and caller-supplied evidence digests
+cannot authorize by themselves; the binder reconstructs append-only authority
+under the fixed `READ COMMITTED` lock protocol. Application and worker SQL
+still cannot publish a `BOUND` context through `SET`, request data, a raw tenant
+identifier, or a default. A missing or invalid native release blocks tenant
+release operations and structural readiness. Once deployed, closed admission,
+an ineligible key, an invalid signature, a stale principal, a reused or wrong
+challenge, or any contract mismatch makes binding refuse.
 
-Issue #172 owns the production verifier and binder, capability issuer,
-signer/key custody, framing, bounded validity, revocation, and rotation. It
-must introduce those accepted decisions in a forward migration. Issue #184
-owns the complete semantic reference kind/cardinality matrix; #174 supplies
-only its isolated neutral relational carrier.
+Issue #172 owns external identity verification, exact principal resolution, an
+independent capability codec, nonce and capability creation, and signing with
+the accepted non-exportable Cloud KMS HSM key. It also owns the live KMS/IAM
+observation, quiescence, and minting controls that coordinate with the
+database's lifecycle receipts. This package does not implement or attest that
+production signer or control-plane deployment, and PostgreSQL does not query
+Google Cloud; its key-control functions validate governed database state and
+record the required external evidence digests. A frozen native verifier release
+therefore makes the checked database release deployable, but does not by itself
+open admission or make production capability issuance available. Issue #173
+owns keeping challenge creation, binder invocation, governed work, commit or
+rollback, and pool return on one backend and transaction. Issue #184 owns the
+complete semantic reference kind/cardinality matrix; #174 supplies only its
+isolated neutral relational carrier.
 
 ## Security-audit schema
 

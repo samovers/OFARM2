@@ -5,12 +5,14 @@ from __future__ import annotations
 import base64
 import binascii
 from dataclasses import dataclass
+from datetime import datetime
 import hashlib
 import json
 import re
 import stat
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote_to_bytes, urlsplit
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
@@ -30,9 +32,10 @@ EVIDENCE_RECEIPT_PATH = (
 )
 SOURCE_DIRECTORY = IDENTITY_PATH.parent
 MAX_IDENTITY_BYTES = 256 * 1024
-MAX_EVIDENCE_RECEIPT_BYTES = 256 * 1024
+MAX_EVIDENCE_RECEIPT_BYTES = 768 * 1024
 MAX_INDEX_BYTES = 64 * 1024
 MAX_EVIDENCE_AUTHORITY_FILE_BYTES = 2 * 1024 * 1024
+MAX_PROVIDER_VERIFICATION_BYTES = 64 * 1024
 SHA256_PATTERN = re.compile(r"sha256:[0-9a-f]{64}\Z")
 COMMIT_PATTERN = re.compile(r"[0-9a-f]{40}\Z")
 OCI_INDEX_MEDIA_TYPE = "application/vnd.oci.image.index.v1+json"
@@ -40,6 +43,56 @@ OCI_MANIFEST_MEDIA_TYPE = "application/vnd.oci.image.manifest.v1+json"
 SBOM_PREDICATE_TYPE = "https://spdx.dev/Document"
 PROVENANCE_PREDICATE_TYPE = "https://slsa.dev/provenance/v0.2"
 NATIVE_RELEASE_REPOSITORY = "samovers/OFARM2"
+NATIVE_RELEASE_REPOSITORY_ID = 1266697770
+NATIVE_RELEASE_REPOSITORY_NODE_ID = "R_kgDOS4BGKg"
+NATIVE_RELEASE_REPOSITORY_API_URL = (
+    "https://api.github.com/repos/" + NATIVE_RELEASE_REPOSITORY
+)
+NATIVE_RELEASE_REPOSITORY_URL = (
+    "https://github.com/" + NATIVE_RELEASE_REPOSITORY
+)
+NATIVE_RELEASE_GITHUB_API_VERSION = "2026-03-10"
+NATIVE_RELEASE_GITHUB_CLI_VERSION = "2.96.0"
+NATIVE_RELEASE_GITHUB_CLI_VERSION_OUTPUT = (
+    "gh version 2.96.0 (2026-07-02)\n"
+    "https://github.com/cli/cli/releases/tag/v2.96.0\n"
+).encode("ascii")
+GITHUB_PROVIDER_VERIFICATION_SCHEMA = (
+    "ofarm.github-release-provider-verification.v1"
+)
+GITHUB_RELEASE_PREDICATE_TYPE = (
+    "https://in-toto.io/attestation/release/v0.1"
+)
+IN_TOTO_STATEMENT_V1 = "https://in-toto.io/Statement/v1"
+SIGSTORE_BUNDLE_MEDIA_TYPE = "application/vnd.dev.sigstore.bundle.v0.3+json"
+SIGSTORE_VERIFICATION_RESULT_MEDIA_TYPE = (
+    "application/vnd.dev.sigstore.verificationresult+json;version=0.1"
+)
+GITHUB_RELEASE_CERTIFICATE_ISSUER = (
+    "CN=Fulcio Intermediate l1,O=GitHub\\, Inc."
+)
+GITHUB_RELEASE_CERTIFICATE_SAN = "https://dotcom.releases.github.com"
+GITHUB_RELEASE_TIMESTAMP_AUTHORITY_URI = "timestamp.githubapp.com"
+GITHUB_ATTESTATION_BLOB_HOST = "tmaproduction.blob.core.windows.net"
+GITHUB_RELEASE_VERIFIED_IDENTITY = {
+    "issuer": {"issuer": "", "regexp": ".*"},
+    "subjectAlternativeName": {
+        "regexp": r"^https://dotcom\.releases\.github\.com$",
+        "subjectAlternativeName": "",
+    },
+}
+GITHUB_RELEASE_TIMESTAMP_PATTERN = re.compile(
+    r"[0-9]{4}-(?:0[1-9]|1[0-2])-"
+    r"(?:0[1-9]|[12][0-9]|3[01])T"
+    r"(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]"
+    r"(?:\.[0-9]{0,8}[1-9])?Z\Z"
+)
+GITHUB_ATTESTATION_BLOB_PATH_PATTERN = re.compile(
+    rf"/attestations/{NATIVE_RELEASE_REPOSITORY_ID}/"
+    r"([0-9]{4})/(0[1-9]|1[0-2])/(0[1-9]|[12][0-9]|3[01])/"
+    r"[1-9][0-9]{0,19}\.json\.sn\Z"
+)
+GITHUB_ATTESTATION_QUERY_KEY_PATTERN = re.compile(r"[a-z][a-z0-9]{0,31}\Z")
 BUILDER_ID_PATTERN = re.compile(
     r"https://github\.com/samovers/OFARM2/actions/runs/"
     r"([1-9][0-9]*)/attempts/([1-9][0-9]*)\Z"
@@ -67,6 +120,10 @@ CURRENT_NATIVE_ACTION_PINS = {
     ),
 }
 CURRENT_NATIVE_BUILD_PINS = {
+    "buildxClient": {
+        "version": "v0.34.1",
+        "sourceCommit": "e0b0e77d18d3379bc1e0d55f3b37de288d36fe47",
+    },
     "buildkitImage": (
         "moby/buildkit@sha256:"
         "c457984bd29f04d6acc90c8d9e717afe3922ae14665f3187e0096976fe37b1c8"
@@ -545,17 +602,29 @@ def _validate_digest_size(
     return value
 
 
-def _validate_receipt_platforms(value: Any) -> list[dict[str, Any]]:
+def _validate_receipt_platforms(
+    value: Any,
+    *,
+    identity_platforms: Any,
+) -> list[dict[str, Any]]:
     if not isinstance(value, list) or len(value) != len(PLATFORM_ORDER):
         raise NativeReleaseIdentityError("evidence receipt platform set is not exact")
-    for platform_value, expected_platform in zip(
-        value, PLATFORM_ORDER, strict=True
+    if not isinstance(identity_platforms, list) or len(identity_platforms) != len(
+        PLATFORM_ORDER
+    ):
+        raise NativeReleaseIdentityError("release identity platform set is not exact")
+    for platform_value, identity_platform, expected_platform in zip(
+        value, identity_platforms, PLATFORM_ORDER, strict=True
     ):
         if not isinstance(platform_value, dict) or set(platform_value) != {
+            "artifacts",
             "attestationManifest",
             "ociArchive",
             "platform",
             "provenance",
+            "runtimeChildDigest",
+            "runtimeChildSize",
+            "runtimeConfigDigest",
             "sbom",
             "sourceImageIndexDigest",
         }:
@@ -566,6 +635,33 @@ def _validate_receipt_platforms(value: Any) -> list[dict[str, Any]]:
             raise NativeReleaseIdentityError(
                 "evidence receipt platform order is not exact"
             )
+        if not isinstance(identity_platform, dict) or (
+            platform_value.get("runtimeChildDigest")
+            != identity_platform.get("runtimeChildDigest")
+            or platform_value.get("runtimeChildSize")
+            != identity_platform.get("runtimeChildSize")
+            or platform_value.get("runtimeConfigDigest")
+            != identity_platform.get("runtimeConfigDigest")
+            or platform_value.get("artifacts") != identity_platform.get("artifacts")
+        ):
+            raise NativeReleaseIdentityError(
+                f"{expected_platform} receipt runtime identity differs from "
+                "the frozen release identity"
+            )
+        _require_digest(
+            platform_value.get("runtimeChildDigest"),
+            f"{expected_platform} runtime child digest",
+        )
+        _require_positive_integer(
+            platform_value.get("runtimeChildSize"),
+            MAX_INDEX_BYTES,
+            f"{expected_platform} runtime child size",
+        )
+        _require_digest(
+            platform_value.get("runtimeConfigDigest"),
+            f"{expected_platform} runtime config digest",
+        )
+        _validate_artifacts(platform_value.get("artifacts"), expected_platform)
         _require_digest(
             platform_value.get("sourceImageIndexDigest"),
             f"{expected_platform} source image-index digest",
@@ -674,6 +770,630 @@ def _parse_build_run(value: Any) -> tuple[str, str, int, int]:
     return source_commit, builder_id, run_id, run_attempt
 
 
+def _require_bounded_ascii(value: Any, maximum: int, label: str) -> str:
+    if (
+        not isinstance(value, str)
+        or not value
+        or len(value) > maximum
+        or not value.isascii()
+        or any(ord(character) < 0x20 or ord(character) > 0x7E for character in value)
+    ):
+        raise NativeReleaseIdentityError(f"{label} is invalid")
+    return value
+
+
+def _require_base64_bytes(value: Any, maximum: int, label: str) -> bytes:
+    if not isinstance(value, str) or not value or len(value) > maximum * 2:
+        raise NativeReleaseIdentityError(f"{label} is invalid")
+    try:
+        decoded = base64.b64decode(value, validate=True)
+    except (ValueError, binascii.Error) as exc:
+        raise NativeReleaseIdentityError(f"{label} is invalid") from exc
+    if not decoded or len(decoded) > maximum:
+        raise NativeReleaseIdentityError(f"{label} is invalid")
+    return decoded
+
+
+def _validate_github_bundle_url(value: Any, label: str) -> str:
+    if (
+        not isinstance(value, str)
+        or not value
+        or len(value) > 8192
+        or not value.isascii()
+        or any(ord(character) < 0x21 or ord(character) > 0x7E for character in value)
+    ):
+        raise NativeReleaseIdentityError(f"{label} bundle URL is invalid")
+    try:
+        parsed = urlsplit(value)
+    except ValueError as exc:
+        raise NativeReleaseIdentityError(f"{label} bundle URL is invalid") from exc
+    path_match = GITHUB_ATTESTATION_BLOB_PATH_PATTERN.fullmatch(parsed.path)
+    if (
+        parsed.scheme != "https"
+        or parsed.netloc != GITHUB_ATTESTATION_BLOB_HOST
+        or parsed.fragment
+        or path_match is None
+        or not parsed.query
+        or len(parsed.query) > 4096
+    ):
+        raise NativeReleaseIdentityError(f"{label} bundle URL is not exact")
+    try:
+        datetime.strptime("-".join(path_match.groups()), "%Y-%m-%d")
+    except ValueError as exc:
+        raise NativeReleaseIdentityError(f"{label} bundle URL is not exact") from exc
+    query_components = parsed.query.split("&")
+    if len(query_components) > 32:
+        raise NativeReleaseIdentityError(
+            f"{label} bundle URL query is not canonical"
+        )
+    query_keys: set[str] = set()
+    for component in query_components:
+        if component.count("=") != 1:
+            raise NativeReleaseIdentityError(
+                f"{label} bundle URL query is not canonical"
+            )
+        key, encoded_value = component.split("=", 1)
+        if (
+            GITHUB_ATTESTATION_QUERY_KEY_PATTERN.fullmatch(key) is None
+            or key in query_keys
+            or not encoded_value
+            or len(encoded_value) > 1024
+        ):
+            raise NativeReleaseIdentityError(
+                f"{label} bundle URL query is not canonical"
+            )
+        query_keys.add(key)
+        offset = 0
+        while offset < len(encoded_value):
+            character = encoded_value[offset]
+            if character.isalnum() or character in "._-~":
+                offset += 1
+                continue
+            if (
+                character != "%"
+                or offset + 2 >= len(encoded_value)
+                or re.fullmatch(r"[0-9A-F]{2}", encoded_value[offset + 1 : offset + 3])
+                is None
+            ):
+                raise NativeReleaseIdentityError(
+                    f"{label} bundle URL query is not canonical"
+                )
+            decoded_octet = int(encoded_value[offset + 1 : offset + 3], 16)
+            if (
+                chr(decoded_octet).isalnum()
+                or chr(decoded_octet) in "._-~"
+                or decoded_octet < 0x21
+                or decoded_octet > 0x7E
+            ):
+                raise NativeReleaseIdentityError(
+                    f"{label} bundle URL query is not canonical"
+                )
+            offset += 3
+        decoded_value = unquote_to_bytes(encoded_value)
+        if not decoded_value or any(octet < 0x21 or octet > 0x7E for octet in decoded_value):
+            raise NativeReleaseIdentityError(
+                f"{label} bundle URL query is not canonical"
+            )
+    if "sig" not in query_keys:
+        raise NativeReleaseIdentityError(
+            f"{label} bundle URL query has no signature"
+        )
+    return value
+
+
+def _release_attestation_statement(
+    value: Any,
+    *,
+    tag: str,
+    source_commit: str,
+    release_id: int,
+    platforms: list[dict[str, Any]],
+    label: str,
+) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != {
+        "_type",
+        "predicate",
+        "predicateType",
+        "subject",
+    }:
+        raise NativeReleaseIdentityError(f"{label} statement fields are not exact")
+    if (
+        value.get("_type") != IN_TOTO_STATEMENT_V1
+        or value.get("predicateType") != GITHUB_RELEASE_PREDICATE_TYPE
+    ):
+        raise NativeReleaseIdentityError(f"{label} statement type is not exact")
+    purl = f"pkg:github/{NATIVE_RELEASE_REPOSITORY}@{tag}"
+    subjects = [
+        {"digest": {"sha1": source_commit}, "uri": purl},
+        *[
+            {
+                "digest": {
+                    "sha256": platform["ociArchive"]["sha256"].removeprefix(
+                        "sha256:"
+                    )
+                },
+                "name": (
+                    "ofarm-ed25519-"
+                    + platform["platform"].replace("/", "-")
+                    + ".oci.tar"
+                ),
+            }
+            for platform in platforms
+        ],
+    ]
+    if value.get("subject") != subjects:
+        raise NativeReleaseIdentityError(
+            f"{label} repository/tag/asset subjects are inconsistent"
+        )
+    predicate = value.get("predicate")
+    if not isinstance(predicate, dict) or set(predicate) != {
+        "ownerId",
+        "purl",
+        "releaseId",
+        "repository",
+        "repositoryId",
+        "tag",
+    }:
+        raise NativeReleaseIdentityError(f"{label} predicate fields are not exact")
+    owner_id = predicate.get("ownerId")
+    if (
+        not isinstance(owner_id, str)
+        or not owner_id.isascii()
+        or not owner_id.isdigit()
+        or owner_id.startswith("0")
+        or len(owner_id) > 20
+    ):
+        raise NativeReleaseIdentityError(f"{label} owner identity is invalid")
+    if predicate != {
+        "ownerId": owner_id,
+        "purl": purl,
+        "releaseId": str(release_id),
+        "repository": NATIVE_RELEASE_REPOSITORY,
+        "repositoryId": str(NATIVE_RELEASE_REPOSITORY_ID),
+        "tag": tag,
+    }:
+        raise NativeReleaseIdentityError(
+            f"{label} repository/tag predicate is inconsistent"
+        )
+    return value
+
+
+def validate_github_release_command_document(
+    document: Any,
+    *,
+    tag: str,
+    source_commit: str,
+    release_id: int,
+    platforms: list[dict[str, Any]],
+    label: str,
+) -> dict[str, Any]:
+    """Validate the exact successful JSON contract emitted by the pinned CLI."""
+
+    if not isinstance(document, dict) or set(document) != {
+        "attestation",
+        "verificationResult",
+    }:
+        raise NativeReleaseIdentityError(f"{label} result fields are not exact")
+    attestation = document.get("attestation")
+    if not isinstance(attestation, dict) or set(attestation) != {
+        "bundle",
+        "bundle_url",
+        "initiator",
+    }:
+        raise NativeReleaseIdentityError(f"{label} attestation fields are not exact")
+    _validate_github_bundle_url(attestation.get("bundle_url"), label)
+    if attestation.get("initiator") != "github":
+        raise NativeReleaseIdentityError(f"{label} initiator is not GitHub")
+    bundle = attestation.get("bundle")
+    if not isinstance(bundle, dict) or set(bundle) != {
+        "dsseEnvelope",
+        "mediaType",
+        "verificationMaterial",
+    }:
+        raise NativeReleaseIdentityError(f"{label} bundle fields are not exact")
+    if bundle.get("mediaType") != SIGSTORE_BUNDLE_MEDIA_TYPE:
+        raise NativeReleaseIdentityError(f"{label} bundle media type is not exact")
+    verification_material = bundle.get("verificationMaterial")
+    if not isinstance(verification_material, dict) or set(
+        verification_material
+    ) != {"certificate", "timestampVerificationData"}:
+        raise NativeReleaseIdentityError(
+            f"{label} verification-material fields are not exact"
+        )
+    certificate = verification_material.get("certificate")
+    if not isinstance(certificate, dict) or set(certificate) != {"rawBytes"}:
+        raise NativeReleaseIdentityError(
+            f"{label} verification certificate fields are not exact"
+        )
+    _require_base64_bytes(
+        certificate.get("rawBytes"),
+        MAX_PROVIDER_VERIFICATION_BYTES,
+        f"{label} verification certificate",
+    )
+    timestamp_data = verification_material.get("timestampVerificationData")
+    if not isinstance(timestamp_data, dict) or set(timestamp_data) != {
+        "rfc3161Timestamps"
+    }:
+        raise NativeReleaseIdentityError(
+            f"{label} timestamp-verification fields are not exact"
+        )
+    timestamps = timestamp_data.get("rfc3161Timestamps")
+    if not isinstance(timestamps, list) or len(timestamps) != 1:
+        raise NativeReleaseIdentityError(
+            f"{label} signed-timestamp set is not exact"
+        )
+    timestamp = timestamps[0]
+    if not isinstance(timestamp, dict) or set(timestamp) != {"signedTimestamp"}:
+        raise NativeReleaseIdentityError(
+            f"{label} signed-timestamp fields are not exact"
+        )
+    _require_base64_bytes(
+        timestamp.get("signedTimestamp"),
+        MAX_PROVIDER_VERIFICATION_BYTES,
+        f"{label} signed timestamp",
+    )
+    envelope = bundle.get("dsseEnvelope")
+    if not isinstance(envelope, dict) or set(envelope) != {
+        "payload",
+        "payloadType",
+        "signatures",
+    }:
+        raise NativeReleaseIdentityError(f"{label} DSSE fields are not exact")
+    if envelope.get("payloadType") != "application/vnd.in-toto+json":
+        raise NativeReleaseIdentityError(f"{label} DSSE payload type is not exact")
+    payload = _require_base64_bytes(
+        envelope.get("payload"),
+        MAX_PROVIDER_VERIFICATION_BYTES,
+        f"{label} DSSE payload",
+    )
+    statement = _load_json_bytes(payload, f"{label} DSSE payload")
+    statement = _release_attestation_statement(
+        statement,
+        tag=tag,
+        source_commit=source_commit,
+        release_id=release_id,
+        platforms=platforms,
+        label=label,
+    )
+    signatures = envelope.get("signatures")
+    if not isinstance(signatures, list) or len(signatures) != 1:
+        raise NativeReleaseIdentityError(f"{label} DSSE signature set is not exact")
+    signature = signatures[0]
+    if not isinstance(signature, dict) or set(signature) != {"sig"}:
+        raise NativeReleaseIdentityError(f"{label} DSSE signature fields are not exact")
+    _require_base64_bytes(
+        signature.get("sig"),
+        MAX_PROVIDER_VERIFICATION_BYTES,
+        f"{label} DSSE signature",
+    )
+
+    verification_result = document.get("verificationResult")
+    if not isinstance(verification_result, dict) or set(verification_result) != {
+        "mediaType",
+        "signature",
+        "statement",
+        "verifiedIdentity",
+        "verifiedTimestamps",
+    }:
+        raise NativeReleaseIdentityError(
+            f"{label} verification-result fields are not exact"
+        )
+    if (
+        verification_result.get("mediaType")
+        != SIGSTORE_VERIFICATION_RESULT_MEDIA_TYPE
+        or verification_result.get("statement") != statement
+    ):
+        raise NativeReleaseIdentityError(
+            f"{label} verified statement is inconsistent"
+        )
+    verified_signature = verification_result.get("signature")
+    if (
+        not isinstance(verified_signature, dict)
+        or set(verified_signature) != {"certificate"}
+    ):
+        raise NativeReleaseIdentityError(
+            f"{label} verified signature shape is not exact"
+        )
+    verified_certificate = verified_signature.get("certificate")
+    if verified_certificate != {
+        "certificateIssuer": GITHUB_RELEASE_CERTIFICATE_ISSUER,
+        "subjectAlternativeName": GITHUB_RELEASE_CERTIFICATE_SAN,
+    }:
+        raise NativeReleaseIdentityError(
+            f"{label} verified certificate identity is not exact"
+        )
+    verified_timestamps = verification_result.get("verifiedTimestamps")
+    if not isinstance(verified_timestamps, list) or len(verified_timestamps) != 1:
+        raise NativeReleaseIdentityError(
+            f"{label} verified timestamp set is not exact"
+        )
+    verified_timestamp = verified_timestamps[0]
+    if not isinstance(verified_timestamp, dict) or set(verified_timestamp) != {
+        "timestamp",
+        "type",
+        "uri",
+    }:
+        raise NativeReleaseIdentityError(
+            f"{label} verified timestamp fields are not exact"
+        )
+    if verified_timestamp.get("type") != "TimestampAuthority":
+        raise NativeReleaseIdentityError(
+            f"{label} verified timestamp type is not exact"
+        )
+    if verified_timestamp.get("uri") != GITHUB_RELEASE_TIMESTAMP_AUTHORITY_URI:
+        raise NativeReleaseIdentityError(
+            f"{label} verified timestamp URI is not exact"
+        )
+    timestamp_value = verified_timestamp.get("timestamp")
+    if (
+        not isinstance(timestamp_value, str)
+        or GITHUB_RELEASE_TIMESTAMP_PATTERN.fullmatch(timestamp_value) is None
+    ):
+        raise NativeReleaseIdentityError(
+            f"{label} verified timestamp is not canonical UTC RFC3339Nano"
+        )
+    try:
+        datetime.strptime(timestamp_value[:19], "%Y-%m-%dT%H:%M:%S")
+    except ValueError as exc:
+        raise NativeReleaseIdentityError(
+            f"{label} verified timestamp is not canonical UTC RFC3339Nano"
+        ) from exc
+    verified_identity = verification_result.get("verifiedIdentity")
+    if verified_identity != GITHUB_RELEASE_VERIFIED_IDENTITY:
+        raise NativeReleaseIdentityError(
+            f"{label} verified identity shape is not exact"
+        )
+    return document
+
+
+def _validate_provider_command_result(
+    value: Any,
+    label: str,
+    *,
+    tag: str,
+    source_commit: str,
+    release_id: int,
+    platforms: list[dict[str, Any]],
+) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != {
+        "canonicalDigest",
+        "document",
+        "size",
+    }:
+        raise NativeReleaseIdentityError(
+            f"{label} provider-verification fields are not exact"
+        )
+    document = value.get("document")
+    validate_github_release_command_document(
+        document,
+        tag=tag,
+        source_commit=source_commit,
+        release_id=release_id,
+        platforms=platforms,
+        label=label,
+    )
+    canonical = canonical_json_bytes(document)
+    if (
+        not canonical
+        or len(canonical) > MAX_PROVIDER_VERIFICATION_BYTES
+        or value.get("size") != len(canonical)
+        or _require_digest(
+            value.get("canonicalDigest"),
+            f"{label} provider-verification digest",
+        )
+        != _digest(canonical)
+    ):
+        raise NativeReleaseIdentityError(
+            f"{label} provider-verification identity is inconsistent"
+        )
+    return value
+
+
+def _validate_provider_verification(
+    value: Any,
+    *,
+    identity_digest: str,
+    source_commit: str,
+    platforms: list[dict[str, Any]],
+) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != {
+        "canonicalDigest",
+        "metadata",
+        "schemaVersion",
+    }:
+        raise NativeReleaseIdentityError(
+            "GitHub provider-verification fields are not exact"
+        )
+    if value.get("schemaVersion") != GITHUB_PROVIDER_VERIFICATION_SCHEMA:
+        raise NativeReleaseIdentityError(
+            "GitHub provider-verification schema is not exact"
+        )
+    metadata = value.get("metadata")
+    if not isinstance(metadata, dict) or set(metadata) != {
+        "assetAttestations",
+        "githubCli",
+        "immutableReleases",
+        "release",
+        "releaseAttestation",
+        "repository",
+    }:
+        raise NativeReleaseIdentityError(
+            "GitHub provider-verification metadata fields are not exact"
+        )
+    if _require_digest(
+        value.get("canonicalDigest"),
+        "GitHub provider-verification canonical digest",
+    ) != _digest(canonical_json_bytes(metadata)):
+        raise NativeReleaseIdentityError(
+            "GitHub provider-verification canonical digest is inconsistent"
+        )
+    if metadata.get("repository") != {
+        "apiUrl": NATIVE_RELEASE_REPOSITORY_API_URL,
+        "id": NATIVE_RELEASE_REPOSITORY_ID,
+        "name": NATIVE_RELEASE_REPOSITORY,
+        "nodeId": NATIVE_RELEASE_REPOSITORY_NODE_ID,
+        "url": NATIVE_RELEASE_REPOSITORY_URL,
+    }:
+        raise NativeReleaseIdentityError(
+            "GitHub provider-verification repository is not exact"
+        )
+    if metadata.get("githubCli") != {
+        "version": NATIVE_RELEASE_GITHUB_CLI_VERSION,
+        "versionOutputSha256": _digest(NATIVE_RELEASE_GITHUB_CLI_VERSION_OUTPUT),
+    }:
+        raise NativeReleaseIdentityError(
+            "GitHub provider-verification CLI identity is not exact"
+        )
+    immutable_releases = metadata.get("immutableReleases")
+    if not isinstance(immutable_releases, dict) or set(immutable_releases) != {
+        "enabled",
+        "enforcedByOwner",
+    }:
+        raise NativeReleaseIdentityError(
+            "GitHub immutable-release setting fields are not exact"
+        )
+    if immutable_releases.get("enabled") is not True or type(
+        immutable_releases.get("enforcedByOwner")
+    ) is not bool:
+        raise NativeReleaseIdentityError(
+            "GitHub immutable releases were not enabled"
+        )
+
+    release = metadata.get("release")
+    if not isinstance(release, dict) or set(release) != {
+        "apiUrl",
+        "assets",
+        "draft",
+        "htmlUrl",
+        "id",
+        "immutable",
+        "nodeId",
+        "peeledTagCommit",
+        "prerelease",
+        "tagName",
+        "targetCommitish",
+    }:
+        raise NativeReleaseIdentityError(
+            "GitHub verified-release fields are not exact"
+        )
+    release_id = _require_positive_integer(
+        release.get("id"), 2**63 - 1, "GitHub release id"
+    )
+    _require_bounded_ascii(release.get("nodeId"), 256, "GitHub release node id")
+    tag = _release_tag(identity_digest)
+    release_url = f"{NATIVE_RELEASE_REPOSITORY_URL}/releases/tag/{tag}"
+    if release != {
+        **release,
+        "apiUrl": f"{NATIVE_RELEASE_REPOSITORY_API_URL}/releases/{release_id}",
+        "draft": False,
+        "htmlUrl": release_url,
+        "immutable": True,
+        "peeledTagCommit": source_commit,
+        "prerelease": True,
+        "tagName": tag,
+        "targetCommitish": source_commit,
+    }:
+        raise NativeReleaseIdentityError(
+            "GitHub verified-release identity is inconsistent"
+        )
+    assets = release.get("assets")
+    if not isinstance(assets, list) or len(assets) != len(PLATFORM_ORDER):
+        raise NativeReleaseIdentityError(
+            "GitHub verified-release asset set is not exact"
+        )
+    for asset, platform_value in zip(assets, platforms, strict=True):
+        if not isinstance(asset, dict) or set(asset) != {
+            "apiUrl",
+            "id",
+            "name",
+            "nodeId",
+            "platform",
+            "sha256",
+            "size",
+            "state",
+            "url",
+        }:
+            raise NativeReleaseIdentityError(
+                "GitHub verified-release asset fields are not exact"
+            )
+        platform = platform_value["platform"]
+        asset_id = _require_positive_integer(
+            asset.get("id"), 2**63 - 1, f"{platform} GitHub asset id"
+        )
+        _require_bounded_ascii(
+            asset.get("nodeId"), 256, f"{platform} GitHub asset node id"
+        )
+        asset_name = "ofarm-ed25519-" + platform.replace("/", "-") + ".oci.tar"
+        if asset != {
+            **asset,
+            "apiUrl": (
+                f"{NATIVE_RELEASE_REPOSITORY_API_URL}/releases/assets/{asset_id}"
+            ),
+            "name": asset_name,
+            "platform": platform,
+            "sha256": platform_value["ociArchive"]["sha256"],
+            "size": platform_value["ociArchive"]["size"],
+            "state": "uploaded",
+            "url": (
+                f"{NATIVE_RELEASE_REPOSITORY_URL}/releases/download/"
+                f"{tag}/{asset_name}"
+            ),
+        }:
+            raise NativeReleaseIdentityError(
+                "GitHub verified-release asset identity is inconsistent"
+            )
+    if len({asset["id"] for asset in assets}) != len(assets) or len(
+        {asset["nodeId"] for asset in assets}
+    ) != len(assets):
+        raise NativeReleaseIdentityError(
+            "GitHub verified-release asset identities are not unique"
+        )
+
+    release_attestation = _validate_provider_command_result(
+        metadata.get("releaseAttestation"),
+        "GitHub release attestation",
+        tag=tag,
+        source_commit=source_commit,
+        release_id=release_id,
+        platforms=platforms,
+    )
+    asset_attestations = metadata.get("assetAttestations")
+    if not isinstance(asset_attestations, list) or len(asset_attestations) != len(
+        PLATFORM_ORDER
+    ):
+        raise NativeReleaseIdentityError(
+            "GitHub asset-attestation set is not exact"
+        )
+    for attestation, expected_platform in zip(
+        asset_attestations, PLATFORM_ORDER, strict=True
+    ):
+        if not isinstance(attestation, dict) or set(attestation) != {
+            "platform",
+            "verification",
+        }:
+            raise NativeReleaseIdentityError(
+                "GitHub asset-attestation fields are not exact"
+            )
+        if attestation.get("platform") != expected_platform:
+            raise NativeReleaseIdentityError(
+                "GitHub asset-attestation order is not exact"
+            )
+        verified_asset = _validate_provider_command_result(
+            attestation.get("verification"),
+            f"{expected_platform} GitHub asset attestation",
+            tag=tag,
+            source_commit=source_commit,
+            release_id=release_id,
+            platforms=platforms,
+        )
+        if verified_asset["document"] != release_attestation["document"]:
+            raise NativeReleaseIdentityError(
+                f"{expected_platform} GitHub asset attestation differs from "
+                "the verified release attestation"
+            )
+    return value
+
+
 def _release_tag(identity_digest: str) -> str:
     return "native-verifier-" + identity_digest.removeprefix("sha256:")
 
@@ -682,6 +1402,7 @@ def _validate_preservation(
     value: Any,
     *,
     identity_digest: str,
+    source_commit: str,
     platforms: list[dict[str, Any]],
     expected_status: str,
 ) -> dict[str, Any]:
@@ -689,6 +1410,7 @@ def _validate_preservation(
         "assets",
         "checkedReceiptPath",
         "provider",
+        "providerVerification",
         "releaseKind",
         "releaseTag",
         "releaseUrl",
@@ -705,6 +1427,7 @@ def _validate_preservation(
         **value,
         "checkedReceiptPath": CHECKED_EVIDENCE_RECEIPT_PATH,
         "provider": "github-release",
+        "providerVerification": value.get("providerVerification"),
         "releaseKind": "prerelease",
         "releaseTag": tag,
         "releaseUrl": release_url,
@@ -737,6 +1460,19 @@ def _validate_preservation(
     if assets != expected_assets:
         raise NativeReleaseIdentityError(
             "evidence receipt preservation assets are inconsistent"
+        )
+    provider_verification = value.get("providerVerification")
+    if expected_status == "pending":
+        if provider_verification is not None:
+            raise NativeReleaseIdentityError(
+                "candidate evidence receipt contains provider verification"
+            )
+    else:
+        _validate_provider_verification(
+            provider_verification,
+            identity_digest=identity_digest,
+            source_commit=source_commit,
+            platforms=platforms,
         )
     return value
 
@@ -794,11 +1530,17 @@ def validate_native_evidence_receipt(
             raise NativeReleaseIdentityError(
                 "native evidence receipt claims results for a provisional identity"
             )
-        _parse_build_run(document.get("buildRun"))
-        platforms = _validate_receipt_platforms(document.get("platforms"))
+        source_commit, _builder_id, _run_id, _run_attempt = _parse_build_run(
+            document.get("buildRun")
+        )
+        platforms = _validate_receipt_platforms(
+            document.get("platforms"),
+            identity_platforms=release_identity.document.get("platforms"),
+        )
         _validate_preservation(
             document.get("preservation"),
             identity_digest=release_identity.digest,
+            source_commit=source_commit,
             platforms=platforms,
             expected_status="pending" if status_value == "candidate" else "verified",
         )
@@ -1054,6 +1796,10 @@ def candidate_evidence_receipt_document(
     platforms = [
         {
             "platform": item["platform"],
+            "runtimeChildDigest": item["runtime_child_digest"],
+            "runtimeChildSize": item["runtime_child_size"],
+            "runtimeConfigDigest": item["runtime_config_digest"],
+            "artifacts": item["artifacts"],
             "ociArchive": item["oci_archive"],
             "sourceImageIndexDigest": item["image_index_digest"],
             "attestationManifest": item["attestation_manifest"],
@@ -1102,6 +1848,7 @@ def candidate_evidence_receipt_document(
     tag = _release_tag(release_identity.digest)
     preservation = {
         "provider": "github-release",
+        "providerVerification": None,
         "releaseKind": "prerelease",
         "status": "pending",
         "checkedReceiptPath": CHECKED_EVIDENCE_RECEIPT_PATH,
@@ -1152,6 +1899,7 @@ def frozen_evidence_receipt_document(
     *,
     candidate_receipt: NativeEvidenceReceipt,
     release_identity: NativeReleaseIdentity,
+    provider_verification: dict[str, Any],
     repository_root: Path = PACKAGE_ROOT,
 ) -> dict[str, Any]:
     """Promote a validated candidate after both Release downloads are verified."""
@@ -1163,6 +1911,7 @@ def frozen_evidence_receipt_document(
     document = candidate_receipt.manifest()
     document["status"] = "frozen"
     document["preservation"]["status"] = "verified"
+    document["preservation"]["providerVerification"] = provider_verification
     validate_native_evidence_receipt(
         document,
         canonical_bytes=canonical_json_bytes(document),

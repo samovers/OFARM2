@@ -47,7 +47,10 @@ jobs:
           kernel/tests/test_postgresql_*.py
           kernel/tests/test_review_baseline.py
       - name: Require the exact Buildx client
-        run: test "$(docker buildx version | awk '{print $2}')" = v0.34.1
+        run: >-
+          test "$(docker buildx version)" =
+          "github.com/docker/buildx v0.34.1
+          e0b0e77d18d3379bc1e0d55f3b37de288d36fe47"
       - name: Authenticate tenant migration release
         run: .review-venv/bin/python -m deployment.postgresql.preflight_tenant_migrations
       - name: Authenticate security-audit migration release
@@ -235,7 +238,8 @@ jobs:
           test "$(uname -m)" = "${{ matrix.machine }}"
           test "$(docker info --format '{{.Architecture}}')" = \
             "${{ matrix.docker-architecture }}"
-          test "$(docker buildx version | awk '{print $2}')" = v0.34.1
+          test "$(docker buildx version)" = \
+            "github.com/docker/buildx v0.34.1 e0b0e77d18d3379bc1e0d55f3b37de288d36fe47"
           mkdir -p \
             ".artifacts/native/${{ matrix.architecture }}/first" \
             ".artifacts/native/${{ matrix.architecture }}/second" \

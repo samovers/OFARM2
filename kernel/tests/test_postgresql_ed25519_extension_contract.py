@@ -120,3 +120,17 @@ def test_revoking_the_exact_rotated_old_key_resolves_that_obligation() -> None:
     assert "close_reason" not in clear
     assert "last_rotated_old_kid := NULL" in clear
     assert "last_rotated_old_digest := NULL" in clear
+
+
+def test_emergency_close_is_the_exact_denial_only_lock_exception() -> None:
+    source = MIGRATION.read_text("utf-8")
+    close = source.split(
+        "CREATE FUNCTION ofarm.close_tenant_capability_admission(", 1
+    )[1].split("CREATE FUNCTION ofarm.revoke_tenant_capability_key(", 1)[0]
+    assert "fold_tenant_capability_key_lifecycle(affected_key)" in close
+    assert "pg_advisory" not in close
+    assert "FOR UPDATE" not in close
+    assert "FOR KEY SHARE" not in close
+    assert "WHERE ring.audience = candidate.audience" in close
+    assert "ring.projected_head_id = expected_head_id" in close
+    assert "admission close projection race refused" in close

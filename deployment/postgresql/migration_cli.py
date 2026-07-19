@@ -15,7 +15,12 @@ from .migration_sets import (
     MigrationSetError,
     load_authoritative_migration_set,
 )
-from .provisioning_specs import ProvisioningSpec
+from .provisioning_specs import (
+    TENANT_PROVISIONING_SPEC,
+    ProvisioningSpec,
+    ProvisioningSpecError,
+    require_frozen_tenant_native_verifier_authority,
+)
 
 
 _PACKAGE_ROOT = Path(__file__).resolve().parents[2]
@@ -54,6 +59,12 @@ def run_fixed_migration_cli(
     parser.add_argument("--release-identity", required=True)
     parser.add_argument("--execution-id", required=True, type=_execution_id)
     arguments = parser.parse_args(argv)
+
+    if spec == TENANT_PROVISIONING_SPEC:
+        try:
+            require_frozen_tenant_native_verifier_authority()
+        except ProvisioningSpecError as exc:
+            parser.exit(1, f"migration refused: {exc}\n")
 
     admin_dsn = os.environ.get(admin_dsn_environment)
     migrator_dsn = os.environ.get(migrator_dsn_environment)

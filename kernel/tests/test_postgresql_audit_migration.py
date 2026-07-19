@@ -297,10 +297,10 @@ def test_authoritative_audit_migration_is_one_exact_initial_set():
     assert SECURITY_AUDIT_CONTRACT.digest in source
     assert SECURITY_AUDIT_PROVISIONING_SPEC.digest in source
     assert migration.source_sha256 == \
-        "sha256:d807461a22b98c107c9881637b13399763fd06a85b6a5c38e198a3e5deda783d"
-    assert migration.byte_length == 146_365
+        "sha256:4bc5f67eb5c28f2d7b7261c1b52192ca4474ddac1cbb7a243e76b5eb695d6dc3"
+    assert migration.byte_length == 147_553
     assert migration_set.digest == \
-        "sha256:67213ae5890c8907f3cbadb2fdb6cb397c14d023f94d34205bfea24ed09c476b"
+        "sha256:d14b8d625246de172f22d30421b749e3b583e96c16cc4a958f53dd75b2edc179"
     assert migration_set.prefix_digest(1) == migration_set.digest
 
 
@@ -356,6 +356,12 @@ def test_authoritative_audit_migration_has_closed_carriers_and_limits():
     assert "'backend-statistics-view'" in source
     assert "'backend-statistics-view-columns'" in source
     assert "'backend-statistics-view-rewrite'" in source
+    assert "'rewrite-rule'" in source
+    assert "FROM pg_catalog.pg_rewrite AS rewrite_rule" in source
+    assert "pg_catalog.pg_get_ruledef(rewrite_rule.oid, false)" in source
+    assert "rewrite_rule.ev_qual" not in source
+    assert "rewrite_rule.ev_action" not in source
+    assert "class.relhasrules" in source
     assert "'backend-statistics-view-acl'" in source
     assert "'backend-statistics-routine'" in source
     assert "'backend-statistics-routine-acl'" in source
@@ -411,6 +417,24 @@ def test_audit_catalog_fingerprint_has_exact_shared_schema_class_parity():
         assert classifier.count(
             f"schema_local_object.{item.namespace_column}"
         ) == 1
+
+
+def test_audit_observer_requires_zero_prepared_transaction_capacity():
+    source = (
+        PACKAGE_ROOT
+        / SECURITY_AUDIT_SERVICE.relative_directory
+        / "0001_initial.sql"
+    ).read_text(encoding="utf-8")
+    marker = "-- PREPARED_TRANSACTION_STARTUP_POSTURE_V1"
+    gate = (
+        "pg_catalog.current_setting(\n"
+        "           'max_prepared_transactions'\n"
+        "       )::pg_catalog.int4 <> 0"
+    )
+
+    assert source.count(marker) == 1
+    assert source.count(gate) == 1
+    assert source.count("FROM pg_catalog.pg_prepared_xacts") == 1
 
 
 def test_authoritative_audit_migration_installs_exact_public_functions():
@@ -3081,6 +3105,109 @@ def test_post_migration_owner_created_collation_refuses_observer_and_runner(
                 sql.SQL("DROP COLLATION {}.rogue").format(
                     sql.Identifier(spec.schema_name)
                 )
+            )
+    assert _observe_structure(state) == (True, 0, False)
+
+
+def test_post_migration_owner_created_rule_refuses_observer_and_runner(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    spec = SECURITY_AUDIT_PROVISIONING_SPEC
+    with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
+        admin.execute(
+            sql.SQL("SET ROLE {}").format(sql.Identifier(spec.schema_owner))
+        )
+        admin.execute(
+            "CREATE RULE rogue AS ON INSERT TO "
+            "ofarm_security.operational_security_event DO INSTEAD NOTHING"
+        )
+    try:
+        structure = _observe_structure(state)
+        assert structure[0] is False
+        assert structure[1] >= 1
+
+        with psycopg.connect(
+            _role_dsn(state, "ofarm_security_audit_readiness_login"),
+            autocommit=True,
+        ) as readiness:
+            observation = readiness.execute(
+                "SELECT * FROM "
+                "ofarm_security.observe_security_audit_contract()"
+            ).fetchone()
+        assert observation[11:] == (False, False)
+
+        with pytest.raises(
+            MigrationDirtyError,
+            match="structural verifier differs",
+        ):
+            migrate_service(
+                admin_dsn=state["admin_dsn"],
+                migrator_dsn=_role_dsn(state, "ofarm_migrator"),
+                spec=spec,
+                migration_set=state["migration_set"],
+                release_identity="issue-174-audit-rewrite-rule-drift-test",
+                execution_id=uuid4(),
+            )
+    finally:
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            admin.execute(
+                "DROP RULE rogue ON "
+                "ofarm_security.operational_security_event"
+            )
+    assert _observe_structure(state) == (True, 0, False)
+
+
+def test_post_migration_database_wide_setting_refuses_observer_and_runner(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    spec = SECURITY_AUDIT_PROVISIONING_SPEC
+    with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
+        admin.execute(
+            sql.SQL("SET ROLE {}").format(sql.Identifier(spec.database_owner))
+        )
+        admin.execute(
+            "ALTER DATABASE ofarm_security_audit "
+            "SET default_transaction_read_only = on"
+        )
+    try:
+        structure = _observe_structure(state)
+        assert structure[0] is False
+        assert structure[1] >= 1
+
+        with psycopg.connect(
+            _role_dsn(state, "ofarm_security_audit_readiness_login"),
+            autocommit=True,
+        ) as readiness:
+            observation = readiness.execute(
+                "SELECT * FROM "
+                "ofarm_security.observe_security_audit_contract()"
+            ).fetchone()
+        assert observation[11:] == (False, False)
+
+        with pytest.raises(
+            MigrationDirtyError,
+            match="structural verifier differs",
+        ):
+            migrate_service(
+                admin_dsn=state["admin_dsn"],
+                migrator_dsn=_role_dsn(state, "ofarm_migrator"),
+                spec=spec,
+                migration_set=state["migration_set"],
+                release_identity="issue-174-audit-database-setting-drift-test",
+                execution_id=uuid4(),
+            )
+    finally:
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            admin.execute("SET default_transaction_read_only = off")
+            admin.execute(
+                "ALTER DATABASE ofarm_security_audit "
+                "RESET default_transaction_read_only"
             )
     assert _observe_structure(state) == (True, 0, False)
 

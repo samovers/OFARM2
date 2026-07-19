@@ -31,7 +31,9 @@ from deployment.postgresql.provisioning_specs import (
     TENANT_PROVISIONING_SPEC,
     MembershipSpec,
     ProvisioningSpec,
+    ProvisioningSpecError,
     RoleSpec,
+    require_frozen_tenant_native_verifier_authority,
 )
 from deployment.postgresql.version_policy import (
     SUPPORTED_POSTGRESQL_SERVER_VERSION,
@@ -170,6 +172,11 @@ def _require_fixed_spec(spec: ProvisioningSpec) -> None:
         raise ProvisioningTargetError(
             "spec must be one of the two checked-in PostgreSQL services"
         )
+    if spec == TENANT_PROVISIONING_SPEC:
+        try:
+            require_frozen_tenant_native_verifier_authority()
+        except ProvisioningSpecError as exc:
+            raise ProvisioningTargetError(str(exc)) from exc
 
 
 def _require_dba(
@@ -1325,6 +1332,8 @@ def _native_verifier_differences(
                routine.proargmodes,
                routine.proargnames,
                routine.prosqlbody IS NULL,
+               dependency.objsubid,
+               dependency.refobjsubid,
                dependency.deptype,
                extension.extname::text
         FROM pg_catalog.pg_proc AS routine
@@ -1335,11 +1344,10 @@ def _native_verifier_differences(
         LEFT JOIN pg_catalog.pg_depend AS dependency
           ON dependency.classid = 'pg_catalog.pg_proc'::pg_catalog.regclass
          AND dependency.objid = routine.oid
-         AND dependency.deptype = 'e'
-        LEFT JOIN pg_catalog.pg_extension AS extension
-          ON extension.oid = dependency.refobjid
          AND dependency.refclassid =
              'pg_catalog.pg_extension'::pg_catalog.regclass
+        LEFT JOIN pg_catalog.pg_extension AS extension
+          ON extension.oid = dependency.refobjid
         WHERE namespace.nspname = %s
         ORDER BY routine.proname,
                  pg_catalog.pg_get_function_identity_arguments(routine.oid)
@@ -1372,6 +1380,8 @@ def _native_verifier_differences(
             None,
             ["public_key", "signed_bytes", "signature"],
             True,
+            0,
+            0,
             "e",
             verifier.extension_name,
         )
@@ -1383,6 +1393,7 @@ def _native_verifier_differences(
         """
         SELECT dependency.classid::pg_catalog.regclass::pg_catalog.text,
                dependency.objsubid,
+               dependency.refobjsubid,
                dependency.deptype,
                identified.type,
                identified.schema,
@@ -1397,13 +1408,14 @@ def _native_verifier_differences(
         WHERE dependency.refclassid =
                 'pg_catalog.pg_extension'::pg_catalog.regclass
           AND extension.extname = %s
-        ORDER BY 1, 2, 3, 4, 5, 6, 7
+        ORDER BY 1, 2, 3, 4, 5, 6, 7, 8
         """,
         (verifier.extension_name,),
     ).fetchall()
     if extension_members != [
         (
             "pg_proc",
+            0,
             0,
             "e",
             "function",

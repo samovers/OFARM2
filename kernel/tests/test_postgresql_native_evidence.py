@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+from deployment.postgresql import native_evidence
 from deployment.postgresql.native_evidence import (
     CURRENT_NATIVE_ACTION_PINS,
     CURRENT_NATIVE_BUILD_PINS,
@@ -32,6 +33,12 @@ from deployment.postgresql.native_release_identity import (
     EVIDENCE_RECEIPT_PATH,
     IDENTITY_PATH,
     NATIVE_SOURCE_PATHS,
+    NATIVE_RELEASE_GITHUB_CLI_VERSION_OUTPUT,
+    NATIVE_RELEASE_REPOSITORY,
+    NATIVE_RELEASE_REPOSITORY_API_URL,
+    NATIVE_RELEASE_REPOSITORY_ID,
+    NATIVE_RELEASE_REPOSITORY_NODE_ID,
+    NATIVE_RELEASE_REPOSITORY_URL,
     PACKAGE_ROOT as RELEASE_PACKAGE_ROOT,
     SOURCE_DIRECTORY,
     NativeReleaseIdentityError,
@@ -48,7 +55,7 @@ from deployment.postgresql.native_release_identity import (
 SOURCE_COMMIT = "1" * 40
 PLATFORM = "linux/amd64"
 BUILDER_ID = "https://github.com/samovers/OFARM2/actions/runs/1/attempts/1"
-CONTAINERFILE_BYTES = b"FROM postgres@sha256:fixture\n"
+CONTAINERFILE_BYTES = (SOURCE_DIRECTORY / "Containerfile").read_bytes()
 ARTIFACTS = {
     "libsodium.a": b"static libsodium archive\x00",
     "ofarm_ed25519.so": b"native verifier\x00",
@@ -101,7 +108,11 @@ def _write_metadata(path: Path, digest: str, config_digest: str) -> None:
 
 
 def _reproducibility_fixture(
-    tmp_path: Path, child_digest: str, config_digest: str
+    tmp_path: Path,
+    child_digest: str,
+    config_digest: str,
+    *,
+    platform: str = PLATFORM,
 ) -> Path:
     first = tmp_path / "first"
     second = tmp_path / "second"
@@ -117,7 +128,7 @@ def _reproducibility_fixture(
         second_metadata=second_metadata,
         first_artifacts=first,
         second_artifacts=second,
-        platform=PLATFORM,
+        platform=platform,
         source_commit=SOURCE_COMMIT,
         output=output,
     )
@@ -197,11 +208,42 @@ def _prepare_candidate(
     tmp_path: Path,
     *,
     evidence_octet: str = "a",
+    runtime_octet: str = "stable",
     checked_identity_path: Path | None = None,
     checked_receipt_path: Path | None = None,
 ) -> tuple[Path, Path, Path, Path, dict[str, object]]:
-    amd64_report = _native_oci_report("linux/amd64", "1", evidence_octet)
-    arm64_report = _native_oci_report("linux/arm64", "2", evidence_octet)
+    reports: dict[str, dict[str, object]] = {}
+    for architecture in ("amd64", "arm64"):
+        platform = f"linux/{architecture}"
+        fixture_directory = tmp_path / f"oci-{architecture}-{evidence_octet}"
+        fixture_directory.mkdir()
+        archive, child_digest, config_digest, containerfile = _oci_fixture(
+            fixture_directory,
+            platform=platform,
+            evidence_octet=evidence_octet,
+            runtime_octet=runtime_octet,
+        )
+        reproducibility = _reproducibility_fixture(
+            fixture_directory,
+            child_digest,
+            config_digest,
+            platform=platform,
+        )
+        report = collect_oci_evidence(
+            archive_path=archive,
+            reproducibility_path=reproducibility,
+            platform=platform,
+            source_commit=SOURCE_COMMIT,
+            containerfile_path=containerfile,
+            builder_id=BUILDER_ID,
+            output_directory=fixture_directory / "evidence",
+        )
+        reports[architecture] = report
+        tmp_path.joinpath(
+            f"release-{architecture}-{evidence_octet}.oci.tar"
+        ).write_bytes(archive.read_bytes())
+    amd64_report = reports["amd64"]
+    arm64_report = reports["arm64"]
     amd64_path = tmp_path / f"amd64-{evidence_octet}.json"
     arm64_path = tmp_path / f"arm64-{evidence_octet}.json"
     amd64_path.write_text(json.dumps(amd64_report))
@@ -236,13 +278,598 @@ def _prepare_candidate(
         candidate_receipt,
         index_path,
         evidence_path,
-        {"amd64": amd64_report, "arm64": arm64_report},
+        reports,
     )
+
+
+def _github_release_verification_document(
+    candidate: dict[str, object],
+    *,
+    release_id: int,
+) -> dict[str, object]:
+    preservation = candidate["preservation"]
+    build_run = candidate["buildRun"]
+    platforms = candidate["platforms"]
+    assert isinstance(preservation, dict)
+    assert isinstance(build_run, dict)
+    assert isinstance(platforms, list)
+    tag = preservation["releaseTag"]
+    source_commit = build_run["sourceCommit"]
+    purl = f"pkg:github/{NATIVE_RELEASE_REPOSITORY}@{tag}"
+    subjects = [{"digest": {"sha1": source_commit}, "uri": purl}]
+    for platform in platforms:
+        assert isinstance(platform, dict)
+        architecture = platform["platform"].split("/", 1)[1]
+        subjects.append(
+            {
+                "digest": {
+                    "sha256": platform["ociArchive"]["sha256"].removeprefix(
+                        "sha256:"
+                    )
+                },
+                "name": f"ofarm-ed25519-linux-{architecture}.oci.tar",
+            }
+        )
+    statement = {
+        "_type": "https://in-toto.io/Statement/v1",
+        "subject": subjects,
+        "predicateType": "https://in-toto.io/attestation/release/v0.1",
+        "predicate": {
+            "ownerId": "12345",
+            "purl": purl,
+            "releaseId": str(release_id),
+            "repository": NATIVE_RELEASE_REPOSITORY,
+            "repositoryId": str(NATIVE_RELEASE_REPOSITORY_ID),
+            "tag": tag,
+        },
+    }
+    return {
+        "attestation": {
+            "bundle": {
+                "mediaType": "application/vnd.dev.sigstore.bundle.v0.3+json",
+                "verificationMaterial": {
+                    "timestampVerificationData": {
+                        "rfc3161Timestamps": [
+                            {
+                                "signedTimestamp": base64.b64encode(
+                                    b"fixture timestamp"
+                                ).decode()
+                            }
+                        ]
+                    },
+                    "certificate": {
+                        "rawBytes": base64.b64encode(
+                            b"fixture certificate"
+                        ).decode()
+                    },
+                },
+                "dsseEnvelope": {
+                    "payload": base64.b64encode(_json_bytes(statement)).decode(),
+                    "payloadType": "application/vnd.in-toto+json",
+                    "signatures": [
+                        {
+                            "sig": base64.b64encode(
+                                b"fixture signature"
+                            ).decode()
+                        }
+                    ],
+                },
+            },
+            "bundle_url": (
+                "https://tmaproduction.blob.core.windows.net/attestations/"
+                f"{NATIVE_RELEASE_REPOSITORY_ID}/2026/07/19/12345.json.sn?"
+                "se=2026-07-20T00%3A00%3A00Z&sig=Zml4dHVyZQ%3D%3D&"
+                "ske=2026-07-20T00%3A00%3A00Z&"
+                "skoid=11111111-1111-4111-8111-111111111111&sks=b&"
+                "skt=2026-07-19T00%3A00%3A00Z&"
+                "sktid=22222222-2222-4222-8222-222222222222&"
+                "skv=2026-06-06&sp=r&spr=https&sr=b&"
+                "st=2026-07-19T00%3A00%3A00Z&sv=2026-06-06"
+            ),
+            "initiator": "github",
+        },
+        "verificationResult": {
+            "mediaType": (
+                "application/vnd.dev.sigstore.verificationresult+json;version=0.1"
+            ),
+            "statement": statement,
+            "signature": {
+                "certificate": {
+                    "certificateIssuer": (
+                        "CN=Fulcio Intermediate l1,O=GitHub\\, Inc."
+                    ),
+                    "subjectAlternativeName": (
+                        "https://dotcom.releases.github.com"
+                    ),
+                }
+            },
+            "verifiedTimestamps": [
+                {
+                    "type": "TimestampAuthority",
+                    "uri": "timestamp.githubapp.com",
+                    "timestamp": "2026-07-19T00:00:00Z",
+                }
+            ],
+            "verifiedIdentity": {
+                "issuer": {"issuer": "", "regexp": ".*"},
+                "subjectAlternativeName": {
+                    "regexp": r"^https://dotcom\.releases\.github\.com$",
+                    "subjectAlternativeName": "",
+                },
+            },
+        },
+    }
+
+
+def _install_github_release_fixture(
+    monkeypatch: pytest.MonkeyPatch,
+    candidate_receipt_path: Path,
+    *,
+    evidence_octet: str = "a",
+    mutation=None,
+) -> tuple[dict[str, object], list[tuple[str, ...]]]:
+    candidate = json.loads(candidate_receipt_path.read_bytes())
+    tag = candidate["preservation"]["releaseTag"]
+    source_commit = candidate["buildRun"]["sourceCommit"]
+    release_id = 101
+    raw_assets = []
+    archives: dict[str, bytes] = {}
+    for asset_id, (platform, asset) in enumerate(
+        zip(candidate["platforms"], candidate["preservation"]["assets"], strict=True),
+        start=201,
+    ):
+        raw_assets.append(
+            {
+                "apiUrl": (
+                    f"{NATIVE_RELEASE_REPOSITORY_API_URL}/releases/assets/{asset_id}"
+                ),
+                "id": asset_id,
+                "name": asset["name"],
+                "nodeId": f"ASSET_{asset_id}",
+                "sha256": asset["sha256"],
+                "size": asset["size"],
+                "state": "uploaded",
+                "url": asset["url"],
+            }
+        )
+        architecture = platform["platform"].split("/", 1)[1]
+        archives[asset["name"]] = candidate_receipt_path.parent.joinpath(
+            f"release-{architecture}-{evidence_octet}.oci.tar"
+        ).read_bytes()
+    release_attestation = _github_release_verification_document(
+        candidate,
+        release_id=release_id,
+    )
+    state: dict[str, object] = {
+        "repository": {
+            "apiUrl": NATIVE_RELEASE_REPOSITORY_API_URL,
+            "id": NATIVE_RELEASE_REPOSITORY_ID,
+            "name": NATIVE_RELEASE_REPOSITORY,
+            "nodeId": NATIVE_RELEASE_REPOSITORY_NODE_ID,
+            "url": NATIVE_RELEASE_REPOSITORY_URL,
+        },
+        "immutableReleases": {"enabled": True, "enforcedByOwner": False},
+        "release": {
+            "apiUrl": f"{NATIVE_RELEASE_REPOSITORY_API_URL}/releases/{release_id}",
+            "assets": raw_assets,
+            "draft": False,
+            "htmlUrl": f"{NATIVE_RELEASE_REPOSITORY_URL}/releases/tag/{tag}",
+            "id": release_id,
+            "immutable": True,
+            "nodeId": "RELEASE_101",
+            "prerelease": True,
+            "tagName": tag,
+            "targetCommitish": source_commit,
+        },
+        "peeled": {"sha": source_commit},
+        "archives": archives,
+        "releaseAttestation": release_attestation,
+        "githubCliPathResolutions": 0,
+        "githubCliPaths": [],
+    }
+    if mutation is not None:
+        mutation(state)
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run(
+        arguments: tuple[str, ...],
+        *,
+        label: str,
+        timeout_seconds: int = native_evidence.GITHUB_API_TIMEOUT_SECONDS,
+        github_cli: Path | None = None,
+    ) -> bytes:
+        del label, timeout_seconds
+        assert github_cli is not None
+        state["githubCliPaths"].append(github_cli)
+        calls.append(arguments)
+        if arguments == ("version",):
+            return state.get(
+                "versionOutput", NATIVE_RELEASE_GITHUB_CLI_VERSION_OUTPUT
+            )
+        if arguments[0] == "api":
+            endpoint = next(
+                argument
+                for argument in arguments
+                if argument == "repos/samovers/OFARM2"
+                or argument.startswith("repos/samovers/OFARM2/")
+            )
+            if endpoint == "repos/samovers/OFARM2":
+                value = state["repository"]
+            elif endpoint.endswith("/immutable-releases"):
+                value = state["immutableReleases"]
+            elif "/releases/tags/" in endpoint:
+                value = state["release"]
+            elif "/commits/" in endpoint:
+                value = state["peeled"]
+            else:  # pragma: no cover - fixed command inventory guard
+                raise AssertionError(endpoint)
+            return _json_bytes(value)
+        if arguments[0:2] == ("release", "verify"):
+            if state.get("failVerification"):
+                raise NativeEvidenceError("GitHub release attestation refused")
+            return _json_bytes(state["releaseAttestation"])
+        if arguments[0:2] == ("release", "download"):
+            directory = Path(arguments[arguments.index("--dir") + 1])
+            state["downloadDirectory"] = directory
+            state["downloadDirectoryWasEmpty"] = not any(directory.iterdir())
+            for name, data in state["archives"].items():
+                directory.joinpath(name).write_bytes(data)
+            return b""
+        if arguments[0:2] == ("release", "verify-asset"):
+            if state.get("failAssetVerification"):
+                raise NativeEvidenceError("GitHub asset attestation refused")
+            state["verifiedAssetCount"] = state.get("verifiedAssetCount", 0) + 1
+            if (
+                state.get("changeAfterAssetVerification")
+                and state["verifiedAssetCount"] == 2
+            ):
+                release = state["release"]
+                release["assets"][0]["size"] += 1
+            return _json_bytes(state["releaseAttestation"])
+        raise AssertionError(arguments)
+
+    def fake_github_cli_path() -> Path:
+        state["githubCliPathResolutions"] += 1
+        if state["githubCliPathResolutions"] == 1:
+            return Path("/fixture/gh-2.96.0")
+        return Path("/fixture/hostile-replacement-gh")
+
+    monkeypatch.setattr(native_evidence, "_github_cli_path", fake_github_cli_path)
+    monkeypatch.setattr(native_evidence, "_run_github_cli", fake_run)
+    return state, calls
+
+
+def _fixture_section(
+    state: dict[str, object], section: str
+) -> dict[str, object]:
+    value = state[section]
+    assert isinstance(value, dict)
+    return value
+
+
+def _fixture_assets(state: dict[str, object]) -> list[dict[str, object]]:
+    value = _fixture_section(state, "release")["assets"]
+    assert isinstance(value, list)
+    assert all(isinstance(item, dict) for item in value)
+    return value
+
+
+def _duplicate_second_github_asset_identity(state: dict[str, object]) -> None:
+    assets = _fixture_assets(state)
+    assets[1].update(
+        apiUrl=assets[0]["apiUrl"],
+        id=assets[0]["id"],
+        nodeId=assets[0]["nodeId"],
+    )
+
+
+def _rewrite_provider_verified_statements(
+    provider: dict[str, object],
+    mutation,
+) -> None:
+    metadata = provider["metadata"]
+    assert isinstance(metadata, dict)
+    command_results = [metadata["releaseAttestation"]]
+    asset_attestations = metadata["assetAttestations"]
+    assert isinstance(asset_attestations, list)
+    command_results.extend(
+        attestation["verification"] for attestation in asset_attestations
+    )
+    for command_result in command_results:
+        assert isinstance(command_result, dict)
+        document = command_result["document"]
+        assert isinstance(document, dict)
+        verification_result = document["verificationResult"]
+        attestation = document["attestation"]
+        assert isinstance(verification_result, dict)
+        assert isinstance(attestation, dict)
+        statement = verification_result["statement"]
+        assert isinstance(statement, dict)
+        mutation(statement)
+        bundle = attestation["bundle"]
+        assert isinstance(bundle, dict)
+        envelope = bundle["dsseEnvelope"]
+        assert isinstance(envelope, dict)
+        envelope["payload"] = base64.b64encode(_json_bytes(statement)).decode()
+        canonical = release_canonical_json_bytes(document)
+        command_result["canonicalDigest"] = _digest(canonical)
+        command_result["size"] = len(canonical)
+
+
+def _replace_release_subject(statement: dict[str, object]) -> None:
+    subjects = statement["subject"]
+    assert isinstance(subjects, list)
+    subjects[0]["digest"]["sha1"] = "0" * 40
+
+
+def _replace_asset_subject(statement: dict[str, object]) -> None:
+    subjects = statement["subject"]
+    assert isinstance(subjects, list)
+    subjects[1]["digest"]["sha256"] = "0" * 64
+
+
+def _replace_release_predicate(statement: dict[str, object]) -> None:
+    predicate = statement["predicate"]
+    assert isinstance(predicate, dict)
+    predicate["repository"] = "attacker/OFARM2"
+
+
+def _rewrite_provider_verified_results(
+    provider: dict[str, object],
+    mutation,
+) -> None:
+    metadata = provider["metadata"]
+    assert isinstance(metadata, dict)
+    command_results = [metadata["releaseAttestation"]]
+    asset_attestations = metadata["assetAttestations"]
+    assert isinstance(asset_attestations, list)
+    command_results.extend(
+        attestation["verification"] for attestation in asset_attestations
+    )
+    for command_result in command_results:
+        assert isinstance(command_result, dict)
+        document = command_result["document"]
+        assert isinstance(document, dict)
+        verification_result = document["verificationResult"]
+        assert isinstance(verification_result, dict)
+        mutation(verification_result)
+        canonical = release_canonical_json_bytes(document)
+        command_result["canonicalDigest"] = _digest(canonical)
+        command_result["size"] = len(canonical)
+
+
+def _rewrite_provider_documents(
+    provider: dict[str, object],
+    mutation,
+) -> None:
+    metadata = provider["metadata"]
+    assert isinstance(metadata, dict)
+    command_results = [metadata["releaseAttestation"]]
+    asset_attestations = metadata["assetAttestations"]
+    assert isinstance(asset_attestations, list)
+    command_results.extend(
+        attestation["verification"] for attestation in asset_attestations
+    )
+    for command_result in command_results:
+        assert isinstance(command_result, dict)
+        document = command_result["document"]
+        assert isinstance(document, dict)
+        mutation(document)
+        canonical = release_canonical_json_bytes(document)
+        command_result["canonicalDigest"] = _digest(canonical)
+        command_result["size"] = len(canonical)
+
+
+def _replace_verified_certificate_san(
+    verification_result: dict[str, object],
+) -> None:
+    certificate = verification_result["signature"]["certificate"]
+    certificate["subjectAlternativeName"] = "https://attacker.example.test"
+
+
+def _replace_verified_identity_policy(
+    verification_result: dict[str, object],
+) -> None:
+    identity = verification_result["verifiedIdentity"]
+    identity["issuer"]["regexp"] = "^attacker$"
+
+
+def _replace_verified_timestamp_uri(
+    verification_result: dict[str, object],
+) -> None:
+    verification_result["verifiedTimestamps"][0]["uri"] = (
+        "https://timestamp.githubapp.com"
+    )
+
+
+def _replace_verified_timestamp_encoding(
+    verification_result: dict[str, object],
+) -> None:
+    verification_result["verifiedTimestamps"][0]["timestamp"] = (
+        "2026-07-19T00:00:00.000Z"
+    )
+
+
+def _replace_bundle_url(document: dict[str, object]) -> None:
+    document["attestation"]["bundle_url"] = (
+        "https://attacker.example.test/attestations/fixture?sig=hostile"
+    )
+
+
+def _replace_one_asset_command_bundle(provider: dict[str, object]) -> None:
+    metadata = provider["metadata"]
+    assert isinstance(metadata, dict)
+    asset_attestations = metadata["assetAttestations"]
+    assert isinstance(asset_attestations, list)
+    verification = asset_attestations[0]["verification"]
+    document = verification["document"]
+    certificate = document["attestation"]["bundle"]["verificationMaterial"][
+        "certificate"
+    ]
+    certificate["rawBytes"] = base64.b64encode(
+        b"different valid fixture certificate"
+    ).decode()
+    canonical = release_canonical_json_bytes(document)
+    verification["canonicalDigest"] = _digest(canonical)
+    verification["size"] = len(canonical)
+
+
+def test_github_cli_uses_one_bounded_direct_argv(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = tmp_path / "gh"
+    executable.write_bytes(b"trusted fixture\n")
+    executable.chmod(0o755)
+    calls = []
+
+    def fake_subprocess_run(command, **kwargs):
+        calls.append((command, kwargs))
+        return native_evidence.subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=b'{"ok":true}\n',
+            stderr=b"",
+        )
+
+    monkeypatch.setattr(native_evidence, "_github_cli_path", lambda: executable)
+    monkeypatch.setattr(native_evidence.subprocess, "run", fake_subprocess_run)
+    arguments = (
+        "api",
+        "--hostname",
+        "github.com",
+        "repos/samovers/OFARM2",
+    )
+
+    assert native_evidence._run_github_cli(arguments, label="fixture") == (
+        b'{"ok":true}\n'
+    )
+    assert len(calls) == 1
+    command, kwargs = calls[0]
+    assert command == (str(executable), *arguments)
+    assert isinstance(command, tuple)
+    assert kwargs["shell"] is False
+    assert kwargs["check"] is False
+    assert kwargs["stdout"] is native_evidence.subprocess.PIPE
+    assert kwargs["stderr"] is native_evidence.subprocess.PIPE
+    assert kwargs["env"]["GH_HOST"] == "github.com"
+    assert kwargs["env"]["GH_REPO"] == NATIVE_RELEASE_REPOSITORY
+    assert kwargs["env"]["GH_PROMPT_DISABLED"] == "1"
+
+    with pytest.raises(NativeEvidenceError, match="arguments are not exact"):
+        native_evidence._run_github_cli(
+            ("api", "repos/samovers/OFARM2\n--method=DELETE"),
+            label="hostile fixture",
+        )
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize(
+    ("stdout", "stderr", "returncode", "message"),
+    (
+        (
+            b"x" * (native_evidence.MAX_GITHUB_COMMAND_OUTPUT_BYTES + 1),
+            b"",
+            0,
+            "output exceeds",
+        ),
+        (
+            b"",
+            b"x" * (native_evidence.MAX_GITHUB_COMMAND_OUTPUT_BYTES + 1),
+            0,
+            "output exceeds",
+        ),
+        (b"{}\n", b"warning", 0, "wrote to standard error"),
+        (b"", b"provider refusal", 1, "refused"),
+    ),
+)
+def test_github_cli_refuses_failure_and_oversized_output(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    stdout: bytes,
+    stderr: bytes,
+    returncode: int,
+    message: str,
+) -> None:
+    executable = tmp_path / "gh"
+    executable.write_bytes(b"trusted fixture\n")
+    executable.chmod(0o755)
+    monkeypatch.setattr(native_evidence, "_github_cli_path", lambda: executable)
+    monkeypatch.setattr(
+        native_evidence.subprocess,
+        "run",
+        lambda command, **_kwargs: native_evidence.subprocess.CompletedProcess(
+            command,
+            returncode,
+            stdout=stdout,
+            stderr=stderr,
+        ),
+    )
+
+    with pytest.raises(NativeEvidenceError, match=message):
+        native_evidence._run_github_cli(("version",), label="fixture")
+
+
+@pytest.mark.parametrize(
+    ("data", "message"),
+    (
+        (b"", "invalid size"),
+        (
+            b"x" * (native_evidence.MAX_GITHUB_JSON_BYTES + 1),
+            "invalid size",
+        ),
+        (b'{"value":1,"value":2}', "duplicate object key"),
+        (b'{"value":NaN}', "forbidden number"),
+        (b"\xff", "not UTF-8"),
+    ),
+)
+def test_github_json_is_bounded_and_exact(
+    monkeypatch: pytest.MonkeyPatch,
+    data: bytes,
+    message: str,
+) -> None:
+    monkeypatch.setattr(
+        native_evidence,
+        "_run_github_cli",
+        lambda *_args, **_kwargs: data,
+    )
+
+    with pytest.raises(NativeEvidenceError, match=message):
+        native_evidence._run_github_json(("api",), label="fixture")
+
+
+def test_github_api_command_is_fixed_to_the_release_repository() -> None:
+    arguments = native_evidence._github_api_arguments(
+        "repos/samovers/OFARM2",
+        "{id:.id}",
+    )
+
+    assert arguments[0:5] == (
+        "api",
+        "--hostname",
+        "github.com",
+        "--method",
+        "GET",
+    )
+    assert "Accept: application/vnd.github+json" in arguments
+    assert (
+        f"X-GitHub-Api-Version: {native_evidence.NATIVE_RELEASE_GITHUB_API_VERSION}"
+        in arguments
+    )
+    assert "repos/samovers/OFARM2" in arguments
+    with pytest.raises(NativeEvidenceError, match="fixed repository"):
+        native_evidence._github_api_arguments(
+            "repos/attacker/OFARM2/releases",
+            "{id:.id}",
+        )
 
 
 def _oci_fixture(
     tmp_path: Path,
     *,
+    platform: str = PLATFORM,
+    evidence_octet: str = "a",
+    runtime_octet: str = "stable",
     hostile_subject: bool = False,
     extra_subject: bool = False,
     unreferenced_blob: bool = False,
@@ -264,7 +891,16 @@ def _oci_fixture(
         blobs[_digest(data)] = data
         return data
 
-    runtime_config = remember(b"{}")
+    architecture = platform.split("/", 1)[1]
+    runtime_config = remember(
+        _json_bytes(
+            {
+                "architecture": architecture,
+                "os": "linux",
+                "runtimeFixture": runtime_octet,
+            }
+        )
+    )
     runtime_layer = remember(b"runtime layer")
     runtime_manifest = remember(
         _json_bytes(
@@ -290,8 +926,8 @@ def _oci_fixture(
         subjects = [
             {
                 "name": (
-                    "pkg:docker/ofarm-ed25519-evidence@amd64?"
-                    "platform=linux%2Famd64"
+                    f"pkg:docker/ofarm-ed25519-evidence@{architecture}?"
+                    f"platform=linux%2F{architecture}"
                 ),
                 "digest": {"sha256": subject_digest},
             }
@@ -309,7 +945,10 @@ def _oci_fixture(
                     "dataLicense": "CC0-1.0",
                     "SPDXID": "SPDXRef-DOCUMENT",
                     "name": "ofarm-ed25519",
-                    "documentNamespace": "https://example.test/spdx/ofarm-ed25519",
+                    "documentNamespace": (
+                        "https://example.test/spdx/ofarm-ed25519/"
+                        + evidence_octet
+                    ),
                     "creationInfo": {
                         "created": "1970-01-01T00:00:00Z",
                         "creators": ["Tool: buildkit-test"],
@@ -354,15 +993,10 @@ def _oci_fixture(
                     },
                     {
                         "uri": (
-                            "https://apt.postgresql.org/pub/repos/apt/pool/main/p/"
-                            "postgresql-17/postgresql-server-dev-17_17.10-1.pgdg13+1_"
-                            "amd64.deb"
+                            SERVER_DEV_SOURCES[platform][0]
                         ),
                         "digest": {
-                            "sha256": (
-                                "adc91a999ec840f8db8c8df5ac2473fe1deeaed0e76bd5a6391afa7"
-                                "c74bceac3"
-                            )
+                            "sha256": SERVER_DEV_SOURCES[platform][1]
                         },
                     },
                 ],
@@ -373,7 +1007,7 @@ def _oci_fixture(
                         "args": {},
                         "locals": [{"name": "context"}],
                     },
-                    "environment": {"platform": PLATFORM},
+                    "environment": {"platform": platform},
                 },
                 "metadata": {
                     "buildInvocationID": "fixture-build",
@@ -460,7 +1094,7 @@ def _oci_fixture(
     runtime_descriptor = _descriptor(
         runtime_manifest,
         manifest_media_type,
-        platform={"os": "linux", "architecture": "amd64"},
+        platform={"os": "linux", "architecture": architecture},
     )
     attestation_descriptor = _descriptor(
         attestation_manifest,
@@ -918,10 +1552,28 @@ def test_native_evidence_receipt_refuses_authority_source_drift(
             "OCI archive size is invalid",
         ),
         (
+            lambda receipt: receipt["platforms"][0].update(
+                runtimeChildDigest="sha256:" + "0" * 64
+            ),
+            "receipt runtime identity differs",
+        ),
+        (
+            lambda receipt: receipt["platforms"][0]["artifacts"][0].update(
+                sha256="sha256:" + "0" * 64
+            ),
+            "receipt runtime identity differs",
+        ),
+        (
             lambda receipt: receipt["preservation"].update(
                 releaseUrl="https://example.test/hostile"
             ),
             "preservation reference is inconsistent",
+        ),
+        (
+            lambda receipt: receipt["preservation"].update(
+                providerVerification={}
+            ),
+            "candidate evidence receipt contains provider verification",
         ),
         (
             lambda receipt: receipt["buildRun"]["actionsEvidence"].update(
@@ -1020,7 +1672,23 @@ def test_hosted_fan_in_emits_one_frozen_candidate_identity(tmp_path: Path) -> No
     )
     assert receipt.status == "candidate"
     assert receipt.document["releaseIdentityDigest"] == candidate.digest
+    for receipt_platform, identity_platform in zip(
+        receipt.document["platforms"],
+        candidate.document["platforms"],
+        strict=True,
+    ):
+        assert receipt_platform["runtimeChildDigest"] == identity_platform[
+            "runtimeChildDigest"
+        ]
+        assert receipt_platform["runtimeChildSize"] == identity_platform[
+            "runtimeChildSize"
+        ]
+        assert receipt_platform["runtimeConfigDigest"] == identity_platform[
+            "runtimeConfigDigest"
+        ]
+        assert receipt_platform["artifacts"] == identity_platform["artifacts"]
     assert receipt.document["preservation"]["status"] == "pending"
+    assert receipt.document["preservation"]["providerVerification"] is None
     assert receipt.document["preservation"]["releaseKind"] == "prerelease"
     assert receipt.document["preservation"]["releaseTag"] == (
         "native-verifier-" + candidate.digest.removeprefix("sha256:")
@@ -1041,8 +1709,9 @@ def test_hosted_fan_in_emits_one_frozen_candidate_identity(tmp_path: Path) -> No
     ]
 
 
-def test_release_downloads_freeze_durable_receipt_and_reruns_may_differ(
+def test_immutable_github_release_freezes_durable_receipt_and_blocks_replacement(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     (
         candidate_identity_path,
@@ -1051,12 +1720,11 @@ def test_release_downloads_freeze_durable_receipt_and_reruns_may_differ(
         _,
         reports,
     ) = _prepare_candidate(tmp_path, evidence_octet="a")
-    download_directory = tmp_path / "release-downloads"
-    download_directory.mkdir()
-    amd64_download = download_directory / "ofarm-ed25519-linux-amd64.oci.tar"
-    arm64_download = download_directory / "ofarm-ed25519-linux-arm64.oci.tar"
-    amd64_download.write_bytes(_archive_bytes("linux/amd64", "a"))
-    arm64_download.write_bytes(_archive_bytes("linux/arm64", "a"))
+    _state, calls = _install_github_release_fixture(
+        monkeypatch,
+        candidate_receipt_path,
+        evidence_octet="a",
+    )
     frozen_receipt_path = tmp_path / "frozen-receipt.json"
 
     result = finalize_evidence_receipt(
@@ -1064,8 +1732,6 @@ def test_release_downloads_freeze_durable_receipt_and_reruns_may_differ(
         candidate_receipt_path=candidate_receipt_path,
         source_directory=SOURCE_DIRECTORY,
         repository_root=RELEASE_PACKAGE_ROOT,
-        amd64_download=amd64_download,
-        arm64_download=arm64_download,
         output=frozen_receipt_path,
     )
     identity = load_native_release_identity(
@@ -1084,9 +1750,43 @@ def test_release_downloads_freeze_durable_receipt_and_reruns_may_differ(
     assert result["release_identity_digest"] == identity.digest
     assert frozen_receipt.status == "frozen"
     assert frozen_receipt.document["preservation"]["status"] == "verified"
+    provider = frozen_receipt.document["preservation"]["providerVerification"]
+    assert provider["schemaVersion"] == (
+        "ofarm.github-release-provider-verification.v1"
+    )
+    assert provider["canonicalDigest"] == _digest(
+        release_canonical_json_bytes(provider["metadata"])
+    )
+    assert provider["metadata"]["immutableReleases"]["enabled"] is True
+    assert provider["metadata"]["repository"]["id"] == (
+        NATIVE_RELEASE_REPOSITORY_ID
+    )
+    assert provider["metadata"]["repository"]["nodeId"] == (
+        NATIVE_RELEASE_REPOSITORY_NODE_ID
+    )
+    assert provider["metadata"]["release"]["immutable"] is True
+    assert provider["metadata"]["release"]["targetCommitish"] == SOURCE_COMMIT
+    assert provider["metadata"]["release"]["peeledTagCommit"] == SOURCE_COMMIT
+    assert [
+        asset["id"] for asset in provider["metadata"]["release"]["assets"]
+    ] == [201, 202]
     assert frozen_receipt.document["platforms"][0]["ociArchive"] == reports[
         "amd64"
     ]["oci_archive"]
+    assert calls[0] == ("version",)
+    assert any(call[0:2] == ("release", "download") for call in calls)
+    assert sum(call[0:2] == ("release", "verify-asset") for call in calls) == 2
+    assert _state["githubCliPathResolutions"] == 1
+    assert set(_state["githubCliPaths"]) == {Path("/fixture/gh-2.96.0")}
+    assert _state["downloadDirectoryWasEmpty"] is True
+    assert not _state["downloadDirectory"].exists()
+    download_call = next(
+        call for call in calls if call[0:2] == ("release", "download")
+    )
+    assert "--clobber" not in download_call
+    for call in calls:
+        if call[0] == "release":
+            assert call[call.index("--repo") + 1] == NATIVE_RELEASE_REPOSITORY
 
     fresh_directory = tmp_path / "fresh-rerun"
     fresh_directory.mkdir()
@@ -1104,30 +1804,424 @@ def test_release_downloads_freeze_durable_receipt_and_reruns_may_differ(
         repository_root=RELEASE_PACKAGE_ROOT,
         allow_candidate=True,
     )
-    assert fresh_receipt.document["platforms"][0]["ociArchive"] != (
-        frozen_receipt.document["platforms"][0]["ociArchive"]
-    )
+    assert fresh_receipt.status == "frozen"
+    assert fresh_receipt_path.read_bytes() == frozen_receipt_path.read_bytes()
     assert fresh_receipt.document["releaseIdentityDigest"] == identity.digest
 
 
-def test_receipt_finalization_refuses_mutated_release_download(tmp_path: Path) -> None:
+def test_receipt_finalization_refuses_mutated_release_download(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     candidate_identity, candidate_receipt, _, _, _ = _prepare_candidate(tmp_path)
-    download_directory = tmp_path / "mutated-downloads"
-    download_directory.mkdir()
-    amd64_download = download_directory / "ofarm-ed25519-linux-amd64.oci.tar"
-    arm64_download = download_directory / "ofarm-ed25519-linux-arm64.oci.tar"
-    amd64_download.write_bytes(b"mutated archive")
-    arm64_download.write_bytes(_archive_bytes("linux/arm64", "a"))
+    _install_github_release_fixture(
+        monkeypatch,
+        candidate_receipt,
+        mutation=lambda state: state["archives"].update(
+            {"ofarm-ed25519-linux-amd64.oci.tar": b"mutated archive"}
+        ),
+    )
 
-    with pytest.raises(NativeEvidenceError, match="differs from candidate receipt"):
+    with pytest.raises(NativeEvidenceError, match="Release download differs"):
         finalize_evidence_receipt(
             release_identity_path=candidate_identity,
             candidate_receipt_path=candidate_receipt,
             source_directory=SOURCE_DIRECTORY,
             repository_root=RELEASE_PACKAGE_ROOT,
-            amd64_download=amd64_download,
-            arm64_download=arm64_download,
             output=tmp_path / "must-not-exist.json",
+        )
+
+
+def test_receipt_finalization_reauthenticates_a_self_consistent_alternate_archive(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first = tmp_path / "first"
+    alternate = tmp_path / "alternate"
+    first.mkdir()
+    alternate.mkdir()
+    candidate_identity, candidate_receipt, _, _, _ = _prepare_candidate(
+        first,
+        evidence_octet="a",
+    )
+    _, alternate_receipt, _, _, _ = _prepare_candidate(
+        alternate,
+        evidence_octet="b",
+        runtime_octet="different-runtime",
+    )
+    candidate_document = json.loads(candidate_receipt.read_bytes())
+    alternate_document = json.loads(alternate_receipt.read_bytes())
+    for candidate_platform, alternate_platform, preserved_asset in zip(
+        candidate_document["platforms"],
+        alternate_document["platforms"],
+        candidate_document["preservation"]["assets"],
+        strict=True,
+    ):
+        for field in (
+            "attestationManifest",
+            "ociArchive",
+            "provenance",
+            "sbom",
+            "sourceImageIndexDigest",
+        ):
+            candidate_platform[field] = alternate_platform[field]
+        preserved_asset["sha256"] = alternate_platform["ociArchive"]["sha256"]
+        preserved_asset["size"] = alternate_platform["ociArchive"]["size"]
+        architecture = candidate_platform["platform"].split("/", 1)[1]
+        shutil.copyfile(
+            alternate / f"release-{architecture}-b.oci.tar",
+            first / f"release-{architecture}-b.oci.tar",
+        )
+    candidate_receipt.write_bytes(
+        release_canonical_json_bytes(candidate_document)
+    )
+    _install_github_release_fixture(
+        monkeypatch,
+        candidate_receipt,
+        evidence_octet="b",
+    )
+
+    with pytest.raises(NativeEvidenceError, match="OCI evidence differs"):
+        finalize_evidence_receipt(
+            release_identity_path=candidate_identity,
+            candidate_receipt_path=candidate_receipt,
+            source_directory=SOURCE_DIRECTORY,
+            repository_root=RELEASE_PACKAGE_ROOT,
+            output=tmp_path / "must-not-exist.json",
+        )
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    (
+        (
+            lambda state: state.update(versionOutput=b"gh version 2.87.2\n"),
+            "CLI version is not exact",
+        ),
+        (
+            lambda state: _fixture_section(state, "repository").update(id=1),
+            "repository identity is not exact",
+        ),
+        (
+            lambda state: _fixture_section(state, "repository").update(
+                nodeId="R_hostile"
+            ),
+            "repository identity is not exact",
+        ),
+        (
+            lambda state: _fixture_section(state, "immutableReleases").update(
+                enabled=False
+            ),
+            "immutable releases are not enabled",
+        ),
+        (
+            lambda state: _fixture_section(state, "release").update(
+                immutable=False
+            ),
+            "release identity is inconsistent",
+        ),
+        (
+            lambda state: _fixture_section(state, "release").update(draft=True),
+            "release identity is inconsistent",
+        ),
+        (
+            lambda state: _fixture_section(state, "release").update(
+                prerelease=False
+            ),
+            "release identity is inconsistent",
+        ),
+        (
+            lambda state: _fixture_section(state, "release").update(
+                targetCommitish="0" * 40
+            ),
+            "release identity is inconsistent",
+        ),
+        (
+            lambda state: _fixture_section(state, "release").update(
+                tagName="native-verifier-" + "0" * 64
+            ),
+            "release identity is inconsistent",
+        ),
+        (
+            lambda state: _fixture_section(state, "release").update(
+                htmlUrl="https://github.com/samovers/OFARM2/releases/tag/hostile"
+            ),
+            "release identity is inconsistent",
+        ),
+        (
+            lambda state: _fixture_section(state, "peeled").update(sha="0" * 40),
+            "tag target is inconsistent",
+        ),
+        (
+            lambda state: _fixture_assets(state).append(
+                dict(_fixture_assets(state)[0])
+            ),
+            "asset set is not exact",
+        ),
+        (
+            _duplicate_second_github_asset_identity,
+            "asset identities are not exact",
+        ),
+        (
+            lambda state: _fixture_assets(state)[0].update(id=999),
+            "asset identity is inconsistent",
+        ),
+        (
+            lambda state: _fixture_assets(state)[0].update(name="hostile.oci.tar"),
+            "asset is absent",
+        ),
+        (
+            lambda state: _fixture_assets(state)[0].update(size=999),
+            "asset identity is inconsistent",
+        ),
+        (
+            lambda state: _fixture_assets(state)[0].update(
+                sha256="sha256:" + "0" * 64
+            ),
+            "asset identity is inconsistent",
+        ),
+        (
+            lambda state: _fixture_assets(state)[0].update(
+                url="https://example.test/hostile.oci.tar"
+            ),
+            "asset identity is inconsistent",
+        ),
+        (
+            lambda state: state.update(failVerification=True),
+            "release attestation refused",
+        ),
+        (
+            lambda state: state.update(failAssetVerification=True),
+            "asset attestation refused",
+        ),
+        (
+            lambda state: state.update(changeAfterAssetVerification=True),
+            "release state changed during verification",
+        ),
+    ),
+)
+def test_receipt_finalization_refuses_hostile_github_release_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation,
+    message: str,
+) -> None:
+    candidate_identity, candidate_receipt, _, _, _ = _prepare_candidate(tmp_path)
+    _install_github_release_fixture(
+        monkeypatch,
+        candidate_receipt,
+        mutation=mutation,
+    )
+    output = tmp_path / "must-not-exist.json"
+
+    with pytest.raises(NativeEvidenceError, match=message):
+        finalize_evidence_receipt(
+            release_identity_path=candidate_identity,
+            candidate_receipt_path=candidate_receipt,
+            source_directory=SOURCE_DIRECTORY,
+            repository_root=RELEASE_PACKAGE_ROOT,
+            output=output,
+        )
+    assert not output.exists()
+
+
+def test_receipt_finalization_refuses_differing_existing_output(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    candidate_identity, candidate_receipt, _, _, _ = _prepare_candidate(tmp_path)
+    _install_github_release_fixture(monkeypatch, candidate_receipt)
+    output = tmp_path / "frozen-receipt.json"
+    finalize_evidence_receipt(
+        release_identity_path=candidate_identity,
+        candidate_receipt_path=candidate_receipt,
+        source_directory=SOURCE_DIRECTORY,
+        repository_root=RELEASE_PACKAGE_ROOT,
+        output=output,
+    )
+    output.write_bytes(b"{}\n")
+
+    with pytest.raises(NativeEvidenceError, match="existing.*differs"):
+        finalize_evidence_receipt(
+            release_identity_path=candidate_identity,
+            candidate_receipt_path=candidate_receipt,
+            source_directory=SOURCE_DIRECTORY,
+            repository_root=RELEASE_PACKAGE_ROOT,
+            output=output,
+        )
+    assert output.read_bytes() == b"{}\n"
+
+
+def test_receipt_finalization_never_clobbers_a_concurrent_output(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    candidate_identity, candidate_receipt, _, _, _ = _prepare_candidate(tmp_path)
+    _install_github_release_fixture(monkeypatch, candidate_receipt)
+    output = tmp_path / "frozen-receipt.json"
+    concurrent_bytes = b'{"concurrent":"authority"}\n'
+    real_link = native_evidence.os.link
+    raced = False
+
+    def publish_after_concurrent_writer(source, destination, *args, **kwargs):
+        nonlocal raced
+        if Path(destination) == output and not raced:
+            output.write_bytes(concurrent_bytes)
+            raced = True
+        return real_link(source, destination, *args, **kwargs)
+
+    monkeypatch.setattr(
+        native_evidence.os,
+        "link",
+        publish_after_concurrent_writer,
+    )
+
+    with pytest.raises(NativeEvidenceError, match="existing.*differs"):
+        finalize_evidence_receipt(
+            release_identity_path=candidate_identity,
+            candidate_receipt_path=candidate_receipt,
+            source_directory=SOURCE_DIRECTORY,
+            repository_root=RELEASE_PACKAGE_ROOT,
+            output=output,
+        )
+    assert raced is True
+    assert output.read_bytes() == concurrent_bytes
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    (
+        (
+            lambda provider: provider.update(unexpected=True),
+            "provider-verification fields are not exact",
+        ),
+        (
+            lambda provider: provider["metadata"]["repository"].update(id=1),
+            "repository is not exact",
+        ),
+        (
+            lambda provider: provider["metadata"]["githubCli"].update(
+                version="2.87.2"
+            ),
+            "CLI identity is not exact",
+        ),
+        (
+            lambda provider: provider["metadata"]["immutableReleases"].update(
+                enabled=False
+            ),
+            "immutable releases were not enabled",
+        ),
+        (
+            lambda provider: provider["metadata"]["release"].update(
+                immutable=False
+            ),
+            "verified-release identity is inconsistent",
+        ),
+        (
+            lambda provider: provider["metadata"]["release"]["assets"][0].update(
+                id=999
+            ),
+            "verified-release asset identity is inconsistent",
+        ),
+        (
+            lambda provider: provider["metadata"]["assetAttestations"].reverse(),
+            "asset-attestation order is not exact",
+        ),
+        (
+            lambda provider: provider["metadata"]["releaseAttestation"][
+                "document"
+            ].update(hostile=True),
+            "result fields are not exact",
+        ),
+        (
+            lambda provider: _rewrite_provider_verified_statements(
+                provider, _replace_release_subject
+            ),
+            "repository/tag/asset subjects are inconsistent",
+        ),
+        (
+            lambda provider: _rewrite_provider_verified_statements(
+                provider, _replace_asset_subject
+            ),
+            "repository/tag/asset subjects are inconsistent",
+        ),
+        (
+            lambda provider: _rewrite_provider_verified_statements(
+                provider, _replace_release_predicate
+            ),
+            "repository/tag predicate is inconsistent",
+        ),
+        (
+            lambda provider: _rewrite_provider_verified_results(
+                provider, _replace_verified_certificate_san
+            ),
+            "verified certificate identity is not exact",
+        ),
+        (
+            lambda provider: _rewrite_provider_verified_results(
+                provider, _replace_verified_identity_policy
+            ),
+            "verified identity shape is not exact",
+        ),
+        (
+            lambda provider: _rewrite_provider_verified_results(
+                provider, _replace_verified_timestamp_uri
+            ),
+            "verified timestamp URI is not exact",
+        ),
+        (
+            lambda provider: _rewrite_provider_verified_results(
+                provider, _replace_verified_timestamp_encoding
+            ),
+            "verified timestamp is not canonical UTC RFC3339Nano",
+        ),
+        (
+            lambda provider: _rewrite_provider_documents(
+                provider, _replace_bundle_url
+            ),
+            "bundle URL is not exact",
+        ),
+        (
+            _replace_one_asset_command_bundle,
+            "differs from the verified release attestation",
+        ),
+    ),
+)
+def test_frozen_receipt_refuses_provider_verification_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation,
+    message: str,
+) -> None:
+    candidate_identity, candidate_receipt, _, _, _ = _prepare_candidate(tmp_path)
+    _install_github_release_fixture(monkeypatch, candidate_receipt)
+    output = tmp_path / "frozen-receipt.json"
+    finalize_evidence_receipt(
+        release_identity_path=candidate_identity,
+        candidate_receipt_path=candidate_receipt,
+        source_directory=SOURCE_DIRECTORY,
+        repository_root=RELEASE_PACKAGE_ROOT,
+        output=output,
+    )
+    document = json.loads(output.read_bytes())
+    provider = document["preservation"]["providerVerification"]
+    mutation(provider)
+    provider["canonicalDigest"] = _digest(
+        release_canonical_json_bytes(provider["metadata"])
+    )
+    output.write_bytes(release_canonical_json_bytes(document))
+    identity = load_native_release_identity(
+        candidate_identity,
+        verify_current_sources=True,
+        source_directory=SOURCE_DIRECTORY,
+    )
+
+    with pytest.raises(NativeReleaseIdentityError, match=message):
+        load_native_evidence_receipt(
+            output,
+            release_identity=identity,
+            verify_current_authority=True,
+            repository_root=RELEASE_PACKAGE_ROOT,
         )
 
 
@@ -1244,13 +2338,19 @@ def test_native_workflow_closes_both_native_platform_evidence_lanes():
 
     assert action_lines
     assert observed_action_pins == CURRENT_NATIVE_ACTION_PINS
+    assert CURRENT_NATIVE_BUILD_PINS["buildxClient"] == {
+        "version": "v0.34.1",
+        "sourceCommit": "e0b0e77d18d3379bc1e0d55f3b37de288d36fe47",
+    }
     assert "services:" not in workflow
     assert "ubuntu-24.04-arm" in workflow
     assert "ubuntu-24.04" in workflow
     assert "setup-qemu" not in workflow
     assert workflow.count("version: v0.34.1") == 2
+    assert "docker buildx version | awk" not in workflow
+    assert workflow.count('test "$(docker buildx version)" =') == 2
     assert workflow.count(
-        "test \"$(docker buildx version | awk '{print $2}')\" = v0.34.1"
+        "e0b0e77d18d3379bc1e0d55f3b37de288d36fe47"
     ) == 2
     assert "test \"$(uname -m)\"" in workflow
     assert workflow.count("--no-cache") >= 4
