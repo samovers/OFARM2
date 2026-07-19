@@ -176,7 +176,8 @@ The security-audit migration establishes a separate, non-tenant lane with:
 - one closed append API and fixed session-user-to-producer/reason mapping;
 - bounded event fields, deterministic retry identity, correlation-digest
   validation, database time, quotas, overflow markers, and bounded query APIs;
-- append-only event evidence and protected disposable quota state;
+- append-only event evidence, visibility-stable access cuts, an event-writer
+  close barrier, and protected disposable quota state that cannot reopen;
 - declared gap markers and an exact empty-store recreation posture; and
 - distinct ingest, control, reader, retention, readiness, and deliberately
   absent recovery/break-glass capabilities.

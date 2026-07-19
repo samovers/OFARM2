@@ -143,7 +143,7 @@ schemas and other repository files are global inputs, not database relations.
 | tenant_capability_key_schedule | Globally governed protected immutable authorization key schedule | One immutable row per V1 HMAC key identity stores the HMAC-SHA-256 verification secret and its fixed validity bounds. Direct relation access is denied; the binder receives only the exact columns needed to verify a named key. Only the hardened identity-control install function may append a row; no runtime role can update, delete, list, or return a secret. |
 | tenant_binding_context | Protected disposable transaction operational metadata | An UNLOGGED migration-owned relation stores the one-use challenge and verified TenantBinding for exactly one database-derived backend identity and full xid8. Exact backend-start/full-transaction matching makes a physically retained row unusable after commit, rollback, backend restart, or pool reuse. Only hardened functions may read or write it; the application role has no table privileges. |
 | operational_security_event | Database-global operational security metadata, explicitly non-tenant | Append-only, bounded pre-tenant failure events plus audit-access, retention, and declared-gap maintenance events for this lane. It carries no tenant_id, tenant_ref, Party/farm/role identity, governed batch, knowledge position, or request-supplied attribution. It lives only in the separately provisioned audit PostgreSQL service's protected `ofarm_security` schema and is never read as tenant history. |
-| operational_security_quota_bucket | Disposable non-tenant operational security control state | One fixed database-time bucket per provisioned producer/component records accepted and overflow counts plus marker state. Only hardened audit functions mutate it. It contains no request, tenant, principal, correlation, or evidence data, cannot authorize anything, and is deleted after its bucket is closed and the corresponding overflow marker commits. |
+| operational_security_quota_bucket | Disposable non-tenant operational security control state | One fixed database-time bucket per provisioned producer/component records accepted and overflow counts plus marker state. Only hardened audit functions mutate it. It contains no request, tenant, principal, correlation, or evidence data and cannot authorize anything. A close holds the event-writer barrier through marker insertion and bucket deletion; every append takes its writer lock before selecting database time, so a delayed append cannot recreate the closed bucket after commit. |
 | schema_migration | Database-global operational metadata | Append-only ledger of version, filename, SHA-256, application/release identity, and applied time. Application access is read-only for readiness. |
 | governed_write_batch | Tenant-owned | Primary identity is (tenant_id, batch_id). It anchors the transaction's command identity and the records, edges, traces, gate entries, and receipts emitted by that command. |
 | kernel_record_reference | Tenant-owned relational enforcement carrier | Normalizes governed references extracted from immutable JSONB payloads without changing those payloads. Owner and tenant targets use composite tenant keys; global-content targets use a distinct constrained lane. |
@@ -325,6 +325,13 @@ producer/component and a database-time bucket. At a threshold it first commits
 `OVERFLOW_STARTED`, then increments only the bounded bucket counter instead of
 appending individual events, and finally the control procedure commits
 `OVERFLOW_ENDED` with a count or `COUNT_UNKNOWN`; there is no silent sampling.
+Every event writer takes a protected relation-level writer lock before deriving
+its database time or bucket. Overflow close takes the mutually exclusive
+transaction-level writer barrier before checking the current bucket and holds
+it through the end marker and bucket deletion. A writer admitted before close
+must therefore commit before its old bucket can close; a writer admitted after
+close selects time only after that close commits and cannot recreate the old
+key.
 Connection limits, statement timeouts, reserved marker capacity, service-level
 CPU/storage limits, and growth alerts are provisioned independently of tenant
 traffic. A compromised producer cannot select or reset its bucket. Exhausting
@@ -346,7 +353,13 @@ Ingest and reader roles receive no table SELECT or COPY privilege. A dedicated
 security-operations service first commits an `AUDIT_ACCESS` intent through its
 separate audit-control transaction, binding the closed purpose, exact bounded
 query function, every argument, database-observed data cut, cursor/page, row and
-byte ceiling, and a five-minute expiry. Only then may its distinct reader
+byte ceiling, and a five-minute expiry. The intent also persists a PostgreSQL
+MVCC snapshot. Every event stores its top-level `xid8`, and the bounded reader
+intersects the timestamp cut with `pg_visible_in_snapshot`; a transaction that
+was in progress at the cut remains excluded after a later commit, and a future
+transaction is outside the snapshot high-water. The snapshot is internal
+control metadata and is not exposed in the event-report result. Only then may
+its distinct reader
 session call that migration-owned function with the committed access event ID;
 the function verifies the exact scope fingerprint before returning that one
 bounded page. Rollback of the read cannot erase the already-committed access
@@ -1468,7 +1481,10 @@ PostgreSQL roles and real ASGI/application topology, not mocks.
    pool, WAL, volume, and latency remain isolated; pressure never changes denial
    into access. Lose acknowledgement for an aggregated event and prove the
    control path marks the bucket `COUNT_UNKNOWN` idempotently instead of
-   retrying a countable append or presenting a double increment as exact.
+   retrying a countable append or presenting a double increment as exact. Hold
+   an append and a close on opposite sides of the minute boundary; prove the
+   event-writer barrier admits exactly one ordering, the close count is final,
+   the old bucket cannot be recreated, and only one `OVERFLOW_ENDED` exists.
 9. Inject cancellation, process exit, connection loss, ambiguous commit, key-
    service failure, relation/disk failure, and whole-audit-service outage before
    and after append acknowledgement. Requests remain denied, timeouts/retries
@@ -1496,7 +1512,11 @@ PostgreSQL roles and real ASGI/application topology, not mocks.
     five-minute expiry or read rollback, and while attempting to widen row/byte
     bounds. Only the exact precommitted page succeeds; rollback cannot erase its
     intent, replay/COPY returns no wider unique data, and a new page/cut requires
-    a new intent. Normal provisioning has no export LOGIN. Exercise break-glass
+    a new intent. Hold an append transaction open while committing an intent;
+    prove the first read excludes it, commit the append, and prove reuse still
+    excludes its top-level XID under the persisted snapshot even though its
+    database timestamp satisfies the wall-clock cut. Normal provisioning has no
+    export LOGIN. Exercise break-glass
     approval, credential expiry/revocation, cumulative bounded export, and
     denial without tenant or HMAC-key access; structural and runtime readiness
     remain false for the whole temporary window, and only dropping the temporary

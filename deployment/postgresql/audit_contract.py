@@ -294,10 +294,18 @@ class SecurityAuditContract:
             },
             "derivationPosture": {
                 "producerAndComponent": "EXACT_SESSION_USER_MAP",
-                "observedAt": "DATABASE_CLOCK",
+                "observedAt": (
+                    "EVENT_WRITER_LOCK_THEN_DATABASE_CLOCK"
+                ),
                 "purgeAfter": "OBSERVED_AT_PLUS_RETENTION",
-                "accessDataCut": "DATABASE_CLOCK",
+                "accessDataCut": (
+                    "DATABASE_CLOCK_AND_TOP_LEVEL_XID8_PG_SNAPSHOT"
+                ),
+                "accessVisibility": "PERSISTED_PG_SNAPSHOT",
                 "accessExpiresAt": "ACCESS_DATA_CUT_PLUS_EXPIRY",
+                "overflowClosure": (
+                    "EVENT_WRITER_BARRIER_THROUGH_CLOSE_COMMIT"
+                ),
             },
             "limits": {
                 "retention": {

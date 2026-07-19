@@ -163,6 +163,7 @@ CREATE TYPE ofarm_security.security_audit_contract_observation AS (
 
 CREATE TABLE ofarm_security.operational_security_event (
     event_id pg_catalog.uuid NOT NULL,
+    event_insert_xid pg_catalog.xid8 NOT NULL,
     observed_at pg_catalog.timestamptz NOT NULL,
     purge_after pg_catalog.timestamptz NOT NULL,
     event_kind pg_catalog.text COLLATE pg_catalog."C" NOT NULL,
@@ -179,6 +180,7 @@ CREATE TABLE ofarm_security.operational_security_event (
     access_purpose pg_catalog.text COLLATE pg_catalog."C",
     access_function_identity pg_catalog.text COLLATE pg_catalog."C",
     access_data_cut pg_catalog.timestamptz,
+    access_visibility_snapshot pg_catalog.pg_snapshot,
     access_cursor_observed_at pg_catalog.timestamptz,
     access_cursor_event_id pg_catalog.uuid,
     access_max_rows pg_catalog.int4,
@@ -265,6 +267,7 @@ CREATE TABLE ofarm_security.operational_security_event (
             access_purpose IS NOT NULL
             AND access_function_identity IS NOT NULL
             AND access_data_cut IS NOT NULL
+            AND access_visibility_snapshot IS NOT NULL
             AND access_max_rows IS NOT NULL
             AND access_max_bytes IS NOT NULL
             AND access_expires_at IS NOT NULL
@@ -366,6 +369,7 @@ CREATE TABLE ofarm_security.operational_security_event (
             access_purpose IS NULL
             AND access_function_identity IS NULL
             AND access_data_cut IS NULL
+            AND access_visibility_snapshot IS NULL
             AND access_cursor_observed_at IS NULL
             AND access_cursor_event_id IS NULL
             AND access_max_rows IS NULL
@@ -527,17 +531,24 @@ CREATE FUNCTION ofarm_security._insert_maintenance_event(
     p_interval_event_count pg_catalog.int8,
     p_interval_count_unknown pg_catalog.bool,
     p_affected_producer pg_catalog.text,
-    p_affected_component pg_catalog.text
+    p_affected_component pg_catalog.text,
+    p_access_visibility_snapshot pg_catalog.pg_snapshot
 ) RETURNS ofarm_security.operational_security_event_identity
 LANGUAGE plpgsql VOLATILE PARALLEL UNSAFE SECURITY INVOKER
 SET search_path = pg_catalog, pg_temp
 AS $maintenance$
 DECLARE
-    v_event_id pg_catalog.uuid := pg_catalog.gen_random_uuid();
-    v_observed_at pg_catalog.timestamptz := pg_catalog.clock_timestamp();
+    v_event_id pg_catalog.uuid;
+    v_event_insert_xid pg_catalog.xid8;
+    v_observed_at pg_catalog.timestamptz;
     v_purge_after pg_catalog.timestamptz;
     v_fingerprint pg_catalog.bytea;
 BEGIN
+    LOCK TABLE ofarm_security.operational_security_event
+        IN ROW EXCLUSIVE MODE;
+    v_event_id := pg_catalog.gen_random_uuid();
+    v_event_insert_xid := pg_catalog.pg_current_xact_id();
+    v_observed_at := pg_catalog.clock_timestamp();
     v_purge_after := v_observed_at + pg_catalog.make_interval(days => 30);
     v_fingerprint := ofarm_security._event_fingerprint(
         VARIADIC ARRAY[
@@ -567,28 +578,35 @@ BEGIN
             pg_catalog.int8send(p_interval_event_count),
             pg_catalog.boolsend(p_interval_count_unknown),
             pg_catalog.convert_to(p_affected_producer, 'UTF8'),
-            pg_catalog.convert_to(p_affected_component, 'UTF8')
+            pg_catalog.convert_to(p_affected_component, 'UTF8'),
+            pg_catalog.convert_to(
+                p_access_visibility_snapshot::pg_catalog.text, 'UTF8'
+            )
         ]::pg_catalog.bytea[]
     );
 
     INSERT INTO ofarm_security.operational_security_event (
-        event_id, observed_at, purge_after, event_kind, producer, component,
+        event_id, event_insert_xid, observed_at, purge_after, event_kind,
+        producer, component,
         reason, correlation_hmac_domain, correlation_hmac_key_version,
         correlation_hmac_value, event_format_identity,
         redaction_policy_identity, retention_policy_identity,
         append_input_fingerprint, access_purpose,
         access_function_identity, access_data_cut,
+        access_visibility_snapshot,
         access_cursor_observed_at, access_cursor_event_id, access_max_rows,
         access_max_bytes, access_expires_at, retention_cutoff,
         retention_deleted_count, interval_start, interval_end,
         interval_event_count, interval_count_unknown, affected_producer,
         affected_component
     ) VALUES (
-        v_event_id, v_observed_at, v_purge_after, p_event_kind,
+        v_event_id, v_event_insert_xid, v_observed_at, v_purge_after,
+        p_event_kind,
         'SECURITY_OPERATIONS_V1', p_component, NULL, NULL, NULL, NULL,
         'OFARM_PRETENANT_SECURITY_EVENT_V1', 'CORRELATION_HMAC_ONLY_V1',
         'SECURITY_DIAGNOSTIC_30D_V1', v_fingerprint, p_access_purpose,
         p_access_function_identity, p_access_data_cut,
+        p_access_visibility_snapshot,
         p_access_cursor_observed_at, p_access_cursor_event_id,
         p_access_max_rows, p_access_max_bytes, p_access_expires_at,
         p_retention_cutoff, p_retention_deleted_count, p_interval_start,
@@ -607,7 +625,7 @@ REVOKE ALL PRIVILEGES ON FUNCTION ofarm_security._insert_maintenance_event(
     pg_catalog.int4, pg_catalog.int8, pg_catalog.timestamptz,
     pg_catalog.timestamptz, pg_catalog.int8, pg_catalog.timestamptz,
     pg_catalog.timestamptz, pg_catalog.int8, pg_catalog.bool,
-    pg_catalog.text, pg_catalog.text
+    pg_catalog.text, pg_catalog.text, pg_catalog.pg_snapshot
 ) FROM PUBLIC;
 
 CREATE FUNCTION ofarm_security.append_pretenant_failure(
@@ -716,6 +734,8 @@ BEGIN
             MESSAGE = 'reason is not allowed for this producer';
     END IF;
 
+    LOCK TABLE ofarm_security.operational_security_event
+        IN ROW EXCLUSIVE MODE;
     v_now := pg_catalog.clock_timestamp();
     v_bucket_start := pg_catalog.date_bin(
         pg_catalog.make_interval(secs => 60),
@@ -769,13 +789,15 @@ BEGIN
 
             v_purge_after := v_now + pg_catalog.make_interval(days => 30);
             INSERT INTO ofarm_security.operational_security_event (
-                event_id, observed_at, purge_after, event_kind, producer,
-                component, reason, correlation_hmac_domain,
+                event_id, event_insert_xid, observed_at, purge_after,
+                event_kind, producer, component, reason,
+                correlation_hmac_domain,
                 correlation_hmac_key_version, correlation_hmac_value,
                 event_format_identity, redaction_policy_identity,
                 retention_policy_identity, append_input_fingerprint
             ) VALUES (
-                p_event_id, v_now, v_purge_after, 'PRE_TENANT_FAILURE',
+                p_event_id, pg_catalog.pg_current_xact_id(), v_now,
+                v_purge_after, 'PRE_TENANT_FAILURE',
                 v_producer, v_component, p_reason, p_correlation_hmac_domain,
                 p_correlation_hmac_key_version, p_correlation_hmac,
                 'OFARM_PRETENANT_SECURITY_EVENT_V1',
@@ -821,7 +843,7 @@ BEGIN
             'OVERFLOW_STARTED', 'AUDIT_CONTROL', NULL, NULL, NULL, NULL,
             NULL, NULL, NULL, NULL, NULL, NULL, v_bucket_start,
             v_bucket_start + pg_catalog.make_interval(secs => 60),
-            NULL, false, v_producer, v_component
+            NULL, false, v_producer, v_component, NULL
         );
         UPDATE ofarm_security.operational_security_quota_bucket
         SET overflow_started_at = v_marker.observed_at
@@ -878,6 +900,7 @@ SET search_path = pg_catalog, pg_temp
 AS $access_intent$
 DECLARE
     v_data_cut pg_catalog.timestamptz;
+    v_visibility_snapshot pg_catalog.pg_snapshot;
     v_expires_at pg_catalog.timestamptz;
     v_event ofarm_security.operational_security_event_identity;
 BEGIN
@@ -923,12 +946,13 @@ BEGIN
     END IF;
 
     v_data_cut := pg_catalog.clock_timestamp();
+    v_visibility_snapshot := pg_catalog.pg_current_snapshot();
     v_expires_at := v_data_cut + pg_catalog.make_interval(secs => 300);
     v_event := ofarm_security._insert_maintenance_event(
         'AUDIT_ACCESS', 'AUDIT_CONTROL', p_purpose, p_function_identity,
         v_data_cut, p_cursor_observed_at, p_cursor_event_id, p_max_rows,
         p_max_bytes, v_expires_at, NULL, NULL, NULL, NULL, NULL, NULL,
-        NULL, NULL
+        NULL, NULL, v_visibility_snapshot
     );
     RETURN ROW(v_event.event_id, v_data_cut, v_expires_at)::
         ofarm_security.audit_access_intent_result;
@@ -981,7 +1005,7 @@ BEGIN
         'AUDIT_GAP', 'AUDIT_CONTROL', NULL, NULL, NULL, NULL, NULL,
         NULL, NULL, NULL, NULL, NULL, p_interval_start, p_interval_end,
         CASE WHEN p_count_unknown THEN NULL ELSE p_event_count END,
-        p_count_unknown, NULL, NULL
+        p_count_unknown, NULL, NULL, NULL
     );
     RETURN v_event;
 END
@@ -1060,6 +1084,8 @@ BEGIN
         RAISE EXCEPTION USING ERRCODE = '42501',
             MESSAGE = 'session user is not the audit control operator';
     END IF;
+    LOCK TABLE ofarm_security.operational_security_event
+        IN SHARE ROW EXCLUSIVE MODE;
     v_now_bucket := pg_catalog.date_bin(
         pg_catalog.make_interval(secs => 60), pg_catalog.clock_timestamp(),
         '2000-01-01 00:00:00+00'::pg_catalog.timestamptz
@@ -1113,7 +1139,7 @@ BEGIN
         p_bucket_start + pg_catalog.make_interval(secs => 60),
         CASE WHEN v_bucket.count_unknown
             THEN NULL ELSE v_bucket.overflow_event_count END,
-        v_bucket.count_unknown, p_producer, p_component
+        v_bucket.count_unknown, p_producer, p_component, NULL
     );
     DELETE FROM ofarm_security.operational_security_quota_bucket
     WHERE producer = p_producer
@@ -1218,6 +1244,9 @@ BEGIN
         FROM ofarm_security.operational_security_event AS e
         WHERE e.purge_after > v_now
           AND e.observed_at <= v_access.access_data_cut
+          AND pg_catalog.pg_visible_in_snapshot(
+              e.event_insert_xid, v_access.access_visibility_snapshot
+          )
           AND (
               p_cursor_observed_at IS NULL
               OR (e.observed_at, e.event_id) <
@@ -1377,7 +1406,7 @@ BEGIN
     v_event := ofarm_security._insert_maintenance_event(
         'AUDIT_RETENTION', 'AUDIT_RETENTION', NULL, NULL, NULL, NULL,
         NULL, NULL, NULL, NULL, v_cutoff, v_deleted_count, NULL, NULL,
-        NULL, NULL, NULL, NULL
+        NULL, NULL, NULL, NULL, NULL
     );
     RETURN ROW(
         v_cutoff, v_deleted_count, v_event.event_id, v_event.observed_at,
@@ -1502,13 +1531,15 @@ BEGIN
       AND attribute.attnum > 0
       AND NOT attribute.attisdropped;
     IF v_names IS DISTINCT FROM ARRAY[
-        'event_id', 'observed_at', 'purge_after', 'event_kind', 'producer',
-        'component', 'reason', 'correlation_hmac_domain',
+        'event_id', 'event_insert_xid', 'observed_at', 'purge_after',
+        'event_kind', 'producer', 'component', 'reason',
+        'correlation_hmac_domain',
         'correlation_hmac_key_version', 'correlation_hmac_value',
         'event_format_identity', 'redaction_policy_identity',
         'retention_policy_identity', 'append_input_fingerprint',
         'access_purpose', 'access_function_identity', 'access_data_cut',
-        'access_cursor_observed_at', 'access_cursor_event_id',
+        'access_visibility_snapshot', 'access_cursor_observed_at',
+        'access_cursor_event_id',
         'access_max_rows', 'access_max_bytes', 'access_expires_at',
         'retention_cutoff', 'retention_deleted_count', 'interval_start',
         'interval_end', 'interval_event_count', 'interval_count_unknown',
@@ -1868,7 +1899,7 @@ BEGIN
       AND pg_catalog.sha256(
             pg_catalog.convert_to(routine.prosrc, 'UTF8')
           ) = pg_catalog.decode(
-            '6ac214552a3d7e50c1f2832fa5342dda9ba2fefe96bedd2b4273e35a3769311c',
+            '27890717ec304d2aeda00aac949f3df6f9e2dc2ca32210e167b0d8f24ea0111a',
             'hex'
           );
     IF v_count <> 1 THEN
@@ -3103,7 +3134,7 @@ BEGIN
     INTO v_catalog_fingerprint
     FROM catalog_entry;
     IF v_catalog_fingerprint <>
-            'sha256:04a95986f494a3d8a414035f17cbb2da5b5f1699c325004d2700299dc9c07652' THEN
+            'sha256:9ed925e98884275d977a568e8ed74427adc6b3a1ca69e50446a5231eefdfb4a0' THEN
         v_differences := v_differences + 1;
     END IF;
 
@@ -3145,7 +3176,7 @@ BEGIN
 
     RETURN ROW(
         'ofarm.security-audit-database-contract.v1',
-        'sha256:470afbbdd8fdf6c9c0d1d610198f18724487a161bf0e34213cafd73224161fd7',
+        'sha256:ce588cc29603eb69bcd18b231dc3f1ea131f82ca8350cd917f6de22f0a605839',
         'OFARM_PRETENANT_SECURITY_EVENT_V1',
         'CORRELATION_HMAC_ONLY_V1',
         'SECURITY_DIAGNOSTIC_30D_V1',

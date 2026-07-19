@@ -163,6 +163,72 @@ def _role_dsn(state: dict[str, object], role: str) -> str:
     )
 
 
+def _wait_for_event_relation_lock(
+    state: dict[str, object], application_name: str, mode: str
+) -> None:
+    deadline = monotonic() + 5
+    with psycopg.connect(
+        state["target_admin_dsn"], autocommit=True
+    ) as admin:
+        while monotonic() < deadline:
+            waiting = admin.execute(
+                """
+                SELECT 1
+                FROM pg_catalog.pg_locks AS lock
+                JOIN pg_catalog.pg_stat_activity AS activity
+                  ON activity.pid = lock.pid
+                WHERE activity.application_name = %s
+                  AND lock.locktype = 'relation'
+                  AND lock.relation =
+                      'ofarm_security.operational_security_event'::
+                          pg_catalog.regclass
+                  AND lock.mode = %s
+                  AND NOT lock.granted
+                """,
+                (application_name, mode),
+            ).fetchone()
+            if waiting is not None:
+                return
+            sleep(0.025)
+    raise AssertionError(
+        f"{application_name} did not wait for {mode} on the event relation"
+    )
+
+
+def _wait_for_blocked_event_writer(
+    state: dict[str, object], application_name: str
+) -> None:
+    deadline = monotonic() + 15
+    with psycopg.connect(
+        state["target_admin_dsn"], autocommit=True
+    ) as admin:
+        while monotonic() < deadline:
+            waiting = admin.execute(
+                """
+                SELECT 1
+                FROM pg_catalog.pg_stat_activity AS activity
+                JOIN pg_catalog.pg_locks AS lock
+                  ON lock.pid = activity.pid
+                WHERE activity.application_name = %s
+                  AND activity.state = 'active'
+                  AND activity.wait_event_type = 'Lock'
+                  AND lock.locktype = 'relation'
+                  AND lock.relation =
+                      'ofarm_security.operational_security_event'::
+                          pg_catalog.regclass
+                  AND lock.mode = 'RowExclusiveLock'
+                  AND lock.granted
+                """,
+                (application_name,),
+            ).fetchone()
+            if waiting is not None:
+                return
+            sleep(0.025)
+    raise AssertionError(
+        f"{application_name} did not block while holding the event writer lock"
+    )
+
+
 @pytest.fixture(scope="module")
 def migrated_audit_service():
     admin_dsn = os.environ.get(AUDIT_ADMIN_ENV)
@@ -228,10 +294,10 @@ def test_authoritative_audit_migration_is_one_exact_initial_set():
     assert SECURITY_AUDIT_CONTRACT.digest in source
     assert SECURITY_AUDIT_PROVISIONING_SPEC.digest in source
     assert migration.source_sha256 == \
-        "sha256:7feab04d98f1ceb1610ab59b99eedb2b027c40e4ef23f9c8ee2344e042b325b8"
-    assert migration.byte_length == 134_670
+        "sha256:20cf3829723f957fcfb528804d586087d1c06b9e52cdcd2e950779b043e28831"
+    assert migration.byte_length == 136_051
     assert migration_set.digest == \
-        "sha256:2cf7ce338d8f9a79b57a6423b4b8c2d33c2dbce2a8f5c8687b33c27323ff00c8"
+        "sha256:e5113d62c03e78b37c1efa5a145999b4b119537d319d830d992dfaf6dc4f7344"
     assert migration_set.prefix_digest(1) == migration_set.digest
 
 
@@ -297,11 +363,11 @@ def test_authoritative_audit_migration_has_closed_carriers_and_limits():
     for identity in BACKEND_STATISTICS_ROUTINE_IDENTITIES:
         assert f"'{identity}'" in source
     assert (
-        "6ac214552a3d7e50c1f2832fa5342dda9ba2fefe96bedd2b4273e35a3769311c"
+        "27890717ec304d2aeda00aac949f3df6f9e2dc2ca32210e167b0d8f24ea0111a"
         in source
     )
     assert (
-        "sha256:04a95986f494a3d8a414035f17cbb2da5b5f1699c325004d2700299dc9c07652"
+        "sha256:9ed925e98884275d977a568e8ed74427adc6b3a1ca69e50446a5231eefdfb4a0"
         in source
     )
     assert "jsonb" not in persisted_audit_tables
@@ -1145,6 +1211,72 @@ def test_bounded_reader_requires_an_equal_committed_access_intent(
     assert all(row[2] > access[1] for row in rows)
 
 
+def test_access_intent_snapshot_excludes_append_committed_after_the_cut(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    open_event_id = uuid4()
+
+    with psycopg.connect(
+        _role_dsn(state, "ofarm_security_authentication_producer_login")
+    ) as producer:
+        open_append = producer.execute(
+            """
+            SELECT * FROM ofarm_security.append_pretenant_failure(
+                %s, 'CREDENTIAL_MISSING', %s,
+                'OFARM_PRETENANT_CORRELATION_V1', 1
+            )
+            """,
+            (open_event_id, bytes.fromhex("41" * 32)),
+        ).fetchone()
+        with psycopg.connect(
+            _role_dsn(state, "ofarm_security_audit_control_login"),
+            autocommit=True,
+        ) as control:
+            access = control.execute(
+                """
+                SELECT * FROM ofarm_security.commit_audit_access_intent(
+                    'OPERATIONAL_DIAGNOSTIC_QUERY_V1', %s,
+                    NULL, NULL, 256, 1048576
+                )
+                """,
+                (QUERY_IDENTITY,),
+            ).fetchone()
+
+        assert open_append[0] == open_event_id
+        assert open_append[1] <= access[1]
+        with psycopg.connect(
+            _role_dsn(state, "ofarm_security_audit_reader_login"),
+            autocommit=True,
+        ) as reader:
+            first = reader.execute(
+                """
+                SELECT * FROM ofarm_security.query_operational_security_events(
+                    %s, NULL, NULL, 256, 1048576
+                )
+                """,
+                (access[0],),
+            ).fetchall()
+        assert open_event_id not in {row[0] for row in first}
+
+        producer.commit()
+
+        with psycopg.connect(
+            _role_dsn(state, "ofarm_security_audit_reader_login"),
+            autocommit=True,
+        ) as reader:
+            reused = reader.execute(
+                """
+                SELECT * FROM ofarm_security.query_operational_security_events(
+                    %s, NULL, NULL, 256, 1048576
+                )
+                """,
+                (access[0],),
+            ).fetchall()
+        assert reused == first
+        assert open_event_id not in {row[0] for row in reused}
+
+
 def test_wrong_producer_reasons_and_cross_capabilities_refuse(
     migrated_audit_service,
 ):
@@ -1620,7 +1752,7 @@ def test_quota_overflow_is_explicit_bounded_and_count_unknown_closes_once(
             SELECT ofarm_security._insert_maintenance_event(
                 'OVERFLOW_STARTED', 'AUDIT_CONTROL',
                 NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-                NULL, NULL, %s, %s, NULL, false, %s, %s
+                NULL, NULL, %s, %s, NULL, false, %s, %s, NULL
             )
             """,
             (
@@ -1687,6 +1819,200 @@ def test_quota_overflow_is_explicit_bounded_and_count_unknown_closes_once(
         ).fetchone()[0]
     assert ended == (None, True)
     assert bucket_exists == 0
+
+
+def test_overflow_close_waits_for_old_bucket_append_and_cannot_reopen(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    producer_name = "AUTHENTICATION_BOUNDARY_V1"
+    component = "AUTHENTICATION"
+    _reset_quota_state(state, producer_name, component)
+    event_id = uuid4()
+    token = uuid4().hex
+    producer_application = "issue174-overflow-append-" + token
+    control_application = "issue174-overflow-close-" + token
+    producer_dsn = psycopg.conninfo.make_conninfo(
+        _role_dsn(state, "ofarm_security_authentication_producer_login"),
+        application_name=producer_application,
+    )
+    control_dsn = psycopg.conninfo.make_conninfo(
+        _role_dsn(state, "ofarm_security_audit_control_login"),
+        application_name=control_application,
+    )
+
+    with psycopg.connect(
+        state["target_admin_dsn"], autocommit=True
+    ) as admin:
+        original_source = admin.execute(
+            """
+            SELECT routine.prosrc
+            FROM pg_catalog.pg_proc AS routine
+            WHERE routine.oid =
+                'ofarm_security.append_pretenant_failure('
+                'uuid, text, bytea, text, integer)'::pg_catalog.regprocedure
+            """
+        ).fetchone()[0]
+        clock_marker = "    v_now := pg_catalog.clock_timestamp();"
+        assert original_source.count(clock_marker) == 1
+        test_source = original_source.replace(
+            clock_marker,
+            "    v_now := pg_catalog.current_setting('ofarm.test_now')::\n"
+            "        pg_catalog.timestamptz;\n"
+            "    PERFORM singleton\n"
+            "    FROM ofarm_security._test_overflow_close_barrier\n"
+            "    WHERE singleton\n"
+            "    FOR SHARE;",
+        )
+        old_bucket = admin.execute(
+            """
+            SELECT pg_catalog.date_bin(
+                pg_catalog.make_interval(secs => 60),
+                pg_catalog.clock_timestamp(),
+                '2000-01-01 00:00:00+00'::pg_catalog.timestamptz
+            ) - pg_catalog.make_interval(secs => 120)
+            """
+        ).fetchone()[0]
+        started = admin.execute(
+            """
+            SELECT * FROM ofarm_security._insert_maintenance_event(
+                'OVERFLOW_STARTED', 'AUDIT_CONTROL',
+                NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+                NULL, NULL, %s, %s, NULL, false, %s, %s, NULL
+            )
+            """,
+            (
+                old_bucket,
+                old_bucket + timedelta(minutes=1),
+                producer_name,
+                component,
+            ),
+        ).fetchone()
+        admin.execute(
+            """
+            INSERT INTO ofarm_security.operational_security_quota_bucket (
+                producer, component, bucket_start, accepted_event_count,
+                overflow_event_count, overflow_started_at, count_unknown
+            ) VALUES (%s, %s, %s, 1024, 9, %s, false)
+            """,
+            (producer_name, component, old_bucket, started[1]),
+        )
+        admin.execute(
+            """
+            CREATE TABLE ofarm_security._test_overflow_close_barrier (
+                singleton pg_catalog.bool PRIMARY KEY CHECK (singleton)
+            )
+            """
+        )
+        admin.execute(
+            "ALTER TABLE ofarm_security._test_overflow_close_barrier "
+            "OWNER TO ofarm_security_audit_owner"
+        )
+        admin.execute(
+            "INSERT INTO ofarm_security._test_overflow_close_barrier "
+            "VALUES (true)"
+        )
+        _replace_pretenant_append_source(admin, test_source)
+
+    def append_to_old_bucket() -> tuple[object, ...]:
+        with psycopg.connect(producer_dsn, autocommit=True) as producer:
+            producer.execute("SET lock_timeout = '10s'")
+            producer.execute(
+                "SELECT pg_catalog.set_config('ofarm.test_now', %s, false)",
+                ((old_bucket + timedelta(seconds=30)).isoformat(),),
+            )
+            return producer.execute(
+                """
+                SELECT * FROM ofarm_security.append_pretenant_failure(
+                    %s, 'CREDENTIAL_MISSING', %s,
+                    'OFARM_PRETENANT_CORRELATION_V1', 1
+                )
+                """,
+                (event_id, bytes.fromhex("43" * 32)),
+            ).fetchone()
+
+    def close_old_bucket() -> tuple[object, ...]:
+        with psycopg.connect(control_dsn, autocommit=True) as control:
+            control.execute("SET lock_timeout = '10s'")
+            return control.execute(
+                """
+                SELECT *
+                FROM ofarm_security.close_overflow_bucket(%s, %s, %s)
+                """,
+                (producer_name, component, old_bucket),
+            ).fetchone()
+
+    try:
+        with psycopg.connect(state["target_admin_dsn"]) as locker:
+            locker.execute(
+                """
+                SELECT singleton
+                FROM ofarm_security._test_overflow_close_barrier
+                WHERE singleton
+                FOR UPDATE
+                """
+            ).fetchone()
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                appended_future = executor.submit(append_to_old_bucket)
+                _wait_for_blocked_event_writer(state, producer_application)
+                closed_future = executor.submit(close_old_bucket)
+                _wait_for_event_relation_lock(
+                    state, control_application, "ShareRowExclusiveLock"
+                )
+                assert not appended_future.done()
+                assert not closed_future.done()
+                locker.commit()
+                appended = appended_future.result(timeout=10)
+                closed = closed_future.result(timeout=10)
+
+        assert appended == (None, None, None, False, old_bucket, False)
+        with psycopg.connect(
+            _role_dsn(state, "ofarm_security_audit_control_login"),
+            autocommit=True,
+        ) as control:
+            retry_close = control.execute(
+                """
+                SELECT *
+                FROM ofarm_security.close_overflow_bucket(%s, %s, %s)
+                """,
+                (producer_name, component, old_bucket),
+            ).fetchone()
+        assert retry_close == closed
+
+        with psycopg.connect(state["target_admin_dsn"]) as admin:
+            old_bucket_count = admin.execute(
+                """
+                SELECT pg_catalog.count(*)
+                FROM ofarm_security.operational_security_quota_bucket
+                WHERE producer = %s AND component = %s AND bucket_start = %s
+                """,
+                (producer_name, component, old_bucket),
+            ).fetchone()[0]
+            ended_rows = admin.execute(
+                """
+                SELECT interval_event_count, interval_count_unknown
+                FROM ofarm_security.operational_security_event
+                WHERE event_kind = 'OVERFLOW_ENDED'
+                  AND affected_producer = %s
+                  AND affected_component = %s
+                  AND interval_start = %s
+                """,
+                (producer_name, component, old_bucket),
+            ).fetchall()
+        assert old_bucket_count == 0
+        assert ended_rows == [(10, False)]
+    finally:
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            try:
+                _replace_pretenant_append_source(admin, original_source)
+            finally:
+                admin.execute(
+                    "DROP TABLE IF EXISTS "
+                    "ofarm_security._test_overflow_close_barrier"
+                )
+        _reset_quota_state(state, producer_name, component)
 
 
 def test_bounded_query_enforces_exact_row_and_encoded_byte_ceilings(

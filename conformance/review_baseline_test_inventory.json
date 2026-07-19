@@ -1846,6 +1846,11 @@
       "sourcePath": "kernel/tests/test_postgresql_audit_contract.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_access_intent_snapshot_excludes_append_committed_after_the_cut",
+      "sourceModule": "kernel.tests.test_postgresql_audit_migration",
+      "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_authoritative_audit_migration_has_closed_carriers_and_limits",
       "sourceModule": "kernel.tests.test_postgresql_audit_migration",
       "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
@@ -1917,6 +1922,11 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_migrated_audit_structure_observes_exact_ready_contract",
+      "sourceModule": "kernel.tests.test_postgresql_audit_migration",
+      "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_overflow_close_waits_for_old_bucket_append_and_cannot_reopen",
       "sourceModule": "kernel.tests.test_postgresql_audit_migration",
       "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
     },
@@ -5446,8 +5456,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "6724271812b5cc6dff452dca373cee329a1c78246620658cda71a7996e900fdb",
-  "entryCount": 1089,
+  "entriesSha256": "1fafbf1aba9874b3ddba8a69d9f2bef97111185938d06c4a41d90bd8b3fa1f44",
+  "entryCount": 1091,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

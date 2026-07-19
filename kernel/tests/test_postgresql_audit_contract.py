@@ -197,10 +197,12 @@ def test_public_function_identities_and_capability_grants_are_exact():
     )
     assert manifest["derivationPosture"] == {
         "producerAndComponent": "EXACT_SESSION_USER_MAP",
-        "observedAt": "DATABASE_CLOCK",
+        "observedAt": "EVENT_WRITER_LOCK_THEN_DATABASE_CLOCK",
         "purgeAfter": "OBSERVED_AT_PLUS_RETENTION",
-        "accessDataCut": "DATABASE_CLOCK",
+        "accessDataCut": "DATABASE_CLOCK_AND_TOP_LEVEL_XID8_PG_SNAPSHOT",
+        "accessVisibility": "PERSISTED_PG_SNAPSHOT",
         "accessExpiresAt": "ACCESS_DATA_CUT_PLUS_EXPIRY",
+        "overflowClosure": "EVENT_WRITER_BARRIER_THROUGH_CLOSE_COMMIT",
     }
 
 
@@ -246,7 +248,7 @@ def test_manifest_is_canonical_ascii_and_has_domain_separated_golden_digest():
     assert json.loads(without_digest) == contract.manifest_without_digest()
     assert json.loads(canonical) == contract.manifest()
     assert contract.digest == \
-        "sha256:470afbbdd8fdf6c9c0d1d610198f18724487a161bf0e34213cafd73224161fd7"
+        "sha256:ce588cc29603eb69bcd18b231dc3f1ea131f82ca8350cd917f6de22f0a605839"
     assert contract.digest == "sha256:" + hashlib.sha256(
         SECURITY_AUDIT_CONTRACT_DIGEST_POLICY.encode("ascii")
         + b"\x00"
