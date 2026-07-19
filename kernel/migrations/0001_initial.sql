@@ -2729,6 +2729,8 @@ AS 'DECLARE
         observed_routines pg_catalog.text[];
         observed_roles pg_catalog.text[];
         observed_memberships pg_catalog.text[];
+        observed_database_inventory pg_catalog.text[];
+        observed_schema_inventory pg_catalog.text[];
         observed_relation_inventory pg_catalog.text;
         observed_provisioning_digest pg_catalog.text;
         observed_service_identity pg_catalog.text;
@@ -2761,6 +2763,8 @@ AS 'DECLARE
         invalid_relation_acl_count pg_catalog.int8;
         column_acl_count pg_catalog.int8;
         invalid_column_acl_count pg_catalog.int8;
+        invalid_cluster_database_access_count pg_catalog.int8;
+        unexpected_global_object_count pg_catalog.int8;
         role_name pg_catalog.text;
         relation_name pg_catalog.text;
     BEGIN
@@ -2850,6 +2854,144 @@ AS 'DECLARE
         IF database_exact IS DISTINCT FROM true THEN
             differences := pg_catalog.array_append(
                 differences, ''database equality posture differs''
+            );
+        END IF;
+
+        SELECT pg_catalog.array_agg(
+                   database.datname::pg_catalog.text
+                   ORDER BY database.datname::pg_catalog.text
+                            COLLATE pg_catalog."C"
+               )
+          INTO observed_database_inventory
+          FROM pg_catalog.pg_database AS database;
+        IF observed_database_inventory IS DISTINCT FROM ARRAY[
+            ''ofarm_tenant'', ''postgres'', ''template0'', ''template1''
+        ]::pg_catalog.text[] THEN
+            differences := pg_catalog.array_append(
+                differences, ''cluster database inventory differs''
+            );
+        END IF;
+
+        SELECT pg_catalog.array_agg(
+                   namespace.nspname::pg_catalog.text
+                   ORDER BY namespace.nspname::pg_catalog.text
+                            COLLATE pg_catalog."C"
+               )
+          INTO observed_schema_inventory
+          FROM pg_catalog.pg_namespace AS namespace;
+        IF observed_schema_inventory IS DISTINCT FROM ARRAY[
+            ''information_schema'',
+            ''ofarm'',
+            ''ofarm_crypto'',
+            ''ofarm_infrastructure'',
+            ''pg_catalog'',
+            ''pg_toast'',
+            ''public''
+        ]::pg_catalog.text[] THEN
+            differences := pg_catalog.array_append(
+                differences, ''database schema inventory differs''
+            );
+        END IF;
+
+        SELECT pg_catalog.count(*)
+          INTO invalid_cluster_database_access_count
+          FROM pg_catalog.pg_roles AS role
+          CROSS JOIN pg_catalog.pg_database AS database
+         WHERE role.rolname OPERATOR(pg_catalog.~) ''^ofarm_''
+           AND role.rolcanlogin
+           AND (
+                pg_catalog.has_database_privilege(
+                    role.oid, database.oid, ''CONNECT''
+                ) IS DISTINCT FROM (database.datname = ''ofarm_tenant'')
+                OR pg_catalog.has_database_privilege(
+                    role.oid, database.oid, ''TEMPORARY''
+                ) IS DISTINCT FROM false
+           );
+        IF invalid_cluster_database_access_count <> 0 THEN
+            differences := pg_catalog.array_append(
+                differences, ''OFARM LOGIN cross-database access differs''
+            );
+        END IF;
+
+        SELECT pg_catalog.count(*)
+          INTO unexpected_global_object_count
+          FROM pg_catalog.pg_extension AS extension
+          JOIN pg_catalog.pg_namespace AS namespace
+            ON namespace.oid = extension.extnamespace
+          JOIN pg_catalog.pg_roles AS owner
+            ON owner.oid = extension.extowner
+         WHERE extension.extname = ''ofarm_ed25519''
+           AND extension.extversion = ''1.0''
+           AND namespace.nspname = ''ofarm_crypto''
+           AND owner.rolname = ''ofarm_crypto_installer''
+           AND NOT extension.extrelocatable
+           AND extension.extconfig IS NULL
+           AND extension.extcondition IS NULL;
+        IF unexpected_global_object_count <> 1 THEN
+            differences := pg_catalog.array_append(
+                differences, ''native verifier extension identity differs''
+            );
+        END IF;
+
+        SELECT
+            (SELECT pg_catalog.count(*)
+               FROM pg_catalog.pg_extension AS extension
+               JOIN pg_catalog.pg_namespace AS namespace
+                 ON namespace.oid = extension.extnamespace
+               JOIN pg_catalog.pg_roles AS owner
+                 ON owner.oid = extension.extowner
+              WHERE NOT (
+                    extension.extname = ''plpgsql''
+                    AND extension.extversion = ''1.0''
+                    AND namespace.nspname = ''pg_catalog''
+                    AND owner.rolsuper
+                    AND NOT extension.extrelocatable
+                    AND extension.extconfig IS NULL
+                    AND extension.extcondition IS NULL
+              )
+                AND NOT (
+                    extension.extname = ''ofarm_ed25519''
+                    AND extension.extversion = ''1.0''
+                    AND namespace.nspname = ''ofarm_crypto''
+                    AND owner.rolname = ''ofarm_crypto_installer''
+                    AND NOT extension.extrelocatable
+                    AND extension.extconfig IS NULL
+                    AND extension.extcondition IS NULL
+              ))
+            + (SELECT pg_catalog.count(*)
+                 FROM pg_catalog.pg_event_trigger)
+            + (SELECT pg_catalog.count(*)
+                 FROM pg_catalog.pg_publication)
+            + (SELECT pg_catalog.count(*)
+                 FROM pg_catalog.pg_subscription)
+            + (SELECT pg_catalog.count(*)
+                 FROM pg_catalog.pg_foreign_data_wrapper)
+            + (SELECT pg_catalog.count(*)
+                 FROM pg_catalog.pg_foreign_server)
+            + (SELECT pg_catalog.count(*)
+                 FROM pg_catalog.pg_largeobject_metadata)
+            + (SELECT pg_catalog.count(*)
+                 FROM pg_catalog.pg_transform)
+            + (SELECT pg_catalog.count(*)
+                 FROM pg_catalog.pg_cast AS governed_cast
+                WHERE governed_cast.oid >= 16384)
+            + (SELECT pg_catalog.count(*)
+                 FROM pg_catalog.pg_am AS access_method
+                WHERE access_method.oid >= 16384)
+            + (SELECT pg_catalog.count(*)
+                 FROM pg_catalog.pg_language AS language
+                WHERE language.oid >= 16384)
+            + (SELECT pg_catalog.count(*)
+                 FROM pg_catalog.pg_tablespace AS tablespace
+                WHERE tablespace.spcname NOT IN (''pg_default'', ''pg_global''))
+            + (SELECT pg_catalog.count(*)
+                 FROM pg_catalog.pg_replication_slots)
+            + (SELECT pg_catalog.count(*)
+                 FROM pg_catalog.pg_prepared_xacts)
+          INTO unexpected_global_object_count;
+        IF unexpected_global_object_count <> 0 THEN
+            differences := pg_catalog.array_append(
+                differences, ''unexpected database or cluster object is present''
             );
         END IF;
 
@@ -4175,10 +4317,20 @@ AS 'DECLARE
                     routine.provolatile,
                     routine.proparallel,
                     routine.proretset,
+                    routine.pronargs,
+                    routine.pronargdefaults,
+                    pg_catalog.pg_get_function_arguments(routine.oid),
+                    pg_catalog.pg_get_function_identity_arguments(routine.oid),
                     pg_catalog.pg_get_function_result(routine.oid),
                     routine.proconfig,
                     routine.procost,
                     routine.prorows,
+                    CASE WHEN routine.prosupport = 0 THEN NULL
+                         ELSE routine.prosupport::pg_catalog.regprocedure::pg_catalog.text
+                    END,
+                    routine.probin,
+                    routine.prosqlbody IS NULL,
+                    routine.proacl IS NULL,
                     CASE WHEN namespace.nspname = ''ofarm''
                               AND routine.proname = ''verify_tenant_structure''
                               AND pg_catalog.pg_get_function_identity_arguments(
@@ -4726,7 +4878,7 @@ AS 'DECLARE
           INTO observed_structural_catalog_digest
           FROM catalog_entry;
         IF observed_structural_catalog_digest <>
-                ''sha256:19c387e9677811047679d349349895cf3213637fe462b2257a2408775469f26e'' THEN
+                ''sha256:4f83efabac8f4039f9ee678fc8c6f0491daac73a2c0aa08f9aa62bc36f6a2d67'' THEN
             differences := pg_catalog.array_append(
                 differences, ''complete tenant catalog fingerprint differs''
             );

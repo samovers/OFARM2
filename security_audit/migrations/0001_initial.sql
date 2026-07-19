@@ -1445,6 +1445,97 @@ BEGIN
             MESSAGE = 'session user cannot verify the audit structure';
     END IF;
 
+    SELECT pg_catalog.array_agg(
+               database.datname::pg_catalog.text
+               ORDER BY database.datname::pg_catalog.text
+                        COLLATE pg_catalog."C"
+           )
+    INTO v_names
+    FROM pg_catalog.pg_database AS database;
+    IF v_names IS DISTINCT FROM ARRAY[
+        'ofarm_security_audit', 'postgres', 'template0', 'template1'
+    ]::pg_catalog.text[] THEN
+        v_differences := v_differences + 1;
+    END IF;
+
+    SELECT pg_catalog.array_agg(
+               namespace.nspname::pg_catalog.text
+               ORDER BY namespace.nspname::pg_catalog.text
+                        COLLATE pg_catalog."C"
+           )
+    INTO v_names
+    FROM pg_catalog.pg_namespace AS namespace;
+    IF v_names IS DISTINCT FROM ARRAY[
+        'information_schema',
+        'ofarm_infrastructure',
+        'ofarm_security',
+        'pg_catalog',
+        'pg_toast',
+        'public'
+    ]::pg_catalog.text[] THEN
+        v_differences := v_differences + 1;
+    END IF;
+
+    SELECT pg_catalog.count(*)
+    INTO v_count
+    FROM pg_catalog.pg_roles AS role
+    CROSS JOIN pg_catalog.pg_database AS database
+    WHERE role.rolname OPERATOR(pg_catalog.~) '^ofarm_'
+      AND role.rolcanlogin
+      AND (
+          pg_catalog.has_database_privilege(
+              role.oid, database.oid, 'CONNECT'
+          ) IS DISTINCT FROM (database.datname = 'ofarm_security_audit')
+          OR pg_catalog.has_database_privilege(
+              role.oid, database.oid, 'TEMPORARY'
+          ) IS DISTINCT FROM false
+      );
+    IF v_count <> 0 THEN
+        v_differences := v_differences + 1;
+    END IF;
+
+    SELECT
+        (SELECT pg_catalog.count(*)
+         FROM pg_catalog.pg_extension AS extension
+         JOIN pg_catalog.pg_namespace AS namespace
+           ON namespace.oid = extension.extnamespace
+         JOIN pg_catalog.pg_roles AS owner
+           ON owner.oid = extension.extowner
+         WHERE NOT (
+             extension.extname = 'plpgsql'
+             AND extension.extversion = '1.0'
+             AND namespace.nspname = 'pg_catalog'
+             AND owner.rolsuper
+             AND NOT extension.extrelocatable
+             AND extension.extconfig IS NULL
+             AND extension.extcondition IS NULL
+         ))
+        + (SELECT pg_catalog.count(*) FROM pg_catalog.pg_event_trigger)
+        + (SELECT pg_catalog.count(*) FROM pg_catalog.pg_publication)
+        + (SELECT pg_catalog.count(*) FROM pg_catalog.pg_subscription)
+        + (SELECT pg_catalog.count(*) FROM pg_catalog.pg_foreign_data_wrapper)
+        + (SELECT pg_catalog.count(*) FROM pg_catalog.pg_foreign_server)
+        + (SELECT pg_catalog.count(*) FROM pg_catalog.pg_largeobject_metadata)
+        + (SELECT pg_catalog.count(*) FROM pg_catalog.pg_transform)
+        + (SELECT pg_catalog.count(*)
+           FROM pg_catalog.pg_cast AS governed_cast
+           WHERE governed_cast.oid >= 16384)
+        + (SELECT pg_catalog.count(*)
+           FROM pg_catalog.pg_am AS access_method
+           WHERE access_method.oid >= 16384)
+        + (SELECT pg_catalog.count(*)
+           FROM pg_catalog.pg_language AS language
+           WHERE language.oid >= 16384)
+        + (SELECT pg_catalog.count(*)
+           FROM pg_catalog.pg_tablespace AS tablespace
+           WHERE tablespace.spcname NOT IN ('pg_default', 'pg_global'))
+        + (SELECT pg_catalog.count(*) FROM pg_catalog.pg_replication_slots)
+        + (SELECT pg_catalog.count(*) FROM pg_catalog.pg_prepared_xacts)
+    INTO v_count;
+    IF v_count <> 0 THEN
+        v_differences := v_differences + 1;
+    END IF;
+
     SELECT pg_catalog.array_agg(class.relname::pg_catalog.text
             ORDER BY class.relname::pg_catalog.text)
     INTO v_names

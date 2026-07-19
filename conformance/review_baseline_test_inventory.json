@@ -2911,12 +2911,52 @@
       "sourcePath": "kernel/tests/test_postgresql_structural_compatibility.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_structural_compatibility.py::test_public_structural_observation_refuses_global_foreign_objects[security-audit]",
+      "sourceModule": "kernel.tests.test_postgresql_structural_compatibility",
+      "sourcePath": "kernel/tests/test_postgresql_structural_compatibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_structural_compatibility.py::test_public_structural_observation_refuses_global_foreign_objects[tenant]",
+      "sourceModule": "kernel.tests.test_postgresql_structural_compatibility",
+      "sourcePath": "kernel/tests/test_postgresql_structural_compatibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_structural_compatibility.py::test_public_structural_observation_refuses_maintenance_database_access[security-audit]",
+      "sourceModule": "kernel.tests.test_postgresql_structural_compatibility",
+      "sourcePath": "kernel/tests/test_postgresql_structural_compatibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_structural_compatibility.py::test_public_structural_observation_refuses_maintenance_database_access[tenant]",
+      "sourceModule": "kernel.tests.test_postgresql_structural_compatibility",
+      "sourcePath": "kernel/tests/test_postgresql_structural_compatibility.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_structural_compatibility.py::test_public_structural_observation_refuses_post_migration_rogue_collation[security-audit]",
       "sourceModule": "kernel.tests.test_postgresql_structural_compatibility",
       "sourcePath": "kernel/tests/test_postgresql_structural_compatibility.py"
     },
     {
       "nodeid": "kernel/tests/test_postgresql_structural_compatibility.py::test_public_structural_observation_refuses_post_migration_rogue_collation[tenant]",
+      "sourceModule": "kernel.tests.test_postgresql_structural_compatibility",
+      "sourcePath": "kernel/tests/test_postgresql_structural_compatibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_structural_compatibility.py::test_public_structural_observation_refuses_rogue_database_access[security-audit]",
+      "sourceModule": "kernel.tests.test_postgresql_structural_compatibility",
+      "sourcePath": "kernel/tests/test_postgresql_structural_compatibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_structural_compatibility.py::test_public_structural_observation_refuses_rogue_database_access[tenant]",
+      "sourceModule": "kernel.tests.test_postgresql_structural_compatibility",
+      "sourcePath": "kernel/tests/test_postgresql_structural_compatibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_structural_compatibility.py::test_public_structural_observation_refuses_rogue_schema_and_grant[security-audit]",
+      "sourceModule": "kernel.tests.test_postgresql_structural_compatibility",
+      "sourcePath": "kernel/tests/test_postgresql_structural_compatibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_structural_compatibility.py::test_public_structural_observation_refuses_rogue_schema_and_grant[tenant]",
       "sourceModule": "kernel.tests.test_postgresql_structural_compatibility",
       "sourcePath": "kernel/tests/test_postgresql_structural_compatibility.py"
     },
@@ -2932,6 +2972,11 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_structural_compatibility.py::test_structural_observation_fixes_catalog_output_settings[tenant]",
+      "sourceModule": "kernel.tests.test_postgresql_structural_compatibility",
+      "sourcePath": "kernel/tests/test_postgresql_structural_compatibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_structural_compatibility.py::test_tenant_structural_observation_requires_native_verifier_extension",
       "sourceModule": "kernel.tests.test_postgresql_structural_compatibility",
       "sourcePath": "kernel/tests/test_postgresql_structural_compatibility.py"
     },
@@ -5486,8 +5531,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "01dc354b1feee1b6fa0896387fe607c0970bd2696f1844566a940d1cb38044f6",
-  "entryCount": 1097,
+  "entriesSha256": "78dc387e7d98420a7b47425a21c9e7373918251bdf3012007686d1a1af613e39",
+  "entryCount": 1106,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

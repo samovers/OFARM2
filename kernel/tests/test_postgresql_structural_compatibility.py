@@ -525,3 +525,234 @@ def test_public_structural_observation_refuses_post_migration_rogue_collation(
             audit_structural_dsn=structural_dsn
         )
         assert restored.service_identity == SECURITY_AUDIT_SERVICE.identity
+
+
+def _lane_routes(
+    structural_pair: _StructuralPair,
+    lane: str,
+) -> tuple[str, str, str, str]:
+    if lane == "tenant":
+        return (
+            structural_pair.tenant_admin_dsn,
+            structural_pair.tenant_target_admin_dsn,
+            structural_pair.tenant_readiness_dsn,
+            "ofarm_app",
+        )
+    return (
+        structural_pair.audit_admin_dsn,
+        structural_pair.audit_target_admin_dsn,
+        structural_pair.audit_readiness_dsn,
+        "ofarm_security_audit_readiness_login",
+    )
+
+
+def _verify_lane(structural_dsn: str, lane: str) -> object:
+    if lane == "tenant":
+        return verify_tenant_structural_compatibility(
+            tenant_structural_dsn=structural_dsn
+        )
+    return verify_security_audit_structural_compatibility(
+        audit_structural_dsn=structural_dsn
+    )
+
+
+@pytest.mark.parametrize("lane", ("tenant", "security-audit"))
+def test_public_structural_observation_refuses_rogue_schema_and_grant(
+    structural_pair: _StructuralPair,
+    lane: str,
+):
+    _admin_dsn, target_dsn, structural_dsn, granted_role = _lane_routes(
+        structural_pair, lane
+    )
+    rogue_schema = sql.Identifier("ofarm_hostile_schema")
+    rogue_table = sql.SQL("{}.{}").format(
+        rogue_schema,
+        sql.Identifier("reachable_data"),
+    )
+    try:
+        with psycopg.connect(target_dsn, autocommit=True) as admin:
+            admin.execute(sql.SQL("CREATE SCHEMA {}").format(rogue_schema))
+            admin.execute(
+                sql.SQL("CREATE TABLE {} (value pg_catalog.int4)").format(rogue_table)
+            )
+            admin.execute(
+                sql.SQL("GRANT USAGE ON SCHEMA {} TO {}").format(
+                    rogue_schema,
+                    sql.Identifier(granted_role),
+                )
+            )
+            admin.execute(
+                sql.SQL("GRANT SELECT ON {} TO {}").format(
+                    rogue_table,
+                    sql.Identifier(granted_role),
+                )
+            )
+
+        with pytest.raises(PostgreSQLVerificationError):
+            _verify_lane(structural_dsn, lane)
+    finally:
+        with psycopg.connect(target_dsn, autocommit=True) as admin:
+            admin.execute(
+                sql.SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(rogue_schema)
+            )
+
+    restored = _verify_lane(structural_dsn, lane)
+    expected_identity = (
+        TENANT_SERVICE.identity if lane == "tenant" else SECURITY_AUDIT_SERVICE.identity
+    )
+    assert restored.service_identity == expected_identity
+
+
+@pytest.mark.parametrize("lane", ("tenant", "security-audit"))
+def test_public_structural_observation_refuses_rogue_database_access(
+    structural_pair: _StructuralPair,
+    lane: str,
+):
+    admin_dsn, _target_dsn, structural_dsn, login_role = _lane_routes(
+        structural_pair, lane
+    )
+    rogue_database = sql.Identifier("ofarm_hostile_database")
+    try:
+        with psycopg.connect(admin_dsn, autocommit=True) as admin:
+            admin.execute(sql.SQL("CREATE DATABASE {}").format(rogue_database))
+            access = admin.execute(
+                """
+                SELECT pg_catalog.has_database_privilege(
+                           %s, 'ofarm_hostile_database', 'CONNECT'
+                       ),
+                       pg_catalog.has_database_privilege(
+                           %s, 'ofarm_hostile_database', 'TEMPORARY'
+                       )
+                """,
+                (login_role, login_role),
+            ).fetchone()
+        assert access == (True, True)
+
+        with pytest.raises(PostgreSQLVerificationError):
+            _verify_lane(structural_dsn, lane)
+    finally:
+        with psycopg.connect(admin_dsn, autocommit=True) as admin:
+            admin.execute(sql.SQL("DROP DATABASE IF EXISTS {}").format(rogue_database))
+
+    restored = _verify_lane(structural_dsn, lane)
+    expected_identity = (
+        TENANT_SERVICE.identity if lane == "tenant" else SECURITY_AUDIT_SERVICE.identity
+    )
+    assert restored.service_identity == expected_identity
+
+
+@pytest.mark.parametrize("lane", ("tenant", "security-audit"))
+def test_public_structural_observation_refuses_maintenance_database_access(
+    structural_pair: _StructuralPair,
+    lane: str,
+):
+    admin_dsn, _target_dsn, structural_dsn, login_role = _lane_routes(
+        structural_pair, lane
+    )
+    try:
+        with psycopg.connect(admin_dsn, autocommit=True) as admin:
+            admin.execute(
+                sql.SQL("GRANT CONNECT, TEMPORARY ON DATABASE postgres TO {}").format(
+                    sql.Identifier(login_role)
+                )
+            )
+
+        with pytest.raises(PostgreSQLVerificationError):
+            _verify_lane(structural_dsn, lane)
+    finally:
+        with psycopg.connect(admin_dsn, autocommit=True) as admin:
+            admin.execute(
+                sql.SQL(
+                    "REVOKE CONNECT, TEMPORARY ON DATABASE postgres FROM {}"
+                ).format(sql.Identifier(login_role))
+            )
+
+    restored = _verify_lane(structural_dsn, lane)
+    expected_identity = (
+        TENANT_SERVICE.identity if lane == "tenant" else SECURITY_AUDIT_SERVICE.identity
+    )
+    assert restored.service_identity == expected_identity
+
+
+@pytest.mark.parametrize("lane", ("tenant", "security-audit"))
+def test_public_structural_observation_refuses_global_foreign_objects(
+    structural_pair: _StructuralPair,
+    lane: str,
+):
+    _admin_dsn, target_dsn, structural_dsn, _login_role = _lane_routes(
+        structural_pair, lane
+    )
+    try:
+        with psycopg.connect(target_dsn, autocommit=True) as admin:
+            admin.execute("CREATE FOREIGN DATA WRAPPER ofarm_hostile_fdw")
+            admin.execute(
+                "CREATE SERVER ofarm_hostile_server "
+                "FOREIGN DATA WRAPPER ofarm_hostile_fdw"
+            )
+
+        with pytest.raises(PostgreSQLVerificationError):
+            _verify_lane(structural_dsn, lane)
+    finally:
+        with psycopg.connect(target_dsn, autocommit=True) as admin:
+            admin.execute("DROP SERVER IF EXISTS ofarm_hostile_server")
+            admin.execute("DROP FOREIGN DATA WRAPPER IF EXISTS ofarm_hostile_fdw")
+
+    restored = _verify_lane(structural_dsn, lane)
+    expected_identity = (
+        TENANT_SERVICE.identity if lane == "tenant" else SECURITY_AUDIT_SERVICE.identity
+    )
+    assert restored.service_identity == expected_identity
+
+
+def test_tenant_structural_observation_requires_native_verifier_extension(
+    structural_pair: _StructuralPair,
+):
+    try:
+        with psycopg.connect(
+            structural_pair.tenant_target_admin_dsn,
+            autocommit=True,
+        ) as admin:
+            admin.execute("DROP EXTENSION ofarm_ed25519")
+            admin.execute("DROP SCHEMA ofarm_crypto")
+
+        with pytest.raises(PostgreSQLVerificationError):
+            verify_tenant_structural_compatibility(
+                tenant_structural_dsn=structural_pair.tenant_readiness_dsn
+            )
+    finally:
+        with psycopg.connect(
+            structural_pair.tenant_target_admin_dsn,
+            autocommit=True,
+        ) as admin:
+            schema_present = admin.execute(
+                "SELECT pg_catalog.to_regnamespace('ofarm_crypto') IS NOT NULL"
+            ).fetchone()[0]
+            if not schema_present:
+                admin.execute(
+                    "CREATE SCHEMA ofarm_crypto AUTHORIZATION ofarm_crypto_installer"
+                )
+            extension_present = admin.execute(
+                """
+                SELECT pg_catalog.count(*) = 1
+                FROM pg_catalog.pg_extension
+                WHERE extname = 'ofarm_ed25519'
+                """
+            ).fetchone()[0]
+            if not extension_present:
+                admin.execute("SET ROLE ofarm_crypto_installer")
+                admin.execute("CREATE EXTENSION ofarm_ed25519 VERSION '1.0'")
+                admin.execute("RESET ROLE")
+            admin.execute("REVOKE ALL PRIVILEGES ON SCHEMA ofarm_crypto FROM PUBLIC")
+            admin.execute("GRANT USAGE ON SCHEMA ofarm_crypto TO ofarm_binder")
+            admin.execute(
+                """
+                GRANT EXECUTE ON FUNCTION ofarm_crypto.ed25519_verify(
+                    pg_catalog.bytea, pg_catalog.bytea, pg_catalog.bytea
+                ) TO ofarm_binder
+                """
+            )
+
+    restored = verify_tenant_structural_compatibility(
+        tenant_structural_dsn=structural_pair.tenant_readiness_dsn
+    )
+    assert restored.service_identity == TENANT_SERVICE.identity

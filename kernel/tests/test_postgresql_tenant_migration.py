@@ -2657,6 +2657,16 @@ def test_complete_catalog_fingerprint_refuses_function_constraint_index_policy_a
         AS 'SELECT true'
         """,
         """
+        CREATE OR REPLACE FUNCTION ofarm.valid_ascii_id(
+            value pg_catalog.text DEFAULT ''::pg_catalog.text
+        )
+        RETURNS pg_catalog.bool
+        LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE SECURITY INVOKER
+        SET search_path = pg_catalog, pg_temp
+        AS 'SELECT pg_catalog.octet_length(value) BETWEEN 1 AND 255
+                   AND value OPERATOR(pg_catalog.~) ''^[A-Za-z0-9._:-]+$'''
+        """,
+        """
         ALTER TABLE ofarm.kernel_record
         DROP CONSTRAINT kernel_record_lane_check
         """,
@@ -2681,7 +2691,7 @@ def test_complete_catalog_fingerprint_refuses_function_constraint_index_policy_a
             assert pristine[0] is True
             assert pristine[2] == 0
             assert pristine[3] == (
-                "sha256:19c387e9677811047679d349349895cf3213637fe462b2257a2408775469f26e"
+                "sha256:4f83efabac8f4039f9ee678fc8c6f0491daac73a2c0aa08f9aa62bc36f6a2d67"
             )
         finally:
             migrator.rollback()
@@ -3094,7 +3104,7 @@ def test_readiness_observation_is_complete_after_commit(
     assert row[1] == TENANT_CONTEXT_CONTRACT.digest
     assert row[2] == 0
     assert row[3] == (
-        "sha256:19c387e9677811047679d349349895cf3213637fe462b2257a2408775469f26e"
+        "sha256:4f83efabac8f4039f9ee678fc8c6f0491daac73a2c0aa08f9aa62bc36f6a2d67"
     )
     assert row[5] == TENANT_PROVISIONING_SPEC.digest
     assert row[6] == TENANT_SERVICE.identity

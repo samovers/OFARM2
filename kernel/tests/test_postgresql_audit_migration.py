@@ -297,10 +297,10 @@ def test_authoritative_audit_migration_is_one_exact_initial_set():
     assert SECURITY_AUDIT_CONTRACT.digest in source
     assert SECURITY_AUDIT_PROVISIONING_SPEC.digest in source
     assert migration.source_sha256 == \
-        "sha256:f46106b2f062dae25df1d5b8bf76f75538b0470bc18fb6ee6b36efa320295885"
-    assert migration.byte_length == 142_793
+        "sha256:d807461a22b98c107c9881637b13399763fd06a85b6a5c38e198a3e5deda783d"
+    assert migration.byte_length == 146_365
     assert migration_set.digest == \
-        "sha256:80ff56fb0ccb5959c2a75500cc47d7cccda026ef6f09f9ae138c89ade98dccf5"
+        "sha256:67213ae5890c8907f3cbadb2fdb6cb397c14d023f94d34205bfea24ed09c476b"
     assert migration_set.prefix_digest(1) == migration_set.digest
 
 
