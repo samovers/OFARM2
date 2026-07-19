@@ -71,3 +71,35 @@ END
 $test$;
 
 DROP TABLE ofarm_ed25519_large_input;
+
+CREATE TABLE ofarm_ed25519_admitted_toast (
+    signed_bytes bytea NOT NULL
+) WITH (toast_tuple_target = 128);
+
+INSERT INTO ofarm_ed25519_admitted_toast (signed_bytes)
+VALUES (decode(repeat('a5', 8192), 'hex'));
+
+DO $test$
+DECLARE
+    physical_size integer;
+    logical_size integer;
+BEGIN
+    SELECT pg_column_size(signed_bytes), octet_length(signed_bytes)
+      INTO physical_size, logical_size
+      FROM ofarm_ed25519_admitted_toast;
+
+    IF logical_size <> 8192 OR physical_size >= logical_size THEN
+        RAISE EXCEPTION 'admitted input did not exercise compressed detoast';
+    END IF;
+
+    IF (SELECT ofarm_crypto.ed25519_verify(
+            decode(repeat('00', 32), 'hex'),
+            signed_bytes,
+            decode(repeat('00', 64), 'hex')
+        ) FROM ofarm_ed25519_admitted_toast) THEN
+        RAISE EXCEPTION 'invalid admitted toasted input was accepted';
+    END IF;
+END
+$test$;
+
+DROP TABLE ofarm_ed25519_admitted_toast;

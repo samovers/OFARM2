@@ -68,10 +68,13 @@ def test_libsodium_source_and_reproducibility_controls_are_exact() -> None:
     assert "SOURCE_DATE_EPOCH=0" in CONTAINERFILE
     assert "make -j1" in CONTAINERFILE
     assert "with_llvm=no" in CONTAINERFILE
+    assert CONTAINERFILE.count("-Wextra -Werror") >= 3
     assert "touch --date='@0'" in CONTAINERFILE
     assert "--disable-shared" in CONTAINERFILE
     assert "--enable-static" in CONTAINERFILE
     assert "readelf --dynamic" in CONTAINERFILE
+    assert "grep --extended-regexp 'lib(asan|ubsan)'" in CONTAINERFILE
+    assert "grep --fixed-strings 'OFARM test-only'" in CONTAINERFILE
 
 
 def test_docker_context_copy_is_an_exact_source_allowlist() -> None:
@@ -90,6 +93,7 @@ def test_docker_context_copy_is_an_exact_source_allowlist() -> None:
         "ofarm_ed25519.exports",
         "ofarm_ed25519_core.c",
         "ofarm_ed25519_core.h",
+        "ofarm_ed25519_fault_test.sql",
         "ofarm_ed25519_harness.c",
         "ofarm_ed25519_live_test.sql",
     ):
@@ -97,11 +101,12 @@ def test_docker_context_copy_is_an_exact_source_allowlist() -> None:
 
 
 def test_sanitizer_target_is_closed_and_runs_both_suites() -> None:
-    assert "FROM build-inputs AS sanitizer" in CONTAINERFILE
+    assert "FROM build-inputs AS sanitizer-build" in CONTAINERFILE
+    assert "FROM postgres-runtime AS sanitizer" in CONTAINERFILE
     assert re.search(r"address\|undefined\) ;;", CONTAINERFILE)
     assert "SANITIZER must be exactly address or undefined" in CONTAINERFILE
     sanitizer_section = CONTAINERFILE.split(
-        "FROM build-inputs AS sanitizer", maxsplit=1
+        "FROM build-inputs AS sanitizer-build", maxsplit=1
     )[1].split("FROM --platform=$TARGETPLATFORM postgres@", maxsplit=1)[0]
     assert "make -j1 check" in sanitizer_section
     assert "--disable-asm" in sanitizer_section
@@ -109,6 +114,17 @@ def test_sanitizer_target_is_closed_and_runs_both_suites() -> None:
     assert "-fsanitize=${SANITIZER}" in sanitizer_section
     assert "ofarm_ed25519_core.c ofarm_ed25519_harness.c" in sanitizer_section
     assert "/build/ofarm_ed25519_harness_sanitized" in sanitizer_section
+    assert (
+        'OFARM_EXTRA_CFLAGS="-Wextra -Werror ${SANITIZER_FLAGS}"'
+        in sanitizer_section
+    )
+    assert "OFARM_EXTRA_LDFLAGS=\"${SANITIZER_FLAGS}\"" in sanitizer_section
+    sanitizer_live = CONTAINERFILE.split(
+        "FROM postgres-runtime AS sanitizer", maxsplit=1
+    )[1].split("FROM --platform=$TARGETPLATFORM postgres@", maxsplit=1)[0]
+    assert "LD_PRELOAD=/opt/ofarm-sanitizer/lib/libasan.so" in sanitizer_live
+    assert "--file=/tmp/ofarm_ed25519_live_test.sql" in sanitizer_live
+    assert "pg_ctl" in sanitizer_live
 
 
 def test_shared_core_and_harness_cover_the_hostile_contract() -> None:
@@ -153,7 +169,7 @@ def test_wrapper_refuses_raw_oversize_before_any_detoast() -> None:
     )
 
     raw_gate = wrapper.index("raw_bytea_length_may_fit(public_key_datum")
-    first_detoast = wrapper.index("PG_GETARG_BYTEA_PP(0)")
+    first_detoast = wrapper.index("detoast_bytea(public_key_datum, 0)")
     assert "toast_raw_datum_size(datum)" in wrapper
     assert "maximum_payload_length + VARHDRSZ" in wrapper
     assert raw_gate < first_detoast
@@ -163,6 +179,70 @@ def test_wrapper_refuses_raw_oversize_before_any_detoast() -> None:
     assert "inline-short RFC 8032 vector" in live_test
     assert "toast_tuple_target = 128" in live_test
     assert live_test.count("oversized ") == 3
+    assert "admitted input did not exercise compressed detoast" in live_test
+
+
+def test_failure_mapping_is_selective_and_live_exercised() -> None:
+    wrapper = (EXTENSION_ROOT / "ofarm_ed25519.c").read_text(encoding="ascii")
+    core = (EXTENSION_ROOT / "ofarm_ed25519_core.c").read_text(encoding="ascii")
+    fault_test = (EXTENSION_ROOT / "ofarm_ed25519_fault_test.sql").read_text(
+        encoding="ascii"
+    )
+
+    assert wrapper.count("PG_CATCH") == 1
+    assert "geterrcode() != ERRCODE_OUT_OF_MEMORY" in wrapper
+    assert "PG_RE_THROW()" in wrapper
+    assert "CopyErrorData" not in wrapper
+    assert wrapper.count("ERRCODE_SYSTEM_ERROR") == 1
+    assert (
+        wrapper.count("OFARM Ed25519 verifier infrastructure failure") == 1
+    )
+    assert "public_key_valid != 1" in core
+    assert "signature_r_valid != 1" in core
+    assert "verified = 7" in core
+
+    assert "FROM extension-build AS failure-semantics-build" in CONTAINERFILE
+    assert "FROM postgres-runtime AS failure-semantics" in CONTAINERFILE
+    for fault in (
+        "SODIUM_INIT",
+        "UNEXPECTED_VERIFY_RESULT",
+        "DETOAST_OOM",
+        "DETOAST_CANCEL",
+        "DETOAST_TIMEOUT",
+        "DETOAST_TRANSACTION",
+        "DETOAST_STORAGE",
+    ):
+        assert f"OFARM_ED25519_TEST_FAULT_{fault}" in CONTAINERFILE
+    assert "= '7'" in CONTAINERFILE
+
+    for state, message in (
+        ("58000", "OFARM Ed25519 verifier infrastructure failure"),
+        ("57014", "OFARM test-only cancellation"),
+        ("57014", "OFARM test-only statement timeout"),
+        ("40001", "OFARM test-only transaction failure"),
+        ("58030", "OFARM test-only storage failure"),
+    ):
+        assert f"'{state}'" in fault_test
+        assert message in fault_test
+    for diagnostic in (
+        "PG_EXCEPTION_DETAIL",
+        "PG_EXCEPTION_HINT",
+        "SCHEMA_NAME",
+        "TABLE_NAME",
+        "COLUMN_NAME",
+        "CONSTRAINT_NAME",
+    ):
+        assert diagnostic in fault_test
+
+
+def test_test_only_objects_cannot_reach_the_default_runtime_stage() -> None:
+    final_stage = CONTAINERFILE.rsplit(
+        "FROM --platform=$TARGETPLATFORM postgres@", maxsplit=1
+    )[1]
+    assert "COPY --from=live-test /opt/ofarm-final-root/ /" in final_stage
+    assert "ofarm-test-only" not in final_stage
+    assert "ofarm-sanitizer" not in final_stage
+    assert "OFARM_ED25519_TEST_" not in final_stage
 
 
 def test_sql_and_elf_surfaces_remain_exact() -> None:

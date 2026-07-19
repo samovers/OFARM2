@@ -103,7 +103,7 @@ RUN cc \
  && make clean \
  && make -j1 \
       PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config \
-      PG_CFLAGS='-ffile-prefix-map=/build=. -fdebug-prefix-map=/build=.' \
+      PG_CFLAGS='-Wextra -Werror -ffile-prefix-map=/build=. -fdebug-prefix-map=/build=.' \
       with_llvm=no \
  && make -j1 \
       PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config \
@@ -114,8 +114,12 @@ RUN cc \
       'Pg_magic_func _PG_init ofarm_ed25519_verify pg_finfo_ofarm_ed25519_verify ' \
  && ! readelf --dynamic /usr/lib/postgresql/17/lib/ofarm_ed25519.so \
       | grep --fixed-strings 'libsodium' \
+ && ! readelf --dynamic /usr/lib/postgresql/17/lib/ofarm_ed25519.so \
+      | grep --extended-regexp 'lib(asan|ubsan)' \
  && ! nm -D /usr/lib/postgresql/17/lib/ofarm_ed25519.so \
       | grep --extended-regexp ' (crypto_|randombytes_|sodium_)' \
+ && ! strings /usr/lib/postgresql/17/lib/ofarm_ed25519.so \
+      | grep --fixed-strings 'OFARM test-only' \
  && touch --date='@0' \
       /usr/lib/postgresql/17/lib/ofarm_ed25519.so \
       /usr/share/postgresql/17/extension/ofarm_ed25519.control \
@@ -132,6 +136,57 @@ RUN cc \
       /opt/ofarm-final-root/usr/share/postgresql/17/extension/ \
  && find /opt/ofarm-final-root -exec touch --date='@0' {} +
 
+FROM extension-build AS failure-semantics-build
+RUN set -eu; \
+    install --directory /opt/ofarm-test-only \
+ && build_fault() { \
+      output="$1"; \
+      fault_macro="$2"; \
+      make clean; \
+      make -j1 \
+        PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config \
+        SODIUM_PREFIX=/opt/ofarm-libsodium \
+        OFARM_TEST_CPPFLAGS="-DOFARM_ED25519_TEST_BUILD -D${fault_macro}" \
+        OFARM_EXTRA_CFLAGS='-Wextra -Werror' \
+        with_llvm=no; \
+      install --mode=0755 \
+        ofarm_ed25519.so "/opt/ofarm-test-only/${output}.so"; \
+    }; \
+    build_fault ofarm_ed25519_fault_sodium \
+      OFARM_ED25519_TEST_FAULT_SODIUM_INIT \
+ && build_fault ofarm_ed25519_fault_unexpected \
+      OFARM_ED25519_TEST_FAULT_UNEXPECTED_VERIFY_RESULT \
+ && build_fault ofarm_ed25519_fault_oom \
+      OFARM_ED25519_TEST_FAULT_DETOAST_OOM \
+ && build_fault ofarm_ed25519_fault_cancel \
+      OFARM_ED25519_TEST_FAULT_DETOAST_CANCEL \
+ && build_fault ofarm_ed25519_fault_timeout \
+      OFARM_ED25519_TEST_FAULT_DETOAST_TIMEOUT \
+ && build_fault ofarm_ed25519_fault_transaction \
+      OFARM_ED25519_TEST_FAULT_DETOAST_TRANSACTION \
+ && build_fault ofarm_ed25519_fault_storage \
+      OFARM_ED25519_TEST_FAULT_DETOAST_STORAGE \
+ && test "$(find /opt/ofarm-test-only -type f -name '*.so' | wc -l)" = '7' \
+ && for object in /opt/ofarm-test-only/*.so; do \
+      test "$(nm -D --defined-only "${object}" \
+        | awk '{print $3}' | LC_ALL=C sort | tr '\n' ' ')" = \
+        'Pg_magic_func _PG_init ofarm_ed25519_verify pg_finfo_ofarm_ed25519_verify '; \
+    done
+
+FROM postgres-runtime AS failure-semantics
+COPY --from=failure-semantics-build /opt/ofarm-test-only/ /opt/ofarm-test-only/
+COPY ofarm_ed25519_fault_test.sql /tmp/ofarm_ed25519_fault_test.sql
+RUN chown postgres:postgres /tmp/ofarm_ed25519_fault_test.sql
+USER postgres
+RUN initdb --no-sync --auth=trust --pgdata=/tmp/ofarm-ed25519-fault-data \
+ && pg_ctl --pgdata=/tmp/ofarm-ed25519-fault-data \
+      --options="-c listen_addresses='' -c unix_socket_directories=/tmp" \
+      --wait start \
+ && psql --host=/tmp --dbname=postgres \
+      --file=/tmp/ofarm_ed25519_fault_test.sql \
+ && pg_ctl --pgdata=/tmp/ofarm-ed25519-fault-data \
+      --mode=immediate --wait stop
+
 FROM postgres-runtime AS live-test
 COPY --from=extension-build /opt/ofarm-final-root/ /
 COPY --from=extension-build /opt/ofarm-final-root/ /opt/ofarm-final-root/
@@ -147,10 +202,11 @@ RUN initdb --no-sync --auth=trust --pgdata=/tmp/ofarm-ed25519-test-data \
  && pg_ctl --pgdata=/tmp/ofarm-ed25519-test-data \
       --mode=immediate --wait stop
 
-FROM build-inputs AS sanitizer
+FROM build-inputs AS sanitizer-build
 ARG SANITIZER
 ARG TARGETARCH
-RUN case "${SANITIZER}" in \
+RUN set -eu; \
+    case "${SANITIZER}" in \
       address|undefined) ;; \
       *) echo 'SANITIZER must be exactly address or undefined' >&2; exit 64 ;; \
     esac \
@@ -186,7 +242,70 @@ RUN case "${SANITIZER}" in \
       -o /build/ofarm_ed25519_harness_sanitized \
  && ASAN_OPTIONS='abort_on_error=1:detect_leaks=1:halt_on_error=1:strict_string_checks=1' \
       UBSAN_OPTIONS='halt_on_error=1:print_stacktrace=1' \
-      /build/ofarm_ed25519_harness_sanitized
+      /build/ofarm_ed25519_harness_sanitized \
+ && make clean \
+ && make -j1 \
+      PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config \
+      SODIUM_PREFIX=/opt/ofarm-libsodium-sanitized \
+      OFARM_EXTRA_CFLAGS="-Wextra -Werror ${SANITIZER_FLAGS}" \
+      OFARM_EXTRA_LDFLAGS="${SANITIZER_FLAGS}" \
+      with_llvm=no \
+ && install --directory \
+      /opt/ofarm-sanitized-root/usr/lib/postgresql/17/lib \
+      /opt/ofarm-sanitized-root/usr/share/postgresql/17/extension \
+      /opt/ofarm-sanitizer/lib \
+ && install --mode=0755 \
+      ofarm_ed25519.so \
+      /opt/ofarm-sanitized-root/usr/lib/postgresql/17/lib/ofarm_ed25519.so \
+ && install --mode=0644 \
+      ofarm_ed25519.control ofarm_ed25519--1.0.sql \
+      /opt/ofarm-sanitized-root/usr/share/postgresql/17/extension/ \
+ && copy_runtime() { \
+      requested="$1"; \
+      source_path="$(cc -print-file-name="${requested}")"; \
+      soname="$(objdump --private-headers "${source_path}" \
+        | awk '$1 == "SONAME" {print $2}')"; \
+      test -n "${soname}"; \
+      cp --dereference \
+        "${source_path}" "/opt/ofarm-sanitizer/lib/${soname}"; \
+      chmod 0755 "/opt/ofarm-sanitizer/lib/${soname}"; \
+      ln --symbolic "${soname}" "/opt/ofarm-sanitizer/lib/${requested}"; \
+    }; \
+    case "${SANITIZER}" in \
+      address) copy_runtime libasan.so ;; \
+      undefined) \
+        copy_runtime libubsan.so; \
+        copy_runtime libstdc++.so; \
+        ;; \
+    esac
+
+FROM postgres-runtime AS sanitizer
+ARG SANITIZER
+ENV LD_LIBRARY_PATH=/opt/ofarm-sanitizer/lib
+COPY --from=sanitizer-build /opt/ofarm-sanitized-root/ /
+COPY --from=sanitizer-build /opt/ofarm-sanitizer/ /opt/ofarm-sanitizer/
+COPY ofarm_ed25519_live_test.sql /tmp/ofarm_ed25519_live_test.sql
+RUN chown postgres:postgres /tmp/ofarm_ed25519_live_test.sql
+USER postgres
+RUN set -eu; \
+    case "${SANITIZER}" in \
+      address) \
+        export LD_PRELOAD=/opt/ofarm-sanitizer/lib/libasan.so; \
+        export ASAN_OPTIONS='abort_on_error=1:detect_leaks=0:halt_on_error=1:strict_string_checks=1' \
+        ;; \
+      undefined) \
+        export UBSAN_OPTIONS='halt_on_error=1:print_stacktrace=1' \
+        ;; \
+      *) echo 'SANITIZER must be exactly address or undefined' >&2; exit 64 ;; \
+    esac \
+ && initdb --no-sync --auth=trust --pgdata=/tmp/ofarm-ed25519-sanitizer-data \
+ && pg_ctl --pgdata=/tmp/ofarm-ed25519-sanitizer-data \
+      --options="-c listen_addresses='' -c unix_socket_directories=/tmp" \
+      --wait start \
+ && psql --host=/tmp --dbname=postgres \
+      --file=/tmp/ofarm_ed25519_live_test.sql \
+ && pg_ctl --pgdata=/tmp/ofarm-ed25519-sanitizer-data \
+      --mode=immediate --wait stop
 
 FROM --platform=$TARGETPLATFORM postgres@sha256:5f050f770b427fbd477edee6c3968a72e5c6be97e050a7e368b2b74a9494a285
 COPY --from=live-test /opt/ofarm-final-root/ /

@@ -46,8 +46,11 @@ separate evidence objects and are not part of that byte comparison.
 
 The dedicated sanitizer target accepts only `address` or `undefined`. Each
 selection rebuilds the same pinned libsodium source with that sanitizer, runs
-libsodium's own test suite, then compiles and runs the shared verifier core and
-standalone hostile-input harness:
+libsodium's own test suite, compiles and runs the shared verifier core and
+standalone hostile-input harness, then builds an instrumented test-only copy of
+the extension and loads that copy into the pinned PostgreSQL runtime. The live
+SQL calls the wrapper with inline, compressed, and TOAST-backed values, so the
+argument-size and detoast paths execute under the selected sanitizer:
 
 ```sh
 docker build --file Containerfile --target sanitizer \
@@ -64,6 +67,22 @@ upstream tests exercise unaligned output, before the Ed25519 harness can run.
 The production build does not disable architecture backends; the extension's
 Ed25519 verifier uses the same ref10 C path in both builds.
 
+The separate `failure-semantics` target compiles seven test-only shared objects
+with one fault fixed at compile time in each object. It proves that module
+initialization failure, an unexpected verifier result, and detoast allocation
+failure produce only SQLSTATE `58000` and the constant infrastructure message.
+It also proves that cancellation, statement-timeout, transaction, and storage
+errors raised at the same detoast boundary retain their original SQLSTATE and
+message. There is no runtime fault selector, SQL test API, or extra export:
+
+```sh
+docker build --file Containerfile --target failure-semantics \
+  --build-arg SOURCE_DATE_EPOCH=0 .
+```
+
+Neither the fault objects nor the instrumented sanitizer object is in the
+ancestry or copy set of the default runtime stage.
+
 The harness covers the RFC 8032 empty-message vector, the fixed ADR 0003
 preflight bytes, every accepted message length, all length boundaries, bit
 flips, noncanonical scalars, and zero, identity, small-order, non-main-subgroup,
@@ -78,5 +97,8 @@ the extension, forces a one-megabyte hostile value into compressed TOAST
 storage, and passes that value in each SQL argument position. The wrapper asks
 PostgreSQL for each datum's raw size before any detoast operation, refuses an
 oversized value, and then retains exact post-detoast length checks for admitted
-values. This bounds extension-triggered detoast allocation without catching or
-rewriting PostgreSQL errors and interrupts.
+values. This bounds extension-triggered detoast allocation. The wrapper catches
+only errors from its three owned detoast calls, maps only PostgreSQL's
+out-of-memory SQLSTATE to the fixed verifier infrastructure failure, and
+rethrows every other PostgreSQL `ErrorData` unchanged. Cancellation, timeout,
+transaction, and storage failures therefore keep their native semantics.
