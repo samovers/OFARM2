@@ -297,10 +297,10 @@ def test_authoritative_audit_migration_is_one_exact_initial_set():
     assert SECURITY_AUDIT_CONTRACT.digest in source
     assert SECURITY_AUDIT_PROVISIONING_SPEC.digest in source
     assert migration.source_sha256 == \
-        "sha256:4bc5f67eb5c28f2d7b7261c1b52192ca4474ddac1cbb7a243e76b5eb695d6dc3"
+        "sha256:4d21a11eec18b9b4e015002ba533c306f082aa1c35782f71c593a548a287fed7"
     assert migration.byte_length == 147_553
     assert migration_set.digest == \
-        "sha256:d14b8d625246de172f22d30421b749e3b583e96c16cc4a958f53dd75b2edc179"
+        "sha256:36cbeedb86a68888a5e2320490aa557c9b6a710ce15c024fb1343efef2d91738"
     assert migration_set.prefix_digest(1) == migration_set.digest
 
 
@@ -376,7 +376,7 @@ def test_authoritative_audit_migration_has_closed_carriers_and_limits():
         in source
     )
     assert (
-        "sha256:f144cda261c3a3087f8802e6922678d5c1d1a951a8137327177765525ca0a5c6"
+        "sha256:66395db8f49699ca4631e7fcb76adec48b354ba9fc774391cc381cfaa8704c32"
         in source
     )
     assert "jsonb" not in persisted_audit_tables

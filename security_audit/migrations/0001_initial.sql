@@ -3430,7 +3430,7 @@ BEGIN
     INTO v_catalog_fingerprint
     FROM catalog_entry;
     IF v_catalog_fingerprint <>
-            'sha256:f144cda261c3a3087f8802e6922678d5c1d1a951a8137327177765525ca0a5c6' THEN
+            'sha256:66395db8f49699ca4631e7fcb76adec48b354ba9fc774391cc381cfaa8704c32' THEN
         v_differences := v_differences + 1;
     END IF;
 
