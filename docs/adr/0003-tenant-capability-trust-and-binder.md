@@ -61,8 +61,10 @@ Public keys are immutable candidates. Authority comes only from an append-only,
 digest-chained key lifecycle with expected-head transitions and fixed database-
 time rules. The lifecycle supports initial activation, atomic rotation, and no-
 overlap emergency revocation effective at its serialized commit boundary.
-Graceful rotation permits the retiring key to verify already-issued
-capabilities for exactly the bounded half-open window defined below.
+Graceful rotation permits the retiring key to verify capabilities carrying its
+bounded old-key times for exactly the half-open window defined below; production
+minting stops before the cutover, but the binder cannot observe physical signing
+time.
 A durable append-only admission-close act commits before an emergency
 revocation wait begins, so cancellation or backend loss cannot reopen
 admission.
@@ -127,12 +129,148 @@ HSM attestation, public-key CRC32C, and registered public key. It cannot sign,
 change state, destroy, or change IAM policy. #172 consumes only a fresh verified
 observer result; missing, stale, inconsistent, or wider evidence stops minting.
 
+Public-key observation uses only Cloud KMS v1
+`cryptoKeyVersions.getPublicKey` for the exact canonical key-version name with
+`publicKeyFormat = DER` set explicitly. It accepts only an exact response
+`name`, `algorithm = EC_SIGN_ED25519`, `protectionLevel = HSM`,
+`publicKeyFormat = DER`, and present `publicKey.data` and
+`publicKey.crc32cChecksum`. The default or
+`PUBLIC_KEY_FORMAT_UNSPECIFIED` path, PEM, `pem`/`pemCrc32c`, an empty or second
+key representation, and every format fallback refuse.
+
+`publicKey.data` means the protobuf `ChecksummedData.data` octets after
+transport decoding. REST base64 text is transport only, not key material; when
+used, it must be canonical padded standard base64 whose decode and re-encode
+are byte-identical. `publicKey.crc32cChecksum` must be present, parse as an
+unsigned value from zero through `2^32 - 1`, and equal CRC-32C/Castagnoli over
+the exact decoded DER octets. A checksum over JSON/base64 spelling, a missing,
+negative, out-of-range, byte-swapped, or mismatched value refuses the whole
+observation. A bounded retry fetches a wholly new response; fields from
+different responses are never mixed and there is no PEM fallback. CRC32C is
+transport-corruption evidence only, never resource, algorithm, protection,
+state, IAM, purpose, attestation, or key-identity authority.
+
 A separate audited KMS administrator controls key generation, state, IAM, and
 destruction; a separate PostgreSQL key-control LOGIN controls database
 candidate/lifecycle acts. These two control credentials and any administrator
 able to widen inherited IAM are trust roots, are never shared with the signer
 or observer, and must participate in activation, rotation, or compromise
 response as applicable.
+
+### Candidate-key preflight actor
+
+The sole V1 candidate-key preflight actor is that already classified audited
+KMS administrator, using its separate hardware-authenticated, time-bounded
+control credential. It never uses the production authentication signer,
+lifecycle observer, application, database, migrator, CI, or PostgreSQL
+key-controller credential. The administrator has no standing `useToSign`
+grant. KMS cannot constrain the bytes signed by this temporary authority; a
+malicious administrator remains the signing-authority trust-root compromise
+already accepted above, and any suspected compromise disqualifies and destroys
+the candidate.
+
+For one preflight only, an IAM Policy version-3 read/modify/write binds the
+existing custom role containing only
+`cloudkms.cryptoKeyVersions.useToSign` to the administrator's exact member
+identity at the parent CryptoKey. Both addition and removal first call
+`getIamPolicy` with exact `requestedPolicyVersion = 3`. A complete GET response
+with any conditional binding must be version 3. A version-1 GET response is
+accepted only when the authenticated request/response trace proves that exact
+version-3 request and the complete returned policy contains no conditional
+binding; version 0, an omitted version, or any other request/response pairing
+refuses. This permits Google's documented lower version for a condition-free
+policy without permitting a lower-version read to hide conditions.
+
+Each mutation submits the complete policy through `setIamPolicy` with exact
+`version = 3` and the returned etag, even when the preceding GET was the valid
+condition-free version-1 case. The update changes only the exact preflight
+binding and preserves every unrelated binding, member, condition, and audit
+configuration without semantic change. It accepts only a complete mutation
+response with a new etag and independently verifies a fresh GET made with exact
+`requestedPolicyVersion = 3` under the same response-version rule. A mutation
+response with conditions but a version below 3, missing etag, partial policy,
+changed unrelated entry, stale write or retry without a complete fresh read,
+or blind overwrite refuses.
+
+The temporary condition contains both the candidate's exact CryptoKeyVersion
+resource type/name test and a
+`request.time < timestamp("PROBE_DEADLINE")` bound no later than ten minutes
+after the grant. No unconditional, inherited, sibling-version, other-key, or
+renewable permission is accepted.
+
+```text
+resource.type == "cloudkms.googleapis.com/CryptoKeyVersion" &&
+resource.name == "projects/PROJECT_ID/locations/LOCATION/keyRings/KEY_RING/cryptoKeys/KEY/cryptoKeyVersions/CANDIDATE_VERSION" &&
+request.time < timestamp("PROBE_DEADLINE_RFC3339_UTC")
+```
+
+The receipt fixes the substituted canonical resource and whole-second UTC
+deadline bytes; a differently spelled, rounded, extended, or caller-rewritten
+condition refuses.
+
+The preflight signing input is exactly these 43 octets:
+
+```text
+004f4641524d322d54454e414e542d4341504142494c4954592d4b4d532d505245464c494748542d563100
+```
+
+This is `0x00 || ASCII("OFARM2-TENANT-CAPABILITY-KMS-PREFLIGHT-V1") ||
+0x00`. The closed runner has no message argument and sends only these bytes in
+the KMS raw `data` field with CRC32C; `digest` is absent. The NUL delimiters and
+absence of JWS segment separators make the input structurally impossible to
+parse as a TenantCapability JWS Signing Input. It is never base64url-wrapped,
+combined with a protected header or capability payload, given a tenant
+challenge, or passed to the binder.
+
+The returned resource identity, protection level, data-verification flag,
+signature CRC32C, 64-byte signature, and signature result are checked exactly
+as for production signing. #172's independent verifier and the pinned database
+extension both verify the signature against the extracted candidate key. This
+proves the KMS key and two verification paths; it is not a live-binder success
+and cannot be represented as one.
+
+The executable preflight protocol is:
+
+1. Create the non-exportable candidate with no production or temporary signing
+   grant. Enable it only long enough for the observer to perform the exact DER
+   public-key extraction below, register the resulting PostgreSQL candidate as
+   inactive and never activated, then disable it. Prove neither the
+   administrator nor production signer can sign with it.
+2. Add the exact temporary binding through the full version-3 policy protocol
+   using the current etag. A condition-free initial GET may validly return
+   version 1 only under the response rule above; the `setIamPolicy` request is
+   still version 3. Enable only the candidate version, and independently
+   observe its exact resource, algorithm, HSM protection, and state.
+3. Sign the fixed probe once and verify it through both independent paths.
+   Prove the preflight actor cannot sign with the old version, another sibling,
+   or another key, and that the production signer still cannot sign with the
+   candidate.
+4. While the PostgreSQL candidate remains inactive and the KMS version remains
+   enabled, remove the exact binding through the same complete, version-3-write,
+   etag-guarded policy protocol. If it was the sole conditional binding, the
+   condition-free fresh GET may validly return version 1 under the response
+   rule above. Inspect effective and inherited policy, then repeat the fixed
+   probe with the same credential until KMS returns authorization refusal. A
+   successful or uncertain call blocks rotation.
+5. Disable the candidate, independently observe `DISABLED`, end the operational
+   session and zeroize its bearer credential, and wait until both the recorded
+   credential expiry and `PROBE_DEADLINE` have passed. Persist one canonical
+   removal receipt. Any
+   incomplete or uncertain cleanup blocks that candidate from activation until
+   reconciliation; compromise disqualifies it permanently.
+
+The removal receipt binds the candidate resource, `kid`, raw-key digest,
+administrator member and operational-session identity without bearer material,
+custom role and condition, parent CryptoKey, policy etags and canonical digests
+before/during/after the grant including each exact GET request version, each
+version-3 SET request, every actual GET and mutation response version, and every
+preserved unrelated binding/audit configuration, enable/disable observations,
+probe-byte digest, KMS response identity and CRC results, both verification
+results, every negative-signing result, audit-log operation identities and
+observer times, and its own canonical digest. `ROTATE` requires that exact
+receipt digest. Reusing the existing administrator creates no new principal or
+ADR 0001 role; the temporary raw-sign exception does not make it a production
+signer.
 
 Private material is absent from:
 
@@ -178,31 +316,61 @@ authority.
 | `tenant_capability_key_lifecycle` | Append-only authoritative key and admission acts. |
 | `tenant_capability_keyring` | One mutable reservation/fence and disposable projection of the append-only key/admission lifecycle head per audience. |
 
-PostgreSQL stores exactly one raw 32-byte Ed25519 public key per immutable row
-in `tenant_capability_verification_key`. A key candidate is not authority merely
-because it exists. The candidate also stores:
+For `EC_SIGN_ED25519`, the accepted DER value is exactly this 44-byte RFC 8410
+`SubjectPublicKeyInfo` encoding:
+
+```text
+30 2a 30 05 06 03 2b 65 70 03 21 00 || K
+```
+
+`K` is exactly 32 octets. The fixed prefix encodes one outer SEQUENCE, one
+AlgorithmIdentifier containing only OID `1.3.101.112` (`id-Ed25519`) with
+parameters absent, and one primitive BIT STRING with zero unused bits. The
+extractor consumes the complete input. Wrong tags or OIDs, present parameters
+including ASN.1 NULL, indefinite, long-form or otherwise non-minimal lengths,
+a constructed or malformed BIT STRING, nonzero unused bits, a key other than
+32 octets, truncation, trailing bytes, a certificate, PKCS#8/PrivateKeyInfo,
+another BER/DER shape, or PEM refuses. No general-purpose parser normalization
+or reserialization can create accepted bytes.
+
+Only after metadata, CRC32C, and exact SPKI checks pass does unchanged `K`
+become the public key. PostgreSQL stores exactly that raw 32-byte value per
+immutable `tenant_capability_verification_key` row. A key candidate is not
+authority merely because it exists. The candidate also stores:
 
 - its derived key identity;
 - the fixed algorithm identity `Ed25519`;
 - the exact binder audience;
 - the exact Google Cloud KMS resource identity, purpose, algorithm, protection
-  level, public-key digest, and independently verified attestation digest;
+  level, SHA-256 digest of raw `K`, and independently verified attestation
+  digest;
 - a database-generated candidate identity and registration time;
 - a canonical row digest covering every stored field; and
 - no secret, mutable state, or caller-selected validity endpoint.
 
+The same unchanged `K` is passed to strict point validation, the independent
+verifier, the database extension, PostgreSQL candidate registration, and every
+identity derivation:
+
+```text
+public_key_digest = SHA-256(K)
+x = unpadded-base64url(K)
+```
+
 The key identity is the unpadded base64url SHA-256 JWK thumbprint defined by
-RFC 7638 over the RFC 8037 Ed25519 public JWK. The thumbprint input is exactly:
+RFC 7638 over the RFC 8037 Ed25519 public JWK. Its ASCII thumbprint input is
+exactly:
 
 ```text
 {"crv":"Ed25519","kty":"OKP","x":"<unpadded-base64url-public-key>"}
 ```
 
-The member order, spelling, quoting, absence of whitespace, raw public-key
-encoding, SHA-256 operation, and unpadded base64url output are fixed. The
-resulting `kid` is 43 ASCII bytes. PostgreSQL recomputes the thumbprint and
-compares both the identity and raw public key; digest equality alone is never
-authority.
+The member order, spelling, quoting, absence of whitespace, `x`, SHA-256
+operation, and unpadded base64url output are fixed. The resulting `kid` is 43
+ASCII bytes. A digest of the 44-byte DER value, PEM/base64 text, parsed library
+object, or attestation evidence cannot substitute. PostgreSQL recomputes
+`public_key_digest`, `x`, and `kid` from stored `K`, and compares raw bytes as
+well as identities; digest equality alone is never authority.
 
 ### Verification-only database extension
 
@@ -542,6 +710,7 @@ one append-only, digest-chained keyring lifecycle. Each act contains:
 - the affected old and/or new key identities and candidate-row digests;
 - the incident identity, exact close receipt, and required KMS/IAM evidence
   digests for admission acts;
+- for `ROTATE`, the exact candidate-key preflight removal-receipt digest;
 - the exact audience and algorithm identity;
 - database-observed decision and effective times, equal in V1;
 - a derived accountable controller identity and closed reason code; and
@@ -643,6 +812,13 @@ partially completed response cannot append it. Direct act/projection DML is
 denied, and the exact kinds, transition matrix, owners, grants, conditional
 head update, and denial behavior are structurally fingerprinted.
 
+For closed reason `ROTATION_HANDOFF`, resumption additionally requires the
+exact authoritative chain `ROTATE(old, new)`, `CLOSE_ADMISSION(old)`, then
+`REVOKE(old)`, with the close incident and every expected head linked without a
+gap. It recomputes that `old` is ineligible and `new` is the sole eligible key.
+A close alone cannot reopen admission while the retiring key remains eligible,
+even if KMS reports that key disabled or an active sign probe currently fails.
+
 PostgreSQL verifies the registered candidate, evidence identities and digests,
 and append-only transition; it cannot independently query Google Cloud. The
 separate observer and deployment evidence path validate the external facts
@@ -737,7 +913,8 @@ commit boundary and overrides every time window.
 `ISSUING` key and `new` to be an inactive, never-activated candidate for the
 same audience and algorithm. On commit:
 
-- `new` becomes the sole `ISSUING` key with its own 90-day issuance end;
+- `new` becomes the sole database-eligible `ISSUING` key with its own 90-day
+  issuance end;
 - `old` becomes `VERIFY_ONLY` at the database cutover time; and
 - `old` has a fixed verification end at cutover plus exactly `65,000,000`
   microseconds.
@@ -746,37 +923,73 @@ An old-key capability must satisfy the exact `A`, `R`, and `V` inequalities
 above. The binder refuses the old key when database time equals `V`, even if
 the capability carries a later expiry. A new-key capability must have
 `issued_at >= cutover - 5,000,000` microseconds as well as satisfying the
-ordinary capability-time contract.
+ordinary capability-time contract. Neither database eligibility nor this lower
+bound authorizes minting: the new KMS version, its production `useToSign`
+binding, and #172 issuance remain disabled until the handoff barrier below.
+The committed `ROTATE` receipt fixes `R`, `V`, both candidates, the resulting
+head, and the exact preflight removal receipt.
 
 The rotation procedure is:
 
-1. Generate a new disabled, non-exportable private key.
-2. Register only its public candidate in PostgreSQL.
-3. Run byte-identical signer, independent verifier, libsodium-extension, and live
-   binder golden vectors while the key remains unable to issue production
-   capabilities, then leave the new KMS key version disabled.
-4. Commit `ROTATE` with the exact expected lifecycle head.
-5. Have #172 observe and verify the committed act receipt and head.
-6. Disable the old KMS key version and its production signing permission, and
-   independently verify that disabled state before enabling any replacement.
-7. Enable the new KMS key version and its exact signing permission, verify its
-   pinned state, and only then resume capability issuance.
-8. Schedule permanent destruction of the old private key; retain its public row
+1. Complete the candidate-key preflight protocol and receipt above. The
+   candidate is registered but inactive, its KMS version is `DISABLED`, the
+   temporary binding is absent, its deadline and credential have expired,
+   active authorization refusal is proven, and the production signer has no
+   candidate permission.
+2. Quiesce #172 capability minting under `old` and record that state before the
+   database cutover. A delayed worker, retry, or ambiguous quiescence blocks the
+   transition.
+3. Commit `ROTATE` with the exact expected lifecycle head and preflight receipt,
+   then have #172 and the key controller verify the committed act receipt,
+   derived `R` and `V`, and new head.
+4. Request disablement of the old KMS version and removal of its production
+   signing binding. Collect fresh metadata, effective/inherited-policy, audit,
+   and active negative-signing evidence, but keep minting and the new KMS
+   version disabled.
+5. Choose the drain timing. For a graceful drain, keep the new signer and
+   minting disabled while admission remains `OPEN` until a fresh observation
+   from the intended PostgreSQL binder instance matches the exact `ROTATE` head,
+   instance UUID, audience, `old`, `new`, `R`, and `V`, and reports database
+   `clock_timestamp() >= old.V`. For an expedited cutover, do not wait for `V`.
+   This observation preserves the intended verification tail but is not the
+   handoff barrier.
+6. In both timings, commit `CLOSE_ADMISSION` with the exact `ROTATE` head,
+   `old`, and reason `ROTATION_HANDOFF`, then commit `REVOKE(old)` with that
+   exact close incident and resulting head. Verify both committed receipts.
+   This durable revocation is the sole V1 handoff barrier and remains
+   authoritative across later clock movement. Admission stays `CLOSED`.
+7. Only after the barrier and all required external evidence pass, enable the
+   new KMS version, install its exact production signing binding, and verify its
+   resource, policy, HSM, public key, raw-probe signature, and observer evidence.
+   The old version may still sign despite provider metadata; committed database
+   revocation, not that metadata or one time observation, makes its signatures
+   ineligible.
+8. Append and verify `RESUME_ADMISSION` under its exact rotation-handoff
+   preconditions, recheck the authoritative head, and only then enable #172
+   capability minting. No production-shaped preflight or live binder token is
+   created before this point.
+9. Schedule permanent destruction of the old private key; retain its public row
    and lifecycle acts permanently.
 
-The handoff can briefly stop issuance. Availability does not justify enabling
-the new signer before database activation, retaining old signing authority, or
-extending the overlap. The 65-second overlap is exactly the 60-second maximum
-capability lifetime plus the five-second future-clock leeway.
+Cloud KMS key-state and IAM changes are eventually consistent. Their receipts,
+observations, and negative probes are required operational evidence and may
+prolong an outage, but they cannot shorten or substitute for step 6. The
+65-second interval is a database verification tail equal to the 60-second
+maximum capability lifetime plus five-second future-clock leeway, never a
+period in which both production signers may mint binder-acceptable
+capabilities. Availability does not justify enabling the new signer early.
 
 ### Emergency revocation
 
-`REVOKE(key)` can target an `ISSUING` or `VERIFY_ONLY` key. It has no graceful
-overlap. Once the revocation transition requests the conflicting exclusive
-admission lock, later bind attempts queue behind it. As soon as the transaction
-commits, all queued and later binds under that key reconstruct the new head and
-refuse regardless of `issued_at`, `not_before`, `expires_at`, nonce, challenge,
-or prior validity.
+`REVOKE(key)` can target an `ISSUING` or `VERIFY_ONLY` key. For closed reason
+`ROTATION_HANDOFF` it can also target the exact unrevoked `old` named by the
+immediately governing `ROTATE(old, new)` after time has already made `old`
+ineligible at `V`; no other expired-key selector is accepted. It has no
+graceful overlap. Once the revocation transition requests the conflicting
+exclusive admission lock, later bind attempts queue behind it. As soon as the
+transaction commits, all queued and later binds under that key reconstruct the
+new head and refuse regardless of `issued_at`, `not_before`, `expires_at`,
+nonce, challenge, prior validity, or later clock movement.
 
 `REVOKE` additionally requires the exact committed `CLOSE_ADMISSION` act, head,
 and incident produced for this response. It refuses an open, stale, mismatched,
@@ -1009,7 +1222,7 @@ no production-readiness or deployment claim.
 | Header-directed key retrieval | No `jku`, embedded `jwk`, X.509 header, dynamic provider, file, or network selector. |
 | Encoding ambiguity | Exact header template, canonical unpadded base64url, binary `lp32` payload, fixed field order and widths, and cross-layer vectors. |
 | Cross-installation or fixture token reuse | Per-installation audience plus environment-dedicated keys; production fixture paths are absent. |
-| Old or compromised key remains valid | One-use activation, exact integer issuance/verification bounds, and no-overlap revocation at the serialized commit boundary. Earlier bound transactions are not retroactively cancelled. |
+| Old or compromised key remains valid | One-use activation, exact integer issuance/verification bounds, a disabled replacement signer until committed close-plus-revoke, and no-overlap revocation at the serialized commit boundary. Provider metadata or a time observation alone is never the barrier. Earlier bound transactions are not retroactively cancelled. |
 | Lifecycle projection is stale, forged, or time-obsolete | Authoritative digest-chain-plus-time fold and expected-head check; projection is disposable and never authority. |
 | Capability replay | Protected random challenge bound to backend PID/start/full xid8 and one-way context transition. |
 | Bind races key/principal revocation | One reserved heavyweight advisory admission lock, exact row-lock order, `READ COMMITTED` only, and fresh post-lock fold statements. Raw advisory acquisition is unavailable to callers, preventing same-session re-entry bypass. |
@@ -1026,29 +1239,57 @@ production evidence.
 
 ### Cryptography and wire
 
-1. Execute identical RFC, signer, independent-verifier, libsodium-extension, and
+1. Freeze one cross-standard extraction vector with raw `K`
+   `d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a`,
+   DER
+   `302a300506032b6570032100d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a`,
+   transport base64
+   `MCowBQYDK2VwAyEA11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=`,
+   CRC32C decimal `3927069631`, raw-key SHA-256
+   `21fe31dfa154a261626bf854046fd2271b7bed4b6abe45aa58877ef47f9721b9`,
+   `x` `11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo`, and `kid`
+   `kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k`. Independent observer,
+   reference, and #172 extraction code must agree on every KMS/SPKI mapping;
+   PostgreSQL recomputes the raw-key digest, `x`, and `kid` from `K`, and the
+   extension consumes the same `K` in its signature known-answer test.
+2. Mutate DER without changing CRC, then mutate DER and recompute CRC. Test a
+   missing, negative, greater-than-uint32, byte-swapped, or base64-text CRC;
+   default/unspecified or explicit PEM; absent or duplicate key data; and wrong
+   response name, algorithm, protection level, or format. Each fails at its
+   exact layer without fallback or response-field mixing.
+3. With a correct recomputed CRC, refuse ASN.1 NULL parameters; X25519, Ed448,
+   and unknown OIDs; every outer, inner, or BIT STRING tag/length mutation;
+   indefinite, long-form, or non-minimal lengths; nonzero unused bits; 31- or
+   33-byte keys; truncation, trailing data, certificates, PKCS#8, and alternate
+   BER/PEM forms. Run one live HSM `EC_SIGN_ED25519`
+   `getPublicKey(publicKeyFormat=DER)` path during controlled enabled preflight.
+4. Substitute DER hash for raw-key digest, DER for `x`, padded base64url or
+   standard base64, reordered or whitespace-bearing JWK, or an old digest/`kid`
+   after flipping one bit in `K`. Each refuses and proves raw-key/digest/JWK
+   lockstep.
+5. Execute identical RFC, signer, independent-verifier, libsodium-extension, and
    live-binder golden vectors.
-2. Flip one bit independently in protected header, payload, signature, public
+6. Flip one bit independently in protected header, payload, signature, public
    key, every digest, every UUID, every time, and every text field; each bind
    refuses.
-3. Refuse short/long/malformed public keys and signatures, noncanonical `R` or
+7. Refuse short/long/malformed public keys and signatures, noncanonical `R` or
    `S`, `S >= L`, identity/small-order/mixed-order/invalid public keys and `R`
    values, otherwise valid identity-`R` signatures, negative-zero encodings,
    and all-zero inputs. Include libsodium's checked-in
    `not_main_subgroup_p` regression points. Invalid signatures return false;
    injected initialization, allocation, and internal failures abort with only
    the fixed infrastructure outcome and no diagnostic detail.
-4. Refuse `none`, HMAC algorithms, `EdDSA`, Ed448, unknown algorithms, duplicate
+8. Refuse `none`, HMAC algorithms, `EdDSA`, Ed448, unknown algorithms, duplicate
    or extra header members, reordered members, whitespace, alternate case,
    unprotected headers, JWS JSON serialization, and `jku`/`jwk`/X.509 headers.
-5. Refuse padded or noncanonical base64url, wrong segment counts, empty
+9. Refuse padded or noncanonical base64url, wrong segment counts, empty
    segments, non-ASCII input, non-zero trailing bits, and tokens over 8192
    bytes.
-6. Mutate every `lp32` length, field order, encoding, UTF-8 sequence, UUID byte
+10. Mutate every `lp32` length, field order, encoding, UTF-8 sequence, UUID byte
    order, digest width, timestamp width, omission, duplication, and trailing
    byte. Python and live PostgreSQL must produce identical accept/refuse
    results.
-7. Maintain RFC 8032 plus Wycheproof-equivalent adversarial vectors, fuzz the
+11. Maintain RFC 8032 plus Wycheproof-equivalent adversarial vectors, fuzz the
    SQL and C input boundaries, and run the native suite under ASan and UBSan on
    every supported architecture. Every crash, undefined behavior report, or
    sanitizer finding blocks release.
@@ -1089,7 +1330,7 @@ production evidence.
 ### Key lifecycle
 
 1. Refuse unknown, unregistered, inactive, wrong-audience, wrong-algorithm,
-   expired, retired-beyond-overlap, and revoked keys.
+   expired, retired-beyond-tail, and revoked keys.
 2. Roll back candidate registration, activation, rotation, admission close,
    revocation, and resumption and prove no partial authority or projection
    state becomes visible.
@@ -1127,9 +1368,39 @@ production evidence.
     Cancel and roll back a queued key revocation: no act appears, no false
     revocation receipt is emitted, and the committed close remains authoritative
     across controller disconnect and PostgreSQL restart.
-12. Delay every post-rotation handoff step. The old KMS version and permission
-    are already proven disabled before new issuance is enabled; a delayed or
-    failed new-key enablement causes an outage, never overlapping signers.
+12. Assert the preflight probe is exactly the frozen 43 octets. Every JWS and
+    capability parser refuses it before signature processing, both before and
+    after candidate activation. The runner exposes no caller message, JWS,
+    payload, or challenge input; no tenant challenge row or binder call occurs.
+    Flip each probe/signature bit and prove both verification paths refuse.
+13. Exercise the preflight grant and cleanup with real identities. A disabled
+    candidate refuses signing. During the bounded window only that candidate
+    accepts the fixed probe for the KMS administrator; old/sibling/other keys
+    refuse, and the production signer refuses the candidate. Remove the binding
+    while the candidate remains enabled and simulate delayed IAM propagation;
+    any continued signing, unexpired credential/deadline, inherited grant,
+    uncertain policy etag, or missing disable observation blocks `ROTATE`.
+    Accept condition-free version-1 GET responses before addition and after
+    removal only when the corresponding request proves
+    `requestedPolicyVersion = 3`; bind those actual versions into the receipt.
+    Omit/lower that request option, submit a version-1 SET, return version 1
+    while any condition remains, seed an unrelated condition and omit it from
+    a response or write, send a partial policy, alter an unrelated binding/audit
+    config, or retry an etag conflict without a complete requested-version-3
+    reread; every hostile case refuses without changing policy. Cancel after
+    every step and prove an incomplete receipt never activates the candidate.
+14. Delay every post-rotation handoff step and keep the old signing oracle
+    working even after provider metadata reports `DISABLED` and policy no longer
+    shows its grant. In graceful drain, new signing stays disabled until a fresh
+    intended-database observation reaches `old.V`, then the exact
+    `CLOSE_ADMISSION(ROTATION_HANDOFF)` and `REVOKE(old)` acts commit before the
+    replacement is enabled. Repeat the same close-plus-revoke sequence before
+    `V` for expedited cutover. In both paths old signatures refuse after the
+    durable revocation even if the clock later moves backward; #172 minting
+    remains disabled and every new-key capability remains binder-ineligible
+    while admission is `CLOSED`; only the exact `RESUME_ADMISSION` chain permits
+    new minting. Provider success or failure is evidence, never the safety
+    assertion.
 
 ### Transaction binding and concurrency
 
@@ -1196,7 +1467,14 @@ production evidence.
    the lifecycle observer has only the exact version/key read permissions, and
    neither can use the other's capability. A sibling version, another key, an
    unconditional binding, or a wider inherited binding makes deployment
-   evidence refuse.
+   evidence refuse. Prove the KMS administrator has no standing signing grant;
+   its one preflight binding is exact, etag-guarded, deadline-bounded, and absent
+   with active authorization refusal before `ROTATE`. The removal receipt,
+   expired control credential/deadline, disabled candidate, and negative
+   production-signer check must all agree. Both IAM mutations use complete
+   version-3 SET requests with etags; every GET requests version 3 and accepts
+   an actual version 1 only for a complete condition-free response. Every
+   unrelated binding, condition, member, and audit configuration is preserved.
 4. Attempt function/schema/operator shadowing, search-path substitution,
    dynamic library replacement, unapproved libsodium source or compile-time
    flags, callable sign/keygen addition, argument-default change, binary-path
@@ -1248,8 +1526,8 @@ control path.
 ### Indefinite old-key acceptance after rotation
 
 Rejected. It preserves compromised authority and makes key replacement
-cosmetic. Graceful overlap is fixed at 65 seconds; suspected compromise uses
-immediate revocation.
+cosmetic. The graceful verification tail is fixed at 65 seconds; suspected
+compromise uses immediate revocation.
 
 ### PostgreSQL core or `pgcrypto`
 
@@ -1282,6 +1560,9 @@ through one bounded native function.
 - [RFC 8032](https://www.rfc-editor.org/rfc/rfc8032.html), Ed25519.
 - [RFC 8037](https://www.rfc-editor.org/rfc/rfc8037.html), Ed25519 JWK and JOSE
   representation.
+- [RFC 8410](https://www.rfc-editor.org/rfc/rfc8410.html), Ed25519
+  `SubjectPublicKeyInfo`, fixes OID `1.3.101.112`, absent parameters, and the
+  public-key BIT STRING.
 - [RFC 8725](https://www.rfc-editor.org/rfc/rfc8725.html), JWT Best Current
   Practices, supplies the fixed-algorithm, audience, explicit-type, and
   cross-token-confusion guidance applied here even though the binary payload is
@@ -1301,10 +1582,24 @@ through one bounded native function.
   protection; the
   [key-version API](https://docs.cloud.google.com/kms/docs/reference/rest/v1/projects.locations.keyRings.cryptoKeys.cryptoKeyVersions)
   states that raw private key material cannot be viewed or exported.
+- [Cloud KMS `getPublicKey`](https://docs.cloud.google.com/kms/docs/reference/rest/v1/projects.locations.keyRings.cryptoKeys.cryptoKeyVersions/getPublicKey)
+  defines explicit DER selection, `publicKey.data`, its CRC32C field, and the
+  returned resource, algorithm, protection, and format metadata.
 - [Google Cloud KMS permissions and roles](https://docs.cloud.google.com/kms/docs/reference/permissions-and-roles)
   fixes the policy hierarchy and relevant custom-role permissions; the
   [IAM Conditions attribute reference](https://docs.cloud.google.com/iam/docs/conditions-resource-attributes)
   defines exact CryptoKey and CryptoKeyVersion resource-type/name conditions.
+- [Cloud KMS IAM Policy](https://docs.cloud.google.com/kms/docs/reference/rest/v1/Policy)
+  requires policy version 3 and an etag for operations affecting conditional
+  bindings, and defines complete-policy replacement semantics; IAM's
+  [`GetPolicyOptions`](https://docs.cloud.google.com/iam/docs/reference/rest/v1/GetPolicyOptions)
+  permits a requested-version-3 GET to return version 1 when the policy has no
+  conditional binding.
+- [Cloud KMS key-version states](https://docs.cloud.google.com/kms/docs/key-states)
+  requires an enabled version for asymmetric signing; the
+  [resource-consistency contract](https://docs.cloud.google.com/kms/docs/consistency)
+  explains why state and IAM observations are operational evidence rather than
+  the database handoff barrier.
 - [PostgreSQL 17 advisory-lock functions](https://www.postgresql.org/docs/17/functions-admin.html#FUNCTIONS-ADVISORY-LOCKS)
   define transaction-level shared and exclusive locks; the exact 17.10
   [`lockfuncs.c`](https://github.com/postgres/postgres/blob/REL_17_10/src/backend/utils/adt/lockfuncs.c),
@@ -1322,13 +1617,14 @@ through one bounded native function.
 Architecture review must explicitly accept:
 
 1. Ed25519 and the verification-only in-database extension trust surface;
-2. non-exportable external private-key custody and role separation;
+2. non-exportable external private-key custody, strict DER-to-raw-key
+   extraction, the bounded preflight actor, and role separation;
 3. the exact JWS header, RFC-thumbprint key identity, and binary payload frame;
 4. the 60-second lifetime, five-second skew, installation audience, 90-day key
-   issuance bound, and 65-second graceful overlap;
+   issuance bound, and 65-second verification tail;
 5. append-only activation, atomic rotation, durable admission close,
-   anti-barging advisory admission, emergency revocation, resumption, and their
-   transaction ordering;
+   database-authoritative rotation handoff, anti-barging advisory admission,
+   emergency revocation, resumption, and their transaction ordering;
 6. replay, rollback, pool-reuse, and negative recovery semantics; and
 7. the #172/#174/#173 implementation ownership split and hostile evidence
    plan.
