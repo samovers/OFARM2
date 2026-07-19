@@ -5,7 +5,11 @@ Settled during pre-implementation review (2026-06). A fresh agent does not re-li
 Implementation architecture ADRs are kept in `docs/adr/`, separately from OFARM
 law and extracted contracts. [ADR 0001](docs/adr/0001-tenancy-and-schema-migrations.md)
 freezes the tenancy and schema-migration architecture; [ADR 0002](docs/adr/0002-valid-time-and-knowledge-time.md)
-defines valid-time and tenant knowledge-time semantics.
+defines valid-time and tenant knowledge-time semantics. Proposed
+[ADR 0003](docs/adr/0003-tenant-capability-trust-and-binder.md) would refine the
+TenantCapability trust model and hardened PostgreSQL binder without changing
+ADR 0001's implementation-owner boundaries; it authorizes no implementation
+change until independently accepted.
 
 | # | Decision | Why |
 |---|----------|-----|
