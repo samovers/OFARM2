@@ -30,7 +30,11 @@ VOLATILE_POINTERS = (
     "/environment/ci/runId",
     "/environment/ci/runAttempt",
 )
-ALLOWED_OFARM_ENV = {"OFARM_PG_ADMIN_DSN"}
+ALLOWED_OFARM_ENV = {
+    "OFARM_PG_ADMIN_DSN",
+    "OFARM_SECURITY_AUDIT_PG_ADMIN_DSN",
+    "OFARM_TENANT_PROVISIONING_PG_ADMIN_DSN",
+}
 
 
 def _utc_now() -> str:
@@ -227,6 +231,43 @@ def _postgres_identity(dsn: str) -> dict[str, Any]:
         }
 
 
+def _unavailable_postgres_identity(error_type: str) -> dict[str, Any]:
+    return {
+        "available": False,
+        "errorType": error_type,
+        "version": None,
+        "rawVersion": None,
+        "systemIdentifier": None,
+        "database": None,
+    }
+
+
+def _provisioning_cluster_lineage_reasons(
+    primary_admin: dict[str, Any],
+    tenant_admin: dict[str, Any],
+    audit_admin: dict[str, Any],
+) -> list[str]:
+    reasons: list[str] = []
+    if primary_admin.get("available") is not True:
+        reasons.append("primary-test PostgreSQL identity is unavailable")
+    if tenant_admin.get("available") is not True:
+        reasons.append("tenant-provisioning PostgreSQL identity is unavailable")
+    if audit_admin.get("available") is not True:
+        reasons.append("security-audit PostgreSQL identity is unavailable")
+    if reasons:
+        return reasons
+    identities = (primary_admin, tenant_admin, audit_admin)
+    if len({identity.get("version") for identity in identities}) != 1:
+        reasons.append("primary, tenant, and audit PostgreSQL versions differ")
+    if len({identity.get("rawVersion") for identity in identities}) != 1:
+        reasons.append("primary, tenant, and audit PostgreSQL build versions differ")
+    if len({identity.get("systemIdentifier") for identity in identities}) != 3:
+        reasons.append(
+            "primary, tenant, and audit PostgreSQL cluster lineages are not distinct"
+        )
+    return reasons
+
+
 def _postgres_identity_reasons(
     admin: dict[str, Any],
     test_store: dict[str, Any],
@@ -295,6 +336,20 @@ def _preflight(config: dict[str, Any], env: dict[str, str], pip_check_code: int)
     implementation = platform.python_implementation()
     optimization_actual = sys.flags.optimize
     admin_postgres = _postgres_identity(_admin_dsn(env))
+    tenant_admin_dsn = env.get("OFARM_TENANT_PROVISIONING_PG_ADMIN_DSN")
+    tenant_admin_postgres = (
+        _postgres_identity(tenant_admin_dsn)
+        if tenant_admin_dsn
+        else _unavailable_postgres_identity("TenantProvisioningAdminDsnAbsent")
+    )
+    audit_admin_dsn = env.get("OFARM_SECURITY_AUDIT_PG_ADMIN_DSN")
+    audit_admin_postgres = (
+        _postgres_identity(audit_admin_dsn)
+        if audit_admin_dsn
+        else _unavailable_postgres_identity("AuditAdminDsnAbsent")
+    )
+    cluster_lineage_reasons = _provisioning_cluster_lineage_reasons(
+        admin_postgres, tenant_admin_postgres, audit_admin_postgres)
     required = config["requiredEnvironment"]
     reasons: list[str] = []
     for name in sorted(ALLOWED_OFARM_ENV):
@@ -327,6 +382,17 @@ def _preflight(config: dict[str, Any], env: dict[str, str], pip_check_code: int)
             f"PostgreSQL {admin_postgres['version']} != "
             f"{required['postgresqlVersion']}"
         )
+    if audit_admin_postgres["version"] != required["postgresqlVersion"]:
+        reasons.append(
+            f"audit PostgreSQL {audit_admin_postgres['version']} != "
+            f"{required['postgresqlVersion']}"
+        )
+    if tenant_admin_postgres["version"] != required["postgresqlVersion"]:
+        reasons.append(
+            f"tenant provisioning PostgreSQL {tenant_admin_postgres['version']} != "
+            f"{required['postgresqlVersion']}"
+        )
+    reasons.extend(cluster_lineage_reasons)
 
     distributions = [
         {"name": name, "version": actual[name]}
@@ -353,8 +419,52 @@ def _preflight(config: dict[str, Any], env: dict[str, str], pip_check_code: int)
             "testConnectionSource": "derived-from-verified-admin-connection",
             "testDatabase": required["testDatabaseName"],
             "admin": admin_postgres,
+            "tenantProvisioningAdmin": tenant_admin_postgres,
+            "securityAuditAdmin": audit_admin_postgres,
             "testStore": None,
             "sameServer": None,
+            "tenantAuditClusterLineagesDistinct": (
+                tenant_admin_postgres.get("available") is True
+                and audit_admin_postgres.get("available") is True
+                and tenant_admin_postgres.get("systemIdentifier")
+                != audit_admin_postgres.get("systemIdentifier")
+            ),
+            "testAndProvisioningClusterLineagesPairwiseDistinct": (
+                all(identity.get("available") is True for identity in (
+                    admin_postgres,
+                    tenant_admin_postgres,
+                    audit_admin_postgres,
+                ))
+                and len({identity.get("systemIdentifier") for identity in (
+                    admin_postgres,
+                    tenant_admin_postgres,
+                    audit_admin_postgres,
+                )}) == 3
+            ),
+            "testAndProvisioningPostgresqlVersionsEqual": (
+                all(identity.get("available") is True for identity in (
+                    admin_postgres,
+                    tenant_admin_postgres,
+                    audit_admin_postgres,
+                ))
+                and len({identity.get("version") for identity in (
+                    admin_postgres,
+                    tenant_admin_postgres,
+                    audit_admin_postgres,
+                )}) == 1
+            ),
+            "testAndProvisioningPostgresqlBuildsEqual": (
+                all(identity.get("available") is True for identity in (
+                    admin_postgres,
+                    tenant_admin_postgres,
+                    audit_admin_postgres,
+                ))
+                and len({identity.get("rawVersion") for identity in (
+                    admin_postgres,
+                    tenant_admin_postgres,
+                    audit_admin_postgres,
+                )}) == 1
+            ),
         },
         "dependencies": {
             "installed": distributions,

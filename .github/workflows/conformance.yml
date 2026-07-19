@@ -1,5 +1,5 @@
-# Deterministic review baseline for issue #168. Runtime behavior and claims
-# are outside this workflow's scope.
+# Deterministic review baseline for issue #168, extended with issue #174's
+# live PostgreSQL provisioning boundary. It makes no production-readiness claim.
 name: conformance
 
 on:
@@ -27,6 +27,36 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      tenant-provisioning-postgres:
+        # #174 provisioning tests require a dedicated cluster whose database
+        # inventory contains only the PostgreSQL maintenance databases.
+        image: postgres@sha256:5f050f770b427fbd477edee6c3968a72e5c6be97e050a7e368b2b74a9494a285
+        env:
+          POSTGRES_USER: ofarm
+          POSTGRES_PASSWORD: tenant-ofarm
+          POSTGRES_DB: postgres
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U ofarm -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      security-audit-postgres:
+        # A second container and initdb lineage are required: a second database
+        # inside the tenant cluster is not the accepted audit boundary.
+        image: postgres@sha256:5f050f770b427fbd477edee6c3968a72e5c6be97e050a7e368b2b74a9494a285
+        env:
+          POSTGRES_USER: ofarm
+          POSTGRES_PASSWORD: audit-ofarm
+          POSTGRES_DB: postgres
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U ofarm -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
@@ -42,10 +72,14 @@ jobs:
       - name: Complete Kernel baseline run 1
         env:
           OFARM_PG_ADMIN_DSN: "host=localhost port=5432 dbname=postgres user=ofarm password=ofarm"
+          OFARM_TENANT_PROVISIONING_PG_ADMIN_DSN: "host=localhost port=5434 dbname=postgres user=ofarm password=tenant-ofarm"
+          OFARM_SECURITY_AUDIT_PG_ADMIN_DSN: "host=localhost port=5433 dbname=postgres user=ofarm password=audit-ofarm"
         run: .review-venv/bin/python conformance/run_review_baseline.py run --output-dir .artifacts/review-baseline/run-1
       - name: Complete Kernel baseline run 2
         env:
           OFARM_PG_ADMIN_DSN: "host=localhost port=5432 dbname=postgres user=ofarm password=ofarm"
+          OFARM_TENANT_PROVISIONING_PG_ADMIN_DSN: "host=localhost port=5434 dbname=postgres user=ofarm password=tenant-ofarm"
+          OFARM_SECURITY_AUDIT_PG_ADMIN_DSN: "host=localhost port=5433 dbname=postgres user=ofarm password=audit-ofarm"
         run: .review-venv/bin/python conformance/run_review_baseline.py run --output-dir .artifacts/review-baseline/run-2
       - name: Prove clean-run equivalence
         run: >-

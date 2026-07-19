@@ -1,0 +1,2696 @@
+"""Authoritative PostgreSQL 17 security-audit migration tests for issue #174."""
+
+from __future__ import annotations
+
+import os
+import secrets
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from threading import Barrier, Event
+from time import monotonic, sleep
+from uuid import uuid4
+
+import psycopg
+import psycopg.conninfo
+import pytest
+from psycopg import sql
+
+from deployment.postgresql.audit_contract import SECURITY_AUDIT_CONTRACT
+from deployment.postgresql.migration_runner import (
+    MigrationDirtyError,
+    initial_ledger_sql,
+    migrate_service,
+    validate_migration_source,
+)
+from deployment.postgresql.migration_sets import (
+    SECURITY_AUDIT_SERVICE,
+    load_migration_set,
+)
+from deployment.postgresql.provisioning import provision_service
+from deployment.postgresql.provisioning_specs import (
+    SECURITY_AUDIT_PROVISIONING_SPEC,
+)
+
+
+AUDIT_ADMIN_ENV = "OFARM_SECURITY_AUDIT_PG_ADMIN_DSN"
+PACKAGE_ROOT = Path(__file__).resolve().parents[2]
+QUERY_IDENTITY = (
+    "ofarm_security.query_operational_security_events"
+    "(uuid, timestamptz, uuid, integer, bigint)"
+)
+LIVE_PHYSICAL_REPLICATION_GATE = (
+    "NOT EXISTS (\n"
+    "            SELECT 1\n"
+    "            FROM pg_catalog.pg_stat_get_wal_senders()\n"
+    "        )\n"
+    "        AND NOT EXISTS (\n"
+    "            SELECT 1\n"
+    "            FROM pg_catalog.pg_stat_get_wal_receiver() AS receiver\n"
+    "            WHERE receiver.pid IS NOT NULL\n"
+    "        )"
+)
+LARGE_OBJECT_ROUTINE_IDENTITIES = (
+    "lo_close(integer)",
+    "lo_creat(integer)",
+    "lo_create(oid)",
+    "lo_export(oid, text)",
+    "lo_from_bytea(oid, bytea)",
+    "lo_get(oid)",
+    "lo_get(oid, bigint, integer)",
+    "lo_import(text)",
+    "lo_import(text, oid)",
+    "lo_lseek(integer, integer, integer)",
+    "lo_lseek64(integer, bigint, integer)",
+    "lo_open(oid, integer)",
+    "lo_put(oid, bigint, bytea)",
+    "lo_tell(integer)",
+    "lo_tell64(integer)",
+    "lo_truncate(integer, integer)",
+    "lo_truncate64(integer, bigint)",
+    "lo_unlink(oid)",
+    "loread(integer, integer)",
+    "lowrite(integer, bytea)",
+)
+BACKEND_STATISTICS_ROUTINE_IDENTITIES = (
+    "pg_stat_get_activity(integer)",
+    "pg_stat_get_backend_activity(integer)",
+    "pg_stat_get_backend_activity_start(integer)",
+    "pg_stat_get_backend_client_addr(integer)",
+    "pg_stat_get_backend_client_port(integer)",
+    "pg_stat_get_backend_dbid(integer)",
+    "pg_stat_get_backend_idset()",
+    "pg_stat_get_backend_pid(integer)",
+    "pg_stat_get_backend_start(integer)",
+    "pg_stat_get_backend_subxact(integer)",
+    "pg_stat_get_backend_userid(integer)",
+    "pg_stat_get_backend_wait_event(integer)",
+    "pg_stat_get_backend_wait_event_type(integer)",
+    "pg_stat_get_backend_xact_start(integer)",
+)
+
+
+def _database_dsn(admin_dsn: str, database_name: str, **overrides: str) -> str:
+    parameters = psycopg.conninfo.conninfo_to_dict(admin_dsn)
+    parameters["dbname"] = database_name
+    parameters.update(overrides)
+    return psycopg.conninfo.make_conninfo(**parameters)
+
+
+def _table_definition(source: str, qualified_name: str) -> str:
+    marker = f"CREATE TABLE {qualified_name} ("
+    start = source.index(marker)
+    end = source.index("\n);", start) + len("\n);")
+    return source[start:end]
+
+
+def _destroy_service(admin_dsn: str) -> None:
+    spec = SECURITY_AUDIT_PROVISIONING_SPEC
+    with psycopg.connect(admin_dsn, autocommit=True) as connection:
+        connection.execute(
+            """
+            SELECT pg_catalog.pg_terminate_backend(pid)
+            FROM pg_catalog.pg_stat_activity
+            WHERE datname = %s AND pid <> pg_catalog.pg_backend_pid()
+            """,
+            (spec.database_name,),
+        )
+        connection.execute(
+            sql.SQL("DROP DATABASE IF EXISTS {}").format(
+                sql.Identifier(spec.database_name)
+            )
+        )
+        roles = [
+            row[0]
+            for row in connection.execute(
+                r"""
+                SELECT rolname::text
+                FROM pg_catalog.pg_roles
+                WHERE rolname::text LIKE 'ofarm\_%' ESCAPE '\'
+                ORDER BY rolname
+                """
+            ).fetchall()
+        ]
+        if roles:
+            connection.execute(
+                sql.SQL("DROP ROLE {}").format(
+                    sql.SQL(", ").join(sql.Identifier(role) for role in roles)
+                )
+            )
+        for database_name in ("postgres", "template0", "template1"):
+            connection.execute(
+                sql.SQL("GRANT CONNECT ON DATABASE {} TO PUBLIC").format(
+                    sql.Identifier(database_name)
+                )
+            )
+        connection.execute(
+            "GRANT TEMPORARY ON DATABASE postgres TO PUBLIC"
+        )
+        for database_name in ("template0", "template1"):
+            connection.execute(
+                sql.SQL("REVOKE TEMPORARY ON DATABASE {} FROM PUBLIC").format(
+                    sql.Identifier(database_name)
+                )
+            )
+
+
+def _role_dsn(state: dict[str, object], role: str) -> str:
+    return _database_dsn(
+        state["admin_dsn"],
+        SECURITY_AUDIT_PROVISIONING_SPEC.database_name,
+        user=role,
+        password=state["passwords"][role],
+    )
+
+
+@pytest.fixture(scope="module")
+def migrated_audit_service():
+    admin_dsn = os.environ.get(AUDIT_ADMIN_ENV)
+    if not admin_dsn:
+        pytest.skip(f"{AUDIT_ADMIN_ENV} is required for real PostgreSQL tests")
+    spec = SECURITY_AUDIT_PROVISIONING_SPEC
+    with psycopg.connect(admin_dsn, autocommit=True) as connection:
+        existing_database = connection.execute(
+            "SELECT 1 FROM pg_catalog.pg_database WHERE datname = %s",
+            (spec.database_name,),
+        ).fetchone()
+        existing_roles = connection.execute(
+            r"""
+            SELECT 1 FROM pg_catalog.pg_roles
+            WHERE rolname::text LIKE 'ofarm\_%' ESCAPE '\' LIMIT 1
+            """
+        ).fetchone()
+    assert existing_database is None
+    assert existing_roles is None
+
+    passwords = {
+        role: f"audit-0001-{index}-{secrets.token_urlsafe(32)}"
+        for index, role in enumerate(spec.required_password_role_names)
+    }
+    try:
+        provision_service(admin_dsn, spec, login_passwords=passwords)
+        migration_set = load_migration_set(PACKAGE_ROOT, SECURITY_AUDIT_SERVICE)
+        report = migrate_service(
+            admin_dsn=admin_dsn,
+            migrator_dsn=_database_dsn(
+                admin_dsn,
+                spec.database_name,
+                user="ofarm_migrator",
+                password=passwords["ofarm_migrator"],
+            ),
+            spec=spec,
+            migration_set=migration_set,
+            release_identity="issue-174-audit-0001-test",
+            execution_id=uuid4(),
+        )
+        yield {
+            "admin_dsn": admin_dsn,
+            "target_admin_dsn": _database_dsn(admin_dsn, spec.database_name),
+            "passwords": passwords,
+            "migration_set": migration_set,
+            "report": report,
+        }
+    finally:
+        _destroy_service(admin_dsn)
+
+
+def test_authoritative_audit_migration_is_one_exact_initial_set():
+    migration_set = load_migration_set(PACKAGE_ROOT, SECURITY_AUDIT_SERVICE)
+    migration = migration_set.migrations[0]
+    source = migration.source_bytes.decode("utf-8")
+
+    assert len(migration_set.migrations) == 1
+    assert migration.filename == "0001_initial.sql"
+    assert validate_migration_source(
+        migration.source_bytes, migration.filename
+    ) == source
+    assert initial_ledger_sql(SECURITY_AUDIT_PROVISIONING_SPEC) in source
+    assert SECURITY_AUDIT_CONTRACT.digest in source
+    assert SECURITY_AUDIT_PROVISIONING_SPEC.digest in source
+    assert migration.source_sha256 == \
+        "sha256:7feab04d98f1ceb1610ab59b99eedb2b027c40e4ef23f9c8ee2344e042b325b8"
+    assert migration.byte_length == 134_670
+    assert migration_set.digest == \
+        "sha256:2cf7ce338d8f9a79b57a6423b4b8c2d33c2dbce2a8f5c8687b33c27323ff00c8"
+    assert migration_set.prefix_digest(1) == migration_set.digest
+
+
+def test_authoritative_audit_migration_has_closed_carriers_and_limits():
+    source = load_migration_set(
+        PACKAGE_ROOT, SECURITY_AUDIT_SERVICE
+    ).migrations[0].source_bytes.decode("utf-8")
+    persisted_audit_tables = "\n".join(
+        _table_definition(source, qualified_name)
+        for qualified_name in (
+            "ofarm_security.operational_security_event",
+            "ofarm_security.operational_security_quota_bucket",
+        )
+    )
+
+    assert source.count("CREATE TABLE ofarm_security.operational_security_") == 2
+    assert "CREATE TABLE ofarm_security.operational_security_event" in source
+    assert "CREATE TABLE ofarm_security.operational_security_quota_bucket" in source
+    assert "BETWEEN 0 AND 1024" in source
+    assert "LIMIT 1024" in source
+    assert "p_max_rows BETWEEN 1 AND 256" in source
+    assert "p_max_bytes BETWEEN 1 AND 1048576" in source
+    assert "p_max_rows BETWEEN 1 AND 2048" in source
+    assert "p_max_bytes BETWEEN 1 AND 8388608" in source
+    assert "make_interval(days => 30)" in source
+    assert "make_interval(secs => 300)" in source
+    assert "make_interval(secs => 60)" in source
+    assert "OFARM_SECURITY_AUDIT_COMPLETE_CATALOG_V1" in source
+    assert "SELF_SOURCE_EXCLUDED" in source
+    assert "'parameter-acl'" in source
+    assert "FROM pg_catalog.pg_parameter_acl AS parameter" in source
+    assert LIVE_PHYSICAL_REPLICATION_GATE in source
+    assert "WHEN unique_violation THEN" in source
+    assert source.count("SET TimeZone = 'UTC'") == 1
+    assert source.count("SET DateStyle = 'ISO, MDY'") == 1
+    assert source.count("SET quote_all_identifiers = off") == 1
+    assert source.count("SET standard_conforming_strings = on") == 1
+    assert source.count(
+        "CASE WHEN grantor.rolsuper THEN 'BOOTSTRAP_SUPERUSER'"
+    ) == 5
+    assert "FROM pg_catalog.pg_largeobject_metadata" in source
+    assert "'large-object-routine'" in source
+    assert "'large-object-routine-acl'" in source
+    assert "routine.pronargs" in source
+    assert "routine.pronargdefaults" in source
+    assert "routine.prosupport = 0" in source
+    assert "routine.prosqlbody IS NULL" in source
+    assert source.count(
+        "pg_catalog.left(routine.proname::pg_catalog.text, 3) = 'lo_'"
+    ) == 3
+    for identity in LARGE_OBJECT_ROUTINE_IDENTITIES:
+        assert f"'{identity}'" in source
+    assert "'backend-statistics-view'" in source
+    assert "'backend-statistics-view-columns'" in source
+    assert "'backend-statistics-view-rewrite'" in source
+    assert "'backend-statistics-view-acl'" in source
+    assert "'backend-statistics-routine'" in source
+    assert "'backend-statistics-routine-acl'" in source
+    assert "pg_catalog.pg_get_viewdef(class.oid, false)" in source
+    assert source.count(
+        "'pg_stat_get_activity', 'pg_stat_get_backend_'"
+    ) == 4
+    for identity in BACKEND_STATISTICS_ROUTINE_IDENTITIES:
+        assert f"'{identity}'" in source
+    assert (
+        "6ac214552a3d7e50c1f2832fa5342dda9ba2fefe96bedd2b4273e35a3769311c"
+        in source
+    )
+    assert (
+        "sha256:04a95986f494a3d8a414035f17cbb2da5b5f1699c325004d2700299dc9c07652"
+        in source
+    )
+    assert "jsonb" not in persisted_audit_tables
+    for forbidden in (
+        "tenant_id",
+        "tenant_ref",
+        "party_ref",
+        "message pg_catalog.text",
+        "details",
+        "CREATE EXTENSION",
+    ):
+        assert forbidden not in source
+
+
+def test_authoritative_audit_migration_installs_exact_public_functions():
+    source = load_migration_set(
+        PACKAGE_ROOT, SECURITY_AUDIT_SERVICE
+    ).migrations[0].source_bytes.decode("utf-8")
+
+    for function in SECURITY_AUDIT_CONTRACT.public_functions:
+        assert f"CREATE FUNCTION {function.qualified_name}" in source
+        assert f"TO {function.capability_role};" in source
+    assert source.count("SECURITY DEFINER") == 10
+    assert "FROM PUBLIC;" in source
+
+
+def test_migrated_audit_structure_observes_exact_ready_contract(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    report = state["report"]
+    assert report.applied_versions == (1,)
+    assert report.final_version == 1
+    assert report.migration_set_digest == state["migration_set"].digest
+
+    with psycopg.connect(
+        _role_dsn(state, "ofarm_security_audit_readiness_login"),
+        autocommit=True,
+    ) as connection:
+        row = connection.execute(
+            "SELECT * FROM ofarm_security.observe_security_audit_contract()"
+        ).fetchone()
+    assert row[0] == SECURITY_AUDIT_CONTRACT.identity
+    assert row[1] == SECURITY_AUDIT_CONTRACT.digest
+    assert row[8] == SECURITY_AUDIT_PROVISIONING_SPEC.digest
+    assert row[9] == 1
+    assert row[10] == state["migration_set"].digest
+    assert row[11:] == (True, False, False)
+
+    with psycopg.connect(
+        _role_dsn(state, "ofarm_migrator"), autocommit=True
+    ) as migrator:
+        migrator.execute("SET ROLE ofarm_security_audit_owner")
+        structural = migrator.execute(
+            "SELECT * FROM ofarm_security.verify_security_audit_structure()"
+        ).fetchone()
+    assert structural == (True, False, 0, False)
+
+    with psycopg.connect(
+        _role_dsn(state, "ofarm_security_audit_readiness_login"),
+        autocommit=True,
+    ) as readiness:
+        readiness.execute("SET TimeZone = 'Europe/Ljubljana'")
+        readiness.execute("SET DateStyle = 'SQL, DMY'")
+        readiness.execute("SET quote_all_identifiers = on")
+        readiness.execute("SET IntervalStyle = 'sql_standard'")
+        readiness.execute("SET extra_float_digits = -15")
+        readiness.execute("SET bytea_output = 'escape'")
+        readiness.execute("SET standard_conforming_strings = off")
+        hostile_guc_structure = readiness.execute(
+            "SELECT * FROM ofarm_security.verify_security_audit_structure()"
+        ).fetchone()
+        assert readiness.execute(
+            "SELECT current_setting('TimeZone'), "
+            "current_setting('DateStyle'), "
+            "current_setting('quote_all_identifiers'), "
+            "current_setting('IntervalStyle'), "
+            "current_setting('extra_float_digits'), "
+            "current_setting('bytea_output'), "
+            "current_setting('standard_conforming_strings')"
+        ).fetchone() == (
+            "Europe/Ljubljana",
+            "SQL, DMY",
+            "on",
+            "sql_standard",
+            "-15",
+            "escape",
+            "off",
+        )
+    assert hostile_guc_structure == (True, False, 0, False)
+
+    with psycopg.connect(state["target_admin_dsn"]) as connection:
+        (
+            verifier_source,
+            verifier_proconfig,
+            live_replication_count,
+        ) = connection.execute(
+            """
+            SELECT routine.prosrc,
+                   routine.proconfig,
+                   (SELECT pg_catalog.count(*)
+                    FROM pg_catalog.pg_stat_get_wal_senders())
+                   +
+                   (SELECT pg_catalog.count(*)
+                    FROM pg_catalog.pg_stat_get_wal_receiver() AS receiver
+                    WHERE receiver.pid IS NOT NULL)
+            FROM pg_catalog.pg_proc AS routine
+            WHERE routine.oid =
+                'ofarm_security.verify_security_audit_structure()'::
+                    pg_catalog.regprocedure
+            """
+        ).fetchone()
+        large_object_inventory = tuple(
+            row[0]
+            for row in connection.execute(
+                """
+                SELECT routine.proname::pg_catalog.text || '(' ||
+                       pg_catalog.pg_get_function_identity_arguments(
+                           routine.oid
+                       ) || ')' AS routine_identity
+                FROM pg_catalog.pg_proc AS routine
+                JOIN pg_catalog.pg_namespace AS namespace
+                  ON namespace.oid = routine.pronamespace
+                WHERE namespace.nspname = 'pg_catalog'
+                  AND (
+                    pg_catalog.left(
+                        routine.proname::pg_catalog.text, 3
+                    ) = 'lo_'
+                    OR routine.proname IN ('loread', 'lowrite')
+                  )
+                ORDER BY (
+                    routine.proname::pg_catalog.text || '(' ||
+                    pg_catalog.pg_get_function_identity_arguments(
+                        routine.oid
+                    ) || ')'
+                ) COLLATE pg_catalog."C"
+                """
+            )
+        )
+        large_object_metadata_count = connection.execute(
+            "SELECT pg_catalog.count(*) "
+            "FROM pg_catalog.pg_largeobject_metadata"
+        ).fetchone()[0]
+        public_large_object_execute_count = connection.execute(
+            """
+            SELECT pg_catalog.count(*)
+            FROM pg_catalog.pg_proc AS routine
+            JOIN pg_catalog.pg_namespace AS namespace
+              ON namespace.oid = routine.pronamespace
+            CROSS JOIN LATERAL pg_catalog.aclexplode(
+                COALESCE(
+                    routine.proacl,
+                    pg_catalog.acldefault('f', routine.proowner)
+                )
+            ) AS acl
+            WHERE namespace.nspname = 'pg_catalog'
+              AND (
+                pg_catalog.left(routine.proname::pg_catalog.text, 3) = 'lo_'
+                OR routine.proname IN ('loread', 'lowrite')
+              )
+              AND acl.grantee = 0
+              AND acl.privilege_type = 'EXECUTE'
+            """
+        ).fetchone()[0]
+        backend_statistics_routine_inventory = tuple(
+            row[0]
+            for row in connection.execute(
+                """
+                SELECT routine.proname::pg_catalog.text || '(' ||
+                       pg_catalog.oidvectortypes(routine.proargtypes) || ')'
+                FROM pg_catalog.pg_proc AS routine
+                JOIN pg_catalog.pg_namespace AS namespace
+                  ON namespace.oid = routine.pronamespace
+                WHERE namespace.nspname = 'pg_catalog'
+                  AND pg_catalog.left(
+                          routine.proname::pg_catalog.text, 20
+                      ) IN (
+                          'pg_stat_get_activity',
+                          'pg_stat_get_backend_'
+                      )
+                ORDER BY
+                    routine.proname COLLATE pg_catalog."C",
+                    pg_catalog.oidvectortypes(routine.proargtypes)
+                        COLLATE pg_catalog."C"
+                """
+            )
+        )
+        backend_statistics_routine_acl_posture = connection.execute(
+            """
+            SELECT pg_catalog.count(*),
+                   pg_catalog.count(*) FILTER (
+                       WHERE NOT owner.rolsuper
+                          OR acl.grantee <> routine.proowner
+                          OR acl.grantor <> routine.proowner
+                          OR acl.privilege_type <> 'EXECUTE'
+                          OR acl.is_grantable
+                   )
+            FROM pg_catalog.pg_proc AS routine
+            JOIN pg_catalog.pg_namespace AS namespace
+              ON namespace.oid = routine.pronamespace
+            JOIN pg_catalog.pg_roles AS owner ON owner.oid = routine.proowner
+            CROSS JOIN LATERAL pg_catalog.aclexplode(
+                COALESCE(
+                    routine.proacl,
+                    pg_catalog.acldefault('f', routine.proowner)
+                )
+            ) AS acl
+            WHERE namespace.nspname = 'pg_catalog'
+              AND pg_catalog.left(
+                      routine.proname::pg_catalog.text, 20
+                  ) IN ('pg_stat_get_activity', 'pg_stat_get_backend_')
+            """
+        ).fetchone()
+        backend_statistics_view_definition = connection.execute(
+            """
+            SELECT pg_catalog.pg_get_viewdef(class.oid, false)
+            FROM pg_catalog.pg_class AS class
+            JOIN pg_catalog.pg_namespace AS namespace
+              ON namespace.oid = class.relnamespace
+            WHERE namespace.nspname = 'pg_catalog'
+              AND class.relname = 'pg_stat_activity'
+              AND class.relkind = 'v'
+            """
+        ).fetchone()[0]
+        backend_statistics_view_columns = tuple(
+            connection.execute(
+                """
+                SELECT attribute.attnum,
+                       attribute.attname::pg_catalog.text,
+                       type_namespace.nspname::pg_catalog.text,
+                       pg_catalog.format_type(
+                           attribute.atttypid, attribute.atttypmod
+                       ),
+                       attribute.attnotnull,
+                       CASE WHEN attribute.attcollation = 0 THEN NULL
+                            ELSE collation_namespace.nspname::pg_catalog.text ||
+                                 '.' ||
+                                 column_collation.collname::pg_catalog.text END,
+                       attribute.attidentity,
+                       attribute.attgenerated,
+                       attribute.atthasdef
+                FROM pg_catalog.pg_attribute AS attribute
+                JOIN pg_catalog.pg_type AS data_type
+                  ON data_type.oid = attribute.atttypid
+                JOIN pg_catalog.pg_namespace AS type_namespace
+                  ON type_namespace.oid = data_type.typnamespace
+                LEFT JOIN pg_catalog.pg_collation AS column_collation
+                  ON column_collation.oid = attribute.attcollation
+                LEFT JOIN pg_catalog.pg_namespace AS collation_namespace
+                  ON collation_namespace.oid = column_collation.collnamespace
+                WHERE attribute.attrelid =
+                      'pg_catalog.pg_stat_activity'::pg_catalog.regclass
+                  AND attribute.attnum > 0
+                  AND NOT attribute.attisdropped
+                ORDER BY attribute.attnum
+                """
+            )
+        )
+        backend_statistics_view_acl_posture = connection.execute(
+            """
+            SELECT pg_catalog.count(*),
+                   pg_catalog.count(*) FILTER (
+                       WHERE NOT owner.rolsuper
+                          OR acl.grantee <> class.relowner
+                          OR acl.grantor <> class.relowner
+                          OR acl.privilege_type NOT IN (
+                              'DELETE',
+                              'INSERT',
+                              'MAINTAIN',
+                              'REFERENCES',
+                              'SELECT',
+                              'TRIGGER',
+                              'TRUNCATE',
+                              'UPDATE'
+                          )
+                          OR acl.is_grantable
+                   )
+            FROM pg_catalog.pg_class AS class
+            JOIN pg_catalog.pg_namespace AS namespace
+              ON namespace.oid = class.relnamespace
+            JOIN pg_catalog.pg_roles AS owner ON owner.oid = class.relowner
+            CROSS JOIN LATERAL pg_catalog.aclexplode(
+                COALESCE(
+                    class.relacl,
+                    pg_catalog.acldefault('r', class.relowner)
+                )
+            ) AS acl
+            WHERE namespace.nspname = 'pg_catalog'
+              AND class.relname = 'pg_stat_activity'
+              AND class.relkind = 'v'
+            """
+        ).fetchone()
+        columns = {
+            row[0]
+            for row in connection.execute(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'ofarm_security'
+                  AND table_name = 'operational_security_event'
+                """
+            )
+        }
+    assert LIVE_PHYSICAL_REPLICATION_GATE in verifier_source
+    assert verifier_proconfig == [
+        "search_path=pg_catalog, pg_temp",
+        "TimeZone=UTC",
+        "DateStyle=ISO, MDY",
+        "quote_all_identifiers=off",
+        "standard_conforming_strings=on",
+    ]
+    assert live_replication_count == 0
+    assert large_object_inventory == LARGE_OBJECT_ROUTINE_IDENTITIES
+    assert large_object_metadata_count == 0
+    assert public_large_object_execute_count == 0
+    assert backend_statistics_routine_inventory == \
+        BACKEND_STATISTICS_ROUTINE_IDENTITIES
+    assert backend_statistics_routine_acl_posture == (14, 0)
+    assert backend_statistics_view_definition == \
+        SECURITY_AUDIT_PROVISIONING_SPEC.activity_view.definition
+    assert backend_statistics_view_columns == tuple(
+        (
+            position,
+            column.name,
+            "pg_catalog",
+            column.data_type,
+            False,
+            column.collation,
+            "",
+            "",
+            False,
+        )
+        for position, column in enumerate(
+            SECURITY_AUDIT_PROVISIONING_SPEC.activity_view.columns,
+            start=1,
+        )
+    )
+    assert backend_statistics_view_acl_posture == (8, 0)
+    assert not columns & {
+        "tenant_id", "tenant_ref", "party_ref", "actor_ref", "subject",
+        "issuer", "request_id", "message", "details", "payload",
+    }
+
+
+def test_pretenant_append_is_attributed_bounded_and_exactly_idempotent(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    event_id = uuid4()
+    arguments = (
+        event_id,
+        "CREDENTIAL_MISSING",
+        bytes(range(32)),
+        "OFARM_PRETENANT_CORRELATION_V1",
+        1,
+    )
+    with psycopg.connect(
+        _role_dsn(state, "ofarm_security_authentication_producer_login"),
+        autocommit=True,
+    ) as producer:
+        first = producer.execute(
+            """
+            SELECT * FROM ofarm_security.append_pretenant_failure(
+                %s, %s, %s, %s, %s
+            )
+            """,
+            arguments,
+        ).fetchone()
+        retry = producer.execute(
+            """
+            SELECT * FROM ofarm_security.append_pretenant_failure(
+                %s, %s, %s, %s, %s
+            )
+            """,
+            arguments,
+        ).fetchone()
+        with pytest.raises(psycopg.Error):
+            producer.execute(
+                """
+                SELECT ofarm_security.append_pretenant_failure(
+                    %s, 'VERIFIER_UNAVAILABLE', %s, %s, %s
+                )
+                """,
+                (event_id, arguments[2], arguments[3], arguments[4]),
+            )
+        with pytest.raises(psycopg.Error):
+            producer.execute(
+                "SELECT * FROM ofarm_security.operational_security_event"
+            )
+
+    assert first == retry
+    assert first[0] == event_id
+    assert first[3:] == (True, None, False)
+    with psycopg.connect(state["target_admin_dsn"]) as connection:
+        row = connection.execute(
+            """
+            SELECT event_kind, producer, component, reason,
+                   pg_catalog.octet_length(correlation_hmac_value),
+                   purge_after = observed_at + pg_catalog.make_interval(days => 30),
+                   pg_catalog.octet_length(append_input_fingerprint)
+            FROM ofarm_security.operational_security_event
+            WHERE event_id = %s
+            """,
+            (event_id,),
+        ).fetchone()
+    assert row == (
+        "PRE_TENANT_FAILURE", "AUTHENTICATION_BOUNDARY_V1",
+        "AUTHENTICATION", "CREDENTIAL_MISSING", 32, True, 32,
+    )
+
+
+def _concurrent_append(
+    state: dict[str, object],
+    role: str,
+    barrier: Barrier,
+    arguments: tuple[object, ...],
+) -> tuple[str, object]:
+    with psycopg.connect(_role_dsn(state, role), autocommit=True) as producer:
+        barrier.wait(timeout=15)
+        try:
+            row = producer.execute(
+                """
+                SELECT * FROM ofarm_security.append_pretenant_failure(
+                    %s, %s, %s, %s, %s
+                )
+                """,
+                arguments,
+            ).fetchone()
+        except psycopg.Error as exc:
+            return ("error", exc.diag.message_primary)
+    return ("ok", row)
+
+
+def _run_concurrent_appends(
+    state: dict[str, object],
+    role: str,
+    arguments: tuple[tuple[object, ...], ...],
+) -> list[tuple[str, object]]:
+    barrier = Barrier(len(arguments))
+    with ThreadPoolExecutor(max_workers=len(arguments)) as executor:
+        futures = [
+            executor.submit(
+                _concurrent_append, state, role, barrier, call_arguments
+            )
+            for call_arguments in arguments
+        ]
+        return [future.result(timeout=30) for future in futures]
+
+
+def _replace_pretenant_append_source(
+    admin: psycopg.Connection, source: str
+) -> None:
+    admin.execute(
+        sql.SQL(
+            """
+            CREATE OR REPLACE FUNCTION ofarm_security.append_pretenant_failure(
+                p_event_id pg_catalog.uuid,
+                p_reason pg_catalog.text,
+                p_correlation_hmac pg_catalog.bytea,
+                p_correlation_hmac_domain pg_catalog.text,
+                p_correlation_hmac_key_version pg_catalog.int4
+            ) RETURNS ofarm_security.append_pretenant_failure_result
+            LANGUAGE plpgsql VOLATILE PARALLEL UNSAFE SECURITY DEFINER
+            SET search_path = pg_catalog, pg_temp
+            AS {}
+            """
+        ).format(sql.Literal(source))
+    )
+
+
+def _concurrent_append_at(
+    state: dict[str, object],
+    role: str,
+    barrier: Barrier,
+    arguments: tuple[object, ...],
+    observed_at: datetime,
+    application_name: str,
+) -> tuple[str, object]:
+    dsn = psycopg.conninfo.make_conninfo(
+        _role_dsn(state, role), application_name=application_name
+    )
+    with psycopg.connect(dsn, autocommit=True) as producer:
+        producer.execute(
+            "SELECT pg_catalog.set_config('ofarm.test_now', %s, false)",
+            (observed_at.isoformat(),),
+        )
+        barrier.wait(timeout=15)
+        try:
+            row = producer.execute(
+                """
+                SELECT * FROM ofarm_security.append_pretenant_failure(
+                    %s, %s, %s, %s, %s
+                )
+                """,
+                arguments,
+            ).fetchone()
+        except psycopg.Error as exc:
+            return ("error", exc.diag.message_primary)
+    return ("ok", row)
+
+
+def _run_coordinated_adjacent_bucket_appends(
+    state: dict[str, object],
+    role: str,
+    calls: tuple[tuple[tuple[object, ...], datetime], ...],
+) -> list[tuple[str, object]]:
+    assert len(calls) == 2
+    token = uuid4().hex
+    application_names = [
+        f"a174_adjacent_{token}_{index}" for index in range(len(calls))
+    ]
+    barrier = Barrier(len(calls))
+    both_blocked = False
+    with psycopg.connect(state["target_admin_dsn"]) as locker:
+        locker.execute(
+            """
+            SELECT singleton
+            FROM ofarm_security._test_append_barrier
+            WHERE singleton
+            FOR UPDATE
+            """
+        ).fetchone()
+        with ThreadPoolExecutor(max_workers=len(calls)) as executor:
+            futures = [
+                executor.submit(
+                    _concurrent_append_at,
+                    state,
+                    role,
+                    barrier,
+                    arguments,
+                    observed_at,
+                    application_names[index],
+                )
+                for index, (arguments, observed_at) in enumerate(calls)
+            ]
+            deadline = monotonic() + 15
+            try:
+                with psycopg.connect(
+                    state["target_admin_dsn"], autocommit=True
+                ) as observer:
+                    while monotonic() < deadline:
+                        blocked_count = observer.execute(
+                            """
+                            SELECT pg_catalog.count(*)
+                            FROM pg_catalog.pg_stat_activity
+                            WHERE application_name = ANY(%s::pg_catalog.text[])
+                              AND state = 'active'
+                              AND wait_event_type = 'Lock'
+                            """,
+                            (application_names,),
+                        ).fetchone()[0]
+                        if blocked_count == len(calls):
+                            both_blocked = True
+                            break
+                        sleep(0.01)
+            finally:
+                locker.commit()
+            results = [future.result(timeout=30) for future in futures]
+    assert both_blocked
+    return results
+
+
+def _assert_adjacent_bucket_event_identity_serialization(
+    state: dict[str, object],
+) -> None:
+    role = "ofarm_security_authentication_producer_login"
+    producer_name = "AUTHENTICATION_BOUNDARY_V1"
+    component = "AUTHENTICATION"
+    base_bucket = datetime(2040, 1, 1, tzinfo=timezone.utc)
+    event_ids = (uuid4(), uuid4())
+    bucket_starts = tuple(
+        base_bucket + timedelta(minutes=offset) for offset in range(4)
+    )
+    with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
+        original_source = admin.execute(
+            """
+            SELECT routine.prosrc
+            FROM pg_catalog.pg_proc AS routine
+            WHERE routine.oid =
+                'ofarm_security.append_pretenant_failure('
+                'uuid, text, bytea, text, integer)'::pg_catalog.regprocedure
+            """
+        ).fetchone()[0]
+        clock_marker = "    v_now := pg_catalog.clock_timestamp();"
+        quota_marker = "    IF v_bucket.accepted_event_count < 1024 THEN"
+        assert original_source.count(clock_marker) == 1
+        assert original_source.count(quota_marker) == 1
+        test_source = original_source.replace(
+            clock_marker,
+            "    v_now := pg_catalog.current_setting('ofarm.test_now')::\n"
+            "        pg_catalog.timestamptz;",
+        ).replace(
+            quota_marker,
+            "    PERFORM singleton\n"
+            "    FROM ofarm_security._test_append_barrier\n"
+            "    WHERE singleton\n"
+            "    FOR SHARE;\n\n"
+            f"{quota_marker}",
+        )
+        admin.execute(
+            """
+            CREATE TABLE ofarm_security._test_append_barrier (
+                singleton pg_catalog.bool PRIMARY KEY CHECK (singleton)
+            )
+            """
+        )
+        admin.execute(
+            "ALTER TABLE ofarm_security._test_append_barrier "
+            "OWNER TO ofarm_security_audit_owner"
+        )
+        admin.execute(
+            "INSERT INTO ofarm_security._test_append_barrier VALUES (true)"
+        )
+        admin.execute(
+            """
+            INSERT INTO ofarm_security.operational_security_quota_bucket (
+                producer, component, bucket_start
+            )
+            SELECT %s, %s, bucket_start
+            FROM pg_catalog.unnest(%s::pg_catalog.timestamptz[])
+                AS bucket(bucket_start)
+            """,
+            (producer_name, component, list(bucket_starts)),
+        )
+        _replace_pretenant_append_source(admin, test_source)
+
+    try:
+        exact_arguments = (
+            event_ids[0],
+            "CREDENTIAL_MISSING",
+            bytes.fromhex("41" * 32),
+            "OFARM_PRETENANT_CORRELATION_V1",
+            1,
+        )
+        exact_results = _run_coordinated_adjacent_bucket_appends(
+            state,
+            role,
+            (
+                (exact_arguments, bucket_starts[0] + timedelta(seconds=30)),
+                (exact_arguments, bucket_starts[1] + timedelta(seconds=30)),
+            ),
+        )
+        assert [result[0] for result in exact_results] == ["ok", "ok"]
+        assert exact_results[0][1] == exact_results[1][1]
+        assert exact_results[0][1][0] == event_ids[0]
+        assert exact_results[0][1][3:] == (True, None, False)
+
+        mismatch_common = (
+            bytes.fromhex("42" * 32),
+            "OFARM_PRETENANT_CORRELATION_V1",
+            1,
+        )
+        mismatch_results = _run_coordinated_adjacent_bucket_appends(
+            state,
+            role,
+            (
+                (
+                    (event_ids[1], "CREDENTIAL_MISSING", *mismatch_common),
+                    bucket_starts[2] + timedelta(seconds=30),
+                ),
+                (
+                    (event_ids[1], "VERIFIER_UNAVAILABLE", *mismatch_common),
+                    bucket_starts[3] + timedelta(seconds=30),
+                ),
+            ),
+        )
+        assert sorted(result[0] for result in mismatch_results) == [
+            "error", "ok",
+        ]
+        assert [
+            result[1] for result in mismatch_results if result[0] == "error"
+        ] == ["event identity was already used with different input"]
+
+        with psycopg.connect(state["target_admin_dsn"]) as admin:
+            event_rows = admin.execute(
+                """
+                SELECT event_id, reason
+                FROM ofarm_security.operational_security_event
+                WHERE event_id = ANY(%s::pg_catalog.uuid[])
+                ORDER BY event_id
+                """,
+                (list(event_ids),),
+            ).fetchall()
+            quota_rows = admin.execute(
+                """
+                SELECT bucket_start, accepted_event_count,
+                       overflow_event_count
+                FROM ofarm_security.operational_security_quota_bucket
+                WHERE producer = %s
+                  AND component = %s
+                  AND bucket_start = ANY(%s::pg_catalog.timestamptz[])
+                ORDER BY bucket_start
+                """,
+                (producer_name, component, list(bucket_starts)),
+            ).fetchall()
+        assert {row[0] for row in event_rows} == set(event_ids)
+        assert len(event_rows) == 2
+        assert sorted(row[1] for row in event_rows) in (
+            ["CREDENTIAL_MISSING", "CREDENTIAL_MISSING"],
+            ["CREDENTIAL_MISSING", "VERIFIER_UNAVAILABLE"],
+        )
+        assert len(quota_rows) == 4
+        assert sorted(row[1] for row in quota_rows[0:2]) == [0, 1]
+        assert sorted(row[1] for row in quota_rows[2:4]) == [0, 1]
+        assert all(row[2] == 0 for row in quota_rows)
+    finally:
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            _replace_pretenant_append_source(admin, original_source)
+            admin.execute(
+                """
+                DELETE FROM ofarm_security.operational_security_event
+                WHERE event_id = ANY(%s::pg_catalog.uuid[])
+                """,
+                (list(event_ids),),
+            )
+            admin.execute(
+                """
+                DELETE FROM ofarm_security.operational_security_quota_bucket
+                WHERE producer = %s
+                  AND component = %s
+                  AND bucket_start = ANY(%s::pg_catalog.timestamptz[])
+                """,
+                (producer_name, component, list(bucket_starts)),
+            )
+            admin.execute("DROP TABLE ofarm_security._test_append_barrier")
+
+
+def test_concurrent_same_event_retry_matches_and_mismatch_refuses_once(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    role = "ofarm_security_authentication_producer_login"
+    exact_id = uuid4()
+    exact_arguments = (
+        exact_id,
+        "CREDENTIAL_MISSING",
+        bytes(range(32)),
+        "OFARM_PRETENANT_CORRELATION_V1",
+        1,
+    )
+    exact_results = _run_concurrent_appends(
+        state, role, (exact_arguments, exact_arguments)
+    )
+    assert [result[0] for result in exact_results] == ["ok", "ok"]
+    assert exact_results[0][1] == exact_results[1][1]
+    assert exact_results[0][1][0] == exact_id
+    assert exact_results[0][1][3:] == (True, None, False)
+
+    mismatch_id = uuid4()
+    common = (
+        bytes(reversed(range(32))),
+        "OFARM_PRETENANT_CORRELATION_V1",
+        1,
+    )
+    mismatch_results = _run_concurrent_appends(
+        state,
+        role,
+        (
+            (mismatch_id, "CREDENTIAL_MISSING", *common),
+            (mismatch_id, "VERIFIER_UNAVAILABLE", *common),
+        ),
+    )
+    assert sorted(result[0] for result in mismatch_results) == ["error", "ok"]
+    assert [result[1] for result in mismatch_results if result[0] == "error"] == [
+        "event identity was already used with different input"
+    ]
+
+    with psycopg.connect(state["target_admin_dsn"]) as admin:
+        rows = admin.execute(
+            """
+            SELECT event_id, reason
+            FROM ofarm_security.operational_security_event
+            WHERE event_id IN (%s, %s)
+            ORDER BY event_id
+            """,
+            (exact_id, mismatch_id),
+        ).fetchall()
+    assert len(rows) == 2
+    assert {row[0] for row in rows} == {exact_id, mismatch_id}
+    assert rows[0][1] in {"CREDENTIAL_MISSING", "VERIFIER_UNAVAILABLE"}
+    assert rows[1][1] in {"CREDENTIAL_MISSING", "VERIFIER_UNAVAILABLE"}
+    _assert_adjacent_bucket_event_identity_serialization(state)
+
+
+def test_bounded_reader_requires_an_equal_committed_access_intent(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    with psycopg.connect(
+        _role_dsn(state, "ofarm_security_audit_reader_login"),
+        autocommit=True,
+    ) as reader:
+        with pytest.raises(psycopg.Error):
+            reader.execute(
+                """
+                SELECT * FROM ofarm_security.query_operational_security_events(
+                    %s, NULL, NULL, 10, 100000
+                )
+                """,
+                (uuid4(),),
+            )
+
+    with psycopg.connect(
+        _role_dsn(state, "ofarm_security_audit_control_login"),
+        autocommit=True,
+    ) as control:
+        access = control.execute(
+            """
+            SELECT * FROM ofarm_security.commit_audit_access_intent(
+                'OPERATIONAL_DIAGNOSTIC_QUERY_V1', %s,
+                NULL, NULL, 10, 100000
+            )
+            """,
+            (QUERY_IDENTITY,),
+        ).fetchone()
+
+    with psycopg.connect(
+        _role_dsn(state, "ofarm_security_audit_reader_login"),
+        autocommit=True,
+    ) as reader:
+        rows = reader.execute(
+            """
+            SELECT * FROM ofarm_security.query_operational_security_events(
+                %s, NULL, NULL, 10, 100000
+            )
+            """,
+            (access[0],),
+        ).fetchall()
+        with pytest.raises(psycopg.Error):
+            reader.execute(
+                """
+                SELECT * FROM ofarm_security.query_operational_security_events(
+                    %s, NULL, NULL, 11, 100000
+                )
+                """,
+                (access[0],),
+            )
+    assert 1 <= len(rows) <= 10
+    assert all(row[2] > access[1] for row in rows)
+
+
+def test_wrong_producer_reasons_and_cross_capabilities_refuse(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    producer_cases = (
+        (
+            "ofarm_security_authentication_producer_login",
+            "BINDER_REFUSED",
+        ),
+        (
+            "ofarm_security_request_router_producer_login",
+            "CREDENTIAL_MISSING",
+        ),
+    )
+    for role, wrong_reason in producer_cases:
+        with psycopg.connect(_role_dsn(state, role), autocommit=True) as connection:
+            with pytest.raises(psycopg.Error):
+                connection.execute(
+                    """
+                    SELECT ofarm_security.append_pretenant_failure(
+                        %s, %s, %s, 'OFARM_PRETENANT_CORRELATION_V1', 1
+                    )
+                    """,
+                    (uuid4(), wrong_reason, bytes(range(32))),
+                )
+
+    cross_capability_calls = {
+        "ofarm_security_authentication_producer_login": (
+            "SELECT ofarm_security.append_audit_gap(now(), now(), 0, true)",
+        ),
+        "ofarm_security_audit_control_login": (
+            "SELECT ofarm_security.append_pretenant_failure("
+            "gen_random_uuid(), 'CREDENTIAL_MISSING', decode(repeat('ab',32),'hex'), "
+            "'OFARM_PRETENANT_CORRELATION_V1', 1)",
+            "SELECT * FROM ofarm_security.query_operational_security_events("
+            "gen_random_uuid(), NULL, NULL, 1, 1)",
+        ),
+        "ofarm_security_audit_reader_login": (
+            "SELECT ofarm_security.append_audit_gap(now(), now(), 0, true)",
+            "SELECT ofarm_security.purge_expired_operational_security_events()",
+        ),
+        "ofarm_security_audit_retention_login": (
+            "SELECT * FROM ofarm_security.query_operational_security_events("
+            "gen_random_uuid(), NULL, NULL, 1, 1)",
+        ),
+    }
+    for role, statements in cross_capability_calls.items():
+        with psycopg.connect(_role_dsn(state, role), autocommit=True) as connection:
+            for statement in statements:
+                with pytest.raises(psycopg.Error):
+                    connection.execute(statement)
+
+
+def test_runtime_roles_have_no_direct_event_table_or_schema_authority(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    runtime_logins = (
+        "ofarm_security_authentication_producer_login",
+        "ofarm_security_request_router_producer_login",
+        "ofarm_security_audit_control_login",
+        "ofarm_security_audit_reader_login",
+        "ofarm_security_audit_retention_login",
+        "ofarm_security_audit_readiness_login",
+    )
+    denied_statements = (
+        "SELECT * FROM ofarm_security.operational_security_event",
+        "INSERT INTO ofarm_security.operational_security_event DEFAULT VALUES",
+        "UPDATE ofarm_security.operational_security_event SET reason = reason",
+        "DELETE FROM ofarm_security.operational_security_event",
+        "TRUNCATE ofarm_security.operational_security_event",
+        "CREATE TABLE ofarm_security.untrusted_object (value integer)",
+        "SET ROLE ofarm_security_audit_owner",
+    )
+    for role in runtime_logins:
+        with psycopg.connect(_role_dsn(state, role), autocommit=True) as connection:
+            for statement in denied_statements:
+                with pytest.raises(psycopg.Error):
+                    connection.execute(statement)
+            with pytest.raises(psycopg.Error):
+                with connection.cursor().copy(
+                    "COPY ofarm_security.operational_security_event TO STDOUT"
+                ) as copy:
+                    tuple(copy.rows())
+
+    qualified_large_object_identities = [
+        f"pg_catalog.{identity}" for identity in LARGE_OBJECT_ROUTINE_IDENTITIES
+    ]
+    for role in runtime_logins:
+        with psycopg.connect(
+            _role_dsn(state, role), autocommit=True
+        ) as connection:
+            executable_count = connection.execute(
+                """
+                SELECT pg_catalog.count(*)
+                FROM pg_catalog.unnest(%s::pg_catalog.text[])
+                    AS routine(identity)
+                WHERE pg_catalog.has_function_privilege(
+                    current_user, routine.identity, 'EXECUTE'
+                )
+                """,
+                (qualified_large_object_identities,),
+            ).fetchone()[0]
+            assert executable_count == 0
+            with pytest.raises(psycopg.Error):
+                connection.execute(
+                    "SELECT pg_catalog.lo_from_bytea(0, "
+                    "pg_catalog.decode('aa', 'hex'))"
+                )
+            with pytest.raises(psycopg.Error):
+                connection.execute("SELECT pg_catalog.lo_get(1)")
+
+
+def test_same_login_cannot_observe_peer_activity_surface_while_append_works(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    role = "ofarm_security_authentication_producer_login"
+    peer_application_name = "issue174-audit-peer-" + uuid4().hex
+    peer_sql_secret = "issue174_audit_sql_" + uuid4().hex
+    event_id = uuid4()
+    peer_dsn = psycopg.conninfo.make_conninfo(
+        _role_dsn(state, role),
+        application_name=peer_application_name,
+    )
+    reader_dsn = psycopg.conninfo.make_conninfo(
+        _role_dsn(state, role),
+        application_name="issue174-audit-peer-reader",
+    )
+    peer_query_started = Event()
+
+    def run_peer_query() -> tuple[object, ...]:
+        with psycopg.connect(peer_dsn, autocommit=True) as peer:
+            appended = peer.execute(
+                """
+                SELECT * FROM ofarm_security.append_pretenant_failure(
+                    %s, 'CREDENTIAL_MISSING', %s,
+                    'OFARM_PRETENANT_CORRELATION_V1', 1
+                )
+                """,
+                (event_id, bytes(range(32))),
+            ).fetchone()
+            peer_query_started.set()
+            try:
+                peer.execute(
+                    f"SELECT pg_catalog.pg_sleep(3) /* {peer_sql_secret} */"
+                ).fetchone()
+            except psycopg.errors.QueryCanceled:
+                pass
+        return appended
+
+    direct_activity_calls = (
+        "SELECT * FROM pg_catalog.pg_stat_get_activity(NULL::integer)",
+        "SELECT pg_catalog.pg_stat_get_backend_activity(1)",
+        "SELECT pg_catalog.pg_stat_get_backend_activity_start(1)",
+        "SELECT pg_catalog.pg_stat_get_backend_client_addr(1)",
+        "SELECT pg_catalog.pg_stat_get_backend_client_port(1)",
+        "SELECT pg_catalog.pg_stat_get_backend_dbid(1)",
+        "SELECT * FROM pg_catalog.pg_stat_get_backend_idset()",
+        "SELECT pg_catalog.pg_stat_get_backend_pid(1)",
+        "SELECT pg_catalog.pg_stat_get_backend_start(1)",
+        "SELECT * FROM pg_catalog.pg_stat_get_backend_subxact(1)",
+        "SELECT pg_catalog.pg_stat_get_backend_userid(1)",
+        "SELECT pg_catalog.pg_stat_get_backend_wait_event(1)",
+        "SELECT pg_catalog.pg_stat_get_backend_wait_event_type(1)",
+        "SELECT pg_catalog.pg_stat_get_backend_xact_start(1)",
+    )
+    try:
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            peer_future = executor.submit(run_peer_query)
+            assert peer_query_started.wait(timeout=2)
+            with psycopg.connect(
+                state["target_admin_dsn"], autocommit=True
+            ) as admin:
+                deadline = monotonic() + 2
+                peer_row = None
+                while monotonic() < deadline:
+                    peer_row = admin.execute(
+                        """
+                        SELECT application_name, query
+                        FROM pg_catalog.pg_stat_activity
+                        WHERE application_name = %s
+                        """,
+                        (peer_application_name,),
+                    ).fetchone()
+                    if peer_row is not None and peer_sql_secret in peer_row[1]:
+                        break
+                    sleep(0.025)
+                assert peer_row is not None
+                assert peer_row[0] == peer_application_name
+                assert peer_sql_secret in peer_row[1]
+
+            with psycopg.connect(reader_dsn, autocommit=True) as reader:
+                assert reader.execute(
+                    """
+                    SELECT pg_catalog.has_table_privilege(
+                        current_user,
+                        'pg_catalog.pg_stat_activity',
+                        'SELECT'
+                    )
+                    """
+                ).fetchone() == (False,)
+                routine_privileges = tuple(
+                    reader.execute(
+                        """
+                        SELECT routine.proname::pg_catalog.text || '(' ||
+                               pg_catalog.oidvectortypes(
+                                   routine.proargtypes
+                               ) || ')',
+                               pg_catalog.has_function_privilege(
+                                   current_user, routine.oid, 'EXECUTE'
+                               )
+                        FROM pg_catalog.pg_proc AS routine
+                        JOIN pg_catalog.pg_namespace AS namespace
+                          ON namespace.oid = routine.pronamespace
+                        WHERE namespace.nspname = 'pg_catalog'
+                          AND pg_catalog.left(
+                                  routine.proname::pg_catalog.text, 20
+                              ) IN (
+                                  'pg_stat_get_activity',
+                                  'pg_stat_get_backend_'
+                              )
+                        ORDER BY (
+                            routine.proname::pg_catalog.text || '(' ||
+                            pg_catalog.oidvectortypes(routine.proargtypes) || ')'
+                        ) COLLATE pg_catalog."C"
+                        """
+                    )
+                )
+                assert routine_privileges == tuple(
+                    (identity, False)
+                    for identity in BACKEND_STATISTICS_ROUTINE_IDENTITIES
+                )
+                with pytest.raises(psycopg.errors.InsufficientPrivilege):
+                    reader.execute(
+                        """
+                        SELECT application_name, query
+                        FROM pg_catalog.pg_stat_activity
+                        WHERE application_name = %s OR query LIKE %s
+                        """,
+                        (peer_application_name, f"%{peer_sql_secret}%"),
+                    )
+                for statement in direct_activity_calls:
+                    with pytest.raises(psycopg.errors.InsufficientPrivilege):
+                        reader.execute(statement)
+            appended = peer_future.result(timeout=5)
+        assert appended[0] == event_id
+        assert appended[3:] == (True, None, False)
+    finally:
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            admin.execute(
+                """
+                DELETE FROM ofarm_security.operational_security_event
+                WHERE event_id = %s
+                """,
+                (event_id,),
+            )
+
+
+def _reset_quota_state(
+    state: dict[str, object], producer: str, component: str
+) -> None:
+    with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
+        admin.execute(
+            """
+            DELETE FROM ofarm_security.operational_security_event
+            WHERE event_kind IN ('OVERFLOW_STARTED', 'OVERFLOW_ENDED')
+              AND affected_producer = %s
+              AND affected_component = %s
+            """,
+            (producer, component),
+        )
+        admin.execute(
+            """
+            DELETE FROM ofarm_security.operational_security_quota_bucket
+            WHERE producer = %s
+              AND component = %s
+            """,
+            (producer, component),
+        )
+
+
+def _bulk_append(
+    state: dict[str, object], role: str, prefix: str, reason: str
+) -> tuple[int, int, int]:
+    with psycopg.connect(_role_dsn(state, role), autocommit=True) as producer:
+        return producer.execute(
+            """
+            WITH calls AS MATERIALIZED (
+                SELECT result.*
+                FROM pg_catalog.generate_series(1, 1025) AS series(value)
+                CROSS JOIN LATERAL ofarm_security.append_pretenant_failure(
+                    (%s || pg_catalog.lpad(value::pg_catalog.text, 12, '0'))::
+                        pg_catalog.uuid,
+                    %s,
+                    pg_catalog.decode(pg_catalog.repeat('cd', 32), 'hex'),
+                    'OFARM_PRETENANT_CORRELATION_V1',
+                    1
+                ) AS result
+            )
+            SELECT pg_catalog.count(*) FILTER (WHERE stored_individually),
+                   pg_catalog.count(*) FILTER (WHERE NOT stored_individually),
+                   pg_catalog.count(*) FILTER (WHERE overflow_count_unknown)
+            FROM calls
+            """,
+            (prefix, reason),
+        ).fetchone()
+
+
+def test_concurrent_writes_at_quota_boundary_store_one_and_overflow_one(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    producer_name = "REQUEST_ROUTER_BOUNDARY_V1"
+    component = "REQUEST_ROUTER"
+    _reset_quota_state(state, producer_name, component)
+    with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
+        bucket_start = admin.execute(
+            """
+            INSERT INTO ofarm_security.operational_security_quota_bucket (
+                producer, component, bucket_start, accepted_event_count
+            ) VALUES (
+                %s,
+                %s,
+                pg_catalog.date_bin(
+                    pg_catalog.make_interval(secs => 60),
+                    pg_catalog.clock_timestamp(),
+                    '2000-01-01 00:00:00+00'::pg_catalog.timestamptz
+                ),
+                1023
+            )
+            RETURNING bucket_start
+            """,
+            (producer_name, component),
+        ).fetchone()[0]
+
+    event_ids = (uuid4(), uuid4())
+    common = (
+        "BINDER_REFUSED",
+        bytes.fromhex("ab" * 32),
+        "OFARM_PRETENANT_CORRELATION_V1",
+        1,
+    )
+    results = _run_concurrent_appends(
+        state,
+        "ofarm_security_request_router_producer_login",
+        tuple((event_id, *common) for event_id in event_ids),
+    )
+    assert [result[0] for result in results] == ["ok", "ok"]
+    rows = [result[1] for result in results]
+    assert sorted(row[3] for row in rows) == [False, True]
+    assert [row[4] for row in rows if not row[3]] == [bucket_start]
+
+    with psycopg.connect(state["target_admin_dsn"]) as admin:
+        bucket = admin.execute(
+            """
+            SELECT accepted_event_count, overflow_event_count,
+                   overflow_started_at IS NOT NULL, count_unknown
+            FROM ofarm_security.operational_security_quota_bucket
+            WHERE producer = %s AND component = %s AND bucket_start = %s
+            """,
+            (producer_name, component, bucket_start),
+        ).fetchone()
+        individually_stored = admin.execute(
+            """
+            SELECT pg_catalog.count(*)
+            FROM ofarm_security.operational_security_event
+            WHERE event_id IN (%s, %s)
+            """,
+            event_ids,
+        ).fetchone()[0]
+        overflow_markers = admin.execute(
+            """
+            SELECT pg_catalog.count(*)
+            FROM ofarm_security.operational_security_event
+            WHERE event_kind = 'OVERFLOW_STARTED'
+              AND affected_producer = %s
+              AND affected_component = %s
+              AND interval_start = %s
+            """,
+            (producer_name, component, bucket_start),
+        ).fetchone()[0]
+    assert bucket == (1024, 1, True, False)
+    assert individually_stored == 1
+    assert overflow_markers == 1
+
+
+def test_quota_overflow_is_explicit_bounded_and_count_unknown_closes_once(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    producer_name = "REQUEST_ROUTER_BOUNDARY_V1"
+    component = "REQUEST_ROUTER"
+    _reset_quota_state(state, producer_name, component)
+
+    counts = _bulk_append(
+        state,
+        "ofarm_security_request_router_producer_login",
+        "a1740000-0000-4000-8000-",
+        "BINDER_REFUSED",
+    )
+    assert counts == (1024, 1, 0)
+
+    with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
+        current = admin.execute(
+            """
+            SELECT bucket_start, accepted_event_count, overflow_event_count,
+                   overflow_started_at IS NOT NULL, count_unknown
+            FROM ofarm_security.operational_security_quota_bucket
+            WHERE producer = %s AND component = %s
+            """,
+            (producer_name, component),
+        ).fetchone()
+        individual_count = admin.execute(
+            """
+            SELECT pg_catalog.count(*)
+            FROM ofarm_security.operational_security_event
+            WHERE producer = %s
+              AND component = %s
+              AND event_kind = 'PRE_TENANT_FAILURE'
+              AND event_id::pg_catalog.text LIKE 'a1740000-%%'
+            """,
+            (producer_name, component),
+        ).fetchone()[0]
+        last_id_present = admin.execute(
+            """
+            SELECT pg_catalog.count(*)
+            FROM ofarm_security.operational_security_event
+            WHERE event_id = 'a1740000-0000-4000-8000-000000001025'::
+                pg_catalog.uuid
+            """
+        ).fetchone()[0]
+        start_count = admin.execute(
+            """
+            SELECT pg_catalog.count(*)
+            FROM ofarm_security.operational_security_event
+            WHERE event_kind = 'OVERFLOW_STARTED'
+              AND affected_producer = %s
+              AND affected_component = %s
+              AND interval_start = %s
+            """,
+            (producer_name, component, current[0]),
+        ).fetchone()[0]
+    assert current[1:] == (1024, 1, True, False)
+    assert individual_count == 1024
+    assert last_id_present == 0
+    assert start_count == 1
+
+    with psycopg.connect(
+        _role_dsn(state, "ofarm_security_audit_control_login"),
+        autocommit=True,
+    ) as control:
+        control.execute(
+            "SELECT ofarm_security.mark_overflow_count_unknown(%s, %s, %s)",
+            (producer_name, component, current[0]),
+        )
+        control.execute(
+            "SELECT ofarm_security.mark_overflow_count_unknown(%s, %s, %s)",
+            (producer_name, component, current[0]),
+        )
+        with pytest.raises(psycopg.Error):
+            control.execute(
+                "SELECT ofarm_security.close_overflow_bucket(%s, %s, %s)",
+                (producer_name, component, current[0]),
+            )
+
+    old_bucket = current[0] - timedelta(minutes=2)
+    with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
+        admin.execute(
+            """
+            SELECT ofarm_security._insert_maintenance_event(
+                'OVERFLOW_STARTED', 'AUDIT_CONTROL',
+                NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+                NULL, NULL, %s, %s, NULL, false, %s, %s
+            )
+            """,
+            (
+                old_bucket,
+                old_bucket + timedelta(minutes=1),
+                "AUTHENTICATION_BOUNDARY_V1",
+                "AUTHENTICATION",
+            ),
+        )
+        admin.execute(
+            """
+            INSERT INTO ofarm_security.operational_security_quota_bucket (
+                producer, component, bucket_start, accepted_event_count,
+                overflow_event_count, overflow_started_at, count_unknown
+            ) VALUES (%s, %s, %s, 1024, 9, %s, false)
+            """,
+            (
+                "AUTHENTICATION_BOUNDARY_V1",
+                "AUTHENTICATION",
+                old_bucket,
+                old_bucket,
+            ),
+        )
+
+    with psycopg.connect(
+        _role_dsn(state, "ofarm_security_audit_control_login"),
+        autocommit=True,
+    ) as control:
+        control.execute(
+            "SELECT ofarm_security.mark_overflow_count_unknown(%s, %s, %s)",
+            ("AUTHENTICATION_BOUNDARY_V1", "AUTHENTICATION", old_bucket),
+        )
+        first_close = control.execute(
+            """
+            SELECT * FROM ofarm_security.close_overflow_bucket(%s, %s, %s)
+            """,
+            ("AUTHENTICATION_BOUNDARY_V1", "AUTHENTICATION", old_bucket),
+        ).fetchone()
+        retry_close = control.execute(
+            """
+            SELECT * FROM ofarm_security.close_overflow_bucket(%s, %s, %s)
+            """,
+            ("AUTHENTICATION_BOUNDARY_V1", "AUTHENTICATION", old_bucket),
+        ).fetchone()
+    assert first_close == retry_close
+    with psycopg.connect(state["target_admin_dsn"]) as admin:
+        ended = admin.execute(
+            """
+            SELECT interval_event_count, interval_count_unknown
+            FROM ofarm_security.operational_security_event
+            WHERE event_id = %s
+            """,
+            (first_close[0],),
+        ).fetchone()
+        bucket_exists = admin.execute(
+            """
+            SELECT pg_catalog.count(*)
+            FROM ofarm_security.operational_security_quota_bucket
+            WHERE producer = 'AUTHENTICATION_BOUNDARY_V1'
+              AND component = 'AUTHENTICATION'
+              AND bucket_start = %s
+            """,
+            (old_bucket,),
+        ).fetchone()[0]
+    assert ended == (None, True)
+    assert bucket_exists == 0
+
+
+def test_bounded_query_enforces_exact_row_and_encoded_byte_ceilings(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    with psycopg.connect(
+        _role_dsn(state, "ofarm_security_audit_control_login"),
+        autocommit=True,
+    ) as control:
+        with pytest.raises(psycopg.Error):
+            control.execute(
+                """
+                SELECT ofarm_security.commit_audit_access_intent(
+                    'OPERATIONAL_DIAGNOSTIC_QUERY_V1', %s,
+                    NULL, NULL, 257, 1048576
+                )
+                """,
+                (QUERY_IDENTITY,),
+            )
+        one_byte = control.execute(
+            """
+            SELECT (ofarm_security.commit_audit_access_intent(
+                'OPERATIONAL_DIAGNOSTIC_QUERY_V1', %s,
+                NULL, NULL, 256, 1
+            )).access_event_id
+            """,
+            (QUERY_IDENTITY,),
+        ).fetchone()[0]
+        three_rows = control.execute(
+            """
+            SELECT (ofarm_security.commit_audit_access_intent(
+                'OPERATIONAL_DIAGNOSTIC_QUERY_V1', %s,
+                NULL, NULL, 3, 1048576
+            )).access_event_id
+            """,
+            (QUERY_IDENTITY,),
+        ).fetchone()[0]
+
+    with psycopg.connect(
+        _role_dsn(state, "ofarm_security_audit_reader_login"),
+        autocommit=True,
+    ) as reader:
+        assert reader.execute(
+            """
+            SELECT * FROM ofarm_security.query_operational_security_events(
+                %s, NULL, NULL, 256, 1
+            )
+            """,
+            (one_byte,),
+        ).fetchall() == []
+        rows = reader.execute(
+            """
+            SELECT * FROM ofarm_security.query_operational_security_events(
+                %s, NULL, NULL, 3, 1048576
+            )
+            """,
+            (three_rows,),
+        ).fetchall()
+        assert len(rows) == 3
+        with pytest.raises(psycopg.Error):
+            reader.execute(
+                """
+                SELECT * FROM ofarm_security.query_operational_security_events(
+                    %s, NULL, NULL, 4, 1048576
+                )
+                """,
+                (three_rows,),
+            )
+
+
+def test_retention_hides_expired_rows_then_purges_only_one_bounded_batch(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    producer_name = "AUTHENTICATION_BOUNDARY_V1"
+    component = "AUTHENTICATION"
+    _reset_quota_state(state, producer_name, component)
+    counts = _bulk_append(
+        state,
+        "ofarm_security_authentication_producer_login",
+        "b1740000-0000-4000-8000-",
+        "VERIFICATION_REFUSED",
+    )
+    assert counts[0:2] == (1024, 1)
+
+    with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
+        changed = admin.execute(
+            """
+            UPDATE ofarm_security.operational_security_event
+            SET observed_at = observed_at - pg_catalog.make_interval(days => 31),
+                purge_after = purge_after - pg_catalog.make_interval(days => 31)
+            WHERE event_kind = 'PRE_TENANT_FAILURE'
+              AND event_id::pg_catalog.text LIKE 'b1740000-%%'
+            """
+        ).rowcount
+        stale_bucket = admin.execute(
+            """
+            SELECT pg_catalog.date_bin(
+                pg_catalog.make_interval(secs => 60),
+                pg_catalog.clock_timestamp(),
+                '2000-01-01 00:00:00+00'::pg_catalog.timestamptz
+            ) - pg_catalog.make_interval(secs => 120)
+            """
+        ).fetchone()[0]
+        admin.execute(
+            """
+            INSERT INTO ofarm_security.operational_security_quota_bucket (
+                producer, component, bucket_start, accepted_event_count
+            ) VALUES (
+                'REQUEST_ROUTER_BOUNDARY_V1', 'REQUEST_ROUTER', %s, 5
+            )
+            """,
+            (stale_bucket,),
+        )
+    assert changed == 1024
+
+    cursor = datetime.now(timezone.utc) - timedelta(days=25)
+    with psycopg.connect(
+        _role_dsn(state, "ofarm_security_audit_control_login"),
+        autocommit=True,
+    ) as control:
+        access = control.execute(
+            """
+            SELECT (ofarm_security.commit_audit_access_intent(
+                'OPERATIONAL_DIAGNOSTIC_QUERY_V1', %s,
+                %s, %s, 256, 1048576
+            )).access_event_id
+            """,
+            (QUERY_IDENTITY, cursor, "ffffffff-ffff-4fff-bfff-ffffffffffff"),
+        ).fetchone()[0]
+    with psycopg.connect(
+        _role_dsn(state, "ofarm_security_audit_reader_login"),
+        autocommit=True,
+    ) as reader:
+        hidden = reader.execute(
+            """
+            SELECT * FROM ofarm_security.query_operational_security_events(
+                %s, %s, %s, 256, 1048576
+            )
+            """,
+            (access, cursor, "ffffffff-ffff-4fff-bfff-ffffffffffff"),
+        ).fetchall()
+    assert hidden == []
+
+    with psycopg.connect(
+        _role_dsn(state, "ofarm_security_audit_retention_login"),
+        autocommit=True,
+    ) as retention:
+        first = retention.execute(
+            """
+                SELECT * FROM
+                    ofarm_security.purge_expired_operational_security_events()
+            """
+        ).fetchone()
+        second = retention.execute(
+            """
+                SELECT * FROM
+                    ofarm_security.purge_expired_operational_security_events()
+            """
+        ).fetchone()
+    assert first[1] == 1024
+    assert second[1] == 0
+    with psycopg.connect(state["target_admin_dsn"]) as admin:
+        retention_event = admin.execute(
+            """
+            SELECT event_kind, retention_cutoff, retention_deleted_count,
+                   correlation_hmac_value IS NULL
+            FROM ofarm_security.operational_security_event
+            WHERE event_id = %s
+            """,
+            (first[2],),
+        ).fetchone()
+        remaining = admin.execute(
+            """
+            SELECT pg_catalog.count(*)
+            FROM ofarm_security.operational_security_event
+            WHERE event_id::pg_catalog.text LIKE 'b1740000-%%'
+            """
+        ).fetchone()[0]
+        stale_bucket_exists = admin.execute(
+            """
+            SELECT pg_catalog.count(*)
+            FROM ofarm_security.operational_security_quota_bucket
+            WHERE producer = 'REQUEST_ROUTER_BOUNDARY_V1'
+              AND component = 'REQUEST_ROUTER'
+              AND bucket_start = %s
+            """,
+            (stale_bucket,),
+        ).fetchone()[0]
+    assert retention_event == ("AUDIT_RETENTION", first[0], 1024, True)
+    assert remaining == 0
+    assert stale_bucket_exists == 0
+
+
+def test_destroyed_audit_store_recreates_empty_and_records_only_explicit_gaps(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    sentinel_start = datetime.now(timezone.utc) - timedelta(hours=1)
+    sentinel_end = sentinel_start + timedelta(seconds=1)
+    with psycopg.connect(
+        _role_dsn(state, "ofarm_security_audit_control_login"),
+        autocommit=True,
+    ) as control:
+        sentinel_id = control.execute(
+            "SELECT * FROM ofarm_security.append_audit_gap(%s, %s, 1, false)",
+            (sentinel_start, sentinel_end),
+        ).fetchone()[0]
+    with psycopg.connect(state["target_admin_dsn"]) as admin:
+        assert admin.execute(
+            """
+            SELECT pg_catalog.count(*)
+            FROM ofarm_security.operational_security_event
+            WHERE event_id = %s
+            """,
+            (sentinel_id,),
+        ).fetchone()[0] == 1
+
+    _destroy_service(state["admin_dsn"])
+    provision_service(
+        state["admin_dsn"],
+        SECURITY_AUDIT_PROVISIONING_SPEC,
+        login_passwords=state["passwords"],
+    )
+    state["report"] = migrate_service(
+        admin_dsn=state["admin_dsn"],
+        migrator_dsn=_role_dsn(state, "ofarm_migrator"),
+        spec=SECURITY_AUDIT_PROVISIONING_SPEC,
+        migration_set=state["migration_set"],
+        release_identity="issue-174-audit-store-loss-recreate-test",
+        execution_id=uuid4(),
+    )
+
+    with psycopg.connect(state["target_admin_dsn"]) as admin:
+        recreated_counts = admin.execute(
+            """
+            SELECT
+                (SELECT pg_catalog.count(*)
+                 FROM ofarm_security.operational_security_event),
+                (SELECT pg_catalog.count(*)
+                 FROM ofarm_security.operational_security_quota_bucket),
+                (SELECT pg_catalog.count(*)
+                 FROM ofarm_security.operational_security_event
+                 WHERE event_id = %s)
+            """,
+            (sentinel_id,),
+        ).fetchone()
+    assert recreated_counts == (0, 0, 0)
+
+    now = datetime.now(timezone.utc)
+    start = now - timedelta(minutes=10)
+    middle = now - timedelta(minutes=5)
+    with psycopg.connect(
+        _role_dsn(state, "ofarm_security_audit_control_login"),
+        autocommit=True,
+    ) as control:
+        known = control.execute(
+            "SELECT * FROM ofarm_security.append_audit_gap(%s, %s, 7, false)",
+            (start, middle),
+        ).fetchone()
+        unknown = control.execute(
+            "SELECT * FROM ofarm_security.append_audit_gap(%s, %s, 0, true)",
+            (middle, now),
+        ).fetchone()
+        with pytest.raises(psycopg.Error):
+            control.execute(
+                "SELECT ofarm_security.append_audit_gap(%s, %s, 7, true)",
+                (start, now),
+            )
+
+    with psycopg.connect(state["target_admin_dsn"]) as admin:
+        rows = admin.execute(
+            """
+            SELECT event_id, event_kind, producer, component,
+                   interval_event_count, interval_count_unknown,
+                   correlation_hmac_value IS NULL
+            FROM ofarm_security.operational_security_event
+            ORDER BY interval_start
+            """,
+        ).fetchall()
+        copies = admin.execute(
+            """
+            SELECT
+                (SELECT pg_catalog.count(*) FROM pg_catalog.pg_publication),
+                (SELECT pg_catalog.count(*) FROM pg_catalog.pg_subscription
+                 WHERE subdbid = (SELECT oid FROM pg_catalog.pg_database
+                                  WHERE datname = pg_catalog.current_database())),
+                (SELECT pg_catalog.count(*) FROM pg_catalog.pg_replication_slots
+                 WHERE database = pg_catalog.current_database()),
+                pg_catalog.to_regrole('ofarm_security_audit_backup_reader'),
+                pg_catalog.to_regrole('ofarm_security_audit_restore_operator')
+            """
+        ).fetchone()
+    assert rows == [
+        (
+            known[0], "AUDIT_GAP", "SECURITY_OPERATIONS_V1",
+            "AUDIT_CONTROL", 7, False, True,
+        ),
+        (
+            unknown[0], "AUDIT_GAP", "SECURITY_OPERATIONS_V1",
+            "AUDIT_CONTROL", None, True, True,
+        ),
+    ]
+    assert copies == (0, 0, 0, None, None)
+
+
+def _observe_structure(state: dict[str, object]) -> tuple[object, ...]:
+    with psycopg.connect(
+        _role_dsn(state, "ofarm_security_audit_readiness_login"),
+        autocommit=True,
+    ) as readiness:
+        return readiness.execute(
+            "SELECT * FROM ofarm_security.verify_security_audit_structure()"
+        ).fetchone()
+
+
+def _replace_pg_stat_activity_view(
+    admin: psycopg.Connection, definition: str
+) -> None:
+    admin.execute(
+        sql.SQL(
+            "CREATE OR REPLACE VIEW pg_catalog.pg_stat_activity AS {}"
+        ).format(sql.SQL(definition))
+    )
+
+
+def test_structural_readiness_refuses_role_attribute_and_membership_drift(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    producer = "ofarm_security_authentication_producer_login"
+    with psycopg.connect(state["admin_dsn"], autocommit=True) as admin:
+        admin.execute(sql.SQL("ALTER ROLE {} NOINHERIT").format(
+            sql.Identifier(producer)
+        ))
+    try:
+        drift = _observe_structure(state)
+        assert drift[0:2] == (False, False)
+        assert drift[2] >= 1
+    finally:
+        with psycopg.connect(state["admin_dsn"], autocommit=True) as admin:
+            admin.execute(sql.SQL("ALTER ROLE {} INHERIT").format(
+                sql.Identifier(producer)
+            ))
+    assert _observe_structure(state) == (True, False, 0, False)
+
+    granted_role = "ofarm_security_audit_ingest"
+    member_role = "ofarm_security_authentication_producer_login"
+    alternate_dba = "alternate_audit_portability_dba"
+    renamed_grantor = "renamed_audit_bootstrap_dba"
+    alternate_password = f"audit-portability-{secrets.token_urlsafe(32)}"
+    with psycopg.connect(state["admin_dsn"], autocommit=True) as admin:
+        original_membership = admin.execute(
+            """
+            SELECT grantor.rolname::pg_catalog.text,
+                   grantor.rolsuper,
+                   membership.inherit_option,
+                   membership.set_option,
+                   membership.admin_option
+            FROM pg_catalog.pg_auth_members AS membership
+            JOIN pg_catalog.pg_roles AS granted
+              ON granted.oid = membership.roleid
+            JOIN pg_catalog.pg_roles AS member
+              ON member.oid = membership.member
+            JOIN pg_catalog.pg_roles AS grantor
+              ON grantor.oid = membership.grantor
+            WHERE granted.rolname = %s AND member.rolname = %s
+            """,
+            (granted_role, member_role),
+        ).fetchone()
+        assert original_membership[1:] == (True, True, False, False)
+        assert admin.execute(
+            "SELECT pg_catalog.to_regrole(%s), pg_catalog.to_regrole(%s)",
+            (alternate_dba, renamed_grantor),
+        ).fetchone() == (None, None)
+        admin.execute(
+            sql.SQL("CREATE ROLE {} SUPERUSER LOGIN PASSWORD {}").format(
+                sql.Identifier(alternate_dba),
+                sql.Literal(alternate_password),
+            )
+        )
+    alternate_admin_dsn = psycopg.conninfo.make_conninfo(
+        state["admin_dsn"], user=alternate_dba, password=alternate_password
+    )
+    grantor_renamed = False
+    try:
+        with psycopg.connect(
+            alternate_admin_dsn, autocommit=True
+        ) as alternate_admin:
+            alternate_admin.execute(
+                sql.SQL("ALTER ROLE {} RENAME TO {}").format(
+                    sql.Identifier(original_membership[0]),
+                    sql.Identifier(renamed_grantor),
+                )
+            )
+            grantor_renamed = True
+            portable_membership = alternate_admin.execute(
+                """
+                SELECT grantor.rolname::pg_catalog.text,
+                       grantor.rolsuper,
+                       membership.inherit_option,
+                       membership.set_option,
+                       membership.admin_option
+                FROM pg_catalog.pg_auth_members AS membership
+                JOIN pg_catalog.pg_roles AS granted
+                  ON granted.oid = membership.roleid
+                JOIN pg_catalog.pg_roles AS member
+                  ON member.oid = membership.member
+                JOIN pg_catalog.pg_roles AS grantor
+                  ON grantor.oid = membership.grantor
+                WHERE granted.rolname = %s AND member.rolname = %s
+                """,
+                (granted_role, member_role),
+            ).fetchone()
+        assert portable_membership == (
+            renamed_grantor, True, True, False, False,
+        )
+        assert _observe_structure(state) == (True, False, 0, False)
+        report = migrate_service(
+            admin_dsn=alternate_admin_dsn,
+            migrator_dsn=_role_dsn(state, "ofarm_migrator"),
+            spec=SECURITY_AUDIT_PROVISIONING_SPEC,
+            migration_set=state["migration_set"],
+            release_identity="issue-174-audit-portable-dba-grantor-test",
+            execution_id=uuid4(),
+        )
+        assert report.applied_versions == ()
+    finally:
+        if grantor_renamed:
+            with psycopg.connect(
+                alternate_admin_dsn, autocommit=True
+            ) as alternate_admin:
+                alternate_admin.execute(
+                    sql.SQL("ALTER ROLE {} RENAME TO {}").format(
+                        sql.Identifier(renamed_grantor),
+                        sql.Identifier(original_membership[0]),
+                    )
+                )
+        with psycopg.connect(state["admin_dsn"], autocommit=True) as admin:
+            admin.execute(
+                sql.SQL("DROP ROLE {}").format(sql.Identifier(alternate_dba))
+            )
+            restored_grantor = admin.execute(
+                """
+                SELECT grantor.rolname::pg_catalog.text
+                FROM pg_catalog.pg_auth_members AS membership
+                JOIN pg_catalog.pg_roles AS granted
+                  ON granted.oid = membership.roleid
+                JOIN pg_catalog.pg_roles AS member
+                  ON member.oid = membership.member
+                JOIN pg_catalog.pg_roles AS grantor
+                  ON grantor.oid = membership.grantor
+                WHERE granted.rolname = %s AND member.rolname = %s
+                """,
+                (granted_role, member_role),
+            ).fetchone()[0]
+    assert restored_grantor == original_membership[0]
+    assert _observe_structure(state) == (True, False, 0, False)
+
+    with psycopg.connect(state["admin_dsn"], autocommit=True) as admin:
+        admin.execute(
+            sql.SQL("GRANT {} TO {}").format(
+                sql.Identifier("ofarm_security_audit_control"),
+                sql.Identifier(producer),
+            )
+        )
+    try:
+        drift = _observe_structure(state)
+        assert drift[0:2] == (False, False)
+        assert drift[2] >= 1
+    finally:
+        with psycopg.connect(state["admin_dsn"], autocommit=True) as admin:
+            admin.execute(
+                sql.SQL("REVOKE {} FROM {}").format(
+                    sql.Identifier("ofarm_security_audit_control"),
+                    sql.Identifier(producer),
+                )
+            )
+    assert _observe_structure(state) == (True, False, 0, False)
+
+
+def _replace_event_fingerprint_source(
+    admin: psycopg.Connection, source: str
+) -> None:
+    admin.execute(
+        sql.SQL(
+            """
+            CREATE OR REPLACE FUNCTION ofarm_security._event_fingerprint(
+                VARIADIC p_fields pg_catalog.bytea[]
+            ) RETURNS pg_catalog.bytea
+            LANGUAGE plpgsql IMMUTABLE STRICT PARALLEL SAFE SECURITY INVOKER
+            SET search_path = pg_catalog, pg_temp
+            AS {}
+            """
+        ).format(sql.Literal(source))
+    )
+
+
+def test_complete_catalog_fingerprint_refuses_body_constraint_and_acl_tamper(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    clean = (True, False, 0, False)
+    with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
+        original_source = admin.execute(
+            """
+            SELECT routine.prosrc
+            FROM pg_catalog.pg_proc AS routine
+            WHERE routine.oid =
+                'ofarm_security._event_fingerprint(bytea[])'::pg_catalog.regprocedure
+            """
+        ).fetchone()[0]
+        _replace_event_fingerprint_source(
+            admin, original_source + "\n-- hostile source drift"
+        )
+    try:
+        body_drift = _observe_structure(state)
+        assert body_drift[0:2] == (False, False)
+        assert body_drift[2] >= 1
+    finally:
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            _replace_event_fingerprint_source(admin, original_source)
+    assert _observe_structure(state) == clean
+
+    with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
+        admin.execute(
+            """
+            ALTER TABLE ofarm_security.operational_security_quota_bucket
+            DROP CONSTRAINT operational_security_quota_bucket_count_check
+            """
+        )
+        admin.execute(
+            """
+            ALTER TABLE ofarm_security.operational_security_quota_bucket
+            ADD CONSTRAINT operational_security_quota_bucket_count_check CHECK (
+                accepted_event_count BETWEEN 0 AND 1025
+                AND overflow_event_count >= 0
+            )
+            """
+        )
+    try:
+        constraint_drift = _observe_structure(state)
+        assert constraint_drift[0:2] == (False, False)
+        assert constraint_drift[2] >= 1
+    finally:
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            admin.execute(
+                """
+                ALTER TABLE ofarm_security.operational_security_quota_bucket
+                DROP CONSTRAINT operational_security_quota_bucket_count_check
+                """
+            )
+            admin.execute(
+                """
+                ALTER TABLE ofarm_security.operational_security_quota_bucket
+                ADD CONSTRAINT operational_security_quota_bucket_count_check CHECK (
+                    accepted_event_count BETWEEN 0 AND 1024
+                    AND overflow_event_count >= 0
+                )
+                """
+            )
+    assert _observe_structure(state) == clean
+
+    with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
+        admin.execute(
+            """
+            GRANT EXECUTE ON FUNCTION
+                ofarm_security._event_fingerprint(pg_catalog.bytea[])
+            TO ofarm_security_audit_readiness
+            """
+        )
+    try:
+        acl_drift = _observe_structure(state)
+        assert acl_drift[0:2] == (False, False)
+        assert acl_drift[2] >= 1
+    finally:
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            admin.execute(
+                """
+                REVOKE EXECUTE ON FUNCTION
+                    ofarm_security._event_fingerprint(pg_catalog.bytea[])
+                FROM ofarm_security_audit_readiness
+                """
+            )
+    assert _observe_structure(state) == clean
+
+
+def test_complete_catalog_fingerprint_refuses_parameter_acl_tamper(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    governed_runtime_role = (
+        "ofarm_security_authentication_producer_login"
+    )
+    with psycopg.connect(state["admin_dsn"], autocommit=True) as admin:
+        admin.execute(
+            sql.SQL(
+                "GRANT SET ON PARAMETER session_replication_role TO {}"
+            ).format(sql.Identifier(governed_runtime_role))
+        )
+    try:
+        with psycopg.connect(
+            _role_dsn(state, governed_runtime_role), autocommit=True
+        ) as governed_runtime:
+            governed_runtime.execute(
+                "SET session_replication_role = replica"
+            )
+            assert governed_runtime.execute(
+                "SHOW session_replication_role"
+            ).fetchone()[0] == "replica"
+        parameter_acl_drift = _observe_structure(state)
+        assert parameter_acl_drift[0:2] == (False, False)
+        assert parameter_acl_drift[2] >= 1
+    finally:
+        with psycopg.connect(state["admin_dsn"], autocommit=True) as admin:
+            admin.execute(
+                sql.SQL(
+                    "REVOKE SET ON PARAMETER session_replication_role FROM {}"
+                ).format(sql.Identifier(governed_runtime_role))
+            )
+    assert _observe_structure(state) == (True, False, 0, False)
+
+    with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
+        injected_large_object = admin.execute(
+            "SELECT pg_catalog.lo_from_bytea(0, "
+            "pg_catalog.decode(pg_catalog.repeat('ab', 32), 'hex'))"
+        ).fetchone()[0]
+    try:
+        large_object_drift = _observe_structure(state)
+        assert large_object_drift[0:2] == (False, False)
+        assert large_object_drift[2] >= 1
+    finally:
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            assert admin.execute(
+                "SELECT pg_catalog.lo_unlink(%s)",
+                (injected_large_object,),
+            ).fetchone()[0] == 1
+    assert _observe_structure(state) == (True, False, 0, False)
+
+    with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
+        admin.execute(
+            """
+            GRANT EXECUTE ON FUNCTION pg_catalog.lo_from_bytea(
+                pg_catalog.oid, pg_catalog.bytea
+            ) TO ofarm_security_audit_ingest
+            """
+        )
+    try:
+        large_object_acl_drift = _observe_structure(state)
+        assert large_object_acl_drift[0:2] == (False, False)
+        assert large_object_acl_drift[2] >= 1
+    finally:
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            admin.execute(
+                """
+                REVOKE EXECUTE ON FUNCTION pg_catalog.lo_from_bytea(
+                    pg_catalog.oid, pg_catalog.bytea
+                ) FROM ofarm_security_audit_ingest
+                """
+            )
+    assert _observe_structure(state) == (True, False, 0, False)
+
+    with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
+        original_cost = admin.execute(
+            """
+            SELECT routine.procost
+            FROM pg_catalog.pg_proc AS routine
+            WHERE routine.oid =
+                'pg_catalog.lo_get(oid)'::pg_catalog.regprocedure
+            """
+        ).fetchone()[0]
+        assert original_cost == 1
+        admin.execute("ALTER FUNCTION pg_catalog.lo_get(oid) COST 2")
+    try:
+        large_object_property_drift = _observe_structure(state)
+        assert large_object_property_drift[0:2] == (False, False)
+        assert large_object_property_drift[2] >= 1
+    finally:
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            admin.execute("ALTER FUNCTION pg_catalog.lo_get(oid) COST 1")
+    assert _observe_structure(state) == (True, False, 0, False)
+
+    with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
+        admin.execute(
+            """
+            CREATE OR REPLACE FUNCTION pg_catalog.lo_get(pg_catalog.oid)
+            RETURNS pg_catalog.bytea
+            LANGUAGE sql VOLATILE STRICT PARALLEL UNSAFE SECURITY INVOKER
+            COST 1
+            AS 'SELECT pg_catalog.decode(
+                ''''::pg_catalog.text, ''hex''::pg_catalog.text
+            )'
+            """
+        )
+    try:
+        large_object_body_drift = _observe_structure(state)
+        assert large_object_body_drift[0:2] == (False, False)
+        assert large_object_body_drift[2] >= 1
+    finally:
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            admin.execute(
+                """
+                CREATE OR REPLACE FUNCTION pg_catalog.lo_get(pg_catalog.oid)
+                RETURNS pg_catalog.bytea
+                LANGUAGE internal VOLATILE STRICT PARALLEL UNSAFE
+                    SECURITY INVOKER
+                COST 1
+                AS 'be_lo_get'
+                """
+            )
+    assert _observe_structure(state) == (True, False, 0, False)
+
+    with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
+        admin.execute(
+            """
+            CREATE FUNCTION pg_catalog.lo_backdoor() RETURNS pg_catalog.int4
+            LANGUAGE sql IMMUTABLE PARALLEL SAFE SECURITY INVOKER
+            AS 'SELECT 1'
+            """
+        )
+    try:
+        unexpected_large_object_routine = _observe_structure(state)
+        assert unexpected_large_object_routine[0:2] == (False, False)
+        assert unexpected_large_object_routine[2] >= 1
+    finally:
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            admin.execute("DROP FUNCTION pg_catalog.lo_backdoor()")
+    assert _observe_structure(state) == (True, False, 0, False)
+
+
+def test_backend_statistics_view_routine_and_acl_tamper_refuse(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    clean = (True, False, 0, False)
+
+    with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
+        admin.execute(
+            """
+            GRANT SELECT ON TABLE pg_catalog.pg_stat_activity
+            TO ofarm_security_audit_reader
+            """
+        )
+    try:
+        view_acl_drift = _observe_structure(state)
+        assert view_acl_drift[0:2] == (False, False)
+        assert view_acl_drift[2] >= 1
+    finally:
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            admin.execute(
+                """
+                REVOKE SELECT ON TABLE pg_catalog.pg_stat_activity
+                FROM ofarm_security_audit_reader
+                """
+            )
+    assert _observe_structure(state) == clean
+
+    with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
+        admin.execute(
+            """
+            GRANT EXECUTE ON FUNCTION
+                pg_catalog.pg_stat_get_backend_activity(pg_catalog.int4)
+            TO ofarm_security_audit_ingest
+            """
+        )
+    try:
+        routine_acl_drift = _observe_structure(state)
+        assert routine_acl_drift[0:2] == (False, False)
+        assert routine_acl_drift[2] >= 1
+    finally:
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            admin.execute(
+                """
+                REVOKE EXECUTE ON FUNCTION
+                    pg_catalog.pg_stat_get_backend_activity(pg_catalog.int4)
+                FROM ofarm_security_audit_ingest
+                """
+            )
+    assert _observe_structure(state) == clean
+
+    with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
+        admin.execute(
+            """
+            ALTER FUNCTION
+                pg_catalog.pg_stat_get_backend_activity(pg_catalog.int4)
+            COST 2
+            """
+        )
+    try:
+        routine_property_drift = _observe_structure(state)
+        assert routine_property_drift[0:2] == (False, False)
+        assert routine_property_drift[2] >= 1
+    finally:
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            admin.execute(
+                """
+                ALTER FUNCTION
+                    pg_catalog.pg_stat_get_backend_activity(pg_catalog.int4)
+                COST 1
+                """
+            )
+    assert _observe_structure(state) == clean
+
+    for routine_name in (
+        "pg_stat_get_activity_issue174_extra",
+        "pg_stat_get_backend_issue174_extra",
+    ):
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            admin.execute(
+                sql.SQL(
+                    "CREATE FUNCTION pg_catalog.{}() "
+                    "RETURNS pg_catalog.int4 LANGUAGE sql "
+                    "IMMUTABLE PARALLEL SAFE SECURITY INVOKER "
+                    "AS 'SELECT 1'"
+                ).format(sql.Identifier(routine_name))
+            )
+        try:
+            unexpected_routine_drift = _observe_structure(state)
+            assert unexpected_routine_drift[0:2] == (False, False)
+            assert unexpected_routine_drift[2] >= 1
+        finally:
+            with psycopg.connect(
+                state["target_admin_dsn"], autocommit=True
+            ) as admin:
+                admin.execute(
+                    sql.SQL("DROP FUNCTION pg_catalog.{}()").format(
+                        sql.Identifier(routine_name)
+                    )
+                )
+        assert _observe_structure(state) == clean
+
+    with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
+        original_view_definition = admin.execute(
+            """
+            SELECT pg_catalog.pg_get_viewdef(class.oid, false)
+            FROM pg_catalog.pg_class AS class
+            WHERE class.oid =
+                'pg_catalog.pg_stat_activity'::pg_catalog.regclass
+            """
+        ).fetchone()[0]
+        tampered_view_definition = (
+            original_view_definition.rstrip().removesuffix(";")
+            + "\n WHERE s.pid IS NOT NULL;"
+        )
+        _replace_pg_stat_activity_view(admin, tampered_view_definition)
+    try:
+        view_definition_drift = _observe_structure(state)
+        assert view_definition_drift[0:2] == (False, False)
+        assert view_definition_drift[2] >= 1
+    finally:
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            _replace_pg_stat_activity_view(admin, original_view_definition)
+    assert _observe_structure(state) == clean
+
+
+def _replace_structure_verifier_source(
+    admin: psycopg.Connection, source: str
+) -> None:
+    admin.execute(
+        sql.SQL(
+            """
+            CREATE OR REPLACE FUNCTION
+                ofarm_security.verify_security_audit_structure()
+            RETURNS ofarm_security.security_audit_structure_report
+            LANGUAGE plpgsql VOLATILE PARALLEL UNSAFE SECURITY DEFINER
+            SET search_path = pg_catalog, pg_temp
+            SET TimeZone = 'UTC'
+            SET DateStyle = 'ISO, MDY'
+            SET quote_all_identifiers = off
+            SET standard_conforming_strings = on
+            AS {}
+            """
+        ).format(sql.Literal(source))
+    )
+
+
+def test_external_catalog_anchor_refuses_self_excluded_verifier_body_tamper(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
+        original_source = admin.execute(
+            """
+            SELECT routine.prosrc
+            FROM pg_catalog.pg_proc AS routine
+            WHERE routine.oid =
+                'ofarm_security.verify_security_audit_structure()'::
+                    pg_catalog.regprocedure
+            """
+        ).fetchone()[0]
+        _replace_structure_verifier_source(
+            admin,
+            """
+            BEGIN
+                RAISE EXCEPTION 'hostile verifier body executed';
+            END
+            """,
+        )
+    try:
+        with pytest.raises(
+            MigrationDirtyError,
+            match=(
+                "migration-owned catalog verifier identity differs "
+                "at the final head"
+            ),
+        ):
+            migrate_service(
+                admin_dsn=state["admin_dsn"],
+                migrator_dsn=_role_dsn(state, "ofarm_migrator"),
+                spec=SECURITY_AUDIT_PROVISIONING_SPEC,
+                migration_set=state["migration_set"],
+                release_identity="issue-174-audit-external-anchor-tamper-test",
+                execution_id=uuid4(),
+            )
+    finally:
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            _replace_structure_verifier_source(admin, original_source)
+
+    assert _observe_structure(state) == (True, False, 0, False)
+    report = migrate_service(
+        admin_dsn=state["admin_dsn"],
+        migrator_dsn=_role_dsn(state, "ofarm_migrator"),
+        spec=SECURITY_AUDIT_PROVISIONING_SPEC,
+        migration_set=state["migration_set"],
+        release_identity="issue-174-audit-external-anchor-restored-test",
+        execution_id=uuid4(),
+    )
+    assert report.applied_versions == ()
+
+
+def test_authoritative_runner_noop_refuses_structural_catalog_drift(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
+        admin.execute(
+            "CREATE INDEX rogue_audit_index "
+            "ON ofarm_security.operational_security_event (event_id)"
+        )
+    try:
+        with pytest.raises(
+            MigrationDirtyError,
+            match="structural verifier differs",
+        ):
+            migrate_service(
+                admin_dsn=state["admin_dsn"],
+                migrator_dsn=_role_dsn(state, "ofarm_migrator"),
+                spec=SECURITY_AUDIT_PROVISIONING_SPEC,
+                migration_set=state["migration_set"],
+                release_identity="issue-174-audit-noop-drift-test",
+                execution_id=uuid4(),
+            )
+    finally:
+        with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
+            admin.execute("DROP INDEX ofarm_security.rogue_audit_index")
+    assert _observe_structure(state) == (True, False, 0, False)
+
+
+def test_break_glass_presence_intentionally_makes_readiness_false(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    with psycopg.connect(state["admin_dsn"], autocommit=True) as admin:
+        admin.execute("CREATE ROLE ofarm_security_audit_export_login LOGIN")
+    try:
+        with psycopg.connect(
+            _role_dsn(state, "ofarm_security_audit_readiness_login"),
+            autocommit=True,
+        ) as readiness:
+            row = readiness.execute(
+                "SELECT * FROM ofarm_security.verify_security_audit_structure()"
+            ).fetchone()
+        assert row[0:2] == (False, False)
+        assert row[2] >= 1
+        assert row[3] is True
+    finally:
+        with psycopg.connect(state["admin_dsn"], autocommit=True) as admin:
+            admin.execute("DROP ROLE IF EXISTS ofarm_security_audit_export_login")

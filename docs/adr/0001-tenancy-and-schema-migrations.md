@@ -90,12 +90,14 @@ authoritative lifecycle-head identity and digest. It exists only after the
 hardened binder verifies a transaction-bound TenantCapability.
 
 **TenantCapability** is a short-lived, signed, single-use proof minted by the
-trusted authentication boundary. Its signing authority is unavailable to the
-application database role. It binds one immutable principal-binding version and
-its authoritative lifecycle head, exact equality policy, immutable tenant
-registration, and pinned Party record-kind/identity/schema/payload digests to one
-database transaction challenge and cannot be used to select or rebind another
-tenant.
+trusted authentication boundary. V1 authenticates its canonical frame with
+HMAC-SHA-256 and verifies that MAC again inside the hardened database binder.
+Its signing secret is unavailable to application, worker, readiness, registrar,
+and end-user roles. It binds one immutable principal-binding version and its
+authoritative lifecycle head, exact equality policy, immutable tenant
+registration, and pinned Party record-kind/identity/schema/payload digests to
+one database transaction challenge and cannot be used to select or rebind
+another tenant.
 
 **UnitOfWork** is one checked-out connection and one database transaction for one
 trusted-tenant request, governed command, or explicitly assigned background
@@ -138,6 +140,7 @@ schemas and other repository files are global inputs, not database relations.
 | principal_binding | Globally governed immutable authorization versions | One immutable candidate version maps the exact-policy (issuer, subject) bytes to (tenant_id, party_ref), pins the immutable tenant-registry digest and exact ACTIVE Party record identity/schema/payload digests, and carries an equality-policy identity, version identity/digest, and validity metadata. Repeated principal keys are expected; no mutable lifecycle state or partial ACTIVE uniqueness lives here. It is the only initial global authority relation allowed to reference a tenant-owned Party. |
 | principal_binding_lifecycle | Globally governed append-only authorization authority | A digest-chained stream of ACTIVATE, REVOKE, EXPIRE, and SUPERSEDE acts names immutable binding versions, the prior lifecycle head, effective and decision data, accountable control identity, and reason. These acts, together with immutable versions, are the sole source for current and historical binding state. |
 | principal_binding_current | Optional derived/disposable global control projection and reservation | A unique (equality_policy, issuer, subject) row points to the computed active version and lifecycle head, or records the computed inactive state. It serializes transitions and accelerates lookup, but is rebuildable and never authoritative. |
+| tenant_capability_key_schedule | Globally governed protected immutable authorization key schedule | One immutable row per V1 HMAC key identity stores the HMAC-SHA-256 verification secret and its fixed validity bounds. Direct relation access is denied; the binder receives only the exact columns needed to verify a named key. Only the hardened identity-control install function may append a row; no runtime role can update, delete, list, or return a secret. |
 | tenant_binding_context | Protected disposable transaction operational metadata | An UNLOGGED migration-owned relation stores the one-use challenge and verified TenantBinding for exactly one database-derived backend identity and full xid8. Exact backend-start/full-transaction matching makes a physically retained row unusable after commit, rollback, backend restart, or pool reuse. Only hardened functions may read or write it; the application role has no table privileges. |
 | operational_security_event | Database-global operational security metadata, explicitly non-tenant | Append-only, bounded pre-tenant failure events plus audit-access, retention, and declared-gap maintenance events for this lane. It carries no tenant_id, tenant_ref, Party/farm/role identity, governed batch, knowledge position, or request-supplied attribution. It lives only in the separately provisioned audit PostgreSQL service's protected `ofarm_security` schema and is never read as tenant history. |
 | operational_security_quota_bucket | Disposable non-tenant operational security control state | One fixed database-time bucket per provisioned producer/component records accepted and overflow counts plus marker state. Only hardened audit functions mutate it. It contains no request, tenant, principal, correlation, or evidence data, cannot authorize anything, and is deleted after its bucket is closed and the corresponding overflow marker commits. |
@@ -352,9 +355,17 @@ data; a new page or later cut needs a new intent. Function results can still be
 copied or repeatedly retrieved, so the reader is explicitly a privileged,
 export-capable boundary within the precommitted bound, not a no-exfiltration
 role. Direct table or unbounded extraction is unsupported. A break-glass export
-requires a separately provisioned, time-bounded export LOGIN/capability, dual
-approval, an exact purpose and cumulative result bound, and a committed
-`AUDIT_ACCESS` event; it never grants tenant access or digest-key access.
+requires a separately provisioned, time-bounded export LOGIN, dual approval, an
+exact purpose and cumulative result bound, and a committed `AUDIT_ACCESS`
+event; it never grants tenant access or digest-key access. Normal provisioning
+installs only the NOLOGIN `ofarm_security_audit_export` capability and
+intentionally creates no break-glass export LOGIN or membership. #192 may open
+an approved temporary export window, but the presence of that LOGIN or its
+membership intentionally makes both structural and runtime readiness false.
+After the bounded export, the temporary LOGIN must be dropped and the exact
+normal role/membership posture reverified before readiness can return. #192 owns
+that operational window, its approvals, audit acts, credential handling, and
+closure.
 
 Rows are immutable to ingest and reader roles. V1 uses one ordinary relation;
 the append path performs no runtime partition or other DDL. The append function
@@ -524,19 +535,33 @@ signature, algorithm, expiry, not-before time, key identity, and the exact
 not pass a raw tenant identifier to SQL. After #173 begins one UnitOfWork on one
 checked-out backend, binding proceeds as follows:
 
+V1 uses one database-verifiable HMAC-SHA-256 format, not an algorithm-selectable
+token. The MAC input starts with
+`ASCII("OFARM_TENANT_CAPABILITY_V1") || 0x00`; every capability field named in
+step 2, including the key identity, then follows in the order stated there as
+`lp32(canonical_field_bytes)`. Text uses the exact ASCII or UTF-8 equality bytes
+already frozen here, UUID uses `uuid_send`, SHA-256 values use their raw 32
+bytes, times use a signed 64-bit big-endian count of UTC microseconds since the
+Unix epoch, and challenge and nonce use their fixed raw bytes. JSON
+serialization, delimiter joining, implicit casts, omitted fields, and alternate
+encodings are forbidden. The binder reconstructs that frame and requires the
+exact 32-byte HMAC before it trusts any framed value.
+
 1. A hardened owner function creates a cryptographically random one-use
    challenge bound to the current backend identity and full transaction
    identity in protected transaction context.
 2. The trusted authentication boundary mints a short-lived TenantCapability
-   containing that challenge, binder audience, equality-policy identity, exact
-   issuer and subject, immutable binding-version identity and digest,
+   containing that challenge, binder audience, HMAC key identity,
+   equality-policy identity, exact issuer and subject, immutable binding-version
+   identity and digest,
    lifecycle-head act identity and digest, tenant_id, tenant-registry digest,
    party_ref, pinned Party record-kind identity, record identity, schema digest,
    and payload digest,
-   issued/expiry times, and a unique nonce. The capability is signed by a key
-   unavailable to the application database role.
+   issued/not-before/expiry times, and a unique nonce. The capability is signed
+   by a key unavailable to the application database role.
 3. A schema-qualified SECURITY DEFINER binder with a fixed trusted search_path
-   verifies the signature, audience, expiry, backend/transaction challenge,
+   verifies the HMAC, fixed algorithm, key identity and schedule bounds,
+   audience, issued/not-before/expiry times, backend/transaction challenge,
    nonce, exact immutable version bytes and digest, and the authoritative
    lifecycle head and currentness reconstructed from immutable acts. It may use
    `principal_binding_current` to locate a candidate only when its version and
@@ -557,27 +582,59 @@ checked-out backend, binding proceeds as follows:
    makes the physical row unusable; a capability from another transaction or
    backend cannot be reused.
 
+The HMAC secret comes only from an immutable
+`tenant_capability_key_schedule` row selected by the framed key identity. An
+unknown key, an algorithm other than HMAC-SHA-256, or a capability time outside
+that row's fixed validity bounds refuses. Direct INSERT, UPDATE, DELETE, and
+SELECT are denied to application, worker, readiness, registrar, and end-user
+roles. A migration-owned hardened identity-control install function is the only
+append path, returns no secret, and cannot alter or remove an installed row;
+migrations, provisioning fixtures, logs, and receipts contain no secret. #172
+owns the external signer/key-service integration and byte-for-byte use of this
+frame and schedule across the signer, verifier, and binder, including shared
+golden vectors. #174 supplies only the protected relation, install primitive,
+database verifier, and database-side structural tests.
+
 The bootstrap path is explicit. `tenant_registry`, `principal_binding`,
 `principal_binding_lifecycle`, `principal_binding_current`,
-`tenant_binding_context`, and `schema_migration` are non-tenant control or
-operational relations and are not given tenant RLS policies. They are protected
-by ownership, relation privilege denial, and migration-checksummed hardened
-functions. Every tenant-bearing relation, including the Party-bearing
-`kernel_record`, remains under enabled and forced RLS.
+`tenant_capability_key_schedule`, `tenant_binding_context`, and
+`schema_migration` are non-tenant control or operational relations and are not
+given tenant RLS policies. They are protected by ownership, relation privilege
+denial, and migration-checksummed hardened functions. Every tenant-bearing
+relation, including the Party-bearing `kernel_record`, remains under enabled and
+forced RLS.
 
 The hardened binder executes as `ofarm_binder`, provisioned `NOSUPERUSER`,
 `NOCREATEDB`, `NOCREATEROLE`, `NOREPLICATION`, `NOLOGIN`, `NOINHERIT`, and
 `BYPASSRLS`. No LOGIN role is a member, no `SET ROLE` or admin path to it is
 granted, and it has only the relation/column privileges required
 to reconstruct one principal stream and compare the exact tenant-registry and
-Party tuple named by that binding. Its fixed, schema-qualified SQL accepts no
-table, column, predicate, tenant, or Party selector other than the signed and
-database-matched binding tuple; it returns no tenant row or Party payload. The
-application receives EXECUTE only on the exact challenge, binder, and current-
-context functions. There is no generic query/dynamic-SQL function owned by this
-role. Compromise of `ofarm_binder` is therefore an explicit privileged-boundary
+Party tuple named by that binding and verify the exact named HMAC key-schedule
+row. Its fixed, schema-qualified SQL accepts no table, column, predicate, tenant,
+Party, or key selector other than the framed and database-matched binding tuple;
+it returns no tenant row, Party payload, or key material. The application
+receives EXECUTE only on the exact challenge, binder, and current-context
+functions. There is no generic query/dynamic-SQL function owned by this role.
+Compromise of `ofarm_binder` is therefore an explicit privileged-boundary
 compromise outside RLS, while possession of application credentials or raw SQL
 cannot exercise its bypass as a general tenant-data read path.
+
+Backend-incarnation observation is isolated from that binder authority.
+`ofarm_backend_observer` is a NOLOGIN, INHERIT, NOBYPASSRLS role whose sole
+membership is `pg_read_all_stats` with `INHERIT TRUE`, `SET FALSE`, and `ADMIN
+FALSE`. PUBLIC SELECT on `pg_catalog.pg_stat_activity` and PUBLIC EXECUTE on the
+complete PostgreSQL 17 family of `pg_stat_get_activity(integer)` plus the 13
+`pg_stat_get_backend_*` routines are revoked in both services. The audit
+service grants no replacement. The tenant service grants the observer only
+SELECT on that exact view and EXECUTE on `pg_stat_get_activity(integer)`, in
+addition to its predefined-role membership. The observer owns only two
+fixed-search-path SECURITY DEFINER helpers: one returns the current session's
+backend start and one answers whether one exact `(backend_pid, backend_start)`
+incarnation is live. PUBLIC and every runtime role have no EXECUTE on those
+helpers; only `ofarm_binder` may call them. The helpers return no query text,
+role inventory, or generic statistics. Neither privileged NOLOGIN role can be
+inherited or assumed by a LOGIN role, so same-login raw SQL has no direct
+backend-observation path.
 
 `tenant_binding_context` is an UNLOGGED, migration-owned disposable relation.
 Its authority key is `(backend_pid, backend_start, full_xid8)`, all derived
@@ -707,11 +764,13 @@ database casts, and digest equality without the canonical bytes are forbidden.
   relational key.
 
 The tenant registry assigns every tenant a stable, globally unique signed
-64-bit advisory-lock key. A separately reserved global migration-lock key cannot
-collide with tenant keys. Human-readable tenant references and truncated hashes
-are not advisory-lock identities. Only the protected wrappers defined below may
-use these keys. Any later resource-lock family must reserve a disjoint namespace
-before use.
+64-bit advisory-lock key. The migration lock instead uses one fixed pair of
+signed 32-bit integers derived from its checked-in domain tag. PostgreSQL keeps
+the two-integer advisory-lock namespace disjoint from the single-bigint
+namespace, so the migration lock cannot collide with tenant keys. Human-readable
+tenant references and truncated hashes are not advisory-lock identities. Only
+the protected wrappers defined below may use these keys. Any later resource-lock
+family must reserve a disjoint namespace before use.
 
 ## Foreign keys, graph rules, and sharing boundary
 
@@ -794,10 +853,28 @@ The role model is:
 
 - ofarm_owner: NOLOGIN owner of tenant/application schemas, tables, policies,
   and ordinary functions, explicitly excluding the isolated `ofarm_security`
-  objects and the three narrowly `ofarm_binder`-owned functions;
+  objects, the narrowly binder/backend-observer/graph-validator-owned
+  functions, and the tenant-write lock wrapper;
 - ofarm_migrator: release-only credentials allowed to take the migration lock
   and apply reviewed DDL through the applicable application or security-audit
-  owner role, with no runtime ingest/read/retention authority;
+  owner role, with no runtime ingest/read/retention authority and no raw
+  advisory-function EXECUTE;
+- each service has one provisioning-declared migration-lock owner: a
+  NOSUPERUSER, NOCREATEDB, NOCREATEROLE, NOREPLICATION, NOLOGIN, NOINHERIT,
+  NOBYPASSRLS role with no members or role-assumption path. It owns exactly that
+  service's `ofarm_infrastructure` schema and permanent migration-lock wrapper,
+  and is the sole provisioned role that receives raw EXECUTE on
+  `pg_catalog.pg_advisory_xact_lock(integer, integer)`; it has no table,
+  application, binder, audit, migration, or other raw advisory-lock authority;
+- ofarm_tenant_lock_owner: NOSUPERUSER, NOCREATEDB, NOCREATEROLE,
+  NOREPLICATION, NOLOGIN, NOINHERIT, and NOBYPASSRLS, with no members or
+  role-assumption path. It owns only the no-argument tenant-write wrapper and is
+  the sole provisioned role that receives raw EXECUTE on
+  `pg_catalog.pg_advisory_xact_lock(bigint)`. It has only application-schema
+  USAGE, EXECUTE on the no-argument current-context function, and column SELECT
+  on the tenant registry's tenant identity and advisory-lock key needed by that
+  static wrapper; it has no schema ownership, other table privilege, binder
+  authority, migration lock, or other raw advisory-lock authority;
 - ofarm_app: non-owner application role with NOBYPASSRLS, no DDL, no owner or
   migrator membership, and only required DML;
 - ofarm_worker: same isolation posture as the application, with an explicit
@@ -812,13 +889,30 @@ The role model is:
   only by the hardened challenge, binder, and current-context functions. It has
   no members or role-assumption path and only the exact column/relation rights
   needed to read immutable binding versions, authoritative lifecycle acts,
-  optional current projection, tenant registry, one pinned Party record, and
-  transaction context. The application may EXECUTE those closed functions but
-  cannot SET ROLE to this role or obtain generic tenant reads;
+  optional current projection, tenant registry, one pinned Party record, the
+  named TenantCapability key-schedule row, and transaction context. The
+  application may EXECUTE those closed functions but cannot SET ROLE to this
+  role or obtain generic tenant reads or key access;
+- ofarm_backend_observer: NOSUPERUSER, NOCREATEDB, NOCREATEROLE,
+  NOREPLICATION, NOLOGIN, INHERIT, and NOBYPASSRLS. Its sole membership is the
+  predefined `pg_read_all_stats` role with `INHERIT TRUE`, `SET FALSE`, and
+  `ADMIN FALSE`; no governed or LOGIN role is its member. It alone receives
+  SELECT on the otherwise closed `pg_stat_activity` view and EXECUTE on
+  `pg_stat_get_activity(integer)`. It owns only the two fixed
+  backend-incarnation helpers and grants EXECUTE only to `ofarm_binder`, so
+  governed and LOGIN roles receive only their narrow results rather than a
+  general statistics path;
+- ofarm_graph_validator: NOSUPERUSER, NOCREATEDB, NOCREATEROLE,
+  NOREPLICATION, NOLOGIN, NOINHERIT, and NOBYPASSRLS, with no membership or
+  role-assumption path. It owns only the two deferred promotion-graph trigger
+  functions, may execute the sealed current-context function, and has SELECT
+  on only the record/edge columns those triggers use. It is named in those two
+  tables' tenant policies, so FORCE RLS still constrains it to the bound tenant;
 - ofarm_identity_writer: control-plane-only capability that may execute the
-  principal-binding lifecycle transition but has no direct DML on binding
-  versions, lifecycle acts, or projection, no tenant-truth read role, and no
-  application membership;
+  principal-binding lifecycle transition and hardened TenantCapability-key
+  install function but has no direct DML on binding versions, lifecycle acts,
+  projection, or key schedule, no ability to read back a signing secret, no
+  tenant-truth read role, and no application membership;
 - ofarm_security_audit_owner: NOLOGIN owner only of the protected
   `ofarm_security` schema, operational security-event relation, and hardened
   append/control/query/export/purge/readiness functions, with no tenant-schema
@@ -837,9 +931,10 @@ The role model is:
   EXECUTE only on bounded audited query functions, no table SELECT/COPY,
   append/retention authority, tenant-data access, or application membership;
 - ofarm_security_audit_export: NOLOGIN break-glass capability granted only to a
-  time-bounded LOGIN after dual approval; it executes only the exact
-  pre-authorized bounded export function and has no table, append, retention,
-  tenant, application, or digest-key access;
+  temporary time-bounded LOGIN during a #192-owned, dual-approved export window;
+  normal provisioning creates no such LOGIN or membership. The capability
+  executes only the exact pre-authorized bounded export function and has no
+  table, append, retention, tenant, application, or digest-key access;
 - ofarm_security_audit_retention: NOLOGIN security-operations capability that
   may execute only the migration-owned no-caller-cutoff expired-row purge
   procedure, with no arbitrary row mutation, append, reader, tenant, or
@@ -850,6 +945,27 @@ The role model is:
 - ofarm_readiness: read-only access to migration metadata and no access to
   tenant data, or an equivalently restricted readiness grant.
 
+The shared PostgreSQL large-object store is not a tenant or audit carrier.
+Provisioning freezes the complete PostgreSQL 17 inventory, signatures,
+implementation properties, internal symbols, symbolic bootstrap-superuser
+ownership, and ACLs of the 20 `lo_*`, `loread`, and `lowrite` routines. It
+revokes PUBLIC EXECUTE from every one and grants no governed runtime or control
+role an alternative path. Fresh-target, migration, and startup verification
+also require zero `pg_largeobject_metadata` rows. A missing or added routine,
+property change, widened ACL, or stored large object is structural drift and
+refuses in both the tenant and audit services.
+
+PostgreSQL's default same-role backend visibility is also outside the tenant
+and audit carriers. Provisioning freezes the `pg_stat_activity` view's exact
+owner category, definition, ordered typed/collated columns, relation posture,
+and ACL, plus the complete 14-routine `pg_stat_get_activity` and
+`pg_stat_get_backend_*` family with exact signatures, implementation
+properties, owners, and ACLs. Both services revoke PUBLIC access. Audit grants
+no replacement; tenant grants only the non-assumable backend observer the view
+and activity function access needed by its sealed helpers. An unexpected
+family member, changed definition or property, or widened grant is structural
+drift and refuses.
+
 Enable and FORCE row-level security on every tenant-bearing relation. Policies
 use only the protected current-tenant function for both USING and WITH CHECK.
 They never consume a raw custom setting. Missing, invalid, expired, replayed, or
@@ -857,13 +973,14 @@ multiply bound context denies or raises; it never selects all tenants. Append-
 only restrictions remain additional constraints and do not substitute for RLS.
 The closed non-tenant control list is `tenant_registry`, `principal_binding`,
 `principal_binding_lifecycle`, `principal_binding_current`,
-`tenant_binding_context`, and `schema_migration`; these relations have no
-tenant RLS policy and instead deny direct application, worker, and end-user
-relation access. The binder/registrar reach only their named functions and
-minimum underlying fields; readiness receives the separately specified exact
-read-only migration-ledger grant. Adding any relation or privilege to that list
-requires a migration and classification change. Party and every other tenant-
-bearing record remain forced-RLS protected.
+`tenant_capability_key_schedule`, `tenant_binding_context`, and
+`schema_migration`; these relations have no tenant RLS policy and instead deny
+direct application, worker, readiness, registrar, and end-user relation access.
+The binder, registrar, and identity-control paths reach only their named
+functions and minimum underlying fields; readiness receives the separately
+specified exact read-only migration-ledger grant. Adding any relation or
+privilege to that list requires a migration and classification change. Party
+and every other tenant-bearing record remain forced-RLS protected.
 
 Normal functions execute as the caller. Any unavoidable SECURITY DEFINER
 function has a fixed trusted search_path, schema-qualified objects, no
@@ -871,8 +988,9 @@ caller-controlled dynamic SQL, minimal ownership, explicit EXECUTE grants, and
 adversarial tests. The challenge, binder, current-context, and lock wrappers are
 named exceptions, together with the isolated security-audit append, control,
 query, export, purge, and readiness procedures. Their definitions and owners are
-migration-checksummed. Triggers and constraint functions include tenant and
-batch in every tenant lookup.
+content-addressed by the applicable migration or by the closed provisioning
+capsule defined below; `0001` pins that exact provisioning digest. Triggers and
+constraint functions include tenant and batch in every tenant lookup.
 
 Direct SQL using the application role remains subject to forced RLS, composite
 constraints, verified context, and append-only rules. The application role
@@ -893,35 +1011,66 @@ bypass from becoming an application SQL path.
 
 Cluster provisioning revokes PUBLIC and application EXECUTE on every
 pg_advisory_lock, pg_try_advisory_lock, pg_advisory_unlock, and transaction-lock
-overload. The application and worker roles cannot choose a numeric lock key,
-take a session lock, try a migration lock, or unlock a protected lock.
+overload. Among provisioned roles there are exactly two raw-function grant
+classes:
+`ofarm_tenant_lock_owner` alone receives EXECUTE on
+`pg_catalog.pg_advisory_xact_lock(bigint)`, and each service's isolated
+migration-lock owner alone receives EXECUTE on
+`pg_catalog.pg_advisory_xact_lock(integer, integer)` in that service. Neither
+owner has LOGIN, members, or a role-assumption path. The application, worker,
+and migrator roles cannot choose a numeric lock key, take a raw session or
+transaction lock, try a migration lock, or unlock a protected lock.
 
 Two schema-qualified SECURITY DEFINER wrappers are allowed:
 
 - the tenant-write wrapper accepts no tenant or lock-key argument, requires a
   verified TenantBinding, derives the unique key from its tenant registry row,
-  and acquires only a transaction-scoped lock; and
-- the migration wrapper is executable only by the migrator, accepts no caller
-  key, derives the reserved global key internally, and acquires only a
-  transaction-scoped lock.
+  is owned by isolated `ofarm_tenant_lock_owner`, calls only the raw bigint
+  transaction-lock overload, and acquires only a transaction-scoped lock; and
+- the permanent migration wrapper lives in the separately provisioned
+  `ofarm_infrastructure` schema, is owned by the service-specific isolated
+  migration-lock owner, is executable only by the migrator, accepts no
+  arguments, derives the fixed domain-separated integer pair internally, and
+  acquires only a transaction-scoped lock.
 
 Both wrappers have a fixed trusted search_path, fully qualified calls, exact
 owners and EXECUTE grants, and no dynamic SQL. There is no application-visible
-unlock wrapper; commit or rollback releases the lock.
+unlock wrapper; commit or rollback releases the lock. The migration wrapper is
+part of the exact provisioning capsule and remains after `0001`; application
+startup cannot create, invoke, replace, or repair it.
+
+The administrator-only provisioning command serializes every verify-or-create
+operation in one PostgreSQL cluster with one fixed, cluster-global two-integer
+session-lock pair. Every target on that cluster uses the same pair; the
+separately bounded audit service uses the same defined pair within its own
+cluster, without weakening its required service isolation. The pair comes from
+a provisioning-only domain and differs from every permanent migration-wrapper
+pair; it also never uses the disjoint single-bigint tenant-lock namespace. Only
+the external provisioning administrator takes and explicitly releases this
+session lock; it is not exposed through either protected wrapper or granted to
+any runtime or migrator role.
 
 ## One-time infrastructure provisioning
 
 Database and role creation precede numbered schema migrations. A reviewed,
 versioned infrastructure step run by a database administrator creates the
-tenant database, plus a separately bounded audit PostgreSQL service/database
-with its empty `ofarm_security` namespace. It creates the NOLOGIN application,
-binder, and security owners, migrator/application/worker/readiness identities or
-grants, tenant registrar, identity-control writer, seven isolated
-security-audit capabilities,
-the distinct tenant-control and audit producer/control LOGIN identities and
-exact `INHERIT TRUE`/`SET FALSE`/`ADMIN FALSE` memberships, service resource
-limits, and initial PUBLIC revocations. Application startup and either migration
-runner do not create or repair their own cluster roles or services.
+tenant database, plus a separately bounded audit PostgreSQL service/database.
+It creates the empty application namespace, the separate `ofarm_infrastructure`
+namespace and closed capsule described below, the tenant service's NOLOGIN
+application, binder, and tenant-lock owners, the audit service's NOLOGIN
+security owner, and each service's specific migration-lock owner. It also
+creates the tenant backend-observer and graph-validator roles and the
+observer's one non-assumable predefined-role membership, plus the declared
+migrator/application/worker/readiness identities or
+grants, tenant registrar, identity-control writer, seven isolated security-
+audit capabilities, the distinct tenant-control and audit producer/control
+LOGIN identities and exact `INHERIT TRUE`/`SET FALSE`/`ADMIN FALSE`
+memberships, service resource limits, and initial PUBLIC revocations. Those
+revocations include the exact PostgreSQL 17 backend-statistics view/routine
+surface in both services; tenant grants its non-assumable observer only the two
+catalog privileges needed by the sealed helpers.
+Application startup and either migration runner do not create or repair their
+own cluster roles or services.
 
 The tenant database is created with UTF8 server encoding. Provisioning verifies
 the built-in deterministic `C` collation used by every equality-sensitive
@@ -937,6 +1086,54 @@ owner, and grants to the declared specification. Any unexpected privilege,
 owner, member, object, or role attribute is drift and refuses; provisioning
 does not silently widen or reconcile it. Credentials and signing keys remain
 outside repository fixtures and migration SQL.
+
+An administrator-side infrastructure observation made before the migration
+command may establish that the database, roles, namespaces, grants, and capsule
+are suitable for attempting migration. It is diagnostic infrastructure
+evidence only: it is not migration-history authority, cannot classify a target
+as fresh or migrated, and cannot be reused as the runner's phase, capsule, or
+ledger observation after the migration lock is acquired.
+
+The pre-ledger capsule is a closed provisioning-owned exception to the otherwise
+empty target. Each service's capsule contains the permanent, no-argument,
+fixed-pair migration-lock wrapper in `ofarm_infrastructure`. Its service-specific
+NOLOGIN/no-membership owner is the only role granted raw EXECUTE on
+`pg_catalog.pg_advisory_xact_lock(integer, integer)`; the migrator receives only
+USAGE on `ofarm_infrastructure` and EXECUTE on the wrapper. The complete tenant
+production specification additionally contains one temporary, no-argument
+owner sealer. The sealer is a SECURITY DEFINER routine owned by the external
+provisioning-superuser category, not by any runtime, control, owner, or migrator
+role. Its only EXECUTE grant is to the migrator.
+
+The sealer contains only static statements naming the three frozen challenge,
+binder, and current-context signatures, the two backend-incarnation helpers,
+the two promotion-graph validators, the no-argument tenant-write wrapper,
+their four target owners, and the application schema. It accepts no SQL, role,
+schema, object, signature, owner, or other caller input and contains no dynamic
+SQL. Inside its one transaction it temporarily grants CREATE on only the
+application schema to the four fixed owners, as PostgreSQL requires before
+those roles receive ownership. It transfers the three binder routines, two
+observer helpers, two graph validators, and tenant-write wrapper to their exact
+owners, then revokes every transient CREATE grant. It finally
+changes itself to SECURITY INVOKER and transfers its own ownership to
+`ofarm_migrator`. Provisioning creates none of the eight target routine bodies.
+
+The owner sealer grants no LOGIN membership and creates no `SET ROLE`,
+inheritance, administration, caller-selected grant, or generic ownership-
+transfer path. Tenant `0001` alone uses it. After creating the eight exact
+routines under the ordinary application owner, the runner issues `RESET ROLE`,
+calls the sealer as the migrator, verifies all eight final owners, all revoked
+CREATE grants, and the sealer's SECURITY INVOKER/migrator-owned state, drops the
+sealer, and restores the ordinary application owner role before completing the
+ledger append. A rollback restores every owner and grant plus the exact usable,
+provisioning-superuser-owned SECURITY DEFINER sealer, so failed `0001` can be
+retried without repair. The audit capsule has no owner sealer. Every capsule
+signature, definition, owner category, function property, grant, and absence is
+part of the provisioning digest; missing, extra, changed, or widened capsule
+state is drift and refuses. Verification is phase-aware: before the tenant
+ledger exists the exact sealer must be present, while after `0001` commits it
+must be absent. The permanent migration wrapper and its isolated owner remain
+exact in both phases; provisioning never recreates a missing post-`0001` sealer.
 
 ## Immutable migration baseline
 
@@ -967,13 +1164,24 @@ A separate migration command, release job, or operator action targets exactly
 one provisioned service and its migration set:
 
 1. connects using migrator credentials unavailable to the application;
-2. takes the reserved global transaction-scoped migration lock;
-3. verifies the provisioned database, roles, namespace ownership, and grants;
+2. begins one READ COMMITTED transaction and invokes the permanent no-argument
+   wrapper first, taking the reserved global transaction-scoped migration lock;
+3. while holding that lock in the same transaction, obtains fresh catalog and
+   ledger observations and repeats the exact phase-aware provisioning digest,
+   database, role, namespace ownership, grant, isolated lock-owner, capsule,
+   empty-target or ledger-presence, and migration-history checks. No earlier
+   administrator observation is accepted as authority for these checks;
 4. verifies migration filenames are ordered and gap-free;
 5. verifies every previously applied filename and SHA-256 against the immutable
    local migration set;
-6. applies the next migration and appends its ledger row in one database
-   transaction;
+6. applies the next migration and appends its ledger row in that same database
+   transaction; tenant `0001` alone creates the eight sealed routines, resets
+   from the application owner to the migrator, invokes the exact owner sealer,
+   verifies the three binder, two observer, two graph-validator, and one
+   tenant-lock owners, revoked transient CREATE grants, and the sealer's
+   SECURITY INVOKER/migrator-owned state, drops the sealer, restores the
+   application owner role, and records the provisioning digest before that
+   append;
 7. releases the lock on commit or rollback.
 
 Non-transactional migrations are forbidden in the initial posture. If one ever
@@ -985,18 +1193,31 @@ SHA-256, applied-at diagnostic time, release/application build identity, and an
 execution identifier. Missing, duplicate, reordered, unknown, checksum-
 mismatched, or partially applied history is dirty and fails closed.
 
-A missing ledger is fresh only when the provisioned target namespaces are
+A missing ledger is fresh only when the application and `public` schemas are
 provably empty of application relations, views, materialized views, sequences,
-types, routines, policies, triggers, and migration-owned extensions, and the
-catalog shows exactly the declared empty namespace owners and grants. The empty
-schemas created by infrastructure provisioning are allowed; any application
-object without a ledger is not.
+types, routines, policies, triggers, and migration-owned extensions, their
+owners and grants are exact, and `ofarm_infrastructure` contains exactly the
+capsule declared by the applicable provisioning specification. For the complete
+tenant production specification that means the permanent migration wrapper
+plus the temporary exact owner sealer; for the audit service it means the
+permanent migration wrapper only. Any other object, privilege, or function
+property without a ledger is dirty.
 
-On that one proven-empty path, 0001 creates the ledger and target objects and
-appends its own checksum row atomically. If the ledger is missing while any
-target object exists, the database is dirty and the runner refuses. It never
-adopts, fingerprints as a baseline, repairs, drops, or wraps an untracked schema
-with IF NOT EXISTS behavior.
+On that one proven-empty-plus-capsule path, `0001` creates the ledger and target
+objects, completes the tenant owner-sealing lifecycle when applicable, records
+the exact provisioning digest, and appends its own checksum row atomically. If
+the ledger is missing while any non-capsule target object exists, or the capsule
+is not exact, the database is dirty and the runner refuses. It never adopts,
+fingerprints as a baseline, repairs, drops, or wraps an untracked schema with
+`IF NOT EXISTS` behavior.
+
+Before a migration or startup transaction asks PostgreSQL to deparse any
+catalog identity, it fixes `standard_conforming_strings=on`, `TimeZone=UTC`,
+`DateStyle=ISO, MDY`, and `quote_all_identifiers=off` locally and verifies that
+posture. The migration-owned structural verifiers pin every setting their own
+deparser or lazy PL/pgSQL compilation consumes. Catalog bytes therefore do not
+depend on the caller's display settings, server host time zone, or connection
+options.
 
 ## Startup, readiness, compatibility, and rollback
 
@@ -1005,7 +1226,8 @@ version and ordered migration-set digest. The #192 audit client carries the
 exact expected audit migration version/digest. Each performs read-only
 verification of its own ledger before constructing its repositories or serving
 its traffic. Neither creates, alters, drops, repairs, or bootstraps schema
-objects.
+objects. Application and audit startup cannot invoke, install, complete, or
+repair the pre-ledger capsule; a capsule-only target is unready.
 
 Schema mismatch prevents readiness. A dedicated readiness check reports only
 the supported/observed version state without tenant counts, identifiers, or
@@ -1013,8 +1235,9 @@ records. Liveness checks only process health. An empty database, an older or
 newer schema, a dirty history, an unavailable ledger, or a checksum mismatch
 never becomes ready and never triggers DDL.
 
-V1 readiness applies only to a proven-empty initial target or the uninterrupted
-in-place lineage created from that target. It has no recovery-readiness mode.
+V1 readiness applies only to a proven-empty-plus-capsule initial target or the
+uninterrupted in-place lineage created from that target. It has no recovery-
+readiness mode.
 A target declared restored, point-in-time promoted, snapshot-cloned,
 tenant-history imported, forked, or of unknown provenance cannot be promoted to
 service even when its build and migration digests match. The application cannot
@@ -1087,10 +1310,10 @@ accidental unqualified queries and direct SQL under the application role.
 | Cross-tenant or dangling graph construction, including a future-ID/two-transaction promotion exploit | Same-tenant composite FKs plus same-batch promotion reachability and deferred constraints. |
 | JSONB payload reference omitted from relational enforcement or assigned a guessed kind | #174 supplies only the neutral structural carrier and makes no semantic-completeness claim. Exact RuntimeBundle-pinned extraction/kind/cardinality enforcement arrives through #184's reviewed forward migration; dependent runtime surfaces refuse before it exists. |
 | Cross-tenant idempotency replay or uniqueness existence oracle | Tenant/principal/operation command namespace and tenant-prefixed unique indexes. |
-| Advisory-lock collision, raw session lock, attacker-selected key, unlock, or migration-lock attempt | Raw advisory functions are denied; protected no-key wrappers derive disjoint keys and acquire transaction locks only. |
+| Advisory-lock collision, raw session lock, attacker-selected key, unlock, or migration-lock attempt | Raw advisory functions are denied except for the isolated tenant-lock owner's exact bigint transaction-lock overload and each service's isolated migration-lock owner's exact two-integer transaction-lock overload. The protected no-key wrappers derive keys in disjoint bigint-tenant and integer-pair migration namespaces and acquire transaction locks only. |
 | Materialization, dependency, cache, trace, gate-log, bound error, or frozen-output leakage | Tenant qualification and RLS apply regardless of authoritative status; pre-tenant errors use only the protected non-tenant audit lane, and readiness exposes no tenant or security-event data. |
 | Mutation, substitution, or tenant-table mixing of shared global content | #171 placement is prerequisite to 0001; application read-only privileges plus content digest and canonical-byte equality verification apply. |
-| Concurrent, partial, reordered, missing, edited, future, or ledgerless non-empty migration history | Global migration lock, transactional application, immutable checksums, exact readiness, catalog-emptiness proof, and fail-closed dirty detection. |
+| Concurrent, partial, reordered, missing, edited, future, or ledgerless non-empty migration history | Global migration lock, transactional application, immutable checksums, exact readiness, exact empty-application-plus-capsule proof, and fail-closed dirty detection. |
 | Database administrator, migrator, backup, or trusted-binder compromise | Explicitly outside RLS; separate credentials, release controls, audit, and backup governance are required operational controls. |
 
 ## Executable adversarial verification plan
@@ -1157,6 +1380,13 @@ PostgreSQL roles and real ASGI/application topology, not mocks.
     characters, delimiter-like values, maximum and over-limit bytes, and
     equality-policy mismatch. Valid distinct bytes never collapse; rejected
     bytes never reach storage; the same exact bytes never split into two streams.
+17. Install each TenantCapability HMAC key only through the hardened identity-
+    control function and prove no application, worker, readiness, registrar, or
+    identity-control caller can read it back or mutate its immutable schedule
+    row. Shared #172/#174 golden vectors must produce the same canonical frame
+    and HMAC. Unknown key identities, wrong algorithms or lengths, alternate
+    encodings, out-of-window times, and one-bit changes to every framed field
+    refuse before context is installed.
 
 ### Identifier equality and immutable eligibility
 
@@ -1266,8 +1496,11 @@ PostgreSQL roles and real ASGI/application topology, not mocks.
     five-minute expiry or read rollback, and while attempting to widen row/byte
     bounds. Only the exact precommitted page succeeds; rollback cannot erase its
     intent, replay/COPY returns no wider unique data, and a new page/cut requires
-    a new intent. Exercise break-glass approval, credential expiry/revocation,
-    cumulative bounded export, and denial without tenant or HMAC-key access.
+    a new intent. Normal provisioning has no export LOGIN. Exercise break-glass
+    approval, credential expiry/revocation, cumulative bounded export, and
+    denial without tenant or HMAC-key access; structural and runtime readiness
+    remain false for the whole temporary window, and only dropping the temporary
+    LOGIN and reverifying the exact normal posture restores them.
 12. Prove tenant reconstruction, authorization, RuntimeBundle, materialization,
     qualification, output, support, readiness, and export paths cannot name,
     join, count, or infer the pre-tenant relation.
@@ -1313,7 +1546,12 @@ PostgreSQL roles and real ASGI/application topology, not mocks.
    unlock, session-lock, transaction-lock, and migration wrapper overload.
    Raw/keyed calls and migration locking are denied. The no-argument tenant
    wrapper derives only the verified bound tenant and releases on transaction
-   end.
+   end. Prove `ofarm_tenant_lock_owner` alone has only the exact raw bigint
+   EXECUTE needed by that wrapper. Prove the migrator can execute only the
+   permanent migration wrapper, not the raw two-integer function, while the
+   isolated migration-lock owner alone has only the exact raw two-integer
+   EXECUTE needed by that wrapper. Neither lock owner can assume a LOGIN role or
+   invoke the other namespace.
 6. Cold-bootstrap after #171 and prove globally governed bundle bytes are
    outside tenant-owned records while tenant selection/context rows reference
    the exact bundle digest.
@@ -1321,26 +1559,43 @@ PostgreSQL roles and real ASGI/application topology, not mocks.
 ### Migrations and readiness
 
 1. Provision a new target once and verify exact database owner, NOLOGIN owners,
-   role attributes/memberships, namespace owners, PUBLIC revocations, and empty
-   target catalogs before applying migrations.
-2. Apply each migration set to its proven-empty tenant or audit service and
-   verify exact version, checksums, roles, grants, constraints, functions, and
-   indexes; forced RLS applies to every tenant-bearing relation and never
-   supplies a fake tenant context to the audit service.
+   role attributes/memberships, namespace owners, PUBLIC revocations, isolated
+   lock-owner privilege, empty application catalogs, and exact pre-ledger
+   capsule before applying migrations. Prove every provisioning operation in
+   one cluster uses the one fixed cluster-global two-integer session-lock pair,
+   distinct from every permanent migration pair and the tenant single-bigint
+   namespace.
+2. Apply each migration set to its proven-empty-plus-capsule tenant or audit
+   service and verify exact version, checksums, roles, grants, constraints,
+   functions, and indexes. Tenant `0001` leaves the permanent wrapper exact and
+   the owner sealer absent, with all eight routines assigned to their exact
+   four final owner roles and every transient CREATE grant absent; forced RLS
+   applies to every tenant-bearing relation and never supplies a fake tenant
+   context to the audit service.
 3. Re-run provisioning and the migration runner and prove both are verified
    no-ops, not silent repairs.
 4. Test missing, duplicate, reordered, renamed, edited, unknown-future,
    partially applied, and checksum-mismatched migrations; each fails closed.
-5. Delete or omit the ledger in both an empty target and targets containing one
-   relation, view, sequence, type, routine, policy, trigger, or migration-owned
-   extension. Only the provably empty target is fresh; every non-empty target
+5. Delete or omit the ledger in both an exact capsule-only target and targets
+   with a missing, changed, or widened capsule or one extra relation, view,
+   sequence, type, routine, policy, trigger, or migration-owned extension. Only
+   the exact empty-application-plus-capsule target is fresh; every other target
    refuses without adoption or cleanup.
-6. Inject a DDL failure and prove both schema changes and the ledger append roll
-   back. Run two migration processes and prove the global lock serializes them.
-7. Start the application and audit client against empty, old, exact, newer,
-   dirty, crossed, and unavailable tenant/audit schemas. Only the exact matched
-   pair among fresh or uninterrupted in-place targets becomes ready, and
-   catalog snapshots prove startup performed no DDL.
+6. Inject a DDL failure after the tenant owner sealer runs and prove its eight
+   routine-owner changes, transient CREATE grants and revocations,
+   self-demotion, drop, all schema changes, and the ledger append roll back to
+   the exact usable, provisioning-superuser-owned pre-ledger capsule. Run two
+   migration processes
+   and prove the global lock serializes them. Give the waiting runner an earlier
+   administrator observation of the pre-ledger phase, let the first runner
+   commit `0001`, and prove the waiter discards that stale evidence and observes
+   the committed post-ledger phase only after its wrapper call returns, within
+   its still-open READ COMMITTED transaction.
+7. Start the application and audit client against capsule-only, empty, old,
+   exact, newer, dirty, crossed, and unavailable tenant/audit schemas. Only the
+   exact fully migrated pair from a fresh or uninterrupted in-place lineage
+   becomes ready; the capsule-only pair refuses, and catalog snapshots prove
+   startup performed no DDL.
 8. Prove application and readiness roles cannot provision, apply, repair, or
    downgrade a migration.
 9. Restore a tenant snapshot ending at K40 after K41-K45 and a principal/grant
@@ -1485,9 +1740,11 @@ tenancy and migration tests until the dependent tickets land.
   governed control-plane integration for immutable principal-binding versions,
   append-only lifecycle transitions and deterministic projection rebuild,
   exact-principal equality enforcement, immutable V1 tenant/Party eligibility
-  validation, and the trusted TenantCapability issuer/verifier boundary. #174
-  is its database-primitives prerequisite and supplies the classified storage
-  and hardened functions. #172 does not own durable pre-tenant audit emission.
+  validation, the trusted TenantCapability issuer/verifier boundary, signer and
+  key-service integration, and byte-exact cross-layer use of the canonical HMAC
+  frame and key schedule. #174 is its database-primitives prerequisite and
+  supplies the classified storage and hardened functions. #172 does not own
+  durable pre-tenant audit emission.
 - #173 follows #172 and #174. It supplies the pool, UnitOfWork, application call
   to #174's one-use challenge/binder functions, exact digest propagation,
   transaction finalization/rollback, pool-idle enforcement, and write-batch
@@ -1497,9 +1754,10 @@ tenancy and migration tests until the dependent tickets land.
   and #173. It supplies the one-time provisioning specification, exact role
   attributes and grants, immutable tenant/audit migration baselines, equality
   domains/collations, immutable registry and insert-only registrar, principal
-  storage, NOLOGIN BYPASSRLS binder, challenge/context/current-tenant functions,
-  forced RLS,
-  composite keys, the neutral reference carrier and settled structural graph
+  storage, protected immutable TenantCapability key schedule and hardened key
+  install/database-HMAC verification primitives, NOLOGIN BYPASSRLS binder,
+  challenge/context/current-tenant functions, forced RLS, composite keys, the
+  neutral reference carrier and settled structural graph
   constraints, protected lock wrappers, separately bounded audit
   service/relations, producer LOGIN/session map/reason allowlist, hardened
   audit functions, resource limits, direct-SQL/catalog tests, runners, and
