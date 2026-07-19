@@ -7,6 +7,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define OFARM_ED25519_VECTOR_DEFINE_CASES
+#define OFARM_ED25519_VECTOR_DEFINE_BOUNDARIES
+#define OFARM_ED25519_VECTOR_DEFINE_IDENTITY_R_PROOF
+#include "ofarm_ed25519_vectors.h"
+
 static void
 fail(const char *label)
 {
@@ -40,13 +45,39 @@ decode_hex(const char *hex, unsigned char *output, size_t output_length)
 static unsigned char *
 clone_exact(const unsigned char *source, size_t length)
 {
-    unsigned char *copy = (unsigned char *) malloc(length);
+    unsigned char *copy = (unsigned char *) malloc(length == 0U ? 1U : length);
 
     if (copy == NULL && length != 0U)
         fail("exact-sized allocation failed");
     if (length != 0U)
         (void) memcpy(copy, source, length);
     return copy;
+}
+
+static const ofarm_ed25519_vector_case *
+find_vector(const char *identifier)
+{
+    size_t index;
+
+    for (index = 0; index < OFARM_ED25519_VECTOR_CASE_COUNT; index++) {
+        if (strcmp(OFARM_ED25519_VECTOR_CASES[index].identifier, identifier) == 0)
+            return &OFARM_ED25519_VECTOR_CASES[index];
+    }
+    fail("required canonical vector is absent");
+    return NULL;
+}
+
+static unsigned char *
+decode_allocated_hex(const char *hex, size_t *output_length)
+{
+    size_t length = strlen(hex) / 2U;
+    unsigned char *output = (unsigned char *) malloc(length == 0U ? 1U : length);
+
+    if (output == NULL)
+        fail("canonical vector allocation failed");
+    decode_hex(hex, output, length);
+    *output_length = length;
+    return output;
 }
 
 static void
@@ -78,149 +109,191 @@ expect_result(const char *label,
 }
 
 static void
+exercise_canonical_cases(void)
+{
+    size_t index;
+
+    for (index = 0; index < OFARM_ED25519_VECTOR_CASE_COUNT; index++) {
+        const ofarm_ed25519_vector_case *vector =
+            &OFARM_ED25519_VECTOR_CASES[index];
+        size_t public_key_length;
+        size_t signed_bytes_length;
+        size_t signature_length;
+        unsigned char *public_key = decode_allocated_hex(
+            vector->public_key_hex, &public_key_length);
+        unsigned char *signed_bytes = decode_allocated_hex(
+            vector->signed_bytes_hex, &signed_bytes_length);
+        unsigned char *signature = decode_allocated_hex(
+            vector->signature_hex, &signature_length);
+
+        expect_result(vector->identifier,
+                      public_key,
+                      public_key_length,
+                      signed_bytes,
+                      signed_bytes_length,
+                      signature,
+                      signature_length,
+                      vector->expected_verified ? OFARM_ED25519_VERIFIED :
+                                                  OFARM_ED25519_REFUSED);
+        free(signature);
+        free(signed_bytes);
+        free(public_key);
+    }
+}
+
+static void
 exercise_known_answers(unsigned char public_key[OFARM_ED25519_PUBLIC_KEY_BYTES],
                        unsigned char rfc_signature[OFARM_ED25519_SIGNATURE_BYTES],
                        unsigned char preflight[43],
                        unsigned char preflight_signature[OFARM_ED25519_SIGNATURE_BYTES])
 {
-    static const unsigned char empty[1] = {0};
+    const ofarm_ed25519_vector_case *rfc =
+        find_vector("rfc8032-empty-positive");
+    const ofarm_ed25519_vector_case *probe =
+        find_vector("kms-preflight-positive");
 
-    decode_hex(
-        "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
-        public_key,
-        OFARM_ED25519_PUBLIC_KEY_BYTES);
-    decode_hex(
-        "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e06522490155"
-        "5fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b",
-        rfc_signature,
-        OFARM_ED25519_SIGNATURE_BYTES);
-    decode_hex(
-        "004f4641524d322d54454e414e542d4341504142494c4954592d4b4d532d5052"
-        "45464c494748542d563100",
-        preflight,
-        43U);
-    decode_hex(
-        "b8c5d75bfcdfaf6c33ae31eb6dba6f47ae6a7c11d925982ffbc00d2897a15c1b"
-        "dee4b25b894d6a64f22466d698d536bc5a87fa0650ead4da5cc6496154ffe102",
-        preflight_signature,
-        OFARM_ED25519_SIGNATURE_BYTES);
-
-    expect_result("RFC 8032 empty-message vector refused",
-                  public_key,
-                  OFARM_ED25519_PUBLIC_KEY_BYTES,
-                  empty,
-                  0U,
-                  rfc_signature,
-                  OFARM_ED25519_SIGNATURE_BYTES,
-                  OFARM_ED25519_VERIFIED);
-    expect_result("fixed preflight vector refused",
-                  public_key,
-                  OFARM_ED25519_PUBLIC_KEY_BYTES,
-                  preflight,
-                  43U,
-                  preflight_signature,
-                  OFARM_ED25519_SIGNATURE_BYTES,
-                  OFARM_ED25519_VERIFIED);
+    decode_hex(rfc->public_key_hex,
+               public_key,
+               OFARM_ED25519_PUBLIC_KEY_BYTES);
+    decode_hex(rfc->signature_hex,
+               rfc_signature,
+               OFARM_ED25519_SIGNATURE_BYTES);
+    decode_hex(probe->signed_bytes_hex, preflight, 43U);
+    decode_hex(probe->signature_hex,
+               preflight_signature,
+               OFARM_ED25519_SIGNATURE_BYTES);
 }
 
 static void
 exercise_length_boundaries(const unsigned char public_key[OFARM_ED25519_PUBLIC_KEY_BYTES],
                            const unsigned char signature[OFARM_ED25519_SIGNATURE_BYTES])
 {
-    unsigned char oversized_message[OFARM_ED25519_MAX_SIGNED_BYTES + 1U];
-    unsigned char oversized_public_key[OFARM_ED25519_PUBLIC_KEY_BYTES + 1U];
-    unsigned char oversized_signature[OFARM_ED25519_SIGNATURE_BYTES + 1U];
+    static const unsigned char empty[1] = {0};
+    size_t index;
 
-    (void) memset(oversized_message, 0x5a, sizeof oversized_message);
-    (void) memcpy(oversized_public_key, public_key,
-                  OFARM_ED25519_PUBLIC_KEY_BYTES);
-    oversized_public_key[OFARM_ED25519_PUBLIC_KEY_BYTES] = 0;
-    (void) memcpy(oversized_signature, signature,
-                  OFARM_ED25519_SIGNATURE_BYTES);
-    oversized_signature[OFARM_ED25519_SIGNATURE_BYTES] = 0;
-    expect_result("31-byte public key accepted",
-                  public_key, 31U, oversized_message, 1U,
-                  signature, OFARM_ED25519_SIGNATURE_BYTES,
-                  OFARM_ED25519_REFUSED);
-    expect_result("33-byte public key accepted",
-                  oversized_public_key, sizeof oversized_public_key,
-                  oversized_message, 1U,
-                  signature, OFARM_ED25519_SIGNATURE_BYTES,
-                  OFARM_ED25519_REFUSED);
-    expect_result("63-byte signature accepted",
-                  public_key, OFARM_ED25519_PUBLIC_KEY_BYTES,
-                  oversized_message, 1U, signature, 63U,
-                  OFARM_ED25519_REFUSED);
-    expect_result("65-byte signature accepted",
-                  public_key, OFARM_ED25519_PUBLIC_KEY_BYTES,
-                  oversized_message, 1U,
-                  oversized_signature, sizeof oversized_signature,
-                  OFARM_ED25519_REFUSED);
-    expect_result("8193-byte message accepted",
-                  public_key, OFARM_ED25519_PUBLIC_KEY_BYTES,
-                  oversized_message, sizeof oversized_message,
-                  signature, OFARM_ED25519_SIGNATURE_BYTES,
-                  OFARM_ED25519_REFUSED);
+    for (index = 0;
+         index < OFARM_ED25519_VECTOR_PUBLIC_KEY_LENGTH_COUNT;
+         index++) {
+        size_t length = OFARM_ED25519_VECTOR_PUBLIC_KEY_LENGTHS[index];
+        unsigned char *value;
+
+        if (length == OFARM_ED25519_PUBLIC_KEY_BYTES)
+            continue;
+        value = (unsigned char *) calloc(length == 0U ? 1U : length, 1U);
+        if (value == NULL)
+            fail("canonical public-key boundary allocation failed");
+        expect_result("canonical public-key boundary accepted",
+                      value, length, empty, 0U,
+                      signature, OFARM_ED25519_SIGNATURE_BYTES,
+                      OFARM_ED25519_REFUSED);
+        free(value);
+    }
+    for (index = 0;
+         index < OFARM_ED25519_VECTOR_SIGNED_BYTES_LENGTH_COUNT;
+         index++) {
+        size_t length = OFARM_ED25519_VECTOR_SIGNED_BYTES_LENGTHS[index];
+        unsigned char *value;
+
+        if (length <= OFARM_ED25519_MAX_SIGNED_BYTES)
+            continue;
+        value = (unsigned char *) calloc(length, 1U);
+        if (value == NULL)
+            fail("canonical signed-bytes boundary allocation failed");
+        expect_result("canonical signed-bytes boundary accepted",
+                      public_key, OFARM_ED25519_PUBLIC_KEY_BYTES,
+                      value, length,
+                      signature, OFARM_ED25519_SIGNATURE_BYTES,
+                      OFARM_ED25519_REFUSED);
+        free(value);
+    }
+    for (index = 0;
+         index < OFARM_ED25519_VECTOR_SIGNATURE_LENGTH_COUNT;
+         index++) {
+        size_t length = OFARM_ED25519_VECTOR_SIGNATURE_LENGTHS[index];
+        unsigned char *value;
+
+        if (length == OFARM_ED25519_SIGNATURE_BYTES)
+            continue;
+        value = (unsigned char *) calloc(length == 0U ? 1U : length, 1U);
+        if (value == NULL)
+            fail("canonical signature boundary allocation failed");
+        expect_result("canonical signature boundary accepted",
+                      public_key, OFARM_ED25519_PUBLIC_KEY_BYTES,
+                      empty, 0U,
+                      value, length,
+                      OFARM_ED25519_REFUSED);
+        free(value);
+    }
 }
 
 static void
-exercise_hostile_points_and_scalars(
-    const unsigned char public_key[OFARM_ED25519_PUBLIC_KEY_BYTES],
-    const unsigned char signature[OFARM_ED25519_SIGNATURE_BYTES])
+exercise_identity_r_equation_proof(void)
 {
-    static const char *const point_hex[] = {
-        "0000000000000000000000000000000000000000000000000000000000000000",
-        "0100000000000000000000000000000000000000000000000000000000000000",
-        "0200000000000000000000000000000000000000000000000000000000000000",
-        "9599999999999999999999999999999999999999999999999999999999999999",
-        "f5ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
-        "f6ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f"
-    };
-    static const char scalar_l_hex[] =
-        "edd3f55c1a631258d69cf7a2def9de1400000000000000000000000000000010";
-    static const char scalar_over_l_hex[] =
-        "eed3f55c1a631258d69cf7a2def9de1400000000000000000000000000000010";
-    static const unsigned char empty[1] = {0};
-    unsigned char point[OFARM_ED25519_PUBLIC_KEY_BYTES];
-    unsigned char hostile_signature[OFARM_ED25519_SIGNATURE_BYTES];
-    size_t index;
+    const ofarm_ed25519_vector_case *vector =
+        find_vector(OFARM_ED25519_IDENTITY_R_PROOF_CASE_ID);
+    unsigned char seed[crypto_sign_SEEDBYTES];
+    unsigned char expanded_seed[crypto_hash_sha512_BYTES];
+    unsigned char expected_scalar[crypto_core_ed25519_SCALARBYTES];
+    unsigned char challenge_hash[crypto_hash_sha512_BYTES];
+    unsigned char challenge[crypto_core_ed25519_SCALARBYTES];
+    unsigned char expected_challenge[crypto_core_ed25519_SCALARBYTES];
+    unsigned char public_key[crypto_sign_PUBLICKEYBYTES];
+    unsigned char expected_public_key[crypto_sign_PUBLICKEYBYTES];
+    unsigned char secret_key[crypto_sign_SECRETKEYBYTES];
+    unsigned char signature[crypto_sign_BYTES];
+    unsigned char left[crypto_core_ed25519_BYTES];
+    unsigned char right[crypto_core_ed25519_BYTES];
+    crypto_hash_sha512_state hash_state;
 
-    for (index = 0; index < sizeof point_hex / sizeof point_hex[0]; index++) {
-        decode_hex(point_hex[index], point, sizeof point);
-        expect_result("hostile public-key point accepted",
-                      point, sizeof point, empty, 0U,
-                      signature, OFARM_ED25519_SIGNATURE_BYTES,
-                      OFARM_ED25519_REFUSED);
-        (void) memcpy(hostile_signature, signature, sizeof hostile_signature);
-        (void) memcpy(hostile_signature, point, sizeof point);
-        expect_result("hostile signature R point accepted",
-                      public_key, OFARM_ED25519_PUBLIC_KEY_BYTES,
-                      empty, 0U, hostile_signature, sizeof hostile_signature,
-                      OFARM_ED25519_REFUSED);
-    }
+    decode_hex(OFARM_ED25519_IDENTITY_R_PROOF_SEED_HEX, seed, sizeof seed);
+    decode_hex(OFARM_ED25519_IDENTITY_R_PROOF_CLAMPED_SCALAR_HEX,
+               expected_scalar,
+               sizeof expected_scalar);
+    decode_hex(OFARM_ED25519_IDENTITY_R_PROOF_CHALLENGE_HEX,
+               expected_challenge,
+               sizeof expected_challenge);
+    decode_hex(vector->public_key_hex,
+               expected_public_key,
+               sizeof expected_public_key);
+    decode_hex(vector->signature_hex, signature, sizeof signature);
+    if (vector->signed_bytes_hex[0] != '\0')
+        fail("identity-R proof message is not empty");
 
-    (void) memcpy(hostile_signature, signature, sizeof hostile_signature);
-    decode_hex(scalar_l_hex,
-               hostile_signature + OFARM_ED25519_PUBLIC_KEY_BYTES,
-               OFARM_ED25519_PUBLIC_KEY_BYTES);
-    expect_result("signature scalar S=L accepted",
-                  public_key, OFARM_ED25519_PUBLIC_KEY_BYTES,
-                  empty, 0U, hostile_signature, sizeof hostile_signature,
-                  OFARM_ED25519_REFUSED);
+    if (crypto_hash_sha512(expanded_seed, seed, sizeof seed) != 0)
+        fail("identity-R seed expansion failed");
+    expanded_seed[0] &= 248U;
+    expanded_seed[31] &= 63U;
+    expanded_seed[31] |= 64U;
+    if (sodium_memcmp(expanded_seed, expected_scalar,
+                      sizeof expected_scalar) != 0)
+        fail("identity-R clamped scalar proof changed");
+    if (crypto_sign_seed_keypair(public_key, secret_key, seed) != 0 ||
+        sodium_memcmp(public_key, expected_public_key,
+                      sizeof public_key) != 0)
+        fail("identity-R proof public key changed");
 
-    decode_hex(scalar_over_l_hex,
-               hostile_signature + OFARM_ED25519_PUBLIC_KEY_BYTES,
-               OFARM_ED25519_PUBLIC_KEY_BYTES);
-    expect_result("signature scalar S>L accepted",
-                  public_key, OFARM_ED25519_PUBLIC_KEY_BYTES,
-                  empty, 0U, hostile_signature, sizeof hostile_signature,
-                  OFARM_ED25519_REFUSED);
+    if (crypto_hash_sha512_init(&hash_state) != 0 ||
+        crypto_hash_sha512_update(&hash_state, signature, 32U) != 0 ||
+        crypto_hash_sha512_update(&hash_state,
+                                  expected_public_key,
+                                  sizeof expected_public_key) != 0 ||
+        crypto_hash_sha512_final(&hash_state, challenge_hash) != 0)
+        fail("identity-R challenge hash failed");
+    crypto_core_ed25519_scalar_reduce(challenge, challenge_hash);
+    if (sodium_memcmp(challenge, expected_challenge,
+                      sizeof challenge) != 0)
+        fail("identity-R reduced challenge proof changed");
 
-    (void) memset(hostile_signature, 0, sizeof hostile_signature);
-    expect_result("all-zero signature accepted",
-                  public_key, OFARM_ED25519_PUBLIC_KEY_BYTES,
-                  empty, 0U, hostile_signature, sizeof hostile_signature,
-                  OFARM_ED25519_REFUSED);
+    if (crypto_scalarmult_ed25519_base_noclamp(left, signature + 32U) != 0 ||
+        crypto_scalarmult_ed25519_noclamp(right,
+                                         challenge,
+                                         expected_public_key) != 0 ||
+        sodium_memcmp(left, right, sizeof left) != 0)
+        fail("identity-R signature does not satisfy [S]B=[h]A");
+
+    sodium_memzero(secret_key, sizeof secret_key);
+    sodium_memzero(expanded_seed, sizeof expanded_seed);
+    sodium_memzero(seed, sizeof seed);
 }
 
 static void
@@ -266,10 +339,8 @@ exercise_bit_flips(const unsigned char public_key[OFARM_ED25519_PUBLIC_KEY_BYTES
 static void
 exercise_every_message_length(void)
 {
-    static const char seed_hex[] =
-        "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60";
-    static const char expected_public_key_hex[] =
-        "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a";
+    const ofarm_ed25519_vector_case *identity_proof =
+        find_vector(OFARM_ED25519_IDENTITY_R_PROOF_CASE_ID);
     static const unsigned char empty[1] = {0};
     unsigned char seed[crypto_sign_SEEDBYTES];
     unsigned char public_key[crypto_sign_PUBLICKEYBYTES];
@@ -278,8 +349,8 @@ exercise_every_message_length(void)
     unsigned char signature[crypto_sign_BYTES];
     size_t length;
 
-    decode_hex(seed_hex, seed, sizeof seed);
-    decode_hex(expected_public_key_hex, expected_public_key,
+    decode_hex(OFARM_ED25519_IDENTITY_R_PROOF_SEED_HEX, seed, sizeof seed);
+    decode_hex(identity_proof->public_key_hex, expected_public_key,
                sizeof expected_public_key);
     if (crypto_sign_seed_keypair(public_key, secret_key, seed) != 0)
         fail("deterministic test key generation failed");
@@ -329,12 +400,13 @@ main(void)
     if (sodium_init() < 0)
         fail("libsodium initialization failed");
 
+    exercise_canonical_cases();
     exercise_known_answers(public_key,
                            rfc_signature,
                            preflight,
                            preflight_signature);
     exercise_length_boundaries(public_key, rfc_signature);
-    exercise_hostile_points_and_scalars(public_key, rfc_signature);
+    exercise_identity_r_equation_proof();
     exercise_bit_flips(public_key, preflight, preflight_signature);
     exercise_every_message_length();
 

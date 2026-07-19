@@ -8,7 +8,8 @@ FROM --platform=$TARGETPLATFORM gcc@sha256:1ea81e094f614fd2ed066316651dbac8eecb4
 ADD --checksum=sha256:adc91a999ec840f8db8c8df5ac2473fe1deeaed0e76bd5a6391afa7c74bceac3 \
     https://apt.postgresql.org/pub/repos/apt/pool/main/p/postgresql-17/postgresql-server-dev-17_17.10-1.pgdg13+1_amd64.deb \
     /tmp/postgresql-server-dev-17.deb
-RUN test "$(stat --format='%s' /tmp/postgresql-server-dev-17.deb)" = '1338208' \
+RUN --network=none \
+    test "$(stat --format='%s' /tmp/postgresql-server-dev-17.deb)" = '1338208' \
  && printf '%s  %s\n' \
       'adc91a999ec840f8db8c8df5ac2473fe1deeaed0e76bd5a6391afa7c74bceac3' \
       /tmp/postgresql-server-dev-17.deb \
@@ -18,7 +19,8 @@ FROM --platform=$TARGETPLATFORM gcc@sha256:1ea81e094f614fd2ed066316651dbac8eecb4
 ADD --checksum=sha256:372c8eb77604bc9cba61689661701e65a336b14a43e8f9be850088bb8c4428b6 \
     https://apt.postgresql.org/pub/repos/apt/pool/main/p/postgresql-17/postgresql-server-dev-17_17.10-1.pgdg13+1_arm64.deb \
     /tmp/postgresql-server-dev-17.deb
-RUN test "$(stat --format='%s' /tmp/postgresql-server-dev-17.deb)" = '1327764' \
+RUN --network=none \
+    test "$(stat --format='%s' /tmp/postgresql-server-dev-17.deb)" = '1327764' \
  && printf '%s  %s\n' \
       '372c8eb77604bc9cba61689661701e65a336b14a43e8f9be850088bb8c4428b6' \
       /tmp/postgresql-server-dev-17.deb \
@@ -39,7 +41,8 @@ COPY --from=postgres-runtime \
     /usr/lib/postgresql/17/lib/pgxs \
     /usr/lib/postgresql/17/lib/pgxs
 
-RUN test "$(dpkg-deb --field /tmp/postgresql-server-dev-17.deb Package)" = \
+RUN --network=none \
+    test "$(dpkg-deb --field /tmp/postgresql-server-dev-17.deb Package)" = \
          'postgresql-server-dev-17' \
  && test "$(dpkg-deb --field /tmp/postgresql-server-dev-17.deb Version)" = \
          '17.10-1.pgdg13+1' \
@@ -58,7 +61,8 @@ WORKDIR /build
 ADD --checksum=sha256:adbdd8f16149e81ac6078a03aca6fc03b592b89ef7b5ed83841c086191be3349 \
     https://download.libsodium.org/libsodium/releases/libsodium-1.0.22.tar.gz \
     /build/libsodium.tar.gz
-RUN test "$(stat --format='%s' /build/libsodium.tar.gz)" = '2008529' \
+RUN --network=none \
+    test "$(stat --format='%s' /build/libsodium.tar.gz)" = '2008529' \
  && printf '%s  %s\n' \
       'adbdd8f16149e81ac6078a03aca6fc03b592b89ef7b5ed83841c086191be3349' \
       /build/libsodium.tar.gz \
@@ -75,11 +79,17 @@ COPY Makefile \
      ofarm_ed25519.exports \
      ofarm_ed25519_core.c \
      ofarm_ed25519_core.h \
+     ofarm_ed25519_fuzz.c \
      ofarm_ed25519_harness.c \
+     ofarm_ed25519_vectors.h \
+     ofarm_ed25519_vectors.json \
+     ofarm_ed25519_vectors.sha256 \
+     ofarm_ed25519_vectors.sql \
      ./
 
 FROM build-inputs AS extension-build
-RUN cd /build/libsodium \
+RUN --network=none \
+    cd /build/libsodium \
  && CFLAGS='-O2 -fPIC -fvisibility=hidden -fno-plt -fstack-protector-strong -ffile-prefix-map=/build=. -fdebug-prefix-map=/build=.' \
       ./configure \
         --prefix=/opt/ofarm-libsodium \
@@ -91,7 +101,14 @@ RUN cd /build/libsodium \
  && find /opt/ofarm-libsodium -exec touch --date='@0' {} +
 
 WORKDIR /build/ofarm_ed25519
-RUN cc \
+RUN --network=none \
+    test "$(wc --lines < ofarm_ed25519_vectors.sha256)" = '1' \
+ && sha256sum --check --strict ofarm_ed25519_vectors.sha256 \
+ && VECTOR_DIGEST="$(cut --delimiter=' ' --fields=1 \
+      ofarm_ed25519_vectors.sha256)" \
+ && grep --fixed-strings "sha256:${VECTOR_DIGEST}" ofarm_ed25519_vectors.h \
+ && grep --fixed-strings "sha256:${VECTOR_DIGEST}" ofarm_ed25519_vectors.sql \
+ && cc \
       -std=c11 -O2 -Wall -Wextra -Werror -Wpedantic \
       -fstack-protector-strong \
       -ffile-prefix-map=/build=. -fdebug-prefix-map=/build=. \
@@ -100,6 +117,15 @@ RUN cc \
       /opt/ofarm-libsodium/lib/libsodium.a \
       -o /build/ofarm_ed25519_harness \
  && /build/ofarm_ed25519_harness \
+ && cc \
+      -std=c11 -O2 -Wall -Wextra -Werror -Wpedantic \
+      -fstack-protector-strong \
+      -ffile-prefix-map=/build=. -fdebug-prefix-map=/build=. \
+      -I/opt/ofarm-libsodium/include \
+      ofarm_ed25519_core.c ofarm_ed25519_fuzz.c \
+      /opt/ofarm-libsodium/lib/libsodium.a \
+      -o /build/ofarm_ed25519_fuzz \
+ && /build/ofarm_ed25519_fuzz \
  && make clean \
  && make -j1 \
       PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config \
@@ -137,7 +163,8 @@ RUN cc \
  && find /opt/ofarm-final-root -exec touch --date='@0' {} +
 
 FROM extension-build AS failure-semantics-build
-RUN set -eu; \
+RUN --network=none \
+    set -eu; \
     install --directory /opt/ofarm-test-only \
  && build_fault() { \
       output="$1"; \
@@ -176,9 +203,10 @@ RUN set -eu; \
 FROM postgres-runtime AS failure-semantics
 COPY --from=failure-semantics-build /opt/ofarm-test-only/ /opt/ofarm-test-only/
 COPY ofarm_ed25519_fault_test.sql /tmp/ofarm_ed25519_fault_test.sql
-RUN chown postgres:postgres /tmp/ofarm_ed25519_fault_test.sql
+RUN --network=none chown postgres:postgres /tmp/ofarm_ed25519_fault_test.sql
 USER postgres
-RUN initdb --no-sync --auth=trust --pgdata=/tmp/ofarm-ed25519-fault-data \
+RUN --network=none \
+    initdb --no-sync --auth=trust --pgdata=/tmp/ofarm-ed25519-fault-data \
  && pg_ctl --pgdata=/tmp/ofarm-ed25519-fault-data \
       --options="-c listen_addresses='' -c unix_socket_directories=/tmp" \
       --wait start \
@@ -187,13 +215,32 @@ RUN initdb --no-sync --auth=trust --pgdata=/tmp/ofarm-ed25519-fault-data \
  && pg_ctl --pgdata=/tmp/ofarm-ed25519-fault-data \
       --mode=immediate --wait stop
 
+FROM scratch AS evidence-artifacts
+COPY --from=extension-build \
+    /opt/ofarm-libsodium/lib/libsodium.a \
+    /libsodium.a
+COPY --from=extension-build \
+    /opt/ofarm-final-root/usr/lib/postgresql/17/lib/ofarm_ed25519.so \
+    /ofarm_ed25519.so
+COPY --from=extension-build \
+    /opt/ofarm-final-root/usr/share/postgresql/17/extension/ofarm_ed25519.control \
+    /ofarm_ed25519.control
+COPY --from=extension-build \
+    /opt/ofarm-final-root/usr/share/postgresql/17/extension/ofarm_ed25519--1.0.sql \
+    /ofarm_ed25519--1.0.sql
+
 FROM postgres-runtime AS live-test
 COPY --from=extension-build /opt/ofarm-final-root/ /
 COPY --from=extension-build /opt/ofarm-final-root/ /opt/ofarm-final-root/
 COPY ofarm_ed25519_live_test.sql /tmp/ofarm_ed25519_live_test.sql
-RUN chown postgres:postgres /tmp/ofarm_ed25519_live_test.sql
+COPY ofarm_ed25519_vectors.sql /tmp/ofarm_ed25519_vectors.sql
+RUN --network=none \
+    chown postgres:postgres \
+      /tmp/ofarm_ed25519_live_test.sql \
+      /tmp/ofarm_ed25519_vectors.sql
 USER postgres
-RUN initdb --no-sync --auth=trust --pgdata=/tmp/ofarm-ed25519-test-data \
+RUN --network=none \
+    initdb --no-sync --auth=trust --pgdata=/tmp/ofarm-ed25519-test-data \
  && pg_ctl --pgdata=/tmp/ofarm-ed25519-test-data \
       --options="-c listen_addresses='' -c unix_socket_directories=/tmp" \
       --wait start \
@@ -205,7 +252,8 @@ RUN initdb --no-sync --auth=trust --pgdata=/tmp/ofarm-ed25519-test-data \
 FROM build-inputs AS sanitizer-build
 ARG SANITIZER
 ARG TARGETARCH
-RUN set -eu; \
+RUN --network=none \
+    set -eu; \
     case "${SANITIZER}" in \
       address|undefined) ;; \
       *) echo 'SANITIZER must be exactly address or undefined' >&2; exit 64 ;; \
@@ -240,9 +288,19 @@ RUN set -eu; \
       ofarm_ed25519_core.c ofarm_ed25519_harness.c \
       /opt/ofarm-libsodium-sanitized/lib/libsodium.a \
       -o /build/ofarm_ed25519_harness_sanitized \
+ && cc \
+      -std=c11 -Wall -Wextra -Werror -Wpedantic \
+      ${SANITIZER_FLAGS} \
+      -I/opt/ofarm-libsodium-sanitized/include \
+      ofarm_ed25519_core.c ofarm_ed25519_fuzz.c \
+      /opt/ofarm-libsodium-sanitized/lib/libsodium.a \
+      -o /build/ofarm_ed25519_fuzz_sanitized \
  && ASAN_OPTIONS='abort_on_error=1:detect_leaks=1:halt_on_error=1:strict_string_checks=1' \
       UBSAN_OPTIONS='halt_on_error=1:print_stacktrace=1' \
       /build/ofarm_ed25519_harness_sanitized \
+ && ASAN_OPTIONS='abort_on_error=1:detect_leaks=1:halt_on_error=1:strict_string_checks=1' \
+      UBSAN_OPTIONS='halt_on_error=1:print_stacktrace=1' \
+      /build/ofarm_ed25519_fuzz_sanitized \
  && make clean \
  && make -j1 \
       PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config \
@@ -285,9 +343,14 @@ ENV LD_LIBRARY_PATH=/opt/ofarm-sanitizer/lib
 COPY --from=sanitizer-build /opt/ofarm-sanitized-root/ /
 COPY --from=sanitizer-build /opt/ofarm-sanitizer/ /opt/ofarm-sanitizer/
 COPY ofarm_ed25519_live_test.sql /tmp/ofarm_ed25519_live_test.sql
-RUN chown postgres:postgres /tmp/ofarm_ed25519_live_test.sql
+COPY ofarm_ed25519_vectors.sql /tmp/ofarm_ed25519_vectors.sql
+RUN --network=none \
+    chown postgres:postgres \
+      /tmp/ofarm_ed25519_live_test.sql \
+      /tmp/ofarm_ed25519_vectors.sql
 USER postgres
-RUN set -eu; \
+RUN --network=none \
+    set -eu; \
     case "${SANITIZER}" in \
       address) \
         export LD_PRELOAD=/opt/ofarm-sanitizer/lib/libasan.so; \

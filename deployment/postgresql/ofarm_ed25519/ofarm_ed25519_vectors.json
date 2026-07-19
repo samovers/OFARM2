@@ -1,0 +1,171 @@
+{
+  "schemaVersion": "ofarm.ed25519-adversarial-vectors.v1",
+  "requiredCategories": [
+    "rfc-positive",
+    "preflight-positive",
+    "negative-zero",
+    "identity-r-valid-equation",
+    "subgroup-point",
+    "noncanonical-point",
+    "scalar-s-equals-l",
+    "scalar-s-greater-than-l",
+    "scalar-high-bit",
+    "zero",
+    "bit-flips",
+    "boundaries"
+  ],
+  "cases": [
+    {
+      "id": "rfc8032-empty-positive",
+      "categories": ["rfc-positive"],
+      "expected": "verified",
+      "publicKeyHex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+      "signedBytesHex": "",
+      "signatureHex": "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b"
+    },
+    {
+      "id": "kms-preflight-positive",
+      "categories": ["preflight-positive"],
+      "expected": "verified",
+      "publicKeyHex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+      "signedBytesHex": "004f4641524d322d54454e414e542d4341504142494c4954592d4b4d532d505245464c494748542d563100",
+      "signatureHex": "b8c5d75bfcdfaf6c33ae31eb6dba6f47ae6a7c11d925982ffbc00d2897a15c1bdee4b25b894d6a64f22466d698d536bc5a87fa0650ead4da5cc6496154ffe102"
+    },
+    {
+      "id": "negative-zero-public-key",
+      "categories": ["negative-zero", "subgroup-point"],
+      "expected": "refused",
+      "publicKeyHex": "0100000000000000000000000000000000000000000000000000000000000080",
+      "signedBytesHex": "",
+      "signatureHex": "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b"
+    },
+    {
+      "id": "negative-zero-r",
+      "categories": ["negative-zero", "subgroup-point"],
+      "expected": "refused",
+      "publicKeyHex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+      "signedBytesHex": "",
+      "signatureHex": "01000000000000000000000000000000000000000000000000000000000000805fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b"
+    },
+    {
+      "id": "identity-r-valid-equation",
+      "categories": ["identity-r-valid-equation", "subgroup-point"],
+      "expected": "refused",
+      "publicKeyHex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+      "signedBytesHex": "",
+      "signatureHex": "0100000000000000000000000000000000000000000000000000000000000000756cf9b1d6f0d7a979b9d2af3dc2bc1294ec7cb6daa20eaff534c024fc57920f"
+    },
+    {
+      "id": "zero-public-key",
+      "categories": ["zero", "subgroup-point"],
+      "expected": "refused",
+      "publicKeyHex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "signedBytesHex": "",
+      "signatureHex": "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b"
+    },
+    {
+      "id": "zero-r",
+      "categories": ["zero", "subgroup-point"],
+      "expected": "refused",
+      "publicKeyHex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+      "signedBytesHex": "",
+      "signatureHex": "00000000000000000000000000000000000000000000000000000000000000005fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b"
+    },
+    {
+      "id": "identity-public-key",
+      "categories": ["subgroup-point"],
+      "expected": "refused",
+      "publicKeyHex": "0100000000000000000000000000000000000000000000000000000000000000",
+      "signedBytesHex": "",
+      "signatureHex": "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b"
+    },
+    {
+      "id": "small-order-two-public-key",
+      "categories": ["subgroup-point"],
+      "expected": "refused",
+      "publicKeyHex": "0200000000000000000000000000000000000000000000000000000000000000",
+      "signedBytesHex": "",
+      "signatureHex": "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b"
+    },
+    {
+      "id": "non-main-subgroup-public-key",
+      "categories": ["subgroup-point"],
+      "expected": "refused",
+      "publicKeyHex": "9599999999999999999999999999999999999999999999999999999999999999",
+      "signedBytesHex": "",
+      "signatureHex": "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b"
+    },
+    {
+      "id": "noncanonical-f5-public-key",
+      "categories": ["noncanonical-point"],
+      "expected": "refused",
+      "publicKeyHex": "f5ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+      "signedBytesHex": "",
+      "signatureHex": "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b"
+    },
+    {
+      "id": "noncanonical-f6-r",
+      "categories": ["noncanonical-point"],
+      "expected": "refused",
+      "publicKeyHex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+      "signedBytesHex": "",
+      "signatureHex": "f6ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f5fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b"
+    },
+    {
+      "id": "scalar-s-equals-l",
+      "categories": ["scalar-s-equals-l"],
+      "expected": "refused",
+      "publicKeyHex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+      "signedBytesHex": "",
+      "signatureHex": "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e06522490155edd3f55c1a631258d69cf7a2def9de1400000000000000000000000000000010"
+    },
+    {
+      "id": "scalar-s-greater-than-l",
+      "categories": ["scalar-s-greater-than-l"],
+      "expected": "refused",
+      "publicKeyHex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+      "signedBytesHex": "",
+      "signatureHex": "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e06522490155eed3f55c1a631258d69cf7a2def9de1400000000000000000000000000000010"
+    },
+    {
+      "id": "scalar-high-bit",
+      "categories": ["scalar-high-bit"],
+      "expected": "refused",
+      "publicKeyHex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+      "signedBytesHex": "",
+      "signatureHex": "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a108b"
+    },
+    {
+      "id": "all-zero-signature",
+      "categories": ["zero"],
+      "expected": "refused",
+      "publicKeyHex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+      "signedBytesHex": "",
+      "signatureHex": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "families": {
+    "bitFlips": {
+      "categories": ["bit-flips"],
+      "baseCaseId": "kms-preflight-positive",
+      "arguments": ["publicKey", "signedBytes", "signature"]
+    },
+    "boundaries": {
+      "categories": ["boundaries"],
+      "publicKeyLengths": [0, 1, 30, 31, 32, 33, 34, 63, 64, 65, 95],
+      "signedBytesLengths": [0, 1, 2, 31, 32, 63, 64, 127, 255, 1024, 8191, 8192, 8193, 8447, 16384],
+      "signatureLengths": [0, 1, 31, 32, 62, 63, 64, 65, 66, 127, 159],
+      "sqlIterations": 4096,
+      "cIterations": 16384,
+      "lcgSeed": 1327217885,
+      "xorshiftSeedHex": "4f4641524d324631"
+    }
+  },
+  "identityRProof": {
+    "caseId": "identity-r-valid-equation",
+    "seedHex": "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
+    "clampedScalarHex": "307c83864f2833cb427a2ef1c00a013cfdff2768d980c0a3a520f006904de94f",
+    "reducedChallengeHex": "0e06838d9352561d17c811a94f41f45bc28141139a049fd4996417eef5b0d00e",
+    "equation": "[S]B=[h]A"
+  }
+}

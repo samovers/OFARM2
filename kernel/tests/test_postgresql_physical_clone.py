@@ -9,6 +9,8 @@ false, but the only result issue #174 may return is structural compatibility.
 from __future__ import annotations
 
 import os
+import json
+import re
 import secrets
 import shutil
 import subprocess
@@ -32,13 +34,17 @@ from deployment.postgresql.readiness import (
     PostgreSQLStructuralCompatibilityReport,
     verify_tenant_structural_compatibility,
 )
+from deployment.postgresql.native_evidence import metadata_child_identity
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
-POSTGRES_IMAGE = (
-    "postgres@sha256:"
-    "5f050f770b427fbd477edee6c3968a72e5c6be97e050a7e368b2b74a9494a285"
-)
+DERIVED_IMAGE_ENV = "ISSUE174_DERIVED_POSTGRES_IMAGE"
+DERIVED_METADATA_ENV = "ISSUE174_DERIVED_POSTGRES_METADATA"
+DERIVED_CHILD_DIGEST_ENV = "ISSUE174_DERIVED_POSTGRES_CHILD_DIGEST"
+DERIVED_CONFIG_DIGEST_ENV = "ISSUE174_DERIVED_POSTGRES_CONFIG_DIGEST"
+DERIVED_IDENTITY_STATUS_ENV = "ISSUE174_DERIVED_POSTGRES_IDENTITY_STATUS"
+EXPECTED_DERIVED_IMAGE = "ofarm-postgresql-conformance:local"
+SHA256_PATTERN = re.compile(r"sha256:[0-9a-f]{64}\Z")
 POSTGRES_PORT = "5432/tcp"
 POSTGRES_SUPERUSER = "ofarm"
 POSTGRES_SUPERUSER_PASSWORD = "issue-174-physical-clone-test"
@@ -66,7 +72,44 @@ def _docker(
     )
 
 
-def _require_exact_pinned_image() -> None:
+def _required_environment(name: str) -> str | None:
+    value = os.environ.get(name)
+    if value:
+        return value
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        pytest.fail(f"the GitHub runner is missing required {name}")
+    return None
+
+
+def _require_exact_pinned_image() -> str:
+    image_name = _required_environment(DERIVED_IMAGE_ENV)
+    metadata_name = _required_environment(DERIVED_METADATA_ENV)
+    expected_child = _required_environment(DERIVED_CHILD_DIGEST_ENV)
+    expected_config = _required_environment(DERIVED_CONFIG_DIGEST_ENV)
+    identity_status = _required_environment(DERIVED_IDENTITY_STATUS_ENV)
+    if None in (
+        image_name,
+        metadata_name,
+        expected_child,
+        expected_config,
+        identity_status,
+    ):
+        pytest.skip("the locally built derived PostgreSQL image is not configured")
+    assert image_name is not None
+    assert metadata_name is not None
+    assert expected_child is not None
+    assert expected_config is not None
+    assert identity_status is not None
+    if identity_status != "frozen":
+        pytest.fail("the derived PostgreSQL release identity is not frozen")
+    if image_name != EXPECTED_DERIVED_IMAGE:
+        pytest.fail("the physical-clone image name is not the CI-local derived tag")
+    if (
+        SHA256_PATTERN.fullmatch(expected_child) is None
+        or SHA256_PATTERN.fullmatch(expected_config) is None
+    ):
+        pytest.fail("the frozen derived PostgreSQL identity is malformed")
+
     if shutil.which("docker") is None:
         if os.environ.get("GITHUB_ACTIONS") == "true":
             pytest.fail("the GitHub runner has no Docker client")
@@ -78,11 +121,37 @@ def _require_exact_pinned_image() -> None:
             pytest.fail("the GitHub runner Docker daemon is unavailable")
         pytest.skip("a Docker daemon is required for the physical-clone test")
 
-    image = _docker("image", "inspect", POSTGRES_IMAGE, check=False)
+    metadata_path = Path(metadata_name)
+    if not metadata_path.is_absolute():
+        metadata_path = PACKAGE_ROOT / metadata_path
+    observed_child, observed_config = metadata_child_identity(
+        metadata_path,
+        "derived PostgreSQL build metadata",
+    )
+    if (observed_child, observed_config) != (expected_child, expected_config):
+        pytest.fail("the derived PostgreSQL build metadata differs from frozen identity")
+
+    image = _docker("image", "inspect", image_name, check=False)
     if image.returncode != 0:
         if os.environ.get("GITHUB_ACTIONS") == "true":
             pytest.fail("the exact pinned PostgreSQL image is unavailable")
-        pytest.skip("the exact pinned PostgreSQL image is not present locally")
+        pytest.skip("the exact derived PostgreSQL image is not present locally")
+    try:
+        inspected_images = json.loads(image.stdout)
+    except json.JSONDecodeError as exc:
+        raise AssertionError("Docker returned malformed image inspection JSON") from exc
+    if not isinstance(inspected_images, list) or len(inspected_images) != 1:
+        pytest.fail("Docker did not return one exact derived image")
+    inspected = inspected_images[0]
+    if (
+        not isinstance(inspected, dict)
+        or inspected.get("Id") != expected_config
+        or inspected.get("Architecture") != "amd64"
+        or inspected.get("Os") != "linux"
+        or image_name not in inspected.get("RepoTags", [])
+    ):
+        pytest.fail("the loaded derived PostgreSQL image differs from frozen identity")
+    return image_name
 
 
 def _remove_container(name: str) -> None:
@@ -198,7 +267,7 @@ def _assert_structural_only_result(
 def test_promoted_physical_clone_yields_only_structural_compatibility():
     """Promotion cannot turn issue #174 evidence into continuity proof."""
 
-    _require_exact_pinned_image()
+    postgres_image = _require_exact_pinned_image()
     nonce = uuid4().hex
     network_name = f"ofarm174-network-{nonce}"
     source_name = f"ofarm174-source-{nonce}"
@@ -224,7 +293,7 @@ def test_promoted_physical_clone_yields_only_structural_compatibility():
             f"POSTGRES_PASSWORD={POSTGRES_SUPERUSER_PASSWORD}",
             "--env",
             "POSTGRES_DB=postgres",
-            POSTGRES_IMAGE,
+            postgres_image,
         )
         source_port = _published_port(source_name)
         source_admin_dsn = _dsn(
@@ -287,7 +356,7 @@ def test_promoted_physical_clone_yields_only_structural_compatibility():
             f"{clone_volume}:/var/lib/postgresql/data",
             "--entrypoint",
             "/bin/sh",
-            POSTGRES_IMAGE,
+            postgres_image,
             "-ec",
             "chown postgres:postgres /var/lib/postgresql/data && "
             "exec gosu postgres pg_basebackup "
@@ -309,7 +378,7 @@ def test_promoted_physical_clone_yields_only_structural_compatibility():
             "127.0.0.1::5432",
             "--volume",
             f"{clone_volume}:/var/lib/postgresql/data",
-            POSTGRES_IMAGE,
+            postgres_image,
         )
         clone_port = _published_port(clone_name)
         clone_admin_dsn = _dsn(

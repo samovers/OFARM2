@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from pathlib import Path
 
@@ -94,10 +96,22 @@ def test_docker_context_copy_is_an_exact_source_allowlist() -> None:
         "ofarm_ed25519_core.c",
         "ofarm_ed25519_core.h",
         "ofarm_ed25519_fault_test.sql",
+        "ofarm_ed25519_fuzz.c",
         "ofarm_ed25519_harness.c",
         "ofarm_ed25519_live_test.sql",
+        "ofarm_ed25519_vectors.h",
+        "ofarm_ed25519_vectors.json",
+        "ofarm_ed25519_vectors.sha256",
+        "ofarm_ed25519_vectors.sql",
     ):
         assert filename in CONTAINERFILE
+
+
+def test_every_container_build_step_is_offline_after_pinned_downloads() -> None:
+    run_instructions = re.findall(r"^RUN(?:\s+.*)?$", CONTAINERFILE, re.MULTILINE)
+
+    assert run_instructions
+    assert all(instruction.startswith("RUN --network=none") for instruction in run_instructions)
 
 
 def test_sanitizer_target_is_closed_and_runs_both_suites() -> None:
@@ -133,6 +147,15 @@ def test_shared_core_and_harness_cover_the_hostile_contract() -> None:
     harness = (EXTENSION_ROOT / "ofarm_ed25519_harness.c").read_text(
         encoding="ascii"
     )
+    corpus_bytes = (EXTENSION_ROOT / "ofarm_ed25519_vectors.json").read_bytes()
+    corpus = json.loads(corpus_bytes)
+    generated_header = (EXTENSION_ROOT / "ofarm_ed25519_vectors.h").read_text(
+        encoding="ascii"
+    )
+    generated_sql = (EXTENSION_ROOT / "ofarm_ed25519_vectors.sql").read_text(
+        encoding="ascii"
+    )
+    corpus_digest = hashlib.sha256(corpus_bytes).hexdigest()
 
     assert "ofarm_ed25519_verify_bytes" in core
     assert "ofarm_ed25519_verify_bytes" in wrapper
@@ -144,6 +167,23 @@ def test_shared_core_and_harness_cover_the_hostile_contract() -> None:
         EXTENSION_ROOT / "ofarm_ed25519_core.h"
     ).read_text(encoding="ascii")
 
+    assert '#include "ofarm_ed25519_vectors.h"' in harness
+    assert "OFARM_ED25519_VECTOR_CASES" in harness
+    assert "OFARM_ED25519_VECTOR_CORPUS_SHA256" in generated_header
+    assert corpus["schemaVersion"] == "ofarm.ed25519-adversarial-vectors.v1"
+    assert len(corpus["cases"]) == 16
+    assert set(corpus["requiredCategories"]) == {
+        category
+        for case in corpus["cases"]
+        for category in case["categories"]
+    } | {"bit-flips", "boundaries"}
+    assert (EXTENSION_ROOT / "ofarm_ed25519_vectors.sha256").read_text(
+        encoding="ascii"
+    ) == f"{corpus_digest}  ofarm_ed25519_vectors.json\n"
+    assert f"sha256:{corpus_digest}" in generated_header
+    assert f"sha256:{corpus_digest}" in generated_sql
+
+    corpus_text = corpus_bytes.decode("ascii")
     for vector in (
         "e5564300c360ac729086e2cc806e828a",
         "004f4641524d322d54454e414e542d43",
@@ -153,9 +193,10 @@ def test_shared_core_and_harness_cover_the_hostile_contract() -> None:
         "edd3f55c1a631258d69cf7a2def9de14",
         "eed3f55c1a631258d69cf7a2def9de14",
     ):
-        assert vector in harness
+        assert vector in corpus_text
     assert "length <= OFARM_ED25519_MAX_SIGNED_BYTES" in harness
-    assert "OFARM_ED25519_MAX_SIGNED_BYTES + 1U" in harness
+    assert "OFARM_ED25519_VECTOR_SIGNED_BYTES_LENGTHS" in harness
+    assert 8193 in corpus["families"]["boundaries"]["signedBytesLengths"]
     assert "clone_exact" in harness
     assert "bit < sizeof changed_public_key * 8U" in harness
     assert "bit < sizeof changed_preflight * 8U" in harness
@@ -176,10 +217,12 @@ def test_wrapper_refuses_raw_oversize_before_any_detoast() -> None:
     assert wrapper.count("PG_FREE_IF_COPY") == 3
     assert "FROM postgres-runtime AS live-test" in CONTAINERFILE
     assert "--file=/tmp/ofarm_ed25519_live_test.sql" in CONTAINERFILE
-    assert "inline-short RFC 8032 vector" in live_test
+    assert r"\ir /tmp/ofarm_ed25519_vectors.sql" in live_test
     assert "toast_tuple_target = 128" in live_test
     assert live_test.count("oversized ") == 3
     assert "admitted input did not exercise compressed detoast" in live_test
+    assert live_test.count("ordinary four-byte ") >= 4
+    assert live_test.count("external uncompressed ") >= 4
 
 
 def test_failure_mapping_is_selective_and_live_exercised() -> None:

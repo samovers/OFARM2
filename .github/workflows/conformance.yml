@@ -10,57 +10,20 @@ on:
 jobs:
   conformance:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    services:
-      postgres:
-        # Immutable last-green PostgreSQL 17.10 artifact; the baseline also
-        # verifies the SQL-observed server version before running tests.
-        image: postgres@sha256:5f050f770b427fbd477edee6c3968a72e5c6be97e050a7e368b2b74a9494a285
-        env:
-          POSTGRES_USER: ofarm
-          POSTGRES_PASSWORD: ofarm
-          POSTGRES_DB: ofarm_kernel
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U ofarm -d ofarm_kernel"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-      tenant-provisioning-postgres:
-        # #174 provisioning tests require a dedicated cluster whose database
-        # inventory contains only the PostgreSQL maintenance databases.
-        image: postgres@sha256:5f050f770b427fbd477edee6c3968a72e5c6be97e050a7e368b2b74a9494a285
-        env:
-          POSTGRES_USER: ofarm
-          POSTGRES_PASSWORD: tenant-ofarm
-          POSTGRES_DB: postgres
-        ports:
-          - 5434:5432
-        options: >-
-          --health-cmd "pg_isready -U ofarm -d postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-      security-audit-postgres:
-        # A second container and initdb lineage are required: a second database
-        # inside the tenant cluster is not the accepted audit boundary.
-        image: postgres@sha256:5f050f770b427fbd477edee6c3968a72e5c6be97e050a7e368b2b74a9494a285
-        env:
-          POSTGRES_USER: ofarm
-          POSTGRES_PASSWORD: audit-ofarm
-          POSTGRES_DB: postgres
-        ports:
-          - 5433:5432
-        options: >-
-          --health-cmd "pg_isready -U ofarm -d postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
+    timeout-minutes: 45
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
           fetch-depth: 0
+      - name: Create pinned native image builder
+        id: conformance-buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+        with:
+          driver: docker-container
+          driver-opts: >-
+            image=moby/buildkit@sha256:c457984bd29f04d6acc90c8d9e717afe3922ae14665f3187e0096976fe37b1c8
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12.13"
@@ -90,6 +53,79 @@ jobs:
         run: >-
           git diff --check
           origin/${{ github.event.repository.default_branch }}...HEAD
+      - name: Build the derived PostgreSQL image
+        env:
+          SOURCE_DATE_EPOCH: "0"
+        run: |
+          mkdir -p .artifacts/derived-postgresql
+          docker buildx build \
+            --builder "${{ steps.conformance-buildx.outputs.name }}" \
+            --file deployment/postgresql/ofarm_ed25519/Containerfile \
+            --platform linux/amd64 \
+            --pull \
+            --provenance=false \
+            --sbom=false \
+            --build-arg SOURCE_DATE_EPOCH=0 \
+            --metadata-file .artifacts/derived-postgresql/metadata.json \
+            --load \
+            --tag ofarm-postgresql-conformance:local \
+            deployment/postgresql/ofarm_ed25519
+      - name: Authenticate the derived PostgreSQL release identity
+        run: |
+          .review-venv/bin/python deployment/postgresql/native_evidence.py \
+            conformance-environment \
+            --checked-identity \
+              deployment/postgresql/ofarm_ed25519/native_release_identity.json \
+            --metadata .artifacts/derived-postgresql/metadata.json \
+            --source-directory deployment/postgresql/ofarm_ed25519 \
+            --image-name ofarm-postgresql-conformance:local \
+            --metadata-reference \
+              .artifacts/derived-postgresql/metadata.json \
+            > .artifacts/derived-postgresql/environment
+          cat .artifacts/derived-postgresql/environment >> "$GITHUB_ENV"
+      - name: Start three independent derived PostgreSQL clusters
+        run: |
+          docker run --detach --name ofarm-conformance-main \
+            --env POSTGRES_USER=ofarm \
+            --env POSTGRES_PASSWORD=ofarm \
+            --env POSTGRES_DB=ofarm_kernel \
+            --publish 5432:5432 \
+            --health-cmd "pg_isready -U ofarm -d ofarm_kernel" \
+            --health-interval 5s --health-timeout 5s --health-retries 10 \
+            ofarm-postgresql-conformance:local
+          docker run --detach --name ofarm-conformance-audit \
+            --env POSTGRES_USER=ofarm \
+            --env POSTGRES_PASSWORD=audit-ofarm \
+            --env POSTGRES_DB=postgres \
+            --publish 5433:5432 \
+            --health-cmd "pg_isready -U ofarm -d postgres" \
+            --health-interval 5s --health-timeout 5s --health-retries 10 \
+            ofarm-postgresql-conformance:local
+          docker run --detach --name ofarm-conformance-provisioning \
+            --env POSTGRES_USER=ofarm \
+            --env POSTGRES_PASSWORD=tenant-ofarm \
+            --env POSTGRES_DB=postgres \
+            --publish 5434:5432 \
+            --health-cmd "pg_isready -U ofarm -d postgres" \
+            --health-interval 5s --health-timeout 5s --health-retries 10 \
+            ofarm-postgresql-conformance:local
+          for container in \
+            ofarm-conformance-main \
+            ofarm-conformance-audit \
+            ofarm-conformance-provisioning
+          do
+            state=""
+            for attempt in {1..30}
+            do
+              state="$(docker inspect --format '{{.State.Health.Status}}' "$container")"
+              if test "$state" = healthy
+              then
+                break
+              fi
+              sleep 2
+            done
+            test "$state" = healthy
+          done
       - name: Complete Kernel baseline run 1
         env:
           OFARM_PG_ADMIN_DSN: "host=localhost port=5432 dbname=postgres user=ofarm password=ofarm"
@@ -136,3 +172,295 @@ jobs:
           path: .artifacts/platform-evidence/
           include-hidden-files: true
           if-no-files-found: error
+      - name: Stop disposable PostgreSQL clusters
+        if: always()
+        run: |
+          docker rm --force \
+            ofarm-conformance-main \
+            ofarm-conformance-audit \
+            ofarm-conformance-provisioning \
+            || true
+
+  native-verifier:
+    name: native verifier (${{ matrix.architecture }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            architecture: amd64
+            python-architecture: x64
+            machine: x86_64
+            docker-architecture: x86_64
+          - runner: ubuntu-24.04-arm
+            architecture: arm64
+            python-architecture: arm64
+            machine: aarch64
+            docker-architecture: aarch64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    env:
+      BUILDX_NO_DEFAULT_ATTESTATIONS: "1"
+      BUILDX_METADATA_PROVENANCE: disabled
+      SOURCE_DATE_EPOCH: "0"
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12.13"
+          architecture: ${{ matrix.python-architecture }}
+      - name: Create pinned native image builder
+        id: native-buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+        with:
+          driver: docker-container
+          driver-opts: >-
+            image=moby/buildkit@sha256:c457984bd29f04d6acc90c8d9e717afe3922ae14665f3187e0096976fe37b1c8
+      - name: Require a native runner and Docker engine
+        run: |
+          test "$(uname -m)" = "${{ matrix.machine }}"
+          test "$(docker info --format '{{.Architecture}}')" = \
+            "${{ matrix.docker-architecture }}"
+          mkdir -p \
+            ".artifacts/native/${{ matrix.architecture }}/first" \
+            ".artifacts/native/${{ matrix.architecture }}/second" \
+            ".artifacts/native/${{ matrix.architecture }}/attestations"
+      - name: Refuse every unsupported sanitizer selector
+        run: |
+          set +e
+          docker buildx build \
+            --builder "${{ steps.native-buildx.outputs.name }}" \
+            --file deployment/postgresql/ofarm_ed25519/Containerfile \
+            --platform "linux/${{ matrix.architecture }}" \
+            --target sanitizer \
+            --pull \
+            --no-cache \
+            --provenance=false \
+            --sbom=false \
+            --build-arg SOURCE_DATE_EPOCH=0 \
+            --build-arg SANITIZER=memory \
+            --progress=plain \
+            deployment/postgresql/ofarm_ed25519 \
+            > ".artifacts/native/${{ matrix.architecture }}/invalid-sanitizer.log" \
+            2>&1
+          status=$?
+          set -e
+          test "$status" -ne 0
+          grep --fixed-strings \
+            'SANITIZER must be exactly address or undefined' \
+            ".artifacts/native/${{ matrix.architecture }}/invalid-sanitizer.log"
+      - name: Run AddressSanitizer and UndefinedBehaviorSanitizer
+        run: |
+          for sanitizer in address undefined
+          do
+            docker buildx build \
+              --builder "${{ steps.native-buildx.outputs.name }}" \
+              --file deployment/postgresql/ofarm_ed25519/Containerfile \
+              --platform "linux/${{ matrix.architecture }}" \
+              --target sanitizer \
+              --pull \
+              --no-cache \
+              --provenance=false \
+              --sbom=false \
+              --build-arg SOURCE_DATE_EPOCH=0 \
+              --build-arg "SANITIZER=$sanitizer" \
+              --progress=plain \
+              deployment/postgresql/ofarm_ed25519 \
+              2>&1 | tee \
+              ".artifacts/native/${{ matrix.architecture }}/${sanitizer}.log"
+          done
+      - name: Produce two clean native child builds
+        run: |
+          for build in first second
+          do
+            docker buildx build \
+              --builder "${{ steps.native-buildx.outputs.name }}" \
+              --file deployment/postgresql/ofarm_ed25519/Containerfile \
+              --platform "linux/${{ matrix.architecture }}" \
+              --pull \
+              --no-cache \
+              --provenance=false \
+              --sbom=false \
+              --build-arg SOURCE_DATE_EPOCH=0 \
+              --metadata-file \
+                ".artifacts/native/${{ matrix.architecture }}/${build}-metadata.json" \
+              --load \
+              --tag "ofarm-ed25519-${{ matrix.architecture }}:${build}" \
+              deployment/postgresql/ofarm_ed25519
+            docker buildx build \
+              --builder "${{ steps.native-buildx.outputs.name }}" \
+              --file deployment/postgresql/ofarm_ed25519/Containerfile \
+              --platform "linux/${{ matrix.architecture }}" \
+              --target evidence-artifacts \
+              --pull \
+              --provenance=false \
+              --sbom=false \
+              --build-arg SOURCE_DATE_EPOCH=0 \
+              --output \
+                "type=local,dest=.artifacts/native/${{ matrix.architecture }}/${build}" \
+              deployment/postgresql/ofarm_ed25519
+            if test "$build" = first
+            then
+              docker buildx prune \
+                --builder "${{ steps.native-buildx.outputs.name }}" \
+                --all --force
+            fi
+          done
+      - name: Prove child and installed-artifact reproducibility
+        run: >-
+          python deployment/postgresql/native_evidence.py compare-builds
+          --first-metadata
+          ".artifacts/native/${{ matrix.architecture }}/first-metadata.json"
+          --second-metadata
+          ".artifacts/native/${{ matrix.architecture }}/second-metadata.json"
+          --first-artifacts
+          ".artifacts/native/${{ matrix.architecture }}/first"
+          --second-artifacts
+          ".artifacts/native/${{ matrix.architecture }}/second"
+          --platform "linux/${{ matrix.architecture }}"
+          --source-commit "${{ github.sha }}"
+          --output
+          ".artifacts/native/${{ matrix.architecture }}/reproducibility.json"
+      - name: Run the exact live PostgreSQL verifier smoke
+        run: |
+          docker run --detach --name ofarm-native-live \
+            --env POSTGRES_PASSWORD=ofarm-native-test \
+            --volume \
+              "${{ github.workspace }}/deployment/postgresql/ofarm_ed25519/ofarm_ed25519_vectors.sql:/tmp/ofarm_ed25519_vectors.sql:ro" \
+            "ofarm-ed25519-${{ matrix.architecture }}:second"
+          state=""
+          for attempt in {1..30}
+          do
+            state="$(docker inspect --format '{{.State.Status}}' ofarm-native-live)"
+            if test "$state" = running \
+              && docker exec ofarm-native-live pg_isready --username postgres
+            then
+              break
+            fi
+            sleep 2
+          done
+          test "$state" = running
+          docker exec --interactive --user postgres ofarm-native-live \
+            psql --username postgres --dbname postgres \
+            < deployment/postgresql/ofarm_ed25519/ofarm_ed25519_live_test.sql
+      - name: Produce bounded OCI, SBOM, and max-provenance evidence
+        run: |
+          docker buildx build \
+            --builder "${{ steps.native-buildx.outputs.name }}" \
+            --file deployment/postgresql/ofarm_ed25519/Containerfile \
+            --platform "linux/${{ matrix.architecture }}" \
+            --pull \
+            --build-arg SOURCE_DATE_EPOCH=0 \
+            --tag "ofarm-ed25519-evidence:${{ matrix.architecture }}" \
+            --attest \
+              "type=provenance,mode=max,version=v0.2,builder-id=https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}" \
+            --attest \
+              type=sbom,generator=docker/buildkit-syft-scanner@sha256:79e7b013cbec16bbb436f312819a49a4a57752b2270c1a9332ae1a10fcc82a68 \
+            --output \
+              "type=oci,dest=.artifacts/native/${{ matrix.architecture }}/ofarm-ed25519.oci.tar,oci-mediatypes=true" \
+            --metadata-file \
+              ".artifacts/native/${{ matrix.architecture }}/attested-metadata.json" \
+            deployment/postgresql/ofarm_ed25519
+          python deployment/postgresql/native_evidence.py collect-oci \
+            --archive \
+              ".artifacts/native/${{ matrix.architecture }}/ofarm-ed25519.oci.tar" \
+            --reproducibility \
+              ".artifacts/native/${{ matrix.architecture }}/reproducibility.json" \
+            --platform "linux/${{ matrix.architecture }}" \
+            --source-commit "${{ github.sha }}" \
+            --containerfile deployment/postgresql/ofarm_ed25519/Containerfile \
+            --builder-id \
+              "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}" \
+            --output-directory \
+              ".artifacts/native/${{ matrix.architecture }}/attestations"
+          test "$(du --bytes --summarize \
+            ".artifacts/native/${{ matrix.architecture }}" | cut --fields=1)" \
+            -le 600000000
+      - name: Upload bounded native verifier evidence
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: native-verifier-${{ matrix.architecture }}
+          path: .artifacts/native/${{ matrix.architecture }}/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+      - name: Stop disposable native PostgreSQL
+        if: always()
+        run: docker rm --force ofarm-native-live || true
+
+  native-verifier-index:
+    name: native verifier canonical index
+    needs: native-verifier
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12.13"
+          architecture: x64
+      - name: Download authenticated amd64 evidence
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: native-verifier-amd64
+          path: .artifacts/native-fan-in/amd64
+      - name: Download authenticated arm64 evidence
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: native-verifier-arm64
+          path: .artifacts/native-fan-in/arm64
+      - name: Re-authenticate both native evidence archives
+        run: |
+          for architecture in amd64 arm64
+          do
+            python deployment/postgresql/native_evidence.py collect-oci \
+              --archive \
+                ".artifacts/native-fan-in/${architecture}/ofarm-ed25519.oci.tar" \
+              --reproducibility \
+                ".artifacts/native-fan-in/${architecture}/reproducibility.json" \
+              --platform "linux/${architecture}" \
+              --source-commit "${{ github.sha }}" \
+              --containerfile deployment/postgresql/ofarm_ed25519/Containerfile \
+              --builder-id \
+                "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}" \
+              --output-directory \
+                ".artifacts/native-fan-in/verified/${architecture}"
+          done
+      - name: Compose one canonical two-platform OCI index
+        run: |
+          python deployment/postgresql/native_evidence.py compose-index \
+            --amd64-evidence \
+              .artifacts/native-fan-in/verified/amd64/oci-evidence.json \
+            --arm64-evidence \
+              .artifacts/native-fan-in/verified/arm64/oci-evidence.json \
+            --source-commit "${{ github.sha }}" \
+            --index-output \
+              .artifacts/native-index/ofarm-ed25519.index.json \
+            --evidence-output \
+              .artifacts/native-index/ofarm-ed25519.index-evidence.json
+          test "$(du --bytes --summarize .artifacts/native-index | cut --fields=1)" \
+            -le 1000000
+      - name: Prepare or enforce the native release identity
+        run: |
+          python deployment/postgresql/native_evidence.py \
+            prepare-release-identity \
+            --checked-identity \
+              deployment/postgresql/ofarm_ed25519/native_release_identity.json \
+            --index-evidence \
+              .artifacts/native-index/ofarm-ed25519.index-evidence.json \
+            --index .artifacts/native-index/ofarm-ed25519.index.json \
+            --source-directory deployment/postgresql/ofarm_ed25519 \
+            --candidate-output \
+              .artifacts/native-index/native_release_identity.candidate.json
+      - name: Upload canonical two-platform OCI index evidence
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: native-verifier-index
+          path: .artifacts/native-index/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
