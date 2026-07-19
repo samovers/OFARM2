@@ -6,10 +6,9 @@
 - Parent: GitHub #167
 - Depends on: GitHub #168
 - Implementation coordination: GitHub #172, #173, #174, and #192
-- Proposed TenantCapability trust-model refinement: ADR 0003. Until separately
-  accepted, it authorizes no implementation change. If accepted, it refines
-  the cryptographic transport and key lifecycle without transferring the
-  implementation ownership below.
+- Accepted TenantCapability trust-model refinement: ADR 0003, accepted through
+  GitHub #200. It refines the cryptographic transport and key lifecycle without
+  transferring the implementation ownership below.
 - Additional prerequisite for #174: GitHub #171. GitHub #184 follows the
   neutral structural carrier supplied by #174 and owns semantic reference
   kind/cardinality enforcement; #174 may not claim that later semantic closure.
@@ -142,10 +141,10 @@ schemas and other repository files are global inputs, not database relations.
 | principal_binding | Globally governed immutable authorization versions | One immutable candidate version maps the exact-policy (issuer, subject) bytes to (tenant_id, party_ref), pins the immutable tenant-registry digest and exact ACTIVE Party record identity/schema/payload digests, and carries an equality-policy identity, version identity/digest, and validity metadata. Repeated principal keys are expected; no mutable lifecycle state or partial ACTIVE uniqueness lives here. It is the only initial global authority relation allowed to reference a tenant-owned Party. |
 | principal_binding_lifecycle | Globally governed append-only authorization authority | A digest-chained stream of ACTIVATE, REVOKE, EXPIRE, and SUPERSEDE acts names immutable binding versions, the prior lifecycle head, effective and decision data, accountable control identity, and reason. These acts, together with immutable versions, are the sole source for current and historical binding state. |
 | principal_binding_current | Optional derived/disposable global control projection and reservation | A unique (equality_policy, issuer, subject) row points to the computed active version and lifecycle head, or records the computed inactive state. It serializes transitions and accelerates lookup, but is rebuildable and never authoritative. |
-| tenant_binder_instance | Globally governed immutable binder installation identity | One fresh-provisioning singleton stores a random installation UUID, exact derived binder audience, creation evidence, and canonical row digest. It is not recovery-continuity proof. Direct DML is forbidden. If proposed ADR 0003 is not separately accepted, this relation is not authorized. |
-| tenant_capability_verification_key | Globally governed immutable public-key candidates | Stores only exact Ed25519 public material, content-derived key identity, binder audience, accepted KMS/HSM evidence, candidate identity/time, and canonical row digest. Existence is not authority. If proposed ADR 0003 is not separately accepted, this relation is not authorized. |
-| tenant_capability_key_lifecycle | Globally governed append-only capability-key and admission authority | A digest-chained stream of ACTIVATE, ROTATE, CLOSE_ADMISSION, REVOKE, and RESUME_ADMISSION acts plus ADR 0003's fixed database-time rules is the sole capability-key and binder-admission authority. If proposed ADR 0003 is not separately accepted, this relation is not authorized. |
-| tenant_capability_keyring | Disposable global capability-key reservation/projection | One row per binder audience is a row-lock fence and projected current key/admission head. It cannot provide advisory-lock fairness or authorize independently of the complete lifecycle fold and fixed time rules. If proposed ADR 0003 is not separately accepted, this relation is not authorized. |
+| tenant_binder_instance | Globally governed immutable binder installation identity | One fresh-provisioning singleton stores a random installation UUID, exact derived binder audience, creation evidence, and canonical row digest. It is not recovery-continuity proof. Direct DML is forbidden. |
+| tenant_capability_verification_key | Globally governed immutable public-key candidates | Stores only exact Ed25519 public material, content-derived key identity, binder audience, accepted KMS/HSM evidence, candidate identity/time, and canonical row digest. Existence is not authority. |
+| tenant_capability_key_lifecycle | Globally governed append-only capability-key and admission authority | A digest-chained stream of ACTIVATE, ROTATE, CLOSE_ADMISSION, REVOKE, and RESUME_ADMISSION acts plus ADR 0003's fixed database-time rules is the sole capability-key and binder-admission authority. |
+| tenant_capability_keyring | Disposable global capability-key reservation/projection | One row per binder audience is a row-lock fence and projected current key/admission head. It cannot provide advisory-lock fairness or authorize independently of the complete lifecycle fold and fixed time rules. |
 | tenant_binding_context | Protected disposable transaction operational metadata | An UNLOGGED migration-owned relation stores the one-use challenge and verified TenantBinding for exactly one database-derived backend identity and full xid8. Exact backend-start/full-transaction matching makes a physically retained row unusable after commit, rollback, backend restart, or pool reuse. Only hardened functions may read or write it; the application role has no table privileges. |
 | operational_security_event | Database-global operational security metadata, explicitly non-tenant | Append-only, bounded pre-tenant failure events plus audit-access, retention, and declared-gap maintenance events for this lane. It carries no tenant_id, tenant_ref, Party/farm/role identity, governed batch, knowledge position, or request-supplied attribution. It lives only in the separately provisioned audit PostgreSQL service's protected `ofarm_security` schema and is never read as tenant history. |
 | operational_security_quota_bucket | Disposable non-tenant operational security control state | One fixed database-time bucket per provisioned producer/component records accepted and overflow counts plus marker state. Only hardened audit functions mutate it. It contains no request, tenant, principal, correlation, or evidence data and cannot authorize anything. A close holds the event-writer barrier through marker insertion and bucket deletion; every append takes its writer lock before selecting database time, so a delayed append cannot recreate the closed bucket after commit. |
@@ -547,13 +546,13 @@ versions, lifecycle acts, or current projection.
 
 ### Unforgeable transaction binding
 
-In production, #172's authentication boundary verifies issuer, audience,
-signature, algorithm, expiry, not-before time, key identity, and the exact
-(issuer, subject) identity under the binding version's equality policy. It does
-not pass a raw tenant identifier to SQL. After #173 begins one UnitOfWork on one
-checked-out backend, binding proceeds as follows:
+In production, #172's authentication boundary verifies the external OIDC
+token's issuer, audience, signature, algorithm, expiry, not-before time, key
+identity, and the exact (issuer, subject) identity under the binding version's
+equality policy. It does not pass a raw tenant identifier to SQL. After #173
+begins one UnitOfWork on one checked-out backend, binding proceeds as follows:
 
-If separately accepted, ADR 0003 freezes the TenantCapability transport,
+Accepted ADR 0003 freezes the TenantCapability transport,
 verification-material, bounded validity, rotation, revocation, and compromise-
 response choices used by this flow. It does not move the boundary: #172 owns
 authentication, principal-lifecycle integration, capability minting, and
@@ -572,13 +571,11 @@ PostgreSQL tests; and #173 owns the same-backend UnitOfWork sequence.
    and payload digest,
    issued/expiry times, and a unique nonce. The capability is signed
    by a key unavailable to the application database role.
-3. A binder installed only after #172's verifier boundary is accepted consumes
-   that boundary's authenticated proof and enforces the audience, expiry,
+3. #174's hardened binder independently verifies the exact signed capability
+   with the accepted database verifier and enforces the audience, expiry,
    backend/transaction challenge, nonce, exact immutable version bytes and
    digest, and the authoritative lifecycle head and currentness reconstructed
-   from immutable acts. The #172 architecture decision determines which trusted
-   component verifies the signature and how its result crosses into the binder;
-   #174 selects neither mechanism. The binder may use
+   from immutable acts. The binder may use
    `principal_binding_current` to locate a candidate only when its version and
    head exactly equal that reconstruction; a missing or mismatched projection
    causes refusal or a separate privileged deterministic rebuild, never
@@ -597,14 +594,9 @@ PostgreSQL tests; and #173 owns the same-backend UnitOfWork sequence.
    makes the physical row unusable; a capability from another transaction or
    backend cannot be reused.
 
-This ADR deliberately does not select the TenantCapability algorithm, canonical
-wire framing, signer or verifier custody, database verification mechanism, key
-validity bounds, rotation overlap, emergency revocation, or compromise response.
-#172 owns those production decisions and must obtain their architectural
-acceptance before an immutable forward migration installs a production binder.
-#174 exposes the protected challenge, transaction-context, and current-context
-primitives only. Production binding remains fail-closed and unavailable until
-that #172 migration lands.
+Accepted ADR 0003 selects those previously deferred choices and preserves the
+ownership split above. Production binding remains fail-closed and unavailable
+until the required #172, #173, and #174 implementation and evidence pass.
 
 The bootstrap path is explicit. `tenant_registry`, `principal_binding`,
 `principal_binding_lifecycle`, `principal_binding_current`,
@@ -623,7 +615,7 @@ to reconstruct one principal stream and compare the exact tenant-registry and
 Party tuple named by that binding. Its fixed, schema-qualified SQL accepts no
 table, column, predicate, tenant, or Party selector other than the signed and
 database-matched binding tuple; it returns no tenant row or Party payload. Once
-#172 supplies the accepted binder, the application receives EXECUTE only on the
+#174 installs the accepted binder, the application receives EXECUTE only on the
 exact challenge, binder, and current-context functions. There is no generic
 query/dynamic-SQL function owned by this role.
 Compromise of `ofarm_binder` is therefore an explicit privileged-boundary
@@ -714,7 +706,7 @@ rewrites it.
 | Idempotency `caller_key` | `OFARM_ASCII_ID_V1`: the contract-validated authored ASCII bytes | 1-255 bytes matching `[A-Za-z0-9._:-]+` | Exact bytes inside the full idempotency identity; no transport-layer rewriting |
 | Principal lifecycle stream and current reservation | Separate equality-policy, issuer, and subject columns; digest input uses tag plus unsigned length-prefixed field bytes | Exactly the issuer/subject rules above | One composite exact-byte key; delimiter concatenation and digest-only equality are forbidden |
 
-If ADR 0003 is separately accepted, its bounded byte grammar is the exact V1
+Accepted ADR 0003's bounded byte grammar is the exact V1
 meaning of the issuer/subject rows above. It narrows `host`, port, path, and
 visible-subject syntax without normalization and requires identical independent
 live-PostgreSQL and #172 outcomes; neither a wider SQL regex nor a platform URL
@@ -868,7 +860,7 @@ schemas, tables, sequences, and functions.
 
 The role model is:
 
-- ofarm_crypto_installer: only if ADR 0003 is separately accepted, a dedicated
+- ofarm_crypto_installer: a dedicated
   NOLOGIN/NOINHERIT cluster-superuser boundary with exact catalog flags
   `SUPERUSER`, `NOCREATEDB`, `NOCREATEROLE`, `NOREPLICATION`, and
   `NOBYPASSRLS`; it has no members or runtime/migrator assumption path and owns
@@ -877,7 +869,7 @@ The role model is:
   only during reviewed provisioning; both are outside RLS;
 - ofarm_owner: NOLOGIN owner of tenant/application schemas, tables, policies,
   and ordinary functions, explicitly excluding the isolated `ofarm_security`
-  objects, any accepted `ofarm_crypto` objects, the narrowly
+  objects, the `ofarm_crypto` objects accepted by ADR 0003, the narrowly
   binder/backend-observer/graph-validator-owned functions, and the tenant-write
   lock wrapper;
 - ofarm_migrator: release-only credentials allowed to take the migration lock
@@ -911,8 +903,8 @@ The role model is:
   binding/lifecycle authority, or tenant reads;
 - ofarm_binder: NOSUPERUSER, NOCREATEDB, NOCREATEROLE, NOREPLICATION, NOLOGIN,
   NOINHERIT, BYPASSRLS privileged function owner used
-  only by the hardened challenge and current-context functions installed by
-  #174 and by the future binder accepted under #172. It has
+  only by the hardened challenge, binder, and current-context functions
+  installed by #174. It has
   no members or role-assumption path and only the exact column/relation rights
   needed to read immutable binding versions, authoritative lifecycle acts,
   optional current projection, tenant registry, one pinned Party record, and
@@ -942,7 +934,7 @@ The role model is:
   principal-binding lifecycle transition but has no direct DML on binding
   versions, lifecycle acts, or projection, no tenant-truth read role, and no
   application membership;
-- ofarm_capability_key_controller: only if ADR 0003 is separately accepted,
+- ofarm_capability_key_controller:
   an exact `NOSUPERUSER`, `NOCREATEDB`, `NOCREATEROLE`, `NOREPLICATION`,
   `NOBYPASSRLS`, `NOLOGIN`, `NOINHERIT` capability with EXECUTE only on closed
   public-key registration/lifecycle/rebuild functions. The separate
@@ -1020,7 +1012,7 @@ specified exact read-only migration-ledger grant. Adding any relation or
 privilege to that list requires a migration and classification change. Party
 and every other tenant-bearing record remain forced-RLS protected.
 
-If ADR 0003 is separately accepted, that closed list also contains
+Under accepted ADR 0003, that closed list also contains
 `tenant_binder_instance`, `tenant_capability_verification_key`,
 `tenant_capability_key_lifecycle`, and `tenant_capability_keyring`, with the
 classifications above. Their direct runtime relation access is denied; only the
@@ -1029,12 +1021,14 @@ closed key-control and binder functions receive the minimum fields they need.
 Normal functions execute as the caller. Any unavoidable SECURITY DEFINER
 function has a fixed trusted search_path, schema-qualified objects, no
 caller-controlled dynamic SQL, minimal ownership, explicit EXECUTE grants, and
-adversarial tests. The challenge, current-context, and lock wrappers are named
-exceptions, together with the isolated security-audit append, control,
-query, export, purge, and readiness procedures. Their definitions and owners are
-content-addressed by the applicable migration or by the closed provisioning
-capsule defined below; `0001` pins that exact provisioning digest. Triggers and
-constraint functions include tenant and batch in every tenant lookup.
+adversarial tests. The ADR 0003 challenge, binder, capability-key-control,
+principal-lifecycle, projection-rebuild, and current-context functions and the
+lock wrappers are named exceptions, together with the isolated security-audit
+append, control, query, export, purge, and readiness procedures. Their
+definitions and owners are content-addressed by the applicable migration or by
+the closed provisioning capsule defined below; `0001` pins that exact
+provisioning digest. Triggers and constraint functions include tenant and batch
+in every tenant lookup.
 
 Direct SQL using the application role remains subject to forced RLS, composite
 constraints, verified context, and append-only rules. The application role
@@ -1044,8 +1038,8 @@ capability-verification material; cannot call the security-audit append or reten
 functions; cannot assume any privileged role; and cannot execute raw
 advisory-lock functions. End users and support users never receive application,
 migration, or security-audit credentials. Superusers, database administrators,
-migrators, identity-control writers, any accepted crypto installer or
-capability-key controller, security-audit owners/readers/retention operators,
+migrators, identity-control writers, the crypto installer and capability-key
+controller, security-audit owners/readers/retention operators,
 backup readers, `ofarm_binder`, and a fully compromised capability signer are
 outside the RLS protection boundary; access to those capabilities requires
 separate operational controls and audit. The binder's NOLOGIN/no-
@@ -1095,7 +1089,7 @@ the external provisioning administrator takes and explicitly releases this
 session lock; it is not exposed through either protected wrapper or granted to
 any runtime or migrator role.
 
-If ADR 0003 is separately accepted, its existing binder, public-key control,
+Under accepted ADR 0003, its binder, public-key control,
 principal-lifecycle, and projection-rebuild entry points may additionally use
 only the reserved two-int transaction-level admission pair fixed there. The
 binder owner receives only the exact shared acquisition overload; the exact
@@ -1130,7 +1124,7 @@ catalog privileges needed by the sealed helpers.
 Application startup and either migration runner do not create or repair their
 own cluster roles or services.
 
-If ADR 0003 is separately accepted, this same reviewed infrastructure step also
+Under accepted ADR 0003, this same reviewed infrastructure step also
 creates the exact crypto-installer and capability-key-control roles/login above,
 installs the fixed non-trusted/non-relocatable `ofarm_ed25519` extension from
 the already pinned derived image, and then removes every runtime/migrator
@@ -1363,10 +1357,11 @@ and malformed SQL inputs. The attacker may trigger authentication, verifier,
 routing, binder, transaction, and pool-reuse failures. The model also covers
 accidental unqualified queries and direct SQL under the application role.
 
-Controls below that require a TenantCapability verifier, production binder, or
-UnitOfWork describe the required end state after #172 and #173. #174 alone
-implements their storage and fail-closed prerequisites; it does not claim those
-future controls are active.
+Controls below that require production capability minting or a UnitOfWork
+describe the required end state after #172 and #173. #174 independently
+implements the accepted package-local reference capability, database verifier
+and binder, and fail-closed storage primitives; it does not claim that the
+dependent production path is active.
 
 | Threat | Required control |
 |---|---|
@@ -1403,18 +1398,19 @@ The implementation owners named below turn this plan into tests using the real
 PostgreSQL roles and real ASGI/application topology, not mocks.
 
 #174 owns the direct PostgreSQL challenge, binder, bootstrap, replay, role, and
-catalog tests for any separately accepted ADR 0003 implementation. Until then,
-production binding remains unavailable. #172 owns authentication,
-issuer/verifier, principal-lifecycle, capability-minting, and signer-custody
-tests. #173 owns the same-backend UnitOfWork and real application/pool sequence;
-#192 owns audit integration, and #193 owns any restore-continuity path.
+catalog tests for accepted ADR 0003. #172 owns external authentication and OIDC
+verification, principal-lifecycle integration, capability construction and
+minting, and signer-custody tests. #173 owns the same-backend UnitOfWork and real
+application/pool sequence; #192 owns audit integration, and #193 owns any
+restore-continuity path. Architecture acceptance authorizes implementation
+only; production binding remains unavailable until the required evidence passes.
 
 ### Tenant context and pool reuse
 
-#174 executes the storage, role, fail-closed context, issuer-vector, and direct-
-SQL subset of this section. The production capability, binder, UnitOfWork, and
-pool cases become mandatory executable evidence under #172 and #173 after their
-accepted forward migration and integration; they are not claims of `0001`.
+#174 executes the storage, role, fail-closed context, issuer-vector, and
+direct-SQL binder cases. #172's production capability and signer cases and
+#173's UnitOfWork and pool cases become mandatory after their implementation
+and integration; they are not claims of `0001`.
 
 1. Create tenants A and B with deliberately identical local record, request,
    artifact, materialization, and caller idempotency references.
@@ -1476,11 +1472,12 @@ accepted forward migration and integration; they are not claims of `0001`.
 17. Execute the same table-driven issuer and identifier vectors against the
     Python contract and live PostgreSQL constraints, including malformed hosts,
     bracket syntax, ports outside 1..65535, URI delimiters, Unicode, controls,
-    and byte limits. #174 must expose no production capability binder, signing
-    key, canonical signature frame, algorithm, rotation, or revocation schedule.
-    After a separate #172 architecture decision accepts those choices, #172
-    adds shared signer/verifier vectors and a forward migration; until then
-    production context binding refuses because no verifier exists.
+    and byte limits. #174 exposes no production signing key or issuance path.
+    It owns the frozen manifest, independent reference codec, test-only fixture
+    signer, live-PostgreSQL binder, and baseline vectors. #172 later proves its
+    independent production codec and KMS signer match those exact bytes; #172
+    is not a prerequisite for #174 to close. Production context binding remains
+    unavailable until the #172/#173/#174 path and evidence pass.
 
 ### Identifier equality and immutable eligibility
 
@@ -1496,7 +1493,8 @@ accepted forward migration and integration; they are not claims of `0001`.
 3. Prove `(policy, issuer="ab", subject="c")` and
    `(policy, issuer="a", subject="bc")` cannot collide. JSON escape spellings
    that decode to the same issuer/subject scalars produce the same canonical
-   bytes. Golden vectors from #172's verifier and #174's PostgreSQL functions
+   bytes. Golden vectors from #172's production capability codec and #174's
+   PostgreSQL functions
    must produce identical tagged/lp32 bytes and digests.
 4. Provision targets with a non-UTF8 encoding, wrong/default/nondeterministic
    collation, missing/widened domain check, wrong index collation, `citext`, or
@@ -1838,13 +1836,13 @@ tenancy and migration tests until the dependent tickets land.
   event shape, trust/access boundary, privileges, independent-commit/failure
   posture, retention/redaction rules, producer classes, and verification plan.
   The documentation-only guardrail authorizes no implementation.
-- #172 supplies explicit production authentication and verifier behavior, the
-  governed control-plane integration for immutable principal-binding versions,
-  append-only lifecycle transitions and deterministic projection rebuild,
-  exact-principal equality enforcement, immutable V1 tenant/Party eligibility
-  validation, and the trusted TenantCapability issuer/verifier boundary,
-  capability minting, and signer custody, as refined by accepted ADR 0003. #174
-  is its database-primitives prerequisite and supplies the
+- #172 supplies explicit production authentication and external OIDC-verifier
+  behavior, the governed control-plane integration for immutable principal-
+  binding versions, append-only lifecycle transitions and deterministic
+  projection rebuild, exact-principal equality enforcement, immutable V1
+  tenant/Party eligibility validation, TenantCapability construction and
+  minting, production signing, and signer custody, as refined by accepted
+  ADR 0003. #174 is its database-primitives prerequisite and supplies the
   classified storage, database verification material/schema, and hardened
   binder functions. #172 does not own those migrations, roles, functions,
   direct PostgreSQL tests, or durable pre-tenant audit emission.
