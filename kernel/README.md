@@ -12,7 +12,8 @@ schema. It is not an issue #174 tenant or security-audit deployment path and
 must never be pointed at either provisioned service. Its historical startup
 DDL remains quarantined here until #173 replaces the ambient Store with the
 tenant UnitOfWork integration. The #174 production database boundary uses only
-the external numbered runners and read-only startup gate documented in
+the external numbered runners and independent read-only structural observations
+documented in
 `deployment/postgresql/README.md`.
 
 For the exact evidence-only review environment and the single complete Kernel

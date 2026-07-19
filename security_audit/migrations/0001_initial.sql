@@ -138,8 +138,7 @@ CREATE TYPE ofarm_security.operational_security_event_report AS (
 );
 
 CREATE TYPE ofarm_security.security_audit_structure_report AS (
-    structurally_ready pg_catalog.bool,
-    runtime_ready pg_catalog.bool,
+    structurally_compatible pg_catalog.bool,
     difference_count pg_catalog.int4,
     break_glass_login_present pg_catalog.bool
 );
@@ -156,8 +155,7 @@ CREATE TYPE ofarm_security.security_audit_contract_observation AS (
     provisioning_spec_digest pg_catalog.text,
     migration_version pg_catalog.int4,
     migration_prefix_digest pg_catalog.text,
-    structurally_ready pg_catalog.bool,
-    runtime_ready pg_catalog.bool,
+    structurally_compatible pg_catalog.bool,
     break_glass_login_present pg_catalog.bool
 );
 
@@ -2164,7 +2162,13 @@ BEGIN
         v_differences := v_differences + 1;
     END IF;
 
-    WITH catalog_entry(category, object_identity, definition) AS (
+    WITH governed_schema(schema_name) AS (
+        VALUES
+            ('ofarm_security'::pg_catalog.text),
+            ('ofarm_infrastructure'::pg_catalog.text),
+            ('public'::pg_catalog.text)
+    ),
+    catalog_entry(category, object_identity, definition) AS (
         SELECT
             'role',
             role.rolname::pg_catalog.text,
@@ -3108,6 +3112,177 @@ BEGIN
             pg_catalog.left(routine.proname::pg_catalog.text, 3) = 'lo_'
             OR routine.proname IN ('loread', 'lowrite')
           )
+
+        -- SCHEMA_LOCAL_CATALOG_CLASSIFIER_V1
+        -- Keep this block in exact parity with catalog_classifier.py.
+        UNION ALL
+        SELECT
+            'schema-local-relation',
+            namespace.nspname::pg_catalog.text || '.' ||
+                schema_local_object.relname::pg_catalog.text,
+            'pg_catalog.pg_class'
+        FROM pg_catalog.pg_class AS schema_local_object
+        JOIN pg_catalog.pg_namespace AS namespace
+          ON namespace.oid = schema_local_object.relnamespace
+        WHERE namespace.nspname IN (
+            SELECT schema_name FROM governed_schema
+        )
+
+        UNION ALL
+        SELECT
+            'schema-local-routine',
+            namespace.nspname::pg_catalog.text || '.' ||
+                schema_local_object.proname::pg_catalog.text,
+            'pg_catalog.pg_proc'
+        FROM pg_catalog.pg_proc AS schema_local_object
+        JOIN pg_catalog.pg_namespace AS namespace
+          ON namespace.oid = schema_local_object.pronamespace
+        WHERE namespace.nspname IN (
+            SELECT schema_name FROM governed_schema
+        )
+
+        UNION ALL
+        SELECT
+            'schema-local-type',
+            namespace.nspname::pg_catalog.text || '.' ||
+                schema_local_object.typname::pg_catalog.text,
+            'pg_catalog.pg_type'
+        FROM pg_catalog.pg_type AS schema_local_object
+        JOIN pg_catalog.pg_namespace AS namespace
+          ON namespace.oid = schema_local_object.typnamespace
+        WHERE namespace.nspname IN (
+            SELECT schema_name FROM governed_schema
+        )
+
+        UNION ALL
+        SELECT
+            'schema-local-collation',
+            namespace.nspname::pg_catalog.text || '.' ||
+                schema_local_object.collname::pg_catalog.text,
+            'pg_catalog.pg_collation'
+        FROM pg_catalog.pg_collation AS schema_local_object
+        JOIN pg_catalog.pg_namespace AS namespace
+          ON namespace.oid = schema_local_object.collnamespace
+        WHERE namespace.nspname IN (
+            SELECT schema_name FROM governed_schema
+        )
+
+        UNION ALL
+        SELECT
+            'schema-local-operator',
+            namespace.nspname::pg_catalog.text || '.' ||
+                schema_local_object.oprname::pg_catalog.text,
+            'pg_catalog.pg_operator'
+        FROM pg_catalog.pg_operator AS schema_local_object
+        JOIN pg_catalog.pg_namespace AS namespace
+          ON namespace.oid = schema_local_object.oprnamespace
+        WHERE namespace.nspname IN (
+            SELECT schema_name FROM governed_schema
+        )
+
+        UNION ALL
+        SELECT
+            'schema-local-operator_class',
+            namespace.nspname::pg_catalog.text || '.' ||
+                schema_local_object.opcname::pg_catalog.text,
+            'pg_catalog.pg_opclass'
+        FROM pg_catalog.pg_opclass AS schema_local_object
+        JOIN pg_catalog.pg_namespace AS namespace
+          ON namespace.oid = schema_local_object.opcnamespace
+        WHERE namespace.nspname IN (
+            SELECT schema_name FROM governed_schema
+        )
+
+        UNION ALL
+        SELECT
+            'schema-local-operator_family',
+            namespace.nspname::pg_catalog.text || '.' ||
+                schema_local_object.opfname::pg_catalog.text,
+            'pg_catalog.pg_opfamily'
+        FROM pg_catalog.pg_opfamily AS schema_local_object
+        JOIN pg_catalog.pg_namespace AS namespace
+          ON namespace.oid = schema_local_object.opfnamespace
+        WHERE namespace.nspname IN (
+            SELECT schema_name FROM governed_schema
+        )
+
+        UNION ALL
+        SELECT
+            'schema-local-conversion',
+            namespace.nspname::pg_catalog.text || '.' ||
+                schema_local_object.conname::pg_catalog.text,
+            'pg_catalog.pg_conversion'
+        FROM pg_catalog.pg_conversion AS schema_local_object
+        JOIN pg_catalog.pg_namespace AS namespace
+          ON namespace.oid = schema_local_object.connamespace
+        WHERE namespace.nspname IN (
+            SELECT schema_name FROM governed_schema
+        )
+
+        UNION ALL
+        SELECT
+            'schema-local-text_search_config',
+            namespace.nspname::pg_catalog.text || '.' ||
+                schema_local_object.cfgname::pg_catalog.text,
+            'pg_catalog.pg_ts_config'
+        FROM pg_catalog.pg_ts_config AS schema_local_object
+        JOIN pg_catalog.pg_namespace AS namespace
+          ON namespace.oid = schema_local_object.cfgnamespace
+        WHERE namespace.nspname IN (
+            SELECT schema_name FROM governed_schema
+        )
+
+        UNION ALL
+        SELECT
+            'schema-local-text_search_dictionary',
+            namespace.nspname::pg_catalog.text || '.' ||
+                schema_local_object.dictname::pg_catalog.text,
+            'pg_catalog.pg_ts_dict'
+        FROM pg_catalog.pg_ts_dict AS schema_local_object
+        JOIN pg_catalog.pg_namespace AS namespace
+          ON namespace.oid = schema_local_object.dictnamespace
+        WHERE namespace.nspname IN (
+            SELECT schema_name FROM governed_schema
+        )
+
+        UNION ALL
+        SELECT
+            'schema-local-text_search_parser',
+            namespace.nspname::pg_catalog.text || '.' ||
+                schema_local_object.prsname::pg_catalog.text,
+            'pg_catalog.pg_ts_parser'
+        FROM pg_catalog.pg_ts_parser AS schema_local_object
+        JOIN pg_catalog.pg_namespace AS namespace
+          ON namespace.oid = schema_local_object.prsnamespace
+        WHERE namespace.nspname IN (
+            SELECT schema_name FROM governed_schema
+        )
+
+        UNION ALL
+        SELECT
+            'schema-local-text_search_template',
+            namespace.nspname::pg_catalog.text || '.' ||
+                schema_local_object.tmplname::pg_catalog.text,
+            'pg_catalog.pg_ts_template'
+        FROM pg_catalog.pg_ts_template AS schema_local_object
+        JOIN pg_catalog.pg_namespace AS namespace
+          ON namespace.oid = schema_local_object.tmplnamespace
+        WHERE namespace.nspname IN (
+            SELECT schema_name FROM governed_schema
+        )
+
+        UNION ALL
+        SELECT
+            'schema-local-statistics',
+            namespace.nspname::pg_catalog.text || '.' ||
+                schema_local_object.stxname::pg_catalog.text,
+            'pg_catalog.pg_statistic_ext'
+        FROM pg_catalog.pg_statistic_ext AS schema_local_object
+        JOIN pg_catalog.pg_namespace AS namespace
+          ON namespace.oid = schema_local_object.stxnamespace
+        WHERE namespace.nspname IN (
+            SELECT schema_name FROM governed_schema
+        )
     )
     SELECT 'sha256:' || pg_catalog.encode(
         pg_catalog.sha256(
@@ -3134,13 +3309,12 @@ BEGIN
     INTO v_catalog_fingerprint
     FROM catalog_entry;
     IF v_catalog_fingerprint <>
-            'sha256:9ed925e98884275d977a568e8ed74427adc6b3a1ca69e50446a5231eefdfb4a0' THEN
+            'sha256:f144cda261c3a3087f8802e6922678d5c1d1a951a8137327177765525ca0a5c6' THEN
         v_differences := v_differences + 1;
     END IF;
 
     RETURN ROW(
         v_differences = 0,
-        false,
         v_differences,
         v_break_glass_present
     )::ofarm_security.security_audit_structure_report;
@@ -3176,7 +3350,7 @@ BEGIN
 
     RETURN ROW(
         'ofarm.security-audit-database-contract.v1',
-        'sha256:ce588cc29603eb69bcd18b231dc3f1ea131f82ca8350cd917f6de22f0a605839',
+        'sha256:a7bf363d590e27334470ae633bc694b9ba83afecd29a3d1c7f0be2606d1ab18b',
         'OFARM_PRETENANT_SECURITY_EVENT_V1',
         'CORRELATION_HMAC_ONLY_V1',
         'SECURITY_DIAGNOSTIC_30D_V1',
@@ -3186,8 +3360,7 @@ BEGIN
         'sha256:770165332bbdb7a5e67e468f021d9fe82df817a2aee1a8a70191a08e869c307a',
         v_version,
         v_prefix_digest,
-        v_structure.structurally_ready,
-        v_structure.runtime_ready,
+        v_structure.structurally_compatible,
         v_structure.break_glass_login_present
     )::ofarm_security.security_audit_contract_observation;
 END

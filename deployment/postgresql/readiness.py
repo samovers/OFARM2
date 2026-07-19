@@ -1,9 +1,10 @@
-"""Read-only PostgreSQL startup readiness for the fixed tenant/audit pair.
+"""Independent read-only PostgreSQL structural compatibility observations.
 
-The application calls this gate before constructing any database-backed
-service.  It authenticates the checked-in migration release against two live,
-independent PostgreSQL 17 observations.  It never provisions, migrates, repairs,
-locks, or otherwise writes either database.
+The tenant and security-audit lanes authenticate their own checked-in migration
+release against their own live observation of the pinned PostgreSQL 17.10
+build.  A separate, narrow attestation can prove only that the two observed
+routes use different PostgreSQL system identifiers.  None of these results is
+an application, audit-runtime, promotion, provenance, or continuity decision.
 """
 
 from __future__ import annotations
@@ -14,7 +15,6 @@ from pathlib import Path
 
 import psycopg
 
-from deployment.postgresql.audit_contract import SECURITY_AUDIT_CONTRACT
 from deployment.postgresql.catalog_identity import (
     CATALOG_OUTPUT_SETTING_ASSIGNMENTS,
     CATALOG_OUTPUT_SETTING_VALUES,
@@ -33,12 +33,13 @@ from deployment.postgresql.provisioning_specs import (
     TENANT_PROVISIONING_SPEC,
     ProvisioningSpec,
 )
-from deployment.postgresql.tenant_contract import TENANT_CAPABILITY_CONTRACT
+from deployment.postgresql.version_policy import (
+    SUPPORTED_POSTGRESQL_SERVER_VERSION,
+    SUPPORTED_POSTGRESQL_SERVER_VERSION_NUM,
+)
 
 
 _PACKAGE_ROOT = Path(__file__).resolve().parents[2]
-_POSTGRESQL_17_MIN = 170000
-_POSTGRESQL_18_MIN = 180000
 _CONNECT_TIMEOUT_SECONDS = 5
 _STATEMENT_TIMEOUT_MILLISECONDS = 2_000
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
@@ -48,8 +49,8 @@ _IDENTITY_SQL = """
            CURRENT_USER::text,
            pg_catalog.current_database()::text,
            pg_catalog.current_setting('server_version_num')::integer,
+           pg_catalog.current_setting('server_version')::text,
            control.system_identifier::text,
-           pg_catalog.pg_is_in_recovery(),
            pg_catalog.current_setting('transaction_isolation')::text,
            pg_catalog.current_setting('transaction_read_only')::text,
            pg_catalog.current_setting('standard_conforming_strings')::text,
@@ -89,39 +90,44 @@ _AUDIT_OBSERVER_SQL = (
 )
 
 
-class PostgreSQLReadinessError(RuntimeError):
-    """The exact read-only startup contract could not be proven."""
+class PostgreSQLVerificationError(RuntimeError):
+    """One exact read-only structural observation could not be proven."""
 
     def __init__(self, reason: str):
         self.reason = reason
-        super().__init__(f"PostgreSQL startup readiness refused: {reason}")
+        super().__init__(f"PostgreSQL verification refused: {reason}")
 
 
 @dataclass(frozen=True, slots=True)
-class PostgreSQLStartupReadinessReport:
-    """Safe, immutable version-only evidence for one successful startup."""
+class PostgreSQLStructuralCompatibilityReport:
+    """Safe version-only evidence for one exact structural observation."""
 
-    tenant_supported_version: int
-    tenant_observed_version: int
-    audit_supported_version: int
-    audit_observed_version: int
-
-    @property
-    def ready(self) -> bool:
-        return True
+    service_identity: str
+    supported_version: int
+    observed_version: int
 
     def manifest(self) -> dict[str, object]:
         return {
-            "schemaVersion": "ofarm.postgresql-startup-readiness.v1",
-            "ready": True,
-            "tenant": {
-                "supportedVersion": self.tenant_supported_version,
-                "observedVersion": self.tenant_observed_version,
-            },
-            "securityAudit": {
-                "supportedVersion": self.audit_supported_version,
-                "observedVersion": self.audit_observed_version,
-            },
+            "schemaVersion": "ofarm.postgresql-structural-compatibility.v1",
+            "serviceIdentity": self.service_identity,
+            "supportedVersion": self.supported_version,
+            "observedVersion": self.observed_version,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class PostgreSQLServiceSeparationAttestation:
+    """Evidence only that the two fixed routes have different system IDs."""
+
+    tenant_service_identity: str
+    audit_service_identity: str
+
+    def manifest(self) -> dict[str, object]:
+        return {
+            "schemaVersion": "ofarm.postgresql-service-separation.v1",
+            "tenantServiceIdentity": self.tenant_service_identity,
+            "securityAuditServiceIdentity": self.audit_service_identity,
+            "distinctPostgreSQLSystemIdentifiers": True,
         }
 
 
@@ -170,26 +176,31 @@ class _LaneObservation:
     migration_version: int
 
 
-def _refuse(reason: str) -> PostgreSQLReadinessError:
-    return PostgreSQLReadinessError(reason)
+def _refuse(reason: str) -> PostgreSQLVerificationError:
+    return PostgreSQLVerificationError(reason)
 
 
-def _load_authoritative_sets(
+def _load_authoritative_set(
     package_root: Path,
-) -> tuple[MigrationSet, MigrationSet]:
+    lane: _Lane,
+) -> MigrationSet:
     failed = False
+    migration_set = None
     try:
-        tenant = load_authoritative_migration_set(package_root, TENANT_SERVICE)
-        audit = load_authoritative_migration_set(
-            package_root, SECURITY_AUDIT_SERVICE
+        migration_set = load_authoritative_migration_set(
+            package_root, lane.service
         )
     except Exception:
         failed = True
-    if failed:
-        raise _refuse("authoritative migration identity is unavailable")
-    if tenant.service != TENANT_SERVICE or audit.service != SECURITY_AUDIT_SERVICE:
-        raise _refuse("authoritative migration service identity differs")
-    return tenant, audit
+    if failed or migration_set is None:
+        raise _refuse(
+            f"{lane.label} authoritative migration identity is unavailable"
+        )
+    if migration_set.service != lane.service:
+        raise _refuse(
+            f"{lane.label} authoritative migration service identity differs"
+        )
+    return migration_set
 
 
 def _connect(dsn: str, lane: _Lane) -> _ConnectionState:
@@ -204,7 +215,7 @@ def _connect(dsn: str, lane: _Lane) -> _ConnectionState:
     except Exception:
         failed = True
     if failed or connection is None:
-        raise _refuse(f"{lane.label} readiness route is unavailable")
+        raise _refuse(f"{lane.label} structural route is unavailable")
     return _ConnectionState(connection)
 
 
@@ -240,13 +251,13 @@ def _begin_read_only_transaction(state: _ConnectionState, lane: _Lane) -> None:
     _execute(
         state.connection,
         "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY",
-        f"{lane.label} readiness transaction could not begin",
+        f"{lane.label} structural observation transaction could not begin",
     )
     state.transaction_started = True
     _execute(
         state.connection,
         f"SET LOCAL statement_timeout = '{_STATEMENT_TIMEOUT_MILLISECONDS}ms'",
-        f"{lane.label} readiness timeout could not be fixed",
+        f"{lane.label} structural observation timeout could not be fixed",
     )
     for assignment in CATALOG_OUTPUT_SETTING_ASSIGNMENTS:
         _execute(
@@ -263,30 +274,30 @@ def _observe_identity(
     rows = _fetch_rows(
         connection,
         _IDENTITY_SQL,
-        f"{lane.label} readiness identity is unreadable",
+        f"{lane.label} structural route identity is unreadable",
     )
     if len(rows) != 1 or len(rows[0]) != 12:
-        raise _refuse(f"{lane.label} readiness identity differs")
+        raise _refuse(f"{lane.label} structural route identity differs")
     row = rows[0]
     if row[0:3] != (
         lane.session_user,
         lane.session_user,
         lane.database_name,
     ):
-        raise _refuse(f"{lane.label} readiness identity differs")
-    if type(row[3]) is not int or not (
-        _POSTGRESQL_17_MIN <= row[3] < _POSTGRESQL_18_MIN
+        raise _refuse(f"{lane.label} structural route identity differs")
+    if (
+        type(row[3]) is not int
+        or row[3] != SUPPORTED_POSTGRESQL_SERVER_VERSION_NUM
+        or row[4] != SUPPORTED_POSTGRESQL_SERVER_VERSION
     ):
         raise _refuse(f"{lane.label} PostgreSQL version differs")
     if (
-        type(row[4]) is not str
-        or not row[4]
-        or not row[4].isascii()
-        or not row[4].isdigit()
+        type(row[5]) is not str
+        or not row[5]
+        or not row[5].isascii()
+        or not row[5].isdigit()
     ):
-        raise _refuse(f"{lane.label} database lineage is unreadable")
-    if row[5] is not False:
-        raise _refuse(f"{lane.label} database is not a primary")
+        raise _refuse(f"{lane.label} PostgreSQL system identifier is unreadable")
     if row[6:12] != (
         "repeatable read",
         "on",
@@ -295,7 +306,7 @@ def _observe_identity(
         raise _refuse(
             f"{lane.label} transaction or catalog observation posture differs"
         )
-    return row[4], row[3]
+    return row[5], row[3]
 
 
 def _expected_history(
@@ -365,12 +376,14 @@ def _verify_tenant_observer(
     connection: psycopg.Connection,
     migration_set: MigrationSet,
 ) -> None:
+    from deployment.postgresql.tenant_contract import TENANT_CONTEXT_CONTRACT
+
     row = _exact_observer_row(connection, _TENANT_LANE)
     latest_version = len(migration_set.migrations)
     if (
         len(row) != 11
         or row[0] is not True
-        or row[1] != TENANT_CAPABILITY_CONTRACT.digest
+        or row[1] != TENANT_CONTEXT_CONTRACT.digest
         or type(row[2]) is not int
         or row[2] != 0
         or not _is_digest(row[3])
@@ -391,6 +404,8 @@ def _verify_audit_observer(
     connection: psycopg.Connection,
     migration_set: MigrationSet,
 ) -> None:
+    from deployment.postgresql.audit_contract import SECURITY_AUDIT_CONTRACT
+
     row = _exact_observer_row(connection, _AUDIT_LANE)
     latest_version = len(migration_set.migrations)
     expected = (
@@ -407,13 +422,12 @@ def _verify_audit_observer(
         migration_set.prefix_digest(latest_version),
         True,
         False,
-        False,
     )
-    if len(row) != 14 or row != expected:
+    if len(row) != 13 or row != expected:
         raise _refuse("security-audit contract observation differs")
     if type(row[6]) is not int or type(row[9]) is not int:
         raise _refuse("security-audit contract observation differs")
-    if row[11] is not True or row[12] is not False or row[13] is not False:
+    if row[11] is not True or row[12] is not False:
         raise _refuse("security-audit contract observation differs")
 
 
@@ -437,7 +451,7 @@ def _observe_lane(
     elif lane is _AUDIT_LANE:
         _verify_audit_observer(state.connection, migration_set)
     else:
-        raise _refuse("readiness service identity differs")
+        raise _refuse("structural observation service identity differs")
     return _LaneObservation(
         system_identifier=system_identifier,
         server_version_num=server_version_num,
@@ -460,71 +474,144 @@ def _cleanup(states: list[_ConnectionState]) -> bool:
     return not failed
 
 
-def verify_startup_readiness(
+def _verify_lane_structural_compatibility(
     *,
-    tenant_readiness_dsn: str,
-    audit_readiness_dsn: str,
-    package_root: Path = _PACKAGE_ROOT,
-) -> PostgreSQLStartupReadinessReport:
-    """Prove the exact two-database startup contract without any writes.
-
-    Both snapshots remain open until the complete pair, including independent
-    cluster lineage, has been checked.  Every exit explicitly rolls back and
-    closes every connection that was opened.  Errors use only closed diagnostic
-    text and never include routes, observed identifiers, or database records.
-    """
-
-    if type(tenant_readiness_dsn) is not str or not tenant_readiness_dsn:
-        raise _refuse("tenant readiness route is required")
-    if type(audit_readiness_dsn) is not str or not audit_readiness_dsn:
-        raise _refuse("security-audit readiness route is required")
+    structural_dsn: str,
+    lane: _Lane,
+    package_root: Path,
+) -> PostgreSQLStructuralCompatibilityReport:
+    if type(structural_dsn) is not str or not structural_dsn:
+        raise _refuse(f"{lane.label} structural route is required")
     if not isinstance(package_root, Path):
         raise _refuse("package root must be a pathlib.Path")
 
-    tenant_set, audit_set = _load_authoritative_sets(package_root)
+    migration_set = _load_authoritative_set(package_root, lane)
     states: list[_ConnectionState] = []
     failure_reason: str | None = None
-    report: PostgreSQLStartupReadinessReport | None = None
+    report: PostgreSQLStructuralCompatibilityReport | None = None
     cleanup_succeeded = False
     try:
-        tenant_state = _connect(tenant_readiness_dsn, _TENANT_LANE)
-        states.append(tenant_state)
-        _begin_read_only_transaction(tenant_state, _TENANT_LANE)
-
-        audit_state = _connect(audit_readiness_dsn, _AUDIT_LANE)
-        states.append(audit_state)
-        _begin_read_only_transaction(audit_state, _AUDIT_LANE)
-
-        tenant = _observe_lane(tenant_state, _TENANT_LANE, tenant_set)
-        audit = _observe_lane(audit_state, _AUDIT_LANE, audit_set)
-        if tenant.server_version_num != audit.server_version_num:
-            raise _refuse("tenant and security-audit PostgreSQL versions differ")
-        if tenant.system_identifier == audit.system_identifier:
-            raise _refuse("tenant and security-audit database lineages are not distinct")
-        report = PostgreSQLStartupReadinessReport(
-            tenant_supported_version=len(tenant_set.migrations),
-            tenant_observed_version=tenant.migration_version,
-            audit_supported_version=len(audit_set.migrations),
-            audit_observed_version=audit.migration_version,
+        state = _connect(structural_dsn, lane)
+        states.append(state)
+        _begin_read_only_transaction(state, lane)
+        observation = _observe_lane(state, lane, migration_set)
+        report = PostgreSQLStructuralCompatibilityReport(
+            service_identity=lane.service.identity,
+            supported_version=len(migration_set.migrations),
+            observed_version=observation.migration_version,
         )
-    except PostgreSQLReadinessError as exc:
+    except PostgreSQLVerificationError as exc:
         failure_reason = exc.reason
     except Exception:
-        failure_reason = "readiness observation failed"
+        failure_reason = f"{lane.label} structural observation failed"
     finally:
         cleanup_succeeded = _cleanup(states)
 
     if not cleanup_succeeded:
-        failure_reason = "readiness transaction cleanup failed"
+        failure_reason = f"{lane.label} structural observation cleanup failed"
     if failure_reason is not None:
         raise _refuse(failure_reason)
     if report is None:
-        raise _refuse("readiness observation failed")
+        raise _refuse(f"{lane.label} structural observation failed")
     return report
 
 
+def verify_tenant_structural_compatibility(
+    *,
+    tenant_structural_dsn: str,
+    package_root: Path = _PACKAGE_ROOT,
+) -> PostgreSQLStructuralCompatibilityReport:
+    """Verify only the tenant database's exact structural contract."""
+
+    return _verify_lane_structural_compatibility(
+        structural_dsn=tenant_structural_dsn,
+        lane=_TENANT_LANE,
+        package_root=package_root,
+    )
+
+
+def verify_security_audit_structural_compatibility(
+    *,
+    audit_structural_dsn: str,
+    package_root: Path = _PACKAGE_ROOT,
+) -> PostgreSQLStructuralCompatibilityReport:
+    """Verify only the security-audit database's structural contract."""
+
+    return _verify_lane_structural_compatibility(
+        structural_dsn=audit_structural_dsn,
+        lane=_AUDIT_LANE,
+        package_root=package_root,
+    )
+
+
+def verify_postgresql_service_separation(
+    *,
+    tenant_structural_dsn: str,
+    audit_structural_dsn: str,
+) -> PostgreSQLServiceSeparationAttestation:
+    """Attest only that the two fixed routes have different system IDs.
+
+    The result says nothing about uninterrupted history, restore provenance,
+    physical resources, operational health, or whether either service should
+    accept traffic.
+    """
+
+    if type(tenant_structural_dsn) is not str or not tenant_structural_dsn:
+        raise _refuse("tenant structural route is required")
+    if type(audit_structural_dsn) is not str or not audit_structural_dsn:
+        raise _refuse("security-audit structural route is required")
+
+    states: list[_ConnectionState] = []
+    failure_reason: str | None = None
+    attestation: PostgreSQLServiceSeparationAttestation | None = None
+    cleanup_succeeded = False
+    try:
+        tenant_state = _connect(tenant_structural_dsn, _TENANT_LANE)
+        states.append(tenant_state)
+        _begin_read_only_transaction(tenant_state, _TENANT_LANE)
+
+        audit_state = _connect(audit_structural_dsn, _AUDIT_LANE)
+        states.append(audit_state)
+        _begin_read_only_transaction(audit_state, _AUDIT_LANE)
+
+        tenant_system_identifier, tenant_version = _observe_identity(
+            tenant_state.connection, _TENANT_LANE
+        )
+        audit_system_identifier, audit_version = _observe_identity(
+            audit_state.connection, _AUDIT_LANE
+        )
+        if tenant_version != audit_version:
+            raise _refuse("tenant and security-audit PostgreSQL versions differ")
+        if tenant_system_identifier == audit_system_identifier:
+            raise _refuse(
+                "tenant and security-audit routes use one PostgreSQL "
+                "system identifier"
+            )
+        attestation = PostgreSQLServiceSeparationAttestation(
+            tenant_service_identity=TENANT_SERVICE.identity,
+            audit_service_identity=SECURITY_AUDIT_SERVICE.identity,
+        )
+    except PostgreSQLVerificationError as exc:
+        failure_reason = exc.reason
+    except Exception:
+        failure_reason = "PostgreSQL service-separation observation failed"
+    finally:
+        cleanup_succeeded = _cleanup(states)
+
+    if not cleanup_succeeded:
+        failure_reason = "PostgreSQL service-separation cleanup failed"
+    if failure_reason is not None:
+        raise _refuse(failure_reason)
+    if attestation is None:
+        raise _refuse("PostgreSQL service-separation observation failed")
+    return attestation
+
+
 __all__ = (
-    "PostgreSQLReadinessError",
-    "PostgreSQLStartupReadinessReport",
-    "verify_startup_readiness",
+    "PostgreSQLServiceSeparationAttestation",
+    "PostgreSQLStructuralCompatibilityReport",
+    "PostgreSQLVerificationError",
+    "verify_postgresql_service_separation",
+    "verify_security_audit_structural_compatibility",
+    "verify_tenant_structural_compatibility",
 )

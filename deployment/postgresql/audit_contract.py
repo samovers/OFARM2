@@ -1,8 +1,8 @@
 """Immutable PostgreSQL security-audit database contract for issue #174.
 
 This module performs no I/O.  It gives the first audit migration and later
-readiness code one checked-in source for every closed V1 reason, event kind,
-policy, resource bound, callable identity, and break-glass posture.
+structural verification one checked-in source for every closed V1 reason,
+event kind, policy, resource bound, callable identity, and break-glass posture.
 """
 
 from __future__ import annotations
@@ -77,11 +77,7 @@ EXPORT_FUNCTION_IDENTITY = (
 EXPORT_MAX_ROWS = 2_048
 EXPORT_MAX_BYTES = 8_388_608
 
-STRUCTURAL_READINESS_OWNER = "ISSUE_174"
-RUNTIME_READINESS_OWNER = "ISSUE_192"
-RUNTIME_READINESS_WIRE_FIELD = "runtime_ready"
-RUNTIME_READINESS_POSTURE = "RESERVED_FALSE_PENDING_ISSUE_192"
-RUNTIME_READINESS_WIRE_VALUE = False
+STRUCTURAL_COMPATIBILITY_OWNER = "ISSUE_174"
 
 _POSTGRES_IDENTIFIER = re.compile(r"[a-z][a-z0-9_]{0,62}")
 _CLOSED_TOKEN = re.compile(r"[A-Z][A-Z0-9_]*")
@@ -205,7 +201,7 @@ class BreakGlassSpec:
     normal_state: str
     temporary_state: str
     normal_login_present: bool
-    ready_while_temporary_login_present: bool
+    structurally_compatible_while_temporary_login_present: bool
     dual_approval_required: bool
     time_bounded_login_required: bool
 
@@ -216,31 +212,11 @@ class BreakGlassSpec:
             "normalState": self.normal_state,
             "temporaryState": self.temporary_state,
             "normalLoginPresent": self.normal_login_present,
-            "readyWhileTemporaryLoginPresent": (
-                self.ready_while_temporary_login_present
+            "structurallyCompatibleWhileTemporaryLoginPresent": (
+                self.structurally_compatible_while_temporary_login_present
             ),
             "dualApprovalRequired": self.dual_approval_required,
             "timeBoundedLoginRequired": self.time_bounded_login_required,
-        }
-
-
-@dataclass(frozen=True, slots=True)
-class ReadinessPostureSpec:
-    """Ownership and wire semantics for structural versus runtime readiness."""
-
-    structural_owner: str
-    runtime_owner: str
-    runtime_wire_field: str
-    runtime_posture: str
-    runtime_wire_value: bool
-
-    def manifest(self) -> dict[str, object]:
-        return {
-            "structuralOwner": self.structural_owner,
-            "runtimeOwner": self.runtime_owner,
-            "runtimeWireField": self.runtime_wire_field,
-            "runtimePosture": self.runtime_posture,
-            "runtimeWireValue": self.runtime_wire_value,
         }
 
 
@@ -269,7 +245,6 @@ class SecurityAuditContract:
     export_limit: ResultLimitSpec
     access_protocols: tuple[AccessProtocolSpec, ...]
     public_functions: tuple[PublicFunctionSpec, ...]
-    readiness: ReadinessPostureSpec
     break_glass: BreakGlassSpec
 
     def manifest_without_digest(self) -> dict[str, object]:
@@ -342,7 +317,9 @@ class SecurityAuditContract:
                 }
                 for role in capability_roles
             ],
-            "readiness": self.readiness.manifest(),
+            "structuralCompatibility": {
+                "owner": STRUCTURAL_COMPATIBILITY_OWNER,
+            },
             "breakGlassExport": self.break_glass.manifest(),
         }
 
@@ -512,20 +489,13 @@ def _expected_contract() -> SecurityAuditContract:
                 "ofarm_security_audit_readiness",
             ),
         ),
-        readiness=ReadinessPostureSpec(
-            structural_owner=STRUCTURAL_READINESS_OWNER,
-            runtime_owner=RUNTIME_READINESS_OWNER,
-            runtime_wire_field=RUNTIME_READINESS_WIRE_FIELD,
-            runtime_posture=RUNTIME_READINESS_POSTURE,
-            runtime_wire_value=RUNTIME_READINESS_WIRE_VALUE,
-        ),
         break_glass=BreakGlassSpec(
             capability_role="ofarm_security_audit_export",
             login_role="ofarm_security_audit_export_login",
             normal_state="LOGIN_ABSENT",
-            temporary_state="MAINTENANCE_UNREADY",
+            temporary_state="STRUCTURALLY_INCOMPATIBLE",
             normal_login_present=False,
-            ready_while_temporary_login_present=False,
+            structurally_compatible_while_temporary_login_present=False,
             dual_approval_required=True,
             time_bounded_login_required=True,
         ),
@@ -656,26 +626,16 @@ def validate_security_audit_contract(contract: SecurityAuditContract) -> None:
         _require_exact_int(protocol.result_limit.max_rows, "access protocol rows")
         _require_exact_int(protocol.result_limit.max_bytes, "access protocol bytes")
 
-    if _CLOSED_TOKEN.fullmatch(contract.readiness.structural_owner) is None or \
-            _CLOSED_TOKEN.fullmatch(contract.readiness.runtime_owner) is None or \
-            _CLOSED_TOKEN.fullmatch(contract.readiness.runtime_posture) is None:
+    if _CLOSED_TOKEN.fullmatch(STRUCTURAL_COMPATIBILITY_OWNER) is None:
         raise SecurityAuditContractError(
-            "readiness ownership and posture must be closed ASCII tokens"
-        )
-    _validate_identifier(
-        contract.readiness.runtime_wire_field, "runtime readiness wire field"
-    )
-    if type(contract.readiness.runtime_wire_value) is not bool or \
-            contract.readiness.runtime_wire_value is not False:
-        raise SecurityAuditContractError(
-            "runtime readiness wire value must remain reserved false"
+            "structural compatibility owner must be a closed ASCII token"
         )
 
     _validate_identifier(contract.break_glass.capability_role, "break-glass role")
     _validate_identifier(contract.break_glass.login_role, "break-glass login")
     boolean_posture = (
         contract.break_glass.normal_login_present,
-        contract.break_glass.ready_while_temporary_login_present,
+        contract.break_glass.structurally_compatible_while_temporary_login_present,
         contract.break_glass.dual_approval_required,
         contract.break_glass.time_bounded_login_required,
     )
@@ -716,21 +676,16 @@ __all__ = (
     "QUERY_FUNCTION_IDENTITY",
     "QUOTA_ACCEPTED_EVENT_THRESHOLD",
     "QUOTA_BUCKET_SECONDS",
-    "ReadinessPostureSpec",
     "REDACTION_POLICY_IDENTITY",
     "REQUEST_ROUTER_REASONS",
     "RETENTION_DAYS",
     "RETENTION_POLICY_IDENTITY",
     "RETENTION_SECONDS",
-    "RUNTIME_READINESS_OWNER",
-    "RUNTIME_READINESS_POSTURE",
-    "RUNTIME_READINESS_WIRE_FIELD",
-    "RUNTIME_READINESS_WIRE_VALUE",
     "ResultLimitSpec",
     "SECURITY_AUDIT_CONTRACT",
     "SECURITY_AUDIT_CONTRACT_DIGEST_POLICY",
     "SecurityAuditContract",
     "SecurityAuditContractError",
-    "STRUCTURAL_READINESS_OWNER",
+    "STRUCTURAL_COMPATIBILITY_OWNER",
     "validate_security_audit_contract",
 )

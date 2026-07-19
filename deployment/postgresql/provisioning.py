@@ -23,6 +23,9 @@ from deployment.postgresql.catalog_identity import (
     CATALOG_OUTPUT_SETTING_ASSIGNMENTS,
     CATALOG_OUTPUT_SETTING_VALUES,
 )
+from deployment.postgresql.catalog_classifier import (
+    SCHEMA_LOCAL_OBJECT_SELECTS_SQL,
+)
 from deployment.postgresql.provisioning_specs import (
     SECURITY_AUDIT_PROVISIONING_SPEC,
     TENANT_PROVISIONING_SPEC,
@@ -30,10 +33,12 @@ from deployment.postgresql.provisioning_specs import (
     ProvisioningSpec,
     RoleSpec,
 )
+from deployment.postgresql.version_policy import (
+    SUPPORTED_POSTGRESQL_SERVER_VERSION,
+    SUPPORTED_POSTGRESQL_SERVER_VERSION_NUM,
+)
 
 
-_POSTGRESQL_17_MIN = 170000
-_POSTGRESQL_18_MIN = 180000
 _POSTGRESQL_FIRST_NORMAL_OBJECT_ID = 16384
 _CONTROL_DATABASE = "postgres"
 _BASE_DATABASE_INVENTORY = frozenset({"postgres", "template0", "template1"})
@@ -138,6 +143,7 @@ class _PostgresIdentity:
     database_name: str
     system_identifier: str
     server_version_num: int
+    server_version: str
 
 
 def _provisioning_lock_key() -> tuple[int, int]:
@@ -174,6 +180,7 @@ def _require_dba(
         SELECT pg_catalog.current_database()::text,
                r.rolsuper,
                pg_catalog.current_setting('server_version_num')::integer,
+               pg_catalog.current_setting('server_version')::text,
                s.system_identifier::text,
                pg_catalog.current_setting('scram_iterations')::integer,
                pg_catalog.pg_is_in_recovery(),
@@ -191,16 +198,23 @@ def _require_dba(
         raise ProvisioningTargetError(
             f"admin DSN must connect to {_CONTROL_DATABASE}"
         )
-    if not (_POSTGRESQL_17_MIN <= row[2] < _POSTGRESQL_18_MIN):
-        raise ProvisioningTargetError("provisioning requires PostgreSQL major 17")
-    if row[4] != spec.scram_iterations:
+    if (
+        row[2] != SUPPORTED_POSTGRESQL_SERVER_VERSION_NUM
+        or row[3] != SUPPORTED_POSTGRESQL_SERVER_VERSION
+    ):
+        raise ProvisioningTargetError(
+            "provisioning requires exact PostgreSQL build "
+            f"{SUPPORTED_POSTGRESQL_SERVER_VERSION}"
+        )
+    if row[5] != spec.scram_iterations:
         raise ProvisioningTargetError("PostgreSQL SCRAM iteration posture differs")
-    if row[5] is not False or row[6] != "off":
+    if row[6] is not False or row[7] != "off":
         raise ProvisioningTargetError("provisioning requires a writable primary")
     return _PostgresIdentity(
         database_name=row[0],
-        system_identifier=row[3],
+        system_identifier=row[4],
         server_version_num=row[2],
+        server_version=row[3],
     )
 
 
@@ -418,19 +432,25 @@ def _target_identity(
         SELECT pg_catalog.current_database()::text,
                control.system_identifier::text,
                pg_catalog.current_setting('server_version_num')::integer,
+               pg_catalog.current_setting('server_version')::text,
                pg_catalog.pg_is_in_recovery(),
                pg_catalog.current_setting('default_transaction_read_only')
         FROM pg_catalog.pg_control_system() AS control
         """
     ).fetchone()
-    identity = _PostgresIdentity(row[0], row[1], row[2])
+    identity = _PostgresIdentity(row[0], row[1], row[2], row[3])
     if identity.database_name != spec.database_name:
         raise ProvisioningTargetError("target route reached the wrong database")
     if identity.system_identifier != expected.system_identifier:
         raise ProvisioningTargetError("admin and target routes reach different clusters")
     if identity.server_version_num != expected.server_version_num:
         raise ProvisioningTargetError("admin and target PostgreSQL versions differ")
-    if row[3] is not False or row[4] != "off":
+    if (
+        identity.server_version != expected.server_version
+        or identity.server_version != SUPPORTED_POSTGRESQL_SERVER_VERSION
+    ):
+        raise ProvisioningTargetError("admin and target PostgreSQL builds differ")
+    if row[4] is not False or row[5] != "off":
         raise ProvisioningTargetError("target route is not a writable primary")
     return identity
 
@@ -2296,74 +2316,11 @@ def _unmigrated_object_differences(
     if not allow_migration_objects:
         inspected_schemas.append(spec.schema_name)
     rows = target.execute(
-        """
+        f"""
         WITH target_names AS (
             SELECT pg_catalog.unnest(%s::text[]) AS schema_name
         )
-        SELECT 'relation', n.nspname::text, c.relname::text
-        FROM pg_catalog.pg_class AS c
-        JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
-        WHERE n.nspname IN (SELECT schema_name FROM target_names)
-        UNION ALL
-        SELECT 'routine', n.nspname::text, p.proname::text
-        FROM pg_catalog.pg_proc AS p
-        JOIN pg_catalog.pg_namespace AS n ON n.oid = p.pronamespace
-        WHERE n.nspname IN (SELECT schema_name FROM target_names)
-        UNION ALL
-        SELECT 'type', n.nspname::text, t.typname::text
-        FROM pg_catalog.pg_type AS t
-        JOIN pg_catalog.pg_namespace AS n ON n.oid = t.typnamespace
-        WHERE n.nspname IN (SELECT schema_name FROM target_names)
-        UNION ALL
-        SELECT 'collation', n.nspname::text, c.collname::text
-        FROM pg_catalog.pg_collation AS c
-        JOIN pg_catalog.pg_namespace AS n ON n.oid = c.collnamespace
-        WHERE n.nspname IN (SELECT schema_name FROM target_names)
-        UNION ALL
-        SELECT 'operator', n.nspname::text, o.oprname::text
-        FROM pg_catalog.pg_operator AS o
-        JOIN pg_catalog.pg_namespace AS n ON n.oid = o.oprnamespace
-        WHERE n.nspname IN (SELECT schema_name FROM target_names)
-        UNION ALL
-        SELECT 'operator_class', n.nspname::text, o.opcname::text
-        FROM pg_catalog.pg_opclass AS o
-        JOIN pg_catalog.pg_namespace AS n ON n.oid = o.opcnamespace
-        WHERE n.nspname IN (SELECT schema_name FROM target_names)
-        UNION ALL
-        SELECT 'operator_family', n.nspname::text, o.opfname::text
-        FROM pg_catalog.pg_opfamily AS o
-        JOIN pg_catalog.pg_namespace AS n ON n.oid = o.opfnamespace
-        WHERE n.nspname IN (SELECT schema_name FROM target_names)
-        UNION ALL
-        SELECT 'conversion', n.nspname::text, c.conname::text
-        FROM pg_catalog.pg_conversion AS c
-        JOIN pg_catalog.pg_namespace AS n ON n.oid = c.connamespace
-        WHERE n.nspname IN (SELECT schema_name FROM target_names)
-        UNION ALL
-        SELECT 'text_search_config', n.nspname::text, c.cfgname::text
-        FROM pg_catalog.pg_ts_config AS c
-        JOIN pg_catalog.pg_namespace AS n ON n.oid = c.cfgnamespace
-        WHERE n.nspname IN (SELECT schema_name FROM target_names)
-        UNION ALL
-        SELECT 'text_search_dictionary', n.nspname::text, d.dictname::text
-        FROM pg_catalog.pg_ts_dict AS d
-        JOIN pg_catalog.pg_namespace AS n ON n.oid = d.dictnamespace
-        WHERE n.nspname IN (SELECT schema_name FROM target_names)
-        UNION ALL
-        SELECT 'text_search_parser', n.nspname::text, p.prsname::text
-        FROM pg_catalog.pg_ts_parser AS p
-        JOIN pg_catalog.pg_namespace AS n ON n.oid = p.prsnamespace
-        WHERE n.nspname IN (SELECT schema_name FROM target_names)
-        UNION ALL
-        SELECT 'text_search_template', n.nspname::text, t.tmplname::text
-        FROM pg_catalog.pg_ts_template AS t
-        JOIN pg_catalog.pg_namespace AS n ON n.oid = t.tmplnamespace
-        WHERE n.nspname IN (SELECT schema_name FROM target_names)
-        UNION ALL
-        SELECT 'statistics', n.nspname::text, s.stxname::text
-        FROM pg_catalog.pg_statistic_ext AS s
-        JOIN pg_catalog.pg_namespace AS n ON n.oid = s.stxnamespace
-        WHERE n.nspname IN (SELECT schema_name FROM target_names)
+        {SCHEMA_LOCAL_OBJECT_SELECTS_SQL}
         UNION ALL
         SELECT 'extension', n.nspname::text, e.extname::text
         FROM pg_catalog.pg_extension AS e
@@ -2464,6 +2421,7 @@ def migration_locked_differences(
                CURRENT_USER::text,
                pg_catalog.current_database()::text,
                pg_catalog.current_setting('server_version_num')::integer,
+               pg_catalog.current_setting('server_version')::text,
                pg_catalog.pg_is_in_recovery(),
                pg_catalog.current_setting('transaction_isolation'),
                pg_catalog.current_setting('transaction_read_only'),
@@ -2481,7 +2439,8 @@ def migration_locked_differences(
         "ofarm_migrator",
         spec.schema_owner,
         spec.database_name,
-        posture[3] if posture is not None else None,
+        SUPPORTED_POSTGRESQL_SERVER_VERSION_NUM,
+        SUPPORTED_POSTGRESQL_SERVER_VERSION,
         False,
         "read committed",
         "off",
@@ -2489,8 +2448,6 @@ def migration_locked_differences(
         *CATALOG_OUTPUT_SETTING_VALUES,
         "on",
         "on",
-    ) or posture is None or not (
-        _POSTGRESQL_17_MIN <= posture[3] < _POSTGRESQL_18_MIN
     ):
         differences.append("locked migration route or transaction posture differs")
 

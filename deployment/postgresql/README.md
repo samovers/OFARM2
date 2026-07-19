@@ -1,6 +1,6 @@
 # PostgreSQL deployment boundary
 
-Issue #174 defines two independently provisioned PostgreSQL 17 services and
+Issue #174 defines two independently provisioned PostgreSQL 17.10 services and
 their immutable schema-release boundary:
 
 - `ofarm_tenant` stores tenant truth, protected identity control, and the
@@ -11,8 +11,9 @@ their immutable schema-release boundary:
   tenant service. A second database in the tenant cluster is not sufficient.
 
 Application startup does not create, alter, repair, or adopt either schema.
-Provisioning and migration are explicit release/operator actions. The startup
-gate is read-only and fail-closed.
+Provisioning and migration are explicit release/operator actions. The tenant
+and audit structural observations are independent, read-only evidence inputs;
+neither is a service or runtime decision.
 
 ## Release order
 
@@ -24,8 +25,8 @@ Use the exact checked-in release in this order:
    `SECURITY_AUDIT_PROVISIONING_SPEC` and different externally supplied SCRAM
    passwords.
 3. Call `verify_provisioned_cluster_lineages` with both administrator routes.
-   It requires PostgreSQL 17, the same server patch version, and distinct
-   system identifiers.
+   It requires the pinned PostgreSQL build
+   `17.10 (Debian 17.10-1.pgdg13+1)` and distinct system identifiers.
 4. Preflight both immutable migration sets without connecting to PostgreSQL:
 
    ```bash
@@ -50,15 +51,25 @@ Use the exact checked-in release in this order:
      --execution-id '<canonical-non-nil-uuid>'
    ```
 
-6. Before constructing database-backed application services, call
-   `verify_startup_readiness` with only the tenant and audit readiness routes.
-   The caller must not publish its startup-complete observation until that gate
-   returns and the caller's surrounding startup transaction has committed.
+6. Observe each migrated lane independently:
 
-The #174 library supplies the gate. Issue #173 owns wiring it into the tenant
-UnitOfWork, repository, and pool lifecycle. Issue #192 owns the bounded audit
+   - the #173 application integration may call
+     `verify_tenant_structural_compatibility` with only the tenant structural
+     route; and
+   - the #192 audit integration may call
+     `verify_security_audit_structural_compatibility` with only the audit
+     structural route.
+
+   Neither call opens, loads, or makes a policy decision for the other lane.
+7. Where deployment evidence needs a fresh pair check, call
+   `verify_postgresql_service_separation` with both structural routes. Its only
+   claim is that the fixed tenant and audit routes expose different PostgreSQL
+   system identifiers.
+
+Issue #173 owns composing the tenant structural report with its application,
+UnitOfWork, repository, and pool policy. Issue #192 independently owns the audit
 client, producer credential deployment, operational availability policy, and
-its runtime readiness threshold.
+runtime-health threshold.
 
 ## Immutable migration authority
 
@@ -109,22 +120,22 @@ defaults, not controls against a hostile raw SQL session.
 
 The permanent `ofarm_infrastructure` capsule contains a fixed, no-argument,
 transaction-scoped migration-lock wrapper. Tenant bootstrap also uses a
-temporary static owner sealer for the binder, backend-incarnation observer,
-graph validator, and tenant-lock functions. The
+temporary static owner sealer for the transaction-context helpers,
+backend-incarnation observer, graph validator, and tenant-lock functions. The
 tenant runner consumes and drops that sealer atomically during `0001`; it is
 never recreated after the ledger exists. No runtime role can call either raw
 advisory-lock overload or assume the isolated function-owner roles.
 
 Provisioning also closes PostgreSQL's database-local large-object side store.
-It freezes the complete 20-routine PostgreSQL 17 `lo_*`/`loread`/`lowrite`
+It freezes the complete 20-routine PostgreSQL 17.10 `lo_*`/`loread`/`lowrite`
 inventory and implementation posture, revokes every PUBLIC EXECUTE path, and
 accepts only the bootstrap-superuser owner's symbolic ACL. Both services
 require zero `pg_largeobject_metadata` rows before migration and at structural
-readiness. An added routine, changed implementation property, widened grant,
+observation. An added routine, changed implementation property, widened grant,
 or stored large object refuses.
 
 Provisioning also removes the default same-login backend-observation path in
-both services. PUBLIC loses SELECT on the exact PostgreSQL 17
+both services. PUBLIC loses SELECT on the exact PostgreSQL 17.10
 `pg_catalog.pg_stat_activity` view and EXECUTE on the complete
 `pg_stat_get_activity`/`pg_stat_get_backend_*` family of 14 routines. The audit
 service grants no replacement. The tenant service grants only its NOLOGIN,
@@ -141,13 +152,15 @@ The tenant migration establishes:
 - an immutable tenant registry and append-only principal-binding versions and
   lifecycle acts;
 - a rebuildable current-binding projection that is never authority by itself;
-- an immutable capability-key schedule and exact HMAC-SHA-256 capability frame;
+- one exact, shared Python/PostgreSQL issuer-storage grammar and exact UTF-8
+  issuer equality;
 - a protected UNLOGGED context keyed by database-derived PID, backend start,
-  and full `xid8`, with one challenge and one final bind per transaction;
+  and full `xid8`, with storage for one challenge or one externally verified
+  bound context per transaction;
 - a privileged NOLOGIN backend observer that cannot be inherited or assumed by
   a LOGIN role and exposes only current-incarnation and exact liveness helper
-  results to the NOLOGIN binder, plus a NOLOGIN graph validator that remains
-  constrained by FORCE RLS and minimum column grants;
+  results to the isolated NOLOGIN context-function owner, plus a NOLOGIN graph
+  validator that remains constrained by FORCE RLS and minimum column grants;
 - a protected, no-caller-key tenant write lock;
 - tenant-qualified composite primary, unique, and foreign keys;
 - enabled and forced RLS on every tenant-bearing relation;
@@ -157,15 +170,18 @@ The tenant migration establishes:
 - exact catalog and contract observers available only to the appropriate
   migration/readiness roles.
 
-The binder validates the immutable binding version, authoritative lifecycle
-fold and currentness, pinned tenant/Party identities and digests, one-use
-database challenge, full canonical capability frame, HMAC, key schedule, and
-time bounds before it publishes a transaction-local binding. Application and
-worker SQL cannot establish tenant context through `SET`, request data, a raw
-tenant identifier, or a default. Cross-tenant keys, joins, references, and
-continuations fail at the database boundary.
+The `0001` baseline intentionally installs no production capability binder,
+cryptographic algorithm or framing, signing secret, key schedule, validity
+window, rotation, or revocation policy. The challenge and protected context
+storage therefore remain fail-closed: application and worker SQL cannot
+publish a `BOUND` context through `SET`, request data, a raw tenant identifier,
+or a default. Cross-tenant keys, joins, references, and continuations still
+fail at the database boundary when a trusted test or later accepted verifier
+supplies an already-verified transaction context.
 
-Issue #172 owns authentication and external capability signing. Issue #184
+Issue #172 owns the production verifier and binder, capability issuer,
+signer/key custody, framing, bounded validity, revocation, and rotation. It
+must introduce those accepted decisions in a forward migration. Issue #184
 owns the complete semantic reference kind/cardinality matrix; #174 supplies
 only its isolated neutral relational carrier.
 
@@ -184,54 +200,63 @@ The security-audit migration establishes a separate, non-tenant lane with:
 
 It never accepts or stores tenant, principal, Party, farm, role, governed-batch,
 or knowledge-position fields. It cannot authorize or reconstruct tenant state.
-The migration's structural flag proves the #174 schema only. The reserved
-runtime-readiness flag remains false until #192 supplies and verifies the
-external client and operational controls.
+The migration's structural flag proves the #174 schema only. It is not an audit
+client availability or operational-health result; #192 owns those decisions.
 
 The audit service has no V1 backup, replica, restore, or history-import path.
 Loss is represented as an operational evidence gap: recreate an empty verified
 service from immutable provisioning and migrations, then let the later #192
 control client append a declared gap. This is not tenant recovery.
 
-## Read-only startup gate
+## Read-only structural compatibility
 
-`verify_startup_readiness` loads both literal migration identities before it
-connects. It then opens both repeatable-read, read-only snapshots before the
-first catalog observation. Each transaction fixes
-`standard_conforming_strings=on`, `TimeZone=UTC`, `DateStyle=ISO, MDY`, and
-`quote_all_identifiers=off` before PostgreSQL deparses any catalog identity, so
-caller or cluster display settings cannot change the authenticated bytes. It
-then verifies:
+Each lane-specific structural function loads only its own literal migration
+identity and opens one repeatable-read, read-only snapshot. Each transaction
+fixes `standard_conforming_strings=on`, `TimeZone=UTC`,
+`DateStyle=ISO, MDY`, and `quote_all_identifiers=off` before PostgreSQL deparses
+any catalog identity, so caller or cluster display settings cannot change the
+authenticated bytes. It then verifies:
 
-- exact readiness session and current-user identities and fixed database names;
-- PostgreSQL 17 primary posture, the same patch version, and distinct cluster
-  lineages;
+- the exact structural session and current-user identity and fixed database name;
+- the exact tested PostgreSQL build
+  `17.10 (Debian 17.10-1.pgdg13+1)` with
+  `server_version_num = 170010`;
 - no publication, subscription, replication slot, or live physical-replication
-  path in either service;
-- the exact closed PostgreSQL 17 large-object routine surface and an empty
+  path in that service;
+- the exact closed PostgreSQL 17.10 large-object routine surface and an empty
   large-object store;
 - the exact closed backend-statistics view, routine, ownership, and ACL
   posture;
 - the complete ordered seven-column ledger history;
-- the complete symbolic catalog identity for each service; and
-- the exact tenant and audit contract-observer rows.
+- that lane's complete symbolic catalog identity; and
+- that lane's exact structural contract-observer fields.
 
-Every exit explicitly rolls back and closes both connections. Its returned
-manifest exposes only supported and observed schema versions. Errors use closed
-diagnostic text and do not include DSNs, observed identifiers, tenant data, or
-audit records. The gate performs no DDL, DML, lock acquisition, repair, or
-bootstrap.
+Every exit explicitly rolls back and closes the connection it opened. A report
+exposes only the service identity and supported/observed schema versions. It has
+no generic service decision, runtime-health result, primary-state result,
+promotion result, or continuity result. Errors use closed diagnostic text and
+do not include DSNs, observed identifiers, tenant data, or audit records. The
+observation performs no DDL, DML, lock acquisition, repair, or bootstrap.
+
+`verify_postgresql_service_separation` is deliberately narrower. It opens both
+structural routes, verifies their fixed role/database identities and pinned
+PostgreSQL build, and attests only that their system identifiers differ. A system
+identifier is copied by a physical backup. After promotion, a physical clone can
+therefore produce the same tenant structural report and still satisfy tenant-
+versus-audit separation. Neither result proves uninterrupted tenant history or
+authorizes traffic. Issue #193 must supply an external non-rewindable witness
+before any restore or promotion decision can exist.
 
 ## Accepted limits
 
-The checked-in conformance workflow proves three disposable, distinct
-PostgreSQL 17 lineages and exercises the two services with their real roles.
+The checked-in conformance workflow exercises three disposable PostgreSQL
+17.10 instances and the two services with their real roles.
 That evidence does not prove production separation of disks, WAL, network
 routes, connection pools, credentials, CPU, memory, storage quotas, monitoring,
 or backup targets. Those require deployment evidence and operational controls.
 
-There is no V1 tenant restore, point-in-time promotion, snapshot adoption,
-logical history import, or recovery readiness. Issue #193 owns that future
-design. Database isolation, migration, recovery, RLS, and direct-SQL boundaries
-remain the responsibility of #174; application/pool integration does not
-weaken them.
+There is no V1 tenant restore, point-in-time promotion, snapshot adoption, or
+logical history import. Issue #193 owns that future design and any continuity
+witness or promotion decision. Database isolation, migration, recovery, RLS,
+and direct-SQL boundaries remain the responsibility of #174; application/pool
+integration does not weaken them.

@@ -38,13 +38,9 @@ from deployment.postgresql.audit_contract import (
     RETENTION_DAYS,
     RETENTION_POLICY_IDENTITY,
     RETENTION_SECONDS,
-    RUNTIME_READINESS_OWNER,
-    RUNTIME_READINESS_POSTURE,
-    RUNTIME_READINESS_WIRE_FIELD,
-    RUNTIME_READINESS_WIRE_VALUE,
     SECURITY_AUDIT_CONTRACT,
     SECURITY_AUDIT_CONTRACT_DIGEST_POLICY,
-    STRUCTURAL_READINESS_OWNER,
+    STRUCTURAL_COMPATIBILITY_OWNER,
     SecurityAuditContractError,
     validate_security_audit_contract,
 )
@@ -206,34 +202,28 @@ def test_public_function_identities_and_capability_grants_are_exact():
     }
 
 
-def test_break_glass_login_is_absent_in_normal_state_and_blocks_readiness():
+def test_break_glass_login_is_absent_in_normal_structural_state():
     posture = SECURITY_AUDIT_CONTRACT.break_glass
 
     assert posture.capability_role == "ofarm_security_audit_export"
     assert posture.login_role == "ofarm_security_audit_export_login"
     assert posture.normal_state == "LOGIN_ABSENT"
     assert posture.normal_login_present is False
-    assert posture.temporary_state == "MAINTENANCE_UNREADY"
-    assert posture.ready_while_temporary_login_present is False
+    assert posture.temporary_state == "STRUCTURALLY_INCOMPATIBLE"
+    assert posture.structurally_compatible_while_temporary_login_present is False
     assert posture.dual_approval_required is True
     assert posture.time_bounded_login_required is True
 
 
-def test_runtime_readiness_wire_value_is_reserved_false_for_issue_192():
-    readiness = SECURITY_AUDIT_CONTRACT.readiness
+def test_contract_exposes_only_issue_174_structural_compatibility():
+    manifest = SECURITY_AUDIT_CONTRACT.manifest_without_digest()
 
-    assert STRUCTURAL_READINESS_OWNER == "ISSUE_174"
-    assert RUNTIME_READINESS_OWNER == "ISSUE_192"
-    assert RUNTIME_READINESS_WIRE_FIELD == "runtime_ready"
-    assert RUNTIME_READINESS_POSTURE == "RESERVED_FALSE_PENDING_ISSUE_192"
-    assert RUNTIME_READINESS_WIRE_VALUE is False
-    assert readiness.manifest() == {
-        "structuralOwner": "ISSUE_174",
-        "runtimeOwner": "ISSUE_192",
-        "runtimeWireField": "runtime_ready",
-        "runtimePosture": "RESERVED_FALSE_PENDING_ISSUE_192",
-        "runtimeWireValue": False,
-    }
+    assert STRUCTURAL_COMPATIBILITY_OWNER == "ISSUE_174"
+    assert manifest["structuralCompatibility"] == {"owner": "ISSUE_174"}
+    canonical = SECURITY_AUDIT_CONTRACT.canonical_manifest_bytes().decode("ascii")
+    assert "runtime_ready" not in canonical
+    assert "runtimeReady" not in canonical
+    assert "runtimeOwner" not in canonical
 
 
 def test_manifest_is_canonical_ascii_and_has_domain_separated_golden_digest():
@@ -248,7 +238,7 @@ def test_manifest_is_canonical_ascii_and_has_domain_separated_golden_digest():
     assert json.loads(without_digest) == contract.manifest_without_digest()
     assert json.loads(canonical) == contract.manifest()
     assert contract.digest == \
-        "sha256:ce588cc29603eb69bcd18b231dc3f1ea131f82ca8350cd917f6de22f0a605839"
+        "sha256:a7bf363d590e27334470ae633bc694b9ba83afecd29a3d1c7f0be2606d1ab18b"
     assert contract.digest == "sha256:" + hashlib.sha256(
         SECURITY_AUDIT_CONTRACT_DIGEST_POLICY.encode("ascii")
         + b"\x00"
@@ -312,11 +302,6 @@ def _replace_break_glass(**changes):
     return replace(contract, break_glass=replace(contract.break_glass, **changes))
 
 
-def _replace_readiness(**changes):
-    contract = SECURITY_AUDIT_CONTRACT
-    return replace(contract, readiness=replace(contract.readiness, **changes))
-
-
 @pytest.mark.parametrize(
     "mutate",
     (
@@ -373,17 +358,14 @@ def _replace_readiness(**changes):
         lambda value: _replace_function(result_shape="pg_catalog.void"),
         lambda value: _replace_function(capability_role="other_role"),
         lambda value: replace(value, public_functions=value.public_functions[::-1]),
-        lambda value: _replace_readiness(structural_owner="ISSUE_192"),
-        lambda value: _replace_readiness(runtime_owner="ISSUE_174"),
-        lambda value: _replace_readiness(runtime_wire_field="runtime_health"),
-        lambda value: _replace_readiness(runtime_posture="READY"),
-        lambda value: _replace_readiness(runtime_wire_value=True),
         lambda value: _replace_break_glass(capability_role="other_role"),
         lambda value: _replace_break_glass(login_role="other_login"),
         lambda value: _replace_break_glass(normal_state="LOGIN_PRESENT"),
-        lambda value: _replace_break_glass(temporary_state="READY"),
+        lambda value: _replace_break_glass(temporary_state="COMPATIBLE"),
         lambda value: _replace_break_glass(normal_login_present=True),
-        lambda value: _replace_break_glass(ready_while_temporary_login_present=True),
+        lambda value: _replace_break_glass(
+            structurally_compatible_while_temporary_login_present=True
+        ),
         lambda value: _replace_break_glass(dual_approval_required=False),
         lambda value: _replace_break_glass(time_bounded_login_required=False),
         lambda value: replace(value, reason_matrix=(None,)),
@@ -394,7 +376,6 @@ def _replace_readiness(**changes):
         lambda value: replace(value, export_limit=None),
         lambda value: replace(value, access_protocols=(None,)),
         lambda value: replace(value, public_functions=(None,)),
-        lambda value: replace(value, readiness=None),
         lambda value: replace(value, break_glass=None),
     ),
 )

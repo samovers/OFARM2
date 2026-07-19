@@ -17,6 +17,9 @@ import pytest
 from psycopg import sql
 
 from deployment.postgresql.audit_contract import SECURITY_AUDIT_CONTRACT
+from deployment.postgresql.catalog_classifier import (
+    SCHEMA_LOCAL_CATALOG_CLASSES,
+)
 from deployment.postgresql.migration_runner import (
     MigrationDirtyError,
     initial_ledger_sql,
@@ -294,10 +297,10 @@ def test_authoritative_audit_migration_is_one_exact_initial_set():
     assert SECURITY_AUDIT_CONTRACT.digest in source
     assert SECURITY_AUDIT_PROVISIONING_SPEC.digest in source
     assert migration.source_sha256 == \
-        "sha256:20cf3829723f957fcfb528804d586087d1c06b9e52cdcd2e950779b043e28831"
-    assert migration.byte_length == 136_051
+        "sha256:f46106b2f062dae25df1d5b8bf76f75538b0470bc18fb6ee6b36efa320295885"
+    assert migration.byte_length == 142_793
     assert migration_set.digest == \
-        "sha256:e5113d62c03e78b37c1efa5a145999b4b119537d319d830d992dfaf6dc4f7344"
+        "sha256:80ff56fb0ccb5959c2a75500cc47d7cccda026ef6f09f9ae138c89ade98dccf5"
     assert migration_set.prefix_digest(1) == migration_set.digest
 
 
@@ -367,7 +370,7 @@ def test_authoritative_audit_migration_has_closed_carriers_and_limits():
         in source
     )
     assert (
-        "sha256:9ed925e98884275d977a568e8ed74427adc6b3a1ca69e50446a5231eefdfb4a0"
+        "sha256:f144cda261c3a3087f8802e6922678d5c1d1a951a8137327177765525ca0a5c6"
         in source
     )
     assert "jsonb" not in persisted_audit_tables
@@ -380,6 +383,34 @@ def test_authoritative_audit_migration_has_closed_carriers_and_limits():
         "CREATE EXTENSION",
     ):
         assert forbidden not in source
+
+
+def test_audit_catalog_fingerprint_has_exact_shared_schema_class_parity():
+    source = (
+        PACKAGE_ROOT
+        / SECURITY_AUDIT_SERVICE.relative_directory
+        / "0001_initial.sql"
+    ).read_text(encoding="utf-8")
+    marker = "-- SCHEMA_LOCAL_CATALOG_CLASSIFIER_V1"
+    assert source.count(marker) == 1
+    classifier = source.split(marker, 1)[1].split(
+        "    )\n    SELECT 'sha256:'",
+        1,
+    )[0]
+    assert classifier.count("'schema-local-") == len(
+        SCHEMA_LOCAL_CATALOG_CLASSES
+    )
+    for item in SCHEMA_LOCAL_CATALOG_CLASSES:
+        assert classifier.count(f"'schema-local-{item.category}'") == 1
+        assert classifier.count(
+            f"FROM pg_catalog.{item.catalog_name} AS schema_local_object"
+        ) == 1
+        assert classifier.count(
+            f"schema_local_object.{item.name_column}::pg_catalog.text"
+        ) == 1
+        assert classifier.count(
+            f"schema_local_object.{item.namespace_column}"
+        ) == 1
 
 
 def test_authoritative_audit_migration_installs_exact_public_functions():
@@ -415,7 +446,7 @@ def test_migrated_audit_structure_observes_exact_ready_contract(
     assert row[8] == SECURITY_AUDIT_PROVISIONING_SPEC.digest
     assert row[9] == 1
     assert row[10] == state["migration_set"].digest
-    assert row[11:] == (True, False, False)
+    assert row[11:] == (True, False)
 
     with psycopg.connect(
         _role_dsn(state, "ofarm_migrator"), autocommit=True
@@ -424,7 +455,7 @@ def test_migrated_audit_structure_observes_exact_ready_contract(
         structural = migrator.execute(
             "SELECT * FROM ofarm_security.verify_security_audit_structure()"
         ).fetchone()
-    assert structural == (True, False, 0, False)
+    assert structural == (True, 0, False)
 
     with psycopg.connect(
         _role_dsn(state, "ofarm_security_audit_readiness_login"),
@@ -457,7 +488,7 @@ def test_migrated_audit_structure_observes_exact_ready_contract(
             "escape",
             "off",
         )
-    assert hostile_guc_structure == (True, False, 0, False)
+    assert hostile_guc_structure == (True, 0, False)
 
     with psycopg.connect(state["target_admin_dsn"]) as connection:
         (
@@ -2351,14 +2382,14 @@ def test_structural_readiness_refuses_role_attribute_and_membership_drift(
         ))
     try:
         drift = _observe_structure(state)
-        assert drift[0:2] == (False, False)
-        assert drift[2] >= 1
+        assert drift[0] is False
+        assert drift[1] >= 1
     finally:
         with psycopg.connect(state["admin_dsn"], autocommit=True) as admin:
             admin.execute(sql.SQL("ALTER ROLE {} INHERIT").format(
                 sql.Identifier(producer)
             ))
-    assert _observe_structure(state) == (True, False, 0, False)
+    assert _observe_structure(state) == (True, 0, False)
 
     granted_role = "ofarm_security_audit_ingest"
     member_role = "ofarm_security_authentication_producer_login"
@@ -2431,7 +2462,7 @@ def test_structural_readiness_refuses_role_attribute_and_membership_drift(
         assert portable_membership == (
             renamed_grantor, True, True, False, False,
         )
-        assert _observe_structure(state) == (True, False, 0, False)
+        assert _observe_structure(state) == (True, 0, False)
         report = migrate_service(
             admin_dsn=alternate_admin_dsn,
             migrator_dsn=_role_dsn(state, "ofarm_migrator"),
@@ -2471,7 +2502,7 @@ def test_structural_readiness_refuses_role_attribute_and_membership_drift(
                 (granted_role, member_role),
             ).fetchone()[0]
     assert restored_grantor == original_membership[0]
-    assert _observe_structure(state) == (True, False, 0, False)
+    assert _observe_structure(state) == (True, 0, False)
 
     with psycopg.connect(state["admin_dsn"], autocommit=True) as admin:
         admin.execute(
@@ -2482,8 +2513,8 @@ def test_structural_readiness_refuses_role_attribute_and_membership_drift(
         )
     try:
         drift = _observe_structure(state)
-        assert drift[0:2] == (False, False)
-        assert drift[2] >= 1
+        assert drift[0] is False
+        assert drift[1] >= 1
     finally:
         with psycopg.connect(state["admin_dsn"], autocommit=True) as admin:
             admin.execute(
@@ -2492,7 +2523,7 @@ def test_structural_readiness_refuses_role_attribute_and_membership_drift(
                     sql.Identifier(producer),
                 )
             )
-    assert _observe_structure(state) == (True, False, 0, False)
+    assert _observe_structure(state) == (True, 0, False)
 
 
 def _replace_event_fingerprint_source(
@@ -2516,7 +2547,7 @@ def test_complete_catalog_fingerprint_refuses_body_constraint_and_acl_tamper(
     migrated_audit_service,
 ):
     state = migrated_audit_service
-    clean = (True, False, 0, False)
+    clean = (True, 0, False)
     with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
         original_source = admin.execute(
             """
@@ -2531,8 +2562,8 @@ def test_complete_catalog_fingerprint_refuses_body_constraint_and_acl_tamper(
         )
     try:
         body_drift = _observe_structure(state)
-        assert body_drift[0:2] == (False, False)
-        assert body_drift[2] >= 1
+        assert body_drift[0] is False
+        assert body_drift[1] >= 1
     finally:
         with psycopg.connect(
             state["target_admin_dsn"], autocommit=True
@@ -2558,8 +2589,8 @@ def test_complete_catalog_fingerprint_refuses_body_constraint_and_acl_tamper(
         )
     try:
         constraint_drift = _observe_structure(state)
-        assert constraint_drift[0:2] == (False, False)
-        assert constraint_drift[2] >= 1
+        assert constraint_drift[0] is False
+        assert constraint_drift[1] >= 1
     finally:
         with psycopg.connect(
             state["target_admin_dsn"], autocommit=True
@@ -2591,8 +2622,8 @@ def test_complete_catalog_fingerprint_refuses_body_constraint_and_acl_tamper(
         )
     try:
         acl_drift = _observe_structure(state)
-        assert acl_drift[0:2] == (False, False)
-        assert acl_drift[2] >= 1
+        assert acl_drift[0] is False
+        assert acl_drift[1] >= 1
     finally:
         with psycopg.connect(
             state["target_admin_dsn"], autocommit=True
@@ -2631,8 +2662,8 @@ def test_complete_catalog_fingerprint_refuses_parameter_acl_tamper(
                 "SHOW session_replication_role"
             ).fetchone()[0] == "replica"
         parameter_acl_drift = _observe_structure(state)
-        assert parameter_acl_drift[0:2] == (False, False)
-        assert parameter_acl_drift[2] >= 1
+        assert parameter_acl_drift[0] is False
+        assert parameter_acl_drift[1] >= 1
     finally:
         with psycopg.connect(state["admin_dsn"], autocommit=True) as admin:
             admin.execute(
@@ -2640,7 +2671,7 @@ def test_complete_catalog_fingerprint_refuses_parameter_acl_tamper(
                     "REVOKE SET ON PARAMETER session_replication_role FROM {}"
                 ).format(sql.Identifier(governed_runtime_role))
             )
-    assert _observe_structure(state) == (True, False, 0, False)
+    assert _observe_structure(state) == (True, 0, False)
 
     with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
         injected_large_object = admin.execute(
@@ -2649,8 +2680,8 @@ def test_complete_catalog_fingerprint_refuses_parameter_acl_tamper(
         ).fetchone()[0]
     try:
         large_object_drift = _observe_structure(state)
-        assert large_object_drift[0:2] == (False, False)
-        assert large_object_drift[2] >= 1
+        assert large_object_drift[0] is False
+        assert large_object_drift[1] >= 1
     finally:
         with psycopg.connect(
             state["target_admin_dsn"], autocommit=True
@@ -2659,7 +2690,7 @@ def test_complete_catalog_fingerprint_refuses_parameter_acl_tamper(
                 "SELECT pg_catalog.lo_unlink(%s)",
                 (injected_large_object,),
             ).fetchone()[0] == 1
-    assert _observe_structure(state) == (True, False, 0, False)
+    assert _observe_structure(state) == (True, 0, False)
 
     with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
         admin.execute(
@@ -2671,8 +2702,8 @@ def test_complete_catalog_fingerprint_refuses_parameter_acl_tamper(
         )
     try:
         large_object_acl_drift = _observe_structure(state)
-        assert large_object_acl_drift[0:2] == (False, False)
-        assert large_object_acl_drift[2] >= 1
+        assert large_object_acl_drift[0] is False
+        assert large_object_acl_drift[1] >= 1
     finally:
         with psycopg.connect(
             state["target_admin_dsn"], autocommit=True
@@ -2684,7 +2715,7 @@ def test_complete_catalog_fingerprint_refuses_parameter_acl_tamper(
                 ) FROM ofarm_security_audit_ingest
                 """
             )
-    assert _observe_structure(state) == (True, False, 0, False)
+    assert _observe_structure(state) == (True, 0, False)
 
     with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
         original_cost = admin.execute(
@@ -2699,14 +2730,14 @@ def test_complete_catalog_fingerprint_refuses_parameter_acl_tamper(
         admin.execute("ALTER FUNCTION pg_catalog.lo_get(oid) COST 2")
     try:
         large_object_property_drift = _observe_structure(state)
-        assert large_object_property_drift[0:2] == (False, False)
-        assert large_object_property_drift[2] >= 1
+        assert large_object_property_drift[0] is False
+        assert large_object_property_drift[1] >= 1
     finally:
         with psycopg.connect(
             state["target_admin_dsn"], autocommit=True
         ) as admin:
             admin.execute("ALTER FUNCTION pg_catalog.lo_get(oid) COST 1")
-    assert _observe_structure(state) == (True, False, 0, False)
+    assert _observe_structure(state) == (True, 0, False)
 
     with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
         admin.execute(
@@ -2722,8 +2753,8 @@ def test_complete_catalog_fingerprint_refuses_parameter_acl_tamper(
         )
     try:
         large_object_body_drift = _observe_structure(state)
-        assert large_object_body_drift[0:2] == (False, False)
-        assert large_object_body_drift[2] >= 1
+        assert large_object_body_drift[0] is False
+        assert large_object_body_drift[1] >= 1
     finally:
         with psycopg.connect(
             state["target_admin_dsn"], autocommit=True
@@ -2738,7 +2769,7 @@ def test_complete_catalog_fingerprint_refuses_parameter_acl_tamper(
                 AS 'be_lo_get'
                 """
             )
-    assert _observe_structure(state) == (True, False, 0, False)
+    assert _observe_structure(state) == (True, 0, False)
 
     with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
         admin.execute(
@@ -2750,21 +2781,21 @@ def test_complete_catalog_fingerprint_refuses_parameter_acl_tamper(
         )
     try:
         unexpected_large_object_routine = _observe_structure(state)
-        assert unexpected_large_object_routine[0:2] == (False, False)
-        assert unexpected_large_object_routine[2] >= 1
+        assert unexpected_large_object_routine[0] is False
+        assert unexpected_large_object_routine[1] >= 1
     finally:
         with psycopg.connect(
             state["target_admin_dsn"], autocommit=True
         ) as admin:
             admin.execute("DROP FUNCTION pg_catalog.lo_backdoor()")
-    assert _observe_structure(state) == (True, False, 0, False)
+    assert _observe_structure(state) == (True, 0, False)
 
 
 def test_backend_statistics_view_routine_and_acl_tamper_refuse(
     migrated_audit_service,
 ):
     state = migrated_audit_service
-    clean = (True, False, 0, False)
+    clean = (True, 0, False)
 
     with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
         admin.execute(
@@ -2775,8 +2806,8 @@ def test_backend_statistics_view_routine_and_acl_tamper_refuse(
         )
     try:
         view_acl_drift = _observe_structure(state)
-        assert view_acl_drift[0:2] == (False, False)
-        assert view_acl_drift[2] >= 1
+        assert view_acl_drift[0] is False
+        assert view_acl_drift[1] >= 1
     finally:
         with psycopg.connect(
             state["target_admin_dsn"], autocommit=True
@@ -2799,8 +2830,8 @@ def test_backend_statistics_view_routine_and_acl_tamper_refuse(
         )
     try:
         routine_acl_drift = _observe_structure(state)
-        assert routine_acl_drift[0:2] == (False, False)
-        assert routine_acl_drift[2] >= 1
+        assert routine_acl_drift[0] is False
+        assert routine_acl_drift[1] >= 1
     finally:
         with psycopg.connect(
             state["target_admin_dsn"], autocommit=True
@@ -2824,8 +2855,8 @@ def test_backend_statistics_view_routine_and_acl_tamper_refuse(
         )
     try:
         routine_property_drift = _observe_structure(state)
-        assert routine_property_drift[0:2] == (False, False)
-        assert routine_property_drift[2] >= 1
+        assert routine_property_drift[0] is False
+        assert routine_property_drift[1] >= 1
     finally:
         with psycopg.connect(
             state["target_admin_dsn"], autocommit=True
@@ -2856,8 +2887,8 @@ def test_backend_statistics_view_routine_and_acl_tamper_refuse(
             )
         try:
             unexpected_routine_drift = _observe_structure(state)
-            assert unexpected_routine_drift[0:2] == (False, False)
-            assert unexpected_routine_drift[2] >= 1
+            assert unexpected_routine_drift[0] is False
+            assert unexpected_routine_drift[1] >= 1
         finally:
             with psycopg.connect(
                 state["target_admin_dsn"], autocommit=True
@@ -2885,8 +2916,8 @@ def test_backend_statistics_view_routine_and_acl_tamper_refuse(
         _replace_pg_stat_activity_view(admin, tampered_view_definition)
     try:
         view_definition_drift = _observe_structure(state)
-        assert view_definition_drift[0:2] == (False, False)
-        assert view_definition_drift[2] >= 1
+        assert view_definition_drift[0] is False
+        assert view_definition_drift[1] >= 1
     finally:
         with psycopg.connect(
             state["target_admin_dsn"], autocommit=True
@@ -2960,7 +2991,7 @@ def test_external_catalog_anchor_refuses_self_excluded_verifier_body_tamper(
         ) as admin:
             _replace_structure_verifier_source(admin, original_source)
 
-    assert _observe_structure(state) == (True, False, 0, False)
+    assert _observe_structure(state) == (True, 0, False)
     report = migrate_service(
         admin_dsn=state["admin_dsn"],
         migrator_dsn=_role_dsn(state, "ofarm_migrator"),
@@ -2997,7 +3028,61 @@ def test_authoritative_runner_noop_refuses_structural_catalog_drift(
     finally:
         with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
             admin.execute("DROP INDEX ofarm_security.rogue_audit_index")
-    assert _observe_structure(state) == (True, False, 0, False)
+    assert _observe_structure(state) == (True, 0, False)
+
+
+def test_post_migration_owner_created_collation_refuses_observer_and_runner(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    spec = SECURITY_AUDIT_PROVISIONING_SPEC
+    with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
+        admin.execute(
+            sql.SQL("SET ROLE {}").format(sql.Identifier(spec.schema_owner))
+        )
+        admin.execute(
+            sql.SQL(
+                "CREATE COLLATION {}.rogue "
+                "(provider = builtin, locale = 'C')"
+            ).format(sql.Identifier(spec.schema_name))
+        )
+    try:
+        structure = _observe_structure(state)
+        assert structure[0] is False
+        assert structure[1] >= 1
+
+        with psycopg.connect(
+            _role_dsn(state, "ofarm_security_audit_readiness_login"),
+            autocommit=True,
+        ) as readiness:
+            observation = readiness.execute(
+                "SELECT * FROM "
+                "ofarm_security.observe_security_audit_contract()"
+            ).fetchone()
+        assert observation[11:] == (False, False)
+
+        with pytest.raises(
+            MigrationDirtyError,
+            match="structural verifier differs",
+        ):
+            migrate_service(
+                admin_dsn=state["admin_dsn"],
+                migrator_dsn=_role_dsn(state, "ofarm_migrator"),
+                spec=spec,
+                migration_set=state["migration_set"],
+                release_identity="issue-174-audit-schema-class-drift-test",
+                execution_id=uuid4(),
+            )
+    finally:
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            admin.execute(
+                sql.SQL("DROP COLLATION {}.rogue").format(
+                    sql.Identifier(spec.schema_name)
+                )
+            )
+    assert _observe_structure(state) == (True, 0, False)
 
 
 def test_break_glass_presence_intentionally_makes_readiness_false(
@@ -3014,9 +3099,9 @@ def test_break_glass_presence_intentionally_makes_readiness_false(
             row = readiness.execute(
                 "SELECT * FROM ofarm_security.verify_security_audit_structure()"
             ).fetchone()
-        assert row[0:2] == (False, False)
-        assert row[2] >= 1
-        assert row[3] is True
+        assert row[0] is False
+        assert row[1] >= 1
+        assert row[2] is True
     finally:
         with psycopg.connect(state["admin_dsn"], autocommit=True) as admin:
             admin.execute("DROP ROLE IF EXISTS ofarm_security_audit_export_login")

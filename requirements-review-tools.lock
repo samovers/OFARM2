@@ -1,0 +1,4 @@
+# Exact CPython 3.12 / x86_64 Linux wheel used by the explicit static checks
+# in .github/workflows/conformance.yml. Install without dependencies.
+ruff==0.15.5 \
+    --hash=sha256:c1cb7169f53c1ddb06e71a9aebd7e98fc0fea936b39afb36d8e86d36ecc2636a

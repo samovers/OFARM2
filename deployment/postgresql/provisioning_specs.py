@@ -19,7 +19,7 @@ from deployment.postgresql.migration_sets import (
     TENANT_SERVICE,
     MigrationService,
 )
-from deployment.postgresql.tenant_contract import TENANT_BINDER_ROUTINE_SIGNATURES
+from deployment.postgresql.tenant_contract import TENANT_CONTEXT_ROUTINE_SIGNATURES
 
 
 PROVISIONING_SPEC_DIGEST_POLICY = "OFARM_POSTGRESQL_PROVISIONING_SPEC_V1"
@@ -1133,35 +1133,6 @@ _TENANT_INITIAL_OWNER_SEALER = TenantInitialOwnerSealerSpec(
         RoutineOwnerTransfer(
             "ofarm", "create_tenant_challenge", (), "ofarm_binder"
         ),
-        RoutineOwnerTransfer(
-            "ofarm",
-            "bind_tenant_capability",
-            (
-                "uuid",
-                "text",
-                "text",
-                "text",
-                "text",
-                "text",
-                "uuid",
-                "bytea",
-                "uuid",
-                "bytea",
-                "uuid",
-                "bytea",
-                "text",
-                "text",
-                "text",
-                "bytea",
-                "bytea",
-                "bigint",
-                "bigint",
-                "bigint",
-                "uuid",
-                "bytea",
-            ),
-            "ofarm_binder",
-        ),
         RoutineOwnerTransfer("ofarm", "current_tenant_id", (), "ofarm_binder"),
         RoutineOwnerTransfer(
             "ofarm",
@@ -1672,10 +1643,10 @@ def _validate_spec(spec: ProvisioningSpec) -> None:
         }
         if not set(
             (routine.name, routine.argument_types)
-            for routine in TENANT_BINDER_ROUTINE_SIGNATURES
+            for routine in TENANT_CONTEXT_ROUTINE_SIGNATURES
         ).issubset(sealed_signatures):
             raise ProvisioningSpecError(
-                "tenant owner sealer omits a capability contract signature"
+                "tenant owner sealer omits a context contract signature"
             )
         transfer_identities: set[tuple[str, str, tuple[str, ...]]] = set()
         for transfer in sealer.transfers:

@@ -12,10 +12,80 @@ AS 'SELECT pg_catalog.octet_length(value) BETWEEN 1 AND 255
 
 CREATE FUNCTION ofarm.valid_oidc_issuer(value pg_catalog.text)
 RETURNS pg_catalog.bool
-LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE SECURITY INVOKER
+LANGUAGE plpgsql IMMUTABLE STRICT PARALLEL SAFE SECURITY INVOKER
 SET search_path = pg_catalog, pg_temp
-AS 'SELECT pg_catalog.octet_length(value) BETWEEN 1 AND 2048
-           AND value OPERATOR(pg_catalog.~) ''^https://[^/?#@[:space:][:cntrl:]]+(/[^?#[:space:][:cntrl:]]*)?$''';
+AS 'DECLARE
+        authority_and_path pg_catalog.text;
+        authority pg_catalog.text;
+        path_value pg_catalog.text := '''';
+        host_value pg_catalog.text;
+        port_text pg_catalog.text;
+        port_value pg_catalog.int4;
+        slash_position pg_catalog.int4;
+        label_value pg_catalog.text;
+    BEGIN
+        IF pg_catalog.octet_length(value) NOT BETWEEN 1 AND 2048
+           OR (value COLLATE pg_catalog."C")
+                OPERATOR(pg_catalog.!~) ''^[!-~]+$''
+           OR pg_catalog.left(value, 8) <> ''https://'' THEN
+            RETURN false;
+        END IF;
+
+        authority_and_path := pg_catalog.substring(value, 9);
+        slash_position := pg_catalog.strpos(authority_and_path, ''/'');
+        IF slash_position = 0 THEN
+            authority := authority_and_path;
+        ELSE
+            authority := pg_catalog.left(
+                authority_and_path, slash_position - 1
+            );
+            path_value := pg_catalog.substring(
+                authority_and_path, slash_position
+            );
+        END IF;
+
+        IF authority = ''''
+           OR pg_catalog.strpos(authority, ''@'') <> 0
+           OR pg_catalog.length(authority) - pg_catalog.length(
+                pg_catalog.replace(authority, '':'', '''')
+           ) > 1
+           OR (
+                path_value <> ''''
+                AND (path_value COLLATE pg_catalog."C")
+                    OPERATOR(pg_catalog.!~)
+                    ''^/[A-Za-z0-9._~!$&()*+,;=:@%/-]*$''
+           ) THEN
+            RETURN false;
+        END IF;
+
+        IF pg_catalog.strpos(authority, '':'') <> 0 THEN
+            host_value := pg_catalog.split_part(authority, '':'', 1);
+            port_text := pg_catalog.split_part(authority, '':'', 2);
+            IF (port_text COLLATE pg_catalog."C")
+                    OPERATOR(pg_catalog.!~) ''^[0-9]{1,5}$'' THEN
+                RETURN false;
+            END IF;
+            port_value := port_text::pg_catalog.int4;
+            IF port_value NOT BETWEEN 1 AND 65535 THEN
+                RETURN false;
+            END IF;
+        ELSE
+            host_value := authority;
+        END IF;
+
+        IF pg_catalog.octet_length(host_value) NOT BETWEEN 1 AND 253 THEN
+            RETURN false;
+        END IF;
+        FOREACH label_value IN ARRAY pg_catalog.string_to_array(host_value, ''.'') LOOP
+            IF pg_catalog.octet_length(label_value) NOT BETWEEN 1 AND 63
+               OR (label_value COLLATE pg_catalog."C")
+                    OPERATOR(pg_catalog.!~)
+                    ''^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$'' THEN
+                RETURN false;
+            END IF;
+        END LOOP;
+        RETURN true;
+    END';
 
 CREATE FUNCTION ofarm.valid_runtime_logical_ref(value pg_catalog.text)
 RETURNS pg_catalog.bool
@@ -372,26 +442,6 @@ CREATE TABLE ofarm.tenant_registry (
         registration_digest = ofarm.compute_tenant_registration_digest(
             tenant_id, tenant_ref::pg_catalog.text, advisory_lock_key
         )
-    )
-);
-
-CREATE TABLE ofarm.tenant_capability_key_schedule (
-    key_id ofarm.ascii_id NOT NULL,
-    secret pg_catalog.bytea NOT NULL,
-    valid_from_unix_us pg_catalog.int8 NOT NULL,
-    valid_until_unix_us pg_catalog.int8 NOT NULL,
-    key_row_policy pg_catalog.text COLLATE pg_catalog."C" NOT NULL,
-    installed_at pg_catalog.timestamptz NOT NULL
-        DEFAULT pg_catalog.clock_timestamp(),
-    CONSTRAINT tenant_capability_key_schedule_pkey PRIMARY KEY (key_id),
-    CONSTRAINT tenant_capability_key_secret_check CHECK (
-        pg_catalog.octet_length(secret) = 32
-    ),
-    CONSTRAINT tenant_capability_key_bounds_check CHECK (
-        valid_from_unix_us < valid_until_unix_us
-    ),
-    CONSTRAINT tenant_capability_key_policy_check CHECK (
-        key_row_policy = 'OFARM_TENANT_CAPABILITY_KEY_ROW_V1'
     )
 );
 
@@ -1596,31 +1646,6 @@ AS 'DECLARE
             generated_digest;
     END';
 
-CREATE FUNCTION ofarm.install_tenant_capability_key(
-    requested_key_id pg_catalog.text,
-    requested_secret pg_catalog.bytea,
-    requested_valid_from_unix_us pg_catalog.int8,
-    requested_valid_until_unix_us pg_catalog.int8
-)
-RETURNS pg_catalog.void
-LANGUAGE plpgsql VOLATILE PARALLEL UNSAFE SECURITY DEFINER
-SET search_path = pg_catalog, pg_temp
-AS 'BEGIN
-        INSERT INTO ofarm.tenant_capability_key_schedule (
-            key_id,
-            secret,
-            valid_from_unix_us,
-            valid_until_unix_us,
-            key_row_policy
-        ) VALUES (
-            requested_key_id::ofarm.ascii_id,
-            requested_secret,
-            requested_valid_from_unix_us,
-            requested_valid_until_unix_us,
-            ''OFARM_TENANT_CAPABILITY_KEY_ROW_V1''
-        );
-    END';
-
 CREATE FUNCTION ofarm.transition_principal_binding(
     requested_equality_policy pg_catalog.text,
     requested_issuer pg_catalog.text,
@@ -2254,9 +2279,6 @@ FOR EACH ROW EXECUTE FUNCTION ofarm.stamp_batch_member_full_xid();
 CREATE TRIGGER tenant_registry_reject_mutation
 BEFORE UPDATE OR DELETE OR TRUNCATE ON ofarm.tenant_registry
 FOR EACH STATEMENT EXECUTE FUNCTION ofarm.reject_immutable_relation_truncate();
-CREATE TRIGGER tenant_capability_key_schedule_reject_mutation
-BEFORE UPDATE OR DELETE OR TRUNCATE ON ofarm.tenant_capability_key_schedule
-FOR EACH STATEMENT EXECUTE FUNCTION ofarm.reject_immutable_relation_truncate();
 CREATE TRIGGER runtime_content_blob_reject_mutation
 BEFORE UPDATE OR DELETE OR TRUNCATE ON ofarm.runtime_content_blob
 FOR EACH STATEMENT EXECUTE FUNCTION ofarm.reject_immutable_relation_truncate();
@@ -2433,9 +2455,6 @@ TO ofarm_app, ofarm_worker;
 
 GRANT EXECUTE ON FUNCTION ofarm.register_tenant(pg_catalog.text)
 TO ofarm_tenant_registrar;
-GRANT EXECUTE ON FUNCTION ofarm.install_tenant_capability_key(
-    pg_catalog.text, pg_catalog.bytea, pg_catalog.int8, pg_catalog.int8
-) TO ofarm_identity_writer;
 GRANT EXECUTE ON FUNCTION ofarm.compute_principal_binding_version_digest(
     pg_catalog.text,
     pg_catalog.text,
@@ -2577,556 +2596,6 @@ AS 'DECLARE
         RETURN generated_challenge_id;
     END';
 
-CREATE FUNCTION ofarm.frame_tenant_capability(
-    requested_challenge_id pg_catalog.uuid,
-    requested_audience pg_catalog.text,
-    requested_key_id pg_catalog.text,
-    requested_equality_policy pg_catalog.text,
-    requested_issuer pg_catalog.text,
-    requested_subject pg_catalog.text,
-    requested_binding_version_id pg_catalog.uuid,
-    requested_binding_version_digest pg_catalog.bytea,
-    requested_lifecycle_head_id pg_catalog.uuid,
-    requested_lifecycle_head_digest pg_catalog.bytea,
-    requested_tenant_id pg_catalog.uuid,
-    requested_tenant_registration_digest pg_catalog.bytea,
-    requested_party_ref pg_catalog.text,
-    requested_party_record_kind pg_catalog.text,
-    requested_party_record_id pg_catalog.text,
-    requested_party_schema_digest pg_catalog.bytea,
-    requested_party_payload_digest pg_catalog.bytea,
-    requested_issued_at_unix_us pg_catalog.int8,
-    requested_not_before_unix_us pg_catalog.int8,
-    requested_expires_at_unix_us pg_catalog.int8,
-    requested_nonce pg_catalog.uuid
-)
-RETURNS pg_catalog.bytea
-LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE SECURITY INVOKER
-SET search_path = pg_catalog, pg_temp
-AS 'SELECT
-        pg_catalog.convert_to(''OFARM_TENANT_CAPABILITY_V1'', ''UTF8'')
-        OPERATOR(pg_catalog.||) pg_catalog.decode(''00'', ''hex'')
-        OPERATOR(pg_catalog.||) ofarm.lp32(
-            pg_catalog.uuid_send(requested_challenge_id)
-        )
-        OPERATOR(pg_catalog.||) ofarm.lp32(
-            pg_catalog.convert_to(requested_audience, ''UTF8'')
-        )
-        OPERATOR(pg_catalog.||) ofarm.lp32(
-            pg_catalog.convert_to(requested_key_id, ''UTF8'')
-        )
-        OPERATOR(pg_catalog.||) ofarm.lp32(
-            pg_catalog.convert_to(requested_equality_policy, ''UTF8'')
-        )
-        OPERATOR(pg_catalog.||) ofarm.lp32(
-            pg_catalog.convert_to(requested_issuer, ''UTF8'')
-        )
-        OPERATOR(pg_catalog.||) ofarm.lp32(
-            pg_catalog.convert_to(requested_subject, ''UTF8'')
-        )
-        OPERATOR(pg_catalog.||) ofarm.lp32(
-            pg_catalog.uuid_send(requested_binding_version_id)
-        )
-        OPERATOR(pg_catalog.||) ofarm.lp32(requested_binding_version_digest)
-        OPERATOR(pg_catalog.||) ofarm.lp32(
-            pg_catalog.uuid_send(requested_lifecycle_head_id)
-        )
-        OPERATOR(pg_catalog.||) ofarm.lp32(requested_lifecycle_head_digest)
-        OPERATOR(pg_catalog.||) ofarm.lp32(
-            pg_catalog.uuid_send(requested_tenant_id)
-        )
-        OPERATOR(pg_catalog.||) ofarm.lp32(requested_tenant_registration_digest)
-        OPERATOR(pg_catalog.||) ofarm.lp32(
-            pg_catalog.convert_to(requested_party_ref, ''UTF8'')
-        )
-        OPERATOR(pg_catalog.||) ofarm.lp32(
-            pg_catalog.convert_to(requested_party_record_kind, ''UTF8'')
-        )
-        OPERATOR(pg_catalog.||) ofarm.lp32(
-            pg_catalog.convert_to(requested_party_record_id, ''UTF8'')
-        )
-        OPERATOR(pg_catalog.||) ofarm.lp32(requested_party_schema_digest)
-        OPERATOR(pg_catalog.||) ofarm.lp32(requested_party_payload_digest)
-        OPERATOR(pg_catalog.||) ofarm.lp32(
-            pg_catalog.int8send(requested_issued_at_unix_us)
-        )
-        OPERATOR(pg_catalog.||) ofarm.lp32(
-            pg_catalog.int8send(requested_not_before_unix_us)
-        )
-        OPERATOR(pg_catalog.||) ofarm.lp32(
-            pg_catalog.int8send(requested_expires_at_unix_us)
-        )
-        OPERATOR(pg_catalog.||) ofarm.lp32(
-            pg_catalog.uuid_send(requested_nonce)
-        )';
-
-CREATE FUNCTION ofarm.hmac_sha256(
-    secret pg_catalog.bytea,
-    framed_input pg_catalog.bytea
-)
-RETURNS pg_catalog.bytea
-LANGUAGE plpgsql IMMUTABLE STRICT PARALLEL SAFE SECURITY INVOKER
-SET search_path = pg_catalog, pg_temp
-AS 'DECLARE
-        padded_key pg_catalog.bytea;
-        inner_pad pg_catalog.bytea;
-        outer_pad pg_catalog.bytea;
-        position pg_catalog.int4;
-    BEGIN
-        IF pg_catalog.octet_length(secret) <> 32 THEN
-            RAISE EXCEPTION USING
-                ERRCODE = ''22023'', MESSAGE = ''HMAC key length is not exact'';
-        END IF;
-        padded_key := secret OPERATOR(pg_catalog.||)
-            pg_catalog.decode(pg_catalog.repeat(''00'', 32), ''hex'');
-        inner_pad := pg_catalog.decode(pg_catalog.repeat(''00'', 64), ''hex'');
-        outer_pad := pg_catalog.decode(pg_catalog.repeat(''00'', 64), ''hex'');
-        FOR position IN 0..63 LOOP
-            inner_pad := pg_catalog.set_byte(
-                inner_pad,
-                position,
-                pg_catalog.get_byte(padded_key, position) # 54
-            );
-            outer_pad := pg_catalog.set_byte(
-                outer_pad,
-                position,
-                pg_catalog.get_byte(padded_key, position) # 92
-            );
-        END LOOP;
-        RETURN pg_catalog.sha256(
-            outer_pad OPERATOR(pg_catalog.||)
-            pg_catalog.sha256(
-                inner_pad OPERATOR(pg_catalog.||) framed_input
-            )
-        );
-    END';
-
-CREATE FUNCTION ofarm.secure_bytea_equal(
-    first_value pg_catalog.bytea,
-    second_value pg_catalog.bytea
-)
-RETURNS pg_catalog.bool
-LANGUAGE plpgsql IMMUTABLE STRICT PARALLEL SAFE SECURITY INVOKER
-SET search_path = pg_catalog, pg_temp
-AS 'DECLARE
-        difference pg_catalog.int4 := 0;
-        position pg_catalog.int4;
-    BEGIN
-        IF pg_catalog.octet_length(first_value) <>
-           pg_catalog.octet_length(second_value) THEN
-            RETURN false;
-        END IF;
-        IF pg_catalog.octet_length(first_value) = 0 THEN
-            RETURN true;
-        END IF;
-        FOR position IN 0..pg_catalog.octet_length(first_value) - 1 LOOP
-            difference := difference |
-                (pg_catalog.get_byte(first_value, position) #
-                 pg_catalog.get_byte(second_value, position));
-        END LOOP;
-        RETURN difference = 0;
-    END';
-
-CREATE FUNCTION ofarm.bind_tenant_capability(
-    pg_catalog.uuid,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.uuid,
-    pg_catalog.bytea,
-    pg_catalog.uuid,
-    pg_catalog.bytea,
-    pg_catalog.uuid,
-    pg_catalog.bytea,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.bytea,
-    pg_catalog.bytea,
-    pg_catalog.int8,
-    pg_catalog.int8,
-    pg_catalog.int8,
-    pg_catalog.uuid,
-    pg_catalog.bytea
-)
-RETURNS pg_catalog.void
-LANGUAGE plpgsql VOLATILE PARALLEL UNSAFE SECURITY DEFINER
-SET search_path = pg_catalog, pg_temp
-AS 'DECLARE
-        requested_challenge_id ALIAS FOR $1;
-        requested_audience ALIAS FOR $2;
-        requested_key_id ALIAS FOR $3;
-        requested_equality_policy ALIAS FOR $4;
-        requested_issuer ALIAS FOR $5;
-        requested_subject ALIAS FOR $6;
-        requested_binding_version_id ALIAS FOR $7;
-        requested_binding_version_digest ALIAS FOR $8;
-        requested_lifecycle_head_id ALIAS FOR $9;
-        requested_lifecycle_head_digest ALIAS FOR $10;
-        requested_tenant_id ALIAS FOR $11;
-        requested_tenant_registration_digest ALIAS FOR $12;
-        requested_party_ref ALIAS FOR $13;
-        requested_party_record_kind ALIAS FOR $14;
-        requested_party_record_id ALIAS FOR $15;
-        requested_party_schema_digest ALIAS FOR $16;
-        requested_party_payload_digest ALIAS FOR $17;
-        requested_issued_at_unix_us ALIAS FOR $18;
-        requested_not_before_unix_us ALIAS FOR $19;
-        requested_expires_at_unix_us ALIAS FOR $20;
-        requested_nonce ALIAS FOR $21;
-        requested_mac ALIAS FOR $22;
-        observed_backend_start pg_catalog.timestamptz;
-        observed_full_xid pg_catalog.xid8;
-        observed_now pg_catalog.timestamptz;
-        observed_now_unix_us pg_catalog.int8;
-        verification_secret pg_catalog.bytea;
-        verification_valid_from pg_catalog.int8;
-        verification_valid_until pg_catalog.int8;
-        expected_mac pg_catalog.bytea;
-        framed_input pg_catalog.bytea;
-        latest_act pg_catalog.record;
-        chain_count pg_catalog.int8;
-        changed_count pg_catalog.int4;
-    BEGIN
-        IF requested_challenge_id IS NULL
-           OR requested_audience IS NULL
-           OR requested_key_id IS NULL
-           OR requested_equality_policy IS NULL
-           OR requested_issuer IS NULL
-           OR requested_subject IS NULL
-           OR requested_binding_version_id IS NULL
-           OR requested_binding_version_digest IS NULL
-           OR requested_lifecycle_head_id IS NULL
-           OR requested_lifecycle_head_digest IS NULL
-           OR requested_tenant_id IS NULL
-           OR requested_tenant_registration_digest IS NULL
-           OR requested_party_ref IS NULL
-           OR requested_party_record_kind IS NULL
-           OR requested_party_record_id IS NULL
-           OR requested_party_schema_digest IS NULL
-           OR requested_party_payload_digest IS NULL
-           OR requested_issued_at_unix_us IS NULL
-           OR requested_not_before_unix_us IS NULL
-           OR requested_expires_at_unix_us IS NULL
-           OR requested_nonce IS NULL
-           OR requested_mac IS NULL THEN
-            RAISE EXCEPTION USING
-                ERRCODE = ''42501'',
-                MESSAGE = ''tenant capability required field is absent'';
-        END IF;
-        IF requested_audience <> ''OFARM_TENANT_BINDER_V1''
-           OR requested_equality_policy <> ''OIDC_EXACT_UTF8_V1''
-           OR requested_party_record_kind <> ''ofarm.party.v0.1''
-           OR requested_party_record_id <> requested_party_ref THEN
-            RAISE EXCEPTION USING
-                ERRCODE = ''42501'', MESSAGE = ''tenant capability identity is not exact'';
-        END IF;
-        PERFORM requested_key_id::ofarm.ascii_id;
-        PERFORM requested_issuer::ofarm.oidc_issuer;
-        PERFORM requested_subject::ofarm.oidc_subject;
-        PERFORM requested_party_ref::ofarm.tenant_local_ref;
-        PERFORM requested_party_record_id::ofarm.tenant_local_ref;
-        IF requested_challenge_id =
-                ''00000000-0000-0000-0000-000000000000''::pg_catalog.uuid
-           OR requested_binding_version_id =
-                ''00000000-0000-0000-0000-000000000000''::pg_catalog.uuid
-           OR requested_lifecycle_head_id =
-                ''00000000-0000-0000-0000-000000000000''::pg_catalog.uuid
-           OR requested_tenant_id =
-                ''00000000-0000-0000-0000-000000000000''::pg_catalog.uuid
-           OR requested_nonce =
-                ''00000000-0000-0000-0000-000000000000''::pg_catalog.uuid
-           OR pg_catalog.octet_length(requested_binding_version_digest) <> 32
-           OR pg_catalog.octet_length(requested_lifecycle_head_digest) <> 32
-           OR pg_catalog.octet_length(requested_tenant_registration_digest) <> 32
-           OR pg_catalog.octet_length(requested_party_schema_digest) <> 32
-           OR pg_catalog.octet_length(requested_party_payload_digest) <> 32
-           OR pg_catalog.octet_length(requested_mac) <> 32 THEN
-            RAISE EXCEPTION USING
-                ERRCODE = ''42501'', MESSAGE = ''tenant capability wire shape differs'';
-        END IF;
-        IF NOT (
-            requested_issued_at_unix_us <= requested_not_before_unix_us
-            AND requested_not_before_unix_us < requested_expires_at_unix_us
-            AND requested_expires_at_unix_us - requested_not_before_unix_us
-                <= 60000000
-        ) THEN
-            RAISE EXCEPTION USING
-                ERRCODE = ''42501'', MESSAGE = ''tenant capability time bounds differ'';
-        END IF;
-
-        observed_now := pg_catalog.clock_timestamp();
-        observed_now_unix_us := pg_catalog.floor(
-            EXTRACT(EPOCH FROM observed_now) * 1000000
-        )::pg_catalog.int8;
-        IF requested_issued_at_unix_us > observed_now_unix_us + 5000000
-           OR requested_not_before_unix_us > observed_now_unix_us
-           OR requested_expires_at_unix_us <= observed_now_unix_us THEN
-            RAISE EXCEPTION USING
-                ERRCODE = ''42501'', MESSAGE = ''tenant capability is not currently valid'';
-        END IF;
-
-        observed_backend_start := ofarm.current_backend_start();
-        observed_full_xid := pg_catalog.pg_current_xact_id();
-        PERFORM 1
-          FROM ofarm.tenant_binding_context AS context
-         WHERE context.backend_pid = pg_catalog.pg_backend_pid()
-           AND context.backend_start = observed_backend_start
-           AND context.full_xid = observed_full_xid
-           AND context.challenge_id = requested_challenge_id
-           AND context.context_state = ''CHALLENGE''
-         FOR UPDATE;
-        IF NOT FOUND THEN
-            RAISE EXCEPTION USING
-                ERRCODE = ''42501'', MESSAGE = ''tenant capability challenge differs'';
-        END IF;
-
-        SELECT schedule.secret,
-               schedule.valid_from_unix_us,
-               schedule.valid_until_unix_us
-          INTO STRICT verification_secret,
-                      verification_valid_from,
-                      verification_valid_until
-          FROM ofarm.tenant_capability_key_schedule AS schedule
-         WHERE schedule.key_id = requested_key_id::ofarm.ascii_id;
-        IF requested_issued_at_unix_us < verification_valid_from
-           OR requested_expires_at_unix_us > verification_valid_until THEN
-            RAISE EXCEPTION USING
-                ERRCODE = ''42501'', MESSAGE = ''tenant capability key schedule differs'';
-        END IF;
-
-        framed_input := ofarm.frame_tenant_capability(
-            requested_challenge_id,
-            requested_audience,
-            requested_key_id,
-            requested_equality_policy,
-            requested_issuer,
-            requested_subject,
-            requested_binding_version_id,
-            requested_binding_version_digest,
-            requested_lifecycle_head_id,
-            requested_lifecycle_head_digest,
-            requested_tenant_id,
-            requested_tenant_registration_digest,
-            requested_party_ref,
-            requested_party_record_kind,
-            requested_party_record_id,
-            requested_party_schema_digest,
-            requested_party_payload_digest,
-            requested_issued_at_unix_us,
-            requested_not_before_unix_us,
-            requested_expires_at_unix_us,
-            requested_nonce
-        );
-        expected_mac := ofarm.hmac_sha256(verification_secret, framed_input);
-        IF ofarm.secure_bytea_equal(expected_mac, requested_mac) IS NOT TRUE THEN
-            RAISE EXCEPTION USING
-                ERRCODE = ''42501'', MESSAGE = ''tenant capability MAC refused'';
-        END IF;
-
-        PERFORM 1
-          FROM ofarm.tenant_registry AS registry
-         WHERE registry.tenant_id = requested_tenant_id
-           AND registry.registration_digest::pg_catalog.text =
-                ''sha256:'' || pg_catalog.encode(
-                    requested_tenant_registration_digest, ''hex''
-                );
-        IF NOT FOUND THEN
-            RAISE EXCEPTION USING
-                ERRCODE = ''42501'', MESSAGE = ''tenant registration differs'';
-        END IF;
-
-        PERFORM 1
-          FROM ofarm.principal_binding AS binding
-         WHERE binding.equality_policy = requested_equality_policy
-           AND binding.issuer = requested_issuer::ofarm.oidc_issuer
-           AND binding.subject = requested_subject::ofarm.oidc_subject
-           AND binding.binding_version_id = requested_binding_version_id
-           AND binding.binding_version_digest::pg_catalog.text =
-                ''sha256:'' || pg_catalog.encode(
-                    requested_binding_version_digest, ''hex''
-                )
-           AND binding.tenant_id = requested_tenant_id
-           AND binding.tenant_registration_digest::pg_catalog.text =
-                ''sha256:'' || pg_catalog.encode(
-                    requested_tenant_registration_digest, ''hex''
-                )
-           AND binding.party_ref = requested_party_ref::ofarm.tenant_local_ref
-           AND binding.party_record_kind = requested_party_record_kind
-           AND binding.party_record_id = requested_party_record_id::ofarm.tenant_local_ref
-           AND binding.party_schema_digest::pg_catalog.text =
-                ''sha256:'' || pg_catalog.encode(
-                    requested_party_schema_digest, ''hex''
-                )
-           AND binding.party_payload_digest::pg_catalog.text =
-                ''sha256:'' || pg_catalog.encode(
-                    requested_party_payload_digest, ''hex''
-                )
-           AND binding.party_state = ''ACTIVE''
-           AND binding.party_payload_party_id =
-                requested_party_ref::ofarm.tenant_local_ref
-           AND binding.valid_from <= observed_now
-           AND binding.valid_until > observed_now;
-        IF NOT FOUND THEN
-            RAISE EXCEPTION USING
-                ERRCODE = ''42501'', MESSAGE = ''principal binding differs'';
-        END IF;
-
-        SELECT act.stream_sequence,
-               act.act_id,
-               act.act_digest,
-               act.act_kind,
-               act.binding_version_id,
-               act.binding_version_digest,
-               act.prior_act_id,
-               act.prior_act_digest,
-               act.successor_version_id,
-               act.successor_version_digest
-          INTO STRICT latest_act
-          FROM ofarm.principal_binding_lifecycle AS act
-         WHERE act.equality_policy = requested_equality_policy
-           AND act.issuer = requested_issuer::ofarm.oidc_issuer
-           AND act.subject = requested_subject::ofarm.oidc_subject
-         ORDER BY act.stream_sequence DESC
-         LIMIT 1;
-        IF latest_act.act_id <> requested_lifecycle_head_id
-           OR latest_act.act_digest::pg_catalog.text <>
-                ''sha256:'' || pg_catalog.encode(
-                    requested_lifecycle_head_digest, ''hex''
-                )
-           OR NOT (
-                (latest_act.act_kind = ''ACTIVATE''
-                 AND latest_act.binding_version_id = requested_binding_version_id
-                 AND latest_act.binding_version_digest::pg_catalog.text =
-                    ''sha256:'' || pg_catalog.encode(
-                        requested_binding_version_digest, ''hex''
-                    ))
-                OR
-                (latest_act.act_kind = ''SUPERSEDE''
-                 AND latest_act.successor_version_id = requested_binding_version_id
-                 AND latest_act.successor_version_digest::pg_catalog.text =
-                    ''sha256:'' || pg_catalog.encode(
-                        requested_binding_version_digest, ''hex''
-                    ))
-           ) THEN
-            RAISE EXCEPTION USING
-                ERRCODE = ''42501'', MESSAGE = ''principal lifecycle head differs'';
-        END IF;
-
-        WITH RECURSIVE lifecycle_chain AS (
-            SELECT latest_act.stream_sequence AS stream_sequence,
-                   latest_act.act_id AS act_id,
-                   latest_act.act_digest AS act_digest,
-                   latest_act.prior_act_id AS prior_act_id,
-                   latest_act.prior_act_digest AS prior_act_digest
-            UNION ALL
-            SELECT prior.stream_sequence,
-                   prior.act_id,
-                   prior.act_digest,
-                   prior.prior_act_id,
-                   prior.prior_act_digest
-              FROM lifecycle_chain AS child
-              JOIN ofarm.principal_binding_lifecycle AS prior
-                ON prior.equality_policy = requested_equality_policy
-               AND prior.issuer = requested_issuer::ofarm.oidc_issuer
-               AND prior.subject = requested_subject::ofarm.oidc_subject
-               AND prior.act_id = child.prior_act_id
-               AND prior.act_digest = child.prior_act_digest
-               AND prior.stream_sequence = child.stream_sequence - 1
-        )
-        SELECT pg_catalog.count(*) INTO chain_count FROM lifecycle_chain;
-        IF chain_count <> latest_act.stream_sequence THEN
-            RAISE EXCEPTION USING
-                ERRCODE = ''42501'', MESSAGE = ''principal lifecycle chain differs'';
-        END IF;
-
-        PERFORM 1
-          FROM ofarm.principal_binding_current AS current_binding
-         WHERE current_binding.equality_policy = requested_equality_policy
-           AND current_binding.issuer = requested_issuer::ofarm.oidc_issuer
-           AND current_binding.subject = requested_subject::ofarm.oidc_subject
-           AND current_binding.current_state = ''ACTIVE''
-           AND current_binding.binding_version_id = requested_binding_version_id
-           AND current_binding.binding_version_digest::pg_catalog.text =
-                ''sha256:'' || pg_catalog.encode(
-                    requested_binding_version_digest, ''hex''
-                )
-           AND current_binding.lifecycle_head_id = requested_lifecycle_head_id
-           AND current_binding.lifecycle_head_digest::pg_catalog.text =
-                ''sha256:'' || pg_catalog.encode(
-                    requested_lifecycle_head_digest, ''hex''
-                );
-        IF NOT FOUND THEN
-            RAISE EXCEPTION USING
-                ERRCODE = ''42501'', MESSAGE = ''principal lifecycle projection differs'';
-        END IF;
-
-        PERFORM 1
-          FROM ofarm.kernel_record AS party
-         WHERE party.tenant_id = requested_tenant_id
-           AND party.record_id = requested_party_record_id::ofarm.tenant_local_ref
-           AND party.record_kind = requested_party_record_kind
-           AND party.schema_digest::pg_catalog.text =
-                ''sha256:'' || pg_catalog.encode(
-                    requested_party_schema_digest, ''hex''
-                )
-           AND party.payload_digest::pg_catalog.text =
-                ''sha256:'' || pg_catalog.encode(
-                    requested_party_payload_digest, ''hex''
-                )
-           AND party.party_state = ''ACTIVE''
-           AND party.party_id = requested_party_ref;
-        IF NOT FOUND THEN
-            RAISE EXCEPTION USING
-                ERRCODE = ''42501'', MESSAGE = ''pinned Party differs'';
-        END IF;
-
-        UPDATE ofarm.tenant_binding_context AS context
-           SET context_state = ''BOUND'',
-               equality_policy = requested_equality_policy,
-               issuer = requested_issuer,
-               subject = requested_subject,
-               binding_version_id = requested_binding_version_id,
-               binding_version_digest = ''sha256:'' || pg_catalog.encode(
-                    requested_binding_version_digest, ''hex''
-               ),
-               lifecycle_head_id = requested_lifecycle_head_id,
-               lifecycle_head_digest = ''sha256:'' || pg_catalog.encode(
-                    requested_lifecycle_head_digest, ''hex''
-               ),
-               tenant_id = requested_tenant_id,
-               tenant_registration_digest = ''sha256:'' || pg_catalog.encode(
-                    requested_tenant_registration_digest, ''hex''
-               ),
-               party_ref = requested_party_ref,
-               party_record_kind = requested_party_record_kind,
-               party_record_id = requested_party_record_id,
-               party_schema_digest = ''sha256:'' || pg_catalog.encode(
-                    requested_party_schema_digest, ''hex''
-               ),
-               party_payload_digest = ''sha256:'' || pg_catalog.encode(
-                    requested_party_payload_digest, ''hex''
-               ),
-               capability_nonce = requested_nonce,
-               bound_at = observed_now
-         WHERE backend_pid = pg_catalog.pg_backend_pid()
-           AND backend_start = observed_backend_start
-           AND full_xid = observed_full_xid
-           AND challenge_id = requested_challenge_id
-           AND context_state = ''CHALLENGE'';
-        GET DIAGNOSTICS changed_count = ROW_COUNT;
-        IF changed_count <> 1 THEN
-            RAISE EXCEPTION USING
-                ERRCODE = ''42501'', MESSAGE = ''tenant capability bind was not unique'';
-        END IF;
-    EXCEPTION
-        WHEN NO_DATA_FOUND OR TOO_MANY_ROWS THEN
-            RAISE EXCEPTION USING
-                ERRCODE = ''42501'', MESSAGE = ''tenant capability authority differs'';
-    END';
-
 CREATE FUNCTION ofarm.take_tenant_write_lock()
 RETURNS pg_catalog.void
 LANGUAGE plpgsql VOLATILE PARALLEL UNSAFE SECURITY DEFINER
@@ -3152,123 +2621,11 @@ REVOKE ALL PRIVILEGES ON FUNCTION ofarm.purge_stale_tenant_context()
 FROM PUBLIC;
 REVOKE ALL PRIVILEGES ON FUNCTION ofarm.create_tenant_challenge()
 FROM PUBLIC;
-REVOKE ALL PRIVILEGES ON FUNCTION ofarm.frame_tenant_capability(
-    pg_catalog.uuid,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.uuid,
-    pg_catalog.bytea,
-    pg_catalog.uuid,
-    pg_catalog.bytea,
-    pg_catalog.uuid,
-    pg_catalog.bytea,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.bytea,
-    pg_catalog.bytea,
-    pg_catalog.int8,
-    pg_catalog.int8,
-    pg_catalog.int8,
-    pg_catalog.uuid
-) FROM PUBLIC;
-REVOKE ALL PRIVILEGES ON FUNCTION ofarm.hmac_sha256(
-    pg_catalog.bytea, pg_catalog.bytea
-) FROM PUBLIC;
-REVOKE ALL PRIVILEGES ON FUNCTION ofarm.secure_bytea_equal(
-    pg_catalog.bytea, pg_catalog.bytea
-) FROM PUBLIC;
-REVOKE ALL PRIVILEGES ON FUNCTION ofarm.bind_tenant_capability(
-    pg_catalog.uuid,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.uuid,
-    pg_catalog.bytea,
-    pg_catalog.uuid,
-    pg_catalog.bytea,
-    pg_catalog.uuid,
-    pg_catalog.bytea,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.bytea,
-    pg_catalog.bytea,
-    pg_catalog.int8,
-    pg_catalog.int8,
-    pg_catalog.int8,
-    pg_catalog.uuid,
-    pg_catalog.bytea
-) FROM PUBLIC;
 REVOKE ALL PRIVILEGES ON FUNCTION ofarm.take_tenant_write_lock()
 FROM PUBLIC;
 
 GRANT SELECT, INSERT, UPDATE, DELETE
 ON TABLE ofarm.tenant_binding_context TO ofarm_binder;
-GRANT SELECT (
-    key_id, secret, valid_from_unix_us, valid_until_unix_us
-) ON TABLE ofarm.tenant_capability_key_schedule TO ofarm_binder;
-GRANT SELECT (
-    tenant_id, registration_digest
-) ON TABLE ofarm.tenant_registry TO ofarm_binder;
-GRANT SELECT (
-    equality_policy,
-    issuer,
-    subject,
-    binding_version_id,
-    binding_version_digest,
-    tenant_id,
-    tenant_registration_digest,
-    party_ref,
-    party_record_kind,
-    party_record_id,
-    party_schema_digest,
-    party_payload_digest,
-    party_state,
-    party_payload_party_id,
-    valid_from,
-    valid_until
-) ON TABLE ofarm.principal_binding TO ofarm_binder;
-GRANT SELECT (
-    equality_policy,
-    issuer,
-    subject,
-    stream_sequence,
-    act_id,
-    act_digest,
-    act_kind,
-    binding_version_id,
-    binding_version_digest,
-    prior_act_id,
-    prior_act_digest,
-    successor_version_id,
-    successor_version_digest
-) ON TABLE ofarm.principal_binding_lifecycle TO ofarm_binder;
-GRANT SELECT (
-    equality_policy,
-    issuer,
-    subject,
-    current_state,
-    binding_version_id,
-    binding_version_digest,
-    lifecycle_head_id,
-    lifecycle_head_digest
-) ON TABLE ofarm.principal_binding_current TO ofarm_binder;
-GRANT SELECT (
-    tenant_id,
-    record_id,
-    record_kind,
-    schema_digest,
-    payload_digest,
-    party_state,
-    party_id
-) ON TABLE ofarm.kernel_record TO ofarm_binder;
-
 GRANT SELECT (
     tenant_id,
     record_id,
@@ -3285,12 +2642,6 @@ GRANT SELECT (
     batch_full_xid
 ) ON TABLE ofarm.kernel_edge TO ofarm_graph_validator;
 
-GRANT EXECUTE ON FUNCTION ofarm.valid_ascii_id(pg_catalog.text)
-TO ofarm_binder;
-GRANT EXECUTE ON FUNCTION ofarm.valid_oidc_issuer(pg_catalog.text)
-TO ofarm_binder;
-GRANT EXECUTE ON FUNCTION ofarm.lp32(pg_catalog.bytea)
-TO ofarm_binder;
 GRANT EXECUTE ON FUNCTION ofarm.current_backend_start()
 TO ofarm_binder;
 GRANT EXECUTE ON FUNCTION ofarm.backend_incarnation_is_live(
@@ -3298,62 +2649,8 @@ GRANT EXECUTE ON FUNCTION ofarm.backend_incarnation_is_live(
 ) TO ofarm_binder;
 GRANT EXECUTE ON FUNCTION ofarm.purge_stale_tenant_context()
 TO ofarm_binder;
-GRANT EXECUTE ON FUNCTION ofarm.frame_tenant_capability(
-    pg_catalog.uuid,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.uuid,
-    pg_catalog.bytea,
-    pg_catalog.uuid,
-    pg_catalog.bytea,
-    pg_catalog.uuid,
-    pg_catalog.bytea,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.bytea,
-    pg_catalog.bytea,
-    pg_catalog.int8,
-    pg_catalog.int8,
-    pg_catalog.int8,
-    pg_catalog.uuid
-) TO ofarm_binder;
-GRANT EXECUTE ON FUNCTION ofarm.hmac_sha256(
-    pg_catalog.bytea, pg_catalog.bytea
-) TO ofarm_binder;
-GRANT EXECUTE ON FUNCTION ofarm.secure_bytea_equal(
-    pg_catalog.bytea, pg_catalog.bytea
-) TO ofarm_binder;
-
 GRANT EXECUTE ON FUNCTION ofarm.create_tenant_challenge()
 TO ofarm_app, ofarm_worker;
-GRANT EXECUTE ON FUNCTION ofarm.bind_tenant_capability(
-    pg_catalog.uuid,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.uuid,
-    pg_catalog.bytea,
-    pg_catalog.uuid,
-    pg_catalog.bytea,
-    pg_catalog.uuid,
-    pg_catalog.bytea,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.bytea,
-    pg_catalog.bytea,
-    pg_catalog.int8,
-    pg_catalog.int8,
-    pg_catalog.int8,
-    pg_catalog.uuid,
-    pg_catalog.bytea
-) TO ofarm_app, ofarm_worker;
 GRANT EXECUTE ON FUNCTION ofarm.current_tenant_id()
 TO ofarm_app, ofarm_worker;
 GRANT EXECUTE ON FUNCTION ofarm.current_tenant_id()
@@ -3369,8 +2666,8 @@ GRANT SELECT (
 
 CREATE FUNCTION ofarm.verify_tenant_structure()
 RETURNS TABLE (
-    structurally_ready pg_catalog.bool,
-    tenant_capability_contract_digest pg_catalog.text,
+    structurally_compatible pg_catalog.bool,
+    tenant_context_contract_digest pg_catalog.text,
     difference_count pg_catalog.int4,
     structural_catalog_digest pg_catalog.text,
     relation_inventory_digest pg_catalog.text,
@@ -3407,7 +2704,6 @@ AS 'DECLARE
             ''runtime_trace'',
             ''schema_migration'',
             ''tenant_binding_context'',
-            ''tenant_capability_key_schedule'',
             ''tenant_registry''
         ]::pg_catalog.text[];
         expected_tenant_relations pg_catalog.text[] := ARRAY[
@@ -3623,7 +2919,6 @@ AS 'DECLARE
             ''runtime_trace:r:p:ofarm_owner:true:true'',
             ''schema_migration:r:p:ofarm_owner:false:false'',
             ''tenant_binding_context:r:u:ofarm_owner:false:false'',
-            ''tenant_capability_key_schedule:r:p:ofarm_owner:false:false'',
             ''tenant_registry:r:p:ofarm_owner:false:false''
         ]::pg_catalog.text[] THEN
             differences := pg_catalog.array_append(
@@ -3837,61 +3132,6 @@ AS 'DECLARE
                        )
                        OR
                        (
-                           grantee.rolname = ''ofarm_binder''
-                           AND acl.privilege_type = ''SELECT''
-                           AND (
-                               (class.relname = ''tenant_capability_key_schedule''
-                                AND attribute.attname IN (
-                                    ''key_id'', ''secret'',
-                                    ''valid_from_unix_us'', ''valid_until_unix_us''
-                                ))
-                               OR
-                               (class.relname = ''tenant_registry''
-                                AND attribute.attname IN (
-                                    ''tenant_id'', ''registration_digest''
-                                ))
-                               OR
-                               (class.relname = ''principal_binding''
-                                AND attribute.attname IN (
-                                    ''equality_policy'', ''issuer'', ''subject'',
-                                    ''binding_version_id'', ''binding_version_digest'',
-                                    ''tenant_id'', ''tenant_registration_digest'',
-                                    ''party_ref'', ''party_record_kind'',
-                                    ''party_record_id'', ''party_schema_digest'',
-                                    ''party_payload_digest'', ''party_state'',
-                                    ''party_payload_party_id'', ''valid_from'',
-                                    ''valid_until''
-                                ))
-                               OR
-                               (class.relname = ''kernel_record''
-                                AND attribute.attname IN (
-                                    ''tenant_id'', ''record_id'', ''record_kind'',
-                                    ''schema_digest'', ''payload_digest'',
-                                    ''party_state'', ''party_id''
-                                ))
-                               OR
-                               (class.relname = ''principal_binding_lifecycle''
-                                AND attribute.attname IN (
-                                    ''equality_policy'', ''issuer'', ''subject'',
-                                    ''stream_sequence'', ''act_id'', ''act_digest'',
-                                    ''act_kind'', ''binding_version_id'',
-                                    ''binding_version_digest'', ''prior_act_id'',
-                                    ''prior_act_digest'', ''successor_version_id'',
-                                    ''successor_version_digest''
-                                ))
-                               OR
-                               (class.relname = ''principal_binding_current''
-                                AND attribute.attname IN (
-                                    ''equality_policy'', ''issuer'', ''subject'',
-                                    ''current_state'', ''binding_version_id'',
-                                    ''binding_version_digest'',
-                                    ''lifecycle_head_id'',
-                                    ''lifecycle_head_digest''
-                                ))
-                           )
-                       )
-                       OR
-                       (
                            grantee.rolname = ''ofarm_graph_validator''
                            AND acl.privilege_type = ''SELECT''
                            AND (
@@ -3933,7 +3173,7 @@ AS 'DECLARE
          WHERE namespace.nspname = ''ofarm''
            AND attribute.attnum > 0
            AND NOT attribute.attisdropped;
-        IF column_acl_count <> 70 OR invalid_column_acl_count <> 0 THEN
+        IF column_acl_count <> 20 OR invalid_column_acl_count <> 0 THEN
             differences := pg_catalog.array_append(
                 differences, ''column ACL inventory differs''
             );
@@ -3995,13 +3235,11 @@ AS 'DECLARE
           JOIN pg_catalog.pg_language AS language ON language.oid = routine.prolang
          WHERE namespace.nspname = ''ofarm''
            AND routine.proname = ANY (ARRAY[
-                ''bind_tenant_capability'',
                 ''create_tenant_challenge'',
                 ''current_tenant_id'',
                 ''take_tenant_write_lock''
            ]::pg_catalog.text[]);
         IF observed_routines IS DISTINCT FROM ARRAY[
-            ''bind_tenant_capability(uuid, text, text, text, text, text, uuid, bytea, uuid, bytea, uuid, bytea, text, text, text, bytea, bytea, bigint, bigint, bigint, uuid, bytea)=ofarm_binder:plpgsql:true:false:false:v:u:search_path=pg_catalog, pg_temp:37248899a3db8fdf01bd0fdc6271ed6d366ffe9fe64afb88fda9e05e589056c4:false:true:true:false:false:false'',
             ''create_tenant_challenge()=ofarm_binder:plpgsql:true:false:false:v:u:search_path=pg_catalog, pg_temp:6d99502e1baa7c56099c5fc32ffc79c20a6817e9f389ee66efd95a6d7cb863cc:false:true:true:false:false:false'',
             ''current_tenant_id()=ofarm_binder:plpgsql:true:false:false:s:u:search_path=pg_catalog, pg_temp:2dea636af9e5cd14b7fcb406fd556934ffd8ab408dae965aa318e4120beb0ab0:false:true:true:true:false:false'',
             ''take_tenant_write_lock()=ofarm_tenant_lock_owner:plpgsql:true:false:false:v:u:search_path=pg_catalog, pg_temp:38c75f051ee82b75c2e872fe2e191874e17984da7183add568f481d2eadb0de8:false:true:true:true:false:false''
@@ -4021,7 +3259,7 @@ AS 'DECLARE
            AND trigger.tgname OPERATOR(pg_catalog.~) ''_reject_mutation$''
            AND NOT trigger.tgisinternal
            AND trigger.tgenabled = ''O'';
-        IF guarded_relation_count <> 17 THEN
+        IF guarded_relation_count <> 16 THEN
             differences := pg_catalog.array_append(
                 differences, ''immutable relation guard inventory differs''
             );
@@ -4285,7 +3523,6 @@ AS 'DECLARE
         ]::pg_catalog.text[] LOOP
             FOREACH relation_name IN ARRAY ARRAY[
                 ''tenant_registry'',
-                ''tenant_capability_key_schedule'',
                 ''principal_binding'',
                 ''principal_binding_lifecycle'',
                 ''principal_binding_current'',
@@ -4346,13 +3583,27 @@ AS 'DECLARE
            OR observed_head_version <> 1
            OR observed_service_identity <> ''ofarm.tenant-postgresql.v1''
            OR observed_provisioning_digest <>
-                ''sha256:d6f8c4b83c4ee235a5a50b49bd857b0e7d744efa3b0ebbf4ecfea3151b4f21d7''
+                ''sha256:a7c69cd270aac75efef0419e3eadf2ae37722abfc14dbd4b639ee653ad21680f''
            OR observed_prefix_digest !~ ''^sha256:[0-9a-f]{64}$'' THEN
             differences := pg_catalog.array_append(
                 differences, ''migration 0001 ledger identity differs''
             );
         END IF;
 
+        -- SCHEMA_LOCAL_CATALOG_CLASSIFIER_V1
+        -- relation|pg_class|relnamespace|relname
+        -- routine|pg_proc|pronamespace|proname
+        -- type|pg_type|typnamespace|typname
+        -- collation|pg_collation|collnamespace|collname
+        -- operator|pg_operator|oprnamespace|oprname
+        -- operator_class|pg_opclass|opcnamespace|opcname
+        -- operator_family|pg_opfamily|opfnamespace|opfname
+        -- conversion|pg_conversion|connamespace|conname
+        -- text_search_config|pg_ts_config|cfgnamespace|cfgname
+        -- text_search_dictionary|pg_ts_dict|dictnamespace|dictname
+        -- text_search_parser|pg_ts_parser|prsnamespace|prsname
+        -- text_search_template|pg_ts_template|tmplnamespace|tmplname
+        -- statistics|pg_statistic_ext|stxnamespace|stxname
         WITH catalog_entry(category, object_identity, definition) AS (
             SELECT
                 ''role'',
@@ -4513,6 +3764,227 @@ AS 'DECLARE
               JOIN pg_catalog.pg_namespace AS namespace
                 ON namespace.oid = type.typnamespace
               JOIN pg_catalog.pg_roles AS owner ON owner.oid = type.typowner
+             WHERE namespace.nspname IN (
+                    ''ofarm'', ''ofarm_infrastructure'', ''public''
+             )
+
+            UNION ALL
+            SELECT
+                ''collation'',
+                namespace.nspname::pg_catalog.text || ''.'' ||
+                    governed_collation.collname::pg_catalog.text,
+                pg_catalog.jsonb_build_array(
+                    owner.rolname,
+                    governed_collation.collprovider,
+                    governed_collation.collisdeterministic,
+                    governed_collation.collencoding,
+                    governed_collation.collcollate,
+                    governed_collation.collctype,
+                    governed_collation.colllocale,
+                    governed_collation.collicurules,
+                    governed_collation.collversion
+                )::pg_catalog.text
+              FROM pg_catalog.pg_collation AS governed_collation
+              JOIN pg_catalog.pg_namespace AS namespace
+                ON namespace.oid = governed_collation.collnamespace
+              JOIN pg_catalog.pg_roles AS owner
+                ON owner.oid = governed_collation.collowner
+             WHERE namespace.nspname IN (
+                    ''ofarm'', ''ofarm_infrastructure'', ''public''
+             )
+
+            UNION ALL
+            SELECT
+                ''operator'',
+                namespace.nspname::pg_catalog.text || ''.'' ||
+                    governed_operator.oprname::pg_catalog.text || ''('' ||
+                    pg_catalog.format_type(governed_operator.oprleft, NULL) || '','' ||
+                    pg_catalog.format_type(governed_operator.oprright, NULL) || '')'',
+                pg_catalog.jsonb_build_array(
+                    owner.rolname,
+                    governed_operator.oprkind,
+                    governed_operator.oprcanmerge,
+                    governed_operator.oprcanhash,
+                    pg_catalog.format_type(governed_operator.oprresult, NULL),
+                    governed_operator.oprcode::pg_catalog.regprocedure::pg_catalog.text,
+                    governed_operator.oprrest::pg_catalog.regprocedure::pg_catalog.text,
+                    governed_operator.oprjoin::pg_catalog.regprocedure::pg_catalog.text
+                )::pg_catalog.text
+              FROM pg_catalog.pg_operator AS governed_operator
+              JOIN pg_catalog.pg_namespace AS namespace
+                ON namespace.oid = governed_operator.oprnamespace
+              JOIN pg_catalog.pg_roles AS owner
+                ON owner.oid = governed_operator.oprowner
+             WHERE namespace.nspname IN (
+                    ''ofarm'', ''ofarm_infrastructure'', ''public''
+             )
+
+            UNION ALL
+            SELECT
+                ''operator_class'',
+                namespace.nspname::pg_catalog.text || ''.'' ||
+                    operator_class.opcname::pg_catalog.text || '':'' ||
+                    access_method.amname::pg_catalog.text,
+                pg_catalog.jsonb_build_array(
+                    owner.rolname,
+                    operator_family_namespace.nspname,
+                    operator_family.opfname,
+                    operator_class.opcintype::pg_catalog.regtype::pg_catalog.text,
+                    CASE WHEN operator_class.opckeytype = 0 THEN NULL
+                         ELSE operator_class.opckeytype::pg_catalog.regtype::pg_catalog.text END,
+                    operator_class.opcdefault
+                )::pg_catalog.text
+              FROM pg_catalog.pg_opclass AS operator_class
+              JOIN pg_catalog.pg_namespace AS namespace
+                ON namespace.oid = operator_class.opcnamespace
+              JOIN pg_catalog.pg_roles AS owner
+                ON owner.oid = operator_class.opcowner
+              JOIN pg_catalog.pg_am AS access_method
+                ON access_method.oid = operator_class.opcmethod
+              JOIN pg_catalog.pg_opfamily AS operator_family
+                ON operator_family.oid = operator_class.opcfamily
+              JOIN pg_catalog.pg_namespace AS operator_family_namespace
+                ON operator_family_namespace.oid = operator_family.opfnamespace
+             WHERE namespace.nspname IN (
+                    ''ofarm'', ''ofarm_infrastructure'', ''public''
+             )
+
+            UNION ALL
+            SELECT
+                ''operator_family'',
+                namespace.nspname::pg_catalog.text || ''.'' ||
+                    operator_family.opfname::pg_catalog.text || '':'' ||
+                    access_method.amname::pg_catalog.text,
+                pg_catalog.jsonb_build_array(owner.rolname)::pg_catalog.text
+              FROM pg_catalog.pg_opfamily AS operator_family
+              JOIN pg_catalog.pg_namespace AS namespace
+                ON namespace.oid = operator_family.opfnamespace
+              JOIN pg_catalog.pg_roles AS owner
+                ON owner.oid = operator_family.opfowner
+              JOIN pg_catalog.pg_am AS access_method
+                ON access_method.oid = operator_family.opfmethod
+             WHERE namespace.nspname IN (
+                    ''ofarm'', ''ofarm_infrastructure'', ''public''
+             )
+
+            UNION ALL
+            SELECT
+                ''conversion'',
+                namespace.nspname::pg_catalog.text || ''.'' ||
+                    conversion.conname::pg_catalog.text,
+                pg_catalog.jsonb_build_array(
+                    owner.rolname,
+                    conversion.conforencoding,
+                    conversion.contoencoding,
+                    conversion.conproc::pg_catalog.regprocedure::pg_catalog.text,
+                    conversion.condefault
+                )::pg_catalog.text
+              FROM pg_catalog.pg_conversion AS conversion
+              JOIN pg_catalog.pg_namespace AS namespace
+                ON namespace.oid = conversion.connamespace
+              JOIN pg_catalog.pg_roles AS owner ON owner.oid = conversion.conowner
+             WHERE namespace.nspname IN (
+                    ''ofarm'', ''ofarm_infrastructure'', ''public''
+             )
+
+            UNION ALL
+            SELECT
+                ''text_search_config'',
+                namespace.nspname::pg_catalog.text || ''.'' ||
+                    configuration.cfgname::pg_catalog.text,
+                pg_catalog.jsonb_build_array(
+                    owner.rolname,
+                    parser_namespace.nspname,
+                    parser.prsname
+                )::pg_catalog.text
+              FROM pg_catalog.pg_ts_config AS configuration
+              JOIN pg_catalog.pg_namespace AS namespace
+                ON namespace.oid = configuration.cfgnamespace
+              JOIN pg_catalog.pg_roles AS owner ON owner.oid = configuration.cfgowner
+              JOIN pg_catalog.pg_ts_parser AS parser
+                ON parser.oid = configuration.cfgparser
+              JOIN pg_catalog.pg_namespace AS parser_namespace
+                ON parser_namespace.oid = parser.prsnamespace
+             WHERE namespace.nspname IN (
+                    ''ofarm'', ''ofarm_infrastructure'', ''public''
+             )
+
+            UNION ALL
+            SELECT
+                ''text_search_dictionary'',
+                namespace.nspname::pg_catalog.text || ''.'' ||
+                    dictionary.dictname::pg_catalog.text,
+                pg_catalog.jsonb_build_array(
+                    owner.rolname,
+                    template_namespace.nspname,
+                    template.tmplname,
+                    dictionary.dictinitoption
+                )::pg_catalog.text
+              FROM pg_catalog.pg_ts_dict AS dictionary
+              JOIN pg_catalog.pg_namespace AS namespace
+                ON namespace.oid = dictionary.dictnamespace
+              JOIN pg_catalog.pg_roles AS owner ON owner.oid = dictionary.dictowner
+              JOIN pg_catalog.pg_ts_template AS template
+                ON template.oid = dictionary.dicttemplate
+              JOIN pg_catalog.pg_namespace AS template_namespace
+                ON template_namespace.oid = template.tmplnamespace
+             WHERE namespace.nspname IN (
+                    ''ofarm'', ''ofarm_infrastructure'', ''public''
+             )
+
+            UNION ALL
+            SELECT
+                ''text_search_parser'',
+                namespace.nspname::pg_catalog.text || ''.'' ||
+                    parser.prsname::pg_catalog.text,
+                pg_catalog.jsonb_build_array(
+                    parser.prsstart::pg_catalog.regprocedure::pg_catalog.text,
+                    parser.prstoken::pg_catalog.regprocedure::pg_catalog.text,
+                    parser.prsend::pg_catalog.regprocedure::pg_catalog.text,
+                    parser.prsheadline::pg_catalog.regprocedure::pg_catalog.text,
+                    parser.prslextype::pg_catalog.regprocedure::pg_catalog.text
+                )::pg_catalog.text
+              FROM pg_catalog.pg_ts_parser AS parser
+              JOIN pg_catalog.pg_namespace AS namespace
+                ON namespace.oid = parser.prsnamespace
+             WHERE namespace.nspname IN (
+                    ''ofarm'', ''ofarm_infrastructure'', ''public''
+             )
+
+            UNION ALL
+            SELECT
+                ''text_search_template'',
+                namespace.nspname::pg_catalog.text || ''.'' ||
+                    template.tmplname::pg_catalog.text,
+                pg_catalog.jsonb_build_array(
+                    template.tmplinit::pg_catalog.regprocedure::pg_catalog.text,
+                    template.tmpllexize::pg_catalog.regprocedure::pg_catalog.text
+                )::pg_catalog.text
+              FROM pg_catalog.pg_ts_template AS template
+              JOIN pg_catalog.pg_namespace AS namespace
+                ON namespace.oid = template.tmplnamespace
+             WHERE namespace.nspname IN (
+                    ''ofarm'', ''ofarm_infrastructure'', ''public''
+             )
+
+            UNION ALL
+            SELECT
+                ''statistics'',
+                namespace.nspname::pg_catalog.text || ''.'' ||
+                    statistics.stxname::pg_catalog.text,
+                pg_catalog.jsonb_build_array(
+                    owner.rolname,
+                    statistics.stxrelid::pg_catalog.regclass::pg_catalog.text,
+                    statistics.stxkeys::pg_catalog.text,
+                    statistics.stxkind,
+                    pg_catalog.pg_get_expr(
+                        statistics.stxexprs, statistics.stxrelid
+                    )
+                )::pg_catalog.text
+              FROM pg_catalog.pg_statistic_ext AS statistics
+              JOIN pg_catalog.pg_namespace AS namespace
+                ON namespace.oid = statistics.stxnamespace
+              JOIN pg_catalog.pg_roles AS owner ON owner.oid = statistics.stxowner
              WHERE namespace.nspname IN (
                     ''ofarm'', ''ofarm_infrastructure'', ''public''
              )
@@ -5254,7 +4726,7 @@ AS 'DECLARE
           INTO observed_structural_catalog_digest
           FROM catalog_entry;
         IF observed_structural_catalog_digest <>
-                ''sha256:31ab4a6f58a2bb952e4e273db546feeab3590c555dfb4883f09b0cd329e3b1cc'' THEN
+                ''sha256:19c387e9677811047679d349349895cf3213637fe462b2257a2408775469f26e'' THEN
             differences := pg_catalog.array_append(
                 differences, ''complete tenant catalog fingerprint differs''
             );
@@ -5262,7 +4734,7 @@ AS 'DECLARE
 
         RETURN QUERY SELECT
             pg_catalog.cardinality(differences) = 0,
-            ''sha256:a4d104f8ad7c5eab11a5b8d17293e82a6d4ac5f224ba0307c4e2cc07fa928e55''::pg_catalog.text,
+            ''sha256:4e0acd383a1c44142043c51f2bca26fbddc0f191dcf511c2aa97d212d3a6cb62''::pg_catalog.text,
             pg_catalog.cardinality(differences),
             observed_structural_catalog_digest,
             observed_relation_inventory,
@@ -5276,8 +4748,8 @@ AS 'DECLARE
 
 CREATE FUNCTION ofarm.observe_tenant_contract()
 RETURNS TABLE (
-    structurally_ready pg_catalog.bool,
-    tenant_capability_contract_digest pg_catalog.text,
+    structurally_compatible pg_catalog.bool,
+    tenant_context_contract_digest pg_catalog.text,
     difference_count pg_catalog.int4,
     structural_catalog_digest pg_catalog.text,
     relation_inventory_digest pg_catalog.text,

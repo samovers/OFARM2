@@ -1,4 +1,4 @@
-"""Filesystem-only unit tests for the two-database startup gate."""
+"""Filesystem-only tests for PostgreSQL structural observations."""
 
 from __future__ import annotations
 
@@ -21,7 +21,11 @@ from deployment.postgresql.provisioning_specs import (
     SECURITY_AUDIT_PROVISIONING_SPEC,
     TENANT_PROVISIONING_SPEC,
 )
-from deployment.postgresql.tenant_contract import TENANT_CAPABILITY_CONTRACT
+from deployment.postgresql.tenant_contract import TENANT_CONTEXT_CONTRACT
+from deployment.postgresql.version_policy import (
+    SUPPORTED_POSTGRESQL_SERVER_VERSION,
+    SUPPORTED_POSTGRESQL_SERVER_VERSION_NUM,
+)
 
 
 _PACKAGE_ROOT = Path(__file__).resolve().parents[2]
@@ -76,10 +80,10 @@ class _FakeConnection:
             return _Cursor([])
         if normalized.startswith("SET LOCAL"):
             if not self.transaction_started:
-                raise AssertionError("readiness setting fixed outside transaction")
+                raise AssertionError("setting fixed outside structural transaction")
             return _Cursor([])
         if not self.transaction_started:
-            raise AssertionError("readiness read outside transaction")
+            raise AssertionError("structural read outside transaction")
         if "SESSION_USER::text" in normalized:
             return _Cursor(self.identity_rows)
         if "schema_migration" in normalized:
@@ -88,7 +92,7 @@ class _FakeConnection:
             return _Cursor(self.observer_rows)
         if "observe_security_audit_contract" in normalized:
             return _Cursor(self.observer_rows)
-        raise AssertionError(f"unexpected readiness SQL: {normalized}")
+        raise AssertionError(f"unexpected structural SQL: {normalized}")
 
     def rollback(self) -> None:
         self.rollback_calls += 1
@@ -125,7 +129,7 @@ def _tenant_observer_row(migration_set: MigrationSet) -> tuple[object, ...]:
     version = len(migration_set.migrations)
     return (
         True,
-        TENANT_CAPABILITY_CONTRACT.digest,
+        TENANT_CONTEXT_CONTRACT.digest,
         0,
         _DERIVED_DIGEST_A,
         _DERIVED_DIGEST_B,
@@ -154,7 +158,6 @@ def _audit_observer_row(migration_set: MigrationSet) -> tuple[object, ...]:
         migration_set.prefix_digest(version),
         True,
         False,
-        False,
     )
 
 
@@ -169,8 +172,8 @@ class _Harness:
     connect_calls: list[tuple[str, dict[str, object]]] = field(default_factory=list)
     catalog_calls: list[tuple[str, object]] = field(default_factory=list)
     connect_failures: set[str] = field(default_factory=set)
+    loader_failures: set[object] = field(default_factory=set)
     catalog_failure: str | None = None
-    loader_failure: bool = False
 
 
 @pytest.fixture
@@ -186,9 +189,9 @@ def harness(monkeypatch: pytest.MonkeyPatch) -> _Harness:
                 "ofarm_readiness",
                 "ofarm_readiness",
                 "ofarm_tenant",
-                170009,
+                SUPPORTED_POSTGRESQL_SERVER_VERSION_NUM,
+                SUPPORTED_POSTGRESQL_SERVER_VERSION,
                 _TENANT_SYSTEM_IDENTIFIER,
-                False,
                 "repeatable read",
                 "on",
                 "on",
@@ -211,9 +214,9 @@ def harness(monkeypatch: pytest.MonkeyPatch) -> _Harness:
                 "ofarm_security_audit_readiness_login",
                 "ofarm_security_audit_readiness_login",
                 "ofarm_security_audit",
-                170009,
+                SUPPORTED_POSTGRESQL_SERVER_VERSION_NUM,
+                SUPPORTED_POSTGRESQL_SERVER_VERSION,
                 _AUDIT_SYSTEM_IDENTIFIER,
-                False,
                 "repeatable read",
                 "on",
                 "on",
@@ -232,7 +235,7 @@ def harness(monkeypatch: pytest.MonkeyPatch) -> _Harness:
 
     def fake_loader(package_root: Path, service):
         result.loader_calls.append((package_root, service))
-        if result.loader_failure:
+        if service in result.loader_failures:
             raise RuntimeError(
                 "migration load leaked tenant-event-id and filesystem path"
             )
@@ -268,11 +271,24 @@ def harness(monkeypatch: pytest.MonkeyPatch) -> _Harness:
     return result
 
 
-def _verify() -> readiness.PostgreSQLStartupReadinessReport:
-    return readiness.verify_startup_readiness(
-        tenant_readiness_dsn=_TENANT_DSN,
-        audit_readiness_dsn=_AUDIT_DSN,
+def _verify_tenant() -> readiness.PostgreSQLStructuralCompatibilityReport:
+    return readiness.verify_tenant_structural_compatibility(
+        tenant_structural_dsn=_TENANT_DSN,
         package_root=_PACKAGE_ROOT,
+    )
+
+
+def _verify_audit() -> readiness.PostgreSQLStructuralCompatibilityReport:
+    return readiness.verify_security_audit_structural_compatibility(
+        audit_structural_dsn=_AUDIT_DSN,
+        package_root=_PACKAGE_ROOT,
+    )
+
+
+def _verify_separation() -> readiness.PostgreSQLServiceSeparationAttestation:
+    return readiness.verify_postgresql_service_separation(
+        tenant_structural_dsn=_TENANT_DSN,
+        audit_structural_dsn=_AUDIT_DSN,
     )
 
 
@@ -284,58 +300,154 @@ def _replace_row_value(
     rows[0] = tuple(changed)
 
 
-def _assert_closed(harness: _Harness) -> None:
-    assert harness.tenant.rollback_calls == 1
-    assert harness.tenant.close_calls == 1
-    assert harness.audit.rollback_calls == 1
-    assert harness.audit.close_calls == 1
+def _assert_lane_closed(connection: _FakeConnection) -> None:
+    assert connection.rollback_calls == 1
+    assert connection.close_calls == 1
 
 
-def test_exact_pair_returns_only_immutable_version_state(
+def _assert_lane_untouched(connection: _FakeConnection) -> None:
+    assert connection.rollback_calls == 0
+    assert connection.close_calls == 0
+    assert connection.statements == []
+
+
+def test_public_api_contains_only_structural_and_separation_results():
+    assert set(readiness.__all__) == {
+        "PostgreSQLServiceSeparationAttestation",
+        "PostgreSQLStructuralCompatibilityReport",
+        "PostgreSQLVerificationError",
+        "verify_postgresql_service_separation",
+        "verify_security_audit_structural_compatibility",
+        "verify_tenant_structural_compatibility",
+    }
+    for removed in (
+        "PostgreSQLReadinessError",
+        "PostgreSQLStartupReadinessReport",
+        "verify_startup_readiness",
+    ):
+        assert not hasattr(readiness, removed)
+
+
+def test_tenant_structural_report_is_independent_and_has_no_service_decision(
     harness: _Harness,
 ):
-    report = _verify()
+    harness.connect_failures.add(_AUDIT_DSN)
+    harness.loader_failures.add(SECURITY_AUDIT_SERVICE)
 
-    assert report.ready is True
+    report = _verify_tenant()
+
     assert report.manifest() == {
-        "schemaVersion": "ofarm.postgresql-startup-readiness.v1",
-        "ready": True,
-        "tenant": {"supportedVersion": 1, "observedVersion": 1},
-        "securityAudit": {"supportedVersion": 1, "observedVersion": 1},
+        "schemaVersion": "ofarm.postgresql-structural-compatibility.v1",
+        "serviceIdentity": TENANT_SERVICE.identity,
+        "supportedVersion": 1,
+        "observedVersion": 1,
     }
-    with pytest.raises(FrozenInstanceError):
-        report.tenant_observed_version = 2
-
+    assert not hasattr(report, "ready")
+    assert not hasattr(report, "runtime_ready")
+    assert not hasattr(report, "recovery_ready")
     serialized = json.dumps(report.manifest(), sort_keys=True)
-    for prohibited in (
-        _TENANT_DSN,
-        _AUDIT_DSN,
-        _TENANT_SYSTEM_IDENTIFIER,
-        _AUDIT_SYSTEM_IDENTIFIER,
-        "tenant-password",
-        "audit-password",
-        SECURITY_AUDIT_CONTRACT.event_format_identity,
-    ):
-        assert prohibited not in serialized
-
-    assert harness.loader_calls == [
-        (_PACKAGE_ROOT, TENANT_SERVICE),
-        (_PACKAGE_ROOT, SECURITY_AUDIT_SERVICE),
-    ]
+    assert "ready" not in serialized.lower()
+    assert "recovery" not in serialized.lower()
+    assert harness.loader_calls == [(_PACKAGE_ROOT, TENANT_SERVICE)]
     assert harness.connect_calls == [
-        (
-            _TENANT_DSN,
-            {"autocommit": True, "connect_timeout": 5},
-        ),
-        (
-            _AUDIT_DSN,
-            {"autocommit": True, "connect_timeout": 5},
-        ),
+        (_TENANT_DSN, {"autocommit": True, "connect_timeout": 5})
+    ]
+    assert harness.catalog_calls == [("tenant", TENANT_SERVICE)]
+    with pytest.raises(FrozenInstanceError):
+        report.observed_version = 2
+    _assert_lane_closed(harness.tenant)
+    _assert_lane_untouched(harness.audit)
+
+
+def test_audit_structural_report_is_independent_of_tenant_lane(
+    harness: _Harness,
+):
+    harness.connect_failures.add(_TENANT_DSN)
+    harness.loader_failures.add(TENANT_SERVICE)
+
+    report = _verify_audit()
+
+    assert report.manifest() == {
+        "schemaVersion": "ofarm.postgresql-structural-compatibility.v1",
+        "serviceIdentity": SECURITY_AUDIT_SERVICE.identity,
+        "supportedVersion": 1,
+        "observedVersion": 1,
+    }
+    assert harness.loader_calls == [(_PACKAGE_ROOT, SECURITY_AUDIT_SERVICE)]
+    assert harness.connect_calls == [
+        (_AUDIT_DSN, {"autocommit": True, "connect_timeout": 5})
     ]
     assert harness.catalog_calls == [
-        ("tenant", TENANT_SERVICE),
-        ("security-audit", SECURITY_AUDIT_SERVICE),
+        ("security-audit", SECURITY_AUDIT_SERVICE)
     ]
+    _assert_lane_untouched(harness.tenant)
+    _assert_lane_closed(harness.audit)
+
+
+def test_promoted_physical_clone_observation_has_no_promotion_result(
+    harness: _Harness,
+):
+    """A promoted clone is structurally indistinguishable without #193."""
+
+    promoted_clone_observation = {
+        "sourceSystemIdentifier": _TENANT_SYSTEM_IDENTIFIER,
+        "observedSystemIdentifier": harness.tenant.identity_rows[0][5],
+        "pgIsInRecovery": False,
+    }
+    assert promoted_clone_observation == {
+        "sourceSystemIdentifier": _TENANT_SYSTEM_IDENTIFIER,
+        "observedSystemIdentifier": _TENANT_SYSTEM_IDENTIFIER,
+        "pgIsInRecovery": False,
+    }
+
+    report = _verify_tenant()
+
+    # A physical copy preserves the source system identifier.  After promotion
+    # PostgreSQL reports a current non-recovery state, but this structural query
+    # deliberately asks neither that question nor any historical-provenance one.
+    identity_sql = next(
+        statement
+        for statement in harness.tenant.statements
+        if "SESSION_USER::text" in statement
+    )
+    assert "pg_is_in_recovery" not in identity_sql
+    assert report.manifest() == {
+        "schemaVersion": "ofarm.postgresql-structural-compatibility.v1",
+        "serviceIdentity": TENANT_SERVICE.identity,
+        "supportedVersion": 1,
+        "observedVersion": 1,
+    }
+    serialized = json.dumps(report.manifest(), sort_keys=True).lower()
+    for prohibited in (
+        "ready",
+        "recovery",
+        "primary",
+        "continuity",
+        "promotion",
+        "provenance",
+        "systemidentifier",
+    ):
+        assert prohibited not in serialized
+    _assert_lane_closed(harness.tenant)
+    _assert_lane_untouched(harness.audit)
+
+
+def test_separation_is_narrow_and_opens_both_snapshots_before_observation(
+    harness: _Harness,
+):
+    attestation = _verify_separation()
+
+    assert attestation.manifest() == {
+        "schemaVersion": "ofarm.postgresql-service-separation.v1",
+        "tenantServiceIdentity": TENANT_SERVICE.identity,
+        "securityAuditServiceIdentity": SECURITY_AUDIT_SERVICE.identity,
+        "distinctPostgreSQLSystemIdentifiers": True,
+    }
+    serialized = json.dumps(attestation.manifest(), sort_keys=True).lower()
+    for prohibited in ("ready", "recovery", "primary", "continuity", "promotion"):
+        assert prohibited not in serialized
+    assert harness.loader_calls == []
+    assert harness.catalog_calls == []
     first_read = next(
         index
         for index, (_label, statement) in enumerate(harness.events)
@@ -348,51 +460,118 @@ def test_exact_pair_returns_only_immutable_version_state(
         )
     )
     assert audit_begin < first_read
-    for connection in (harness.tenant, harness.audit):
-        history_event = next(
-            index
-            for index, (label, statement) in enumerate(harness.events)
-            if label == connection.label and "schema_migration" in statement
-        )
-        catalog_event = harness.events.index(
-            (connection.label, "VERIFY CATALOG IDENTITY")
-        )
-        observer_event = next(
-            index
-            for index, (label, statement) in enumerate(harness.events)
-            if label == connection.label and "observe_" in statement
-        )
-        assert history_event < catalog_event < observer_event
-
-    governed_sql = " ".join(
-        harness.tenant.statements + harness.audit.statements
+    assert all(
+        "schema_migration" not in statement and "observe_" not in statement
+        for statement in harness.tenant.statements + harness.audit.statements
     )
+    _assert_lane_closed(harness.tenant)
+    _assert_lane_closed(harness.audit)
+
+
+def test_structural_observation_is_read_only_and_orders_exact_checks(
+    harness: _Harness,
+):
+    _verify_tenant()
+
+    history_event = next(
+        index
+        for index, (label, statement) in enumerate(harness.events)
+        if label == "tenant" and "schema_migration" in statement
+    )
+    catalog_event = harness.events.index(("tenant", "VERIFY CATALOG IDENTITY"))
+    observer_event = next(
+        index
+        for index, (label, statement) in enumerate(harness.events)
+        if label == "tenant" and "observe_tenant_contract" in statement
+    )
+    assert history_event < catalog_event < observer_event
+    governed_sql = " ".join(harness.tenant.statements)
     assert re.search(
         r"\b(INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|TRUNCATE)\b",
         governed_sql,
         re.IGNORECASE,
     ) is None
-    history_sql = [
-        statement
-        for statement in harness.tenant.statements + harness.audit.statements
-        if "schema_migration" in statement
-    ]
-    assert len(history_sql) == 2
-    for statement in history_sql:
-        assert "release_identity" not in statement
-        assert "execution_id" not in statement
-        assert "applied_at" not in statement
-        for column in (
-            "version",
-            "filename",
-            "source_sha256",
-            "source_byte_length",
-            "applied_prefix_digest",
-            "service_identity",
-            "provisioning_spec_digest",
-        ):
-            assert column in statement
-    _assert_closed(harness)
+    _assert_lane_closed(harness.tenant)
+
+
+@pytest.mark.parametrize("server_version", (170009, 170011, 170100, 180000))
+def test_structural_observation_accepts_only_postgresql_17_10(
+    harness: _Harness,
+    server_version: int,
+):
+    _replace_row_value(harness.tenant.identity_rows, 3, server_version)
+
+    with pytest.raises(
+        readiness.PostgreSQLVerificationError,
+        match="PostgreSQL version differs",
+    ):
+        _verify_tenant()
+    _assert_lane_closed(harness.tenant)
+
+
+@pytest.mark.parametrize(
+    "server_version",
+    (
+        "17.10",
+        "17.10 (Debian 17.10-1.pgdg13+2)",
+        "17.10 (Ubuntu 17.10-1)",
+    ),
+)
+def test_structural_observation_accepts_only_the_pinned_build_string(
+    harness: _Harness,
+    server_version: str,
+):
+    _replace_row_value(harness.tenant.identity_rows, 4, server_version)
+
+    with pytest.raises(
+        readiness.PostgreSQLVerificationError,
+        match="PostgreSQL version differs",
+    ):
+        _verify_tenant()
+    _assert_lane_closed(harness.tenant)
+
+
+@pytest.mark.parametrize(
+    ("index", "changed"),
+    (
+        (0, "ofarm_app"),
+        (1, "ofarm_app"),
+        (2, "crossed_database"),
+        (5, "not-a-system-id"),
+        (6, "read committed"),
+        (7, "off"),
+        (8, "off"),
+        (9, "Europe/Ljubljana"),
+        (10, "SQL, DMY"),
+        (11, "on"),
+    ),
+)
+def test_route_and_structural_transaction_identity_are_exact(
+    harness: _Harness,
+    index: int,
+    changed: object,
+):
+    _replace_row_value(harness.tenant.identity_rows, index, changed)
+
+    with pytest.raises(readiness.PostgreSQLVerificationError):
+        _verify_tenant()
+    _assert_lane_closed(harness.tenant)
+
+
+def test_separation_refuses_one_system_identifier(harness: _Harness):
+    _replace_row_value(
+        harness.audit.identity_rows,
+        5,
+        _TENANT_SYSTEM_IDENTIFIER,
+    )
+
+    with pytest.raises(
+        readiness.PostgreSQLVerificationError,
+        match="use one PostgreSQL system identifier",
+    ):
+        _verify_separation()
+    _assert_lane_closed(harness.tenant)
+    _assert_lane_closed(harness.audit)
 
 
 @pytest.mark.parametrize(
@@ -407,7 +586,7 @@ def test_exact_pair_returns_only_immutable_version_state(
         (6, "sha256:" + "e" * 64),
     ),
 )
-def test_every_readiness_ledger_column_is_exact(
+def test_every_tenant_ledger_column_is_exact(
     harness: _Harness,
     index: int,
     changed: object,
@@ -415,84 +594,21 @@ def test_every_readiness_ledger_column_is_exact(
     _replace_row_value(harness.tenant.history_rows, index, changed)
 
     with pytest.raises(
-        readiness.PostgreSQLReadinessError,
+        readiness.PostgreSQLVerificationError,
         match="tenant migration history differs",
     ):
-        _verify()
-    _assert_closed(harness)
+        _verify_tenant()
+    _assert_lane_closed(harness.tenant)
 
 
-def test_extra_or_missing_history_rows_refuse(
-    harness: _Harness,
-):
+def test_extra_or_missing_history_rows_refuse(harness: _Harness):
     harness.tenant.history_rows.append(harness.tenant.history_rows[0])
-
     with pytest.raises(
-        readiness.PostgreSQLReadinessError,
+        readiness.PostgreSQLVerificationError,
         match="tenant migration history differs",
     ):
-        _verify()
-    _assert_closed(harness)
-
-
-@pytest.mark.parametrize(
-    ("lane", "index", "changed"),
-    (
-        ("tenant", 0, "ofarm_app"),
-        ("tenant", 1, "ofarm_app"),
-        ("tenant", 2, "crossed_database"),
-        ("tenant", 3, 180000),
-        ("tenant", 4, "not-a-system-id"),
-        ("tenant", 5, True),
-        ("tenant", 6, "read committed"),
-        ("tenant", 7, "off"),
-        ("tenant", 8, "off"),
-        ("tenant", 9, "Europe/Ljubljana"),
-        ("tenant", 10, "SQL, DMY"),
-        ("tenant", 11, "on"),
-        ("security-audit", 0, "ofarm_security_audit_readiness"),
-        ("security-audit", 1, "ofarm_security_audit_readiness"),
-        ("security-audit", 2, "ofarm_tenant"),
-    ),
-)
-def test_route_transaction_and_primary_identity_are_exact(
-    harness: _Harness,
-    lane: str,
-    index: int,
-    changed: object,
-):
-    connection = harness.tenant if lane == "tenant" else harness.audit
-    _replace_row_value(connection.identity_rows, index, changed)
-
-    with pytest.raises(readiness.PostgreSQLReadinessError):
-        _verify()
-    _assert_closed(harness)
-
-
-def test_pair_requires_same_postgresql_patch_and_distinct_lineages(
-    harness: _Harness,
-):
-    _replace_row_value(harness.audit.identity_rows, 3, 170010)
-    with pytest.raises(
-        readiness.PostgreSQLReadinessError,
-        match="PostgreSQL versions differ",
-    ):
-        _verify()
-    _assert_closed(harness)
-
-
-def test_pair_refuses_one_cluster_lineage(harness: _Harness):
-    _replace_row_value(
-        harness.audit.identity_rows,
-        4,
-        _TENANT_SYSTEM_IDENTIFIER,
-    )
-    with pytest.raises(
-        readiness.PostgreSQLReadinessError,
-        match="database lineages are not distinct",
-    ):
-        _verify()
-    _assert_closed(harness)
+        _verify_tenant()
+    _assert_lane_closed(harness.tenant)
 
 
 @pytest.mark.parametrize(
@@ -511,7 +627,7 @@ def test_pair_refuses_one_cluster_lineage(harness: _Harness):
         (10, True),
     ),
 )
-def test_all_eleven_tenant_observer_fields_are_validated(
+def test_all_tenant_observer_fields_are_validated(
     harness: _Harness,
     index: int,
     changed: object,
@@ -519,43 +635,40 @@ def test_all_eleven_tenant_observer_fields_are_validated(
     _replace_row_value(harness.tenant.observer_rows, index, changed)
 
     with pytest.raises(
-        readiness.PostgreSQLReadinessError,
+        readiness.PostgreSQLVerificationError,
         match="tenant contract observation differs",
     ):
-        _verify()
-    _assert_closed(harness)
+        _verify_tenant()
+    _assert_lane_closed(harness.tenant)
 
 
-@pytest.mark.parametrize("index", range(14))
-def test_all_fourteen_audit_observer_fields_are_exact(
+@pytest.mark.parametrize("index", range(13))
+def test_every_structural_audit_observer_field_is_exact(
     harness: _Harness,
     index: int,
 ):
-    row = harness.audit.observer_rows[0]
-    changed = list(row)
+    changed = list(harness.audit.observer_rows[0])
     if index in (6, 9):
         changed[index] = True
     elif index == 11:
         changed[index] = False
     elif index == 12:
         changed[index] = True
-    elif index == 13:
-        changed[index] = True
     else:
         changed[index] = "wrong"
     harness.audit.observer_rows[0] = tuple(changed)
 
     with pytest.raises(
-        readiness.PostgreSQLReadinessError,
+        readiness.PostgreSQLVerificationError,
         match="security-audit contract observation differs",
     ):
-        _verify()
-    _assert_closed(harness)
+        _verify_audit()
+    _assert_lane_closed(harness.audit)
 
 
 @pytest.mark.parametrize("lane", ("tenant", "security-audit"))
 @pytest.mark.parametrize("row_count", (0, 2))
-def test_observers_must_return_exactly_one_row(
+def test_observer_must_return_exactly_one_row(
     harness: _Harness,
     lane: str,
     row_count: int,
@@ -564,83 +677,75 @@ def test_observers_must_return_exactly_one_row(
     row = connection.observer_rows[0]
     connection.observer_rows[:] = [row] * row_count
 
-    with pytest.raises(readiness.PostgreSQLReadinessError):
-        _verify()
-    _assert_closed(harness)
+    with pytest.raises(readiness.PostgreSQLVerificationError):
+        _verify_tenant() if lane == "tenant" else _verify_audit()
+    _assert_lane_closed(connection)
 
 
-def test_authoritative_loader_failure_is_sanitized_before_connect(
+def test_authoritative_loader_failure_is_lane_local_and_sanitized(
     harness: _Harness,
 ):
-    harness.loader_failure = True
+    harness.loader_failures.add(TENANT_SERVICE)
 
-    with pytest.raises(readiness.PostgreSQLReadinessError) as raised:
-        _verify()
+    with pytest.raises(readiness.PostgreSQLVerificationError) as raised:
+        _verify_tenant()
     rendered = str(raised.value)
-    assert "authoritative migration identity is unavailable" in rendered
+    assert "tenant authoritative migration identity is unavailable" in rendered
     assert "tenant-event-id" not in rendered
     assert str(_PACKAGE_ROOT) not in rendered
     assert raised.value.__cause__ is None
     assert raised.value.__context__ is None
     assert harness.connect_calls == []
-    assert harness.tenant.close_calls == 0
-    assert harness.audit.close_calls == 0
+    _assert_lane_untouched(harness.tenant)
+    _assert_lane_untouched(harness.audit)
 
 
-def test_audit_connection_failure_sanitizes_and_closes_tenant_snapshot(
+def test_connection_failure_is_sanitized_and_does_not_touch_peer(
     harness: _Harness,
 ):
     harness.connect_failures.add(_AUDIT_DSN)
 
-    with pytest.raises(readiness.PostgreSQLReadinessError) as raised:
-        _verify()
+    with pytest.raises(readiness.PostgreSQLVerificationError) as raised:
+        _verify_audit()
     rendered = str(raised.value)
-    for prohibited in (
-        _AUDIT_DSN,
-        "audit-password",
-        _AUDIT_SYSTEM_IDENTIFIER,
-    ):
+    for prohibited in (_AUDIT_DSN, "audit-password", _AUDIT_SYSTEM_IDENTIFIER):
         assert prohibited not in rendered
     assert raised.value.__cause__ is None
     assert raised.value.__context__ is None
-    assert harness.tenant.rollback_calls == 1
-    assert harness.tenant.close_calls == 1
-    assert harness.audit.rollback_calls == 0
-    assert harness.audit.close_calls == 0
+    _assert_lane_untouched(harness.tenant)
+    _assert_lane_untouched(harness.audit)
 
 
-def test_cleanup_failure_refuses_without_leaking_cleanup_diagnostic(
-    harness: _Harness,
-):
+def test_cleanup_failure_refuses_without_leaking_diagnostic(harness: _Harness):
     harness.audit.fail_rollback = True
 
-    with pytest.raises(readiness.PostgreSQLReadinessError) as raised:
-        _verify()
-    assert "readiness transaction cleanup failed" in str(raised.value)
+    with pytest.raises(readiness.PostgreSQLVerificationError) as raised:
+        _verify_audit()
+    assert "security-audit structural observation cleanup failed" in str(
+        raised.value
+    )
     assert "password" not in str(raised.value)
     assert "system identifier" not in str(raised.value)
-    _assert_closed(harness)
+    _assert_lane_closed(harness.audit)
 
 
-def test_catalog_identity_failure_is_sanitized_and_closes_both_snapshots(
+def test_catalog_identity_failure_is_lane_local_and_sanitized(
     harness: _Harness,
 ):
     harness.catalog_failure = "security-audit"
 
-    with pytest.raises(readiness.PostgreSQLReadinessError) as raised:
-        _verify()
-
+    with pytest.raises(readiness.PostgreSQLVerificationError) as raised:
+        _verify_audit()
     assert str(raised.value).endswith(
         "security-audit catalog verifier identity differs"
     )
     assert "password" not in str(raised.value)
     assert "system identifier" not in str(raised.value)
-    assert raised.value.__cause__ is None
-    assert raised.value.__context__ is None
-    _assert_closed(harness)
+    _assert_lane_untouched(harness.tenant)
+    _assert_lane_closed(harness.audit)
 
 
-def test_process_interruption_still_rolls_back_and_closes_both_snapshots(
+def test_process_interruption_still_rolls_back_and_closes_one_snapshot(
     harness: _Harness,
 ):
     class ProcessInterrupted(BaseException):
@@ -656,5 +761,6 @@ def test_process_interruption_still_rolls_back_and_closes_both_snapshots(
     harness.tenant.execute = interrupt_first_read
 
     with pytest.raises(ProcessInterrupted):
-        _verify()
-    _assert_closed(harness)
+        _verify_tenant()
+    _assert_lane_closed(harness.tenant)
+    _assert_lane_untouched(harness.audit)

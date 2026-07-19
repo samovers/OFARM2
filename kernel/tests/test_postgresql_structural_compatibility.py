@@ -1,4 +1,4 @@
-"""Real PostgreSQL 17 startup-readiness tests for the independent pair."""
+"""Real PostgreSQL 17.10 structural-compatibility tests."""
 
 from __future__ import annotations
 
@@ -26,8 +26,10 @@ from deployment.postgresql.provisioning_specs import (
     ProvisioningSpec,
 )
 from deployment.postgresql.readiness import (
-    PostgreSQLReadinessError,
-    verify_startup_readiness,
+    PostgreSQLVerificationError,
+    verify_postgresql_service_separation,
+    verify_security_audit_structural_compatibility,
+    verify_tenant_structural_compatibility,
 )
 
 
@@ -38,7 +40,7 @@ MAINTENANCE_DATABASES = ("postgres", "template0", "template1")
 
 
 @dataclass(frozen=True, slots=True)
-class _ReadyPair:
+class _StructuralPair:
     tenant_admin_dsn: str
     audit_admin_dsn: str
     tenant_target_admin_dsn: str
@@ -137,11 +139,11 @@ def _passwords(spec: ProvisioningSpec, lane: str) -> dict[str, str]:
 
 
 @pytest.fixture(scope="module")
-def ready_pair() -> _ReadyPair:
+def structural_pair() -> _StructuralPair:
     tenant_admin_dsn = os.environ.get(TENANT_ADMIN_ENV)
     audit_admin_dsn = os.environ.get(AUDIT_ADMIN_ENV)
     if not tenant_admin_dsn or not audit_admin_dsn:
-        pytest.skip("both dedicated PostgreSQL 17 admin routes are required")
+        pytest.skip("both dedicated PostgreSQL 17.10 admin routes are required")
 
     tenant_spec = TENANT_PROVISIONING_SPEC
     audit_spec = SECURITY_AUDIT_PROVISIONING_SPEC
@@ -181,7 +183,7 @@ def ready_pair() -> _ReadyPair:
                 PACKAGE_ROOT,
                 TENANT_SERVICE,
             ),
-            release_identity="issue-174-readiness-tenant-test",
+            release_identity="issue-174-structural-tenant-test",
             execution_id=uuid4(),
         )
         migrate_service(
@@ -197,10 +199,10 @@ def ready_pair() -> _ReadyPair:
                 PACKAGE_ROOT,
                 SECURITY_AUDIT_SERVICE,
             ),
-            release_identity="issue-174-readiness-audit-test",
+            release_identity="issue-174-structural-audit-test",
             execution_id=uuid4(),
         )
-        yield _ReadyPair(
+        yield _StructuralPair(
             tenant_admin_dsn=tenant_admin_dsn,
             audit_admin_dsn=audit_admin_dsn,
             tenant_target_admin_dsn=tenant_target_admin_dsn,
@@ -238,40 +240,52 @@ def _ledger_rows(dsn: str, qualified_ledger: str) -> list[tuple[object, ...]]:
         ).fetchall()
 
 
-def test_real_readiness_logins_prove_exact_independent_read_only_pair(
-    ready_pair: _ReadyPair,
+def test_real_structural_logins_prove_independent_read_only_lanes(
+    structural_pair: _StructuralPair,
 ):
     tenant_before = _ledger_rows(
-        ready_pair.tenant_target_admin_dsn,
+        structural_pair.tenant_target_admin_dsn,
         TENANT_SERVICE.qualified_ledger,
     )
     audit_before = _ledger_rows(
-        ready_pair.audit_target_admin_dsn,
+        structural_pair.audit_target_admin_dsn,
         SECURITY_AUDIT_SERVICE.qualified_ledger,
     )
 
-    report = verify_startup_readiness(
-        tenant_readiness_dsn=ready_pair.tenant_readiness_dsn,
-        audit_readiness_dsn=ready_pair.audit_readiness_dsn,
+    tenant_report = verify_tenant_structural_compatibility(
+        tenant_structural_dsn=structural_pair.tenant_readiness_dsn,
+    )
+    audit_report = verify_security_audit_structural_compatibility(
+        audit_structural_dsn=structural_pair.audit_readiness_dsn,
+    )
+    separation = verify_postgresql_service_separation(
+        tenant_structural_dsn=structural_pair.tenant_readiness_dsn,
+        audit_structural_dsn=structural_pair.audit_readiness_dsn,
     )
 
-    assert report.ready is True
-    assert report.tenant_supported_version == 1
-    assert report.tenant_observed_version == 1
-    assert report.audit_supported_version == 1
-    assert report.audit_observed_version == 1
+    assert tenant_report.service_identity == TENANT_SERVICE.identity
+    assert tenant_report.supported_version == 1
+    assert tenant_report.observed_version == 1
+    assert audit_report.service_identity == SECURITY_AUDIT_SERVICE.identity
+    assert audit_report.supported_version == 1
+    assert audit_report.observed_version == 1
+    assert not hasattr(tenant_report, "ready")
+    assert not hasattr(audit_report, "ready")
+    assert separation.manifest()["distinctPostgreSQLSystemIdentifiers"] is True
     assert _ledger_rows(
-        ready_pair.tenant_target_admin_dsn,
+        structural_pair.tenant_target_admin_dsn,
         TENANT_SERVICE.qualified_ledger,
     ) == tenant_before
     assert _ledger_rows(
-        ready_pair.audit_target_admin_dsn,
+        structural_pair.audit_target_admin_dsn,
         SECURITY_AUDIT_SERVICE.qualified_ledger,
     ) == audit_before
 
 
-def test_readiness_fixes_catalog_output_settings_before_observation(
-    ready_pair: _ReadyPair,
+@pytest.mark.parametrize("lane", ("tenant", "security-audit"))
+def test_structural_observation_fixes_catalog_output_settings(
+    structural_pair: _StructuralPair,
+    lane: str,
 ):
     hostile_options = (
         "-c quote_all_identifiers=on "
@@ -280,38 +294,45 @@ def test_readiness_fixes_catalog_output_settings_before_observation(
         "-c standard_conforming_strings=off"
     )
     tenant_parameters = psycopg.conninfo.conninfo_to_dict(
-        ready_pair.tenant_readiness_dsn
+        structural_pair.tenant_readiness_dsn
     )
     tenant_parameters["options"] = hostile_options
     audit_parameters = psycopg.conninfo.conninfo_to_dict(
-        ready_pair.audit_readiness_dsn
+        structural_pair.audit_readiness_dsn
     )
     audit_parameters["options"] = hostile_options
 
-    report = verify_startup_readiness(
-        tenant_readiness_dsn=psycopg.conninfo.make_conninfo(
-            **tenant_parameters
-        ),
-        audit_readiness_dsn=psycopg.conninfo.make_conninfo(
-            **audit_parameters
-        ),
-    )
+    if lane == "tenant":
+        report = verify_tenant_structural_compatibility(
+            tenant_structural_dsn=psycopg.conninfo.make_conninfo(
+                **tenant_parameters
+            )
+        )
+        assert report.service_identity == TENANT_SERVICE.identity
+    else:
+        report = verify_security_audit_structural_compatibility(
+            audit_structural_dsn=psycopg.conninfo.make_conninfo(
+                **audit_parameters
+            )
+        )
+        assert report.service_identity == SECURITY_AUDIT_SERVICE.identity
 
-    assert report.ready is True
 
-
-def test_crossed_readiness_routes_and_newer_history_refuse(
-    ready_pair: _ReadyPair,
+def test_crossed_structural_routes_and_newer_history_refuse(
+    structural_pair: _StructuralPair,
 ):
-    with pytest.raises(PostgreSQLReadinessError):
-        verify_startup_readiness(
-            tenant_readiness_dsn=ready_pair.audit_readiness_dsn,
-            audit_readiness_dsn=ready_pair.tenant_readiness_dsn,
+    with pytest.raises(PostgreSQLVerificationError):
+        verify_tenant_structural_compatibility(
+            tenant_structural_dsn=structural_pair.audit_readiness_dsn,
+        )
+    with pytest.raises(PostgreSQLVerificationError):
+        verify_security_audit_structural_compatibility(
+            audit_structural_dsn=structural_pair.tenant_readiness_dsn,
         )
 
     try:
         with psycopg.connect(
-            ready_pair.tenant_target_admin_dsn,
+            structural_pair.tenant_target_admin_dsn,
             autocommit=True,
         ) as admin:
             admin.execute(
@@ -326,22 +347,21 @@ def test_crossed_readiness_routes_and_newer_history_refuse(
                 )
                 SELECT 2, '0002_future.sql', source_sha256, source_byte_length,
                        applied_prefix_digest, service_identity,
-                       provisioning_spec_digest, 'hostile-readiness-test',
+                       provisioning_spec_digest, 'hostile-structural-test',
                        pg_catalog.gen_random_uuid()
                 FROM ofarm.schema_migration WHERE version = 1
                 """
             )
         with pytest.raises(
-            PostgreSQLReadinessError,
+            PostgreSQLVerificationError,
             match="tenant migration history differs",
         ):
-            verify_startup_readiness(
-                tenant_readiness_dsn=ready_pair.tenant_readiness_dsn,
-                audit_readiness_dsn=ready_pair.audit_readiness_dsn,
+            verify_tenant_structural_compatibility(
+                tenant_structural_dsn=structural_pair.tenant_readiness_dsn,
             )
     finally:
         with psycopg.connect(
-            ready_pair.tenant_target_admin_dsn,
+            structural_pair.tenant_target_admin_dsn,
             autocommit=True,
         ) as admin:
             admin.execute(
@@ -353,30 +373,39 @@ def test_crossed_readiness_routes_and_newer_history_refuse(
 
 
 @pytest.mark.parametrize(
-    ("target_attribute", "schema_name", "function_name", "lane_label"),
+    (
+        "target_attribute",
+        "schema_name",
+        "function_name",
+        "lane_label",
+        "structural_dsn_attribute",
+    ),
     (
         (
             "tenant_target_admin_dsn",
             "ofarm",
             "verify_tenant_structure",
             "tenant",
+            "tenant_readiness_dsn",
         ),
         (
             "audit_target_admin_dsn",
             "ofarm_security",
             "verify_security_audit_structure",
             "security-audit",
+            "audit_readiness_dsn",
         ),
     ),
 )
 def test_external_catalog_anchor_refuses_semantically_unchanged_verifier_body(
-    ready_pair: _ReadyPair,
+    structural_pair: _StructuralPair,
     target_attribute: str,
     schema_name: str,
     function_name: str,
     lane_label: str,
+    structural_dsn_attribute: str,
 ):
-    target_dsn = getattr(ready_pair, target_attribute)
+    target_dsn = getattr(structural_pair, target_attribute)
     original_definition: str | None = None
     try:
         with psycopg.connect(target_dsn, autocommit=True) as admin:
@@ -405,19 +434,94 @@ def test_external_catalog_anchor_refuses_semantically_unchanged_verifier_body(
             admin.execute(tampered_definition)
 
         with pytest.raises(
-            PostgreSQLReadinessError,
+            PostgreSQLVerificationError,
             match=f"{lane_label} catalog verifier identity differs",
         ):
-            verify_startup_readiness(
-                tenant_readiness_dsn=ready_pair.tenant_readiness_dsn,
-                audit_readiness_dsn=ready_pair.audit_readiness_dsn,
-            )
+            if lane_label == "tenant":
+                verify_tenant_structural_compatibility(
+                    tenant_structural_dsn=getattr(
+                        structural_pair, structural_dsn_attribute
+                    )
+                )
+            else:
+                verify_security_audit_structural_compatibility(
+                    audit_structural_dsn=getattr(
+                        structural_pair, structural_dsn_attribute
+                    )
+                )
     finally:
         if original_definition is not None:
             with psycopg.connect(target_dsn, autocommit=True) as admin:
                 admin.execute(original_definition)
 
-    assert verify_startup_readiness(
-        tenant_readiness_dsn=ready_pair.tenant_readiness_dsn,
-        audit_readiness_dsn=ready_pair.audit_readiness_dsn,
-    ).ready is True
+    if lane_label == "tenant":
+        restored_report = verify_tenant_structural_compatibility(
+            tenant_structural_dsn=structural_pair.tenant_readiness_dsn,
+        )
+        assert restored_report.service_identity == TENANT_SERVICE.identity
+    else:
+        restored_report = verify_security_audit_structural_compatibility(
+            audit_structural_dsn=structural_pair.audit_readiness_dsn,
+        )
+        assert restored_report.service_identity == SECURITY_AUDIT_SERVICE.identity
+
+
+@pytest.mark.parametrize("lane", ("tenant", "security-audit"))
+def test_public_structural_observation_refuses_post_migration_rogue_collation(
+    structural_pair: _StructuralPair,
+    lane: str,
+):
+    if lane == "tenant":
+        target_dsn = structural_pair.tenant_target_admin_dsn
+        structural_dsn = structural_pair.tenant_readiness_dsn
+        owner_role = "ofarm_owner"
+        schema_name = "ofarm"
+    else:
+        target_dsn = structural_pair.audit_target_admin_dsn
+        structural_dsn = structural_pair.audit_readiness_dsn
+        owner_role = "ofarm_security_audit_owner"
+        schema_name = "ofarm_security"
+
+    qualified_collation = sql.SQL("{}.{}").format(
+        sql.Identifier(schema_name),
+        sql.Identifier("rogue"),
+    )
+    try:
+        with psycopg.connect(target_dsn, autocommit=True) as admin:
+            admin.execute(
+                sql.SQL("SET ROLE {}").format(sql.Identifier(owner_role))
+            )
+            admin.execute(
+                sql.SQL(
+                    "CREATE COLLATION {} (provider = builtin, locale = 'C')"
+                ).format(qualified_collation)
+            )
+            admin.execute("RESET ROLE")
+
+        with pytest.raises(PostgreSQLVerificationError):
+            if lane == "tenant":
+                verify_tenant_structural_compatibility(
+                    tenant_structural_dsn=structural_dsn
+                )
+            else:
+                verify_security_audit_structural_compatibility(
+                    audit_structural_dsn=structural_dsn
+                )
+    finally:
+        with psycopg.connect(target_dsn, autocommit=True) as admin:
+            admin.execute(
+                sql.SQL("DROP COLLATION IF EXISTS {}").format(
+                    qualified_collation
+                )
+            )
+
+    if lane == "tenant":
+        restored = verify_tenant_structural_compatibility(
+            tenant_structural_dsn=structural_dsn
+        )
+        assert restored.service_identity == TENANT_SERVICE.identity
+    else:
+        restored = verify_security_audit_structural_compatibility(
+            audit_structural_dsn=structural_dsn
+        )
+        assert restored.service_identity == SECURITY_AUDIT_SERVICE.identity

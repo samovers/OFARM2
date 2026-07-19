@@ -51,6 +51,9 @@ from deployment.postgresql.provisioning_specs import (
     TENANT_PROVISIONING_SPEC,
     ProvisioningSpec,
 )
+from deployment.postgresql.version_policy import (
+    SUPPORTED_POSTGRESQL_SERVER_VERSION_NUM,
+)
 
 
 TENANT_ADMIN_ENV = "OFARM_TENANT_PROVISIONING_PG_ADMIN_DSN"
@@ -269,35 +272,6 @@ RETURNS pg_catalog.uuid
 LANGUAGE sql VOLATILE PARALLEL UNSAFE SECURITY INVOKER
 SET search_path = pg_catalog, pg_temp
 AS 'SELECT NULL::pg_catalog.uuid';
-
-CREATE FUNCTION ofarm.bind_tenant_capability(
-    pg_catalog.uuid,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.uuid,
-    pg_catalog.bytea,
-    pg_catalog.uuid,
-    pg_catalog.bytea,
-    pg_catalog.uuid,
-    pg_catalog.bytea,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.text,
-    pg_catalog.bytea,
-    pg_catalog.bytea,
-    pg_catalog.int8,
-    pg_catalog.int8,
-    pg_catalog.int8,
-    pg_catalog.uuid,
-    pg_catalog.bytea
-)
-RETURNS pg_catalog.void
-LANGUAGE sql VOLATILE PARALLEL UNSAFE SECURITY INVOKER
-SET search_path = pg_catalog, pg_temp
-AS 'SELECT pg_catalog.pg_sleep(0)';
 
 CREATE FUNCTION ofarm.current_tenant_id()
 RETURNS pg_catalog.uuid
@@ -589,7 +563,7 @@ def test_applies_exact_0001_then_verifies_a_noop_without_creating_the_ledger(
     assert report.migration_set_digest == migration_set.digest
     assert report.database_name == TENANT_PROVISIONING_SPEC.database_name
     assert report.system_identifier.isdigit()
-    assert 170000 <= report.server_version_num < 180000
+    assert report.server_version_num == SUPPORTED_POSTGRESQL_SERVER_VERSION_NUM
     assert report.previous_version == 0
     assert report.final_version == 1
     assert report.applied_versions == (1,)
@@ -614,7 +588,6 @@ def test_applies_exact_0001_then_verifies_a_noop_without_creating_the_ledger(
             WHERE namespace.nspname = 'ofarm'
               AND routine.proname = ANY (
                   ARRAY[
-                      'bind_tenant_capability',
                       'backend_incarnation_is_live',
                       'create_tenant_challenge',
                       'current_backend_start',
@@ -631,13 +604,6 @@ def test_applies_exact_0001_then_verifies_a_noop_without_creating_the_ledger(
                 "backend_incarnation_is_live",
                 "integer, timestamp with time zone",
                 "ofarm_backend_observer",
-            ),
-            (
-                "bind_tenant_capability",
-                "uuid, text, text, text, text, text, uuid, bytea, uuid, "
-                "bytea, uuid, bytea, text, text, text, bytea, bytea, bigint, "
-                "bigint, bigint, uuid, bytea",
-                "ofarm_binder",
             ),
             ("create_tenant_challenge", "", "ofarm_binder"),
             ("current_backend_start", "", "ofarm_backend_observer"),

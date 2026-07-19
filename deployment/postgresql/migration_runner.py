@@ -18,6 +18,9 @@ import psycopg
 from psycopg import sql
 from psycopg.pq import TransactionStatus
 
+from deployment.postgresql.catalog_classifier import (
+    SCHEMA_LOCAL_OBJECT_SELECTS_SQL,
+)
 from deployment.postgresql.catalog_identity import (
     CATALOG_OUTPUT_SETTING_ASSIGNMENTS,
     CatalogIdentityError,
@@ -43,11 +46,13 @@ from deployment.postgresql.provisioning_specs import (
     TENANT_PROVISIONING_SPEC,
     ProvisioningSpec,
 )
-from deployment.postgresql.tenant_contract import TENANT_CAPABILITY_CONTRACT
+from deployment.postgresql.tenant_contract import TENANT_CONTEXT_CONTRACT
+from deployment.postgresql.version_policy import (
+    SUPPORTED_POSTGRESQL_SERVER_VERSION,
+    SUPPORTED_POSTGRESQL_SERVER_VERSION_NUM,
+)
 
 
-_POSTGRESQL_17_MIN = 170000
-_POSTGRESQL_18_MIN = 180000
 _RELEASE_IDENTITY = re.compile(r"[!-~]{1,128}")
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 _LEDGER_GUARD_FUNCTION = "reject_schema_migration_mutation"
@@ -486,6 +491,7 @@ def _target_identity(
                    CURRENT_USER::text,
                    pg_catalog.current_database()::text,
                    pg_catalog.current_setting('server_version_num')::integer,
+                   pg_catalog.current_setting('server_version')::text,
                    control.system_identifier::text,
                    pg_catalog.pg_is_in_recovery(),
                    pg_catalog.current_setting('transaction_read_only')
@@ -496,16 +502,18 @@ def _target_identity(
         raise MigrationTargetError("migrator route identity is unreadable") from exc
     if row is None or row[0:2] != ("ofarm_migrator", "ofarm_migrator"):
         raise MigrationTargetError("migrator route must use exact ofarm_migrator")
-    identity = _TargetIdentity(row[2], row[4], row[3])
+    identity = _TargetIdentity(row[2], row[5], row[3])
     if identity.database_name != report.database_name:
         raise MigrationTargetError("migrator route reached the wrong database")
     if identity.system_identifier != report.system_identifier:
         raise MigrationTargetError("admin and migrator routes reach different clusters")
-    if identity.server_version_num != report.server_version_num or not (
-        _POSTGRESQL_17_MIN <= identity.server_version_num < _POSTGRESQL_18_MIN
+    if (
+        identity.server_version_num != report.server_version_num
+        or identity.server_version_num != SUPPORTED_POSTGRESQL_SERVER_VERSION_NUM
+        or row[4] != SUPPORTED_POSTGRESQL_SERVER_VERSION
     ):
         raise MigrationTargetError("migrator route PostgreSQL version differs")
-    if row[5] is not False or row[6] != "off":
+    if row[6] is not False or row[7] != "off":
         raise MigrationTargetError("migrator route is not a writable primary")
     return identity
 
@@ -555,90 +563,11 @@ def _schema_object_rows(
     schema_names: tuple[str, ...],
 ) -> list[tuple[str, str, str]]:
     rows = connection.execute(
-        """
+        f"""
         WITH target_names AS (
             SELECT pg_catalog.unnest(%s::text[]) AS schema_name
         )
-        SELECT 'relation', namespace.nspname::text, object_name.relname::text
-        FROM pg_catalog.pg_class AS object_name
-        JOIN pg_catalog.pg_namespace AS namespace
-             ON namespace.oid = object_name.relnamespace
-        WHERE namespace.nspname IN (SELECT schema_name FROM target_names)
-        UNION ALL
-        SELECT 'routine', namespace.nspname::text, object_name.proname::text
-        FROM pg_catalog.pg_proc AS object_name
-        JOIN pg_catalog.pg_namespace AS namespace
-             ON namespace.oid = object_name.pronamespace
-        WHERE namespace.nspname IN (SELECT schema_name FROM target_names)
-        UNION ALL
-        SELECT 'type', namespace.nspname::text, object_name.typname::text
-        FROM pg_catalog.pg_type AS object_name
-        JOIN pg_catalog.pg_namespace AS namespace
-             ON namespace.oid = object_name.typnamespace
-        WHERE namespace.nspname IN (SELECT schema_name FROM target_names)
-        UNION ALL
-        SELECT 'collation', namespace.nspname::text, object_name.collname::text
-        FROM pg_catalog.pg_collation AS object_name
-        JOIN pg_catalog.pg_namespace AS namespace
-             ON namespace.oid = object_name.collnamespace
-        WHERE namespace.nspname IN (SELECT schema_name FROM target_names)
-        UNION ALL
-        SELECT 'operator', namespace.nspname::text, object_name.oprname::text
-        FROM pg_catalog.pg_operator AS object_name
-        JOIN pg_catalog.pg_namespace AS namespace
-             ON namespace.oid = object_name.oprnamespace
-        WHERE namespace.nspname IN (SELECT schema_name FROM target_names)
-        UNION ALL
-        SELECT 'operator_class', namespace.nspname::text, object_name.opcname::text
-        FROM pg_catalog.pg_opclass AS object_name
-        JOIN pg_catalog.pg_namespace AS namespace
-             ON namespace.oid = object_name.opcnamespace
-        WHERE namespace.nspname IN (SELECT schema_name FROM target_names)
-        UNION ALL
-        SELECT 'operator_family', namespace.nspname::text, object_name.opfname::text
-        FROM pg_catalog.pg_opfamily AS object_name
-        JOIN pg_catalog.pg_namespace AS namespace
-             ON namespace.oid = object_name.opfnamespace
-        WHERE namespace.nspname IN (SELECT schema_name FROM target_names)
-        UNION ALL
-        SELECT 'conversion', namespace.nspname::text, object_name.conname::text
-        FROM pg_catalog.pg_conversion AS object_name
-        JOIN pg_catalog.pg_namespace AS namespace
-             ON namespace.oid = object_name.connamespace
-        WHERE namespace.nspname IN (SELECT schema_name FROM target_names)
-        UNION ALL
-        SELECT 'text_search_config', namespace.nspname::text, object_name.cfgname::text
-        FROM pg_catalog.pg_ts_config AS object_name
-        JOIN pg_catalog.pg_namespace AS namespace
-             ON namespace.oid = object_name.cfgnamespace
-        WHERE namespace.nspname IN (SELECT schema_name FROM target_names)
-        UNION ALL
-        SELECT 'text_search_dictionary', namespace.nspname::text,
-               object_name.dictname::text
-        FROM pg_catalog.pg_ts_dict AS object_name
-        JOIN pg_catalog.pg_namespace AS namespace
-             ON namespace.oid = object_name.dictnamespace
-        WHERE namespace.nspname IN (SELECT schema_name FROM target_names)
-        UNION ALL
-        SELECT 'text_search_parser', namespace.nspname::text,
-               object_name.prsname::text
-        FROM pg_catalog.pg_ts_parser AS object_name
-        JOIN pg_catalog.pg_namespace AS namespace
-             ON namespace.oid = object_name.prsnamespace
-        WHERE namespace.nspname IN (SELECT schema_name FROM target_names)
-        UNION ALL
-        SELECT 'text_search_template', namespace.nspname::text,
-               object_name.tmplname::text
-        FROM pg_catalog.pg_ts_template AS object_name
-        JOIN pg_catalog.pg_namespace AS namespace
-             ON namespace.oid = object_name.tmplnamespace
-        WHERE namespace.nspname IN (SELECT schema_name FROM target_names)
-        UNION ALL
-        SELECT 'statistics', namespace.nspname::text, object_name.stxname::text
-        FROM pg_catalog.pg_statistic_ext AS object_name
-        JOIN pg_catalog.pg_namespace AS namespace
-             ON namespace.oid = object_name.stxnamespace
-        WHERE namespace.nspname IN (SELECT schema_name FROM target_names)
+        {SCHEMA_LOCAL_OBJECT_SELECTS_SQL}
         ORDER BY 1, 2, 3
         """,
         (list(schema_names),),
@@ -1453,7 +1382,7 @@ def _verify_final_service_structure(
                 row is None
                 or len(row) != 11
                 or row[0] is not True
-                or row[1] != TENANT_CAPABILITY_CONTRACT.digest
+                or row[1] != TENANT_CONTEXT_CONTRACT.digest
                 or row[2] != 0
                 or not isinstance(row[3], str)
                 or _DIGEST.fullmatch(row[3]) is None
@@ -1468,7 +1397,7 @@ def _verify_final_service_structure(
             row = connection.execute(
                 "SELECT * FROM ofarm_security.verify_security_audit_structure()"
             ).fetchone()
-            if tuple(row or ()) != (True, False, 0, False):
+            if tuple(row or ()) != (True, 0, False):
                 raise MigrationDirtyError(
                     "security-audit structural verifier differs at the final head"
                 )

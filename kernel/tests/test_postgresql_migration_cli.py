@@ -21,6 +21,9 @@ from deployment.postgresql.provisioning_specs import (
     SECURITY_AUDIT_PROVISIONING_SPEC,
     TENANT_PROVISIONING_SPEC,
 )
+from deployment.postgresql.version_policy import (
+    SUPPORTED_POSTGRESQL_SERVER_VERSION_NUM,
+)
 
 
 _EXECUTION_ID = UUID("11111111-1111-4111-8111-111111111111")
@@ -87,7 +90,7 @@ def test_each_entry_point_has_one_fixed_service_and_route_pair(
             migration_set_digest=migration_set.digest,
             database_name=spec.database_name,
             system_identifier="123",
-            server_version_num=170009,
+            server_version_num=SUPPORTED_POSTGRESQL_SERVER_VERSION_NUM,
             previous_version=0,
             final_version=1,
             applied_versions=(1,),

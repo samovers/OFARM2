@@ -59,6 +59,8 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12.13"
@@ -69,6 +71,25 @@ jobs:
           .review-venv/bin/python -m pip install --require-hashes --only-binary=:all: --no-deps --requirement requirements-review-pip.lock
           .review-venv/bin/python -m pip install --require-hashes --only-binary=:all: --no-deps --requirement requirements-review-baseline.lock
           .review-venv/bin/python -m pip check
+          python -m venv .review-tools-venv
+          .review-tools-venv/bin/python -m pip install --require-hashes --only-binary=:all: --no-deps --requirement requirements-review-pip.lock
+          .review-tools-venv/bin/python -m pip install --require-hashes --only-binary=:all: --no-deps --requirement requirements-review-tools.lock
+          .review-tools-venv/bin/python -m pip check
+      - name: Ruff PostgreSQL implementation
+        run: >-
+          .review-tools-venv/bin/python -m ruff check
+          deployment/postgresql
+          kernel/tests/test_migration_sets.py
+          kernel/tests/test_postgresql_*.py
+          kernel/tests/test_review_baseline.py
+      - name: Authenticate tenant migration release
+        run: .review-venv/bin/python -m deployment.postgresql.preflight_tenant_migrations
+      - name: Authenticate security-audit migration release
+        run: .review-venv/bin/python -m deployment.postgresql.preflight_security_audit_migrations
+      - name: Reject whitespace errors
+        run: >-
+          git diff --check
+          origin/${{ github.event.repository.default_branch }}...HEAD
       - name: Complete Kernel baseline run 1
         env:
           OFARM_PG_ADMIN_DSN: "host=localhost port=5432 dbname=postgres user=ofarm password=ofarm"

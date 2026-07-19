@@ -18,6 +18,10 @@ import pytest
 from psycopg import sql
 
 import deployment.postgresql.provisioning as provisioning_module
+from deployment.postgresql.catalog_classifier import (
+    SCHEMA_LOCAL_CATALOG_CLASSES,
+    SCHEMA_LOCAL_OBJECT_SELECTS_SQL,
+)
 from deployment.postgresql.provisioning import (
     ProvisioningDriftError,
     ProvisioningInfrastructureReport,
@@ -34,7 +38,12 @@ from deployment.postgresql.provisioning_specs import (
     SECURITY_AUDIT_PROVISIONING_SPEC,
     TENANT_PROVISIONING_SPEC,
 )
-from deployment.postgresql.tenant_contract import TENANT_BINDER_ROUTINE_SIGNATURES
+from deployment.postgresql.tenant_contract import TENANT_CONTEXT_ROUTINE_SIGNATURES
+from deployment.postgresql.version_policy import (
+    SUPPORTED_POSTGRESQL_SERVER_VERSION,
+    SUPPORTED_POSTGRESQL_SERVER_VERSION_NUM,
+    SUPPORTED_POSTGRESQL_VERSION,
+)
 
 
 TENANT_ADMIN_ENV = "OFARM_TENANT_PROVISIONING_PG_ADMIN_DSN"
@@ -475,7 +484,7 @@ def test_provisioning_specs_freeze_distinct_service_and_role_boundaries():
     ).hexdigest() == \
         "17e431e33221426151a6ceb3eb2214b1abc51a7b9390d508603f233742deca28"
     assert tenant.digest == \
-        "sha256:d6f8c4b83c4ee235a5a50b49bd857b0e7d744efa3b0ebbf4ecfea3151b4f21d7"
+        "sha256:a7c69cd270aac75efef0419e3eadf2ae37722abfc14dbd4b639ee653ad21680f"
     assert audit.digest == \
         "sha256:770165332bbdb7a5e67e468f021d9fe82df817a2aee1a8a70191a08e869c307a"
     assert next(
@@ -568,13 +577,6 @@ def test_tenant_write_lock_owner_and_one_time_owner_sealer_are_closed():
         (item.qualified_identity, item.owner_role) for item in sealer.transfers
     } == {
         ("ofarm.create_tenant_challenge()", "ofarm_binder"),
-        (
-            "ofarm.bind_tenant_capability("
-            "uuid, text, text, text, text, text, uuid, bytea, uuid, bytea, "
-            "uuid, bytea, text, text, text, bytea, bytea, bigint, bigint, "
-            "bigint, uuid, bytea)",
-            "ofarm_binder",
-        ),
         ("ofarm.current_tenant_id()", "ofarm_binder"),
         ("ofarm.current_backend_start()", "ofarm_backend_observer"),
         (
@@ -592,7 +594,7 @@ def test_tenant_write_lock_owner_and_one_time_owner_sealer_are_closed():
         (item.function_name, item.argument_types) for item in sealer.transfers
     ).issuperset(
         (routine.name, routine.argument_types)
-        for routine in TENANT_BINDER_ROUTINE_SIGNATURES
+        for routine in TENANT_CONTEXT_ROUTINE_SIGNATURES
     )
     assert sealer.source.startswith(
         "BEGIN GRANT CREATE ON SCHEMA ofarm TO "
@@ -604,6 +606,137 @@ def test_tenant_write_lock_owner_and_one_time_owner_sealer_are_closed():
     )
     assert audit.tenant_write_lock is None
     assert audit.tenant_initial_owner_sealer is None
+
+
+def test_schema_local_catalog_classifier_is_one_exact_postgresql_17_10_list():
+    assert tuple(item.category for item in SCHEMA_LOCAL_CATALOG_CLASSES) == (
+        "relation",
+        "routine",
+        "type",
+        "collation",
+        "operator",
+        "operator_class",
+        "operator_family",
+        "conversion",
+        "text_search_config",
+        "text_search_dictionary",
+        "text_search_parser",
+        "text_search_template",
+        "statistics",
+    )
+    for item in SCHEMA_LOCAL_CATALOG_CLASSES:
+        assert SCHEMA_LOCAL_OBJECT_SELECTS_SQL.count(
+            f"SELECT '{item.category}'"
+        ) == 1
+        assert SCHEMA_LOCAL_OBJECT_SELECTS_SQL.count(
+            f"FROM pg_catalog.{item.catalog_name} AS object_name"
+        ) == 1
+        assert SCHEMA_LOCAL_OBJECT_SELECTS_SQL.count(
+            f"object_name.{item.name_column}::text"
+        ) == 1
+        assert SCHEMA_LOCAL_OBJECT_SELECTS_SQL.count(
+            f"object_name.{item.namespace_column}"
+        ) == 1
+
+
+class _IdentityCursor:
+    def __init__(self, row: tuple[object, ...]):
+        self._row = row
+
+    def fetchone(self) -> tuple[object, ...]:
+        return self._row
+
+
+class _IdentityConnection:
+    def __init__(self, row: tuple[object, ...]):
+        self._row = row
+
+    def execute(self, _statement: str) -> _IdentityCursor:
+        return _IdentityCursor(self._row)
+
+
+def _dba_identity_row(
+    server_version_num: int,
+    server_version: str = SUPPORTED_POSTGRESQL_SERVER_VERSION,
+) -> tuple[object, ...]:
+    return (
+        "postgres",
+        True,
+        server_version_num,
+        server_version,
+        "123456789",
+        TENANT_PROVISIONING_SPEC.scram_iterations,
+        False,
+        "off",
+    )
+
+
+def test_provisioning_accepts_only_the_tested_postgresql_17_10_build():
+    assert SUPPORTED_POSTGRESQL_VERSION == "17.10"
+    assert SUPPORTED_POSTGRESQL_SERVER_VERSION_NUM == 170010
+    assert (
+        SUPPORTED_POSTGRESQL_SERVER_VERSION
+        == "17.10 (Debian 17.10-1.pgdg13+1)"
+    )
+    accepted = provisioning_module._require_dba(
+        _IdentityConnection(_dba_identity_row(170010)),
+        TENANT_PROVISIONING_SPEC,
+    )
+    assert accepted.server_version_num == 170010
+    assert accepted.server_version == SUPPORTED_POSTGRESQL_SERVER_VERSION
+
+    for refused_version in (170000, 170009, 170011, 179999):
+        with pytest.raises(
+            ProvisioningTargetError,
+            match="requires exact PostgreSQL build",
+        ):
+            provisioning_module._require_dba(
+                _IdentityConnection(_dba_identity_row(refused_version)),
+                TENANT_PROVISIONING_SPEC,
+            )
+
+    with pytest.raises(
+        ProvisioningTargetError,
+        match="requires exact PostgreSQL build",
+    ):
+        provisioning_module._require_dba(
+            _IdentityConnection(_dba_identity_row(170010, "17.10")),
+            TENANT_PROVISIONING_SPEC,
+        )
+
+
+def test_target_identity_accepts_only_the_same_exact_postgresql_build():
+    expected = provisioning_module._PostgresIdentity(
+        database_name="postgres",
+        system_identifier="123456789",
+        server_version_num=SUPPORTED_POSTGRESQL_SERVER_VERSION_NUM,
+        server_version=SUPPORTED_POSTGRESQL_SERVER_VERSION,
+    )
+    row = (
+        TENANT_PROVISIONING_SPEC.database_name,
+        expected.system_identifier,
+        expected.server_version_num,
+        expected.server_version,
+        False,
+        "off",
+    )
+    accepted = provisioning_module._target_identity(
+        _IdentityConnection(row),
+        TENANT_PROVISIONING_SPEC,
+        expected,
+    )
+    assert accepted.server_version == SUPPORTED_POSTGRESQL_SERVER_VERSION
+
+    wrong_build = (*row[0:3], "17.10", *row[4:])
+    with pytest.raises(
+        ProvisioningTargetError,
+        match="admin and target PostgreSQL builds differ",
+    ):
+        provisioning_module._target_identity(
+            _IdentityConnection(wrong_build),
+            TENANT_PROVISIONING_SPEC,
+            expected,
+        )
 
 
 def test_infrastructure_report_cannot_claim_a_migration_phase():
@@ -1140,7 +1273,6 @@ def test_fake_ledger_and_rogue_collation_both_refuse(provisioned_services):
         with psycopg.connect(target_dsn, autocommit=True) as connection:
             connection.execute("DROP TABLE ofarm.schema_migration")
     verify_service(admin_dsn, TENANT_PROVISIONING_SPEC)
-
     with psycopg.connect(target_dsn, autocommit=True) as connection:
         connection.execute(
             "CREATE COLLATION ofarm.rogue "
@@ -1153,6 +1285,38 @@ def test_fake_ledger_and_rogue_collation_both_refuse(provisioned_services):
         with psycopg.connect(target_dsn, autocommit=True) as connection:
             connection.execute("DROP COLLATION ofarm.rogue")
     verify_service(admin_dsn, TENANT_PROVISIONING_SPEC)
+
+
+def test_fresh_audit_target_with_owner_created_rogue_collation_refuses(
+    provisioned_services,
+):
+    admin_dsn = provisioned_services["auditAdmin"]
+    spec = SECURITY_AUDIT_PROVISIONING_SPEC
+    target_dsn = _database_dsn(admin_dsn, spec.database_name)
+    with psycopg.connect(target_dsn, autocommit=True) as connection:
+        connection.execute(
+            sql.SQL("SET ROLE {}").format(sql.Identifier(spec.schema_owner))
+        )
+        connection.execute(
+            sql.SQL(
+                "CREATE COLLATION {}.rogue "
+                "(provider = builtin, locale = 'C')"
+            ).format(sql.Identifier(spec.schema_name))
+        )
+    try:
+        with pytest.raises(
+            ProvisioningDriftError,
+            match="unverified database objects",
+        ):
+            verify_service(admin_dsn, spec)
+    finally:
+        with psycopg.connect(target_dsn, autocommit=True) as connection:
+            connection.execute(
+                sql.SQL("DROP COLLATION {}.rogue").format(
+                    sql.Identifier(spec.schema_name)
+                )
+            )
+    verify_service(admin_dsn, spec)
 
 
 def test_acl_and_default_acl_drift_refuse_without_reconciliation(

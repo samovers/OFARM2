@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import hashlib
-import hmac
 import json
 import os
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
 from uuid import UUID, uuid4
@@ -18,6 +17,9 @@ import pytest
 from psycopg import sql
 from psycopg.types.json import Jsonb
 
+from deployment.postgresql.catalog_classifier import (
+    SCHEMA_LOCAL_CATALOG_CLASSES,
+)
 from deployment.postgresql.migration_runner import (
     MigrationDirtyError,
     initial_ledger_sql,
@@ -31,13 +33,11 @@ from deployment.postgresql.migration_sets import (
 from deployment.postgresql.provisioning import provision_service
 from deployment.postgresql.provisioning_specs import TENANT_PROVISIONING_SPEC
 from deployment.postgresql.tenant_contract import (
-    TENANT_BINDER_AUDIENCE,
-    TENANT_CAPABILITY_CONTRACT,
-    TENANT_CAPABILITY_DOMAIN,
-    TENANT_CAPABILITY_EQUALITY_POLICY,
-    TenantCapability,
-    canonical_tenant_capability_bytes,
-    tenant_capability_hmac,
+    OIDC_ISSUER_EQUALITY_POLICY,
+    OIDC_ISSUER_INVALID_VECTORS,
+    OIDC_ISSUER_VALID_VECTORS,
+    TENANT_CONTEXT_CONTRACT,
+    valid_oidc_issuer,
 )
 from kernel.tests.test_postgresql_migration_runner import (
     _assert_clean_service,
@@ -51,8 +51,6 @@ ADMIN_ENV = "OFARM_TENANT_PROVISIONING_PG_ADMIN_DSN"
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 MIGRATION_PATH = PACKAGE_ROOT / "kernel" / "migrations" / "0001_initial.sql"
 RELEASE_IDENTITY = "ofarm-tests/issue-174-tenant-baseline"
-KEY_ID = "tenant-key-2026-01"
-KEY_SECRET = bytes(range(32))
 ISSUER = "https://issuer.example.test/tenant"
 SUBJECT = "subject-tenant-01"
 PARTY_REF = "party-01"
@@ -87,6 +85,7 @@ class TenantTarget:
 
 @dataclass(frozen=True, slots=True)
 class TenantAuthority:
+    target_admin_dsn: str
     tenant_id: UUID
     tenant_registration_digest: str
     subject: str
@@ -154,10 +153,6 @@ def tenant_target() -> TenantTarget:
         _destroy_test_service(admin_dsn, spec)
 
 
-def _digest_bytes(value: str) -> bytes:
-    return bytes.fromhex(value.removeprefix("sha256:"))
-
-
 def _sha256_id(value: bytes) -> str:
     return "sha256:" + hashlib.sha256(value).hexdigest()
 
@@ -195,7 +190,7 @@ def _compute_binding_digest(
         )
         """,
         (
-            TENANT_CAPABILITY_EQUALITY_POLICY,
+            OIDC_ISSUER_EQUALITY_POLICY,
             ISSUER,
             subject,
             binding_version_id,
@@ -239,7 +234,7 @@ def _compute_act_digest(
         )
         """,
         (
-            TENANT_CAPABILITY_EQUALITY_POLICY,
+            OIDC_ISSUER_EQUALITY_POLICY,
             ISSUER,
             subject,
             stream_sequence,
@@ -293,7 +288,7 @@ def _transition(
         )
         """,
         (
-            TENANT_CAPABILITY_EQUALITY_POLICY,
+            OIDC_ISSUER_EQUALITY_POLICY,
             ISSUER,
             subject,
             expected_head_id,
@@ -338,21 +333,6 @@ def authority(
             "SELECT tenant_id, registration_digest FROM ofarm.register_tenant(%s)",
             ("tenant-beta",),
         ).fetchone()
-
-    with psycopg.connect(
-        tenant_target.role_dsn("ofarm_identity_control_login")
-    ) as identity:
-        now_us = identity.execute(
-            """
-            SELECT pg_catalog.floor(
-                EXTRACT(EPOCH FROM pg_catalog.clock_timestamp()) * 1000000
-            )::pg_catalog.int8
-            """
-        ).fetchone()[0]
-        identity.execute(
-            "SELECT ofarm.install_tenant_capability_key(%s, %s, %s, %s)",
-            (KEY_ID, KEY_SECRET, now_us - 3_600_000_000, now_us + 3_600_000_000),
-        )
 
     bundle_bytes = b'{"bundle":"tenant-integration-v1"}'
     bundle_digest = _sha256_id(bundle_bytes)
@@ -483,6 +463,7 @@ def authority(
         )
 
     return TenantAuthority(
+        target_admin_dsn=tenant_target.target_admin_dsn,
         tenant_id=tenant_id,
         tenant_registration_digest=registration_digest,
         subject=SUBJECT,
@@ -637,6 +618,7 @@ def other_authority(
             reason=INITIAL_REASON,
         )
     return TenantAuthority(
+        target_admin_dsn=tenant_target.target_admin_dsn,
         tenant_id=tenant_id,
         tenant_registration_digest=registration_digest,
         subject=subject,
@@ -654,119 +636,85 @@ def other_authority(
     )
 
 
-def _wire_bytes(capability: TenantCapability) -> bytes:
-    def lp32(value: bytes) -> bytes:
-        return len(value).to_bytes(4, "big") + value
-
-    values = (
-        capability.challenge_id.bytes,
-        capability.audience.encode("ascii"),
-        capability.key_id.encode("ascii"),
-        capability.equality_policy.encode("ascii"),
-        capability.issuer.encode("utf-8"),
-        capability.subject.encode("utf-8"),
-        capability.binding_version_id.bytes,
-        capability.binding_version_digest,
-        capability.lifecycle_head_id.bytes,
-        capability.lifecycle_head_digest,
-        capability.tenant_id.bytes,
-        capability.tenant_registration_digest,
-        capability.party_ref.encode("ascii"),
-        capability.party_record_kind.encode("ascii"),
-        capability.party_record_id.encode("ascii"),
-        capability.party_schema_digest,
-        capability.party_payload_digest,
-        capability.issued_at_unix_microseconds.to_bytes(8, "big", signed=True),
-        capability.not_before_unix_microseconds.to_bytes(8, "big", signed=True),
-        capability.expires_at_unix_microseconds.to_bytes(8, "big", signed=True),
-        capability.nonce.bytes,
-    )
-    return TENANT_CAPABILITY_DOMAIN + b"".join(lp32(value) for value in values)
-
-
-def _bind_arguments(capability: TenantCapability, mac: bytes) -> tuple[object, ...]:
-    return (
-        capability.challenge_id,
-        capability.audience,
-        capability.key_id,
-        capability.equality_policy,
-        capability.issuer,
-        capability.subject,
-        capability.binding_version_id,
-        capability.binding_version_digest,
-        capability.lifecycle_head_id,
-        capability.lifecycle_head_digest,
-        capability.tenant_id,
-        capability.tenant_registration_digest,
-        capability.party_ref,
-        capability.party_record_kind,
-        capability.party_record_id,
-        capability.party_schema_digest,
-        capability.party_payload_digest,
-        capability.issued_at_unix_microseconds,
-        capability.not_before_unix_microseconds,
-        capability.expires_at_unix_microseconds,
-        capability.nonce,
-        mac,
-    )
-
-
-BIND_SQL = "SELECT ofarm.bind_tenant_capability(" + ",".join(["%s"] * 22) + ")"
-
-
-def _capability_for_challenge(
+def _install_test_bound_context(
     connection: psycopg.Connection,
     authority: TenantAuthority,
-    challenge_id: UUID,
-    **changes: object,
-) -> TenantCapability:
-    now_us = connection.execute(
-        """
-        SELECT pg_catalog.floor(
-            EXTRACT(EPOCH FROM pg_catalog.clock_timestamp()) * 1000000
-        )::pg_catalog.int8
-        """
-    ).fetchone()[0]
-    capability = TenantCapability(
-        challenge_id=challenge_id,
-        audience=TENANT_BINDER_AUDIENCE,
-        key_id=KEY_ID,
-        equality_policy=TENANT_CAPABILITY_EQUALITY_POLICY,
-        issuer=ISSUER,
-        subject=authority.subject,
-        binding_version_id=authority.binding_version_id,
-        binding_version_digest=_digest_bytes(authority.binding_version_digest),
-        lifecycle_head_id=authority.lifecycle_head_id,
-        lifecycle_head_digest=_digest_bytes(authority.lifecycle_head_digest),
-        tenant_id=authority.tenant_id,
-        tenant_registration_digest=_digest_bytes(authority.tenant_registration_digest),
-        party_ref=authority.party_ref,
-        party_record_kind=PARTY_KIND,
-        party_record_id=authority.party_ref,
-        party_schema_digest=_digest_bytes(authority.party_schema_digest),
-        party_payload_digest=_digest_bytes(authority.party_payload_digest),
-        issued_at_unix_microseconds=now_us,
-        not_before_unix_microseconds=now_us,
-        expires_at_unix_microseconds=now_us + 30_000_000,
-        nonce=uuid4(),
-    )
-    return replace(capability, **changes)
+) -> None:
+    """Install a privileged test-only context for RLS/graph tests.
 
+    Production binding is deliberately absent until issue #172.  These #174
+    tests still need to exercise the protected storage primitives, so a target
+    administrator supplies the already-verified transaction context directly.
+    """
 
-def _bind(
-    connection: psycopg.Connection,
-    authority: TenantAuthority,
-    **changes: object,
-) -> TenantCapability:
-    challenge_id = connection.execute(
-        "SELECT ofarm.create_tenant_challenge()"
-    ).fetchone()[0]
-    capability = _capability_for_challenge(
-        connection, authority, challenge_id, **changes
-    )
-    mac = hmac.new(KEY_SECRET, _wire_bytes(capability), hashlib.sha256).digest()
-    connection.execute(BIND_SQL, _bind_arguments(capability, mac))
-    return capability
+    backend_pid, full_xid = connection.execute(
+        """
+        SELECT pg_catalog.pg_backend_pid(),
+               pg_catalog.pg_current_xact_id()::pg_catalog.text
+        """
+    ).fetchone()
+    with psycopg.connect(authority.target_admin_dsn) as admin:
+        backend_start = admin.execute(
+            """
+            SELECT backend_start
+            FROM pg_catalog.pg_stat_activity
+            WHERE pid = %s
+            """,
+            (backend_pid,),
+        ).fetchone()[0]
+        admin.execute(
+            """
+            DELETE FROM ofarm.tenant_binding_context
+            WHERE backend_pid = %s AND backend_start = %s
+            """,
+            (backend_pid, backend_start),
+        )
+        admin.execute(
+            """
+            INSERT INTO ofarm.tenant_binding_context (
+                backend_pid, backend_start, full_xid,
+                challenge_id, context_state,
+                equality_policy, issuer, subject,
+                binding_version_id, binding_version_digest,
+                lifecycle_head_id, lifecycle_head_digest,
+                tenant_id, tenant_registration_digest,
+                party_ref, party_record_kind, party_record_id,
+                party_schema_digest, party_payload_digest,
+                capability_nonce, bound_at
+            ) VALUES (
+                %s, %s, %s::pg_catalog.xid8,
+                %s, 'BOUND',
+                %s, %s, %s,
+                %s, %s,
+                %s, %s,
+                %s, %s,
+                %s, %s, %s,
+                %s, %s,
+                %s, pg_catalog.clock_timestamp()
+            )
+            """,
+            (
+                backend_pid,
+                backend_start,
+                full_xid,
+                uuid4(),
+                OIDC_ISSUER_EQUALITY_POLICY,
+                ISSUER,
+                authority.subject,
+                authority.binding_version_id,
+                authority.binding_version_digest,
+                authority.lifecycle_head_id,
+                authority.lifecycle_head_digest,
+                authority.tenant_id,
+                authority.tenant_registration_digest,
+                authority.party_ref,
+                PARTY_KIND,
+                authority.party_ref,
+                authority.party_schema_digest,
+                authority.party_payload_digest,
+                uuid4(),
+            ),
+        )
 
 
 def _verify(connection: psycopg.Connection) -> tuple[object, ...]:
@@ -791,12 +739,46 @@ def test_authoritative_source_ledger_contract_and_apply_noop(
     assert b"FROM pg_catalog.pg_stat_get_wal_receiver() AS receiver" in source
     assert source.count(b"SET quote_all_identifiers = off") == 1
     assert b"FROM pg_catalog.pg_largeobject_metadata" in source
-    assert TENANT_CAPABILITY_CONTRACT.digest == (
-        "sha256:a4d104f8ad7c5eab11a5b8d17293e82a6d4ac5f224ba0307c4e2cc07fa928e55"
+    assert TENANT_CONTEXT_CONTRACT.digest == (
+        "sha256:4e0acd383a1c44142043c51f2bca26fbddc0f191dcf511c2aa97d212d3a6cb62"
     )
     assert tenant_target.first_report.applied_versions == (1,)
     assert tenant_target.noop_report.applied_versions == ()
     assert tenant_target.noop_report.final_version == 1
+
+
+def test_tenant_catalog_fingerprint_has_exact_shared_schema_class_parity() -> None:
+    source = MIGRATION_PATH.read_text(encoding="utf-8")
+    marker = "-- SCHEMA_LOCAL_CATALOG_CLASSIFIER_V1"
+    assert source.count(marker) == 1
+    classifier = source.split(marker, 1)[1].split(
+        "        WITH catalog_entry(category, object_identity, definition) AS (",
+        1,
+    )
+    registry_lines, fingerprint = classifier
+    observed_registry = tuple(
+        tuple(line.strip().removeprefix("-- ").split("|"))
+        for line in registry_lines.splitlines()
+        if line.strip().startswith("-- ")
+    )
+    expected_registry = tuple(
+        (
+            item.category,
+            item.catalog_name,
+            item.namespace_column,
+            item.name_column,
+        )
+        for item in SCHEMA_LOCAL_CATALOG_CLASSES
+    )
+    assert observed_registry == expected_registry
+    fingerprint = fingerprint.split(
+        "        SELECT ''sha256:'' || pg_catalog.encode(", 1
+    )[0]
+    for item in SCHEMA_LOCAL_CATALOG_CLASSES:
+        assert fingerprint.count(f"''{item.category}''") == 1
+        assert f"FROM pg_catalog.{item.catalog_name} AS" in fingerprint
+        assert f".{item.namespace_column}" in fingerprint
+        assert f".{item.name_column}" in fingerprint
 
 
 def test_shared_application_role_cannot_observe_peer_backend_statistics(
@@ -915,140 +897,56 @@ def test_shared_application_role_cannot_observe_peer_backend_statistics(
         attacker.close()
 
 
-def test_database_frame_hmac_signature_and_minimum_binder_columns(
+def test_production_binding_is_fail_closed_pending_issue_172(
     tenant_target: TenantTarget,
 ) -> None:
-    issued_at = 1_800_000_000_000_000
-    capability = TenantCapability(
-        challenge_id=UUID("11111111-1111-4111-8111-111111111111"),
-        audience=TENANT_BINDER_AUDIENCE,
-        key_id="key-2026-01",
-        equality_policy=TENANT_CAPABILITY_EQUALITY_POLICY,
-        issuer=ISSUER,
-        subject="subject-01",
-        binding_version_id=UUID("22222222-2222-4222-8222-222222222222"),
-        binding_version_digest=bytes.fromhex("11" * 32),
-        lifecycle_head_id=UUID("33333333-3333-4333-8333-333333333333"),
-        lifecycle_head_digest=bytes.fromhex("22" * 32),
-        tenant_id=UUID("44444444-4444-4444-8444-444444444444"),
-        tenant_registration_digest=bytes.fromhex("33" * 32),
-        party_ref="party-01",
-        party_record_kind=PARTY_KIND,
-        party_record_id="party-01",
-        party_schema_digest=bytes.fromhex("44" * 32),
-        party_payload_digest=bytes.fromhex("55" * 32),
-        issued_at_unix_microseconds=issued_at,
-        not_before_unix_microseconds=issued_at,
-        expires_at_unix_microseconds=issued_at + 60_000_000,
-        nonce=UUID("55555555-5555-4555-8555-555555555555"),
-    )
-    expected_frame = canonical_tenant_capability_bytes(capability)
     with psycopg.connect(tenant_target.target_admin_dsn) as admin:
-        frame = bytes(
-            admin.execute(
-                "SELECT ofarm.frame_tenant_capability(" + ",".join(["%s"] * 21) + ")",
-                _bind_arguments(capability, b"")[:-1],
-            ).fetchone()[0]
-        )
-        database_mac = bytes(
-            admin.execute(
-                "SELECT ofarm.hmac_sha256(%s, %s)", (KEY_SECRET, frame)
-            ).fetchone()[0]
-        )
-        identity_arguments = admin.execute(
+        forbidden_relations = admin.execute(
             """
-            SELECT pg_catalog.pg_get_function_identity_arguments(routine.oid)
+            SELECT pg_catalog.to_regclass('ofarm.tenant_capability_key_schedule')
+            """
+        ).fetchone()
+        forbidden_routines = admin.execute(
+            """
+            SELECT routine.proname
             FROM pg_catalog.pg_proc AS routine
             JOIN pg_catalog.pg_namespace AS namespace
               ON namespace.oid = routine.pronamespace
             WHERE namespace.nspname = 'ofarm'
-              AND routine.proname = 'bind_tenant_capability'
+              AND routine.proname IN (
+                  'bind_tenant_capability',
+                  'frame_tenant_capability',
+                  'hmac_sha256',
+                  'secure_bytea_equal',
+                  'install_tenant_capability_key'
+              )
             """
+        ).fetchall()
+    assert forbidden_relations == (None,)
+    assert forbidden_routines == []
+
+    with psycopg.connect(tenant_target.role_dsn("ofarm_app")) as application:
+        challenge_id = application.execute(
+            "SELECT ofarm.create_tenant_challenge()"
         ).fetchone()[0]
-        privilege_rows = admin.execute(
-            """
-            SELECT
-                pg_catalog.has_table_privilege(
-                    'ofarm_binder', 'ofarm.principal_binding_lifecycle', 'SELECT'
-                ),
-                pg_catalog.has_table_privilege(
-                    'ofarm_binder', 'ofarm.principal_binding_current', 'SELECT'
-                ),
-                pg_catalog.has_column_privilege(
-                    'ofarm_binder', 'ofarm.principal_binding_lifecycle',
-                    'act_digest', 'SELECT'
-                ),
-                pg_catalog.has_column_privilege(
-                    'ofarm_binder', 'ofarm.principal_binding_lifecycle',
-                    'decided_at', 'SELECT'
-                ),
-                pg_catalog.has_column_privilege(
-                    'ofarm_binder', 'ofarm.principal_binding_current',
-                    'lifecycle_head_digest', 'SELECT'
-                ),
-                pg_catalog.has_column_privilege(
-                    'ofarm_binder', 'ofarm.principal_binding_current',
-                    'rebuilt_at', 'SELECT'
-                ),
-                pg_catalog.has_column_privilege(
-                    'ofarm_binder', 'ofarm.kernel_record', 'payload', 'SELECT'
-                ),
-                pg_catalog.has_column_privilege(
-                    'ofarm_binder', 'ofarm.tenant_capability_key_schedule',
-                    'installed_at', 'SELECT'
-                ),
-                pg_catalog.pg_has_role(
-                    'ofarm_binder', 'pg_read_all_stats', 'MEMBER'
-                ),
-                pg_catalog.has_function_privilege(
-                    'ofarm_app', 'ofarm.valid_ascii_id(text)', 'EXECUTE'
-                ),
-                pg_catalog.has_function_privilege(
-                    'ofarm_worker', 'ofarm.valid_ascii_id(text)', 'EXECUTE'
-                ),
-                pg_catalog.has_function_privilege(
-                    'ofarm_app', 'ofarm.valid_runtime_logical_ref(text)', 'EXECUTE'
-                ),
-                pg_catalog.has_function_privilege(
-                    'ofarm_worker', 'ofarm.valid_runtime_logical_ref(text)', 'EXECUTE'
-                ),
-                pg_catalog.has_function_privilege(
-                    'ofarm_app', 'ofarm.valid_oidc_issuer(text)', 'EXECUTE'
-                ),
-                pg_catalog.has_function_privilege(
-                    'ofarm_worker', 'ofarm.valid_oidc_issuer(text)', 'EXECUTE'
-                )
-            """
-        ).fetchone()
-    assert frame == expected_frame
-    assert hashlib.sha256(frame).hexdigest() == (
-        "b8cf399fc84251d58e699f58c853345c71dc2a56e3da3f17344aaf1208fbb012"
+        assert isinstance(challenge_id, UUID)
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            application.execute("SELECT ofarm.current_tenant_id()")
+
+
+def test_live_postgresql_and_python_share_exact_issuer_vectors(
+    tenant_target: TenantTarget,
+) -> None:
+    vectors = tuple((value, True) for value in OIDC_ISSUER_VALID_VECTORS) + tuple(
+        (value, False) for value in OIDC_ISSUER_INVALID_VECTORS
     )
-    assert database_mac == tenant_capability_hmac(KEY_SECRET, capability)
-    assert database_mac.hex() == (
-        "0ff2c776ce7dfb5d1ab2419d7aa18df4fe55c39e7b85bb4dbd0b19c3be6ab466"
-    )
-    assert identity_arguments == (
-        "uuid, text, text, text, text, text, uuid, bytea, uuid, bytea, uuid, "
-        "bytea, text, text, text, bytea, bytea, bigint, bigint, bigint, uuid, bytea"
-    )
-    assert privilege_rows == (
-        False,
-        False,
-        True,
-        False,
-        True,
-        False,
-        False,
-        False,
-        False,
-        True,
-        True,
-        True,
-        True,
-        False,
-        False,
-    )
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        for issuer, expected in vectors:
+            database_result = admin.execute(
+                "SELECT ofarm.valid_oidc_issuer(%s)", (issuer,)
+            ).fetchone()[0]
+            assert database_result is expected
+            assert valid_oidc_issuer(issuer) is expected
 
 
 def test_runtime_component_logical_ref_has_exact_ascii_octet_bound(
@@ -1238,12 +1136,12 @@ def test_runtime_roles_cannot_use_any_postgresql_large_object_path(
                     runtime.execute(statement)
 
 
-def test_binder_rls_copy_replay_search_path_and_lock_namespace(
+def test_context_storage_rls_copy_search_path_and_lock_namespace(
     tenant_target: TenantTarget,
     authority: TenantAuthority,
 ) -> None:
     with psycopg.connect(tenant_target.role_dsn("ofarm_app")) as application:
-        bound_capability = _bind(application, authority)
+        _install_test_bound_context(application, authority)
         assert (
             application.execute("SELECT ofarm.current_tenant_id()").fetchone()[0]
             == authority.tenant_id
@@ -1271,18 +1169,6 @@ def test_binder_rls_copy_replay_search_path_and_lock_namespace(
         with pytest.raises(psycopg.errors.ObjectNotInPrerequisiteState):
             with application.transaction():
                 application.execute("SELECT ofarm.create_tenant_challenge()")
-
-        replay_arguments = _bind_arguments(
-            bound_capability,
-            hmac.new(
-                KEY_SECRET,
-                _wire_bytes(bound_capability),
-                hashlib.sha256,
-            ).digest(),
-        )
-        with pytest.raises(psycopg.errors.InsufficientPrivilege):
-            with application.transaction():
-                application.execute(BIND_SQL, replay_arguments)
 
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             with application.transaction():
@@ -1327,9 +1213,9 @@ def test_tenant_write_lock_serializes_same_tenant_but_not_different_tenant(
     attempting = threading.Event()
     same_acquired = threading.Event()
     try:
-        _bind(first, authority)
-        _bind(same, authority)
-        _bind(different, other_authority)
+        _install_test_bound_context(first, authority)
+        _install_test_bound_context(same, authority)
+        _install_test_bound_context(different, other_authority)
         first.execute("SELECT ofarm.take_tenant_write_lock()")
 
         def acquire_same() -> bool:
@@ -1365,7 +1251,7 @@ def test_runtime_role_rls_refuses_query_shape_and_cross_tenant_write_bypasses(
     role_name: str,
 ) -> None:
     with psycopg.connect(tenant_target.role_dsn(role_name)) as runtime:
-        _bind(runtime, authority)
+        _install_test_bound_context(runtime, authority)
         assert runtime.execute(
             """
             SELECT pg_catalog.count(*) > 0,
@@ -1451,52 +1337,17 @@ def test_runtime_role_rls_refuses_query_shape_and_cross_tenant_write_bypasses(
                 )
 
 
-@pytest.mark.parametrize(
-    "changes",
-    (
-        {"party_ref": "party-other", "party_record_id": "party-other"},
-        {"party_record_kind": "ofarm.not-party.v0.1"},
-        {"party_schema_digest": bytes.fromhex("a1" * 32)},
-        {"party_payload_digest": bytes.fromhex("b2" * 32)},
-        {"binding_version_digest": bytes.fromhex("c3" * 32)},
-        {"lifecycle_head_digest": bytes.fromhex("d4" * 32)},
-        {"tenant_registration_digest": bytes.fromhex("e5" * 32)},
-    ),
-)
-def test_binder_refuses_wrong_party_and_authority_digests_with_valid_mac(
+def test_oidc_issuer_domain_enforces_shared_invalid_vectors(
     tenant_target: TenantTarget,
-    authority: TenantAuthority,
-    changes: Mapping[str, object],
 ) -> None:
-    with psycopg.connect(tenant_target.role_dsn("ofarm_app")) as application:
-        with pytest.raises(psycopg.errors.InsufficientPrivilege):
-            _bind(application, authority, **changes)
-
-
-@pytest.mark.parametrize(
-    "argument_index",
-    (
-        pytest.param(21, id="mac"),
-        pytest.param(17, id="issued-at"),
-        pytest.param(18, id="not-before"),
-        pytest.param(19, id="expires-at"),
-    ),
-)
-def test_binder_refuses_null_mac_and_time_fields(
-    tenant_target: TenantTarget,
-    authority: TenantAuthority,
-    argument_index: int,
-) -> None:
-    with psycopg.connect(tenant_target.role_dsn("ofarm_app")) as application:
-        challenge_id = application.execute(
-            "SELECT ofarm.create_tenant_challenge()"
-        ).fetchone()[0]
-        capability = _capability_for_challenge(application, authority, challenge_id)
-        mac = hmac.new(KEY_SECRET, _wire_bytes(capability), hashlib.sha256).digest()
-        arguments = list(_bind_arguments(capability, mac))
-        arguments[argument_index] = None
-        with pytest.raises(psycopg.errors.InsufficientPrivilege):
-            application.execute(BIND_SQL, arguments)
+    with psycopg.connect(tenant_target.target_admin_dsn, autocommit=True) as admin:
+        for issuer in OIDC_ISSUER_VALID_VECTORS:
+            assert admin.execute(
+                "SELECT %s::ofarm.oidc_issuer::pg_catalog.text", (issuer,)
+            ).fetchone() == (issuer,)
+        for issuer in OIDC_ISSUER_INVALID_VECTORS:
+            with pytest.raises(psycopg.errors.CheckViolation):
+                admin.execute("SELECT %s::ofarm.oidc_issuer", (issuer,))
 
 
 def test_stale_purge_preserves_two_live_backend_incarnations(
@@ -1508,7 +1359,7 @@ def test_stale_purge_preserves_two_live_backend_incarnations(
     observer_peer = psycopg.connect(tenant_target.role_dsn("ofarm_app"))
     purger_peer: psycopg.Connection | None = None
     try:
-        _bind(bound_peer, authority)
+        _install_test_bound_context(bound_peer, authority)
         bound_pid = bound_peer.execute("SELECT pg_catalog.pg_backend_pid()").fetchone()[
             0
         ]
@@ -1926,7 +1777,7 @@ def test_future_transition_and_corrupt_same_head_projection_refuse_then_rebuild(
                     binding_version_digest = NULL
                 WHERE equality_policy = %s AND issuer = %s AND subject = %s
                 """,
-                (TENANT_CAPABILITY_EQUALITY_POLICY, ISSUER, SUBJECT),
+                (OIDC_ISSUER_EQUALITY_POLICY, ISSUER, SUBJECT),
             )
         with psycopg.connect(
             tenant_target.role_dsn("ofarm_identity_control_login")
@@ -2004,7 +1855,7 @@ def test_future_transition_and_corrupt_same_head_projection_refuse_then_rebuild(
             FROM ofarm.principal_binding_current
             WHERE equality_policy = %s AND issuer = %s AND subject = %s
             """,
-            (TENANT_CAPABILITY_EQUALITY_POLICY, ISSUER, SUBJECT),
+            (OIDC_ISSUER_EQUALITY_POLICY, ISSUER, SUBJECT),
         ).fetchone() == (
             "ACTIVE",
             authority.binding_version_id,
@@ -2014,7 +1865,7 @@ def test_future_transition_and_corrupt_same_head_projection_refuse_then_rebuild(
         )
 
 
-def test_missing_projection_refuses_bind_and_rebuilds_from_authority(
+def test_missing_projection_rebuilds_from_authority(
     tenant_target: TenantTarget,
     authority: TenantAuthority,
 ) -> None:
@@ -2024,9 +1875,27 @@ def test_missing_projection_refuses_bind_and_rebuilds_from_authority(
                 "DELETE FROM ofarm.principal_binding_current WHERE subject = %s",
                 (SUBJECT,),
             )
-        with psycopg.connect(tenant_target.role_dsn("ofarm_app")) as application:
-            with pytest.raises(psycopg.errors.InsufficientPrivilege):
-                _bind(application, authority)
+        with psycopg.connect(
+            tenant_target.role_dsn("ofarm_identity_control_login")
+        ) as identity:
+            assert (
+                identity.execute(
+                    "SELECT ofarm.rebuild_principal_binding_current()"
+                ).fetchone()[0]
+                >= 1
+            )
+        with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+            assert admin.execute(
+                """
+                SELECT binding_version_id, lifecycle_head_id
+                FROM ofarm.principal_binding_current
+                WHERE equality_policy = %s AND issuer = %s AND subject = %s
+                """,
+                (OIDC_ISSUER_EQUALITY_POLICY, ISSUER, SUBJECT),
+            ).fetchone() == (
+                authority.binding_version_id,
+                authority.lifecycle_head_id,
+            )
     finally:
         with psycopg.connect(
             tenant_target.role_dsn("ofarm_identity_control_login")
@@ -2241,7 +2110,7 @@ def test_deferred_graph_accepts_future_ids_only_with_same_batch_reachability(
     trace_id = "promotion-trace-future"
     assertion_id = "assertion-future"
     with psycopg.connect(tenant_target.role_dsn("ofarm_app")) as application:
-        _bind(application, authority)
+        _install_test_bound_context(application, authority)
         _insert_batch(application, authority, batch_id)
         application.execute(
             """
@@ -2292,7 +2161,7 @@ def test_deferred_graph_accepts_future_ids_only_with_same_batch_reachability(
         )
 
     with psycopg.connect(tenant_target.role_dsn("ofarm_app")) as application:
-        _bind(application, authority)
+        _install_test_bound_context(application, authority)
         with pytest.raises(psycopg.errors.CheckViolation):
             with application.transaction():
                 application.execute(
@@ -2312,7 +2181,7 @@ def test_deferred_graph_accepts_future_ids_only_with_same_batch_reachability(
 
     with pytest.raises(psycopg.errors.CheckViolation):
         with psycopg.connect(tenant_target.role_dsn("ofarm_app")) as application:
-            _bind(application, authority)
+            _install_test_bound_context(application, authority)
             batch_a = "batch-hostile-edge-a"
             batch_b = "batch-hostile-edge-b"
             _insert_batch(application, authority, batch_a)
@@ -2371,7 +2240,7 @@ def test_promotion_edge_refuses_missing_null_and_malformed_trace_references(
     assertion_id = "assertion-unreferenced-" + case_name
     with pytest.raises(psycopg.errors.CheckViolation):
         with psycopg.connect(tenant_target.role_dsn("ofarm_app")) as application:
-            _bind(application, authority)
+            _install_test_bound_context(application, authority)
             _insert_batch(application, authority, batch_id)
             _insert_record(
                 application,
@@ -2414,7 +2283,7 @@ def test_full_xid_binding_refuses_two_transaction_future_id_completion(
 ) -> None:
     old_batch_id = "batch-old-cross-transaction"
     with psycopg.connect(tenant_target.role_dsn("ofarm_app")) as creator:
-        _bind(creator, authority)
+        _install_test_bound_context(creator, authority)
         _insert_batch(creator, authority, old_batch_id)
         old_full_xid = creator.execute(
             """
@@ -2428,8 +2297,8 @@ def test_full_xid_binding_refuses_two_transaction_future_id_completion(
     edge_session = psycopg.connect(tenant_target.role_dsn("ofarm_app"))
     record_session = psycopg.connect(tenant_target.role_dsn("ofarm_app"))
     try:
-        _bind(edge_session, authority)
-        _bind(record_session, authority)
+        _install_test_bound_context(edge_session, authority)
+        _install_test_bound_context(record_session, authority)
         edge_session.execute(
             """
             INSERT INTO ofarm.kernel_edge (
@@ -2528,7 +2397,7 @@ def test_derived_key_identity_and_typed_source_lanes_are_database_enforced(
     runtime_content = b"derived-runtime-logical-ref-boundary"
     runtime_content_digest = _sha256_id(runtime_content)
     with psycopg.connect(tenant_target.role_dsn("ofarm_app")) as application:
-        _bind(application, authority)
+        _install_test_bound_context(application, authority)
         _insert_batch(application, authority, batch_id)
         application.execute(
             """
@@ -2812,7 +2681,7 @@ def test_complete_catalog_fingerprint_refuses_function_constraint_index_policy_a
             assert pristine[0] is True
             assert pristine[2] == 0
             assert pristine[3] == (
-                "sha256:31ab4a6f58a2bb952e4e273db546feeab3590c555dfb4883f09b0cd329e3b1cc"
+                "sha256:19c387e9677811047679d349349895cf3213637fe462b2257a2408775469f26e"
             )
         finally:
             migrator.rollback()
@@ -3173,6 +3042,47 @@ def test_public_runner_noop_refuses_non_provisioning_application_index_tamper(
         assert _verify(migrator)[0] is True
 
 
+def test_post_migration_schema_local_collation_tamper_refuses_every_gate(
+    tenant_target: TenantTarget,
+) -> None:
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        admin.execute("SET LOCAL ROLE ofarm_owner")
+        admin.execute(
+            "CREATE COLLATION ofarm.rogue (provider = builtin, locale = 'C')"
+        )
+    try:
+        with psycopg.connect(tenant_target.migrator_dsn) as migrator:
+            verifier_row = _verify(migrator)
+        assert verifier_row[0] is False
+        assert verifier_row[2] >= 1
+
+        with psycopg.connect(
+            tenant_target.role_dsn("ofarm_readiness")
+        ) as readiness:
+            observer_row = readiness.execute(
+                "SELECT * FROM ofarm.observe_tenant_contract()"
+            ).fetchone()
+        assert observer_row[0] is False
+        assert observer_row[2] >= 1
+
+        with pytest.raises(MigrationDirtyError):
+            migrate_service(
+                admin_dsn=tenant_target.admin_dsn,
+                migrator_dsn=tenant_target.migrator_dsn,
+                spec=TENANT_PROVISIONING_SPEC,
+                migration_set=tenant_target.migration_set,
+                release_identity=RELEASE_IDENTITY,
+                execution_id=uuid4(),
+            )
+    finally:
+        with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+            admin.execute("SET LOCAL ROLE ofarm_owner")
+            admin.execute("DROP COLLATION ofarm.rogue")
+
+    with psycopg.connect(tenant_target.migrator_dsn) as migrator:
+        assert _verify(migrator)[0] is True
+
+
 def test_readiness_observation_is_complete_after_commit(
     tenant_target: TenantTarget,
 ) -> None:
@@ -3181,10 +3091,10 @@ def test_readiness_observation_is_complete_after_commit(
             "SELECT * FROM ofarm.observe_tenant_contract()"
         ).fetchone()
     assert row[0] is True
-    assert row[1] == TENANT_CAPABILITY_CONTRACT.digest
+    assert row[1] == TENANT_CONTEXT_CONTRACT.digest
     assert row[2] == 0
     assert row[3] == (
-        "sha256:31ab4a6f58a2bb952e4e273db546feeab3590c555dfb4883f09b0cd329e3b1cc"
+        "sha256:19c387e9677811047679d349349895cf3213637fe462b2257a2408775469f26e"
     )
     assert row[5] == TENANT_PROVISIONING_SPEC.digest
     assert row[6] == TENANT_SERVICE.identity

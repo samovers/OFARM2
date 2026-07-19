@@ -1461,12 +1461,17 @@
       "sourcePath": "kernel/tests/test_migration_sets.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_audit_contract.py::test_break_glass_login_is_absent_in_normal_state_and_blocks_readiness",
+      "nodeid": "kernel/tests/test_postgresql_audit_contract.py::test_break_glass_login_is_absent_in_normal_structural_state",
       "sourceModule": "kernel.tests.test_postgresql_audit_contract",
       "sourcePath": "kernel/tests/test_postgresql_audit_contract.py"
     },
     {
       "nodeid": "kernel/tests/test_postgresql_audit_contract.py::test_contract_dataclasses_are_frozen",
+      "sourceModule": "kernel.tests.test_postgresql_audit_contract",
+      "sourcePath": "kernel/tests/test_postgresql_audit_contract.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_contract.py::test_contract_exposes_only_issue_174_structural_compatibility",
       "sourceModule": "kernel.tests.test_postgresql_audit_contract",
       "sourcePath": "kernel/tests/test_postgresql_audit_contract.py"
     },
@@ -1756,36 +1761,6 @@
       "sourcePath": "kernel/tests/test_postgresql_audit_contract.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_audit_contract.py::test_exhaustive_validation_refuses_every_contract_change[<lambda>60]",
-      "sourceModule": "kernel.tests.test_postgresql_audit_contract",
-      "sourcePath": "kernel/tests/test_postgresql_audit_contract.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_postgresql_audit_contract.py::test_exhaustive_validation_refuses_every_contract_change[<lambda>61]",
-      "sourceModule": "kernel.tests.test_postgresql_audit_contract",
-      "sourcePath": "kernel/tests/test_postgresql_audit_contract.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_postgresql_audit_contract.py::test_exhaustive_validation_refuses_every_contract_change[<lambda>62]",
-      "sourceModule": "kernel.tests.test_postgresql_audit_contract",
-      "sourcePath": "kernel/tests/test_postgresql_audit_contract.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_postgresql_audit_contract.py::test_exhaustive_validation_refuses_every_contract_change[<lambda>63]",
-      "sourceModule": "kernel.tests.test_postgresql_audit_contract",
-      "sourcePath": "kernel/tests/test_postgresql_audit_contract.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_postgresql_audit_contract.py::test_exhaustive_validation_refuses_every_contract_change[<lambda>64]",
-      "sourceModule": "kernel.tests.test_postgresql_audit_contract",
-      "sourcePath": "kernel/tests/test_postgresql_audit_contract.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_postgresql_audit_contract.py::test_exhaustive_validation_refuses_every_contract_change[<lambda>65]",
-      "sourceModule": "kernel.tests.test_postgresql_audit_contract",
-      "sourcePath": "kernel/tests/test_postgresql_audit_contract.py"
-    },
-    {
       "nodeid": "kernel/tests/test_postgresql_audit_contract.py::test_exhaustive_validation_refuses_every_contract_change[<lambda>6]",
       "sourceModule": "kernel.tests.test_postgresql_audit_contract",
       "sourcePath": "kernel/tests/test_postgresql_audit_contract.py"
@@ -1821,11 +1796,6 @@
       "sourcePath": "kernel/tests/test_postgresql_audit_contract.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_audit_contract.py::test_runtime_readiness_wire_value_is_reserved_false_for_issue_192",
-      "sourceModule": "kernel.tests.test_postgresql_audit_contract",
-      "sourcePath": "kernel/tests/test_postgresql_audit_contract.py"
-    },
-    {
       "nodeid": "kernel/tests/test_postgresql_audit_contract.py::test_validation_refuses_non_contract_values[None]",
       "sourceModule": "kernel.tests.test_postgresql_audit_contract",
       "sourcePath": "kernel/tests/test_postgresql_audit_contract.py"
@@ -1847,6 +1817,11 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_access_intent_snapshot_excludes_append_committed_after_the_cut",
+      "sourceModule": "kernel.tests.test_postgresql_audit_migration",
+      "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_audit_catalog_fingerprint_has_exact_shared_schema_class_parity",
       "sourceModule": "kernel.tests.test_postgresql_audit_migration",
       "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
     },
@@ -1927,6 +1902,11 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_overflow_close_waits_for_old_bucket_append_and_cannot_reopen",
+      "sourceModule": "kernel.tests.test_postgresql_audit_migration",
+      "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_post_migration_owner_created_collation_refuses_observer_and_runner",
       "sourceModule": "kernel.tests.test_postgresql_audit_migration",
       "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
     },
@@ -2406,6 +2386,11 @@
       "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_physical_clone.py::test_promoted_physical_clone_yields_only_structural_compatibility",
+      "sourceModule": "kernel.tests.test_postgresql_physical_clone",
+      "sourcePath": "kernel/tests/test_postgresql_physical_clone.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_acl_and_default_acl_drift_refuse_without_reconciliation",
       "sourceModule": "kernel.tests.test_postgresql_provisioning",
       "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
@@ -2457,6 +2442,11 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_fake_ledger_and_rogue_collation_both_refuse",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_fresh_audit_target_with_owner_created_rogue_collation_refuses",
       "sourceModule": "kernel.tests.test_postgresql_provisioning",
       "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
     },
@@ -2516,6 +2506,11 @@
       "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_provisioning_accepts_only_the_tested_postgresql_17_10_build",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_provisioning_specs_freeze_distinct_service_and_role_boundaries",
       "sourceModule": "kernel.tests.test_postgresql_provisioning",
       "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
@@ -2541,12 +2536,22 @@
       "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_schema_local_catalog_classifier_is_one_exact_postgresql_17_10_list",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_scram_verifiers_are_exact_cost_and_never_contain_plaintext",
       "sourceModule": "kernel.tests.test_postgresql_provisioning",
       "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
     },
     {
       "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_split_admin_and_target_routes_refuse_before_catalog_verification",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_target_identity_accepts_only_the_same_exact_postgresql_build",
       "sourceModule": "kernel.tests.test_postgresql_provisioning",
       "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
     },
@@ -2566,187 +2571,182 @@
       "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_eleven_tenant_observer_fields_are_validated[0-False]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_tenant_observer_fields_are_validated[0-False]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_eleven_tenant_observer_fields_are_validated[1-sha256:1111111111111111111111111111111111111111111111111111111111111111]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_tenant_observer_fields_are_validated[1-sha256:1111111111111111111111111111111111111111111111111111111111111111]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_eleven_tenant_observer_fields_are_validated[10-True]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_tenant_observer_fields_are_validated[10-True]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_eleven_tenant_observer_fields_are_validated[2-1]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_tenant_observer_fields_are_validated[2-1]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_eleven_tenant_observer_fields_are_validated[3-not-a-digest]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_tenant_observer_fields_are_validated[3-not-a-digest]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_eleven_tenant_observer_fields_are_validated[4-not-a-digest]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_tenant_observer_fields_are_validated[4-not-a-digest]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_eleven_tenant_observer_fields_are_validated[5-sha256:2222222222222222222222222222222222222222222222222222222222222222]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_tenant_observer_fields_are_validated[5-sha256:2222222222222222222222222222222222222222222222222222222222222222]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_eleven_tenant_observer_fields_are_validated[6-wrong.service]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_tenant_observer_fields_are_validated[6-wrong.service]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_eleven_tenant_observer_fields_are_validated[7-True]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_tenant_observer_fields_are_validated[7-True]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_eleven_tenant_observer_fields_are_validated[8-sha256:3333333333333333333333333333333333333333333333333333333333333333]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_tenant_observer_fields_are_validated[8-sha256:3333333333333333333333333333333333333333333333333333333333333333]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_eleven_tenant_observer_fields_are_validated[9-True]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_tenant_observer_fields_are_validated[9-True]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_fourteen_audit_observer_fields_are_exact[0]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_audit_structural_report_is_independent_of_tenant_lane",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_fourteen_audit_observer_fields_are_exact[10]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_authoritative_loader_failure_is_lane_local_and_sanitized",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_fourteen_audit_observer_fields_are_exact[11]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_catalog_identity_failure_is_lane_local_and_sanitized",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_fourteen_audit_observer_fields_are_exact[12]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_cleanup_failure_refuses_without_leaking_diagnostic",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_fourteen_audit_observer_fields_are_exact[13]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_connection_failure_is_sanitized_and_does_not_touch_peer",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_fourteen_audit_observer_fields_are_exact[1]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_every_structural_audit_observer_field_is_exact[0]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_fourteen_audit_observer_fields_are_exact[2]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_every_structural_audit_observer_field_is_exact[10]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_fourteen_audit_observer_fields_are_exact[3]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_every_structural_audit_observer_field_is_exact[11]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_fourteen_audit_observer_fields_are_exact[4]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_every_structural_audit_observer_field_is_exact[12]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_fourteen_audit_observer_fields_are_exact[5]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_every_structural_audit_observer_field_is_exact[1]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_fourteen_audit_observer_fields_are_exact[6]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_every_structural_audit_observer_field_is_exact[2]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_fourteen_audit_observer_fields_are_exact[7]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_every_structural_audit_observer_field_is_exact[3]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_fourteen_audit_observer_fields_are_exact[8]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_every_structural_audit_observer_field_is_exact[4]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_all_fourteen_audit_observer_fields_are_exact[9]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_every_structural_audit_observer_field_is_exact[5]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_audit_connection_failure_sanitizes_and_closes_tenant_snapshot",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_every_structural_audit_observer_field_is_exact[6]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_authoritative_loader_failure_is_sanitized_before_connect",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_every_structural_audit_observer_field_is_exact[7]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_catalog_identity_failure_is_sanitized_and_closes_both_snapshots",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_every_structural_audit_observer_field_is_exact[8]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_cleanup_failure_refuses_without_leaking_cleanup_diagnostic",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_every_structural_audit_observer_field_is_exact[9]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_every_readiness_ledger_column_is_exact[0-True]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_every_tenant_ledger_column_is_exact[0-True]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_every_readiness_ledger_column_is_exact[1-0001_changed.sql]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_every_tenant_ledger_column_is_exact[1-0001_changed.sql]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_every_readiness_ledger_column_is_exact[2-sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_every_tenant_ledger_column_is_exact[2-sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_every_readiness_ledger_column_is_exact[3-True]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_every_tenant_ledger_column_is_exact[3-True]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_every_readiness_ledger_column_is_exact[4-sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_every_tenant_ledger_column_is_exact[4-sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_every_readiness_ledger_column_is_exact[5-wrong.service]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_every_tenant_ledger_column_is_exact[5-wrong.service]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_every_readiness_ledger_column_is_exact[6-sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee]",
-      "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
-      "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_exact_pair_returns_only_immutable_version_state",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_every_tenant_ledger_column_is_exact[6-sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
@@ -2756,287 +2756,352 @@
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_observers_must_return_exactly_one_row[0-security-audit]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_observer_must_return_exactly_one_row[0-security-audit]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_observers_must_return_exactly_one_row[0-tenant]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_observer_must_return_exactly_one_row[0-tenant]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_observers_must_return_exactly_one_row[2-security-audit]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_observer_must_return_exactly_one_row[2-security-audit]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_observers_must_return_exactly_one_row[2-tenant]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_observer_must_return_exactly_one_row[2-tenant]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_pair_refuses_one_cluster_lineage",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_process_interruption_still_rolls_back_and_closes_one_snapshot",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_pair_requires_same_postgresql_patch_and_distinct_lineages",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_promoted_physical_clone_observation_has_no_promotion_result",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_process_interruption_still_rolls_back_and_closes_both_snapshots",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_public_api_contains_only_structural_and_separation_results",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_route_transaction_and_primary_identity_are_exact[security-audit-0-ofarm_security_audit_readiness]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_route_and_structural_transaction_identity_are_exact[0-ofarm_app]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_route_transaction_and_primary_identity_are_exact[security-audit-1-ofarm_security_audit_readiness]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_route_and_structural_transaction_identity_are_exact[1-ofarm_app]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_route_transaction_and_primary_identity_are_exact[security-audit-2-ofarm_tenant]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_route_and_structural_transaction_identity_are_exact[10-SQL, DMY]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_route_transaction_and_primary_identity_are_exact[tenant-0-ofarm_app]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_route_and_structural_transaction_identity_are_exact[11-on]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_route_transaction_and_primary_identity_are_exact[tenant-1-ofarm_app]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_route_and_structural_transaction_identity_are_exact[2-crossed_database]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_route_transaction_and_primary_identity_are_exact[tenant-10-SQL, DMY]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_route_and_structural_transaction_identity_are_exact[5-not-a-system-id]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_route_transaction_and_primary_identity_are_exact[tenant-11-on]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_route_and_structural_transaction_identity_are_exact[6-read committed]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_route_transaction_and_primary_identity_are_exact[tenant-2-crossed_database]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_route_and_structural_transaction_identity_are_exact[7-off]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_route_transaction_and_primary_identity_are_exact[tenant-3-180000]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_route_and_structural_transaction_identity_are_exact[8-off]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_route_transaction_and_primary_identity_are_exact[tenant-4-not-a-system-id]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_route_and_structural_transaction_identity_are_exact[9-Europe/Ljubljana]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_route_transaction_and_primary_identity_are_exact[tenant-5-True]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_separation_is_narrow_and_opens_both_snapshots_before_observation",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_route_transaction_and_primary_identity_are_exact[tenant-6-read committed]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_separation_refuses_one_system_identifier",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_route_transaction_and_primary_identity_are_exact[tenant-7-off]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_structural_observation_accepts_only_postgresql_17_10[170009]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_route_transaction_and_primary_identity_are_exact[tenant-8-off]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_structural_observation_accepts_only_postgresql_17_10[170011]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_route_transaction_and_primary_identity_are_exact[tenant-9-Europe/Ljubljana]",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_structural_observation_accepts_only_postgresql_17_10[170100]",
       "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
       "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_startup_readiness.py::test_crossed_readiness_routes_and_newer_history_refuse",
-      "sourceModule": "kernel.tests.test_postgresql_startup_readiness",
-      "sourcePath": "kernel/tests/test_postgresql_startup_readiness.py"
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_structural_observation_accepts_only_postgresql_17_10[180000]",
+      "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
+      "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_startup_readiness.py::test_external_catalog_anchor_refuses_semantically_unchanged_verifier_body[audit_target_admin_dsn-ofarm_security-verify_security_audit_structure-security-audit]",
-      "sourceModule": "kernel.tests.test_postgresql_startup_readiness",
-      "sourcePath": "kernel/tests/test_postgresql_startup_readiness.py"
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_structural_observation_accepts_only_the_pinned_build_string[17.10 (Debian 17.10-1.pgdg13+2)]",
+      "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
+      "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_startup_readiness.py::test_external_catalog_anchor_refuses_semantically_unchanged_verifier_body[tenant_target_admin_dsn-ofarm-verify_tenant_structure-tenant]",
-      "sourceModule": "kernel.tests.test_postgresql_startup_readiness",
-      "sourcePath": "kernel/tests/test_postgresql_startup_readiness.py"
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_structural_observation_accepts_only_the_pinned_build_string[17.10 (Ubuntu 17.10-1)]",
+      "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
+      "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_startup_readiness.py::test_readiness_fixes_catalog_output_settings_before_observation",
-      "sourceModule": "kernel.tests.test_postgresql_startup_readiness",
-      "sourcePath": "kernel/tests/test_postgresql_startup_readiness.py"
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_structural_observation_accepts_only_the_pinned_build_string[17.10]",
+      "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
+      "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_startup_readiness.py::test_real_readiness_logins_prove_exact_independent_read_only_pair",
-      "sourceModule": "kernel.tests.test_postgresql_startup_readiness",
-      "sourcePath": "kernel/tests/test_postgresql_startup_readiness.py"
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_structural_observation_is_read_only_and_orders_exact_checks",
+      "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
+      "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_capability_golden_bytes_hmac_and_all_field_lp32_are_frozen",
+      "nodeid": "kernel/tests/test_postgresql_readiness_unit.py::test_tenant_structural_report_is_independent_and_has_no_service_decision",
+      "sourceModule": "kernel.tests.test_postgresql_readiness_unit",
+      "sourcePath": "kernel/tests/test_postgresql_readiness_unit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_structural_compatibility.py::test_crossed_structural_routes_and_newer_history_refuse",
+      "sourceModule": "kernel.tests.test_postgresql_structural_compatibility",
+      "sourcePath": "kernel/tests/test_postgresql_structural_compatibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_structural_compatibility.py::test_external_catalog_anchor_refuses_semantically_unchanged_verifier_body[audit_target_admin_dsn-ofarm_security-verify_security_audit_structure-security-audit-audit_readiness_dsn]",
+      "sourceModule": "kernel.tests.test_postgresql_structural_compatibility",
+      "sourcePath": "kernel/tests/test_postgresql_structural_compatibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_structural_compatibility.py::test_external_catalog_anchor_refuses_semantically_unchanged_verifier_body[tenant_target_admin_dsn-ofarm-verify_tenant_structure-tenant-tenant_readiness_dsn]",
+      "sourceModule": "kernel.tests.test_postgresql_structural_compatibility",
+      "sourcePath": "kernel/tests/test_postgresql_structural_compatibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_structural_compatibility.py::test_public_structural_observation_refuses_post_migration_rogue_collation[security-audit]",
+      "sourceModule": "kernel.tests.test_postgresql_structural_compatibility",
+      "sourcePath": "kernel/tests/test_postgresql_structural_compatibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_structural_compatibility.py::test_public_structural_observation_refuses_post_migration_rogue_collation[tenant]",
+      "sourceModule": "kernel.tests.test_postgresql_structural_compatibility",
+      "sourcePath": "kernel/tests/test_postgresql_structural_compatibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_structural_compatibility.py::test_real_structural_logins_prove_independent_read_only_lanes",
+      "sourceModule": "kernel.tests.test_postgresql_structural_compatibility",
+      "sourcePath": "kernel/tests/test_postgresql_structural_compatibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_structural_compatibility.py::test_structural_observation_fixes_catalog_output_settings[security-audit]",
+      "sourceModule": "kernel.tests.test_postgresql_structural_compatibility",
+      "sourcePath": "kernel/tests/test_postgresql_structural_compatibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_structural_compatibility.py::test_structural_observation_fixes_catalog_output_settings[tenant]",
+      "sourceModule": "kernel.tests.test_postgresql_structural_compatibility",
+      "sourcePath": "kernel/tests/test_postgresql_structural_compatibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_context_manifest_digest_changes_with_any_declared_posture",
       "sourceModule": "kernel.tests.test_postgresql_tenant_contract",
       "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_contract_manifest_is_canonical_ascii_non_secret_and_content_addressed",
+      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_context_posture_is_explicitly_fail_closed_and_crypto_free",
       "sourceModule": "kernel.tests.test_postgresql_tenant_contract",
       "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_each_mutable_signed_group_changes_the_mac",
+      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_context_routines_freeze_no_production_binder_signature",
       "sourceModule": "kernel.tests.test_postgresql_tenant_contract",
       "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_every_capability_uuid_refuses_nil[binding_version_id]",
+      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_issuer_octet_host_label_and_port_boundaries_are_exact",
       "sourceModule": "kernel.tests.test_postgresql_tenant_contract",
       "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_every_capability_uuid_refuses_nil[challenge_id]",
+      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_issuer_policy_identity_is_exact",
       "sourceModule": "kernel.tests.test_postgresql_tenant_contract",
       "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_every_capability_uuid_refuses_nil[lifecycle_head_id]",
+      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_issuer_policy_rejects_non_text_runtime_types[1]",
       "sourceModule": "kernel.tests.test_postgresql_tenant_contract",
       "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_every_capability_uuid_refuses_nil[nonce]",
+      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_issuer_policy_rejects_non_text_runtime_types[None]",
       "sourceModule": "kernel.tests.test_postgresql_tenant_contract",
       "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_every_capability_uuid_refuses_nil[tenant_id]",
+      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_issuer_policy_rejects_non_text_runtime_types[True]",
       "sourceModule": "kernel.tests.test_postgresql_tenant_contract",
       "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_exact_core_type_binder_signatures_are_frozen",
+      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_issuer_policy_rejects_non_text_runtime_types[https://issuer.test]",
       "sourceModule": "kernel.tests.test_postgresql_tenant_contract",
       "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_exact_text_and_raw_digest_forms_refuse_variants",
+      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_removed_crypto_api_is_not_part_of_the_tenant_contract_module",
       "sourceModule": "kernel.tests.test_postgresql_tenant_contract",
       "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_future_skew_and_expiry_are_exact",
+      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_shared_invalid_issuer_vectors_refuse_exactly[]",
       "sourceModule": "kernel.tests.test_postgresql_tenant_contract",
       "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_invalid_time_order_or_ttl_refuses[changes0]",
+      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_shared_invalid_issuer_vectors_refuse_exactly[http://issuer.example.test]",
       "sourceModule": "kernel.tests.test_postgresql_tenant_contract",
       "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_invalid_time_order_or_ttl_refuses[changes1]",
+      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_shared_invalid_issuer_vectors_refuse_exactly[https://-issuer.example.test]",
       "sourceModule": "kernel.tests.test_postgresql_tenant_contract",
       "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_invalid_time_order_or_ttl_refuses[changes2]",
+      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_shared_invalid_issuer_vectors_refuse_exactly[https://[2001:db8::1]]",
       "sourceModule": "kernel.tests.test_postgresql_tenant_contract",
       "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_invalid_time_order_or_ttl_refuses[changes3]",
+      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_shared_invalid_issuer_vectors_refuse_exactly[https://[invalid]",
       "sourceModule": "kernel.tests.test_postgresql_tenant_contract",
       "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_issuer_grammar_refuses_widening[http://issuer.example.test]",
+      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_shared_invalid_issuer_vectors_refuse_exactly[https://]",
       "sourceModule": "kernel.tests.test_postgresql_tenant_contract",
       "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_issuer_grammar_refuses_widening[https://[invalid]",
+      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_shared_invalid_issuer_vectors_refuse_exactly[https://issuer-.example.test]",
       "sourceModule": "kernel.tests.test_postgresql_tenant_contract",
       "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_issuer_grammar_refuses_widening[https://issuer.example.test#fragment]",
+      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_shared_invalid_issuer_vectors_refuse_exactly[https://issuer..example.test]",
       "sourceModule": "kernel.tests.test_postgresql_tenant_contract",
       "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_issuer_grammar_refuses_widening[https://issuer.example.test/white space]",
+      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_shared_invalid_issuer_vectors_refuse_exactly[https://issuer.example.test#fragment]",
       "sourceModule": "kernel.tests.test_postgresql_tenant_contract",
       "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_issuer_grammar_refuses_widening[https://issuer.example.test:70000]",
+      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_shared_invalid_issuer_vectors_refuse_exactly[https://issuer.example.test.]",
       "sourceModule": "kernel.tests.test_postgresql_tenant_contract",
       "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_issuer_grammar_refuses_widening[https://issuer.example.test?query=1]",
+      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_shared_invalid_issuer_vectors_refuse_exactly[https://issuer.example.test//u017e]",
       "sourceModule": "kernel.tests.test_postgresql_tenant_contract",
       "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_issuer_grammar_refuses_widening[https://user@issuer.example.test]",
+      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_shared_invalid_issuer_vectors_refuse_exactly[https://issuer.example.test/path//segment]",
       "sourceModule": "kernel.tests.test_postgresql_tenant_contract",
       "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_key_rows_and_mac_wire_form_are_exact_and_bounded",
+      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_shared_invalid_issuer_vectors_refuse_exactly[https://issuer.example.test/white space]",
       "sourceModule": "kernel.tests.test_postgresql_tenant_contract",
       "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_lp32_principal_framing_prevents_delimiter_free_collision",
+      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_shared_invalid_issuer_vectors_refuse_exactly[https://issuer.example.test:0]",
       "sourceModule": "kernel.tests.test_postgresql_tenant_contract",
       "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_manifest_field_order_and_sql_types_match_binder_arguments_before_mac",
+      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_shared_invalid_issuer_vectors_refuse_exactly[https://issuer.example.test:65536]",
       "sourceModule": "kernel.tests.test_postgresql_tenant_contract",
       "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_positive_ttl_boundary_is_accepted[1]",
+      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_shared_invalid_issuer_vectors_refuse_exactly[https://issuer.example.test:70000]",
       "sourceModule": "kernel.tests.test_postgresql_tenant_contract",
       "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_positive_ttl_boundary_is_accepted[60000000]",
+      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_shared_invalid_issuer_vectors_refuse_exactly[https://issuer.example.test:not-a-port]",
       "sourceModule": "kernel.tests.test_postgresql_tenant_contract",
       "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_signature_change_changes_contract_digest",
+      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_shared_invalid_issuer_vectors_refuse_exactly[https://issuer.example.test?query=1]",
       "sourceModule": "kernel.tests.test_postgresql_tenant_contract",
       "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_signed_int64_and_exact_runtime_types_are_required",
+      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_shared_invalid_issuer_vectors_refuse_exactly[https://user@issuer.example.test]",
       "sourceModule": "kernel.tests.test_postgresql_tenant_contract",
       "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_text_bounds_accept_exact_maxima_and_refuse_one_byte_over",
+      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_shared_valid_issuer_vectors_accept_exactly[https://127.0.0.1:8443/oidc]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_contract",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_shared_valid_issuer_vectors_accept_exactly[https://issuer.example.test/tenant]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_contract",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_shared_valid_issuer_vectors_accept_exactly[https://issuer.example.test:443/tenant/v1]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_contract",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_shared_valid_issuer_vectors_accept_exactly[https://issuer.example.test]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_contract",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_contract.py::test_shared_valid_issuer_vectors_accept_exactly[https://localhost]",
       "sourceModule": "kernel.tests.test_postgresql_tenant_contract",
       "sourcePath": "kernel/tests/test_postgresql_tenant_contract.py"
     },
@@ -3051,66 +3116,6 @@
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_binder_refuses_null_mac_and_time_fields[expires-at]",
-      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
-      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_binder_refuses_null_mac_and_time_fields[issued-at]",
-      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
-      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_binder_refuses_null_mac_and_time_fields[mac]",
-      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
-      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_binder_refuses_null_mac_and_time_fields[not-before]",
-      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
-      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_binder_refuses_wrong_party_and_authority_digests_with_valid_mac[changes0]",
-      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
-      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_binder_refuses_wrong_party_and_authority_digests_with_valid_mac[changes1]",
-      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
-      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_binder_refuses_wrong_party_and_authority_digests_with_valid_mac[changes2]",
-      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
-      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_binder_refuses_wrong_party_and_authority_digests_with_valid_mac[changes3]",
-      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
-      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_binder_refuses_wrong_party_and_authority_digests_with_valid_mac[changes4]",
-      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
-      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_binder_refuses_wrong_party_and_authority_digests_with_valid_mac[changes5]",
-      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
-      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_binder_refuses_wrong_party_and_authority_digests_with_valid_mac[changes6]",
-      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
-      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_binder_rls_copy_replay_search_path_and_lock_namespace",
-      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
-      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
-    },
-    {
       "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_complete_catalog_fingerprint_refuses_function_constraint_index_policy_and_acl_tamper",
       "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
@@ -3121,7 +3126,7 @@
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_database_frame_hmac_signature_and_minimum_binder_columns",
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_context_storage_rls_copy_search_path_and_lock_namespace",
       "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
@@ -3221,7 +3226,27 @@
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_missing_projection_refuses_bind_and_rebuilds_from_authority",
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_live_postgresql_and_python_share_exact_issuer_vectors",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_missing_projection_rebuilds_from_authority",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_oidc_issuer_domain_enforces_shared_invalid_vectors",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_post_migration_schema_local_collation_tamper_refuses_every_gate",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_production_binding_is_fail_closed_pending_issue_172",
       "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
@@ -3302,6 +3327,11 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_superuser_advisory_acl_tamper_is_name_portable_and_refused",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_tenant_catalog_fingerprint_has_exact_shared_schema_class_parity",
       "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
@@ -5456,8 +5486,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "1fafbf1aba9874b3ddba8a69d9f2bef97111185938d06c4a41d90bd8b3fa1f44",
-  "entryCount": 1091,
+  "entriesSha256": "01dc354b1feee1b6fa0896387fe607c0970bd2696f1844566a940d1cb38044f6",
+  "entryCount": 1097,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
