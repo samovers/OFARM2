@@ -1,4 +1,4 @@
-"""Exact current/provisional identity for the confined native verifier image."""
+"""Exact release identity and durable evidence receipt for the native verifier."""
 
 from __future__ import annotations
 
@@ -21,12 +21,41 @@ IDENTITY_PATH = (
     / "ofarm_ed25519"
     / "native_release_identity.json"
 )
+EVIDENCE_RECEIPT_PATH = (
+    PACKAGE_ROOT
+    / "deployment"
+    / "postgresql"
+    / "ofarm_ed25519"
+    / "native_evidence_receipt.json"
+)
 SOURCE_DIRECTORY = IDENTITY_PATH.parent
 MAX_IDENTITY_BYTES = 256 * 1024
+MAX_EVIDENCE_RECEIPT_BYTES = 256 * 1024
 MAX_INDEX_BYTES = 64 * 1024
+MAX_EVIDENCE_AUTHORITY_FILE_BYTES = 2 * 1024 * 1024
 SHA256_PATTERN = re.compile(r"sha256:[0-9a-f]{64}\Z")
+COMMIT_PATTERN = re.compile(r"[0-9a-f]{40}\Z")
 OCI_INDEX_MEDIA_TYPE = "application/vnd.oci.image.index.v1+json"
 OCI_MANIFEST_MEDIA_TYPE = "application/vnd.oci.image.manifest.v1+json"
+SBOM_PREDICATE_TYPE = "https://spdx.dev/Document"
+PROVENANCE_PREDICATE_TYPE = "https://slsa.dev/provenance/v0.2"
+NATIVE_RELEASE_REPOSITORY = "samovers/OFARM2"
+BUILDER_ID_PATTERN = re.compile(
+    r"https://github\.com/samovers/OFARM2/actions/runs/"
+    r"([1-9][0-9]*)/attempts/([1-9][0-9]*)\Z"
+)
+CHECKED_EVIDENCE_RECEIPT_PATH = (
+    "deployment/postgresql/ofarm_ed25519/native_evidence_receipt.json"
+)
+EVIDENCE_AUTHORITY_PATHS = (
+    ".github/workflows/conformance.yml",
+    "deployment/postgresql/native_evidence.py",
+    "deployment/postgresql/native_release_identity.py",
+    "kernel/tests/test_postgresql_ed25519_native_build.py",
+    "kernel/tests/test_postgresql_native_evidence.py",
+    "kernel/tests/test_postgresql_physical_clone.py",
+)
+PLATFORM_ORDER = ("linux/amd64", "linux/arm64")
 
 CURRENT_NATIVE_ACTION_PINS = {
     "actions/checkout@v5": "93cb6efe18208431cddfb8368fd83d5badbf9bfd",
@@ -222,6 +251,79 @@ def _validate_source_input(
     return value
 
 
+def evidence_authority_input_manifest(
+    repository_root: Path = PACKAGE_ROOT,
+) -> dict[str, Any]:
+    """Identify every checked file that decides whether evidence is accepted."""
+
+    files: list[dict[str, Any]] = []
+    for relative_path in EVIDENCE_AUTHORITY_PATHS:
+        data = _read_regular(
+            repository_root / relative_path,
+            MAX_EVIDENCE_AUTHORITY_FILE_BYTES,
+            f"evidence authority {relative_path}",
+        )
+        files.append(
+            {
+                "path": relative_path,
+                "sha256": _digest(data),
+                "size": len(data),
+            }
+        )
+    body = {"algorithm": "sha256", "files": files}
+    return {**body, "digest": _digest(canonical_json_bytes(body))}
+
+
+def _validate_evidence_authority_input(
+    value: Any,
+    *,
+    repository_root: Path | None,
+) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != {"algorithm", "digest", "files"}:
+        raise NativeReleaseIdentityError(
+            "evidence-authority input fields are not exact"
+        )
+    if value.get("algorithm") != "sha256":
+        raise NativeReleaseIdentityError(
+            "evidence-authority input algorithm is not SHA-256"
+        )
+    files = value.get("files")
+    if not isinstance(files, list) or len(files) != len(EVIDENCE_AUTHORITY_PATHS):
+        raise NativeReleaseIdentityError(
+            "evidence-authority input file inventory is incomplete"
+        )
+    for item, expected_path in zip(files, EVIDENCE_AUTHORITY_PATHS, strict=True):
+        if (
+            not isinstance(item, dict)
+            or set(item) != {"path", "sha256", "size"}
+            or item.get("path") != expected_path
+            or not isinstance(item.get("size"), int)
+            or isinstance(item.get("size"), bool)
+            or not 0 < item["size"] <= MAX_EVIDENCE_AUTHORITY_FILE_BYTES
+        ):
+            raise NativeReleaseIdentityError(
+                "evidence-authority input file identity is invalid"
+            )
+        _require_digest(
+            item.get("sha256"), f"evidence authority {expected_path} digest"
+        )
+    body = {"algorithm": "sha256", "files": files}
+    if _require_digest(
+        value.get("digest"), "evidence-authority input digest"
+    ) != _digest(canonical_json_bytes(body)):
+        raise NativeReleaseIdentityError(
+            "evidence-authority input manifest digest is inconsistent"
+        )
+    if (
+        repository_root is not None
+        and value != evidence_authority_input_manifest(repository_root)
+    ):
+        raise NativeReleaseIdentityError(
+            "evidence-authority input differs from current files"
+        )
+    return value
+
+
 def _validate_artifacts(value: Any, platform: str) -> list[dict[str, Any]]:
     if not isinstance(value, list) or len(value) != len(ARTIFACT_NAMES_AND_MODES):
         raise NativeReleaseIdentityError(f"{platform} artifact inventory is incomplete")
@@ -404,6 +506,328 @@ def load_native_release_identity(
     )
 
 
+@dataclass(frozen=True)
+class NativeEvidenceReceipt:
+    """Validated durable evidence receipt linked to one release identity."""
+
+    document: dict[str, Any]
+    canonical_bytes: bytes
+    digest: str
+
+    @property
+    def status(self) -> str:
+        return self.document["status"]
+
+    def manifest(self) -> dict[str, Any]:
+        return json.loads(self.canonical_bytes)
+
+
+def _require_positive_integer(value: Any, maximum: int, label: str) -> int:
+    if (
+        not isinstance(value, int)
+        or isinstance(value, bool)
+        or not 0 < value <= maximum
+    ):
+        raise NativeReleaseIdentityError(f"{label} is invalid")
+    return value
+
+
+def _validate_digest_size(
+    value: Any,
+    *,
+    maximum: int,
+    label: str,
+) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != {"sha256", "size"}:
+        raise NativeReleaseIdentityError(f"{label} fields are not exact")
+    _require_digest(value.get("sha256"), f"{label} digest")
+    _require_positive_integer(value.get("size"), maximum, f"{label} size")
+    return value
+
+
+def _validate_receipt_platforms(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list) or len(value) != len(PLATFORM_ORDER):
+        raise NativeReleaseIdentityError("evidence receipt platform set is not exact")
+    for platform_value, expected_platform in zip(
+        value, PLATFORM_ORDER, strict=True
+    ):
+        if not isinstance(platform_value, dict) or set(platform_value) != {
+            "attestationManifest",
+            "ociArchive",
+            "platform",
+            "provenance",
+            "sbom",
+            "sourceImageIndexDigest",
+        }:
+            raise NativeReleaseIdentityError(
+                "evidence receipt platform fields are not exact"
+            )
+        if platform_value.get("platform") != expected_platform:
+            raise NativeReleaseIdentityError(
+                "evidence receipt platform order is not exact"
+            )
+        _require_digest(
+            platform_value.get("sourceImageIndexDigest"),
+            f"{expected_platform} source image-index digest",
+        )
+        _validate_digest_size(
+            platform_value.get("ociArchive"),
+            maximum=512 * 1024 * 1024,
+            label=f"{expected_platform} OCI archive",
+        )
+        _validate_digest_size(
+            platform_value.get("attestationManifest"),
+            maximum=8 * 1024 * 1024,
+            label=f"{expected_platform} attestation manifest",
+        )
+        for name, predicate_type, maximum in (
+            ("sbom", SBOM_PREDICATE_TYPE, 8 * 1024 * 1024),
+            ("provenance", PROVENANCE_PREDICATE_TYPE, 2 * 1024 * 1024),
+        ):
+            evidence = platform_value.get(name)
+            if not isinstance(evidence, dict) or set(evidence) != {
+                "predicateType",
+                "sha256",
+                "size",
+            }:
+                raise NativeReleaseIdentityError(
+                    f"{expected_platform} {name} fields are not exact"
+                )
+            if evidence.get("predicateType") != predicate_type:
+                raise NativeReleaseIdentityError(
+                    f"{expected_platform} {name} predicate is not exact"
+                )
+            _require_digest(
+                evidence.get("sha256"), f"{expected_platform} {name} digest"
+            )
+            _require_positive_integer(
+                evidence.get("size"), maximum, f"{expected_platform} {name} size"
+            )
+    return value
+
+
+def _parse_build_run(value: Any) -> tuple[str, str, int, int]:
+    if not isinstance(value, dict) or set(value) != {
+        "actionsEvidence",
+        "builderId",
+        "repository",
+        "runAttempt",
+        "runId",
+        "runUrl",
+        "sourceCommit",
+    }:
+        raise NativeReleaseIdentityError("evidence receipt build-run fields are not exact")
+    repository = value.get("repository")
+    if repository != NATIVE_RELEASE_REPOSITORY:
+        raise NativeReleaseIdentityError("evidence receipt repository is not exact")
+    run_id = _require_positive_integer(
+        value.get("runId"), 2**63 - 1, "evidence receipt run id"
+    )
+    run_attempt = _require_positive_integer(
+        value.get("runAttempt"), 2**31 - 1, "evidence receipt run attempt"
+    )
+    source_commit = value.get("sourceCommit")
+    if not isinstance(source_commit, str) or COMMIT_PATTERN.fullmatch(source_commit) is None:
+        raise NativeReleaseIdentityError("evidence receipt source commit is not exact")
+    run_url = f"https://github.com/{repository}/actions/runs/{run_id}"
+    builder_id = f"{run_url}/attempts/{run_attempt}"
+    if value.get("runUrl") != run_url or value.get("builderId") != builder_id:
+        raise NativeReleaseIdentityError(
+            "evidence receipt builder and run identities are inconsistent"
+        )
+    actions = value.get("actionsEvidence")
+    if not isinstance(actions, dict) or set(actions) != {
+        "artifacts",
+        "retentionDays",
+        "runArtifactsUrl",
+    }:
+        raise NativeReleaseIdentityError(
+            "temporary Actions evidence fields are not exact"
+        )
+    if actions.get("retentionDays") != 14 or actions.get("runArtifactsUrl") != (
+        run_url + "#artifacts"
+    ):
+        raise NativeReleaseIdentityError(
+            "temporary Actions evidence reference is inconsistent"
+        )
+    expected_artifacts = [
+        {
+            "archivePath": "ofarm-ed25519.oci.tar",
+            "name": "native-verifier-amd64",
+            "platform": "linux/amd64",
+        },
+        {
+            "archivePath": "ofarm-ed25519.oci.tar",
+            "name": "native-verifier-arm64",
+            "platform": "linux/arm64",
+        },
+        {
+            "archivePath": "native_evidence_receipt.candidate.json",
+            "name": "native-verifier-index",
+            "platform": None,
+        },
+    ]
+    if actions.get("artifacts") != expected_artifacts:
+        raise NativeReleaseIdentityError(
+            "temporary Actions artifact references are not exact"
+        )
+    return source_commit, builder_id, run_id, run_attempt
+
+
+def _release_tag(identity_digest: str) -> str:
+    return "native-verifier-" + identity_digest.removeprefix("sha256:")
+
+
+def _validate_preservation(
+    value: Any,
+    *,
+    identity_digest: str,
+    platforms: list[dict[str, Any]],
+    expected_status: str,
+) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != {
+        "assets",
+        "checkedReceiptPath",
+        "provider",
+        "releaseKind",
+        "releaseTag",
+        "releaseUrl",
+        "status",
+    }:
+        raise NativeReleaseIdentityError(
+            "evidence receipt preservation fields are not exact"
+        )
+    tag = _release_tag(identity_digest)
+    release_url = (
+        f"https://github.com/{NATIVE_RELEASE_REPOSITORY}/releases/tag/{tag}"
+    )
+    if value != {
+        **value,
+        "checkedReceiptPath": CHECKED_EVIDENCE_RECEIPT_PATH,
+        "provider": "github-release",
+        "releaseKind": "prerelease",
+        "releaseTag": tag,
+        "releaseUrl": release_url,
+        "status": expected_status,
+    }:
+        raise NativeReleaseIdentityError(
+            "evidence receipt preservation reference is inconsistent"
+        )
+    assets = value.get("assets")
+    if not isinstance(assets, list) or len(assets) != len(PLATFORM_ORDER):
+        raise NativeReleaseIdentityError(
+            "evidence receipt preservation asset set is not exact"
+        )
+    expected_assets: list[dict[str, Any]] = []
+    for platform_value in platforms:
+        platform = platform_value["platform"]
+        asset_name = "ofarm-ed25519-" + platform.replace("/", "-") + ".oci.tar"
+        expected_assets.append(
+            {
+                "name": asset_name,
+                "platform": platform,
+                "sha256": platform_value["ociArchive"]["sha256"],
+                "size": platform_value["ociArchive"]["size"],
+                "url": (
+                    f"https://github.com/{NATIVE_RELEASE_REPOSITORY}/releases/"
+                    f"download/{tag}/{asset_name}"
+                ),
+            }
+        )
+    if assets != expected_assets:
+        raise NativeReleaseIdentityError(
+            "evidence receipt preservation assets are inconsistent"
+        )
+    return value
+
+
+def validate_native_evidence_receipt(
+    document: Any,
+    *,
+    canonical_bytes: bytes,
+    release_identity: NativeReleaseIdentity,
+    repository_root: Path | None,
+    allow_candidate: bool = False,
+) -> NativeEvidenceReceipt:
+    if not isinstance(document, dict) or set(document) != {
+        "buildPins",
+        "buildRun",
+        "evidenceAuthorityInput",
+        "platforms",
+        "preservation",
+        "releaseIdentityDigest",
+        "schemaVersion",
+        "status",
+    }:
+        raise NativeReleaseIdentityError("native evidence receipt fields are not exact")
+    if canonical_json_bytes(document) != canonical_bytes:
+        raise NativeReleaseIdentityError("native evidence receipt JSON is not canonical")
+    if document.get("schemaVersion") != "ofarm.native-verifier-evidence-receipt.v1":
+        raise NativeReleaseIdentityError("native evidence receipt schema is not exact")
+    if document.get("buildPins") != CURRENT_NATIVE_BUILD_PINS:
+        raise NativeReleaseIdentityError("native evidence receipt build pins differ")
+    if _require_digest(
+        document.get("releaseIdentityDigest"), "release identity link"
+    ) != release_identity.digest:
+        raise NativeReleaseIdentityError(
+            "native evidence receipt is not linked to the release identity"
+        )
+    _validate_evidence_authority_input(
+        document.get("evidenceAuthorityInput"), repository_root=repository_root
+    )
+    status_value = document.get("status")
+    if status_value == "provisional":
+        if release_identity.status != "provisional" or (
+            document.get("buildRun") is not None
+            or document.get("platforms") != []
+            or document.get("preservation") is not None
+        ):
+            raise NativeReleaseIdentityError(
+                "provisional evidence receipt contains frozen result claims"
+            )
+    elif status_value in {"candidate", "frozen"}:
+        if status_value == "candidate" and not allow_candidate:
+            raise NativeReleaseIdentityError(
+                "a candidate evidence receipt cannot be checked as frozen authority"
+            )
+        if release_identity.status != "frozen":
+            raise NativeReleaseIdentityError(
+                "native evidence receipt claims results for a provisional identity"
+            )
+        _parse_build_run(document.get("buildRun"))
+        platforms = _validate_receipt_platforms(document.get("platforms"))
+        _validate_preservation(
+            document.get("preservation"),
+            identity_digest=release_identity.digest,
+            platforms=platforms,
+            expected_status="pending" if status_value == "candidate" else "verified",
+        )
+    else:
+        raise NativeReleaseIdentityError("native evidence receipt status is not exact")
+    return NativeEvidenceReceipt(document, canonical_bytes, _digest(canonical_bytes))
+
+
+def load_native_evidence_receipt(
+    path: Path = EVIDENCE_RECEIPT_PATH,
+    *,
+    release_identity: NativeReleaseIdentity,
+    verify_current_authority: bool = False,
+    repository_root: Path | None = None,
+    allow_candidate: bool = False,
+) -> NativeEvidenceReceipt:
+    data = _read_regular(path, MAX_EVIDENCE_RECEIPT_BYTES, "native evidence receipt")
+    document = _load_json_bytes(data, "native evidence receipt")
+    return validate_native_evidence_receipt(
+        document,
+        canonical_bytes=data,
+        release_identity=release_identity,
+        repository_root=(
+            repository_root or PACKAGE_ROOT if verify_current_authority else None
+        ),
+        allow_candidate=allow_candidate,
+    )
+
+
 def provisional_identity_document(
     source_directory: Path = SOURCE_DIRECTORY,
 ) -> dict[str, Any]:
@@ -418,15 +842,41 @@ def provisional_identity_document(
     }
 
 
-def frozen_identity_document(
+def provisional_evidence_receipt_document(
     *,
-    index_evidence: dict[str, Any],
-    index_bytes: bytes,
-    source_directory: Path = SOURCE_DIRECTORY,
+    release_identity: NativeReleaseIdentity,
+    repository_root: Path = PACKAGE_ROOT,
 ) -> dict[str, Any]:
-    """Build and fully validate the stable identity from hosted fan-in evidence."""
+    if release_identity.status != "provisional":
+        raise NativeReleaseIdentityError(
+            "a provisional receipt requires a provisional release identity"
+        )
+    document = {
+        "schemaVersion": "ofarm.native-verifier-evidence-receipt.v1",
+        "status": "provisional",
+        "releaseIdentityDigest": release_identity.digest,
+        "buildPins": CURRENT_NATIVE_BUILD_PINS,
+        "evidenceAuthorityInput": evidence_authority_input_manifest(repository_root),
+        "buildRun": None,
+        "platforms": [],
+        "preservation": None,
+    }
+    validate_native_evidence_receipt(
+        document,
+        canonical_bytes=canonical_json_bytes(document),
+        release_identity=release_identity,
+        repository_root=repository_root,
+    )
+    return document
 
+
+def _validate_fan_in_evidence(
+    index_evidence: Any,
+    *,
+    index_bytes: bytes,
+) -> list[dict[str, Any]]:
     if not isinstance(index_evidence, dict) or set(index_evidence) != {
+        "build_pins",
         "builder_id",
         "index",
         "platforms",
@@ -437,10 +887,17 @@ def frozen_identity_document(
         raise NativeReleaseIdentityError("native index evidence fields are not exact")
     if (
         index_evidence.get("schema")
-        != "ofarm.native-multi-platform-index-evidence.v1"
+        != "ofarm.native-multi-platform-index-evidence.v2"
         or index_evidence.get("workflow_action_pins") != CURRENT_NATIVE_ACTION_PINS
+        or index_evidence.get("build_pins") != CURRENT_NATIVE_BUILD_PINS
     ):
         raise NativeReleaseIdentityError("native index evidence identity differs")
+    source_commit = index_evidence.get("source_commit")
+    if not isinstance(source_commit, str) or COMMIT_PATTERN.fullmatch(source_commit) is None:
+        raise NativeReleaseIdentityError("native index source commit is not exact")
+    builder_id = index_evidence.get("builder_id")
+    if not isinstance(builder_id, str) or BUILDER_ID_PATTERN.fullmatch(builder_id) is None:
+        raise NativeReleaseIdentityError("native index builder identity is not exact")
     evidence_index = index_evidence.get("index")
     if not isinstance(evidence_index, dict) or evidence_index != {
         "media_type": OCI_INDEX_MEDIA_TYPE,
@@ -451,22 +908,93 @@ def frozen_identity_document(
     evidence_platforms = index_evidence.get("platforms")
     if not isinstance(evidence_platforms, list) or len(evidence_platforms) != 2:
         raise NativeReleaseIdentityError("native fan-in platform set is not exact")
-    platforms: list[dict[str, Any]] = []
     for item, expected_platform in zip(
-        evidence_platforms, ("linux/amd64", "linux/arm64"), strict=True
+        evidence_platforms, PLATFORM_ORDER, strict=True
     ):
         if not isinstance(item, dict) or set(item) != {
             "artifacts",
-            "attestation_manifest_digest",
-            "oci_archive_sha256",
+            "attestation_manifest",
+            "image_index_digest",
+            "oci_archive",
             "platform",
+            "provenance",
             "runtime_child_digest",
             "runtime_child_size",
             "runtime_config_digest",
+            "sbom",
         }:
             raise NativeReleaseIdentityError("native fan-in platform fields are not exact")
         if item.get("platform") != expected_platform:
             raise NativeReleaseIdentityError("native fan-in platform order differs")
+        _require_digest(
+            item.get("runtime_child_digest"),
+            f"{expected_platform} runtime child digest",
+        )
+        _require_digest(
+            item.get("runtime_config_digest"),
+            f"{expected_platform} runtime config digest",
+        )
+        _require_positive_integer(
+            item.get("runtime_child_size"),
+            MAX_INDEX_BYTES,
+            f"{expected_platform} runtime child size",
+        )
+        _validate_artifacts(item.get("artifacts"), expected_platform)
+        _require_digest(
+            item.get("image_index_digest"),
+            f"{expected_platform} source image-index digest",
+        )
+        _validate_digest_size(
+            item.get("oci_archive"),
+            maximum=512 * 1024 * 1024,
+            label=f"{expected_platform} OCI archive",
+        )
+        _validate_digest_size(
+            item.get("attestation_manifest"),
+            maximum=8 * 1024 * 1024,
+            label=f"{expected_platform} attestation manifest",
+        )
+        for name, predicate_type, maximum in (
+            ("sbom", SBOM_PREDICATE_TYPE, 8 * 1024 * 1024),
+            ("provenance", PROVENANCE_PREDICATE_TYPE, 2 * 1024 * 1024),
+        ):
+            evidence = item.get(name)
+            if not isinstance(evidence, dict) or set(evidence) != {
+                "predicate_type",
+                "sha256",
+                "size",
+            }:
+                raise NativeReleaseIdentityError(
+                    f"{expected_platform} {name} fields are not exact"
+                )
+            if evidence.get("predicate_type") != predicate_type:
+                raise NativeReleaseIdentityError(
+                    f"{expected_platform} {name} predicate is not exact"
+                )
+            _require_digest(
+                evidence.get("sha256"), f"{expected_platform} {name} digest"
+            )
+            _require_positive_integer(
+                evidence.get("size"), maximum, f"{expected_platform} {name} size"
+            )
+    return evidence_platforms
+
+
+def frozen_identity_document(
+    *,
+    index_evidence: dict[str, Any],
+    index_bytes: bytes,
+    source_directory: Path = SOURCE_DIRECTORY,
+) -> dict[str, Any]:
+    """Build and fully validate the stable identity from hosted fan-in evidence."""
+
+    evidence_platforms = _validate_fan_in_evidence(
+        index_evidence, index_bytes=index_bytes
+    )
+    platforms: list[dict[str, Any]] = []
+    for item, expected_platform in zip(
+        evidence_platforms, PLATFORM_ORDER, strict=True
+    ):
         platforms.append(
             {
                 "platform": expected_platform,
@@ -494,5 +1022,151 @@ def frozen_identity_document(
         document,
         canonical_bytes=canonical_json_bytes(document),
         source_directory=source_directory,
+    )
+    return document
+
+
+def candidate_evidence_receipt_document(
+    *,
+    release_identity: NativeReleaseIdentity,
+    index_evidence: dict[str, Any],
+    index_bytes: bytes,
+    repository_root: Path = PACKAGE_ROOT,
+) -> dict[str, Any]:
+    """Create a non-authoritative receipt pending durable Release preservation."""
+
+    if release_identity.status != "frozen":
+        raise NativeReleaseIdentityError(
+            "a candidate receipt requires a frozen candidate release identity"
+        )
+    evidence_platforms = _validate_fan_in_evidence(
+        index_evidence, index_bytes=index_bytes
+    )
+    builder_id = index_evidence["builder_id"]
+    builder_match = BUILDER_ID_PATTERN.fullmatch(builder_id)
+    if builder_match is None:  # Kept explicit for type narrowing after validation.
+        raise NativeReleaseIdentityError("native index builder identity is not exact")
+    run_id = int(builder_match.group(1))
+    run_attempt = int(builder_match.group(2))
+    run_url = (
+        f"https://github.com/{NATIVE_RELEASE_REPOSITORY}/actions/runs/{run_id}"
+    )
+    platforms = [
+        {
+            "platform": item["platform"],
+            "ociArchive": item["oci_archive"],
+            "sourceImageIndexDigest": item["image_index_digest"],
+            "attestationManifest": item["attestation_manifest"],
+            "sbom": {
+                "predicateType": item["sbom"]["predicate_type"],
+                "sha256": item["sbom"]["sha256"],
+                "size": item["sbom"]["size"],
+            },
+            "provenance": {
+                "predicateType": item["provenance"]["predicate_type"],
+                "sha256": item["provenance"]["sha256"],
+                "size": item["provenance"]["size"],
+            },
+        }
+        for item in evidence_platforms
+    ]
+    build_run = {
+        "repository": NATIVE_RELEASE_REPOSITORY,
+        "sourceCommit": index_evidence["source_commit"],
+        "runId": run_id,
+        "runAttempt": run_attempt,
+        "runUrl": run_url,
+        "builderId": builder_id,
+        "actionsEvidence": {
+            "retentionDays": 14,
+            "runArtifactsUrl": run_url + "#artifacts",
+            "artifacts": [
+                {
+                    "archivePath": "ofarm-ed25519.oci.tar",
+                    "name": "native-verifier-amd64",
+                    "platform": "linux/amd64",
+                },
+                {
+                    "archivePath": "ofarm-ed25519.oci.tar",
+                    "name": "native-verifier-arm64",
+                    "platform": "linux/arm64",
+                },
+                {
+                    "archivePath": "native_evidence_receipt.candidate.json",
+                    "name": "native-verifier-index",
+                    "platform": None,
+                },
+            ],
+        },
+    }
+    tag = _release_tag(release_identity.digest)
+    preservation = {
+        "provider": "github-release",
+        "releaseKind": "prerelease",
+        "status": "pending",
+        "checkedReceiptPath": CHECKED_EVIDENCE_RECEIPT_PATH,
+        "releaseTag": tag,
+        "releaseUrl": (
+            f"https://github.com/{NATIVE_RELEASE_REPOSITORY}/releases/tag/{tag}"
+        ),
+        "assets": [
+            {
+                "platform": item["platform"],
+                "name": (
+                    "ofarm-ed25519-"
+                    + item["platform"].replace("/", "-")
+                    + ".oci.tar"
+                ),
+                "sha256": item["ociArchive"]["sha256"],
+                "size": item["ociArchive"]["size"],
+                "url": (
+                    f"https://github.com/{NATIVE_RELEASE_REPOSITORY}/releases/"
+                    f"download/{tag}/ofarm-ed25519-"
+                    f"{item['platform'].replace('/', '-')}.oci.tar"
+                ),
+            }
+            for item in platforms
+        ],
+    }
+    document = {
+        "schemaVersion": "ofarm.native-verifier-evidence-receipt.v1",
+        "status": "candidate",
+        "releaseIdentityDigest": release_identity.digest,
+        "buildPins": CURRENT_NATIVE_BUILD_PINS,
+        "evidenceAuthorityInput": evidence_authority_input_manifest(repository_root),
+        "buildRun": build_run,
+        "platforms": platforms,
+        "preservation": preservation,
+    }
+    validate_native_evidence_receipt(
+        document,
+        canonical_bytes=canonical_json_bytes(document),
+        release_identity=release_identity,
+        repository_root=repository_root,
+        allow_candidate=True,
+    )
+    return document
+
+
+def frozen_evidence_receipt_document(
+    *,
+    candidate_receipt: NativeEvidenceReceipt,
+    release_identity: NativeReleaseIdentity,
+    repository_root: Path = PACKAGE_ROOT,
+) -> dict[str, Any]:
+    """Promote a validated candidate after both Release downloads are verified."""
+
+    if candidate_receipt.status != "candidate":
+        raise NativeReleaseIdentityError(
+            "only a candidate evidence receipt can be frozen"
+        )
+    document = candidate_receipt.manifest()
+    document["status"] = "frozen"
+    document["preservation"]["status"] = "verified"
+    validate_native_evidence_receipt(
+        document,
+        canonical_bytes=canonical_json_bytes(document),
+        release_identity=release_identity,
+        repository_root=repository_root,
     )
     return document

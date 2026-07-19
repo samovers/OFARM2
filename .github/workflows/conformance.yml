@@ -79,8 +79,11 @@ jobs:
             conformance-environment \
             --checked-identity \
               deployment/postgresql/ofarm_ed25519/native_release_identity.json \
+            --checked-receipt \
+              deployment/postgresql/ofarm_ed25519/native_evidence_receipt.json \
             --metadata .artifacts/derived-postgresql/metadata.json \
             --source-directory deployment/postgresql/ofarm_ed25519 \
+            --repository-root . \
             --image-name ofarm-postgresql-conformance:local \
             --metadata-reference \
               .artifacts/derived-postgresql/metadata.json \
@@ -478,12 +481,17 @@ jobs:
             prepare-release-identity \
             --checked-identity \
               deployment/postgresql/ofarm_ed25519/native_release_identity.json \
+            --checked-receipt \
+              deployment/postgresql/ofarm_ed25519/native_evidence_receipt.json \
             --index-evidence \
               .artifacts/native-index/ofarm-ed25519.index-evidence.json \
             --index .artifacts/native-index/ofarm-ed25519.index.json \
             --source-directory deployment/postgresql/ofarm_ed25519 \
+            --repository-root . \
             --candidate-output \
-              .artifacts/native-index/native_release_identity.candidate.json
+              .artifacts/native-index/native_release_identity.candidate.json \
+            --candidate-receipt-output \
+              .artifacts/native-index/native_evidence_receipt.candidate.json
       - name: Upload canonical two-platform OCI index evidence
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:

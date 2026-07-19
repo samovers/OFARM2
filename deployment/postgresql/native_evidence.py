@@ -21,18 +21,28 @@ from typing import Any
 try:
     from deployment.postgresql.native_release_identity import (
         CURRENT_NATIVE_ACTION_PINS,
+        CURRENT_NATIVE_BUILD_PINS,
         NativeReleaseIdentityError,
+        candidate_evidence_receipt_document,
         canonical_json_bytes as release_canonical_json_bytes,
+        frozen_evidence_receipt_document,
         frozen_identity_document,
+        load_native_evidence_receipt,
         load_native_release_identity,
+        validate_native_release_identity,
     )
 except ModuleNotFoundError:  # Direct execution from this source directory.
     from native_release_identity import (  # type: ignore[no-redef]
         CURRENT_NATIVE_ACTION_PINS,
+        CURRENT_NATIVE_BUILD_PINS,
         NativeReleaseIdentityError,
+        candidate_evidence_receipt_document,
         canonical_json_bytes as release_canonical_json_bytes,
+        frozen_evidence_receipt_document,
         frozen_identity_document,
+        load_native_evidence_receipt,
         load_native_release_identity,
+        validate_native_release_identity,
     )
 
 
@@ -859,6 +869,13 @@ def collect_oci_evidence(
         attestation_digest = _require_digest(
             attestation_descriptor.get("digest"), "attestation manifest digest"
         )
+        attestation_size = attestation_descriptor.get("size")
+        if (
+            not isinstance(attestation_size, int)
+            or isinstance(attestation_size, bool)
+            or not 0 < attestation_size <= MAX_MANIFEST_BYTES
+        ):
+            raise NativeEvidenceError("attestation manifest size is invalid")
         archive.require_no_unreferenced_blobs()
     finally:
         archive.close()
@@ -879,6 +896,7 @@ def collect_oci_evidence(
         "artifacts": reproducible_artifacts,
         "image_index_digest": image_index_digest,
         "attestation_manifest_digest": attestation_digest,
+        "attestation_manifest_size": attestation_size,
         "oci_archive": {
             "sha256": archive.sha256,
             "size": archive.size,
@@ -931,6 +949,7 @@ def _load_oci_evidence_report(
         "artifacts",
         "image_index_digest",
         "attestation_manifest_digest",
+        "attestation_manifest_size",
         "oci_archive",
         "sbom",
         "provenance",
@@ -995,6 +1014,54 @@ def _load_oci_evidence_report(
         raise NativeEvidenceError(
             f"{expected_platform} builder identity is invalid"
         )
+    _require_digest(
+        report.get("image_index_digest"),
+        f"{expected_platform} source image-index digest",
+    )
+    _require_digest(
+        report.get("attestation_manifest_digest"),
+        f"{expected_platform} attestation manifest digest",
+    )
+    attestation_size = report.get("attestation_manifest_size")
+    if (
+        not isinstance(attestation_size, int)
+        or isinstance(attestation_size, bool)
+        or not 0 < attestation_size <= MAX_MANIFEST_BYTES
+    ):
+        raise NativeEvidenceError(
+            f"{expected_platform} attestation manifest size is invalid"
+        )
+    for name, maximum, predicate in (
+        ("oci_archive", MAX_OCI_ARCHIVE_BYTES, None),
+        ("sbom", MAX_SBOM_BYTES, SBOM_PREDICATE_TYPE),
+        ("provenance", MAX_PROVENANCE_BYTES, PROVENANCE_PREDICATE_TYPE),
+    ):
+        evidence = _require_object(
+            report.get(name), f"{expected_platform} {name} evidence"
+        )
+        expected_fields = {"sha256", "size"}
+        if predicate is not None:
+            expected_fields.add("predicate_type")
+        if set(evidence) != expected_fields:
+            raise NativeEvidenceError(
+                f"{expected_platform} {name} evidence fields are not exact"
+            )
+        _require_digest(
+            evidence.get("sha256"), f"{expected_platform} {name} digest"
+        )
+        size = evidence.get("size")
+        if (
+            not isinstance(size, int)
+            or isinstance(size, bool)
+            or not 0 < size <= maximum
+        ):
+            raise NativeEvidenceError(
+                f"{expected_platform} {name} evidence size is invalid"
+            )
+        if predicate is not None and evidence.get("predicate_type") != predicate:
+            raise NativeEvidenceError(
+                f"{expected_platform} {name} predicate is not exact"
+            )
     return report
 
 
@@ -1047,17 +1114,14 @@ def compose_multi_platform_index(
                 "runtime_child_size": report["runtime_child_size"],
                 "runtime_config_digest": report["runtime_config_digest"],
                 "artifacts": report["artifacts"],
-                "oci_archive_sha256": _require_digest(
-                    _require_object(
-                        report.get("oci_archive"),
-                        f"{report['platform']} OCI archive",
-                    ).get("sha256"),
-                    f"{report['platform']} OCI archive digest",
-                ),
-                "attestation_manifest_digest": _require_digest(
-                    report.get("attestation_manifest_digest"),
-                    f"{report['platform']} attestation manifest digest",
-                ),
+                "oci_archive": report["oci_archive"],
+                "image_index_digest": report["image_index_digest"],
+                "attestation_manifest": {
+                    "sha256": report["attestation_manifest_digest"],
+                    "size": report["attestation_manifest_size"],
+                },
+                "sbom": report["sbom"],
+                "provenance": report["provenance"],
             }
         )
 
@@ -1069,10 +1133,11 @@ def compose_multi_platform_index(
     index_bytes = _canonical_json_bytes(index)
     _write_regular(index_output, index_bytes)
     evidence = {
-        "schema": "ofarm.native-multi-platform-index-evidence.v1",
+        "schema": "ofarm.native-multi-platform-index-evidence.v2",
         "source_commit": source_commit,
         "builder_id": reports[0]["builder_id"],
         "workflow_action_pins": CURRENT_NATIVE_ACTION_PINS,
+        "build_pins": CURRENT_NATIVE_BUILD_PINS,
         "index": {
             "media_type": OCI_INDEX_MEDIA_TYPE,
             "sha256": _sha256(index_bytes),
@@ -1087,18 +1152,27 @@ def compose_multi_platform_index(
 def prepare_release_identity(
     *,
     checked_identity_path: Path,
+    checked_receipt_path: Path,
     index_evidence_path: Path,
     index_path: Path,
     source_directory: Path,
+    repository_root: Path,
     candidate_output: Path,
+    candidate_receipt_output: Path,
 ) -> dict[str, Any]:
-    """Emit a hosted candidate or enforce an already frozen native identity."""
+    """Emit identity/receipt candidates and enforce checked authority linkage."""
 
     try:
         checked = load_native_release_identity(
             checked_identity_path,
             verify_current_sources=True,
             source_directory=source_directory,
+        )
+        checked_receipt = load_native_evidence_receipt(
+            checked_receipt_path,
+            release_identity=checked,
+            verify_current_authority=True,
+            repository_root=repository_root,
         )
         index_evidence = _require_object(
             _load_json_file(
@@ -1125,19 +1199,129 @@ def prepare_release_identity(
         raise NativeEvidenceError(
             "hosted native result differs from the frozen release identity"
         )
+    try:
+        candidate_identity = validate_native_release_identity(
+            candidate,
+            canonical_bytes=candidate_bytes,
+            source_directory=source_directory,
+        )
+        candidate_receipt = candidate_evidence_receipt_document(
+            release_identity=candidate_identity,
+            index_evidence=index_evidence,
+            index_bytes=index_bytes,
+            repository_root=repository_root,
+        )
+    except NativeReleaseIdentityError as exc:
+        raise NativeEvidenceError(str(exc)) from exc
+    candidate_receipt_bytes = release_canonical_json_bytes(candidate_receipt)
     _write_regular(candidate_output, candidate_bytes)
+    _write_regular(candidate_receipt_output, candidate_receipt_bytes)
     return {
         "checked_status": checked.status,
+        "checked_receipt_status": checked_receipt.status,
         "candidate_digest": _sha256(candidate_bytes),
         "candidate_index_digest": candidate["index"]["sha256"],
+        "candidate_receipt_digest": _sha256(candidate_receipt_bytes),
+    }
+
+
+def _bounded_file_identity(path: Path, maximum: int, label: str) -> dict[str, Any]:
+    try:
+        file_stat = path.lstat()
+    except OSError as exc:
+        raise NativeEvidenceError(f"{label} is unavailable") from exc
+    if path.is_symlink() or not stat.S_ISREG(file_stat.st_mode):
+        raise NativeEvidenceError(f"{label} must be one regular file")
+    if not 0 < file_stat.st_size <= maximum:
+        raise NativeEvidenceError(f"{label} has an invalid size")
+    digest = hashlib.sha256()
+    try:
+        with path.open("rb") as input_file:
+            while chunk := input_file.read(1024 * 1024):
+                digest.update(chunk)
+    except OSError as exc:
+        raise NativeEvidenceError(f"{label} cannot be read") from exc
+    return {"sha256": "sha256:" + digest.hexdigest(), "size": file_stat.st_size}
+
+
+def finalize_evidence_receipt(
+    *,
+    release_identity_path: Path,
+    candidate_receipt_path: Path,
+    source_directory: Path,
+    repository_root: Path,
+    amd64_download: Path,
+    arm64_download: Path,
+    output: Path,
+) -> dict[str, Any]:
+    """Freeze a receipt after independently downloaded Release assets verify."""
+
+    try:
+        identity = load_native_release_identity(
+            release_identity_path,
+            verify_current_sources=True,
+            source_directory=source_directory,
+        )
+        candidate = load_native_evidence_receipt(
+            candidate_receipt_path,
+            release_identity=identity,
+            verify_current_authority=True,
+            repository_root=repository_root,
+            allow_candidate=True,
+        )
+    except NativeReleaseIdentityError as exc:
+        raise NativeEvidenceError(str(exc)) from exc
+    if identity.status != "frozen" or candidate.status != "candidate":
+        raise NativeEvidenceError(
+            "receipt finalization requires frozen identity and candidate receipt"
+        )
+    downloads = [amd64_download, arm64_download]
+    for path, platform, asset in zip(
+        downloads,
+        candidate.document["platforms"],
+        candidate.document["preservation"]["assets"],
+        strict=True,
+    ):
+        if path.name != asset["name"]:
+            raise NativeEvidenceError(
+                f"{platform['platform']} Release download name is not exact"
+            )
+        observed = _bounded_file_identity(
+            path,
+            MAX_OCI_ARCHIVE_BYTES,
+            f"{platform['platform']} Release download",
+        )
+        if observed != platform["ociArchive"] or observed != {
+            "sha256": asset["sha256"],
+            "size": asset["size"],
+        }:
+            raise NativeEvidenceError(
+                f"{platform['platform']} Release download differs from candidate receipt"
+            )
+    try:
+        frozen = frozen_evidence_receipt_document(
+            candidate_receipt=candidate,
+            release_identity=identity,
+            repository_root=repository_root,
+        )
+    except NativeReleaseIdentityError as exc:
+        raise NativeEvidenceError(str(exc)) from exc
+    frozen_bytes = release_canonical_json_bytes(frozen)
+    _write_regular(output, frozen_bytes)
+    return {
+        "status": "frozen",
+        "release_identity_digest": identity.digest,
+        "receipt_digest": _sha256(frozen_bytes),
     }
 
 
 def conformance_environment(
     *,
     checked_identity_path: Path,
+    checked_receipt_path: Path,
     metadata_path: Path,
     source_directory: Path,
+    repository_root: Path,
     image_name: str,
     metadata_reference: str,
 ) -> str:
@@ -1157,6 +1341,12 @@ def conformance_environment(
             checked_identity_path,
             verify_current_sources=True,
             source_directory=source_directory,
+        )
+        receipt = load_native_evidence_receipt(
+            checked_receipt_path,
+            release_identity=identity,
+            verify_current_authority=True,
+            repository_root=repository_root,
         )
     except NativeReleaseIdentityError as exc:
         raise NativeEvidenceError(str(exc)) from exc
@@ -1181,6 +1371,8 @@ def conformance_environment(
         "ISSUE174_DERIVED_POSTGRES_CHILD_DIGEST": expected_child,
         "ISSUE174_DERIVED_POSTGRES_CONFIG_DIGEST": expected_config,
         "ISSUE174_DERIVED_POSTGRES_IDENTITY_STATUS": identity.status,
+        "ISSUE174_DERIVED_POSTGRES_EVIDENCE_RECEIPT_DIGEST": receipt.digest,
+        "ISSUE174_DERIVED_POSTGRES_EVIDENCE_RECEIPT_STATUS": receipt.status,
     }
     return "".join(f"{name}={value}\n" for name, value in values.items())
 
@@ -1216,15 +1408,29 @@ def _parser() -> argparse.ArgumentParser:
 
     release = subparsers.add_parser("prepare-release-identity")
     release.add_argument("--checked-identity", type=Path, required=True)
+    release.add_argument("--checked-receipt", type=Path, required=True)
     release.add_argument("--index-evidence", type=Path, required=True)
     release.add_argument("--index", type=Path, required=True)
     release.add_argument("--source-directory", type=Path, required=True)
+    release.add_argument("--repository-root", type=Path, required=True)
     release.add_argument("--candidate-output", type=Path, required=True)
+    release.add_argument("--candidate-receipt-output", type=Path, required=True)
+
+    finalize = subparsers.add_parser("finalize-evidence-receipt")
+    finalize.add_argument("--release-identity", type=Path, required=True)
+    finalize.add_argument("--candidate-receipt", type=Path, required=True)
+    finalize.add_argument("--source-directory", type=Path, required=True)
+    finalize.add_argument("--repository-root", type=Path, required=True)
+    finalize.add_argument("--amd64-download", type=Path, required=True)
+    finalize.add_argument("--arm64-download", type=Path, required=True)
+    finalize.add_argument("--output", type=Path, required=True)
 
     environment = subparsers.add_parser("conformance-environment")
     environment.add_argument("--checked-identity", type=Path, required=True)
+    environment.add_argument("--checked-receipt", type=Path, required=True)
     environment.add_argument("--metadata", type=Path, required=True)
     environment.add_argument("--source-directory", type=Path, required=True)
+    environment.add_argument("--repository-root", type=Path, required=True)
     environment.add_argument("--image-name", required=True)
     environment.add_argument("--metadata-reference", required=True)
     return parser
@@ -1264,17 +1470,32 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "prepare-release-identity":
             prepare_release_identity(
                 checked_identity_path=args.checked_identity,
+                checked_receipt_path=args.checked_receipt,
                 index_evidence_path=args.index_evidence,
                 index_path=args.index,
                 source_directory=args.source_directory,
+                repository_root=args.repository_root,
                 candidate_output=args.candidate_output,
+                candidate_receipt_output=args.candidate_receipt_output,
+            )
+        elif args.command == "finalize-evidence-receipt":
+            finalize_evidence_receipt(
+                release_identity_path=args.release_identity,
+                candidate_receipt_path=args.candidate_receipt,
+                source_directory=args.source_directory,
+                repository_root=args.repository_root,
+                amd64_download=args.amd64_download,
+                arm64_download=args.arm64_download,
+                output=args.output,
             )
         else:
             print(
                 conformance_environment(
                     checked_identity_path=args.checked_identity,
+                    checked_receipt_path=args.checked_receipt,
                     metadata_path=args.metadata,
                     source_directory=args.source_directory,
+                    repository_root=args.repository_root,
                     image_name=args.image_name,
                     metadata_reference=args.metadata_reference,
                 ),

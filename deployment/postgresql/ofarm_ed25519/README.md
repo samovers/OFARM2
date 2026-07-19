@@ -19,6 +19,32 @@ the exact source inventory, build pins, and workflow-action pins. A later
 reviewed commit freezes those bytes. Conformance refuses to call the derived
 image frozen unless its Buildx metadata matches that checked identity exactly.
 
+`native_evidence_receipt.json` is the separate checked, durable evidence record.
+Its provisional form contains no build, platform, attestation, archive, or
+preservation claim. The fan-in emits a candidate linked to the exact frozen
+release-identity digest. For both platforms it records the source image-index,
+attestation-manifest, SBOM, provenance, and OCI-archive digest and size, together
+with the exact builder, Actions run, source commit, build pins, and evidence
+authority source inventory. Actions artifacts are explicitly temporary inputs.
+The durable archive location is a deterministic GitHub Release tag derived from
+the release-identity digest, with one exact asset name and URL per platform.
+Only archives downloaded back from those URLs and independently checked against
+the candidate may promote the receipt from `candidate` to `frozen`.
+
+The final verification command accepts the two independently downloaded Release
+assets and writes the canonical frozen receipt; it refuses a wrong filename,
+size, or digest:
+
+```sh
+python3 ../native_evidence.py finalize-evidence-receipt \
+  --release-identity native_release_identity.json \
+  --candidate-receipt native_evidence_receipt.candidate.json \
+  --source-directory . --repository-root ../../.. \
+  --amd64-download ofarm-ed25519-linux-amd64.oci.tar \
+  --arm64-download ofarm-ed25519-linux-arm64.oci.tar \
+  --output native_evidence_receipt.json
+```
+
 The build has a closed `linux/amd64`/`linux/arm64` input set. It uses pinned
 Dockerfile-frontend, GCC-builder, and PostgreSQL-runtime manifest digests. The
 matching PostgreSQL 17.10 server-development package is downloaded by exact

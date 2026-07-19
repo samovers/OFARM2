@@ -15,6 +15,7 @@ import pytest
 
 from deployment.postgresql.native_evidence import (
     CURRENT_NATIVE_ACTION_PINS,
+    CURRENT_NATIVE_BUILD_PINS,
     LIBSODIUM_SOURCE_SHA256,
     LIBSODIUM_SOURCE_URL,
     NativeEvidenceError,
@@ -23,16 +24,24 @@ from deployment.postgresql.native_evidence import (
     compare_builds,
     conformance_environment,
     compose_multi_platform_index,
+    finalize_evidence_receipt,
     prepare_release_identity,
 )
 from deployment.postgresql.native_release_identity import (
+    EVIDENCE_AUTHORITY_PATHS,
+    EVIDENCE_RECEIPT_PATH,
     IDENTITY_PATH,
     NATIVE_SOURCE_PATHS,
+    PACKAGE_ROOT as RELEASE_PACKAGE_ROOT,
     SOURCE_DIRECTORY,
     NativeReleaseIdentityError,
     canonical_json_bytes as release_canonical_json_bytes,
+    evidence_authority_input_manifest,
     load_native_release_identity,
+    load_native_evidence_receipt,
+    provisional_evidence_receipt_document,
     provisional_identity_document,
+    validate_native_release_identity,
 )
 
 
@@ -115,7 +124,15 @@ def _reproducibility_fixture(
     return output
 
 
-def _native_oci_report(platform: str, digest_octet: str) -> dict[str, object]:
+def _archive_bytes(platform: str, evidence_octet: str) -> bytes:
+    return f"native OCI archive {platform} {evidence_octet}\n".encode()
+
+
+def _native_oci_report(
+    platform: str,
+    digest_octet: str,
+    evidence_octet: str = "a",
+) -> dict[str, object]:
     artifacts = [
         {
             "name": name,
@@ -134,20 +151,93 @@ def _native_oci_report(platform: str, digest_octet: str) -> dict[str, object]:
         "runtime_child_size": 1234,
         "runtime_config_digest": "sha256:" + digest_octet.upper().lower() * 64,
         "artifacts": artifacts,
-        "image_index_digest": "sha256:" + "c" * 64,
-        "attestation_manifest_digest": "sha256:" + "d" * 64,
-        "oci_archive": {"sha256": "sha256:" + "e" * 64, "size": 12345},
+        "image_index_digest": "sha256:" + evidence_octet * 64,
+        "attestation_manifest_digest": "sha256:" + evidence_octet * 64,
+        "attestation_manifest_size": 456,
+        "oci_archive": {
+            "sha256": _digest(_archive_bytes(platform, evidence_octet)),
+            "size": len(_archive_bytes(platform, evidence_octet)),
+        },
         "sbom": {
             "predicate_type": "https://spdx.dev/Document",
-            "sha256": "sha256:" + "a" * 64,
+            "sha256": "sha256:" + evidence_octet * 64,
             "size": 321,
         },
         "provenance": {
             "predicate_type": "https://slsa.dev/provenance/v0.2",
-            "sha256": "sha256:" + "b" * 64,
+            "sha256": "sha256:" + evidence_octet * 64,
             "size": 654,
         },
     }
+
+
+def _write_provisional_checked_authority(tmp_path: Path) -> tuple[Path, Path]:
+    identity_document = provisional_identity_document(SOURCE_DIRECTORY)
+    identity_bytes = release_canonical_json_bytes(identity_document)
+    identity = validate_native_release_identity(
+        identity_document,
+        canonical_bytes=identity_bytes,
+        source_directory=SOURCE_DIRECTORY,
+    )
+    identity_path = tmp_path / "provisional.json"
+    identity_path.write_bytes(identity_bytes)
+    receipt_path = tmp_path / "provisional-receipt.json"
+    receipt_path.write_bytes(
+        release_canonical_json_bytes(
+            provisional_evidence_receipt_document(
+                release_identity=identity,
+                repository_root=RELEASE_PACKAGE_ROOT,
+            )
+        )
+    )
+    return identity_path, receipt_path
+
+
+def _prepare_candidate(
+    tmp_path: Path,
+    *,
+    evidence_octet: str = "a",
+    checked_identity_path: Path | None = None,
+    checked_receipt_path: Path | None = None,
+) -> tuple[Path, Path, Path, Path, dict[str, object]]:
+    amd64_report = _native_oci_report("linux/amd64", "1", evidence_octet)
+    arm64_report = _native_oci_report("linux/arm64", "2", evidence_octet)
+    amd64_path = tmp_path / f"amd64-{evidence_octet}.json"
+    arm64_path = tmp_path / f"arm64-{evidence_octet}.json"
+    amd64_path.write_text(json.dumps(amd64_report))
+    arm64_path.write_text(json.dumps(arm64_report))
+    index_path = tmp_path / f"index-{evidence_octet}.json"
+    evidence_path = tmp_path / f"index-evidence-{evidence_octet}.json"
+    compose_multi_platform_index(
+        amd64_evidence_path=amd64_path,
+        arm64_evidence_path=arm64_path,
+        source_commit=SOURCE_COMMIT,
+        index_output=index_path,
+        evidence_output=evidence_path,
+    )
+    if checked_identity_path is None or checked_receipt_path is None:
+        checked_identity_path, checked_receipt_path = (
+            _write_provisional_checked_authority(tmp_path)
+        )
+    candidate_identity = tmp_path / f"candidate-identity-{evidence_octet}.json"
+    candidate_receipt = tmp_path / f"candidate-receipt-{evidence_octet}.json"
+    prepare_release_identity(
+        checked_identity_path=checked_identity_path,
+        checked_receipt_path=checked_receipt_path,
+        index_evidence_path=evidence_path,
+        index_path=index_path,
+        source_directory=SOURCE_DIRECTORY,
+        repository_root=RELEASE_PACKAGE_ROOT,
+        candidate_output=candidate_identity,
+        candidate_receipt_output=candidate_receipt,
+    )
+    return (
+        candidate_identity,
+        candidate_receipt,
+        index_path,
+        evidence_path,
+        {"amd64": amd64_report, "arm64": arm64_report},
+    )
 
 
 def _oci_fixture(
@@ -485,6 +575,7 @@ def test_attested_oci_child_must_equal_both_clean_builds(tmp_path):
 
     assert report["runtime_child_digest"] == child_digest
     assert report["runtime_child_size"] > 0
+    assert report["attestation_manifest_size"] > 0
     assert [artifact["name"] for artifact in report["artifacts"]] == list(ARTIFACTS)
     assert (output_directory / "sbom.spdx.in-toto.json").is_file()
     assert (output_directory / "provenance.slsa-v0.2.in-toto.json").is_file()
@@ -694,6 +785,15 @@ def test_two_native_reports_compose_one_canonical_platform_index(tmp_path):
         "size": len(index_bytes),
     }
     assert evidence["workflow_action_pins"] == CURRENT_NATIVE_ACTION_PINS
+    assert evidence["build_pins"] == CURRENT_NATIVE_BUILD_PINS
+    assert evidence["schema"] == "ofarm.native-multi-platform-index-evidence.v2"
+    assert evidence["platforms"][0]["oci_archive"] == amd64_report["oci_archive"]
+    assert evidence["platforms"][0]["attestation_manifest"] == {
+        "sha256": amd64_report["attestation_manifest_digest"],
+        "size": amd64_report["attestation_manifest_size"],
+    }
+    assert evidence["platforms"][0]["sbom"] == amd64_report["sbom"]
+    assert evidence["platforms"][0]["provenance"] == amd64_report["provenance"]
     assert json.loads(evidence_path.read_bytes()) == evidence
 
 
@@ -710,6 +810,31 @@ def test_checked_native_release_identity_matches_every_current_source() -> None:
     assert "ofarm_ed25519_fault_test.sql" in source_paths
     assert "ofarm_ed25519_vectors.json" in source_paths
     assert identity.document["workflowActionPins"] == CURRENT_NATIVE_ACTION_PINS
+
+
+def test_checked_native_evidence_receipt_matches_current_authority() -> None:
+    identity = load_native_release_identity(verify_current_sources=True)
+    receipt = load_native_evidence_receipt(
+        EVIDENCE_RECEIPT_PATH,
+        release_identity=identity,
+        verify_current_authority=True,
+        repository_root=RELEASE_PACKAGE_ROOT,
+    )
+
+    assert receipt.status == identity.status
+    assert receipt.document["releaseIdentityDigest"] == identity.digest
+    assert receipt.document["buildPins"] == CURRENT_NATIVE_BUILD_PINS
+    assert [
+        item["path"]
+        for item in receipt.document["evidenceAuthorityInput"]["files"]
+    ] == list(EVIDENCE_AUTHORITY_PATHS)
+    assert receipt.document["evidenceAuthorityInput"] == (
+        evidence_authority_input_manifest(RELEASE_PACKAGE_ROOT)
+    )
+    if receipt.status == "provisional":
+        assert receipt.document["buildRun"] is None
+        assert receipt.document["platforms"] == []
+        assert receipt.document["preservation"] is None
 
 
 def test_native_release_identity_refuses_source_drift(tmp_path: Path) -> None:
@@ -731,6 +856,110 @@ def test_native_release_identity_refuses_source_drift(tmp_path: Path) -> None:
         )
 
 
+def test_native_evidence_receipt_refuses_authority_source_drift(
+    tmp_path: Path,
+) -> None:
+    authority_root = tmp_path / "authority"
+    for relative_path in EVIDENCE_AUTHORITY_PATHS:
+        destination = authority_root / relative_path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(RELEASE_PACKAGE_ROOT / relative_path, destination)
+    identity_document = provisional_identity_document(SOURCE_DIRECTORY)
+    identity_bytes = release_canonical_json_bytes(identity_document)
+    identity = validate_native_release_identity(
+        identity_document,
+        canonical_bytes=identity_bytes,
+        source_directory=SOURCE_DIRECTORY,
+    )
+    receipt_path = tmp_path / "receipt.json"
+    receipt_path.write_bytes(
+        release_canonical_json_bytes(
+            provisional_evidence_receipt_document(
+                release_identity=identity,
+                repository_root=authority_root,
+            )
+        )
+    )
+    drift_path = authority_root / "deployment/postgresql/native_evidence.py"
+    drift_path.write_bytes(drift_path.read_bytes() + b"\n# hostile drift\n")
+
+    with pytest.raises(NativeReleaseIdentityError, match="current files"):
+        load_native_evidence_receipt(
+            receipt_path,
+            release_identity=identity,
+            verify_current_authority=True,
+            repository_root=authority_root,
+        )
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    (
+        (
+            lambda receipt: receipt.update(unexpected=True),
+            "fields are not exact",
+        ),
+        (
+            lambda receipt: receipt.update(
+                releaseIdentityDigest="sha256:" + "0" * 64
+            ),
+            "not linked",
+        ),
+        (
+            lambda receipt: receipt["platforms"][0]["sbom"].update(
+                predicateType="https://example.test/not-spdx"
+            ),
+            "predicate is not exact",
+        ),
+        (
+            lambda receipt: receipt["platforms"][0]["ociArchive"].update(
+                size=True
+            ),
+            "OCI archive size is invalid",
+        ),
+        (
+            lambda receipt: receipt["preservation"].update(
+                releaseUrl="https://example.test/hostile"
+            ),
+            "preservation reference is inconsistent",
+        ),
+        (
+            lambda receipt: receipt["buildRun"]["actionsEvidence"].update(
+                retentionDays=90
+            ),
+            "temporary Actions evidence reference is inconsistent",
+        ),
+    ),
+)
+def test_candidate_evidence_receipt_refuses_schema_and_claim_mutation(
+    tmp_path: Path,
+    mutation,
+    message: str,
+) -> None:
+    candidate_identity_path, candidate_receipt_path, _, _, _ = _prepare_candidate(
+        tmp_path
+    )
+    identity = load_native_release_identity(
+        candidate_identity_path,
+        verify_current_sources=True,
+        source_directory=SOURCE_DIRECTORY,
+    )
+    receipt_document = json.loads(candidate_receipt_path.read_bytes())
+    mutation(receipt_document)
+    candidate_receipt_path.write_bytes(
+        release_canonical_json_bytes(receipt_document)
+    )
+
+    with pytest.raises(NativeReleaseIdentityError, match=message):
+        load_native_evidence_receipt(
+            candidate_receipt_path,
+            release_identity=identity,
+            verify_current_authority=True,
+            repository_root=RELEASE_PACKAGE_ROOT,
+            allow_candidate=True,
+        )
+
+
 def test_hosted_fan_in_emits_one_frozen_candidate_identity(tmp_path: Path) -> None:
     amd64_path = tmp_path / "amd64.json"
     arm64_path = tmp_path / "arm64.json"
@@ -745,18 +974,21 @@ def test_hosted_fan_in_emits_one_frozen_candidate_identity(tmp_path: Path) -> No
         index_output=index_path,
         evidence_output=evidence_path,
     )
-    provisional_path = tmp_path / "provisional.json"
-    provisional_path.write_bytes(
-        release_canonical_json_bytes(provisional_identity_document(SOURCE_DIRECTORY))
+    provisional_path, provisional_receipt_path = (
+        _write_provisional_checked_authority(tmp_path)
     )
     candidate_path = tmp_path / "candidate.json"
+    candidate_receipt_path = tmp_path / "candidate-receipt.json"
 
     result = prepare_release_identity(
         checked_identity_path=provisional_path,
+        checked_receipt_path=provisional_receipt_path,
         index_evidence_path=evidence_path,
         index_path=index_path,
         source_directory=SOURCE_DIRECTORY,
+        repository_root=RELEASE_PACKAGE_ROOT,
         candidate_output=candidate_path,
+        candidate_receipt_output=candidate_receipt_path,
     )
     candidate = load_native_release_identity(
         candidate_path,
@@ -766,8 +998,10 @@ def test_hosted_fan_in_emits_one_frozen_candidate_identity(tmp_path: Path) -> No
 
     assert result == {
         "checked_status": "provisional",
+        "checked_receipt_status": "provisional",
         "candidate_digest": candidate.digest,
         "candidate_index_digest": candidate.index_digest,
+        "candidate_receipt_digest": _digest(candidate_receipt_path.read_bytes()),
     }
     assert candidate.status == "frozen"
     assert candidate.document["index"]["canonicalBytesBase64"] == (
@@ -777,6 +1011,124 @@ def test_hosted_fan_in_emits_one_frozen_candidate_identity(tmp_path: Path) -> No
         "linux/amd64",
         "linux/arm64",
     ]
+    receipt = load_native_evidence_receipt(
+        candidate_receipt_path,
+        release_identity=candidate,
+        verify_current_authority=True,
+        repository_root=RELEASE_PACKAGE_ROOT,
+        allow_candidate=True,
+    )
+    assert receipt.status == "candidate"
+    assert receipt.document["releaseIdentityDigest"] == candidate.digest
+    assert receipt.document["preservation"]["status"] == "pending"
+    assert receipt.document["preservation"]["releaseKind"] == "prerelease"
+    assert receipt.document["preservation"]["releaseTag"] == (
+        "native-verifier-" + candidate.digest.removeprefix("sha256:")
+    )
+    assert [
+        asset["url"] for asset in receipt.document["preservation"]["assets"]
+    ] == [
+        (
+            "https://github.com/samovers/OFARM2/releases/download/"
+            f"native-verifier-{candidate.digest.removeprefix('sha256:')}/"
+            "ofarm-ed25519-linux-amd64.oci.tar"
+        ),
+        (
+            "https://github.com/samovers/OFARM2/releases/download/"
+            f"native-verifier-{candidate.digest.removeprefix('sha256:')}/"
+            "ofarm-ed25519-linux-arm64.oci.tar"
+        ),
+    ]
+
+
+def test_release_downloads_freeze_durable_receipt_and_reruns_may_differ(
+    tmp_path: Path,
+) -> None:
+    (
+        candidate_identity_path,
+        candidate_receipt_path,
+        _,
+        _,
+        reports,
+    ) = _prepare_candidate(tmp_path, evidence_octet="a")
+    download_directory = tmp_path / "release-downloads"
+    download_directory.mkdir()
+    amd64_download = download_directory / "ofarm-ed25519-linux-amd64.oci.tar"
+    arm64_download = download_directory / "ofarm-ed25519-linux-arm64.oci.tar"
+    amd64_download.write_bytes(_archive_bytes("linux/amd64", "a"))
+    arm64_download.write_bytes(_archive_bytes("linux/arm64", "a"))
+    frozen_receipt_path = tmp_path / "frozen-receipt.json"
+
+    result = finalize_evidence_receipt(
+        release_identity_path=candidate_identity_path,
+        candidate_receipt_path=candidate_receipt_path,
+        source_directory=SOURCE_DIRECTORY,
+        repository_root=RELEASE_PACKAGE_ROOT,
+        amd64_download=amd64_download,
+        arm64_download=arm64_download,
+        output=frozen_receipt_path,
+    )
+    identity = load_native_release_identity(
+        candidate_identity_path,
+        verify_current_sources=True,
+        source_directory=SOURCE_DIRECTORY,
+    )
+    frozen_receipt = load_native_evidence_receipt(
+        frozen_receipt_path,
+        release_identity=identity,
+        verify_current_authority=True,
+        repository_root=RELEASE_PACKAGE_ROOT,
+    )
+
+    assert result["status"] == "frozen"
+    assert result["release_identity_digest"] == identity.digest
+    assert frozen_receipt.status == "frozen"
+    assert frozen_receipt.document["preservation"]["status"] == "verified"
+    assert frozen_receipt.document["platforms"][0]["ociArchive"] == reports[
+        "amd64"
+    ]["oci_archive"]
+
+    fresh_directory = tmp_path / "fresh-rerun"
+    fresh_directory.mkdir()
+    fresh_identity_path, fresh_receipt_path, _, _, _ = _prepare_candidate(
+        fresh_directory,
+        evidence_octet="b",
+        checked_identity_path=candidate_identity_path,
+        checked_receipt_path=frozen_receipt_path,
+    )
+    assert fresh_identity_path.read_bytes() == candidate_identity_path.read_bytes()
+    fresh_receipt = load_native_evidence_receipt(
+        fresh_receipt_path,
+        release_identity=identity,
+        verify_current_authority=True,
+        repository_root=RELEASE_PACKAGE_ROOT,
+        allow_candidate=True,
+    )
+    assert fresh_receipt.document["platforms"][0]["ociArchive"] != (
+        frozen_receipt.document["platforms"][0]["ociArchive"]
+    )
+    assert fresh_receipt.document["releaseIdentityDigest"] == identity.digest
+
+
+def test_receipt_finalization_refuses_mutated_release_download(tmp_path: Path) -> None:
+    candidate_identity, candidate_receipt, _, _, _ = _prepare_candidate(tmp_path)
+    download_directory = tmp_path / "mutated-downloads"
+    download_directory.mkdir()
+    amd64_download = download_directory / "ofarm-ed25519-linux-amd64.oci.tar"
+    arm64_download = download_directory / "ofarm-ed25519-linux-arm64.oci.tar"
+    amd64_download.write_bytes(b"mutated archive")
+    arm64_download.write_bytes(_archive_bytes("linux/arm64", "a"))
+
+    with pytest.raises(NativeEvidenceError, match="differs from candidate receipt"):
+        finalize_evidence_receipt(
+            release_identity_path=candidate_identity,
+            candidate_receipt_path=candidate_receipt,
+            source_directory=SOURCE_DIRECTORY,
+            repository_root=RELEASE_PACKAGE_ROOT,
+            amd64_download=amd64_download,
+            arm64_download=arm64_download,
+            output=tmp_path / "must-not-exist.json",
+        )
 
 
 def test_conformance_environment_carries_release_status_and_exact_metadata(
@@ -794,8 +1146,10 @@ def test_conformance_environment_carries_release_status_and_exact_metadata(
 
     environment = conformance_environment(
         checked_identity_path=IDENTITY_PATH,
+        checked_receipt_path=EVIDENCE_RECEIPT_PATH,
         metadata_path=metadata,
         source_directory=SOURCE_DIRECTORY,
+        repository_root=RELEASE_PACKAGE_ROOT,
         image_name="ofarm-postgresql-conformance:local",
         metadata_reference=".artifacts/derived-postgresql/metadata.json",
     )
@@ -804,6 +1158,19 @@ def test_conformance_environment_carries_release_status_and_exact_metadata(
     assert f"ISSUE174_DERIVED_POSTGRES_CONFIG_DIGEST={config}\n" in environment
     assert (
         f"ISSUE174_DERIVED_POSTGRES_IDENTITY_STATUS={identity.status}\n"
+        in environment
+    )
+    receipt = load_native_evidence_receipt(
+        release_identity=identity,
+        verify_current_authority=True,
+        repository_root=RELEASE_PACKAGE_ROOT,
+    )
+    assert (
+        f"ISSUE174_DERIVED_POSTGRES_EVIDENCE_RECEIPT_DIGEST={receipt.digest}\n"
+        in environment
+    )
+    assert (
+        f"ISSUE174_DERIVED_POSTGRES_EVIDENCE_RECEIPT_STATUS={receipt.status}\n"
         in environment
     )
 
@@ -817,6 +1184,24 @@ def test_conformance_environment_carries_release_status_and_exact_metadata(
         (
             lambda report: report.update(runtime_child_size=True),
             "descriptor size",
+        ),
+        (
+            lambda report: report.update(attestation_manifest_size=False),
+            "attestation manifest size",
+        ),
+        (
+            lambda report: report["oci_archive"].pop("size"),
+            "fields are not exact",
+        ),
+        (
+            lambda report: report["sbom"].update(
+                predicate_type="https://example.test/not-spdx"
+            ),
+            "predicate is not exact",
+        ),
+        (
+            lambda report: report.update(image_index_digest="not-a-digest"),
+            "source image-index digest",
         ),
     ),
 )
@@ -899,6 +1284,8 @@ def test_native_workflow_closes_both_native_platform_evidence_lanes():
     assert "compose-index" in workflow
     assert "prepare-release-identity" in workflow
     assert "native_release_identity.candidate.json" in workflow
+    assert "native_evidence_receipt.json" in workflow
+    assert "native_evidence_receipt.candidate.json" in workflow
     assert "conformance-environment" in workflow
     assert 'cat .artifacts/derived-postgresql/environment >> "$GITHUB_ENV"' in workflow
     assert "REPLACE_WITH_FROZEN" not in workflow
