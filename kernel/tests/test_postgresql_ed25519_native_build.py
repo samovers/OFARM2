@@ -5,6 +5,9 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 
@@ -201,6 +204,31 @@ def test_shared_core_and_harness_cover_the_hostile_contract() -> None:
     assert "bit < sizeof changed_public_key * 8U" in harness
     assert "bit < sizeof changed_preflight * 8U" in harness
     assert "bit < sizeof changed_signature * 8U" in harness
+
+
+def test_generator_refuses_stale_header_or_sql_even_with_digest_token(
+    tmp_path: Path,
+) -> None:
+    for generated_name in (
+        "ofarm_ed25519_vectors.h",
+        "ofarm_ed25519_vectors.sql",
+    ):
+        source_copy = tmp_path / generated_name.replace(".", "-")
+        shutil.copytree(EXTENSION_ROOT, source_copy)
+        generated = source_copy / generated_name
+        generated.write_bytes(generated.read_bytes() + b"\n-- stale bytes\n")
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(source_copy / "generate_ofarm_ed25519_vectors.py"),
+                "--check",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode != 0
+        assert f"generated file {generated_name} is stale" in result.stderr
 
 
 def test_wrapper_refuses_raw_oversize_before_any_detoast() -> None:

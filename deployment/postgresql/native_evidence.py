@@ -538,13 +538,19 @@ def _require_spdx_predicate(predicate: Any) -> None:
             or not package_object["name"]
         ):
             raise NativeEvidenceError("SPDX package identity is incomplete")
-    if not any(
-        isinstance(package, dict)
-        and package.get("name") == "postgresql-17"
-        and package.get("versionInfo") == POSTGRESQL_PACKAGE_VERSION
+    postgresql_packages = [
+        package
         for package in packages
+        if isinstance(package, dict) and package.get("name") == "postgresql-17"
+    ]
+    if (
+        len(postgresql_packages) != 1
+        or postgresql_packages[0].get("versionInfo")
+        != POSTGRESQL_PACKAGE_VERSION
     ):
-        raise NativeEvidenceError("SBOM omits the exact PostgreSQL runtime package")
+        raise NativeEvidenceError(
+            "SBOM PostgreSQL runtime package identity is ambiguous"
+        )
 
 
 def _require_max_provenance_predicate(
@@ -576,14 +582,18 @@ def _require_max_provenance_predicate(
         SERVER_DEV_SOURCES[platform],
     )
     for expected_uri, expected_digest in expected_materials:
-        if not any(
-            isinstance(material, dict)
-            and material.get("uri") == expected_uri
-            and material.get("digest") == {"sha256": expected_digest}
+        matching_materials = [
+            material
             for material in materials
+            if isinstance(material, dict) and material.get("uri") == expected_uri
+        ]
+        if (
+            len(matching_materials) != 1
+            or matching_materials[0].get("digest")
+            != {"sha256": expected_digest}
         ):
             raise NativeEvidenceError(
-                "provenance omits an exact archive source and digest"
+                "provenance archive source identity is ambiguous"
             )
     invocation = _require_object(provenance.get("invocation"), "provenance invocation")
     config_source = _require_object(

@@ -158,7 +158,9 @@ def _oci_fixture(
     unreferenced_blob: bool = False,
     hostile_layer_media_type: bool = False,
     incomplete_spdx: bool = False,
+    duplicate_spdx_conflict: bool = False,
     minimal_provenance: bool = False,
+    duplicate_material_conflict: str | None = None,
     empty_builder: bool = False,
 ):
     manifest_media_type = "application/vnd.oci.image.manifest.v1+json"
@@ -231,6 +233,14 @@ def _oci_fixture(
                     ],
                 }
             )
+            if duplicate_spdx_conflict and not incomplete_spdx:
+                predicate["packages"].append(
+                    {
+                        "SPDXID": "SPDXRef-Package-postgresql-conflict",
+                        "name": "postgresql-17",
+                        "versionInfo": "17.9-conflict",
+                    }
+                )
         else:
             predicate = {
                 "builder": {"id": "" if empty_builder else BUILDER_ID},
@@ -304,6 +314,14 @@ def _oci_fixture(
                     ),
                 },
             }
+            if duplicate_material_conflict is not None:
+                material_by_kind = {
+                    "libsodium": predicate["materials"][1],
+                    "server-dev": predicate["materials"][2],
+                }
+                conflicting = dict(material_by_kind[duplicate_material_conflict])
+                conflicting["digest"] = {"sha256": "f" * 64}
+                predicate["materials"].append(conflicting)
             if not minimal_provenance:
                 predicate["buildConfig"] = {"llbDefinition": [{"id": "step0"}]}
         return remember(
@@ -500,7 +518,19 @@ def test_attestation_with_unrelated_subject_refuses(tmp_path):
         ({"unreferenced_blob": True}, "unreferenced blob"),
         ({"hostile_layer_media_type": True}, "layer media type is not exact"),
         ({"incomplete_spdx": True}, "SPDX 2.3 document"),
+        (
+            {"duplicate_spdx_conflict": True},
+            "PostgreSQL runtime package identity is ambiguous",
+        ),
         ({"minimal_provenance": True}, "build configuration"),
+        (
+            {"duplicate_material_conflict": "libsodium"},
+            "archive source identity is ambiguous",
+        ),
+        (
+            {"duplicate_material_conflict": "server-dev"},
+            "archive source identity is ambiguous",
+        ),
         ({"empty_builder": True}, "builder identity"),
     ),
 )
@@ -833,10 +863,29 @@ def test_native_workflow_closes_both_native_platform_evidence_lanes():
     assert "ubuntu-24.04-arm" in workflow
     assert "ubuntu-24.04" in workflow
     assert "setup-qemu" not in workflow
+    assert workflow.count("version: v0.34.1") == 2
+    assert workflow.count(
+        "test \"$(docker buildx version | awk '{print $2}')\" = v0.34.1"
+    ) == 2
     assert "test \"$(uname -m)\"" in workflow
-    assert workflow.count("--no-cache") >= 3
+    assert workflow.count("--no-cache") >= 4
     assert "SANITIZER=memory" in workflow
     assert 'for sanitizer in address undefined' in workflow
+    sanitizer_step = workflow.split(
+        "- name: Run AddressSanitizer and UndefinedBehaviorSanitizer", 1
+    )[1].split("- name: Exercise every verifier failure mapping", 1)[0]
+    assert "shell: bash" in sanitizer_step
+    assert sanitizer_step.index("set -o pipefail") < sanitizer_step.index("| tee")
+    failure_step = workflow.split(
+        "- name: Exercise every verifier failure mapping", 1
+    )[1].split("- name: Produce two clean native child builds", 1)[0]
+    assert "--target failure-semantics" in failure_step
+    assert "--no-cache" in failure_step
+    vector_step = workflow.split(
+        "- name: Authenticate generated native verifier vectors", 1
+    )[1].split("- name: Require a native runner", 1)[0]
+    assert "generate_ofarm_ed25519_vectors.py" in vector_step
+    assert "--check" in vector_step
     assert "ofarm_ed25519_live_test.sql" in workflow
     assert "compare-builds" in workflow
     assert "type=provenance,mode=max,version=v0.2,builder-id=" in workflow
