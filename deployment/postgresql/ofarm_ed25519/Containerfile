@@ -1,0 +1,40 @@
+# syntax=docker/dockerfile:1.7
+FROM postgres@sha256:5f050f770b427fbd477edee6c3968a72e5c6be97e050a7e368b2b74a9494a285 AS build
+
+ARG LIBSODIUM_VERSION=1.0.22
+ARG LIBSODIUM_SHA256=adbdd8f16149e81ac6078a03aca6fc03b592b89ef7b5ed83841c086191be3349
+ARG SOURCE_DATE_EPOCH=0
+ARG BUILD_JOBS=1
+
+RUN apt-get update \
+ && apt-get install --yes --no-install-recommends \
+      ca-certificates curl gcc libc6-dev make \
+      "postgresql-server-dev-17=${PG_VERSION}" \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+RUN curl --fail --location --proto '=https' --tlsv1.2 \
+      --output libsodium.tar.gz \
+      "https://download.libsodium.org/libsodium/releases/libsodium-${LIBSODIUM_VERSION}.tar.gz" \
+ && printf '%s  %s\n' "${LIBSODIUM_SHA256}" libsodium.tar.gz | sha256sum --check --strict \
+ && mkdir libsodium \
+ && tar --extract --gzip --file libsodium.tar.gz --directory libsodium --strip-components=1 \
+ && cd libsodium \
+ && CFLAGS='-O2 -fPIC -fvisibility=hidden -fno-plt -fstack-protector-strong' \
+      ./configure --prefix=/opt/ofarm-libsodium --disable-shared --enable-static \
+ && make -j"${BUILD_JOBS}" \
+ && make install
+
+COPY . /build/ofarm_ed25519
+WORKDIR /build/ofarm_ed25519
+RUN make clean \
+ && make PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config \
+ && make PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config install \
+ && test "$(nm -D --defined-only /usr/lib/postgresql/17/lib/ofarm_ed25519.so \
+      | awk '{print $3}' | LC_ALL=C sort | tr '\n' ' ')" = \
+      'Pg_magic_func _PG_init ofarm_ed25519_verify pg_finfo_ofarm_ed25519_verify '
+
+FROM postgres@sha256:5f050f770b427fbd477edee6c3968a72e5c6be97e050a7e368b2b74a9494a285
+COPY --from=build /usr/lib/postgresql/17/lib/ofarm_ed25519.so /usr/lib/postgresql/17/lib/ofarm_ed25519.so
+COPY --from=build /usr/share/postgresql/17/extension/ofarm_ed25519.control /usr/share/postgresql/17/extension/ofarm_ed25519.control
+COPY --from=build /usr/share/postgresql/17/extension/ofarm_ed25519--1.0.sql /usr/share/postgresql/17/extension/ofarm_ed25519--1.0.sql
