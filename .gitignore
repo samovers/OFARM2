@@ -1,6 +1,7 @@
 # Local development environment — never part of the package
 .venv/
 .review-venv/
+.review-tools-venv/
 .pgrun/
 __pycache__/
 *.pyc
