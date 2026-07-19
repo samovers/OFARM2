@@ -13,4 +13,3 @@ IMMUTABLE STRICT PARALLEL UNSAFE SECURITY INVOKER;
 REVOKE ALL PRIVILEGES ON FUNCTION ed25519_verify(
     pg_catalog.bytea, pg_catalog.bytea, pg_catalog.bytea
 ) FROM PUBLIC;
-
