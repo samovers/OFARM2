@@ -1816,6 +1816,11 @@
       "sourcePath": "kernel/tests/test_postgresql_audit_contract.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_access_intent_captures_time_and_visibility_in_one_sql_command",
+      "sourceModule": "kernel.tests.test_postgresql_audit_migration",
+      "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_access_intent_snapshot_excludes_append_committed_after_the_cut",
       "sourceModule": "kernel.tests.test_postgresql_audit_migration",
       "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
@@ -2129,6 +2134,11 @@
       "nodeid": "kernel/tests/test_postgresql_ed25519_native_build.py::test_wrapper_refuses_raw_oversize_before_any_detoast",
       "sourceModule": "kernel.tests.test_postgresql_ed25519_native_build",
       "sourcePath": "kernel/tests/test_postgresql_ed25519_native_build.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_migration_cli.py::test_admin_connection_error_is_sanitized_at_the_cli_boundary",
+      "sourceModule": "kernel.tests.test_postgresql_migration_cli",
+      "sourcePath": "kernel/tests/test_postgresql_migration_cli.py"
     },
     {
       "nodeid": "kernel/tests/test_postgresql_migration_cli.py::test_each_entry_point_has_one_fixed_service_and_route_pair[deployment.postgresql.run_security_audit_migrations-service1-spec1-OFARM_SECURITY_AUDIT_PG_ADMIN_DSN-OFARM_SECURITY_AUDIT_MIGRATOR_DSN]",
@@ -2494,6 +2504,11 @@
       "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_tampered_history_refuses_without_repair[source_sha256-sha256:0000000000000000000000000000000000000000000000000000000000000000-False]",
       "sourceModule": "kernel.tests.test_postgresql_migration_runner",
       "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_archive_path_replacement_cannot_separate_hashed_and_parsed_bytes",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
     },
     {
       "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_attestation_with_unrelated_subject_refuses",
@@ -3317,6 +3332,11 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_symlinked_clean_build_archive_refuses",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_truncated_gzip_archive_has_one_native_evidence_error_boundary",
       "sourceModule": "kernel.tests.test_postgresql_native_evidence",
       "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
     },
@@ -4676,6 +4696,11 @@
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_component_length_must_match_the_selected_content_blob",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_concurrent_same_head_principal_transition_allows_exactly_one_commit",
       "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
@@ -4707,6 +4732,11 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_future_transition_and_corrupt_same_head_projection_refuse_then_rebuild",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_gate_log_request_must_belong_to_its_governed_batch",
       "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
@@ -4776,6 +4806,16 @@
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_idempotency_identity_must_match_its_governed_batch[operation-None-WRONG_OPERATION]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_idempotency_identity_must_match_its_governed_batch[principal-wrong-principal-TENANT_TEST_WRITE]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_key_controller_refuses_every_missing_lifecycle_evidence_field",
       "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
@@ -4812,6 +4852,11 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_oidc_issuer_domain_enforces_shared_invalid_vectors",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_one_tenant_transaction_cannot_create_two_governed_batches",
       "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
@@ -4887,6 +4932,11 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_readiness_observation_is_complete_after_commit",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_record_runtime_bundle_must_match_its_governed_batch",
       "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
@@ -7101,8 +7151,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "e92f026c3b8f34bfb0a9a70ee660a0fe1e404be34589d325662155e935846e0c",
-  "entryCount": 1420,
+  "entriesSha256": "e207f4fa2f34dc443fd34f2a7d15ea339c1c448c52cf2e88d4e699943b9841f8",
+  "entryCount": 1430,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

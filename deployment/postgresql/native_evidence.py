@@ -10,7 +10,9 @@ from __future__ import annotations
 import argparse
 import base64
 import binascii
+import errno
 import hashlib
+import io
 import json
 import os
 import re
@@ -144,19 +146,73 @@ class NativeEvidenceError(RuntimeError):
     """Raised when native CI evidence is absent, ambiguous, or malformed."""
 
 
-def _read_bounded(path: Path, maximum: int, label: str) -> bytes:
+def _native_file_open_flags() -> int:
+    if not hasattr(os, "O_NOFOLLOW"):
+        raise NativeEvidenceError("native evidence requires O_NOFOLLOW support")
+    return (
+        os.O_RDONLY
+        | os.O_NOFOLLOW
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NONBLOCK", 0)
+    )
+
+
+def _open_bounded_regular(
+    path: Path,
+    maximum: int,
+    label: str,
+) -> tuple[int, os.stat_result]:
     try:
-        file_stat = path.lstat()
+        descriptor = os.open(path, _native_file_open_flags())
     except OSError as exc:
+        if exc.errno == errno.ELOOP:
+            raise NativeEvidenceError(f"{label} must be one regular file") from exc
         raise NativeEvidenceError(f"{label} is unavailable") from exc
-    if not stat.S_ISREG(file_stat.st_mode) or path.is_symlink():
-        raise NativeEvidenceError(f"{label} must be one regular file")
-    if file_stat.st_size > maximum:
-        raise NativeEvidenceError(f"{label} exceeds its byte limit")
     try:
-        return path.read_bytes()
-    except OSError as exc:
-        raise NativeEvidenceError(f"{label} cannot be read") from exc
+        try:
+            file_stat = os.fstat(descriptor)
+        except OSError as exc:
+            raise NativeEvidenceError(f"{label} cannot be inspected") from exc
+        if not stat.S_ISREG(file_stat.st_mode):
+            raise NativeEvidenceError(f"{label} must be one regular file")
+        if file_stat.st_size > maximum:
+            raise NativeEvidenceError(f"{label} exceeds its byte limit")
+        return descriptor, file_stat
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def _read_bounded_with_stat(
+    path: Path,
+    maximum: int,
+    label: str,
+) -> tuple[bytes, os.stat_result]:
+    descriptor, file_stat = _open_bounded_regular(path, maximum, label)
+    chunks: list[bytes] = []
+    observed_size = 0
+    try:
+        try:
+            while True:
+                read_size = min(1024 * 1024, maximum - observed_size + 1)
+                chunk = os.read(descriptor, read_size)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                observed_size += len(chunk)
+                if observed_size > maximum:
+                    raise NativeEvidenceError(f"{label} exceeds its byte limit")
+        except OSError as exc:
+            raise NativeEvidenceError(f"{label} cannot be read") from exc
+        if observed_size != file_stat.st_size:
+            raise NativeEvidenceError(f"{label} has an invalid size")
+        return b"".join(chunks), file_stat
+    finally:
+        os.close(descriptor)
+
+
+def _read_bounded(path: Path, maximum: int, label: str) -> bytes:
+    return _read_bounded_with_stat(path, maximum, label)[0]
 
 
 def _load_json_bytes(data: bytes, label: str) -> Any:
@@ -402,8 +458,11 @@ def _artifact_identity(
     expected_mode: str,
 ) -> dict[str, Any]:
     path = directory / name
-    data = _read_bounded(path, maximum, f"native artifact {name}")
-    file_stat = path.stat()
+    data, file_stat = _read_bounded_with_stat(
+        path,
+        maximum,
+        f"native artifact {name}",
+    )
     observed_mode = format(stat.S_IMODE(file_stat.st_mode), "04o")
     if observed_mode != expected_mode:
         raise NativeEvidenceError(f"native artifact {name} mode is not {expected_mode}")
@@ -474,25 +533,31 @@ def compare_builds(
 class _OciArchive:
     def __init__(self, path: Path, *, docker_transport: bool = False):
         archive_bytes = _read_bounded(path, MAX_OCI_ARCHIVE_BYTES, "OCI archive")
-        self.path = path
         self.sha256 = _sha256(archive_bytes)
         self.size = len(archive_bytes)
+        self._stream = io.BytesIO(archive_bytes)
         try:
-            self._tar = tarfile.open(path, mode="r:*")
-        except (OSError, tarfile.TarError) as exc:
+            self._tar = tarfile.open(fileobj=self._stream, mode="r:*")
+        except (EOFError, OSError, tarfile.TarError) as exc:
+            self._stream.close()
             raise NativeEvidenceError("OCI archive is not a readable tar archive") from exc
         self._members: dict[str, tarfile.TarInfo] = {}
         self._referenced_blobs: set[str] = set()
         self._docker_transport = docker_transport
-        self._index_members()
+        try:
+            self._index_members()
+        except BaseException:
+            self.close()
+            raise
 
     def close(self) -> None:
         self._tar.close()
+        self._stream.close()
 
     def _index_members(self) -> None:
         try:
             members = self._tar.getmembers()
-        except (OSError, tarfile.TarError) as exc:
+        except (EOFError, OSError, tarfile.TarError) as exc:
             raise NativeEvidenceError("OCI archive member table is unreadable") from exc
         if len(members) > MAX_OCI_MEMBER_COUNT:
             raise NativeEvidenceError("OCI archive contains too many members")
@@ -536,7 +601,7 @@ class _OciArchive:
             if extracted is None:
                 raise NativeEvidenceError(f"{label} is unreadable")
             data = extracted.read(maximum + 1)
-        except (OSError, tarfile.TarError) as exc:
+        except (EOFError, OSError, tarfile.TarError) as exc:
             raise NativeEvidenceError(f"{label} is unreadable") from exc
         if len(data) != member.size or len(data) > maximum:
             raise NativeEvidenceError(f"{label} has an invalid size")
@@ -1641,22 +1706,30 @@ def prepare_release_identity(
 
 
 def _bounded_file_identity(path: Path, maximum: int, label: str) -> dict[str, Any]:
-    try:
-        file_stat = path.lstat()
-    except OSError as exc:
-        raise NativeEvidenceError(f"{label} is unavailable") from exc
-    if path.is_symlink() or not stat.S_ISREG(file_stat.st_mode):
-        raise NativeEvidenceError(f"{label} must be one regular file")
+    descriptor, file_stat = _open_bounded_regular(path, maximum, label)
     if not 0 < file_stat.st_size <= maximum:
+        os.close(descriptor)
         raise NativeEvidenceError(f"{label} has an invalid size")
     digest = hashlib.sha256()
+    observed_size = 0
     try:
-        with path.open("rb") as input_file:
-            while chunk := input_file.read(1024 * 1024):
+        try:
+            while True:
+                read_size = min(1024 * 1024, maximum - observed_size + 1)
+                chunk = os.read(descriptor, read_size)
+                if not chunk:
+                    break
                 digest.update(chunk)
-    except OSError as exc:
-        raise NativeEvidenceError(f"{label} cannot be read") from exc
-    return {"sha256": "sha256:" + digest.hexdigest(), "size": file_stat.st_size}
+                observed_size += len(chunk)
+                if observed_size > maximum:
+                    raise NativeEvidenceError(f"{label} has an invalid size")
+        except OSError as exc:
+            raise NativeEvidenceError(f"{label} cannot be read") from exc
+        if observed_size != file_stat.st_size:
+            raise NativeEvidenceError(f"{label} has an invalid size")
+        return {"sha256": "sha256:" + digest.hexdigest(), "size": observed_size}
+    finally:
+        os.close(descriptor)
 
 
 def _github_api_arguments(endpoint: str, projection: str) -> tuple[str, ...]:

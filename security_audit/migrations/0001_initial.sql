@@ -943,8 +943,12 @@ BEGIN
             MESSAGE = 'audit access input exceeds 4096 bytes';
     END IF;
 
-    v_data_cut := pg_catalog.clock_timestamp();
-    v_visibility_snapshot := pg_catalog.pg_current_snapshot();
+    SELECT
+        pg_catalog.clock_timestamp(),
+        pg_catalog.pg_current_snapshot()
+    INTO STRICT
+        v_data_cut,
+        v_visibility_snapshot;
     v_expires_at := v_data_cut + pg_catalog.make_interval(secs => 300);
     v_event := ofarm_security._insert_maintenance_event(
         'AUDIT_ACCESS', 'AUDIT_CONTROL', p_purpose, p_function_identity,
@@ -3450,7 +3454,7 @@ BEGIN
     INTO v_catalog_fingerprint
     FROM catalog_entry;
     IF v_catalog_fingerprint <>
-            'sha256:66395db8f49699ca4631e7fcb76adec48b354ba9fc774391cc381cfaa8704c32' THEN
+            'sha256:76c1b99279cd069f2944ed1d2097438a9de01924ab7a0435f6c6042088a3f402' THEN
         v_differences := v_differences + 1;
     END IF;
 

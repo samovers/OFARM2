@@ -159,15 +159,15 @@ TENANT_AUTHORITATIVE_MIGRATION_SET = AuthoritativeMigrationSet(
             version=1,
             filename="0001_initial.sql",
             source_sha256=(
-                "sha256:c8848df888208cb9bf5e98ab96529ae6855ed0720e03fd8806b71235543dcb71"
+                "sha256:398c6ecf9832f747a60440793c495eb0ce56588fb6681e1b4f778b6a1e16de78"
             ),
-            byte_length=386295,
+            byte_length=386705,
             applied_prefix_digest=(
-                "sha256:6ddfad9f9a25ae54bb51f04c01644cd67bd25eb8140b4c070a545e9c316c5b7a"
+                "sha256:587bb18eee4b84de2f8b2f461876e73c2dbbf57975971584a532391e0f0f250d"
             ),
         ),
     ),
-    digest="sha256:6ddfad9f9a25ae54bb51f04c01644cd67bd25eb8140b4c070a545e9c316c5b7a",
+    digest="sha256:587bb18eee4b84de2f8b2f461876e73c2dbbf57975971584a532391e0f0f250d",
 )
 
 SECURITY_AUDIT_AUTHORITATIVE_MIGRATION_SET = AuthoritativeMigrationSet(
@@ -177,15 +177,15 @@ SECURITY_AUDIT_AUTHORITATIVE_MIGRATION_SET = AuthoritativeMigrationSet(
             version=1,
             filename="0001_initial.sql",
             source_sha256=(
-                "sha256:cda7ce3d05d0e533210cdae90b8d1a49a34901f4bfccc7cbc7ba65739405b864"
+                "sha256:837be8b2093d99f71bcd08856157d7e177e6b670b161a2b3706070c379b739f7"
             ),
-            byte_length=148371,
+            byte_length=148417,
             applied_prefix_digest=(
-                "sha256:851fb434cb68fef25a859385deac098fbcc28b6eb739e05e72aff2ceed111c7a"
+                "sha256:c4a89a0143580be00e4e3aa4a0911b3ddacc0cec3a94aa5c9dc330d73a28cf0f"
             ),
         ),
     ),
-    digest="sha256:851fb434cb68fef25a859385deac098fbcc28b6eb739e05e72aff2ceed111c7a",
+    digest="sha256:c4a89a0143580be00e4e3aa4a0911b3ddacc0cec3a94aa5c9dc330d73a28cf0f",
 )
 
 AUTHORITATIVE_MIGRATION_SETS = (

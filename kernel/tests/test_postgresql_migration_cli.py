@@ -6,9 +6,11 @@ import json
 from pathlib import Path
 from uuid import UUID
 
+import psycopg
 import pytest
 
 import deployment.postgresql.migration_cli as migration_cli
+import deployment.postgresql.migration_runner as migration_runner
 import deployment.postgresql.run_security_audit_migrations as audit_cli
 import deployment.postgresql.run_tenant_migrations as tenant_cli
 from deployment.postgresql.migration_runner import MigrationRunReport
@@ -165,3 +167,57 @@ def test_execution_identity_is_canonical_and_non_nil(
         )
 
     assert raised.value.code == 2
+
+
+def test_admin_connection_error_is_sanitized_at_the_cli_boundary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _write_set(tmp_path, SECURITY_AUDIT_SERVICE.relative_directory)
+    monkeypatch.setattr(migration_cli, "_PACKAGE_ROOT", tmp_path)
+    monkeypatch.setattr(
+        migration_cli,
+        "load_authoritative_migration_set",
+        load_migration_set,
+    )
+    monkeypatch.setattr(
+        migration_cli,
+        "migrate_service",
+        migration_runner._migrate_service_for_testing,
+    )
+    monkeypatch.setenv(
+        "OFARM_SECURITY_AUDIT_PG_ADMIN_DSN",
+        "host=admin-route.invalid dbname=postgres",
+    )
+    monkeypatch.setenv(
+        "OFARM_SECURITY_AUDIT_MIGRATOR_DSN",
+        "host=migrator-route.invalid dbname=ofarm_security",
+    )
+
+    def refuse_admin_route(*_args, **_kwargs):
+        raise psycopg.OperationalError("SECRET-ADMIN-ROUTE-SENTINEL")
+
+    monkeypatch.setattr(
+        migration_runner,
+        "verify_service_infrastructure",
+        refuse_admin_route,
+    )
+
+    with pytest.raises(SystemExit) as raised:
+        audit_cli.main(
+            [
+                "--release-identity",
+                "ofarm-release/174",
+                "--execution-id",
+                str(_EXECUTION_ID),
+            ]
+        )
+
+    captured = capsys.readouterr()
+    assert raised.value.code == 1
+    assert captured.out == ""
+    assert captured.err == (
+        "migration refused: admin provisioning route is unavailable\n"
+    )
+    assert "SECRET-ADMIN-ROUTE-SENTINEL" not in captured.out + captured.err

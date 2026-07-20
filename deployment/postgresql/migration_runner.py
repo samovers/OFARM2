@@ -485,6 +485,10 @@ def _observe_infrastructure(
                 time.sleep(0.025)
                 continue
             raise MigrationTargetError(str(exc)) from exc
+        except psycopg.Error:
+            raise MigrationTargetError(
+                "admin provisioning route is unavailable"
+            ) from None
 
 
 def _target_identity(

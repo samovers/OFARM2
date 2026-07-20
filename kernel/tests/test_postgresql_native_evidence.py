@@ -1889,6 +1889,63 @@ def test_symlinked_clean_build_archive_refuses(tmp_path):
         direct_oci_child_identity(symlink, "clean build", platform=PLATFORM)
 
 
+def test_truncated_gzip_archive_has_one_native_evidence_error_boundary(
+    tmp_path: Path,
+) -> None:
+    archive = tmp_path / "truncated.oci.tar.gz"
+    archive.write_bytes(b"\x1f\x8bbroken")
+
+    with pytest.raises(NativeEvidenceError, match="readable tar archive"):
+        direct_oci_child_identity(archive, "truncated gzip", platform=PLATFORM)
+
+
+def test_archive_path_replacement_cannot_separate_hashed_and_parsed_bytes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    archive, child_digest, config_digest = _direct_oci_fixture(
+        tmp_path,
+        name="path-authority-a",
+        runtime_octet="a",
+    )
+    replacement, replacement_child, replacement_config = _direct_oci_fixture(
+        tmp_path,
+        name="path-authority-b",
+        runtime_octet="b",
+    )
+    assert (replacement_child, replacement_config) != (
+        child_digest,
+        config_digest,
+    )
+
+    real_open = native_evidence.os.open
+    replaced = False
+
+    def open_then_replace(
+        path,
+        flags: int,
+        mode: int = 0o777,
+        *,
+        dir_fd: int | None = None,
+    ) -> int:
+        nonlocal replaced
+        descriptor = real_open(path, flags, mode, dir_fd=dir_fd)
+        if Path(path) == archive and not replaced:
+            assert flags & native_evidence.os.O_NOFOLLOW
+            replaced = True
+            replacement.replace(archive)
+        return descriptor
+
+    monkeypatch.setattr(native_evidence.os, "open", open_then_replace)
+
+    assert direct_oci_child_identity(
+        archive,
+        "path replacement",
+        platform=PLATFORM,
+    ) == (child_digest, config_digest)
+    assert replaced is True
+
+
 def test_two_native_reports_compose_one_canonical_platform_index(tmp_path):
     amd64_report = _native_oci_report("linux/amd64", "1")
     arm64_report = _native_oci_report("linux/arm64", "2")

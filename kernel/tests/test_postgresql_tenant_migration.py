@@ -4096,6 +4096,7 @@ def _insert_record(
     record_kind: str,
     payload: object,
     lane: str = "draft",
+    runtime_bundle_digest: str | None = None,
 ) -> None:
     payload_bytes = _canonical_json(payload)
     connection.execute(
@@ -4114,7 +4115,11 @@ def _insert_record(
             Jsonb(payload),
             _sha256_id(payload_bytes),
             batch_id,
-            authority.runtime_bundle_digest,
+            (
+                authority.runtime_bundle_digest
+                if runtime_bundle_digest is None
+                else runtime_bundle_digest
+            ),
         ),
     )
 
@@ -4196,22 +4201,25 @@ def test_deferred_graph_accepts_future_ids_only_with_same_batch_reachability(
                     ),
                 )
 
+    batch_a = "batch-hostile-edge-a"
+    batch_b = "batch-hostile-edge-b"
+    with psycopg.connect(tenant_target.role_dsn("ofarm_app")) as application:
+        _install_test_bound_context(application, authority)
+        _insert_batch(application, authority, batch_b)
+        _insert_record(
+            application,
+            authority,
+            batch_id=batch_b,
+            record_id="promotion-trace-wrong-batch",
+            record_kind="ofarm.promotiontrace.v0.1",
+            payload={"emittedAssertionRecordRefs": ["assertion-wrong-batch"]},
+            lane="canonical",
+        )
+
     with pytest.raises(psycopg.errors.CheckViolation):
         with psycopg.connect(tenant_target.role_dsn("ofarm_app")) as application:
             _install_test_bound_context(application, authority)
-            batch_a = "batch-hostile-edge-a"
-            batch_b = "batch-hostile-edge-b"
             _insert_batch(application, authority, batch_a)
-            _insert_batch(application, authority, batch_b)
-            _insert_record(
-                application,
-                authority,
-                batch_id=batch_b,
-                record_id="promotion-trace-wrong-batch",
-                record_kind="ofarm.promotiontrace.v0.1",
-                payload={"emittedAssertionRecordRefs": ["assertion-wrong-batch"]},
-                lane="canonical",
-            )
             _insert_record(
                 application,
                 authority,
@@ -4236,6 +4244,228 @@ def test_deferred_graph_accepts_future_ids_only_with_same_batch_reachability(
                 ),
             )
             application.execute("SET CONSTRAINTS ALL IMMEDIATE")
+
+
+def test_one_tenant_transaction_cannot_create_two_governed_batches(
+    tenant_target: TenantTarget,
+    authority: TenantAuthority,
+) -> None:
+    with pytest.raises(psycopg.errors.UniqueViolation) as raised:
+        with psycopg.connect(tenant_target.role_dsn("ofarm_app")) as application:
+            _install_test_bound_context(application, authority)
+            _insert_batch(application, authority, "batch-one-transaction-a")
+            _insert_batch(application, authority, "batch-one-transaction-b")
+
+    assert raised.value.diag.constraint_name == (
+        "governed_write_batch_transaction_key"
+    )
+
+
+def test_gate_log_request_must_belong_to_its_governed_batch(
+    tenant_target: TenantTarget,
+    authority: TenantAuthority,
+) -> None:
+    batch_id = "batch-gate-command-binding"
+    with pytest.raises(psycopg.errors.ForeignKeyViolation) as raised:
+        with psycopg.connect(tenant_target.role_dsn("ofarm_app")) as application:
+            _install_test_bound_context(application, authority)
+            _insert_batch(application, authority, batch_id)
+            application.execute(
+                """
+                INSERT INTO ofarm.kernel_gate_log (
+                    tenant_id, batch_id, request_id, gate, outcome
+                ) VALUES (%s, %s, %s, 'TEST_GATE', 'REFUSED')
+                """,
+                (
+                    authority.tenant_id,
+                    batch_id,
+                    "request-not-owned-by-batch",
+                ),
+            )
+            application.execute("SET CONSTRAINTS ALL IMMEDIATE")
+    assert raised.value.diag.constraint_name == "kernel_gate_log_command_fkey"
+
+
+@pytest.mark.parametrize(
+    ("case_name", "principal_ref", "governed_operation"),
+    (
+        ("principal", "wrong-principal", "TENANT_TEST_WRITE"),
+        ("operation", None, "WRONG_OPERATION"),
+    ),
+)
+def test_idempotency_identity_must_match_its_governed_batch(
+    tenant_target: TenantTarget,
+    authority: TenantAuthority,
+    case_name: str,
+    principal_ref: str | None,
+    governed_operation: str,
+) -> None:
+    batch_id = "batch-idempotency-command-" + case_name
+    result_record_id = "result-idempotency-command-" + case_name
+    with pytest.raises(psycopg.errors.ForeignKeyViolation) as raised:
+        with psycopg.connect(tenant_target.role_dsn("ofarm_app")) as application:
+            _install_test_bound_context(application, authority)
+            _insert_batch(application, authority, batch_id)
+            _insert_record(
+                application,
+                authority,
+                batch_id=batch_id,
+                record_id=result_record_id,
+                record_kind="ofarm.commandresult.v0.1",
+                payload={"case": case_name},
+            )
+            application.execute(
+                """
+                INSERT INTO ofarm.kernel_idempotency (
+                    tenant_id, authenticated_principal_ref,
+                    governed_operation, caller_key, request_digest,
+                    request_id, batch_id, result_record_id
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    authority.tenant_id,
+                    (
+                        authority.party_ref
+                        if principal_ref is None
+                        else principal_ref
+                    ),
+                    governed_operation,
+                    "caller-key-" + case_name,
+                    _sha256_id(("request-" + case_name).encode("ascii")),
+                    "request-" + batch_id,
+                    batch_id,
+                    result_record_id,
+                ),
+            )
+            application.execute("SET CONSTRAINTS ALL IMMEDIATE")
+    assert raised.value.diag.constraint_name == "kernel_idempotency_command_fkey"
+
+
+def test_record_runtime_bundle_must_match_its_governed_batch(
+    tenant_target: TenantTarget,
+    authority: TenantAuthority,
+) -> None:
+    other_bundle_bytes = b'{"bundle":"record-provenance-hostile"}'
+    other_bundle_digest = _sha256_id(other_bundle_bytes)
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        admin.execute(
+            """
+            INSERT INTO ofarm.runtime_bundle (
+                tenant_id, bundle_digest, bundle_ref,
+                canonical_bytes, byte_length
+            ) VALUES (%s, %s, %s, %s, %s)
+            """,
+            (
+                authority.tenant_id,
+                other_bundle_digest,
+                "runtimebundle:" + other_bundle_digest,
+                other_bundle_bytes,
+                len(other_bundle_bytes),
+            ),
+        )
+
+    with pytest.raises(psycopg.errors.ForeignKeyViolation) as raised:
+        with psycopg.connect(tenant_target.role_dsn("ofarm_app")) as application:
+            _install_test_bound_context(application, authority)
+            batch_id = "batch-record-bundle-binding"
+            _insert_batch(application, authority, batch_id)
+            _insert_record(
+                application,
+                authority,
+                batch_id=batch_id,
+                record_id="record-wrong-runtime-bundle",
+                record_kind="ofarm.provenancetest.v0.1",
+                payload={"hostile": True},
+                runtime_bundle_digest=other_bundle_digest,
+            )
+            application.execute("SET CONSTRAINTS ALL IMMEDIATE")
+    assert raised.value.diag.constraint_name == (
+        "kernel_record_batch_provenance_fkey"
+    )
+
+
+def test_component_length_must_match_the_selected_content_blob(
+    tenant_target: TenantTarget,
+    authority: TenantAuthority,
+) -> None:
+    global_bytes = b"global-runtime-length-authority"
+    global_digest = _sha256_id(global_bytes)
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        admin.execute(
+            """
+            INSERT INTO ofarm.runtime_content_blob (
+                content_digest, canonical_bytes, byte_length
+            ) VALUES (%s, %s, %s)
+            """,
+            (global_digest, global_bytes, len(global_bytes)),
+        )
+
+    with pytest.raises(psycopg.errors.ForeignKeyViolation) as raised:
+        with psycopg.connect(tenant_target.role_dsn("ofarm_app")) as application:
+            _install_test_bound_context(application, authority)
+            application.execute(
+                """
+                INSERT INTO ofarm.runtime_bundle_component (
+                    tenant_id, bundle_digest, component_role, logical_ref,
+                    canonicalization, content_placement,
+                    global_content_digest, byte_length
+                ) VALUES (
+                    %s, %s, 'REFERENCE_SOURCE', %s,
+                    'EXACT_BYTES_V1', 'GLOBAL_IMMUTABLE_CONTENT', %s, %s
+                )
+                """,
+                (
+                    authority.tenant_id,
+                    authority.runtime_bundle_digest,
+                    "test:global-length-mismatch",
+                    global_digest,
+                    len(global_bytes) + 1,
+                ),
+            )
+    assert raised.value.diag.constraint_name == (
+        "runtime_bundle_component_global_fkey"
+    )
+
+    tenant_bytes = b"tenant-runtime-length-authority"
+    tenant_digest = _sha256_id(tenant_bytes)
+    with pytest.raises(psycopg.errors.ForeignKeyViolation) as raised:
+        with psycopg.connect(tenant_target.role_dsn("ofarm_app")) as application:
+            _install_test_bound_context(application, authority)
+            application.execute(
+                """
+                INSERT INTO ofarm.runtime_tenant_content_blob (
+                    tenant_id, content_digest, canonical_bytes, byte_length
+                ) VALUES (%s, %s, %s, %s)
+                """,
+                (
+                    authority.tenant_id,
+                    tenant_digest,
+                    tenant_bytes,
+                    len(tenant_bytes),
+                ),
+            )
+            application.execute(
+                """
+                INSERT INTO ofarm.runtime_bundle_component (
+                    tenant_id, bundle_digest, component_role, logical_ref,
+                    canonicalization, content_placement,
+                    tenant_content_digest, byte_length
+                ) VALUES (
+                    %s, %s, 'REFERENCE_SOURCE', %s,
+                    'EXACT_BYTES_V1', 'TENANT_RUNTIME_SELECTION', %s, %s
+                )
+                """,
+                (
+                    authority.tenant_id,
+                    authority.runtime_bundle_digest,
+                    "test:tenant-length-mismatch",
+                    tenant_digest,
+                    len(tenant_bytes) + 1,
+                ),
+            )
+    assert raised.value.diag.constraint_name == (
+        "runtime_bundle_component_tenant_fkey"
+    )
 
 
 @pytest.mark.parametrize(
@@ -4708,7 +4938,7 @@ def test_complete_catalog_fingerprint_refuses_function_constraint_index_policy_a
             assert pristine[0] is True
             assert pristine[2] == 0
             assert pristine[3] == (
-                "sha256:352fff101e2ee47de5d5e78331551e9e7b84e32948b2d2509b60d9bb91b321aa"
+                "sha256:91b6e16a0759197c60d91e72bf48338bd4e27bae0c4edf71cf8cbe199f6800ea"
             )
         finally:
             migrator.rollback()
@@ -5397,7 +5627,7 @@ def test_readiness_observation_is_complete_after_commit(
     assert row[1] == TENANT_CONTEXT_CONTRACT.digest
     assert row[2] == 0
     assert row[3] == (
-        "sha256:352fff101e2ee47de5d5e78331551e9e7b84e32948b2d2509b60d9bb91b321aa"
+        "sha256:91b6e16a0759197c60d91e72bf48338bd4e27bae0c4edf71cf8cbe199f6800ea"
     )
     assert row[5] == TENANT_PROVISIONING_SPEC.digest
     assert row[6] == TENANT_SERVICE.identity

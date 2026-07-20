@@ -1174,6 +1174,8 @@ CREATE TABLE ofarm.runtime_content_blob (
     canonical_bytes pg_catalog.bytea NOT NULL,
     byte_length pg_catalog.int8 NOT NULL,
     CONSTRAINT runtime_content_blob_pkey PRIMARY KEY (content_digest),
+    CONSTRAINT runtime_content_blob_digest_length_key
+        UNIQUE (content_digest, byte_length),
     CONSTRAINT runtime_content_blob_length_check CHECK (
         byte_length >= 0
         AND byte_length = pg_catalog.octet_length(canonical_bytes)
@@ -1192,6 +1194,8 @@ CREATE TABLE ofarm.runtime_tenant_content_blob (
     byte_length pg_catalog.int8 NOT NULL,
     CONSTRAINT runtime_tenant_content_blob_pkey
         PRIMARY KEY (tenant_id, content_digest),
+    CONSTRAINT runtime_tenant_content_blob_digest_length_key
+        UNIQUE (tenant_id, content_digest, byte_length),
     CONSTRAINT runtime_tenant_content_blob_tenant_fkey
         FOREIGN KEY (tenant_id) REFERENCES ofarm.tenant_registry (tenant_id),
     CONSTRAINT runtime_tenant_content_blob_length_check CHECK (
@@ -1249,12 +1253,12 @@ CREATE TABLE ofarm.runtime_bundle_component (
         FOREIGN KEY (tenant_id, bundle_digest)
         REFERENCES ofarm.runtime_bundle (tenant_id, bundle_digest),
     CONSTRAINT runtime_bundle_component_global_fkey
-        FOREIGN KEY (global_content_digest)
-        REFERENCES ofarm.runtime_content_blob (content_digest),
+        FOREIGN KEY (global_content_digest, byte_length)
+        REFERENCES ofarm.runtime_content_blob (content_digest, byte_length),
     CONSTRAINT runtime_bundle_component_tenant_fkey
-        FOREIGN KEY (tenant_id, tenant_content_digest)
+        FOREIGN KEY (tenant_id, tenant_content_digest, byte_length)
         REFERENCES ofarm.runtime_tenant_content_blob (
-            tenant_id, content_digest
+            tenant_id, content_digest, byte_length
         ),
     CONSTRAINT runtime_bundle_component_role_check CHECK (
         component_role IN (
@@ -1296,12 +1300,21 @@ CREATE TABLE ofarm.governed_write_batch (
     created_at pg_catalog.timestamptz NOT NULL
         DEFAULT pg_catalog.clock_timestamp(),
     CONSTRAINT governed_write_batch_pkey PRIMARY KEY (tenant_id, batch_id),
-    CONSTRAINT governed_write_batch_full_xid_key
+    CONSTRAINT governed_write_batch_identity_key
         UNIQUE (tenant_id, batch_id, full_xid),
+    CONSTRAINT governed_write_batch_transaction_key
+        UNIQUE (tenant_id, full_xid),
     CONSTRAINT governed_write_batch_request_key
         UNIQUE (tenant_id, request_id),
-    CONSTRAINT governed_write_batch_request_full_xid_key
-        UNIQUE (tenant_id, request_id, full_xid),
+    CONSTRAINT governed_write_batch_gate_command_key
+        UNIQUE (tenant_id, batch_id, full_xid, request_id),
+    CONSTRAINT governed_write_batch_idempotency_command_key
+        UNIQUE (
+            tenant_id, batch_id, full_xid, request_id,
+            authenticated_principal_ref, governed_operation
+        ),
+    CONSTRAINT governed_write_batch_record_provenance_key
+        UNIQUE (tenant_id, batch_id, full_xid, runtime_bundle_digest),
     CONSTRAINT governed_write_batch_tenant_fkey
         FOREIGN KEY (tenant_id) REFERENCES ofarm.tenant_registry (tenant_id),
     CONSTRAINT governed_write_batch_bundle_fkey
@@ -1351,13 +1364,13 @@ CREATE TABLE ofarm.kernel_record (
         party_state,
         party_id
     ),
-    CONSTRAINT kernel_record_batch_fkey
-        FOREIGN KEY (tenant_id, batch_id, batch_full_xid)
-        REFERENCES ofarm.governed_write_batch (tenant_id, batch_id, full_xid)
+    CONSTRAINT kernel_record_batch_provenance_fkey
+        FOREIGN KEY (
+            tenant_id, batch_id, batch_full_xid, runtime_bundle_digest
+        ) REFERENCES ofarm.governed_write_batch (
+            tenant_id, batch_id, full_xid, runtime_bundle_digest
+        )
         DEFERRABLE INITIALLY DEFERRED,
-    CONSTRAINT kernel_record_bundle_fkey
-        FOREIGN KEY (tenant_id, runtime_bundle_digest)
-        REFERENCES ofarm.runtime_bundle (tenant_id, bundle_digest),
     CONSTRAINT kernel_record_lane_check CHECK (
         lane IN ('canonical', 'draft')
     )
@@ -1815,13 +1828,11 @@ CREATE TABLE ofarm.kernel_gate_log (
     record_time pg_catalog.timestamptz NOT NULL
         DEFAULT pg_catalog.clock_timestamp(),
     CONSTRAINT kernel_gate_log_pkey PRIMARY KEY (tenant_id, entry_id),
-    CONSTRAINT kernel_gate_log_batch_fkey
-        FOREIGN KEY (tenant_id, batch_id, batch_full_xid)
-        REFERENCES ofarm.governed_write_batch (tenant_id, batch_id, full_xid)
-        DEFERRABLE INITIALLY DEFERRED,
-    CONSTRAINT kernel_gate_log_request_fkey
-        FOREIGN KEY (tenant_id, request_id, batch_full_xid)
-        REFERENCES ofarm.governed_write_batch (tenant_id, request_id, full_xid)
+    CONSTRAINT kernel_gate_log_command_fkey
+        FOREIGN KEY (tenant_id, batch_id, batch_full_xid, request_id)
+        REFERENCES ofarm.governed_write_batch (
+            tenant_id, batch_id, full_xid, request_id
+        )
         DEFERRABLE INITIALLY DEFERRED,
     CONSTRAINT kernel_gate_log_entry_id_check CHECK (
         entry_id <> '00000000-0000-0000-0000-000000000000'::pg_catalog.uuid
@@ -1852,13 +1863,14 @@ CREATE TABLE ofarm.kernel_idempotency (
         governed_operation,
         caller_key
     ),
-    CONSTRAINT kernel_idempotency_batch_fkey
-        FOREIGN KEY (tenant_id, batch_id, batch_full_xid)
-        REFERENCES ofarm.governed_write_batch (tenant_id, batch_id, full_xid)
-        DEFERRABLE INITIALLY DEFERRED,
-    CONSTRAINT kernel_idempotency_request_fkey
-        FOREIGN KEY (tenant_id, request_id, batch_full_xid)
-        REFERENCES ofarm.governed_write_batch (tenant_id, request_id, full_xid)
+    CONSTRAINT kernel_idempotency_command_fkey
+        FOREIGN KEY (
+            tenant_id, batch_id, batch_full_xid, request_id,
+            authenticated_principal_ref, governed_operation
+        ) REFERENCES ofarm.governed_write_batch (
+            tenant_id, batch_id, full_xid, request_id,
+            authenticated_principal_ref, governed_operation
+        )
         DEFERRABLE INITIALLY DEFERRED,
     CONSTRAINT kernel_idempotency_result_fkey
         FOREIGN KEY (
@@ -7014,7 +7026,7 @@ AS 'DECLARE
            OR observed_head_version <> 1
            OR observed_service_identity <> ''ofarm.tenant-postgresql.v1''
            OR observed_provisioning_digest <>
-                ''sha256:d3d332006837c1a61ff285f73f048ce916f25dd15b9ac3f52ca7e023cd504229''
+                ''sha256:5aea41d4e235d58c1b0f740983f6bd570751198008e0bf8c2a2bc6d6bdffd9bf''
            OR observed_prefix_digest !~ ''^sha256:[0-9a-f]{64}$'' THEN
             differences := pg_catalog.array_append(
                 differences, ''migration 0001 ledger identity differs''
@@ -8253,7 +8265,7 @@ AS 'DECLARE
           INTO observed_structural_catalog_digest
           FROM catalog_entry;
         IF observed_structural_catalog_digest <>
-                ''sha256:352fff101e2ee47de5d5e78331551e9e7b84e32948b2d2509b60d9bb91b321aa'' THEN
+                ''sha256:91b6e16a0759197c60d91e72bf48338bd4e27bae0c4edf71cf8cbe199f6800ea'' THEN
             differences := pg_catalog.array_append(
                 differences, ''complete tenant catalog fingerprint differs''
             );

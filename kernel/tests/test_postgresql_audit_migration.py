@@ -298,10 +298,10 @@ def test_authoritative_audit_migration_is_one_exact_initial_set():
     assert SECURITY_AUDIT_CONTRACT.digest in source
     assert SECURITY_AUDIT_PROVISIONING_SPEC.digest in source
     assert migration.source_sha256 == \
-        "sha256:cda7ce3d05d0e533210cdae90b8d1a49a34901f4bfccc7cbc7ba65739405b864"
-    assert migration.byte_length == 148_371
+        "sha256:837be8b2093d99f71bcd08856157d7e177e6b670b161a2b3706070c379b739f7"
+    assert migration.byte_length == 148_417
     assert migration_set.digest == \
-        "sha256:851fb434cb68fef25a859385deac098fbcc28b6eb739e05e72aff2ceed111c7a"
+        "sha256:c4a89a0143580be00e4e3aa4a0911b3ddacc0cec3a94aa5c9dc330d73a28cf0f"
     assert migration_set.prefix_digest(1) == migration_set.digest
 
 
@@ -387,7 +387,7 @@ def test_authoritative_audit_migration_has_closed_carriers_and_limits():
         in source
     )
     assert (
-        "sha256:66395db8f49699ca4631e7fcb76adec48b354ba9fc774391cc381cfaa8704c32"
+        "sha256:76c1b99279cd069f2944ed1d2097438a9de01924ab7a0435f6c6042088a3f402"
         in source
     )
     assert "jsonb" not in persisted_audit_tables
@@ -400,6 +400,22 @@ def test_authoritative_audit_migration_has_closed_carriers_and_limits():
         "CREATE EXTENSION",
     ):
         assert forbidden not in source
+
+
+def test_access_intent_captures_time_and_visibility_in_one_sql_command():
+    source = load_migration_set(
+        PACKAGE_ROOT, SECURITY_AUDIT_SERVICE
+    ).migrations[0].source_bytes.decode("utf-8")
+    combined_capture = """    SELECT
+        pg_catalog.clock_timestamp(),
+        pg_catalog.pg_current_snapshot()
+    INTO STRICT
+        v_data_cut,
+        v_visibility_snapshot;"""
+
+    assert source.count(combined_capture) == 1
+    assert "v_data_cut := pg_catalog.clock_timestamp()" not in source
+    assert "v_visibility_snapshot := pg_catalog.pg_current_snapshot()" not in source
 
 
 def test_audit_catalog_fingerprint_has_exact_shared_schema_class_parity():
