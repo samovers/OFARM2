@@ -127,6 +127,8 @@ def test_sanitizer_target_is_closed_and_runs_both_suites() -> None:
     )[1].split("FROM --platform=$TARGETPLATFORM postgres@", maxsplit=1)[0]
     assert "make -j1 check" in sanitizer_section
     assert "--disable-asm" in sanitizer_section
+    assert "--disable-pie" in sanitizer_section
+    assert "--enable-pic" in sanitizer_section
     assert "arm64) SANITIZER_ARCH_FLAGS='-mgeneral-regs-only'" in sanitizer_section
     assert "-fsanitize=${SANITIZER}" in sanitizer_section
     assert "ofarm_ed25519_core.c ofarm_ed25519_harness.c" in sanitizer_section
@@ -136,6 +138,7 @@ def test_sanitizer_target_is_closed_and_runs_both_suites() -> None:
         in sanitizer_section
     )
     assert "OFARM_EXTRA_LDFLAGS=\"${SANITIZER_FLAGS}\"" in sanitizer_section
+    assert '} \\\n && case "${SANITIZER}" in' in sanitizer_section
     sanitizer_live = CONTAINERFILE.split(
         "FROM postgres-runtime AS sanitizer", maxsplit=1
     )[1].split("FROM --platform=$TARGETPLATFORM postgres@", maxsplit=1)[0]

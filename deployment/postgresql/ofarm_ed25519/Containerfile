@@ -270,7 +270,9 @@ RUN --network=none \
       ./configure \
         --prefix=/opt/ofarm-libsodium-sanitized \
         --disable-asm \
+        --disable-pie \
         --disable-shared \
+        --enable-pic \
         --enable-static \
  && make -j1 \
  && ASAN_OPTIONS='abort_on_error=1:detect_leaks=1:halt_on_error=1:strict_string_checks=1' \
@@ -328,8 +330,8 @@ RUN --network=none \
         "${source_path}" "/opt/ofarm-sanitizer/lib/${soname}"; \
       chmod 0755 "/opt/ofarm-sanitizer/lib/${soname}"; \
       ln --symbolic "${soname}" "/opt/ofarm-sanitizer/lib/${requested}"; \
-    }; \
-    case "${SANITIZER}" in \
+    } \
+ && case "${SANITIZER}" in \
       address) copy_runtime libasan.so ;; \
       undefined) \
         copy_runtime libubsan.so; \
