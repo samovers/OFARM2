@@ -3266,6 +3266,9 @@ def test_frozen_receipt_is_reverified_by_the_maintained_provider_path(
     assert result["status"] == "cryptographically-verified"
     assert result["providerVerificationDigest"] == retained["canonicalDigest"]
     assert observed["candidate"].status == "frozen"
+    assert observed["retained_immutable_releases"] == retained["metadata"][
+        "immutableReleases"
+    ]
 
 
 def test_conformance_environment_carries_release_status_and_exact_archive(

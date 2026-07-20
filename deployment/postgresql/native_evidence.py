@@ -1781,6 +1781,7 @@ def _authenticate_github_release(
     identity: Any,
     source_directory: Path,
     download_directory: Path,
+    retained_immutable_releases: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     github_cli = _github_cli_path()
     version_output = _run_github_cli(
@@ -1811,7 +1812,22 @@ def _authenticate_github_release(
     }:
         raise NativeEvidenceError("GitHub repository identity is not exact")
 
+    # Actions cannot read the repository-administration setting. Replay may
+    # retain that frozen observation; release state and attestations are fresh.
+    if retained_immutable_releases is not None:
+        if (
+            set(retained_immutable_releases) != {"enabled", "enforcedByOwner"}
+            or retained_immutable_releases.get("enabled") is not True
+            or type(retained_immutable_releases.get("enforcedByOwner")) is not bool
+        ):
+            raise NativeEvidenceError(
+                "retained GitHub immutable-release setting is invalid"
+            )
+        retained_immutable_releases = dict(retained_immutable_releases)
+
     def observe_immutable_releases() -> Any:
+        if retained_immutable_releases is not None:
+            return dict(retained_immutable_releases)
         return _run_github_json(
             _github_api_arguments(
                 "repos/samovers/OFARM2/immutable-releases",
@@ -2258,6 +2274,9 @@ def verify_frozen_evidence_receipt(
             identity=identity,
             source_directory=source_directory,
             download_directory=Path(directory),
+            retained_immutable_releases=receipt.document["preservation"][
+                "providerVerification"
+            ]["metadata"]["immutableReleases"],
         )
     retained = receipt.document["preservation"]["providerVerification"]
     if observed != retained:
