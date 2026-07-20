@@ -17,8 +17,10 @@ candidate containing the canonical amd64/arm64 index bytes, both child and
 configuration digests, the four installed-artifact identities per platform,
 the exact source inventory, build pins, and workflow-action pins. A later
 reviewed commit freezes those bytes. Conformance refuses to call the derived
-image frozen unless the directly authenticated OCI archive matches that checked
-child and configuration identity exactly; only that archive is then loaded.
+image frozen unless the temporary OCI-media Docker archive binds its loadable
+manifest to that checked child, configuration, ordered layer set, and exact tag;
+only those authenticated archive bytes are then loaded. Durable release evidence
+remains a strict OCI archive and rejects the Docker transport wrapper.
 
 `native_evidence_receipt.json` is the separate checked, durable evidence record.
 Its provisional form contains no build, platform, attestation, archive, or
@@ -87,8 +89,9 @@ image timestamps when the caller supplies the argument. The extension build
 stages exactly three runtime files in a dedicated root, normalizes every file
 and directory timestamp, and copies that root as one final layer. A clean-build
 reproducibility check runs the command twice with `--no-cache` and compares the
-authenticated OCI child/configuration identity and the SHA-256, size, and mode
-of the static library, shared object, control file, and SQL file. BuildKit
+authenticated OCI child/configuration identity inside two loadable OCI-media
+Docker archives, plus the SHA-256, size, and mode of the static library, shared
+object, control file, and SQL file. BuildKit
 provenance attestations are separate evidence objects and are not part of that
 byte comparison.
 

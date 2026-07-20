@@ -42,7 +42,7 @@ from deployment.postgresql.readiness import (
     verify_security_audit_structural_compatibility,
     verify_tenant_structural_compatibility,
 )
-from deployment.postgresql.native_evidence import direct_oci_child_identity
+from deployment.postgresql.native_evidence import docker_transport_child_identity
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
@@ -132,13 +132,16 @@ def _require_exact_pinned_image() -> str:
     archive_path = Path(archive_name)
     if not archive_path.is_absolute():
         archive_path = PACKAGE_ROOT / archive_path
-    observed_child, observed_config = direct_oci_child_identity(
+    observed_child, observed_config = docker_transport_child_identity(
         archive_path,
-        "derived PostgreSQL OCI archive",
+        "derived PostgreSQL Docker transport archive",
         platform="linux/amd64",
+        image_name=EXPECTED_DERIVED_IMAGE,
     )
     if (observed_child, observed_config) != (expected_child, expected_config):
-        pytest.fail("the derived PostgreSQL OCI archive differs from frozen identity")
+        pytest.fail(
+            "the derived PostgreSQL Docker transport differs from frozen identity"
+        )
 
     image = _docker("image", "inspect", image_name, check=False)
     if image.returncode != 0:

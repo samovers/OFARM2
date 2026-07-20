@@ -26,6 +26,7 @@ from deployment.postgresql.native_evidence import (
     conformance_environment,
     compose_multi_platform_index,
     direct_oci_child_identity,
+    docker_transport_child_identity,
     finalize_evidence_receipt,
     prepare_release_identity,
 )
@@ -117,6 +118,8 @@ def _direct_oci_fixture(
     wrong_size: str | None = None,
     duplicate_json: str | None = None,
     duplicate_directory: bool = False,
+    docker_image_name: str | None = None,
+    docker_manifest_mutation: str | None = None,
 ) -> tuple[Path, str, str]:
     manifest_type = "application/vnd.oci.image.manifest.v1+json"
     index_type = "application/vnd.oci.image.index.v1+json"
@@ -153,13 +156,17 @@ def _direct_oci_fixture(
         config_media_type,
         "config",
     )
-    layer = b"runtime layer"
-    layer_descriptor = content_descriptor(layer, layer_media_type, "layer")
+    layers = (b"runtime layer",)
+    if docker_manifest_mutation == "reordered-layers":
+        layers += (b"runtime metadata layer",)
+    layer_descriptors = [
+        content_descriptor(layer, layer_media_type, "layer") for layer in layers
+    ]
     manifest_document: dict[str, object] = {
         "schemaVersion": 2,
         "mediaType": manifest_media_type,
         "config": config_descriptor,
-        "layers": [layer_descriptor],
+        "layers": layer_descriptors,
     }
     if manifest_artifact_type:
         manifest_document["artifactType"] = "application/example"
@@ -222,7 +229,9 @@ def _direct_oci_fixture(
         hostile = b"unreferenced hostile blob"
         blobs[_digest(hostile)] = hostile
     layout = _json_bytes({"imageLayoutVersion": "1.0.0"})
-    archive = tmp_path / f"{name}.oci.tar"
+    archive = tmp_path / (
+        f"{name}.docker.tar" if docker_image_name is not None else f"{name}.oci.tar"
+    )
     with tarfile.open(archive, "w") as output:
         for directory in (
             "blobs",
@@ -241,10 +250,62 @@ def _direct_oci_fixture(
                 for digest, data in blobs.items()
             }
         )
+        if docker_image_name is not None and docker_manifest_mutation != "missing":
+            docker_entry: dict[str, object] = {
+                "Config": "blobs/sha256/"
+                + str(config_descriptor["digest"]).removeprefix("sha256:"),
+                "RepoTags": [docker_image_name],
+                "Layers": [
+                    "blobs/sha256/"
+                    + str(descriptor["digest"]).removeprefix("sha256:")
+                    for descriptor in layer_descriptors
+                ],
+            }
+            docker_document: object = [docker_entry]
+            if docker_manifest_mutation == "extra-entry":
+                docker_document = [docker_entry, dict(docker_entry)]
+            elif docker_manifest_mutation == "extra-key":
+                docker_entry["Parent"] = ""
+            elif docker_manifest_mutation == "missing-key":
+                docker_entry.pop("Layers")
+            elif docker_manifest_mutation == "wrong-config":
+                docker_entry["Config"] = "blobs/sha256/" + "0" * 64
+            elif docker_manifest_mutation == "reordered-layers":
+                docker_entry["Layers"] = list(reversed(docker_entry["Layers"]))
+            elif docker_manifest_mutation == "wrong-layer":
+                docker_entry["Layers"] = ["blobs/sha256/" + "0" * 64]
+            elif docker_manifest_mutation == "wrong-tag":
+                docker_entry["RepoTags"] = ["ofarm-ed25519-amd64:second"]
+            elif docker_manifest_mutation == "extra-tag":
+                docker_entry["RepoTags"] = [docker_image_name, "hostile:latest"]
+            elif docker_manifest_mutation == "nonobject-entry":
+                docker_document = [[]]
+            elif docker_manifest_mutation == "top-object":
+                docker_document = docker_entry
+            docker_bytes = _json_bytes(docker_document)
+            if docker_manifest_mutation == "duplicate-json":
+                docker_bytes = docker_bytes.replace(
+                    b'"Config":',
+                    b'"Config":"hostile","Config":',
+                    1,
+                )
+            elif docker_manifest_mutation == "malformed":
+                docker_bytes = b"{"
+            elif docker_manifest_mutation == "oversize":
+                docker_bytes = b" " * (64 * 1024 + 1)
+            if docker_manifest_mutation != "symlink":
+                files["manifest.json"] = docker_bytes
+        if docker_manifest_mutation == "extra-file":
+            files["repositories"] = b"{}"
         for member_name, data in files.items():
             member = tarfile.TarInfo(member_name)
             member.size = len(data)
             output.addfile(member, io.BytesIO(data))
+        if docker_image_name is not None and docker_manifest_mutation == "symlink":
+            member = tarfile.TarInfo("manifest.json")
+            member.type = tarfile.SYMTYPE
+            member.linkname = "index.json"
+            output.addfile(member)
     return archive, _digest(manifest), _digest(config_document)
 
 
@@ -260,17 +321,20 @@ def _reproducibility_fixture(
     second = tmp_path / "second"
     _write_artifacts(first)
     _write_artifacts(second)
+    architecture = platform.split("/", 1)[1]
     first_archive, observed_child, observed_config = _direct_oci_fixture(
         tmp_path,
         name="first-clean",
         platform=platform,
         runtime_octet=runtime_octet,
+        docker_image_name=f"ofarm-ed25519-{architecture}:first",
     )
     second_archive, second_child, second_config = _direct_oci_fixture(
         tmp_path,
         name="second-clean",
         platform=platform,
         runtime_octet=runtime_octet,
+        docker_image_name=f"ofarm-ed25519-{architecture}:second",
     )
     assert (observed_child, observed_config) == (child_digest, config_digest)
     assert (second_child, second_config) == (child_digest, config_digest)
@@ -1322,6 +1386,157 @@ def test_direct_oci_archive_authenticates_exact_runtime_child(
     ) == (child_digest, config_digest)
 
 
+@pytest.mark.parametrize(
+    ("platform", "image_name"),
+    (
+        ("linux/amd64", "ofarm-ed25519-amd64:first"),
+        ("linux/arm64", "ofarm-ed25519-arm64:second"),
+        ("linux/amd64", "ofarm-postgresql-conformance:local"),
+    ),
+)
+def test_docker_transport_archive_binds_the_exact_loadable_image(
+    tmp_path: Path,
+    platform: str,
+    image_name: str,
+) -> None:
+    archive, child_digest, config_digest = _direct_oci_fixture(
+        tmp_path,
+        platform=platform,
+        docker_image_name=image_name,
+    )
+
+    assert docker_transport_child_identity(
+        archive,
+        "loadable image",
+        platform=platform,
+        image_name=image_name,
+    ) == (child_digest, config_digest)
+
+    with pytest.raises(NativeEvidenceError, match="unexpected file"):
+        direct_oci_child_identity(archive, "release OCI", platform=platform)
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    (
+        ("missing", "is absent"),
+        ("extra-entry", "must contain one entry"),
+        ("extra-key", "fields are not exact"),
+        ("missing-key", "fields are not exact"),
+        ("wrong-config", "does not bind"),
+        ("reordered-layers", "does not bind"),
+        ("wrong-layer", "does not bind"),
+        ("wrong-tag", "does not bind"),
+        ("extra-tag", "does not bind"),
+        ("duplicate-json", "duplicate object key"),
+        ("malformed", "not valid JSON"),
+        ("nonobject-entry", "must be a JSON object"),
+        ("top-object", "must contain one entry"),
+        ("symlink", "non-regular member"),
+        ("oversize", "exceeds its byte limit"),
+        ("extra-file", "unexpected file"),
+    ),
+)
+def test_docker_transport_archive_refuses_an_ambiguous_wrapper(
+    tmp_path: Path,
+    mutation: str,
+    message: str,
+) -> None:
+    image_name = "ofarm-ed25519-amd64:first"
+    archive, _, _ = _direct_oci_fixture(
+        tmp_path,
+        docker_image_name=image_name,
+        docker_manifest_mutation=mutation,
+    )
+
+    with pytest.raises(NativeEvidenceError, match=message):
+        docker_transport_child_identity(
+            archive,
+            "loadable image",
+            platform=PLATFORM,
+            image_name=image_name,
+        )
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    (
+        ({"corrupt_blob": "config"}, "does not authenticate"),
+        ({"corrupt_blob": "layer"}, "does not authenticate"),
+        ({"unreferenced_blob": True}, "unreferenced blob"),
+        (
+            {
+                "root_annotations": {
+                    "vnd.docker.reference.type": "attestation-manifest"
+                }
+            },
+            "attestation",
+        ),
+    ),
+)
+def test_docker_transport_archive_keeps_the_hostile_oci_dag_checks(
+    tmp_path: Path,
+    mutation: dict[str, object],
+    message: str,
+) -> None:
+    image_name = "ofarm-ed25519-amd64:first"
+    archive, _, _ = _direct_oci_fixture(
+        tmp_path,
+        docker_image_name=image_name,
+        **mutation,
+    )
+
+    with pytest.raises(NativeEvidenceError, match=message):
+        docker_transport_child_identity(
+            archive,
+            "loadable image",
+            platform=PLATFORM,
+            image_name=image_name,
+        )
+
+
+def test_docker_transport_archive_requires_oci_media_types_and_a_known_tag(
+    tmp_path: Path,
+) -> None:
+    image_name = "ofarm-ed25519-amd64:first"
+    docker_media_type = "application/vnd.docker.distribution.manifest.v2+json"
+    archive, _, _ = _direct_oci_fixture(
+        tmp_path,
+        docker_image_name=image_name,
+        root_media_type=docker_media_type,
+        manifest_media_type=docker_media_type,
+    )
+
+    with pytest.raises(NativeEvidenceError, match="directly reference"):
+        docker_transport_child_identity(
+            archive,
+            "loadable image",
+            platform=PLATFORM,
+            image_name=image_name,
+        )
+    with pytest.raises(NativeEvidenceError, match="image name is not allowed"):
+        docker_transport_child_identity(
+            archive,
+            "loadable image",
+            platform=PLATFORM,
+            image_name="hostile:latest",
+        )
+
+    mismatched_archive, _, _ = _direct_oci_fixture(
+        tmp_path,
+        name="mismatched-platform-tag",
+        platform="linux/arm64",
+        docker_image_name="ofarm-ed25519-amd64:first",
+    )
+    with pytest.raises(NativeEvidenceError, match="image name is not allowed"):
+        docker_transport_child_identity(
+            mismatched_archive,
+            "loadable image",
+            platform="linux/arm64",
+            image_name="ofarm-ed25519-amd64:first",
+        )
+
+
 def test_two_clean_builds_require_exact_child_and_installed_artifacts(tmp_path):
     first = tmp_path / "first"
     second = tmp_path / "second"
@@ -1330,10 +1545,12 @@ def test_two_clean_builds_require_exact_child_and_installed_artifacts(tmp_path):
     first_archive, digest, config_digest = _direct_oci_fixture(
         tmp_path,
         name="first",
+        docker_image_name="ofarm-ed25519-amd64:first",
     )
     second_archive, second_digest, second_config = _direct_oci_fixture(
         tmp_path,
         name="second",
+        docker_image_name="ofarm-ed25519-amd64:second",
     )
     assert (second_digest, second_config) == (digest, config_digest)
     output = tmp_path / "report.json"
@@ -1368,11 +1585,16 @@ def test_two_clean_builds_refuse_different_runtime_dags(tmp_path: Path) -> None:
     second = tmp_path / "second"
     _write_artifacts(first)
     _write_artifacts(second)
-    first_archive, _, _ = _direct_oci_fixture(tmp_path, name="first")
+    first_archive, _, _ = _direct_oci_fixture(
+        tmp_path,
+        name="first",
+        docker_image_name="ofarm-ed25519-amd64:first",
+    )
     second_archive, _, _ = _direct_oci_fixture(
         tmp_path,
         name="second",
         runtime_octet="different",
+        docker_image_name="ofarm-ed25519-amd64:second",
     )
 
     with pytest.raises(NativeEvidenceError, match="different child digests"):
@@ -1561,8 +1783,16 @@ def test_installed_artifact_mode_is_absolute_not_merely_equal(tmp_path):
     _write_artifacts(second)
     first.joinpath("ofarm_ed25519.so").chmod(0o700)
     second.joinpath("ofarm_ed25519.so").chmod(0o700)
-    first_archive, _, _ = _direct_oci_fixture(tmp_path, name="first")
-    second_archive, _, _ = _direct_oci_fixture(tmp_path, name="second")
+    first_archive, _, _ = _direct_oci_fixture(
+        tmp_path,
+        name="first",
+        docker_image_name="ofarm-ed25519-amd64:first",
+    )
+    second_archive, _, _ = _direct_oci_fixture(
+        tmp_path,
+        name="second",
+        docker_image_name="ofarm-ed25519-amd64:second",
+    )
 
     with pytest.raises(NativeEvidenceError, match="mode is not 0755"):
         compare_builds(
@@ -2431,7 +2661,10 @@ def test_conformance_environment_carries_release_status_and_exact_archive(
         verify_current_sources=True,
         source_directory=SOURCE_DIRECTORY,
     )
-    archive, child, config = _direct_oci_fixture(tmp_path)
+    archive, child, config = _direct_oci_fixture(
+        tmp_path,
+        docker_image_name="ofarm-postgresql-conformance:local",
+    )
 
     environment = conformance_environment(
         checked_identity_path=identity_path,
@@ -2503,6 +2736,7 @@ def test_frozen_conformance_environment_refuses_a_different_valid_archive(
         tmp_path,
         name="matching-frozen",
         runtime_octet="stable",
+        docker_image_name="ofarm-postgresql-conformance:local",
     )
     assert (child_digest, config_digest) == (
         expected["runtimeChildDigest"],
@@ -2528,6 +2762,7 @@ def test_frozen_conformance_environment_refuses_a_different_valid_archive(
         tmp_path,
         name="different-frozen",
         runtime_octet="different",
+        docker_image_name="ofarm-postgresql-conformance:local",
     )
     with pytest.raises(
         NativeEvidenceError,
@@ -2645,8 +2880,8 @@ def test_native_workflow_closes_both_native_platform_evidence_lanes():
         "- name: Produce two clean native child builds", 1
     )[1].split("- name: Prove child and installed-artifact reproducibility", 1)[0]
     assert clean_build_step.count(
-        '"type=oci,dest=.artifacts/native/${{ matrix.architecture }}/'
-        '${build}-image.oci.tar,oci-mediatypes=true"'
+        '"type=docker,dest=.artifacts/native/${{ matrix.architecture }}/'
+        '${build}-image.docker.tar,oci-mediatypes=true"'
     ) == 1
     assert "--load" not in clean_build_step
     assert "--metadata-file" not in clean_build_step
@@ -2658,26 +2893,27 @@ def test_native_workflow_closes_both_native_platform_evidence_lanes():
         "- name: Prove child and installed-artifact reproducibility", 1
     )[1].split("- name: Load and verify the authenticated clean native child", 1)[0]
     assert "--first-archive" in compare_step
-    assert "first-image.oci.tar" in compare_step
+    assert "first-image.docker.tar" in compare_step
     assert "--second-archive" in compare_step
-    assert "second-image.oci.tar" in compare_step
+    assert "second-image.docker.tar" in compare_step
     assert "metadata" not in compare_step
     native_load_step = workflow.split(
         "- name: Load and verify the authenticated clean native child", 1
     )[1].split("- name: Run the exact live PostgreSQL verifier smoke", 1)[0]
     assert "docker image inspect" in native_load_step
-    assert "docker load --input" in native_load_step
-    assert "second-image.oci.tar" in native_load_step
+    assert native_load_step.count("docker load --input") == 1
+    assert "second-image.docker.tar" in native_load_step
+    assert "docker tag" not in native_load_step
     assert "child_digest" in native_load_step
     assert "config_digest" in native_load_step
     assert "{{.Os}}/{{.Architecture}}" in native_load_step
     assert native_load_step.count("rm --") == 1
     assert native_load_step.count("test ! -e") == 2
     first_archive_path = (
-        '".artifacts/native/${{ matrix.architecture }}/first-image.oci.tar"'
+        '".artifacts/native/${{ matrix.architecture }}/first-image.docker.tar"'
     )
     second_archive_path = (
-        '".artifacts/native/${{ matrix.architecture }}/second-image.oci.tar"'
+        '".artifacts/native/${{ matrix.architecture }}/second-image.docker.tar"'
     )
     assert native_load_step.count(first_archive_path) == 2
     assert native_load_step.count(second_archive_path) == 3
@@ -2705,8 +2941,8 @@ def test_native_workflow_closes_both_native_platform_evidence_lanes():
         "- name: Build the derived PostgreSQL image", 1
     )[1].split("- name: Authenticate the derived PostgreSQL release identity", 1)[0]
     assert (
-        "type=oci,dest=.artifacts/derived-postgresql/"
-        "ofarm-postgresql-conformance.oci.tar,oci-mediatypes=true"
+        "type=docker,dest=.artifacts/derived-postgresql/"
+        "ofarm-postgresql-conformance.docker.tar,oci-mediatypes=true"
     ) in derived_build_step
     assert "--metadata-file" not in derived_build_step
     assert "--load" not in derived_build_step
@@ -2715,16 +2951,17 @@ def test_native_workflow_closes_both_native_platform_evidence_lanes():
     )[1].split("- name: Load the exact authenticated derived PostgreSQL image", 1)[0]
     assert "--archive" in derived_auth_step
     assert "--archive-reference" in derived_auth_step
-    assert "ofarm-postgresql-conformance.oci.tar" in derived_auth_step
+    assert "ofarm-postgresql-conformance.docker.tar" in derived_auth_step
     assert "metadata" not in derived_auth_step
     derived_load_step = workflow.split(
         "- name: Load the exact authenticated derived PostgreSQL image", 1
     )[1].split("- name: Start three independent derived PostgreSQL clusters", 1)[0]
     assert "docker image inspect" in derived_load_step
-    assert "docker load --input" in derived_load_step
+    assert derived_load_step.count("docker load --input") == 1
     assert "ISSUE174_DERIVED_POSTGRES_CHILD_DIGEST" in derived_load_step
     assert "ISSUE174_DERIVED_POSTGRES_CONFIG_DIGEST" in derived_load_step
     assert "{{.Os}}/{{.Architecture}}" in derived_load_step
+    assert "docker tag" not in derived_load_step
     derived_load_markers = (
         "if docker image inspect ofarm-postgresql-conformance:local",
         "docker load --input",
@@ -2734,6 +2971,13 @@ def test_native_workflow_closes_both_native_platform_evidence_lanes():
     assert [
         derived_load_step.index(marker) for marker in derived_load_markers
     ] == sorted(derived_load_step.index(marker) for marker in derived_load_markers)
+    derived_archive_path = (
+        ".artifacts/derived-postgresql/"
+        "ofarm-postgresql-conformance.docker.tar"
+    )
+    assert workflow.count(derived_archive_path) == 4
+    assert derived_auth_step.count(derived_archive_path) == 2
+    assert derived_load_step.count(derived_archive_path) == 1
     derived_step_names = (
         "- name: Build the derived PostgreSQL image",
         "- name: Authenticate the derived PostgreSQL release identity",
@@ -2743,6 +2987,17 @@ def test_native_workflow_closes_both_native_platform_evidence_lanes():
     assert [workflow.index(name) for name in derived_step_names] == sorted(
         workflow.index(name) for name in derived_step_names
     )
+    attested_step = workflow.split(
+        "- name: Produce bounded OCI, SBOM, and max-provenance evidence", 1
+    )[1].split("- name: Upload bounded native verifier evidence", 1)[0]
+    assert (
+        '"type=oci,dest=.artifacts/native/${{ matrix.architecture }}/'
+        'ofarm-ed25519.oci.tar,oci-mediatypes=true"'
+    ) in attested_step
+    assert "type=docker" not in attested_step
+    assert "first-image.docker.tar" not in attested_step
+    assert "second-image.docker.tar" not in attested_step
+    assert attested_step.count("ofarm-ed25519.oci.tar") == 2
     vector_step = workflow.split(
         "- name: Authenticate generated native verifier vectors", 1
     )[1].split("- name: Require a native runner", 1)[0]

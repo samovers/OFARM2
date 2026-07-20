@@ -77,6 +77,7 @@ MAX_OCI_ARCHIVE_BYTES = 512 * 1024 * 1024
 MAX_OCI_MEMBER_COUNT = 2_048
 MAX_OCI_EXPANDED_BYTES = 1024 * 1024 * 1024
 MAX_MANIFEST_BYTES = 8 * 1024 * 1024
+MAX_DOCKER_TRANSPORT_MANIFEST_BYTES = 64 * 1024
 MAX_SBOM_BYTES = 8 * 1024 * 1024
 MAX_PROVENANCE_BYTES = 2 * 1024 * 1024
 MAX_CONTAINERFILE_BYTES = 128 * 1024
@@ -92,7 +93,6 @@ SHA256_PATTERN = re.compile(r"sha256:[0-9a-f]{64}\Z")
 COMMIT_PATTERN = re.compile(r"[0-9a-f]{40}\Z")
 PLATFORM_PATTERN = re.compile(r"linux/(amd64|arm64)\Z")
 OCI_BLOB_PATTERN = re.compile(r"blobs/sha256/([0-9a-f]{64})\Z")
-
 OCI_MANIFEST_MEDIA_TYPES = frozenset(
     {"application/vnd.oci.image.manifest.v1+json"}
 )
@@ -425,15 +425,18 @@ def compare_builds(
 
     platform = _require_platform(platform)
     source_commit = _require_source_commit(source_commit)
-    first_digest, first_config_digest = direct_oci_child_identity(
+    architecture = platform.split("/", 1)[1]
+    first_digest, first_config_digest = docker_transport_child_identity(
         first_archive,
-        "first clean build OCI archive",
+        "first clean build Docker transport archive",
         platform=platform,
+        image_name=f"ofarm-ed25519-{architecture}:first",
     )
-    second_digest, second_config_digest = direct_oci_child_identity(
+    second_digest, second_config_digest = docker_transport_child_identity(
         second_archive,
-        "second clean build OCI archive",
+        "second clean build Docker transport archive",
         platform=platform,
+        image_name=f"ofarm-ed25519-{architecture}:second",
     )
     if (first_digest, first_config_digest) != (
         second_digest,
@@ -465,7 +468,7 @@ def compare_builds(
 
 
 class _OciArchive:
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, *, docker_transport: bool = False):
         archive_bytes = _read_bounded(path, MAX_OCI_ARCHIVE_BYTES, "OCI archive")
         self.path = path
         self.sha256 = _sha256(archive_bytes)
@@ -476,6 +479,7 @@ class _OciArchive:
             raise NativeEvidenceError("OCI archive is not a readable tar archive") from exc
         self._members: dict[str, tarfile.TarInfo] = {}
         self._referenced_blobs: set[str] = set()
+        self._docker_transport = docker_transport
         self._index_members()
 
     def close(self) -> None:
@@ -507,9 +511,10 @@ class _OciArchive:
                 continue
             if not member.isreg():
                 raise NativeEvidenceError("OCI archive contains a non-regular member")
-            if name not in {"oci-layout", "index.json"} and OCI_BLOB_PATTERN.fullmatch(
-                name
-            ) is None:
+            allowed_files = {"oci-layout", "index.json"}
+            if self._docker_transport:
+                allowed_files.add("manifest.json")
+            if name not in allowed_files and OCI_BLOB_PATTERN.fullmatch(name) is None:
                 raise NativeEvidenceError("OCI archive contains an unexpected file")
             expanded_size += member.size
             if expanded_size > MAX_OCI_EXPANDED_BYTES:
@@ -644,7 +649,7 @@ def _authenticate_runtime_manifest(
     archive: _OciArchive,
     manifest: dict[str, Any],
     platform: str,
-) -> str:
+) -> tuple[str, tuple[str, ...]]:
     platform = _require_platform(platform)
     config = _require_object(manifest.get("config"), "runtime config descriptor")
     if config.get("mediaType") != OCI_CONFIG_MEDIA_TYPE:
@@ -666,29 +671,86 @@ def _authenticate_runtime_manifest(
     layers = manifest.get("layers")
     if not isinstance(layers, list) or not 1 <= len(layers) <= 64:
         raise NativeEvidenceError("runtime layer set is absent or unbounded")
+    layer_paths: list[str] = []
     for index, layer in enumerate(layers):
         layer_object = _require_object(layer, f"runtime layer {index} descriptor")
         if layer_object.get("mediaType") != OCI_LAYER_MEDIA_TYPE:
             raise NativeEvidenceError("runtime layer media type is not exact")
+        layer_digest = _require_digest(
+            layer_object.get("digest"), f"runtime layer {index} digest"
+        )
         archive.descriptor_bytes(
             layer_object,
             MAX_OCI_ARCHIVE_BYTES,
             f"runtime layer {index}",
         )
-    return config_digest
+        layer_paths.append("blobs/sha256/" + layer_digest.removeprefix("sha256:"))
+    return config_digest, tuple(layer_paths)
 
 
-def direct_oci_child_identity(
+def _require_docker_transport_image_name(image_name: str, platform: str) -> str:
+    architecture = platform.split("/", 1)[1]
+    allowed_names = {
+        f"ofarm-ed25519-{architecture}:first",
+        f"ofarm-ed25519-{architecture}:second",
+    }
+    if platform == "linux/amd64":
+        allowed_names.add("ofarm-postgresql-conformance:local")
+    if image_name not in allowed_names:
+        raise NativeEvidenceError("Docker transport image name is not allowed")
+    return image_name
+
+
+def _authenticate_docker_transport_manifest(
+    archive: _OciArchive,
+    *,
+    label: str,
+    image_name: str,
+    config_digest: str,
+    layer_paths: tuple[str, ...],
+) -> None:
+    document = _load_json_bytes(
+        archive.read_member(
+            "manifest.json",
+            MAX_DOCKER_TRANSPORT_MANIFEST_BYTES,
+            f"{label} Docker transport manifest",
+        ),
+        f"{label} Docker transport manifest",
+    )
+    if not isinstance(document, list) or len(document) != 1:
+        raise NativeEvidenceError(
+            f"{label} Docker transport manifest must contain one entry"
+        )
+    entry = _require_object(document[0], f"{label} Docker transport entry")
+    if set(entry) != {"Config", "RepoTags", "Layers"}:
+        raise NativeEvidenceError(
+            f"{label} Docker transport entry fields are not exact"
+        )
+    expected = {
+        "Config": "blobs/sha256/" + config_digest.removeprefix("sha256:"),
+        "RepoTags": [image_name],
+        "Layers": list(layer_paths),
+    }
+    if entry != expected:
+        raise NativeEvidenceError(
+            f"{label} Docker transport entry does not bind the authenticated image"
+        )
+
+
+def _direct_oci_child_identity(
     path: Path,
     label: str,
     *,
     platform: str,
+    docker_image_name: str | None,
 ) -> tuple[str, str]:
-    """Authenticate one direct single-platform OCI runtime child."""
-
     platform = _require_platform(platform)
     expected_os, expected_architecture = platform.split("/", 1)
-    archive = _OciArchive(path)
+    if docker_image_name is not None:
+        docker_image_name = _require_docker_transport_image_name(
+            docker_image_name, platform
+        )
+    archive = _OciArchive(path, docker_transport=docker_image_name is not None)
     try:
         layout = _require_object(
             _load_json_bytes(
@@ -750,11 +812,54 @@ def direct_oci_child_identity(
             or "subject" in manifest
         ):
             raise NativeEvidenceError(f"{label} runtime manifest is not a plain image")
-        config_digest = _authenticate_runtime_manifest(archive, manifest, platform)
+        config_digest, layer_paths = _authenticate_runtime_manifest(
+            archive, manifest, platform
+        )
+        if docker_image_name is not None:
+            _authenticate_docker_transport_manifest(
+                archive,
+                label=label,
+                image_name=docker_image_name,
+                config_digest=config_digest,
+                layer_paths=layer_paths,
+            )
         archive.require_no_unreferenced_blobs()
     finally:
         archive.close()
     return child_digest, config_digest
+
+
+def direct_oci_child_identity(
+    path: Path,
+    label: str,
+    *,
+    platform: str,
+) -> tuple[str, str]:
+    """Authenticate one direct single-platform OCI runtime child."""
+
+    return _direct_oci_child_identity(
+        path,
+        label,
+        platform=platform,
+        docker_image_name=None,
+    )
+
+
+def docker_transport_child_identity(
+    path: Path,
+    label: str,
+    *,
+    platform: str,
+    image_name: str,
+) -> tuple[str, str]:
+    """Authenticate one loadable Docker archive containing an exact OCI child."""
+
+    return _direct_oci_child_identity(
+        path,
+        label,
+        platform=platform,
+        docker_image_name=image_name,
+    )
 
 
 def _require_exact_runtime_subject(
@@ -1062,7 +1167,7 @@ def _inspect_oci_archive(
         runtime_manifest = _load_manifest(
             archive, runtime_descriptor, "runtime manifest"
         )
-        runtime_config_digest = _authenticate_runtime_manifest(
+        runtime_config_digest, _ = _authenticate_runtime_manifest(
             archive, runtime_manifest, platform
         )
         attestation_manifest = _load_manifest(
@@ -2073,10 +2178,11 @@ def conformance_environment(
         )
     except NativeReleaseIdentityError as exc:
         raise NativeEvidenceError(str(exc)) from exc
-    observed_child, observed_config = direct_oci_child_identity(
+    observed_child, observed_config = docker_transport_child_identity(
         archive_path,
-        "derived PostgreSQL OCI archive",
+        "derived PostgreSQL Docker transport archive",
         platform="linux/amd64",
+        image_name=image_name,
     )
     if identity.status == "frozen":
         amd64 = identity.document["platforms"][0]
