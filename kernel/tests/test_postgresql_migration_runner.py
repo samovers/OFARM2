@@ -266,7 +266,7 @@ def _initial_source(*, delay_seconds: float | None = None) -> bytes:
     source = initial_ledger_sql(TENANT_PROVISIONING_SPEC).encode("utf-8")
     if delay_seconds is not None:
         source += f"\nSELECT pg_catalog.pg_sleep({delay_seconds});\n".encode("ascii")
-    return source + b"""
+    source += b"""
 CREATE FUNCTION ofarm.create_tenant_challenge()
 RETURNS pg_catalog.uuid
 LANGUAGE sql VOLATILE PARALLEL UNSAFE SECURITY INVOKER
@@ -317,6 +317,34 @@ CREATE TABLE ofarm.migration_runner_probe (
     value pg_catalog.text NOT NULL
 );
 """
+    existing_routine_identities = {
+        ("create_tenant_challenge", ()),
+        ("current_tenant_id", ()),
+        ("current_backend_start", ()),
+        (
+            "backend_incarnation_is_live",
+            ("integer", "timestamp with time zone"),
+        ),
+        ("validate_promotion_edge", ()),
+        ("require_promotion_reachability", ()),
+        ("take_tenant_write_lock", ()),
+    }
+    sealer = TENANT_PROVISIONING_SPEC.tenant_initial_owner_sealer
+    assert sealer is not None
+    for transfer in sealer.transfers:
+        identity = (transfer.function_name, transfer.argument_types)
+        if identity in existing_routine_identities:
+            continue
+        source += (
+            f"""
+CREATE FUNCTION {transfer.qualified_identity}
+RETURNS pg_catalog.void
+LANGUAGE sql VOLATILE PARALLEL UNSAFE SECURITY INVOKER
+SET search_path = pg_catalog, pg_temp
+AS 'SELECT pg_catalog.pg_sleep(0)';
+"""
+        ).encode("ascii")
+    return source
 
 
 def _run(
@@ -576,6 +604,11 @@ def test_applies_exact_0001_then_verifies_a_noop_without_creating_the_ledger(
             "SELECT pg_catalog.to_regprocedure("
             "'ofarm_infrastructure.seal_tenant_routine_owners()') IS NULL"
         ).fetchone() == (True,)
+        sealer = TENANT_PROVISIONING_SPEC.tenant_initial_owner_sealer
+        assert sealer is not None
+        transfer_names = sorted(
+            {transfer.function_name for transfer in sealer.transfers}
+        )
         assert connection.execute(
             """
             SELECT routine.proname::text,
@@ -586,36 +619,18 @@ def test_applies_exact_0001_then_verifies_a_noop_without_creating_the_ledger(
                  ON namespace.oid = routine.pronamespace
             JOIN pg_catalog.pg_roles AS owner ON owner.oid = routine.proowner
             WHERE namespace.nspname = 'ofarm'
-              AND routine.proname = ANY (
-                  ARRAY[
-                      'backend_incarnation_is_live',
-                      'create_tenant_challenge',
-                      'current_backend_start',
-                      'current_tenant_id',
-                      'require_promotion_reachability',
-                      'take_tenant_write_lock',
-                      'validate_promotion_edge'
-                  ]::text[]
-              )
+              AND routine.proname = ANY (%s::text[])
             ORDER BY 1, 2
-            """
-        ).fetchall() == [
+            """,
+            (transfer_names,),
+        ).fetchall() == sorted(
             (
-                "backend_incarnation_is_live",
-                "integer, timestamp with time zone",
-                "ofarm_backend_observer",
-            ),
-            ("create_tenant_challenge", "", "ofarm_binder"),
-            ("current_backend_start", "", "ofarm_backend_observer"),
-            ("current_tenant_id", "", "ofarm_binder"),
-            (
-                "require_promotion_reachability",
-                "",
-                "ofarm_graph_validator",
-            ),
-            ("take_tenant_write_lock", "", "ofarm_tenant_lock_owner"),
-            ("validate_promotion_edge", "", "ofarm_graph_validator"),
-        ]
+                transfer.function_name,
+                transfer.identity_arguments,
+                transfer.owner_role,
+            )
+            for transfer in sealer.transfers
+        )
     assert _ledger_rows(tenant_target) == [
         (
             1,
@@ -1072,6 +1087,53 @@ def test_same_named_ledger_trigger_with_false_predicate_refuses(
 
     with pytest.raises(MigrationDirtyError, match="triggers differ"):
         _run(tenant_target, migration_set)
+
+
+def test_create_then_drop_ledger_rule_restores_verified_noop(
+    tenant_target: _TenantTarget,
+    tmp_path: Path,
+):
+    migration_set = _load_synthetic_set(
+        tmp_path,
+        {"0001_initial.sql": _initial_source()},
+    )
+    first = _run(tenant_target, migration_set)
+    with psycopg.connect(
+        tenant_target.target_admin_dsn,
+        autocommit=True,
+    ) as connection:
+        connection.execute(
+            "CREATE RULE migration_rule_probe AS ON INSERT "
+            "TO ofarm.schema_migration DO ALSO NOTHING"
+        )
+
+    with pytest.raises(MigrationDirtyError, match="relation posture differs"):
+        _run(tenant_target, migration_set)
+
+    with psycopg.connect(
+        tenant_target.target_admin_dsn,
+        autocommit=True,
+    ) as connection:
+        connection.execute(
+            "DROP RULE migration_rule_probe ON ofarm.schema_migration"
+        )
+        assert connection.execute(
+            """
+            SELECT relation.relhasrules,
+                   EXISTS (
+                       SELECT 1
+                       FROM pg_catalog.pg_rewrite AS relation_rule
+                       WHERE relation_rule.ev_class = relation.oid
+                   )
+            FROM pg_catalog.pg_class AS relation
+            WHERE relation.oid = 'ofarm.schema_migration'::pg_catalog.regclass
+            """
+        ).fetchone() == (True, False)
+
+    report = _run(tenant_target, migration_set)
+    assert report.applied_versions == ()
+    assert report.verified_noop is True
+    assert report.observed_head_execution_id == first.observed_head_execution_id
 
 
 @pytest.mark.parametrize(

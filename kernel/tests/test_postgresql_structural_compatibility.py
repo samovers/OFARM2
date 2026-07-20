@@ -591,6 +591,82 @@ def test_public_structural_observation_refuses_post_migration_rewrite_rule(
 
 
 @pytest.mark.parametrize("lane", ("tenant", "security-audit"))
+def test_public_structural_observation_restores_after_backend_view_trigger(
+    structural_pair: _StructuralPair,
+    lane: str,
+):
+    if lane == "tenant":
+        target_dsn = structural_pair.tenant_target_admin_dsn
+        structural_dsn = structural_pair.tenant_readiness_dsn
+    else:
+        target_dsn = structural_pair.audit_target_admin_dsn
+        structural_dsn = structural_pair.audit_readiness_dsn
+
+    try:
+        with psycopg.connect(target_dsn, autocommit=True) as admin:
+            admin.execute(
+                """
+                CREATE FUNCTION public.ofarm_backend_view_trigger_probe()
+                RETURNS pg_catalog.trigger
+                LANGUAGE plpgsql
+                SET search_path = pg_catalog, pg_temp
+                AS 'BEGIN RETURN NEW; END'
+                """
+            )
+            admin.execute(
+                """
+                CREATE TRIGGER ofarm_backend_view_trigger_probe
+                INSTEAD OF INSERT ON pg_catalog.pg_stat_activity
+                FOR EACH ROW EXECUTE FUNCTION
+                    public.ofarm_backend_view_trigger_probe()
+                """
+            )
+
+        with pytest.raises(PostgreSQLVerificationError):
+            if lane == "tenant":
+                verify_tenant_structural_compatibility(
+                    tenant_structural_dsn=structural_dsn
+                )
+            else:
+                verify_security_audit_structural_compatibility(
+                    audit_structural_dsn=structural_dsn
+                )
+    finally:
+        with psycopg.connect(target_dsn, autocommit=True) as admin:
+            admin.execute(
+                "DROP TRIGGER IF EXISTS ofarm_backend_view_trigger_probe "
+                "ON pg_catalog.pg_stat_activity"
+            )
+            admin.execute(
+                "DROP FUNCTION IF EXISTS "
+                "public.ofarm_backend_view_trigger_probe()"
+            )
+
+    with psycopg.connect(target_dsn, autocommit=True) as admin:
+        assert admin.execute(
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM pg_catalog.pg_trigger AS relation_trigger
+                WHERE relation_trigger.tgrelid =
+                    'pg_catalog.pg_stat_activity'::pg_catalog.regclass
+            )
+            """
+        ).fetchone() == (False,)
+
+    if lane == "tenant":
+        restored = verify_tenant_structural_compatibility(
+            tenant_structural_dsn=structural_dsn
+        )
+        assert restored.service_identity == TENANT_SERVICE.identity
+    else:
+        restored = verify_security_audit_structural_compatibility(
+            audit_structural_dsn=structural_dsn
+        )
+        assert restored.service_identity == SECURITY_AUDIT_SERVICE.identity
+
+
+@pytest.mark.parametrize("lane", ("tenant", "security-audit"))
 def test_public_structural_observation_refuses_database_wide_setting(
     structural_pair: _StructuralPair,
     lane: str,

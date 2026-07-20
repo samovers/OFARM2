@@ -2427,7 +2427,11 @@ BEGIN
                 tablespace.spcname,
                 class.relrowsecurity,
                 class.relforcerowsecurity,
-                class.relhasrules,
+                EXISTS (
+                    SELECT 1
+                    FROM pg_catalog.pg_rewrite AS relation_rule
+                    WHERE relation_rule.ev_class = class.oid
+                ),
                 class.relreplident,
                 class.relispartition,
                 class.reloptions,
@@ -2983,10 +2987,26 @@ BEGIN
                 class.relispartition,
                 class.relrowsecurity,
                 class.relforcerowsecurity,
-                class.relhasrules,
-                class.relhastriggers,
-                class.relhassubclass,
-                class.relhasindex,
+                EXISTS (
+                    SELECT 1
+                    FROM pg_catalog.pg_rewrite AS relation_rule
+                    WHERE relation_rule.ev_class = class.oid
+                ),
+                EXISTS (
+                    SELECT 1
+                    FROM pg_catalog.pg_trigger AS relation_trigger
+                    WHERE relation_trigger.tgrelid = class.oid
+                ),
+                EXISTS (
+                    SELECT 1
+                    FROM pg_catalog.pg_inherits AS relation_child
+                    WHERE relation_child.inhparent = class.oid
+                ),
+                EXISTS (
+                    SELECT 1
+                    FROM pg_catalog.pg_index AS relation_index
+                    WHERE relation_index.indrelid = class.oid
+                ),
                 class.relnatts,
                 class.relchecks,
                 class.relreplident,

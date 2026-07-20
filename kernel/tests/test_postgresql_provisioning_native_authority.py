@@ -230,7 +230,7 @@ def test_tenant_manifest_fails_closed_on_missing_or_stale_authority(
         TENANT_PROVISIONING_SPEC.manifest()
 
 
-def test_full_schema_rejects_self_consistent_but_incomplete_frozen_pair(
+def test_full_schema_rejects_digest_linked_but_incomplete_frozen_pair(
     tmp_path: Path,
 ) -> None:
     source_copy = tmp_path / "native-source"
@@ -267,7 +267,7 @@ def test_full_schema_rejects_self_consistent_but_incomplete_frozen_pair(
         )
 
     assert isinstance(raised.value.__cause__, NativeReleaseIdentityError)
-    assert "platform inventory" in str(raised.value.__cause__)
+    assert "canonical index identity fields" in str(raised.value.__cause__)
 
 
 def test_validated_provisional_documents_remain_bootstrap_only(

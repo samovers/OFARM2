@@ -2191,6 +2191,11 @@
       "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_create_then_drop_ledger_rule_restores_verified_noop",
+      "sourceModule": "kernel.tests.test_postgresql_migration_runner",
+      "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_cross_service_set_is_rejected_before_target_writes",
       "sourceModule": "kernel.tests.test_postgresql_migration_runner",
       "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
@@ -2556,12 +2561,337 @@
       "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_conformance_environment_carries_release_status_and_exact_metadata",
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_conformance_environment_carries_release_status_and_exact_archive",
       "sourceModule": "kernel.tests.test_postgresql_native_evidence",
       "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_duplicate_metadata_key_refuses",
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_direct_oci_archive_authenticates_exact_runtime_child[linux/amd64]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_direct_oci_archive_authenticates_exact_runtime_child[linux/arm64]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_direct_oci_archive_refuses_ambiguous_or_unauthenticated_inputs[mutation0-one direct runtime child]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_direct_oci_archive_refuses_ambiguous_or_unauthenticated_inputs[mutation1-does not directly reference]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_direct_oci_archive_refuses_ambiguous_or_unauthenticated_inputs[mutation10-attestation]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_direct_oci_archive_refuses_ambiguous_or_unauthenticated_inputs[mutation11-plain image]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_direct_oci_archive_refuses_ambiguous_or_unauthenticated_inputs[mutation12-plain image]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_direct_oci_archive_refuses_ambiguous_or_unauthenticated_inputs[mutation13-plain image]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_direct_oci_archive_refuses_ambiguous_or_unauthenticated_inputs[mutation14-plain image]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_direct_oci_archive_refuses_ambiguous_or_unauthenticated_inputs[mutation15-does not authenticate]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_direct_oci_archive_refuses_ambiguous_or_unauthenticated_inputs[mutation16-does not authenticate]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_direct_oci_archive_refuses_ambiguous_or_unauthenticated_inputs[mutation17-does not authenticate]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_direct_oci_archive_refuses_ambiguous_or_unauthenticated_inputs[mutation18-absent]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_direct_oci_archive_refuses_ambiguous_or_unauthenticated_inputs[mutation19-absent]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_direct_oci_archive_refuses_ambiguous_or_unauthenticated_inputs[mutation2-descriptor platform]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_direct_oci_archive_refuses_ambiguous_or_unauthenticated_inputs[mutation20-absent]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_direct_oci_archive_refuses_ambiguous_or_unauthenticated_inputs[mutation21-does not authenticate]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_direct_oci_archive_refuses_ambiguous_or_unauthenticated_inputs[mutation22-does not authenticate]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_direct_oci_archive_refuses_ambiguous_or_unauthenticated_inputs[mutation23-does not authenticate]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_direct_oci_archive_refuses_ambiguous_or_unauthenticated_inputs[mutation24-unreferenced blob]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_direct_oci_archive_refuses_ambiguous_or_unauthenticated_inputs[mutation25-duplicate object key]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_direct_oci_archive_refuses_ambiguous_or_unauthenticated_inputs[mutation26-duplicate object key]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_direct_oci_archive_refuses_ambiguous_or_unauthenticated_inputs[mutation27-duplicate object key]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_direct_oci_archive_refuses_ambiguous_or_unauthenticated_inputs[mutation28-unsafe member name]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_direct_oci_archive_refuses_ambiguous_or_unauthenticated_inputs[mutation3-descriptor platform]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_direct_oci_archive_refuses_ambiguous_or_unauthenticated_inputs[mutation4-config platform]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_direct_oci_archive_refuses_ambiguous_or_unauthenticated_inputs[mutation5-does not directly reference]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_direct_oci_archive_refuses_ambiguous_or_unauthenticated_inputs[mutation6-plain image]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_direct_oci_archive_refuses_ambiguous_or_unauthenticated_inputs[mutation7-config media type]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_direct_oci_archive_refuses_ambiguous_or_unauthenticated_inputs[mutation8-layer media type]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_direct_oci_archive_refuses_ambiguous_or_unauthenticated_inputs[mutation9-attestation]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_docker_transport_archive_binds_the_exact_loadable_image[linux/amd64-ofarm-ed25519-amd64:first]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_docker_transport_archive_binds_the_exact_loadable_image[linux/amd64-ofarm-postgresql-conformance:local]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_docker_transport_archive_binds_the_exact_loadable_image[linux/arm64-ofarm-ed25519-arm64:second]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_docker_transport_archive_keeps_the_hostile_oci_dag_checks[mutation0-does not authenticate]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_docker_transport_archive_keeps_the_hostile_oci_dag_checks[mutation1-does not authenticate]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_docker_transport_archive_keeps_the_hostile_oci_dag_checks[mutation2-unreferenced blob]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_docker_transport_archive_keeps_the_hostile_oci_dag_checks[mutation3-attestation]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_docker_transport_archive_refuses_an_ambiguous_wrapper[duplicate-json-duplicate object key]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_docker_transport_archive_refuses_an_ambiguous_wrapper[extra-entry-must contain one entry]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_docker_transport_archive_refuses_an_ambiguous_wrapper[extra-file-unexpected file]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_docker_transport_archive_refuses_an_ambiguous_wrapper[extra-key-fields are not exact]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_docker_transport_archive_refuses_an_ambiguous_wrapper[extra-tag-does not bind]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_docker_transport_archive_refuses_an_ambiguous_wrapper[malformed-not valid JSON]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_docker_transport_archive_refuses_an_ambiguous_wrapper[missing-is absent]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_docker_transport_archive_refuses_an_ambiguous_wrapper[missing-key-fields are not exact]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_docker_transport_archive_refuses_an_ambiguous_wrapper[nonobject-entry-must be a JSON object]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_docker_transport_archive_refuses_an_ambiguous_wrapper[oversize-exceeds its byte limit]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_docker_transport_archive_refuses_an_ambiguous_wrapper[reordered-layers-does not bind]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_docker_transport_archive_refuses_an_ambiguous_wrapper[symlink-non-regular member]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_docker_transport_archive_refuses_an_ambiguous_wrapper[top-object-must contain one entry]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_docker_transport_archive_refuses_an_ambiguous_wrapper[wrong-config-does not bind]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_docker_transport_archive_refuses_an_ambiguous_wrapper[wrong-layer-does not bind]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_docker_transport_archive_refuses_an_ambiguous_wrapper[wrong-tag-does not bind]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_docker_transport_archive_requires_oci_media_types_and_a_known_tag",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_finalizer_refuses_an_unapproved_historical_candidate_before_github",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_frozen_conformance_environment_refuses_a_different_valid_archive",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_frozen_receipt_refuses_every_partial_historical_marker_set[False-False-True]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_frozen_receipt_refuses_every_partial_historical_marker_set[False-True-False]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_frozen_receipt_refuses_every_partial_historical_marker_set[False-True-True]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_frozen_receipt_refuses_every_partial_historical_marker_set[True-False-False]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_frozen_receipt_refuses_every_partial_historical_marker_set[True-False-True]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_frozen_receipt_refuses_every_partial_historical_marker_set[True-True-False]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_frozen_receipt_refuses_inexact_complete_historical_tuple[candidate-digest]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_frozen_receipt_refuses_inexact_complete_historical_tuple[run-attempt]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_frozen_receipt_refuses_nonhistorical_authority_mismatch",
       "sourceModule": "kernel.tests.test_postgresql_native_evidence",
       "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
     },
@@ -2576,12 +2906,22 @@
       "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_frozen_receipt_refuses_provider_verification_mutation[<lambda>-bundle URL is not exact]",
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_frozen_receipt_refuses_provider_verification_mutation[<lambda>-immutable releases were not enabled]",
       "sourceModule": "kernel.tests.test_postgresql_native_evidence",
       "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_frozen_receipt_refuses_provider_verification_mutation[<lambda>-immutable releases were not enabled]",
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_frozen_receipt_refuses_provider_verification_mutation[<lambda>-owner identity is not exact]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_frozen_receipt_refuses_provider_verification_mutation[<lambda>-pinned-CLI transport metadata is not exact0]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_frozen_receipt_refuses_provider_verification_mutation[<lambda>-pinned-CLI transport metadata is not exact1]",
       "sourceModule": "kernel.tests.test_postgresql_native_evidence",
       "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
     },
@@ -2596,7 +2936,17 @@
       "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_frozen_receipt_refuses_provider_verification_mutation[<lambda>-repository/tag predicate is inconsistent]",
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_frozen_receipt_refuses_provider_verification_mutation[<lambda>-repository/tag predicate is inconsistent0]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_frozen_receipt_refuses_provider_verification_mutation[<lambda>-repository/tag predicate is inconsistent1]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_frozen_receipt_refuses_provider_verification_mutation[<lambda>-repository/tag predicate is inconsistent2]",
       "sourceModule": "kernel.tests.test_postgresql_native_evidence",
       "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
     },
@@ -2612,6 +2962,11 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_frozen_receipt_refuses_provider_verification_mutation[<lambda>-result fields are not exact]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_frozen_receipt_refuses_provider_verification_mutation[<lambda>-statement type is not exact]",
       "sourceModule": "kernel.tests.test_postgresql_native_evidence",
       "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
     },
@@ -2647,6 +3002,11 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_frozen_receipt_refuses_provider_verification_mutation[_replace_one_asset_command_bundle-differs from the verified release attestation]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_frozen_receipt_refuses_v2_candidate_downgrade",
       "sourceModule": "kernel.tests.test_postgresql_native_evidence",
       "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
     },
@@ -2706,6 +3066,11 @@
       "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_historical_receipt_refuses_snapshot_swap_even_with_recomputed_link",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_hosted_fan_in_emits_one_frozen_candidate_identity",
       "sourceModule": "kernel.tests.test_postgresql_native_evidence",
       "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
@@ -2717,11 +3082,6 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_installed_artifact_mode_is_absolute_not_merely_equal",
-      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
-      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_metadata_index_digest_cannot_pose_as_runtime_child",
       "sourceModule": "kernel.tests.test_postgresql_native_evidence",
       "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
     },
@@ -2956,7 +3316,12 @@
       "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_symlinked_build_metadata_refuses",
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_symlinked_clean_build_archive_refuses",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_two_clean_builds_refuse_different_runtime_dags",
       "sourceModule": "kernel.tests.test_postgresql_native_evidence",
       "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
     },
@@ -3196,7 +3561,7 @@
       "sourcePath": "kernel/tests/test_postgresql_provisioning_native_authority.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_provisioning_native_authority.py::test_full_schema_rejects_self_consistent_but_incomplete_frozen_pair",
+      "nodeid": "kernel/tests/test_postgresql_provisioning_native_authority.py::test_full_schema_rejects_digest_linked_but_incomplete_frozen_pair",
       "sourceModule": "kernel.tests.test_postgresql_provisioning_native_authority",
       "sourcePath": "kernel/tests/test_postgresql_provisioning_native_authority.py"
     },
@@ -3642,6 +4007,16 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_structural_compatibility.py::test_public_structural_observation_refuses_rogue_schema_and_grant[tenant]",
+      "sourceModule": "kernel.tests.test_postgresql_structural_compatibility",
+      "sourcePath": "kernel/tests/test_postgresql_structural_compatibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_structural_compatibility.py::test_public_structural_observation_restores_after_backend_view_trigger[security-audit]",
+      "sourceModule": "kernel.tests.test_postgresql_structural_compatibility",
+      "sourcePath": "kernel/tests/test_postgresql_structural_compatibility.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_structural_compatibility.py::test_public_structural_observation_restores_after_backend_view_trigger[tenant]",
       "sourceModule": "kernel.tests.test_postgresql_structural_compatibility",
       "sourcePath": "kernel/tests/test_postgresql_structural_compatibility.py"
     },
@@ -6726,8 +7101,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "188cc3c522d04140212a39b178afaa7c08e103edf61e03ccf23f6fba563f231d",
-  "entryCount": 1345,
+  "entriesSha256": "e92f026c3b8f34bfb0a9a70ee660a0fe1e404be34589d325662155e935846e0c",
+  "entryCount": 1420,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

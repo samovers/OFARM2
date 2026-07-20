@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from deployment.postgresql import native_evidence
+from deployment.postgresql import native_evidence, native_release_identity
 from deployment.postgresql.native_evidence import (
     CURRENT_NATIVE_ACTION_PINS,
     CURRENT_NATIVE_BUILD_PINS,
@@ -35,6 +35,7 @@ from deployment.postgresql.native_release_identity import (
     EVIDENCE_RECEIPT_PATH,
     NATIVE_SOURCE_PATHS,
     NATIVE_RELEASE_GITHUB_CLI_VERSION_OUTPUT,
+    NATIVE_RELEASE_OWNER_ID,
     NATIVE_RELEASE_REPOSITORY,
     NATIVE_RELEASE_REPOSITORY_API_URL,
     NATIVE_RELEASE_REPOSITORY_ID,
@@ -42,6 +43,8 @@ from deployment.postgresql.native_release_identity import (
     NATIVE_RELEASE_REPOSITORY_URL,
     PACKAGE_ROOT as RELEASE_PACKAGE_ROOT,
     SOURCE_DIRECTORY,
+    NativeEvidenceReceipt,
+    NativeReleaseIdentity,
     NativeReleaseIdentityError,
     canonical_json_bytes as release_canonical_json_bytes,
     evidence_authority_input_manifest,
@@ -68,6 +71,28 @@ PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 
 def _digest(data: bytes) -> str:
     return "sha256:" + hashlib.sha256(data).hexdigest()
+
+
+def _candidate_digest_from_frozen(document: dict[str, object]) -> str:
+    candidate = json.loads(release_canonical_json_bytes(document))
+    candidate.pop("candidateReceiptDigest")
+    candidate.pop("verificationAuthorityInput")
+    candidate["schemaVersion"] = native_release_identity.EVIDENCE_RECEIPT_SCHEMA_V1
+    candidate["status"] = "candidate"
+    candidate["preservation"]["status"] = "pending"
+    candidate["preservation"]["providerVerification"] = None
+    return _digest(release_canonical_json_bytes(candidate))
+
+
+def _different_authority_snapshot(value: dict[str, object]) -> dict[str, object]:
+    authority = json.loads(release_canonical_json_bytes(value))
+    authority["files"][0]["sha256"] = "sha256:" + "0" * 64
+    authority_body = {
+        "algorithm": authority["algorithm"],
+        "files": authority["files"],
+    }
+    authority["digest"] = _digest(release_canonical_json_bytes(authority_body))
+    return authority
 
 
 def _json_bytes(value: object) -> bytes:
@@ -530,11 +555,12 @@ def _github_release_verification_document(
     statement = {
         "_type": "https://in-toto.io/Statement/v1",
         "subject": subjects,
-        "predicateType": "https://in-toto.io/attestation/release/v0.1",
+        "predicateType": "https://in-toto.io/attestation/release/v0.2",
         "predicate": {
-            "ownerId": "12345",
+            "databaseId": str(release_id),
+            "ownerId": NATIVE_RELEASE_OWNER_ID,
+            "packageId": str(NATIVE_RELEASE_REPOSITORY_ID),
             "purl": purl,
-            "releaseId": str(release_id),
             "repository": NATIVE_RELEASE_REPOSITORY,
             "repositoryId": str(NATIVE_RELEASE_REPOSITORY_ID),
             "tag": tag,
@@ -572,18 +598,8 @@ def _github_release_verification_document(
                     ],
                 },
             },
-            "bundle_url": (
-                "https://tmaproduction.blob.core.windows.net/attestations/"
-                f"{NATIVE_RELEASE_REPOSITORY_ID}/2026/07/19/12345.json.sn?"
-                "se=2026-07-20T00%3A00%3A00Z&sig=Zml4dHVyZQ%3D%3D&"
-                "ske=2026-07-20T00%3A00%3A00Z&"
-                "skoid=11111111-1111-4111-8111-111111111111&sks=b&"
-                "skt=2026-07-19T00%3A00%3A00Z&"
-                "sktid=22222222-2222-4222-8222-222222222222&"
-                "skv=2026-06-06&sp=r&spr=https&sr=b&"
-                "st=2026-07-19T00%3A00%3A00Z&sv=2026-06-06"
-            ),
-            "initiator": "github",
+            "bundle_url": "",
+            "initiator": "",
         },
         "verificationResult": {
             "mediaType": (
@@ -756,6 +772,36 @@ def _install_github_release_fixture(
     return state, calls
 
 
+def _prepare_frozen_receipt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[NativeReleaseIdentity, NativeEvidenceReceipt, Path]:
+    candidate_identity_path, candidate_receipt_path, _, _, _ = _prepare_candidate(
+        tmp_path
+    )
+    _install_github_release_fixture(monkeypatch, candidate_receipt_path)
+    frozen_path = tmp_path / "frozen-receipt.json"
+    finalize_evidence_receipt(
+        release_identity_path=candidate_identity_path,
+        candidate_receipt_path=candidate_receipt_path,
+        source_directory=SOURCE_DIRECTORY,
+        repository_root=RELEASE_PACKAGE_ROOT,
+        output=frozen_path,
+    )
+    identity = load_native_release_identity(
+        candidate_identity_path,
+        verify_current_sources=True,
+        source_directory=SOURCE_DIRECTORY,
+    )
+    receipt = load_native_evidence_receipt(
+        frozen_path,
+        release_identity=identity,
+        verify_current_authority=True,
+        repository_root=RELEASE_PACKAGE_ROOT,
+    )
+    return identity, receipt, frozen_path
+
+
 def _fixture_section(
     state: dict[str, object], section: str
 ) -> dict[str, object]:
@@ -829,6 +875,32 @@ def _replace_release_predicate(statement: dict[str, object]) -> None:
     predicate = statement["predicate"]
     assert isinstance(predicate, dict)
     predicate["repository"] = "attacker/OFARM2"
+
+
+def _replace_release_predicate_version(statement: dict[str, object]) -> None:
+    statement["predicateType"] = "https://in-toto.io/attestation/release/v0.1"
+    predicate = statement["predicate"]
+    assert isinstance(predicate, dict)
+    predicate["releaseId"] = predicate.pop("packageId")
+    predicate.pop("databaseId")
+
+
+def _replace_release_database_id(statement: dict[str, object]) -> None:
+    predicate = statement["predicate"]
+    assert isinstance(predicate, dict)
+    predicate["databaseId"] = "1"
+
+
+def _replace_release_package_id(statement: dict[str, object]) -> None:
+    predicate = statement["predicate"]
+    assert isinstance(predicate, dict)
+    predicate["packageId"] = "1"
+
+
+def _replace_release_owner_id(statement: dict[str, object]) -> None:
+    predicate = statement["predicate"]
+    assert isinstance(predicate, dict)
+    predicate["ownerId"] = "1"
 
 
 def _rewrite_provider_verified_results(
@@ -908,9 +980,11 @@ def _replace_verified_timestamp_encoding(
 
 
 def _replace_bundle_url(document: dict[str, object]) -> None:
-    document["attestation"]["bundle_url"] = (
-        "https://attacker.example.test/attestations/fixture?sig=hostile"
-    )
+    document["attestation"]["bundle_url"] = "https://attacker.example.test"
+
+
+def _replace_initiator(document: dict[str, object]) -> None:
+    document["attestation"]["initiator"] = "github"
 
 
 def _replace_one_asset_command_bundle(provider: dict[str, object]) -> None:
@@ -1889,13 +1963,18 @@ def test_checked_native_evidence_receipt_matches_current_authority() -> None:
         item["path"]
         for item in receipt.document["evidenceAuthorityInput"]["files"]
     ] == list(EVIDENCE_AUTHORITY_PATHS)
-    assert receipt.document["evidenceAuthorityInput"] == (
-        evidence_authority_input_manifest(RELEASE_PACKAGE_ROOT)
-    )
     if receipt.status == "provisional":
+        assert receipt.document["evidenceAuthorityInput"] == (
+            evidence_authority_input_manifest(RELEASE_PACKAGE_ROOT)
+        )
         assert receipt.document["buildRun"] is None
         assert receipt.document["platforms"] == []
         assert receipt.document["preservation"] is None
+    else:
+        assert receipt.status == "frozen"
+        assert receipt.document["verificationAuthorityInput"] == (
+            evidence_authority_input_manifest(RELEASE_PACKAGE_ROOT)
+        )
 
 
 def test_native_release_identity_refuses_source_drift(tmp_path: Path) -> None:
@@ -2136,6 +2215,38 @@ def test_hosted_fan_in_emits_one_frozen_candidate_identity(tmp_path: Path) -> No
     ]
 
 
+def test_finalizer_refuses_an_unapproved_historical_candidate_before_github(
+    tmp_path: Path,
+) -> None:
+    candidate_identity_path, candidate_receipt_path, _, _, _ = _prepare_candidate(
+        tmp_path
+    )
+    candidate = json.loads(candidate_receipt_path.read_bytes())
+    authority = candidate["evidenceAuthorityInput"]
+    authority["files"][0]["sha256"] = "sha256:" + "0" * 64
+    authority_body = {
+        "algorithm": authority["algorithm"],
+        "files": authority["files"],
+    }
+    authority["digest"] = _digest(release_canonical_json_bytes(authority_body))
+    candidate_receipt_path.write_bytes(release_canonical_json_bytes(candidate))
+    output = tmp_path / "must-not-exist.json"
+
+    with pytest.raises(
+        NativeEvidenceError,
+        match="historical candidate evidence authority is not the exact v1 migration",
+    ):
+        finalize_evidence_receipt(
+            release_identity_path=candidate_identity_path,
+            candidate_receipt_path=candidate_receipt_path,
+            source_directory=SOURCE_DIRECTORY,
+            repository_root=RELEASE_PACKAGE_ROOT,
+            output=output,
+        )
+
+    assert not output.exists()
+
+
 def test_immutable_github_release_freezes_durable_receipt_and_blocks_replacement(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -2176,10 +2287,22 @@ def test_immutable_github_release_freezes_durable_receipt_and_blocks_replacement
     assert result["status"] == "frozen"
     assert result["release_identity_digest"] == identity.digest
     assert frozen_receipt.status == "frozen"
+    assert frozen_receipt.document["schemaVersion"] == (
+        "ofarm.native-verifier-evidence-receipt.v2"
+    )
+    assert frozen_receipt.document["candidateReceiptDigest"] == _digest(
+        candidate_receipt_path.read_bytes()
+    )
+    assert frozen_receipt.document["verificationAuthorityInput"] == (
+        evidence_authority_input_manifest(RELEASE_PACKAGE_ROOT)
+    )
+    assert frozen_receipt.document["evidenceAuthorityInput"] == (
+        frozen_receipt.document["verificationAuthorityInput"]
+    )
     assert frozen_receipt.document["preservation"]["status"] == "verified"
     provider = frozen_receipt.document["preservation"]["providerVerification"]
     assert provider["schemaVersion"] == (
-        "ofarm.github-release-provider-verification.v1"
+        "ofarm.github-release-provider-verification.v2"
     )
     assert provider["canonicalDigest"] == _digest(
         release_canonical_json_bytes(provider["metadata"])
@@ -2207,6 +2330,81 @@ def test_immutable_github_release_freezes_durable_receipt_and_blocks_replacement
     assert set(_state["githubCliPaths"]) == {Path("/fixture/gh-2.96.0")}
     assert _state["downloadDirectoryWasEmpty"] is True
     assert not _state["downloadDirectory"].exists()
+
+    mutated = frozen_receipt.manifest()
+    mutated["candidateReceiptDigest"] = "sha256:" + "0" * 64
+    mutated_path = tmp_path / "mutated-candidate-link.json"
+    mutated_path.write_bytes(release_canonical_json_bytes(mutated))
+    with pytest.raises(
+        NativeReleaseIdentityError,
+        match="does not bind its candidate",
+    ):
+        load_native_evidence_receipt(
+            mutated_path,
+            release_identity=identity,
+            verify_current_authority=True,
+            repository_root=RELEASE_PACKAGE_ROOT,
+        )
+
+    mutated_candidate_content = frozen_receipt.manifest()
+    mutated_candidate_content["evidenceAuthorityInput"] = (
+        _different_authority_snapshot(
+            mutated_candidate_content["evidenceAuthorityInput"]
+        )
+    )
+    mutated_candidate_path = tmp_path / "mutated-candidate-content.json"
+    mutated_candidate_path.write_bytes(
+        release_canonical_json_bytes(mutated_candidate_content)
+    )
+    with pytest.raises(
+        NativeReleaseIdentityError,
+        match="does not bind its candidate",
+    ):
+        load_native_evidence_receipt(
+            mutated_candidate_path,
+            release_identity=identity,
+            verify_current_authority=True,
+            repository_root=RELEASE_PACKAGE_ROOT,
+        )
+
+    downgraded = frozen_receipt.manifest()
+    downgraded.pop("candidateReceiptDigest")
+    downgraded.pop("verificationAuthorityInput")
+    downgraded["schemaVersion"] = "ofarm.native-verifier-evidence-receipt.v1"
+    downgraded_path = tmp_path / "downgraded-frozen.json"
+    downgraded_path.write_bytes(release_canonical_json_bytes(downgraded))
+    with pytest.raises(NativeReleaseIdentityError, match="fields are not exact"):
+        load_native_evidence_receipt(
+            downgraded_path,
+            release_identity=identity,
+        )
+
+    candidate_v1 = frozen_receipt.manifest()
+    candidate_v1.pop("candidateReceiptDigest")
+    candidate_v1.pop("verificationAuthorityInput")
+    candidate_v1["schemaVersion"] = (
+        native_release_identity.EVIDENCE_RECEIPT_SCHEMA_V1
+    )
+    candidate_v1["status"] = "candidate"
+    candidate_v1["preservation"]["status"] = "pending"
+    candidate_v1["preservation"]["providerVerification"] = None
+    candidate_v1_path = tmp_path / "valid-candidate-v1.json"
+    candidate_v1_path.write_bytes(release_canonical_json_bytes(candidate_v1))
+    with pytest.raises(
+        NativeReleaseIdentityError,
+        match="candidate evidence receipt cannot be checked as frozen authority",
+    ):
+        load_native_evidence_receipt(
+            candidate_v1_path,
+            release_identity=identity,
+        )
+    explicit_candidate = load_native_evidence_receipt(
+        candidate_v1_path,
+        release_identity=identity,
+        allow_candidate=True,
+    )
+    assert explicit_candidate.status == "candidate"
+
     download_call = next(
         call for call in calls if call[0:2] == ("release", "download")
     )
@@ -2234,6 +2432,209 @@ def test_immutable_github_release_freezes_durable_receipt_and_blocks_replacement
     assert fresh_receipt.status == "frozen"
     assert fresh_receipt_path.read_bytes() == frozen_receipt_path.read_bytes()
     assert fresh_receipt.document["releaseIdentityDigest"] == identity.digest
+
+
+def test_frozen_receipt_refuses_nonhistorical_authority_mismatch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    identity, receipt, _ = _prepare_frozen_receipt(tmp_path, monkeypatch)
+    mutated = receipt.manifest()
+    mutated["evidenceAuthorityInput"] = _different_authority_snapshot(
+        mutated["evidenceAuthorityInput"]
+    )
+    mutated["candidateReceiptDigest"] = _candidate_digest_from_frozen(mutated)
+    mutated_path = tmp_path / "nonhistorical-authority-mismatch.json"
+    mutated_path.write_bytes(release_canonical_json_bytes(mutated))
+
+    with pytest.raises(
+        NativeReleaseIdentityError,
+        match="build and verification authority snapshots differ",
+    ):
+        load_native_evidence_receipt(
+            mutated_path,
+            release_identity=identity,
+            verify_current_authority=True,
+            repository_root=RELEASE_PACKAGE_ROOT,
+        )
+
+
+@pytest.mark.parametrize(
+    ("identity_marker", "source_marker", "run_marker"),
+    [
+        (True, False, False),
+        (False, True, False),
+        (False, False, True),
+        (True, True, False),
+        (True, False, True),
+        (False, True, True),
+    ],
+)
+def test_frozen_receipt_refuses_every_partial_historical_marker_set(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    identity_marker: bool,
+    source_marker: bool,
+    run_marker: bool,
+) -> None:
+    identity, receipt, frozen_path = _prepare_frozen_receipt(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        native_release_identity,
+        "HISTORICAL_V1_RELEASE_IDENTITY_DIGEST",
+        identity.digest if identity_marker else "sha256:" + "f" * 64,
+    )
+    monkeypatch.setattr(
+        native_release_identity,
+        "HISTORICAL_V1_SOURCE_COMMIT",
+        SOURCE_COMMIT if source_marker else "2" * 40,
+    )
+    monkeypatch.setattr(
+        native_release_identity,
+        "HISTORICAL_V1_RUN_ID",
+        1 if run_marker else 2,
+    )
+    monkeypatch.setattr(
+        native_release_identity,
+        "HISTORICAL_V1_CANDIDATE_RECEIPT_DIGEST",
+        receipt.document["candidateReceiptDigest"],
+    )
+    monkeypatch.setattr(
+        native_release_identity,
+        "HISTORICAL_V1_RUN_ATTEMPT",
+        1,
+    )
+
+    with pytest.raises(
+        NativeReleaseIdentityError,
+        match="historical candidate authority is not the exact v1 migration",
+    ):
+        load_native_evidence_receipt(
+            frozen_path,
+            release_identity=identity,
+            verify_current_authority=True,
+            repository_root=RELEASE_PACKAGE_ROOT,
+        )
+
+
+@pytest.mark.parametrize("fault", ["candidate-digest", "run-attempt"])
+def test_frozen_receipt_refuses_inexact_complete_historical_tuple(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fault: str,
+) -> None:
+    identity, receipt, frozen_path = _prepare_frozen_receipt(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        native_release_identity,
+        "HISTORICAL_V1_RELEASE_IDENTITY_DIGEST",
+        identity.digest,
+    )
+    monkeypatch.setattr(
+        native_release_identity,
+        "HISTORICAL_V1_SOURCE_COMMIT",
+        SOURCE_COMMIT,
+    )
+    monkeypatch.setattr(native_release_identity, "HISTORICAL_V1_RUN_ID", 1)
+    monkeypatch.setattr(
+        native_release_identity,
+        "HISTORICAL_V1_CANDIDATE_RECEIPT_DIGEST",
+        (
+            "sha256:" + "f" * 64
+            if fault == "candidate-digest"
+            else receipt.document["candidateReceiptDigest"]
+        ),
+    )
+    monkeypatch.setattr(
+        native_release_identity,
+        "HISTORICAL_V1_RUN_ATTEMPT",
+        2 if fault == "run-attempt" else 1,
+    )
+
+    with pytest.raises(
+        NativeReleaseIdentityError,
+        match="historical candidate authority is not the exact v1 migration",
+    ):
+        load_native_evidence_receipt(
+            frozen_path,
+            release_identity=identity,
+            verify_current_authority=True,
+            repository_root=RELEASE_PACKAGE_ROOT,
+        )
+
+
+def test_historical_receipt_refuses_snapshot_swap_even_with_recomputed_link(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    identity, receipt, _ = _prepare_frozen_receipt(tmp_path, monkeypatch)
+    historical = receipt.manifest()
+    historical["evidenceAuthorityInput"] = _different_authority_snapshot(
+        historical["evidenceAuthorityInput"]
+    )
+    historical["candidateReceiptDigest"] = _candidate_digest_from_frozen(historical)
+    historical_path = tmp_path / "approved-historical-receipt.json"
+    historical_path.write_bytes(release_canonical_json_bytes(historical))
+
+    monkeypatch.setattr(
+        native_release_identity,
+        "HISTORICAL_V1_RELEASE_IDENTITY_DIGEST",
+        identity.digest,
+    )
+    monkeypatch.setattr(
+        native_release_identity,
+        "HISTORICAL_V1_SOURCE_COMMIT",
+        SOURCE_COMMIT,
+    )
+    monkeypatch.setattr(native_release_identity, "HISTORICAL_V1_RUN_ID", 1)
+    monkeypatch.setattr(native_release_identity, "HISTORICAL_V1_RUN_ATTEMPT", 1)
+    monkeypatch.setattr(
+        native_release_identity,
+        "HISTORICAL_V1_CANDIDATE_RECEIPT_DIGEST",
+        historical["candidateReceiptDigest"],
+    )
+
+    accepted = load_native_evidence_receipt(
+        historical_path,
+        release_identity=identity,
+        verify_current_authority=True,
+        repository_root=RELEASE_PACKAGE_ROOT,
+    )
+    assert accepted.document["evidenceAuthorityInput"] != (
+        accepted.document["verificationAuthorityInput"]
+    )
+
+    swapped = accepted.manifest()
+    swapped["evidenceAuthorityInput"] = swapped["verificationAuthorityInput"]
+    swapped["candidateReceiptDigest"] = _candidate_digest_from_frozen(swapped)
+    swapped_path = tmp_path / "swapped-historical-receipt.json"
+    swapped_path.write_bytes(release_canonical_json_bytes(swapped))
+    with pytest.raises(
+        NativeReleaseIdentityError,
+        match="historical candidate authority is not the exact v1 migration",
+    ):
+        load_native_evidence_receipt(
+            swapped_path,
+            release_identity=identity,
+            verify_current_authority=True,
+            repository_root=RELEASE_PACKAGE_ROOT,
+        )
+
+
+def test_frozen_receipt_refuses_v2_candidate_downgrade(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    identity, receipt, _ = _prepare_frozen_receipt(tmp_path, monkeypatch)
+    downgraded = receipt.manifest()
+    downgraded["status"] = "candidate"
+    downgraded_path = tmp_path / "v2-candidate.json"
+    downgraded_path.write_bytes(release_canonical_json_bytes(downgraded))
+
+    with pytest.raises(NativeReleaseIdentityError, match="fields are not exact"):
+        load_native_evidence_receipt(
+            downgraded_path,
+            release_identity=identity,
+            allow_candidate=True,
+        )
 
 
 def test_receipt_finalization_refuses_mutated_release_download(
@@ -2579,6 +2980,30 @@ def test_receipt_finalization_never_clobbers_a_concurrent_output(
             "repository/tag predicate is inconsistent",
         ),
         (
+            lambda provider: _rewrite_provider_verified_statements(
+                provider, _replace_release_predicate_version
+            ),
+            "statement type is not exact",
+        ),
+        (
+            lambda provider: _rewrite_provider_verified_statements(
+                provider, _replace_release_database_id
+            ),
+            "repository/tag predicate is inconsistent",
+        ),
+        (
+            lambda provider: _rewrite_provider_verified_statements(
+                provider, _replace_release_package_id
+            ),
+            "repository/tag predicate is inconsistent",
+        ),
+        (
+            lambda provider: _rewrite_provider_verified_statements(
+                provider, _replace_release_owner_id
+            ),
+            "owner identity is not exact",
+        ),
+        (
             lambda provider: _rewrite_provider_verified_results(
                 provider, _replace_verified_certificate_san
             ),
@@ -2606,7 +3031,13 @@ def test_receipt_finalization_never_clobbers_a_concurrent_output(
             lambda provider: _rewrite_provider_documents(
                 provider, _replace_bundle_url
             ),
-            "bundle URL is not exact",
+            "pinned-CLI transport metadata is not exact",
+        ),
+        (
+            lambda provider: _rewrite_provider_documents(
+                provider, _replace_initiator
+            ),
+            "pinned-CLI transport metadata is not exact",
         ),
         (
             _replace_one_asset_command_bundle,

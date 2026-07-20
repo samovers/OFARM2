@@ -29,6 +29,18 @@ release-identity digest. For both platforms it records the source image-index,
 attestation-manifest, SBOM, provenance, and OCI-archive digest and size, together
 with the exact builder, Actions run, source commit, build pins, and evidence
 authority source inventory. Actions artifacts are explicitly temporary inputs.
+The v1 candidate's `evidenceAuthorityInput` is the build-time authority
+snapshot. The v2 frozen receipt preserves that snapshot and adds a separate
+`verificationAuthorityInput` for the exact files that performed final Release
+verification. A v1 candidate remains non-authoritative and is accepted only by
+the explicit finalization path. Those snapshots must normally be identical. The
+only accepted historical mismatch is pinned to release identity
+`sha256:7aae043c84013e8f05b1729e2de23358486e57e661c170074d15d0b135225775`,
+source commit `cb25339b859aadf7d38be2ca0452511284cc8438`, Actions run
+`29717583674` attempt `1`, and v1 candidate-receipt digest
+`sha256:ddb70333297aeda15961fe4ab8d045e918a1f5d6e44645fe51940db1e4d13fa2`.
+Any partial or different historical tuple refuses.
+
 The durable archive location is a deterministic GitHub Release tag derived from
 the release-identity digest, with one exact asset name and URL per platform.
 Repository release immutability must be enabled before this tag is created. The
@@ -42,8 +54,13 @@ queries the fixed repository and requires its stable identity and immutable
 release setting, the exact published prerelease and peeled tag commit, and the
 exact two asset identities. It downloads both assets into a fresh temporary
 directory and requires GitHub's signed release and per-asset verification before
-writing the canonical frozen receipt. A wrong release, tag, target, filename,
-size, digest, download, attestation, or pre-existing different output refuses:
+writing the canonical frozen receipt. For pinned GitHub CLI 2.96.0, the JSON
+wrapper's `bundle_url` and `initiator` fields are exactly empty. They are not
+release authority: the embedded signed bundle, its verified GitHub Release
+certificate identity and timestamp, and the exact signed v0.2 statement,
+subjects, and predicate are retained and checked. A wrong release, tag, target,
+filename, size, digest, download, attestation, or pre-existing different output
+refuses:
 
 ```sh
 python3 ../native_evidence.py finalize-evidence-receipt \

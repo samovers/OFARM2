@@ -27,6 +27,7 @@ try:
         CURRENT_NATIVE_ACTION_PINS,
         CURRENT_NATIVE_BUILD_PINS,
         GITHUB_PROVIDER_VERIFICATION_SCHEMA,
+        HISTORICAL_V1_CANDIDATE_RECEIPT_DIGEST,
         NATIVE_RELEASE_GITHUB_API_VERSION,
         NATIVE_RELEASE_GITHUB_CLI_VERSION,
         NATIVE_RELEASE_GITHUB_CLI_VERSION_OUTPUT,
@@ -38,6 +39,7 @@ try:
         NativeReleaseIdentityError,
         candidate_evidence_receipt_document,
         canonical_json_bytes as release_canonical_json_bytes,
+        evidence_authority_input_manifest,
         frozen_evidence_receipt_document,
         frozen_identity_document,
         load_native_evidence_receipt,
@@ -50,6 +52,7 @@ except ModuleNotFoundError:  # Direct execution from this source directory.
         CURRENT_NATIVE_ACTION_PINS,
         CURRENT_NATIVE_BUILD_PINS,
         GITHUB_PROVIDER_VERIFICATION_SCHEMA,
+        HISTORICAL_V1_CANDIDATE_RECEIPT_DIGEST,
         NATIVE_RELEASE_GITHUB_API_VERSION,
         NATIVE_RELEASE_GITHUB_CLI_VERSION,
         NATIVE_RELEASE_GITHUB_CLI_VERSION_OUTPUT,
@@ -61,6 +64,7 @@ except ModuleNotFoundError:  # Direct execution from this source directory.
         NativeReleaseIdentityError,
         candidate_evidence_receipt_document,
         canonical_json_bytes as release_canonical_json_bytes,
+        evidence_authority_input_manifest,
         frozen_evidence_receipt_document,
         frozen_identity_document,
         load_native_evidence_receipt,
@@ -2103,8 +2107,6 @@ def finalize_evidence_receipt(
         candidate = load_native_evidence_receipt(
             candidate_receipt_path,
             release_identity=identity,
-            verify_current_authority=True,
-            repository_root=repository_root,
             allow_candidate=True,
         )
     except NativeReleaseIdentityError as exc:
@@ -2112,6 +2114,14 @@ def finalize_evidence_receipt(
     if identity.status != "frozen" or candidate.status != "candidate":
         raise NativeEvidenceError(
             "receipt finalization requires frozen identity and candidate receipt"
+        )
+    current_authority = evidence_authority_input_manifest(repository_root)
+    if (
+        candidate.document["evidenceAuthorityInput"] != current_authority
+        and candidate.digest != HISTORICAL_V1_CANDIDATE_RECEIPT_DIGEST
+    ):
+        raise NativeEvidenceError(
+            "historical candidate evidence authority is not the exact v1 migration"
         )
     with tempfile.TemporaryDirectory(prefix="ofarm-native-release-") as temporary:
         provider_verification = _authenticate_github_release(

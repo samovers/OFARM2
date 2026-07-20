@@ -42,10 +42,10 @@ CATALOG_OUTPUT_SETTING_VALUES = (
 # These literals are derived only from clean, fully migrated PostgreSQL 17
 # targets. ``None`` remains fail-closed while a release is being frozen.
 TENANT_CATALOG_VERIFIER_DIGEST: str | None = (
-    "sha256:aa80d1382ef18213a721228408a059fdbb637a6c377f60ef311ea34e16a2b05c"
+    "sha256:40e7f1aa7726b503dd15194d72b2f0179f60d7b0fbe221144327a7d2eb81ece4"
 )
 SECURITY_AUDIT_CATALOG_VERIFIER_DIGEST: str | None = (
-    "sha256:7d046e48045e72d63e709966e310b90ce802580fe3f03c755eac5d21b362190d"
+    "sha256:0c836799d96c33afe1bd54fda7fbec3149404de9f6aa6c2aa331c09ab56f6943"
 )
 
 

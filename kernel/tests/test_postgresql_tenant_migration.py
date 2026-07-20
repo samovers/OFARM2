@@ -23,6 +23,7 @@ from deployment.postgresql.catalog_classifier import (
 )
 from deployment.postgresql.migration_runner import (
     MigrationDirtyError,
+    MigrationTargetError,
     initial_ledger_sql,
     migrate_service,
 )
@@ -1036,7 +1037,17 @@ def test_tenant_catalog_fingerprint_has_exact_shared_schema_class_parity() -> No
     assert "pg_get_ruledef(rewrite_rule.oid, false)" in fingerprint
     assert "rewrite_rule.ev_qual" not in fingerprint
     assert "rewrite_rule.ev_action" not in fingerprint
-    assert "class.relhasrules" in fingerprint
+    assert fingerprint.count("relation_rule.ev_class = class.oid") == 2
+    assert fingerprint.count("relation_trigger.tgrelid = class.oid") == 1
+    assert fingerprint.count("relation_child.inhparent = class.oid") == 1
+    assert fingerprint.count("relation_index.indrelid = class.oid") == 1
+    for lazy_hint in (
+        "class.relhasrules",
+        "class.relhastriggers",
+        "class.relhassubclass",
+        "class.relhasindex",
+    ):
+        assert lazy_hint not in fingerprint
     assert "''ofarm'', ''ofarm_infrastructure'', ''public''" not in fingerprint
     assert "''ofarm_crypto''" in fingerprint
     assert fingerprint.count("''extension-dependency''") == 1
@@ -4697,7 +4708,7 @@ def test_complete_catalog_fingerprint_refuses_function_constraint_index_policy_a
             assert pristine[0] is True
             assert pristine[2] == 0
             assert pristine[3] == (
-                "sha256:0733675e55923ec5b4102dea7f57d4735b4c827b9ab64d648a9b4b70a9bc0531"
+                "sha256:352fff101e2ee47de5d5e78331551e9e7b84e32948b2d2509b60d9bb91b321aa"
             )
         finally:
             migrator.rollback()
@@ -5100,16 +5111,18 @@ def test_post_migration_schema_local_collation_tamper_refuses_every_gate(
 
 
 @pytest.mark.parametrize(
-    ("tamper_statement", "cleanup_statement"),
+    ("tamper_statement", "cleanup_statement", "runner_error"),
     (
         (
             "CREATE COLLATION ofarm_crypto.rogue "
             "(provider = builtin, locale = 'C')",
             "DROP COLLATION ofarm_crypto.rogue",
+            "native-verifier schema object inventory differs",
         ),
         (
             "GRANT CREATE ON SCHEMA ofarm_crypto TO ofarm_app",
             "REVOKE CREATE ON SCHEMA ofarm_crypto FROM ofarm_app",
+            "native-verifier schema ACL differs",
         ),
     ),
     ids=("crypto-object", "crypto-acl"),
@@ -5118,6 +5131,7 @@ def test_post_migration_crypto_schema_tamper_refuses_every_gate(
     tenant_target: TenantTarget,
     tamper_statement: str,
     cleanup_statement: str,
+    runner_error: str,
 ) -> None:
     with psycopg.connect(
         tenant_target.target_admin_dsn, autocommit=True
@@ -5139,7 +5153,7 @@ def test_post_migration_crypto_schema_tamper_refuses_every_gate(
         assert observer_row[0] is False
         assert observer_row[2] >= 1
 
-        with pytest.raises(MigrationDirtyError):
+        with pytest.raises(MigrationTargetError, match=runner_error):
             migrate_service(
                 admin_dsn=tenant_target.admin_dsn,
                 migrator_dsn=tenant_target.migrator_dsn,
@@ -5188,7 +5202,13 @@ def test_post_migration_native_extension_membership_tamper_refuses_every_gate(
         assert observer_row[0] is False
         assert observer_row[2] >= 1
 
-        with pytest.raises(MigrationDirtyError):
+        with pytest.raises(
+            MigrationTargetError,
+            match=(
+                "native-verifier SQL function identity differs; "
+                "native-verifier extension membership differs"
+            ),
+        ):
             migrate_service(
                 admin_dsn=tenant_target.admin_dsn,
                 migrator_dsn=tenant_target.migrator_dsn,
@@ -5241,7 +5261,10 @@ def test_post_migration_native_extension_dependency_tamper_refuses_every_gate(
         assert observer_row[0] is False
         assert observer_row[2] >= 1
 
-        with pytest.raises(MigrationDirtyError):
+        with pytest.raises(
+            MigrationTargetError,
+            match="native-verifier SQL function identity differs",
+        ):
             migrate_service(
                 admin_dsn=tenant_target.admin_dsn,
                 migrator_dsn=tenant_target.migrator_dsn,
@@ -5337,7 +5360,10 @@ def test_post_migration_database_wide_setting_refuses_every_gate(
         assert observer_row[0] is False
         assert observer_row[2] >= 1
 
-        with pytest.raises(MigrationDirtyError):
+        with pytest.raises(
+            MigrationTargetError,
+            match="target route is not a writable primary",
+        ):
             migrate_service(
                 admin_dsn=tenant_target.admin_dsn,
                 migrator_dsn=tenant_target.migrator_dsn,
@@ -5371,7 +5397,7 @@ def test_readiness_observation_is_complete_after_commit(
     assert row[1] == TENANT_CONTEXT_CONTRACT.digest
     assert row[2] == 0
     assert row[3] == (
-        "sha256:0733675e55923ec5b4102dea7f57d4735b4c827b9ab64d648a9b4b70a9bc0531"
+        "sha256:352fff101e2ee47de5d5e78331551e9e7b84e32948b2d2509b60d9bb91b321aa"
     )
     assert row[5] == TENANT_PROVISIONING_SPEC.digest
     assert row[6] == TENANT_SERVICE.identity

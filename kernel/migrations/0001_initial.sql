@@ -7014,7 +7014,7 @@ AS 'DECLARE
            OR observed_head_version <> 1
            OR observed_service_identity <> ''ofarm.tenant-postgresql.v1''
            OR observed_provisioning_digest <>
-                ''sha256:8e892076a54b7c5e807c1cf6f155d08ceb926e86e8e7e9ce2be5e4edb769faee''
+                ''sha256:5dbf4d0e8b4e3a5e7133e04da6d084ce7b1258e1da9ea78e5f169604b1695669''
            OR observed_prefix_digest !~ ''^sha256:[0-9a-f]{64}$'' THEN
             differences := pg_catalog.array_append(
                 differences, ''migration 0001 ledger identity differs''
@@ -7439,7 +7439,11 @@ AS 'DECLARE
                     class.relpersistence,
                     class.relrowsecurity,
                     class.relforcerowsecurity,
-                    class.relhasrules,
+                    EXISTS (
+                        SELECT 1
+                          FROM pg_catalog.pg_rewrite AS relation_rule
+                         WHERE relation_rule.ev_class = class.oid
+                    ),
                     class.relreplident,
                     class.reloptions
                 )::pg_catalog.text
@@ -7886,10 +7890,26 @@ AS 'DECLARE
                     class.relispartition,
                     class.relrowsecurity,
                     class.relforcerowsecurity,
-                    class.relhasrules,
-                    class.relhastriggers,
-                    class.relhassubclass,
-                    class.relhasindex,
+                    EXISTS (
+                        SELECT 1
+                          FROM pg_catalog.pg_rewrite AS relation_rule
+                         WHERE relation_rule.ev_class = class.oid
+                    ),
+                    EXISTS (
+                        SELECT 1
+                          FROM pg_catalog.pg_trigger AS relation_trigger
+                         WHERE relation_trigger.tgrelid = class.oid
+                    ),
+                    EXISTS (
+                        SELECT 1
+                          FROM pg_catalog.pg_inherits AS relation_child
+                         WHERE relation_child.inhparent = class.oid
+                    ),
+                    EXISTS (
+                        SELECT 1
+                          FROM pg_catalog.pg_index AS relation_index
+                         WHERE relation_index.indrelid = class.oid
+                    ),
                     class.relnatts,
                     class.relchecks,
                     class.relreplident,
@@ -8233,7 +8253,7 @@ AS 'DECLARE
           INTO observed_structural_catalog_digest
           FROM catalog_entry;
         IF observed_structural_catalog_digest <>
-                ''sha256:0733675e55923ec5b4102dea7f57d4735b4c827b9ab64d648a9b4b70a9bc0531'' THEN
+                ''sha256:352fff101e2ee47de5d5e78331551e9e7b84e32948b2d2509b60d9bb91b321aa'' THEN
             differences := pg_catalog.array_append(
                 differences, ''complete tenant catalog fingerprint differs''
             );

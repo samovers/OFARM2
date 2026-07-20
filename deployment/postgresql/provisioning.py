@@ -2191,9 +2191,21 @@ def _backend_statistics_view_differences(
                relation.relispopulated,
                relation.relreplident,
                relation.reloptions,
-               relation.relhasrules,
-               relation.relhastriggers,
-               relation.relhassubclass,
+               EXISTS (
+                   SELECT 1
+                   FROM pg_catalog.pg_rewrite AS relation_rule
+                   WHERE relation_rule.ev_class = relation.oid
+               ),
+               EXISTS (
+                   SELECT 1
+                   FROM pg_catalog.pg_trigger AS relation_trigger
+                   WHERE relation_trigger.tgrelid = relation.oid
+               ),
+               EXISTS (
+                   SELECT 1
+                   FROM pg_catalog.pg_inherits AS relation_child
+                   WHERE relation_child.inhparent = relation.oid
+               ),
                relation.relchecks,
                owner.rolname::text,
                owner.rolsuper,

@@ -12,7 +12,6 @@ import re
 import stat
 from pathlib import Path
 from typing import Any
-from urllib.parse import unquote_to_bytes, urlsplit
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
@@ -45,6 +44,7 @@ PROVENANCE_PREDICATE_TYPE = "https://slsa.dev/provenance/v0.2"
 NATIVE_RELEASE_REPOSITORY = "samovers/OFARM2"
 NATIVE_RELEASE_REPOSITORY_ID = 1266697770
 NATIVE_RELEASE_REPOSITORY_NODE_ID = "R_kgDOS4BGKg"
+NATIVE_RELEASE_OWNER_ID = "263070375"
 NATIVE_RELEASE_REPOSITORY_API_URL = (
     "https://api.github.com/repos/" + NATIVE_RELEASE_REPOSITORY
 )
@@ -58,10 +58,21 @@ NATIVE_RELEASE_GITHUB_CLI_VERSION_OUTPUT = (
     "https://github.com/cli/cli/releases/tag/v2.96.0\n"
 ).encode("ascii")
 GITHUB_PROVIDER_VERIFICATION_SCHEMA = (
-    "ofarm.github-release-provider-verification.v1"
+    "ofarm.github-release-provider-verification.v2"
 )
+EVIDENCE_RECEIPT_SCHEMA_V1 = "ofarm.native-verifier-evidence-receipt.v1"
+EVIDENCE_RECEIPT_SCHEMA_V2 = "ofarm.native-verifier-evidence-receipt.v2"
+HISTORICAL_V1_CANDIDATE_RECEIPT_DIGEST = (
+    "sha256:ddb70333297aeda15961fe4ab8d045e918a1f5d6e44645fe51940db1e4d13fa2"
+)
+HISTORICAL_V1_RELEASE_IDENTITY_DIGEST = (
+    "sha256:7aae043c84013e8f05b1729e2de23358486e57e661c170074d15d0b135225775"
+)
+HISTORICAL_V1_SOURCE_COMMIT = "cb25339b859aadf7d38be2ca0452511284cc8438"
+HISTORICAL_V1_RUN_ID = 29717583674
+HISTORICAL_V1_RUN_ATTEMPT = 1
 GITHUB_RELEASE_PREDICATE_TYPE = (
-    "https://in-toto.io/attestation/release/v0.1"
+    "https://in-toto.io/attestation/release/v0.2"
 )
 IN_TOTO_STATEMENT_V1 = "https://in-toto.io/Statement/v1"
 SIGSTORE_BUNDLE_MEDIA_TYPE = "application/vnd.dev.sigstore.bundle.v0.3+json"
@@ -73,7 +84,6 @@ GITHUB_RELEASE_CERTIFICATE_ISSUER = (
 )
 GITHUB_RELEASE_CERTIFICATE_SAN = "https://dotcom.releases.github.com"
 GITHUB_RELEASE_TIMESTAMP_AUTHORITY_URI = "timestamp.githubapp.com"
-GITHUB_ATTESTATION_BLOB_HOST = "tmaproduction.blob.core.windows.net"
 GITHUB_RELEASE_VERIFIED_IDENTITY = {
     "issuer": {"issuer": "", "regexp": ".*"},
     "subjectAlternativeName": {
@@ -87,12 +97,6 @@ GITHUB_RELEASE_TIMESTAMP_PATTERN = re.compile(
     r"(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]"
     r"(?:\.[0-9]{0,8}[1-9])?Z\Z"
 )
-GITHUB_ATTESTATION_BLOB_PATH_PATTERN = re.compile(
-    rf"/attestations/{NATIVE_RELEASE_REPOSITORY_ID}/"
-    r"([0-9]{4})/(0[1-9]|1[0-2])/(0[1-9]|[12][0-9]|3[01])/"
-    r"[1-9][0-9]{0,19}\.json\.sn\Z"
-)
-GITHUB_ATTESTATION_QUERY_KEY_PATTERN = re.compile(r"[a-z][a-z0-9]{0,31}\Z")
 BUILDER_ID_PATTERN = re.compile(
     r"https://github\.com/samovers/OFARM2/actions/runs/"
     r"([1-9][0-9]*)/attempts/([1-9][0-9]*)\Z"
@@ -794,93 +798,6 @@ def _require_base64_bytes(value: Any, maximum: int, label: str) -> bytes:
     return decoded
 
 
-def _validate_github_bundle_url(value: Any, label: str) -> str:
-    if (
-        not isinstance(value, str)
-        or not value
-        or len(value) > 8192
-        or not value.isascii()
-        or any(ord(character) < 0x21 or ord(character) > 0x7E for character in value)
-    ):
-        raise NativeReleaseIdentityError(f"{label} bundle URL is invalid")
-    try:
-        parsed = urlsplit(value)
-    except ValueError as exc:
-        raise NativeReleaseIdentityError(f"{label} bundle URL is invalid") from exc
-    path_match = GITHUB_ATTESTATION_BLOB_PATH_PATTERN.fullmatch(parsed.path)
-    if (
-        parsed.scheme != "https"
-        or parsed.netloc != GITHUB_ATTESTATION_BLOB_HOST
-        or parsed.fragment
-        or path_match is None
-        or not parsed.query
-        or len(parsed.query) > 4096
-    ):
-        raise NativeReleaseIdentityError(f"{label} bundle URL is not exact")
-    try:
-        datetime.strptime("-".join(path_match.groups()), "%Y-%m-%d")
-    except ValueError as exc:
-        raise NativeReleaseIdentityError(f"{label} bundle URL is not exact") from exc
-    query_components = parsed.query.split("&")
-    if len(query_components) > 32:
-        raise NativeReleaseIdentityError(
-            f"{label} bundle URL query is not canonical"
-        )
-    query_keys: set[str] = set()
-    for component in query_components:
-        if component.count("=") != 1:
-            raise NativeReleaseIdentityError(
-                f"{label} bundle URL query is not canonical"
-            )
-        key, encoded_value = component.split("=", 1)
-        if (
-            GITHUB_ATTESTATION_QUERY_KEY_PATTERN.fullmatch(key) is None
-            or key in query_keys
-            or not encoded_value
-            or len(encoded_value) > 1024
-        ):
-            raise NativeReleaseIdentityError(
-                f"{label} bundle URL query is not canonical"
-            )
-        query_keys.add(key)
-        offset = 0
-        while offset < len(encoded_value):
-            character = encoded_value[offset]
-            if character.isalnum() or character in "._-~":
-                offset += 1
-                continue
-            if (
-                character != "%"
-                or offset + 2 >= len(encoded_value)
-                or re.fullmatch(r"[0-9A-F]{2}", encoded_value[offset + 1 : offset + 3])
-                is None
-            ):
-                raise NativeReleaseIdentityError(
-                    f"{label} bundle URL query is not canonical"
-                )
-            decoded_octet = int(encoded_value[offset + 1 : offset + 3], 16)
-            if (
-                chr(decoded_octet).isalnum()
-                or chr(decoded_octet) in "._-~"
-                or decoded_octet < 0x21
-                or decoded_octet > 0x7E
-            ):
-                raise NativeReleaseIdentityError(
-                    f"{label} bundle URL query is not canonical"
-                )
-            offset += 3
-        decoded_value = unquote_to_bytes(encoded_value)
-        if not decoded_value or any(octet < 0x21 or octet > 0x7E for octet in decoded_value):
-            raise NativeReleaseIdentityError(
-                f"{label} bundle URL query is not canonical"
-            )
-    if "sig" not in query_keys:
-        raise NativeReleaseIdentityError(
-            f"{label} bundle URL query has no signature"
-        )
-    return value
-
-
 def _release_attestation_statement(
     value: Any,
     *,
@@ -927,27 +844,23 @@ def _release_attestation_statement(
         )
     predicate = value.get("predicate")
     if not isinstance(predicate, dict) or set(predicate) != {
+        "databaseId",
         "ownerId",
+        "packageId",
         "purl",
-        "releaseId",
         "repository",
         "repositoryId",
         "tag",
     }:
         raise NativeReleaseIdentityError(f"{label} predicate fields are not exact")
     owner_id = predicate.get("ownerId")
-    if (
-        not isinstance(owner_id, str)
-        or not owner_id.isascii()
-        or not owner_id.isdigit()
-        or owner_id.startswith("0")
-        or len(owner_id) > 20
-    ):
-        raise NativeReleaseIdentityError(f"{label} owner identity is invalid")
+    if owner_id != NATIVE_RELEASE_OWNER_ID:
+        raise NativeReleaseIdentityError(f"{label} owner identity is not exact")
     if predicate != {
+        "databaseId": str(release_id),
         "ownerId": owner_id,
+        "packageId": str(NATIVE_RELEASE_REPOSITORY_ID),
         "purl": purl,
-        "releaseId": str(release_id),
         "repository": NATIVE_RELEASE_REPOSITORY,
         "repositoryId": str(NATIVE_RELEASE_REPOSITORY_ID),
         "tag": tag,
@@ -981,9 +894,10 @@ def validate_github_release_command_document(
         "initiator",
     }:
         raise NativeReleaseIdentityError(f"{label} attestation fields are not exact")
-    _validate_github_bundle_url(attestation.get("bundle_url"), label)
-    if attestation.get("initiator") != "github":
-        raise NativeReleaseIdentityError(f"{label} initiator is not GitHub")
+    if attestation.get("bundle_url") != "" or attestation.get("initiator") != "":
+        raise NativeReleaseIdentityError(
+            f"{label} pinned-CLI transport metadata is not exact"
+        )
     bundle = attestation.get("bundle")
     if not isinstance(bundle, dict) or set(bundle) != {
         "dsseEnvelope",
@@ -1485,7 +1399,10 @@ def validate_native_evidence_receipt(
     repository_root: Path | None,
     allow_candidate: bool = False,
 ) -> NativeEvidenceReceipt:
-    if not isinstance(document, dict) or set(document) != {
+    if not isinstance(document, dict):
+        raise NativeReleaseIdentityError("native evidence receipt fields are not exact")
+    status_value = document.get("status")
+    expected_fields = {
         "buildPins",
         "buildRun",
         "evidenceAuthorityInput",
@@ -1494,11 +1411,17 @@ def validate_native_evidence_receipt(
         "releaseIdentityDigest",
         "schemaVersion",
         "status",
-    }:
+    }
+    expected_schema = EVIDENCE_RECEIPT_SCHEMA_V1
+    if status_value == "frozen":
+        expected_fields.add("candidateReceiptDigest")
+        expected_fields.add("verificationAuthorityInput")
+        expected_schema = EVIDENCE_RECEIPT_SCHEMA_V2
+    if set(document) != expected_fields:
         raise NativeReleaseIdentityError("native evidence receipt fields are not exact")
     if canonical_json_bytes(document) != canonical_bytes:
         raise NativeReleaseIdentityError("native evidence receipt JSON is not canonical")
-    if document.get("schemaVersion") != "ofarm.native-verifier-evidence-receipt.v1":
+    if document.get("schemaVersion") != expected_schema:
         raise NativeReleaseIdentityError("native evidence receipt schema is not exact")
     if document.get("buildPins") != CURRENT_NATIVE_BUILD_PINS:
         raise NativeReleaseIdentityError("native evidence receipt build pins differ")
@@ -1509,9 +1432,14 @@ def validate_native_evidence_receipt(
             "native evidence receipt is not linked to the release identity"
         )
     _validate_evidence_authority_input(
-        document.get("evidenceAuthorityInput"), repository_root=repository_root
+        document.get("evidenceAuthorityInput"),
+        repository_root=None if status_value == "frozen" else repository_root,
     )
-    status_value = document.get("status")
+    if status_value == "frozen":
+        _validate_evidence_authority_input(
+            document.get("verificationAuthorityInput"),
+            repository_root=repository_root,
+        )
     if status_value == "provisional":
         if release_identity.status != "provisional" or (
             document.get("buildRun") is not None
@@ -1530,7 +1458,7 @@ def validate_native_evidence_receipt(
             raise NativeReleaseIdentityError(
                 "native evidence receipt claims results for a provisional identity"
             )
-        source_commit, _builder_id, _run_id, _run_attempt = _parse_build_run(
+        source_commit, _builder_id, run_id, run_attempt = _parse_build_run(
             document.get("buildRun")
         )
         platforms = _validate_receipt_platforms(
@@ -1544,6 +1472,46 @@ def validate_native_evidence_receipt(
             platforms=platforms,
             expected_status="pending" if status_value == "candidate" else "verified",
         )
+        if status_value == "frozen":
+            candidate_digest = _require_digest(
+                document.get("candidateReceiptDigest"),
+                "candidate evidence receipt digest",
+            )
+            candidate_document = _load_json_bytes(
+                canonical_json_bytes(document),
+                "frozen evidence receipt reconstruction",
+            )
+            candidate_document.pop("candidateReceiptDigest")
+            candidate_document.pop("verificationAuthorityInput")
+            candidate_document["schemaVersion"] = EVIDENCE_RECEIPT_SCHEMA_V1
+            candidate_document["status"] = "candidate"
+            candidate_document["preservation"]["status"] = "pending"
+            candidate_document["preservation"]["providerVerification"] = None
+            if _digest(canonical_json_bytes(candidate_document)) != candidate_digest:
+                raise NativeReleaseIdentityError(
+                    "frozen evidence receipt does not bind its candidate"
+                )
+            historical_markers = (
+                release_identity.digest == HISTORICAL_V1_RELEASE_IDENTITY_DIGEST,
+                source_commit == HISTORICAL_V1_SOURCE_COMMIT,
+                run_id == HISTORICAL_V1_RUN_ID,
+            )
+            if any(historical_markers):
+                if (
+                    not all(historical_markers)
+                    or candidate_digest != HISTORICAL_V1_CANDIDATE_RECEIPT_DIGEST
+                    or run_attempt != HISTORICAL_V1_RUN_ATTEMPT
+                ):
+                    raise NativeReleaseIdentityError(
+                        "historical candidate authority is not the exact v1 migration"
+                    )
+            elif (
+                document["evidenceAuthorityInput"]
+                != document["verificationAuthorityInput"]
+            ):
+                raise NativeReleaseIdentityError(
+                    "build and verification authority snapshots differ"
+                )
     else:
         raise NativeReleaseIdentityError("native evidence receipt status is not exact")
     return NativeEvidenceReceipt(document, canonical_bytes, _digest(canonical_bytes))
@@ -1594,7 +1562,7 @@ def provisional_evidence_receipt_document(
             "a provisional receipt requires a provisional release identity"
         )
     document = {
-        "schemaVersion": "ofarm.native-verifier-evidence-receipt.v1",
+        "schemaVersion": EVIDENCE_RECEIPT_SCHEMA_V1,
         "status": "provisional",
         "releaseIdentityDigest": release_identity.digest,
         "buildPins": CURRENT_NATIVE_BUILD_PINS,
@@ -1876,7 +1844,7 @@ def candidate_evidence_receipt_document(
         ],
     }
     document = {
-        "schemaVersion": "ofarm.native-verifier-evidence-receipt.v1",
+        "schemaVersion": EVIDENCE_RECEIPT_SCHEMA_V1,
         "status": "candidate",
         "releaseIdentityDigest": release_identity.digest,
         "buildPins": CURRENT_NATIVE_BUILD_PINS,
@@ -1909,7 +1877,12 @@ def frozen_evidence_receipt_document(
             "only a candidate evidence receipt can be frozen"
         )
     document = candidate_receipt.manifest()
+    document["schemaVersion"] = EVIDENCE_RECEIPT_SCHEMA_V2
     document["status"] = "frozen"
+    document["candidateReceiptDigest"] = candidate_receipt.digest
+    document["verificationAuthorityInput"] = evidence_authority_input_manifest(
+        repository_root
+    )
     document["preservation"]["status"] = "verified"
     document["preservation"]["providerVerification"] = provider_verification
     validate_native_evidence_receipt(

@@ -22,6 +22,7 @@ from deployment.postgresql.catalog_classifier import (
 )
 from deployment.postgresql.migration_runner import (
     MigrationDirtyError,
+    MigrationTargetError,
     initial_ledger_sql,
     migrate_service,
     validate_migration_source,
@@ -297,10 +298,10 @@ def test_authoritative_audit_migration_is_one_exact_initial_set():
     assert SECURITY_AUDIT_CONTRACT.digest in source
     assert SECURITY_AUDIT_PROVISIONING_SPEC.digest in source
     assert migration.source_sha256 == \
-        "sha256:4d21a11eec18b9b4e015002ba533c306f082aa1c35782f71c593a548a287fed7"
-    assert migration.byte_length == 147_553
+        "sha256:cda7ce3d05d0e533210cdae90b8d1a49a34901f4bfccc7cbc7ba65739405b864"
+    assert migration.byte_length == 148_371
     assert migration_set.digest == \
-        "sha256:36cbeedb86a68888a5e2320490aa557c9b6a710ce15c024fb1343efef2d91738"
+        "sha256:851fb434cb68fef25a859385deac098fbcc28b6eb739e05e72aff2ceed111c7a"
     assert migration_set.prefix_digest(1) == migration_set.digest
 
 
@@ -361,7 +362,17 @@ def test_authoritative_audit_migration_has_closed_carriers_and_limits():
     assert "pg_catalog.pg_get_ruledef(rewrite_rule.oid, false)" in source
     assert "rewrite_rule.ev_qual" not in source
     assert "rewrite_rule.ev_action" not in source
-    assert "class.relhasrules" in source
+    assert source.count("relation_rule.ev_class = class.oid") == 2
+    assert source.count("relation_trigger.tgrelid = class.oid") == 1
+    assert source.count("relation_child.inhparent = class.oid") == 1
+    assert source.count("relation_index.indrelid = class.oid") == 1
+    for lazy_hint in (
+        "class.relhasrules",
+        "class.relhastriggers",
+        "class.relhassubclass",
+        "class.relhasindex",
+    ):
+        assert lazy_hint not in source
     assert "'backend-statistics-view-acl'" in source
     assert "'backend-statistics-routine'" in source
     assert "'backend-statistics-routine-acl'" in source
@@ -3189,8 +3200,8 @@ def test_post_migration_database_wide_setting_refuses_observer_and_runner(
         assert observation[11:] == (False, False)
 
         with pytest.raises(
-            MigrationDirtyError,
-            match="structural verifier differs",
+            MigrationTargetError,
+            match="target route is not a writable primary",
         ):
             migrate_service(
                 admin_dsn=state["admin_dsn"],

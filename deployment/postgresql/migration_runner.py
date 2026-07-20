@@ -741,9 +741,21 @@ def _verify_ledger_contract(
                relation.relispartition,
                relation.relrowsecurity,
                relation.relforcerowsecurity,
-               relation.relhasrules,
-               relation.relhastriggers,
-               relation.relhasindex,
+               EXISTS (
+                   SELECT 1
+                   FROM pg_catalog.pg_rewrite AS relation_rule
+                   WHERE relation_rule.ev_class = relation.oid
+               ),
+               EXISTS (
+                   SELECT 1
+                   FROM pg_catalog.pg_trigger AS relation_trigger
+                   WHERE relation_trigger.tgrelid = relation.oid
+               ),
+               EXISTS (
+                   SELECT 1
+                   FROM pg_catalog.pg_index AS relation_index
+                   WHERE relation_index.indrelid = relation.oid
+               ),
                relation.relnatts,
                relation.relchecks,
                relation.relreplident,
