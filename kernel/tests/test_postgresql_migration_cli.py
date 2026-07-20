@@ -14,6 +14,7 @@ import deployment.postgresql.migration_runner as migration_runner
 import deployment.postgresql.run_security_audit_migrations as audit_cli
 import deployment.postgresql.run_tenant_migrations as tenant_cli
 from deployment.postgresql.migration_runner import MigrationRunReport
+from deployment.postgresql.migration_runner import MigrationTargetError
 from deployment.postgresql.migration_sets import (
     SECURITY_AUDIT_SERVICE,
     TENANT_SERVICE,
@@ -221,3 +222,56 @@ def test_admin_connection_error_is_sanitized_at_the_cli_boundary(
         "migration refused: admin provisioning route is unavailable\n"
     )
     assert "SECRET-ADMIN-ROUTE-SENTINEL" not in captured.out + captured.err
+
+
+@pytest.mark.parametrize("failure_stage", ("BEGIN", "SET LOCAL"))
+def test_transaction_setup_failure_is_sanitized_at_the_cli_boundary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    failure_stage: str,
+) -> None:
+    _write_set(tmp_path, TENANT_SERVICE.relative_directory)
+    monkeypatch.setattr(migration_cli, "_PACKAGE_ROOT", tmp_path)
+    monkeypatch.setattr(
+        migration_cli,
+        "load_authoritative_migration_set",
+        load_migration_set,
+    )
+    monkeypatch.setenv(
+        "OFARM_TENANT_PROVISIONING_PG_ADMIN_DSN", "admin-route"
+    )
+    monkeypatch.setenv("OFARM_TENANT_MIGRATOR_DSN", "migrator-route")
+
+    def refuse_transaction_setup(**_values):
+        try:
+            raise psycopg.OperationalError(
+                f"SECRET-{failure_stage}-TRANSACTION-SENTINEL"
+            )
+        except psycopg.OperationalError as exc:
+            raise MigrationTargetError(
+                "protected migration transaction setup failed"
+            ) from exc
+
+    monkeypatch.setattr(
+        migration_cli, "migrate_service", refuse_transaction_setup
+    )
+
+    with pytest.raises(SystemExit) as raised:
+        tenant_cli.main(
+            [
+                "--release-identity",
+                "ofarm-release/174",
+                "--execution-id",
+                str(_EXECUTION_ID),
+            ]
+        )
+
+    captured = capsys.readouterr()
+    assert raised.value.code == 1
+    assert captured.out == ""
+    assert captured.err == (
+        "migration refused: protected migration transaction setup failed\n"
+    )
+    assert "SECRET" not in captured.err
+    assert "Traceback" not in captured.err

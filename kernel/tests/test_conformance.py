@@ -1496,7 +1496,11 @@ def test_95_hostile_review_regressions(store, pipeline, materializer):
     spray1 = pipeline.commit(demo.spray_submission(
         f"hr:f6a:{uid()}", erp_id=f"erp:hr.{uid()}",
         event_start="2026-06-08T06:00:00Z", event_end="2026-06-08T06:30:00Z"))
-    as_of_t = context.now_iso()
+    with store.tx() as cur:
+        as_of_time = cur.execute(
+            "SELECT pg_catalog.clock_timestamp() AS as_of_time"
+        ).fetchone()["as_of_time"]
+    as_of_t = as_of_time.isoformat().replace("+00:00", "Z")
     spray2 = pipeline.commit(demo.spray_submission(
         f"hr:f6b:{uid()}", erp_id=f"erp:hr.{uid()}"))
     assert {spray1["decisionOutcome"], spray2["decisionOutcome"]} == {"PROMOTE_ACCEPTED"}

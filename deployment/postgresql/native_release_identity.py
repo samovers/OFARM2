@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime
 import hashlib
 import json
+import os
 import re
 import stat
 from pathlib import Path
@@ -71,6 +72,11 @@ HISTORICAL_V1_RELEASE_IDENTITY_DIGEST = (
 HISTORICAL_V1_SOURCE_COMMIT = "cb25339b859aadf7d38be2ca0452511284cc8438"
 HISTORICAL_V1_RUN_ID = 29717583674
 HISTORICAL_V1_RUN_ATTEMPT = 1
+FROZEN_PROVIDER_VERIFICATION_DIGESTS = {
+    "sha256:7aae043c84013e8f05b1729e2de23358486e57e661c170074d15d0b135225775": (
+        "sha256:a3e2bd305a38ded067c7547781362f05792a1da7a017da8919adb9b21c36802b"
+    )
+}
 GITHUB_RELEASE_PREDICATE_TYPE = (
     "https://in-toto.io/attestation/release/v0.2"
 )
@@ -259,15 +265,37 @@ def _require_digest(value: Any, label: str) -> str:
 
 
 def _read_regular(path: Path, maximum: int, label: str) -> bytes:
+    flags = os.O_RDONLY
+    for flag_name in ("O_CLOEXEC", "O_NOFOLLOW", "O_NONBLOCK"):
+        flags |= getattr(os, flag_name, 0)
     try:
-        file_stat = path.lstat()
+        descriptor = os.open(path, flags)
     except OSError as exc:
         raise NativeReleaseIdentityError(f"{label} is unavailable") from exc
-    if path.is_symlink() or not stat.S_ISREG(file_stat.st_mode):
-        raise NativeReleaseIdentityError(f"{label} must be one regular file")
-    if not 0 < file_stat.st_size <= maximum:
-        raise NativeReleaseIdentityError(f"{label} has an invalid size")
-    return path.read_bytes()
+    try:
+        file_stat = os.fstat(descriptor)
+        if not stat.S_ISREG(file_stat.st_mode):
+            raise NativeReleaseIdentityError(f"{label} must be one regular file")
+        if not 0 < file_stat.st_size <= maximum:
+            raise NativeReleaseIdentityError(f"{label} has an invalid size")
+        chunks: list[bytes] = []
+        remaining = maximum + 1
+        while remaining:
+            chunk = os.read(descriptor, min(remaining, 64 * 1024))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        data = b"".join(chunks)
+        if not 0 < len(data) <= maximum or len(data) != file_stat.st_size:
+            raise NativeReleaseIdentityError(f"{label} changed while reading")
+        return data
+    except NativeReleaseIdentityError:
+        raise
+    except OSError as exc:
+        raise NativeReleaseIdentityError(f"{label} could not be read") from exc
+    finally:
+        os.close(descriptor)
 
 
 def source_input_manifest(source_directory: Path = SOURCE_DIRECTORY) -> dict[str, Any]:
@@ -1134,12 +1162,23 @@ def _validate_provider_verification(
         raise NativeReleaseIdentityError(
             "GitHub provider-verification metadata fields are not exact"
         )
-    if _require_digest(
+    provider_digest = _require_digest(
         value.get("canonicalDigest"),
         "GitHub provider-verification canonical digest",
-    ) != _digest(canonical_json_bytes(metadata)):
+    )
+    if provider_digest != _digest(canonical_json_bytes(metadata)):
         raise NativeReleaseIdentityError(
             "GitHub provider-verification canonical digest is inconsistent"
+        )
+    frozen_provider_digest = FROZEN_PROVIDER_VERIFICATION_DIGESTS.get(
+        identity_digest
+    )
+    if (
+        frozen_provider_digest is not None
+        and provider_digest != frozen_provider_digest
+    ):
+        raise NativeReleaseIdentityError(
+            "retained provider-verification digest differs from frozen authority"
         )
     if metadata.get("repository") != {
         "apiUrl": NATIVE_RELEASE_REPOSITORY_API_URL,

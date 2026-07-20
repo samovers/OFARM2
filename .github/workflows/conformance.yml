@@ -55,6 +55,18 @@ jobs:
         run: .review-venv/bin/python -m deployment.postgresql.preflight_tenant_migrations
       - name: Authenticate security-audit migration release
         run: .review-venv/bin/python -m deployment.postgresql.preflight_security_audit_migrations
+      - name: Cryptographically reverify retained native release evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          .review-venv/bin/python deployment/postgresql/native_evidence.py \
+            verify-frozen-evidence-receipt \
+            --release-identity \
+              deployment/postgresql/ofarm_ed25519/native_release_identity.json \
+            --evidence-receipt \
+              deployment/postgresql/ofarm_ed25519/native_evidence_receipt.json \
+            --source-directory deployment/postgresql/ofarm_ed25519 \
+            --repository-root .
       - name: Reject whitespace errors
         run: >-
           git diff --check

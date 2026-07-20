@@ -2225,6 +2225,54 @@ def finalize_evidence_receipt(
     }
 
 
+def verify_frozen_evidence_receipt(
+    *,
+    release_identity_path: Path,
+    evidence_receipt_path: Path,
+    source_directory: Path,
+    repository_root: Path,
+) -> dict[str, Any]:
+    """Re-run maintained GitHub/Sigstore verification for retained evidence."""
+
+    try:
+        identity = load_native_release_identity(
+            release_identity_path,
+            verify_current_sources=True,
+            source_directory=source_directory,
+        )
+        receipt = load_native_evidence_receipt(
+            evidence_receipt_path,
+            release_identity=identity,
+            verify_current_authority=True,
+            repository_root=repository_root,
+        )
+    except NativeReleaseIdentityError as exc:
+        raise NativeEvidenceError(str(exc)) from exc
+    if identity.status != "frozen" or receipt.status != "frozen":
+        raise NativeEvidenceError("native release evidence is not frozen")
+    with tempfile.TemporaryDirectory(
+        prefix="ofarm-native-release-reverify-"
+    ) as directory:
+        observed = _authenticate_github_release(
+            candidate=receipt,
+            identity=identity,
+            source_directory=source_directory,
+            download_directory=Path(directory),
+        )
+    retained = receipt.document["preservation"]["providerVerification"]
+    if observed != retained:
+        raise NativeEvidenceError(
+            "retained provider verification differs from fresh cryptographic "
+            "verification"
+        )
+    return {
+        "evidenceReceiptDigest": receipt.digest,
+        "providerVerificationDigest": observed["canonicalDigest"],
+        "releaseIdentityDigest": identity.digest,
+        "status": "cryptographically-verified",
+    }
+
+
 def conformance_environment(
     *,
     checked_identity_path: Path,
@@ -2336,6 +2384,12 @@ def _parser() -> argparse.ArgumentParser:
     finalize.add_argument("--repository-root", type=Path, required=True)
     finalize.add_argument("--output", type=Path, required=True)
 
+    reverify = subparsers.add_parser("verify-frozen-evidence-receipt")
+    reverify.add_argument("--release-identity", type=Path, required=True)
+    reverify.add_argument("--evidence-receipt", type=Path, required=True)
+    reverify.add_argument("--source-directory", type=Path, required=True)
+    reverify.add_argument("--repository-root", type=Path, required=True)
+
     environment = subparsers.add_parser("conformance-environment")
     environment.add_argument("--checked-identity", type=Path, required=True)
     environment.add_argument("--checked-receipt", type=Path, required=True)
@@ -2396,6 +2450,20 @@ def main(argv: list[str] | None = None) -> int:
                 source_directory=args.source_directory,
                 repository_root=args.repository_root,
                 output=args.output,
+            )
+        elif args.command == "verify-frozen-evidence-receipt":
+            print(
+                json.dumps(
+                    verify_frozen_evidence_receipt(
+                        release_identity_path=args.release_identity,
+                        evidence_receipt_path=args.evidence_receipt,
+                        source_directory=args.source_directory,
+                        repository_root=args.repository_root,
+                    ),
+                    ensure_ascii=True,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
             )
         else:
             print(

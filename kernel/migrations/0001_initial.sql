@@ -1510,6 +1510,9 @@ CREATE TABLE ofarm.principal_binding_lifecycle (
     accountable_control_ref ofarm.ascii_id NOT NULL,
     reason ofarm.ascii_id NOT NULL,
     CONSTRAINT principal_binding_lifecycle_pkey PRIMARY KEY (act_id),
+    CONSTRAINT principal_binding_lifecycle_act_id_check CHECK (
+        act_id <> '00000000-0000-0000-0000-000000000000'::pg_catalog.uuid
+    ),
     CONSTRAINT principal_binding_lifecycle_digest_key UNIQUE (act_digest),
     CONSTRAINT principal_binding_lifecycle_stream_sequence_key UNIQUE (
         equality_policy, issuer, subject, stream_sequence
@@ -1618,6 +1621,10 @@ CREATE TABLE ofarm.principal_binding_current (
         DEFAULT pg_catalog.clock_timestamp(),
     CONSTRAINT principal_binding_current_pkey
         PRIMARY KEY (equality_policy, issuer, subject),
+    CONSTRAINT principal_binding_current_head_id_check CHECK (
+        lifecycle_head_id <>
+            '00000000-0000-0000-0000-000000000000'::pg_catalog.uuid
+    ),
     CONSTRAINT principal_binding_current_binding_fkey
         FOREIGN KEY (
             equality_policy,
@@ -1954,6 +1961,150 @@ CREATE UNIQUE INDEX derived_materialization_live_key_key
         materialization_key
     )
     WHERE superseded_by IS NULL;
+
+CREATE FUNCTION ofarm.publish_materialization_generation(
+    expected_live_materialization_id pg_catalog.text,
+    requested_materialization_id pg_catalog.text,
+    requested_materialization_key pg_catalog.jsonb,
+    requested_use_class pg_catalog.text,
+    requested_current_state pg_catalog.jsonb,
+    requested_basis_record_id pg_catalog.text,
+    requested_snapshot_record_id pg_catalog.text,
+    requested_context_snapshot_ref pg_catalog.text,
+    requested_freshness_vector pg_catalog.jsonb,
+    requested_batch_id pg_catalog.text
+)
+RETURNS pg_catalog.void
+LANGUAGE plpgsql VOLATILE PARALLEL UNSAFE SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+AS 'DECLARE
+        bound_tenant_id pg_catalog.uuid;
+        checked_key_digest ofarm.sha256_id;
+        checked_target_twin ofarm.tenant_local_ref;
+        checked_anchor_scope_ref ofarm.tenant_local_ref;
+        checked_time_policy pg_catalog.jsonb;
+        observed_live_materialization_id ofarm.tenant_local_ref;
+        updated_rows pg_catalog.int4;
+    BEGIN
+        bound_tenant_id := ofarm.current_tenant_id();
+        IF requested_materialization_id IS NULL
+           OR requested_materialization_key IS NULL
+           OR requested_use_class IS NULL
+           OR requested_current_state IS NULL
+           OR requested_basis_record_id IS NULL
+           OR requested_snapshot_record_id IS NULL
+           OR requested_context_snapshot_ref IS NULL
+           OR requested_freshness_vector IS NULL
+           OR requested_batch_id IS NULL THEN
+            RAISE EXCEPTION USING
+                ERRCODE = ''22023'',
+                MESSAGE = ''materialization generation is incomplete'';
+        END IF;
+        IF requested_materialization_key IS DISTINCT FROM
+                pg_catalog.jsonb_build_object(
+                    ''anchorScopeRef'',
+                    requested_materialization_key -> ''anchorScopeRef'',
+                    ''targetTwin'',
+                    requested_materialization_key -> ''targetTwin'',
+                    ''timePolicy'',
+                    requested_materialization_key -> ''timePolicy''
+                )
+           OR pg_catalog.jsonb_typeof(
+                requested_materialization_key -> ''anchorScopeRef''
+           ) <> ''string''
+           OR pg_catalog.jsonb_typeof(
+                requested_materialization_key -> ''targetTwin''
+           ) <> ''string''
+           OR pg_catalog.jsonb_typeof(
+                requested_materialization_key -> ''timePolicy''
+           ) <> ''object'' THEN
+            RAISE EXCEPTION USING
+                ERRCODE = ''22023'',
+                MESSAGE = ''materialization key is not exact'';
+        END IF;
+        checked_target_twin := (
+            requested_materialization_key ->> ''targetTwin''
+        )::ofarm.tenant_local_ref;
+        checked_anchor_scope_ref := (
+            requested_materialization_key ->> ''anchorScopeRef''
+        )::ofarm.tenant_local_ref;
+        checked_time_policy := requested_materialization_key -> ''timePolicy'';
+        checked_key_digest := ofarm.compute_materialization_key_digest(
+            requested_materialization_key
+        );
+
+        SELECT materialization.materialization_id
+          INTO observed_live_materialization_id
+          FROM ofarm.derived_materialization AS materialization
+         WHERE materialization.tenant_id = bound_tenant_id
+           AND materialization.key_digest = checked_key_digest
+           AND materialization.materialization_key =
+               requested_materialization_key
+           AND materialization.superseded_by IS NULL
+         FOR UPDATE;
+
+        IF observed_live_materialization_id IS DISTINCT FROM
+                expected_live_materialization_id THEN
+            RAISE EXCEPTION USING
+                ERRCODE = ''40001'',
+                MESSAGE = ''expected live materialization generation differs'';
+        END IF;
+        IF requested_materialization_id = expected_live_materialization_id THEN
+            RAISE EXCEPTION USING
+                ERRCODE = ''22023'',
+                MESSAGE = ''materialization generation cannot supersede itself'';
+        END IF;
+
+        IF observed_live_materialization_id IS NOT NULL THEN
+            UPDATE ofarm.derived_materialization AS materialization
+               SET freshness = ''STALE'',
+                   superseded_by = requested_materialization_id
+             WHERE materialization.tenant_id = bound_tenant_id
+               AND materialization.materialization_id =
+                   observed_live_materialization_id
+               AND materialization.superseded_by IS NULL;
+            GET DIAGNOSTICS updated_rows = ROW_COUNT;
+            IF updated_rows <> 1 THEN
+                RAISE EXCEPTION USING
+                    ERRCODE = ''40001'',
+                    MESSAGE = ''live materialization generation changed'';
+            END IF;
+        END IF;
+
+        INSERT INTO ofarm.derived_materialization (
+            tenant_id,
+            materialization_id,
+            key_digest,
+            materialization_key,
+            target_twin,
+            anchor_scope_ref,
+            time_policy,
+            use_class,
+            freshness,
+            current_state,
+            basis_record_id,
+            snapshot_record_id,
+            context_snapshot_ref,
+            freshness_vector,
+            batch_id
+        ) VALUES (
+            bound_tenant_id,
+            requested_materialization_id,
+            checked_key_digest,
+            requested_materialization_key,
+            checked_target_twin,
+            checked_anchor_scope_ref,
+            checked_time_policy,
+            requested_use_class,
+            ''FRESH'',
+            requested_current_state,
+            requested_basis_record_id,
+            requested_snapshot_record_id,
+            requested_context_snapshot_ref,
+            requested_freshness_vector,
+            requested_batch_id
+        );
+    END';
 
 CREATE TABLE ofarm.derived_dependency_index (
     tenant_id pg_catalog.uuid NOT NULL,
@@ -2316,6 +2467,11 @@ AS 'DECLARE
         next_sequence pg_catalog.int8;
         observed_decision_now pg_catalog.timestamptz;
     BEGIN
+        IF requested_act_id IS NULL OR requested_act_id =
+                ''00000000-0000-0000-0000-000000000000''::pg_catalog.uuid THEN
+            RAISE EXCEPTION USING
+                ERRCODE = ''22023'', MESSAGE = ''lifecycle act id is nil'';
+        END IF;
         IF pg_catalog.current_setting(''transaction_isolation'') <>
                 ''read committed'' THEN
             RAISE EXCEPTION USING
@@ -4906,7 +5062,7 @@ WITH CHECK (tenant_id = ofarm.current_tenant_id());
 ALTER TABLE ofarm.derived_materialization ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ofarm.derived_materialization FORCE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON ofarm.derived_materialization
-TO ofarm_app, ofarm_worker
+TO ofarm_app, ofarm_graph_validator, ofarm_worker
 USING (tenant_id = ofarm.current_tenant_id())
 WITH CHECK (tenant_id = ofarm.current_tenant_id());
 
@@ -4963,16 +5119,26 @@ GRANT SELECT, INSERT ON TABLE
     ofarm.export_artifact,
     ofarm.kernel_record_reference
 TO ofarm_app, ofarm_worker;
-GRANT SELECT, INSERT, DELETE ON TABLE
-    ofarm.derived_materialization
-TO ofarm_app, ofarm_worker;
-GRANT UPDATE (freshness, superseded_by)
+GRANT SELECT ON TABLE ofarm.derived_materialization TO ofarm_app, ofarm_worker;
+GRANT UPDATE (freshness)
 ON TABLE ofarm.derived_materialization TO ofarm_app, ofarm_worker;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
     ofarm.derived_dependency_index
 TO ofarm_app, ofarm_worker;
 GRANT EXECUTE ON FUNCTION ofarm.compute_materialization_key_digest(
     pg_catalog.jsonb
+) TO ofarm_app, ofarm_worker;
+GRANT EXECUTE ON FUNCTION ofarm.publish_materialization_generation(
+    pg_catalog.text,
+    pg_catalog.text,
+    pg_catalog.jsonb,
+    pg_catalog.text,
+    pg_catalog.jsonb,
+    pg_catalog.text,
+    pg_catalog.text,
+    pg_catalog.text,
+    pg_catalog.jsonb,
+    pg_catalog.text
 ) TO ofarm_app, ofarm_worker;
 GRANT EXECUTE ON FUNCTION ofarm.valid_ascii_id(pg_catalog.text)
 TO ofarm_app, ofarm_worker;
@@ -5847,6 +6013,10 @@ GRANT SELECT (
     batch_id,
     batch_full_xid
 ) ON TABLE ofarm.kernel_edge TO ofarm_graph_validator;
+GRANT SELECT, INSERT ON TABLE
+    ofarm.derived_materialization TO ofarm_graph_validator;
+GRANT UPDATE (freshness, superseded_by)
+ON TABLE ofarm.derived_materialization TO ofarm_graph_validator;
 
 GRANT EXECUTE ON FUNCTION ofarm.current_backend_start()
 TO ofarm_binder;
@@ -5870,6 +6040,11 @@ TO ofarm_app, ofarm_worker;
 GRANT EXECUTE ON FUNCTION ofarm.current_tenant_id()
 TO ofarm_app, ofarm_worker;
 GRANT EXECUTE ON FUNCTION ofarm.current_tenant_id()
+TO ofarm_graph_validator;
+GRANT EXECUTE ON FUNCTION ofarm.compute_materialization_key_digest(
+    pg_catalog.jsonb
+) TO ofarm_graph_validator;
+GRANT EXECUTE ON FUNCTION ofarm.valid_ascii_id(pg_catalog.text)
 TO ofarm_graph_validator;
 GRANT EXECUTE ON FUNCTION ofarm.take_tenant_write_lock()
 TO ofarm_app, ofarm_worker;
@@ -6331,7 +6506,11 @@ AS 'DECLARE
                           FROM pg_catalog.unnest(policy.polroles) AS member(role_oid)
                           JOIN pg_catalog.pg_roles AS role ON role.oid = member.role_oid
                       ) IS DISTINCT FROM CASE
-                            WHEN class.relname IN (''kernel_edge'', ''kernel_record'')
+                            WHEN class.relname IN (
+                                ''derived_materialization'',
+                                ''kernel_edge'',
+                                ''kernel_record''
+                            )
                             THEN ARRAY[
                                 ''ofarm_app'',
                                 ''ofarm_graph_validator'',
@@ -6504,15 +6683,19 @@ AS 'DECLARE
                                 ) AND acl.privilege_type IN (''SELECT'', ''INSERT''))
                                OR
                                (class.relname = ''derived_materialization''
-                                AND acl.privilege_type IN (
-                                    ''SELECT'', ''INSERT'', ''DELETE''
-                                ))
+                                AND acl.privilege_type = ''SELECT'')
                                OR
                                (class.relname = ''derived_dependency_index''
                                 AND acl.privilege_type IN (
                                     ''SELECT'', ''INSERT'', ''UPDATE'', ''DELETE''
                                 ))
                            )
+                       )
+                       OR
+                       (
+                           grantee.rolname = ''ofarm_graph_validator''
+                           AND class.relname = ''derived_materialization''
+                           AND acl.privilege_type IN (''SELECT'', ''INSERT'')
                        )
                    ) OR acl.is_grantable
                )
@@ -6525,7 +6708,7 @@ AS 'DECLARE
          WHERE namespace.nspname = ''ofarm''
            AND class.relkind IN (''r'', ''p'')
            AND acl.grantee <> class.relowner;
-        IF relation_acl_count <> 94 OR invalid_relation_acl_count <> 0 THEN
+        IF relation_acl_count <> 92 OR invalid_relation_acl_count <> 0 THEN
             differences := pg_catalog.array_append(
                 differences, ''relation ACL inventory differs''
             );
@@ -6595,6 +6778,13 @@ AS 'DECLARE
                        OR
                        (
                            grantee.rolname IN (''ofarm_app'', ''ofarm_worker'')
+                           AND class.relname = ''derived_materialization''
+                           AND attribute.attname = ''freshness''
+                           AND acl.privilege_type = ''UPDATE''
+                       )
+                       OR
+                       (
+                           grantee.rolname = ''ofarm_graph_validator''
                            AND class.relname = ''derived_materialization''
                            AND attribute.attname IN (
                                 ''freshness'', ''superseded_by''
@@ -7057,7 +7247,7 @@ AS 'DECLARE
            OR observed_head_version <> 1
            OR observed_service_identity <> ''ofarm.tenant-postgresql.v1''
            OR observed_provisioning_digest <>
-                ''sha256:5aea41d4e235d58c1b0f740983f6bd570751198008e0bf8c2a2bc6d6bdffd9bf''
+                ''sha256:b1291fd054e4f6bbb32c082ea8cac27abe2b11f00f5a86ab8b384c952b0bd66a''
            OR observed_prefix_digest !~ ''^sha256:[0-9a-f]{64}$'' THEN
             differences := pg_catalog.array_append(
                 differences, ''migration 0001 ledger identity differs''
@@ -8296,7 +8486,7 @@ AS 'DECLARE
           INTO observed_structural_catalog_digest
           FROM catalog_entry;
         IF observed_structural_catalog_digest <>
-                ''sha256:41e8540211ecadf08a6dcd80f499a0bc17c93ba8e5c64914d1c620ab17686fd3'' THEN
+                ''sha256:31bf0f1dadcbd8729bc4caa0373008c84549d9c90b6d2da185dbfece343e4a4a'' THEN
             differences := pg_catalog.array_append(
                 differences, ''complete tenant catalog fingerprint differs''
             );

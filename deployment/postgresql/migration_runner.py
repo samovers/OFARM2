@@ -530,23 +530,33 @@ def _target_identity(
 
 
 def _begin_and_lock(connection: psycopg.Connection, spec: ProvisioningSpec) -> None:
-    connection.execute(
-        "BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED READ WRITE"
-    )
     wrapper = sql.Identifier(
         spec.migration_lock.schema_name,
         spec.migration_lock.function_name,
     )
     try:
-        connection.execute(sql.SQL("SELECT {}()").format(wrapper)).fetchone()
-    except (psycopg.errors.QueryCanceled, psycopg.errors.LockNotAvailable) as exc:
+        connection.execute(
+            "BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED READ WRITE"
+        )
+        try:
+            connection.execute(sql.SQL("SELECT {}()").format(wrapper)).fetchone()
+        except (
+            psycopg.errors.QueryCanceled,
+            psycopg.errors.LockNotAvailable,
+        ) as exc:
+            raise MigrationBusyError(
+                "another migration runner holds the lock"
+            ) from exc
+        for assignment in CATALOG_OUTPUT_SETTING_ASSIGNMENTS:
+            connection.execute(f"SET LOCAL {assignment}")
+    except MigrationBusyError:
         _rollback_quietly(connection)
-        raise MigrationBusyError("another migration runner holds the lock") from exc
+        raise
     except psycopg.Error as exc:
         _rollback_quietly(connection)
-        raise MigrationTargetError("protected migration lock failed") from exc
-    for assignment in CATALOG_OUTPUT_SETTING_ASSIGNMENTS:
-        connection.execute(f"SET LOCAL {assignment}")
+        raise MigrationTargetError(
+            "protected migration transaction setup failed"
+        ) from exc
 
 
 def _rollback_quietly(connection: psycopg.Connection) -> None:

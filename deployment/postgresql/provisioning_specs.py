@@ -1425,6 +1425,23 @@ _TENANT_INITIAL_OWNER_SEALER = TenantInitialOwnerSealerSpec(
             "ofarm_graph_validator",
         ),
         RoutineOwnerTransfer(
+            "ofarm",
+            "publish_materialization_generation",
+            (
+                "text",
+                "text",
+                "jsonb",
+                "text",
+                "jsonb",
+                "text",
+                "text",
+                "text",
+                "jsonb",
+                "text",
+            ),
+            "ofarm_graph_validator",
+        ),
+        RoutineOwnerTransfer(
             "ofarm", "take_tenant_write_lock", (), "ofarm_tenant_lock_owner"
         ),
     ),
@@ -2103,6 +2120,7 @@ def _validate_spec(spec: ProvisioningSpec) -> None:
                     "bigint",
                     "bytea",
                     "integer",
+                    "jsonb",
                     "timestamp with time zone",
                 }
                 for value in transfer.argument_types

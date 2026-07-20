@@ -6,6 +6,7 @@ import base64
 import hashlib
 import io
 import json
+import os
 import re
 import shutil
 import tarfile
@@ -29,6 +30,7 @@ from deployment.postgresql.native_evidence import (
     docker_transport_child_identity,
     finalize_evidence_receipt,
     prepare_release_identity,
+    verify_frozen_evidence_receipt,
 )
 from deployment.postgresql.native_release_identity import (
     EVIDENCE_AUTHORITY_PATHS,
@@ -97,6 +99,67 @@ def _different_authority_snapshot(value: dict[str, object]) -> dict[str, object]
 
 def _json_bytes(value: object) -> bytes:
     return json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+
+
+def test_authority_file_read_is_descriptor_pinned_during_path_replacement(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    authority_path = tmp_path / "authority.json"
+    authority_path.write_bytes(b"original")
+    replacement_path = tmp_path / "replacement.json"
+    replacement_path.write_bytes(b"replacement")
+    real_open = os.open
+
+    def open_then_replace(path, flags):
+        descriptor = real_open(path, flags)
+        os.replace(replacement_path, authority_path)
+        return descriptor
+
+    monkeypatch.setattr(native_release_identity.os, "open", open_then_replace)
+
+    assert native_release_identity._read_regular(
+        authority_path, 64, "authority"
+    ) == b"original"
+    assert authority_path.read_bytes() == b"replacement"
+
+
+def test_authority_file_read_refuses_symlink(tmp_path: Path) -> None:
+    target = tmp_path / "target.json"
+    target.write_bytes(b"original")
+    symlink = tmp_path / "authority.json"
+    symlink.symlink_to(target)
+
+    with pytest.raises(NativeReleaseIdentityError, match="unavailable"):
+        native_release_identity._read_regular(symlink, 64, "authority")
+
+
+@pytest.mark.parametrize("mutation", ("grow", "truncate"))
+def test_authority_file_read_refuses_in_place_size_change(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
+) -> None:
+    target = tmp_path / "target.json"
+    target.write_bytes(b"original")
+    real_read = os.read
+    changed = False
+
+    def change_before_read(descriptor: int, size: int) -> bytes:
+        nonlocal changed
+        if not changed:
+            changed = True
+            if mutation == "grow":
+                with target.open("ab") as stream:
+                    stream.write(b"-grew")
+            else:
+                with target.open("r+b") as stream:
+                    stream.truncate(1)
+        return real_read(descriptor, size)
+
+    monkeypatch.setattr(native_release_identity.os, "read", change_before_read)
+    with pytest.raises(NativeReleaseIdentityError, match="changed while reading"):
+        native_release_identity._read_regular(target, 64, "authority")
 
 
 def _descriptor(data: bytes, media_type: str, **additional):
@@ -3138,6 +3201,71 @@ def test_frozen_receipt_refuses_provider_verification_mutation(
             verify_current_authority=True,
             repository_root=RELEASE_PACKAGE_ROOT,
         )
+
+
+def test_frozen_receipt_refuses_recomputed_fake_dsse_signatures(
+    tmp_path: Path,
+) -> None:
+    document = json.loads(EVIDENCE_RECEIPT_PATH.read_bytes())
+    provider = document["preservation"]["providerVerification"]
+    metadata = provider["metadata"]
+    commands = [metadata["releaseAttestation"]]
+    commands.extend(
+        entry["verification"] for entry in metadata["assetAttestations"]
+    )
+    fake_signature = base64.b64encode(b"fake").decode("ascii")
+    for command in commands:
+        command["document"]["attestation"]["bundle"]["dsseEnvelope"][
+            "signatures"
+        ][0]["sig"] = fake_signature
+        canonical = release_canonical_json_bytes(command["document"])
+        command["canonicalDigest"] = _digest(canonical)
+        command["size"] = len(canonical)
+    provider["canonicalDigest"] = _digest(
+        release_canonical_json_bytes(metadata)
+    )
+    hostile_receipt = tmp_path / "hostile-receipt.json"
+    hostile_receipt.write_bytes(release_canonical_json_bytes(document))
+    identity = load_native_release_identity(
+        verify_current_sources=True,
+        source_directory=SOURCE_DIRECTORY,
+    )
+
+    with pytest.raises(
+        NativeReleaseIdentityError,
+        match="retained provider-verification digest differs",
+    ):
+        load_native_evidence_receipt(
+            hostile_receipt,
+            release_identity=identity,
+            verify_current_authority=True,
+            repository_root=RELEASE_PACKAGE_ROOT,
+        )
+
+
+def test_frozen_receipt_is_reverified_by_the_maintained_provider_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    document = json.loads(EVIDENCE_RECEIPT_PATH.read_bytes())
+    retained = document["preservation"]["providerVerification"]
+    observed: dict[str, object] = {}
+
+    def authenticate(**values):
+        observed.update(values)
+        return retained
+
+    monkeypatch.setattr(native_evidence, "_authenticate_github_release", authenticate)
+
+    result = verify_frozen_evidence_receipt(
+        release_identity_path=native_release_identity.IDENTITY_PATH,
+        evidence_receipt_path=EVIDENCE_RECEIPT_PATH,
+        source_directory=SOURCE_DIRECTORY,
+        repository_root=RELEASE_PACKAGE_ROOT,
+    )
+
+    assert result["status"] == "cryptographically-verified"
+    assert result["providerVerificationDigest"] == retained["canonicalDigest"]
+    assert observed["candidate"].status == "frozen"
 
 
 def test_conformance_environment_carries_release_status_and_exact_archive(

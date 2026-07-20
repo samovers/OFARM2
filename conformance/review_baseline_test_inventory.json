@@ -2171,6 +2171,16 @@
       "sourcePath": "kernel/tests/test_postgresql_migration_cli.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_migration_cli.py::test_transaction_setup_failure_is_sanitized_at_the_cli_boundary[BEGIN]",
+      "sourceModule": "kernel.tests.test_postgresql_migration_cli",
+      "sourcePath": "kernel/tests/test_postgresql_migration_cli.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_migration_cli.py::test_transaction_setup_failure_is_sanitized_at_the_cli_boundary[SET LOCAL]",
+      "sourceModule": "kernel.tests.test_postgresql_migration_cli",
+      "sourcePath": "kernel/tests/test_postgresql_migration_cli.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_admin_and_migrator_routes_cannot_be_crossed_between_services",
       "sourceModule": "kernel.tests.test_postgresql_migration_runner",
       "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
@@ -2506,6 +2516,16 @@
       "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_transaction_setup_failures_are_normalized_and_rolled_back[BEGIN]",
+      "sourceModule": "kernel.tests.test_postgresql_migration_runner",
+      "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_transaction_setup_failures_are_normalized_and_rolled_back[SET LOCAL]",
+      "sourceModule": "kernel.tests.test_postgresql_migration_runner",
+      "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_archive_path_replacement_cannot_separate_hashed_and_parsed_bytes",
       "sourceModule": "kernel.tests.test_postgresql_native_evidence",
       "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
@@ -2517,6 +2537,26 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_attested_oci_child_must_equal_both_clean_builds",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_authority_file_read_is_descriptor_pinned_during_path_replacement",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_authority_file_read_refuses_in_place_size_change[grow]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_authority_file_read_refuses_in_place_size_change[truncate]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_authority_file_read_refuses_symlink",
       "sourceModule": "kernel.tests.test_postgresql_native_evidence",
       "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
     },
@@ -2866,6 +2906,11 @@
       "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_frozen_receipt_is_reverified_by_the_maintained_provider_path",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_frozen_receipt_refuses_every_partial_historical_marker_set[False-False-True]",
       "sourceModule": "kernel.tests.test_postgresql_native_evidence",
       "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
@@ -3017,6 +3062,11 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_frozen_receipt_refuses_provider_verification_mutation[_replace_one_asset_command_bundle-differs from the verified release attestation]",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_frozen_receipt_refuses_recomputed_fake_dsse_signatures",
       "sourceModule": "kernel.tests.test_postgresql_native_evidence",
       "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
     },
@@ -4857,6 +4907,26 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_native_verifier_preflight_checks_complete_extension_dependency_set",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_nil_principal_lifecycle_act_refuses_before_transition[ACTIVATE]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_nil_principal_lifecycle_act_refuses_before_transition[SUPERSEDE]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_nil_principal_lifecycle_ids_are_schema_invalid[principal_binding_current-lifecycle_head_id-principal_binding_current_head_id_check]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_nil_principal_lifecycle_ids_are_schema_invalid[principal_binding_lifecycle-act_id-principal_binding_lifecycle_act_id_check]",
       "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
@@ -7161,8 +7231,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "6b5452f0c24d8438b94da6893fb1d0ab7cdec873a0b25dc77e71fb022edf0888",
-  "entryCount": 1432,
+  "entriesSha256": "dec4606679c21ff5db3239eaf4092603e7c8ce5056622fce8bc8c5eff1282fb8",
+  "entryCount": 1446,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

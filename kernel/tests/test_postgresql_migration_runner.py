@@ -28,6 +28,7 @@ from deployment.postgresql.migration_runner import (
     MigrationOutcomeUnknown,
     MigrationRunReport,
     MigrationTargetError,
+    _begin_and_lock,
     _migrate_service_for_testing as migrate_service,
     initial_ledger_sql,
     migrate_service as migrate_authoritative_service,
@@ -60,6 +61,40 @@ TENANT_ADMIN_ENV = "OFARM_TENANT_PROVISIONING_PG_ADMIN_DSN"
 AUDIT_ADMIN_ENV = "OFARM_SECURITY_AUDIT_PG_ADMIN_DSN"
 MAINTENANCE_DATABASES = ("postgres", "template0", "template1")
 RELEASE_IDENTITY = "ofarm-tests/issue-174"
+
+
+class _FailingTransactionSetup:
+    def __init__(self, failure_prefix: str) -> None:
+        self.failure_prefix = failure_prefix
+        self.rolled_back = False
+
+    def execute(self, statement):
+        rendered = str(statement)
+        if rendered.startswith(self.failure_prefix):
+            raise psycopg.OperationalError("SECRET-TRANSACTION-SETUP-SENTINEL")
+        return self
+
+    def fetchone(self):
+        return (None,)
+
+    def rollback(self) -> None:
+        self.rolled_back = True
+
+
+@pytest.mark.parametrize("failure_prefix", ("BEGIN", "SET LOCAL"))
+def test_transaction_setup_failures_are_normalized_and_rolled_back(
+    failure_prefix: str,
+) -> None:
+    connection = _FailingTransactionSetup(failure_prefix)
+
+    with pytest.raises(
+        MigrationTargetError,
+        match="protected migration transaction setup failed",
+    ) as raised:
+        _begin_and_lock(connection, TENANT_PROVISIONING_SPEC)  # type: ignore[arg-type]
+
+    assert connection.rolled_back is True
+    assert "SECRET-TRANSACTION-SETUP-SENTINEL" not in str(raised.value)
 
 
 @dataclass(frozen=True, slots=True)
