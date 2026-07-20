@@ -72,8 +72,8 @@ jobs:
             --provenance=false \
             --sbom=false \
             --build-arg SOURCE_DATE_EPOCH=0 \
-            --metadata-file .artifacts/derived-postgresql/metadata.json \
-            --load \
+            --output \
+              "type=oci,dest=.artifacts/derived-postgresql/ofarm-postgresql-conformance.oci.tar,oci-mediatypes=true" \
             --tag ofarm-postgresql-conformance:local \
             deployment/postgresql/ofarm_ed25519
       - name: Authenticate the derived PostgreSQL release identity
@@ -84,14 +84,35 @@ jobs:
               deployment/postgresql/ofarm_ed25519/native_release_identity.json \
             --checked-receipt \
               deployment/postgresql/ofarm_ed25519/native_evidence_receipt.json \
-            --metadata .artifacts/derived-postgresql/metadata.json \
+            --archive \
+              .artifacts/derived-postgresql/ofarm-postgresql-conformance.oci.tar \
             --source-directory deployment/postgresql/ofarm_ed25519 \
             --repository-root . \
             --image-name ofarm-postgresql-conformance:local \
-            --metadata-reference \
-              .artifacts/derived-postgresql/metadata.json \
+            --archive-reference \
+              .artifacts/derived-postgresql/ofarm-postgresql-conformance.oci.tar \
             > .artifacts/derived-postgresql/environment
           cat .artifacts/derived-postgresql/environment >> "$GITHUB_ENV"
+      - name: Load the exact authenticated derived PostgreSQL image
+        run: |
+          if docker image inspect ofarm-postgresql-conformance:local \
+            >/dev/null 2>&1
+          then
+            exit 1
+          fi
+          docker load --input \
+            .artifacts/derived-postgresql/ofarm-postgresql-conformance.oci.tar
+          observed_id="$(docker image inspect --format '{{.Id}}' \
+            ofarm-postgresql-conformance:local)"
+          if test "$observed_id" != \
+              "$ISSUE174_DERIVED_POSTGRES_CHILD_DIGEST" \
+            && test "$observed_id" != \
+              "$ISSUE174_DERIVED_POSTGRES_CONFIG_DIGEST"
+          then
+            exit 1
+          fi
+          test "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' \
+            ofarm-postgresql-conformance:local)" = "linux/amd64"
       - name: Start three independent derived PostgreSQL clusters
         run: |
           docker run --detach --name ofarm-conformance-main \
@@ -319,9 +340,8 @@ jobs:
               --provenance=false \
               --sbom=false \
               --build-arg SOURCE_DATE_EPOCH=0 \
-              --metadata-file \
-                ".artifacts/native/${{ matrix.architecture }}/${build}-metadata.json" \
-              --output "type=docker,oci-mediatypes=true" \
+              --output \
+                "type=oci,dest=.artifacts/native/${{ matrix.architecture }}/${build}-image.oci.tar,oci-mediatypes=true" \
               --tag "ofarm-ed25519-${{ matrix.architecture }}:${build}" \
               deployment/postgresql/ofarm_ed25519
             docker buildx build \
@@ -346,10 +366,10 @@ jobs:
       - name: Prove child and installed-artifact reproducibility
         run: >-
           python deployment/postgresql/native_evidence.py compare-builds
-          --first-metadata
-          ".artifacts/native/${{ matrix.architecture }}/first-metadata.json"
-          --second-metadata
-          ".artifacts/native/${{ matrix.architecture }}/second-metadata.json"
+          --first-archive
+          ".artifacts/native/${{ matrix.architecture }}/first-image.oci.tar"
+          --second-archive
+          ".artifacts/native/${{ matrix.architecture }}/second-image.oci.tar"
           --first-artifacts
           ".artifacts/native/${{ matrix.architecture }}/first"
           --second-artifacts
@@ -358,6 +378,36 @@ jobs:
           --source-commit "${{ github.sha }}"
           --output
           ".artifacts/native/${{ matrix.architecture }}/reproducibility.json"
+      - name: Load and verify the authenticated clean native child
+        run: |
+          image="ofarm-ed25519-${{ matrix.architecture }}:second"
+          if docker image inspect "$image" >/dev/null 2>&1
+          then
+            exit 1
+          fi
+          docker load --input \
+            ".artifacts/native/${{ matrix.architecture }}/second-image.oci.tar"
+          expected_child="$(python -c \
+            'import json,pathlib,sys; print(json.loads(pathlib.Path(sys.argv[1]).read_bytes())["child_digest"])' \
+            ".artifacts/native/${{ matrix.architecture }}/reproducibility.json")"
+          expected_config="$(python -c \
+            'import json,pathlib,sys; print(json.loads(pathlib.Path(sys.argv[1]).read_bytes())["config_digest"])' \
+            ".artifacts/native/${{ matrix.architecture }}/reproducibility.json")"
+          observed_id="$(docker image inspect --format '{{.Id}}' "$image")"
+          if test "$observed_id" != "$expected_child" \
+            && test "$observed_id" != "$expected_config"
+          then
+            exit 1
+          fi
+          test "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' \
+            "$image")" = "linux/${{ matrix.architecture }}"
+          rm -- \
+            ".artifacts/native/${{ matrix.architecture }}/first-image.oci.tar" \
+            ".artifacts/native/${{ matrix.architecture }}/second-image.oci.tar"
+          test ! -e \
+            ".artifacts/native/${{ matrix.architecture }}/first-image.oci.tar"
+          test ! -e \
+            ".artifacts/native/${{ matrix.architecture }}/second-image.oci.tar"
       - name: Run the exact live PostgreSQL verifier smoke
         run: |
           docker run --detach --name ofarm-native-live \

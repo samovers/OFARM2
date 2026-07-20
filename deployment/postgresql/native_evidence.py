@@ -70,9 +70,9 @@ except ModuleNotFoundError:  # Direct execution from this source directory.
     )
 
 
-MAX_METADATA_BYTES = 64 * 1024
 MAX_REPRODUCIBILITY_REPORT_BYTES = 64 * 1024
 MAX_OCI_EVIDENCE_REPORT_BYTES = 64 * 1024
+MAX_CANONICAL_INDEX_BYTES = 64 * 1024
 MAX_OCI_ARCHIVE_BYTES = 512 * 1024 * 1024
 MAX_OCI_MEMBER_COUNT = 2_048
 MAX_OCI_EXPANDED_BYTES = 1024 * 1024 * 1024
@@ -391,35 +391,6 @@ def _publish_regular_no_clobber(path: Path, data: bytes, label: str) -> None:
             pass
 
 
-def metadata_child_identity(path: Path, label: str) -> tuple[str, str]:
-    """Read one direct runtime-child identity from bounded Buildx metadata."""
-
-    metadata = _require_object(
-        _load_json_file(path, MAX_METADATA_BYTES, label),
-        label,
-    )
-    digest = _require_digest(metadata.get("containerimage.digest"), f"{label} digest")
-    config_digest = _require_digest(
-        metadata.get("containerimage.config.digest"), f"{label} config digest"
-    )
-    descriptor = _require_object(
-        metadata.get("containerimage.descriptor"), f"{label} descriptor"
-    )
-    if descriptor.get("mediaType") not in OCI_MANIFEST_MEDIA_TYPES:
-        raise NativeEvidenceError(
-            f"{label} describes an index instead of one runtime child"
-        )
-    if _require_digest(descriptor.get("digest"), f"{label} descriptor digest") != digest:
-        raise NativeEvidenceError(f"{label} descriptor digest is inconsistent")
-    size = descriptor.get("size")
-    if not isinstance(size, int) or isinstance(size, bool) or size <= 0:
-        raise NativeEvidenceError(f"{label} descriptor size is invalid")
-    annotations = descriptor.get("annotations")
-    if not isinstance(annotations, dict) or annotations.get("config.digest") != config_digest:
-        raise NativeEvidenceError(f"{label} config annotation is inconsistent")
-    return digest, config_digest
-
-
 def _artifact_identity(
     directory: Path,
     name: str,
@@ -442,8 +413,8 @@ def _artifact_identity(
 
 def compare_builds(
     *,
-    first_metadata: Path,
-    second_metadata: Path,
+    first_archive: Path,
+    second_archive: Path,
     first_artifacts: Path,
     second_artifacts: Path,
     platform: str,
@@ -454,11 +425,15 @@ def compare_builds(
 
     platform = _require_platform(platform)
     source_commit = _require_source_commit(source_commit)
-    first_digest, first_config_digest = metadata_child_identity(
-        first_metadata, "first build metadata"
+    first_digest, first_config_digest = direct_oci_child_identity(
+        first_archive,
+        "first clean build OCI archive",
+        platform=platform,
     )
-    second_digest, second_config_digest = metadata_child_identity(
-        second_metadata, "second build metadata"
+    second_digest, second_config_digest = direct_oci_child_identity(
+        second_archive,
+        "second clean build OCI archive",
+        platform=platform,
     )
     if (first_digest, first_config_digest) != (
         second_digest,
@@ -514,6 +489,7 @@ class _OciArchive:
         if len(members) > MAX_OCI_MEMBER_COUNT:
             raise NativeEvidenceError("OCI archive contains too many members")
         expanded_size = 0
+        seen_names: set[str] = set()
         for member in members:
             name = member.name.removeprefix("./")
             pure_name = PurePosixPath(name)
@@ -521,9 +497,10 @@ class _OciArchive:
                 not name
                 or pure_name.is_absolute()
                 or ".." in pure_name.parts
-                or name in self._members
+                or name in seen_names
             ):
                 raise NativeEvidenceError("OCI archive contains an unsafe member name")
+            seen_names.add(name)
             if member.isdir():
                 if name not in {"blobs", "blobs/sha256"}:
                     raise NativeEvidenceError("OCI archive contains an unexpected directory")
@@ -664,13 +641,28 @@ def _load_manifest(
 
 
 def _authenticate_runtime_manifest(
-    archive: _OciArchive, manifest: dict[str, Any]
+    archive: _OciArchive,
+    manifest: dict[str, Any],
+    platform: str,
 ) -> str:
+    platform = _require_platform(platform)
     config = _require_object(manifest.get("config"), "runtime config descriptor")
     if config.get("mediaType") != OCI_CONFIG_MEDIA_TYPE:
         raise NativeEvidenceError("runtime config media type is not exact")
     config_digest = _require_digest(config.get("digest"), "runtime config digest")
-    archive.descriptor_bytes(config, MAX_MANIFEST_BYTES, "runtime config")
+    config_document = _require_object(
+        _load_json_bytes(
+            archive.descriptor_bytes(config, MAX_MANIFEST_BYTES, "runtime config"),
+            "runtime config",
+        ),
+        "runtime config",
+    )
+    expected_os, expected_architecture = platform.split("/", 1)
+    if (
+        config_document.get("os") != expected_os
+        or config_document.get("architecture") != expected_architecture
+    ):
+        raise NativeEvidenceError("runtime config platform is inconsistent")
     layers = manifest.get("layers")
     if not isinstance(layers, list) or not 1 <= len(layers) <= 64:
         raise NativeEvidenceError("runtime layer set is absent or unbounded")
@@ -684,6 +676,85 @@ def _authenticate_runtime_manifest(
             f"runtime layer {index}",
         )
     return config_digest
+
+
+def direct_oci_child_identity(
+    path: Path,
+    label: str,
+    *,
+    platform: str,
+) -> tuple[str, str]:
+    """Authenticate one direct single-platform OCI runtime child."""
+
+    platform = _require_platform(platform)
+    expected_os, expected_architecture = platform.split("/", 1)
+    archive = _OciArchive(path)
+    try:
+        layout = _require_object(
+            _load_json_bytes(
+                archive.read_member("oci-layout", 4 * 1024, f"{label} OCI layout"),
+                f"{label} OCI layout",
+            ),
+            f"{label} OCI layout",
+        )
+        if layout != {"imageLayoutVersion": "1.0.0"}:
+            raise NativeEvidenceError(
+                f"{label} OCI layout version is not exactly 1.0.0"
+            )
+        index = _require_object(
+            _load_json_bytes(
+                archive.read_member(
+                    "index.json",
+                    MAX_MANIFEST_BYTES,
+                    f"{label} OCI index",
+                ),
+                f"{label} OCI index",
+            ),
+            f"{label} OCI index",
+        )
+        descriptors = _manifest_descriptors(index)
+        if len(descriptors) != 1:
+            raise NativeEvidenceError(
+                f"{label} OCI index must contain one direct runtime child"
+            )
+        descriptor = descriptors[0]
+        if descriptor.get("mediaType") not in OCI_MANIFEST_MEDIA_TYPES:
+            raise NativeEvidenceError(
+                f"{label} OCI index does not directly reference one runtime child"
+            )
+        if "artifactType" in descriptor or "subject" in descriptor:
+            raise NativeEvidenceError(f"{label} runtime descriptor is not a plain image")
+        if descriptor.get("platform") != {
+            "os": expected_os,
+            "architecture": expected_architecture,
+        }:
+            raise NativeEvidenceError(f"{label} runtime descriptor platform is inconsistent")
+        annotations = descriptor.get("annotations", {})
+        if not isinstance(annotations, dict):
+            raise NativeEvidenceError(f"{label} runtime descriptor annotations are malformed")
+        if any(
+            key in annotations
+            for key in (
+                ATTESTATION_REFERENCE_ANNOTATION,
+                ATTESTATION_TYPE_ANNOTATION,
+            )
+        ):
+            raise NativeEvidenceError(f"{label} runtime descriptor is an attestation")
+        child_digest = _require_digest(
+            descriptor.get("digest"), f"{label} runtime child digest"
+        )
+        manifest = _load_manifest(archive, descriptor, f"{label} runtime manifest")
+        if (
+            manifest.get("mediaType") not in OCI_MANIFEST_MEDIA_TYPES
+            or "artifactType" in manifest
+            or "subject" in manifest
+        ):
+            raise NativeEvidenceError(f"{label} runtime manifest is not a plain image")
+        config_digest = _authenticate_runtime_manifest(archive, manifest, platform)
+        archive.require_no_unreferenced_blobs()
+    finally:
+        archive.close()
+    return child_digest, config_digest
 
 
 def _require_exact_runtime_subject(
@@ -992,7 +1063,7 @@ def _inspect_oci_archive(
             archive, runtime_descriptor, "runtime manifest"
         )
         runtime_config_digest = _authenticate_runtime_manifest(
-            archive, runtime_manifest
+            archive, runtime_manifest, platform
         )
         attestation_manifest = _load_manifest(
             archive, attestation_descriptor, "attestation manifest"
@@ -1405,7 +1476,7 @@ def prepare_release_identity(
         )
         index_bytes = _read_bounded(
             index_path,
-            MAX_METADATA_BYTES,
+            MAX_CANONICAL_INDEX_BYTES,
             "canonical multi-platform index",
         )
         candidate = frozen_identity_document(
@@ -1970,23 +2041,24 @@ def conformance_environment(
     *,
     checked_identity_path: Path,
     checked_receipt_path: Path,
-    metadata_path: Path,
+    archive_path: Path,
     source_directory: Path,
     repository_root: Path,
     image_name: str,
-    metadata_reference: str,
+    archive_reference: str,
 ) -> str:
     """Resolve exact derived-image test inputs without a frozen bootstrap claim."""
 
     if image_name != "ofarm-postgresql-conformance:local":
         raise NativeEvidenceError("conformance image name is not the exact local tag")
     if (
-        not metadata_reference
-        or len(metadata_reference) > 1024
-        or "\n" in metadata_reference
-        or "\r" in metadata_reference
+        not archive_reference
+        or len(archive_reference) > 1024
+        or "\n" in archive_reference
+        or "\r" in archive_reference
+        or str(archive_path) != archive_reference
     ):
-        raise NativeEvidenceError("conformance metadata reference is invalid")
+        raise NativeEvidenceError("conformance OCI archive reference is invalid")
     try:
         identity = load_native_release_identity(
             checked_identity_path,
@@ -2001,9 +2073,10 @@ def conformance_environment(
         )
     except NativeReleaseIdentityError as exc:
         raise NativeEvidenceError(str(exc)) from exc
-    observed_child, observed_config = metadata_child_identity(
-        metadata_path,
-        "derived PostgreSQL build metadata",
+    observed_child, observed_config = direct_oci_child_identity(
+        archive_path,
+        "derived PostgreSQL OCI archive",
+        platform="linux/amd64",
     )
     if identity.status == "frozen":
         amd64 = identity.document["platforms"][0]
@@ -2018,7 +2091,7 @@ def conformance_environment(
         expected_config = observed_config
     values = {
         "ISSUE174_DERIVED_POSTGRES_IMAGE": image_name,
-        "ISSUE174_DERIVED_POSTGRES_METADATA": metadata_reference,
+        "ISSUE174_DERIVED_POSTGRES_ARCHIVE": archive_reference,
         "ISSUE174_DERIVED_POSTGRES_CHILD_DIGEST": expected_child,
         "ISSUE174_DERIVED_POSTGRES_CONFIG_DIGEST": expected_config,
         "ISSUE174_DERIVED_POSTGRES_IDENTITY_STATUS": identity.status,
@@ -2033,8 +2106,8 @@ def _parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     compare = subparsers.add_parser("compare-builds")
-    compare.add_argument("--first-metadata", type=Path, required=True)
-    compare.add_argument("--second-metadata", type=Path, required=True)
+    compare.add_argument("--first-archive", type=Path, required=True)
+    compare.add_argument("--second-archive", type=Path, required=True)
     compare.add_argument("--first-artifacts", type=Path, required=True)
     compare.add_argument("--second-artifacts", type=Path, required=True)
     compare.add_argument("--platform", required=True)
@@ -2077,11 +2150,11 @@ def _parser() -> argparse.ArgumentParser:
     environment = subparsers.add_parser("conformance-environment")
     environment.add_argument("--checked-identity", type=Path, required=True)
     environment.add_argument("--checked-receipt", type=Path, required=True)
-    environment.add_argument("--metadata", type=Path, required=True)
+    environment.add_argument("--archive", type=Path, required=True)
     environment.add_argument("--source-directory", type=Path, required=True)
     environment.add_argument("--repository-root", type=Path, required=True)
     environment.add_argument("--image-name", required=True)
-    environment.add_argument("--metadata-reference", required=True)
+    environment.add_argument("--archive-reference", required=True)
     return parser
 
 
@@ -2090,8 +2163,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "compare-builds":
             compare_builds(
-                first_metadata=args.first_metadata,
-                second_metadata=args.second_metadata,
+                first_archive=args.first_archive,
+                second_archive=args.second_archive,
                 first_artifacts=args.first_artifacts,
                 second_artifacts=args.second_artifacts,
                 platform=args.platform,
@@ -2140,11 +2213,11 @@ def main(argv: list[str] | None = None) -> int:
                 conformance_environment(
                     checked_identity_path=args.checked_identity,
                     checked_receipt_path=args.checked_receipt,
-                    metadata_path=args.metadata,
+                    archive_path=args.archive,
                     source_directory=args.source_directory,
                     repository_root=args.repository_root,
                     image_name=args.image_name,
-                    metadata_reference=args.metadata_reference,
+                    archive_reference=args.archive_reference,
                 ),
                 end="",
             )

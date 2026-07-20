@@ -17,7 +17,8 @@ candidate containing the canonical amd64/arm64 index bytes, both child and
 configuration digests, the four installed-artifact identities per platform,
 the exact source inventory, build pins, and workflow-action pins. A later
 reviewed commit freezes those bytes. Conformance refuses to call the derived
-image frozen unless its Buildx metadata matches that checked identity exactly.
+image frozen unless the directly authenticated OCI archive matches that checked
+child and configuration identity exactly; only that archive is then loaded.
 
 `native_evidence_receipt.json` is the separate checked, durable evidence record.
 Its provisional form contains no build, platform, attestation, archive, or
@@ -86,9 +87,10 @@ image timestamps when the caller supplies the argument. The extension build
 stages exactly three runtime files in a dedicated root, normalizes every file
 and directory timestamp, and copies that root as one final layer. A clean-build
 reproducibility check runs the command twice with `--no-cache` and compares the
-image configuration, root-filesystem layer digests, and SHA-256 values for the
-shared object, control file, and SQL file. BuildKit provenance attestations are
-separate evidence objects and are not part of that byte comparison.
+authenticated OCI child/configuration identity and the SHA-256, size, and mode
+of the static library, shared object, control file, and SQL file. BuildKit
+provenance attestations are separate evidence objects and are not part of that
+byte comparison.
 
 The dedicated sanitizer target accepts only `address` or `undefined`. Each
 selection rebuilds the same pinned libsodium source with that sanitizer, runs

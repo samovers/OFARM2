@@ -42,12 +42,12 @@ from deployment.postgresql.readiness import (
     verify_security_audit_structural_compatibility,
     verify_tenant_structural_compatibility,
 )
-from deployment.postgresql.native_evidence import metadata_child_identity
+from deployment.postgresql.native_evidence import direct_oci_child_identity
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 DERIVED_IMAGE_ENV = "ISSUE174_DERIVED_POSTGRES_IMAGE"
-DERIVED_METADATA_ENV = "ISSUE174_DERIVED_POSTGRES_METADATA"
+DERIVED_ARCHIVE_ENV = "ISSUE174_DERIVED_POSTGRES_ARCHIVE"
 DERIVED_CHILD_DIGEST_ENV = "ISSUE174_DERIVED_POSTGRES_CHILD_DIGEST"
 DERIVED_CONFIG_DIGEST_ENV = "ISSUE174_DERIVED_POSTGRES_CONFIG_DIGEST"
 DERIVED_IDENTITY_STATUS_ENV = "ISSUE174_DERIVED_POSTGRES_IDENTITY_STATUS"
@@ -91,20 +91,20 @@ def _required_environment(name: str) -> str | None:
 
 def _require_exact_pinned_image() -> str:
     image_name = _required_environment(DERIVED_IMAGE_ENV)
-    metadata_name = _required_environment(DERIVED_METADATA_ENV)
+    archive_name = _required_environment(DERIVED_ARCHIVE_ENV)
     expected_child = _required_environment(DERIVED_CHILD_DIGEST_ENV)
     expected_config = _required_environment(DERIVED_CONFIG_DIGEST_ENV)
     identity_status = _required_environment(DERIVED_IDENTITY_STATUS_ENV)
     if None in (
         image_name,
-        metadata_name,
+        archive_name,
         expected_child,
         expected_config,
         identity_status,
     ):
         pytest.skip("the locally built derived PostgreSQL image is not configured")
     assert image_name is not None
-    assert metadata_name is not None
+    assert archive_name is not None
     assert expected_child is not None
     assert expected_config is not None
     assert identity_status is not None
@@ -129,15 +129,16 @@ def _require_exact_pinned_image() -> str:
             pytest.fail("the GitHub runner Docker daemon is unavailable")
         pytest.skip("a Docker daemon is required for the physical-clone test")
 
-    metadata_path = Path(metadata_name)
-    if not metadata_path.is_absolute():
-        metadata_path = PACKAGE_ROOT / metadata_path
-    observed_child, observed_config = metadata_child_identity(
-        metadata_path,
-        "derived PostgreSQL build metadata",
+    archive_path = Path(archive_name)
+    if not archive_path.is_absolute():
+        archive_path = PACKAGE_ROOT / archive_path
+    observed_child, observed_config = direct_oci_child_identity(
+        archive_path,
+        "derived PostgreSQL OCI archive",
+        platform="linux/amd64",
     )
     if (observed_child, observed_config) != (expected_child, expected_config):
-        pytest.fail("the derived PostgreSQL build metadata differs from frozen identity")
+        pytest.fail("the derived PostgreSQL OCI archive differs from frozen identity")
 
     image = _docker("image", "inspect", image_name, check=False)
     if image.returncode != 0:
@@ -153,7 +154,7 @@ def _require_exact_pinned_image() -> str:
     inspected = inspected_images[0]
     if (
         not isinstance(inspected, dict)
-        or inspected.get("Id") != expected_config
+        or inspected.get("Id") not in {expected_child, expected_config}
         or inspected.get("Architecture") != "amd64"
         or inspected.get("Os") != "linux"
         or image_name not in inspected.get("RepoTags", [])
