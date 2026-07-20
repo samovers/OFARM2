@@ -484,7 +484,7 @@ def test_provisioning_specs_freeze_distinct_service_and_role_boundaries():
     ).hexdigest() == \
         "17e431e33221426151a6ceb3eb2214b1abc51a7b9390d508603f233742deca28"
     assert tenant.digest == \
-        "sha256:b1291fd054e4f6bbb32c082ea8cac27abe2b11f00f5a86ab8b384c952b0bd66a"
+        "sha256:4d958a0944b2c1627f8029328b6e6a40607e00aa58c14fd1574aeaa57a094035"
     assert audit.digest == \
         "sha256:770165332bbdb7a5e67e468f021d9fe82df817a2aee1a8a70191a08e869c307a"
     assert next(
