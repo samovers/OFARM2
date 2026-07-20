@@ -475,7 +475,7 @@ def test_promoted_physical_clone_yields_only_structural_compatibility():
         ) as readiness:
             structural = readiness.execute(
                 "SELECT structurally_compatible, difference_count "
-                "FROM ofarm.verify_tenant_structure()"
+                "FROM ofarm.observe_tenant_contract()"
             ).fetchone()
         assert structural == (False, 1)
         with pytest.raises(
