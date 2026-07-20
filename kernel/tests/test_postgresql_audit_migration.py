@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import os
 import secrets
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from threading import Barrier, Event
@@ -866,8 +868,14 @@ def _concurrent_append(
     role: str,
     barrier: Barrier,
     arguments: tuple[object, ...],
+    observed_at: datetime | None = None,
 ) -> tuple[str, object]:
     with psycopg.connect(_role_dsn(state, role), autocommit=True) as producer:
+        if observed_at is not None:
+            producer.execute(
+                "SELECT pg_catalog.set_config('ofarm.test_now', %s, false)",
+                (observed_at.isoformat(),),
+            )
         barrier.wait(timeout=15)
         try:
             row = producer.execute(
@@ -887,12 +895,18 @@ def _run_concurrent_appends(
     state: dict[str, object],
     role: str,
     arguments: tuple[tuple[object, ...], ...],
+    observed_at: datetime | None = None,
 ) -> list[tuple[str, object]]:
     barrier = Barrier(len(arguments))
     with ThreadPoolExecutor(max_workers=len(arguments)) as executor:
         futures = [
             executor.submit(
-                _concurrent_append, state, role, barrier, call_arguments
+                _concurrent_append,
+                state,
+                role,
+                barrier,
+                call_arguments,
+                observed_at,
             )
             for call_arguments in arguments
         ]
@@ -918,6 +932,47 @@ def _replace_pretenant_append_source(
             """
         ).format(sql.Literal(source))
     )
+
+
+@contextmanager
+def _controlled_pretenant_clock(
+    state: dict[str, object],
+) -> Iterator[datetime]:
+    with psycopg.connect(
+        state["target_admin_dsn"], autocommit=True
+    ) as admin:
+        original_source, observed_at = admin.execute(
+            """
+            SELECT routine.prosrc,
+                   pg_catalog.date_bin(
+                       pg_catalog.make_interval(secs => 60),
+                       pg_catalog.clock_timestamp(),
+                       '2000-01-01 00:00:00+00'::pg_catalog.timestamptz
+                   ) + pg_catalog.make_interval(hours => 1, secs => 30)
+            FROM pg_catalog.pg_proc AS routine
+            WHERE routine.oid =
+                'ofarm_security.append_pretenant_failure('
+                'uuid, text, bytea, text, integer)'::pg_catalog.regprocedure
+            """
+        ).fetchone()
+        clock_marker = "    v_now := pg_catalog.clock_timestamp();"
+        assert original_source.count(clock_marker) == 1
+        _replace_pretenant_append_source(
+            admin,
+            original_source.replace(
+                clock_marker,
+                "    v_now := pg_catalog.current_setting('ofarm.test_now')::\n"
+                "        pg_catalog.timestamptz;",
+            ),
+        )
+
+    try:
+        yield observed_at
+    finally:
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            _replace_pretenant_append_source(admin, original_source)
 
 
 def _concurrent_append_at(
@@ -1643,31 +1698,45 @@ def _reset_quota_state(
         )
 
 
-def _bulk_append(
+def _bulk_append_in_one_bucket(
     state: dict[str, object], role: str, prefix: str, reason: str
 ) -> tuple[int, int, int]:
-    with psycopg.connect(_role_dsn(state, role), autocommit=True) as producer:
-        return producer.execute(
-            """
-            WITH calls AS MATERIALIZED (
-                SELECT result.*
-                FROM pg_catalog.generate_series(1, 1025) AS series(value)
-                CROSS JOIN LATERAL ofarm_security.append_pretenant_failure(
-                    (%s || pg_catalog.lpad(value::pg_catalog.text, 12, '0'))::
-                        pg_catalog.uuid,
-                    %s,
-                    pg_catalog.decode(pg_catalog.repeat('cd', 32), 'hex'),
-                    'OFARM_PRETENANT_CORRELATION_V1',
-                    1
-                ) AS result
+    with _controlled_pretenant_clock(state) as observed_at:
+        with psycopg.connect(
+            _role_dsn(state, role), autocommit=True
+        ) as producer:
+            producer.execute(
+                "SELECT pg_catalog.set_config('ofarm.test_now', %s, false)",
+                (observed_at.isoformat(),),
             )
-            SELECT pg_catalog.count(*) FILTER (WHERE stored_individually),
-                   pg_catalog.count(*) FILTER (WHERE NOT stored_individually),
-                   pg_catalog.count(*) FILTER (WHERE overflow_count_unknown)
-            FROM calls
-            """,
-            (prefix, reason),
-        ).fetchone()
+            return producer.execute(
+                """
+                WITH calls AS MATERIALIZED (
+                    SELECT result.*
+                    FROM pg_catalog.generate_series(1, 1025) AS series(value)
+                    CROSS JOIN LATERAL ofarm_security.append_pretenant_failure(
+                        (%s || pg_catalog.lpad(
+                            value::pg_catalog.text, 12, '0'
+                        ))::pg_catalog.uuid,
+                        %s,
+                        pg_catalog.decode(
+                            pg_catalog.repeat('cd', 32), 'hex'
+                        ),
+                        'OFARM_PRETENANT_CORRELATION_V1',
+                        1
+                    ) AS result
+                )
+                SELECT pg_catalog.count(*) FILTER (WHERE stored_individually),
+                       pg_catalog.count(*) FILTER (
+                           WHERE NOT stored_individually
+                       ),
+                       pg_catalog.count(*) FILTER (
+                           WHERE overflow_count_unknown
+                       )
+                FROM calls
+                """,
+                (prefix, reason),
+            ).fetchone()
 
 
 def test_concurrent_writes_at_quota_boundary_store_one_and_overflow_one(
@@ -1677,38 +1746,42 @@ def test_concurrent_writes_at_quota_boundary_store_one_and_overflow_one(
     producer_name = "REQUEST_ROUTER_BOUNDARY_V1"
     component = "REQUEST_ROUTER"
     _reset_quota_state(state, producer_name, component)
-    with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
-        bucket_start = admin.execute(
-            """
-            INSERT INTO ofarm_security.operational_security_quota_bucket (
-                producer, component, bucket_start, accepted_event_count
-            ) VALUES (
-                %s,
-                %s,
-                pg_catalog.date_bin(
-                    pg_catalog.make_interval(secs => 60),
-                    pg_catalog.clock_timestamp(),
-                    '2000-01-01 00:00:00+00'::pg_catalog.timestamptz
-                ),
-                1023
-            )
-            RETURNING bucket_start
-            """,
-            (producer_name, component),
-        ).fetchone()[0]
+    with _controlled_pretenant_clock(state) as observed_at:
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            bucket_start = admin.execute(
+                """
+                INSERT INTO ofarm_security.operational_security_quota_bucket (
+                    producer, component, bucket_start, accepted_event_count
+                ) VALUES (
+                    %s,
+                    %s,
+                    pg_catalog.date_bin(
+                        pg_catalog.make_interval(secs => 60),
+                        %s::pg_catalog.timestamptz,
+                        '2000-01-01 00:00:00+00'::pg_catalog.timestamptz
+                    ),
+                    1023
+                )
+                RETURNING bucket_start
+                """,
+                (producer_name, component, observed_at),
+            ).fetchone()[0]
 
-    event_ids = (uuid4(), uuid4())
-    common = (
-        "BINDER_REFUSED",
-        bytes.fromhex("ab" * 32),
-        "OFARM_PRETENANT_CORRELATION_V1",
-        1,
-    )
-    results = _run_concurrent_appends(
-        state,
-        "ofarm_security_request_router_producer_login",
-        tuple((event_id, *common) for event_id in event_ids),
-    )
+        event_ids = (uuid4(), uuid4())
+        common = (
+            "BINDER_REFUSED",
+            bytes.fromhex("ab" * 32),
+            "OFARM_PRETENANT_CORRELATION_V1",
+            1,
+        )
+        results = _run_concurrent_appends(
+            state,
+            "ofarm_security_request_router_producer_login",
+            tuple((event_id, *common) for event_id in event_ids),
+            observed_at,
+        )
     assert [result[0] for result in results] == ["ok", "ok"]
     rows = [result[1] for result in results]
     assert sorted(row[3] for row in rows) == [False, True]
@@ -1756,7 +1829,7 @@ def test_quota_overflow_is_explicit_bounded_and_count_unknown_closes_once(
     component = "REQUEST_ROUTER"
     _reset_quota_state(state, producer_name, component)
 
-    counts = _bulk_append(
+    counts = _bulk_append_in_one_bucket(
         state,
         "ofarm_security_request_router_producer_login",
         "a1740000-0000-4000-8000-",
@@ -1827,8 +1900,16 @@ def test_quota_overflow_is_explicit_bounded_and_count_unknown_closes_once(
                 (producer_name, component, current[0]),
             )
 
-    old_bucket = current[0] - timedelta(minutes=2)
     with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
+        old_bucket = admin.execute(
+            """
+            SELECT pg_catalog.date_bin(
+                pg_catalog.make_interval(secs => 60),
+                pg_catalog.clock_timestamp(),
+                '2000-01-01 00:00:00+00'::pg_catalog.timestamptz
+            ) - pg_catalog.make_interval(secs => 120)
+            """
+        ).fetchone()[0]
         admin.execute(
             """
             SELECT ofarm_security._insert_maintenance_event(
@@ -2173,7 +2254,7 @@ def test_retention_hides_expired_rows_then_purges_only_one_bounded_batch(
     producer_name = "AUTHENTICATION_BOUNDARY_V1"
     component = "AUTHENTICATION"
     _reset_quota_state(state, producer_name, component)
-    counts = _bulk_append(
+    counts = _bulk_append_in_one_bucket(
         state,
         "ofarm_security_authentication_producer_login",
         "b1740000-0000-4000-8000-",
