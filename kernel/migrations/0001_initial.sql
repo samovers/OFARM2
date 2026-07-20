@@ -1904,8 +1904,6 @@ CREATE TABLE ofarm.derived_materialization (
     superseded_by ofarm.tenant_local_ref,
     CONSTRAINT derived_materialization_pkey
         PRIMARY KEY (tenant_id, materialization_id),
-    CONSTRAINT derived_materialization_key_key
-        UNIQUE (tenant_id, key_digest, materialization_key),
     CONSTRAINT derived_materialization_id_key_identity_key
         UNIQUE (
             tenant_id,
@@ -1927,10 +1925,19 @@ CREATE TABLE ofarm.derived_materialization (
         REFERENCES ofarm.governed_write_batch (tenant_id, batch_id, full_xid)
         DEFERRABLE INITIALLY DEFERRED,
     CONSTRAINT derived_materialization_superseded_fkey
-        FOREIGN KEY (tenant_id, superseded_by)
+        FOREIGN KEY (
+            tenant_id,
+            superseded_by,
+            key_digest,
+            materialization_key
+        )
         REFERENCES ofarm.derived_materialization (
-            tenant_id, materialization_id
-        ),
+            tenant_id,
+            materialization_id,
+            key_digest,
+            materialization_key
+        )
+        DEFERRABLE INITIALLY DEFERRED,
     CONSTRAINT derived_materialization_freshness_check CHECK (
         freshness IN ('FRESH', 'STALE', 'INVALID')
     ),
@@ -1939,6 +1946,14 @@ CREATE TABLE ofarm.derived_materialization (
             ofarm.compute_materialization_key_digest(materialization_key)
     )
 );
+
+CREATE UNIQUE INDEX derived_materialization_live_key_key
+    ON ofarm.derived_materialization (
+        tenant_id,
+        key_digest COLLATE pg_catalog."C",
+        materialization_key
+    )
+    WHERE superseded_by IS NULL;
 
 CREATE TABLE ofarm.derived_dependency_index (
     tenant_id pg_catalog.uuid NOT NULL,
@@ -4948,8 +4963,12 @@ GRANT SELECT, INSERT ON TABLE
     ofarm.export_artifact,
     ofarm.kernel_record_reference
 TO ofarm_app, ofarm_worker;
+GRANT SELECT, INSERT, DELETE ON TABLE
+    ofarm.derived_materialization
+TO ofarm_app, ofarm_worker;
+GRANT UPDATE (freshness, superseded_by)
+ON TABLE ofarm.derived_materialization TO ofarm_app, ofarm_worker;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
-    ofarm.derived_materialization,
     ofarm.derived_dependency_index
 TO ofarm_app, ofarm_worker;
 GRANT EXECUTE ON FUNCTION ofarm.compute_materialization_key_digest(
@@ -6484,10 +6503,13 @@ AS 'DECLARE
                                     ''kernel_record_reference''
                                 ) AND acl.privilege_type IN (''SELECT'', ''INSERT''))
                                OR
-                               (class.relname IN (
-                                    ''derived_materialization'',
-                                    ''derived_dependency_index''
-                                ) AND acl.privilege_type IN (
+                               (class.relname = ''derived_materialization''
+                                AND acl.privilege_type IN (
+                                    ''SELECT'', ''INSERT'', ''DELETE''
+                                ))
+                               OR
+                               (class.relname = ''derived_dependency_index''
+                                AND acl.privilege_type IN (
                                     ''SELECT'', ''INSERT'', ''UPDATE'', ''DELETE''
                                 ))
                            )
@@ -6503,7 +6525,7 @@ AS 'DECLARE
          WHERE namespace.nspname = ''ofarm''
            AND class.relkind IN (''r'', ''p'')
            AND acl.grantee <> class.relowner;
-        IF relation_acl_count <> 96 OR invalid_relation_acl_count <> 0 THEN
+        IF relation_acl_count <> 94 OR invalid_relation_acl_count <> 0 THEN
             differences := pg_catalog.array_append(
                 differences, ''relation ACL inventory differs''
             );
@@ -6572,6 +6594,15 @@ AS 'DECLARE
                        )
                        OR
                        (
+                           grantee.rolname IN (''ofarm_app'', ''ofarm_worker'')
+                           AND class.relname = ''derived_materialization''
+                           AND attribute.attname IN (
+                                ''freshness'', ''superseded_by''
+                           )
+                           AND acl.privilege_type = ''UPDATE''
+                       )
+                       OR
+                       (
                            grantee.rolname = ''ofarm_admission_lock_owner''
                            AND class.relname =
                                 ''tenant_capability_verification_key''
@@ -6606,7 +6637,7 @@ AS 'DECLARE
          WHERE namespace.nspname = ''ofarm''
            AND attribute.attnum > 0
            AND NOT attribute.attisdropped;
-        IF column_acl_count <> 38 OR invalid_column_acl_count <> 0 THEN
+        IF column_acl_count <> 42 OR invalid_column_acl_count <> 0 THEN
             differences := pg_catalog.array_append(
                 differences, ''column ACL inventory differs''
             );
@@ -8265,7 +8296,7 @@ AS 'DECLARE
           INTO observed_structural_catalog_digest
           FROM catalog_entry;
         IF observed_structural_catalog_digest <>
-                ''sha256:91b6e16a0759197c60d91e72bf48338bd4e27bae0c4edf71cf8cbe199f6800ea'' THEN
+                ''sha256:41e8540211ecadf08a6dcd80f499a0bc17c93ba8e5c64914d1c620ab17686fd3'' THEN
             differences := pg_catalog.array_append(
                 differences, ''complete tenant catalog fingerprint differs''
             );

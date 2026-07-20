@@ -4841,6 +4841,16 @@
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_materialization_generations_preserve_creation_provenance[ofarm_app]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_materialization_generations_preserve_creation_provenance[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_missing_projection_rebuilds_from_authority",
       "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
@@ -7151,8 +7161,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "e207f4fa2f34dc443fd34f2a7d15ea339c1c448c52cf2e88d4e699943b9841f8",
-  "entryCount": 1430,
+  "entriesSha256": "6b5452f0c24d8438b94da6893fb1d0ab7cdec873a0b25dc77e71fb022edf0888",
+  "entryCount": 1432,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

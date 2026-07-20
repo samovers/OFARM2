@@ -4124,6 +4124,53 @@ def _insert_record(
     )
 
 
+def _insert_test_materialization(
+    connection: psycopg.Connection,
+    authority: TenantAuthority,
+    *,
+    batch_id: str,
+    materialization_id: str,
+    materialization_key: Mapping[str, object],
+    basis_record_id: str,
+    snapshot_record_id: str,
+    context_snapshot_ref: str,
+    current_state: Mapping[str, object],
+) -> str:
+    key_digest = connection.execute(
+        "SELECT ofarm.compute_materialization_key_digest(%s)",
+        (Jsonb(materialization_key),),
+    ).fetchone()[0]
+    connection.execute(
+        """
+        INSERT INTO ofarm.derived_materialization (
+            tenant_id, materialization_id, key_digest, materialization_key,
+            target_twin, anchor_scope_ref, time_policy, use_class,
+            freshness, current_state, basis_record_id, snapshot_record_id,
+            context_snapshot_ref, freshness_vector, batch_id
+        ) VALUES (
+            %s, %s, %s, %s, %s, %s, %s, 'OPERATIONAL_DASHBOARD',
+            'FRESH', %s, %s, %s, %s, %s, %s
+        )
+        """,
+        (
+            authority.tenant_id,
+            materialization_id,
+            key_digest,
+            Jsonb(materialization_key),
+            materialization_key["targetTwin"],
+            materialization_key["anchorScopeRef"],
+            Jsonb(materialization_key["timePolicy"]),
+            Jsonb(current_state),
+            basis_record_id,
+            snapshot_record_id,
+            context_snapshot_ref,
+            Jsonb({"basis": [basis_record_id]}),
+            batch_id,
+        ),
+    )
+    return key_digest
+
+
 def test_deferred_graph_accepts_future_ids_only_with_same_batch_reachability(
     tenant_target: TenantTarget,
     authority: TenantAuthority,
@@ -4879,17 +4926,320 @@ def test_derived_key_identity_and_typed_source_lanes_are_database_enforced(
                   ON namespace.oid = governed_constraint.connamespace
                 WHERE namespace.nspname = 'ofarm'
                   AND governed_constraint.conname IN (
-                    'derived_materialization_key_key',
-                    'derived_dependency_index_materialization_fkey'
+                    'derived_dependency_index_materialization_fkey',
+                    'derived_materialization_superseded_fkey'
                   )
                 """
             ).fetchall()
         )
-    assert "materialization_key" in definitions["derived_materialization_key_key"]
+        index_definitions = dict(
+            admin.execute(
+                """
+                SELECT index.relname,
+                       pg_catalog.pg_get_indexdef(index.oid)
+                FROM pg_catalog.pg_class AS index
+                JOIN pg_catalog.pg_namespace AS namespace
+                  ON namespace.oid = index.relnamespace
+                WHERE namespace.nspname = 'ofarm'
+                  AND index.relname = 'derived_materialization_live_key_key'
+                """
+            ).fetchall()
+        )
     assert (
         "materialization_key"
         in (definitions["derived_dependency_index_materialization_fkey"])
     )
+    assert all(
+        field in definitions["derived_materialization_superseded_fkey"]
+        for field in (
+            "superseded_by",
+            "key_digest",
+            "materialization_key",
+            "DEFERRABLE INITIALLY DEFERRED",
+        )
+    )
+    live_key_index = index_definitions["derived_materialization_live_key_key"]
+    assert "UNIQUE INDEX" in live_key_index
+    assert "key_digest" in live_key_index
+    assert "materialization_key" in live_key_index
+    assert "WHERE (superseded_by IS NULL)" in live_key_index
+
+
+@pytest.mark.parametrize("role_name", ("ofarm_app", "ofarm_worker"))
+def test_materialization_generations_preserve_creation_provenance(
+    tenant_target: TenantTarget,
+    authority: TenantAuthority,
+    role_name: str,
+) -> None:
+    role_suffix = role_name.removeprefix("ofarm_")
+    batch_a = f"batch-materialization-provenance-{role_suffix}-a"
+    batch_b = f"batch-materialization-provenance-{role_suffix}-b"
+    generation_a_id = f"materialization-provenance-{role_suffix}-a"
+    generation_b_id = f"materialization-provenance-{role_suffix}-b"
+    unrelated_generation_id = (
+        f"materialization-provenance-{role_suffix}-unrelated"
+    )
+    materialization_key = {
+        "anchorScopeRef": f"farm-provenance-{role_suffix}",
+        "targetTwin": f"twin-provenance-{role_suffix}",
+        "timePolicy": {"policyType": "NOW"},
+    }
+    records_a = tuple(
+        f"materialization-provenance-{role_suffix}-{kind}-a"
+        for kind in ("basis", "snapshot", "context")
+    )
+    records_b = tuple(
+        f"materialization-provenance-{role_suffix}-{kind}-b"
+        for kind in ("basis", "snapshot", "context")
+    )
+
+    with psycopg.connect(tenant_target.role_dsn(role_name)) as application:
+        _install_test_bound_context(application, authority)
+        _insert_batch(application, authority, batch_a)
+        for record_id in records_a:
+            _insert_record(
+                application,
+                authority,
+                batch_id=batch_a,
+                record_id=record_id,
+                record_kind="ofarm.derivedtest.v0.1",
+                payload={"recordId": record_id},
+            )
+        key_digest = _insert_test_materialization(
+            application,
+            authority,
+            batch_id=batch_a,
+            materialization_id=generation_a_id,
+            materialization_key=materialization_key,
+            basis_record_id=records_a[0],
+            snapshot_record_id=records_a[1],
+            context_snapshot_ref=records_a[2],
+            current_state={"generation": "a"},
+        )
+        original_generation = application.execute(
+            """
+            SELECT
+                current_state, basis_record_id, snapshot_record_id,
+                context_snapshot_ref, freshness_vector, batch_id,
+                batch_full_xid::pg_catalog.text, generated_at
+            FROM ofarm.derived_materialization
+            WHERE tenant_id = %s AND materialization_id = %s
+            """,
+            (authority.tenant_id, generation_a_id),
+        ).fetchone()
+
+    with psycopg.connect(tenant_target.role_dsn(role_name)) as application:
+        _install_test_bound_context(application, authority)
+        assert application.execute(
+            """
+            SELECT pg_catalog.has_table_privilege(
+                current_user,
+                'ofarm.derived_materialization',
+                'UPDATE'
+            )
+            """
+        ).fetchone() == (False,)
+        update_columns = {
+            column_name
+            for column_name, permitted in application.execute(
+                """
+                SELECT attribute.attname,
+                       pg_catalog.has_column_privilege(
+                           current_user,
+                           'ofarm.derived_materialization',
+                           attribute.attname,
+                           'UPDATE'
+                       )
+                FROM pg_catalog.pg_attribute AS attribute
+                JOIN pg_catalog.pg_class AS class
+                  ON class.oid = attribute.attrelid
+                JOIN pg_catalog.pg_namespace AS namespace
+                  ON namespace.oid = class.relnamespace
+                WHERE namespace.nspname = 'ofarm'
+                  AND class.relname = 'derived_materialization'
+                  AND attribute.attnum > 0
+                  AND NOT attribute.attisdropped
+                ORDER BY attribute.attnum
+                """
+            ).fetchall()
+            if permitted
+        }
+        assert update_columns == {"freshness", "superseded_by"}
+
+        _insert_batch(application, authority, batch_b)
+        for record_id in records_b:
+            _insert_record(
+                application,
+                authority,
+                batch_id=batch_b,
+                record_id=record_id,
+                record_kind="ofarm.derivedtest.v0.1",
+                payload={"recordId": record_id},
+            )
+        _insert_test_materialization(
+            application,
+            authority,
+            batch_id=batch_b,
+            materialization_id=unrelated_generation_id,
+            materialization_key={
+                **materialization_key,
+                "targetTwin": f"twin-provenance-{role_suffix}-unrelated",
+            },
+            basis_record_id=records_b[0],
+            snapshot_record_id=records_b[1],
+            context_snapshot_ref=records_b[2],
+            current_state={"generation": "unrelated"},
+        )
+
+        with pytest.raises(psycopg.errors.ForeignKeyViolation) as wrong_key:
+            with application.transaction():
+                application.execute(
+                    """
+                    UPDATE ofarm.derived_materialization
+                    SET superseded_by = %s
+                    WHERE tenant_id = %s AND materialization_id = %s
+                    """,
+                    (
+                        unrelated_generation_id,
+                        authority.tenant_id,
+                        generation_a_id,
+                    ),
+                )
+                application.execute(
+                    "SET CONSTRAINTS "
+                    "ofarm.derived_materialization_superseded_fkey IMMEDIATE"
+                )
+        assert wrong_key.value.diag.constraint_name == (
+            "derived_materialization_superseded_fkey"
+        )
+
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            with application.transaction():
+                application.execute(
+                    """
+                    UPDATE ofarm.derived_materialization
+                    SET current_state = %s,
+                        generated_at = TIMESTAMPTZ '2000-01-01 00:00:00+00',
+                        batch_id = %s,
+                        batch_full_xid = pg_catalog.pg_current_xact_id()
+                    WHERE tenant_id = %s AND materialization_id = %s
+                    """,
+                    (
+                        Jsonb({"generation": "forged"}),
+                        batch_b,
+                        authority.tenant_id,
+                        generation_a_id,
+                    ),
+                )
+
+        application.execute(
+            """
+            UPDATE ofarm.derived_materialization
+            SET freshness = 'STALE', superseded_by = %s
+            WHERE tenant_id = %s AND materialization_id = %s
+            """,
+            (generation_b_id, authority.tenant_id, generation_a_id),
+        )
+        _insert_test_materialization(
+            application,
+            authority,
+            batch_id=batch_b,
+            materialization_id=generation_b_id,
+            materialization_key=materialization_key,
+            basis_record_id=records_b[0],
+            snapshot_record_id=records_b[1],
+            context_snapshot_ref=records_b[2],
+            current_state={"generation": "b"},
+        )
+        with pytest.raises(psycopg.errors.UniqueViolation) as duplicate:
+            with application.transaction():
+                _insert_test_materialization(
+                    application,
+                    authority,
+                    batch_id=batch_b,
+                    materialization_id=(
+                        f"materialization-provenance-{role_suffix}-duplicate"
+                    ),
+                    materialization_key=materialization_key,
+                    basis_record_id=records_b[0],
+                    snapshot_record_id=records_b[1],
+                    context_snapshot_ref=records_b[2],
+                    current_state={"generation": "duplicate"},
+                )
+        assert duplicate.value.diag.constraint_name == (
+            "derived_materialization_live_key_key"
+        )
+        application.execute("SET CONSTRAINTS ALL IMMEDIATE")
+        with pytest.raises(psycopg.errors.ForeignKeyViolation) as missing_successor:
+            with application.transaction():
+                application.execute(
+                    "SET CONSTRAINTS "
+                    "ofarm.derived_materialization_superseded_fkey DEFERRED"
+                )
+                application.execute(
+                    """
+                    UPDATE ofarm.derived_materialization
+                    SET superseded_by = %s
+                    WHERE tenant_id = %s AND materialization_id = %s
+                    """,
+                    (
+                        f"materialization-provenance-{role_suffix}-missing",
+                        authority.tenant_id,
+                        generation_b_id,
+                    ),
+                )
+                application.execute(
+                    "SET CONSTRAINTS "
+                    "ofarm.derived_materialization_superseded_fkey IMMEDIATE"
+                )
+        assert missing_successor.value.diag.constraint_name == (
+            "derived_materialization_superseded_fkey"
+        )
+
+        observed_generation_a = application.execute(
+            """
+            SELECT
+                current_state, basis_record_id, snapshot_record_id,
+                context_snapshot_ref, freshness_vector, batch_id,
+                batch_full_xid::pg_catalog.text, generated_at,
+                freshness, superseded_by
+            FROM ofarm.derived_materialization
+            WHERE tenant_id = %s AND materialization_id = %s
+            """,
+            (authority.tenant_id, generation_a_id),
+        ).fetchone()
+        observed_generation_b = application.execute(
+            """
+            SELECT
+                batch_id, batch_full_xid::pg_catalog.text,
+                freshness, superseded_by, current_state
+            FROM ofarm.derived_materialization
+            WHERE tenant_id = %s AND materialization_id = %s
+            """,
+            (authority.tenant_id, generation_b_id),
+        ).fetchone()
+        live_generations = application.execute(
+            """
+            SELECT materialization_id
+            FROM ofarm.derived_materialization
+            WHERE tenant_id = %s
+              AND key_digest = %s
+              AND materialization_key = %s
+              AND superseded_by IS NULL
+            """,
+            (authority.tenant_id, key_digest, Jsonb(materialization_key)),
+        ).fetchall()
+
+    assert observed_generation_a[:-2] == original_generation
+    assert observed_generation_a[-2:] == ("STALE", generation_b_id)
+    assert observed_generation_b[0] == batch_b
+    assert observed_generation_b[1] != original_generation[6]
+    assert observed_generation_b[2:] == (
+        "FRESH",
+        None,
+        {"generation": "b"},
+    )
+    assert live_generations == [(generation_b_id,)]
 
 
 def test_complete_catalog_fingerprint_refuses_function_constraint_index_policy_and_acl_tamper(
@@ -4926,6 +5276,10 @@ def test_complete_catalog_fingerprint_refuses_function_constraint_index_policy_a
         ALTER POLICY tenant_isolation ON ofarm.kernel_record
         USING (true)
         """,
+        """
+        GRANT UPDATE (current_state)
+        ON ofarm.derived_materialization TO ofarm_app
+        """,
         "GRANT SELECT (payload) ON ofarm.kernel_record TO ofarm_binder",
         "GRANT CREATE ON SCHEMA public TO ofarm_app",
         "CREATE TABLE public.ofarm_rogue_catalog_object (id pg_catalog.int4)",
@@ -4938,7 +5292,7 @@ def test_complete_catalog_fingerprint_refuses_function_constraint_index_policy_a
             assert pristine[0] is True
             assert pristine[2] == 0
             assert pristine[3] == (
-                "sha256:91b6e16a0759197c60d91e72bf48338bd4e27bae0c4edf71cf8cbe199f6800ea"
+                "sha256:41e8540211ecadf08a6dcd80f499a0bc17c93ba8e5c64914d1c620ab17686fd3"
             )
         finally:
             migrator.rollback()
@@ -5627,7 +5981,7 @@ def test_readiness_observation_is_complete_after_commit(
     assert row[1] == TENANT_CONTEXT_CONTRACT.digest
     assert row[2] == 0
     assert row[3] == (
-        "sha256:91b6e16a0759197c60d91e72bf48338bd4e27bae0c4edf71cf8cbe199f6800ea"
+        "sha256:41e8540211ecadf08a6dcd80f499a0bc17c93ba8e5c64914d1c620ab17686fd3"
     )
     assert row[5] == TENANT_PROVISIONING_SPEC.digest
     assert row[6] == TENANT_SERVICE.identity
