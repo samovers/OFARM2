@@ -1866,6 +1866,11 @@
       "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_bounded_reader_byte_ceiling_is_session_independent",
+      "sourceModule": "kernel.tests.test_postgresql_audit_migration",
+      "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_bounded_reader_requires_an_equal_committed_access_intent",
       "sourceModule": "kernel.tests.test_postgresql_audit_migration",
       "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
@@ -7231,8 +7236,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "dec4606679c21ff5db3239eaf4092603e7c8ce5056622fce8bc8c5eff1282fb8",
-  "entryCount": 1446,
+  "entriesSha256": "af45dc88617665ea9a7f8a985e2f06e089732d92caab4eb4e683396056a7e004",
+  "entryCount": 1447,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

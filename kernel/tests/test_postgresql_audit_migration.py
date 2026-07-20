@@ -300,10 +300,10 @@ def test_authoritative_audit_migration_is_one_exact_initial_set():
     assert SECURITY_AUDIT_CONTRACT.digest in source
     assert SECURITY_AUDIT_PROVISIONING_SPEC.digest in source
     assert migration.source_sha256 == \
-        "sha256:837be8b2093d99f71bcd08856157d7e177e6b670b161a2b3706070c379b739f7"
-    assert migration.byte_length == 148_417
+        "sha256:82d842ab383ac71e986b24f6a42e71fcc68e8fa30513d79501caa2b9c2eab65d"
+    assert migration.byte_length == 148_490
     assert migration_set.digest == \
-        "sha256:c4a89a0143580be00e4e3aa4a0911b3ddacc0cec3a94aa5c9dc330d73a28cf0f"
+        "sha256:391ebd25018067e06040547a534018c1feb9d543b39c8f517ee0fc8b7ae4eee6"
     assert migration_set.prefix_digest(1) == migration_set.digest
 
 
@@ -337,8 +337,9 @@ def test_authoritative_audit_migration_has_closed_carriers_and_limits():
     assert "FROM pg_catalog.pg_parameter_acl AS parameter" in source
     assert LIVE_PHYSICAL_REPLICATION_GATE in source
     assert "WHEN unique_violation THEN" in source
-    assert source.count("SET TimeZone = 'UTC'") == 1
-    assert source.count("SET DateStyle = 'ISO, MDY'") == 1
+    assert source.count("SET TimeZone = 'UTC'") == 2
+    assert source.count("SET DateStyle = 'ISO, MDY'") == 2
+    assert source.count("SET bytea_output = 'hex'") == 1
     assert source.count("SET quote_all_identifiers = off") == 1
     assert source.count("SET standard_conforming_strings = on") == 1
     assert source.count(
@@ -389,7 +390,7 @@ def test_authoritative_audit_migration_has_closed_carriers_and_limits():
         in source
     )
     assert (
-        "sha256:76c1b99279cd069f2944ed1d2097438a9de01924ab7a0435f6c6042088a3f402"
+        "sha256:5d5cb995532ebf38598c4ab674532d4fc963958dd1fe6991f75fae95ae23eb6a"
         in source
     )
     assert "jsonb" not in persisted_audit_tables
@@ -1346,6 +1347,141 @@ def test_bounded_reader_requires_an_equal_committed_access_intent(
             )
     assert 1 <= len(rows) <= 10
     assert all(row[2] > access[1] for row in rows)
+
+
+def test_bounded_reader_byte_ceiling_is_session_independent(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    event_ids = (uuid4(), uuid4())
+    with psycopg.connect(
+        _role_dsn(state, "ofarm_security_authentication_producer_login"),
+        autocommit=True,
+    ) as producer:
+        for event_id in event_ids:
+            producer.execute(
+                """
+                SELECT * FROM ofarm_security.append_pretenant_failure(
+                    %s, 'CREDENTIAL_MISSING', %s,
+                    'OFARM_PRETENANT_CORRELATION_V1', 1
+                )
+                """,
+                (event_id, bytes(range(32))),
+            )
+
+    with psycopg.connect(
+        _role_dsn(state, "ofarm_security_audit_control_login"),
+        autocommit=True,
+    ) as control:
+        calibration_access = control.execute(
+            """
+            SELECT * FROM ofarm_security.commit_audit_access_intent(
+                'OPERATIONAL_DIAGNOSTIC_QUERY_V1', %s,
+                NULL, NULL, 2, 1048576
+            )
+            """,
+            (QUERY_IDENTITY,),
+        ).fetchone()
+
+    size_query = """
+        SELECT event_id,
+               pg_catalog.octet_length(
+                   pg_catalog.convert_to(
+                       pg_catalog.row_to_json(report)::pg_catalog.text,
+                       'UTF8'
+                   )
+               )
+        FROM ofarm_security.query_operational_security_events(
+            %s, NULL, NULL, 2, 1048576
+        ) AS report
+        ORDER BY observed_at DESC, event_id DESC
+    """
+    with psycopg.connect(
+        _role_dsn(state, "ofarm_security_audit_reader_login"),
+        autocommit=True,
+    ) as reader:
+        reader.execute("SET bytea_output = 'hex'")
+        reader.execute("SET TimeZone = 'UTC'")
+        reader.execute("SET DateStyle = 'ISO, MDY'")
+        canonical_sizes = reader.execute(
+            size_query, (calibration_access[0],)
+        ).fetchall()
+
+        reader.execute("SET bytea_output = 'escape'")
+        reader.execute("SET TimeZone = 'Europe/Ljubljana'")
+        reader.execute("SET DateStyle = 'SQL, DMY'")
+        hostile_sizes = reader.execute(
+            size_query, (calibration_access[0],)
+        ).fetchall()
+
+    assert [row[0] for row in canonical_sizes] == [
+        row[0] for row in hostile_sizes
+    ]
+    assert set(row[0] for row in canonical_sizes) == set(event_ids)
+    canonical_ceiling = sum(row[1] for row in canonical_sizes)
+    assert sum(row[1] for row in hostile_sizes) > canonical_ceiling
+
+    with psycopg.connect(state["target_admin_dsn"]) as admin:
+        calibration_cursor = admin.execute(
+            """
+            SELECT observed_at, event_id
+            FROM ofarm_security.operational_security_event
+            WHERE event_id = %s
+            """,
+            (calibration_access[0],),
+        ).fetchone()
+    assert calibration_cursor is not None
+
+    with psycopg.connect(
+        _role_dsn(state, "ofarm_security_audit_control_login"),
+        autocommit=True,
+    ) as control:
+        bounded_access = control.execute(
+            """
+            SELECT * FROM ofarm_security.commit_audit_access_intent(
+                'OPERATIONAL_DIAGNOSTIC_QUERY_V1', %s,
+                %s, %s, 2, %s
+            )
+            """,
+            (QUERY_IDENTITY, *calibration_cursor, canonical_ceiling),
+        ).fetchone()
+
+    bounded_query = """
+        SELECT event_id
+        FROM ofarm_security.query_operational_security_events(
+            %s, %s, %s, 2, %s
+        )
+        ORDER BY observed_at DESC, event_id DESC
+    """
+    with psycopg.connect(
+        _role_dsn(state, "ofarm_security_audit_reader_login"),
+        autocommit=True,
+    ) as reader:
+        reader.execute("SET bytea_output = 'escape'")
+        reader.execute("SET TimeZone = 'Europe/Ljubljana'")
+        reader.execute("SET DateStyle = 'SQL, DMY'")
+        hostile_rows = reader.execute(
+            bounded_query,
+            (bounded_access[0], *calibration_cursor, canonical_ceiling),
+        ).fetchall()
+        assert reader.execute(
+            """
+            SELECT current_setting('bytea_output'),
+                   current_setting('TimeZone'),
+                   current_setting('DateStyle')
+            """
+        ).fetchone() == ('escape', 'Europe/Ljubljana', 'SQL, DMY')
+
+        reader.execute("SET bytea_output = 'hex'")
+        reader.execute("SET TimeZone = 'UTC'")
+        reader.execute("SET DateStyle = 'ISO, MDY'")
+        canonical_rows = reader.execute(
+            bounded_query,
+            (bounded_access[0], *calibration_cursor, canonical_ceiling),
+        ).fetchall()
+
+    assert hostile_rows == canonical_rows
+    assert {row[0] for row in canonical_rows} == set(event_ids)
 
 
 def test_access_intent_snapshot_excludes_append_committed_after_the_cut(

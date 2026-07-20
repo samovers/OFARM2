@@ -1169,6 +1169,9 @@ CREATE FUNCTION ofarm_security._bounded_operational_security_events(
 ) RETURNS SETOF ofarm_security.operational_security_event_report
 LANGUAGE plpgsql VOLATILE PARALLEL UNSAFE SECURITY INVOKER
 SET search_path = pg_catalog, pg_temp
+SET bytea_output = 'hex'
+SET TimeZone = 'UTC'
+SET DateStyle = 'ISO, MDY'
 AS $bounded_events$
 DECLARE
     v_access ofarm_security.operational_security_event%ROWTYPE;
@@ -3454,7 +3457,7 @@ BEGIN
     INTO v_catalog_fingerprint
     FROM catalog_entry;
     IF v_catalog_fingerprint <>
-            'sha256:76c1b99279cd069f2944ed1d2097438a9de01924ab7a0435f6c6042088a3f402' THEN
+            'sha256:5d5cb995532ebf38598c4ab674532d4fc963958dd1fe6991f75fae95ae23eb6a' THEN
         v_differences := v_differences + 1;
     END IF;
 
