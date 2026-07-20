@@ -2366,6 +2366,16 @@ def test_native_workflow_closes_both_native_platform_evidence_lanes():
     )[1].split("- name: Produce two clean native child builds", 1)[0]
     assert "--target failure-semantics" in failure_step
     assert "--no-cache" in failure_step
+    clean_build_step = workflow.split(
+        "- name: Produce two clean native child builds", 1
+    )[1].split("- name: Prove child and installed-artifact reproducibility", 1)[0]
+    assert clean_build_step.count('--output "type=docker,oci-mediatypes=true"') == 1
+    assert "--load" not in clean_build_step
+    assert "--metadata-file" in clean_build_step
+    assert '--tag "ofarm-ed25519-${{ matrix.architecture }}:${build}"' in (
+        clean_build_step
+    )
+    assert '--platform "linux/${{ matrix.architecture }}"' in clean_build_step
     vector_step = workflow.split(
         "- name: Authenticate generated native verifier vectors", 1
     )[1].split("- name: Require a native runner", 1)[0]

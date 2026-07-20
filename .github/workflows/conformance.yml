@@ -321,7 +321,7 @@ jobs:
               --build-arg SOURCE_DATE_EPOCH=0 \
               --metadata-file \
                 ".artifacts/native/${{ matrix.architecture }}/${build}-metadata.json" \
-              --load \
+              --output "type=docker,oci-mediatypes=true" \
               --tag "ofarm-ed25519-${{ matrix.architecture }}:${build}" \
               deployment/postgresql/ofarm_ed25519
             docker buildx build \
