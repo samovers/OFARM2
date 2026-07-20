@@ -218,7 +218,7 @@ def _wait_for_postgres(
 def _enable_prepared_transactions(
     container_name: str,
     admin_dsn: str,
-) -> None:
+) -> int:
     with psycopg.connect(admin_dsn, autocommit=True) as connection:
         posture = connection.execute(
             "SELECT setting::integer, context::text "
@@ -231,15 +231,21 @@ def _enable_prepared_transactions(
         )
 
     _docker("restart", container_name)
-    _wait_for_postgres(admin_dsn, expected_recovery=False)
+    restarted_port = _published_port(container_name)
+    restarted_admin_dsn = psycopg.conninfo.make_conninfo(
+        admin_dsn,
+        port=restarted_port,
+    )
+    _wait_for_postgres(restarted_admin_dsn, expected_recovery=False)
 
-    with psycopg.connect(admin_dsn, autocommit=True) as connection:
+    with psycopg.connect(restarted_admin_dsn, autocommit=True) as connection:
         posture = connection.execute(
             "SELECT setting::integer, context::text "
             "FROM pg_catalog.pg_settings "
             "WHERE name = 'max_prepared_transactions'"
         ).fetchone()
     assert posture == (1, "postmaster")
+    return restarted_port
 
 
 def _system_identifier(admin_dsn: str) -> str:
@@ -456,7 +462,13 @@ def test_promoted_physical_clone_yields_only_structural_compatibility():
         assert report.service_identity == TENANT_SERVICE.identity
         _assert_structural_only_result(report)
 
-        _enable_prepared_transactions(clone_name, clone_admin_dsn)
+        clone_port = _enable_prepared_transactions(clone_name, clone_admin_dsn)
+        tenant_readiness_dsn = _dsn(
+            clone_port,
+            TENANT_PROVISIONING_SPEC.database_name,
+            "ofarm_readiness",
+            tenant_passwords["ofarm_readiness"],
+        )
         with psycopg.connect(
             tenant_readiness_dsn,
             autocommit=True,
@@ -552,7 +564,16 @@ def test_security_audit_observer_refuses_prepared_transaction_capacity():
         assert report.service_identity == SECURITY_AUDIT_SERVICE.identity
         _assert_structural_only_result(report)
 
-        _enable_prepared_transactions(container_name, audit_admin_dsn)
+        audit_port = _enable_prepared_transactions(
+            container_name,
+            audit_admin_dsn,
+        )
+        audit_readiness_dsn = _dsn(
+            audit_port,
+            SECURITY_AUDIT_PROVISIONING_SPEC.database_name,
+            "ofarm_security_audit_readiness_login",
+            audit_passwords["ofarm_security_audit_readiness_login"],
+        )
         with psycopg.connect(
             audit_readiness_dsn,
             autocommit=True,
