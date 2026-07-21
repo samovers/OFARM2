@@ -906,6 +906,11 @@ BEGIN
         RAISE EXCEPTION USING ERRCODE = '42501',
             MESSAGE = 'session user is not the audit control operator';
     END IF;
+    IF pg_catalog.current_setting('transaction_isolation') <>
+            'read committed' THEN
+        RAISE EXCEPTION USING ERRCODE = '25001',
+            MESSAGE = 'audit access intent requires READ COMMITTED';
+    END IF;
     IF p_purpose IS NULL OR p_function_identity IS NULL
             OR p_max_rows IS NULL OR p_max_bytes IS NULL THEN
         RAISE EXCEPTION USING ERRCODE = '22004',
@@ -3461,7 +3466,7 @@ BEGIN
     INTO v_catalog_fingerprint
     FROM catalog_entry;
     IF v_catalog_fingerprint <>
-            'sha256:577080fc6983bc58a0497f188e8deac9449758d969b4d09202e78ea1cfdf7708' THEN
+            'sha256:c9d17f020c14c31c8fd675ac6adfbd71d19fdf9b4b899df31419b14d63ee14f6' THEN
         v_differences := v_differences + 1;
     END IF;
 

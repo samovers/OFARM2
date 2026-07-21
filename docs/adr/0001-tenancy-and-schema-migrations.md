@@ -358,10 +358,14 @@ security-operations service first commits an `AUDIT_ACCESS` intent through its
 separate audit-control transaction, binding the closed purpose, exact bounded
 query function, every argument, database-observed data cut, cursor/page, row and
 byte ceiling, and a five-minute expiry. The intent also persists a PostgreSQL
-MVCC snapshot. Every event stores its top-level `xid8`, and the bounded reader
-intersects the timestamp cut with `pg_visible_in_snapshot`; a transaction that
-was in progress at the cut remains excluded after a later commit, and a future
-transaction is outside the snapshot high-water. The snapshot is internal
+MVCC snapshot. The audit-control transaction must use `READ COMMITTED`;
+`commit_audit_access_intent` refuses higher isolation before capturing either
+value, so a caller cannot combine a later wall-clock cut with a transaction
+snapshot frozen earlier. Every event stores its top-level `xid8`, and the
+bounded reader intersects the timestamp cut with `pg_visible_in_snapshot`. A
+transaction that was in progress at the cut remains excluded after a later
+commit, and a future transaction is outside the snapshot high-water. The
+snapshot is internal
 control metadata and is not exposed in the event-report result. Only then may
 its distinct reader
 session call that migration-owned function with the committed access event ID;

@@ -1841,6 +1841,11 @@
       "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_access_intent_refuses_a_repeatable_read_stale_snapshot",
+      "sourceModule": "kernel.tests.test_postgresql_audit_migration",
+      "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_access_intent_snapshot_excludes_append_committed_after_the_cut",
       "sourceModule": "kernel.tests.test_postgresql_audit_migration",
       "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
@@ -7276,8 +7281,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "1059173fb86320aaf57dc0f09d136422e3d4421dfa1f0545c1c7cf628afa0ab0",
-  "entryCount": 1455,
+  "entriesSha256": "a331a5793f1aa497b9316f5e6c75b5eeb2b8503e5dcabb3c953a479eb9703635",
+  "entryCount": 1456,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

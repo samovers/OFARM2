@@ -45,7 +45,7 @@ TENANT_CATALOG_VERIFIER_DIGEST: str | None = (
     "sha256:91d2e408de2ba6aa1ee89b91533f45ac08db54715f9a11ffc63c31b857a1fd6a"
 )
 SECURITY_AUDIT_CATALOG_VERIFIER_DIGEST: str | None = (
-    "sha256:f377a12dfeffef547283b70f2ff2ff856ed31f6dd8bd9ef15afbd9f4542a1fb1"
+    "sha256:4e87d6b979a7ac9369a592dbd2d8fcc13c4e3389acdb33c5b9a7b7f9650ebb21"
 )
 
 

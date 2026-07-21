@@ -300,10 +300,10 @@ def test_authoritative_audit_migration_is_one_exact_initial_set():
     assert SECURITY_AUDIT_CONTRACT.digest in source
     assert SECURITY_AUDIT_PROVISIONING_SPEC.digest in source
     assert migration.source_sha256 == \
-        "sha256:cd9d5bba970dc93c7e4200ab156be5f494b0031dad52166fa74c31efb17f9fab"
-    assert migration.byte_length == 148_599
+        "sha256:d66390a6f7e7c0afb686b511757a0d05161efe6bddef2b278fc63c8afdbeac46"
+    assert migration.byte_length == 148_825
     assert migration_set.digest == \
-        "sha256:21facc255e2a47877a0e9749595db9e1ba2291e627805c9b9433c2137e9f9035"
+        "sha256:68946e329063e8c76a6e5f00049c337511c3e51cc71652f43236cb65ee7ceeab"
     assert migration_set.prefix_digest(1) == migration_set.digest
 
 
@@ -390,7 +390,7 @@ def test_authoritative_audit_migration_has_closed_carriers_and_limits():
         in source
     )
     assert (
-        "sha256:577080fc6983bc58a0497f188e8deac9449758d969b4d09202e78ea1cfdf7708"
+        "sha256:c9d17f020c14c31c8fd675ac6adfbd71d19fdf9b4b899df31419b14d63ee14f6"
         in source
     )
     assert "jsonb" not in persisted_audit_tables
@@ -409,6 +409,11 @@ def test_access_intent_captures_time_and_visibility_in_one_sql_command():
     source = load_migration_set(
         PACKAGE_ROOT, SECURITY_AUDIT_SERVICE
     ).migrations[0].source_bytes.decode("utf-8")
+    isolation_guard = """    IF pg_catalog.current_setting('transaction_isolation') <>
+            'read committed' THEN
+        RAISE EXCEPTION USING ERRCODE = '25001',
+            MESSAGE = 'audit access intent requires READ COMMITTED';
+    END IF;"""
     combined_capture = """    SELECT
         pg_catalog.clock_timestamp(),
         pg_catalog.pg_current_snapshot()
@@ -416,7 +421,9 @@ def test_access_intent_captures_time_and_visibility_in_one_sql_command():
         v_data_cut,
         v_visibility_snapshot;"""
 
+    assert source.count(isolation_guard) == 1
     assert source.count(combined_capture) == 1
+    assert source.index(isolation_guard) < source.index(combined_capture)
     assert "v_data_cut := pg_catalog.clock_timestamp()" not in source
     assert "v_visibility_snapshot := pg_catalog.pg_current_snapshot()" not in source
 
@@ -1548,6 +1555,81 @@ def test_access_intent_snapshot_excludes_append_committed_after_the_cut(
             ).fetchall()
         assert reused == first
         assert open_event_id not in {row[0] for row in reused}
+
+
+def test_access_intent_refuses_a_repeatable_read_stale_snapshot(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    committed_event_id = uuid4()
+
+    with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
+        access_count_before = admin.execute(
+            """
+            SELECT pg_catalog.count(*)
+            FROM ofarm_security.operational_security_event
+            WHERE event_kind = 'AUDIT_ACCESS'
+            """
+        ).fetchone()[0]
+
+    with psycopg.connect(
+        _role_dsn(state, "ofarm_security_audit_control_login")
+    ) as control:
+        control.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+        frozen_snapshot = control.execute(
+            "SELECT pg_catalog.pg_current_snapshot()"
+        ).fetchone()[0]
+
+        with psycopg.connect(
+            _role_dsn(state, "ofarm_security_authentication_producer_login"),
+            autocommit=True,
+        ) as producer:
+            producer.execute(
+                """
+                SELECT * FROM ofarm_security.append_pretenant_failure(
+                    %s, 'CREDENTIAL_MISSING', %s,
+                    'OFARM_PRETENANT_CORRELATION_V1', 1
+                )
+                """,
+                (committed_event_id, bytes.fromhex("42" * 32)),
+            ).fetchone()
+
+        with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
+            visible_in_frozen_snapshot = admin.execute(
+                """
+                SELECT pg_catalog.pg_visible_in_snapshot(
+                    event_insert_xid, %s::pg_catalog.pg_snapshot
+                )
+                FROM ofarm_security.operational_security_event
+                WHERE event_id = %s
+                """,
+                (frozen_snapshot, committed_event_id),
+            ).fetchone()[0]
+        assert visible_in_frozen_snapshot is False
+
+        with pytest.raises(psycopg.Error) as refused:
+            control.execute(
+                """
+                SELECT * FROM ofarm_security.commit_audit_access_intent(
+                    'OPERATIONAL_DIAGNOSTIC_QUERY_V1', %s,
+                    NULL, NULL, 256, 1048576
+                )
+                """,
+                (QUERY_IDENTITY,),
+            )
+        assert refused.value.sqlstate == "25001"
+        assert "requires READ COMMITTED" in str(refused.value)
+        control.rollback()
+
+    with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
+        access_count_after = admin.execute(
+            """
+            SELECT pg_catalog.count(*)
+            FROM ofarm_security.operational_security_event
+            WHERE event_kind = 'AUDIT_ACCESS'
+            """
+        ).fetchone()[0]
+    assert access_count_after == access_count_before
 
 
 def test_wrong_producer_reasons_and_cross_capabilities_refuse(
