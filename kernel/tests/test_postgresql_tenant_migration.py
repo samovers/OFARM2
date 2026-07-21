@@ -3230,6 +3230,24 @@ def test_runtime_bundle_publication_is_exact_and_idempotent(
                     components + components,
                 )
 
+        for null_field in ("schemaVersion", "canonicalization"):
+            null_identity_document = {
+                "schemaVersion": "ofarm.runtime-bundle.local.v1",
+                "canonicalization": "OFARM_CANONICAL_JSON_V1",
+                "components": components,
+            }
+            null_identity_document[null_field] = None
+            with pytest.raises(psycopg.errors.InvalidParameterValue):
+                with publisher.transaction():
+                    publisher.execute(
+                        "SELECT ofarm.publish_runtime_bundle(%s, %s, %s)",
+                        (
+                            authority.tenant_id,
+                            authority.runtime_bundle_digest,
+                            Jsonb(null_identity_document),
+                        ),
+                    )
+
         digest_mismatch_components = [
             {
                 **components[0],
@@ -5674,7 +5692,7 @@ def test_complete_catalog_fingerprint_refuses_function_constraint_index_policy_a
             assert pristine[0] is True
             assert pristine[2] == 0
             assert pristine[3] == (
-                "sha256:3ab4160ecf8a4bcb1f22d4cdf0ea086d2e412e8321704cb5ad3e3ac5605c9499"
+                "sha256:6516707817bbda9bd3426e26782a0a4b42e50017082ea7c0f53843024f7f1a7a"
             )
         finally:
             migrator.rollback()
@@ -6363,7 +6381,7 @@ def test_readiness_observation_is_complete_after_commit(
     assert row[1] == TENANT_CONTEXT_CONTRACT.digest
     assert row[2] == 0
     assert row[3] == (
-        "sha256:3ab4160ecf8a4bcb1f22d4cdf0ea086d2e412e8321704cb5ad3e3ac5605c9499"
+        "sha256:6516707817bbda9bd3426e26782a0a4b42e50017082ea7c0f53843024f7f1a7a"
     )
     assert row[5] == TENANT_PROVISIONING_SPEC.digest
     assert row[6] == TENANT_SERVICE.identity

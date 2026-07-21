@@ -1387,9 +1387,9 @@ AS 'DECLARE
                 ''canonicalization'', bundle_document -> ''canonicalization'',
                 ''components'', bundle_document -> ''components''
               )
-           OR bundle_document ->> ''schemaVersion'' <>
+           OR bundle_document ->> ''schemaVersion'' IS DISTINCT FROM
                 ''ofarm.runtime-bundle.local.v1''
-           OR bundle_document ->> ''canonicalization'' <>
+           OR bundle_document ->> ''canonicalization'' IS DISTINCT FROM
                 ''OFARM_CANONICAL_JSON_V1''
            OR pg_catalog.jsonb_typeof(bundle_document -> ''components'') <>
                 ''array'' THEN
@@ -7332,7 +7332,7 @@ AS 'DECLARE
             ''create_tenant_challenge()=ofarm_binder:plpgsql:true:false:false:v:u:search_path=pg_catalog, pg_temp:da7cd7c1ac111700f4dcd9490d910770f7dec213a40dee1c533edccc8500dd56:false:true:true:false:false:false:false:false'',
             ''current_authenticated_principal_ref()=ofarm_binder:plpgsql:true:false:false:s:u:search_path=pg_catalog, pg_temp:6b0b3abc610609988a965cb7b8671603b0c8bdd8fde62d5aafdc465507182df7:false:true:true:false:false:false:false:false'',
             ''current_tenant_id()=ofarm_binder:plpgsql:true:false:false:s:u:search_path=pg_catalog, pg_temp:2dea636af9e5cd14b7fcb406fd556934ffd8ab408dae965aa318e4120beb0ab0:false:true:true:false:false:true:false:false'',
-            ''publish_runtime_bundle(requested_tenant_id uuid, expected_bundle_digest text, bundle_document jsonb)=ofarm_owner:plpgsql:true:false:false:v:u:search_path=pg_catalog, pg_temp:cde9b41ddee0f563e243103168d98bb1d912f493125dd8d3a862c989cd20f0b0:false:false:false:true:true:false:false:false'',
+            ''publish_runtime_bundle(requested_tenant_id uuid, expected_bundle_digest text, bundle_document jsonb)=ofarm_owner:plpgsql:true:false:false:v:u:search_path=pg_catalog, pg_temp:02a4cd5b6d42902ac8e261d3c81e0ddd25dd0493b2e0c360effa99f4cc897441:false:false:false:true:true:false:false:false'',
             ''runtime_bundle_tenant_allowed(candidate_tenant_id uuid)=ofarm_owner:plpgsql:false:true:false:s:u:search_path=pg_catalog, pg_temp:be29ed711b7d2402e4c8c05cedb173cbd3f6179a26869d7b9463a94bdd1b4e92:false:true:true:true:false:false:false:false'',
             ''take_tenant_write_lock()=ofarm_tenant_lock_owner:plpgsql:true:false:false:v:u:search_path=pg_catalog, pg_temp:38c75f051ee82b75c2e872fe2e191874e17984da7183add568f481d2eadb0de8:false:true:true:false:false:true:false:false''
         ]::pg_catalog.text[] THEN
@@ -8926,7 +8926,7 @@ AS 'DECLARE
           INTO observed_structural_catalog_digest
           FROM catalog_entry;
         IF observed_structural_catalog_digest <>
-                ''sha256:3ab4160ecf8a4bcb1f22d4cdf0ea086d2e412e8321704cb5ad3e3ac5605c9499'' THEN
+                ''sha256:6516707817bbda9bd3426e26782a0a4b42e50017082ea7c0f53843024f7f1a7a'' THEN
             differences := pg_catalog.array_append(
                 differences, ''complete tenant catalog fingerprint differs''
             );
