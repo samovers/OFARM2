@@ -1836,17 +1836,17 @@
       "sourcePath": "kernel/tests/test_postgresql_audit_contract.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_access_intent_captures_time_and_visibility_in_one_sql_command",
-      "sourceModule": "kernel.tests.test_postgresql_audit_migration",
-      "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
-    },
-    {
       "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_access_intent_refuses_a_repeatable_read_stale_snapshot",
       "sourceModule": "kernel.tests.test_postgresql_audit_migration",
       "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_access_intent_snapshot_excludes_append_committed_after_the_cut",
+      "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_access_intent_serializes_earlier_and_later_event_writers",
+      "sourceModule": "kernel.tests.test_postgresql_audit_migration",
+      "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_access_intent_serializes_writers_before_combined_cut_capture",
       "sourceModule": "kernel.tests.test_postgresql_audit_migration",
       "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
     },
@@ -1972,6 +1972,11 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_retention_hides_expired_rows_then_purges_only_one_bounded_batch",
+      "sourceModule": "kernel.tests.test_postgresql_audit_migration",
+      "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_retention_order_cannot_widen_a_reused_access_page",
       "sourceModule": "kernel.tests.test_postgresql_audit_migration",
       "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
     },
@@ -7281,8 +7286,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "a331a5793f1aa497b9316f5e6c75b5eeb2b8503e5dcabb3c953a479eb9703635",
-  "entryCount": 1456,
+  "entriesSha256": "105a0405e7f9d6b7b20d86ce870e2ea083170a554200cab1f067c8c0d583c4f9",
+  "entryCount": 1457,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

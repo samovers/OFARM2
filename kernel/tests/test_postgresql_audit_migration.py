@@ -300,10 +300,10 @@ def test_authoritative_audit_migration_is_one_exact_initial_set():
     assert SECURITY_AUDIT_CONTRACT.digest in source
     assert SECURITY_AUDIT_PROVISIONING_SPEC.digest in source
     assert migration.source_sha256 == \
-        "sha256:d66390a6f7e7c0afb686b511757a0d05161efe6bddef2b278fc63c8afdbeac46"
-    assert migration.byte_length == 148_825
+        "sha256:3c06da687583e3e9b2c7a42facb46d45d99721afa90de36ec54e32dda111a5b8"
+    assert migration.byte_length == 148_919
     assert migration_set.digest == \
-        "sha256:68946e329063e8c76a6e5f00049c337511c3e51cc71652f43236cb65ee7ceeab"
+        "sha256:466858a917e327d969478b3e5739988dad5612026d886ee057c39e8d474053af"
     assert migration_set.prefix_digest(1) == migration_set.digest
 
 
@@ -390,7 +390,7 @@ def test_authoritative_audit_migration_has_closed_carriers_and_limits():
         in source
     )
     assert (
-        "sha256:c9d17f020c14c31c8fd675ac6adfbd71d19fdf9b4b899df31419b14d63ee14f6"
+        "sha256:a2a1a7a6d8551a489781c976a58380e2ed832821d24d92d5e850329375083c07"
         in source
     )
     assert "jsonb" not in persisted_audit_tables
@@ -405,15 +405,24 @@ def test_authoritative_audit_migration_has_closed_carriers_and_limits():
         assert forbidden not in source
 
 
-def test_access_intent_captures_time_and_visibility_in_one_sql_command():
+def test_access_intent_serializes_writers_before_combined_cut_capture():
     source = load_migration_set(
         PACKAGE_ROOT, SECURITY_AUDIT_SERVICE
     ).migrations[0].source_bytes.decode("utf-8")
+    access_function = source.split(
+        "CREATE FUNCTION ofarm_security.commit_audit_access_intent(", 1
+    )[1].split(
+        "REVOKE ALL PRIVILEGES ON FUNCTION "
+        "ofarm_security.commit_audit_access_intent(",
+        1,
+    )[0]
     isolation_guard = """    IF pg_catalog.current_setting('transaction_isolation') <>
             'read committed' THEN
         RAISE EXCEPTION USING ERRCODE = '25001',
             MESSAGE = 'audit access intent requires READ COMMITTED';
     END IF;"""
+    writer_barrier = """    LOCK TABLE ofarm_security.operational_security_event
+        IN SHARE ROW EXCLUSIVE MODE;"""
     combined_capture = """    SELECT
         pg_catalog.clock_timestamp(),
         pg_catalog.pg_current_snapshot()
@@ -421,11 +430,49 @@ def test_access_intent_captures_time_and_visibility_in_one_sql_command():
         v_data_cut,
         v_visibility_snapshot;"""
 
-    assert source.count(isolation_guard) == 1
-    assert source.count(combined_capture) == 1
-    assert source.index(isolation_guard) < source.index(combined_capture)
-    assert "v_data_cut := pg_catalog.clock_timestamp()" not in source
-    assert "v_visibility_snapshot := pg_catalog.pg_current_snapshot()" not in source
+    assert access_function.count(isolation_guard) == 1
+    assert access_function.count(writer_barrier) == 1
+    assert access_function.count(combined_capture) == 1
+    assert (
+        access_function.index(isolation_guard)
+        < access_function.index(writer_barrier)
+        < access_function.index(combined_capture)
+    )
+    assert "v_data_cut := pg_catalog.clock_timestamp()" not in access_function
+    assert (
+        "v_visibility_snapshot := pg_catalog.pg_current_snapshot()"
+        not in access_function
+    )
+
+
+def test_retention_order_cannot_widen_a_reused_access_page():
+    source = load_migration_set(
+        PACKAGE_ROOT, SECURITY_AUDIT_SERVICE
+    ).migrations[0].source_bytes.decode("utf-8")
+    event_table = _table_definition(
+        source, "ofarm_security.operational_security_event"
+    )
+    bounded_function = source.split(
+        "CREATE FUNCTION "
+        "ofarm_security._bounded_operational_security_events(",
+        1,
+    )[1].split(
+        "REVOKE ALL PRIVILEGES ON FUNCTION\n"
+        "ofarm_security._bounded_operational_security_events(",
+        1,
+    )[0]
+
+    assert (
+        "purge_after = observed_at + pg_catalog.make_interval(days => 30)"
+        in event_table
+    )
+    retained_query = """        WHERE e.purge_after > v_now
+          AND e.observed_at <= v_access.access_data_cut"""
+    assert bounded_function.count(retained_query) == 1
+    assert bounded_function.count(
+        "        ORDER BY e.observed_at DESC, e.event_id DESC\n"
+        "        LIMIT p_max_rows"
+    ) == 1
 
 
 def test_audit_catalog_fingerprint_has_exact_shared_schema_class_parity():
@@ -1491,28 +1538,29 @@ def test_bounded_reader_byte_ceiling_is_session_independent(
     assert {row[0] for row in canonical_rows} == set(event_ids)
 
 
-def test_access_intent_snapshot_excludes_append_committed_after_the_cut(
+def test_access_intent_serializes_earlier_and_later_event_writers(
     migrated_audit_service,
 ):
     state = migrated_audit_service
-    open_event_id = uuid4()
+    earlier_event_id = uuid4()
+    later_event_id = uuid4()
+    token = uuid4().hex
+    control_application = "issue174-cut-control-" + token
+    later_application = "issue174-cut-later-" + token
+    control_dsn = psycopg.conninfo.make_conninfo(
+        _role_dsn(state, "ofarm_security_audit_control_login"),
+        application_name=control_application,
+    )
+    later_dsn = psycopg.conninfo.make_conninfo(
+        _role_dsn(state, "ofarm_security_authentication_producer_login"),
+        application_name=later_application,
+    )
+    access_captured = Event()
+    release_access = Event()
 
-    with psycopg.connect(
-        _role_dsn(state, "ofarm_security_authentication_producer_login")
-    ) as producer:
-        open_append = producer.execute(
-            """
-            SELECT * FROM ofarm_security.append_pretenant_failure(
-                %s, 'CREDENTIAL_MISSING', %s,
-                'OFARM_PRETENANT_CORRELATION_V1', 1
-            )
-            """,
-            (open_event_id, bytes.fromhex("41" * 32)),
-        ).fetchone()
-        with psycopg.connect(
-            _role_dsn(state, "ofarm_security_audit_control_login"),
-            autocommit=True,
-        ) as control:
+    def create_access_intent() -> tuple[object, ...]:
+        with psycopg.connect(control_dsn) as control:
+            control.execute("SET lock_timeout = '10s'")
             access = control.execute(
                 """
                 SELECT * FROM ofarm_security.commit_audit_access_intent(
@@ -1522,39 +1570,86 @@ def test_access_intent_snapshot_excludes_append_committed_after_the_cut(
                 """,
                 (QUERY_IDENTITY,),
             ).fetchone()
+            access_captured.set()
+            if not release_access.wait(timeout=10):
+                raise AssertionError("access-intent commit was not released")
+            control.commit()
+            return access
 
-        assert open_append[0] == open_event_id
-        assert open_append[1] <= access[1]
-        with psycopg.connect(
-            _role_dsn(state, "ofarm_security_audit_reader_login"),
-            autocommit=True,
-        ) as reader:
-            first = reader.execute(
+    def append_after_cut() -> tuple[object, ...]:
+        with psycopg.connect(later_dsn, autocommit=True) as producer:
+            producer.execute("SET lock_timeout = '10s'")
+            return producer.execute(
                 """
-                SELECT * FROM ofarm_security.query_operational_security_events(
-                    %s, NULL, NULL, 256, 1048576
+                SELECT * FROM ofarm_security.append_pretenant_failure(
+                    %s, 'CREDENTIAL_MISSING', %s,
+                    'OFARM_PRETENANT_CORRELATION_V1', 1
                 )
                 """,
-                (access[0],),
-            ).fetchall()
-        assert open_event_id not in {row[0] for row in first}
+                (later_event_id, bytes.fromhex("42" * 32)),
+            ).fetchone()
 
-        producer.commit()
+    with psycopg.connect(
+        _role_dsn(state, "ofarm_security_authentication_producer_login")
+    ) as earlier_producer:
+        earlier_append = earlier_producer.execute(
+            """
+            SELECT * FROM ofarm_security.append_pretenant_failure(
+                %s, 'CREDENTIAL_MISSING', %s,
+                'OFARM_PRETENANT_CORRELATION_V1', 1
+            )
+            """,
+            (earlier_event_id, bytes.fromhex("41" * 32)),
+        ).fetchone()
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            access_future = executor.submit(create_access_intent)
+            _wait_for_event_relation_lock(
+                state, control_application, "ShareRowExclusiveLock"
+            )
+            assert not access_future.done()
 
-        with psycopg.connect(
-            _role_dsn(state, "ofarm_security_audit_reader_login"),
-            autocommit=True,
-        ) as reader:
-            reused = reader.execute(
-                """
-                SELECT * FROM ofarm_security.query_operational_security_events(
-                    %s, NULL, NULL, 256, 1048576
-                )
-                """,
-                (access[0],),
-            ).fetchall()
-        assert reused == first
-        assert open_event_id not in {row[0] for row in reused}
+            earlier_producer.commit()
+            assert access_captured.wait(timeout=10)
+
+            later_future = executor.submit(append_after_cut)
+            _wait_for_event_relation_lock(
+                state, later_application, "RowExclusiveLock"
+            )
+            assert not later_future.done()
+
+            release_access.set()
+            access = access_future.result(timeout=10)
+            later_append = later_future.result(timeout=10)
+
+    assert earlier_append[0] == earlier_event_id
+    assert later_append[0] == later_event_id
+    assert earlier_append[1] <= access[1]
+    assert later_append[1] > access[1]
+
+    with psycopg.connect(
+        _role_dsn(state, "ofarm_security_audit_reader_login"),
+        autocommit=True,
+    ) as reader:
+        first = reader.execute(
+            """
+            SELECT * FROM ofarm_security.query_operational_security_events(
+                %s, NULL, NULL, 256, 1048576
+            )
+            """,
+            (access[0],),
+        ).fetchall()
+        reused = reader.execute(
+            """
+            SELECT * FROM ofarm_security.query_operational_security_events(
+                %s, NULL, NULL, 256, 1048576
+            )
+            """,
+            (access[0],),
+        ).fetchall()
+
+    assert reused == first
+    assert earlier_event_id in {row[0] for row in first}
+    assert later_event_id not in {row[0] for row in first}
 
 
 def test_access_intent_refuses_a_repeatable_read_stale_snapshot(

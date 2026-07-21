@@ -948,6 +948,8 @@ BEGIN
             MESSAGE = 'audit access input exceeds 4096 bytes';
     END IF;
 
+    LOCK TABLE ofarm_security.operational_security_event
+        IN SHARE ROW EXCLUSIVE MODE;
     SELECT
         pg_catalog.clock_timestamp(),
         pg_catalog.pg_current_snapshot()
@@ -3466,7 +3468,7 @@ BEGIN
     INTO v_catalog_fingerprint
     FROM catalog_entry;
     IF v_catalog_fingerprint <>
-            'sha256:c9d17f020c14c31c8fd675ac6adfbd71d19fdf9b4b899df31419b14d63ee14f6' THEN
+            'sha256:a2a1a7a6d8551a489781c976a58380e2ed832821d24d92d5e850329375083c07' THEN
         v_differences := v_differences + 1;
     END IF;
 

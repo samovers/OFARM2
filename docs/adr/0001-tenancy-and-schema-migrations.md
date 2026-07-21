@@ -361,21 +361,28 @@ byte ceiling, and a five-minute expiry. The intent also persists a PostgreSQL
 MVCC snapshot. The audit-control transaction must use `READ COMMITTED`;
 `commit_audit_access_intent` refuses higher isolation before capturing either
 value, so a caller cannot combine a later wall-clock cut with a transaction
-snapshot frozen earlier. Every event stores its top-level `xid8`, and the
-bounded reader intersects the timestamp cut with `pg_visible_in_snapshot`. A
-transaction that was in progress at the cut remains excluded after a later
-commit, and a future transaction is outside the snapshot high-water. The
-snapshot is internal
-control metadata and is not exposed in the event-report result. Only then may
-its distinct reader
-session call that migration-owned function with the committed access event ID;
-the function verifies the exact scope fingerprint before returning that one
-bounded page. Rollback of the read cannot erase the already-committed access
-intent. Reuse can return only the same cut/page/ceiling and cannot widen unique
-data; a new page or later cut needs a new intent. Function results can still be
-copied or repeatedly retrieved, so the reader is explicitly a privileged,
-export-capable boundary within the precommitted bound, not a no-exfiltration
-role. Direct table or unbounded extraction is unsupported. A break-glass export
+snapshot frozen earlier. After validating the closed request, the function
+takes the same migration-owned `SHARE ROW EXCLUSIVE` event-writer barrier used
+by retention and overflow close. Previously admitted writers finish before a
+fresh snapshot and wall-clock cut are captured; later writers wait until the
+intent transaction commits. Every event stores its top-level `xid8`, and the
+bounded reader intersects the timestamp cut with `pg_visible_in_snapshot`.
+A transaction ordered before the cut is visible in the persisted snapshot, and
+a transaction ordered after the cut is outside both boundaries. The snapshot
+is internal control metadata and is not exposed in the event-report result.
+Only then may its distinct reader session call that migration-owned function
+with the committed access event ID; the function verifies the exact scope
+fingerprint before returning that one bounded page. Rollback of the read cannot
+erase the already-committed access intent. Reuse can return only the same
+cut/page/ceiling and cannot widen unique data. Retention cannot reveal a
+replacement row: `purge_after` is constrained to exactly
+`observed_at + 30 days`, the page is ordered by `observed_at` descending, and
+expired rows are filtered before `LIMIT`, independent of whether physical
+deletion has run. A new page or later cut needs a new intent. Function results
+can still be copied or repeatedly retrieved, so the reader is explicitly a
+privileged, export-capable boundary within the precommitted bound, not a
+no-exfiltration role. Direct table or unbounded extraction is unsupported. A
+break-glass export
 requires a separately provisioned, time-bounded export LOGIN, dual approval, an
 exact purpose and cumulative result bound, and a committed `AUDIT_ACCESS`
 event; it never grants tenant access or digest-key access. Normal provisioning
@@ -1595,10 +1602,11 @@ and integration; they are not claims of `0001`.
     five-minute expiry or read rollback, and while attempting to widen row/byte
     bounds. Only the exact precommitted page succeeds; rollback cannot erase its
     intent, replay/COPY returns no wider unique data, and a new page/cut requires
-    a new intent. Hold an append transaction open while committing an intent;
-    prove the first read excludes it, commit the append, and prove reuse still
-    excludes its top-level XID under the persisted snapshot even though its
-    database timestamp satisfies the wall-clock cut. Normal provisioning has no
+    a new intent. Hold an append transaction open while creating an intent and
+    prove the intent waits on the event-writer barrier; commit that append and
+    prove it is included by the fresh cut and snapshot. While the intent
+    transaction still holds the barrier, attempt a later append and prove it
+    waits, then remains outside the committed cut. Normal provisioning has no
     export LOGIN. Exercise break-glass
     approval, credential expiry/revocation, cumulative bounded export, and
     denial without tenant or HMAC-key access; audit structural compatibility
