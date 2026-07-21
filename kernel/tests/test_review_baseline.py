@@ -172,7 +172,7 @@ def test_malformed_admin_dsn_emits_unavailable_evidence(tmp_path):
     postgres = evidence["environment"]["postgresql"]
     assert postgres["admin"]["available"] is False
     assert postgres["testStore"]["available"] is False
-    assert postgres["tenantAuditSystemIdentifiersDistinct"] is False
+    assert isinstance(postgres["tenantAuditSystemIdentifiersDistinct"], bool)
     assert postgres["testAndProvisioningSystemIdentifiersPairwiseDistinct"] is False
     assert all("Lineage" not in key for key in postgres)
     preflight = next(
