@@ -21,6 +21,7 @@ from typing import Sequence
 
 
 MIGRATION_SET_DIGEST_POLICY = "OFARM_POSTGRESQL_MIGRATION_SET_V1"
+MIGRATION_SOURCE_MAX_BYTES = 1024 * 1024
 _DIGEST_DOMAIN = MIGRATION_SET_DIGEST_POLICY.encode("ascii") + b"\x00"
 _MIGRATION_FILENAME = re.compile(r"(?P<version>[0-9]{4})_(?P<name>[a-z][a-z0-9_]*)\.sql")
 _PACKAGE_ROOT = Path(__file__).resolve().parents[2]
@@ -305,9 +306,26 @@ def _directory_open_flags() -> int:
 
 
 def _file_open_flags() -> int:
-    if not hasattr(os, "O_NOFOLLOW"):
-        raise MigrationSetError("migration preflight requires O_NOFOLLOW support")
-    return os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
+    if not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_NONBLOCK"):
+        raise MigrationSetError(
+            "migration preflight requires O_NOFOLLOW and O_NONBLOCK support"
+        )
+    return (
+        os.O_RDONLY
+        | os.O_NOFOLLOW
+        | os.O_NONBLOCK
+        | getattr(os, "O_CLOEXEC", 0)
+    )
+
+
+def _descriptor_read_identity(value: os.stat_result) -> tuple[int, int, int, int, int]:
+    return (
+        value.st_dev,
+        value.st_ino,
+        value.st_mode,
+        value.st_size,
+        value.st_mtime_ns,
+    )
 
 
 def _open_migration_directory(
@@ -363,17 +381,36 @@ def _read_opened_migration(
             f"migration directory contains a non-regular entry: {filename}"
         ) from exc
     try:
-        if not stat.S_ISREG(os.fstat(source_fd).st_mode):
+        initial_stat = os.fstat(source_fd)
+        if not stat.S_ISREG(initial_stat.st_mode):
             raise MigrationSetError(
                 f"migration directory contains a non-regular entry: {filename}"
             )
+        if initial_stat.st_size > MIGRATION_SOURCE_MAX_BYTES:
+            raise MigrationSetError(
+                f"migration {filename} exceeds the fixed source byte limit"
+            )
         chunks: list[bytes] = []
-        while True:
-            chunk = os.read(source_fd, 1024 * 1024)
+        remaining = MIGRATION_SOURCE_MAX_BYTES + 1
+        while remaining:
+            chunk = os.read(source_fd, min(1024 * 1024, remaining))
             if not chunk:
                 break
             chunks.append(chunk)
-        return _read_migration(filename, b"".join(chunks), version)
+            remaining -= len(chunk)
+        source_bytes = b"".join(chunks)
+        final_stat = os.fstat(source_fd)
+        if (
+            _descriptor_read_identity(final_stat)
+            != _descriptor_read_identity(initial_stat)
+            or len(source_bytes) != initial_stat.st_size
+        ):
+            raise MigrationSetError(f"migration {filename} changed while it was read")
+        if len(source_bytes) > MIGRATION_SOURCE_MAX_BYTES:
+            raise MigrationSetError(
+                f"migration {filename} exceeds the fixed source byte limit"
+            )
+        return _read_migration(filename, source_bytes, version)
     finally:
         os.close(source_fd)
 

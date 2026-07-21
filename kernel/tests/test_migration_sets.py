@@ -13,6 +13,7 @@ import pytest
 from deployment.postgresql.migration_sets import (
     SECURITY_AUDIT_AUTHORITATIVE_MIGRATION_SET,
     MIGRATION_SET_DIGEST_POLICY,
+    MIGRATION_SOURCE_MAX_BYTES,
     SECURITY_AUDIT_SERVICE,
     TENANT_AUTHORITATIVE_MIGRATION_SET,
     TENANT_SERVICE,
@@ -206,6 +207,68 @@ def test_migration_directory_rejects_symlinked_entries(tmp_path):
     (directory / "0001_initial.sql").symlink_to(source)
 
     with pytest.raises(MigrationSetError, match="non-regular entry"):
+        load_migration_set(tmp_path, TENANT_SERVICE)
+
+
+def test_migration_directory_rejects_fifo_without_blocking(tmp_path, monkeypatch):
+    directory = tmp_path / TENANT_SERVICE.relative_directory
+    directory.mkdir(parents=True)
+    os.mkfifo(directory / "0001_initial.sql")
+    real_open = os.open
+    observed_migration_open = False
+
+    def require_nonblocking_open(path, flags, *args, **kwargs):
+        nonlocal observed_migration_open
+        if path == "0001_initial.sql":
+            observed_migration_open = True
+            assert flags & os.O_NONBLOCK
+        return real_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", require_nonblocking_open)
+
+    with pytest.raises(MigrationSetError, match="non-regular entry"):
+        load_migration_set(tmp_path, TENANT_SERVICE)
+    assert observed_migration_open
+
+
+def test_migration_source_rejects_oversized_regular_file(tmp_path):
+    _write_migration(
+        tmp_path,
+        TENANT_SERVICE.relative_directory,
+        "0001_initial.sql",
+        b"x" * (MIGRATION_SOURCE_MAX_BYTES + 1),
+    )
+
+    with pytest.raises(MigrationSetError, match="fixed source byte limit"):
+        load_migration_set(tmp_path, TENANT_SERVICE)
+
+
+def test_migration_source_rejects_growth_during_descriptor_read(
+    tmp_path, monkeypatch
+):
+    _write_migration(
+        tmp_path,
+        TENANT_SERVICE.relative_directory,
+        "0001_initial.sql",
+        b"SELECT 1;\n",
+    )
+    migration_path = (
+        tmp_path / TENANT_SERVICE.relative_directory / "0001_initial.sql"
+    )
+    real_read = os.read
+    grew = False
+
+    def grow_before_read(file_descriptor, byte_count):
+        nonlocal grew
+        if not grew:
+            grew = True
+            with migration_path.open("ab") as migration_file:
+                migration_file.write(b"-- concurrent growth\n")
+        return real_read(file_descriptor, byte_count)
+
+    monkeypatch.setattr(os, "read", grow_before_read)
+
+    with pytest.raises(MigrationSetError, match="changed while it was read"):
         load_migration_set(tmp_path, TENANT_SERVICE)
 
 
