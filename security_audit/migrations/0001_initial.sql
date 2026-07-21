@@ -434,8 +434,32 @@ CREATE TABLE ofarm_security.operational_security_quota_bucket (
     )
 );
 
+CREATE TABLE ofarm_security.operational_security_quota_high_water (
+    producer pg_catalog.text COLLATE pg_catalog."C" NOT NULL,
+    component pg_catalog.text COLLATE pg_catalog."C" NOT NULL,
+    closed_through_bucket_start pg_catalog.timestamptz NOT NULL,
+
+    CONSTRAINT operational_security_quota_high_water_pkey
+        PRIMARY KEY (producer, component),
+    CONSTRAINT operational_security_quota_high_water_attribution_check CHECK (
+        (producer = 'AUTHENTICATION_BOUNDARY_V1'
+            AND component = 'AUTHENTICATION')
+        OR
+        (producer = 'REQUEST_ROUTER_BOUNDARY_V1'
+            AND component = 'REQUEST_ROUTER')
+    ),
+    CONSTRAINT operational_security_quota_high_water_start_check CHECK (
+        closed_through_bucket_start = pg_catalog.date_bin(
+            pg_catalog.make_interval(secs => 60),
+            closed_through_bucket_start,
+            '2000-01-01 00:00:00+00'::pg_catalog.timestamptz
+        )
+    )
+);
+
 REVOKE ALL PRIVILEGES ON TABLE ofarm_security.operational_security_event FROM PUBLIC;
 REVOKE ALL PRIVILEGES ON TABLE ofarm_security.operational_security_quota_bucket FROM PUBLIC;
+REVOKE ALL PRIVILEGES ON TABLE ofarm_security.operational_security_quota_high_water FROM PUBLIC;
 
 CREATE FUNCTION ofarm_security._event_fingerprint(
     VARIADIC p_fields pg_catalog.bytea[]
@@ -740,6 +764,16 @@ BEGIN
         v_now,
         '2000-01-01 00:00:00+00'::pg_catalog.timestamptz
     );
+    IF EXISTS (
+        SELECT 1
+        FROM ofarm_security.operational_security_quota_high_water
+        WHERE producer = v_producer
+          AND component = v_component
+          AND closed_through_bucket_start >= v_bucket_start
+    ) THEN
+        RAISE EXCEPTION USING ERRCODE = '22023',
+            MESSAGE = 'audit clock moved behind closed quota boundary';
+    END IF;
     INSERT INTO ofarm_security.operational_security_quota_bucket (
         producer, component, bucket_start
     ) VALUES (v_producer, v_component, v_bucket_start)
@@ -1150,6 +1184,16 @@ BEGIN
             THEN NULL ELSE v_bucket.overflow_event_count END,
         v_bucket.count_unknown, p_producer, p_component, NULL
     );
+    INSERT INTO ofarm_security.operational_security_quota_high_water (
+        producer, component, closed_through_bucket_start
+    ) VALUES (p_producer, p_component, p_bucket_start)
+    ON CONFLICT (producer, component) DO UPDATE
+    SET closed_through_bucket_start = CASE
+        WHEN operational_security_quota_high_water.closed_through_bucket_start
+                >= EXCLUDED.closed_through_bucket_start
+            THEN operational_security_quota_high_water.closed_through_bucket_start
+        ELSE EXCLUDED.closed_through_bucket_start
+    END;
     DELETE FROM ofarm_security.operational_security_quota_bucket
     WHERE producer = p_producer
       AND component = p_component
@@ -1254,7 +1298,7 @@ BEGIN
             e.affected_producer,
             e.affected_component
         FROM ofarm_security.operational_security_event AS e
-        WHERE e.purge_after > v_now
+        WHERE e.purge_after > v_access.access_expires_at
           AND e.observed_at <= v_access.access_data_cut
           AND pg_catalog.pg_visible_in_snapshot(
               e.event_insert_xid, v_access.access_visibility_snapshot
@@ -1406,7 +1450,8 @@ BEGIN
     SELECT pg_catalog.count(*) INTO v_deleted_count FROM deleted;
 
     WITH stale_buckets AS (
-        SELECT bucket.ctid
+        SELECT bucket.ctid, bucket.producer, bucket.component,
+               bucket.bucket_start
         FROM ofarm_security.operational_security_quota_bucket AS bucket
         WHERE bucket.overflow_started_at IS NULL
           AND bucket.bucket_start + pg_catalog.make_interval(secs => 60)
@@ -1414,10 +1459,33 @@ BEGIN
         ORDER BY bucket.bucket_start, bucket.producer, bucket.component
         LIMIT 1024
         FOR UPDATE SKIP LOCKED
+    ), advanced_high_water AS (
+        INSERT INTO ofarm_security.operational_security_quota_high_water (
+            producer, component, closed_through_bucket_start
+        )
+        SELECT producer, component, pg_catalog.max(bucket_start)
+        FROM stale_buckets
+        GROUP BY producer, component
+        ON CONFLICT (producer, component) DO UPDATE
+        SET closed_through_bucket_start = CASE
+            WHEN operational_security_quota_high_water.
+                    closed_through_bucket_start
+                    >= EXCLUDED.closed_through_bucket_start
+                THEN operational_security_quota_high_water.
+                    closed_through_bucket_start
+            ELSE EXCLUDED.closed_through_bucket_start
+        END
+        RETURNING producer, component
     )
     DELETE FROM ofarm_security.operational_security_quota_bucket AS bucket
     USING stale_buckets
-    WHERE bucket.ctid = stale_buckets.ctid;
+    WHERE bucket.ctid = stale_buckets.ctid
+      AND EXISTS (
+          SELECT 1
+          FROM advanced_high_water
+          WHERE advanced_high_water.producer = stale_buckets.producer
+            AND advanced_high_water.component = stale_buckets.component
+      );
 
     v_event := ofarm_security._insert_maintenance_event(
         'AUDIT_RETENTION', 'AUDIT_RETENTION', NULL, NULL, NULL, NULL,
@@ -1572,6 +1640,7 @@ BEGIN
     IF v_names IS DISTINCT FROM ARRAY[
         'operational_security_event',
         'operational_security_quota_bucket',
+        'operational_security_quota_high_water',
         'schema_migration'
     ]::pg_catalog.text[] THEN
         v_differences := v_differences + 1;
@@ -1590,6 +1659,7 @@ BEGIN
         'operational_security_event_pkey',
         'operational_security_event_purge_idx',
         'operational_security_quota_bucket_pkey',
+        'operational_security_quota_high_water_pkey',
         'schema_migration_filename_key',
         'schema_migration_pkey'
     ]::pg_catalog.text[] THEN
@@ -1677,6 +1747,20 @@ BEGIN
         v_differences := v_differences + 1;
     END IF;
 
+    SELECT pg_catalog.array_agg(attribute.attname::pg_catalog.text
+            ORDER BY attribute.attnum)
+    INTO v_names
+    FROM pg_catalog.pg_attribute AS attribute
+    WHERE attribute.attrelid =
+            'ofarm_security.operational_security_quota_high_water'::pg_catalog.regclass
+      AND attribute.attnum > 0
+      AND NOT attribute.attisdropped;
+    IF v_names IS DISTINCT FROM ARRAY[
+        'producer', 'component', 'closed_through_bucket_start'
+    ]::pg_catalog.text[] THEN
+        v_differences := v_differences + 1;
+    END IF;
+
     SELECT pg_catalog.count(*) INTO v_count
     FROM pg_catalog.pg_attribute AS attribute
     JOIN pg_catalog.pg_class AS class ON class.oid = attribute.attrelid
@@ -1685,7 +1769,8 @@ BEGIN
     WHERE namespace.nspname = 'ofarm_security'
       AND class.relname IN (
           'operational_security_event',
-          'operational_security_quota_bucket'
+          'operational_security_quota_bucket',
+          'operational_security_quota_high_water'
       )
       AND attribute.attnum > 0
       AND NOT attribute.attisdropped
@@ -1741,6 +1826,20 @@ BEGIN
         v_differences := v_differences + 1;
     END IF;
 
+    SELECT pg_catalog.array_agg(con.conname::pg_catalog.text
+            ORDER BY con.conname::pg_catalog.text)
+    INTO v_names
+    FROM pg_catalog.pg_constraint AS con
+    WHERE con.conrelid =
+        'ofarm_security.operational_security_quota_high_water'::pg_catalog.regclass;
+    IF v_names IS DISTINCT FROM ARRAY[
+        'operational_security_quota_high_water_attribution_check',
+        'operational_security_quota_high_water_pkey',
+        'operational_security_quota_high_water_start_check'
+    ]::pg_catalog.text[] THEN
+        v_differences := v_differences + 1;
+    END IF;
+
     SELECT pg_catalog.count(*) INTO v_count
     FROM pg_catalog.pg_constraint AS con
     JOIN pg_catalog.pg_class AS class ON class.oid = con.conrelid
@@ -1749,7 +1848,8 @@ BEGIN
     WHERE namespace.nspname = 'ofarm_security'
       AND class.relname IN (
           'operational_security_event',
-          'operational_security_quota_bucket'
+          'operational_security_quota_bucket',
+          'operational_security_quota_high_water'
       )
       AND (
           NOT con.convalidated OR con.condeferrable
@@ -2013,7 +2113,7 @@ BEGIN
       AND pg_catalog.sha256(
             pg_catalog.convert_to(routine.prosrc, 'UTF8')
           ) = pg_catalog.decode(
-            '27890717ec304d2aeda00aac949f3df6f9e2dc2ca32210e167b0d8f24ea0111a',
+            'c954dbc9e8d15962d1eea6caeca23feaa1f16d0086f3f8a26b266fa58bac5d7c',
             'hex'
           );
     IF v_count <> 1 THEN
@@ -2035,7 +2135,8 @@ BEGIN
     JOIN pg_catalog.pg_class AS class ON class.oid = trigger.tgrelid
     WHERE class.oid IN (
         'ofarm_security.operational_security_event'::pg_catalog.regclass,
-        'ofarm_security.operational_security_quota_bucket'::pg_catalog.regclass
+        'ofarm_security.operational_security_quota_bucket'::pg_catalog.regclass,
+        'ofarm_security.operational_security_quota_high_water'::pg_catalog.regclass
     ) AND NOT trigger.tgisinternal;
     IF v_count <> 0 THEN
         v_differences := v_differences + 1;
@@ -2048,7 +2149,8 @@ BEGIN
     ) AS acl
     WHERE class.oid IN (
         'ofarm_security.operational_security_event'::pg_catalog.regclass,
-        'ofarm_security.operational_security_quota_bucket'::pg_catalog.regclass
+        'ofarm_security.operational_security_quota_bucket'::pg_catalog.regclass,
+        'ofarm_security.operational_security_quota_high_water'::pg_catalog.regclass
     )
       AND acl.grantee <> class.relowner;
     IF v_count <> 0 THEN
@@ -3468,7 +3570,7 @@ BEGIN
     INTO v_catalog_fingerprint
     FROM catalog_entry;
     IF v_catalog_fingerprint <>
-            'sha256:a2a1a7a6d8551a489781c976a58380e2ed832821d24d92d5e850329375083c07' THEN
+            'sha256:c4a00eb7e9601f4e1ee82fec165c6ba051f4b9e82f9d7286944e38413de26e8c' THEN
         v_differences := v_differences + 1;
     END IF;
 

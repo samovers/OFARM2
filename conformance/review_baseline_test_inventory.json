@@ -1836,6 +1836,11 @@
       "sourcePath": "kernel/tests/test_postgresql_audit_contract.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_access_expiry_freezes_retention_membership_for_page_reuse",
+      "sourceModule": "kernel.tests.test_postgresql_audit_migration",
+      "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_access_intent_refuses_a_repeatable_read_stale_snapshot",
       "sourceModule": "kernel.tests.test_postgresql_audit_migration",
       "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
@@ -1971,12 +1976,12 @@
       "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_retention_hides_expired_rows_then_purges_only_one_bounded_batch",
+      "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_retention_deleted_bucket_cannot_reopen_after_clock_rollback",
       "sourceModule": "kernel.tests.test_postgresql_audit_migration",
       "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_retention_order_cannot_widen_a_reused_access_page",
+      "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_retention_hides_expired_rows_then_purges_only_one_bounded_batch",
       "sourceModule": "kernel.tests.test_postgresql_audit_migration",
       "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
     },
@@ -7286,8 +7291,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "105a0405e7f9d6b7b20d86ce870e2ea083170a554200cab1f067c8c0d583c4f9",
-  "entryCount": 1457,
+  "entriesSha256": "b947035b76f501677ee6de488c1ff90a33dbc003db01b63b6c49a9dd5b2202bc",
+  "entryCount": 1458,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

@@ -147,7 +147,8 @@ schemas and other repository files are global inputs, not database relations.
 | tenant_capability_keyring | Disposable global capability-key reservation/projection | One row per binder audience is a row-lock fence and projected current key/admission head. It cannot provide advisory-lock fairness or authorize independently of the complete lifecycle fold and fixed time rules. |
 | tenant_binding_context | Protected disposable transaction operational metadata | An UNLOGGED migration-owned relation stores the one-use challenge and verified TenantBinding for exactly one database-derived backend identity and full xid8. Exact backend-start/full-transaction matching makes a physically retained row unusable after commit, rollback, backend restart, or pool reuse. Only hardened functions may read or write it; the application role has no table privileges. |
 | operational_security_event | Database-global operational security metadata, explicitly non-tenant | Append-only, bounded pre-tenant failure events plus audit-access, retention, and declared-gap maintenance events for this lane. It carries no tenant_id, tenant_ref, Party/farm/role identity, governed batch, knowledge position, or request-supplied attribution. It lives only in the separately provisioned audit PostgreSQL service's protected `ofarm_security` schema and is never read as tenant history. |
-| operational_security_quota_bucket | Disposable non-tenant operational security control state | One fixed database-time bucket per provisioned producer/component records accepted and overflow counts plus marker state. Only hardened audit functions mutate it. It contains no request, tenant, principal, correlation, or evidence data and cannot authorize anything. A close holds the event-writer barrier through marker insertion and bucket deletion; every append takes its writer lock before selecting database time, so a delayed append cannot recreate the closed bucket after commit. |
+| operational_security_quota_bucket | Disposable non-tenant operational security control state | One fixed database-time bucket per provisioned producer/component records accepted and overflow counts plus marker state. Only hardened audit functions mutate it. It contains no request, tenant, principal, correlation, or evidence data and cannot authorize anything. |
+| operational_security_quota_high_water | Durable bounded non-tenant operational security control state | At most one row for each of the two fixed producer/component pairs records the latest closed quota minute. It survives bucket deletion and makes a backward wall-clock step fail closed instead of recreating a closed bucket. It contains no request, tenant, principal, correlation, or evidence data and cannot authorize anything. |
 | schema_migration | Database-global operational metadata | Append-only ledger of version, filename, SHA-256, application/release identity, and applied time. Application access is read-only for readiness. |
 | governed_write_batch | Tenant-owned | Primary identity is (tenant_id, batch_id). It anchors the transaction's command identity and the records, edges, traces, gate entries, and receipts emitted by that command. Runtime insertion requires authenticated_principal_ref to equal the protected transaction binding's party_ref; it is not caller-selected attribution. |
 | kernel_record_reference | Tenant-owned relational enforcement carrier | Normalizes governed references extracted from immutable JSONB payloads without changing those payloads. Owner and tenant targets use composite tenant keys; global-content targets use a distinct constrained lane. |
@@ -260,9 +261,13 @@ existing evidence.
 `SECURITY_DIAGNOSTIC_30D_V1` is an exact live/query-visible retention policy,
 not a claim of physical erasure from PostgreSQL heap pages, local WAL, storage
 snapshots, or retired media at the same instant. Every bounded query and export
-function applies `purge_after` strictly greater than its database-observed
-current time before any other filter, so an expired row is undisclosable even if
-the bounded purge job lags. Because
+first requires its committed access intent to be unexpired at the freshly
+observed database time. Target-event membership is frozen when that intent is
+created: only rows whose immutable `purge_after` is strictly later than the
+intent's fixed `access_expires_at` can appear. A backward wall-clock step during
+reuse therefore cannot re-admit a row excluded from that page, and an event is
+undisclosable for the entire permitted reuse window before its retention
+deadline even if the bounded purge job lags. Because
 V1 stores no raw identity/evidence and destroys the correlation key version by
 the last stamped deadline, delayed physical remnants cannot be correlated
 through this system. A requirement for physical-byte erasure at 30 days needs a
@@ -332,10 +337,12 @@ appending individual events, and finally the control procedure commits
 Every event writer takes a protected relation-level writer lock before deriving
 its database time or bucket. Overflow close takes the mutually exclusive
 transaction-level writer barrier before checking the current bucket and holds
-it through the end marker and bucket deletion. A writer admitted before close
-must therefore commit before its old bucket can close; a writer admitted after
-close selects time only after that close commits and cannot recreate the old
-key.
+it through the end marker, a durable high-water advance, and bucket deletion. A
+writer admitted before close must therefore commit before its old bucket can
+close. A writer admitted after close refuses any derived bucket at or below the
+pair's closed high-water, so a backward wall-clock step cannot recreate the old
+key. The high-water relation is bounded to the two fixed producer/component
+pairs and is not a general clock, ordering, continuity, or recovery service.
 Connection limits, statement timeouts, reserved marker capacity, service-level
 CPU/storage limits, and growth alerts are provisioned independently of tenant
 traffic. A compromised producer cannot select or reset its bucket. Exhausting
@@ -376,9 +383,11 @@ fingerprint before returning that one bounded page. Rollback of the read cannot
 erase the already-committed access intent. Reuse can return only the same
 cut/page/ceiling and cannot widen unique data. Retention cannot reveal a
 replacement row: `purge_after` is constrained to exactly
-`observed_at + 30 days`, the page is ordered by `observed_at` descending, and
-expired rows are filtered before `LIMIT`, independent of whether physical
-deletion has run. A new page or later cut needs a new intent. Function results
+`observed_at + 30 days`, target eligibility requires `purge_after` later than
+the intent's fixed `access_expires_at`, and the page is ordered by `observed_at`
+descending before `LIMIT`, independent of wall-clock reversal or whether
+physical deletion has run. A new page or later cut needs a new intent. Function
+results
 can still be copied or repeatedly retrieved, so the reader is explicitly a
 privileged, export-capable boundary within the precommitted bound, not a
 no-exfiltration role. Direct table or unbounded extraction is unsupported. A

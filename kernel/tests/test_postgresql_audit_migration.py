@@ -300,10 +300,10 @@ def test_authoritative_audit_migration_is_one_exact_initial_set():
     assert SECURITY_AUDIT_CONTRACT.digest in source
     assert SECURITY_AUDIT_PROVISIONING_SPEC.digest in source
     assert migration.source_sha256 == \
-        "sha256:3c06da687583e3e9b2c7a42facb46d45d99721afa90de36ec54e32dda111a5b8"
-    assert migration.byte_length == 148_919
+        "sha256:49d57e0963319933e762db000fcecd36312b35a3deb79fb31e4920c51e7be8db"
+    assert migration.byte_length == 153_500
     assert migration_set.digest == \
-        "sha256:466858a917e327d969478b3e5739988dad5612026d886ee057c39e8d474053af"
+        "sha256:38d1cf4911ea1639bf4fd2e099efa61e83921a00fc06fd1a55e39a7fd13af666"
     assert migration_set.prefix_digest(1) == migration_set.digest
 
 
@@ -316,12 +316,17 @@ def test_authoritative_audit_migration_has_closed_carriers_and_limits():
         for qualified_name in (
             "ofarm_security.operational_security_event",
             "ofarm_security.operational_security_quota_bucket",
+            "ofarm_security.operational_security_quota_high_water",
         )
     )
 
-    assert source.count("CREATE TABLE ofarm_security.operational_security_") == 2
+    assert source.count("CREATE TABLE ofarm_security.operational_security_") == 3
     assert "CREATE TABLE ofarm_security.operational_security_event" in source
     assert "CREATE TABLE ofarm_security.operational_security_quota_bucket" in source
+    assert (
+        "CREATE TABLE ofarm_security.operational_security_quota_high_water"
+        in source
+    )
     assert "BETWEEN 0 AND 1024" in source
     assert "LIMIT 1024" in source
     assert "p_max_rows BETWEEN 1 AND 256" in source
@@ -386,11 +391,11 @@ def test_authoritative_audit_migration_has_closed_carriers_and_limits():
     for identity in BACKEND_STATISTICS_ROUTINE_IDENTITIES:
         assert f"'{identity}'" in source
     assert (
-        "27890717ec304d2aeda00aac949f3df6f9e2dc2ca32210e167b0d8f24ea0111a"
+        "c954dbc9e8d15962d1eea6caeca23feaa1f16d0086f3f8a26b266fa58bac5d7c"
         in source
     )
     assert (
-        "sha256:a2a1a7a6d8551a489781c976a58380e2ed832821d24d92d5e850329375083c07"
+        "sha256:c4a00eb7e9601f4e1ee82fec165c6ba051f4b9e82f9d7286944e38413de26e8c"
         in source
     )
     assert "jsonb" not in persisted_audit_tables
@@ -445,7 +450,7 @@ def test_access_intent_serializes_writers_before_combined_cut_capture():
     )
 
 
-def test_retention_order_cannot_widen_a_reused_access_page():
+def test_access_expiry_freezes_retention_membership_for_page_reuse():
     source = load_migration_set(
         PACKAGE_ROOT, SECURITY_AUDIT_SERVICE
     ).migrations[0].source_bytes.decode("utf-8")
@@ -466,9 +471,10 @@ def test_retention_order_cannot_widen_a_reused_access_page():
         "purge_after = observed_at + pg_catalog.make_interval(days => 30)"
         in event_table
     )
-    retained_query = """        WHERE e.purge_after > v_now
+    retained_query = """        WHERE e.purge_after > v_access.access_expires_at
           AND e.observed_at <= v_access.access_data_cut"""
     assert bounded_function.count(retained_query) == 1
+    assert "WHERE e.purge_after > v_now" not in bounded_function
     assert bounded_function.count(
         "        ORDER BY e.observed_at DESC, e.event_id DESC\n"
         "        LIMIT p_max_rows"
@@ -2009,6 +2015,14 @@ def _reset_quota_state(
             """,
             (producer, component),
         )
+        admin.execute(
+            """
+            DELETE FROM ofarm_security.operational_security_quota_high_water
+            WHERE producer = %s
+              AND component = %s
+            """,
+            (producer, component),
+        )
 
 
 def _bulk_append_in_one_bucket(
@@ -2455,6 +2469,12 @@ def test_overflow_close_waits_for_old_bucket_append_and_cannot_reopen(
             ).fetchone()
         assert retry_close == closed
 
+        with pytest.raises(
+            psycopg.errors.InvalidParameterValue,
+            match="audit clock moved behind closed quota boundary",
+        ):
+            append_to_old_bucket()
+
         with psycopg.connect(state["target_admin_dsn"]) as admin:
             old_bucket_count = admin.execute(
                 """
@@ -2475,8 +2495,17 @@ def test_overflow_close_waits_for_old_bucket_append_and_cannot_reopen(
                 """,
                 (producer_name, component, old_bucket),
             ).fetchall()
+            high_water = admin.execute(
+                """
+                SELECT closed_through_bucket_start
+                FROM ofarm_security.operational_security_quota_high_water
+                WHERE producer = %s AND component = %s
+                """,
+                (producer_name, component),
+            ).fetchone()
         assert old_bucket_count == 0
         assert ended_rows == [(10, False)]
+        assert high_water == (old_bucket,)
     finally:
         with psycopg.connect(
             state["target_admin_dsn"], autocommit=True
@@ -2668,6 +2697,108 @@ def test_retention_waits_for_delayed_writer_and_cannot_reset_quota(
                     """,
                     (event_id,),
                 )
+        _reset_quota_state(state, producer_name, component)
+
+
+def test_retention_deleted_bucket_cannot_reopen_after_clock_rollback(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    producer_name = "REQUEST_ROUTER_BOUNDARY_V1"
+    component = "REQUEST_ROUTER"
+    _reset_quota_state(state, producer_name, component)
+
+    try:
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            stale_bucket = admin.execute(
+                """
+                SELECT pg_catalog.date_bin(
+                    pg_catalog.make_interval(secs => 60),
+                    pg_catalog.clock_timestamp(),
+                    '2000-01-01 00:00:00+00'::pg_catalog.timestamptz
+                ) - pg_catalog.make_interval(secs => 120)
+                """
+            ).fetchone()[0]
+            admin.execute(
+                """
+                INSERT INTO ofarm_security.operational_security_quota_bucket (
+                    producer, component, bucket_start, accepted_event_count
+                ) VALUES (%s, %s, %s, 7)
+                """,
+                (producer_name, component, stale_bucket),
+            )
+
+        with psycopg.connect(
+            _role_dsn(state, "ofarm_security_audit_retention_login"),
+            autocommit=True,
+        ) as retention:
+            retention.execute(
+                "SELECT * FROM "
+                "ofarm_security.purge_expired_operational_security_events()"
+            ).fetchone()
+
+        with psycopg.connect(state["target_admin_dsn"]) as admin:
+            state_after_purge = admin.execute(
+                """
+                SELECT
+                    (SELECT pg_catalog.count(*)
+                     FROM ofarm_security.operational_security_quota_bucket
+                     WHERE producer = %s AND component = %s
+                       AND bucket_start = %s),
+                    (SELECT closed_through_bucket_start
+                     FROM ofarm_security.operational_security_quota_high_water
+                     WHERE producer = %s AND component = %s)
+                """,
+                (
+                    producer_name,
+                    component,
+                    stale_bucket,
+                    producer_name,
+                    component,
+                ),
+            ).fetchone()
+        assert state_after_purge == (0, stale_bucket)
+
+        with _controlled_pretenant_clock(state):
+            with psycopg.connect(
+                _role_dsn(
+                    state,
+                    "ofarm_security_request_router_producer_login",
+                ),
+                autocommit=True,
+            ) as producer:
+                producer.execute(
+                    "SELECT pg_catalog.set_config('ofarm.test_now', %s, false)",
+                    ((stale_bucket + timedelta(seconds=30)).isoformat(),),
+                )
+                with pytest.raises(
+                    psycopg.errors.InvalidParameterValue,
+                    match="audit clock moved behind closed quota boundary",
+                ):
+                    producer.execute(
+                        """
+                        SELECT * FROM ofarm_security.append_pretenant_failure(
+                            %s, 'BINDER_REFUSED', %s,
+                            'OFARM_PRETENANT_CORRELATION_V1', 1
+                        )
+                        """,
+                        (uuid4(), bytes.fromhex("45" * 32)),
+                    ).fetchone()
+
+        with psycopg.connect(state["target_admin_dsn"]) as admin:
+            reopened = admin.execute(
+                """
+                SELECT pg_catalog.count(*)
+                FROM ofarm_security.operational_security_quota_bucket
+                WHERE producer = %s AND component = %s
+                  AND bucket_start = %s
+                """,
+                (producer_name, component, stale_bucket),
+            ).fetchone()[0]
+        assert reopened == 0
+    finally:
         _reset_quota_state(state, producer_name, component)
 
 

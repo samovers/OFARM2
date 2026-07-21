@@ -178,15 +178,15 @@ SECURITY_AUDIT_AUTHORITATIVE_MIGRATION_SET = AuthoritativeMigrationSet(
             version=1,
             filename="0001_initial.sql",
             source_sha256=(
-                "sha256:3c06da687583e3e9b2c7a42facb46d45d99721afa90de36ec54e32dda111a5b8"
+                "sha256:49d57e0963319933e762db000fcecd36312b35a3deb79fb31e4920c51e7be8db"
             ),
-            byte_length=148919,
+            byte_length=153500,
             applied_prefix_digest=(
-                "sha256:466858a917e327d969478b3e5739988dad5612026d886ee057c39e8d474053af"
+                "sha256:38d1cf4911ea1639bf4fd2e099efa61e83921a00fc06fd1a55e39a7fd13af666"
             ),
         ),
     ),
-    digest="sha256:466858a917e327d969478b3e5739988dad5612026d886ee057c39e8d474053af",
+    digest="sha256:38d1cf4911ea1639bf4fd2e099efa61e83921a00fc06fd1a55e39a7fd13af666",
 )
 
 AUTHORITATIVE_MIGRATION_SETS = (
