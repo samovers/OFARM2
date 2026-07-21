@@ -7287,7 +7287,7 @@ AS 'DECLARE
            OR observed_head_version <> 1
            OR observed_service_identity <> ''ofarm.tenant-postgresql.v1''
            OR observed_provisioning_digest <>
-                ''sha256:f9954daa6a895115917688524d4a4cbafa2e48b2ab65c82016da80b2f369bb68''
+                ''sha256:38e78f1b218ee348fab7778cfc04f82efb36e7d5572e96299001f241ca19684d''
            OR observed_prefix_digest !~ ''^sha256:[0-9a-f]{64}$'' THEN
             differences := pg_catalog.array_append(
                 differences, ''migration 0001 ledger identity differs''

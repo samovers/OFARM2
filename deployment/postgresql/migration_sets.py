@@ -160,15 +160,15 @@ TENANT_AUTHORITATIVE_MIGRATION_SET = AuthoritativeMigrationSet(
             version=1,
             filename="0001_initial.sql",
             source_sha256=(
-                "sha256:01930c57e009feebc7f7c25f8ad81d5281321396bd98f52b2cab6c59f599ad78"
+                "sha256:60ffde31c9d69ab0622af8204595a0eeeb7291c0a6c1613d2e8d4341a935eabb"
             ),
             byte_length=397654,
             applied_prefix_digest=(
-                "sha256:7058819ec5da641ba08d324160c045a9f79d93c876da4491e705804f939daf62"
+                "sha256:4920eb2ec1190c9a278610d7f19bfebdabbd439890cbe5f9f2263115df73c208"
             ),
         ),
     ),
-    digest="sha256:7058819ec5da641ba08d324160c045a9f79d93c876da4491e705804f939daf62",
+    digest="sha256:4920eb2ec1190c9a278610d7f19bfebdabbd439890cbe5f9f2263115df73c208",
 )
 
 SECURITY_AUDIT_AUTHORITATIVE_MIGRATION_SET = AuthoritativeMigrationSet(
