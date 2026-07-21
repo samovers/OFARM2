@@ -1314,6 +1314,354 @@ CREATE TABLE ofarm.runtime_bundle_component (
     CONSTRAINT runtime_bundle_component_length_check CHECK (byte_length >= 0)
 );
 
+CREATE FUNCTION ofarm.runtime_bundle_tenant_allowed(
+    candidate_tenant_id pg_catalog.uuid
+)
+RETURNS pg_catalog.bool
+LANGUAGE plpgsql STABLE STRICT PARALLEL UNSAFE SECURITY INVOKER
+SET search_path = pg_catalog, pg_temp
+AS 'BEGIN
+        IF CURRENT_USER = ''ofarm_owner'' THEN
+            RETURN true;
+        END IF;
+        IF SESSION_USER NOT IN (''ofarm_app'', ''ofarm_worker'') THEN
+            RETURN false;
+        END IF;
+        RETURN candidate_tenant_id = ofarm.current_tenant_id();
+    END';
+
+CREATE FUNCTION ofarm.publish_runtime_bundle(
+    requested_tenant_id pg_catalog.uuid,
+    expected_bundle_digest pg_catalog.text,
+    bundle_document pg_catalog.jsonb
+)
+RETURNS ofarm.sha256_id
+LANGUAGE plpgsql VOLATILE PARALLEL UNSAFE SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+AS 'DECLARE
+        selected_component pg_catalog.jsonb;
+        component_ordinality pg_catalog.int8;
+        component_count pg_catalog.int4;
+        checked_role pg_catalog.text;
+        checked_logical_ref ofarm.runtime_logical_ref;
+        checked_canonicalization pg_catalog.text;
+        checked_placement pg_catalog.text;
+        checked_content_digest ofarm.sha256_id;
+        checked_byte_length pg_catalog.int8;
+        previous_role pg_catalog.text;
+        previous_logical_ref pg_catalog.text;
+        component_canonical_texts pg_catalog.text[] :=
+            ARRAY[]::pg_catalog.text[];
+        canonical_bundle_bytes pg_catalog.bytea;
+        computed_bundle_digest ofarm.sha256_id;
+        observed_bundle_bytes pg_catalog.bytea;
+        observed_components pg_catalog.jsonb;
+    BEGIN
+        IF requested_tenant_id IS NULL
+           OR NOT (
+                pg_catalog.pg_has_role(
+                    SESSION_USER,
+                    ''ofarm_runtime_bundle_publisher'',
+                    ''USAGE''
+                )
+                OR pg_catalog.pg_has_role(
+                    SESSION_USER, ''ofarm_owner'', ''MEMBER''
+                )
+           ) THEN
+            RAISE EXCEPTION USING
+                ERRCODE = ''42501'',
+                MESSAGE = ''runtime bundle publication tenant is not authorized'';
+        END IF;
+        IF expected_bundle_digest IS NULL
+           OR (expected_bundle_digest COLLATE pg_catalog."C")
+                OPERATOR(pg_catalog.!~) ''^sha256:[0-9a-f]{64}$'' THEN
+            RAISE EXCEPTION USING
+                ERRCODE = ''22023'',
+                MESSAGE = ''runtime bundle expected digest is not exact'';
+        END IF;
+        IF bundle_document IS NULL
+           OR pg_catalog.pg_column_size(bundle_document) > 1048576
+           OR pg_catalog.jsonb_typeof(bundle_document) <> ''object''
+           OR bundle_document IS DISTINCT FROM pg_catalog.jsonb_build_object(
+                ''schemaVersion'', bundle_document -> ''schemaVersion'',
+                ''canonicalization'', bundle_document -> ''canonicalization'',
+                ''components'', bundle_document -> ''components''
+              )
+           OR bundle_document ->> ''schemaVersion'' <>
+                ''ofarm.runtime-bundle.local.v1''
+           OR bundle_document ->> ''canonicalization'' <>
+                ''OFARM_CANONICAL_JSON_V1''
+           OR pg_catalog.jsonb_typeof(bundle_document -> ''components'') <>
+                ''array'' THEN
+            RAISE EXCEPTION USING
+                ERRCODE = ''22023'',
+                MESSAGE = ''runtime bundle document is not exact'';
+        END IF;
+
+        component_count := pg_catalog.jsonb_array_length(
+            bundle_document -> ''components''
+        );
+        IF component_count NOT BETWEEN 1 AND 4096 THEN
+            RAISE EXCEPTION USING
+                ERRCODE = ''22023'',
+                MESSAGE = ''runtime bundle component count is outside the bound'';
+        END IF;
+
+        FOR selected_component, component_ordinality IN
+            SELECT entry.value, entry.ordinality::pg_catalog.int8
+              FROM pg_catalog.jsonb_array_elements(
+                    bundle_document -> ''components''
+              ) WITH ORDINALITY AS entry(value, ordinality)
+             ORDER BY entry.ordinality
+        LOOP
+            IF pg_catalog.jsonb_typeof(selected_component) <> ''object''
+               OR selected_component IS DISTINCT FROM
+                    pg_catalog.jsonb_build_object(
+                        ''role'', selected_component -> ''role'',
+                        ''logicalRef'', selected_component -> ''logicalRef'',
+                        ''canonicalization'',
+                            selected_component -> ''canonicalization'',
+                        ''placement'', selected_component -> ''placement'',
+                        ''contentDigest'',
+                            selected_component -> ''contentDigest'',
+                        ''byteLength'', selected_component -> ''byteLength''
+                    )
+               OR pg_catalog.jsonb_typeof(selected_component -> ''role'') <>
+                    ''string''
+               OR pg_catalog.jsonb_typeof(
+                    selected_component -> ''logicalRef''
+                  ) <> ''string''
+               OR pg_catalog.jsonb_typeof(
+                    selected_component -> ''canonicalization''
+                  ) <> ''string''
+               OR pg_catalog.jsonb_typeof(
+                    selected_component -> ''placement''
+                  ) <> ''string''
+               OR pg_catalog.jsonb_typeof(
+                    selected_component -> ''contentDigest''
+                  ) <> ''string''
+               OR pg_catalog.jsonb_typeof(
+                    selected_component -> ''byteLength''
+                  ) <> ''number'' THEN
+                RAISE EXCEPTION USING
+                    ERRCODE = ''22023'',
+                    MESSAGE = ''runtime bundle component is not exact'',
+                    DETAIL = ''component ordinal '' || component_ordinality;
+            END IF;
+
+            checked_role := selected_component ->> ''role'';
+            IF checked_role NOT IN (
+                ''PROFILE_DESCRIPTOR'', ''ACTIVE_MANIFEST'', ''PROFILE_INSTANCE'',
+                ''PROFILE_POLICY'', ''QUERY_SPECIFICATION'', ''QUERY_PLAN'',
+                ''VIEW_BINDING'', ''CONTRACT_SCHEMA'', ''DRAFT_CONTRACT_SCHEMA'',
+                ''VALIDATOR_SOURCE'', ''ADAPTER_SOURCE'', ''QUERY_OUTPUT_SOURCE'',
+                ''REFERENCE_SNAPSHOT'', ''REFERENCE_SOURCE''
+            ) THEN
+                RAISE EXCEPTION USING
+                    ERRCODE = ''22023'',
+                    MESSAGE = ''runtime bundle component role is not closed'';
+            END IF;
+            checked_logical_ref := (
+                selected_component ->> ''logicalRef''
+            )::ofarm.runtime_logical_ref;
+            checked_canonicalization :=
+                selected_component ->> ''canonicalization'';
+            checked_placement := selected_component ->> ''placement'';
+            IF checked_canonicalization NOT IN (
+                    ''OFARM_CANONICAL_JSON_V1'', ''EXACT_BYTES_V1''
+               )
+               OR checked_placement NOT IN (
+                    ''GLOBAL_IMMUTABLE_CONTENT'', ''TENANT_RUNTIME_SELECTION''
+               ) THEN
+                RAISE EXCEPTION USING
+                    ERRCODE = ''22023'',
+                    MESSAGE = ''runtime bundle component policy is not closed'';
+            END IF;
+            checked_content_digest := (
+                selected_component ->> ''contentDigest''
+            )::ofarm.sha256_id;
+            IF pg_catalog.length(
+                    selected_component ->> ''byteLength''
+               ) > 10
+               OR ((selected_component ->> ''byteLength'')
+                    COLLATE pg_catalog."C")
+                    OPERATOR(pg_catalog.!~) ''^(0|[1-9][0-9]*)$'' THEN
+                RAISE EXCEPTION USING
+                    ERRCODE = ''22023'',
+                    MESSAGE = ''runtime bundle component length is not canonical'';
+            END IF;
+            checked_byte_length := (
+                selected_component ->> ''byteLength''
+            )::pg_catalog.int8;
+            IF checked_byte_length NOT BETWEEN 0 AND 1073741823 THEN
+                RAISE EXCEPTION USING
+                    ERRCODE = ''22023'',
+                    MESSAGE = ''runtime bundle component length is outside the bound'';
+            END IF;
+
+            IF previous_role IS NOT NULL AND (
+                (previous_role COLLATE pg_catalog."C")
+                    OPERATOR(pg_catalog.>)
+                    (checked_role COLLATE pg_catalog."C")
+                OR (
+                    previous_role = checked_role
+                    AND (previous_logical_ref COLLATE pg_catalog."C")
+                        OPERATOR(pg_catalog.>=)
+                        (checked_logical_ref::pg_catalog.text
+                            COLLATE pg_catalog."C")
+                )
+            ) THEN
+                RAISE EXCEPTION USING
+                    ERRCODE = ''22023'',
+                    MESSAGE = ''runtime bundle components are not canonically unique'';
+            END IF;
+            previous_role := checked_role;
+            previous_logical_ref := checked_logical_ref::pg_catalog.text;
+
+            IF checked_placement = ''GLOBAL_IMMUTABLE_CONTENT'' THEN
+                PERFORM 1
+                  FROM ofarm.runtime_content_blob AS content
+                 WHERE content.content_digest = checked_content_digest
+                   AND content.byte_length = checked_byte_length;
+                IF NOT FOUND THEN
+                    RAISE EXCEPTION USING
+                        ERRCODE = ''23503'',
+                        MESSAGE = ''runtime bundle global component is absent'',
+                        CONSTRAINT = ''runtime_bundle_component_global_fkey'';
+                END IF;
+            ELSE
+                PERFORM 1
+                  FROM ofarm.runtime_tenant_content_blob AS content
+                 WHERE content.tenant_id = requested_tenant_id
+                   AND content.content_digest = checked_content_digest
+                   AND content.byte_length = checked_byte_length;
+                IF NOT FOUND THEN
+                    RAISE EXCEPTION USING
+                        ERRCODE = ''23503'',
+                        MESSAGE = ''runtime bundle tenant component is absent'',
+                        CONSTRAINT = ''runtime_bundle_component_tenant_fkey'';
+                END IF;
+            END IF;
+
+            component_canonical_texts := pg_catalog.array_append(
+                component_canonical_texts,
+                ''{"byteLength":'' || checked_byte_length::pg_catalog.text ||
+                '',"canonicalization":"'' || checked_canonicalization ||
+                ''","contentDigest":"'' ||
+                    checked_content_digest::pg_catalog.text ||
+                ''","logicalRef":"'' ||
+                    checked_logical_ref::pg_catalog.text ||
+                ''","placement":"'' || checked_placement ||
+                ''","role":"'' || checked_role || ''"}''
+            );
+        END LOOP;
+
+        canonical_bundle_bytes := pg_catalog.convert_to(
+            ''{"canonicalization":"OFARM_CANONICAL_JSON_V1","components":['' ||
+            pg_catalog.array_to_string(component_canonical_texts, '','') ||
+            ''],"schemaVersion":"ofarm.runtime-bundle.local.v1"}'',
+            ''UTF8''
+        );
+        computed_bundle_digest := (
+            ''sha256:'' || pg_catalog.encode(
+                pg_catalog.sha256(canonical_bundle_bytes), ''hex''
+            )
+        )::ofarm.sha256_id;
+        IF computed_bundle_digest::pg_catalog.text <>
+                expected_bundle_digest THEN
+            RAISE EXCEPTION USING
+                ERRCODE = ''22023'',
+                MESSAGE = ''runtime bundle digest differs from its exact components'';
+        END IF;
+
+        PERFORM 1
+          FROM ofarm.tenant_registry AS tenant
+         WHERE tenant.tenant_id = requested_tenant_id
+         FOR UPDATE;
+        IF NOT FOUND THEN
+            RAISE EXCEPTION USING
+                ERRCODE = ''23503'',
+                MESSAGE = ''runtime bundle tenant is absent'',
+                CONSTRAINT = ''runtime_bundle_tenant_fkey'';
+        END IF;
+
+        SELECT bundle.canonical_bytes
+          INTO observed_bundle_bytes
+          FROM ofarm.runtime_bundle AS bundle
+         WHERE bundle.tenant_id = requested_tenant_id
+           AND bundle.bundle_digest = computed_bundle_digest;
+        IF FOUND THEN
+            SELECT COALESCE(
+                       pg_catalog.jsonb_agg(
+                           pg_catalog.jsonb_build_object(
+                               ''role'', component.component_role,
+                               ''logicalRef'', component.logical_ref::pg_catalog.text,
+                               ''canonicalization'', component.canonicalization,
+                               ''placement'', component.content_placement,
+                               ''contentDigest'', COALESCE(
+                                    component.global_content_digest,
+                                    component.tenant_content_digest
+                                )::pg_catalog.text,
+                               ''byteLength'', component.byte_length
+                           ) ORDER BY component.component_role,
+                                      component.logical_ref
+                       ),
+                       ''[]''::pg_catalog.jsonb
+                   )
+              INTO observed_components
+              FROM ofarm.runtime_bundle_component AS component
+             WHERE component.tenant_id = requested_tenant_id
+               AND component.bundle_digest = computed_bundle_digest;
+            IF observed_bundle_bytes <> canonical_bundle_bytes
+               OR observed_components IS DISTINCT FROM
+                    bundle_document -> ''components'' THEN
+                RAISE EXCEPTION USING
+                    ERRCODE = ''55000'',
+                    MESSAGE = ''persisted runtime bundle seal differs'';
+            END IF;
+            RETURN computed_bundle_digest;
+        END IF;
+
+        INSERT INTO ofarm.runtime_bundle (
+            tenant_id, bundle_digest, bundle_ref, canonical_bytes, byte_length
+        ) VALUES (
+            requested_tenant_id,
+            computed_bundle_digest,
+            ''runtimebundle:'' || computed_bundle_digest::pg_catalog.text,
+            canonical_bundle_bytes,
+            pg_catalog.octet_length(canonical_bundle_bytes)
+        );
+
+        INSERT INTO ofarm.runtime_bundle_component (
+            tenant_id, bundle_digest, component_role, logical_ref,
+            canonicalization, content_placement, global_content_digest,
+            tenant_content_digest, byte_length
+        )
+        SELECT requested_tenant_id,
+               computed_bundle_digest,
+               component.value ->> ''role'',
+               (component.value ->> ''logicalRef'')::ofarm.runtime_logical_ref,
+               component.value ->> ''canonicalization'',
+               component.value ->> ''placement'',
+               CASE
+                   WHEN component.value ->> ''placement'' =
+                        ''GLOBAL_IMMUTABLE_CONTENT''
+                   THEN (component.value ->> ''contentDigest'')::ofarm.sha256_id
+               END,
+               CASE
+                   WHEN component.value ->> ''placement'' =
+                        ''TENANT_RUNTIME_SELECTION''
+                   THEN (component.value ->> ''contentDigest'')::ofarm.sha256_id
+               END,
+               (component.value ->> ''byteLength'')::pg_catalog.int8
+          FROM pg_catalog.jsonb_array_elements(
+                bundle_document -> ''components''
+          ) WITH ORDINALITY AS component(value, ordinality)
+         ORDER BY component.ordinality;
+
+        RETURN computed_bundle_digest;
+    END';
+
 CREATE TABLE ofarm.governed_write_batch (
     tenant_id pg_catalog.uuid NOT NULL,
     batch_id ofarm.tenant_local_ref NOT NULL,
@@ -5032,23 +5380,23 @@ FOR EACH STATEMENT EXECUTE FUNCTION ofarm.reject_immutable_relation_truncate();
 ALTER TABLE ofarm.runtime_tenant_content_blob ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ofarm.runtime_tenant_content_blob FORCE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON ofarm.runtime_tenant_content_blob
-TO ofarm_app, ofarm_worker
-USING (tenant_id = ofarm.current_tenant_id())
-WITH CHECK (tenant_id = ofarm.current_tenant_id());
+TO ofarm_app, ofarm_owner, ofarm_worker
+USING (ofarm.runtime_bundle_tenant_allowed(tenant_id))
+WITH CHECK (ofarm.runtime_bundle_tenant_allowed(tenant_id));
 
 ALTER TABLE ofarm.runtime_bundle ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ofarm.runtime_bundle FORCE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON ofarm.runtime_bundle
-TO ofarm_app, ofarm_worker
-USING (tenant_id = ofarm.current_tenant_id())
-WITH CHECK (tenant_id = ofarm.current_tenant_id());
+TO ofarm_app, ofarm_owner, ofarm_worker
+USING (ofarm.runtime_bundle_tenant_allowed(tenant_id))
+WITH CHECK (ofarm.runtime_bundle_tenant_allowed(tenant_id));
 
 ALTER TABLE ofarm.runtime_bundle_component ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ofarm.runtime_bundle_component FORCE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON ofarm.runtime_bundle_component
-TO ofarm_app, ofarm_worker
-USING (tenant_id = ofarm.current_tenant_id())
-WITH CHECK (tenant_id = ofarm.current_tenant_id());
+TO ofarm_app, ofarm_owner, ofarm_worker
+USING (ofarm.runtime_bundle_tenant_allowed(tenant_id))
+WITH CHECK (ofarm.runtime_bundle_tenant_allowed(tenant_id));
 
 ALTER TABLE ofarm.governed_write_batch ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ofarm.governed_write_batch FORCE ROW LEVEL SECURITY;
@@ -5134,11 +5482,13 @@ WITH CHECK (tenant_id = ofarm.current_tenant_id());
 REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA ofarm FROM PUBLIC;
 REVOKE ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA ofarm FROM PUBLIC;
 
-GRANT SELECT ON TABLE ofarm.runtime_content_blob TO ofarm_app, ofarm_worker;
+GRANT SELECT ON TABLE
+    ofarm.runtime_content_blob,
+    ofarm.runtime_bundle,
+    ofarm.runtime_bundle_component
+TO ofarm_app, ofarm_worker;
 GRANT SELECT, INSERT ON TABLE
     ofarm.runtime_tenant_content_blob,
-    ofarm.runtime_bundle,
-    ofarm.runtime_bundle_component,
     ofarm.governed_write_batch,
     ofarm.kernel_record,
     ofarm.kernel_edge,
@@ -5158,6 +5508,12 @@ TO ofarm_app, ofarm_worker;
 GRANT EXECUTE ON FUNCTION ofarm.compute_materialization_key_digest(
     pg_catalog.jsonb
 ) TO ofarm_app, ofarm_worker;
+GRANT EXECUTE ON FUNCTION ofarm.runtime_bundle_tenant_allowed(
+    pg_catalog.uuid
+) TO ofarm_app, ofarm_worker;
+GRANT EXECUTE ON FUNCTION ofarm.publish_runtime_bundle(
+    pg_catalog.uuid, pg_catalog.text, pg_catalog.jsonb
+) TO ofarm_runtime_bundle_publisher;
 GRANT EXECUTE ON FUNCTION ofarm.publish_materialization_generation(
     pg_catalog.text,
     pg_catalog.text,
@@ -6233,6 +6589,8 @@ AS 'DECLARE
             ''ofarm_migrator:false:false:false:false:true:false:false:2'',
             ''ofarm_owner:false:false:false:false:false:false:false:-1'',
             ''ofarm_readiness:false:false:false:false:true:true:false:2'',
+            ''ofarm_runtime_bundle_control_login:false:false:false:false:true:true:false:1'',
+            ''ofarm_runtime_bundle_publisher:false:false:false:false:false:false:false:-1'',
             ''ofarm_tenant_control_login:false:false:false:false:true:true:false:1'',
             ''ofarm_tenant_lock_owner:false:false:false:false:false:false:false:-1'',
             ''ofarm_tenant_migration_lock_owner:false:false:false:false:false:false:false:-1'',
@@ -6266,6 +6624,7 @@ AS 'DECLARE
             ''ofarm_capability_key_controller>ofarm_capability_key_control_login:true:false:false'',
             ''ofarm_identity_writer>ofarm_identity_control_login:true:false:false'',
             ''ofarm_owner>ofarm_migrator:false:true:false'',
+            ''ofarm_runtime_bundle_publisher>ofarm_runtime_bundle_control_login:true:false:false'',
             ''ofarm_tenant_registrar>ofarm_tenant_control_login:true:false:false'',
             ''pg_read_all_stats>ofarm_backend_observer:true:false:false''
         ]::pg_catalog.text[] THEN
@@ -6550,18 +6909,42 @@ AS 'DECLARE
                                 ''ofarm_graph_validator'',
                                 ''ofarm_worker''
                             ]::pg_catalog.name[]
+                            WHEN class.relname IN (
+                                ''runtime_bundle'',
+                                ''runtime_bundle_component'',
+                                ''runtime_tenant_content_blob''
+                            )
+                            THEN ARRAY[
+                                ''ofarm_app'',
+                                ''ofarm_owner'',
+                                ''ofarm_worker''
+                            ]::pg_catalog.name[]
                             ELSE ARRAY[
                                 ''ofarm_app'', ''ofarm_worker''
                             ]::pg_catalog.name[]
                         END
                       OR pg_catalog.pg_get_expr(
                             policy.polqual, policy.polrelid
-                         ) <> ''(tenant_id = ofarm.current_tenant_id())''
+                         ) <> CASE
+                            WHEN class.relname IN (
+                                ''runtime_bundle'',
+                                ''runtime_bundle_component'',
+                                ''runtime_tenant_content_blob''
+                            )
+                            THEN ''ofarm.runtime_bundle_tenant_allowed(tenant_id)''
+                            ELSE ''(tenant_id = ofarm.current_tenant_id())''
+                         END
                       OR pg_catalog.pg_get_expr(
                             policy.polwithcheck, policy.polrelid
                          ) <> CASE
                             WHEN class.relname = ''governed_write_batch''
                             THEN ''((tenant_id = ofarm.current_tenant_id()) AND ((authenticated_principal_ref)::text = (ofarm.current_authenticated_principal_ref())::text))''
+                            WHEN class.relname IN (
+                                ''runtime_bundle'',
+                                ''runtime_bundle_component'',
+                                ''runtime_tenant_content_blob''
+                            )
+                            THEN ''ofarm.runtime_bundle_tenant_allowed(tenant_id)''
                             ELSE ''(tenant_id = ofarm.current_tenant_id())''
                          END
                )
@@ -6706,9 +7089,12 @@ AS 'DECLARE
                                 AND acl.privilege_type = ''SELECT'')
                                OR
                                (class.relname IN (
-                                    ''runtime_tenant_content_blob'',
                                     ''runtime_bundle'',
-                                    ''runtime_bundle_component'',
+                                    ''runtime_bundle_component''
+                                ) AND acl.privilege_type = ''SELECT'')
+                               OR
+                               (class.relname IN (
+                                    ''runtime_tenant_content_blob'',
                                     ''governed_write_batch'',
                                     ''kernel_record'',
                                     ''kernel_edge'',
@@ -6746,7 +7132,7 @@ AS 'DECLARE
          WHERE namespace.nspname = ''ofarm''
            AND class.relkind IN (''r'', ''p'')
            AND acl.grantee <> class.relowner;
-        IF relation_acl_count <> 92 OR invalid_relation_acl_count <> 0 THEN
+        IF relation_acl_count <> 88 OR invalid_relation_acl_count <> 0 THEN
             differences := pg_catalog.array_append(
                 differences, ''relation ACL inventory differs''
             );
@@ -6908,6 +7294,14 @@ AS 'DECLARE
                        ''ofarm_worker'', routine.oid, ''EXECUTE''
                    )::pg_catalog.text || '':'' ||
                    pg_catalog.has_function_privilege(
+                       ''ofarm_owner'', routine.oid, ''EXECUTE''
+                   )::pg_catalog.text || '':'' ||
+                   pg_catalog.has_function_privilege(
+                       ''ofarm_runtime_bundle_publisher'',
+                       routine.oid,
+                       ''EXECUTE''
+                   )::pg_catalog.text || '':'' ||
+                   pg_catalog.has_function_privilege(
                        ''ofarm_tenant_lock_owner'', routine.oid, ''EXECUTE''
                    )::pg_catalog.text || '':'' ||
                    pg_catalog.has_function_privilege(
@@ -6930,13 +7324,17 @@ AS 'DECLARE
                 ''create_tenant_challenge'',
                 ''current_authenticated_principal_ref'',
                 ''current_tenant_id'',
+                ''publish_runtime_bundle'',
+                ''runtime_bundle_tenant_allowed'',
                 ''take_tenant_write_lock''
            ]::pg_catalog.text[]);
         IF observed_routines IS DISTINCT FROM ARRAY[
-            ''create_tenant_challenge()=ofarm_binder:plpgsql:true:false:false:v:u:search_path=pg_catalog, pg_temp:da7cd7c1ac111700f4dcd9490d910770f7dec213a40dee1c533edccc8500dd56:false:true:true:false:false:false'',
-            ''current_authenticated_principal_ref()=ofarm_binder:plpgsql:true:false:false:s:u:search_path=pg_catalog, pg_temp:6b0b3abc610609988a965cb7b8671603b0c8bdd8fde62d5aafdc465507182df7:false:true:true:false:false:false'',
-            ''current_tenant_id()=ofarm_binder:plpgsql:true:false:false:s:u:search_path=pg_catalog, pg_temp:2dea636af9e5cd14b7fcb406fd556934ffd8ab408dae965aa318e4120beb0ab0:false:true:true:true:false:false'',
-            ''take_tenant_write_lock()=ofarm_tenant_lock_owner:plpgsql:true:false:false:v:u:search_path=pg_catalog, pg_temp:38c75f051ee82b75c2e872fe2e191874e17984da7183add568f481d2eadb0de8:false:true:true:true:false:false''
+            ''create_tenant_challenge()=ofarm_binder:plpgsql:true:false:false:v:u:search_path=pg_catalog, pg_temp:da7cd7c1ac111700f4dcd9490d910770f7dec213a40dee1c533edccc8500dd56:false:true:true:false:false:false:false:false'',
+            ''current_authenticated_principal_ref()=ofarm_binder:plpgsql:true:false:false:s:u:search_path=pg_catalog, pg_temp:6b0b3abc610609988a965cb7b8671603b0c8bdd8fde62d5aafdc465507182df7:false:true:true:false:false:false:false:false'',
+            ''current_tenant_id()=ofarm_binder:plpgsql:true:false:false:s:u:search_path=pg_catalog, pg_temp:2dea636af9e5cd14b7fcb406fd556934ffd8ab408dae965aa318e4120beb0ab0:false:true:true:false:false:true:false:false'',
+            ''publish_runtime_bundle(requested_tenant_id uuid, expected_bundle_digest text, bundle_document jsonb)=ofarm_owner:plpgsql:true:false:false:v:u:search_path=pg_catalog, pg_temp:cde9b41ddee0f563e243103168d98bb1d912f493125dd8d3a862c989cd20f0b0:false:false:false:true:true:false:false:false'',
+            ''runtime_bundle_tenant_allowed(candidate_tenant_id uuid)=ofarm_owner:plpgsql:false:true:false:s:u:search_path=pg_catalog, pg_temp:be29ed711b7d2402e4c8c05cedb173cbd3f6179a26869d7b9463a94bdd1b4e92:false:true:true:true:false:false:false:false'',
+            ''take_tenant_write_lock()=ofarm_tenant_lock_owner:plpgsql:true:false:false:v:u:search_path=pg_catalog, pg_temp:38c75f051ee82b75c2e872fe2e191874e17984da7183add568f481d2eadb0de8:false:true:true:false:false:true:false:false''
         ]::pg_catalog.text[] THEN
             differences := pg_catalog.array_append(
                 differences, ''sealed tenant routine inventory differs''
@@ -7222,6 +7620,8 @@ AS 'DECLARE
             ''ofarm_app'',
             ''ofarm_worker'',
             ''ofarm_readiness'',
+            ''ofarm_runtime_bundle_control_login'',
+            ''ofarm_runtime_bundle_publisher'',
             ''ofarm_tenant_registrar'',
             ''ofarm_identity_writer''
         ]::pg_catalog.text[] LOOP
@@ -7287,7 +7687,7 @@ AS 'DECLARE
            OR observed_head_version <> 1
            OR observed_service_identity <> ''ofarm.tenant-postgresql.v1''
            OR observed_provisioning_digest <>
-                ''sha256:f1f757575e430fef4a8200d40dcf95149e994105ddc28bd9d36718fb384d1e32''
+                ''sha256:56e46233da66f1e6c0e9a99d7cfeb7f7b5bddccf983a6c5554fc8675d3b505ef''
            OR observed_prefix_digest !~ ''^sha256:[0-9a-f]{64}$'' THEN
             differences := pg_catalog.array_append(
                 differences, ''migration 0001 ledger identity differs''
@@ -8526,7 +8926,7 @@ AS 'DECLARE
           INTO observed_structural_catalog_digest
           FROM catalog_entry;
         IF observed_structural_catalog_digest <>
-                ''sha256:81133ba94a7024f0a74ab192f7016c61eebe6bc3fce55f8aa2781e8a31a885e3'' THEN
+                ''sha256:3ab4160ecf8a4bcb1f22d4cdf0ea086d2e412e8321704cb5ad3e3ac5605c9499'' THEN
             differences := pg_catalog.array_append(
                 differences, ''complete tenant catalog fingerprint differs''
             );

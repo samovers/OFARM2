@@ -484,7 +484,7 @@ def test_provisioning_specs_freeze_distinct_service_and_role_boundaries():
     ).hexdigest() == \
         "17e431e33221426151a6ceb3eb2214b1abc51a7b9390d508603f233742deca28"
     assert tenant.digest == \
-        "sha256:f1f757575e430fef4a8200d40dcf95149e994105ddc28bd9d36718fb384d1e32"
+        "sha256:56e46233da66f1e6c0e9a99d7cfeb7f7b5bddccf983a6c5554fc8675d3b505ef"
     assert audit.digest == \
         "sha256:770165332bbdb7a5e67e468f021d9fe82df817a2aee1a8a70191a08e869c307a"
     assert next(
@@ -884,6 +884,13 @@ def test_binder_and_runtime_memberships_are_closed():
         (
             "ofarm_tenant_registrar",
             "ofarm_tenant_control_login",
+            True,
+            False,
+            False,
+        ),
+        (
+            "ofarm_runtime_bundle_publisher",
+            "ofarm_runtime_bundle_control_login",
             True,
             False,
             False,

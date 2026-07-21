@@ -146,6 +146,10 @@ schemas and other repository files are global inputs, not database relations.
 | tenant_capability_key_lifecycle | Globally governed append-only capability-key and admission authority | A digest-chained stream of ACTIVATE, ROTATE, CLOSE_ADMISSION, REVOKE, and RESUME_ADMISSION acts plus ADR 0003's fixed database-time rules is the sole capability-key and binder-admission authority. |
 | tenant_capability_keyring | Disposable global capability-key reservation/projection | One row per binder audience is a row-lock fence and projected current key/admission head. It cannot provide advisory-lock fairness or authorize independently of the complete lifecycle fold and fixed time rules. |
 | tenant_binding_context | Protected disposable transaction operational metadata | An UNLOGGED migration-owned relation stores the one-use challenge and verified TenantBinding for exactly one database-derived backend identity and full xid8. Exact backend-start/full-transaction matching makes a physically retained row unusable after commit, rollback, backend restart, or pool reuse. Only hardened functions may read or write it; the application role has no table privileges. |
+| runtime_content_blob | Globally governed immutable content carrier | Stores exact content-addressed package/reference bytes. Application and worker roles may read but cannot publish these rows. A row is inert until a sealed tenant RuntimeBundle names its exact digest and byte length. |
+| runtime_tenant_content_blob | Tenant-scoped immutable content carrier | Stores exact content-addressed bytes for tenant runtime selection under forced RLS. Existence is not runtime authority; only a sealed RuntimeBundle component can select a row. |
+| runtime_bundle | Tenant-scoped immutable provenance root | Stores the exact canonical RuntimeBundle identity document under its full digest. Ordinary application and worker roles have read-only access. The dedicated startup publisher is the only provisioned non-owner role that can invoke the closed atomic publication function; direct INSERT is denied. |
+| runtime_bundle_component | Tenant-scoped immutable bundle membership | Stores exactly the component identities selected by one RuntimeBundle. The atomic publisher installs the complete set with the bundle row. No runtime role can append a component before or after a governed batch references the bundle. |
 | operational_security_event | Database-global operational security metadata, explicitly non-tenant | Append-only, bounded pre-tenant failure events plus audit-access, retention, and declared-gap maintenance events for this lane. It carries no tenant_id, tenant_ref, Party/farm/role identity, governed batch, knowledge position, or request-supplied attribution. It lives only in the separately provisioned audit PostgreSQL service's protected `ofarm_security` schema and is never read as tenant history. |
 | operational_security_quota_bucket | Disposable non-tenant operational security control state | One fixed database-time bucket per provisioned producer/component records accepted and overflow counts plus marker state. Only hardened audit functions mutate it. It contains no request, tenant, principal, correlation, or evidence data and cannot authorize anything. |
 | operational_security_quota_high_water | Durable bounded non-tenant operational security control state | At most one row for each of the two fixed producer/component pairs records the latest closed quota minute. It survives bucket deletion and makes a backward wall-clock step fail closed instead of recreating a closed bucket. It contains no request, tenant, principal, correlation, or evidence data and cannot authorize anything. |
@@ -444,6 +448,35 @@ silently relabelled global. #171 must publish the placement map and equality
 rules before #174 cuts 0001; #174 refuses to guess. This prerequisite changes no
 manifest, active artifact set, profile activation, contract, or capability
 claim.
+
+RuntimeBundle publication is a startup-only capability. Provisioning creates
+the NOLOGIN `ofarm_runtime_bundle_publisher` capability and one separately
+credentialed `ofarm_runtime_bundle_control_login` with only inherited,
+non-assumable membership (`INHERIT TRUE`, `SET FALSE`, `ADMIN FALSE`). The
+trusted operating-system startup process uses that login after it has built and
+validated the Python RuntimeBundle. Application and worker roles cannot execute
+the publication function and have no INSERT privilege on `runtime_bundle` or
+`runtime_bundle_component`.
+
+`publish_runtime_bundle` receives the tenant, expected full digest, and exact
+identity document. It accepts only the closed V1 document shape, a non-empty
+bounded component array in canonical `(role, logicalRef)` order, closed roles,
+canonicalization and placement values, canonical bounded byte lengths, and
+content digests whose exact bytes already exist in the appropriate immutable
+carrier. It reconstructs the canonical identity bytes itself, compares their
+SHA-256 digest with the expected digest, locks the immutable tenant-registry
+row, and inserts the bundle plus its complete component set in one statement
+and transaction. An exact replay is an idempotent no-op; unequal reuse refuses.
+
+The bundle row's existence is its immutable seal. There is no mutable sealed
+flag, draft bundle state, hot reload, or same-process defensive machinery. A
+governed batch has a composite foreign key to that row, which cannot become
+visible without the same publication statement also completing every component
+insert. Because no non-owner role has direct component INSERT, membership
+cannot be appended after publication or first use. Complete semantic validation
+remains in the already trusted Python publisher boundary accepted by #171;
+arbitrary code execution in that process, database-owner/migrator use, or DBA
+compromise remains outside the ordinary-role SQL threat boundary.
 
 ## Tenant identity and trusted context
 
@@ -916,6 +949,13 @@ The role model is:
   migrator membership, and only required DML;
 - ofarm_worker: same isolation posture as the application, with an explicit
   TenantBinding per job;
+- ofarm_runtime_bundle_publisher: NOLOGIN, NOINHERIT, NOBYPASSRLS startup
+  capability with EXECUTE only on the closed atomic RuntimeBundle publication
+  function and no direct bundle/component DML;
+- ofarm_runtime_bundle_control_login: separately credentialed trusted-startup
+  LOGIN with NOBYPASSRLS and a sole `ofarm_runtime_bundle_publisher` membership
+  using `INHERIT TRUE`, `SET FALSE`, and `ADMIN FALSE`; it has no application,
+  worker, binder, owner, migrator, identity, or tenant-registration authority;
 - ofarm_tenant_registrar: NOLOGIN control-plane capability granted only to one
   separately provisioned tenant-control LOGIN with `INHERIT TRUE`, `SET FALSE`,
   and `ADMIN FALSE`; it has EXECUTE only on the insert-only `register_tenant`
@@ -1408,7 +1448,8 @@ dependent production path is active.
 | Cross-tenant idempotency replay or uniqueness existence oracle | Tenant/principal/operation command namespace and tenant-prefixed unique indexes. |
 | Advisory-lock collision, raw session lock, attacker-selected key, unlock, or migration-lock attempt | Raw advisory functions are denied except for the isolated tenant-lock owner's exact bigint transaction-lock overload and each service's isolated migration-lock owner's exact two-integer transaction-lock overload. The protected no-key wrappers derive keys in disjoint bigint-tenant and integer-pair migration namespaces and acquire transaction locks only. |
 | Materialization, dependency, cache, trace, gate-log, bound error, or frozen-output leakage | Tenant qualification and RLS apply regardless of authoritative status; pre-tenant errors use only the protected non-tenant audit lane, and structural observations expose no tenant or security-event data. |
-| Mutation, substitution, or tenant-table mixing of shared global content | #171 placement is prerequisite to 0001; application read-only privileges plus content digest and canonical-byte equality verification apply. |
+| Arbitrary RuntimeBundle bytes, a partial component set, or component append after governed use forges or corrupts provenance | Ordinary runtime roles have read-only bundle/component access and cannot call the dedicated publisher. The trusted startup capability reconstructs and hashes the exact canonical document, verifies every exact content link, and atomically inserts one complete non-empty component set. Row existence is the immutable seal; governed batches reference only that sealed row. |
+| Mutation, substitution, or tenant-table mixing of shared global content | #171 placement is prerequisite to 0001; application read-only privileges on global content plus content digest and canonical-byte equality verification apply. Tenant content is inert unless selected by the sealed exact bundle. |
 | Concurrent, partial, reordered, missing, edited, future, or ledgerless non-empty migration history | Global migration lock, transactional application, immutable checksums, exact structural compatibility, exact empty-application-plus-capsule proof, and fail-closed dirty detection. |
 | Database administrator, migrator, backup, or trusted-binder compromise | Explicitly outside RLS; separate credentials, release controls, audit, and backup governance are required operational controls. |
 
@@ -1676,6 +1717,12 @@ and integration; they are not claims of `0001`.
 6. Cold-bootstrap after #171 and prove globally governed bundle bytes are
    outside tenant-owned records while tenant selection/context rows reference
    the exact bundle digest.
+7. As application and worker roles, attempt arbitrary bundle INSERT, direct
+   component INSERT, invocation of the startup publisher, and component append
+   after a governed batch references the bundle. Every attempt refuses. As the
+   dedicated publisher, prove one exact publication is complete and an exact
+   replay is idempotent; malformed, empty, duplicate, unsorted, digest-mismatched,
+   or absent-content component sets leave no partial bundle row.
 
 ### Migrations and structural compatibility
 

@@ -207,6 +207,47 @@ def _canonical_json(value: object) -> bytes:
     ).encode("ascii")
 
 
+def _runtime_component_identity(
+    *,
+    role: str,
+    logical_ref: str,
+    canonicalization: str,
+    placement: str,
+    content_digest: str,
+    byte_length: int,
+) -> dict[str, object]:
+    return {
+        "role": role,
+        "logicalRef": logical_ref,
+        "canonicalization": canonicalization,
+        "placement": placement,
+        "contentDigest": content_digest,
+        "byteLength": byte_length,
+    }
+
+
+def _publish_runtime_bundle(
+    connection: psycopg.Connection,
+    tenant_id: UUID,
+    components: list[dict[str, object]],
+) -> str:
+    ordered = sorted(
+        components,
+        key=lambda item: (str(item["role"]), str(item["logicalRef"])),
+    )
+    document = {
+        "schemaVersion": "ofarm.runtime-bundle.local.v1",
+        "canonicalization": "OFARM_CANONICAL_JSON_V1",
+        "components": ordered,
+    }
+    digest = _sha256_id(_canonical_json(document))
+    assert connection.execute(
+        "SELECT ofarm.publish_runtime_bundle(%s, %s, %s)",
+        (tenant_id, digest, Jsonb(document)),
+    ).fetchone() == (digest,)
+    return digest
+
+
 def _compute_binding_digest(
     connection: psycopg.Connection,
     *,
@@ -374,9 +415,8 @@ def authority(
             ("tenant-beta",),
         ).fetchone()
 
-    bundle_bytes = b'{"bundle":"tenant-integration-v1"}'
-    bundle_digest = _sha256_id(bundle_bytes)
-    bundle_ref = "runtimebundle:" + bundle_digest
+    bundle_content = b"tenant-alpha-runtime-reference-source-v1"
+    bundle_content_digest = _sha256_id(bundle_content)
     batch_id = "batch-authority-01"
     party_payload = {"partyId": PARTY_REF, "partyState": "ACTIVE"}
     party_schema_digest = _sha256_id(b"ofarm.party.v0.1.schema")
@@ -384,11 +424,29 @@ def authority(
     with psycopg.connect(tenant_target.target_admin_dsn) as admin:
         admin.execute(
             """
-            INSERT INTO ofarm.runtime_bundle (
-                tenant_id, bundle_digest, bundle_ref, canonical_bytes, byte_length
-            ) VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO ofarm.runtime_content_blob (
+                content_digest, canonical_bytes, byte_length
+            ) VALUES (%s, %s, %s)
             """,
-            (tenant_id, bundle_digest, bundle_ref, bundle_bytes, len(bundle_bytes)),
+            (
+                bundle_content_digest,
+                bundle_content,
+                len(bundle_content),
+            ),
+        )
+        bundle_digest = _publish_runtime_bundle(
+            admin,
+            tenant_id,
+            [
+                _runtime_component_identity(
+                    role="REFERENCE_SOURCE",
+                    logical_ref=RUNTIME_LOGICAL_REF_MAX,
+                    canonicalization="EXACT_BYTES_V1",
+                    placement="GLOBAL_IMMUTABLE_CONTENT",
+                    content_digest=bundle_content_digest,
+                    byte_length=len(bundle_content),
+                )
+            ],
         )
         admin.execute(
             """
@@ -736,9 +794,8 @@ def other_authority(
     registration_digest = authority.other_tenant_registration_digest
     subject = "subject-tenant-02"
     party_ref = "party-02"
-    bundle_bytes = b'{"bundle":"tenant-beta-integration-v1"}'
-    bundle_digest = _sha256_id(bundle_bytes)
-    bundle_ref = "runtimebundle:" + bundle_digest
+    bundle_content = b"tenant-beta-runtime-reference-source-v1"
+    bundle_content_digest = _sha256_id(bundle_content)
     batch_id = "batch-authority-02"
     party_payload = {"partyId": party_ref, "partyState": "ACTIVE"}
     party_schema_digest = _sha256_id(b"ofarm.party.v0.1.schema")
@@ -746,11 +803,29 @@ def other_authority(
     with psycopg.connect(tenant_target.target_admin_dsn) as admin:
         admin.execute(
             """
-            INSERT INTO ofarm.runtime_bundle (
-                tenant_id, bundle_digest, bundle_ref, canonical_bytes, byte_length
-            ) VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO ofarm.runtime_content_blob (
+                content_digest, canonical_bytes, byte_length
+            ) VALUES (%s, %s, %s)
             """,
-            (tenant_id, bundle_digest, bundle_ref, bundle_bytes, len(bundle_bytes)),
+            (
+                bundle_content_digest,
+                bundle_content,
+                len(bundle_content),
+            ),
+        )
+        bundle_digest = _publish_runtime_bundle(
+            admin,
+            tenant_id,
+            [
+                _runtime_component_identity(
+                    role="REFERENCE_SOURCE",
+                    logical_ref="runtime:tenant-beta-reference-source-v1",
+                    canonicalization="EXACT_BYTES_V1",
+                    placement="GLOBAL_IMMUTABLE_CONTENT",
+                    content_digest=bundle_content_digest,
+                    byte_length=len(bundle_content),
+                )
+            ],
         )
         admin.execute(
             """
@@ -2970,16 +3045,6 @@ def test_runtime_component_logical_ref_has_exact_ascii_octet_bound(
 ) -> None:
     content = b"runtime-component-logical-ref-boundary"
     content_digest = _sha256_id(content)
-    insert_sql = """
-        INSERT INTO ofarm.runtime_bundle_component (
-            tenant_id, bundle_digest, component_role, logical_ref,
-            canonicalization, content_placement, global_content_digest,
-            byte_length
-        ) VALUES (
-            %s, %s, 'REFERENCE_SOURCE', %s,
-            'EXACT_BYTES_V1', 'GLOBAL_IMMUTABLE_CONTENT', %s, %s
-        )
-    """
     with psycopg.connect(tenant_target.target_admin_dsn) as admin:
         try:
             admin.execute(
@@ -2991,15 +3056,19 @@ def test_runtime_component_logical_ref_has_exact_ascii_octet_bound(
                 (content_digest, content, len(content)),
             )
             maximum_ref = RUNTIME_LOGICAL_REF_MAX
-            admin.execute(
-                insert_sql,
-                (
-                    authority.tenant_id,
-                    authority.runtime_bundle_digest,
-                    maximum_ref,
-                    content_digest,
-                    len(content),
-                ),
+            bundle_digest = _publish_runtime_bundle(
+                admin,
+                authority.tenant_id,
+                [
+                    _runtime_component_identity(
+                        role="REFERENCE_SOURCE",
+                        logical_ref=maximum_ref,
+                        canonicalization="EXACT_BYTES_V1",
+                        placement="GLOBAL_IMMUTABLE_CONTENT",
+                        content_digest=content_digest,
+                        byte_length=len(content),
+                    )
+                ],
             )
             assert admin.execute(
                 """
@@ -3012,7 +3081,7 @@ def test_runtime_component_logical_ref_has_exact_ascii_octet_bound(
                 """,
                 (
                     authority.tenant_id,
-                    authority.runtime_bundle_digest,
+                    bundle_digest,
                     maximum_ref,
                 ),
             ).fetchone() == (1024,)
@@ -3023,18 +3092,219 @@ def test_runtime_component_logical_ref_has_exact_ascii_octet_bound(
             ):
                 with pytest.raises(psycopg.errors.CheckViolation):
                     with admin.transaction():
-                        admin.execute(
-                            insert_sql,
-                            (
-                                authority.tenant_id,
-                                authority.runtime_bundle_digest,
-                                invalid_ref,
-                                content_digest,
-                                len(content),
-                            ),
+                        _publish_runtime_bundle(
+                            admin,
+                            authority.tenant_id,
+                            [
+                                _runtime_component_identity(
+                                    role="REFERENCE_SOURCE",
+                                    logical_ref=invalid_ref,
+                                    canonicalization="EXACT_BYTES_V1",
+                                    placement="GLOBAL_IMMUTABLE_CONTENT",
+                                    content_digest=content_digest,
+                                    byte_length=len(content),
+                                )
+                            ],
                         )
         finally:
             admin.rollback()
+
+
+@pytest.mark.parametrize("role_name", ("ofarm_app", "ofarm_worker"))
+def test_runtime_roles_cannot_bypass_atomic_bundle_publication(
+    tenant_target: TenantTarget,
+    authority: TenantAuthority,
+    role_name: str,
+) -> None:
+    arbitrary_bytes = b'{"bundle":"caller-selected-bytes"}'
+    arbitrary_digest = _sha256_id(arbitrary_bytes)
+    with psycopg.connect(tenant_target.role_dsn(role_name)) as runtime:
+        _install_test_bound_context(runtime, authority)
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            with runtime.transaction():
+                _publish_runtime_bundle(
+                    runtime,
+                    authority.tenant_id,
+                    [
+                        _runtime_component_identity(
+                            role="REFERENCE_SOURCE",
+                            logical_ref="runtime:unauthorized-publication",
+                            canonicalization="EXACT_BYTES_V1",
+                            placement="GLOBAL_IMMUTABLE_CONTENT",
+                            content_digest=_sha256_id(b"unauthorized-content"),
+                            byte_length=len(b"unauthorized-content"),
+                        )
+                    ],
+                )
+
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            with runtime.transaction():
+                runtime.execute(
+                    """
+                    INSERT INTO ofarm.runtime_bundle (
+                        tenant_id, bundle_digest, bundle_ref,
+                        canonical_bytes, byte_length
+                    ) VALUES (%s, %s, %s, %s, %s)
+                    """,
+                    (
+                        authority.tenant_id,
+                        arbitrary_digest,
+                        "runtimebundle:" + arbitrary_digest,
+                        arbitrary_bytes,
+                        len(arbitrary_bytes),
+                    ),
+                )
+
+        component = runtime.execute(
+            """
+            SELECT canonicalization, content_placement,
+                   global_content_digest, tenant_content_digest, byte_length
+            FROM ofarm.runtime_bundle_component
+            WHERE tenant_id = %s AND bundle_digest = %s
+            """,
+            (authority.tenant_id, authority.runtime_bundle_digest),
+        ).fetchone()
+        assert component is not None
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            with runtime.transaction():
+                runtime.execute(
+                    """
+                    INSERT INTO ofarm.runtime_bundle_component (
+                        tenant_id, bundle_digest, component_role, logical_ref,
+                        canonicalization, content_placement,
+                        global_content_digest, tenant_content_digest, byte_length
+                    ) VALUES (%s, %s, 'REFERENCE_SOURCE', %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        authority.tenant_id,
+                        authority.runtime_bundle_digest,
+                        "runtime:post-seal-append",
+                        *component,
+                    ),
+                )
+
+
+def test_runtime_bundle_publication_is_exact_and_idempotent(
+    tenant_target: TenantTarget,
+    authority: TenantAuthority,
+) -> None:
+    with psycopg.connect(tenant_target.role_dsn("ofarm_app")) as application:
+        _install_test_bound_context(application, authority)
+        components = [
+            {
+                "role": row[0],
+                "logicalRef": row[1],
+                "canonicalization": row[2],
+                "placement": row[3],
+                "contentDigest": row[4],
+                "byteLength": row[5],
+            }
+            for row in application.execute(
+                """
+                SELECT component_role, logical_ref, canonicalization,
+                       content_placement,
+                       COALESCE(global_content_digest, tenant_content_digest),
+                       byte_length
+                FROM ofarm.runtime_bundle_component
+                WHERE tenant_id = %s AND bundle_digest = %s
+                ORDER BY component_role COLLATE "C", logical_ref COLLATE "C"
+                """,
+                (authority.tenant_id, authority.runtime_bundle_digest),
+            ).fetchall()
+        ]
+    with psycopg.connect(
+        tenant_target.role_dsn("ofarm_runtime_bundle_control_login")
+    ) as publisher:
+        assert _publish_runtime_bundle(
+            publisher, authority.tenant_id, components
+        ) == authority.runtime_bundle_digest
+
+        with pytest.raises(psycopg.errors.InvalidParameterValue):
+            with publisher.transaction():
+                _publish_runtime_bundle(publisher, authority.tenant_id, [])
+        with pytest.raises(psycopg.errors.InvalidParameterValue):
+            with publisher.transaction():
+                _publish_runtime_bundle(
+                    publisher,
+                    authority.tenant_id,
+                    components + components,
+                )
+
+        digest_mismatch_components = [
+            {
+                **components[0],
+                "logicalRef": "runtime:digest-mismatch",
+            }
+        ]
+        digest_mismatch_document = {
+            "schemaVersion": "ofarm.runtime-bundle.local.v1",
+            "canonicalization": "OFARM_CANONICAL_JSON_V1",
+            "components": digest_mismatch_components,
+        }
+        digest_mismatch_candidate = _sha256_id(
+            _canonical_json(digest_mismatch_document)
+        )
+        with pytest.raises(psycopg.errors.InvalidParameterValue):
+            with publisher.transaction():
+                publisher.execute(
+                    "SELECT ofarm.publish_runtime_bundle(%s, %s, %s)",
+                    (
+                        authority.tenant_id,
+                        SHA256_ZERO,
+                        Jsonb(digest_mismatch_document),
+                    ),
+                )
+
+        unsorted_document = {
+            "schemaVersion": "ofarm.runtime-bundle.local.v1",
+            "canonicalization": "OFARM_CANONICAL_JSON_V1",
+            "components": [
+                {
+                    **components[0],
+                    "logicalRef": "runtime:unsorted-z",
+                },
+                {
+                    **components[0],
+                    "role": "ACTIVE_MANIFEST",
+                    "logicalRef": "runtime:unsorted-a",
+                },
+            ],
+        }
+        unsorted_candidate = _sha256_id(_canonical_json(unsorted_document))
+        with pytest.raises(psycopg.errors.InvalidParameterValue):
+            with publisher.transaction():
+                publisher.execute(
+                    "SELECT ofarm.publish_runtime_bundle(%s, %s, %s)",
+                    (
+                        authority.tenant_id,
+                        unsorted_candidate,
+                        Jsonb(unsorted_document),
+                    ),
+                )
+
+    with psycopg.connect(tenant_target.role_dsn("ofarm_app")) as application:
+        _install_test_bound_context(application, authority)
+        assert application.execute(
+            """
+            SELECT pg_catalog.count(*)
+            FROM ofarm.runtime_bundle_component
+            WHERE tenant_id = %s AND bundle_digest = %s
+            """,
+            (authority.tenant_id, authority.runtime_bundle_digest),
+        ).fetchone() == (len(components),)
+
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        assert admin.execute(
+            """
+            SELECT pg_catalog.count(*)
+            FROM ofarm.runtime_bundle
+            WHERE tenant_id = %s AND bundle_digest = ANY (%s::text[])
+            """,
+            (
+                authority.tenant_id,
+                [digest_mismatch_candidate, unsorted_candidate],
+            ),
+        ).fetchone() == (0,)
 
 
 @pytest.mark.parametrize("role_name", ("ofarm_app", "ofarm_worker"))
@@ -4541,23 +4811,34 @@ def test_record_runtime_bundle_must_match_its_governed_batch(
     tenant_target: TenantTarget,
     authority: TenantAuthority,
 ) -> None:
-    other_bundle_bytes = b'{"bundle":"record-provenance-hostile"}'
-    other_bundle_digest = _sha256_id(other_bundle_bytes)
+    other_bundle_content = b"record-provenance-hostile-reference-source"
+    other_content_digest = _sha256_id(other_bundle_content)
     with psycopg.connect(tenant_target.target_admin_dsn) as admin:
         admin.execute(
             """
-            INSERT INTO ofarm.runtime_bundle (
-                tenant_id, bundle_digest, bundle_ref,
-                canonical_bytes, byte_length
-            ) VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO ofarm.runtime_content_blob (
+                content_digest, canonical_bytes, byte_length
+            ) VALUES (%s, %s, %s)
             """,
             (
-                authority.tenant_id,
-                other_bundle_digest,
-                "runtimebundle:" + other_bundle_digest,
-                other_bundle_bytes,
-                len(other_bundle_bytes),
+                other_content_digest,
+                other_bundle_content,
+                len(other_bundle_content),
             ),
+        )
+        other_bundle_digest = _publish_runtime_bundle(
+            admin,
+            authority.tenant_id,
+            [
+                _runtime_component_identity(
+                    role="REFERENCE_SOURCE",
+                    logical_ref="runtime:record-provenance-hostile-v1",
+                    canonicalization="EXACT_BYTES_V1",
+                    placement="GLOBAL_IMMUTABLE_CONTENT",
+                    content_digest=other_content_digest,
+                    byte_length=len(other_bundle_content),
+                )
+            ],
         )
 
     with pytest.raises(psycopg.errors.ForeignKeyViolation) as raised:
@@ -4597,26 +4878,22 @@ def test_component_length_must_match_the_selected_content_blob(
         )
 
     with pytest.raises(psycopg.errors.ForeignKeyViolation) as raised:
-        with psycopg.connect(tenant_target.role_dsn("ofarm_app")) as application:
-            _install_test_bound_context(application, authority)
-            application.execute(
-                """
-                INSERT INTO ofarm.runtime_bundle_component (
-                    tenant_id, bundle_digest, component_role, logical_ref,
-                    canonicalization, content_placement,
-                    global_content_digest, byte_length
-                ) VALUES (
-                    %s, %s, 'REFERENCE_SOURCE', %s,
-                    'EXACT_BYTES_V1', 'GLOBAL_IMMUTABLE_CONTENT', %s, %s
-                )
-                """,
-                (
-                    authority.tenant_id,
-                    authority.runtime_bundle_digest,
-                    "test:global-length-mismatch",
-                    global_digest,
-                    len(global_bytes) + 1,
-                ),
+        with psycopg.connect(
+            tenant_target.role_dsn("ofarm_runtime_bundle_control_login")
+        ) as publisher:
+            _publish_runtime_bundle(
+                publisher,
+                authority.tenant_id,
+                [
+                    _runtime_component_identity(
+                        role="REFERENCE_SOURCE",
+                        logical_ref="test:global-length-mismatch",
+                        canonicalization="EXACT_BYTES_V1",
+                        placement="GLOBAL_IMMUTABLE_CONTENT",
+                        content_digest=global_digest,
+                        byte_length=len(global_bytes) + 1,
+                    )
+                ],
             )
     assert raised.value.diag.constraint_name == (
         "runtime_bundle_component_global_fkey"
@@ -4624,40 +4901,38 @@ def test_component_length_must_match_the_selected_content_blob(
 
     tenant_bytes = b"tenant-runtime-length-authority"
     tenant_digest = _sha256_id(tenant_bytes)
+    with psycopg.connect(tenant_target.role_dsn("ofarm_app")) as application:
+        _install_test_bound_context(application, authority)
+        application.execute(
+            """
+            INSERT INTO ofarm.runtime_tenant_content_blob (
+                tenant_id, content_digest, canonical_bytes, byte_length
+            ) VALUES (%s, %s, %s, %s)
+            """,
+            (
+                authority.tenant_id,
+                tenant_digest,
+                tenant_bytes,
+                len(tenant_bytes),
+            ),
+        )
     with pytest.raises(psycopg.errors.ForeignKeyViolation) as raised:
-        with psycopg.connect(tenant_target.role_dsn("ofarm_app")) as application:
-            _install_test_bound_context(application, authority)
-            application.execute(
-                """
-                INSERT INTO ofarm.runtime_tenant_content_blob (
-                    tenant_id, content_digest, canonical_bytes, byte_length
-                ) VALUES (%s, %s, %s, %s)
-                """,
-                (
-                    authority.tenant_id,
-                    tenant_digest,
-                    tenant_bytes,
-                    len(tenant_bytes),
-                ),
-            )
-            application.execute(
-                """
-                INSERT INTO ofarm.runtime_bundle_component (
-                    tenant_id, bundle_digest, component_role, logical_ref,
-                    canonicalization, content_placement,
-                    tenant_content_digest, byte_length
-                ) VALUES (
-                    %s, %s, 'REFERENCE_SOURCE', %s,
-                    'EXACT_BYTES_V1', 'TENANT_RUNTIME_SELECTION', %s, %s
-                )
-                """,
-                (
-                    authority.tenant_id,
-                    authority.runtime_bundle_digest,
-                    "test:tenant-length-mismatch",
-                    tenant_digest,
-                    len(tenant_bytes) + 1,
-                ),
+        with psycopg.connect(
+            tenant_target.role_dsn("ofarm_runtime_bundle_control_login")
+        ) as publisher:
+            _publish_runtime_bundle(
+                publisher,
+                authority.tenant_id,
+                [
+                    _runtime_component_identity(
+                        role="REFERENCE_SOURCE",
+                        logical_ref="test:tenant-length-mismatch",
+                        canonicalization="EXACT_BYTES_V1",
+                        placement="TENANT_RUNTIME_SELECTION",
+                        content_digest=tenant_digest,
+                        byte_length=len(tenant_bytes) + 1,
+                    )
+                ],
             )
     assert raised.value.diag.constraint_name == (
         "runtime_bundle_component_tenant_fkey"
@@ -4837,43 +5112,9 @@ def test_derived_key_identity_and_typed_source_lanes_are_database_enforced(
         "targetTwin": "compliance",
         "timePolicy": {"policyType": "NOW"},
     }
-    runtime_content = b"derived-runtime-logical-ref-boundary"
-    runtime_content_digest = _sha256_id(runtime_content)
     with psycopg.connect(tenant_target.role_dsn("ofarm_app")) as application:
         _install_test_bound_context(application, authority)
         _insert_batch(application, authority, batch_id)
-        application.execute(
-            """
-            INSERT INTO ofarm.runtime_tenant_content_blob (
-                tenant_id, content_digest, canonical_bytes, byte_length
-            ) VALUES (%s, %s, %s, %s)
-            """,
-            (
-                authority.tenant_id,
-                runtime_content_digest,
-                runtime_content,
-                len(runtime_content),
-            ),
-        )
-        application.execute(
-            """
-            INSERT INTO ofarm.runtime_bundle_component (
-                tenant_id, bundle_digest, component_role, logical_ref,
-                canonicalization, content_placement, tenant_content_digest,
-                byte_length
-            ) VALUES (
-                %s, %s, 'REFERENCE_SOURCE', %s,
-                'EXACT_BYTES_V1', 'TENANT_RUNTIME_SELECTION', %s, %s
-            )
-            """,
-            (
-                authority.tenant_id,
-                authority.runtime_bundle_digest,
-                RUNTIME_LOGICAL_REF_MAX,
-                runtime_content_digest,
-                len(runtime_content),
-            ),
-        )
         for record_id in (basis_id, snapshot_id, context_id):
             _insert_record(
                 application,
@@ -5433,7 +5674,7 @@ def test_complete_catalog_fingerprint_refuses_function_constraint_index_policy_a
             assert pristine[0] is True
             assert pristine[2] == 0
             assert pristine[3] == (
-                "sha256:81133ba94a7024f0a74ab192f7016c61eebe6bc3fce55f8aa2781e8a31a885e3"
+                "sha256:3ab4160ecf8a4bcb1f22d4cdf0ea086d2e412e8321704cb5ad3e3ac5605c9499"
             )
         finally:
             migrator.rollback()
@@ -6122,7 +6363,7 @@ def test_readiness_observation_is_complete_after_commit(
     assert row[1] == TENANT_CONTEXT_CONTRACT.digest
     assert row[2] == 0
     assert row[3] == (
-        "sha256:81133ba94a7024f0a74ab192f7016c61eebe6bc3fce55f8aa2781e8a31a885e3"
+        "sha256:3ab4160ecf8a4bcb1f22d4cdf0ea086d2e412e8321704cb5ad3e3ac5605c9499"
     )
     assert row[5] == TENANT_PROVISIONING_SPEC.digest
     assert row[6] == TENANT_SERVICE.identity

@@ -1512,6 +1512,18 @@ TENANT_PROVISIONING_SPEC = ProvisioningSpec(
             "ofarm_worker", True, True, False, 12, True, _WORKER_SETTINGS
         ),
         RoleSpec(
+            "ofarm_runtime_bundle_publisher", False, False, False, -1
+        ),
+        RoleSpec(
+            "ofarm_runtime_bundle_control_login",
+            True,
+            True,
+            False,
+            1,
+            True,
+            _CONTROL_SETTINGS,
+        ),
+        RoleSpec(
             "ofarm_readiness", True, True, False, 2, True, _READINESS_SETTINGS
         ),
         RoleSpec("ofarm_tenant_registrar", False, False, False, -1),
@@ -1560,6 +1572,13 @@ TENANT_PROVISIONING_SPEC = ProvisioningSpec(
             False,
         ),
         MembershipSpec(
+            "ofarm_runtime_bundle_publisher",
+            "ofarm_runtime_bundle_control_login",
+            True,
+            False,
+            False,
+        ),
+        MembershipSpec(
             "ofarm_identity_writer",
             "ofarm_identity_control_login",
             True,
@@ -1585,6 +1604,7 @@ TENANT_PROVISIONING_SPEC = ProvisioningSpec(
         "ofarm_migrator",
         "ofarm_app",
         "ofarm_worker",
+        "ofarm_runtime_bundle_publisher",
         "ofarm_readiness",
         "ofarm_tenant_registrar",
         "ofarm_identity_writer",
@@ -1593,6 +1613,7 @@ TENANT_PROVISIONING_SPEC = ProvisioningSpec(
     schema_usage_roles=(
         "ofarm_app",
         "ofarm_worker",
+        "ofarm_runtime_bundle_publisher",
         "ofarm_readiness",
         "ofarm_tenant_registrar",
         "ofarm_identity_writer",
