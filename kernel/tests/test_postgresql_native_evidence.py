@@ -3475,7 +3475,26 @@ def test_native_workflow_closes_both_native_platform_evidence_lanes():
     assert "ubuntu-24.04-arm" in workflow
     assert "ubuntu-24.04" in workflow
     assert "setup-qemu" not in workflow
-    assert workflow.count("version: v0.34.1") == 2
+    assert "version: v0.34.1" not in workflow
+    authenticated_install_steps = workflow.split(
+        "- name: Authenticate and install the exact Buildx client"
+    )
+    assert len(authenticated_install_steps) == 3
+    for install_step in authenticated_install_steps[1:]:
+        install_step = install_step.split(
+            "- name: Create pinned native image builder", 1
+        )[0]
+        assert "curl --fail --location" in install_step
+        assert "sha256sum --check --strict" in install_step
+        assert install_step.index("sha256sum --check --strict") < (
+            install_step.index("install -m 0755")
+        )
+    assert workflow.count(
+        "f1332ddb9010bd0b72628266c3a906d9a6979848033df4c8d9bd2cd113bae12b"
+    ) == 2
+    assert workflow.count(
+        "c34e32dd6ea2653d960d6c099c9f09b9077e4a37504d2d31e5066eccc3904231"
+    ) == 1
     assert "docker buildx version | awk" not in workflow
     assert workflow.count('test "$(docker buildx version)" =') == 2
     assert workflow.count(

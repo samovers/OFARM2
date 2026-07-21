@@ -1370,7 +1370,7 @@ LANGUAGE plpgsql VOLATILE PARALLEL UNSAFE SECURITY DEFINER
 SET search_path = pg_catalog, pg_temp
 AS $purge_events$
 DECLARE
-    v_cutoff pg_catalog.timestamptz := pg_catalog.clock_timestamp();
+    v_cutoff pg_catalog.timestamptz;
     v_deleted_count pg_catalog.int8;
     v_event ofarm_security.operational_security_event_identity;
 BEGIN
@@ -1378,6 +1378,10 @@ BEGIN
         RAISE EXCEPTION USING ERRCODE = '42501',
             MESSAGE = 'session user is not the audit retention operator';
     END IF;
+
+    LOCK TABLE ofarm_security.operational_security_event
+        IN SHARE ROW EXCLUSIVE MODE;
+    v_cutoff := pg_catalog.clock_timestamp();
 
     WITH victims AS (
         SELECT event.ctid
@@ -3457,7 +3461,7 @@ BEGIN
     INTO v_catalog_fingerprint
     FROM catalog_entry;
     IF v_catalog_fingerprint <>
-            'sha256:5d5cb995532ebf38598c4ab674532d4fc963958dd1fe6991f75fae95ae23eb6a' THEN
+            'sha256:577080fc6983bc58a0497f188e8deac9449758d969b4d09202e78ea1cfdf7708' THEN
         v_differences := v_differences + 1;
     END IF;
 

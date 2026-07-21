@@ -300,10 +300,10 @@ def test_authoritative_audit_migration_is_one_exact_initial_set():
     assert SECURITY_AUDIT_CONTRACT.digest in source
     assert SECURITY_AUDIT_PROVISIONING_SPEC.digest in source
     assert migration.source_sha256 == \
-        "sha256:82d842ab383ac71e986b24f6a42e71fcc68e8fa30513d79501caa2b9c2eab65d"
-    assert migration.byte_length == 148_490
+        "sha256:cd9d5bba970dc93c7e4200ab156be5f494b0031dad52166fa74c31efb17f9fab"
+    assert migration.byte_length == 148_599
     assert migration_set.digest == \
-        "sha256:391ebd25018067e06040547a534018c1feb9d543b39c8f517ee0fc8b7ae4eee6"
+        "sha256:21facc255e2a47877a0e9749595db9e1ba2291e627805c9b9433c2137e9f9035"
     assert migration_set.prefix_digest(1) == migration_set.digest
 
 
@@ -390,7 +390,7 @@ def test_authoritative_audit_migration_has_closed_carriers_and_limits():
         in source
     )
     assert (
-        "sha256:5d5cb995532ebf38598c4ab674532d4fc963958dd1fe6991f75fae95ae23eb6a"
+        "sha256:577080fc6983bc58a0497f188e8deac9449758d969b4d09202e78ea1cfdf7708"
         in source
     )
     assert "jsonb" not in persisted_audit_tables
@@ -2310,6 +2310,186 @@ def test_overflow_close_waits_for_old_bucket_append_and_cannot_reopen(
                 admin.execute(
                     "DROP TABLE IF EXISTS "
                     "ofarm_security._test_overflow_close_barrier"
+                )
+        _reset_quota_state(state, producer_name, component)
+
+
+def test_retention_waits_for_delayed_writer_and_cannot_reset_quota(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    producer_name = "REQUEST_ROUTER_BOUNDARY_V1"
+    component = "REQUEST_ROUTER"
+    _reset_quota_state(state, producer_name, component)
+    event_id = uuid4()
+    token = uuid4().hex
+    producer_application = "issue174-retention-append-" + token
+    retention_application = "issue174-retention-purge-" + token
+    producer_dsn = psycopg.conninfo.make_conninfo(
+        _role_dsn(state, "ofarm_security_request_router_producer_login"),
+        application_name=producer_application,
+    )
+    retention_dsn = psycopg.conninfo.make_conninfo(
+        _role_dsn(state, "ofarm_security_audit_retention_login"),
+        application_name=retention_application,
+    )
+
+    with psycopg.connect(
+        state["target_admin_dsn"], autocommit=True
+    ) as admin:
+        original_source = admin.execute(
+            """
+            SELECT routine.prosrc
+            FROM pg_catalog.pg_proc AS routine
+            WHERE routine.oid =
+                'ofarm_security.append_pretenant_failure('
+                'uuid, text, bytea, text, integer)'::pg_catalog.regprocedure
+            """
+        ).fetchone()[0]
+        clock_marker = "    v_now := pg_catalog.clock_timestamp();"
+        assert original_source.count(clock_marker) == 1
+        test_source = original_source.replace(
+            clock_marker,
+            "    v_now := pg_catalog.current_setting('ofarm.test_now')::\n"
+            "        pg_catalog.timestamptz;\n"
+            "    PERFORM singleton\n"
+            "    FROM ofarm_security._test_retention_barrier\n"
+            "    WHERE singleton\n"
+            "    FOR SHARE;",
+        )
+        stale_bucket = admin.execute(
+            """
+            SELECT pg_catalog.date_bin(
+                pg_catalog.make_interval(secs => 60),
+                pg_catalog.clock_timestamp(),
+                '2000-01-01 00:00:00+00'::pg_catalog.timestamptz
+            ) - pg_catalog.make_interval(secs => 120)
+            """
+        ).fetchone()[0]
+        admin.execute(
+            """
+            INSERT INTO ofarm_security.operational_security_quota_bucket (
+                producer, component, bucket_start, accepted_event_count
+            ) VALUES (%s, %s, %s, 1024)
+            """,
+            (producer_name, component, stale_bucket),
+        )
+        admin.execute(
+            """
+            CREATE TABLE ofarm_security._test_retention_barrier (
+                singleton pg_catalog.bool PRIMARY KEY CHECK (singleton)
+            )
+            """
+        )
+        admin.execute(
+            "ALTER TABLE ofarm_security._test_retention_barrier "
+            "OWNER TO ofarm_security_audit_owner"
+        )
+        admin.execute(
+            "INSERT INTO ofarm_security._test_retention_barrier VALUES (true)"
+        )
+        _replace_pretenant_append_source(admin, test_source)
+
+    def append_to_stale_full_bucket() -> tuple[object, ...]:
+        with psycopg.connect(producer_dsn, autocommit=True) as producer:
+            producer.execute("SET lock_timeout = '10s'")
+            producer.execute(
+                "SELECT pg_catalog.set_config('ofarm.test_now', %s, false)",
+                ((stale_bucket + timedelta(seconds=30)).isoformat(),),
+            )
+            return producer.execute(
+                """
+                SELECT * FROM ofarm_security.append_pretenant_failure(
+                    %s, 'BINDER_REFUSED', %s,
+                    'OFARM_PRETENANT_CORRELATION_V1', 1
+                )
+                """,
+                (event_id, bytes.fromhex("44" * 32)),
+            ).fetchone()
+
+    def purge_stale_buckets() -> tuple[object, ...]:
+        with psycopg.connect(retention_dsn, autocommit=True) as retention:
+            retention.execute("SET lock_timeout = '10s'")
+            return retention.execute(
+                """
+                SELECT * FROM
+                    ofarm_security.purge_expired_operational_security_events()
+                """
+            ).fetchone()
+
+    try:
+        with psycopg.connect(state["target_admin_dsn"]) as locker:
+            locker.execute(
+                """
+                SELECT singleton
+                FROM ofarm_security._test_retention_barrier
+                WHERE singleton
+                FOR UPDATE
+                """
+            ).fetchone()
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                appended_future = executor.submit(append_to_stale_full_bucket)
+                _wait_for_blocked_event_writer(state, producer_application)
+                purged_future = executor.submit(purge_stale_buckets)
+                _wait_for_event_relation_lock(
+                    state, retention_application, "ShareRowExclusiveLock"
+                )
+                assert not appended_future.done()
+                assert not purged_future.done()
+                locker.commit()
+                appended = appended_future.result(timeout=10)
+                purged_future.result(timeout=10)
+
+        assert appended == (None, None, None, False, stale_bucket, False)
+        with psycopg.connect(state["target_admin_dsn"]) as admin:
+            bucket = admin.execute(
+                """
+                SELECT accepted_event_count, overflow_event_count,
+                       overflow_started_at IS NOT NULL, count_unknown
+                FROM ofarm_security.operational_security_quota_bucket
+                WHERE producer = %s AND component = %s AND bucket_start = %s
+                """,
+                (producer_name, component, stale_bucket),
+            ).fetchone()
+            stored_event_count = admin.execute(
+                """
+                SELECT pg_catalog.count(*)
+                FROM ofarm_security.operational_security_event
+                WHERE event_id = %s
+                """,
+                (event_id,),
+            ).fetchone()[0]
+            overflow_markers = admin.execute(
+                """
+                SELECT pg_catalog.count(*)
+                FROM ofarm_security.operational_security_event
+                WHERE event_kind = 'OVERFLOW_STARTED'
+                  AND affected_producer = %s
+                  AND affected_component = %s
+                  AND interval_start = %s
+                """,
+                (producer_name, component, stale_bucket),
+            ).fetchone()[0]
+        assert bucket == (1024, 1, True, False)
+        assert stored_event_count == 0
+        assert overflow_markers == 1
+    finally:
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            try:
+                _replace_pretenant_append_source(admin, original_source)
+            finally:
+                admin.execute(
+                    "DROP TABLE IF EXISTS "
+                    "ofarm_security._test_retention_barrier"
+                )
+                admin.execute(
+                    """
+                    DELETE FROM ofarm_security.operational_security_event
+                    WHERE event_id = %s
+                    """,
+                    (event_id,),
                 )
         _reset_quota_state(state, producer_name, component)
 
