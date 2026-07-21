@@ -30,7 +30,7 @@ from deployment.postgresql.provisioning import (
     provision_service,
     verify_service,
     verify_service_infrastructure,
-    verify_provisioned_cluster_lineages,
+    verify_provisioned_system_identifier_separation,
 )
 from deployment.postgresql.provisioning_specs import (
     MIGRATION_LOCK_KEY_POLICY,
@@ -484,7 +484,7 @@ def test_provisioning_specs_freeze_distinct_service_and_role_boundaries():
     ).hexdigest() == \
         "17e431e33221426151a6ceb3eb2214b1abc51a7b9390d508603f233742deca28"
     assert tenant.digest == \
-        "sha256:38e78f1b218ee348fab7778cfc04f82efb36e7d5572e96299001f241ca19684d"
+        "sha256:f1f757575e430fef4a8200d40dcf95149e994105ddc28bd9d36718fb384d1e32"
     assert audit.digest == \
         "sha256:770165332bbdb7a5e67e468f021d9fe82df817a2aee1a8a70191a08e869c307a"
     assert next(
@@ -1107,14 +1107,19 @@ def test_real_services_create_once_then_verify_as_read_only_noops(
     assert second_tenant == replace(first_tenant, created=False)
     assert second_audit == replace(first_audit, created=False)
 
-    separation = verify_provisioned_cluster_lineages(
+    separation = verify_provisioned_system_identifier_separation(
         provisioned_services["tenantAdmin"], provisioned_services["auditAdmin"]
     )
     assert separation.tenant_system_identifier != separation.audit_system_identifier
-    assert separation.manifest()["distinct"] is True
+    assert separation.manifest() == {
+        "schemaVersion": "ofarm.postgresql-system-identifier-separation.v1",
+        "tenantSystemIdentifier": separation.tenant_system_identifier,
+        "auditSystemIdentifier": separation.audit_system_identifier,
+        "distinct": True,
+    }
 
 
-def test_same_cluster_lineage_refuses_as_audit_service(
+def test_same_system_identifier_refuses_as_audit_service(
     provisioned_services, monkeypatch
 ):
     tenant = provisioned_services["tenant"]
@@ -1132,7 +1137,9 @@ def test_same_cluster_lineage_refuses_as_audit_service(
 
     monkeypatch.setattr(provisioning_module, "verify_service", fake_verify)
     with pytest.raises(ProvisioningTargetError, match="system identifier"):
-        verify_provisioned_cluster_lineages("tenant-admin", "audit-admin")
+        verify_provisioned_system_identifier_separation(
+            "tenant-admin", "audit-admin"
+        )
 
 
 def test_one_cluster_global_lock_serializes_both_specs(provisioned_services):

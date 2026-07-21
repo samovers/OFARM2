@@ -3241,6 +3241,11 @@
       "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_native_workflow_has_no_buildx_discovery_or_download_fallback",
+      "sourceModule": "kernel.tests.test_postgresql_native_evidence",
+      "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_native_evidence.py::test_oci_evidence_refuses_ambiguous_or_label_only_claims[mutation0-exactly one subject]",
       "sourceModule": "kernel.tests.test_postgresql_native_evidence",
       "sourcePath": "kernel/tests/test_postgresql_native_evidence.py"
@@ -3581,12 +3586,12 @@
       "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_same_cluster_lineage_refuses_as_audit_service",
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_same_role_sessions_cannot_read_peer_sql_text_or_application_name",
       "sourceModule": "kernel.tests.test_postgresql_provisioning",
       "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_same_role_sessions_cannot_read_peer_sql_text_or_application_name",
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_same_system_identifier_refuses_as_audit_service",
       "sourceModule": "kernel.tests.test_postgresql_provisioning",
       "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
     },
@@ -6291,7 +6296,7 @@
       "sourcePath": "kernel/tests/test_review_baseline.py"
     },
     {
-      "nodeid": "kernel/tests/test_review_baseline.py::test_provisioning_services_require_distinct_postgresql_lineages",
+      "nodeid": "kernel/tests/test_review_baseline.py::test_provisioning_services_require_distinct_postgresql_system_identifiers",
       "sourceModule": "kernel.tests.test_review_baseline",
       "sourcePath": "kernel/tests/test_review_baseline.py"
     },
@@ -7271,8 +7276,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "5a405cbfd5d87b2e5d6ae308398bca1eabb3b6ff3d6f12158a22a6203bdc2530",
-  "entryCount": 1454,
+  "entriesSha256": "1059173fb86320aaf57dc0f09d136422e3d4421dfa1f0545c1c7cf628afa0ab0",
+  "entryCount": 1455,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

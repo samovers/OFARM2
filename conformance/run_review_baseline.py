@@ -242,7 +242,7 @@ def _unavailable_postgres_identity(error_type: str) -> dict[str, Any]:
     }
 
 
-def _provisioning_cluster_lineage_reasons(
+def _provisioning_system_identifier_separation_reasons(
     primary_admin: dict[str, Any],
     tenant_admin: dict[str, Any],
     audit_admin: dict[str, Any],
@@ -263,7 +263,7 @@ def _provisioning_cluster_lineage_reasons(
         reasons.append("primary, tenant, and audit PostgreSQL build versions differ")
     if len({identity.get("systemIdentifier") for identity in identities}) != 3:
         reasons.append(
-            "primary, tenant, and audit PostgreSQL cluster lineages are not distinct"
+            "primary, tenant, and audit PostgreSQL system identifiers are not distinct"
         )
     return reasons
 
@@ -348,8 +348,11 @@ def _preflight(config: dict[str, Any], env: dict[str, str], pip_check_code: int)
         if audit_admin_dsn
         else _unavailable_postgres_identity("AuditAdminDsnAbsent")
     )
-    cluster_lineage_reasons = _provisioning_cluster_lineage_reasons(
-        admin_postgres, tenant_admin_postgres, audit_admin_postgres)
+    system_identifier_separation_reasons = (
+        _provisioning_system_identifier_separation_reasons(
+            admin_postgres, tenant_admin_postgres, audit_admin_postgres
+        )
+    )
     required = config["requiredEnvironment"]
     reasons: list[str] = []
     for name in sorted(ALLOWED_OFARM_ENV):
@@ -392,7 +395,7 @@ def _preflight(config: dict[str, Any], env: dict[str, str], pip_check_code: int)
             f"tenant provisioning PostgreSQL {tenant_admin_postgres['version']} != "
             f"{required['postgresqlVersion']}"
         )
-    reasons.extend(cluster_lineage_reasons)
+    reasons.extend(system_identifier_separation_reasons)
 
     distributions = [
         {"name": name, "version": actual[name]}
@@ -423,13 +426,13 @@ def _preflight(config: dict[str, Any], env: dict[str, str], pip_check_code: int)
             "securityAuditAdmin": audit_admin_postgres,
             "testStore": None,
             "sameServer": None,
-            "tenantAuditClusterLineagesDistinct": (
+            "tenantAuditSystemIdentifiersDistinct": (
                 tenant_admin_postgres.get("available") is True
                 and audit_admin_postgres.get("available") is True
                 and tenant_admin_postgres.get("systemIdentifier")
                 != audit_admin_postgres.get("systemIdentifier")
             ),
-            "testAndProvisioningClusterLineagesPairwiseDistinct": (
+            "testAndProvisioningSystemIdentifiersPairwiseDistinct": (
                 all(identity.get("available") is True for identity in (
                     admin_postgres,
                     tenant_admin_postgres,

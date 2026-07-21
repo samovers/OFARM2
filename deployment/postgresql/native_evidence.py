@@ -26,8 +26,9 @@ from typing import Any
 
 try:
     from deployment.postgresql.native_release_identity import (
-        CURRENT_NATIVE_ACTION_PINS,
         CURRENT_NATIVE_BUILD_PINS,
+        CURRENT_NATIVE_REPRODUCER_ACTION_PINS,
+        FROZEN_NATIVE_RELEASE_ACTION_PINS,
         GITHUB_PROVIDER_VERIFICATION_SCHEMA,
         HISTORICAL_V1_CANDIDATE_RECEIPT_DIGEST,
         NATIVE_RELEASE_GITHUB_API_VERSION,
@@ -51,8 +52,9 @@ try:
     )
 except ModuleNotFoundError:  # Direct execution from this source directory.
     from native_release_identity import (  # type: ignore[no-redef]
-        CURRENT_NATIVE_ACTION_PINS,
         CURRENT_NATIVE_BUILD_PINS,
+        CURRENT_NATIVE_REPRODUCER_ACTION_PINS,
+        FROZEN_NATIVE_RELEASE_ACTION_PINS,
         GITHUB_PROVIDER_VERIFICATION_SCHEMA,
         HISTORICAL_V1_CANDIDATE_RECEIPT_DIGEST,
         NATIVE_RELEASE_GITHUB_API_VERSION,
@@ -1599,10 +1601,11 @@ def compose_multi_platform_index(
     index_bytes = _canonical_json_bytes(index)
     _write_regular(index_output, index_bytes)
     evidence = {
-        "schema": "ofarm.native-multi-platform-index-evidence.v2",
+        "schema": "ofarm.native-multi-platform-index-evidence.v3",
         "source_commit": source_commit,
         "builder_id": reports[0]["builder_id"],
-        "workflow_action_pins": CURRENT_NATIVE_ACTION_PINS,
+        "release_workflow_action_pins": FROZEN_NATIVE_RELEASE_ACTION_PINS,
+        "reproducer_workflow_action_pins": CURRENT_NATIVE_REPRODUCER_ACTION_PINS,
         "build_pins": CURRENT_NATIVE_BUILD_PINS,
         "index": {
             "media_type": OCI_INDEX_MEDIA_TYPE,

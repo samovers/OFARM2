@@ -120,7 +120,7 @@ EVIDENCE_AUTHORITY_PATHS = (
 )
 PLATFORM_ORDER = ("linux/amd64", "linux/arm64")
 
-CURRENT_NATIVE_ACTION_PINS = {
+FROZEN_NATIVE_RELEASE_ACTION_PINS = {
     "actions/checkout@v5": "93cb6efe18208431cddfb8368fd83d5badbf9bfd",
     "actions/download-artifact@v7": "37930b1c2abaa49bbe596cd826c3c89aef350131",
     "actions/setup-python@v6": "ece7cb06caefa5fff74198d8649806c4678c61a1",
@@ -128,6 +128,11 @@ CURRENT_NATIVE_ACTION_PINS = {
     "docker/setup-buildx-action@v3": (
         "8d2750c68a42422c14e847fe6c8ac0403b4cbd6f"
     ),
+}
+CURRENT_NATIVE_REPRODUCER_ACTION_PINS = {
+    key: value
+    for key, value in FROZEN_NATIVE_RELEASE_ACTION_PINS.items()
+    if key != "docker/setup-buildx-action@v3"
 }
 CURRENT_NATIVE_BUILD_PINS = {
     "buildxClient": {
@@ -557,7 +562,7 @@ def validate_native_release_identity(
         raise NativeReleaseIdentityError("native identity JSON is not canonical")
     if document.get("schemaVersion") != "ofarm.native-verifier-release-identity.v1":
         raise NativeReleaseIdentityError("native identity schema is not exact")
-    if document.get("workflowActionPins") != CURRENT_NATIVE_ACTION_PINS:
+    if document.get("workflowActionPins") != FROZEN_NATIVE_RELEASE_ACTION_PINS:
         raise NativeReleaseIdentityError("native workflow action pins differ")
     if document.get("buildPins") != CURRENT_NATIVE_BUILD_PINS:
         raise NativeReleaseIdentityError("native build pins differ")
@@ -1585,7 +1590,7 @@ def provisional_identity_document(
         "status": "provisional",
         "sourceInput": source_input_manifest(source_directory),
         "buildPins": CURRENT_NATIVE_BUILD_PINS,
-        "workflowActionPins": CURRENT_NATIVE_ACTION_PINS,
+        "workflowActionPins": FROZEN_NATIVE_RELEASE_ACTION_PINS,
         "platforms": [],
         "index": None,
     }
@@ -1629,15 +1634,19 @@ def _validate_fan_in_evidence(
         "builder_id",
         "index",
         "platforms",
+        "release_workflow_action_pins",
+        "reproducer_workflow_action_pins",
         "schema",
         "source_commit",
-        "workflow_action_pins",
     }:
         raise NativeReleaseIdentityError("native index evidence fields are not exact")
     if (
         index_evidence.get("schema")
-        != "ofarm.native-multi-platform-index-evidence.v2"
-        or index_evidence.get("workflow_action_pins") != CURRENT_NATIVE_ACTION_PINS
+        != "ofarm.native-multi-platform-index-evidence.v3"
+        or index_evidence.get("release_workflow_action_pins")
+        != FROZEN_NATIVE_RELEASE_ACTION_PINS
+        or index_evidence.get("reproducer_workflow_action_pins")
+        != CURRENT_NATIVE_REPRODUCER_ACTION_PINS
         or index_evidence.get("build_pins") != CURRENT_NATIVE_BUILD_PINS
     ):
         raise NativeReleaseIdentityError("native index evidence identity differs")
@@ -1758,7 +1767,7 @@ def frozen_identity_document(
         "status": "frozen",
         "sourceInput": source_input_manifest(source_directory),
         "buildPins": CURRENT_NATIVE_BUILD_PINS,
-        "workflowActionPins": CURRENT_NATIVE_ACTION_PINS,
+        "workflowActionPins": FROZEN_NATIVE_RELEASE_ACTION_PINS,
         "platforms": platforms,
         "index": {
             "mediaType": OCI_INDEX_MEDIA_TYPE,

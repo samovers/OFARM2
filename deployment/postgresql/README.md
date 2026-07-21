@@ -33,9 +33,11 @@ Use the exact checked-in release in this order:
 3. Provision or verify the security-audit infrastructure with
    `SECURITY_AUDIT_PROVISIONING_SPEC` and different externally supplied SCRAM
    passwords.
-4. Call `verify_provisioned_cluster_lineages` with both administrator routes.
-   It requires the pinned PostgreSQL build
-   `17.10 (Debian 17.10-1.pgdg13+1)` and distinct system identifiers.
+4. Call `verify_provisioned_system_identifier_separation` with both
+   administrator routes. It requires the pinned PostgreSQL build
+   `17.10 (Debian 17.10-1.pgdg13+1)` and directly observes different system
+   identifiers. That observation does not prove origin, clone history,
+   continuity, promotion authority, or recovery lineage.
 5. Preflight both immutable migration sets without connecting to PostgreSQL:
 
    ```bash

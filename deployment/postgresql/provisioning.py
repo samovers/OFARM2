@@ -125,15 +125,15 @@ class ProvisioningInfrastructureReport:
 
 
 @dataclass(frozen=True, slots=True)
-class ClusterLineageReport:
-    """Fresh SQL evidence that tenant and audit use different cluster lineages."""
+class SystemIdentifierSeparationReport:
+    """Fresh SQL evidence that tenant and audit system identifiers differ."""
 
     tenant_system_identifier: str
     audit_system_identifier: str
 
     def manifest(self) -> dict[str, object]:
         return {
-            "schemaVersion": "ofarm.postgresql-cluster-lineage.v1",
+            "schemaVersion": "ofarm.postgresql-system-identifier-separation.v1",
             "tenantSystemIdentifier": self.tenant_system_identifier,
             "auditSystemIdentifier": self.audit_system_identifier,
             "distinct": True,
@@ -3059,9 +3059,9 @@ def verify_service_infrastructure(
     )
 
 
-def _cluster_lineage_report(
+def _system_identifier_separation_report(
     tenant: ProvisioningReport, audit: ProvisioningReport
-) -> ClusterLineageReport:
+) -> SystemIdentifierSeparationReport:
     """Validate two freshly observed fixed-service reports."""
 
     if tenant.service_identity != TENANT_PROVISIONING_SPEC.identity:
@@ -3082,23 +3082,23 @@ def _cluster_lineage_report(
         raise ProvisioningTargetError(
             "tenant and audit targets share one PostgreSQL system identifier"
         )
-    return ClusterLineageReport(
+    return SystemIdentifierSeparationReport(
         tenant_system_identifier=tenant.system_identifier,
         audit_system_identifier=audit.system_identifier,
     )
 
 
-def verify_provisioned_cluster_lineages(
+def verify_provisioned_system_identifier_separation(
     tenant_admin_dsn: str, audit_admin_dsn: str
-) -> ClusterLineageReport:
-    """Verify both services directly, then require distinct cluster lineages.
+) -> SystemIdentifierSeparationReport:
+    """Verify both services, then require different system identifiers.
 
-    A distinct PostgreSQL system identifier proves different cluster lineages.
-    It does not prove separate current disks, WAL routes, pools, credentials,
-    network routes, or backup targets; deployment evidence must cover those
-    external resources independently.
+    Identifier inequality does not prove origin, clone history, continuity,
+    promotion authority, recovery lineage, current disks, WAL routes, pools,
+    credentials, network routes, or backup targets. Deployment evidence must
+    cover those external facts independently.
     """
 
     tenant = verify_service(tenant_admin_dsn, TENANT_PROVISIONING_SPEC)
     audit = verify_service(audit_admin_dsn, SECURITY_AUDIT_PROVISIONING_SPEC)
-    return _cluster_lineage_report(tenant, audit)
+    return _system_identifier_separation_report(tenant, audit)

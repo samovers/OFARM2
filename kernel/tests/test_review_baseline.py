@@ -120,7 +120,7 @@ def test_sanitized_environment_removes_ambient_test_and_ofarm_controls(monkeypat
     assert env["PYTHONHASHSEED"] == "0"
 
 
-def test_provisioning_services_require_distinct_postgresql_lineages():
+def test_provisioning_services_require_distinct_postgresql_system_identifiers():
     primary = {
         "available": True,
         "version": "17.10",
@@ -131,15 +131,15 @@ def test_provisioning_services_require_distinct_postgresql_lineages():
     tenant = dict(primary, systemIdentifier="200")
     audit = dict(primary, systemIdentifier="300")
 
-    assert baseline._provisioning_cluster_lineage_reasons(
+    assert baseline._provisioning_system_identifier_separation_reasons(
         primary, tenant, audit
     ) == []
-    assert baseline._provisioning_cluster_lineage_reasons(
+    assert baseline._provisioning_system_identifier_separation_reasons(
         primary, tenant, tenant
     ) == [
-        "primary, tenant, and audit PostgreSQL cluster lineages are not distinct"
+        "primary, tenant, and audit PostgreSQL system identifiers are not distinct"
     ]
-    assert baseline._provisioning_cluster_lineage_reasons(
+    assert baseline._provisioning_system_identifier_separation_reasons(
         primary, tenant, dict(audit, rawVersion="17.10 other build")
     ) == ["primary, tenant, and audit PostgreSQL build versions differ"]
 
@@ -169,8 +169,12 @@ def test_malformed_admin_dsn_emits_unavailable_evidence(tmp_path):
         (output / "review-baseline-evidence.json").read_text(encoding="utf-8")
     )
     assert evidence["run"]["outcome"] == "failed"
-    assert evidence["environment"]["postgresql"]["admin"]["available"] is False
-    assert evidence["environment"]["postgresql"]["testStore"]["available"] is False
+    postgres = evidence["environment"]["postgresql"]
+    assert postgres["admin"]["available"] is False
+    assert postgres["testStore"]["available"] is False
+    assert postgres["tenantAuditSystemIdentifiersDistinct"] is False
+    assert postgres["testAndProvisioningSystemIdentifiersPairwiseDistinct"] is False
+    assert all("Lineage" not in key for key in postgres)
     preflight = next(
         step for step in evidence["steps"]
         if step["name"] == "environment-preflight"

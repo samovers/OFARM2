@@ -16,8 +16,9 @@ import pytest
 
 from deployment.postgresql import native_evidence, native_release_identity
 from deployment.postgresql.native_evidence import (
-    CURRENT_NATIVE_ACTION_PINS,
     CURRENT_NATIVE_BUILD_PINS,
+    CURRENT_NATIVE_REPRODUCER_ACTION_PINS,
+    FROZEN_NATIVE_RELEASE_ACTION_PINS,
     LIBSODIUM_SOURCE_SHA256,
     LIBSODIUM_SOURCE_URL,
     NativeEvidenceError,
@@ -2039,9 +2040,16 @@ def test_two_native_reports_compose_one_canonical_platform_index(tmp_path):
         "sha256": _digest(index_bytes),
         "size": len(index_bytes),
     }
-    assert evidence["workflow_action_pins"] == CURRENT_NATIVE_ACTION_PINS
+    assert (
+        evidence["release_workflow_action_pins"]
+        == FROZEN_NATIVE_RELEASE_ACTION_PINS
+    )
+    assert (
+        evidence["reproducer_workflow_action_pins"]
+        == CURRENT_NATIVE_REPRODUCER_ACTION_PINS
+    )
     assert evidence["build_pins"] == CURRENT_NATIVE_BUILD_PINS
-    assert evidence["schema"] == "ofarm.native-multi-platform-index-evidence.v2"
+    assert evidence["schema"] == "ofarm.native-multi-platform-index-evidence.v3"
     assert evidence["platforms"][0]["oci_archive"] == amd64_report["oci_archive"]
     assert evidence["platforms"][0]["attestation_manifest"] == {
         "sha256": amd64_report["attestation_manifest_digest"],
@@ -2064,7 +2072,10 @@ def test_checked_native_release_identity_matches_every_current_source() -> None:
     assert source_paths == list(NATIVE_SOURCE_PATHS)
     assert "ofarm_ed25519_fault_test.sql" in source_paths
     assert "ofarm_ed25519_vectors.json" in source_paths
-    assert identity.document["workflowActionPins"] == CURRENT_NATIVE_ACTION_PINS
+    assert (
+        identity.document["workflowActionPins"]
+        == FROZEN_NATIVE_RELEASE_ACTION_PINS
+    )
 
 
 def test_checked_native_evidence_receipt_matches_current_authority() -> None:
@@ -3466,7 +3477,7 @@ def test_native_workflow_closes_both_native_platform_evidence_lanes():
         assert observed_action_pins.setdefault(logical_name, commit) == commit
 
     assert action_lines
-    assert observed_action_pins == CURRENT_NATIVE_ACTION_PINS
+    assert observed_action_pins == CURRENT_NATIVE_REPRODUCER_ACTION_PINS
     assert CURRENT_NATIVE_BUILD_PINS["buildxClient"] == {
         "version": "v0.34.1",
         "sourceCommit": "e0b0e77d18d3379bc1e0d55f3b37de288d36fe47",
@@ -3475,6 +3486,8 @@ def test_native_workflow_closes_both_native_platform_evidence_lanes():
     assert "ubuntu-24.04-arm" in workflow
     assert "ubuntu-24.04" in workflow
     assert "setup-qemu" not in workflow
+    assert "docker/setup-buildx-action" not in workflow
+    assert "docker buildx" not in workflow
     assert "version: v0.34.1" not in workflow
     authenticated_install_steps = workflow.split(
         "- name: Authenticate and install the exact Buildx client"
@@ -3489,17 +3502,26 @@ def test_native_workflow_closes_both_native_platform_evidence_lanes():
         assert install_step.index("sha256sum --check --strict") < (
             install_step.index("install -m 0755")
         )
+        assert install_step.index("install -m 0755") < install_step.index(
+            'test "$("${buildx_binary}" version)" ='
+        )
+        assert install_step.index(
+            'test "$("${buildx_binary}" version)" ='
+        ) < install_step.index("ISSUE174_BUILDX=%s")
+        assert ".docker/cli-plugins" not in install_step
     assert workflow.count(
         "f1332ddb9010bd0b72628266c3a906d9a6979848033df4c8d9bd2cd113bae12b"
     ) == 2
     assert workflow.count(
         "c34e32dd6ea2653d960d6c099c9f09b9077e4a37504d2d31e5066eccc3904231"
     ) == 1
-    assert "docker buildx version | awk" not in workflow
-    assert workflow.count('test "$(docker buildx version)" =') == 2
     assert workflow.count(
         "e0b0e77d18d3379bc1e0d55f3b37de288d36fe47"
-    ) == 2
+    ) == 3
+    assert workflow.count('"${ISSUE174_BUILDX}" create') == 2
+    assert workflow.count('"${ISSUE174_BUILDX}" inspect') == 2
+    assert workflow.count('"${ISSUE174_BUILDX}" build') == 7
+    assert workflow.count('"${ISSUE174_BUILDX}" rm') == 2
     assert "test \"$(uname -m)\"" in workflow
     assert workflow.count("--no-cache") >= 4
     assert "SANITIZER=memory" in workflow
@@ -3661,6 +3683,43 @@ def test_native_workflow_closes_both_native_platform_evidence_lanes():
     assert "REPLACE_WITH_FROZEN" not in workflow
     assert "SOURCE_DATE_EPOCH=0" in workflow
     assert "--image-name ofarm-postgresql-conformance:local" in workflow
+
+
+def test_native_workflow_has_no_buildx_discovery_or_download_fallback():
+    workflow = PACKAGE_ROOT.joinpath(".github/workflows/conformance.yml").read_text()
+
+    assert "docker/setup-buildx-action" not in workflow
+    assert "docker buildx" not in workflow
+    assert ".docker/cli-plugins" not in workflow
+    assert workflow.count("buildx/releases/download/v0.34.1/") == 2
+
+    install_sections = workflow.split(
+        "- name: Authenticate and install the exact Buildx client"
+    )[1:]
+    assert len(install_sections) == 2
+    for section in install_sections:
+        install_step, remainder = section.split(
+            "- name: Create pinned native image builder", 1
+        )
+        builder_step = remainder.split("      - name:", 1)[0]
+        assert "buildx/releases/download/v0.34.1/" in install_step
+        assert install_step.index("sha256sum --check --strict") < (
+            install_step.index("install -m 0755")
+        )
+        assert install_step.index("install -m 0755") < install_step.index(
+            'test "$("${buildx_binary}" version)" ='
+        )
+        assert install_step.index(
+            'test "$("${buildx_binary}" version)" ='
+        ) < install_step.index("ISSUE174_BUILDX=%s")
+
+        assert builder_step.index('test -x "${ISSUE174_BUILDX}"') < (
+            builder_step.index('"${ISSUE174_BUILDX}" create')
+        )
+        assert '"${ISSUE174_BUILDX}" inspect' in builder_step
+        assert "curl" not in builder_step
+        assert "download" not in builder_step.lower()
+        assert "install" not in builder_step.lower()
 
 
 def test_native_build_sources_match_evidence_material_authority():

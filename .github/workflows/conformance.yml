@@ -23,21 +23,31 @@ jobs:
             f1332ddb9010bd0b72628266c3a906d9a6979848033df4c8d9bd2cd113bae12b
         run: |
           buildx_asset="${RUNNER_TEMP}/buildx-v0.34.1.linux-amd64"
+          buildx_binary="${RUNNER_TEMP}/ofarm-buildx-v0.34.1-linux-amd64"
           curl --fail --location --proto '=https' --proto-redir '=https' \
             --tlsv1.2 --retry 3 --output "${buildx_asset}" \
             "https://github.com/docker/buildx/releases/download/v0.34.1/buildx-v0.34.1.linux-amd64"
           printf '%s  %s\n' "${BUILDX_ASSET_SHA256}" "${buildx_asset}" | \
             sha256sum --check --strict
-          mkdir -p "${HOME}/.docker/cli-plugins"
-          install -m 0755 \
-            "${buildx_asset}" "${HOME}/.docker/cli-plugins/docker-buildx"
+          install -m 0755 "${buildx_asset}" "${buildx_binary}"
+          test "$("${buildx_binary}" version)" = \
+            "github.com/docker/buildx v0.34.1 e0b0e77d18d3379bc1e0d55f3b37de288d36fe47"
+          printf 'ISSUE174_BUILDX=%s\n' "${buildx_binary}" >> "${GITHUB_ENV}"
+          printf 'ISSUE174_BUILDER=%s\n' \
+            issue174-conformance-builder >> "${GITHUB_ENV}"
       - name: Create pinned native image builder
-        id: conformance-buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
-        with:
-          driver: docker-container
-          driver-opts: >-
-            image=moby/buildkit@sha256:c457984bd29f04d6acc90c8d9e717afe3922ae14665f3187e0096976fe37b1c8
+        run: |
+          test -x "${ISSUE174_BUILDX}"
+          "${ISSUE174_BUILDX}" create \
+            --name "${ISSUE174_BUILDER}" \
+            --driver docker-container \
+            --driver-opt \
+              image=moby/buildkit@sha256:c457984bd29f04d6acc90c8d9e717afe3922ae14665f3187e0096976fe37b1c8 \
+            --buildkitd-flags \
+              '--allow-insecure-entitlement security.insecure --allow-insecure-entitlement network.host' \
+            --use
+          "${ISSUE174_BUILDX}" inspect \
+            --builder "${ISSUE174_BUILDER}" --bootstrap
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12.13"
@@ -59,11 +69,6 @@ jobs:
           kernel/tests/test_migration_sets.py
           kernel/tests/test_postgresql_*.py
           kernel/tests/test_review_baseline.py
-      - name: Require the exact Buildx client
-        run: >-
-          test "$(docker buildx version)" =
-          "github.com/docker/buildx v0.34.1
-          e0b0e77d18d3379bc1e0d55f3b37de288d36fe47"
       - name: Authenticate tenant migration release
         run: .review-venv/bin/python -m deployment.postgresql.preflight_tenant_migrations
       - name: Authenticate security-audit migration release
@@ -89,8 +94,8 @@ jobs:
           SOURCE_DATE_EPOCH: "0"
         run: |
           mkdir -p .artifacts/derived-postgresql
-          docker buildx build \
-            --builder "${{ steps.conformance-buildx.outputs.name }}" \
+          "${ISSUE174_BUILDX}" build \
+            --builder "${ISSUE174_BUILDER}" \
             --file deployment/postgresql/ofarm_ed25519/Containerfile \
             --platform linux/amd64 \
             --pull \
@@ -235,6 +240,13 @@ jobs:
             ofarm-conformance-audit \
             ofarm-conformance-provisioning \
             || true
+      - name: Remove pinned native image builder
+        if: always()
+        run: |
+          if test -x "${ISSUE174_BUILDX:-}"
+          then
+            "${ISSUE174_BUILDX}" rm "${ISSUE174_BUILDER}" || true
+          fi
 
   native-verifier:
     name: native verifier (${{ matrix.architecture }})
@@ -275,21 +287,31 @@ jobs:
           BUILDX_ASSET_SHA256: ${{ matrix.buildx-sha256 }}
         run: |
           buildx_asset="${RUNNER_TEMP}/buildx-v0.34.1.linux-${{ matrix.architecture }}"
+          buildx_binary="${RUNNER_TEMP}/ofarm-buildx-v0.34.1-linux-${{ matrix.architecture }}"
           curl --fail --location --proto '=https' --proto-redir '=https' \
             --tlsv1.2 --retry 3 --output "${buildx_asset}" \
             "https://github.com/docker/buildx/releases/download/v0.34.1/buildx-v0.34.1.linux-${{ matrix.architecture }}"
           printf '%s  %s\n' "${BUILDX_ASSET_SHA256}" "${buildx_asset}" | \
             sha256sum --check --strict
-          mkdir -p "${HOME}/.docker/cli-plugins"
-          install -m 0755 \
-            "${buildx_asset}" "${HOME}/.docker/cli-plugins/docker-buildx"
+          install -m 0755 "${buildx_asset}" "${buildx_binary}"
+          test "$("${buildx_binary}" version)" = \
+            "github.com/docker/buildx v0.34.1 e0b0e77d18d3379bc1e0d55f3b37de288d36fe47"
+          printf 'ISSUE174_BUILDX=%s\n' "${buildx_binary}" >> "${GITHUB_ENV}"
+          printf 'ISSUE174_BUILDER=%s\n' \
+            "issue174-native-${{ matrix.architecture }}-builder" >> "${GITHUB_ENV}"
       - name: Create pinned native image builder
-        id: native-buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
-        with:
-          driver: docker-container
-          driver-opts: >-
-            image=moby/buildkit@sha256:c457984bd29f04d6acc90c8d9e717afe3922ae14665f3187e0096976fe37b1c8
+        run: |
+          test -x "${ISSUE174_BUILDX}"
+          "${ISSUE174_BUILDX}" create \
+            --name "${ISSUE174_BUILDER}" \
+            --driver docker-container \
+            --driver-opt \
+              image=moby/buildkit@sha256:c457984bd29f04d6acc90c8d9e717afe3922ae14665f3187e0096976fe37b1c8 \
+            --buildkitd-flags \
+              '--allow-insecure-entitlement security.insecure --allow-insecure-entitlement network.host' \
+            --use
+          "${ISSUE174_BUILDX}" inspect \
+            --builder "${ISSUE174_BUILDER}" --bootstrap
       - name: Authenticate generated native verifier vectors
         run: >-
           python
@@ -300,19 +322,19 @@ jobs:
           test "$(uname -m)" = "${{ matrix.machine }}"
           test "$(docker info --format '{{.Architecture}}')" = \
             "${{ matrix.docker-architecture }}"
-          test "$(docker buildx version)" = \
+          test "$("${ISSUE174_BUILDX}" version)" = \
             "github.com/docker/buildx v0.34.1 e0b0e77d18d3379bc1e0d55f3b37de288d36fe47"
           mkdir -p \
             ".artifacts/native/${{ matrix.architecture }}/first" \
             ".artifacts/native/${{ matrix.architecture }}/second" \
             ".artifacts/native/${{ matrix.architecture }}/attestations"
-          docker buildx version > \
+          "${ISSUE174_BUILDX}" version > \
             ".artifacts/native/${{ matrix.architecture }}/buildx-version.txt"
       - name: Refuse every unsupported sanitizer selector
         run: |
           set +e
-          docker buildx build \
-            --builder "${{ steps.native-buildx.outputs.name }}" \
+          "${ISSUE174_BUILDX}" build \
+            --builder "${ISSUE174_BUILDER}" \
             --file deployment/postgresql/ofarm_ed25519/Containerfile \
             --platform "linux/${{ matrix.architecture }}" \
             --target sanitizer \
@@ -338,8 +360,8 @@ jobs:
           set -o pipefail
           for sanitizer in address undefined
           do
-            docker buildx build \
-              --builder "${{ steps.native-buildx.outputs.name }}" \
+            "${ISSUE174_BUILDX}" build \
+              --builder "${ISSUE174_BUILDER}" \
               --file deployment/postgresql/ofarm_ed25519/Containerfile \
               --platform "linux/${{ matrix.architecture }}" \
               --target sanitizer \
@@ -356,8 +378,8 @@ jobs:
           done
       - name: Exercise every verifier failure mapping in PostgreSQL
         run: |
-          docker buildx build \
-            --builder "${{ steps.native-buildx.outputs.name }}" \
+          "${ISSUE174_BUILDX}" build \
+            --builder "${ISSUE174_BUILDER}" \
             --file deployment/postgresql/ofarm_ed25519/Containerfile \
             --platform "linux/${{ matrix.architecture }}" \
             --target failure-semantics \
@@ -372,8 +394,8 @@ jobs:
         run: |
           for build in first second
           do
-            docker buildx build \
-              --builder "${{ steps.native-buildx.outputs.name }}" \
+            "${ISSUE174_BUILDX}" build \
+              --builder "${ISSUE174_BUILDER}" \
               --file deployment/postgresql/ofarm_ed25519/Containerfile \
               --platform "linux/${{ matrix.architecture }}" \
               --pull \
@@ -385,8 +407,8 @@ jobs:
                 "type=docker,dest=.artifacts/native/${{ matrix.architecture }}/${build}-image.docker.tar,oci-mediatypes=true" \
               --tag "ofarm-ed25519-${{ matrix.architecture }}:${build}" \
               deployment/postgresql/ofarm_ed25519
-            docker buildx build \
-              --builder "${{ steps.native-buildx.outputs.name }}" \
+            "${ISSUE174_BUILDX}" build \
+              --builder "${ISSUE174_BUILDER}" \
               --file deployment/postgresql/ofarm_ed25519/Containerfile \
               --platform "linux/${{ matrix.architecture }}" \
               --target evidence-artifacts \
@@ -399,8 +421,8 @@ jobs:
               deployment/postgresql/ofarm_ed25519
             if test "$build" = first
             then
-              docker buildx prune \
-                --builder "${{ steps.native-buildx.outputs.name }}" \
+              "${ISSUE174_BUILDX}" prune \
+                --builder "${ISSUE174_BUILDER}" \
                 --all --force
             fi
           done
@@ -473,8 +495,8 @@ jobs:
             < deployment/postgresql/ofarm_ed25519/ofarm_ed25519_live_test.sql
       - name: Produce bounded OCI, SBOM, and max-provenance evidence
         run: |
-          docker buildx build \
-            --builder "${{ steps.native-buildx.outputs.name }}" \
+          "${ISSUE174_BUILDX}" build \
+            --builder "${ISSUE174_BUILDER}" \
             --file deployment/postgresql/ofarm_ed25519/Containerfile \
             --platform "linux/${{ matrix.architecture }}" \
             --pull \
@@ -515,6 +537,13 @@ jobs:
       - name: Stop disposable native PostgreSQL
         if: always()
         run: docker rm --force ofarm-native-live || true
+      - name: Remove pinned native image builder
+        if: always()
+        run: |
+          if test -x "${ISSUE174_BUILDX:-}"
+          then
+            "${ISSUE174_BUILDX}" rm "${ISSUE174_BUILDER}" || true
+          fi
 
   native-verifier-index:
     name: native verifier canonical index
