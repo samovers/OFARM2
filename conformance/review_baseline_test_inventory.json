@@ -1446,6 +1446,11 @@
       "sourcePath": "kernel/tests/test_migration_sets.py"
     },
     {
+      "nodeid": "kernel/tests/test_migration_sets.py::test_preflight_sanitizes_descriptor_read_failure",
+      "sourceModule": "kernel.tests.test_migration_sets",
+      "sourcePath": "kernel/tests/test_migration_sets.py"
+    },
+    {
       "nodeid": "kernel/tests/test_migration_sets.py::test_same_migration_bytes_do_not_cross_service_identity",
       "sourceModule": "kernel.tests.test_migration_sets",
       "sourcePath": "kernel/tests/test_migration_sets.py"
@@ -4876,6 +4881,16 @@
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_governed_batch_principal_must_match_verified_binding[ofarm_app]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_governed_batch_principal_must_match_verified_binding[ofarm_worker]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_idempotency_identity_must_match_its_governed_batch[operation-None-WRONG_OPERATION]",
       "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
@@ -7251,8 +7266,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "20333655469ac05e9b5e83905a0aafba6485cc55097064a67ee4cd8b58b8acba",
-  "entryCount": 1450,
+  "entriesSha256": "20fc9035341c06d4235ae0be47b578aecac6c53ab07154feb2cfc26834e6838d",
+  "entryCount": 1453,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

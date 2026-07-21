@@ -1169,6 +1169,32 @@ AS 'DECLARE
                 MESSAGE = ''verified tenant context is absent'';
     END';
 
+CREATE FUNCTION ofarm.current_authenticated_principal_ref()
+RETURNS ofarm.tenant_local_ref
+LANGUAGE plpgsql STABLE PARALLEL UNSAFE SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+AS 'DECLARE
+        observed_backend_start pg_catalog.timestamptz;
+        observed_principal_ref ofarm.tenant_local_ref;
+    BEGIN
+        observed_backend_start := ofarm.current_backend_start();
+
+        SELECT context.party_ref
+          INTO STRICT observed_principal_ref
+          FROM ofarm.tenant_binding_context AS context
+         WHERE context.backend_pid = pg_catalog.pg_backend_pid()
+           AND context.backend_start = observed_backend_start
+           AND context.full_xid = pg_catalog.pg_current_xact_id()
+           AND context.context_state = ''BOUND'';
+
+        RETURN observed_principal_ref;
+    EXCEPTION
+        WHEN NO_DATA_FOUND OR TOO_MANY_ROWS THEN
+            RAISE EXCEPTION USING
+                ERRCODE = ''42501'',
+                MESSAGE = ''verified tenant context is absent'';
+    END';
+
 CREATE TABLE ofarm.runtime_content_blob (
     content_digest ofarm.sha256_id NOT NULL,
     canonical_bytes pg_catalog.bytea NOT NULL,
@@ -5029,7 +5055,11 @@ ALTER TABLE ofarm.governed_write_batch FORCE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON ofarm.governed_write_batch
 TO ofarm_app, ofarm_worker
 USING (tenant_id = ofarm.current_tenant_id())
-WITH CHECK (tenant_id = ofarm.current_tenant_id());
+WITH CHECK (
+    tenant_id = ofarm.current_tenant_id()
+    AND authenticated_principal_ref =
+        ofarm.current_authenticated_principal_ref()
+);
 
 ALTER TABLE ofarm.kernel_record ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ofarm.kernel_record FORCE ROW LEVEL SECURITY;
@@ -5993,6 +6023,8 @@ REVOKE ALL PRIVILEGES ON FUNCTION ofarm.purge_stale_tenant_context()
 FROM PUBLIC;
 REVOKE ALL PRIVILEGES ON FUNCTION ofarm.create_tenant_challenge()
 FROM PUBLIC;
+REVOKE ALL PRIVILEGES ON FUNCTION ofarm.current_authenticated_principal_ref()
+FROM PUBLIC;
 REVOKE ALL PRIVILEGES ON FUNCTION ofarm.take_tenant_write_lock()
 FROM PUBLIC;
 
@@ -6038,6 +6070,8 @@ TO ofarm_binder;
 GRANT EXECUTE ON FUNCTION ofarm.create_tenant_challenge()
 TO ofarm_app, ofarm_worker;
 GRANT EXECUTE ON FUNCTION ofarm.current_tenant_id()
+TO ofarm_app, ofarm_worker;
+GRANT EXECUTE ON FUNCTION ofarm.current_authenticated_principal_ref()
 TO ofarm_app, ofarm_worker;
 GRANT EXECUTE ON FUNCTION ofarm.current_tenant_id()
 TO ofarm_graph_validator;
@@ -6525,7 +6559,11 @@ AS 'DECLARE
                          ) <> ''(tenant_id = ofarm.current_tenant_id())''
                       OR pg_catalog.pg_get_expr(
                             policy.polwithcheck, policy.polrelid
-                         ) <> ''(tenant_id = ofarm.current_tenant_id())''
+                         ) <> CASE
+                            WHEN class.relname = ''governed_write_batch''
+                            THEN ''((tenant_id = ofarm.current_tenant_id()) AND ((authenticated_principal_ref)::text = (ofarm.current_authenticated_principal_ref())::text))''
+                            ELSE ''(tenant_id = ofarm.current_tenant_id())''
+                         END
                )
           INTO policy_count, invalid_policy_count
           FROM pg_catalog.pg_policy AS policy
@@ -6890,11 +6928,13 @@ AS 'DECLARE
          WHERE namespace.nspname = ''ofarm''
            AND routine.proname = ANY (ARRAY[
                 ''create_tenant_challenge'',
+                ''current_authenticated_principal_ref'',
                 ''current_tenant_id'',
                 ''take_tenant_write_lock''
            ]::pg_catalog.text[]);
         IF observed_routines IS DISTINCT FROM ARRAY[
             ''create_tenant_challenge()=ofarm_binder:plpgsql:true:false:false:v:u:search_path=pg_catalog, pg_temp:da7cd7c1ac111700f4dcd9490d910770f7dec213a40dee1c533edccc8500dd56:false:true:true:false:false:false'',
+            ''current_authenticated_principal_ref()=ofarm_binder:plpgsql:true:false:false:s:u:search_path=pg_catalog, pg_temp:6b0b3abc610609988a965cb7b8671603b0c8bdd8fde62d5aafdc465507182df7:false:true:true:false:false:false'',
             ''current_tenant_id()=ofarm_binder:plpgsql:true:false:false:s:u:search_path=pg_catalog, pg_temp:2dea636af9e5cd14b7fcb406fd556934ffd8ab408dae965aa318e4120beb0ab0:false:true:true:true:false:false'',
             ''take_tenant_write_lock()=ofarm_tenant_lock_owner:plpgsql:true:false:false:v:u:search_path=pg_catalog, pg_temp:38c75f051ee82b75c2e872fe2e191874e17984da7183add568f481d2eadb0de8:false:true:true:true:false:false''
         ]::pg_catalog.text[] THEN
@@ -7247,7 +7287,7 @@ AS 'DECLARE
            OR observed_head_version <> 1
            OR observed_service_identity <> ''ofarm.tenant-postgresql.v1''
            OR observed_provisioning_digest <>
-                ''sha256:4d958a0944b2c1627f8029328b6e6a40607e00aa58c14fd1574aeaa57a094035''
+                ''sha256:f9954daa6a895115917688524d4a4cbafa2e48b2ab65c82016da80b2f369bb68''
            OR observed_prefix_digest !~ ''^sha256:[0-9a-f]{64}$'' THEN
             differences := pg_catalog.array_append(
                 differences, ''migration 0001 ledger identity differs''
@@ -8486,7 +8526,7 @@ AS 'DECLARE
           INTO observed_structural_catalog_digest
           FROM catalog_entry;
         IF observed_structural_catalog_digest <>
-                ''sha256:31bf0f1dadcbd8729bc4caa0373008c84549d9c90b6d2da185dbfece343e4a4a'' THEN
+                ''sha256:81133ba94a7024f0a74ab192f7016c61eebe6bc3fce55f8aa2781e8a31a885e3'' THEN
             differences := pg_catalog.array_append(
                 differences, ''complete tenant catalog fingerprint differs''
             );
@@ -8636,6 +8676,7 @@ GRANT EXECUTE ON FUNCTION ofarm.verify_tenant_capability_preflight(
 ) TO ofarm_admission_lock_owner;
 GRANT EXECUTE ON FUNCTION ofarm.bind_tenant_capability(pg_catalog.text),
     ofarm.create_tenant_challenge(),
+    ofarm.current_authenticated_principal_ref(),
     ofarm.current_tenant_context(),
     ofarm.current_tenant_id(),
     ofarm.take_tenant_write_lock()

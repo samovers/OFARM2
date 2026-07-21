@@ -160,15 +160,15 @@ TENANT_AUTHORITATIVE_MIGRATION_SET = AuthoritativeMigrationSet(
             version=1,
             filename="0001_initial.sql",
             source_sha256=(
-                "sha256:922f43906db33e69ce767c69194c7b52dbdd7c573839c23e9cd8e66f363b2fce"
+                "sha256:01930c57e009feebc7f7c25f8ad81d5281321396bd98f52b2cab6c59f599ad78"
             ),
-            byte_length=395709,
+            byte_length=397654,
             applied_prefix_digest=(
-                "sha256:1a1144eca66059fd95e06e10099b678942a588df8eaf4dc0f077e6415368ed48"
+                "sha256:7058819ec5da641ba08d324160c045a9f79d93c876da4491e705804f939daf62"
             ),
         ),
     ),
-    digest="sha256:1a1144eca66059fd95e06e10099b678942a588df8eaf4dc0f077e6415368ed48",
+    digest="sha256:7058819ec5da641ba08d324160c045a9f79d93c876da4491e705804f939daf62",
 )
 
 SECURITY_AUDIT_AUTHORITATIVE_MIGRATION_SET = AuthoritativeMigrationSet(
@@ -328,6 +328,26 @@ def _descriptor_read_identity(value: os.stat_result) -> tuple[int, int, int, int
     )
 
 
+def _close_descriptor(file_descriptor: int, label: str) -> None:
+    """Close one preflight descriptor without exposing an operating-system error."""
+
+    try:
+        os.close(file_descriptor)
+    except OSError as exc:
+        raise MigrationSetError(f"{label} could not be closed safely") from exc
+
+
+def _list_migration_directory(directory_fd: int) -> list[str]:
+    """List the already-opened directory with one closed diagnostic."""
+
+    try:
+        return sorted(os.listdir(directory_fd))
+    except OSError as exc:
+        raise MigrationSetError(
+            "migration directory could not be listed safely"
+        ) from exc
+
+
 def _open_migration_directory(
     package_root: Path, service: MigrationService
 ) -> int:
@@ -361,11 +381,15 @@ def _open_migration_directory(
                     "migration directory contains a symlink or non-directory "
                     f"component: {component}"
                 ) from exc
-            os.close(current_fd)
+            previous_fd = current_fd
             current_fd = next_fd
-        return current_fd
+            _close_descriptor(previous_fd, "migration directory descriptor")
+        result_fd = current_fd
+        current_fd = None
+        return result_fd
     except BaseException:
-        os.close(current_fd)
+        if current_fd is not None:
+            _close_descriptor(current_fd, "migration directory descriptor")
         raise
 
 
@@ -381,25 +405,30 @@ def _read_opened_migration(
             f"migration directory contains a non-regular entry: {filename}"
         ) from exc
     try:
-        initial_stat = os.fstat(source_fd)
-        if not stat.S_ISREG(initial_stat.st_mode):
+        try:
+            initial_stat = os.fstat(source_fd)
+            if not stat.S_ISREG(initial_stat.st_mode):
+                raise MigrationSetError(
+                    f"migration directory contains a non-regular entry: {filename}"
+                )
+            if initial_stat.st_size > MIGRATION_SOURCE_MAX_BYTES:
+                raise MigrationSetError(
+                    f"migration {filename} exceeds the fixed source byte limit"
+                )
+            chunks: list[bytes] = []
+            remaining = MIGRATION_SOURCE_MAX_BYTES + 1
+            while remaining:
+                chunk = os.read(source_fd, min(1024 * 1024, remaining))
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                remaining -= len(chunk)
+            source_bytes = b"".join(chunks)
+            final_stat = os.fstat(source_fd)
+        except OSError as exc:
             raise MigrationSetError(
-                f"migration directory contains a non-regular entry: {filename}"
-            )
-        if initial_stat.st_size > MIGRATION_SOURCE_MAX_BYTES:
-            raise MigrationSetError(
-                f"migration {filename} exceeds the fixed source byte limit"
-            )
-        chunks: list[bytes] = []
-        remaining = MIGRATION_SOURCE_MAX_BYTES + 1
-        while remaining:
-            chunk = os.read(source_fd, min(1024 * 1024, remaining))
-            if not chunk:
-                break
-            chunks.append(chunk)
-            remaining -= len(chunk)
-        source_bytes = b"".join(chunks)
-        final_stat = os.fstat(source_fd)
+                f"migration {filename} could not be read safely"
+            ) from exc
         if (
             _descriptor_read_identity(final_stat)
             != _descriptor_read_identity(initial_stat)
@@ -412,7 +441,7 @@ def _read_opened_migration(
             )
         return _read_migration(filename, source_bytes, version)
     finally:
-        os.close(source_fd)
+        _close_descriptor(source_fd, f"migration {filename} descriptor")
 
 
 def load_migration_set(package_root: Path, service: MigrationService) -> MigrationSet:
@@ -425,7 +454,7 @@ def load_migration_set(package_root: Path, service: MigrationService) -> Migrati
 
     directory_fd = _open_migration_directory(package_root, service)
     try:
-        entry_names = sorted(os.listdir(directory_fd))
+        entry_names = _list_migration_directory(directory_fd)
         numbered: list[tuple[int, str]] = []
         for entry_name in entry_names:
             match = _MIGRATION_FILENAME.fullmatch(entry_name)
@@ -464,10 +493,10 @@ def load_migration_set(package_root: Path, service: MigrationService) -> Migrati
             migrations.append(
                 _read_opened_migration(directory_fd, filename, observed_version)
             )
-        if sorted(os.listdir(directory_fd)) != entry_names:
+        if _list_migration_directory(directory_fd) != entry_names:
             raise MigrationSetError("migration directory changed during preflight")
     finally:
-        os.close(directory_fd)
+        _close_descriptor(directory_fd, "migration directory descriptor")
 
     exact = tuple(migrations)
     return MigrationSet(

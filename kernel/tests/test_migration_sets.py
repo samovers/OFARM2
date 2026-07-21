@@ -21,6 +21,7 @@ from deployment.postgresql.migration_sets import (
     MigrationSetError,
     load_authoritative_migration_set,
     load_migration_set,
+    preflight_main,
     require_authoritative_migration_set,
     revalidate_migration_set,
 )
@@ -270,6 +271,27 @@ def test_migration_source_rejects_growth_during_descriptor_read(
 
     with pytest.raises(MigrationSetError, match="changed while it was read"):
         load_migration_set(tmp_path, TENANT_SERVICE)
+
+
+def test_preflight_sanitizes_descriptor_read_failure(monkeypatch, capsys):
+    sentinel = "SECRET-MIGRATION-READ-SENTINEL"
+
+    def refuse_read(_file_descriptor, _byte_count):
+        raise OSError(sentinel)
+
+    monkeypatch.setattr(os, "read", refuse_read)
+
+    with pytest.raises(SystemExit) as raised:
+        preflight_main(SECURITY_AUDIT_SERVICE, [])
+
+    assert raised.value.code == 2
+    stderr = capsys.readouterr().err
+    assert stderr == (
+        "migration preflight refused: migration 0001_initial.sql "
+        "could not be read safely\n"
+    )
+    assert sentinel not in stderr
+    assert "Traceback" not in stderr
 
 
 def test_migration_directory_rejects_symlinked_parent(tmp_path):

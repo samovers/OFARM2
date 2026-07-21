@@ -1302,6 +1302,12 @@ _TENANT_INITIAL_OWNER_SEALER = TenantInitialOwnerSealerSpec(
         ),
         RoutineOwnerTransfer(
             "ofarm",
+            "current_authenticated_principal_ref",
+            (),
+            "ofarm_binder",
+        ),
+        RoutineOwnerTransfer(
+            "ofarm",
             "verify_tenant_capability_preflight",
             ("bytea", "bytea"),
             "ofarm_binder",

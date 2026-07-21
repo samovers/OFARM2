@@ -484,7 +484,7 @@ def test_provisioning_specs_freeze_distinct_service_and_role_boundaries():
     ).hexdigest() == \
         "17e431e33221426151a6ceb3eb2214b1abc51a7b9390d508603f233742deca28"
     assert tenant.digest == \
-        "sha256:4d958a0944b2c1627f8029328b6e6a40607e00aa58c14fd1574aeaa57a094035"
+        "sha256:f9954daa6a895115917688524d4a4cbafa2e48b2ab65c82016da80b2f369bb68"
     assert audit.digest == \
         "sha256:770165332bbdb7a5e67e468f021d9fe82df817a2aee1a8a70191a08e869c307a"
     assert next(
@@ -612,6 +612,10 @@ def test_tenant_write_lock_owner_and_one_time_owner_sealer_are_closed():
             "ofarm_binder",
         ),
         ("ofarm.current_tenant_context()", "ofarm_binder"),
+        (
+            "ofarm.current_authenticated_principal_ref()",
+            "ofarm_binder",
+        ),
         (
             "ofarm.verify_tenant_capability_preflight(bytea, bytea)",
             "ofarm_binder",

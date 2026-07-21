@@ -4418,6 +4418,45 @@ def test_one_tenant_transaction_cannot_create_two_governed_batches(
     )
 
 
+@pytest.mark.parametrize("runtime_role", ("ofarm_app", "ofarm_worker"))
+def test_governed_batch_principal_must_match_verified_binding(
+    tenant_target: TenantTarget,
+    authority: TenantAuthority,
+    runtime_role: str,
+) -> None:
+    batch_id = "batch-forged-principal-" + runtime_role.removeprefix("ofarm_")
+    with psycopg.connect(tenant_target.role_dsn(runtime_role)) as runtime:
+        _install_test_bound_context(runtime, authority)
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            with runtime.transaction():
+                runtime.execute(
+                    """
+                    INSERT INTO ofarm.governed_write_batch (
+                        tenant_id, batch_id, authenticated_principal_ref,
+                        governed_operation, request_id, runtime_bundle_digest
+                    ) VALUES (%s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        authority.tenant_id,
+                        batch_id,
+                        "forged-principal",
+                        "TENANT_TEST_WRITE",
+                        "request-" + batch_id,
+                        authority.runtime_bundle_digest,
+                    ),
+                )
+
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        assert admin.execute(
+            """
+            SELECT count(*)
+            FROM ofarm.governed_write_batch
+            WHERE tenant_id = %s AND batch_id = %s
+            """,
+            (authority.tenant_id, batch_id),
+        ).fetchone() == (0,)
+
+
 def test_gate_log_request_must_belong_to_its_governed_batch(
     tenant_target: TenantTarget,
     authority: TenantAuthority,
@@ -5394,7 +5433,7 @@ def test_complete_catalog_fingerprint_refuses_function_constraint_index_policy_a
             assert pristine[0] is True
             assert pristine[2] == 0
             assert pristine[3] == (
-                "sha256:31bf0f1dadcbd8729bc4caa0373008c84549d9c90b6d2da185dbfece343e4a4a"
+                "sha256:81133ba94a7024f0a74ab192f7016c61eebe6bc3fce55f8aa2781e8a31a885e3"
             )
         finally:
             migrator.rollback()
@@ -6083,7 +6122,7 @@ def test_readiness_observation_is_complete_after_commit(
     assert row[1] == TENANT_CONTEXT_CONTRACT.digest
     assert row[2] == 0
     assert row[3] == (
-        "sha256:31bf0f1dadcbd8729bc4caa0373008c84549d9c90b6d2da185dbfece343e4a4a"
+        "sha256:81133ba94a7024f0a74ab192f7016c61eebe6bc3fce55f8aa2781e8a31a885e3"
     )
     assert row[5] == TENANT_PROVISIONING_SPEC.digest
     assert row[6] == TENANT_SERVICE.identity
