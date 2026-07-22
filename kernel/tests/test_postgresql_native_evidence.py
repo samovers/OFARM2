@@ -9,6 +9,7 @@ import json
 import os
 import re
 import shutil
+import sys
 import tarfile
 from pathlib import Path
 
@@ -1069,100 +1070,173 @@ def _replace_one_asset_command_bundle(provider: dict[str, object]) -> None:
     verification["size"] = len(canonical)
 
 
-def test_github_cli_uses_one_bounded_direct_argv(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def _write_python_command(tmp_path: Path, source: str) -> Path:
     executable = tmp_path / "gh"
-    executable.write_bytes(b"trusted fixture\n")
+    executable.write_text(
+        f"#!{sys.executable}\n{source}",
+        encoding="ascii",
+    )
     executable.chmod(0o755)
-    calls = []
+    return executable
 
-    def fake_subprocess_run(command, **kwargs):
-        calls.append((command, kwargs))
-        return native_evidence.subprocess.CompletedProcess(
-            command,
-            0,
-            stdout=b'{"ok":true}\n',
-            stderr=b"",
-        )
 
-    monkeypatch.setattr(native_evidence, "_github_cli_path", lambda: executable)
-    monkeypatch.setattr(native_evidence.subprocess, "run", fake_subprocess_run)
+def test_github_cli_uses_one_bounded_direct_argv(tmp_path: Path) -> None:
+    executable = _write_python_command(
+        tmp_path,
+        """
+import json
+import os
+import sys
+
+document = {
+    "arguments": sys.argv[1:],
+    "environment": {
+        name: os.environ.get(name)
+        for name in ("GH_HOST", "GH_REPO", "GH_PROMPT_DISABLED")
+    },
+}
+sys.stdout.write(json.dumps(document, sort_keys=True, separators=(",", ":")))
+""",
+    )
     arguments = (
         "api",
         "--hostname",
         "github.com",
         "repos/samovers/OFARM2",
+        "literal;exit 99",
     )
 
-    assert native_evidence._run_github_cli(arguments, label="fixture") == (
-        b'{"ok":true}\n'
+    observed = json.loads(
+        native_evidence._run_github_cli(
+            arguments,
+            label="fixture",
+            github_cli=executable,
+        )
     )
-    assert len(calls) == 1
-    command, kwargs = calls[0]
-    assert command == (str(executable), *arguments)
-    assert isinstance(command, tuple)
-    assert kwargs["shell"] is False
-    assert kwargs["check"] is False
-    assert kwargs["stdout"] is native_evidence.subprocess.PIPE
-    assert kwargs["stderr"] is native_evidence.subprocess.PIPE
-    assert kwargs["env"]["GH_HOST"] == "github.com"
-    assert kwargs["env"]["GH_REPO"] == NATIVE_RELEASE_REPOSITORY
-    assert kwargs["env"]["GH_PROMPT_DISABLED"] == "1"
+    assert observed == {
+        "arguments": list(arguments),
+        "environment": {
+            "GH_HOST": "github.com",
+            "GH_REPO": NATIVE_RELEASE_REPOSITORY,
+            "GH_PROMPT_DISABLED": "1",
+        },
+    }
 
     with pytest.raises(NativeEvidenceError, match="arguments are not exact"):
         native_evidence._run_github_cli(
             ("api", "repos/samovers/OFARM2\n--method=DELETE"),
             label="hostile fixture",
+            github_cli=executable,
         )
-    assert len(calls) == 1
 
 
 @pytest.mark.parametrize(
-    ("stdout", "stderr", "returncode", "message"),
+    ("mode", "message"),
     (
-        (
-            b"x" * (native_evidence.MAX_GITHUB_COMMAND_OUTPUT_BYTES + 1),
-            b"",
-            0,
-            "output exceeds",
-        ),
-        (
-            b"",
-            b"x" * (native_evidence.MAX_GITHUB_COMMAND_OUTPUT_BYTES + 1),
-            0,
-            "output exceeds",
-        ),
-        (b"{}\n", b"warning", 0, "wrote to standard error"),
-        (b"", b"provider refusal", 1, "refused"),
+        ("oversized-stdout", "output exceeds"),
+        ("oversized-stderr", "output exceeds"),
+        ("warning", "wrote to standard error"),
+        ("refusal", "refused"),
     ),
 )
 def test_github_cli_refuses_failure_and_oversized_output(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    stdout: bytes,
-    stderr: bytes,
-    returncode: int,
+    mode: str,
     message: str,
 ) -> None:
-    executable = tmp_path / "gh"
-    executable.write_bytes(b"trusted fixture\n")
-    executable.chmod(0o755)
-    monkeypatch.setattr(native_evidence, "_github_cli_path", lambda: executable)
-    monkeypatch.setattr(
-        native_evidence.subprocess,
-        "run",
-        lambda command, **_kwargs: native_evidence.subprocess.CompletedProcess(
-            command,
-            returncode,
-            stdout=stdout,
-            stderr=stderr,
-        ),
+    executable = _write_python_command(
+        tmp_path,
+        """
+import os
+import sys
+
+mode = sys.argv[1]
+limit = int(sys.argv[2])
+if mode == "oversized-stdout":
+    os.write(1, b"x" * (limit + 1))
+elif mode == "oversized-stderr":
+    os.write(2, b"x" * (limit + 1))
+elif mode == "warning":
+    os.write(1, b"{}\\n")
+    os.write(2, b"warning")
+elif mode == "refusal":
+    os.write(2, b"provider refusal")
+    raise SystemExit(1)
+""",
     )
 
     with pytest.raises(NativeEvidenceError, match=message):
-        native_evidence._run_github_cli(("version",), label="fixture")
+        native_evidence._run_github_cli(
+            (mode, str(native_evidence.MAX_GITHUB_COMMAND_OUTPUT_BYTES)),
+            label="fixture",
+            github_cli=executable,
+        )
+
+
+@pytest.mark.parametrize(
+    ("stream_name", "descriptor"),
+    (("stdout", 1), ("stderr", 2)),
+)
+def test_github_cli_stops_and_reaps_endless_output_floods(
+    tmp_path: Path,
+    stream_name: str,
+    descriptor: int,
+) -> None:
+    executable = _write_python_command(
+        tmp_path,
+        """
+import os
+import pathlib
+import sys
+
+descriptor = int(sys.argv[1])
+pathlib.Path(sys.argv[2]).write_text(str(os.getpid()), encoding="ascii")
+block = b"x" * 65536
+while True:
+    os.write(descriptor, block)
+""",
+    )
+    pid_path = tmp_path / f"{stream_name}.pid"
+
+    with pytest.raises(NativeEvidenceError, match="output exceeds"):
+        native_evidence._run_github_cli(
+            (str(descriptor), str(pid_path)),
+            label=f"endless {stream_name}",
+            timeout_seconds=10,
+            github_cli=executable,
+        )
+
+    child_pid = int(pid_path.read_text(encoding="ascii"))
+    with pytest.raises(ProcessLookupError):
+        os.kill(child_pid, 0)
+
+
+def test_github_cli_timeout_stops_and_reaps_the_child(tmp_path: Path) -> None:
+    executable = _write_python_command(
+        tmp_path,
+        """
+import os
+import pathlib
+import sys
+import time
+
+pathlib.Path(sys.argv[1]).write_text(str(os.getpid()), encoding="ascii")
+time.sleep(30)
+""",
+    )
+    pid_path = tmp_path / "timeout.pid"
+
+    with pytest.raises(NativeEvidenceError, match="could not execute"):
+        native_evidence._run_github_cli(
+            (str(pid_path),),
+            label="sleeping fixture",
+            timeout_seconds=1,
+            github_cli=executable,
+        )
+
+    child_pid = int(pid_path.read_text(encoding="ascii"))
+    with pytest.raises(ProcessLookupError):
+        os.kill(child_pid, 0)
 
 
 @pytest.mark.parametrize(

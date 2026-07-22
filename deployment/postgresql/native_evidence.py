@@ -16,11 +16,13 @@ import io
 import json
 import os
 import re
+import selectors
 import shutil
 import stat
 import subprocess
 import tarfile
 import tempfile
+import time
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -146,6 +148,10 @@ ARTIFACT_CONTRACTS = {
 
 class NativeEvidenceError(RuntimeError):
     """Raised when native CI evidence is absent, ambiguous, or malformed."""
+
+
+class _BoundedCommandOutputError(RuntimeError):
+    """One child-process stream crossed its fixed in-memory byte bound."""
 
 
 def _native_file_open_flags() -> int:
@@ -314,6 +320,108 @@ def _github_environment() -> dict[str, str]:
     return environment
 
 
+def _terminate_and_reap(process: subprocess.Popen[bytes]) -> None:
+    for stream in (process.stdout, process.stderr):
+        if stream is not None and not stream.closed:
+            stream.close()
+    if process.poll() is None:
+        try:
+            process.terminate()
+        except ProcessLookupError:
+            pass
+        try:
+            process.wait(timeout=1)
+        except subprocess.TimeoutExpired:
+            try:
+                process.kill()
+            except ProcessLookupError:
+                pass
+    process.wait()
+
+
+def _collect_bounded_process_output(
+    process: subprocess.Popen[bytes],
+    *,
+    timeout_seconds: int,
+    stream_byte_limit: int,
+) -> subprocess.CompletedProcess[bytes]:
+    if process.stdout is None or process.stderr is None:
+        raise RuntimeError("bounded process pipes are absent")
+
+    outputs = {
+        process.stdout: bytearray(),
+        process.stderr: bytearray(),
+    }
+    selector = selectors.DefaultSelector()
+    deadline = time.monotonic() + timeout_seconds
+    try:
+        for stream in outputs:
+            selector.register(stream, selectors.EVENT_READ)
+        while selector.get_map():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise subprocess.TimeoutExpired(process.args, timeout_seconds)
+            events = selector.select(remaining)
+            if not events:
+                raise subprocess.TimeoutExpired(process.args, timeout_seconds)
+            for key, _mask in events:
+                stream = key.fileobj
+                output = outputs[stream]
+                read_size = min(
+                    64 * 1024,
+                    stream_byte_limit + 1 - len(output),
+                )
+                if read_size <= 0:
+                    raise _BoundedCommandOutputError
+                chunk = os.read(stream.fileno(), read_size)
+                if not chunk:
+                    selector.unregister(stream)
+                    stream.close()
+                    continue
+                output.extend(chunk)
+                if len(output) > stream_byte_limit:
+                    raise _BoundedCommandOutputError
+
+        remaining = deadline - time.monotonic()
+        if remaining <= 0 and process.poll() is None:
+            raise subprocess.TimeoutExpired(process.args, timeout_seconds)
+        returncode = process.wait(timeout=max(remaining, 0))
+        return subprocess.CompletedProcess(
+            process.args,
+            returncode,
+            stdout=bytes(outputs[process.stdout]),
+            stderr=bytes(outputs[process.stderr]),
+        )
+    finally:
+        selector.close()
+
+
+def _run_bounded_process(
+    command: tuple[str, ...],
+    *,
+    environment: dict[str, str],
+    timeout_seconds: int,
+    stream_byte_limit: int,
+) -> subprocess.CompletedProcess[bytes]:
+    process = subprocess.Popen(
+        command,
+        shell=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=environment,
+        bufsize=0,
+    )
+    try:
+        return _collect_bounded_process_output(
+            process,
+            timeout_seconds=timeout_seconds,
+            stream_byte_limit=stream_byte_limit,
+        )
+    except BaseException:
+        _terminate_and_reap(process)
+        raise
+
+
 def _run_github_cli(
     arguments: tuple[str, ...],
     *,
@@ -343,22 +451,16 @@ def _run_github_cli(
         raise NativeEvidenceError("GitHub CLI path is not exact")
     command = (str(executable), *arguments)
     try:
-        completed = subprocess.run(
+        completed = _run_bounded_process(
             command,
-            check=False,
-            shell=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=timeout_seconds,
-            env=_github_environment(),
+            environment=_github_environment(),
+            timeout_seconds=timeout_seconds,
+            stream_byte_limit=MAX_GITHUB_COMMAND_OUTPUT_BYTES,
         )
+    except _BoundedCommandOutputError as exc:
+        raise NativeEvidenceError(f"{label} output exceeds its byte limit") from exc
     except (OSError, subprocess.SubprocessError) as exc:
         raise NativeEvidenceError(f"{label} could not execute") from exc
-    if (
-        len(completed.stdout) > MAX_GITHUB_COMMAND_OUTPUT_BYTES
-        or len(completed.stderr) > MAX_GITHUB_COMMAND_OUTPUT_BYTES
-    ):
-        raise NativeEvidenceError(f"{label} output exceeds its byte limit")
     if completed.returncode != 0:
         raise NativeEvidenceError(f"{label} refused")
     if completed.stderr:

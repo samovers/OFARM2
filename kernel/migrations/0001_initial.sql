@@ -2336,6 +2336,28 @@ CREATE UNIQUE INDEX derived_materialization_live_key_key
     )
     WHERE superseded_by IS NULL;
 
+CREATE FUNCTION ofarm.enforce_materialization_freshness_transition()
+RETURNS trigger
+LANGUAGE plpgsql VOLATILE PARALLEL UNSAFE SECURITY INVOKER
+SET search_path = pg_catalog, pg_temp
+AS 'BEGIN
+        IF NEW.freshness = OLD.freshness
+           OR (OLD.freshness = ''FRESH'' AND NEW.freshness IN (
+                ''STALE'', ''INVALID''
+           ))
+           OR (OLD.freshness = ''STALE'' AND NEW.freshness = ''INVALID'') THEN
+            RETURN NEW;
+        END IF;
+        RAISE EXCEPTION USING
+            ERRCODE = ''23514'',
+            MESSAGE = ''materialization freshness may only degrade'';
+    END';
+
+CREATE TRIGGER derived_materialization_enforce_freshness_transition
+BEFORE UPDATE OF freshness ON ofarm.derived_materialization
+FOR EACH ROW
+EXECUTE FUNCTION ofarm.enforce_materialization_freshness_transition();
+
 CREATE FUNCTION ofarm.publish_materialization_generation(
     expected_live_materialization_id pg_catalog.text,
     requested_materialization_id pg_catalog.text,
@@ -7687,7 +7709,7 @@ AS 'DECLARE
            OR observed_head_version <> 1
            OR observed_service_identity <> ''ofarm.tenant-postgresql.v1''
            OR observed_provisioning_digest <>
-                ''sha256:56e46233da66f1e6c0e9a99d7cfeb7f7b5bddccf983a6c5554fc8675d3b505ef''
+                ''sha256:210c99c1e1a6b2d4ed2a85941cfd50ed04c282d73a9edd65ed6f702a76561806''
            OR observed_prefix_digest !~ ''^sha256:[0-9a-f]{64}$'' THEN
             differences := pg_catalog.array_append(
                 differences, ''migration 0001 ledger identity differs''
@@ -8926,7 +8948,7 @@ AS 'DECLARE
           INTO observed_structural_catalog_digest
           FROM catalog_entry;
         IF observed_structural_catalog_digest <>
-                ''sha256:6516707817bbda9bd3426e26782a0a4b42e50017082ea7c0f53843024f7f1a7a'' THEN
+                ''sha256:db308216df157bc4e1980c7e0524dbcf52b053f0ddda9ad7075b8cacc3d240f9'' THEN
             differences := pg_catalog.array_append(
                 differences, ''complete tenant catalog fingerprint differs''
             );

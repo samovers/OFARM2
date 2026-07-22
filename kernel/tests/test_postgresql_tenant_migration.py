@@ -5321,7 +5321,7 @@ def test_derived_key_identity_and_typed_source_lanes_are_database_enforced(
 
 
 @pytest.mark.parametrize("role_name", ("ofarm_app", "ofarm_worker"))
-def test_materialization_generations_preserve_creation_provenance(
+def test_materialization_generations_preserve_provenance_and_monotone_freshness(
     tenant_target: TenantTarget,
     authority: TenantAuthority,
     role_name: str,
@@ -5445,6 +5445,49 @@ def test_materialization_generations_preserve_creation_provenance(
             context_snapshot_ref=records_b[2],
             current_state={"generation": "unrelated"},
         )
+
+        application.execute(
+            """
+            UPDATE ofarm.derived_materialization
+            SET freshness = 'STALE'
+            WHERE tenant_id = %s AND materialization_id = %s
+            """,
+            (authority.tenant_id, unrelated_generation_id),
+        )
+        application.execute(
+            """
+            UPDATE ofarm.derived_materialization
+            SET freshness = 'INVALID'
+            WHERE tenant_id = %s AND materialization_id = %s
+            """,
+            (authority.tenant_id, unrelated_generation_id),
+        )
+        for forbidden_freshness in ("STALE", "FRESH"):
+            with pytest.raises(
+                psycopg.errors.CheckViolation,
+                match="freshness may only degrade",
+            ):
+                with application.transaction():
+                    application.execute(
+                        """
+                        UPDATE ofarm.derived_materialization
+                        SET freshness = %s
+                        WHERE tenant_id = %s AND materialization_id = %s
+                        """,
+                        (
+                            forbidden_freshness,
+                            authority.tenant_id,
+                            unrelated_generation_id,
+                        ),
+                    )
+        assert application.execute(
+            """
+            SELECT freshness
+            FROM ofarm.derived_materialization
+            WHERE tenant_id = %s AND materialization_id = %s
+            """,
+            (authority.tenant_id, unrelated_generation_id),
+        ).fetchone() == ("INVALID",)
 
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             with application.transaction():
@@ -5692,7 +5735,7 @@ def test_complete_catalog_fingerprint_refuses_function_constraint_index_policy_a
             assert pristine[0] is True
             assert pristine[2] == 0
             assert pristine[3] == (
-                "sha256:6516707817bbda9bd3426e26782a0a4b42e50017082ea7c0f53843024f7f1a7a"
+                "sha256:db308216df157bc4e1980c7e0524dbcf52b053f0ddda9ad7075b8cacc3d240f9"
             )
         finally:
             migrator.rollback()
@@ -6381,7 +6424,7 @@ def test_readiness_observation_is_complete_after_commit(
     assert row[1] == TENANT_CONTEXT_CONTRACT.digest
     assert row[2] == 0
     assert row[3] == (
-        "sha256:6516707817bbda9bd3426e26782a0a4b42e50017082ea7c0f53843024f7f1a7a"
+        "sha256:db308216df157bc4e1980c7e0524dbcf52b053f0ddda9ad7075b8cacc3d240f9"
     )
     assert row[5] == TENANT_PROVISIONING_SPEC.digest
     assert row[6] == TENANT_SERVICE.identity
