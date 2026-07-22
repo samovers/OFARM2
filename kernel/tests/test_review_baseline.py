@@ -86,7 +86,20 @@ def test_sanitized_environment_removes_ambient_test_and_ofarm_controls(monkeypat
     monkeypatch.setenv("OFARM_ACTIVE_PROFILE", "profile_bad")
     monkeypatch.setenv("OFARM_PG_DSN", "host=wrong.example dbname=wrong")
     admin_dsn = "host=localhost port=5432 dbname=postgres user=ofarm password=ofarm"
+    audit_admin_dsn = (
+        "host=localhost port=5433 dbname=postgres "
+        "user=ofarm password=audit-ofarm"
+    )
+    tenant_provisioning_admin_dsn = (
+        "host=localhost port=5434 dbname=postgres "
+        "user=ofarm password=tenant-ofarm"
+    )
     monkeypatch.setenv("OFARM_PG_ADMIN_DSN", admin_dsn)
+    monkeypatch.setenv("OFARM_SECURITY_AUDIT_PG_ADMIN_DSN", audit_admin_dsn)
+    monkeypatch.setenv(
+        "OFARM_TENANT_PROVISIONING_PG_ADMIN_DSN",
+        tenant_provisioning_admin_dsn,
+    )
     config = baseline._read_json(baseline.CONFIG_PATH)
 
     env = baseline._sanitized_environment(config)
@@ -97,11 +110,38 @@ def test_sanitized_environment_removes_ambient_test_and_ofarm_controls(monkeypat
     assert "PYTHONPATH" not in env
     assert "OFARM_ACTIVE_PROFILE" not in env
     assert env["OFARM_PG_ADMIN_DSN"] == admin_dsn
+    assert env["OFARM_SECURITY_AUDIT_PG_ADMIN_DSN"] == audit_admin_dsn
+    assert env["OFARM_TENANT_PROVISIONING_PG_ADMIN_DSN"] == \
+        tenant_provisioning_admin_dsn
     assert env["OFARM_PG_DSN"] == baseline._derive_test_dsn(
         admin_dsn, "ofarm_kernel_test")
     assert "wrong.example" not in env["OFARM_PG_DSN"]
     assert env["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] == "1"
     assert env["PYTHONHASHSEED"] == "0"
+
+
+def test_provisioning_services_require_distinct_postgresql_system_identifiers():
+    primary = {
+        "available": True,
+        "version": "17.10",
+        "rawVersion": "17.10 (Debian 17.10-1.pgdg13+1)",
+        "systemIdentifier": "100",
+        "database": "postgres",
+    }
+    tenant = dict(primary, systemIdentifier="200")
+    audit = dict(primary, systemIdentifier="300")
+
+    assert baseline._provisioning_system_identifier_separation_reasons(
+        primary, tenant, audit
+    ) == []
+    assert baseline._provisioning_system_identifier_separation_reasons(
+        primary, tenant, tenant
+    ) == [
+        "primary, tenant, and audit PostgreSQL system identifiers are not distinct"
+    ]
+    assert baseline._provisioning_system_identifier_separation_reasons(
+        primary, tenant, dict(audit, rawVersion="17.10 other build")
+    ) == ["primary, tenant, and audit PostgreSQL build versions differ"]
 
 
 def test_malformed_admin_dsn_emits_unavailable_evidence(tmp_path):
@@ -129,8 +169,12 @@ def test_malformed_admin_dsn_emits_unavailable_evidence(tmp_path):
         (output / "review-baseline-evidence.json").read_text(encoding="utf-8")
     )
     assert evidence["run"]["outcome"] == "failed"
-    assert evidence["environment"]["postgresql"]["admin"]["available"] is False
-    assert evidence["environment"]["postgresql"]["testStore"]["available"] is False
+    postgres = evidence["environment"]["postgresql"]
+    assert postgres["admin"]["available"] is False
+    assert postgres["testStore"]["available"] is False
+    assert isinstance(postgres["tenantAuditSystemIdentifiersDistinct"], bool)
+    assert postgres["testAndProvisioningSystemIdentifiersPairwiseDistinct"] is False
+    assert all("Lineage" not in key for key in postgres)
     preflight = next(
         step for step in evidence["steps"]
         if step["name"] == "environment-preflight"

@@ -29,10 +29,12 @@ environment so imported profile-test assertions cannot be stripped.
 
 ## One complete command
 
-In the pinned environment, set only `OFARM_PG_ADMIN_DSN`. The runner derives
-the fixed `ofarm_kernel_test` Store DSN from that verified connection route,
-so an independently supplied test DSN cannot point tests at another server.
-One complete Kernel run is:
+In the pinned environment, set `OFARM_PG_ADMIN_DSN`,
+`OFARM_TENANT_PROVISIONING_PG_ADMIN_DSN`, and
+`OFARM_SECURITY_AUDIT_PG_ADMIN_DSN` to three independent PostgreSQL 17
+clusters. The runner derives the fixed `ofarm_kernel_test` Store DSN from the
+primary verified connection route, so an independently supplied test DSN
+cannot point tests at another server. One complete Kernel run is:
 
 ```bash
 .review-venv/bin/python conformance/run_review_baseline.py run \
@@ -45,7 +47,8 @@ hostile regression cases, malformed-input and fail-closed cases, profile
 engineering bridges, and unit tests. No `-k`, marker, or ambient pytest option
 can narrow the selection. `PYTEST_ADDOPTS`, `PYTEST_PLUGINS`,
 `PYTHONOPTIMIZE`, `PYTHONPATH`, and ambient `OFARM_*` values are scrubbed;
-only the explicit admin DSN is accepted, and the Store DSN is derived from it.
+only the three explicit admin DSNs are accepted, and the Store DSN is derived
+from the primary one.
 Plugin autoload is disabled, and hash seed, time zone, locale, and optimization
 level are fixed.
 

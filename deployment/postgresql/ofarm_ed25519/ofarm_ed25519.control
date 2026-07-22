@@ -1,0 +1,7 @@
+comment = 'OFARM verification-only strict Ed25519 primitive'
+default_version = '1.0'
+module_pathname = '$libdir/ofarm_ed25519'
+superuser = true
+trusted = false
+relocatable = false
+schema = 'ofarm_crypto'

@@ -5,7 +5,16 @@ the gate pipeline + the materializer, with the two governed outputs and the
 generated Capability Manifest. Implementation and conformance packaging
 profile — not OFARM law; claims record-keeping completeness only.
 
-## Run it (no canonical-repository knowledge required)
+## Legacy M1 development runner
+
+This section runs the pre-tenancy M1 prototype against a disposable `public`
+schema. It is not an issue #174 tenant or security-audit deployment path and
+must never be pointed at either provisioned service. Its historical startup
+DDL remains quarantined here until #173 replaces the ambient Store with the
+tenant UnitOfWork integration. The #174 production database boundary uses only
+the external numbered runners and independent read-only structural observations
+documented in
+`deployment/postgresql/README.md`.
 
 For the exact evidence-only review environment and the single complete Kernel
 test command, use `conformance/REVIEW_BASELINE.md`. That Linux x86_64 baseline
@@ -24,7 +33,7 @@ PGBIN=$(dirname "$(which initdb)")        # e.g. /opt/homebrew/opt/postgresql@17
 "$PGBIN/pg_ctl" -D .pgrun/data -o "-p 54317 -k $(pwd)/.pgrun -c listen_addresses=''" -l .pgrun/pg.log start
 "$PGBIN/createdb" -h "$(pwd)/.pgrun" -p 54317 -U ofarm ofarm_kernel
 
-# 3. the API (migrates + bootstraps the SI context spine on startup)
+# 3. the legacy development API (installs its disposable prototype schema)
 export OFARM_DEPLOYMENT_IMAGE_DIGEST="$VERIFIED_OFARM_IMAGE_DIGEST"
 .venv/bin/uvicorn --factory kernel.api:create_app --port 8800
 
@@ -69,7 +78,7 @@ is a complete `ExecutionRecordPayload` per `contracts/core/`.
 
 | Module | Role |
 |---|---|
-| `schema.sql` / `schema_posture.py` | DDL plus startup-only exact source digest, canonical live-catalog identity, and transaction-posture verification; no per-request schema probes |
+| `schema.sql` / `schema_posture.py` | Legacy M1 disposable-schema DDL and posture verification; not an issue #174 production migration or startup path |
 | `contracts.py` | contract registry: every write validated against `contracts/` (canonical lane) or `contracts/drafts_reference/` (draft lane, D16) |
 | `profile_runtime.py` | active profile runtime descriptor loader: validates profile-local runtime inputs fail-closed while keeping tenant/demo binding outside the descriptor |
 | `store.py` | the append-only truth store; edges, gate log, idempotency, in-force queries, reachability check |

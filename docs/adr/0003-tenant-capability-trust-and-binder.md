@@ -1,12 +1,14 @@
 # ADR 0003: TenantCapability trust and database binder
 
-**Status:** Proposed for architecture review
+**Status:** Accepted for implementation
 
 **Decision class:** Package-local security and implementation architecture
 
 **Date:** 2026-07-19
 
 **Decision issue:** GitHub #200
+
+**Accepted proposal head:** `a721a7d3a51feb07e09abfd00d237b7d1a72afd3`
 
 **Parent architecture:** GitHub #169 and ADR 0001
 
@@ -18,9 +20,9 @@
 
 This ADR does not amend OFARM law, promote a contract, activate a profile, or
 change a capability claim. It selects the production trust model needed to
-finish ADR 0001's hardened tenant binder. Until this ADR is accepted and its
-implementation evidence passes, production tenant binding remains unavailable
-and fails closed.
+finish ADR 0001's hardened tenant binder. It is accepted for implementation,
+but production tenant binding remains unavailable and fails closed until its
+implementation evidence passes.
 
 ## Context
 
@@ -863,8 +865,8 @@ This control LOGIN is an explicit signing-authority trust root: possession can
 register an attacker public key and make it database-active. Its credential is
 separate, hardware-authenticated, time-bounded for transitions, dual-approved
 operationally, and fully audited with expected-head receipts. Those controls do
-not turn its compromise into an RLS-protected event; architecture acceptance
-must accept that residual privileged boundary.
+not turn its compromise into an RLS-protected event. The accepted architecture
+explicitly includes that residual privileged boundary.
 
 ### Activation and cryptoperiod
 
@@ -1612,9 +1614,9 @@ through one bounded native function.
   [`PREPARE TRANSACTION`](https://www.postgresql.org/docs/17/sql-prepare-transaction.html)
   explains why V1 disables prepared transactions for bound work.
 
-## Acceptance conditions for this ADR
+## Accepted scope
 
-Architecture review must explicitly accept:
+GitHub #200 independently accepted:
 
 1. Ed25519 and the verification-only in-database extension trust surface;
 2. non-exportable external private-key custody, strict DER-to-raw-key
@@ -1629,14 +1631,13 @@ Architecture review must explicitly accept:
 7. the #172/#174/#173 implementation ownership split and hostile evidence
    plan.
 
-Acceptance of this documentation authorizes implementation work only. It does
+This acceptance authorizes implementation work only. It does
 not make the implementation complete, close #174, enable production binding,
 or establish production readiness.
 
 ## Validation for this documentation decision
 
-Before every commit and after inserting the concrete decision-issue number,
-run:
+The acceptance transition is validated with:
 
 ```text
 python3 conformance/ofarm_pkg_contract_check.py
@@ -1646,9 +1647,7 @@ git diff --cached --check
 git status --short
 ```
 
-The review must also prove that the change is documentation-only, every new
-relation/role is conditionally classified in ADR 0001, proposed text does not
-authorize implementation before acceptance, all local links resolve, and the
-#172/#173/#174/#192/#193 owner accounting remains exact. The ADR cannot move to
-accepted status until its concrete GitHub decision issue records independent
-architecture and security acceptance.
+The accepted review confirmed that the change was documentation-only, every new
+relation and role was classified in ADR 0001, all local links resolved, and the
+#172/#173/#174/#192/#193 owner accounting remained exact. GitHub #200 records
+the independent architecture and security acceptance.

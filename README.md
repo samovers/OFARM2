@@ -37,6 +37,7 @@ profile_si_ffs/   PROFILE.md + 6 descriptor-bootstrapped validated instances (ac
 profile_nl_go_glmc7_2026/  narrow Netherlands GO + GLMC 7 2026 profile/source slice
 views/            VIEWS.md pointer to profile-local SI view material
 kernel/           the M1 implementation: store, gates, materializer, views, manifest, API, conformance tests
+deployment/       external PostgreSQL provisioning, immutable tenant/audit migrations, and read-only readiness
 conformance/      ofarm_pkg_contract_check.py + CONFORMANCE.md + fixtures/gate_sequencing/ (9 inherited)
                   + evidence/ (executed platform-MVP suite results)
 reference/        REFERENCE_MANIFEST.json + law/ (4) + rfcs/ (14) + research/ (1) + companions/

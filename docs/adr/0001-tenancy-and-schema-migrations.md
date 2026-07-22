@@ -6,10 +6,9 @@
 - Parent: GitHub #167
 - Depends on: GitHub #168
 - Implementation coordination: GitHub #172, #173, #174, and #192
-- Proposed TenantCapability trust-model refinement: ADR 0003. Until separately
-  accepted, it authorizes no implementation change. If accepted, it refines
-  the cryptographic transport and key lifecycle without transferring the
-  implementation ownership below.
+- Accepted TenantCapability trust-model refinement: ADR 0003, accepted through
+  GitHub #200. It refines the cryptographic transport and key lifecycle without
+  transferring the implementation ownership below.
 - Additional prerequisite for #174: GitHub #171. GitHub #184 follows the
   neutral structural carrier supplied by #174 and owns semantic reference
   kind/cardinality enforcement; #174 may not claim that later semantic closure.
@@ -125,7 +124,7 @@ and tenant-qualified keys.
 | kernel_edge | Tenant-owned | The edge, source, and destination share tenant_id. Both endpoints have composite foreign keys. The edge carries the batch that emitted it. Promotion reachability additionally requires edge, trace, and emitted record to share one batch. |
 | kernel_gate_log | Operational metadata, tenant-scoped and durable | Every entry carries tenant_id, batch identity, and request identity. It remains append-only audit evidence and is not disposable logging. |
 | kernel_idempotency | Operational metadata, tenant-scoped and durable | Its unique command identity is (tenant_id, authenticated_principal_ref, governed_operation, caller_key). Its durable result reference stays in the same tenant. |
-| derived_materialization | Derived/cache | All keys start with tenant_id. Basis, snapshot, context, and supersession references are same-tenant composite references. Deleting it must not delete its proof or source truth. |
+| derived_materialization | Derived/cache | All keys start with tenant_id. Basis, snapshot, context, and supersession references are same-tenant composite references. At most one unsuperseded row exists for an exact materialization key. Regeneration inserts a new generation and atomically supersedes the prior live generation; generation content and batch provenance are fixed for each row's lifetime. Application and worker roles may directly degrade `freshness` only along `FRESH -> STALE`, `FRESH -> INVALID`, or `STALE -> INVALID`; only hardened generation publication may create a new `FRESH` generation, and supersession is available only through that function. Deleting cache state must not delete its proof or source truth. |
 | derived_dependency_index | Derived/cache | Dependency sources and materialization keys are tenant-qualified. It may not invalidate or reveal another tenant. Polymorphic references become typed and constrained rather than unverified text. |
 | reference_snapshot_data | Derived/cache, with a rebuildability precondition | Primary identity is (tenant_id, snapshot_ref, data_family), with a same-tenant snapshot reference. It is deletable only after durable source bytes and deterministic rebuild are proven; #171 and #185 own that closure. |
 | runtime_trace | Operational metadata, tenant-scoped and durable | Primary identity is (tenant_id, trace_id). Every trace carries its write-batch identity, remains append-only, and is not treated as a disposable cache. |
@@ -142,15 +141,23 @@ schemas and other repository files are global inputs, not database relations.
 | principal_binding | Globally governed immutable authorization versions | One immutable candidate version maps the exact-policy (issuer, subject) bytes to (tenant_id, party_ref), pins the immutable tenant-registry digest and exact ACTIVE Party record identity/schema/payload digests, and carries an equality-policy identity, version identity/digest, and validity metadata. Repeated principal keys are expected; no mutable lifecycle state or partial ACTIVE uniqueness lives here. It is the only initial global authority relation allowed to reference a tenant-owned Party. |
 | principal_binding_lifecycle | Globally governed append-only authorization authority | A digest-chained stream of ACTIVATE, REVOKE, EXPIRE, and SUPERSEDE acts names immutable binding versions, the prior lifecycle head, effective and decision data, accountable control identity, and reason. These acts, together with immutable versions, are the sole source for current and historical binding state. |
 | principal_binding_current | Optional derived/disposable global control projection and reservation | A unique (equality_policy, issuer, subject) row points to the computed active version and lifecycle head, or records the computed inactive state. It serializes transitions and accelerates lookup, but is rebuildable and never authoritative. |
-| tenant_binder_instance | Globally governed immutable binder installation identity | One fresh-provisioning singleton stores a random installation UUID, exact derived binder audience, creation evidence, and canonical row digest. It is not recovery-continuity proof. Direct DML is forbidden. If proposed ADR 0003 is not separately accepted, this relation is not authorized. |
-| tenant_capability_verification_key | Globally governed immutable public-key candidates | Stores only exact Ed25519 public material, content-derived key identity, binder audience, accepted KMS/HSM evidence, candidate identity/time, and canonical row digest. Existence is not authority. If proposed ADR 0003 is not separately accepted, this relation is not authorized. |
-| tenant_capability_key_lifecycle | Globally governed append-only capability-key and admission authority | A digest-chained stream of ACTIVATE, ROTATE, CLOSE_ADMISSION, REVOKE, and RESUME_ADMISSION acts plus ADR 0003's fixed database-time rules is the sole capability-key and binder-admission authority. If proposed ADR 0003 is not separately accepted, this relation is not authorized. |
-| tenant_capability_keyring | Disposable global capability-key reservation/projection | One row per binder audience is a row-lock fence and projected current key/admission head. It cannot provide advisory-lock fairness or authorize independently of the complete lifecycle fold and fixed time rules. If proposed ADR 0003 is not separately accepted, this relation is not authorized. |
+| tenant_binder_instance | Globally governed immutable binder installation identity | One fresh-provisioning singleton stores a random installation UUID, exact derived binder audience, creation evidence, and canonical row digest. It is not recovery-continuity proof. Direct DML is forbidden. |
+| tenant_capability_verification_key | Globally governed immutable public-key candidates | Stores only exact Ed25519 public material, content-derived key identity, binder audience, accepted KMS/HSM evidence, candidate identity/time, and canonical row digest. Existence is not authority. |
+| tenant_capability_key_lifecycle | Globally governed append-only capability-key and admission authority | A digest-chained stream of ACTIVATE, ROTATE, CLOSE_ADMISSION, REVOKE, and RESUME_ADMISSION acts plus ADR 0003's fixed database-time rules is the sole capability-key and binder-admission authority. |
+| tenant_capability_keyring | Disposable global capability-key reservation/projection | One row per binder audience is a row-lock fence and projected current key/admission head. It cannot provide advisory-lock fairness or authorize independently of the complete lifecycle fold and fixed time rules. |
 | tenant_binding_context | Protected disposable transaction operational metadata | An UNLOGGED migration-owned relation stores the one-use challenge and verified TenantBinding for exactly one database-derived backend identity and full xid8. Exact backend-start/full-transaction matching makes a physically retained row unusable after commit, rollback, backend restart, or pool reuse. Only hardened functions may read or write it; the application role has no table privileges. |
+| runtime_content_blob | Globally governed immutable content carrier | Stores exact content-addressed package/reference bytes. Application and worker roles may read but cannot publish these rows. A row is inert until a sealed tenant RuntimeBundle names its exact digest and byte length. |
+| runtime_tenant_content_blob | Tenant-scoped immutable content carrier | Stores exact content-addressed bytes for tenant runtime selection under forced RLS. Existence is not runtime authority; only a sealed RuntimeBundle component can select a row. |
+| runtime_bundle | Tenant-scoped immutable provenance root | Stores the exact canonical RuntimeBundle identity document under its full digest. Ordinary application and worker roles have read-only access. The dedicated startup publisher is the only provisioned non-owner role that can invoke the closed atomic publication function; direct INSERT is denied. |
+| runtime_bundle_component | Tenant-scoped immutable bundle membership | Stores exactly the component identities selected by one RuntimeBundle. The atomic publisher installs the complete set with the bundle row. No runtime role can append a component before or after a governed batch references the bundle. |
 | operational_security_event | Database-global operational security metadata, explicitly non-tenant | Append-only, bounded pre-tenant failure events plus audit-access, retention, and declared-gap maintenance events for this lane. It carries no tenant_id, tenant_ref, Party/farm/role identity, governed batch, knowledge position, or request-supplied attribution. It lives only in the separately provisioned audit PostgreSQL service's protected `ofarm_security` schema and is never read as tenant history. |
-| operational_security_quota_bucket | Disposable non-tenant operational security control state | One fixed database-time bucket per provisioned producer/component records accepted and overflow counts plus marker state. Only hardened audit functions mutate it. It contains no request, tenant, principal, correlation, or evidence data, cannot authorize anything, and is deleted after its bucket is closed and the corresponding overflow marker commits. |
+| operational_security_access_clock_high_water | Durable non-tenant authorization control state | One owner-only bigint sequence stores the greatest database wall-clock microsecond observed by the audit-access protocol. A function-scoped session advisory mutex serializes observation and is released before the caller regains control. Advancement is nontransactional, so a rejected or rolled-back read cannot erase an observed expiry crossing. Normal APIs never decrease it; an observed clock regression fails closed. It contains no request, tenant, principal, correlation, or evidence data. |
+| operational_security_quota_bucket | Disposable non-tenant operational security control state | One fixed database-time bucket per provisioned producer/component records accepted and overflow counts plus marker state. Only hardened audit functions mutate it. It contains no request, tenant, principal, correlation, or evidence data and cannot authorize anything. |
+| operational_security_quota_high_water | Durable bounded non-tenant operational security control state | At most one row for each of the two fixed producer/component pairs records the latest closed quota minute. It survives bucket deletion and makes a backward wall-clock step fail closed instead of recreating a closed bucket. It contains no request, tenant, principal, correlation, or evidence data and cannot authorize anything. |
+| operational_security_event_identity_lock | Fixed non-tenant operational mutex state | Exactly 256 migration-created lock stripes serialize same-ID append attempts before database time and quota selection. The table stores no event ID, fingerprint, request, tenant, principal, correlation, or evidence data; a stripe collision only reduces concurrency and cannot authorize anything. |
+| operational_security_overflow_identity_receipt | Fixed bounded non-tenant overflow retry state | Exactly 256 migration-created receipt slots for each of the two fixed producer/component pairs retain an exact overflow event ID, its append fingerprint, bucket, and retention bound. A slot collision makes the affected bucket `COUNT_UNKNOWN` instead of evicting exact evidence. The relation has no tenant, principal, request, raw correlation, or authorization data and cannot grow beyond 512 rows. |
 | schema_migration | Database-global operational metadata | Append-only ledger of version, filename, SHA-256, application/release identity, and applied time. Application access is read-only for readiness. |
-| governed_write_batch | Tenant-owned | Primary identity is (tenant_id, batch_id). It anchors the transaction's command identity and the records, edges, traces, gate entries, and receipts emitted by that command. |
+| governed_write_batch | Tenant-owned | Primary identity is (tenant_id, batch_id). It anchors the transaction's command identity and the records, edges, traces, gate entries, and receipts emitted by that command. Runtime insertion requires authenticated_principal_ref to equal the protected transaction binding's party_ref; it is not caller-selected attribution. |
 | kernel_record_reference | Tenant-owned relational enforcement carrier | Normalizes governed references extracted from immutable JSONB payloads without changing those payloads. Owner and tenant targets use composite tenant keys; global-content targets use a distinct constrained lane. |
 
 Any later relation must be classified before its migration is accepted. A future
@@ -253,7 +260,9 @@ and retention calculation are migration-checksummed constants/functions, not
 mutable or unclassified policy tables. V1 names redaction policy
 `CORRELATION_HMAC_ONLY_V1` and retention policy `SECURITY_DIAGNOSTIC_30D_V1`.
 Its sole initial HMAC domain is `OFARM_PRETENANT_CORRELATION_V1` with key version
-`1`. The database sets `purge_after = observed_at + interval '30 days'`.
+`1`. The database sets `purge_after` to exactly 2,592,000 seconds after
+`observed_at`; this duration is independent of the session time zone and
+daylight-saving transitions.
 Changing a domain, accepted key version, or either policy requires a reviewed
 forward migration and applies only to newly appended rows; it never rewrites
 existing evidence.
@@ -261,9 +270,13 @@ existing evidence.
 `SECURITY_DIAGNOSTIC_30D_V1` is an exact live/query-visible retention policy,
 not a claim of physical erasure from PostgreSQL heap pages, local WAL, storage
 snapshots, or retired media at the same instant. Every bounded query and export
-function applies `purge_after` strictly greater than its database-observed
-current time before any other filter, so an expired row is undisclosable even if
-the bounded purge job lags. Because
+first requires its committed access intent to be unexpired at the freshly
+observed database time. Target-event membership is frozen when that intent is
+created: only rows whose immutable `purge_after` is strictly later than the
+intent's fixed `access_expires_at` can appear. A backward wall-clock step during
+reuse therefore cannot re-admit a row excluded from that page, and an event is
+undisclosable for the entire permitted reuse window before its retention
+deadline even if the bounded purge job lags. Because
 V1 stores no raw identity/evidence and destroys the correlation key version by
 the last stamped deadline, delayed physical remnants cannot be correlated
 through this system. A requirement for physical-byte erasure at 30 days needs a
@@ -330,20 +343,45 @@ producer/component and a database-time bucket. At a threshold it first commits
 `OVERFLOW_STARTED`, then increments only the bounded bucket counter instead of
 appending individual events, and finally the control procedure commits
 `OVERFLOW_ENDED` with a count or `COUNT_UNKNOWN`; there is no silent sampling.
+Every event writer takes a protected relation-level writer lock before deriving
+its database time or bucket. Overflow close takes the mutually exclusive
+transaction-level writer barrier before checking the current bucket and holds
+it through the end marker, a durable high-water advance, and bucket deletion. A
+writer admitted before close must therefore commit before its old bucket can
+close. A writer admitted after close refuses any derived bucket at or below the
+pair's closed high-water, so a backward wall-clock step cannot recreate the old
+key. The high-water relation is bounded to the two fixed producer/component
+pairs and is not a general clock, ordering, continuity, or recovery service.
 Connection limits, statement timeouts, reserved marker capacity, service-level
 CPU/storage limits, and growth alerts are provisioned independently of tenant
 traffic. A compromised producer cannot select or reset its bucket. Exhausting
 the audit service is an accepted denial/readiness availability risk, never an
 authorization bypass or tenant-storage exhaustion path.
 
-Once a bucket is in overflow posture, individual submitted event IDs are
-deliberately not durable. An acknowledged overflow call increments the bounded
-counter once. If its commit acknowledgement is ambiguous, the producer must not
-retry it as a countable append; the #192 control path atomically and idempotently
-sets that derived bucket to `COUNT_UNKNOWN`. The closing marker then makes no
-exact-count claim. This is the explicit exception to per-event retry because the
-individual event was intentionally aggregated; it cannot cause a silent double
-count presented as exact evidence.
+Before policy, database-time, or quota evaluation, an append hashes all 16
+canonical UUID bytes and maps the first SHA-256 octet to one of 256 fixed
+migration-owned mutex rows, takes that row `FOR UPDATE`, and rechecks both the
+event relation and fixed overflow receipts while holding the lock through
+transaction end. Append transactions must use `READ COMMITTED`; the append
+function refuses every fixed-snapshot isolation level before acquiring the
+mutex or reading either outcome relation. Each post-wait recheck can therefore
+observe the preceding same-ID transaction's committed event or receipt.
+Concurrent same-ID attempts therefore cannot split one logical event between an
+individual row in one minute and an exact overflow count in another. No event
+ID or fingerprint is persisted in the mutex table; unrelated IDs sharing a
+stripe can only wait for one another.
+
+An overflow result is exact only when its event ID and full append fingerprint
+occupy the corresponding fixed receipt slot for that producer. An equal retry
+returns the original overflow bucket without incrementing it; a changed retry
+refuses. A different ID whose derived slot is occupied never evicts the older
+exact receipt: the current bucket becomes `COUNT_UNKNOWN` and its now-unneeded
+receipts are cleared. Exact receipts survive bucket close through the matching
+`OVERFLOW_ENDED` marker's retention lifetime and are cleared only after that
+exact marker is gone. Control-declared unknown posture clears the affected
+receipts immediately. The fixed 512-row grid therefore preserves exact retry
+semantics when it has evidence and otherwise makes uncertainty explicit without
+unbounded event-identity storage.
 
 #### Read, retention, replica, and backup boundary
 
@@ -351,18 +389,67 @@ Ingest and reader roles receive no table SELECT or COPY privilege. A dedicated
 security-operations service first commits an `AUDIT_ACCESS` intent through its
 separate audit-control transaction, binding the closed purpose, exact bounded
 query function, every argument, database-observed data cut, cursor/page, row and
-byte ceiling, and a five-minute expiry. Only then may its distinct reader
-session call that migration-owned function with the committed access event ID;
-the function verifies the exact scope fingerprint before returning that one
-bounded page. Rollback of the read cannot erase the already-committed access
-intent. Reuse can return only the same cut/page/ceiling and cannot widen unique
-data; a new page or later cut needs a new intent. Function results can still be
-copied or repeatedly retrieved, so the reader is explicitly a privileged,
-export-capable boundary within the precommitted bound, not a no-exfiltration
-role. Direct table or unbounded extraction is unsupported. A break-glass export
-requires a separately provisioned, time-bounded export LOGIN/capability, dual
-approval, an exact purpose and cumulative result bound, and a committed
-`AUDIT_ACCESS` event; it never grants tenant access or digest-key access.
+byte ceiling, and a five-minute expiry. The intent also persists a PostgreSQL
+MVCC snapshot. The audit-control transaction must use `READ COMMITTED`;
+`commit_audit_access_intent` refuses higher isolation before capturing either
+value, so a caller cannot combine a later wall-clock cut with a transaction
+snapshot frozen earlier. After validating the closed request, the function
+takes the same migration-owned `SHARE ROW EXCLUSIVE` event-writer barrier used
+by retention and overflow close. Previously admitted writers finish before a
+fresh snapshot and wall-clock cut are captured; later writers wait until the
+intent transaction commits. Access-clock observation is serialized with one
+provisioning-owned, function-scoped session advisory mutex. The helper releases
+that mutex before the outer caller regains control, so a reader, exporter, or
+controller cannot retain it merely by keeping its transaction open. The audit
+schema owner can execute only no-argument take/release wrappers whose fixed key
+is embedded by provisioning. A separate NOLOGIN/NOINHERIT access-clock lock
+owner with no members or role-assumption path owns those wrappers and alone has
+the exact raw session-lock and unlock grants. The audit schema owner, migrator,
+and runtime logins have no raw advisory-lock authority. The helper
+advances an owner-only bigint sequence to the greatest observed database-time
+microsecond. Sequence advancement is not rolled back with its calling
+transaction. A new intent refuses whenever current database time is behind
+that high-water mark. Every event stores its top-level `xid8`, and the
+bounded reader intersects the timestamp cut with `pg_visible_in_snapshot`.
+A transaction ordered before the cut is visible in the persisted snapshot, and
+a transaction ordered after the cut is outside both boundaries. The snapshot
+is internal control metadata and is not exposed in the event-report result.
+Only then may its distinct reader session call that migration-owned function
+with the committed access event ID; the function verifies the exact scope
+fingerprint before returning that one bounded page. Rollback of the read cannot
+erase either the already-committed access intent or an access-clock advance.
+Both normal query and break-glass export compare expiry with the non-regressing
+high-water mark. Once an observation reaches the intent deadline, that intent
+remains expired; a later backward wall-clock step cannot resurrect it. An
+observed clock regression before expiry also refuses rather than extending the
+authorization window. PostgreSQL has no independent monotonic elapsed-time
+authority here, so V1 explicitly trusts the database wall clock not to pass an
+intent deadline and roll back before any access-protocol observation occurs.
+Such an unobserved excursion cannot be distinguished from ordinary time by the
+database. #192 owns external clock-health fencing if deployment cannot satisfy
+that trusted operating-system prerequisite.
+Reuse can return only the same cut/page/ceiling and cannot widen unique data. Retention cannot reveal a
+replacement row: `purge_after` is constrained to exactly
+`observed_at + 2,592,000 seconds`, target eligibility requires `purge_after` later than
+the intent's fixed `access_expires_at`, and the page is ordered by `observed_at`
+descending before `LIMIT`, independent of wall-clock reversal or whether
+physical deletion has run. A new page or later cut needs a new intent. Function
+results
+can still be copied or repeatedly retrieved, so the reader is explicitly a
+privileged, export-capable boundary within the precommitted bound, not a
+no-exfiltration role. Direct table or unbounded extraction is unsupported. A
+break-glass export
+requires a separately provisioned, time-bounded export LOGIN, dual approval, an
+exact purpose and cumulative result bound, and a committed `AUDIT_ACCESS`
+event; it never grants tenant access or digest-key access. Normal provisioning
+installs only the NOLOGIN `ofarm_security_audit_export` capability and
+intentionally creates no break-glass export LOGIN or membership. #192 may open
+an approved temporary export window, but the presence of that LOGIN or its
+membership intentionally makes the audit lane structurally incompatible. #192
+must independently treat the window as runtime-unhealthy. After the bounded
+export, the temporary LOGIN must be dropped and the exact normal role/membership
+posture reverified before structural compatibility can return. #192 owns that
+operational window, its approvals, audit acts, credential handling, and closure.
 
 Rows are immutable to ingest and reader roles. V1 uses one ordinary relation;
 the append path performs no runtime partition or other DDL. The append function
@@ -404,6 +491,35 @@ silently relabelled global. #171 must publish the placement map and equality
 rules before #174 cuts 0001; #174 refuses to guess. This prerequisite changes no
 manifest, active artifact set, profile activation, contract, or capability
 claim.
+
+RuntimeBundle publication is a startup-only capability. Provisioning creates
+the NOLOGIN `ofarm_runtime_bundle_publisher` capability and one separately
+credentialed `ofarm_runtime_bundle_control_login` with only inherited,
+non-assumable membership (`INHERIT TRUE`, `SET FALSE`, `ADMIN FALSE`). The
+trusted operating-system startup process uses that login after it has built and
+validated the Python RuntimeBundle. Application and worker roles cannot execute
+the publication function and have no INSERT privilege on `runtime_bundle` or
+`runtime_bundle_component`.
+
+`publish_runtime_bundle` receives the tenant, expected full digest, and exact
+identity document. It accepts only the closed V1 document shape, a non-empty
+bounded component array in canonical `(role, logicalRef)` order, closed roles,
+canonicalization and placement values, canonical bounded byte lengths, and
+content digests whose exact bytes already exist in the appropriate immutable
+carrier. It reconstructs the canonical identity bytes itself, compares their
+SHA-256 digest with the expected digest, locks the immutable tenant-registry
+row, and inserts the bundle plus its complete component set in one statement
+and transaction. An exact replay is an idempotent no-op; unequal reuse refuses.
+
+The bundle row's existence is its immutable seal. There is no mutable sealed
+flag, draft bundle state, hot reload, or same-process defensive machinery. A
+governed batch has a composite foreign key to that row, which cannot become
+visible without the same publication statement also completing every component
+insert. Because no non-owner role has direct component INSERT, membership
+cannot be appended after publication or first use. Complete semantic validation
+remains in the already trusted Python publisher boundary accepted by #171;
+arbitrary code execution in that process, database-owner/migrator use, or DBA
+compromise remains outside the ordinary-role SQL threat boundary.
 
 ## Tenant identity and trusted context
 
@@ -526,13 +642,13 @@ versions, lifecycle acts, or current projection.
 
 ### Unforgeable transaction binding
 
-In production, #172's authentication boundary verifies issuer, audience,
-signature, algorithm, expiry, not-before time, key identity, and the exact
-(issuer, subject) identity under the binding version's equality policy. It does
-not pass a raw tenant identifier to SQL. After #173 begins one UnitOfWork on one
-checked-out backend, binding proceeds as follows:
+In production, #172's authentication boundary verifies the external OIDC
+token's issuer, audience, signature, algorithm, expiry, not-before time, key
+identity, and the exact (issuer, subject) identity under the binding version's
+equality policy. It does not pass a raw tenant identifier to SQL. After #173
+begins one UnitOfWork on one checked-out backend, binding proceeds as follows:
 
-If separately accepted, ADR 0003 freezes the TenantCapability transport,
+Accepted ADR 0003 freezes the TenantCapability transport,
 verification-material, bounded validity, rotation, revocation, and compromise-
 response choices used by this flow. It does not move the boundary: #172 owns
 authentication, principal-lifecycle integration, capability minting, and
@@ -549,12 +665,13 @@ PostgreSQL tests; and #173 owns the same-backend UnitOfWork sequence.
    lifecycle-head act identity and digest, tenant_id, tenant-registry digest,
    party_ref, pinned Party record-kind identity, record identity, schema digest,
    and payload digest,
-   issued/expiry times, and a unique nonce. The capability is signed by a key
-   unavailable to the application database role.
-3. A schema-qualified SECURITY DEFINER binder with a fixed trusted search_path
-   verifies the signature, audience, expiry, backend/transaction challenge,
-   nonce, exact immutable version bytes and digest, and the authoritative
-   lifecycle head and currentness reconstructed from immutable acts. It may use
+   issued/expiry times, and a unique nonce. The capability is signed
+   by a key unavailable to the application database role.
+3. #174's hardened binder independently verifies the exact signed capability
+   with the accepted database verifier and enforces the audience, expiry,
+   backend/transaction challenge, nonce, exact immutable version bytes and
+   digest, and the authoritative lifecycle head and currentness reconstructed
+   from immutable acts. The binder may use
    `principal_binding_current` to locate a candidate only when its version and
    head exactly equal that reconstruction; a missing or mismatched projection
    causes refusal or a separate privileged deterministic rebuild, never
@@ -573,13 +690,18 @@ PostgreSQL tests; and #173 owns the same-backend UnitOfWork sequence.
    makes the physical row unusable; a capability from another transaction or
    backend cannot be reused.
 
+Accepted ADR 0003 selects those previously deferred choices and preserves the
+ownership split above. Production binding remains fail-closed and unavailable
+until the required #172, #173, and #174 implementation and evidence pass.
+
 The bootstrap path is explicit. `tenant_registry`, `principal_binding`,
 `principal_binding_lifecycle`, `principal_binding_current`,
 `tenant_binding_context`, and `schema_migration` are non-tenant control or
-operational relations and are not given tenant RLS policies. They are protected
-by ownership, relation privilege denial, and migration-checksummed hardened
-functions. Every tenant-bearing relation, including the Party-bearing
-`kernel_record`, remains under enabled and forced RLS.
+operational relations and are not
+given tenant RLS policies. They are protected by ownership, relation privilege
+denial, and migration-checksummed hardened functions. Every tenant-bearing
+relation, including the Party-bearing `kernel_record`, remains under enabled and
+forced RLS.
 
 The hardened binder executes as `ofarm_binder`, provisioned `NOSUPERUSER`,
 `NOCREATEDB`, `NOCREATEROLE`, `NOREPLICATION`, `NOLOGIN`, `NOINHERIT`, and
@@ -588,12 +710,30 @@ granted, and it has only the relation/column privileges required
 to reconstruct one principal stream and compare the exact tenant-registry and
 Party tuple named by that binding. Its fixed, schema-qualified SQL accepts no
 table, column, predicate, tenant, or Party selector other than the signed and
-database-matched binding tuple; it returns no tenant row or Party payload. The
-application receives EXECUTE only on the exact challenge, binder, and current-
-context functions. There is no generic query/dynamic-SQL function owned by this
-role. Compromise of `ofarm_binder` is therefore an explicit privileged-boundary
+database-matched binding tuple; it returns no tenant row or Party payload. Once
+#174 installs the accepted binder, the application receives EXECUTE only on the
+exact challenge, binder, and current-context functions. There is no generic
+query/dynamic-SQL function owned by this role.
+Compromise of `ofarm_binder` is therefore an explicit privileged-boundary
 compromise outside RLS, while possession of application credentials or raw SQL
 cannot exercise its bypass as a general tenant-data read path.
+
+Backend-incarnation observation is isolated from that binder authority.
+`ofarm_backend_observer` is a NOLOGIN, INHERIT, NOBYPASSRLS role whose sole
+membership is `pg_read_all_stats` with `INHERIT TRUE`, `SET FALSE`, and `ADMIN
+FALSE`. PUBLIC SELECT on `pg_catalog.pg_stat_activity` and PUBLIC EXECUTE on the
+complete PostgreSQL 17 family of `pg_stat_get_activity(integer)` plus the 13
+`pg_stat_get_backend_*` routines are revoked in both services. The audit
+service grants no replacement. The tenant service grants the observer only
+SELECT on that exact view and EXECUTE on `pg_stat_get_activity(integer)`, in
+addition to its predefined-role membership. The observer owns only two
+fixed-search-path SECURITY DEFINER helpers: one returns the current session's
+backend start and one answers whether one exact `(backend_pid, backend_start)`
+incarnation is live. PUBLIC and every runtime role have no EXECUTE on those
+helpers; only `ofarm_binder` may call them. The helpers return no query text,
+role inventory, or generic statistics. Neither privileged NOLOGIN role can be
+inherited or assumed by a LOGIN role, so same-login raw SQL has no direct
+backend-observation path.
 
 `tenant_binding_context` is an UNLOGGED, migration-owned disposable relation.
 Its authority key is `(backend_pid, backend_start, full_xid8)`, all derived
@@ -662,7 +802,7 @@ rewrites it.
 | Idempotency `caller_key` | `OFARM_ASCII_ID_V1`: the contract-validated authored ASCII bytes | 1-255 bytes matching `[A-Za-z0-9._:-]+` | Exact bytes inside the full idempotency identity; no transport-layer rewriting |
 | Principal lifecycle stream and current reservation | Separate equality-policy, issuer, and subject columns; digest input uses tag plus unsigned length-prefixed field bytes | Exactly the issuer/subject rules above | One composite exact-byte key; delimiter concatenation and digest-only equality are forbidden |
 
-If ADR 0003 is separately accepted, its bounded byte grammar is the exact V1
+Accepted ADR 0003's bounded byte grammar is the exact V1
 meaning of the issuer/subject rows above. It narrows `host`, port, path, and
 visible-subject syntax without normalization and requires identical independent
 live-PostgreSQL and #172 outcomes; neither a wider SQL regex nor a platform URL
@@ -729,11 +869,13 @@ database casts, and digest equality without the canonical bytes are forbidden.
   relational key.
 
 The tenant registry assigns every tenant a stable, globally unique signed
-64-bit advisory-lock key. A separately reserved global migration-lock key cannot
-collide with tenant keys. Human-readable tenant references and truncated hashes
-are not advisory-lock identities. Only the protected wrappers defined below may
-use these keys. Any later resource-lock family must reserve a disjoint namespace
-before use.
+64-bit advisory-lock key. The migration lock instead uses one fixed pair of
+signed 32-bit integers derived from its checked-in domain tag. PostgreSQL keeps
+the two-integer advisory-lock namespace disjoint from the single-bigint
+namespace, so the migration lock cannot collide with tenant keys. Human-readable
+tenant references and truncated hashes are not advisory-lock identities. Only
+the protected wrappers defined below may use these keys. Any later resource-lock
+family must reserve a disjoint namespace before use.
 
 ## Foreign keys, graph rules, and sharing boundary
 
@@ -814,7 +956,7 @@ schemas, tables, sequences, and functions.
 
 The role model is:
 
-- ofarm_crypto_installer: only if ADR 0003 is separately accepted, a dedicated
+- ofarm_crypto_installer: a dedicated
   NOLOGIN/NOINHERIT cluster-superuser boundary with exact catalog flags
   `SUPERUSER`, `NOCREATEDB`, `NOCREATEROLE`, `NOREPLICATION`, and
   `NOBYPASSRLS`; it has no members or runtime/migrator assumption path and owns
@@ -823,15 +965,40 @@ The role model is:
   only during reviewed provisioning; both are outside RLS;
 - ofarm_owner: NOLOGIN owner of tenant/application schemas, tables, policies,
   and ordinary functions, explicitly excluding the isolated `ofarm_security`
-  objects, any accepted `ofarm_crypto` objects, and the three narrowly
-  `ofarm_binder`-owned functions;
+  objects, the `ofarm_crypto` objects accepted by ADR 0003, the narrowly
+  binder/backend-observer/graph-validator-owned functions, and the tenant-write
+  lock wrapper;
 - ofarm_migrator: release-only credentials allowed to take the migration lock
   and apply reviewed DDL through the applicable application or security-audit
-  owner role, with no runtime ingest/read/retention authority;
+  owner role, with no runtime ingest/read/retention authority and no raw
+  advisory-function EXECUTE;
+- each service has one provisioning-declared migration-lock owner: a
+  NOSUPERUSER, NOCREATEDB, NOCREATEROLE, NOREPLICATION, NOLOGIN, NOINHERIT,
+  NOBYPASSRLS role with no members or role-assumption path. It owns exactly that
+  service's `ofarm_infrastructure` schema and permanent migration-lock wrapper,
+  and is the sole provisioned role that receives raw EXECUTE on
+  `pg_catalog.pg_advisory_xact_lock(integer, integer)`; it has no table,
+  application, binder, audit, migration, or other raw advisory-lock authority;
+- ofarm_tenant_lock_owner: NOSUPERUSER, NOCREATEDB, NOCREATEROLE,
+  NOREPLICATION, NOLOGIN, NOINHERIT, and NOBYPASSRLS, with no members or
+  role-assumption path. It owns only the no-argument tenant-write wrapper and is
+  the sole provisioned role that receives raw EXECUTE on
+  `pg_catalog.pg_advisory_xact_lock(bigint)`. It has only application-schema
+  USAGE, EXECUTE on the no-argument current-context function, and column SELECT
+  on the tenant registry's tenant identity and advisory-lock key needed by that
+  static wrapper; it has no schema ownership, other table privilege, binder
+  authority, migration lock, or other raw advisory-lock authority;
 - ofarm_app: non-owner application role with NOBYPASSRLS, no DDL, no owner or
   migrator membership, and only required DML;
 - ofarm_worker: same isolation posture as the application, with an explicit
   TenantBinding per job;
+- ofarm_runtime_bundle_publisher: NOLOGIN, NOINHERIT, NOBYPASSRLS startup
+  capability with EXECUTE only on the closed atomic RuntimeBundle publication
+  function and no direct bundle/component DML;
+- ofarm_runtime_bundle_control_login: separately credentialed trusted-startup
+  LOGIN with NOBYPASSRLS and a sole `ofarm_runtime_bundle_publisher` membership
+  using `INHERIT TRUE`, `SET FALSE`, and `ADMIN FALSE`; it has no application,
+  worker, binder, owner, migrator, identity, or tenant-registration authority;
 - ofarm_tenant_registrar: NOLOGIN control-plane capability granted only to one
   separately provisioned tenant-control LOGIN with `INHERIT TRUE`, `SET FALSE`,
   and `ADMIN FALSE`; it has EXECUTE only on the insert-only `register_tenant`
@@ -839,22 +1006,38 @@ The role model is:
   binding/lifecycle authority, or tenant reads;
 - ofarm_binder: NOSUPERUSER, NOCREATEDB, NOCREATEROLE, NOREPLICATION, NOLOGIN,
   NOINHERIT, BYPASSRLS privileged function owner used
-  only by the hardened challenge, binder, and current-context functions. It has
+  only by the hardened challenge, binder, and current-context functions
+  installed by #174. It has
   no members or role-assumption path and only the exact column/relation rights
   needed to read immutable binding versions, authoritative lifecycle acts,
   optional current projection, tenant registry, one pinned Party record, and
   transaction context. The application may EXECUTE those closed functions but
-  cannot SET ROLE to this role or obtain generic tenant reads. If accepted,
-  ADR 0003 adds only the exact binder-instance, verification-key, key-lifecycle,
+  cannot SET ROLE to this role or obtain generic tenant reads. ADR 0003 adds
+  only the exact binder-instance, verification-key, key-lifecycle,
   keyring-fence, and verify-function access named there. It leaves this role,
   its database verification material/schema, and all three migration-owned
   functions under #174; #172 owns capability minting and signer custody, not
   this database role;
+- ofarm_backend_observer: NOSUPERUSER, NOCREATEDB, NOCREATEROLE,
+  NOREPLICATION, NOLOGIN, INHERIT, and NOBYPASSRLS. Its sole membership is the
+  predefined `pg_read_all_stats` role with `INHERIT TRUE`, `SET FALSE`, and
+  `ADMIN FALSE`; no governed or LOGIN role is its member. It alone receives
+  SELECT on the otherwise closed `pg_stat_activity` view and EXECUTE on
+  `pg_stat_get_activity(integer)`. It owns only the two fixed
+  backend-incarnation helpers and grants EXECUTE only to `ofarm_binder`, so
+  governed and LOGIN roles receive only their narrow results rather than a
+  general statistics path;
+- ofarm_graph_validator: NOSUPERUSER, NOCREATEDB, NOCREATEROLE,
+  NOREPLICATION, NOLOGIN, NOINHERIT, and NOBYPASSRLS, with no membership or
+  role-assumption path. It owns only the two deferred promotion-graph trigger
+  functions, may execute the sealed current-context function, and has SELECT
+  on only the record/edge columns those triggers use. It is named in those two
+  tables' tenant policies, so FORCE RLS still constrains it to the bound tenant;
 - ofarm_identity_writer: control-plane-only capability that may execute the
   principal-binding lifecycle transition but has no direct DML on binding
   versions, lifecycle acts, or projection, no tenant-truth read role, and no
   application membership;
-- ofarm_capability_key_controller: only if ADR 0003 is separately accepted,
+- ofarm_capability_key_controller:
   an exact `NOSUPERUSER`, `NOCREATEDB`, `NOCREATEROLE`, `NOREPLICATION`,
   `NOBYPASSRLS`, `NOLOGIN`, `NOINHERIT` capability with EXECUTE only on closed
   public-key registration/lifecycle/rebuild functions. The separate
@@ -867,6 +1050,10 @@ The role model is:
   `ofarm_security` schema, operational security-event relation, and hardened
   append/control/query/export/purge/readiness functions, with no tenant-schema
   membership;
+- ofarm_security_audit_access_clock_lock_owner: isolated NOLOGIN/NOINHERIT
+  owner only of the two fixed-key access-clock wrappers, with no membership or
+  role-assumption path and only the exact raw two-integer session lock/unlock
+  grants needed by those wrappers;
 - ofarm_security_audit_ingest: NOLOGIN capability granted only to separately
   provisioned authentication/router producer LOGIN identities with `INHERIT
   TRUE`, `SET FALSE`, and `ADMIN FALSE`; it may execute only the pre-tenant
@@ -881,9 +1068,10 @@ The role model is:
   EXECUTE only on bounded audited query functions, no table SELECT/COPY,
   append/retention authority, tenant-data access, or application membership;
 - ofarm_security_audit_export: NOLOGIN break-glass capability granted only to a
-  time-bounded LOGIN after dual approval; it executes only the exact
-  pre-authorized bounded export function and has no table, append, retention,
-  tenant, application, or digest-key access;
+  temporary time-bounded LOGIN during a #192-owned, dual-approved export window;
+  normal provisioning creates no such LOGIN or membership. The capability
+  executes only the exact pre-authorized bounded export function and has no
+  table, append, retention, tenant, application, or digest-key access;
 - ofarm_security_audit_retention: NOLOGIN security-operations capability that
   may execute only the migration-owned no-caller-cutoff expired-row purge
   procedure, with no arbitrary row mutation, append, reader, tenant, or
@@ -894,6 +1082,27 @@ The role model is:
 - ofarm_readiness: read-only access to migration metadata and no access to
   tenant data, or an equivalently restricted readiness grant.
 
+The shared PostgreSQL large-object store is not a tenant or audit carrier.
+Provisioning freezes the complete PostgreSQL 17 inventory, signatures,
+implementation properties, internal symbols, symbolic bootstrap-superuser
+ownership, and ACLs of the 20 `lo_*`, `loread`, and `lowrite` routines. It
+revokes PUBLIC EXECUTE from every one and grants no governed runtime or control
+role an alternative path. Fresh-target, migration, and startup verification
+also require zero `pg_largeobject_metadata` rows. A missing or added routine,
+property change, widened ACL, or stored large object is structural drift and
+refuses in both the tenant and audit services.
+
+PostgreSQL's default same-role backend visibility is also outside the tenant
+and audit carriers. Provisioning freezes the `pg_stat_activity` view's exact
+owner category, definition, ordered typed/collated columns, relation posture,
+and ACL, plus the complete 14-routine `pg_stat_get_activity` and
+`pg_stat_get_backend_*` family with exact signatures, implementation
+properties, owners, and ACLs. Both services revoke PUBLIC access. Audit grants
+no replacement; tenant grants only the non-assumable backend observer the view
+and activity function access needed by its sealed helpers. An unexpected
+family member, changed definition or property, or widened grant is structural
+drift and refuses.
+
 Enable and FORCE row-level security on every tenant-bearing relation. Policies
 use only the protected current-tenant function for both USING and WITH CHECK.
 They never consume a raw custom setting. Missing, invalid, expired, replayed, or
@@ -902,14 +1111,15 @@ only restrictions remain additional constraints and do not substitute for RLS.
 The closed non-tenant control list is `tenant_registry`, `principal_binding`,
 `principal_binding_lifecycle`, `principal_binding_current`,
 `tenant_binding_context`, and `schema_migration`; these relations have no
-tenant RLS policy and instead deny direct application, worker, and end-user
-relation access. The binder/registrar reach only their named functions and
-minimum underlying fields; readiness receives the separately specified exact
-read-only migration-ledger grant. Adding any relation or privilege to that list
-requires a migration and classification change. Party and every other tenant-
-bearing record remain forced-RLS protected.
+tenant RLS policy and instead deny
+direct application, worker, readiness, registrar, and end-user relation access.
+The binder, registrar, and identity-control paths reach only their named
+functions and minimum underlying fields; readiness receives the separately
+specified exact read-only migration-ledger grant. Adding any relation or
+privilege to that list requires a migration and classification change. Party
+and every other tenant-bearing record remain forced-RLS protected.
 
-If ADR 0003 is separately accepted, that closed list also contains
+Under accepted ADR 0003, that closed list also contains
 `tenant_binder_instance`, `tenant_capability_verification_key`,
 `tenant_capability_key_lifecycle`, and `tenant_capability_keyring`, with the
 classifications above. Their direct runtime relation access is denied; only the
@@ -918,22 +1128,25 @@ closed key-control and binder functions receive the minimum fields they need.
 Normal functions execute as the caller. Any unavoidable SECURITY DEFINER
 function has a fixed trusted search_path, schema-qualified objects, no
 caller-controlled dynamic SQL, minimal ownership, explicit EXECUTE grants, and
-adversarial tests. The challenge, binder, current-context, and lock wrappers are
-named exceptions, together with the isolated security-audit append, control,
-query, export, purge, and readiness procedures. Their definitions and owners are
-migration-checksummed. Triggers and constraint functions include tenant and
-batch in every tenant lookup.
+adversarial tests. The ADR 0003 challenge, binder, capability-key-control,
+principal-lifecycle, projection-rebuild, and current-context functions and the
+lock wrappers are named exceptions, together with the isolated security-audit
+append, control, query, export, purge, and readiness procedures. Their
+definitions and owners are content-addressed by the applicable migration or by
+the closed provisioning capsule defined below; `0001` pins that exact
+provisioning digest. Triggers and constraint functions include tenant and batch
+in every tenant lookup.
 
 Direct SQL using the application role remains subject to forced RLS, composite
 constraints, verified context, and append-only rules. The application role
 cannot read or write protected context, binding versions, lifecycle acts,
 current projection, pre-tenant security events, tenant lock keys, or
-capability-verification keys; cannot call the security-audit append or retention
+capability-verification material; cannot call the security-audit append or retention
 functions; cannot assume any privileged role; and cannot execute raw
 advisory-lock functions. End users and support users never receive application,
 migration, or security-audit credentials. Superusers, database administrators,
-migrators, identity-control writers, any accepted crypto installer or
-capability-key controller, security-audit owners/readers/retention operators,
+migrators, identity-control writers, the crypto installer and capability-key
+controller, security-audit owners/readers/retention operators,
 backup readers, `ofarm_binder`, and a fully compromised capability signer are
 outside the RLS protection boundary; access to those capabilities requires
 separate operational controls and audit. The binder's NOLOGIN/no-
@@ -944,23 +1157,59 @@ bypass from becoming an application SQL path.
 
 Cluster provisioning revokes PUBLIC and application EXECUTE on every
 pg_advisory_lock, pg_try_advisory_lock, pg_advisory_unlock, and transaction-lock
-overload. The application and worker roles cannot choose a numeric lock key,
-take a session lock, try a migration lock, or unlock a protected lock.
+overload. Among provisioned roles there are exactly three raw-function grant
+classes:
+`ofarm_tenant_lock_owner` alone receives EXECUTE on
+`pg_catalog.pg_advisory_xact_lock(bigint)`, and each service's isolated
+migration-lock owner alone receives EXECUTE on
+`pg_catalog.pg_advisory_xact_lock(integer, integer)` in that service. In the
+audit service only, isolated `ofarm_security_audit_access_clock_lock_owner`
+alone receives the exact `pg_advisory_lock(integer, integer)` and
+`pg_advisory_unlock(integer, integer)` grants. None of these owners has LOGIN,
+members, or a role-assumption path. The audit schema owner, application,
+worker, and migrator roles cannot call any raw advisory routine or choose a
+numeric lock key.
 
-Two schema-qualified SECURITY DEFINER wrappers are allowed:
+Four schema-qualified SECURITY DEFINER wrapper functions in three closed
+capsules are allowed:
 
 - the tenant-write wrapper accepts no tenant or lock-key argument, requires a
   verified TenantBinding, derives the unique key from its tenant registry row,
-  and acquires only a transaction-scoped lock; and
-- the migration wrapper is executable only by the migrator, accepts no caller
-  key, derives the reserved global key internally, and acquires only a
-  transaction-scoped lock.
+  is owned by isolated `ofarm_tenant_lock_owner`, calls only the raw bigint
+  transaction-lock overload, and acquires only a transaction-scoped lock; and
+- the permanent migration wrapper lives in the separately provisioned
+  `ofarm_infrastructure` schema, is owned by the service-specific isolated
+  migration-lock owner, is executable only by the migrator, accepts no
+  arguments, derives the fixed domain-separated integer pair internally, and
+  acquires only a transaction-scoped lock; and
+- the audit access-clock take/release pair lives in the same separately
+  provisioned infrastructure schema, is owned by the distinct isolated
+  access-clock lock owner, is executable only by the audit schema owner,
+  accepts no arguments, and embeds the one fixed access-clock integer pair.
+  The take wrapper acquires one session lock and the release wrapper releases
+  only that same lock; the migration-owned clock helper invokes them in one
+  exception-safe function-scoped protocol.
 
-Both wrappers have a fixed trusted search_path, fully qualified calls, exact
+All wrappers have a fixed trusted search_path, fully qualified calls, exact
 owners and EXECUTE grants, and no dynamic SQL. There is no application-visible
-unlock wrapper; commit or rollback releases the lock.
+unlock wrapper; commit or rollback releases each transaction lock. The access-
+clock release wrapper is not executable by runtime roles and selects no key.
+The infrastructure wrappers are part of the exact provisioning capsule and
+remain after `0001`; application startup cannot create, invoke, replace, or
+repair them.
 
-If ADR 0003 is separately accepted, its existing binder, public-key control,
+The administrator-only provisioning command serializes every verify-or-create
+operation in one PostgreSQL cluster with one fixed, cluster-global two-integer
+session-lock pair. Every target on that cluster uses the same pair; the
+separately bounded audit service uses the same defined pair within its own
+cluster, without weakening its required service isolation. The pair comes from
+a provisioning-only domain and differs from every permanent migration-wrapper
+pair; it also never uses the disjoint single-bigint tenant-lock namespace. Only
+the external provisioning administrator takes and explicitly releases this
+session lock; it is not exposed through either protected wrapper or granted to
+any runtime or migrator role.
+
+Under accepted ADR 0003, its binder, public-key control,
 principal-lifecycle, and projection-rebuild entry points may additionally use
 only the reserved two-int transaction-level admission pair fixed there. The
 binder owner receives only the exact shared acquisition overload; the exact
@@ -977,17 +1226,25 @@ emergency-revocation wait.
 
 Database and role creation precede numbered schema migrations. A reviewed,
 versioned infrastructure step run by a database administrator creates the
-tenant database, plus a separately bounded audit PostgreSQL service/database
-with its empty `ofarm_security` namespace. It creates the NOLOGIN application,
-binder, and security owners, migrator/application/worker/readiness identities or
-grants, tenant registrar, identity-control writer, seven isolated
-security-audit capabilities,
-the distinct tenant-control and audit producer/control LOGIN identities and
-exact `INHERIT TRUE`/`SET FALSE`/`ADMIN FALSE` memberships, service resource
-limits, and initial PUBLIC revocations. Application startup and either migration
-runner do not create or repair their own cluster roles or services.
+tenant database, plus a separately bounded audit PostgreSQL service/database.
+It creates the empty application namespace, the separate `ofarm_infrastructure`
+namespace and closed capsule described below, the tenant service's NOLOGIN
+application, binder, and tenant-lock owners, the audit service's NOLOGIN
+security owner, and each service's specific migration-lock owner. It also
+creates the tenant backend-observer and graph-validator roles and the
+observer's one non-assumable predefined-role membership, plus the declared
+migrator/application/worker/readiness identities or
+grants, tenant registrar, identity-control writer, seven isolated security-
+audit capabilities, the distinct tenant-control and audit producer/control
+LOGIN identities and exact `INHERIT TRUE`/`SET FALSE`/`ADMIN FALSE`
+memberships, service resource limits, and initial PUBLIC revocations. Those
+revocations include the exact PostgreSQL 17 backend-statistics view/routine
+surface in both services; tenant grants its non-assumable observer only the two
+catalog privileges needed by the sealed helpers.
+Application startup and either migration runner do not create or repair their
+own cluster roles or services.
 
-If ADR 0003 is separately accepted, this same reviewed infrastructure step also
+Under accepted ADR 0003, this same reviewed infrastructure step also
 creates the exact crypto-installer and capability-key-control roles/login above,
 installs the fixed non-trusted/non-relocatable `ofarm_ed25519` extension from
 the already pinned derived image, and then removes every runtime/migrator
@@ -1008,6 +1265,55 @@ owner, and grants to the declared specification. Any unexpected privilege,
 owner, member, object, or role attribute is drift and refuses; provisioning
 does not silently widen or reconcile it. Credentials and signing keys remain
 outside repository fixtures and migration SQL.
+
+An administrator-side infrastructure observation made before the migration
+command may establish that the database, roles, namespaces, grants, and capsule
+are suitable for attempting migration. It is diagnostic infrastructure
+evidence only: it is not migration-history authority, cannot classify a target
+as fresh or migrated, and cannot be reused as the runner's phase, capsule, or
+ledger observation after the migration lock is acquired.
+
+The pre-ledger capsule is a closed provisioning-owned exception to the otherwise
+empty target. Each service's capsule contains the permanent, no-argument,
+fixed-pair migration-lock wrapper in `ofarm_infrastructure`. Its service-specific
+NOLOGIN/no-membership owner is the only role granted raw EXECUTE on
+`pg_catalog.pg_advisory_xact_lock(integer, integer)`; the migrator receives only
+USAGE on `ofarm_infrastructure` and EXECUTE on the wrapper. The complete tenant
+production specification additionally contains one temporary, no-argument
+owner sealer. The sealer is a SECURITY DEFINER routine owned by the external
+provisioning-superuser category, not by any runtime, control, owner, or migrator
+role. Its only EXECUTE grant is to the migrator.
+
+The sealer contains only static statements naming the two frozen challenge and
+current-context signatures, the two backend-incarnation helpers,
+the two promotion-graph validators, the no-argument tenant-write wrapper,
+their four target owners, and the application schema. It accepts no SQL, role,
+schema, object, signature, owner, or other caller input and contains no dynamic
+SQL. Inside its one transaction it temporarily grants CREATE on only the
+application schema to the four fixed owners, as PostgreSQL requires before
+those roles receive ownership. It transfers the two `ofarm_binder`-owned
+routines, two
+observer helpers, two graph validators, and tenant-write wrapper to their exact
+owners, then revokes every transient CREATE grant. It finally
+changes itself to SECURITY INVOKER and transfers its own ownership to
+`ofarm_migrator`. Provisioning creates none of the seven target routine bodies.
+
+The owner sealer grants no LOGIN membership and creates no `SET ROLE`,
+inheritance, administration, caller-selected grant, or generic ownership-
+transfer path. Tenant `0001` alone uses it. After creating the seven exact
+routines under the ordinary application owner, the runner issues `RESET ROLE`,
+calls the sealer as the migrator, verifies all seven final owners, all revoked
+CREATE grants, and the sealer's SECURITY INVOKER/migrator-owned state, drops the
+sealer, and restores the ordinary application owner role before completing the
+ledger append. A rollback restores every owner and grant plus the exact usable,
+provisioning-superuser-owned SECURITY DEFINER sealer, so failed `0001` can be
+retried without repair. The audit capsule has no owner sealer. Every capsule
+signature, definition, owner category, function property, grant, and absence is
+part of the provisioning digest; missing, extra, changed, or widened capsule
+state is drift and refuses. Verification is phase-aware: before the tenant
+ledger exists the exact sealer must be present, while after `0001` commits it
+must be absent. The permanent migration wrapper and its isolated owner remain
+exact in both phases; provisioning never recreates a missing post-`0001` sealer.
 
 ## Immutable migration baseline
 
@@ -1038,13 +1344,24 @@ A separate migration command, release job, or operator action targets exactly
 one provisioned service and its migration set:
 
 1. connects using migrator credentials unavailable to the application;
-2. takes the reserved global transaction-scoped migration lock;
-3. verifies the provisioned database, roles, namespace ownership, and grants;
+2. begins one READ COMMITTED transaction and invokes the permanent no-argument
+   wrapper first, taking the reserved global transaction-scoped migration lock;
+3. while holding that lock in the same transaction, obtains fresh catalog and
+   ledger observations and repeats the exact phase-aware provisioning digest,
+   database, role, namespace ownership, grant, isolated lock-owner, capsule,
+   empty-target or ledger-presence, and migration-history checks. No earlier
+   administrator observation is accepted as authority for these checks;
 4. verifies migration filenames are ordered and gap-free;
 5. verifies every previously applied filename and SHA-256 against the immutable
    local migration set;
-6. applies the next migration and appends its ledger row in one database
-   transaction;
+6. applies the next migration and appends its ledger row in that same database
+   transaction; tenant `0001` alone creates the seven sealed routines, resets
+   from the application owner to the migrator, invokes the exact owner sealer,
+   verifies the two `ofarm_binder`-owned, two observer, two graph-validator,
+   and one tenant-lock owners, revoked transient CREATE grants, and the sealer's
+   SECURITY INVOKER/migrator-owned state, drops the sealer, restores the
+   application owner role, and records the provisioning digest before that
+   append;
 7. releases the lock on commit or rollback.
 
 Non-transactional migrations are forbidden in the initial posture. If one ever
@@ -1056,42 +1373,72 @@ SHA-256, applied-at diagnostic time, release/application build identity, and an
 execution identifier. Missing, duplicate, reordered, unknown, checksum-
 mismatched, or partially applied history is dirty and fails closed.
 
-A missing ledger is fresh only when the provisioned target namespaces are
+A missing ledger is fresh only when the application and `public` schemas are
 provably empty of application relations, views, materialized views, sequences,
-types, routines, policies, triggers, and migration-owned extensions, and the
-catalog shows exactly the declared empty namespace owners and grants. The empty
-schemas created by infrastructure provisioning are allowed; any application
-object without a ledger is not.
+types, routines, policies, triggers, and migration-owned extensions, their
+owners and grants are exact, and `ofarm_infrastructure` contains exactly the
+capsule declared by the applicable provisioning specification. For the complete
+tenant production specification that means the permanent migration wrapper
+plus the temporary exact owner sealer; for the audit service it means the
+permanent migration wrapper only. Any other object, privilege, or function
+property without a ledger is dirty.
 
-On that one proven-empty path, 0001 creates the ledger and target objects and
-appends its own checksum row atomically. If the ledger is missing while any
-target object exists, the database is dirty and the runner refuses. It never
-adopts, fingerprints as a baseline, repairs, drops, or wraps an untracked schema
-with IF NOT EXISTS behavior.
+On that one proven-empty-plus-capsule path, `0001` creates the ledger and target
+objects, completes the tenant owner-sealing lifecycle when applicable, records
+the exact provisioning digest, and appends its own checksum row atomically. If
+the ledger is missing while any non-capsule target object exists, or the capsule
+is not exact, the database is dirty and the runner refuses. It never adopts,
+fingerprints as a baseline, repairs, drops, or wraps an untracked schema with
+`IF NOT EXISTS` behavior.
 
-## Startup, readiness, compatibility, and rollback
+Before a migration or startup transaction asks PostgreSQL to deparse any
+catalog identity, it fixes `standard_conforming_strings=on`, `TimeZone=UTC`,
+`DateStyle=ISO, MDY`, and `quote_all_identifiers=off` locally and verifies that
+posture. The migration-owned structural verifiers pin every setting their own
+deparser or lazy PL/pgSQL compilation consumes. Catalog bytes therefore do not
+depend on the caller's display settings, server host time zone, or connection
+options.
+
+## Structural compatibility, startup policy, and rollback
 
 The application build carries the exact expected latest tenant migration
 version and ordered migration-set digest. The #192 audit client carries the
 exact expected audit migration version/digest. Each performs read-only
 verification of its own ledger before constructing its repositories or serving
 its traffic. Neither creates, alters, drops, repairs, or bootstraps schema
-objects.
+objects. Application and audit startup cannot invoke, install, complete, or
+repair the pre-ledger capsule; a capsule-only target is structurally
+incompatible.
 
-Schema mismatch prevents readiness. A dedicated readiness check reports only
-the supported/observed version state without tenant counts, identifiers, or
-records. Liveness checks only process health. An empty database, an older or
-newer schema, a dirty history, an unavailable ledger, or a checksum mismatch
-never becomes ready and never triggers DDL.
+#174 exposes independent read-only tenant and audit structural-compatibility
+reports plus a cross-service separation attestation. Each lane verifies its
+pinned build, provisioning identity, ledger, catalog-visible posture, and
+observer state internally; its returned report exposes only the fixed service
+identity and supported/observed schema versions, never tenant counts,
+identifiers, or records. The separation
+attestation proves only that the two fixed database routes expose different
+PostgreSQL system identifiers. It does not combine their availability or choose
+a startup policy. An empty database,
+an older or newer schema, a dirty history, an unavailable ledger, or a checksum
+mismatch is structurally incompatible and never triggers DDL. #173 composes the
+tenant result for application startup, while #192 independently composes the
+audit result with its operational-health policy.
 
-V1 readiness applies only to a proven-empty initial target or the uninterrupted
-in-place lineage created from that target. It has no recovery-readiness mode.
-A target declared restored, point-in-time promoted, snapshot-cloned,
+#174 exposes no generic `ready`, service-promotion, recovery-readiness, or
+continuity result. A physical restore or promoted clone can preserve the
+ledger, catalog, roles, and PostgreSQL system identifier, and can therefore be
+structurally compatible after promotion. That observation is not authorization
+to serve. A target declared restored, point-in-time promoted, snapshot-cloned,
 tenant-history imported, forked, or of unknown provenance cannot be promoted to
-service even when its build and migration digests match. The application cannot
-detect a privileged operator who conceals such an operation; database-
-administrator and recovery-control compromise is outside the RLS boundary.
-Schema compatibility is never represented as proof of timeline continuity.
+service in V1 even when its structural report matches. #193 must add an
+external continuity witness and explicit promotion policy before such a target
+can serve. Database-administrator and recovery-control compromise remains
+outside the RLS boundary.
+The audit access-clock high-water is also copied or rewound by physical
+recovery. Within one uninterrupted audit-store lineage it preserves only
+observed wall-clock advances and refuses observed regressions; it cannot detect
+a pass-and-rollback excursion between observations. It is not recovery-
+continuity or promotion evidence.
 
 The first deployment has an exact-version compatibility window: one release
 supports exactly one tenant migration-set digest and one audit migration-set
@@ -1135,6 +1482,12 @@ and malformed SQL inputs. The attacker may trigger authentication, verifier,
 routing, binder, transaction, and pool-reuse failures. The model also covers
 accidental unqualified queries and direct SQL under the application role.
 
+Controls below that require production capability minting or a UnitOfWork
+describe the required end state after #172 and #173. #174 independently
+implements the accepted package-local reference capability, database verifier
+and binder, and fail-closed storage primitives; it does not claim that the
+dependent production path is active.
+
 | Threat | Required control |
 |---|---|
 | Forged tenant in a body, route, header, farm reference, or environment default | Only a signed, challenge-bound TenantCapability verified against an immutable binding version and the authoritative lifecycle head can create TenantBinding; selectors are untrusted and there is no production default. |
@@ -1158,10 +1511,11 @@ accidental unqualified queries and direct SQL under the application role.
 | Cross-tenant or dangling graph construction, including a future-ID/two-transaction promotion exploit | Same-tenant composite FKs plus same-batch promotion reachability and deferred constraints. |
 | JSONB payload reference omitted from relational enforcement or assigned a guessed kind | #174 supplies only the neutral structural carrier and makes no semantic-completeness claim. Exact RuntimeBundle-pinned extraction/kind/cardinality enforcement arrives through #184's reviewed forward migration; dependent runtime surfaces refuse before it exists. |
 | Cross-tenant idempotency replay or uniqueness existence oracle | Tenant/principal/operation command namespace and tenant-prefixed unique indexes. |
-| Advisory-lock collision, raw session lock, attacker-selected key, unlock, or migration-lock attempt | Raw advisory functions are denied; protected no-key wrappers derive disjoint keys and acquire transaction locks only. |
-| Materialization, dependency, cache, trace, gate-log, bound error, or frozen-output leakage | Tenant qualification and RLS apply regardless of authoritative status; pre-tenant errors use only the protected non-tenant audit lane, and readiness exposes no tenant or security-event data. |
-| Mutation, substitution, or tenant-table mixing of shared global content | #171 placement is prerequisite to 0001; application read-only privileges plus content digest and canonical-byte equality verification apply. |
-| Concurrent, partial, reordered, missing, edited, future, or ledgerless non-empty migration history | Global migration lock, transactional application, immutable checksums, exact readiness, catalog-emptiness proof, and fail-closed dirty detection. |
+| Advisory-lock collision, raw session lock, attacker-selected key, unlock, or migration-lock attempt | Raw advisory functions are denied except for each isolated capsule owner's exact required overloads: tenant bigint transaction lock, service migration two-integer transaction lock, and audit access-clock two-integer session lock/unlock. Protected no-key wrappers derive or embed the disjoint keys. Only the audit clock capsule uses a session lock, and its helper releases the fixed key on every normal or exception path before returning. |
+| Materialization, dependency, cache, trace, gate-log, bound error, or frozen-output leakage | Tenant qualification and RLS apply regardless of authoritative status; pre-tenant errors use only the protected non-tenant audit lane, and structural observations expose no tenant or security-event data. |
+| Arbitrary RuntimeBundle bytes, a partial component set, or component append after governed use forges or corrupts provenance | Ordinary runtime roles have read-only bundle/component access and cannot call the dedicated publisher. The trusted startup capability reconstructs and hashes the exact canonical document, verifies every exact content link, and atomically inserts one complete non-empty component set. Row existence is the immutable seal; governed batches reference only that sealed row. |
+| Mutation, substitution, or tenant-table mixing of shared global content | #171 placement is prerequisite to 0001; application read-only privileges on global content plus content digest and canonical-byte equality verification apply. Tenant content is inert unless selected by the sealed exact bundle. |
+| Concurrent, partial, reordered, missing, edited, future, or ledgerless non-empty migration history | Global migration lock, transactional application, immutable checksums, exact structural compatibility, exact empty-application-plus-capsule proof, and fail-closed dirty detection. |
 | Database administrator, migrator, backup, or trusted-binder compromise | Explicitly outside RLS; separate credentials, release controls, audit, and backup governance are required operational controls. |
 
 ## Executable adversarial verification plan
@@ -1170,13 +1524,19 @@ The implementation owners named below turn this plan into tests using the real
 PostgreSQL roles and real ASGI/application topology, not mocks.
 
 #174 owns the direct PostgreSQL challenge, binder, bootstrap, replay, role, and
-catalog tests for any separately accepted ADR 0003 implementation. Until then,
-production binding remains unavailable. #172 owns authentication,
-issuer/verifier, principal-lifecycle, capability-minting, and signer-custody
-tests. #173 owns the same-backend UnitOfWork and real application/pool sequence;
-#192 owns audit integration, and #193 owns any restore-continuity path.
+catalog tests for accepted ADR 0003. #172 owns external authentication and OIDC
+verification, principal-lifecycle integration, capability construction and
+minting, and signer-custody tests. #173 owns the same-backend UnitOfWork and real
+application/pool sequence; #192 owns audit integration, and #193 owns any
+restore-continuity path. Architecture acceptance authorizes implementation
+only; production binding remains unavailable until the required evidence passes.
 
 ### Tenant context and pool reuse
+
+#174 executes the storage, role, fail-closed context, issuer-vector, and
+direct-SQL binder cases. #172's production capability and signer cases and
+#173's UnitOfWork and pool cases become mandatory after their implementation
+and integration; they are not claims of `0001`.
 
 1. Create tenants A and B with deliberately identical local record, request,
    artifact, materialization, and caller idempotency references.
@@ -1235,6 +1595,15 @@ tests. #173 owns the same-backend UnitOfWork and real application/pool sequence;
     characters, delimiter-like values, maximum and over-limit bytes, and
     equality-policy mismatch. Valid distinct bytes never collapse; rejected
     bytes never reach storage; the same exact bytes never split into two streams.
+17. Execute the same table-driven issuer and identifier vectors against the
+    Python contract and live PostgreSQL constraints, including malformed hosts,
+    bracket syntax, ports outside 1..65535, URI delimiters, Unicode, controls,
+    and byte limits. #174 exposes no production signing key or issuance path.
+    It owns the frozen manifest, independent reference codec, test-only fixture
+    signer, live-PostgreSQL binder, and baseline vectors. #172 later proves its
+    independent production codec and KMS signer match those exact bytes; #172
+    is not a prerequisite for #174 to close. Production context binding remains
+    unavailable until the #172/#173/#174 path and evidence pass.
 
 ### Identifier equality and immutable eligibility
 
@@ -1250,7 +1619,8 @@ tests. #173 owns the same-backend UnitOfWork and real application/pool sequence;
 3. Prove `(policy, issuer="ab", subject="c")` and
    `(policy, issuer="a", subject="bc")` cannot collide. JSON escape spellings
    that decode to the same issuer/subject scalars produce the same canonical
-   bytes. Golden vectors from #172's verifier and #174's PostgreSQL functions
+   bytes. Golden vectors from #172's production capability codec and #174's
+   PostgreSQL functions
    must produce identical tagged/lp32 bytes and digests.
 4. Provision targets with a non-UTF8 encoding, wrong/default/nondeterministic
    collation, missing/widened domain check, wrong index collation, `citext`, or
@@ -1314,15 +1684,26 @@ tests. #173 owns the same-backend UnitOfWork and real application/pool sequence;
    aggregation, and `OVERFLOW_ENDED` records a count or `COUNT_UNKNOWN`. Measure
    the separate audit service's connection/CPU/storage limits and prove tenant
    pool, WAL, volume, and latency remain isolated; pressure never changes denial
-   into access. Lose acknowledgement for an aggregated event and prove the
-   control path marks the bucket `COUNT_UNKNOWN` idempotently instead of
-   retrying a countable append or presenting a double increment as exact.
+   into access. Retry an exact overflow ID after commit and across the next
+   minute; prove the original overflow outcome is returned without an increment.
+   Force two different IDs onto one fixed receipt slot; prove the affected
+   bucket becomes `COUNT_UNKNOWN` rather than evicting older exact evidence or
+   presenting a double increment as exact. Hold
+   a producer transaction at `REPEATABLE READ`, commit each possible same-ID
+   outcome in another session, and prove both accepted-to-overflow and
+   overflow-to-accepted adjacent-minute retries refuse before reading a stale
+   snapshot. Hold
+   an append and a close on opposite sides of the minute boundary; prove the
+   event-writer barrier admits exactly one ordering, the close count is final,
+   the old bucket cannot be recreated, and only one `OVERFLOW_ENDED` exists.
 9. Inject cancellation, process exit, connection loss, ambiguous commit, key-
    service failure, relation/disk failure, and whole-audit-service outage before
    and after append acknowledgement. Requests remain denied, timeouts/retries
    stay bounded, no raw or ungoverned queue fallback is emitted, exact-ID retry
-   deduplicates ambiguous commits, and recovery records every known gap or
-   `COUNT_UNKNOWN` without claiming lossless/exactly-once delivery. Rotate keys
+   deduplicates ambiguous commits while a durable row or fixed receipt exists,
+   any receipt-capacity loss makes the affected count unknown, and recovery
+   records every known gap or `COUNT_UNKNOWN` without claiming
+   lossless/exactly-once delivery. Rotate keys
    and prove each old version is destroyed by its last stamped `purge_after`
    even when row purge is delayed.
 10. Test the no-caller-cutoff purge immediately before and after `purge_after`,
@@ -1342,10 +1723,28 @@ tests. #173 owns the same-backend UnitOfWork and real application/pool sequence;
 11. Call every bounded reader function without a committed `AUDIT_ACCESS`
     intent, with a missing/mismatched function/argument/data-cut/cursor, after
     five-minute expiry or read rollback, and while attempting to widen row/byte
-    bounds. Only the exact precommitted page succeeds; rollback cannot erase its
-    intent, replay/COPY returns no wider unique data, and a new page/cut requires
-    a new intent. Exercise break-glass approval, credential expiry/revocation,
-    cumulative bounded export, and denial without tenant or HMAC-key access.
+    bounds. Advance the access-clock authority through expiry, reject the read,
+    roll back that read, move the database wall clock backward, and prove the
+    same intent still refuses. Only the exact precommitted page succeeds;
+    rollback cannot erase its intent or an observed non-regressing clock
+    high-water advance,
+    replay/COPY returns no wider unique data, and a new page/cut requires
+    a new intent. Hold an append transaction open while creating an intent and
+    prove the intent waits on the event-writer barrier; commit that append and
+    prove it is included by the fresh cut and snapshot. While the intent
+    transaction still holds the barrier, attempt a later append and prove it
+    waits, then remains outside the committed cut. Keep one successful reader
+    transaction open with transaction and idle-in-transaction timeouts disabled
+    and prove a second reader can still observe the same access intent without
+    waiting on access-clock serialization. Treat database wall-clock
+    monotonicity between observations as a trusted prerequisite; #192 must
+    supply external fencing if that prerequisite is unavailable. Normal
+    provisioning has no export LOGIN. Exercise break-glass
+    approval, credential expiry/revocation, cumulative bounded export, and
+    denial without tenant or HMAC-key access; audit structural compatibility
+    remains false for the whole temporary window, and only dropping the
+    temporary LOGIN and reverifying the exact normal posture restores it. #192
+    independently decides the corresponding runtime-health policy.
 12. Prove tenant reconstruction, authorization, RuntimeBundle, materialization,
     qualification, output, support, readiness, and export paths cannot name,
     join, count, or infer the pre-tenant relation.
@@ -1391,34 +1790,66 @@ tests. #173 owns the same-backend UnitOfWork and real application/pool sequence;
    unlock, session-lock, transaction-lock, and migration wrapper overload.
    Raw/keyed calls and migration locking are denied. The no-argument tenant
    wrapper derives only the verified bound tenant and releases on transaction
-   end.
+   end. Prove `ofarm_tenant_lock_owner` alone has only the exact raw bigint
+   EXECUTE needed by that wrapper. Prove the migrator can execute only the
+   permanent migration wrapper, not the raw two-integer function, while the
+   isolated migration-lock owner alone has only the exact raw two-integer
+   EXECUTE needed by that wrapper. Neither lock owner can assume a LOGIN role or
+   invoke the other namespace. In the audit service, prove the audit schema
+   owner and migrator cannot call either raw session routine or select a key;
+   the distinct access-clock lock owner alone has those two raw grants, the
+   no-argument wrappers embed the fixed pair, and the clock helper releases it
+   before the reader transaction ends.
 6. Cold-bootstrap after #171 and prove globally governed bundle bytes are
    outside tenant-owned records while tenant selection/context rows reference
    the exact bundle digest.
+7. As application and worker roles, attempt arbitrary bundle INSERT, direct
+   component INSERT, invocation of the startup publisher, and component append
+   after a governed batch references the bundle. Every attempt refuses. As the
+   dedicated publisher, prove one exact publication is complete and an exact
+   replay is idempotent; malformed, empty, duplicate, unsorted, digest-mismatched,
+   or absent-content component sets leave no partial bundle row.
 
-### Migrations and readiness
+### Migrations and structural compatibility
 
 1. Provision a new target once and verify exact database owner, NOLOGIN owners,
-   role attributes/memberships, namespace owners, PUBLIC revocations, and empty
-   target catalogs before applying migrations.
-2. Apply each migration set to its proven-empty tenant or audit service and
-   verify exact version, checksums, roles, grants, constraints, functions, and
-   indexes; forced RLS applies to every tenant-bearing relation and never
-   supplies a fake tenant context to the audit service.
+   role attributes/memberships, namespace owners, PUBLIC revocations, isolated
+   lock-owner privilege, empty application catalogs, and exact pre-ledger
+   capsule before applying migrations. Prove every provisioning operation in
+   one cluster uses the one fixed cluster-global two-integer session-lock pair,
+   distinct from every permanent migration pair and the tenant single-bigint
+   namespace.
+2. Apply each migration set to its proven-empty-plus-capsule tenant or audit
+   service and verify exact version, checksums, roles, grants, constraints,
+   functions, and indexes. Tenant `0001` leaves the permanent wrapper exact and
+   the owner sealer absent, with all seven routines assigned to their exact
+   four final owner roles and every transient CREATE grant absent; forced RLS
+   applies to every tenant-bearing relation and never supplies a fake tenant
+   context to the audit service.
 3. Re-run provisioning and the migration runner and prove both are verified
    no-ops, not silent repairs.
 4. Test missing, duplicate, reordered, renamed, edited, unknown-future,
    partially applied, and checksum-mismatched migrations; each fails closed.
-5. Delete or omit the ledger in both an empty target and targets containing one
-   relation, view, sequence, type, routine, policy, trigger, or migration-owned
-   extension. Only the provably empty target is fresh; every non-empty target
+5. Delete or omit the ledger in both an exact capsule-only target and targets
+   with a missing, changed, or widened capsule or one extra relation, view,
+   sequence, type, routine, policy, trigger, or migration-owned extension. Only
+   the exact empty-application-plus-capsule target is fresh; every other target
    refuses without adoption or cleanup.
-6. Inject a DDL failure and prove both schema changes and the ledger append roll
-   back. Run two migration processes and prove the global lock serializes them.
-7. Start the application and audit client against empty, old, exact, newer,
-   dirty, crossed, and unavailable tenant/audit schemas. Only the exact matched
-   pair among fresh or uninterrupted in-place targets becomes ready, and
-   catalog snapshots prove startup performed no DDL.
+6. Inject a DDL failure after the tenant owner sealer runs and prove its seven
+   routine-owner changes, transient CREATE grants and revocations,
+   self-demotion, drop, all schema changes, and the ledger append roll back to
+   the exact usable, provisioning-superuser-owned pre-ledger capsule. Run two
+   migration processes
+   and prove the global lock serializes them. Give the waiting runner an earlier
+   administrator observation of the pre-ledger phase, let the first runner
+   commit `0001`, and prove the waiter discards that stale evidence and observes
+   the committed post-ledger phase only after its wrapper call returns, within
+   its still-open READ COMMITTED transaction.
+7. Observe capsule-only, empty, old, exact, newer, dirty, crossed, and
+   unavailable tenant/audit schemas independently. Only each exact fully
+   migrated lane is structurally compatible; the capsule-only lane refuses.
+   Prove the pair-separation attestation has no generic ready bit, does not
+   combine lane availability, and that every observation performs no DDL.
 8. Prove application and readiness roles cannot provision, apply, repair, or
    downgrade a migration.
 9. Restore a tenant snapshot ending at K40 after K41-K45 and a principal/grant
@@ -1559,13 +1990,13 @@ tenancy and migration tests until the dependent tickets land.
   event shape, trust/access boundary, privileges, independent-commit/failure
   posture, retention/redaction rules, producer classes, and verification plan.
   The documentation-only guardrail authorizes no implementation.
-- #172 supplies explicit production authentication and verifier behavior, the
-  governed control-plane integration for immutable principal-binding versions,
-  append-only lifecycle transitions and deterministic projection rebuild,
-  exact-principal equality enforcement, immutable V1 tenant/Party eligibility
-  validation, and the trusted TenantCapability issuer/verifier boundary,
-  capability minting, and signer custody, as refined if ADR 0003 is separately
-  accepted. #174 is its database-primitives prerequisite and supplies the
+- #172 supplies explicit production authentication and external OIDC-verifier
+  behavior, the governed control-plane integration for immutable principal-
+  binding versions, append-only lifecycle transitions and deterministic
+  projection rebuild, exact-principal equality enforcement, immutable V1
+  tenant/Party eligibility validation, TenantCapability construction and
+  minting, production signing, and signer custody, as refined by accepted
+  ADR 0003. #174 is its database-primitives prerequisite and supplies the
   classified storage, database verification material/schema, and hardened
   binder functions. #172 does not own those migrations, roles, functions,
   direct PostgreSQL tests, or durable pre-tenant audit emission.
@@ -1578,14 +2009,16 @@ tenancy and migration tests until the dependent tickets land.
   and #173. It supplies the one-time provisioning specification, exact role
   attributes and grants, immutable tenant/audit migration baselines, equality
   domains/collations, immutable registry and insert-only registrar, principal
-  storage, any separately accepted ADR 0003 package-local framing manifest,
+  storage, accepted ADR 0003's package-local framing manifest,
   reference/fixture vectors, database verification material/schema, NOLOGIN
   BYPASSRLS binder, challenge/binder/current-context functions, roles/grants,
   forced RLS, composite keys, the neutral reference carrier and settled
   structural graph constraints, protected lock wrappers, separately bounded audit
   service/relations, producer LOGIN/session map/reason allowlist, hardened
   audit functions, resource limits, direct PostgreSQL binder/bootstrap/replay,
-  role and catalog tests, runners, and structural readiness. It does not
+  role and catalog tests, runners, separate lane structural-compatibility
+  reports, and a pair-separation attestation. It exposes no generic ready,
+  recovery, or promotion result. It does not
   implement #172 authentication, OIDC verification, principal-lifecycle
   integration, TenantCapability minting or signer custody, #173
   application/pool integration, #184's semantic relationship matrix, #192's
