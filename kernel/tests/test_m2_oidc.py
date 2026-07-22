@@ -1,13 +1,11 @@
 """M2 G4 — OIDC principal binding over the HTTP surface.
 
 Engineering tests, NOT part of the named conformance suite. They pin the OIDC
-principal-derivation: a VERIFIED bearer token yields the Party transport
-principal (replacing the X-Acting-Party dev header), the actor-binding contract
-and default-deny are preserved, and authority is unchanged — a role claim alone
-never authorizes (authority still comes only from grants, D4). The verifier is
-the zero-dependency HS256 dev/conformance path; RS256/JWKS (Keycloak) is a
-deliberate NotImplemented production path with no silent fallback. All identifiers
-fictional.
+principal-derivation in explicit test mode: a VERIFIED local bearer token yields
+the Party transport principal, the actor-binding contract and default-deny are
+preserved, and authority is unchanged — a role claim alone never authorizes.
+Production asymmetric/JWKS behavior is covered separately by
+test_authentication_modes.py. All identifiers are fictional.
 """
 from __future__ import annotations
 
@@ -19,16 +17,20 @@ import time
 import uuid
 
 import pytest
-
-
-def uid():
-    return uuid.uuid4().hex[:8]
-
 from fastapi.testclient import TestClient
 
 from kernel import demo
 from kernel.api import create_app
-from kernel.auth_oidc import OidcConfig, OidcError, issue_dev_token
+from kernel.auth_oidc import (
+    AuthenticationStartupError,
+    OidcConfig,
+    OidcError,
+    issue_dev_token,
+)
+
+
+def uid():
+    return uuid.uuid4().hex[:8]
 
 ISSUER = "https://keycloak.example/realms/ofarm-dev"
 AUDIENCE = "ofarm2-kernel"
@@ -62,15 +64,21 @@ def _bearer(token):
 
 
 def _raw_token(header: dict, payload: dict, signature: str = "x") -> str:
-    enc = lambda d: base64.urlsafe_b64encode(
-        json.dumps(d, separators=(",", ":")).encode()).rstrip(b"=").decode()
+    def enc(value):
+        return base64.urlsafe_b64encode(
+            json.dumps(value, separators=(",", ":")).encode()
+        ).rstrip(b"=").decode()
+
     return f"{enc(header)}.{enc(payload)}.{signature}"
 
 
 def _signed(header: dict, payload: dict, secret: str = SECRET) -> str:
     """A correctly HS256-SIGNED token with a CUSTOM header (e.g. carrying crit/b64)."""
-    enc = lambda d: base64.urlsafe_b64encode(
-        json.dumps(d, separators=(",", ":")).encode()).rstrip(b"=").decode()
+    def enc(value):
+        return base64.urlsafe_b64encode(
+            json.dumps(value, separators=(",", ":")).encode()
+        ).rstrip(b"=").decode()
+
     h, p = enc(header), enc(payload)
     sig = base64.urlsafe_b64encode(
         hmac.new(secret.encode(), f"{h}.{p}".encode(), hashlib.sha256).digest()).rstrip(b"=").decode()
@@ -152,21 +160,15 @@ def test_g4_invalid_tokens_denied(store):
                            secret=SECRET))                        # no sub
 
 
-def test_g4_rs256_is_not_implemented_no_fallback(store):
-    # production RS256/JWKS is a deliberate NotImplemented path — a token is NOT
-    # silently verified by HS256 even if it would pass HS256
+def test_g4_test_verifier_cannot_select_rs256_or_fallback(store):
+    # The local fixture verifier cannot become a production verifier by changing
+    # an algorithm string, and never falls back to HS256.
     cfg = _cfg(algorithm="RS256")
-    client = _client(store, cfg)
-    sub = demo.spray_submission("g4-rs256-1", erp_id="erp:g4.rs", actor_ref=demo.FARMER)
-    r = client.post("/commit", json={"submission": sub}, headers=_bearer(_token(demo.FARMER)))
-    assert r.status_code == 401
-    # and the verifier itself raises a clear NotImplemented-style error
-    try:
+    with pytest.raises(AuthenticationStartupError, match="HS256"):
+        create_app(store, oidc=cfg)
+    with pytest.raises(OidcError) as raised:
         cfg.verify(_token(demo.FARMER))
-        assert False, "RS256 verify must raise"
-    except OidcError as exc:
-        assert "RS256" in str(exc) and "not implemented" in str(exc).lower()
-        assert "fallback" in str(exc).lower()
+    assert raised.value.internal_detail == "test algorithm differs"
 
 
 # ---------------------------------------------------------------------------
@@ -242,7 +244,7 @@ def test_g4_verifier_rejects_tampered_payload(store):
         _cfg().verify(f"{header_b64}.{forged_payload}.{sig}")
         assert False, "tampered payload must fail signature verification"
     except OidcError as exc:
-        assert "signature" in str(exc).lower()
+        assert "signature" in exc.internal_detail.lower()
 
 
 # ---------------------------------------------------------------------------
@@ -267,10 +269,9 @@ def test_g4_critical_jose_headers_rejected_even_if_signed(store):
             _cfg().verify(tok)
 
 
-def test_g4_from_env_default_reads_oidc_config_deterministically(store, monkeypatch):
-    # PR #16 hostile B2: create_app(store) (default _FROM_ENV) reads OIDC from the
-    # environment — with OFARM_OIDC_* set it enables OIDC, cleared it is the shim.
-    # (Conformance shim tests force oidc=None, so they are deterministic regardless.)
+def test_g4_from_env_requires_an_explicit_mode(store, monkeypatch):
+    # No issuer/audience combination selects a mode. The exact mode variable does.
+    monkeypatch.setenv("OFARM_AUTH_MODE", "test")
     monkeypatch.setenv("OFARM_OIDC_ISSUER", ISSUER)
     monkeypatch.setenv("OFARM_OIDC_AUDIENCE", AUDIENCE)
     monkeypatch.setenv("OFARM_OIDC_HS256_SECRET", SECRET)
@@ -281,9 +282,8 @@ def test_g4_from_env_default_reads_oidc_config_deterministically(store, monkeypa
                         headers={"x-acting-party": demo.FARMER}).status_code == 401  # header != auth
     assert enabled.post("/commit", json={"submission": sub},
                         headers=_bearer(_token(demo.FARMER))).status_code == 200
-    monkeypatch.delenv("OFARM_OIDC_ISSUER")
-    monkeypatch.delenv("OFARM_OIDC_AUDIENCE")
-    shim = TestClient(create_app(store))      # _FROM_ENV -> no issuer/aud -> shim
+    monkeypatch.setenv("OFARM_AUTH_MODE", "development")
+    shim = TestClient(create_app(store))
     sub2 = demo.spray_submission(f"g4-env2:{uid()}", erp_id=f"erp:g4.env2.{uid()}", actor_ref=demo.FARMER)
     assert shim.post("/commit", json={"submission": sub2},
                      headers={"x-acting-party": demo.FARMER}).status_code == 200

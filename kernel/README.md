@@ -25,7 +25,7 @@ an exact baseline match.
 ```bash
 # 1. environment (Python 3.11+, PostgreSQL 15+)
 python3 -m venv .venv
-.venv/bin/pip install fastapi uvicorn pytest "psycopg[binary]" jsonschema rfc3339-validator httpx
+.venv/bin/pip install fastapi uvicorn pytest "psycopg[binary]" jsonschema rfc3339-validator httpx "PyJWT[crypto]"
 
 # 2. a scratch cluster on a unix socket (no TCP listener)
 PGBIN=$(dirname "$(which initdb)")        # e.g. /opt/homebrew/opt/postgresql@17/bin
@@ -35,6 +35,7 @@ PGBIN=$(dirname "$(which initdb)")        # e.g. /opt/homebrew/opt/postgresql@17
 
 # 3. the legacy development API (installs its disposable prototype schema)
 export OFARM_DEPLOYMENT_IMAGE_DIGEST="$VERIFIED_OFARM_IMAGE_DIGEST"
+export OFARM_AUTH_MODE=development
 .venv/bin/uvicorn --factory kernel.api:create_app --port 8800
 
 # 4. the test suites: root conformance (tests 1-15 + regressions + the
@@ -57,11 +58,20 @@ OCI digest (`sha256:` plus 64 hexadecimal digits). It is reported as a
 process-local activation observation and never enters RuntimeBundle identity or
 semantic receipts.
 
+`OFARM_AUTH_MODE` is required. `development` enables only the local header shim;
+`test` requires `OFARM_OIDC_ISSUER`, `OFARM_OIDC_AUDIENCE`, and
+`OFARM_OIDC_HS256_SECRET`; `production` requires the issuer, audience,
+`OFARM_OIDC_JWKS_URL`, an initialized asymmetric JWKS verifier, and an injected
+immutable principal-binding resolver. Production mode refuses the HS256 secret
+and never falls back to either test or development.
+The complete mode, binding, capability, and safe-refusal policy is in
+`docs/AUTHENTICATION_MODES.md`.
+
 ## Client surface
 
 | Endpoint | What |
 |---|---|
-| `POST /commit` | one capture through the full gate chain; body `{"submission": {...}}`; requires `X-Acting-Party` matching `submission.actingPartyRef` (transport-principal binding — a development principal pending OIDC at M2, see `profile_si_ffs/UNSUPPORTED_SURFACES.md`); always returns the `CommitIngressResult` envelope (refusals are data with registry reason codes, not transport errors) |
+| `POST /commit` | one capture through the full gate chain; body `{"submission": {...}}`; in explicit development mode requires `X-Acting-Party` matching `submission.actingPartyRef`; always returns the `CommitIngressResult` envelope (refusals are data with registry reason codes, not transport errors) |
 | `GET /views/passport/{farmRef}` | the live spray register (View 1) — freshness, exception rows, advisory flags; header `X-Acting-Party` |
 | `POST /review/accept` | governed queue acceptance: body `{farmRef, assertionRef, rationale, evidenceRefs?, idempotencyKey?}`; the rationale is mandatory and routed insufficiencies additionally require reviewer-attached durable evidence (gate-enforced) |
 | `POST /views/inspection-register/freeze` | freeze the exportable inspection register (View 2); body `{farmRef, windowStart, windowEnd}` |

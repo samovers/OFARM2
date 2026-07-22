@@ -1,18 +1,8 @@
-"""OIDC principal verification (M2 G4) — a PLUGGABLE, fail-closed verifier that
-turns a bearer token into a Party transport principal.
+"""Explicit authentication modes and exact OIDC identity verification.
 
-POSTURE (decided, not a production claim): this build ships a zero-dependency
-HS256 verifier for the DEVELOPMENT / CONFORMANCE OIDC path only. Production
-RS256 / JWKS (Keycloak) verification is a deliberate `NotImplemented` path — the
-boundary is executable and obvious, never a silent fallback. The HTTP surface
-remains a development/conformance surface, not a production-authenticated runtime
-(see profile_si_ffs/UNSUPPORTED_SURFACES.md). No PyJWT / jose / cryptography /
-authlib dependency is introduced.
-
-Authority is unchanged by this module: a verified token yields a Party id (the
-transport principal) and, separately, any role claims — but roles map to
-`RoleAssignment` only and NEVER synthesize authority. Authority still comes solely
-from AuthorityGrant / DelegationGrant / SharingGrant (kernel/authority.py, D4).
+Development header authentication, the local HS256 test issuer, and the
+production JWKS verifier are different runtime types.  A missing setting never
+selects one of them implicitly.
 """
 from __future__ import annotations
 
@@ -24,171 +14,607 @@ import json
 import math
 import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any, Protocol, runtime_checkable
+from urllib.parse import urlsplit
 
-# compact-JWS segments are UNPADDED base64url — strictly this alphabet, no "="
-# padding, no other characters. Enforcing canonical form before decode keeps the
-# verifier fail-closed: a non-canonical segment is rejected even if it would
-# otherwise decode (base64 decoders silently drop stray characters) and even if it
-# was signed over that exact mutated segment (PR #16 hostile B2).
+from deployment.postgresql.tenant_contract import (
+    OIDC_ISSUER_EQUALITY_POLICY,
+    TenantCapabilityContractError,
+    validate_oidc_issuer,
+)
+
+
 _B64URL_SEGMENT = re.compile(r"^[A-Za-z0-9_-]+$")
+_OIDC_SUBJECT = re.compile(r"^[!-~]{1,255}$")
+_VISIBLE_ASCII = re.compile(r"^[!-~]+$")
+_MAX_JWT_BYTES = 16_384
+_PRODUCTION_ALGORITHMS = frozenset(
+    {
+        "RS256",
+        "RS384",
+        "RS512",
+        "PS256",
+        "PS384",
+        "PS512",
+        "ES256",
+        "ES384",
+        "ES512",
+        "EdDSA",
+    }
+)
+_FORBIDDEN_JOSE_HEADERS = frozenset(
+    {"crit", "b64", "jku", "jwk", "x5u", "x5c", "x5t", "x5t#S256"}
+)
+
+
+class AuthenticationMode(str, Enum):
+    DEVELOPMENT = "development"
+    TEST = "test"
+    PRODUCTION = "production"
+
+
+class PreBindingOutcome(str, Enum):
+    """Closed, non-sensitive outcomes that #192 may consume later."""
+
+    NO_CREDENTIAL = "NO_CREDENTIAL"
+    INVALID_CREDENTIAL = "INVALID_CREDENTIAL"
+    VERIFIER_UNAVAILABLE = "VERIFIER_UNAVAILABLE"
+    BINDING_UNAVAILABLE = "BINDING_UNAVAILABLE"
+    PRINCIPAL_UNBOUND = "PRINCIPAL_UNBOUND"
+    BINDING_INTEGRITY_REFUSED = "BINDING_INTEGRITY_REFUSED"
+    CONFIGURATION_REFUSED = "CONFIGURATION_REFUSED"
+    SIGNER_UNAVAILABLE = "SIGNER_UNAVAILABLE"
+    CAPABILITY_REFUSED = "CAPABILITY_REFUSED"
+
+
+class AuthenticationStartupError(RuntimeError):
+    """The selected authentication mode could not initialize safely."""
 
 
 class OidcError(Exception):
-    """A token was absent, malformed, or failed verification — fail closed."""
+    """Fail-closed OIDC refusal without credential or identity disclosure."""
+
+    def __init__(
+        self,
+        outcome: PreBindingOutcome = PreBindingOutcome.INVALID_CREDENTIAL,
+        *,
+        internal_detail: str = "",
+    ) -> None:
+        self.outcome = outcome
+        self.internal_detail = internal_detail
+        super().__init__(f"authentication refused ({outcome.value})")
 
 
-def _reject_json_constant(token: str):
-    # JSON has no NaN/Infinity; a JWT must not carry them (PR #16 hostile B1)
-    raise OidcError(f"non-finite JSON constant {token!r} is not allowed in a token")
+@dataclass(frozen=True, slots=True)
+class VerifiedOidcIdentity:
+    """Exact decoded identity bytes accepted by the configured verifier."""
+
+    equality_policy: str
+    issuer: str
+    subject: str
+    claims: dict[str, Any] = field(repr=False, compare=False)
+
+
+@runtime_checkable
+class OidcVerifier(Protocol):
+    def initialize(self) -> None: ...
+
+    def verify_identity(self, token: str) -> VerifiedOidcIdentity: ...
+
+
+@runtime_checkable
+class PrincipalBindingResolver(Protocol):
+    def initialize(self) -> None: ...
+
+    def resolve(self, identity: VerifiedOidcIdentity) -> object: ...
+
+
+def _reject_json_constant(token: str) -> None:
+    raise OidcError(internal_detail=f"non-finite JSON constant {token!r}")
+
+
+def _object_without_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise OidcError(internal_detail="duplicate JWT object member")
+        result[key] = value
+    return result
 
 
 def _b64url_decode(segment: str) -> bytes:
-    if not isinstance(segment, str) or not _B64URL_SEGMENT.match(segment):
-        raise OidcError("token segment is not canonical unpadded base64url")
-    pad = "=" * (-len(segment) % 4)
+    if type(segment) is not str or _B64URL_SEGMENT.fullmatch(segment) is None:
+        raise OidcError(internal_detail="noncanonical compact-JWS segment")
     try:
-        return base64.urlsafe_b64decode(segment + pad)
+        decoded = base64.urlsafe_b64decode(segment + "=" * (-len(segment) % 4))
     except (binascii.Error, ValueError) as exc:
-        raise OidcError(f"malformed base64url segment: {exc}")
-
-
-def _numeric_date(claims: dict, name: str, *, required: bool):
-    """A JWT NumericDate (epoch seconds): a FINITE, non-bool int/float. Rejects
-    missing (when required), bool, NaN/Infinity (PR #16 hostile B1)."""
-    value = claims.get(name)
-    if value is None:
-        if required:
-            raise OidcError(f"missing {name} claim")
-        return None
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
-        raise OidcError(f"invalid {name} claim (must be a finite NumericDate)")
-    return int(value)
+        raise OidcError(internal_detail="malformed compact-JWS segment") from exc
+    if _b64url_encode(decoded) != segment:
+        raise OidcError(internal_detail="noncanonical compact-JWS segment")
+    return decoded
 
 
 def _b64url_encode(raw: bytes) -> str:
     return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
 
 
-def _claim_path(claims: dict, path: str):
-    """Resolve a dotted claim path (e.g. realm_access.roles), or None."""
-    node = claims
+def _strict_unverified_token(token: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    if type(token) is not str:
+        raise OidcError(internal_detail="token is not text")
+    try:
+        encoded = token.encode("ascii", errors="strict")
+    except UnicodeEncodeError as exc:
+        raise OidcError(internal_detail="token is not ASCII") from exc
+    if not 1 <= len(encoded) <= _MAX_JWT_BYTES:
+        raise OidcError(internal_detail="token size is outside the bound")
+    segments = token.split(".")
+    if len(segments) != 3 or not all(segments):
+        raise OidcError(internal_detail="token is not compact JWS")
+    try:
+        header = json.loads(
+            _b64url_decode(segments[0]).decode("utf-8", errors="strict"),
+            parse_constant=_reject_json_constant,
+            object_pairs_hook=_object_without_duplicates,
+        )
+        claims = json.loads(
+            _b64url_decode(segments[1]).decode("utf-8", errors="strict"),
+            parse_constant=_reject_json_constant,
+            object_pairs_hook=_object_without_duplicates,
+        )
+        _b64url_decode(segments[2])
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise OidcError(internal_detail="malformed token JSON") from exc
+    if type(header) is not dict or type(claims) is not dict:
+        raise OidcError(internal_detail="JWT header and claims must be objects")
+    return header, claims
+
+
+def _numeric_date(claims: dict[str, Any], name: str, *, required: bool) -> int | None:
+    value = claims.get(name)
+    if value is None:
+        if required:
+            raise OidcError(internal_detail=f"missing {name}")
+        return None
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+    ):
+        raise OidcError(internal_detail=f"invalid {name}")
+    return int(value)
+
+
+def _validate_exact_identity(issuer: object, subject: object) -> tuple[str, str]:
+    try:
+        exact_issuer = validate_oidc_issuer(issuer)
+    except TenantCapabilityContractError as exc:
+        raise OidcError(internal_detail="issuer grammar refused") from exc
+    if type(subject) is not str or _OIDC_SUBJECT.fullmatch(subject) is None:
+        raise OidcError(internal_detail="subject grammar refused")
+    return exact_issuer, subject
+
+
+def _claim_path(claims: dict[str, Any], path: str) -> object:
+    node: object = claims
     for part in path.split("."):
-        if not isinstance(node, dict) or part not in node:
+        if type(node) is not dict or part not in node:
             return None
         node = node[part]
     return node
 
 
-def _verify_hs256(token: str, *, secret: str, issuer: str, audience: str,
-                  leeway_seconds: int = 0) -> dict:
-    """Verify a compact-JWS HS256 token, fail-closed. Rejects alg=none /
-    non-HS256, missing/short structure, malformed base64url or JSON, a bad or
-    missing signature (constant-time compare), and missing/invalid iss / aud /
-    exp (and nbf if present). Returns the decoded claims on success."""
+def _verify_hs256(
+    token: str,
+    *,
+    secret: str,
+    issuer: str,
+    audience: str,
+    leeway_seconds: int = 0,
+) -> dict[str, Any]:
+    """Strict local test verifier. This path is never used by production mode."""
+
     if not secret:
-        raise OidcError("no HS256 secret configured; cannot verify")
-    parts = token.split(".")
-    if len(parts) != 3 or not all(parts):
-        raise OidcError("token is not a well-formed compact JWS (header.payload.signature)")
-    header_b64, payload_b64, signature_b64 = parts
-
-    try:
-        header = json.loads(_b64url_decode(header_b64), parse_constant=_reject_json_constant)
-        claims = json.loads(_b64url_decode(payload_b64), parse_constant=_reject_json_constant)
-    except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
-        # ValueError also covers a non-finite-constant rejection raised inside json
-        raise OidcError(f"malformed token JSON: {exc}")
-    if not isinstance(header, dict) or not isinstance(claims, dict):
-        raise OidcError("token header/payload is not a JSON object")
-
-    # This minimal verifier understands NO critical JOSE header extensions, so any
-    # `crit` (RFC 7515 §4.1.11) must be rejected, and `b64` (RFC 7797 — unencoded
-    # payload, which would change the signing input) is unsupported. Fail closed
-    # rather than ignore them (PR #16 hostile B1), e.g. {"b64": false, "crit": ["b64"]}.
-    if "crit" in header:
-        raise OidcError("unsupported critical JOSE header(s) 'crit' — rejected (no extensions understood)")
-    if "b64" in header:
-        raise OidcError("unsupported JOSE 'b64' header (RFC 7797) — rejected")
-
-    alg = header.get("alg")
-    if alg == "none":
-        raise OidcError("alg=none is rejected (unsigned tokens are never accepted)")
-    if alg != "HS256":
-        # never silently fall back from another algorithm to HS256
-        raise OidcError(f"unsupported/mismatched alg {alg!r}; this verifier accepts only HS256")
-
-    expected_sig = _b64url_encode(
-        hmac.new(secret.encode("utf-8"), f"{header_b64}.{payload_b64}".encode("ascii"),
-                 hashlib.sha256).digest())
-    # constant-time comparison (never short-circuit on the signature)
-    if not hmac.compare_digest(expected_sig, signature_b64):
-        raise OidcError("signature verification failed")
-
+        raise OidcError(internal_detail="test secret is absent")
+    header, claims = _strict_unverified_token(token)
+    if _FORBIDDEN_JOSE_HEADERS.intersection(header):
+        raise OidcError(internal_detail="unsupported JOSE header")
+    if header.get("alg") != "HS256":
+        raise OidcError(internal_detail="test algorithm differs")
+    header_b64, payload_b64, signature_b64 = token.split(".")
+    expected = _b64url_encode(
+        hmac.new(
+            secret.encode("utf-8"),
+            f"{header_b64}.{payload_b64}".encode("ascii"),
+            hashlib.sha256,
+        ).digest()
+    )
+    if not hmac.compare_digest(expected, signature_b64):
+        raise OidcError(internal_detail="signature verification failed")
+    if claims.get("iss") != issuer:
+        raise OidcError(internal_detail="issuer differs")
+    audience_claim = claims.get("aud")
+    if not (
+        audience_claim == audience
+        or (
+            type(audience_claim) is list
+            and all(type(item) is str for item in audience_claim)
+            and audience in audience_claim
+        )
+    ):
+        raise OidcError(internal_detail="audience differs")
     now = int(time.time())
-    iss = claims.get("iss")
-    if iss != issuer:
-        raise OidcError(f"issuer {iss!r} is not the configured issuer {issuer!r}")
-    aud = claims.get("aud")
-    aud_ok = (aud == audience) or (isinstance(aud, list) and audience in aud)
-    if not aud_ok:
-        raise OidcError(f"audience {aud!r} does not include the configured audience {audience!r}")
-    exp = _numeric_date(claims, "exp", required=True)
-    if now > exp + leeway_seconds:
-        raise OidcError("token has expired")
-    nbf = _numeric_date(claims, "nbf", required=False)
-    if nbf is not None and now + leeway_seconds < nbf:
-        raise OidcError("token is not yet valid (nbf)")
+    expires = _numeric_date(claims, "exp", required=True)
+    assert expires is not None
+    if now > expires + leeway_seconds:
+        raise OidcError(internal_detail="token expired")
+    not_before = _numeric_date(claims, "nbf", required=False)
+    if not_before is not None and now + leeway_seconds < not_before:
+        raise OidcError(internal_detail="token not yet valid")
     return claims
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class OidcConfig:
-    """A pluggable verifier config. `algorithm` selects the verification path;
-    RS256 / JWKS is a deliberate NotImplemented production path."""
+    """Local HS256 test issuer. It cannot construct production mode."""
+
     issuer: str
     audience: str
     algorithm: str = "HS256"
     hs256_secret: str | None = None
-    subject_claim: str = "sub"          # the claim carrying the Party id
-    roles_claim: str | None = None      # dotted path to role claims, e.g. realm_access.roles
+    subject_claim: str = "sub"
+    roles_claim: str | None = None
     leeway_seconds: int = 0
 
-    def verify(self, token: str) -> dict:
-        """Verify the token and return {partyRef, roles, claims}. Raises OidcError
-        on any failure (fail closed). `partyRef` is the Party transport principal;
-        `roles` are recognised RoleAssignment-level roles that NEVER grant authority."""
-        if not isinstance(token, str) or not token.strip():
-            raise OidcError("no token presented")
-        if self.algorithm == "HS256":
-            claims = _verify_hs256(token, secret=self.hs256_secret, issuer=self.issuer,
-                                   audience=self.audience, leeway_seconds=self.leeway_seconds)
-        elif self.algorithm in ("RS256", "JWKS"):
-            raise OidcError(
-                "RS256 / JWKS (Keycloak) production verification is not implemented in "
-                "this development/conformance build (see UNSUPPORTED_SURFACES.md); "
-                "there is no fallback to HS256")
-        else:
-            raise OidcError(f"unsupported verifier algorithm {self.algorithm!r}")
+    def initialize(self) -> None:
+        if self.algorithm != "HS256":
+            raise AuthenticationStartupError(
+                "test authentication accepts only the local HS256 verifier"
+            )
+        if not self.hs256_secret:
+            raise AuthenticationStartupError("test authentication secret is required")
+        try:
+            _validate_exact_identity(self.issuer, "subject-probe")
+        except OidcError as exc:
+            raise AuthenticationStartupError("test OIDC issuer is invalid") from exc
 
-        party_ref = claims.get(self.subject_claim)
-        if not isinstance(party_ref, str) or not party_ref:
-            raise OidcError(f"token carries no usable {self.subject_claim!r} (Party) claim")
-        roles = _claim_path(claims, self.roles_claim) if self.roles_claim else None
-        if not isinstance(roles, list):
+    def verify_identity(self, token: str) -> VerifiedOidcIdentity:
+        if self.algorithm != "HS256":
+            raise OidcError(internal_detail="test algorithm differs")
+        claims = _verify_hs256(
+            token,
+            secret=self.hs256_secret or "",
+            issuer=self.issuer,
+            audience=self.audience,
+            leeway_seconds=self.leeway_seconds,
+        )
+        if self.subject_claim != "sub":
+            raise OidcError(internal_detail="subject claim must be sub")
+        issuer, subject = _validate_exact_identity(claims.get("iss"), claims.get("sub"))
+        return VerifiedOidcIdentity(
+            equality_policy=OIDC_ISSUER_EQUALITY_POLICY,
+            issuer=issuer,
+            subject=subject,
+            claims=claims,
+        )
+
+    def verify(self, token: str) -> dict[str, Any]:
+        """Compatibility view used by the existing M2 engineering tests."""
+
+        identity = self.verify_identity(token)
+        roles = _claim_path(identity.claims, self.roles_claim) if self.roles_claim else []
+        if type(roles) is not list:
             roles = []
-        # roles are RoleAssignment-level only — recorded/recognised, never authority
-        return {"partyRef": party_ref, "roles": list(roles), "claims": claims}
+        return {
+            "partyRef": identity.subject,
+            "roles": list(roles),
+            "claims": identity.claims,
+        }
 
 
-def issue_dev_token(claims: dict, *, secret: str) -> str:
-    """Issue an HS256 token for the DEVELOPMENT / CONFORMANCE flow (a stand-in for
-    a real IdP, which the production RS256/JWKS path will replace). NOT a security
-    boundary — only the verifier is. Used by conformance tests and local dev."""
-    header_b64 = _b64url_encode(json.dumps({"alg": "HS256", "typ": "JWT"},
-                                           separators=(",", ":")).encode("utf-8"))
-    payload_b64 = _b64url_encode(json.dumps(claims, separators=(",", ":")).encode("utf-8"))
+@dataclass(frozen=True, slots=True)
+class ProductionOidcConfig:
+    issuer: str
+    audience: str
+    jwks_url: str
+    algorithms: tuple[str, ...] = ("RS256",)
+    leeway_seconds: int = 0
+    jwks_lifespan_seconds: int = 300
+    timeout_seconds: int = 5
+
+    def validate(self) -> None:
+        try:
+            validate_oidc_issuer(self.issuer)
+        except TenantCapabilityContractError as exc:
+            raise AuthenticationStartupError("production OIDC issuer is invalid") from exc
+        if (
+            type(self.audience) is not str
+            or not 1 <= len(self.audience.encode("utf-8")) <= 2048
+            or _VISIBLE_ASCII.fullmatch(self.audience) is None
+        ):
+            raise AuthenticationStartupError("production OIDC audience is invalid")
+        if (
+            type(self.jwks_url) is not str
+            or not 1 <= len(self.jwks_url.encode("utf-8")) <= 2048
+            or _VISIBLE_ASCII.fullmatch(self.jwks_url) is None
+        ):
+            raise AuthenticationStartupError("production JWKS URL must be an HTTPS URL")
+        parsed_jwks = urlsplit(self.jwks_url)
+        if (
+            parsed_jwks.scheme != "https"
+            or not parsed_jwks.netloc
+            or not parsed_jwks.hostname
+            or parsed_jwks.username is not None
+            or parsed_jwks.password is not None
+            or parsed_jwks.fragment
+        ):
+            raise AuthenticationStartupError("production JWKS URL must be an HTTPS URL")
+        if (
+            type(self.algorithms) is not tuple
+            or not self.algorithms
+            or len(set(self.algorithms)) != len(self.algorithms)
+            or any(algorithm not in _PRODUCTION_ALGORITHMS for algorithm in self.algorithms)
+        ):
+            raise AuthenticationStartupError("production OIDC algorithms are invalid")
+        if type(self.leeway_seconds) is not int or not 0 <= self.leeway_seconds <= 60:
+            raise AuthenticationStartupError("production OIDC leeway is invalid")
+        if (
+            type(self.jwks_lifespan_seconds) is not int
+            or not 60 <= self.jwks_lifespan_seconds <= 86_400
+        ):
+            raise AuthenticationStartupError("production JWKS lifespan is invalid")
+        if type(self.timeout_seconds) is not int or not 1 <= self.timeout_seconds <= 30:
+            raise AuthenticationStartupError("production JWKS timeout is invalid")
+
+
+class ProductionOidcVerifier:
+    """Maintained PyJWT verifier with bounded cached JWKS rotation."""
+
+    def __init__(self, config: ProductionOidcConfig, *, jwks_client: object | None = None):
+        self.config = config
+        self._jwks_client = jwks_client
+        self._jwt: Any | None = None
+        self._initialized = False
+
+    @property
+    def initialized(self) -> bool:
+        return self._initialized
+
+    def initialize(self) -> None:
+        self.config.validate()
+        try:
+            import jwt
+        except ImportError as exc:
+            raise AuthenticationStartupError(
+                "production OIDC verifier dependency is unavailable"
+            ) from exc
+        self._jwt = jwt
+        if self._jwks_client is None:
+            self._jwks_client = jwt.PyJWKClient(
+                self.config.jwks_url,
+                cache_keys=True,
+                max_cached_keys=16,
+                cache_jwk_set=True,
+                lifespan=self.config.jwks_lifespan_seconds,
+                timeout=self.config.timeout_seconds,
+            )
+        try:
+            jwk_set = self._jwks_client.get_jwk_set(refresh=True)
+            keys = tuple(jwk_set.keys)
+        except Exception as exc:
+            raise AuthenticationStartupError(
+                "production OIDC JWKS initialization failed"
+            ) from exc
+        if not keys or not any(
+            getattr(key, "algorithm_name", None) in self.config.algorithms
+            and type(getattr(key, "key_id", None)) is str
+            and _VISIBLE_ASCII.fullmatch(getattr(key, "key_id")) is not None
+            and 1 <= len(getattr(key, "key_id")) <= 255
+            for key in keys
+        ):
+            raise AuthenticationStartupError(
+                "production OIDC JWKS has no usable keyed verifier"
+            )
+        self._initialized = True
+
+    def verify_identity(self, token: str) -> VerifiedOidcIdentity:
+        if not self._initialized or self._jwt is None or self._jwks_client is None:
+            raise OidcError(
+                PreBindingOutcome.VERIFIER_UNAVAILABLE,
+                internal_detail="production verifier is not initialized",
+            )
+        header, unverified_claims = _strict_unverified_token(token)
+        if _FORBIDDEN_JOSE_HEADERS.intersection(header):
+            raise OidcError(internal_detail="unsupported JOSE header")
+        algorithm = header.get("alg")
+        key_id = header.get("kid")
+        if algorithm not in self.config.algorithms:
+            raise OidcError(internal_detail="token algorithm differs")
+        if (
+            type(key_id) is not str
+            or not 1 <= len(key_id.encode("ascii", errors="ignore")) <= 255
+            or _VISIBLE_ASCII.fullmatch(key_id) is None
+        ):
+            raise OidcError(internal_detail="token key id is absent or invalid")
+        if "typ" in header and header["typ"] not in ("JWT", "at+jwt"):
+            raise OidcError(internal_detail="token type differs")
+        _numeric_date(unverified_claims, "exp", required=True)
+        _numeric_date(unverified_claims, "nbf", required=False)
+        _numeric_date(unverified_claims, "iat", required=False)
+        try:
+            signing_key = self._jwks_client.get_signing_key(key_id)
+            if (
+                signing_key.key_id != key_id
+                or signing_key.algorithm_name != algorithm
+            ):
+                raise OidcError(internal_detail="selected JWKS key differs")
+            claims = self._jwt.decode(
+                token,
+                signing_key.key,
+                algorithms=[algorithm],
+                audience=self.config.audience,
+                issuer=self.config.issuer,
+                leeway=self.config.leeway_seconds,
+                options={
+                    "require": ["exp", "iss", "sub"],
+                    "verify_signature": True,
+                    "verify_exp": True,
+                    "verify_nbf": True,
+                    "verify_iat": True,
+                    "verify_aud": True,
+                    "verify_iss": True,
+                },
+            )
+        except OidcError:
+            raise
+        except Exception as exc:
+            raise OidcError(internal_detail="maintained verifier refused token") from exc
+        if type(claims) is not dict or claims != unverified_claims:
+            raise OidcError(internal_detail="verified claims representation differs")
+        if claims.get("iss") != self.config.issuer:
+            raise OidcError(internal_detail="verified issuer differs")
+        issuer, subject = _validate_exact_identity(claims.get("iss"), claims.get("sub"))
+        return VerifiedOidcIdentity(
+            equality_policy=OIDC_ISSUER_EQUALITY_POLICY,
+            issuer=issuer,
+            subject=subject,
+            claims=claims,
+        )
+
+
+@dataclass(slots=True)
+class AuthenticationRuntime:
+    """One explicit mode and only the dependencies permitted in that mode."""
+
+    mode: AuthenticationMode
+    verifier: OidcVerifier | None = None
+    principal_binding_resolver: PrincipalBindingResolver | None = None
+    _initialized: bool = field(default=False, init=False, repr=False)
+
+    @classmethod
+    def development(cls) -> "AuthenticationRuntime":
+        return cls(AuthenticationMode.DEVELOPMENT)
+
+    @classmethod
+    def test(cls, verifier: OidcVerifier) -> "AuthenticationRuntime":
+        return cls(AuthenticationMode.TEST, verifier=verifier)
+
+    @classmethod
+    def production(
+        cls,
+        verifier: OidcVerifier,
+        principal_binding_resolver: PrincipalBindingResolver,
+    ) -> "AuthenticationRuntime":
+        return cls(
+            AuthenticationMode.PRODUCTION,
+            verifier=verifier,
+            principal_binding_resolver=principal_binding_resolver,
+        )
+
+    def initialize(self) -> None:
+        if self.mode is AuthenticationMode.DEVELOPMENT:
+            if self.verifier is not None or self.principal_binding_resolver is not None:
+                raise AuthenticationStartupError(
+                    "development mode cannot contain production authentication dependencies"
+                )
+        elif self.mode is AuthenticationMode.TEST:
+            if self.verifier is None or self.principal_binding_resolver is not None:
+                raise AuthenticationStartupError("test authentication shape is invalid")
+            self.verifier.initialize()
+        elif self.mode is AuthenticationMode.PRODUCTION:
+            if self.verifier is None or self.principal_binding_resolver is None:
+                raise AuthenticationStartupError(
+                    "production verifier and principal-binding resolver are required"
+                )
+            if isinstance(self.verifier, OidcConfig):
+                raise AuthenticationStartupError(
+                    "the local HS256 verifier is unavailable in production"
+                )
+            self.verifier.initialize()
+            self.principal_binding_resolver.initialize()
+        else:
+            raise AuthenticationStartupError("authentication mode is invalid")
+        self._initialized = True
+
+    def resolve_principal(
+        self,
+        *,
+        authorization: str | None,
+        development_header: str | None,
+    ) -> tuple[str, object | None]:
+        if not self._initialized:
+            raise OidcError(
+                PreBindingOutcome.CONFIGURATION_REFUSED,
+                internal_detail="authentication runtime is not initialized",
+            )
+        if self.mode is AuthenticationMode.DEVELOPMENT:
+            if type(development_header) is not str or not development_header:
+                raise OidcError(PreBindingOutcome.NO_CREDENTIAL)
+            return development_header, None
+        token = _bearer_token(authorization)
+        assert self.verifier is not None
+        identity = self.verifier.verify_identity(token)
+        if self.mode is AuthenticationMode.TEST:
+            return identity.subject, identity
+        assert self.principal_binding_resolver is not None
+        try:
+            resolved = self.principal_binding_resolver.resolve(identity)
+        except OidcError:
+            raise
+        except Exception as exc:
+            raise OidcError(
+                PreBindingOutcome.BINDING_INTEGRITY_REFUSED,
+                internal_detail="principal binding resolver refused",
+            ) from exc
+        party_ref = getattr(resolved, "party_ref", None)
+        if type(party_ref) is not str or not party_ref:
+            raise OidcError(
+                PreBindingOutcome.BINDING_INTEGRITY_REFUSED,
+                internal_detail="resolved Party reference is invalid",
+            )
+        return party_ref, resolved
+
+
+def _bearer_token(authorization: object) -> str:
+    if type(authorization) is not str:
+        raise OidcError(PreBindingOutcome.NO_CREDENTIAL)
+    pieces = authorization.split(" ")
+    if len(pieces) != 2 or pieces[0].lower() != "bearer" or not pieces[1]:
+        raise OidcError(PreBindingOutcome.NO_CREDENTIAL)
+    return pieces[1]
+
+
+def issue_dev_token(claims: dict[str, Any], *, secret: str) -> str:
+    """Issue a local HS256 fixture token for explicit test mode only."""
+
+    header_b64 = _b64url_encode(
+        json.dumps({"alg": "HS256", "typ": "JWT"}, separators=(",", ":")).encode(
+            "utf-8"
+        )
+    )
+    payload_b64 = _b64url_encode(
+        json.dumps(claims, separators=(",", ":")).encode("utf-8")
+    )
     signature = _b64url_encode(
-        hmac.new(secret.encode("utf-8"), f"{header_b64}.{payload_b64}".encode("ascii"),
-                 hashlib.sha256).digest())
+        hmac.new(
+            secret.encode("utf-8"),
+            f"{header_b64}.{payload_b64}".encode("ascii"),
+            hashlib.sha256,
+        ).digest()
+    )
     return f"{header_b64}.{payload_b64}.{signature}"
+
+
+__all__ = [
+    "AuthenticationMode",
+    "AuthenticationRuntime",
+    "AuthenticationStartupError",
+    "OidcConfig",
+    "OidcError",
+    "PreBindingOutcome",
+    "ProductionOidcConfig",
+    "ProductionOidcVerifier",
+    "VerifiedOidcIdentity",
+    "issue_dev_token",
+]

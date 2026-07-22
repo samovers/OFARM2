@@ -1,0 +1,497 @@
+"""Application-owned #172 binding, control-plane, and capability tests."""
+from __future__ import annotations
+
+import base64
+from contextlib import AbstractContextManager
+from datetime import UTC, datetime, timedelta
+from uuid import uuid4
+
+import pytest
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+from deployment.postgresql.tenant_contract import (
+    GOOGLE_KMS_KEY_ALGORITHM,
+    GOOGLE_KMS_KEY_PURPOSE,
+    GOOGLE_KMS_PROTECTION_LEVEL,
+    GoogleKmsEd25519PublicKey,
+    TENANT_CAPABILITY_RFC8410_PREFIX,
+    decode_tenant_capability_jws,
+    derive_binder_audience,
+    derive_ed25519_key_id,
+    raw_public_key_digest,
+)
+from kernel.auth_oidc import OidcError, PreBindingOutcome, VerifiedOidcIdentity
+from kernel.principal_binding import (
+    BindingLifecycleHead,
+    BindingTransitionRequest,
+    BindingVersionCandidate,
+    PostgreSQLPrincipalBindingResolver,
+    PrincipalBindingAct,
+    PrincipalBindingAuthority,
+    PrincipalBindingControlError,
+    PrincipalBindingControlPlane,
+)
+from kernel.tenant_capability import (
+    CapabilityIssuanceError,
+    GoogleCloudKmsClientAdapter,
+    GoogleKmsEd25519Signer,
+    GoogleKmsSigningResponse,
+    ProductionSigningEvidence,
+    ProductionTenantCapabilityIssuer,
+    TenantChallenge,
+)
+
+
+ISSUER = "https://issuer.example.test/tenant"
+SUBJECT = "subject-01"
+PARTY = "party:operator-01"
+DIGEST_A = "sha256:" + "11" * 32
+DIGEST_B = "sha256:" + "22" * 32
+DIGEST_C = "sha256:" + "33" * 32
+DIGEST_D = "sha256:" + "44" * 32
+
+
+class _Result:
+    def __init__(self, *, one=None, many=None):
+        self.one = one
+        self.many = [] if many is None else many
+
+    def fetchone(self):
+        return self.one
+
+    def fetchall(self):
+        return self.many
+
+
+class _Connection(AbstractContextManager):
+    def __init__(self, handler):
+        self.handler = handler
+        self.statements: list[tuple[str, object]] = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def execute(self, query, params=None):
+        self.statements.append((query, params))
+        return self.handler(query, params)
+
+
+class _Factory:
+    def __init__(self, connection):
+        self.connection = connection
+
+    def __call__(self):
+        return self.connection
+
+
+def _identity():
+    return VerifiedOidcIdentity(
+        equality_policy="OIDC_EXACT_UTF8_V1",
+        issuer=ISSUER,
+        subject=SUBJECT,
+        claims={},
+    )
+
+
+def _authority():
+    now = datetime.now(UTC)
+    return PrincipalBindingAuthority(
+        equality_policy="OIDC_EXACT_UTF8_V1",
+        issuer=ISSUER,
+        subject=SUBJECT,
+        binding_version_id=uuid4(),
+        binding_version_digest=DIGEST_A,
+        lifecycle_head_id=uuid4(),
+        lifecycle_head_digest=DIGEST_B,
+        tenant_id=uuid4(),
+        tenant_registration_digest=DIGEST_C,
+        party_ref=PARTY,
+        party_record_kind="ofarm.party.v0.1",
+        party_record_id=PARTY,
+        party_schema_digest=DIGEST_D,
+        party_payload_digest="sha256:" + "55" * 32,
+        party_state="ACTIVE",
+        valid_from=now - timedelta(days=1),
+        valid_until=now + timedelta(days=1),
+    )
+
+
+def test_resolver_folds_immutable_authority_and_never_reads_projection():
+    authority = _authority()
+    row = tuple(getattr(authority, field) for field in authority.__dataclass_fields__) + (
+        True,
+    )
+
+    def handler(query, _params):
+        if "startup-probe" in repr(_params):
+            return _Result(many=[])
+        return _Result(many=[row])
+
+    connection = _Connection(handler)
+    resolver = PostgreSQLPrincipalBindingResolver(_Factory(connection))
+    resolver.initialize()
+    assert resolver.resolve(_identity()) == authority
+    sql = "\n".join(query.lower() for query, _ in connection.statements)
+    assert "fold_principal_binding_authority" in sql
+    assert "principal_binding_current" not in sql
+    assert "join ofarm.principal_binding" in sql
+    assert "join ofarm.tenant_registry" in sql
+    assert "join ofarm.kernel_record" in sql
+
+
+def test_missing_or_ambiguous_binding_fails_closed_with_safe_outcome():
+    for rows, outcome in (
+        ([], PreBindingOutcome.PRINCIPAL_UNBOUND),
+        ([tuple(range(18)), tuple(range(18))], PreBindingOutcome.BINDING_INTEGRITY_REFUSED),
+    ):
+        calls = 0
+
+        def handler(_query, _params):
+            nonlocal calls
+            calls += 1
+            return _Result(many=[] if calls == 1 else rows)
+
+        resolver = PostgreSQLPrincipalBindingResolver(_Factory(_Connection(handler)))
+        resolver.initialize()
+        with pytest.raises(OidcError) as raised:
+            resolver.resolve(_identity())
+        assert raised.value.outcome is outcome
+        assert SUBJECT not in str(raised.value)
+
+
+def test_control_plane_activates_only_through_hardened_functions():
+    now = datetime.now(UTC)
+    candidate = BindingVersionCandidate(
+        binding_version_id=uuid4(),
+        tenant_id=uuid4(),
+        tenant_registration_digest=DIGEST_A,
+        party_ref=PARTY,
+        party_record_kind="ofarm.party.v0.1",
+        party_record_id=PARTY,
+        party_schema_digest=DIGEST_B,
+        party_payload_digest=DIGEST_C,
+        party_state="ACTIVE",
+        valid_from=now - timedelta(minutes=1),
+        valid_until=now + timedelta(days=1),
+    )
+
+    def handler(query, _params):
+        if "compute_principal_binding_version_digest" in query:
+            return _Result(one=(DIGEST_D,))
+        if "compute_principal_lifecycle_act_digest" in query:
+            return _Result(one=("sha256:" + "66" * 32,))
+        if "transition_principal_binding" in query:
+            return _Result(one=(None,))
+        raise AssertionError(query)
+
+    connection = _Connection(handler)
+    controller = PrincipalBindingControlPlane(_Factory(connection))
+    receipt = controller.transition(
+        BindingTransitionRequest(
+            act_kind=PrincipalBindingAct.ACTIVATE,
+            issuer=ISSUER,
+            subject=SUBJECT,
+            expected_head=None,
+            effective_at=now,
+            decided_at=now,
+            accountable_control_ref="control:identity-admin",
+            reason="initial-activation",
+            candidate=candidate,
+        )
+    )
+    assert receipt.binding_version_id == candidate.binding_version_id
+    assert receipt.binding_version_digest == DIGEST_D
+    sql = "\n".join(query.lower() for query, _ in connection.statements)
+    assert "compute_principal_binding_version_digest" in sql
+    assert "compute_principal_lifecycle_act_digest" in sql
+    assert "transition_principal_binding" in sql
+    assert not any(word in sql for word in ("insert into", "update ", "delete from"))
+
+
+def test_control_plane_requires_exact_head_and_predecessor_for_supersession():
+    now = datetime.now(UTC)
+    current_id = uuid4()
+    head = BindingLifecycleHead(
+        stream_sequence=1,
+        act_id=uuid4(),
+        act_digest=DIGEST_A,
+        current_state="ACTIVE",
+        binding_version_id=current_id,
+        binding_version_digest=DIGEST_B,
+    )
+    bad_candidate = BindingVersionCandidate(
+        binding_version_id=uuid4(),
+        tenant_id=uuid4(),
+        tenant_registration_digest=DIGEST_A,
+        party_ref=PARTY,
+        party_record_kind="ofarm.party.v0.1",
+        party_record_id=PARTY,
+        party_schema_digest=DIGEST_B,
+        party_payload_digest=DIGEST_C,
+        party_state="ACTIVE",
+        valid_from=now - timedelta(minutes=1),
+        valid_until=now + timedelta(days=1),
+        predecessor_version_id=uuid4(),
+    )
+    controller = PrincipalBindingControlPlane(
+        _Factory(_Connection(lambda *_: pytest.fail("database must not be called")))
+    )
+    with pytest.raises(PrincipalBindingControlError):
+        controller.transition(
+            BindingTransitionRequest(
+                act_kind=PrincipalBindingAct.SUPERSEDE,
+                issuer=ISSUER,
+                subject=SUBJECT,
+                expected_head=head,
+                current_binding_version_id=current_id,
+                current_binding_version_digest=DIGEST_B,
+                candidate=bad_candidate,
+                effective_at=now,
+                decided_at=now,
+                accountable_control_ref="control:identity-admin",
+                reason="replacement",
+            )
+        )
+
+
+class _CapabilityResolver:
+    def __init__(self, authority):
+        self.authority = authority
+        self.initialized = False
+
+    def initialize(self):
+        self.initialized = True
+
+    def resolve(self, identity):
+        assert identity == _identity()
+        return self.authority
+
+
+class _FixtureSigner:
+    def __init__(self, private, audience):
+        self.private = private
+        self._audience = audience
+        public = private.public_key().public_bytes_raw()
+        self._public = public
+        self._kid = derive_ed25519_key_id(public)
+
+    @property
+    def key_id(self):
+        return self._kid
+
+    @property
+    def public_key(self):
+        return self._public
+
+    @property
+    def audience(self):
+        return self._audience
+
+    def initialize(self):
+        pass
+
+    def sign(self, data):
+        return self.private.sign(data)
+
+
+def _production_signer(private, audience, now_us):
+    public = private.public_key().public_bytes_raw()
+    resource = (
+        "projects/ofarm1/locations/europe-west1/keyRings/auth/"
+        "cryptoKeys/capability/cryptoKeyVersions/1"
+    )
+    kid = derive_ed25519_key_id(public)
+    observation = GoogleKmsEd25519PublicKey(
+        key_version_resource=resource,
+        der=TENANT_CAPABILITY_RFC8410_PREFIX + public,
+        public_key=public,
+        public_key_digest=raw_public_key_digest(public),
+        x=base64.urlsafe_b64encode(public).rstrip(b"=").decode("ascii"),
+        kid=kid,
+    )
+    evidence = ProductionSigningEvidence(
+        audience=audience,
+        key_version_resource=resource,
+        key_id=kid,
+        public_key_digest=raw_public_key_digest(public),
+        key_purpose=GOOGLE_KMS_KEY_PURPOSE,
+        key_algorithm=GOOGLE_KMS_KEY_ALGORITHM,
+        protection_level=GOOGLE_KMS_PROTECTION_LEVEL,
+        key_state="ENABLED",
+        attestation_evidence_digest=DIGEST_A,
+        iam_evidence_digest=DIGEST_B,
+        database_candidate_digest=DIGEST_C,
+        database_lifecycle_head_digest=DIGEST_D,
+        observed_at_unix_microseconds=now_us - 1,
+        valid_until_unix_microseconds=now_us + 60_000_000,
+    )
+    return GoogleKmsEd25519Signer(
+        client=_KmsClient(private, resource),
+        public_key=observation,
+        evidence=evidence,
+        now_microseconds=lambda: now_us,
+    )
+
+
+def test_capability_pins_exact_binding_head_tenant_party_and_challenge():
+    authority = _authority()
+    audience = derive_binder_audience(uuid4())
+    now_us = 1_900_000_000_000_000
+    private = Ed25519PrivateKey.generate()
+    signer = _production_signer(private, audience, now_us)
+    issuer = ProductionTenantCapabilityIssuer(
+        resolver=_CapabilityResolver(authority),
+        signer=signer,
+        now_microseconds=lambda: now_us,
+    )
+    issuer.initialize()
+    challenge = TenantChallenge(uuid4(), audience)
+    token = issuer.mint(_identity(), challenge)
+    decoded = decode_tenant_capability_jws(token)
+    capability = decoded.capability
+    assert capability.challenge_id == challenge.challenge_id
+    assert capability.binding_version_id == authority.binding_version_id
+    assert capability.binding_version_digest.hex() == DIGEST_A.removeprefix("sha256:")
+    assert capability.lifecycle_head_id == authority.lifecycle_head_id
+    assert capability.tenant_registration_digest.hex() == DIGEST_C.removeprefix("sha256:")
+    assert capability.party_ref == PARTY
+    assert capability.party_schema_digest.hex() == DIGEST_D.removeprefix("sha256:")
+    assert capability.issuer == ISSUER and capability.subject == SUBJECT
+    assert capability.nonce.version == 4
+    assert capability.expires_at_unix_microseconds - now_us == 30_000_000
+    private.public_key().verify(decoded.signature, decoded.signing_input)
+
+
+def _crc32c(value):
+    checksum = 0xFFFFFFFF
+    for octet in value:
+        checksum ^= octet
+        for _ in range(8):
+            checksum = (checksum >> 1) ^ (0x82F63B78 if checksum & 1 else 0)
+    return checksum ^ 0xFFFFFFFF
+
+
+class _KmsClient:
+    def __init__(self, private, resource):
+        self.private = private
+        self.resource = resource
+        self.calls = []
+
+    def asymmetric_sign(self, *, name, data, data_crc32c):
+        assert name == self.resource
+        assert data_crc32c == _crc32c(data)
+        self.calls.append(data)
+        signature = self.private.sign(data)
+        return GoogleKmsSigningResponse(
+            key_version_resource=name,
+            protection_level="HSM",
+            verified_data_crc32c=True,
+            signature=signature,
+            signature_crc32c=_crc32c(signature),
+        )
+
+
+def test_kms_signer_checks_resource_crc_hsm_and_signature():
+    private = Ed25519PrivateKey.generate()
+    public = private.public_key().public_bytes_raw()
+    resource = (
+        "projects/ofarm1/locations/europe-west1/keyRings/auth/"
+        "cryptoKeys/capability/cryptoKeyVersions/1"
+    )
+    kid = derive_ed25519_key_id(public)
+    observation = GoogleKmsEd25519PublicKey(
+        key_version_resource=resource,
+        der=TENANT_CAPABILITY_RFC8410_PREFIX + public,
+        public_key=public,
+        public_key_digest=raw_public_key_digest(public),
+        x=base64.urlsafe_b64encode(public).rstrip(b"=").decode("ascii"),
+        kid=kid,
+    )
+    now_us = 1_900_000_000_000_000
+    evidence = ProductionSigningEvidence(
+        audience=derive_binder_audience(uuid4()),
+        key_version_resource=resource,
+        key_id=kid,
+        public_key_digest=raw_public_key_digest(public),
+        key_purpose=GOOGLE_KMS_KEY_PURPOSE,
+        key_algorithm=GOOGLE_KMS_KEY_ALGORITHM,
+        protection_level=GOOGLE_KMS_PROTECTION_LEVEL,
+        key_state="ENABLED",
+        attestation_evidence_digest=DIGEST_A,
+        iam_evidence_digest=DIGEST_B,
+        database_candidate_digest=DIGEST_C,
+        database_lifecycle_head_digest=DIGEST_D,
+        observed_at_unix_microseconds=now_us - 1,
+        valid_until_unix_microseconds=now_us + 1_000_000,
+    )
+    client = _KmsClient(private, resource)
+    signer = GoogleKmsEd25519Signer(
+        client=client,
+        public_key=observation,
+        evidence=evidence,
+        now_microseconds=lambda: now_us,
+    )
+    signer.initialize()
+    data = b"exact-jws-signing-input"
+    signature = signer.sign(data)
+    private.public_key().verify(signature, data)
+    assert client.calls == [data]
+
+
+def test_google_client_adapter_sends_only_raw_data_and_checksum():
+    class Protection:
+        name = "HSM"
+
+    class Checksum:
+        value = 123
+
+    class Response:
+        name = "projects/ofarm1/locations/europe-west1/keyRings/auth/cryptoKeys/capability/cryptoKeyVersions/1"
+        protection_level = Protection()
+        verified_data_crc32c = True
+        signature = b"x" * 64
+        signature_crc32c = Checksum()
+
+    class Client:
+        request = None
+
+        def asymmetric_sign(self, *, request):
+            self.request = request
+            return Response()
+
+    client = Client()
+    adapter = GoogleCloudKmsClientAdapter(client)
+    result = adapter.asymmetric_sign(name=Response.name, data=b"raw", data_crc32c=7)
+    assert client.request == {"name": Response.name, "data": b"raw", "data_crc32c": 7}
+    assert "digest" not in client.request
+    assert result.protection_level == "HSM"
+
+
+def test_capability_wrong_audience_and_stale_signer_refuse_safely():
+    authority = _authority()
+    audience = derive_binder_audience(uuid4())
+    now_us = 1_900_000_000_000_000
+    issuer = ProductionTenantCapabilityIssuer(
+        resolver=_CapabilityResolver(authority),
+        signer=_production_signer(Ed25519PrivateKey.generate(), audience, now_us),
+        now_microseconds=lambda: now_us,
+    )
+    issuer.initialize()
+    with pytest.raises(CapabilityIssuanceError) as raised:
+        issuer.mint(_identity(), TenantChallenge(uuid4(), derive_binder_audience(uuid4())))
+    assert raised.value.outcome is PreBindingOutcome.CAPABILITY_REFUSED
+    assert PARTY not in str(raised.value)
+
+
+def test_production_issuer_rejects_local_fixture_signer():
+    audience = derive_binder_audience(uuid4())
+    issuer = ProductionTenantCapabilityIssuer(
+        resolver=_CapabilityResolver(_authority()),
+        signer=_FixtureSigner(Ed25519PrivateKey.generate(), audience),
+    )
+    with pytest.raises(CapabilityIssuanceError) as raised:
+        issuer.initialize()
+    assert raised.value.outcome is PreBindingOutcome.CONFIGURATION_REFUSED

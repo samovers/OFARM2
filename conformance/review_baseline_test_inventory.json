@@ -1,6 +1,86 @@
 {
   "entries": [
     {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_environment_modes_are_exact_and_production_forbids_hs256",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_exact_identity_policy_refuses_case_whitespace_unicode_and_overlength[claims0]",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_exact_identity_policy_refuses_case_whitespace_unicode_and_overlength[claims1]",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_exact_identity_policy_refuses_case_whitespace_unicode_and_overlength[claims2]",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_exact_identity_policy_refuses_case_whitespace_unicode_and_overlength[claims3]",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_exact_identity_policy_refuses_case_whitespace_unicode_and_overlength[claims4]",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_exact_identity_policy_refuses_case_whitespace_unicode_and_overlength[claims5]",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_exact_identity_policy_refuses_case_whitespace_unicode_and_overlength[claims6]",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_key_id_algorithm_time_and_provider_failures_are_closed",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_local_hs256_verifier_is_structurally_rejected_by_production",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_maintained_verifier_accepts_a_new_key_id_after_jwks_rotation",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_maintained_verifier_accepts_exact_identity_and_initializes_fresh_jwks",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_mode_is_required_and_never_inferred",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_production_runtime_uses_binding_not_subject_as_party",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_production_startup_requires_initialized_jwks_and_binding_resolver",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_safe_failure_outcome_does_not_expose_exception_detail",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
       "nodeid": "kernel/tests/test_conformance.py::test_01_append_only",
       "sourceModule": "kernel.tests.test_conformance",
       "sourcePath": "kernel/tests/test_conformance.py"
@@ -506,7 +586,7 @@
       "sourcePath": "kernel/tests/test_m2_oidc.py"
     },
     {
-      "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_from_env_default_reads_oidc_config_deterministically",
+      "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_from_env_requires_an_explicit_mode",
       "sourceModule": "kernel.tests.test_m2_oidc",
       "sourcePath": "kernel/tests/test_m2_oidc.py"
     },
@@ -531,12 +611,12 @@
       "sourcePath": "kernel/tests/test_m2_oidc.py"
     },
     {
-      "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_rs256_is_not_implemented_no_fallback",
+      "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_shim_mode_uses_x_acting_party_when_oidc_disabled",
       "sourceModule": "kernel.tests.test_m2_oidc",
       "sourcePath": "kernel/tests/test_m2_oidc.py"
     },
     {
-      "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_shim_mode_uses_x_acting_party_when_oidc_disabled",
+      "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_test_verifier_cannot_select_rs256_or_fallback",
       "sourceModule": "kernel.tests.test_m2_oidc",
       "sourcePath": "kernel/tests/test_m2_oidc.py"
     },
@@ -5346,6 +5426,51 @@
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
     {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_capability_pins_exact_binding_head_tenant_party_and_challenge",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_capability_wrong_audience_and_stale_signer_refuse_safely",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_control_plane_activates_only_through_hardened_functions",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_control_plane_requires_exact_head_and_predecessor_for_supersession",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_google_client_adapter_sends_only_raw_data_and_checksum",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_kms_signer_checks_resource_crc_hsm_and_signature",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_missing_or_ambiguous_binding_fails_closed_with_safe_outcome",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_production_issuer_rejects_local_fixture_signer",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_resolver_folds_immutable_authority_and_never_reads_projection",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
       "nodeid": "kernel/tests/test_profile_harness_bridge.py::test_profile_harness_declared_modules_have_root_collection_bridges",
       "sourceModule": "kernel.tests.test_profile_harness_bridge",
       "sourcePath": "kernel/tests/test_profile_harness_bridge.py"
@@ -7486,8 +7611,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "4b9c2832d8df0dafaf70a0147e3770341f084d99e25bdab474ddb434061dad92",
-  "entryCount": 1497,
+  "entriesSha256": "da7d6e1a5fccacdd38875f0602747a63c6797f424f3afa3e0adae3efe4935b3d",
+  "entryCount": 1522,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
