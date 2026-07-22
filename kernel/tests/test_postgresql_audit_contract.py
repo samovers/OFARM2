@@ -10,6 +10,7 @@ import pytest
 
 from deployment.postgresql.audit_contract import (
     ACCESS_INTENT_EXPIRY_SECONDS,
+    APPEND_TRANSACTION_ISOLATION,
     APPEND_INPUT_FINGERPRINT_ALGORITHM,
     APPEND_INPUT_FINGERPRINT_DOMAIN,
     APPEND_INPUT_FINGERPRINT_FRAMING,
@@ -122,11 +123,13 @@ def test_digest_and_resource_bounds_are_exact():
     assert (
         EVENT_IDENTITY_SERIALIZATION_IDENTITY,
         EVENT_IDENTITY_LOCK_STRIPES,
+        APPEND_TRANSACTION_ISOLATION,
         OVERFLOW_IDENTITY_OUTCOME_IDENTITY,
         OVERFLOW_EXACT_RECEIPT_SLOTS_PER_PRODUCER,
     ) == (
         "SHA256_UUID_SEND_FIRST_OCTET_FIXED_ROW_MUTEX_V1",
         256,
+        "READ_COMMITTED",
         "FIXED_RECEIPT_OR_COUNT_UNKNOWN_V1",
         256,
     )
@@ -218,6 +221,7 @@ def test_public_function_identities_and_capability_grants_are_exact():
     assert manifest["eventIdentitySerialization"] == {
         "identity": "SHA256_UUID_SEND_FIRST_OCTET_FIXED_ROW_MUTEX_V1",
         "lockStripes": 256,
+        "transactionIsolation": "READ_COMMITTED",
         "overflowOutcomeIdentity": "FIXED_RECEIPT_OR_COUNT_UNKNOWN_V1",
         "exactReceiptSlotsPerProducer": 256,
     }
@@ -259,7 +263,7 @@ def test_manifest_is_canonical_ascii_and_has_domain_separated_golden_digest():
     assert json.loads(without_digest) == contract.manifest_without_digest()
     assert json.loads(canonical) == contract.manifest()
     assert contract.digest == \
-        "sha256:16166f50fc00c225d830212f6853e1ff99dda826f696573844ca2138a487c783"
+        "sha256:10e7e4036620c68f93dce273774ba5d58dbd8cf093078e900fe49ab164561b7f"
     assert contract.digest == "sha256:" + hashlib.sha256(
         SECURITY_AUDIT_CONTRACT_DIGEST_POLICY.encode("ascii")
         + b"\x00"
@@ -351,6 +355,9 @@ def _replace_break_glass(**changes):
             event_identity_serialization_identity="OTHER_MUTEX_V1",
         ),
         lambda value: replace(value, event_identity_lock_stripes=255),
+        lambda value: replace(
+            value, append_transaction_isolation="SERIALIZABLE"
+        ),
         lambda value: replace(
             value,
             overflow_identity_outcome_identity="OTHER_OUTCOME_V1",

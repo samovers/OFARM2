@@ -359,7 +359,10 @@ Before policy, database-time, or quota evaluation, an append hashes all 16
 canonical UUID bytes and maps the first SHA-256 octet to one of 256 fixed
 migration-owned mutex rows, takes that row `FOR UPDATE`, and rechecks both the
 event relation and fixed overflow receipts while holding the lock through
-transaction end.
+transaction end. Append transactions must use `READ COMMITTED`; the append
+function refuses every fixed-snapshot isolation level before acquiring the
+mutex or reading either outcome relation. Each post-wait recheck can therefore
+observe the preceding same-ID transaction's committed event or receipt.
 Concurrent same-ID attempts therefore cannot split one logical event between an
 individual row in one minute and an exact overflow count in another. No event
 ID or fingerprint is persisted in the mutex table; unrelated IDs sharing a
@@ -1639,6 +1642,10 @@ and integration; they are not claims of `0001`.
    Force two different IDs onto one fixed receipt slot; prove the affected
    bucket becomes `COUNT_UNKNOWN` rather than evicting older exact evidence or
    presenting a double increment as exact. Hold
+   a producer transaction at `REPEATABLE READ`, commit each possible same-ID
+   outcome in another session, and prove both accepted-to-overflow and
+   overflow-to-accepted adjacent-minute retries refuse before reading a stale
+   snapshot. Hold
    an append and a close on opposite sides of the minute boundary; prove the
    event-writer barrier admits exactly one ordering, the close count is final,
    the old bucket cannot be recreated, and only one `OVERFLOW_ENDED` exists.

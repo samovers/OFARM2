@@ -301,10 +301,10 @@ def test_authoritative_audit_migration_is_one_exact_initial_set():
     assert SECURITY_AUDIT_CONTRACT.digest in source
     assert SECURITY_AUDIT_PROVISIONING_SPEC.digest in source
     assert migration.source_sha256 == \
-        "sha256:eefe32892e0508c75f17a7640bff5c278c5296a0b64528e1ebc4bbb3a4c943e2"
-    assert migration.byte_length == 163_323
+        "sha256:2c71a9ce8bbc98ae0e933a9e29fc0de76b142357556525f2ba9c28fab2b47373"
+    assert migration.byte_length == 163_547
     assert migration_set.digest == \
-        "sha256:485b7d02d63cf73073f10d6c67eff46d45f3149a574b2d925686a16da94ab6dd"
+        "sha256:025aba1427f86b664c353f5f561d3a931e487e2e08126154595c883f1f699b42"
     assert migration_set.prefix_digest(1) == migration_set.digest
 
 
@@ -408,11 +408,11 @@ def test_authoritative_audit_migration_has_closed_carriers_and_limits():
     for identity in BACKEND_STATISTICS_ROUTINE_IDENTITIES:
         assert f"'{identity}'" in source
     assert (
-        "3f111401524f836932651750964b01f7b089d90ebd6c1f88f88968c7c897b340"
+        "41aa56167153a612bb4a41e1c86b1d570ab2d95c0e1513f7b1860488964be734"
         in source
     )
     assert (
-        "sha256:b2c10a893dcd846a3fb556c52963a3dad9197fdbd2319dc148d1ef04aded1bd5"
+        "sha256:a556cb1735de900a31ce6fc4eb642f23e95553ad050563aa8d19da3152a233fb"
         in source
     )
     assert "jsonb" not in persisted_audit_tables
@@ -464,6 +464,34 @@ def test_access_intent_serializes_writers_before_combined_cut_capture():
     assert (
         "v_visibility_snapshot := pg_catalog.pg_current_snapshot()"
         not in access_function
+    )
+
+
+def test_pretenant_append_rejects_fixed_snapshots_before_identity_reads():
+    source = load_migration_set(
+        PACKAGE_ROOT, SECURITY_AUDIT_SERVICE
+    ).migrations[0].source_bytes.decode("utf-8")
+    append_function = source.split(
+        "CREATE FUNCTION ofarm_security.append_pretenant_failure(", 1
+    )[1].split(
+        "REVOKE ALL PRIVILEGES ON FUNCTION "
+        "ofarm_security.append_pretenant_failure(",
+        1,
+    )[0]
+    isolation_guard = """    IF pg_catalog.current_setting('transaction_isolation') <>
+            'read committed' THEN
+        RAISE EXCEPTION USING ERRCODE = '25001',
+            MESSAGE = 'pre-tenant append requires READ COMMITTED';
+    END IF;"""
+    identity_lock = """    SELECT lock_slot INTO STRICT v_identity_lock_slot
+    FROM ofarm_security.operational_security_event_identity_lock"""
+    body = append_function.split("BEGIN\n", 1)[1]
+
+    assert body.startswith(isolation_guard)
+    assert append_function.count(isolation_guard) == 1
+    assert append_function.count(identity_lock) == 1
+    assert append_function.index(isolation_guard) < append_function.index(
+        identity_lock
     )
 
 
@@ -1473,6 +1501,162 @@ def _assert_adjacent_bucket_event_identity_serialization(
                 (list(event_ids),),
             )
             admin.execute("DROP TABLE ofarm_security._test_append_barrier")
+
+
+def _assert_repeatable_read_append_refusal(
+    state: dict[str, object], first_outcome: str
+) -> None:
+    assert first_outcome in {"accepted", "overflow"}
+    role = "ofarm_security_authentication_producer_login"
+    producer_name = "AUTHENTICATION_BOUNDARY_V1"
+    component = "AUTHENTICATION"
+    event_id = uuid4()
+    arguments = (
+        event_id,
+        "CREDENTIAL_MISSING",
+        bytes.fromhex("45" * 32),
+        "OFARM_PRETENANT_CORRELATION_V1",
+        1,
+    )
+    _reset_quota_state(state, producer_name, component)
+
+    try:
+        with _controlled_pretenant_clock(state) as first_at:
+            first_bucket = first_at.replace(second=0, microsecond=0)
+            second_at = first_at + timedelta(minutes=1)
+            second_bucket = first_bucket + timedelta(minutes=1)
+            full_bucket = (
+                first_bucket if first_outcome == "overflow" else second_bucket
+            )
+            with psycopg.connect(
+                state["target_admin_dsn"], autocommit=True
+            ) as admin:
+                admin.execute(
+                    """
+                    INSERT INTO
+                        ofarm_security.operational_security_quota_bucket (
+                            producer, component, bucket_start,
+                            accepted_event_count
+                        )
+                    VALUES (%s, %s, %s, 1024)
+                    """,
+                    (producer_name, component, full_bucket),
+                )
+
+            with psycopg.connect(_role_dsn(state, role)) as stale_producer:
+                stale_producer.execute(
+                    "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ"
+                )
+                frozen_snapshot = stale_producer.execute(
+                    "SELECT pg_catalog.pg_current_snapshot()"
+                ).fetchone()[0]
+                assert frozen_snapshot is not None
+
+                with psycopg.connect(
+                    _role_dsn(state, role), autocommit=True
+                ) as first_producer:
+                    first_producer.execute(
+                        "SELECT pg_catalog.set_config('ofarm.test_now', %s, false)",
+                        (first_at.isoformat(),),
+                    )
+                    first_result = first_producer.execute(
+                        """
+                        SELECT *
+                        FROM ofarm_security.append_pretenant_failure(
+                            %s, %s, %s, %s, %s
+                        )
+                        """,
+                        arguments,
+                    ).fetchone()
+
+                stale_producer.execute(
+                    "SELECT pg_catalog.set_config('ofarm.test_now', %s, false)",
+                    (second_at.isoformat(),),
+                )
+                with pytest.raises(
+                    psycopg.Error,
+                    match="pre-tenant append requires READ COMMITTED",
+                ) as refused:
+                    stale_producer.execute(
+                        """
+                        SELECT *
+                        FROM ofarm_security.append_pretenant_failure(
+                            %s, %s, %s, %s, %s
+                        )
+                        """,
+                        arguments,
+                    )
+                assert refused.value.sqlstate == "25001"
+                stale_producer.rollback()
+
+        with psycopg.connect(state["target_admin_dsn"]) as admin:
+            event_count = admin.execute(
+                """
+                SELECT pg_catalog.count(*)
+                FROM ofarm_security.operational_security_event
+                WHERE event_id = %s
+                """,
+                (event_id,),
+            ).fetchone()[0]
+            receipt_count = admin.execute(
+                """
+                SELECT pg_catalog.count(*)
+                FROM ofarm_security.
+                    operational_security_overflow_identity_receipt
+                WHERE event_id = %s
+                """,
+                (event_id,),
+            ).fetchone()[0]
+            quota_rows = admin.execute(
+                """
+                SELECT bucket_start, accepted_event_count,
+                       overflow_event_count, count_unknown
+                FROM ofarm_security.operational_security_quota_bucket
+                WHERE producer = %s
+                  AND component = %s
+                  AND bucket_start IN (%s, %s)
+                ORDER BY bucket_start
+                """,
+                (producer_name, component, first_bucket, second_bucket),
+            ).fetchall()
+
+        if first_outcome == "accepted":
+            assert first_result[0] == event_id
+            assert first_result[3:] == (True, None, False)
+            assert event_count == 1
+            assert receipt_count == 0
+            assert quota_rows == [
+                (first_bucket, 1, 0, False),
+                (second_bucket, 1024, 0, False),
+            ]
+        else:
+            assert first_result == (
+                None, None, None, False, first_bucket, False,
+            )
+            assert event_count == 0
+            assert receipt_count == 1
+            assert quota_rows == [(first_bucket, 1024, 1, False)]
+    finally:
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            admin.execute(
+                """
+                DELETE FROM ofarm_security.operational_security_event
+                WHERE event_id = %s
+                """,
+                (event_id,),
+            )
+        _reset_quota_state(state, producer_name, component)
+
+
+@pytest.mark.parametrize("first_outcome", ("accepted", "overflow"))
+def test_pretenant_append_refuses_repeatable_read_stale_snapshot(
+    migrated_audit_service, first_outcome,
+):
+    _assert_repeatable_read_append_refusal(
+        migrated_audit_service, first_outcome
+    )
 
 
 def test_concurrent_same_event_retry_matches_and_mismatch_refuses_once(

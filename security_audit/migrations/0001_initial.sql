@@ -752,6 +752,11 @@ DECLARE
     v_bucket ofarm_security.operational_security_quota_bucket%ROWTYPE;
     v_marker ofarm_security.operational_security_event_identity;
 BEGIN
+    IF pg_catalog.current_setting('transaction_isolation') <>
+            'read committed' THEN
+        RAISE EXCEPTION USING ERRCODE = '25001',
+            MESSAGE = 'pre-tenant append requires READ COMMITTED';
+    END IF;
     IF p_event_id IS NULL OR p_event_id =
             '00000000-0000-0000-0000-000000000000'::pg_catalog.uuid THEN
         RAISE EXCEPTION USING ERRCODE = '22023',
@@ -2351,7 +2356,7 @@ BEGIN
       AND pg_catalog.sha256(
             pg_catalog.convert_to(routine.prosrc, 'UTF8')
           ) = pg_catalog.decode(
-            '3f111401524f836932651750964b01f7b089d90ebd6c1f88f88968c7c897b340',
+            '41aa56167153a612bb4a41e1c86b1d570ab2d95c0e1513f7b1860488964be734',
             'hex'
           );
     IF v_count <> 1 THEN
@@ -3816,7 +3821,7 @@ BEGIN
     INTO v_catalog_fingerprint
     FROM catalog_entry;
     IF v_catalog_fingerprint <>
-            'sha256:b2c10a893dcd846a3fb556c52963a3dad9197fdbd2319dc148d1ef04aded1bd5' THEN
+            'sha256:a556cb1735de900a31ce6fc4eb642f23e95553ad050563aa8d19da3152a233fb' THEN
         v_differences := v_differences + 1;
     END IF;
 
@@ -3857,7 +3862,7 @@ BEGIN
 
     RETURN ROW(
         'ofarm.security-audit-database-contract.v1',
-        'sha256:16166f50fc00c225d830212f6853e1ff99dda826f696573844ca2138a487c783',
+        'sha256:10e7e4036620c68f93dce273774ba5d58dbd8cf093078e900fe49ab164561b7f',
         'OFARM_PRETENANT_SECURITY_EVENT_V1',
         'CORRELATION_HMAC_ONLY_V1',
         'SECURITY_DIAGNOSTIC_30D_V1',

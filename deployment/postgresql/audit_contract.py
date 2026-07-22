@@ -31,6 +31,7 @@ APPEND_INPUT_FINGERPRINT_DOMAIN = \
 EVENT_IDENTITY_SERIALIZATION_IDENTITY = \
     "SHA256_UUID_SEND_FIRST_OCTET_FIXED_ROW_MUTEX_V1"
 EVENT_IDENTITY_LOCK_STRIPES = 256
+APPEND_TRANSACTION_ISOLATION = "READ_COMMITTED"
 OVERFLOW_IDENTITY_OUTCOME_IDENTITY = \
     "FIXED_RECEIPT_OR_COUNT_UNKNOWN_V1"
 OVERFLOW_EXACT_RECEIPT_SLOTS_PER_PRODUCER = 256
@@ -240,6 +241,7 @@ class SecurityAuditContract:
     append_input_fingerprint: DigestSpec
     event_identity_serialization_identity: str
     event_identity_lock_stripes: int
+    append_transaction_isolation: str
     overflow_identity_outcome_identity: str
     overflow_exact_receipt_slots_per_producer: int
     redaction_policy_identity: str
@@ -276,6 +278,7 @@ class SecurityAuditContract:
             "eventIdentitySerialization": {
                 "identity": self.event_identity_serialization_identity,
                 "lockStripes": self.event_identity_lock_stripes,
+                "transactionIsolation": self.append_transaction_isolation,
                 "overflowOutcomeIdentity": (
                     self.overflow_identity_outcome_identity
                 ),
@@ -428,6 +431,7 @@ def _expected_contract() -> SecurityAuditContract:
             EVENT_IDENTITY_SERIALIZATION_IDENTITY
         ),
         event_identity_lock_stripes=EVENT_IDENTITY_LOCK_STRIPES,
+        append_transaction_isolation=APPEND_TRANSACTION_ISOLATION,
         overflow_identity_outcome_identity=(
             OVERFLOW_IDENTITY_OUTCOME_IDENTITY
         ),
@@ -590,6 +594,7 @@ def validate_security_audit_contract(contract: SecurityAuditContract) -> None:
             "event identity serialization identity",
             contract.event_identity_serialization_identity,
         ),
+        ("append transaction isolation", contract.append_transaction_isolation),
         (
             "overflow identity outcome identity",
             contract.overflow_identity_outcome_identity,

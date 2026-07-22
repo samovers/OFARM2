@@ -1801,6 +1801,11 @@
       "sourcePath": "kernel/tests/test_postgresql_audit_contract.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_audit_contract.py::test_exhaustive_validation_refuses_every_contract_change[<lambda>64]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_contract",
+      "sourcePath": "kernel/tests/test_postgresql_audit_contract.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_audit_contract.py::test_exhaustive_validation_refuses_every_contract_change[<lambda>6]",
       "sourceModule": "kernel.tests.test_postgresql_audit_contract",
       "sourcePath": "kernel/tests/test_postgresql_audit_contract.py"
@@ -2002,6 +2007,21 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_pretenant_append_is_attributed_bounded_and_exactly_idempotent",
+      "sourceModule": "kernel.tests.test_postgresql_audit_migration",
+      "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_pretenant_append_refuses_repeatable_read_stale_snapshot[accepted]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_migration",
+      "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_pretenant_append_refuses_repeatable_read_stale_snapshot[overflow]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_migration",
+      "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_pretenant_append_rejects_fixed_snapshots_before_identity_reads",
       "sourceModule": "kernel.tests.test_postgresql_audit_migration",
       "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
     },
@@ -7341,8 +7361,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "e5277ae7f883b6b481773739bd49bead840626c610cb35e706b5288f2e0876e6",
-  "entryCount": 1468,
+  "entriesSha256": "0d145f77fda31e5fbd360011e2887d79b18823fab5e04ab9378704f649283ebf",
+  "entryCount": 1472,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
