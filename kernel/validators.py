@@ -1225,6 +1225,11 @@ class ValidationGate:
             return GatePass()
 
         if ctx.policy_provider is None:
+            if ctx.active_profile is not None:
+                return _validation_policy_refusal(
+                    ctx,
+                    "descriptor-backed runtime provider services are unavailable",
+                )
             operation_sequence = OPERATION_SEQUENCE
         else:
             try:

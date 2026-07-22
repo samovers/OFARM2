@@ -43,6 +43,10 @@ from kernel.profile_runtime import (
     resolve_profile_route,
     resolve_active_descriptor,
 )
+from kernel.profile_runtime_provider import (
+    ProfileRuntimeProviderRegistry,
+    default_profile_runtime_provider_registry,
+)
 from kernel.runtime_bundle import (
     RuntimeBundleBuilder,
     RuntimeComponentRole,
@@ -1753,6 +1757,46 @@ def test_gate_pipeline_default_sequence_remains_unrouted(fresh_env):
     assert gates[:2] == ["INGRESS_NORMALIZATION", "AUTHORITY"]
 
 
+def test_default_runtime_provider_registry_registers_only_si():
+    registry = default_profile_runtime_provider_registry()
+
+    assert registry.registered_package_names == ("profile_si_ffs",)
+    assert "profile_rs_organic_crop" not in registry.registered_package_names
+    assert not (
+        config.PACKAGE_ROOT
+        / "profile_rs_organic_crop"
+        / "runtime_profile_descriptor.json"
+    ).exists()
+
+
+def test_gate_pipeline_selects_registered_si_provider(fresh_env):
+    _store, pipeline, _ = fresh_env
+
+    assert pipeline.runtime_services.provider.package_name == "profile_si_ffs"
+    assert pipeline.runtime_services.descriptor == config.ACTIVE_PROFILE
+    assert pipeline.runtime_services.policy_provider is pipeline.policy_provider
+    assert pipeline.runtime_services.context_assembler is pipeline.context
+    assert pipeline.runtime_services.materializer is pipeline.materializer
+    assert pipeline.runtime_services.reference_bindings is \
+        pipeline.si_reference_bindings
+    assert pipeline.runtime_services.product_lookup is pipeline.products
+    assert isinstance(pipeline.products, context.SIProductRegister)
+
+
+def test_gate_pipeline_direct_construction_refuses_unregistered_provider(
+        fresh_env):
+    store, _, _ = fresh_env
+
+    with pytest.raises(
+        ProfileRuntimeError,
+        match="no registered executable runtime provider",
+    ):
+        GatePipeline(
+            store,
+            runtime_provider_registry=ProfileRuntimeProviderRegistry(()),
+        )
+
+
 def test_gate_pipeline_default_missing_farm_ref_still_fails_before_route(
         fresh_env):
     store, pipeline, _ = fresh_env
@@ -1847,6 +1891,55 @@ def test_route_backed_gate_pipeline_accepts_clean_si_operation(fresh_env):
         "AUTHORITY",
     ]
     assert trace["gateSequence"][1]["outcome"] == "PROFILE_ROUTE_PASS"
+
+
+def test_route_backed_gate_pipeline_refuses_unregistered_runtime_provider(
+        fresh_env, tmp_path):
+    store, _, _ = fresh_env
+    package_root = _copied_package_root(tmp_path)
+    package_name = "profile_unregistered_runtime"
+    profile_root, descriptor_doc = _copied_si_package(
+        package_root,
+        package_name,
+    )
+    _make_second_descriptor_unique(
+        profile_root,
+        descriptor_doc,
+        duplicate_field="",
+    )
+    registry = load_profile_descriptor_registry(
+        package_root,
+        allowed_profile_package_names=("profile_si_ffs", package_name),
+    )
+    descriptor = registry.candidate_for(package_name).descriptor
+    route = ProfileRouteRecord(
+        route_id=f"profileroute:test.unregistered.{_uid()}",
+        tenant_ref=config.TENANT_REF,
+        farm_ref=demo.FARM,
+        profile_package_name=package_name,
+        profile_ref=descriptor.profile_ref,
+        pack_ref=descriptor.pack_ref,
+        pack_activation_set_ref=descriptor.pack_activation_set_ref,
+        active_artifact_set_ref=descriptor.active_artifact_set_ref,
+        descriptor_identity=profile_runtime_descriptor_identity(descriptor),
+    )
+    pipeline = _route_pipeline(
+        store,
+        routes=[route],
+        registry=registry,
+        selected=("profile_si_ffs", package_name),
+    )
+
+    result = pipeline.commit(demo.spray_submission(
+        f"rs1-route-unregistered:{_uid()}",
+        erp_id=f"erp:rs1.route.unregistered.{_uid()}",
+        confirm=True,
+    ))
+
+    assert "no registered executable runtime provider" in \
+        result["problems"][0]["detail"]
+    _assert_profile_route_refusal(store, result)
+    assert pipeline.runtime_services.provider.package_name == "profile_si_ffs"
 
 
 @pytest.mark.parametrize("routes,match", [
@@ -2321,6 +2414,7 @@ def test_route_backed_handoff_binds_materializer_to_resolved_descriptor(fresh_en
         assert pipeline._resolve_profile_route(ctx) is None
 
     assert ctx.profile_route_resolution.descriptor == config.ACTIVE_PROFILE
+    assert ctx.runtime_services is pipeline.runtime_services
     assert ctx.active_profile == ctx.profile_route_resolution.descriptor
     assert ctx.materializer.active_profile == ctx.profile_route_resolution.descriptor
     assert ctx.materializer.context.active_profile == ctx.profile_route_resolution.descriptor
@@ -2639,7 +2733,38 @@ def test_gate_pipeline_omits_si_reference_bindings_when_descriptor_changes(
 
     ctx = pipeline._new_context(None, sub)
 
+    assert ctx.runtime_services is None
+    assert ctx.policy_provider is None
+    assert ctx.context_assembler is None
+    assert ctx.materializer is None
+    assert ctx.products is None
     assert ctx.si_reference_bindings is None
+
+
+def test_descriptor_backed_pipeline_cannot_fall_back_to_legacy_validation(
+        fresh_env, monkeypatch):
+    store, pipeline, _ = fresh_env
+
+    class FailIfRun:
+        def run(self, _ctx):
+            raise AssertionError("legacy config-backed validation ran")
+
+    monkeypatch.setattr(validators, "OPERATION_SEQUENCE", (FailIfRun(),))
+    pipeline.active_profile = replace(
+        config.ACTIVE_PROFILE,
+        profile_ref="profile:si.ffs.unbound-provider.v0_1",
+    )
+
+    result = pipeline.commit(demo.spray_submission(
+        f"rs1-no-legacy-policy:{_uid()}",
+        erp_id=f"erp:rs1.no-legacy-policy.{_uid()}",
+        confirm=True,
+    ))
+
+    assert result["decisionOutcome"] == "RETAIN_DRAFT"
+    assert result["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+    trace = _trace_payload(store, result)
+    assert trace["gateSequence"][-1]["outcome"] == "FAIL_PROFILE_POLICY"
 
 
 def test_registry_reverification_prefers_context_si_reference_bindings(
