@@ -14,6 +14,13 @@ from typing import Any, Protocol
 from .profile_runtime import ProfileRuntimeDescriptor, ProfileRuntimeError
 
 
+_REQUIRED_SERVICE_CAPABILITIES = {
+    "policy_provider": ("validation_policy", "evidence_policy"),
+    "context_assembler": ("assemble",),
+    "materializer": ("invalidate_for_sources", "recompute"),
+}
+
+
 class ProfileRuntimeProvider(Protocol):
     """A deliberately registered constructor for one executable profile."""
 
@@ -98,11 +105,32 @@ class ProfileRuntimeProviderRegistry:
     ) -> ProfileRuntimeServices:
         provider = self.provider_for(descriptor)
         services = provider.build_services(store, descriptor)
+        if not isinstance(services, ProfileRuntimeServices):
+            raise ProfileRuntimeError(
+                "profile runtime provider returned an invalid service bundle"
+            )
         if services.provider is not provider or services.descriptor != descriptor:
             raise ProfileRuntimeError(
                 "profile runtime provider returned services for a different provider "
                 "or descriptor"
             )
+        for service_name, capabilities in _REQUIRED_SERVICE_CAPABILITIES.items():
+            service = getattr(services, service_name)
+            if service is None:
+                raise ProfileRuntimeError(
+                    "profile runtime provider omitted required service "
+                    f"{service_name!r}"
+                )
+            missing = [
+                capability
+                for capability in capabilities
+                if not callable(getattr(service, capability, None))
+            ]
+            if missing:
+                raise ProfileRuntimeError(
+                    f"profile runtime provider service {service_name!r} lacks "
+                    f"required callable capabilities {missing!r}"
+                )
         return services
 
 

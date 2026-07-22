@@ -5816,11 +5816,6 @@
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_gate_pipeline_direct_construction_refuses_unregistered_provider",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_gate_pipeline_explicit_active_profile_matches_default_for_clean_operation",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
@@ -5852,6 +5847,11 @@
     },
     {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_gate_pipeline_partial_route_config_fails_closed[kwargs4]",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_gate_pipeline_rejects_same_identity_provider_injection",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
@@ -6262,6 +6262,26 @@
     },
     {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_handoff_binds_materializer_to_resolved_descriptor",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_runtime_service_construction_refuses_missing_required_capability[context_assembler]",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_runtime_service_construction_refuses_missing_required_capability[materializer]",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_runtime_service_construction_refuses_missing_required_capability[policy_provider]",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_runtime_service_construction_refuses_unregistered_provider",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
@@ -7486,8 +7506,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "4b9c2832d8df0dafaf70a0147e3770341f084d99e25bdab474ddb434061dad92",
-  "entryCount": 1497,
+  "entriesSha256": "6757b66716d9b77932c10177b9b02071cc19c9a96dc06b6f21477eeeb6086a73",
+  "entryCount": 1501,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

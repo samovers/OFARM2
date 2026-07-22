@@ -1783,17 +1783,69 @@ def test_gate_pipeline_selects_registered_si_provider(fresh_env):
     assert isinstance(pipeline.products, context.SIProductRegister)
 
 
-def test_gate_pipeline_direct_construction_refuses_unregistered_provider(
-        fresh_env):
+def test_runtime_service_construction_refuses_unregistered_provider(fresh_env):
     store, _, _ = fresh_env
 
     with pytest.raises(
         ProfileRuntimeError,
         match="no registered executable runtime provider",
     ):
+        ProfileRuntimeProviderRegistry(()).build_services(
+            store,
+            config.ACTIVE_PROFILE,
+        )
+
+
+def test_gate_pipeline_rejects_same_identity_provider_injection(fresh_env):
+    store, _, _ = fresh_env
+
+    class HostileProvider:
+        package_name = "profile_si_ffs"
+        profile_ref = config.ACTIVE_PROFILE.profile_ref
+        executed = False
+
+        def build_services(self, _store, _descriptor):
+            self.executed = True
+            raise AssertionError("alternate provider executed")
+
+    hostile = HostileProvider()
+    with pytest.raises(TypeError, match="runtime_provider_registry"):
         GatePipeline(
             store,
-            runtime_provider_registry=ProfileRuntimeProviderRegistry(()),
+            runtime_provider_registry=ProfileRuntimeProviderRegistry((hostile,)),
+        )
+
+    assert hostile.executed is False
+
+
+@pytest.mark.parametrize("missing_service", [
+    "policy_provider",
+    "context_assembler",
+    "materializer",
+])
+def test_runtime_service_construction_refuses_missing_required_capability(
+        fresh_env, missing_service):
+    store, _, _ = fresh_env
+
+    class IncompleteProvider:
+        package_name = "profile_si_ffs"
+        profile_ref = config.ACTIVE_PROFILE.profile_ref
+
+        def build_services(self, provider_store, descriptor):
+            si_provider = default_profile_runtime_provider_registry().provider_for(
+                descriptor
+            )
+            complete = si_provider.build_services(provider_store, descriptor)
+            return replace(
+                complete,
+                provider=self,
+                **{missing_service: None},
+            )
+
+    with pytest.raises(ProfileRuntimeError, match=missing_service):
+        ProfileRuntimeProviderRegistry((IncompleteProvider(),)).build_services(
+            store,
+            config.ACTIVE_PROFILE,
         )
 
 

@@ -33,10 +33,7 @@ from .emission import PromotionTraceWriter, ReplayWriter
 from .problems import runtime_problem
 from .profile_runtime import (ProfileRuntimeError, resolve_bound_descriptor,
                               resolve_profile_route)
-from .profile_runtime_provider import (
-    ProfileRuntimeProviderRegistry,
-    default_profile_runtime_provider_registry,
-)
+from .profile_runtime_provider import default_profile_runtime_provider_registry
 from .stages import (AuthorityGate, EnvelopePersist, EvidenceSufficiencyGate,
                      GateContext, GateRefusal, GateReplay, IngressNormalizer,
                      MaterializationGate, ProfileApplicabilityGate,
@@ -68,7 +65,6 @@ class GatePipeline:
         profile_route_registry=None,
         selected_profile_package_names=None,
         tenant_ref=None,
-        runtime_provider_registry: ProfileRuntimeProviderRegistry | None = None,
     ):
         self.store = store
         route_inputs = (
@@ -97,11 +93,10 @@ class GatePipeline:
         )
         store.require_startup_complete("GatePipeline")
         self.runtime_bundle = store.runtime_bundle
-        self.runtime_provider_registry = (
-            runtime_provider_registry
-            if runtime_provider_registry is not None
-            else default_profile_runtime_provider_registry()
-        )
+        # Governed pipelines consume only the code-owned composition root. A
+        # caller cannot substitute executable provider code after Store startup
+        # while retaining receipts for the checked RuntimeBundle source set.
+        self.runtime_provider_registry = default_profile_runtime_provider_registry()
         self.runtime_services = self.runtime_provider_registry.build_services(
             store,
             self.active_profile,

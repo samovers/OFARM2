@@ -148,6 +148,16 @@
       "forbiddenUse": "Do not use profile-local adapter content as Core law or broad country abstraction."
     },
     {
+      "id": "kernel-profile-runtime-provider-active-si-support",
+      "path": "kernel/profile_runtime_provider.py",
+      "term": "SI",
+      "category": "ACTIVE_RUNTIME_SI_SUPPORT",
+      "reason": "The code-owned runtime composition root registers only the existing SI provider and documents the SI-specific optional service boundary for RS1.",
+      "owner": "profile-runtime-provider-seam-review",
+      "expiresWhen": "A separately reviewed provider registration changes the code-owned composition root or removes the SI-only runtime posture.",
+      "forbiddenUse": "Do not treat explicit SI-only provider registration as Serbian activation, multi-profile readiness, or a universal country abstraction."
+    },
+    {
       "id": "kernel-context-active-si-support",
       "path": "kernel/context.py",
       "term": "REGSR|GERK|SI",
