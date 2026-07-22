@@ -26,16 +26,17 @@ from __future__ import annotations
 
 import psycopg
 
-from . import profile_policy
 from .authority import AuthorityEvaluator
-from .context import (ContextAssembler, ProductRegister, SIReferenceBindings,
-                      mint, now_iso, parse_ts)
+from .context import mint, now_iso, parse_ts
 from .contracts import sha256_of
 from .emission import PromotionTraceWriter, ReplayWriter
-from .materializer import Materializer
 from .problems import runtime_problem
 from .profile_runtime import (ProfileRuntimeError, resolve_bound_descriptor,
                               resolve_profile_route)
+from .profile_runtime_provider import (
+    ProfileRuntimeProviderRegistry,
+    default_profile_runtime_provider_registry,
+)
 from .stages import (AuthorityGate, EnvelopePersist, EvidenceSufficiencyGate,
                      GateContext, GateRefusal, GateReplay, IngressNormalizer,
                      MaterializationGate, ProfileApplicabilityGate,
@@ -67,6 +68,7 @@ class GatePipeline:
         profile_route_registry=None,
         selected_profile_package_names=None,
         tenant_ref=None,
+        runtime_provider_registry: ProfileRuntimeProviderRegistry | None = None,
     ):
         self.store = store
         route_inputs = (
@@ -95,16 +97,21 @@ class GatePipeline:
         )
         store.require_startup_complete("GatePipeline")
         self.runtime_bundle = store.runtime_bundle
-        self.policy_provider = profile_policy.DescriptorPolicyProvider(
-            self.active_profile)
-        self.si_reference_bindings = SIReferenceBindings.from_runtime_descriptor(
-            self.active_profile)
-        self.si_reference_bindings_descriptor = self.active_profile
+        self.runtime_provider_registry = (
+            runtime_provider_registry
+            if runtime_provider_registry is not None
+            else default_profile_runtime_provider_registry()
+        )
+        self.runtime_services = self.runtime_provider_registry.build_services(
+            store,
+            self.active_profile,
+        )
+        self.policy_provider = self.runtime_services.policy_provider
+        self.si_reference_bindings = self.runtime_services.reference_bindings
         self.authority = AuthorityEvaluator(store)
-        self.context = ContextAssembler(store, active_descriptor=self.active_profile)
-        self.materializer = Materializer(store, active_descriptor=self.active_profile)
-        self.products = ProductRegister(self.si_reference_bindings)
-        self.products.load_from_store(store)
+        self.context = self.runtime_services.context_assembler
+        self.materializer = self.runtime_services.materializer
+        self.products = self.runtime_services.product_lookup
 
     # ======================================================================
     # the governed front door
@@ -139,22 +146,34 @@ class GatePipeline:
             {k: v for k, v in sub.items() if k != "sourcePayloadDigest"})
 
     def _new_context(self, cur, sub: dict) -> GateContext:
-        policy_provider = (
-            self.policy_provider
-            if self.active_profile == self.policy_provider.descriptor
+        runtime_services = (
+            self.runtime_services
+            if self.active_profile == self.runtime_services.descriptor
             else None
         )
-        si_reference_bindings = (
-            self.si_reference_bindings
-            if self.active_profile == self.si_reference_bindings_descriptor
-            else None
+        compatibility_services = (
+            self.runtime_services
+            if self.active_profile is None
+            else runtime_services
         )
         return GateContext(
             cur=cur, store=self.store, authority=self.authority,
-            context_assembler=self.context, materializer=self.materializer,
-            products=self.products, active_profile=self.active_profile,
-            policy_provider=policy_provider,
-            si_reference_bindings=si_reference_bindings,
+            context_assembler=(
+                compatibility_services.context_assembler
+                if compatibility_services else None
+            ),
+            materializer=(
+                compatibility_services.materializer if compatibility_services else None
+            ),
+            products=(
+                compatibility_services.product_lookup if compatibility_services else None
+            ),
+            active_profile=self.active_profile,
+            runtime_services=runtime_services,
+            policy_provider=(runtime_services.policy_provider if runtime_services else None),
+            si_reference_bindings=(
+                runtime_services.reference_bindings if runtime_services else None
+            ),
             sub=sub,
             request_id=mint("cir"), ingested_at=now_iso(),
             source_digest=self._source_digest(sub),
@@ -212,17 +231,27 @@ class GatePipeline:
         return parsed
 
     def _bind_route_resolution(self, ctx: GateContext, resolution) -> None:
+        provider = self.runtime_provider_registry.provider_for(resolution.descriptor)
         descriptor = resolve_bound_descriptor(
             ctx.store,
             active_descriptor=resolution.descriptor,
         )
+        if (
+            provider is not self.runtime_services.provider
+            or descriptor != self.runtime_services.descriptor
+        ):
+            raise ProfileRuntimeError(
+                "resolved profile runtime provider is not the startup-bound provider"
+            )
+        services = self.runtime_services
         ctx.profile_route_resolution = resolution
         ctx.active_profile = descriptor
-        ctx.policy_provider = self.policy_provider
-        ctx.context_assembler = self.context
-        ctx.materializer = self.materializer
-        ctx.products = self.products
-        ctx.si_reference_bindings = self.si_reference_bindings
+        ctx.runtime_services = services
+        ctx.policy_provider = services.policy_provider
+        ctx.context_assembler = services.context_assembler
+        ctx.materializer = services.materializer
+        ctx.products = services.product_lookup
+        ctx.si_reference_bindings = services.reference_bindings
 
     def _resolve_profile_route(self, ctx: GateContext):
         try:

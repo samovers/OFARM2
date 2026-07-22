@@ -375,7 +375,7 @@ def context_reference_snapshots(store, as_of: str | None = None) -> list[dict]:
     )
 
 
-class ProductRegister:
+class SIProductRegister:
     """Offline product-register lookup for the in-force REGSR snapshots.
 
     Snapshot artifacts are dated parses of the official HTML surface
@@ -478,6 +478,11 @@ class ProductRegister:
 
     def has_snapshot(self, snapshot_id: str) -> bool:
         return snapshot_id in self._by_snapshot
+
+
+# Compatibility name for direct tests and existing SI adapter callers. Generic
+# runtime composition uses SIProductRegister through the registered SI provider.
+ProductRegister = SIProductRegister
 
 
 class ContextNotReconstructible(Exception):
