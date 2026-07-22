@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import secrets
 from collections.abc import Iterator
@@ -11,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from threading import Barrier, Event
 from time import monotonic, sleep
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import psycopg
 import psycopg.conninfo
@@ -300,10 +301,10 @@ def test_authoritative_audit_migration_is_one_exact_initial_set():
     assert SECURITY_AUDIT_CONTRACT.digest in source
     assert SECURITY_AUDIT_PROVISIONING_SPEC.digest in source
     assert migration.source_sha256 == \
-        "sha256:f0f631231bb1db27b23e66bc29376e8472d9ca2939076e8b8396fdc7e4c201b7"
-    assert migration.byte_length == 154_881
+        "sha256:eefe32892e0508c75f17a7640bff5c278c5296a0b64528e1ebc4bbb3a4c943e2"
+    assert migration.byte_length == 163_323
     assert migration_set.digest == \
-        "sha256:1846b2f74863e3b185ea828e1c3bb62d902915ad5ef728d1fe8d26acb75fc2cf"
+        "sha256:485b7d02d63cf73073f10d6c67eff46d45f3149a574b2d925686a16da94ab6dd"
     assert migration_set.prefix_digest(1) == migration_set.digest
 
 
@@ -318,10 +319,11 @@ def test_authoritative_audit_migration_has_closed_carriers_and_limits():
             "ofarm_security.operational_security_quota_bucket",
             "ofarm_security.operational_security_quota_high_water",
             "ofarm_security.operational_security_event_identity_lock",
+            "ofarm_security.operational_security_overflow_identity_receipt",
         )
     )
 
-    assert source.count("CREATE TABLE ofarm_security.operational_security_") == 4
+    assert source.count("CREATE TABLE ofarm_security.operational_security_") == 5
     assert "CREATE TABLE ofarm_security.operational_security_event" in source
     assert "CREATE TABLE ofarm_security.operational_security_quota_bucket" in source
     assert (
@@ -332,7 +334,16 @@ def test_authoritative_audit_migration_has_closed_carriers_and_limits():
         "CREATE TABLE ofarm_security.operational_security_event_identity_lock"
         in source
     )
+    assert (
+        "CREATE TABLE "
+        "ofarm_security.operational_security_overflow_identity_receipt"
+        in source
+    )
     assert "FROM pg_catalog.generate_series(0, 255) AS slots(slot)" in source
+    assert "CROSS JOIN pg_catalog.generate_series(0, 255) AS slots(slot)" in source
+    assert (
+        "pg_catalog.sha256(pg_catalog.uuid_send(p_event_id)), 0" in source
+    )
     assert "BETWEEN 0 AND 1024" in source
     assert "LIMIT 1024" in source
     assert "p_max_rows BETWEEN 1 AND 256" in source
@@ -397,11 +408,11 @@ def test_authoritative_audit_migration_has_closed_carriers_and_limits():
     for identity in BACKEND_STATISTICS_ROUTINE_IDENTITIES:
         assert f"'{identity}'" in source
     assert (
-        "1200bed186ca36ebd5101f9db58cf2431de7bb5e67a0f4922021e60c8e7e9ad4"
+        "3f111401524f836932651750964b01f7b089d90ebd6c1f88f88968c7c897b340"
         in source
     )
     assert (
-        "sha256:d53597d5b01dc6768bf8dd8bb93039683a8f6a2afa9794955601f899add3c60a"
+        "sha256:b2c10a893dcd846a3fb556c52963a3dad9197fdbd2319dc148d1ef04aded1bd5"
         in source
     )
     assert "jsonb" not in persisted_audit_tables
@@ -1196,9 +1207,9 @@ def _assert_adjacent_bucket_event_identity_serialization(
     producer_name = "AUTHENTICATION_BOUNDARY_V1"
     component = "AUTHENTICATION"
     base_bucket = datetime(2040, 1, 1, tzinfo=timezone.utc)
-    event_ids = (uuid4(), uuid4(), uuid4())
+    event_ids = (uuid4(), uuid4(), uuid4(), uuid4())
     bucket_starts = tuple(
-        base_bucket + timedelta(minutes=offset) for offset in range(6)
+        base_bucket + timedelta(minutes=offset) for offset in range(8)
     )
     with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
         original_source = admin.execute(
@@ -1257,9 +1268,9 @@ def _assert_adjacent_bucket_event_identity_serialization(
             SET accepted_event_count = 1024
             WHERE producer = %s
               AND component = %s
-              AND bucket_start = %s
+              AND bucket_start = ANY(%s::pg_catalog.timestamptz[])
             """,
-            (producer_name, component, bucket_starts[5]),
+            (producer_name, component, [bucket_starts[5], bucket_starts[6]]),
         )
         _replace_pretenant_append_source(admin, test_source)
 
@@ -1332,6 +1343,52 @@ def _assert_adjacent_bucket_event_identity_serialization(
         assert accepted_overflow_results[0][1][0] == event_ids[2]
         assert accepted_overflow_results[0][1][3:] == (True, None, False)
 
+        overflow_accepted_arguments = (
+            event_ids[3],
+            "CREDENTIAL_MISSING",
+            bytes.fromhex("44" * 32),
+            "OFARM_PRETENANT_CORRELATION_V1",
+            1,
+        )
+        first_overflow = _concurrent_append_at(
+            state,
+            role,
+            Barrier(1),
+            overflow_accepted_arguments,
+            bucket_starts[6] + timedelta(seconds=30),
+            f"a174_overflow_receipt_{uuid4().hex}_0",
+        )
+        overflow_retry = _concurrent_append_at(
+            state,
+            role,
+            Barrier(1),
+            overflow_accepted_arguments,
+            bucket_starts[7] + timedelta(seconds=30),
+            f"a174_overflow_receipt_{uuid4().hex}_1",
+        )
+        assert first_overflow == overflow_retry
+        assert first_overflow[0] == "ok"
+        assert first_overflow[1] == (
+            None, None, None, False, bucket_starts[6], False,
+        )
+        overflow_mismatch = _concurrent_append_at(
+            state,
+            role,
+            Barrier(1),
+            (
+                event_ids[3],
+                "VERIFIER_UNAVAILABLE",
+                bytes.fromhex("44" * 32),
+                "OFARM_PRETENANT_CORRELATION_V1",
+                1,
+            ),
+            bucket_starts[7] + timedelta(seconds=30),
+            f"a174_overflow_receipt_{uuid4().hex}_2",
+        )
+        assert overflow_mismatch == (
+            "error", "event identity was already used with different input",
+        )
+
         with psycopg.connect(state["target_admin_dsn"]) as admin:
             event_rows = admin.execute(
                 """
@@ -1354,7 +1411,16 @@ def _assert_adjacent_bucket_event_identity_serialization(
                 """,
                 (producer_name, component, list(bucket_starts)),
             ).fetchall()
-        assert {row[0] for row in event_rows} == set(event_ids)
+            receipt = admin.execute(
+                """
+                SELECT event_id, bucket_start
+                FROM ofarm_security.
+                    operational_security_overflow_identity_receipt
+                WHERE event_id = %s
+                """,
+                (event_ids[3],),
+            ).fetchone()
+        assert {row[0] for row in event_rows} == set(event_ids[:3])
         assert len(event_rows) == 3
         reasons_by_id = dict(event_rows)
         assert reasons_by_id[event_ids[0]] == "CREDENTIAL_MISSING"
@@ -1362,13 +1428,17 @@ def _assert_adjacent_bucket_event_identity_serialization(
             "CREDENTIAL_MISSING", "VERIFIER_UNAVAILABLE",
         }
         assert reasons_by_id[event_ids[2]] == "CREDENTIAL_MISSING"
-        assert len(quota_rows) == 6
+        assert len(quota_rows) == 8
         assert sorted(row[1] for row in quota_rows[0:2]) == [0, 1]
         assert sorted(row[1] for row in quota_rows[2:4]) == [0, 1]
         assert quota_rows[4][1:] == (1, 0, None)
         assert quota_rows[5][1:] == (1024, 0, None)
-        assert all(row[2] == 0 for row in quota_rows)
-        assert all(row[3] is None for row in quota_rows)
+        assert quota_rows[6][1:3] == (1024, 1)
+        assert quota_rows[6][3] is not None
+        assert quota_rows[7][1:] == (0, 0, None)
+        assert all(row[2] == 0 for row in quota_rows[:6])
+        assert all(row[3] is None for row in quota_rows[:6])
+        assert receipt == (event_ids[3], bucket_starts[6])
     finally:
         with psycopg.connect(
             state["target_admin_dsn"], autocommit=True
@@ -1389,6 +1459,18 @@ def _assert_adjacent_bucket_event_identity_serialization(
                   AND bucket_start = ANY(%s::pg_catalog.timestamptz[])
                 """,
                 (producer_name, component, list(bucket_starts)),
+            )
+            admin.execute(
+                """
+                UPDATE ofarm_security.
+                    operational_security_overflow_identity_receipt
+                SET event_id = NULL,
+                    append_input_fingerprint = NULL,
+                    bucket_start = NULL,
+                    purge_after = NULL
+                WHERE event_id = ANY(%s::pg_catalog.uuid[])
+                """,
+                (list(event_ids),),
             )
             admin.execute("DROP TABLE ofarm_security._test_append_barrier")
 
@@ -2121,6 +2203,18 @@ def _reset_quota_state(
             """,
             (producer, component),
         )
+        admin.execute(
+            """
+            UPDATE ofarm_security.operational_security_overflow_identity_receipt
+            SET event_id = NULL,
+                append_input_fingerprint = NULL,
+                bucket_start = NULL,
+                purge_after = NULL
+            WHERE producer = %s
+              AND component = %s
+            """,
+            (producer, component),
+        )
 
 
 def _bulk_append_in_one_bucket(
@@ -2162,6 +2256,142 @@ def _bulk_append_in_one_bucket(
                 """,
                 (prefix, reason),
             ).fetchone()
+
+
+def test_identity_lock_stripe_hashes_all_uuid_bytes(migrated_audit_service):
+    vectors = (
+        UUID("01800000-0000-7000-8000-000000000001"),
+        UUID("01800000-0000-7000-8000-000000000002"),
+    )
+    expected_slots = tuple(
+        hashlib.sha256(value.bytes).digest()[0] for value in vectors
+    )
+    assert vectors[0].bytes[0] == vectors[1].bytes[0]
+    assert expected_slots[0] != expected_slots[1]
+
+    with psycopg.connect(
+        migrated_audit_service["target_admin_dsn"]
+    ) as admin:
+        observed_slots = tuple(
+            row[0]
+            for row in admin.execute(
+                """
+                SELECT pg_catalog.get_byte(
+                    pg_catalog.sha256(pg_catalog.uuid_send(value)), 0
+                )
+                FROM pg_catalog.unnest(%s::pg_catalog.uuid[]) AS item(value)
+                ORDER BY value
+                """,
+                (list(vectors),),
+            ).fetchall()
+        )
+    assert observed_slots == expected_slots
+
+
+def test_overflow_receipt_collision_makes_count_unknown(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    producer_name = "AUTHENTICATION_BOUNDARY_V1"
+    component = "AUTHENTICATION"
+    role = "ofarm_security_authentication_producer_login"
+    event_ids = (
+        UUID("01800000-0000-7000-8000-000000000009"),
+        UUID("01800000-0000-7000-8000-000000000013"),
+    )
+    assert hashlib.sha256(event_ids[0].bytes).digest()[0] == \
+        hashlib.sha256(event_ids[1].bytes).digest()[0]
+    _reset_quota_state(state, producer_name, component)
+
+    try:
+        with _controlled_pretenant_clock(state) as observed_at:
+            with psycopg.connect(
+                state["target_admin_dsn"], autocommit=True
+            ) as admin:
+                bucket_start = admin.execute(
+                    """
+                    INSERT INTO ofarm_security.operational_security_quota_bucket (
+                        producer, component, bucket_start,
+                        accepted_event_count
+                    ) VALUES (
+                        %s, %s,
+                        pg_catalog.date_bin(
+                            pg_catalog.make_interval(secs => 60),
+                            %s::pg_catalog.timestamptz,
+                            '2000-01-01 00:00:00+00'::pg_catalog.timestamptz
+                        ),
+                        1024
+                    )
+                    RETURNING bucket_start
+                    """,
+                    (producer_name, component, observed_at),
+                ).fetchone()[0]
+
+            common = (
+                "CREDENTIAL_MISSING",
+                bytes.fromhex("ef" * 32),
+                "OFARM_PRETENANT_CORRELATION_V1",
+                1,
+            )
+            first = _concurrent_append_at(
+                state, role, Barrier(1), (event_ids[0], *common),
+                observed_at, f"a174_receipt_bound_{uuid4().hex}_0",
+            )
+            collision = _concurrent_append_at(
+                state, role, Barrier(1), (event_ids[1], *common),
+                observed_at, f"a174_receipt_bound_{uuid4().hex}_1",
+            )
+            retry_after_roll = _concurrent_append_at(
+                state, role, Barrier(1), (event_ids[0], *common),
+                observed_at + timedelta(minutes=1),
+                f"a174_receipt_bound_{uuid4().hex}_2",
+            )
+
+        assert first == (
+            "ok", (None, None, None, False, bucket_start, False),
+        )
+        assert collision == (
+            "ok", (None, None, None, False, bucket_start, True),
+        )
+        assert retry_after_roll[0] == "ok"
+        assert retry_after_roll[1][0] == event_ids[0]
+        assert retry_after_roll[1][3:] == (True, None, False)
+
+        with psycopg.connect(state["target_admin_dsn"]) as admin:
+            old_bucket = admin.execute(
+                """
+                SELECT accepted_event_count, overflow_event_count,
+                       count_unknown
+                FROM ofarm_security.operational_security_quota_bucket
+                WHERE producer = %s
+                  AND component = %s
+                  AND bucket_start = %s
+                """,
+                (producer_name, component, bucket_start),
+            ).fetchone()
+            retained_receipts = admin.execute(
+                """
+                SELECT pg_catalog.count(*)
+                FROM ofarm_security.
+                    operational_security_overflow_identity_receipt
+                WHERE event_id = ANY(%s::pg_catalog.uuid[])
+                """,
+                (list(event_ids),),
+            ).fetchone()[0]
+        assert old_bucket == (1024, 1, True)
+        assert retained_receipts == 0
+    finally:
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            admin.execute(
+                """
+                DELETE FROM ofarm_security.operational_security_event
+                WHERE event_id = ANY(%s::pg_catalog.uuid[])
+                """,
+                (list(event_ids),),
+            )
+        _reset_quota_state(state, producer_name, component)
 
 
 def test_concurrent_writes_at_quota_boundary_store_one_and_overflow_one(
@@ -2291,6 +2521,14 @@ def test_quota_overflow_is_explicit_bounded_and_count_unknown_closes_once(
                 pg_catalog.uuid
             """
         ).fetchone()[0]
+        overflow_receipt_present = admin.execute(
+            """
+            SELECT pg_catalog.count(*)
+            FROM ofarm_security.operational_security_overflow_identity_receipt
+            WHERE event_id = 'a1740000-0000-4000-8000-000000001025'::
+                pg_catalog.uuid
+            """
+        ).fetchone()[0]
         start_count = admin.execute(
             """
             SELECT pg_catalog.count(*)
@@ -2305,6 +2543,7 @@ def test_quota_overflow_is_explicit_bounded_and_count_unknown_closes_once(
     assert current[1:] == (1024, 1, True, False)
     assert individual_count == 1024
     assert last_id_present == 0
+    assert overflow_receipt_present == 1
     assert start_count == 1
 
     with psycopg.connect(
@@ -2324,6 +2563,16 @@ def test_quota_overflow_is_explicit_bounded_and_count_unknown_closes_once(
                 "SELECT ofarm_security.close_overflow_bucket(%s, %s, %s)",
                 (producer_name, component, current[0]),
             )
+
+    with psycopg.connect(state["target_admin_dsn"]) as admin:
+        assert admin.execute(
+            """
+            SELECT pg_catalog.count(*)
+            FROM ofarm_security.operational_security_overflow_identity_receipt
+            WHERE event_id = 'a1740000-0000-4000-8000-000000001025'::
+                pg_catalog.uuid
+            """
+        ).fetchone()[0] == 0
 
     with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
         old_bucket = admin.execute(
@@ -2407,6 +2656,138 @@ def test_quota_overflow_is_explicit_bounded_and_count_unknown_closes_once(
         ).fetchone()[0]
     assert ended == (None, True)
     assert bucket_exists == 0
+
+
+def test_exact_overflow_receipt_survives_close_through_marker_retention(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    producer_name = "AUTHENTICATION_BOUNDARY_V1"
+    component = "AUTHENTICATION"
+    event_id = uuid4()
+    reason = "CREDENTIAL_MISSING"
+    hmac_value = bytes.fromhex("a9" * 32)
+    _reset_quota_state(state, producer_name, component)
+
+    try:
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            bucket_start = admin.execute(
+                """
+                SELECT pg_catalog.date_bin(
+                    pg_catalog.make_interval(secs => 60),
+                    pg_catalog.clock_timestamp(),
+                    '2000-01-01 00:00:00+00'::pg_catalog.timestamptz
+                ) - pg_catalog.make_interval(secs => 120)
+                """
+            ).fetchone()[0]
+            overflow_started_at = admin.execute(
+                """
+                SELECT observed_at
+                FROM ofarm_security._insert_maintenance_event(
+                    'OVERFLOW_STARTED', 'AUDIT_CONTROL',
+                    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+                    NULL, NULL, %s, %s, NULL, false, %s, %s, NULL
+                )
+                """,
+                (
+                    bucket_start,
+                    bucket_start + timedelta(minutes=1),
+                    producer_name,
+                    component,
+                ),
+            ).fetchone()[0]
+            admin.execute(
+                """
+                INSERT INTO ofarm_security.operational_security_quota_bucket (
+                    producer, component, bucket_start, accepted_event_count,
+                    overflow_event_count, overflow_started_at
+                ) VALUES (%s, %s, %s, 1024, 1, %s)
+                """,
+                (
+                    producer_name,
+                    component,
+                    bucket_start,
+                    overflow_started_at,
+                ),
+            )
+            admin.execute(
+                """
+                UPDATE ofarm_security.
+                    operational_security_overflow_identity_receipt
+                SET event_id = %s,
+                    append_input_fingerprint =
+                        ofarm_security._pretenant_event_fingerprint(
+                            %s, %s, %s, %s,
+                            'OFARM_PRETENANT_CORRELATION_V1', 1, %s
+                        ),
+                    bucket_start = %s,
+                    purge_after = 'infinity'::pg_catalog.timestamptz
+                WHERE producer = %s
+                  AND component = %s
+                  AND lock_slot = pg_catalog.get_byte(
+                      pg_catalog.sha256(pg_catalog.uuid_send(%s)), 0
+                  )
+                """,
+                (
+                    event_id,
+                    event_id,
+                    producer_name,
+                    component,
+                    reason,
+                    hmac_value,
+                    bucket_start,
+                    producer_name,
+                    component,
+                    event_id,
+                ),
+            )
+
+        with psycopg.connect(
+            _role_dsn(state, "ofarm_security_audit_control_login"),
+            autocommit=True,
+        ) as control:
+            closed = control.execute(
+                """
+                SELECT *
+                FROM ofarm_security.close_overflow_bucket(%s, %s, %s)
+                """,
+                (producer_name, component, bucket_start),
+            ).fetchone()
+
+        with psycopg.connect(
+            _role_dsn(state, "ofarm_security_authentication_producer_login"),
+            autocommit=True,
+        ) as producer:
+            retry = producer.execute(
+                """
+                SELECT * FROM ofarm_security.append_pretenant_failure(
+                    %s, %s, %s, 'OFARM_PRETENANT_CORRELATION_V1', 1
+                )
+                """,
+                (event_id, reason, hmac_value),
+            ).fetchone()
+
+        with psycopg.connect(state["target_admin_dsn"]) as admin:
+            receipt_and_marker = admin.execute(
+                """
+                SELECT receipt.bucket_start, receipt.purge_after,
+                       marker.purge_after
+                FROM ofarm_security.
+                    operational_security_overflow_identity_receipt AS receipt
+                JOIN ofarm_security.operational_security_event AS marker
+                  ON marker.event_id = %s
+                WHERE receipt.event_id = %s
+                """,
+                (closed[0], event_id),
+            ).fetchone()
+        assert retry == (None, None, None, False, bucket_start, False)
+        assert receipt_and_marker is not None
+        assert receipt_and_marker[0] == bucket_start
+        assert receipt_and_marker[1] == receipt_and_marker[2]
+    finally:
+        _reset_quota_state(state, producer_name, component)
 
 
 def test_overflow_close_waits_for_old_bucket_append_and_cannot_reopen(
@@ -2567,11 +2948,25 @@ def test_overflow_close_waits_for_old_bucket_append_and_cannot_reopen(
             ).fetchone()
         assert retry_close == closed
 
-        with pytest.raises(
-            psycopg.errors.InvalidParameterValue,
-            match="audit clock moved behind closed quota boundary",
-        ):
-            append_to_old_bucket()
+        assert append_to_old_bucket() == appended
+        with psycopg.connect(producer_dsn, autocommit=True) as producer:
+            producer.execute(
+                "SELECT pg_catalog.set_config('ofarm.test_now', %s, false)",
+                ((old_bucket + timedelta(seconds=30)).isoformat(),),
+            )
+            with pytest.raises(
+                psycopg.errors.InvalidParameterValue,
+                match="audit clock moved behind closed quota boundary",
+            ):
+                producer.execute(
+                    """
+                    SELECT * FROM ofarm_security.append_pretenant_failure(
+                        %s, 'CREDENTIAL_MISSING', %s,
+                        'OFARM_PRETENANT_CORRELATION_V1', 1
+                    )
+                    """,
+                    (uuid4(), bytes.fromhex("43" * 32)),
+                ).fetchone()
 
         with psycopg.connect(state["target_admin_dsn"]) as admin:
             old_bucket_count = admin.execute(
@@ -3423,6 +3818,36 @@ def test_complete_catalog_fingerprint_refuses_body_constraint_and_acl_tamper(
             state["target_admin_dsn"], autocommit=True
         ) as admin:
             _replace_event_fingerprint_source(admin, original_source)
+    assert _observe_structure(state) == clean
+
+    with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
+        admin.execute(
+            """
+            DELETE FROM ofarm_security.
+                operational_security_overflow_identity_receipt
+            WHERE producer = 'AUTHENTICATION_BOUNDARY_V1'
+              AND component = 'AUTHENTICATION'
+              AND lock_slot = 0
+            """
+        )
+    try:
+        missing_receipt_slot = _observe_structure(state)
+        assert missing_receipt_slot[0] is False
+        assert missing_receipt_slot[1] >= 1
+    finally:
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            admin.execute(
+                """
+                INSERT INTO ofarm_security.
+                    operational_security_overflow_identity_receipt (
+                        producer, component, lock_slot
+                    ) VALUES (
+                        'AUTHENTICATION_BOUNDARY_V1', 'AUTHENTICATION', 0
+                    )
+                """
+            )
     assert _observe_structure(state) == clean
 
     with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:

@@ -1781,6 +1781,26 @@
       "sourcePath": "kernel/tests/test_postgresql_audit_contract.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_audit_contract.py::test_exhaustive_validation_refuses_every_contract_change[<lambda>60]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_contract",
+      "sourcePath": "kernel/tests/test_postgresql_audit_contract.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_contract.py::test_exhaustive_validation_refuses_every_contract_change[<lambda>61]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_contract",
+      "sourcePath": "kernel/tests/test_postgresql_audit_contract.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_contract.py::test_exhaustive_validation_refuses_every_contract_change[<lambda>62]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_contract",
+      "sourcePath": "kernel/tests/test_postgresql_audit_contract.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_contract.py::test_exhaustive_validation_refuses_every_contract_change[<lambda>63]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_contract",
+      "sourcePath": "kernel/tests/test_postgresql_audit_contract.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_audit_contract.py::test_exhaustive_validation_refuses_every_contract_change[<lambda>6]",
       "sourceModule": "kernel.tests.test_postgresql_audit_contract",
       "sourcePath": "kernel/tests/test_postgresql_audit_contract.py"
@@ -1936,7 +1956,17 @@
       "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_exact_overflow_receipt_survives_close_through_marker_retention",
+      "sourceModule": "kernel.tests.test_postgresql_audit_migration",
+      "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_external_catalog_anchor_refuses_self_excluded_verifier_body_tamper",
+      "sourceModule": "kernel.tests.test_postgresql_audit_migration",
+      "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_identity_lock_stripe_hashes_all_uuid_bytes",
       "sourceModule": "kernel.tests.test_postgresql_audit_migration",
       "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
     },
@@ -1947,6 +1977,11 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_overflow_close_waits_for_old_bucket_append_and_cannot_reopen",
+      "sourceModule": "kernel.tests.test_postgresql_audit_migration",
+      "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_overflow_receipt_collision_makes_count_unknown",
       "sourceModule": "kernel.tests.test_postgresql_audit_migration",
       "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
     },
@@ -7306,8 +7341,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "4b19516367781f21ad61544a39c34a9bc35e08fba59836532b850c89339bbd5a",
-  "entryCount": 1461,
+  "entriesSha256": "e5277ae7f883b6b481773739bd49bead840626c610cb35e706b5288f2e0876e6",
+  "entryCount": 1468,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

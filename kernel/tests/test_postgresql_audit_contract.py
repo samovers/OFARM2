@@ -20,12 +20,16 @@ from deployment.postgresql.audit_contract import (
     CORRELATION_HMAC_KEY_VERSION,
     CORRELATION_HMAC_LENGTH_BYTES,
     EVENT_FORMAT_IDENTITY,
+    EVENT_IDENTITY_LOCK_STRIPES,
+    EVENT_IDENTITY_SERIALIZATION_IDENTITY,
     EVENT_KINDS,
     EVENT_MAX_INPUT_BYTES,
     EXPORT_ACCESS_PURPOSE_IDENTITY,
     EXPORT_FUNCTION_IDENTITY,
     EXPORT_MAX_BYTES,
     EXPORT_MAX_ROWS,
+    OVERFLOW_EXACT_RECEIPT_SLOTS_PER_PRODUCER,
+    OVERFLOW_IDENTITY_OUTCOME_IDENTITY,
     PURGE_BATCH_ROWS,
     QUERY_ACCESS_PURPOSE_IDENTITY,
     QUERY_FUNCTION_IDENTITY,
@@ -115,6 +119,17 @@ def test_digest_and_resource_bounds_are_exact():
     )
     assert (RETENTION_DAYS, RETENTION_SECONDS) == (30, 2_592_000)
     assert (QUOTA_BUCKET_SECONDS, QUOTA_ACCEPTED_EVENT_THRESHOLD) == (60, 1_024)
+    assert (
+        EVENT_IDENTITY_SERIALIZATION_IDENTITY,
+        EVENT_IDENTITY_LOCK_STRIPES,
+        OVERFLOW_IDENTITY_OUTCOME_IDENTITY,
+        OVERFLOW_EXACT_RECEIPT_SLOTS_PER_PRODUCER,
+    ) == (
+        "SHA256_UUID_SEND_FIRST_OCTET_FIXED_ROW_MUTEX_V1",
+        256,
+        "FIXED_RECEIPT_OR_COUNT_UNKNOWN_V1",
+        256,
+    )
     assert EVENT_MAX_INPUT_BYTES == 4_096
     assert PURGE_BATCH_ROWS == 1_024
     assert ACCESS_INTENT_EXPIRY_SECONDS == 300
@@ -200,6 +215,12 @@ def test_public_function_identities_and_capability_grants_are_exact():
         "accessExpiresAt": "ACCESS_DATA_CUT_PLUS_EXPIRY",
         "overflowClosure": "EVENT_WRITER_BARRIER_THROUGH_CLOSE_COMMIT",
     }
+    assert manifest["eventIdentitySerialization"] == {
+        "identity": "SHA256_UUID_SEND_FIRST_OCTET_FIXED_ROW_MUTEX_V1",
+        "lockStripes": 256,
+        "overflowOutcomeIdentity": "FIXED_RECEIPT_OR_COUNT_UNKNOWN_V1",
+        "exactReceiptSlotsPerProducer": 256,
+    }
 
 
 def test_break_glass_login_is_absent_in_normal_structural_state():
@@ -238,7 +259,7 @@ def test_manifest_is_canonical_ascii_and_has_domain_separated_golden_digest():
     assert json.loads(without_digest) == contract.manifest_without_digest()
     assert json.loads(canonical) == contract.manifest()
     assert contract.digest == \
-        "sha256:a7bf363d590e27334470ae633bc694b9ba83afecd29a3d1c7f0be2606d1ab18b"
+        "sha256:16166f50fc00c225d830212f6853e1ff99dda826f696573844ca2138a487c783"
     assert contract.digest == "sha256:" + hashlib.sha256(
         SECURITY_AUDIT_CONTRACT_DIGEST_POLICY.encode("ascii")
         + b"\x00"
@@ -325,6 +346,19 @@ def _replace_break_glass(**changes):
         lambda value: _replace_fingerprint(domain="OTHER_FINGERPRINT_DOMAIN_V1"),
         lambda value: _replace_fingerprint(framing="LP64_BE"),
         lambda value: _replace_fingerprint(key_version=1),
+        lambda value: replace(
+            value,
+            event_identity_serialization_identity="OTHER_MUTEX_V1",
+        ),
+        lambda value: replace(value, event_identity_lock_stripes=255),
+        lambda value: replace(
+            value,
+            overflow_identity_outcome_identity="OTHER_OUTCOME_V1",
+        ),
+        lambda value: replace(
+            value,
+            overflow_exact_receipt_slots_per_producer=255,
+        ),
         lambda value: replace(value, redaction_policy_identity="OTHER_REDACTION_V1"),
         lambda value: replace(value, retention_policy_identity="OTHER_RETENTION_V1"),
         lambda value: replace(value, retention_days=31),

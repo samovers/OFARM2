@@ -28,6 +28,12 @@ APPEND_INPUT_FINGERPRINT_LENGTH_BYTES = 32
 APPEND_INPUT_FINGERPRINT_FRAMING = "PRESENCE_U8_LP32_BE"
 APPEND_INPUT_FINGERPRINT_DOMAIN = \
     "OFARM_PRETENANT_APPEND_INPUT_FINGERPRINT_V1"
+EVENT_IDENTITY_SERIALIZATION_IDENTITY = \
+    "SHA256_UUID_SEND_FIRST_OCTET_FIXED_ROW_MUTEX_V1"
+EVENT_IDENTITY_LOCK_STRIPES = 256
+OVERFLOW_IDENTITY_OUTCOME_IDENTITY = \
+    "FIXED_RECEIPT_OR_COUNT_UNKNOWN_V1"
+OVERFLOW_EXACT_RECEIPT_SLOTS_PER_PRODUCER = 256
 REDACTION_POLICY_IDENTITY = "CORRELATION_HMAC_ONLY_V1"
 RETENTION_POLICY_IDENTITY = "SECURITY_DIAGNOSTIC_30D_V1"
 
@@ -232,6 +238,10 @@ class SecurityAuditContract:
     event_format_identity: str
     correlation_hmac: DigestSpec
     append_input_fingerprint: DigestSpec
+    event_identity_serialization_identity: str
+    event_identity_lock_stripes: int
+    overflow_identity_outcome_identity: str
+    overflow_exact_receipt_slots_per_producer: int
     redaction_policy_identity: str
     retention_policy_identity: str
     retention_days: int
@@ -263,6 +273,16 @@ class SecurityAuditContract:
             "eventFormatIdentity": self.event_format_identity,
             "correlationHmac": self.correlation_hmac.manifest(),
             "appendInputFingerprint": self.append_input_fingerprint.manifest(),
+            "eventIdentitySerialization": {
+                "identity": self.event_identity_serialization_identity,
+                "lockStripes": self.event_identity_lock_stripes,
+                "overflowOutcomeIdentity": (
+                    self.overflow_identity_outcome_identity
+                ),
+                "exactReceiptSlotsPerProducer": (
+                    self.overflow_exact_receipt_slots_per_producer
+                ),
+            },
             "policies": {
                 "redaction": self.redaction_policy_identity,
                 "retention": self.retention_policy_identity,
@@ -404,6 +424,16 @@ def _expected_contract() -> SecurityAuditContract:
             domain=APPEND_INPUT_FINGERPRINT_DOMAIN,
             framing=APPEND_INPUT_FINGERPRINT_FRAMING,
         ),
+        event_identity_serialization_identity=(
+            EVENT_IDENTITY_SERIALIZATION_IDENTITY
+        ),
+        event_identity_lock_stripes=EVENT_IDENTITY_LOCK_STRIPES,
+        overflow_identity_outcome_identity=(
+            OVERFLOW_IDENTITY_OUTCOME_IDENTITY
+        ),
+        overflow_exact_receipt_slots_per_producer=(
+            OVERFLOW_EXACT_RECEIPT_SLOTS_PER_PRODUCER
+        ),
         redaction_policy_identity=REDACTION_POLICY_IDENTITY,
         retention_policy_identity=RETENTION_POLICY_IDENTITY,
         retention_days=RETENTION_DAYS,
@@ -534,6 +564,11 @@ def validate_security_audit_contract(contract: SecurityAuditContract) -> None:
         ("retention seconds", contract.retention_seconds),
         ("quota bucket seconds", contract.quota_bucket_seconds),
         ("quota threshold", contract.quota_accepted_event_threshold),
+        ("event identity lock stripes", contract.event_identity_lock_stripes),
+        (
+            "overflow exact receipt slots per producer",
+            contract.overflow_exact_receipt_slots_per_producer,
+        ),
         ("event input bound", contract.event_max_input_bytes),
         ("purge batch", contract.purge_batch_rows),
         ("access expiry", contract.access_intent_expiry_seconds),
@@ -545,6 +580,23 @@ def validate_security_audit_contract(contract: SecurityAuditContract) -> None:
         _require_exact_int(value, label)
     if contract.retention_seconds != contract.retention_days * 24 * 60 * 60:
         raise SecurityAuditContractError("retention day and second bounds differ")
+    if contract.event_identity_lock_stripes != 256 or \
+            contract.overflow_exact_receipt_slots_per_producer != 256:
+        raise SecurityAuditContractError(
+            "event identity serialization bounds differ"
+        )
+    for label, value in (
+        (
+            "event identity serialization identity",
+            contract.event_identity_serialization_identity,
+        ),
+        (
+            "overflow identity outcome identity",
+            contract.overflow_identity_outcome_identity,
+        ),
+    ):
+        if type(value) is not str or _CLOSED_TOKEN.fullmatch(value) is None:
+            raise SecurityAuditContractError(f"{label} differs")
     if contract.query_limit.max_rows > contract.export_limit.max_rows or \
             contract.query_limit.max_bytes > contract.export_limit.max_bytes:
         raise SecurityAuditContractError("query limits must not exceed export limits")
@@ -661,6 +713,8 @@ __all__ = (
     "CORRELATION_HMAC_LENGTH_BYTES",
     "DigestSpec",
     "EVENT_FORMAT_IDENTITY",
+    "EVENT_IDENTITY_LOCK_STRIPES",
+    "EVENT_IDENTITY_SERIALIZATION_IDENTITY",
     "EVENT_KINDS",
     "EVENT_MAX_INPUT_BYTES",
     "EXPORT_MAX_BYTES",
@@ -676,6 +730,8 @@ __all__ = (
     "QUERY_FUNCTION_IDENTITY",
     "QUOTA_ACCEPTED_EVENT_THRESHOLD",
     "QUOTA_BUCKET_SECONDS",
+    "OVERFLOW_EXACT_RECEIPT_SLOTS_PER_PRODUCER",
+    "OVERFLOW_IDENTITY_OUTCOME_IDENTITY",
     "REDACTION_POLICY_IDENTITY",
     "REQUEST_ROUTER_REASONS",
     "RETENTION_DAYS",

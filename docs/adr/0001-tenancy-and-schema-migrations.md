@@ -154,6 +154,7 @@ schemas and other repository files are global inputs, not database relations.
 | operational_security_quota_bucket | Disposable non-tenant operational security control state | One fixed database-time bucket per provisioned producer/component records accepted and overflow counts plus marker state. Only hardened audit functions mutate it. It contains no request, tenant, principal, correlation, or evidence data and cannot authorize anything. |
 | operational_security_quota_high_water | Durable bounded non-tenant operational security control state | At most one row for each of the two fixed producer/component pairs records the latest closed quota minute. It survives bucket deletion and makes a backward wall-clock step fail closed instead of recreating a closed bucket. It contains no request, tenant, principal, correlation, or evidence data and cannot authorize anything. |
 | operational_security_event_identity_lock | Fixed non-tenant operational mutex state | Exactly 256 migration-created lock stripes serialize same-ID append attempts before database time and quota selection. The table stores no event ID, fingerprint, request, tenant, principal, correlation, or evidence data; a stripe collision only reduces concurrency and cannot authorize anything. |
+| operational_security_overflow_identity_receipt | Fixed bounded non-tenant overflow retry state | Exactly 256 migration-created receipt slots for each of the two fixed producer/component pairs retain an exact overflow event ID, its append fingerprint, bucket, and retention bound. A slot collision makes the affected bucket `COUNT_UNKNOWN` instead of evicting exact evidence. The relation has no tenant, principal, request, raw correlation, or authorization data and cannot grow beyond 512 rows. |
 | schema_migration | Database-global operational metadata | Append-only ledger of version, filename, SHA-256, application/release identity, and applied time. Application access is read-only for readiness. |
 | governed_write_batch | Tenant-owned | Primary identity is (tenant_id, batch_id). It anchors the transaction's command identity and the records, edges, traces, gate entries, and receipts emitted by that command. Runtime insertion requires authenticated_principal_ref to equal the protected transaction binding's party_ref; it is not caller-selected attribution. |
 | kernel_record_reference | Tenant-owned relational enforcement carrier | Normalizes governed references extracted from immutable JSONB payloads without changing those payloads. Owner and tenant targets use composite tenant keys; global-content targets use a distinct constrained lane. |
@@ -354,22 +355,27 @@ traffic. A compromised producer cannot select or reset its bucket. Exhausting
 the audit service is an accepted denial/readiness availability risk, never an
 authorization bypass or tenant-storage exhaustion path.
 
-Before policy, database-time, or quota evaluation, an append maps its event ID
-to one of 256 fixed migration-owned mutex rows, takes that row `FOR UPDATE`, and
-rechecks the event relation while holding the lock through transaction end.
+Before policy, database-time, or quota evaluation, an append hashes all 16
+canonical UUID bytes and maps the first SHA-256 octet to one of 256 fixed
+migration-owned mutex rows, takes that row `FOR UPDATE`, and rechecks both the
+event relation and fixed overflow receipts while holding the lock through
+transaction end.
 Concurrent same-ID attempts therefore cannot split one logical event between an
 individual row in one minute and an exact overflow count in another. No event
 ID or fingerprint is persisted in the mutex table; unrelated IDs sharing a
 stripe can only wait for one another.
 
-Once a bucket is in overflow posture, individual submitted event IDs are
-deliberately not durable. An acknowledged overflow call increments the bounded
-counter once. If its commit acknowledgement is ambiguous, the producer must not
-retry it as a countable append; the #192 control path atomically and idempotently
-sets that derived bucket to `COUNT_UNKNOWN`. The closing marker then makes no
-exact-count claim. This is the explicit exception to per-event retry because the
-individual event was intentionally aggregated; it cannot cause a silent double
-count presented as exact evidence.
+An overflow result is exact only when its event ID and full append fingerprint
+occupy the corresponding fixed receipt slot for that producer. An equal retry
+returns the original overflow bucket without incrementing it; a changed retry
+refuses. A different ID whose derived slot is occupied never evicts the older
+exact receipt: the current bucket becomes `COUNT_UNKNOWN` and its now-unneeded
+receipts are cleared. Exact receipts survive bucket close through the matching
+`OVERFLOW_ENDED` marker's retention lifetime and are cleared only after that
+exact marker is gone. Control-declared unknown posture clears the affected
+receipts immediately. The fixed 512-row grid therefore preserves exact retry
+semantics when it has evidence and otherwise makes uncertainty explicit without
+unbounded event-identity storage.
 
 #### Read, retention, replica, and backup boundary
 
@@ -1628,9 +1634,11 @@ and integration; they are not claims of `0001`.
    aggregation, and `OVERFLOW_ENDED` records a count or `COUNT_UNKNOWN`. Measure
    the separate audit service's connection/CPU/storage limits and prove tenant
    pool, WAL, volume, and latency remain isolated; pressure never changes denial
-   into access. Lose acknowledgement for an aggregated event and prove the
-   control path marks the bucket `COUNT_UNKNOWN` idempotently instead of
-   retrying a countable append or presenting a double increment as exact. Hold
+   into access. Retry an exact overflow ID after commit and across the next
+   minute; prove the original overflow outcome is returned without an increment.
+   Force two different IDs onto one fixed receipt slot; prove the affected
+   bucket becomes `COUNT_UNKNOWN` rather than evicting older exact evidence or
+   presenting a double increment as exact. Hold
    an append and a close on opposite sides of the minute boundary; prove the
    event-writer barrier admits exactly one ordering, the close count is final,
    the old bucket cannot be recreated, and only one `OVERFLOW_ENDED` exists.
@@ -1638,8 +1646,10 @@ and integration; they are not claims of `0001`.
    service failure, relation/disk failure, and whole-audit-service outage before
    and after append acknowledgement. Requests remain denied, timeouts/retries
    stay bounded, no raw or ungoverned queue fallback is emitted, exact-ID retry
-   deduplicates ambiguous commits, and recovery records every known gap or
-   `COUNT_UNKNOWN` without claiming lossless/exactly-once delivery. Rotate keys
+   deduplicates ambiguous commits while a durable row or fixed receipt exists,
+   any receipt-capacity loss makes the affected count unknown, and recovery
+   records every known gap or `COUNT_UNKNOWN` without claiming
+   lossless/exactly-once delivery. Rotate keys
    and prove each old version is destroyed by its last stamped `purge_after`
    even when row purge is delayed.
 10. Test the no-caller-cutoff purge immediately before and after `purge_after`,

@@ -471,10 +471,74 @@ INSERT INTO ofarm_security.operational_security_event_identity_lock (lock_slot)
 SELECT slot::pg_catalog.int2
 FROM pg_catalog.generate_series(0, 255) AS slots(slot);
 
+CREATE TABLE ofarm_security.operational_security_overflow_identity_receipt (
+    producer pg_catalog.text COLLATE pg_catalog."C" NOT NULL,
+    component pg_catalog.text COLLATE pg_catalog."C" NOT NULL,
+    lock_slot pg_catalog.int2 NOT NULL,
+    event_id pg_catalog.uuid,
+    append_input_fingerprint pg_catalog.bytea,
+    bucket_start pg_catalog.timestamptz,
+    purge_after pg_catalog.timestamptz,
+
+    CONSTRAINT operational_security_overflow_receipt_pkey
+        PRIMARY KEY (producer, component, lock_slot),
+    CONSTRAINT operational_security_overflow_receipt_event_id_key
+        UNIQUE (event_id),
+    CONSTRAINT operational_security_overflow_receipt_attribution_check
+        CHECK (
+            (producer = 'AUTHENTICATION_BOUNDARY_V1'
+                AND component = 'AUTHENTICATION')
+            OR
+            (producer = 'REQUEST_ROUTER_BOUNDARY_V1'
+                AND component = 'REQUEST_ROUTER')
+        ),
+    CONSTRAINT operational_security_overflow_receipt_slot_check CHECK (
+        lock_slot BETWEEN 0 AND 255
+    ),
+    CONSTRAINT operational_security_overflow_receipt_shape_check CHECK (
+        (
+            event_id IS NULL
+            AND append_input_fingerprint IS NULL
+            AND bucket_start IS NULL
+            AND purge_after IS NULL
+        )
+        OR
+        (
+            event_id IS NOT NULL
+            AND event_id <>
+                '00000000-0000-0000-0000-000000000000'::pg_catalog.uuid
+            AND append_input_fingerprint IS NOT NULL
+            AND pg_catalog.octet_length(append_input_fingerprint) = 32
+            AND bucket_start IS NOT NULL
+            AND bucket_start = pg_catalog.date_bin(
+                pg_catalog.make_interval(secs => 60),
+                bucket_start,
+                '2000-01-01 00:00:00+00'::pg_catalog.timestamptz
+            )
+            AND purge_after IS NOT NULL
+            AND purge_after > bucket_start
+        )
+    )
+);
+
+INSERT INTO ofarm_security.operational_security_overflow_identity_receipt (
+    producer, component, lock_slot
+)
+SELECT pair.producer, pair.component, slot::pg_catalog.int2
+FROM (
+    VALUES
+        ('AUTHENTICATION_BOUNDARY_V1'::pg_catalog.text,
+         'AUTHENTICATION'::pg_catalog.text),
+        ('REQUEST_ROUTER_BOUNDARY_V1'::pg_catalog.text,
+         'REQUEST_ROUTER'::pg_catalog.text)
+) AS pair(producer, component)
+CROSS JOIN pg_catalog.generate_series(0, 255) AS slots(slot);
+
 REVOKE ALL PRIVILEGES ON TABLE ofarm_security.operational_security_event FROM PUBLIC;
 REVOKE ALL PRIVILEGES ON TABLE ofarm_security.operational_security_quota_bucket FROM PUBLIC;
 REVOKE ALL PRIVILEGES ON TABLE ofarm_security.operational_security_quota_high_water FROM PUBLIC;
 REVOKE ALL PRIVILEGES ON TABLE ofarm_security.operational_security_event_identity_lock FROM PUBLIC;
+REVOKE ALL PRIVILEGES ON TABLE ofarm_security.operational_security_overflow_identity_receipt FROM PUBLIC;
 
 CREATE FUNCTION ofarm_security._event_fingerprint(
     VARIADIC p_fields pg_catalog.bytea[]
@@ -684,6 +748,7 @@ DECLARE
     v_fingerprint pg_catalog.bytea;
     v_identity_lock_slot pg_catalog.int2;
     v_existing ofarm_security.operational_security_event%ROWTYPE;
+    v_receipt ofarm_security.operational_security_overflow_identity_receipt%ROWTYPE;
     v_bucket ofarm_security.operational_security_quota_bucket%ROWTYPE;
     v_marker ofarm_security.operational_security_event_identity;
 BEGIN
@@ -726,7 +791,7 @@ BEGIN
     SELECT lock_slot INTO STRICT v_identity_lock_slot
     FROM ofarm_security.operational_security_event_identity_lock
     WHERE lock_slot = pg_catalog.get_byte(
-        pg_catalog.uuid_send(p_event_id), 0
+        pg_catalog.sha256(pg_catalog.uuid_send(p_event_id)), 0
     )::pg_catalog.int2
     FOR UPDATE;
 
@@ -753,6 +818,20 @@ BEGIN
         RETURN ROW(
             v_existing.event_id, v_existing.observed_at,
             v_existing.purge_after, true, NULL, false
+        )::ofarm_security.append_pretenant_failure_result;
+    END IF;
+
+    SELECT * INTO v_receipt
+    FROM ofarm_security.operational_security_overflow_identity_receipt
+    WHERE event_id = p_event_id;
+
+    IF FOUND THEN
+        IF v_receipt.append_input_fingerprint IS DISTINCT FROM v_fingerprint THEN
+            RAISE EXCEPTION USING ERRCODE = '22000',
+                MESSAGE = 'event identity was already used with different input';
+        END IF;
+        RETURN ROW(
+            NULL, NULL, NULL, false, v_receipt.bucket_start, false
         )::ofarm_security.append_pretenant_failure_result;
     END IF;
 
@@ -882,19 +961,54 @@ BEGIN
           AND bucket_start = v_bucket_start;
     END IF;
 
-    IF v_bucket.count_unknown
-            OR v_bucket.overflow_event_count = 9223372036854775807 THEN
+    IF v_bucket.count_unknown THEN
+        NULL;
+    ELSIF v_bucket.overflow_event_count = 9223372036854775807 THEN
         UPDATE ofarm_security.operational_security_quota_bucket
         SET count_unknown = true
         WHERE producer = v_producer
           AND component = v_component
           AND bucket_start = v_bucket_start;
-    ELSE
-        UPDATE ofarm_security.operational_security_quota_bucket
-        SET overflow_event_count = overflow_event_count + 1
+        UPDATE ofarm_security.operational_security_overflow_identity_receipt
+        SET event_id = NULL,
+            append_input_fingerprint = NULL,
+            bucket_start = NULL,
+            purge_after = NULL
         WHERE producer = v_producer
           AND component = v_component
           AND bucket_start = v_bucket_start;
+    ELSE
+        UPDATE ofarm_security.operational_security_overflow_identity_receipt
+        SET event_id = p_event_id,
+            append_input_fingerprint = v_fingerprint,
+            bucket_start = v_bucket_start,
+            purge_after = 'infinity'::pg_catalog.timestamptz
+        WHERE producer = v_producer
+          AND component = v_component
+          AND lock_slot = v_identity_lock_slot
+          AND event_id IS NULL
+        RETURNING * INTO v_receipt;
+        IF FOUND THEN
+            UPDATE ofarm_security.operational_security_quota_bucket
+            SET overflow_event_count = overflow_event_count + 1
+            WHERE producer = v_producer
+              AND component = v_component
+              AND bucket_start = v_bucket_start;
+        ELSE
+            UPDATE ofarm_security.operational_security_quota_bucket
+            SET count_unknown = true
+            WHERE producer = v_producer
+              AND component = v_component
+              AND bucket_start = v_bucket_start;
+            UPDATE ofarm_security.operational_security_overflow_identity_receipt
+            SET event_id = NULL,
+                append_input_fingerprint = NULL,
+                bucket_start = NULL,
+                purge_after = NULL
+            WHERE producer = v_producer
+              AND component = v_component
+              AND bucket_start = v_bucket_start;
+        END IF;
     END IF;
 
     SELECT * INTO STRICT v_bucket
@@ -1098,6 +1212,14 @@ BEGIN
         RAISE EXCEPTION USING ERRCODE = '22023',
             MESSAGE = 'overflow bucket is not open';
     END IF;
+    UPDATE ofarm_security.operational_security_overflow_identity_receipt
+    SET event_id = NULL,
+        append_input_fingerprint = NULL,
+        bucket_start = NULL,
+        purge_after = NULL
+    WHERE producer = p_producer
+      AND component = p_component
+      AND bucket_start = p_bucket_start;
 END
 $overflow_unknown$;
 
@@ -1182,6 +1304,22 @@ BEGIN
             THEN NULL ELSE v_bucket.overflow_event_count END,
         v_bucket.count_unknown, p_producer, p_component, NULL
     );
+    IF v_bucket.count_unknown THEN
+        UPDATE ofarm_security.operational_security_overflow_identity_receipt
+        SET event_id = NULL,
+            append_input_fingerprint = NULL,
+            bucket_start = NULL,
+            purge_after = NULL
+        WHERE producer = p_producer
+          AND component = p_component
+          AND bucket_start = p_bucket_start;
+    ELSE
+        UPDATE ofarm_security.operational_security_overflow_identity_receipt
+        SET purge_after = v_event.purge_after
+        WHERE producer = p_producer
+          AND component = p_component
+          AND bucket_start = p_bucket_start;
+    END IF;
     INSERT INTO ofarm_security.operational_security_quota_high_water (
         producer, component, closed_through_bucket_start
     ) VALUES (p_producer, p_component, p_bucket_start)
@@ -1447,6 +1585,25 @@ BEGIN
     )
     SELECT pg_catalog.count(*) INTO v_deleted_count FROM deleted;
 
+    UPDATE ofarm_security.operational_security_overflow_identity_receipt
+    SET event_id = NULL,
+        append_input_fingerprint = NULL,
+        bucket_start = NULL,
+        purge_after = NULL
+    WHERE purge_after <= v_cutoff
+      AND NOT EXISTS (
+          SELECT 1
+          FROM ofarm_security.operational_security_event AS event
+          WHERE event.event_kind = 'OVERFLOW_ENDED'
+            AND event.affected_producer =
+                operational_security_overflow_identity_receipt.producer
+            AND event.affected_component =
+                operational_security_overflow_identity_receipt.component
+            AND event.interval_start =
+                operational_security_overflow_identity_receipt.bucket_start
+            AND event.interval_count_unknown = false
+      );
+
     WITH stale_buckets AS (
         SELECT bucket.ctid, bucket.producer, bucket.component,
                bucket.bucket_start
@@ -1638,6 +1795,7 @@ BEGIN
     IF v_names IS DISTINCT FROM ARRAY[
         'operational_security_event',
         'operational_security_event_identity_lock',
+        'operational_security_overflow_identity_receipt',
         'operational_security_quota_bucket',
         'operational_security_quota_high_water',
         'schema_migration'
@@ -1658,6 +1816,8 @@ BEGIN
         'operational_security_event_live_order_idx',
         'operational_security_event_pkey',
         'operational_security_event_purge_idx',
+        'operational_security_overflow_receipt_event_id_key',
+        'operational_security_overflow_receipt_pkey',
         'operational_security_quota_bucket_pkey',
         'operational_security_quota_high_water_pkey',
         'schema_migration_filename_key',
@@ -1782,6 +1942,28 @@ BEGIN
         v_differences := v_differences + 1;
     END IF;
 
+    SELECT pg_catalog.array_agg(attribute.attname::pg_catalog.text
+            ORDER BY attribute.attnum)
+    INTO v_names
+    FROM pg_catalog.pg_attribute AS attribute
+    WHERE attribute.attrelid =
+            'ofarm_security.operational_security_overflow_identity_receipt'::
+                pg_catalog.regclass
+      AND attribute.attnum > 0
+      AND NOT attribute.attisdropped;
+    IF v_names IS DISTINCT FROM ARRAY[
+        'producer', 'component', 'lock_slot', 'event_id',
+        'append_input_fingerprint', 'bucket_start', 'purge_after'
+    ]::pg_catalog.text[] THEN
+        v_differences := v_differences + 1;
+    END IF;
+
+    SELECT pg_catalog.count(*) INTO v_count
+    FROM ofarm_security.operational_security_overflow_identity_receipt;
+    IF v_count <> 512 THEN
+        v_differences := v_differences + 1;
+    END IF;
+
     SELECT pg_catalog.count(*) INTO v_count
     FROM pg_catalog.pg_attribute AS attribute
     JOIN pg_catalog.pg_class AS class ON class.oid = attribute.attrelid
@@ -1791,6 +1973,7 @@ BEGIN
       AND class.relname IN (
           'operational_security_event',
           'operational_security_event_identity_lock',
+          'operational_security_overflow_identity_receipt',
           'operational_security_quota_bucket',
           'operational_security_quota_high_water'
       )
@@ -1876,6 +2059,23 @@ BEGIN
         v_differences := v_differences + 1;
     END IF;
 
+    SELECT pg_catalog.array_agg(con.conname::pg_catalog.text
+            ORDER BY con.conname::pg_catalog.text)
+    INTO v_names
+    FROM pg_catalog.pg_constraint AS con
+    WHERE con.conrelid =
+        'ofarm_security.operational_security_overflow_identity_receipt'::
+            pg_catalog.regclass;
+    IF v_names IS DISTINCT FROM ARRAY[
+        'operational_security_overflow_receipt_attribution_check',
+        'operational_security_overflow_receipt_event_id_key',
+        'operational_security_overflow_receipt_pkey',
+        'operational_security_overflow_receipt_shape_check',
+        'operational_security_overflow_receipt_slot_check'
+    ]::pg_catalog.text[] THEN
+        v_differences := v_differences + 1;
+    END IF;
+
     SELECT pg_catalog.count(*) INTO v_count
     FROM pg_catalog.pg_constraint AS con
     JOIN pg_catalog.pg_class AS class ON class.oid = con.conrelid
@@ -1885,6 +2085,7 @@ BEGIN
       AND class.relname IN (
           'operational_security_event',
           'operational_security_event_identity_lock',
+          'operational_security_overflow_identity_receipt',
           'operational_security_quota_bucket',
           'operational_security_quota_high_water'
       )
@@ -2150,7 +2351,7 @@ BEGIN
       AND pg_catalog.sha256(
             pg_catalog.convert_to(routine.prosrc, 'UTF8')
           ) = pg_catalog.decode(
-            '1200bed186ca36ebd5101f9db58cf2431de7bb5e67a0f4922021e60c8e7e9ad4',
+            '3f111401524f836932651750964b01f7b089d90ebd6c1f88f88968c7c897b340',
             'hex'
           );
     IF v_count <> 1 THEN
@@ -2174,6 +2375,8 @@ BEGIN
         'ofarm_security.operational_security_event'::pg_catalog.regclass,
         'ofarm_security.operational_security_event_identity_lock'::
             pg_catalog.regclass,
+        'ofarm_security.operational_security_overflow_identity_receipt'::
+            pg_catalog.regclass,
         'ofarm_security.operational_security_quota_bucket'::pg_catalog.regclass,
         'ofarm_security.operational_security_quota_high_water'::pg_catalog.regclass
     ) AND NOT trigger.tgisinternal;
@@ -2189,6 +2392,8 @@ BEGIN
     WHERE class.oid IN (
         'ofarm_security.operational_security_event'::pg_catalog.regclass,
         'ofarm_security.operational_security_event_identity_lock'::
+            pg_catalog.regclass,
+        'ofarm_security.operational_security_overflow_identity_receipt'::
             pg_catalog.regclass,
         'ofarm_security.operational_security_quota_bucket'::pg_catalog.regclass,
         'ofarm_security.operational_security_quota_high_water'::pg_catalog.regclass
@@ -3611,7 +3816,7 @@ BEGIN
     INTO v_catalog_fingerprint
     FROM catalog_entry;
     IF v_catalog_fingerprint <>
-            'sha256:d53597d5b01dc6768bf8dd8bb93039683a8f6a2afa9794955601f899add3c60a' THEN
+            'sha256:b2c10a893dcd846a3fb556c52963a3dad9197fdbd2319dc148d1ef04aded1bd5' THEN
         v_differences := v_differences + 1;
     END IF;
 
@@ -3652,7 +3857,7 @@ BEGIN
 
     RETURN ROW(
         'ofarm.security-audit-database-contract.v1',
-        'sha256:a7bf363d590e27334470ae633bc694b9ba83afecd29a3d1c7f0be2606d1ab18b',
+        'sha256:16166f50fc00c225d830212f6853e1ff99dda826f696573844ca2138a487c783',
         'OFARM_PRETENANT_SECURITY_EVENT_V1',
         'CORRELATION_HMAC_ONLY_V1',
         'SECURITY_DIAGNOSTIC_30D_V1',
