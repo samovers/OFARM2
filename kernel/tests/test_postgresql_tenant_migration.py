@@ -4569,6 +4569,46 @@ def _insert_test_materialization(
     return key_digest
 
 
+def _publish_test_materialization_generation(
+    connection: psycopg.Connection,
+    authority: TenantAuthority,
+    *,
+    id_prefix: str,
+    generation_suffix: str,
+    materialization_key: Mapping[str, object],
+    expected_live_materialization_id: str | None = None,
+) -> str:
+    batch_id = f"batch-{id_prefix}-{generation_suffix}"
+    materialization_id = f"{id_prefix}-{generation_suffix}"
+    record_ids = tuple(
+        f"{id_prefix}-{kind}-{generation_suffix}"
+        for kind in ("basis", "snapshot", "context")
+    )
+    _insert_batch(connection, authority, batch_id)
+    for record_id in record_ids:
+        _insert_record(
+            connection,
+            authority,
+            batch_id=batch_id,
+            record_id=record_id,
+            record_kind="ofarm.derivedtest.v0.1",
+            payload={"recordId": record_id},
+        )
+    _insert_test_materialization(
+        connection,
+        authority,
+        batch_id=batch_id,
+        materialization_id=materialization_id,
+        materialization_key=materialization_key,
+        basis_record_id=record_ids[0],
+        snapshot_record_id=record_ids[1],
+        context_snapshot_ref=record_ids[2],
+        current_state={"generation": generation_suffix},
+        expected_live_materialization_id=expected_live_materialization_id,
+    )
+    return materialization_id
+
+
 def test_deferred_graph_accepts_future_ids_only_with_same_batch_reachability(
     tenant_target: TenantTarget,
     authority: TenantAuthority,
@@ -5685,6 +5725,78 @@ def test_materialization_generations_preserve_provenance_and_monotone_freshness(
     assert live_generations == [(generation_b_id,)]
 
 
+@pytest.mark.parametrize("role_name", ("ofarm_app", "ofarm_worker"))
+@pytest.mark.parametrize(
+    ("starting_freshness", "superseded_freshness"),
+    (
+        ("FRESH", "STALE"),
+        ("STALE", "STALE"),
+        ("INVALID", "INVALID"),
+    ),
+)
+def test_materialization_publication_preserves_superseded_freshness(
+    tenant_target: TenantTarget,
+    authority: TenantAuthority,
+    role_name: str,
+    starting_freshness: str,
+    superseded_freshness: str,
+) -> None:
+    case_suffix = (
+        f"{role_name.removeprefix('ofarm_')}-{starting_freshness.lower()}"
+    )
+    materialization_key = {
+        "anchorScopeRef": f"farm-publication-{case_suffix}",
+        "targetTwin": f"twin-publication-{case_suffix}",
+        "timePolicy": {"policyType": "NOW"},
+    }
+    id_prefix = f"materialization-publication-{case_suffix}"
+
+    with psycopg.connect(tenant_target.role_dsn(role_name)) as runtime:
+        _install_test_bound_context(runtime, authority)
+        generation_a_id = _publish_test_materialization_generation(
+            runtime,
+            authority,
+            id_prefix=id_prefix,
+            generation_suffix="a",
+            materialization_key=materialization_key,
+        )
+        if starting_freshness != "FRESH":
+            runtime.execute(
+                """
+                UPDATE ofarm.derived_materialization
+                SET freshness = %s
+                WHERE tenant_id = %s AND materialization_id = %s
+                """,
+                (starting_freshness, authority.tenant_id, generation_a_id),
+            )
+
+    with psycopg.connect(tenant_target.role_dsn(role_name)) as runtime:
+        _install_test_bound_context(runtime, authority)
+        generation_b_id = _publish_test_materialization_generation(
+            runtime,
+            authority,
+            id_prefix=id_prefix,
+            generation_suffix="b",
+            materialization_key=materialization_key,
+            expected_live_materialization_id=generation_a_id,
+        )
+        observed_generations = runtime.execute(
+            """
+            SELECT materialization_id, freshness, superseded_by
+            FROM ofarm.derived_materialization
+            WHERE tenant_id = %s
+              AND materialization_id IN (%s, %s)
+            ORDER BY materialization_id
+            """,
+            (authority.tenant_id, generation_a_id, generation_b_id),
+        ).fetchall()
+
+    assert observed_generations == [
+        (generation_a_id, superseded_freshness, generation_b_id),
+        (generation_b_id, "FRESH", None),
+    ]
+
+
 def test_complete_catalog_fingerprint_refuses_function_constraint_index_policy_and_acl_tamper(
     tenant_target: TenantTarget,
 ) -> None:
@@ -5735,7 +5847,7 @@ def test_complete_catalog_fingerprint_refuses_function_constraint_index_policy_a
             assert pristine[0] is True
             assert pristine[2] == 0
             assert pristine[3] == (
-                "sha256:db308216df157bc4e1980c7e0524dbcf52b053f0ddda9ad7075b8cacc3d240f9"
+                "sha256:f7c72a008792173e110b9359006271fea263b3e26fb53c8ac6303839d0460fc4"
             )
         finally:
             migrator.rollback()
@@ -6424,7 +6536,7 @@ def test_readiness_observation_is_complete_after_commit(
     assert row[1] == TENANT_CONTEXT_CONTRACT.digest
     assert row[2] == 0
     assert row[3] == (
-        "sha256:db308216df157bc4e1980c7e0524dbcf52b053f0ddda9ad7075b8cacc3d240f9"
+        "sha256:f7c72a008792173e110b9359006271fea263b3e26fb53c8ac6303839d0460fc4"
     )
     assert row[5] == TENANT_PROVISIONING_SPEC.digest
     assert row[6] == TENANT_SERVICE.identity

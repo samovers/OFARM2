@@ -2453,7 +2453,10 @@ AS 'DECLARE
 
         IF observed_live_materialization_id IS NOT NULL THEN
             UPDATE ofarm.derived_materialization AS materialization
-               SET freshness = ''STALE'',
+               SET freshness = CASE materialization.freshness
+                       WHEN ''FRESH'' THEN ''STALE''
+                       ELSE materialization.freshness
+                   END,
                    superseded_by = requested_materialization_id
              WHERE materialization.tenant_id = bound_tenant_id
                AND materialization.materialization_id =
@@ -8948,7 +8951,7 @@ AS 'DECLARE
           INTO observed_structural_catalog_digest
           FROM catalog_entry;
         IF observed_structural_catalog_digest <>
-                ''sha256:db308216df157bc4e1980c7e0524dbcf52b053f0ddda9ad7075b8cacc3d240f9'' THEN
+                ''sha256:f7c72a008792173e110b9359006271fea263b3e26fb53c8ac6303839d0460fc4'' THEN
             differences := pg_catalog.array_append(
                 differences, ''complete tenant catalog fingerprint differs''
             );
