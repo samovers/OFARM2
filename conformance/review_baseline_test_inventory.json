@@ -1866,6 +1866,11 @@
       "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_access_clock_mutex_is_released_before_reader_transaction_ends",
+      "sourceModule": "kernel.tests.test_postgresql_audit_migration",
+      "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_access_clock_structure_drift_refuses_readiness",
       "sourceModule": "kernel.tests.test_postgresql_audit_migration",
       "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
@@ -2057,6 +2062,11 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_retention_deleted_bucket_cannot_reopen_after_clock_rollback",
+      "sourceModule": "kernel.tests.test_postgresql_audit_migration",
+      "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_retention_duration_is_fixed_across_caller_timezone_dst_transition",
       "sourceModule": "kernel.tests.test_postgresql_audit_migration",
       "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
     },
@@ -3572,6 +3582,16 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_acl_and_default_acl_drift_refuse_without_reconciliation",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_audit_access_clock_lock_key_is_available_only_through_fixed_wrappers",
+      "sourceModule": "kernel.tests.test_postgresql_provisioning",
+      "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_provisioning.py::test_audit_access_clock_wrapper_drift_refuses_without_repair",
       "sourceModule": "kernel.tests.test_postgresql_provisioning",
       "sourcePath": "kernel/tests/test_postgresql_provisioning.py"
     },
@@ -7441,8 +7461,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "402ae680b8b1caa855a05e99251aff94b75293679e965f4b842ff52fce33a972",
-  "entryCount": 1488,
+  "entriesSha256": "76e6e4af2862a25ce02303858684d062cef824d025bc2282cddb54897038c3c6",
+  "entryCount": 1492,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

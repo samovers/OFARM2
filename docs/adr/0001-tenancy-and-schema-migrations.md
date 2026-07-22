@@ -151,8 +151,7 @@ schemas and other repository files are global inputs, not database relations.
 | runtime_bundle | Tenant-scoped immutable provenance root | Stores the exact canonical RuntimeBundle identity document under its full digest. Ordinary application and worker roles have read-only access. The dedicated startup publisher is the only provisioned non-owner role that can invoke the closed atomic publication function; direct INSERT is denied. |
 | runtime_bundle_component | Tenant-scoped immutable bundle membership | Stores exactly the component identities selected by one RuntimeBundle. The atomic publisher installs the complete set with the bundle row. No runtime role can append a component before or after a governed batch references the bundle. |
 | operational_security_event | Database-global operational security metadata, explicitly non-tenant | Append-only, bounded pre-tenant failure events plus audit-access, retention, and declared-gap maintenance events for this lane. It carries no tenant_id, tenant_ref, Party/farm/role identity, governed batch, knowledge position, or request-supplied attribution. It lives only in the separately provisioned audit PostgreSQL service's protected `ofarm_security` schema and is never read as tenant history. |
-| operational_security_access_clock_lock | Fixed non-tenant operational mutex state | One migration-created singleton serializes access-clock observation for normal query and break-glass export. It stores no time, request, tenant, principal, correlation, evidence, or authorization decision. |
-| operational_security_access_clock_high_water | Durable non-tenant authorization control state | One owner-only bigint sequence stores the greatest database wall-clock microsecond observed by the audit-access protocol. Advancement is nontransactional, so a rejected or rolled-back read cannot erase evidence that its expiry boundary was reached. Normal APIs never decrease it; clock regression fails closed. It contains no request, tenant, principal, correlation, or evidence data. |
+| operational_security_access_clock_high_water | Durable non-tenant authorization control state | One owner-only bigint sequence stores the greatest database wall-clock microsecond observed by the audit-access protocol. A function-scoped session advisory mutex serializes observation and is released before the caller regains control. Advancement is nontransactional, so a rejected or rolled-back read cannot erase an observed expiry crossing. Normal APIs never decrease it; an observed clock regression fails closed. It contains no request, tenant, principal, correlation, or evidence data. |
 | operational_security_quota_bucket | Disposable non-tenant operational security control state | One fixed database-time bucket per provisioned producer/component records accepted and overflow counts plus marker state. Only hardened audit functions mutate it. It contains no request, tenant, principal, correlation, or evidence data and cannot authorize anything. |
 | operational_security_quota_high_water | Durable bounded non-tenant operational security control state | At most one row for each of the two fixed producer/component pairs records the latest closed quota minute. It survives bucket deletion and makes a backward wall-clock step fail closed instead of recreating a closed bucket. It contains no request, tenant, principal, correlation, or evidence data and cannot authorize anything. |
 | operational_security_event_identity_lock | Fixed non-tenant operational mutex state | Exactly 256 migration-created lock stripes serialize same-ID append attempts before database time and quota selection. The table stores no event ID, fingerprint, request, tenant, principal, correlation, or evidence data; a stripe collision only reduces concurrency and cannot authorize anything. |
@@ -261,7 +260,9 @@ and retention calculation are migration-checksummed constants/functions, not
 mutable or unclassified policy tables. V1 names redaction policy
 `CORRELATION_HMAC_ONLY_V1` and retention policy `SECURITY_DIAGNOSTIC_30D_V1`.
 Its sole initial HMAC domain is `OFARM_PRETENANT_CORRELATION_V1` with key version
-`1`. The database sets `purge_after = observed_at + interval '30 days'`.
+`1`. The database sets `purge_after` to exactly 2,592,000 seconds after
+`observed_at`; this duration is independent of the session time zone and
+daylight-saving transitions.
 Changing a domain, accepted key version, or either policy requires a reviewed
 forward migration and applies only to newly appended rows; it never rewrites
 existing evidence.
@@ -396,11 +397,19 @@ snapshot frozen earlier. After validating the closed request, the function
 takes the same migration-owned `SHARE ROW EXCLUSIVE` event-writer barrier used
 by retention and overflow close. Previously admitted writers finish before a
 fresh snapshot and wall-clock cut are captured; later writers wait until the
-intent transaction commits. Access-clock observation is serialized through one
-migration-owned singleton and advances an owner-only bigint sequence to the
-greatest observed database-time microsecond. Sequence advancement is not rolled
-back with its calling transaction. A new intent refuses whenever current
-database time is behind that high-water mark. Every event stores its top-level `xid8`, and the
+intent transaction commits. Access-clock observation is serialized with one
+provisioning-owned, function-scoped session advisory mutex. The helper releases
+that mutex before the outer caller regains control, so a reader, exporter, or
+controller cannot retain it merely by keeping its transaction open. The audit
+schema owner can execute only no-argument take/release wrappers whose fixed key
+is embedded by provisioning. A separate NOLOGIN/NOINHERIT access-clock lock
+owner with no members or role-assumption path owns those wrappers and alone has
+the exact raw session-lock and unlock grants. The audit schema owner, migrator,
+and runtime logins have no raw advisory-lock authority. The helper
+advances an owner-only bigint sequence to the greatest observed database-time
+microsecond. Sequence advancement is not rolled back with its calling
+transaction. A new intent refuses whenever current database time is behind
+that high-water mark. Every event stores its top-level `xid8`, and the
 bounded reader intersects the timestamp cut with `pg_visible_in_snapshot`.
 A transaction ordered before the cut is visible in the persisted snapshot, and
 a transaction ordered after the cut is outside both boundaries. The snapshot
@@ -410,12 +419,18 @@ with the committed access event ID; the function verifies the exact scope
 fingerprint before returning that one bounded page. Rollback of the read cannot
 erase either the already-committed access intent or an access-clock advance.
 Both normal query and break-glass export compare expiry with the non-regressing
-high-water mark. Once it reaches the intent deadline, that intent remains
-expired; a backward wall-clock step cannot resurrect it. A clock regression
-before expiry also refuses rather than extending the authorization window.
+high-water mark. Once an observation reaches the intent deadline, that intent
+remains expired; a later backward wall-clock step cannot resurrect it. An
+observed clock regression before expiry also refuses rather than extending the
+authorization window. PostgreSQL has no independent monotonic elapsed-time
+authority here, so V1 explicitly trusts the database wall clock not to pass an
+intent deadline and roll back before any access-protocol observation occurs.
+Such an unobserved excursion cannot be distinguished from ordinary time by the
+database. #192 owns external clock-health fencing if deployment cannot satisfy
+that trusted operating-system prerequisite.
 Reuse can return only the same cut/page/ceiling and cannot widen unique data. Retention cannot reveal a
 replacement row: `purge_after` is constrained to exactly
-`observed_at + 30 days`, target eligibility requires `purge_after` later than
+`observed_at + 2,592,000 seconds`, target eligibility requires `purge_after` later than
 the intent's fixed `access_expires_at`, and the page is ordered by `observed_at`
 descending before `LIMIT`, independent of wall-clock reversal or whether
 physical deletion has run. A new page or later cut needs a new intent. Function
@@ -1035,6 +1050,10 @@ The role model is:
   `ofarm_security` schema, operational security-event relation, and hardened
   append/control/query/export/purge/readiness functions, with no tenant-schema
   membership;
+- ofarm_security_audit_access_clock_lock_owner: isolated NOLOGIN/NOINHERIT
+  owner only of the two fixed-key access-clock wrappers, with no membership or
+  role-assumption path and only the exact raw two-integer session lock/unlock
+  grants needed by those wrappers;
 - ofarm_security_audit_ingest: NOLOGIN capability granted only to separately
   provisioned authentication/router producer LOGIN identities with `INHERIT
   TRUE`, `SET FALSE`, and `ADMIN FALSE`; it may execute only the pre-tenant
@@ -1138,17 +1157,21 @@ bypass from becoming an application SQL path.
 
 Cluster provisioning revokes PUBLIC and application EXECUTE on every
 pg_advisory_lock, pg_try_advisory_lock, pg_advisory_unlock, and transaction-lock
-overload. Among provisioned roles there are exactly two raw-function grant
+overload. Among provisioned roles there are exactly three raw-function grant
 classes:
 `ofarm_tenant_lock_owner` alone receives EXECUTE on
 `pg_catalog.pg_advisory_xact_lock(bigint)`, and each service's isolated
 migration-lock owner alone receives EXECUTE on
-`pg_catalog.pg_advisory_xact_lock(integer, integer)` in that service. Neither
-owner has LOGIN, members, or a role-assumption path. The application, worker,
-and migrator roles cannot choose a numeric lock key, take a raw session or
-transaction lock, try a migration lock, or unlock a protected lock.
+`pg_catalog.pg_advisory_xact_lock(integer, integer)` in that service. In the
+audit service only, isolated `ofarm_security_audit_access_clock_lock_owner`
+alone receives the exact `pg_advisory_lock(integer, integer)` and
+`pg_advisory_unlock(integer, integer)` grants. None of these owners has LOGIN,
+members, or a role-assumption path. The audit schema owner, application,
+worker, and migrator roles cannot call any raw advisory routine or choose a
+numeric lock key.
 
-Two schema-qualified SECURITY DEFINER wrappers are allowed:
+Four schema-qualified SECURITY DEFINER wrapper functions in three closed
+capsules are allowed:
 
 - the tenant-write wrapper accepts no tenant or lock-key argument, requires a
   verified TenantBinding, derives the unique key from its tenant registry row,
@@ -1158,13 +1181,22 @@ Two schema-qualified SECURITY DEFINER wrappers are allowed:
   `ofarm_infrastructure` schema, is owned by the service-specific isolated
   migration-lock owner, is executable only by the migrator, accepts no
   arguments, derives the fixed domain-separated integer pair internally, and
-  acquires only a transaction-scoped lock.
+  acquires only a transaction-scoped lock; and
+- the audit access-clock take/release pair lives in the same separately
+  provisioned infrastructure schema, is owned by the distinct isolated
+  access-clock lock owner, is executable only by the audit schema owner,
+  accepts no arguments, and embeds the one fixed access-clock integer pair.
+  The take wrapper acquires one session lock and the release wrapper releases
+  only that same lock; the migration-owned clock helper invokes them in one
+  exception-safe function-scoped protocol.
 
-Both wrappers have a fixed trusted search_path, fully qualified calls, exact
+All wrappers have a fixed trusted search_path, fully qualified calls, exact
 owners and EXECUTE grants, and no dynamic SQL. There is no application-visible
-unlock wrapper; commit or rollback releases the lock. The migration wrapper is
-part of the exact provisioning capsule and remains after `0001`; application
-startup cannot create, invoke, replace, or repair it.
+unlock wrapper; commit or rollback releases each transaction lock. The access-
+clock release wrapper is not executable by runtime roles and selects no key.
+The infrastructure wrappers are part of the exact provisioning capsule and
+remain after `0001`; application startup cannot create, invoke, replace, or
+repair them.
 
 The administrator-only provisioning command serializes every verify-or-create
 operation in one PostgreSQL cluster with one fixed, cluster-global two-integer
@@ -1403,8 +1435,10 @@ external continuity witness and explicit promotion policy before such a target
 can serve. Database-administrator and recovery-control compromise remains
 outside the RLS boundary.
 The audit access-clock high-water is also copied or rewound by physical
-recovery. It prevents wall-clock rollback only within one uninterrupted audit-
-store lineage and is not recovery-continuity or promotion evidence.
+recovery. Within one uninterrupted audit-store lineage it preserves only
+observed wall-clock advances and refuses observed regressions; it cannot detect
+a pass-and-rollback excursion between observations. It is not recovery-
+continuity or promotion evidence.
 
 The first deployment has an exact-version compatibility window: one release
 supports exactly one tenant migration-set digest and one audit migration-set
@@ -1477,7 +1511,7 @@ dependent production path is active.
 | Cross-tenant or dangling graph construction, including a future-ID/two-transaction promotion exploit | Same-tenant composite FKs plus same-batch promotion reachability and deferred constraints. |
 | JSONB payload reference omitted from relational enforcement or assigned a guessed kind | #174 supplies only the neutral structural carrier and makes no semantic-completeness claim. Exact RuntimeBundle-pinned extraction/kind/cardinality enforcement arrives through #184's reviewed forward migration; dependent runtime surfaces refuse before it exists. |
 | Cross-tenant idempotency replay or uniqueness existence oracle | Tenant/principal/operation command namespace and tenant-prefixed unique indexes. |
-| Advisory-lock collision, raw session lock, attacker-selected key, unlock, or migration-lock attempt | Raw advisory functions are denied except for the isolated tenant-lock owner's exact bigint transaction-lock overload and each service's isolated migration-lock owner's exact two-integer transaction-lock overload. The protected no-key wrappers derive keys in disjoint bigint-tenant and integer-pair migration namespaces and acquire transaction locks only. |
+| Advisory-lock collision, raw session lock, attacker-selected key, unlock, or migration-lock attempt | Raw advisory functions are denied except for each isolated capsule owner's exact required overloads: tenant bigint transaction lock, service migration two-integer transaction lock, and audit access-clock two-integer session lock/unlock. Protected no-key wrappers derive or embed the disjoint keys. Only the audit clock capsule uses a session lock, and its helper releases the fixed key on every normal or exception path before returning. |
 | Materialization, dependency, cache, trace, gate-log, bound error, or frozen-output leakage | Tenant qualification and RLS apply regardless of authoritative status; pre-tenant errors use only the protected non-tenant audit lane, and structural observations expose no tenant or security-event data. |
 | Arbitrary RuntimeBundle bytes, a partial component set, or component append after governed use forges or corrupts provenance | Ordinary runtime roles have read-only bundle/component access and cannot call the dedicated publisher. The trusted startup capability reconstructs and hashes the exact canonical document, verifies every exact content link, and atomically inserts one complete non-empty component set. Row existence is the immutable seal; governed batches reference only that sealed row. |
 | Mutation, substitution, or tenant-table mixing of shared global content | #171 placement is prerequisite to 0001; application read-only privileges on global content plus content digest and canonical-byte equality verification apply. Tenant content is inert unless selected by the sealed exact bundle. |
@@ -1692,14 +1726,20 @@ and integration; they are not claims of `0001`.
     bounds. Advance the access-clock authority through expiry, reject the read,
     roll back that read, move the database wall clock backward, and prove the
     same intent still refuses. Only the exact precommitted page succeeds;
-    rollback cannot erase its intent or the non-regressing clock high-water,
+    rollback cannot erase its intent or an observed non-regressing clock
+    high-water advance,
     replay/COPY returns no wider unique data, and a new page/cut requires
     a new intent. Hold an append transaction open while creating an intent and
     prove the intent waits on the event-writer barrier; commit that append and
     prove it is included by the fresh cut and snapshot. While the intent
     transaction still holds the barrier, attempt a later append and prove it
-    waits, then remains outside the committed cut. Normal provisioning has no
-    export LOGIN. Exercise break-glass
+    waits, then remains outside the committed cut. Keep one successful reader
+    transaction open with transaction and idle-in-transaction timeouts disabled
+    and prove a second reader can still observe the same access intent without
+    waiting on access-clock serialization. Treat database wall-clock
+    monotonicity between observations as a trusted prerequisite; #192 must
+    supply external fencing if that prerequisite is unavailable. Normal
+    provisioning has no export LOGIN. Exercise break-glass
     approval, credential expiry/revocation, cumulative bounded export, and
     denial without tenant or HMAC-key access; audit structural compatibility
     remains false for the whole temporary window, and only dropping the
@@ -1755,7 +1795,11 @@ and integration; they are not claims of `0001`.
    permanent migration wrapper, not the raw two-integer function, while the
    isolated migration-lock owner alone has only the exact raw two-integer
    EXECUTE needed by that wrapper. Neither lock owner can assume a LOGIN role or
-   invoke the other namespace.
+   invoke the other namespace. In the audit service, prove the audit schema
+   owner and migrator cannot call either raw session routine or select a key;
+   the distinct access-clock lock owner alone has those two raw grants, the
+   no-argument wrappers embed the fixed pair, and the clock helper releases it
+   before the reader transaction ends.
 6. Cold-bootstrap after #171 and prove globally governed bundle bytes are
    outside tenant-owned records while tenant selection/context rows reference
    the exact bundle digest.

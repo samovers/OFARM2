@@ -301,10 +301,10 @@ def test_authoritative_audit_migration_is_one_exact_initial_set():
     assert SECURITY_AUDIT_CONTRACT.digest in source
     assert SECURITY_AUDIT_PROVISIONING_SPEC.digest in source
     assert migration.source_sha256 == \
-        "sha256:3daffdcb8f6dd57cb99a7b1ad2731626797ec21f1efb4a5308d7ba3a8e2bc27b"
-    assert migration.byte_length == 170_960
+        "sha256:5e648e0127ca386363c3a1d979a5718cbd5b4846b3ad98ceaee5e7684b278517"
+    assert migration.byte_length == 169_237
     assert migration_set.digest == \
-        "sha256:d60c3533ee3581de92d5bd810cdd288ae32ba7200623538763df499ddb3db966"
+        "sha256:e3752c1f7d54dff7b749367a29a53b48b5ca3258e51b1a8388dacdcd830392b6"
     assert migration_set.prefix_digest(1) == migration_set.digest
 
 
@@ -316,7 +316,6 @@ def test_authoritative_audit_migration_has_closed_carriers_and_limits():
         _table_definition(source, qualified_name)
         for qualified_name in (
             "ofarm_security.operational_security_event",
-            "ofarm_security.operational_security_access_clock_lock",
             "ofarm_security.operational_security_quota_bucket",
             "ofarm_security.operational_security_quota_high_water",
             "ofarm_security.operational_security_event_identity_lock",
@@ -324,17 +323,14 @@ def test_authoritative_audit_migration_has_closed_carriers_and_limits():
         )
     )
 
-    assert source.count("CREATE TABLE ofarm_security.operational_security_") == 6
+    assert source.count("CREATE TABLE ofarm_security.operational_security_") == 5
     assert "CREATE TABLE ofarm_security.operational_security_event" in source
     assert (
         "CREATE SEQUENCE "
         "ofarm_security.operational_security_access_clock_high_water"
         in source
     )
-    assert (
-        "CREATE TABLE ofarm_security.operational_security_access_clock_lock"
-        in source
-    )
+    assert "operational_security_access_clock_lock" not in source
     assert "CREATE TABLE ofarm_security.operational_security_quota_bucket" in source
     assert (
         "CREATE TABLE ofarm_security.operational_security_quota_high_water"
@@ -360,7 +356,8 @@ def test_authoritative_audit_migration_has_closed_carriers_and_limits():
     assert "p_max_bytes BETWEEN 1 AND 1048576" in source
     assert "p_max_rows BETWEEN 1 AND 2048" in source
     assert "p_max_bytes BETWEEN 1 AND 8388608" in source
-    assert "make_interval(days => 30)" in source
+    assert "make_interval(secs => 2592000)" in source
+    assert "make_interval(days => 30)" not in source
     assert "make_interval(secs => 300)" in source
     assert "make_interval(secs => 60)" in source
     assert "OFARM_SECURITY_AUDIT_COMPLETE_CATALOG_V1" in source
@@ -418,11 +415,11 @@ def test_authoritative_audit_migration_has_closed_carriers_and_limits():
     for identity in BACKEND_STATISTICS_ROUTINE_IDENTITIES:
         assert f"'{identity}'" in source
     assert (
-        "41aa56167153a612bb4a41e1c86b1d570ab2d95c0e1513f7b1860488964be734"
+        "aadb04a6c86ebe27e142ec71c95a1a48422a5930e942fdfa61cd2095340a3934"
         in source
     )
     assert (
-        "sha256:44ba2d104cca6c92b22d61a4754e86fd333cdca6c19175e3ba60cfcd39f6d541"
+        "sha256:90f439c108b77a33e44cc987a057b601c27dfe2e4a4c3bb1e128d4cb2106f663"
         in source
     )
     assert "jsonb" not in persisted_audit_tables
@@ -503,7 +500,16 @@ def test_bounded_access_uses_one_nonregressing_clock_authority():
         1,
     )[0]
 
-    assert "FOR UPDATE;" in clock_function
+    assert (
+        "ofarm_infrastructure.take_audit_access_clock_lock()"
+        in clock_function
+    )
+    assert clock_function.count(
+        "ofarm_infrastructure.release_audit_access_clock_lock()"
+    ) == 3
+    assert "pg_catalog.pg_advisory_lock(" not in clock_function
+    assert "pg_catalog.pg_advisory_unlock(" not in clock_function
+    assert "FOR UPDATE;" not in clock_function
     assert "pg_catalog.setval(" in clock_function
     assert "clock_regressed :=" in clock_function
     assert bounded_function.count(
@@ -559,7 +565,8 @@ def test_access_expiry_freezes_retention_membership_for_page_reuse():
     )[0]
 
     assert (
-        "purge_after = observed_at + pg_catalog.make_interval(days => 30)"
+        "purge_after = observed_at +\n"
+        "            pg_catalog.make_interval(secs => 2592000)"
         in event_table
     )
     retained_query = """        WHERE e.purge_after > v_access.access_expires_at
@@ -1002,7 +1009,7 @@ def test_pretenant_append_is_attributed_bounded_and_exactly_idempotent(
             """
             SELECT event_kind, producer, component, reason,
                    pg_catalog.octet_length(correlation_hmac_value),
-                   purge_after = observed_at + pg_catalog.make_interval(days => 30),
+                   EXTRACT(EPOCH FROM purge_after - observed_at)::pg_catalog.int8,
                    pg_catalog.octet_length(append_input_fingerprint)
             FROM ofarm_security.operational_security_event
             WHERE event_id = %s
@@ -1011,8 +1018,40 @@ def test_pretenant_append_is_attributed_bounded_and_exactly_idempotent(
         ).fetchone()
     assert row == (
         "PRE_TENANT_FAILURE", "AUTHENTICATION_BOUNDARY_V1",
-        "AUTHENTICATION", "CREDENTIAL_MISSING", 32, True, 32,
+        "AUTHENTICATION", "CREDENTIAL_MISSING", 32, 2592000, 32,
     )
+
+
+def test_retention_duration_is_fixed_across_caller_timezone_dst_transition(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    observed_at = datetime.fromisoformat("2099-10-15T12:00:00-04:00")
+    with _controlled_pretenant_clock(state):
+        with psycopg.connect(
+            _role_dsn(
+                state, "ofarm_security_authentication_producer_login"
+            )
+        ) as producer:
+            producer.execute("SET LOCAL TimeZone = 'America/New_York'")
+            producer.execute(
+                "SELECT pg_catalog.set_config('ofarm.test_now', %s, true)",
+                (observed_at.isoformat(),),
+            )
+            retention_seconds = producer.execute(
+                """
+                SELECT EXTRACT(
+                    EPOCH FROM appended.purge_after - appended.observed_at
+                )::pg_catalog.int8
+                FROM ofarm_security.append_pretenant_failure(
+                    %s, 'CREDENTIAL_MISSING', %s,
+                    'OFARM_PRETENANT_CORRELATION_V1', 1
+                ) AS appended
+                """,
+                (uuid4(), bytes(range(32))),
+            ).fetchone()[0]
+            assert retention_seconds == 2592000
+            producer.rollback()
 
 
 def _concurrent_append(
@@ -1819,6 +1858,71 @@ def test_bounded_reader_requires_an_equal_committed_access_intent(
     assert all(row[2] > access[1] for row in rows)
 
 
+def test_access_clock_mutex_is_released_before_reader_transaction_ends(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    with psycopg.connect(
+        _role_dsn(state, "ofarm_security_audit_control_login"),
+        autocommit=True,
+    ) as control:
+        access = control.execute(
+            """
+            SELECT * FROM ofarm_security.commit_audit_access_intent(
+                'OPERATIONAL_DIAGNOSTIC_QUERY_V1', %s,
+                NULL, NULL, 10, 100000
+            )
+            """,
+            (QUERY_IDENTITY,),
+        ).fetchone()
+
+    with psycopg.connect(
+        _role_dsn(state, "ofarm_security_audit_reader_login")
+    ) as first_reader:
+        first_reader.execute("SET transaction_timeout = 0")
+        first_reader.execute("SET idle_in_transaction_session_timeout = 0")
+        first_reader_pid = first_reader.execute(
+            "SELECT pg_catalog.pg_backend_pid()"
+        ).fetchone()[0]
+        first_rows = first_reader.execute(
+            """
+            SELECT * FROM ofarm_security.query_operational_security_events(
+                %s, NULL, NULL, 10, 100000
+            )
+            """,
+            (access[0],),
+        ).fetchall()
+
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            assert admin.execute(
+                """
+                SELECT pg_catalog.count(*)
+                FROM pg_catalog.pg_locks
+                WHERE pid = %s AND locktype = 'advisory'
+                """,
+                (first_reader_pid,),
+            ).fetchone()[0] == 0
+
+        with psycopg.connect(
+            _role_dsn(state, "ofarm_security_audit_reader_login"),
+            autocommit=True,
+        ) as second_reader:
+            second_reader.execute("SET lock_timeout = '1s'")
+            second_rows = second_reader.execute(
+                """
+                SELECT *
+                FROM ofarm_security.query_operational_security_events(
+                    %s, NULL, NULL, 10, 100000
+                )
+                """,
+                (access[0],),
+            ).fetchall()
+
+    assert first_rows == second_rows
+
+
 def _set_access_clock_high_water(
     state: dict[str, object], observed_at: datetime | None
 ) -> int:
@@ -2398,12 +2502,14 @@ def test_runtime_roles_have_no_direct_event_table_or_schema_authority(
     )
     denied_statements = (
         "SELECT * FROM ofarm_security.operational_security_event",
-        "SELECT * FROM "
-        "ofarm_security.operational_security_access_clock_lock",
         "SELECT last_value FROM "
         "ofarm_security.operational_security_access_clock_high_water",
         "SELECT pg_catalog.nextval("
         "'ofarm_security.operational_security_access_clock_high_water')",
+        "SELECT pg_catalog.pg_advisory_lock(-274079271, -1019032096)",
+        "SELECT pg_catalog.pg_advisory_unlock(-274079271, -1019032096)",
+        "SELECT ofarm_infrastructure.take_audit_access_clock_lock()",
+        "SELECT ofarm_infrastructure.release_audit_access_clock_lock()",
         "INSERT INTO ofarm_security.operational_security_event DEFAULT VALUES",
         "UPDATE ofarm_security.operational_security_event SET reason = reason",
         "DELETE FROM ofarm_security.operational_security_event",
@@ -4074,35 +4180,6 @@ def test_access_clock_structure_drift_refuses_readiness(
                 """
             )
     assert _observe_structure(state) == (True, 0, False)
-
-    with psycopg.connect(
-        state["target_admin_dsn"], autocommit=True
-    ) as admin:
-        admin.execute(
-            """
-            DELETE FROM
-                ofarm_security.operational_security_access_clock_lock
-            """
-        )
-    try:
-        drift = _observe_structure(state)
-        assert drift[0] is False
-        assert drift[1] >= 1
-    finally:
-        with psycopg.connect(
-            state["target_admin_dsn"], autocommit=True
-        ) as admin:
-            admin.execute(
-                """
-                INSERT INTO
-                    ofarm_security.operational_security_access_clock_lock (
-                        singleton
-                    )
-                VALUES (true)
-                """
-            )
-    assert _observe_structure(state) == (True, 0, False)
-
 
 def test_structural_readiness_refuses_role_attribute_and_membership_drift(
     migrated_audit_service,

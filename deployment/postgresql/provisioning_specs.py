@@ -48,6 +48,8 @@ _MIGRATION_LOCK_KEY = (
     int.from_bytes(_MIGRATION_LOCK_KEY_BYTES[:4], "big", signed=True),
     int.from_bytes(_MIGRATION_LOCK_KEY_BYTES[4:], "big", signed=True),
 )
+ACCESS_CLOCK_LOCK_KEY_POLICY = "OFARM_SECURITY_AUDIT_ACCESS_CLOCK_LOCK_V1"
+_ACCESS_CLOCK_LOCK_KEY = (-274079271, -1019032096)
 _POSTGRES_IDENTIFIER = re.compile(r"[a-z][a-z0-9_]{0,62}")
 _SETTING_NAME = re.compile(r"[a-z][a-z0-9_]{0,62}")
 
@@ -212,7 +214,7 @@ class AuditProducerSpec:
 
 @dataclass(frozen=True, slots=True)
 class RoutineSpec:
-    """One exact built-in routine signature whose PUBLIC EXECUTE is revoked."""
+    """One built-in whose PUBLIC access is revoked exactly."""
 
     name: str
     argument_types: tuple[str, ...]
@@ -443,6 +445,96 @@ class MigrationLockSpec:
 
 
 @dataclass(frozen=True, slots=True)
+class AccessClockLockSpec:
+    """Exact provisioning-owned, no-caller-key audit clock mutex wrappers."""
+
+    schema_name: str
+    owner_role: str
+    take_function_name: str
+    release_function_name: str
+    execute_role: str
+    key_class_id: int
+    key_object_id: int
+
+    @property
+    def take_qualified_function(self) -> str:
+        return f"{self.schema_name}.{self.take_function_name}"
+
+    @property
+    def release_qualified_function(self) -> str:
+        return f"{self.schema_name}.{self.release_function_name}"
+
+    @property
+    def take_source(self) -> str:
+        return (
+            "SELECT pg_catalog.pg_advisory_lock("
+            f"{self.key_class_id}, {self.key_object_id})"
+        )
+
+    @property
+    def release_source(self) -> str:
+        return (
+            "SELECT pg_catalog.pg_advisory_unlock("
+            f"{self.key_class_id}, {self.key_object_id})"
+        )
+
+    def manifest(self) -> dict[str, object]:
+        function_common: dict[str, object] = {
+            "argumentTypes": [],
+            "owner": self.owner_role,
+            "language": "sql",
+            "securityDefiner": True,
+            "strict": False,
+            "leakproof": False,
+            "volatility": "VOLATILE",
+            "parallelSafety": "UNSAFE",
+            "searchPath": ["pg_catalog", "pg_temp"],
+            "executeRoles": [self.execute_role],
+        }
+        return {
+            "schema": self.schema_name,
+            "owner": self.owner_role,
+            "functions": [
+                {
+                    **function_common,
+                    "qualifiedName": self.take_qualified_function,
+                    "returnType": "pg_catalog.void",
+                    "source": self.take_source,
+                },
+                {
+                    **function_common,
+                    "qualifiedName": self.release_qualified_function,
+                    "returnType": "pg_catalog.bool",
+                    "source": self.release_source,
+                },
+            ],
+            "lockKey": {
+                "policy": ACCESS_CLOCK_LOCK_KEY_POLICY,
+                "namespace": "pg_advisory_lock(integer,integer)",
+                "classId": self.key_class_id,
+                "objectId": self.key_object_id,
+                "callerSelectable": False,
+                "transactionScoped": False,
+                "functionScopedByProtocol": True,
+            },
+            "rawRoutineOwnerGrants": [
+                {
+                    "schema": "pg_catalog",
+                    "name": "pg_advisory_lock",
+                    "argumentTypes": ["integer", "integer"],
+                    "grantee": self.owner_role,
+                },
+                {
+                    "schema": "pg_catalog",
+                    "name": "pg_advisory_unlock",
+                    "argumentTypes": ["integer", "integer"],
+                    "grantee": self.owner_role,
+                },
+            ],
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class RoutineOwnerTransfer:
     """One initial tenant routine whose owner is sealed exactly once."""
 
@@ -615,6 +707,7 @@ class ProvisioningSpec:
     schema_owner: str
     readiness_role_name: str
     migration_lock: MigrationLockSpec
+    access_clock_lock: AccessClockLockSpec | None
     tenant_write_lock: TenantWriteLockSpec | None
     tenant_admission_lock: TenantAdmissionLockSpec | None
     tenant_initial_owner_sealer: TenantInitialOwnerSealerSpec | None
@@ -663,6 +756,8 @@ class ProvisioningSpec:
         """All roles that can own migration or provisioning routines."""
 
         owners = [self.schema_owner, self.migration_lock.owner_role]
+        if self.access_clock_lock is not None:
+            owners.append(self.access_clock_lock.owner_role)
         if self.tenant_write_lock is not None:
             owners.append(self.tenant_write_lock.owner_role)
         if self.tenant_admission_lock is not None:
@@ -723,6 +818,11 @@ class ProvisioningSpec:
                     else {}
                 ),
             },
+            **(
+                {"accessClockLock": self.access_clock_lock.manifest()}
+                if self.access_clock_lock is not None
+                else {}
+            ),
             "tenantWriteLock": (
                 None
                 if self.tenant_write_lock is None
@@ -940,7 +1040,6 @@ _ADVISORY_LOCK_ROUTINES = tuple(
         ("pg_try_advisory_xact_lock_shared", ("integer", "integer")),
     )
 )
-
 
 _LARGE_OBJECT_ROUTINES = tuple(
     LargeObjectRoutineSpec(name, argument_types, return_type, internal_symbol)
@@ -1483,6 +1582,7 @@ TENANT_PROVISIONING_SPEC = ProvisioningSpec(
         key_class_id=_MIGRATION_LOCK_KEY[0],
         key_object_id=_MIGRATION_LOCK_KEY[1],
     ),
+    access_clock_lock=None,
     tenant_write_lock=_TENANT_WRITE_LOCK,
     tenant_admission_lock=_TENANT_ADMISSION_LOCK,
     tenant_initial_owner_sealer=_TENANT_INITIAL_OWNER_SEALER,
@@ -1658,6 +1758,15 @@ SECURITY_AUDIT_PROVISIONING_SPEC = ProvisioningSpec(
         key_class_id=_MIGRATION_LOCK_KEY[0],
         key_object_id=_MIGRATION_LOCK_KEY[1],
     ),
+    access_clock_lock=AccessClockLockSpec(
+        schema_name="ofarm_infrastructure",
+        owner_role="ofarm_security_audit_access_clock_lock_owner",
+        take_function_name="take_audit_access_clock_lock",
+        release_function_name="release_audit_access_clock_lock",
+        execute_role="ofarm_security_audit_owner",
+        key_class_id=_ACCESS_CLOCK_LOCK_KEY[0],
+        key_object_id=_ACCESS_CLOCK_LOCK_KEY[1],
+    ),
     tenant_write_lock=None,
     tenant_admission_lock=None,
     tenant_initial_owner_sealer=None,
@@ -1666,6 +1775,13 @@ SECURITY_AUDIT_PROVISIONING_SPEC = ProvisioningSpec(
         RoleSpec("ofarm_security_audit_owner", False, False, False, -1),
         RoleSpec(
             "ofarm_security_audit_migration_lock_owner",
+            False,
+            False,
+            False,
+            -1,
+        ),
+        RoleSpec(
+            "ofarm_security_audit_access_clock_lock_owner",
             False,
             False,
             False,
@@ -1983,6 +2099,54 @@ def _validate_spec(spec: ProvisioningSpec) -> None:
     if lock.execute_role not in role_map or not role_map[lock.execute_role].login:
         raise ProvisioningSpecError("migration-lock caller must be a declared LOGIN")
 
+    access_clock_lock = spec.access_clock_lock
+    if spec.migration_service == SECURITY_AUDIT_SERVICE:
+        if access_clock_lock is None:
+            raise ProvisioningSpecError("security-audit access-clock lock is absent")
+        for value, label in (
+            (access_clock_lock.schema_name, "access-clock lock schema"),
+            (access_clock_lock.owner_role, "access-clock lock owner"),
+            (access_clock_lock.take_function_name, "access-clock take function"),
+            (
+                access_clock_lock.release_function_name,
+                "access-clock release function",
+            ),
+            (access_clock_lock.execute_role, "access-clock lock caller"),
+        ):
+            _validate_identifier(value, label)
+        if (
+            access_clock_lock.schema_name,
+            access_clock_lock.owner_role,
+            access_clock_lock.take_function_name,
+            access_clock_lock.release_function_name,
+            access_clock_lock.execute_role,
+            access_clock_lock.key_class_id,
+            access_clock_lock.key_object_id,
+        ) != (
+            lock.schema_name,
+            "ofarm_security_audit_access_clock_lock_owner",
+            "take_audit_access_clock_lock",
+            "release_audit_access_clock_lock",
+            spec.schema_owner,
+            *_ACCESS_CLOCK_LOCK_KEY,
+        ):
+            raise ProvisioningSpecError("access-clock lock boundary is not exact")
+        access_clock_owner = role_map.get(access_clock_lock.owner_role)
+        if access_clock_owner is None or (
+            access_clock_owner.login,
+            access_clock_owner.inherit,
+            access_clock_owner.bypass_rls,
+            access_clock_owner.connection_limit,
+        ) != (False, False, False, -1):
+            raise ProvisioningSpecError(
+                "access-clock lock owner must be closed "
+                "NOLOGIN/NOINHERIT/NOBYPASSRLS"
+            )
+    elif access_clock_lock is not None:
+        raise ProvisioningSpecError(
+            "tenant service must not carry the audit access-clock lock"
+        )
+
     tenant_lock = spec.tenant_write_lock
     admission_lock = spec.tenant_admission_lock
     sealer = spec.tenant_initial_owner_sealer
@@ -2177,6 +2341,10 @@ def _validate_spec(spec: ProvisioningSpec) -> None:
         if lock.owner_role in edge:
             raise ProvisioningSpecError(
                 "migration-lock owner must have no membership edge"
+            )
+        if access_clock_lock is not None and access_clock_lock.owner_role in edge:
+            raise ProvisioningSpecError(
+                "access-clock lock owner must have no membership edge"
             )
         if tenant_lock is not None and tenant_lock.owner_role in edge:
             raise ProvisioningSpecError("tenant-lock owner must have no membership edge")

@@ -301,12 +301,17 @@ class SecurityAuditContract:
                 ),
                 "accessVisibility": "PERSISTED_PG_SNAPSHOT",
                 "accessClock": (
-                    "SERIALIZED_NONTRANSACTIONAL_SEQUENCE_HIGH_WATER_V1"
+                    "FUNCTION_SCOPED_SESSION_ADVISORY_LOCKED_"
+                    "NONTRANSACTIONAL_SEQUENCE_HIGH_WATER_V2"
                 ),
                 "accessExpiresAt": (
                     "ACCESS_DATA_CUT_PLUS_EXPIRY_COMPARED_TO_CLOCK_HIGH_WATER"
                 ),
-                "accessClockRollback": "FAIL_CLOSED",
+                "accessClockRollback": "FAIL_CLOSED_AFTER_OBSERVATION",
+                "accessClockTrustedPrerequisite": (
+                    "DATABASE_WALL_CLOCK_MONOTONIC_BETWEEN_"
+                    "ACCESS_PROTOCOL_OBSERVATIONS"
+                ),
                 "overflowClosure": (
                     "EVENT_WRITER_BARRIER_THROUGH_CLOSE_COMMIT"
                 ),

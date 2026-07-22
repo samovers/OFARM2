@@ -33,6 +33,7 @@ from deployment.postgresql.provisioning import (
     verify_provisioned_system_identifier_separation,
 )
 from deployment.postgresql.provisioning_specs import (
+    ACCESS_CLOCK_LOCK_KEY_POLICY,
     MIGRATION_LOCK_KEY_POLICY,
     PROVISIONING_SPEC_DIGEST_POLICY,
     SECURITY_AUDIT_PROVISIONING_SPEC,
@@ -273,8 +274,13 @@ def test_provisioning_specs_freeze_distinct_service_and_role_boundaries():
     assert audit.max_prepared_transactions == 0
     assert set(tenant.role_names) & set(audit.role_names) == {"ofarm_migrator"}
     assert len(tenant.public_execute_revoked_routines) == 21
-    assert tenant.public_execute_revoked_routines == \
-        audit.public_execute_revoked_routines
+    assert tuple(
+        (routine.name, routine.argument_types)
+        for routine in tenant.public_execute_revoked_routines
+    ) == tuple(
+        (routine.name, routine.argument_types)
+        for routine in audit.public_execute_revoked_routines
+    )
     assert tenant.large_object_routines == audit.large_object_routines
     assert tuple(
         (
@@ -486,7 +492,7 @@ def test_provisioning_specs_freeze_distinct_service_and_role_boundaries():
     assert tenant.digest == \
         "sha256:87122affe6e45127d33b50bb7ee7cb9e35f5e66d81549bcae821019b3fd15f00"
     assert audit.digest == \
-        "sha256:770165332bbdb7a5e67e468f021d9fe82df817a2aee1a8a70191a08e869c307a"
+        "sha256:9b9d06c6f6ac5527a32014ec1719a3cee9742d4d5ab7d8e8a4ff2797053824f7"
     assert next(
         role for role in tenant.roles if role.name == "ofarm_migrator"
     ).connection_limit == 2
@@ -535,6 +541,47 @@ def test_preledger_migration_lock_capsules_are_closed_and_service_owned():
             )
             for edge in spec.memberships
         )
+
+    access_lock = audit.access_clock_lock
+    assert tenant.access_clock_lock is None
+    assert access_lock is not None
+    assert ACCESS_CLOCK_LOCK_KEY_POLICY == \
+        "OFARM_SECURITY_AUDIT_ACCESS_CLOCK_LOCK_V1"
+    assert (
+        access_lock.schema_name,
+        access_lock.owner_role,
+        access_lock.take_function_name,
+        access_lock.release_function_name,
+        access_lock.execute_role,
+        access_lock.key_class_id,
+        access_lock.key_object_id,
+    ) == (
+        "ofarm_infrastructure",
+        "ofarm_security_audit_access_clock_lock_owner",
+        "take_audit_access_clock_lock",
+        "release_audit_access_clock_lock",
+        "ofarm_security_audit_owner",
+        -274079271,
+        -1019032096,
+    )
+    assert access_lock.take_source == (
+        "SELECT pg_catalog.pg_advisory_lock(-274079271, -1019032096)"
+    )
+    assert access_lock.release_source == (
+        "SELECT pg_catalog.pg_advisory_unlock(-274079271, -1019032096)"
+    )
+    access_lock_owner = next(
+        role for role in audit.roles if role.name == access_lock.owner_role
+    )
+    assert (
+        access_lock_owner.login,
+        access_lock_owner.inherit,
+        access_lock_owner.bypass_rls,
+    ) == (False, False, False)
+    assert all(
+        access_lock.owner_role not in (edge.granted_role, edge.member_role)
+        for edge in audit.memberships
+    )
 
 
 def test_tenant_write_lock_owner_and_one_time_owner_sealer_are_closed():
@@ -2218,6 +2265,83 @@ def test_only_migrator_can_reach_the_fixed_migration_lock_wrapper(
             ).fetchone() == (False,)
 
 
+def test_audit_access_clock_lock_key_is_available_only_through_fixed_wrappers(
+    provisioned_services,
+):
+    spec = SECURITY_AUDIT_PROVISIONING_SPEC
+    access_lock = spec.access_clock_lock
+    assert access_lock is not None
+    admin_dsn = provisioned_services["auditAdmin"]
+    target_dsn = _database_dsn(admin_dsn, spec.database_name)
+    migrator_dsn = _database_dsn(
+        admin_dsn,
+        spec.database_name,
+        user="ofarm_migrator",
+        password=provisioned_services["auditPasswords"]["ofarm_migrator"],
+    )
+
+    with psycopg.connect(migrator_dsn, autocommit=True) as migrator:
+        migrator.execute("SET ROLE ofarm_security_audit_owner")
+        for routine in (
+            "pg_catalog.pg_advisory_lock(integer,integer)",
+            "pg_catalog.pg_advisory_unlock(integer,integer)",
+        ):
+            assert migrator.execute(
+                "SELECT pg_catalog.has_function_privilege("
+                "CURRENT_USER, %s, 'EXECUTE')",
+                (routine,),
+            ).fetchone() == (False,)
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            migrator.execute("SELECT pg_catalog.pg_advisory_lock(1, 2)")
+
+        migrator.execute(
+            sql.SQL("SELECT {}()").format(
+                sql.Identifier(
+                    access_lock.schema_name,
+                    access_lock.take_function_name,
+                )
+            )
+        )
+        assert migrator.execute(
+            "SELECT pg_catalog.count(*) FROM pg_catalog.pg_locks "
+            "WHERE pid = pg_catalog.pg_backend_pid() "
+            "AND locktype = 'advisory'"
+        ).fetchone() == (1,)
+        assert migrator.execute(
+            sql.SQL("SELECT {}()").format(
+                sql.Identifier(
+                    access_lock.schema_name,
+                    access_lock.release_function_name,
+                )
+            )
+        ).fetchone() == (True,)
+        assert migrator.execute(
+            "SELECT pg_catalog.count(*) FROM pg_catalog.pg_locks "
+            "WHERE pid = pg_catalog.pg_backend_pid() "
+            "AND locktype = 'advisory'"
+        ).fetchone() == (0,)
+
+    with psycopg.connect(target_dsn, autocommit=True) as admin:
+        for routine in (
+            "pg_catalog.pg_advisory_lock(integer,integer)",
+            "pg_catalog.pg_advisory_unlock(integer,integer)",
+        ):
+            assert admin.execute(
+                "SELECT pg_catalog.has_function_privilege(%s, %s, 'EXECUTE')",
+                (access_lock.owner_role, routine),
+            ).fetchone() == (True,)
+            assert admin.execute(
+                "SELECT pg_catalog.has_function_privilege("
+                "'ofarm_security_audit_owner', %s, 'EXECUTE')",
+                (routine,),
+            ).fetchone() == (False,)
+        assert admin.execute(
+            "SELECT pg_catalog.pg_has_role("
+            "'ofarm_migrator', %s, 'SET')",
+            (access_lock.owner_role,),
+        ).fetchone() == (False,)
+
+
 def test_tenant_owner_sealer_and_bigint_lock_grant_are_exactly_isolated(
     provisioned_services,
 ):
@@ -2351,4 +2475,35 @@ def test_migration_lock_capsule_drift_refuses_without_repair(
     finally:
         with psycopg.connect(target_dsn, autocommit=True) as admin:
             admin.execute(sql.SQL("DROP FUNCTION {}(pg_catalog.int4)").format(wrapper))
+    verify_service(admin_dsn, spec)
+
+
+def test_audit_access_clock_wrapper_drift_refuses_without_repair(
+    provisioned_services,
+):
+    admin_dsn = provisioned_services["auditAdmin"]
+    spec = SECURITY_AUDIT_PROVISIONING_SPEC
+    access_lock = spec.access_clock_lock
+    assert access_lock is not None
+    target_dsn = _database_dsn(admin_dsn, spec.database_name)
+    wrapper = sql.Identifier(
+        access_lock.schema_name,
+        access_lock.take_function_name,
+    )
+
+    with psycopg.connect(target_dsn, autocommit=True) as admin:
+        admin.execute(
+            sql.SQL("ALTER FUNCTION {}() SECURITY INVOKER").format(wrapper)
+        )
+    try:
+        with pytest.raises(
+            ProvisioningDriftError,
+            match="access-clock lock infrastructure routine",
+        ):
+            verify_service(admin_dsn, spec)
+    finally:
+        with psycopg.connect(target_dsn, autocommit=True) as admin:
+            admin.execute(
+                sql.SQL("ALTER FUNCTION {}() SECURITY DEFINER").format(wrapper)
+            )
     verify_service(admin_dsn, spec)

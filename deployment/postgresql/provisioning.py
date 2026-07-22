@@ -618,6 +618,21 @@ def _configure_target(
                     "pg_catalog.int4, pg_catalog.int4) TO {}"
                 ).format(sql.Identifier(spec.migration_lock.owner_role))
             )
+            if spec.access_clock_lock is not None:
+                target.execute(
+                    sql.SQL(
+                        "GRANT EXECUTE ON FUNCTION "
+                        "pg_catalog.pg_advisory_lock("
+                        "pg_catalog.int4, pg_catalog.int4) TO {}"
+                    ).format(sql.Identifier(spec.access_clock_lock.owner_role))
+                )
+                target.execute(
+                    sql.SQL(
+                        "GRANT EXECUTE ON FUNCTION "
+                        "pg_catalog.pg_advisory_unlock("
+                        "pg_catalog.int4, pg_catalog.int4) TO {}"
+                    ).format(sql.Identifier(spec.access_clock_lock.owner_role))
+                )
             if spec.tenant_admission_lock is not None:
                 target.execute(
                     sql.SQL(
@@ -666,6 +681,13 @@ def _configure_target(
                     sql.Identifier(spec.migration_lock.execute_role),
                 )
             )
+            if spec.access_clock_lock is not None:
+                target.execute(
+                    sql.SQL("GRANT USAGE ON SCHEMA {} TO {}").format(
+                        sql.Identifier(spec.access_clock_lock.schema_name),
+                        sql.Identifier(spec.access_clock_lock.execute_role),
+                    )
+                )
 
             wrapper = sql.Identifier(
                 spec.migration_lock.schema_name,
@@ -693,6 +715,53 @@ def _configure_target(
                     wrapper, sql.Identifier(spec.migration_lock.execute_role)
                 )
             )
+
+            if spec.access_clock_lock is not None:
+                access_lock = spec.access_clock_lock
+                for function_name, return_type, source in (
+                    (
+                        access_lock.take_function_name,
+                        sql.Identifier("pg_catalog", "void"),
+                        access_lock.take_source,
+                    ),
+                    (
+                        access_lock.release_function_name,
+                        sql.Identifier("pg_catalog", "bool"),
+                        access_lock.release_source,
+                    ),
+                ):
+                    access_wrapper = sql.Identifier(
+                        access_lock.schema_name, function_name
+                    )
+                    target.execute(
+                        sql.SQL(
+                            "CREATE FUNCTION {}() RETURNS {} "
+                            "LANGUAGE sql VOLATILE PARALLEL UNSAFE "
+                            "SECURITY DEFINER "
+                            "SET search_path = pg_catalog, pg_temp AS {}"
+                        ).format(
+                            access_wrapper,
+                            return_type,
+                            sql.Literal(source),
+                        )
+                    )
+                    target.execute(
+                        sql.SQL("ALTER FUNCTION {}() OWNER TO {}").format(
+                            access_wrapper,
+                            sql.Identifier(access_lock.owner_role),
+                        )
+                    )
+                    target.execute(
+                        sql.SQL(
+                            "REVOKE ALL PRIVILEGES ON FUNCTION {}() FROM PUBLIC"
+                        ).format(access_wrapper)
+                    )
+                    target.execute(
+                        sql.SQL("GRANT EXECUTE ON FUNCTION {}() TO {}").format(
+                            access_wrapper,
+                            sql.Identifier(access_lock.execute_role),
+                        )
+                    )
 
             if spec.tenant_initial_owner_sealer is not None:
                 sealer_spec = spec.tenant_initial_owner_sealer
@@ -1216,6 +1285,15 @@ def _namespace_and_acl_differences(
             False,
         ),
     }
+    if spec.access_clock_lock is not None:
+        expected_infrastructure_schema_acl.add(
+            (
+                spec.access_clock_lock.execute_role,
+                spec.migration_lock.owner_role,
+                "USAGE",
+                False,
+            )
+        )
     if infrastructure_schema_acl != expected_infrastructure_schema_acl:
         differences.append("migration-lock infrastructure schema ACL differs")
 
@@ -1950,6 +2028,22 @@ def _routine_acl_differences(
                     False,
                 )
             )
+        if (
+            identity
+            in {
+                ("pg_advisory_lock", "integer, integer"),
+                ("pg_advisory_unlock", "integer, integer"),
+            }
+            and spec.access_clock_lock is not None
+        ):
+            expected_acl.add(
+                (
+                    spec.access_clock_lock.owner_role,
+                    owner,
+                    "EXECUTE",
+                    False,
+                )
+            )
         if observed_acls.get(identity, set()) != expected_acl:
             differences.append(
                 f"raw advisory routine ACL differs: {identity[0]}({identity[1]})"
@@ -2489,6 +2583,7 @@ def _migration_lock_capsule_differences(
                routine.proparallel,
                routine.proretset,
                routine.prorettype = 'pg_catalog.void'::pg_catalog.regtype,
+               routine.prorettype = 'pg_catalog.bool'::pg_catalog.regtype,
                routine.prosrc,
                routine.probin,
                COALESCE(routine.proconfig, ARRAY[]::text[]),
@@ -2521,6 +2616,7 @@ def _migration_lock_capsule_differences(
         "u",
         False,
         True,
+        False,
         lock.source,
         None,
         ["search_path=pg_catalog, pg_temp"],
@@ -2532,6 +2628,58 @@ def _migration_lock_capsule_differences(
     differences: list[str] = []
     row_map = {(row[0], row[1]): row for row in rows}
     expected_identities = {(lock.function_name, "")}
+    access_lock = spec.access_clock_lock
+    expected_access_locks: dict[tuple[str, str], tuple[object, ...]] = {}
+    if access_lock is not None:
+        expected_access_locks = {
+            (access_lock.take_function_name, ""): (
+                access_lock.take_function_name,
+                "",
+                access_lock.owner_role,
+                False,
+                "sql",
+                "f",
+                True,
+                False,
+                False,
+                "v",
+                "u",
+                False,
+                True,
+                False,
+                access_lock.take_source,
+                None,
+                ["search_path=pg_catalog, pg_temp"],
+                100,
+                0,
+                True,
+                True,
+            ),
+            (access_lock.release_function_name, ""): (
+                access_lock.release_function_name,
+                "",
+                access_lock.owner_role,
+                False,
+                "sql",
+                "f",
+                True,
+                False,
+                False,
+                "v",
+                "u",
+                False,
+                False,
+                True,
+                access_lock.release_source,
+                None,
+                ["search_path=pg_catalog, pg_temp"],
+                100,
+                0,
+                True,
+                True,
+            ),
+        }
+        expected_identities.update(expected_access_locks)
     sealer = spec.tenant_initial_owner_sealer
     if sealer is not None and not ledger_present:
         expected_identities.add((sealer.function_name, ""))
@@ -2539,6 +2687,10 @@ def _migration_lock_capsule_differences(
         differences.append("migration-lock infrastructure routine differs")
     elif tuple(row_map[(lock.function_name, "")]) != expected_lock:
         differences.append("migration-lock infrastructure routine differs")
+    else:
+        for identity, expected_access_lock in expected_access_locks.items():
+            if tuple(row_map[identity]) != expected_access_lock:
+                differences.append("access-clock lock infrastructure routine differs")
 
     sealer_owner: str | None = None
     if sealer is not None and not ledger_present:
@@ -2561,6 +2713,7 @@ def _migration_lock_capsule_differences(
                     "u",
                     False,
                     True,
+                    False,
                     sealer.source,
                     None,
                     ["search_path=pg_catalog, pg_temp"],
@@ -2613,6 +2766,31 @@ def _migration_lock_capsule_differences(
             False,
         ),
     }
+    if access_lock is not None:
+        for function_name in (
+            access_lock.take_function_name,
+            access_lock.release_function_name,
+        ):
+            expected_acl.update(
+                {
+                    (
+                        function_name,
+                        "",
+                        access_lock.owner_role,
+                        access_lock.owner_role,
+                        "EXECUTE",
+                        False,
+                    ),
+                    (
+                        function_name,
+                        "",
+                        access_lock.execute_role,
+                        access_lock.owner_role,
+                        "EXECUTE",
+                        False,
+                    ),
+                }
+            )
     if sealer is not None and not ledger_present and sealer_owner is not None:
         expected_acl.update(
             {
@@ -2766,6 +2944,20 @@ def _unmigrated_object_differences(
         unexpected_rows.remove(expected_capsule_routine)
     except ValueError:
         pass
+    if spec.access_clock_lock is not None:
+        for function_name in (
+            spec.access_clock_lock.take_function_name,
+            spec.access_clock_lock.release_function_name,
+        ):
+            expected_access_lock_routine = (
+                "routine",
+                spec.access_clock_lock.schema_name,
+                function_name,
+            )
+            try:
+                unexpected_rows.remove(expected_access_lock_routine)
+            except ValueError:
+                pass
     if spec.tenant_initial_owner_sealer is not None and not ledger_present:
         expected_sealer_routine = (
             "routine",

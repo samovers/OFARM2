@@ -215,11 +215,18 @@ def test_public_function_identities_and_capability_grants_are_exact():
         "purgeAfter": "OBSERVED_AT_PLUS_RETENTION",
         "accessDataCut": "DATABASE_CLOCK_AND_TOP_LEVEL_XID8_PG_SNAPSHOT",
         "accessVisibility": "PERSISTED_PG_SNAPSHOT",
-        "accessClock": "SERIALIZED_NONTRANSACTIONAL_SEQUENCE_HIGH_WATER_V1",
+        "accessClock": (
+            "FUNCTION_SCOPED_SESSION_ADVISORY_LOCKED_"
+            "NONTRANSACTIONAL_SEQUENCE_HIGH_WATER_V2"
+        ),
         "accessExpiresAt": (
             "ACCESS_DATA_CUT_PLUS_EXPIRY_COMPARED_TO_CLOCK_HIGH_WATER"
         ),
-        "accessClockRollback": "FAIL_CLOSED",
+        "accessClockRollback": "FAIL_CLOSED_AFTER_OBSERVATION",
+        "accessClockTrustedPrerequisite": (
+            "DATABASE_WALL_CLOCK_MONOTONIC_BETWEEN_"
+            "ACCESS_PROTOCOL_OBSERVATIONS"
+        ),
         "overflowClosure": "EVENT_WRITER_BARRIER_THROUGH_CLOSE_COMMIT",
     }
     assert manifest["eventIdentitySerialization"] == {
@@ -267,7 +274,7 @@ def test_manifest_is_canonical_ascii_and_has_domain_separated_golden_digest():
     assert json.loads(without_digest) == contract.manifest_without_digest()
     assert json.loads(canonical) == contract.manifest()
     assert contract.digest == \
-        "sha256:8833beace05bf18b82a8e92e1d457140ff36cc8d4cd4d1288c0a9f5740c19106"
+        "sha256:013b5e00232c86f6ef9824c98184c18b899a412305151ee31eb9991a633dc8db"
     assert contract.digest == "sha256:" + hashlib.sha256(
         SECURITY_AUDIT_CONTRACT_DIGEST_POLICY.encode("ascii")
         + b"\x00"
