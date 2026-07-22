@@ -457,9 +457,24 @@ CREATE TABLE ofarm_security.operational_security_quota_high_water (
     )
 );
 
+CREATE TABLE ofarm_security.operational_security_event_identity_lock (
+    lock_slot pg_catalog.int2 NOT NULL,
+
+    CONSTRAINT operational_security_event_identity_lock_pkey
+        PRIMARY KEY (lock_slot),
+    CONSTRAINT operational_security_event_identity_lock_slot_check CHECK (
+        lock_slot BETWEEN 0 AND 255
+    )
+);
+
+INSERT INTO ofarm_security.operational_security_event_identity_lock (lock_slot)
+SELECT slot::pg_catalog.int2
+FROM pg_catalog.generate_series(0, 255) AS slots(slot);
+
 REVOKE ALL PRIVILEGES ON TABLE ofarm_security.operational_security_event FROM PUBLIC;
 REVOKE ALL PRIVILEGES ON TABLE ofarm_security.operational_security_quota_bucket FROM PUBLIC;
 REVOKE ALL PRIVILEGES ON TABLE ofarm_security.operational_security_quota_high_water FROM PUBLIC;
+REVOKE ALL PRIVILEGES ON TABLE ofarm_security.operational_security_event_identity_lock FROM PUBLIC;
 
 CREATE FUNCTION ofarm_security._event_fingerprint(
     VARIADIC p_fields pg_catalog.bytea[]
@@ -667,6 +682,7 @@ DECLARE
     v_now pg_catalog.timestamptz;
     v_purge_after pg_catalog.timestamptz;
     v_fingerprint pg_catalog.bytea;
+    v_identity_lock_slot pg_catalog.int2;
     v_existing ofarm_security.operational_security_event%ROWTYPE;
     v_bucket ofarm_security.operational_security_quota_bucket%ROWTYPE;
     v_marker ofarm_security.operational_security_event_identity;
@@ -706,6 +722,13 @@ BEGIN
         p_correlation_hmac_domain, p_correlation_hmac_key_version,
         p_correlation_hmac
     );
+
+    SELECT lock_slot INTO STRICT v_identity_lock_slot
+    FROM ofarm_security.operational_security_event_identity_lock
+    WHERE lock_slot = pg_catalog.get_byte(
+        pg_catalog.uuid_send(p_event_id), 0
+    )::pg_catalog.int2
+    FOR UPDATE;
 
     SELECT * INTO v_existing
     FROM ofarm_security.operational_security_event
@@ -785,31 +808,6 @@ BEGIN
       AND component = v_component
       AND bucket_start = v_bucket_start
     FOR UPDATE;
-
-    SELECT * INTO v_existing
-    FROM ofarm_security.operational_security_event
-    WHERE event_id = p_event_id;
-    IF FOUND THEN
-        IF v_existing.event_kind <> 'PRE_TENANT_FAILURE'
-                OR v_existing.producer <> v_producer
-                OR v_existing.component <> v_component
-                OR v_existing.reason IS DISTINCT FROM p_reason
-                OR v_existing.correlation_hmac_domain IS DISTINCT FROM
-                    p_correlation_hmac_domain
-                OR v_existing.correlation_hmac_key_version IS DISTINCT FROM
-                    p_correlation_hmac_key_version
-                OR v_existing.correlation_hmac_value IS DISTINCT FROM
-                    p_correlation_hmac
-                OR v_existing.append_input_fingerprint IS DISTINCT FROM
-                    v_fingerprint THEN
-            RAISE EXCEPTION USING ERRCODE = '22000',
-                MESSAGE = 'event identity was already used with different input';
-        END IF;
-        RETURN ROW(
-            v_existing.event_id, v_existing.observed_at,
-            v_existing.purge_after, true, NULL, false
-        )::ofarm_security.append_pretenant_failure_result;
-    END IF;
 
     IF v_bucket.accepted_event_count < 1024 THEN
         BEGIN
@@ -1639,6 +1637,7 @@ BEGIN
       AND class.relkind = 'r';
     IF v_names IS DISTINCT FROM ARRAY[
         'operational_security_event',
+        'operational_security_event_identity_lock',
         'operational_security_quota_bucket',
         'operational_security_quota_high_water',
         'schema_migration'
@@ -1655,6 +1654,7 @@ BEGIN
     WHERE namespace.nspname = 'ofarm_security'
       AND class.relkind = 'i';
     IF v_names IS DISTINCT FROM ARRAY[
+        'operational_security_event_identity_lock_pkey',
         'operational_security_event_live_order_idx',
         'operational_security_event_pkey',
         'operational_security_event_purge_idx',
@@ -1761,6 +1761,27 @@ BEGIN
         v_differences := v_differences + 1;
     END IF;
 
+    SELECT pg_catalog.array_agg(attribute.attname::pg_catalog.text
+            ORDER BY attribute.attnum)
+    INTO v_names
+    FROM pg_catalog.pg_attribute AS attribute
+    WHERE attribute.attrelid =
+            'ofarm_security.operational_security_event_identity_lock'::
+                pg_catalog.regclass
+      AND attribute.attnum > 0
+      AND NOT attribute.attisdropped;
+    IF v_names IS DISTINCT FROM ARRAY[
+        'lock_slot'
+    ]::pg_catalog.text[] THEN
+        v_differences := v_differences + 1;
+    END IF;
+
+    SELECT pg_catalog.count(*) INTO v_count
+    FROM ofarm_security.operational_security_event_identity_lock;
+    IF v_count <> 256 THEN
+        v_differences := v_differences + 1;
+    END IF;
+
     SELECT pg_catalog.count(*) INTO v_count
     FROM pg_catalog.pg_attribute AS attribute
     JOIN pg_catalog.pg_class AS class ON class.oid = attribute.attrelid
@@ -1769,6 +1790,7 @@ BEGIN
     WHERE namespace.nspname = 'ofarm_security'
       AND class.relname IN (
           'operational_security_event',
+          'operational_security_event_identity_lock',
           'operational_security_quota_bucket',
           'operational_security_quota_high_water'
       )
@@ -1840,6 +1862,20 @@ BEGIN
         v_differences := v_differences + 1;
     END IF;
 
+    SELECT pg_catalog.array_agg(con.conname::pg_catalog.text
+            ORDER BY con.conname::pg_catalog.text)
+    INTO v_names
+    FROM pg_catalog.pg_constraint AS con
+    WHERE con.conrelid =
+        'ofarm_security.operational_security_event_identity_lock'::
+            pg_catalog.regclass;
+    IF v_names IS DISTINCT FROM ARRAY[
+        'operational_security_event_identity_lock_pkey',
+        'operational_security_event_identity_lock_slot_check'
+    ]::pg_catalog.text[] THEN
+        v_differences := v_differences + 1;
+    END IF;
+
     SELECT pg_catalog.count(*) INTO v_count
     FROM pg_catalog.pg_constraint AS con
     JOIN pg_catalog.pg_class AS class ON class.oid = con.conrelid
@@ -1848,6 +1884,7 @@ BEGIN
     WHERE namespace.nspname = 'ofarm_security'
       AND class.relname IN (
           'operational_security_event',
+          'operational_security_event_identity_lock',
           'operational_security_quota_bucket',
           'operational_security_quota_high_water'
       )
@@ -2113,7 +2150,7 @@ BEGIN
       AND pg_catalog.sha256(
             pg_catalog.convert_to(routine.prosrc, 'UTF8')
           ) = pg_catalog.decode(
-            'c954dbc9e8d15962d1eea6caeca23feaa1f16d0086f3f8a26b266fa58bac5d7c',
+            '1200bed186ca36ebd5101f9db58cf2431de7bb5e67a0f4922021e60c8e7e9ad4',
             'hex'
           );
     IF v_count <> 1 THEN
@@ -2135,6 +2172,8 @@ BEGIN
     JOIN pg_catalog.pg_class AS class ON class.oid = trigger.tgrelid
     WHERE class.oid IN (
         'ofarm_security.operational_security_event'::pg_catalog.regclass,
+        'ofarm_security.operational_security_event_identity_lock'::
+            pg_catalog.regclass,
         'ofarm_security.operational_security_quota_bucket'::pg_catalog.regclass,
         'ofarm_security.operational_security_quota_high_water'::pg_catalog.regclass
     ) AND NOT trigger.tgisinternal;
@@ -2149,6 +2188,8 @@ BEGIN
     ) AS acl
     WHERE class.oid IN (
         'ofarm_security.operational_security_event'::pg_catalog.regclass,
+        'ofarm_security.operational_security_event_identity_lock'::
+            pg_catalog.regclass,
         'ofarm_security.operational_security_quota_bucket'::pg_catalog.regclass,
         'ofarm_security.operational_security_quota_high_water'::pg_catalog.regclass
     )
@@ -3570,7 +3611,7 @@ BEGIN
     INTO v_catalog_fingerprint
     FROM catalog_entry;
     IF v_catalog_fingerprint <>
-            'sha256:c4a00eb7e9601f4e1ee82fec165c6ba051f4b9e82f9d7286944e38413de26e8c' THEN
+            'sha256:d53597d5b01dc6768bf8dd8bb93039683a8f6a2afa9794955601f899add3c60a' THEN
         v_differences := v_differences + 1;
     END IF;
 

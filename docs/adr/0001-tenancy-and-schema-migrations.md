@@ -153,6 +153,7 @@ schemas and other repository files are global inputs, not database relations.
 | operational_security_event | Database-global operational security metadata, explicitly non-tenant | Append-only, bounded pre-tenant failure events plus audit-access, retention, and declared-gap maintenance events for this lane. It carries no tenant_id, tenant_ref, Party/farm/role identity, governed batch, knowledge position, or request-supplied attribution. It lives only in the separately provisioned audit PostgreSQL service's protected `ofarm_security` schema and is never read as tenant history. |
 | operational_security_quota_bucket | Disposable non-tenant operational security control state | One fixed database-time bucket per provisioned producer/component records accepted and overflow counts plus marker state. Only hardened audit functions mutate it. It contains no request, tenant, principal, correlation, or evidence data and cannot authorize anything. |
 | operational_security_quota_high_water | Durable bounded non-tenant operational security control state | At most one row for each of the two fixed producer/component pairs records the latest closed quota minute. It survives bucket deletion and makes a backward wall-clock step fail closed instead of recreating a closed bucket. It contains no request, tenant, principal, correlation, or evidence data and cannot authorize anything. |
+| operational_security_event_identity_lock | Fixed non-tenant operational mutex state | Exactly 256 migration-created lock stripes serialize same-ID append attempts before database time and quota selection. The table stores no event ID, fingerprint, request, tenant, principal, correlation, or evidence data; a stripe collision only reduces concurrency and cannot authorize anything. |
 | schema_migration | Database-global operational metadata | Append-only ledger of version, filename, SHA-256, application/release identity, and applied time. Application access is read-only for readiness. |
 | governed_write_batch | Tenant-owned | Primary identity is (tenant_id, batch_id). It anchors the transaction's command identity and the records, edges, traces, gate entries, and receipts emitted by that command. Runtime insertion requires authenticated_principal_ref to equal the protected transaction binding's party_ref; it is not caller-selected attribution. |
 | kernel_record_reference | Tenant-owned relational enforcement carrier | Normalizes governed references extracted from immutable JSONB payloads without changing those payloads. Owner and tenant targets use composite tenant keys; global-content targets use a distinct constrained lane. |
@@ -352,6 +353,14 @@ CPU/storage limits, and growth alerts are provisioned independently of tenant
 traffic. A compromised producer cannot select or reset its bucket. Exhausting
 the audit service is an accepted denial/readiness availability risk, never an
 authorization bypass or tenant-storage exhaustion path.
+
+Before policy, database-time, or quota evaluation, an append maps its event ID
+to one of 256 fixed migration-owned mutex rows, takes that row `FOR UPDATE`, and
+rechecks the event relation while holding the lock through transaction end.
+Concurrent same-ID attempts therefore cannot split one logical event between an
+individual row in one minute and an exact overflow count in another. No event
+ID or fingerprint is persisted in the mutex table; unrelated IDs sharing a
+stripe can only wait for one another.
 
 Once a bucket is in overflow posture, individual submitted event IDs are
 deliberately not durable. An acknowledged overflow call increments the bounded

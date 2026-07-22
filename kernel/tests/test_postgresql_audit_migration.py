@@ -300,10 +300,10 @@ def test_authoritative_audit_migration_is_one_exact_initial_set():
     assert SECURITY_AUDIT_CONTRACT.digest in source
     assert SECURITY_AUDIT_PROVISIONING_SPEC.digest in source
     assert migration.source_sha256 == \
-        "sha256:49d57e0963319933e762db000fcecd36312b35a3deb79fb31e4920c51e7be8db"
-    assert migration.byte_length == 153_500
+        "sha256:f0f631231bb1db27b23e66bc29376e8472d9ca2939076e8b8396fdc7e4c201b7"
+    assert migration.byte_length == 154_881
     assert migration_set.digest == \
-        "sha256:38d1cf4911ea1639bf4fd2e099efa61e83921a00fc06fd1a55e39a7fd13af666"
+        "sha256:1846b2f74863e3b185ea828e1c3bb62d902915ad5ef728d1fe8d26acb75fc2cf"
     assert migration_set.prefix_digest(1) == migration_set.digest
 
 
@@ -317,16 +317,22 @@ def test_authoritative_audit_migration_has_closed_carriers_and_limits():
             "ofarm_security.operational_security_event",
             "ofarm_security.operational_security_quota_bucket",
             "ofarm_security.operational_security_quota_high_water",
+            "ofarm_security.operational_security_event_identity_lock",
         )
     )
 
-    assert source.count("CREATE TABLE ofarm_security.operational_security_") == 3
+    assert source.count("CREATE TABLE ofarm_security.operational_security_") == 4
     assert "CREATE TABLE ofarm_security.operational_security_event" in source
     assert "CREATE TABLE ofarm_security.operational_security_quota_bucket" in source
     assert (
         "CREATE TABLE ofarm_security.operational_security_quota_high_water"
         in source
     )
+    assert (
+        "CREATE TABLE ofarm_security.operational_security_event_identity_lock"
+        in source
+    )
+    assert "FROM pg_catalog.generate_series(0, 255) AS slots(slot)" in source
     assert "BETWEEN 0 AND 1024" in source
     assert "LIMIT 1024" in source
     assert "p_max_rows BETWEEN 1 AND 256" in source
@@ -391,11 +397,11 @@ def test_authoritative_audit_migration_has_closed_carriers_and_limits():
     for identity in BACKEND_STATISTICS_ROUTINE_IDENTITIES:
         assert f"'{identity}'" in source
     assert (
-        "c954dbc9e8d15962d1eea6caeca23feaa1f16d0086f3f8a26b266fa58bac5d7c"
+        "1200bed186ca36ebd5101f9db58cf2431de7bb5e67a0f4922021e60c8e7e9ad4"
         in source
     )
     assert (
-        "sha256:c4a00eb7e9601f4e1ee82fec165c6ba051f4b9e82f9d7286944e38413de26e8c"
+        "sha256:d53597d5b01dc6768bf8dd8bb93039683a8f6a2afa9794955601f899add3c60a"
         in source
     )
     assert "jsonb" not in persisted_audit_tables
@@ -1078,7 +1084,6 @@ def _run_coordinated_adjacent_bucket_appends(
         f"a174_adjacent_{token}_{index}" for index in range(len(calls))
     ]
     barrier = Barrier(len(calls))
-    both_blocked = False
     with psycopg.connect(state["target_admin_dsn"]) as locker:
         locker.execute(
             """
@@ -1101,31 +1106,87 @@ def _run_coordinated_adjacent_bucket_appends(
                 )
                 for index, (arguments, observed_at) in enumerate(calls)
             ]
-            deadline = monotonic() + 15
             try:
-                with psycopg.connect(
-                    state["target_admin_dsn"], autocommit=True
-                ) as observer:
-                    while monotonic() < deadline:
-                        blocked_count = observer.execute(
-                            """
-                            SELECT pg_catalog.count(*)
-                            FROM pg_catalog.pg_stat_activity
-                            WHERE application_name = ANY(%s::pg_catalog.text[])
-                              AND state = 'active'
-                              AND wait_event_type = 'Lock'
-                            """,
-                            (application_names,),
-                        ).fetchone()[0]
-                        if blocked_count == len(calls):
-                            both_blocked = True
-                            break
-                        sleep(0.01)
+                assert _wait_for_lock_waiters(state, application_names)
             finally:
                 locker.commit()
             results = [future.result(timeout=30) for future in futures]
-    assert both_blocked
     return results
+
+
+def _wait_for_lock_waiters(
+    state: dict[str, object], application_names: list[str]
+) -> bool:
+    deadline = monotonic() + 15
+    with psycopg.connect(
+        state["target_admin_dsn"], autocommit=True
+    ) as observer:
+        while monotonic() < deadline:
+            blocked_count = observer.execute(
+                """
+                SELECT pg_catalog.count(*)
+                FROM pg_catalog.pg_stat_activity
+                WHERE application_name = ANY(%s::pg_catalog.text[])
+                  AND state = 'active'
+                  AND wait_event_type = 'Lock'
+                """,
+                (application_names,),
+            ).fetchone()[0]
+            if blocked_count == len(application_names):
+                return True
+            sleep(0.01)
+    return False
+
+
+def _run_ordered_accepted_then_overflow_retry(
+    state: dict[str, object],
+    role: str,
+    arguments: tuple[object, ...],
+    accepted_at: datetime,
+    overflow_at: datetime,
+) -> list[tuple[str, object]]:
+    token = uuid4().hex
+    application_names = [
+        f"a174_split_{token}_{index}" for index in range(2)
+    ]
+
+    with psycopg.connect(state["target_admin_dsn"]) as locker:
+        locker.execute(
+            """
+            SELECT singleton
+            FROM ofarm_security._test_append_barrier
+            WHERE singleton
+            FOR UPDATE
+            """
+        ).fetchone()
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            accepted = executor.submit(
+                _concurrent_append_at,
+                state,
+                role,
+                Barrier(1),
+                arguments,
+                accepted_at,
+                application_names[0],
+            )
+            assert _wait_for_lock_waiters(state, application_names[:1])
+            overflow_retry = executor.submit(
+                _concurrent_append_at,
+                state,
+                role,
+                Barrier(1),
+                arguments,
+                overflow_at,
+                application_names[1],
+            )
+            try:
+                assert _wait_for_lock_waiters(state, application_names)
+            finally:
+                locker.commit()
+            return [
+                accepted.result(timeout=30),
+                overflow_retry.result(timeout=30),
+            ]
 
 
 def _assert_adjacent_bucket_event_identity_serialization(
@@ -1135,9 +1196,9 @@ def _assert_adjacent_bucket_event_identity_serialization(
     producer_name = "AUTHENTICATION_BOUNDARY_V1"
     component = "AUTHENTICATION"
     base_bucket = datetime(2040, 1, 1, tzinfo=timezone.utc)
-    event_ids = (uuid4(), uuid4())
+    event_ids = (uuid4(), uuid4(), uuid4())
     bucket_starts = tuple(
-        base_bucket + timedelta(minutes=offset) for offset in range(4)
+        base_bucket + timedelta(minutes=offset) for offset in range(6)
     )
     with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
         original_source = admin.execute(
@@ -1190,6 +1251,16 @@ def _assert_adjacent_bucket_event_identity_serialization(
             """,
             (producer_name, component, list(bucket_starts)),
         )
+        admin.execute(
+            """
+            UPDATE ofarm_security.operational_security_quota_bucket
+            SET accepted_event_count = 1024
+            WHERE producer = %s
+              AND component = %s
+              AND bucket_start = %s
+            """,
+            (producer_name, component, bucket_starts[5]),
+        )
         _replace_pretenant_append_source(admin, test_source)
 
     try:
@@ -1239,6 +1310,28 @@ def _assert_adjacent_bucket_event_identity_serialization(
             result[1] for result in mismatch_results if result[0] == "error"
         ] == ["event identity was already used with different input"]
 
+        accepted_overflow_arguments = (
+            event_ids[2],
+            "CREDENTIAL_MISSING",
+            bytes.fromhex("43" * 32),
+            "OFARM_PRETENANT_CORRELATION_V1",
+            1,
+        )
+        accepted_overflow_results = _run_ordered_accepted_then_overflow_retry(
+            state,
+            role,
+            accepted_overflow_arguments,
+            bucket_starts[4] + timedelta(seconds=30),
+            bucket_starts[5] + timedelta(seconds=30),
+        )
+        assert [result[0] for result in accepted_overflow_results] == [
+            "ok", "ok",
+        ]
+        assert accepted_overflow_results[0][1] == \
+            accepted_overflow_results[1][1]
+        assert accepted_overflow_results[0][1][0] == event_ids[2]
+        assert accepted_overflow_results[0][1][3:] == (True, None, False)
+
         with psycopg.connect(state["target_admin_dsn"]) as admin:
             event_rows = admin.execute(
                 """
@@ -1252,7 +1345,7 @@ def _assert_adjacent_bucket_event_identity_serialization(
             quota_rows = admin.execute(
                 """
                 SELECT bucket_start, accepted_event_count,
-                       overflow_event_count
+                       overflow_event_count, overflow_started_at
                 FROM ofarm_security.operational_security_quota_bucket
                 WHERE producer = %s
                   AND component = %s
@@ -1262,15 +1355,20 @@ def _assert_adjacent_bucket_event_identity_serialization(
                 (producer_name, component, list(bucket_starts)),
             ).fetchall()
         assert {row[0] for row in event_rows} == set(event_ids)
-        assert len(event_rows) == 2
-        assert sorted(row[1] for row in event_rows) in (
-            ["CREDENTIAL_MISSING", "CREDENTIAL_MISSING"],
-            ["CREDENTIAL_MISSING", "VERIFIER_UNAVAILABLE"],
-        )
-        assert len(quota_rows) == 4
+        assert len(event_rows) == 3
+        reasons_by_id = dict(event_rows)
+        assert reasons_by_id[event_ids[0]] == "CREDENTIAL_MISSING"
+        assert reasons_by_id[event_ids[1]] in {
+            "CREDENTIAL_MISSING", "VERIFIER_UNAVAILABLE",
+        }
+        assert reasons_by_id[event_ids[2]] == "CREDENTIAL_MISSING"
+        assert len(quota_rows) == 6
         assert sorted(row[1] for row in quota_rows[0:2]) == [0, 1]
         assert sorted(row[1] for row in quota_rows[2:4]) == [0, 1]
+        assert quota_rows[4][1:] == (1, 0, None)
+        assert quota_rows[5][1:] == (1024, 0, None)
         assert all(row[2] == 0 for row in quota_rows)
+        assert all(row[3] is None for row in quota_rows)
     finally:
         with psycopg.connect(
             state["target_admin_dsn"], autocommit=True
@@ -3389,6 +3487,30 @@ def test_complete_catalog_fingerprint_refuses_body_constraint_and_acl_tamper(
                 REVOKE EXECUTE ON FUNCTION
                     ofarm_security._event_fingerprint(pg_catalog.bytea[])
                 FROM ofarm_security_audit_readiness
+                """
+            )
+    assert _observe_structure(state) == clean
+
+    with psycopg.connect(state["target_admin_dsn"], autocommit=True) as admin:
+        admin.execute(
+            """
+            DELETE FROM ofarm_security.operational_security_event_identity_lock
+            WHERE lock_slot = 0
+            """
+        )
+    try:
+        missing_mutex = _observe_structure(state)
+        assert missing_mutex[0] is False
+        assert missing_mutex[1] >= 1
+    finally:
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            admin.execute(
+                """
+                INSERT INTO ofarm_security.operational_security_event_identity_lock (
+                    lock_slot
+                ) VALUES (0)
                 """
             )
     assert _observe_structure(state) == clean
