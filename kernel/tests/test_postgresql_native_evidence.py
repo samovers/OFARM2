@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import gzip
 import hashlib
 import io
 import json
@@ -2027,14 +2028,51 @@ def test_symlinked_clean_build_archive_refuses(tmp_path):
         direct_oci_child_identity(symlink, "clean build", platform=PLATFORM)
 
 
-def test_truncated_gzip_archive_has_one_native_evidence_error_boundary(
+def test_compressed_oci_archive_refuses_before_member_traversal(
     tmp_path: Path,
 ) -> None:
-    archive = tmp_path / "truncated.oci.tar.gz"
-    archive.write_bytes(b"\x1f\x8bbroken")
+    member = tarfile.TarInfo("blobs/sha256/" + "0" * 64)
+    member.size = native_evidence.MAX_OCI_EXPANDED_BYTES + 1
+    archive = tmp_path / "compressed-oversized.oci.tar.gz"
+    archive.write_bytes(
+        gzip.compress(member.tobuf() + tarfile.NUL * tarfile.BLOCKSIZE * 2)
+    )
+    assert archive.stat().st_size < 4096
 
-    with pytest.raises(NativeEvidenceError, match="readable tar archive"):
-        direct_oci_child_identity(archive, "truncated gzip", platform=PLATFORM)
+    with pytest.raises(NativeEvidenceError, match="uncompressed tar archive"):
+        direct_oci_child_identity(archive, "compressed OCI", platform=PLATFORM)
+
+
+def test_oci_member_limit_is_enforced_without_materializing_the_table(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    archive = tmp_path / "header-heavy.oci.tar"
+    with tarfile.open(archive, "w") as output:
+        for index in range(native_evidence.MAX_OCI_MEMBER_COUNT + 1):
+            output.addfile(
+                tarfile.TarInfo("blobs/sha256/" + f"{index:064x}")
+            )
+
+    def forbid_general_tar_parser(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("the OCI verifier invoked the general tar parser")
+
+    monkeypatch.setattr(tarfile, "open", forbid_general_tar_parser)
+    with pytest.raises(NativeEvidenceError, match="too many members"):
+        native_evidence._OciArchive(archive)
+
+
+def test_oci_extended_header_refuses_before_its_body_is_processed(
+    tmp_path: Path,
+) -> None:
+    archive = tmp_path / "pax-extension.oci.tar"
+    with tarfile.open(archive, "w", format=tarfile.PAX_FORMAT) as output:
+        member = tarfile.TarInfo("blobs/sha256/" + "0" * 64)
+        member.pax_headers = {"comment": "untrusted extension body"}
+        output.addfile(member)
+
+    with pytest.raises(NativeEvidenceError, match="non-regular member"):
+        native_evidence._OciArchive(archive)
 
 
 def test_archive_path_replacement_cannot_separate_hashed_and_parsed_bytes(

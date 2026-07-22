@@ -151,6 +151,8 @@ schemas and other repository files are global inputs, not database relations.
 | runtime_bundle | Tenant-scoped immutable provenance root | Stores the exact canonical RuntimeBundle identity document under its full digest. Ordinary application and worker roles have read-only access. The dedicated startup publisher is the only provisioned non-owner role that can invoke the closed atomic publication function; direct INSERT is denied. |
 | runtime_bundle_component | Tenant-scoped immutable bundle membership | Stores exactly the component identities selected by one RuntimeBundle. The atomic publisher installs the complete set with the bundle row. No runtime role can append a component before or after a governed batch references the bundle. |
 | operational_security_event | Database-global operational security metadata, explicitly non-tenant | Append-only, bounded pre-tenant failure events plus audit-access, retention, and declared-gap maintenance events for this lane. It carries no tenant_id, tenant_ref, Party/farm/role identity, governed batch, knowledge position, or request-supplied attribution. It lives only in the separately provisioned audit PostgreSQL service's protected `ofarm_security` schema and is never read as tenant history. |
+| operational_security_access_clock_lock | Fixed non-tenant operational mutex state | One migration-created singleton serializes access-clock observation for normal query and break-glass export. It stores no time, request, tenant, principal, correlation, evidence, or authorization decision. |
+| operational_security_access_clock_high_water | Durable non-tenant authorization control state | One owner-only bigint sequence stores the greatest database wall-clock microsecond observed by the audit-access protocol. Advancement is nontransactional, so a rejected or rolled-back read cannot erase evidence that its expiry boundary was reached. Normal APIs never decrease it; clock regression fails closed. It contains no request, tenant, principal, correlation, or evidence data. |
 | operational_security_quota_bucket | Disposable non-tenant operational security control state | One fixed database-time bucket per provisioned producer/component records accepted and overflow counts plus marker state. Only hardened audit functions mutate it. It contains no request, tenant, principal, correlation, or evidence data and cannot authorize anything. |
 | operational_security_quota_high_water | Durable bounded non-tenant operational security control state | At most one row for each of the two fixed producer/component pairs records the latest closed quota minute. It survives bucket deletion and makes a backward wall-clock step fail closed instead of recreating a closed bucket. It contains no request, tenant, principal, correlation, or evidence data and cannot authorize anything. |
 | operational_security_event_identity_lock | Fixed non-tenant operational mutex state | Exactly 256 migration-created lock stripes serialize same-ID append attempts before database time and quota selection. The table stores no event ID, fingerprint, request, tenant, principal, correlation, or evidence data; a stripe collision only reduces concurrency and cannot authorize anything. |
@@ -394,7 +396,11 @@ snapshot frozen earlier. After validating the closed request, the function
 takes the same migration-owned `SHARE ROW EXCLUSIVE` event-writer barrier used
 by retention and overflow close. Previously admitted writers finish before a
 fresh snapshot and wall-clock cut are captured; later writers wait until the
-intent transaction commits. Every event stores its top-level `xid8`, and the
+intent transaction commits. Access-clock observation is serialized through one
+migration-owned singleton and advances an owner-only bigint sequence to the
+greatest observed database-time microsecond. Sequence advancement is not rolled
+back with its calling transaction. A new intent refuses whenever current
+database time is behind that high-water mark. Every event stores its top-level `xid8`, and the
 bounded reader intersects the timestamp cut with `pg_visible_in_snapshot`.
 A transaction ordered before the cut is visible in the persisted snapshot, and
 a transaction ordered after the cut is outside both boundaries. The snapshot
@@ -402,8 +408,12 @@ is internal control metadata and is not exposed in the event-report result.
 Only then may its distinct reader session call that migration-owned function
 with the committed access event ID; the function verifies the exact scope
 fingerprint before returning that one bounded page. Rollback of the read cannot
-erase the already-committed access intent. Reuse can return only the same
-cut/page/ceiling and cannot widen unique data. Retention cannot reveal a
+erase either the already-committed access intent or an access-clock advance.
+Both normal query and break-glass export compare expiry with the non-regressing
+high-water mark. Once it reaches the intent deadline, that intent remains
+expired; a backward wall-clock step cannot resurrect it. A clock regression
+before expiry also refuses rather than extending the authorization window.
+Reuse can return only the same cut/page/ceiling and cannot widen unique data. Retention cannot reveal a
 replacement row: `purge_after` is constrained to exactly
 `observed_at + 30 days`, target eligibility requires `purge_after` later than
 the intent's fixed `access_expires_at`, and the page is ordered by `observed_at`
@@ -1392,6 +1402,9 @@ service in V1 even when its structural report matches. #193 must add an
 external continuity witness and explicit promotion policy before such a target
 can serve. Database-administrator and recovery-control compromise remains
 outside the RLS boundary.
+The audit access-clock high-water is also copied or rewound by physical
+recovery. It prevents wall-clock rollback only within one uninterrupted audit-
+store lineage and is not recovery-continuity or promotion evidence.
 
 The first deployment has an exact-version compatibility window: one release
 supports exactly one tenant migration-set digest and one audit migration-set
@@ -1676,8 +1689,11 @@ and integration; they are not claims of `0001`.
 11. Call every bounded reader function without a committed `AUDIT_ACCESS`
     intent, with a missing/mismatched function/argument/data-cut/cursor, after
     five-minute expiry or read rollback, and while attempting to widen row/byte
-    bounds. Only the exact precommitted page succeeds; rollback cannot erase its
-    intent, replay/COPY returns no wider unique data, and a new page/cut requires
+    bounds. Advance the access-clock authority through expiry, reject the read,
+    roll back that read, move the database wall clock backward, and prove the
+    same intent still refuses. Only the exact precommitted page succeeds;
+    rollback cannot erase its intent or the non-regressing clock high-water,
+    replay/COPY returns no wider unique data, and a new page/cut requires
     a new intent. Hold an append transaction open while creating an intent and
     prove the intent waits on the event-writer barrier; commit that append and
     prove it is included by the fresh cut and snapshot. While the intent

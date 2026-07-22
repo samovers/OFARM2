@@ -300,7 +300,13 @@ class SecurityAuditContract:
                     "DATABASE_CLOCK_AND_TOP_LEVEL_XID8_PG_SNAPSHOT"
                 ),
                 "accessVisibility": "PERSISTED_PG_SNAPSHOT",
-                "accessExpiresAt": "ACCESS_DATA_CUT_PLUS_EXPIRY",
+                "accessClock": (
+                    "SERIALIZED_NONTRANSACTIONAL_SEQUENCE_HIGH_WATER_V1"
+                ),
+                "accessExpiresAt": (
+                    "ACCESS_DATA_CUT_PLUS_EXPIRY_COMPARED_TO_CLOCK_HIGH_WATER"
+                ),
+                "accessClockRollback": "FAIL_CLOSED",
                 "overflowClosure": (
                     "EVENT_WRITER_BARRIER_THROUGH_CLOSE_COMMIT"
                 ),

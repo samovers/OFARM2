@@ -399,6 +399,27 @@ ON ofarm_security.operational_security_event (
 CREATE INDEX operational_security_event_purge_idx
 ON ofarm_security.operational_security_event (purge_after, event_id);
 
+CREATE SEQUENCE ofarm_security.operational_security_access_clock_high_water
+AS pg_catalog.int8
+INCREMENT BY 1
+MINVALUE 0
+MAXVALUE 9223372036854775807
+START WITH 0
+CACHE 1
+NO CYCLE;
+
+CREATE TABLE ofarm_security.operational_security_access_clock_lock (
+    singleton pg_catalog.bool NOT NULL,
+
+    CONSTRAINT operational_security_access_clock_lock_pkey
+        PRIMARY KEY (singleton),
+    CONSTRAINT operational_security_access_clock_lock_singleton_check
+        CHECK (singleton)
+);
+
+INSERT INTO ofarm_security.operational_security_access_clock_lock (singleton)
+VALUES (true);
+
 CREATE TABLE ofarm_security.operational_security_quota_bucket (
     producer pg_catalog.text COLLATE pg_catalog."C" NOT NULL,
     component pg_catalog.text COLLATE pg_catalog."C" NOT NULL,
@@ -535,6 +556,10 @@ FROM (
 CROSS JOIN pg_catalog.generate_series(0, 255) AS slots(slot);
 
 REVOKE ALL PRIVILEGES ON TABLE ofarm_security.operational_security_event FROM PUBLIC;
+REVOKE ALL PRIVILEGES ON SEQUENCE
+ofarm_security.operational_security_access_clock_high_water FROM PUBLIC;
+REVOKE ALL PRIVILEGES ON TABLE
+ofarm_security.operational_security_access_clock_lock FROM PUBLIC;
 REVOKE ALL PRIVILEGES ON TABLE ofarm_security.operational_security_quota_bucket FROM PUBLIC;
 REVOKE ALL PRIVILEGES ON TABLE ofarm_security.operational_security_quota_high_water FROM PUBLIC;
 REVOKE ALL PRIVILEGES ON TABLE ofarm_security.operational_security_event_identity_lock FROM PUBLIC;
@@ -1036,6 +1061,53 @@ GRANT EXECUTE ON FUNCTION ofarm_security.append_pretenant_failure(
     pg_catalog.int4
 ) TO ofarm_security_audit_ingest;
 
+CREATE FUNCTION ofarm_security._observe_nonregressing_access_clock()
+RETURNS TABLE (
+    observed_at pg_catalog.timestamptz,
+    high_water_microseconds pg_catalog.int8,
+    clock_regressed pg_catalog.bool
+)
+LANGUAGE plpgsql VOLATILE PARALLEL UNSAFE SECURITY INVOKER
+SET search_path = pg_catalog, pg_temp
+AS $access_clock$
+DECLARE
+    v_lock pg_catalog.bool;
+    v_observed_microseconds pg_catalog.int8;
+    v_previous_high_water pg_catalog.int8;
+BEGIN
+    SELECT access_clock.singleton INTO STRICT v_lock
+    FROM ofarm_security.operational_security_access_clock_lock AS access_clock
+    WHERE access_clock.singleton
+    FOR UPDATE;
+
+    observed_at := pg_catalog.clock_timestamp();
+    v_observed_microseconds := pg_catalog.floor(
+        EXTRACT(EPOCH FROM observed_at) * 1000000
+    )::pg_catalog.int8;
+    SELECT high_water.last_value::pg_catalog.int8
+    INTO STRICT v_previous_high_water
+    FROM ofarm_security.operational_security_access_clock_high_water
+        AS high_water;
+
+    IF v_observed_microseconds > v_previous_high_water THEN
+        PERFORM pg_catalog.setval(
+            'ofarm_security.operational_security_access_clock_high_water'::
+                pg_catalog.regclass,
+            v_observed_microseconds,
+            true
+        );
+        high_water_microseconds := v_observed_microseconds;
+    ELSE
+        high_water_microseconds := v_previous_high_water;
+    END IF;
+    clock_regressed := v_observed_microseconds < v_previous_high_water;
+    RETURN NEXT;
+END
+$access_clock$;
+
+REVOKE ALL PRIVILEGES ON FUNCTION
+ofarm_security._observe_nonregressing_access_clock() FROM PUBLIC;
+
 CREATE FUNCTION ofarm_security.commit_audit_access_intent(
     p_purpose pg_catalog.text,
     p_function_identity pg_catalog.text,
@@ -1050,6 +1122,7 @@ AS $access_intent$
 DECLARE
     v_data_cut pg_catalog.timestamptz;
     v_visibility_snapshot pg_catalog.pg_snapshot;
+    v_clock_regressed pg_catalog.bool;
     v_expires_at pg_catalog.timestamptz;
     v_event ofarm_security.operational_security_event_identity;
 BEGIN
@@ -1102,11 +1175,18 @@ BEGIN
     LOCK TABLE ofarm_security.operational_security_event
         IN SHARE ROW EXCLUSIVE MODE;
     SELECT
-        pg_catalog.clock_timestamp(),
+        access_clock.observed_at,
+        access_clock.clock_regressed,
         pg_catalog.pg_current_snapshot()
     INTO STRICT
         v_data_cut,
-        v_visibility_snapshot;
+        v_clock_regressed,
+        v_visibility_snapshot
+    FROM ofarm_security._observe_nonregressing_access_clock() AS access_clock;
+    IF v_clock_regressed THEN
+        RAISE EXCEPTION USING ERRCODE = '55000',
+            MESSAGE = 'audit access clock regressed';
+    END IF;
     v_expires_at := v_data_cut + pg_catalog.make_interval(secs => 300);
     v_event := ofarm_security._insert_maintenance_event(
         'AUDIT_ACCESS', 'AUDIT_CONTROL', p_purpose, p_function_identity,
@@ -1368,7 +1448,10 @@ AS $bounded_events$
 DECLARE
     v_access ofarm_security.operational_security_event%ROWTYPE;
     v_report ofarm_security.operational_security_event_report;
-    v_now pg_catalog.timestamptz := pg_catalog.clock_timestamp();
+    v_now pg_catalog.timestamptz;
+    v_clock_high_water_microseconds pg_catalog.int8;
+    v_clock_regressed pg_catalog.bool;
+    v_access_expiry_microseconds pg_catalog.int8;
     v_row_bytes pg_catalog.int8;
     v_total_bytes pg_catalog.int8 := 0;
 BEGIN
@@ -1387,6 +1470,16 @@ BEGIN
             MESSAGE = 'bounded audit query arguments are invalid';
     END IF;
 
+    SELECT
+        access_clock.observed_at,
+        access_clock.high_water_microseconds,
+        access_clock.clock_regressed
+    INTO STRICT
+        v_now,
+        v_clock_high_water_microseconds,
+        v_clock_regressed
+    FROM ofarm_security._observe_nonregressing_access_clock() AS access_clock;
+
     SELECT * INTO v_access
     FROM ofarm_security.operational_security_event
     WHERE event_id = p_access_event_id
@@ -1400,10 +1493,20 @@ BEGIN
             OR v_access.access_cursor_event_id IS DISTINCT FROM
                 p_cursor_event_id
             OR v_access.access_max_rows <> p_max_rows
-            OR v_access.access_max_bytes <> p_max_bytes
-            OR v_access.access_expires_at <= v_now THEN
+            OR v_access.access_max_bytes <> p_max_bytes THEN
         RAISE EXCEPTION USING ERRCODE = '42501',
             MESSAGE = 'committed audit access intent is absent, expired, or unequal';
+    END IF;
+    v_access_expiry_microseconds := pg_catalog.floor(
+        EXTRACT(EPOCH FROM v_access.access_expires_at) * 1000000
+    )::pg_catalog.int8;
+    IF v_access_expiry_microseconds <= v_clock_high_water_microseconds THEN
+        RAISE EXCEPTION USING ERRCODE = '42501',
+            MESSAGE = 'committed audit access intent is absent, expired, or unequal';
+    END IF;
+    IF v_clock_regressed THEN
+        RAISE EXCEPTION USING ERRCODE = '55000',
+            MESSAGE = 'audit access clock regressed';
     END IF;
 
     FOR v_report IN
@@ -1798,6 +1901,7 @@ BEGIN
     WHERE namespace.nspname = 'ofarm_security'
       AND class.relkind = 'r';
     IF v_names IS DISTINCT FROM ARRAY[
+        'operational_security_access_clock_lock',
         'operational_security_event',
         'operational_security_event_identity_lock',
         'operational_security_overflow_identity_receipt',
@@ -1815,8 +1919,46 @@ BEGIN
     JOIN pg_catalog.pg_namespace AS namespace
       ON namespace.oid = class.relnamespace
     WHERE namespace.nspname = 'ofarm_security'
+      AND class.relkind = 'S';
+    IF v_names IS DISTINCT FROM ARRAY[
+        'operational_security_access_clock_high_water'
+    ]::pg_catalog.text[] THEN
+        v_differences := v_differences + 1;
+    END IF;
+
+    SELECT pg_catalog.count(*) INTO v_count
+    FROM pg_catalog.pg_sequence AS governed_sequence
+    JOIN pg_catalog.pg_class AS class
+      ON class.oid = governed_sequence.seqrelid
+    JOIN pg_catalog.pg_namespace AS namespace
+      ON namespace.oid = class.relnamespace
+    JOIN pg_catalog.pg_roles AS owner ON owner.oid = class.relowner
+    WHERE namespace.nspname = 'ofarm_security'
+      AND class.relname = 'operational_security_access_clock_high_water'
+      AND class.relpersistence = 'p'
+      AND owner.rolname = 'ofarm_security_audit_owner'
+      AND governed_sequence.seqtypid =
+          'pg_catalog.int8'::pg_catalog.regtype
+      AND governed_sequence.seqstart = 0
+      AND governed_sequence.seqincrement = 1
+      AND governed_sequence.seqmax = 9223372036854775807
+      AND governed_sequence.seqmin = 0
+      AND governed_sequence.seqcache = 1
+      AND NOT governed_sequence.seqcycle;
+    IF v_count <> 1 THEN
+        v_differences := v_differences + 1;
+    END IF;
+
+    SELECT pg_catalog.array_agg(class.relname::pg_catalog.text
+            ORDER BY class.relname::pg_catalog.text)
+    INTO v_names
+    FROM pg_catalog.pg_class AS class
+    JOIN pg_catalog.pg_namespace AS namespace
+      ON namespace.oid = class.relnamespace
+    WHERE namespace.nspname = 'ofarm_security'
       AND class.relkind = 'i';
     IF v_names IS DISTINCT FROM ARRAY[
+        'operational_security_access_clock_lock_pkey',
         'operational_security_event_identity_lock_pkey',
         'operational_security_event_live_order_idx',
         'operational_security_event_pkey',
@@ -1857,7 +1999,7 @@ BEGIN
       ON namespace.oid = class.relnamespace
     JOIN pg_catalog.pg_roles AS owner ON owner.oid = class.relowner
     WHERE namespace.nspname = 'ofarm_security'
-      AND class.relkind IN ('r', 'i', 'c')
+      AND class.relkind IN ('r', 'i', 'S', 'c')
       AND (
           owner.rolname <> 'ofarm_security_audit_owner'
           OR class.relpersistence <> 'p'
@@ -1894,6 +2036,31 @@ BEGIN
         'interval_end', 'interval_event_count', 'interval_count_unknown',
         'affected_producer', 'affected_component'
     ]::pg_catalog.text[] THEN
+        v_differences := v_differences + 1;
+    END IF;
+
+    SELECT pg_catalog.array_agg(attribute.attname::pg_catalog.text
+            ORDER BY attribute.attnum)
+    INTO v_names
+    FROM pg_catalog.pg_attribute AS attribute
+    WHERE attribute.attrelid =
+            'ofarm_security.operational_security_access_clock_lock'::
+                pg_catalog.regclass
+      AND attribute.attnum > 0
+      AND NOT attribute.attisdropped;
+    IF v_names IS DISTINCT FROM ARRAY[
+        'singleton'
+    ]::pg_catalog.text[] THEN
+        v_differences := v_differences + 1;
+    END IF;
+
+    SELECT pg_catalog.count(*) INTO v_count
+    FROM ofarm_security.operational_security_access_clock_lock
+    WHERE singleton;
+    IF v_count <> 1 OR (
+        SELECT pg_catalog.count(*)
+        FROM ofarm_security.operational_security_access_clock_lock
+    ) <> 1 THEN
         v_differences := v_differences + 1;
     END IF;
 
@@ -1976,6 +2143,7 @@ BEGIN
       ON namespace.oid = class.relnamespace
     WHERE namespace.nspname = 'ofarm_security'
       AND class.relname IN (
+          'operational_security_access_clock_lock',
           'operational_security_event',
           'operational_security_event_identity_lock',
           'operational_security_overflow_identity_receipt',
@@ -1988,6 +2156,20 @@ BEGIN
       AND attribute.attcollation <>
           'pg_catalog."C"'::pg_catalog.regcollation;
     IF v_count <> 0 THEN
+        v_differences := v_differences + 1;
+    END IF;
+
+    SELECT pg_catalog.array_agg(con.conname::pg_catalog.text
+            ORDER BY con.conname::pg_catalog.text)
+    INTO v_names
+    FROM pg_catalog.pg_constraint AS con
+    WHERE con.conrelid =
+        'ofarm_security.operational_security_access_clock_lock'::
+            pg_catalog.regclass;
+    IF v_names IS DISTINCT FROM ARRAY[
+        'operational_security_access_clock_lock_pkey',
+        'operational_security_access_clock_lock_singleton_check'
+    ]::pg_catalog.text[] THEN
         v_differences := v_differences + 1;
     END IF;
 
@@ -2088,6 +2270,7 @@ BEGIN
       ON namespace.oid = class.relnamespace
     WHERE namespace.nspname = 'ofarm_security'
       AND class.relname IN (
+          'operational_security_access_clock_lock',
           'operational_security_event',
           'operational_security_event_identity_lock',
           'operational_security_overflow_identity_receipt',
@@ -2113,6 +2296,7 @@ BEGIN
         '_bounded_operational_security_events',
         '_event_fingerprint',
         '_insert_maintenance_event',
+        '_observe_nonregressing_access_clock',
         '_pretenant_event_fingerprint',
         'append_audit_gap',
         'append_pretenant_failure',
@@ -2377,6 +2561,8 @@ BEGIN
     FROM pg_catalog.pg_trigger AS trigger
     JOIN pg_catalog.pg_class AS class ON class.oid = trigger.tgrelid
     WHERE class.oid IN (
+        'ofarm_security.operational_security_access_clock_lock'::
+            pg_catalog.regclass,
         'ofarm_security.operational_security_event'::pg_catalog.regclass,
         'ofarm_security.operational_security_event_identity_lock'::
             pg_catalog.regclass,
@@ -2395,6 +2581,8 @@ BEGIN
         COALESCE(class.relacl, pg_catalog.acldefault('r', class.relowner))
     ) AS acl
     WHERE class.oid IN (
+        'ofarm_security.operational_security_access_clock_lock'::
+            pg_catalog.regclass,
         'ofarm_security.operational_security_event'::pg_catalog.regclass,
         'ofarm_security.operational_security_event_identity_lock'::
             pg_catalog.regclass,
@@ -2403,6 +2591,19 @@ BEGIN
         'ofarm_security.operational_security_quota_bucket'::pg_catalog.regclass,
         'ofarm_security.operational_security_quota_high_water'::pg_catalog.regclass
     )
+      AND acl.grantee <> class.relowner;
+    IF v_count <> 0 THEN
+        v_differences := v_differences + 1;
+    END IF;
+
+    SELECT pg_catalog.count(*) INTO v_count
+    FROM pg_catalog.pg_class AS class
+    CROSS JOIN LATERAL pg_catalog.aclexplode(
+        COALESCE(class.relacl, pg_catalog.acldefault('S', class.relowner))
+    ) AS acl
+    WHERE class.oid =
+        'ofarm_security.operational_security_access_clock_high_water'::
+            pg_catalog.regclass
       AND acl.grantee <> class.relowner;
     IF v_count <> 0 THEN
         v_differences := v_differences + 1;
@@ -3821,7 +4022,7 @@ BEGIN
     INTO v_catalog_fingerprint
     FROM catalog_entry;
     IF v_catalog_fingerprint <>
-            'sha256:a556cb1735de900a31ce6fc4eb642f23e95553ad050563aa8d19da3152a233fb' THEN
+            'sha256:44ba2d104cca6c92b22d61a4754e86fd333cdca6c19175e3ba60cfcd39f6d541' THEN
         v_differences := v_differences + 1;
     END IF;
 
@@ -3862,7 +4063,7 @@ BEGIN
 
     RETURN ROW(
         'ofarm.security-audit-database-contract.v1',
-        'sha256:10e7e4036620c68f93dce273774ba5d58dbd8cf093078e900fe49ab164561b7f',
+        'sha256:8833beace05bf18b82a8e92e1d457140ff36cc8d4cd4d1288c0a9f5740c19106',
         'OFARM_PRETENANT_SECURITY_EVENT_V1',
         'CORRELATION_HMAC_ONLY_V1',
         'SECURITY_DIAGNOSTIC_30D_V1',

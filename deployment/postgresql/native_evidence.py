@@ -12,7 +12,6 @@ import base64
 import binascii
 import errno
 import hashlib
-import io
 import json
 import os
 import re
@@ -639,13 +638,8 @@ class _OciArchive:
         archive_bytes = _read_bounded(path, MAX_OCI_ARCHIVE_BYTES, "OCI archive")
         self.sha256 = _sha256(archive_bytes)
         self.size = len(archive_bytes)
-        self._stream = io.BytesIO(archive_bytes)
-        try:
-            self._tar = tarfile.open(fileobj=self._stream, mode="r:*")
-        except (EOFError, OSError, tarfile.TarError) as exc:
-            self._stream.close()
-            raise NativeEvidenceError("OCI archive is not a readable tar archive") from exc
-        self._members: dict[str, tarfile.TarInfo] = {}
+        self._archive_bytes = archive_bytes
+        self._members: dict[str, tuple[int, int]] = {}
         self._referenced_blobs: set[str] = set()
         self._docker_transport = docker_transport
         try:
@@ -655,19 +649,46 @@ class _OciArchive:
             raise
 
     def close(self) -> None:
-        self._tar.close()
-        self._stream.close()
+        self._members.clear()
+        self._archive_bytes = b""
 
     def _index_members(self) -> None:
-        try:
-            members = self._tar.getmembers()
-        except (EOFError, OSError, tarfile.TarError) as exc:
-            raise NativeEvidenceError("OCI archive member table is unreadable") from exc
-        if len(members) > MAX_OCI_MEMBER_COUNT:
-            raise NativeEvidenceError("OCI archive contains too many members")
+        member_count = 0
         expanded_size = 0
+        offset = 0
         seen_names: set[str] = set()
-        for member in members:
+        while True:
+            if offset + tarfile.BLOCKSIZE > self.size:
+                raise NativeEvidenceError(
+                    "OCI archive is not a readable uncompressed tar archive"
+                )
+            header = self._archive_bytes[offset : offset + tarfile.BLOCKSIZE]
+            if header == tarfile.NUL * tarfile.BLOCKSIZE:
+                trailer_start = offset + tarfile.BLOCKSIZE
+                trailer_end = trailer_start + tarfile.BLOCKSIZE
+                if (
+                    trailer_end > self.size
+                    or self._archive_bytes[trailer_start:trailer_end]
+                    != tarfile.NUL * tarfile.BLOCKSIZE
+                    or any(memoryview(self._archive_bytes)[trailer_end:])
+                ):
+                    raise NativeEvidenceError(
+                        "OCI archive has an invalid end marker"
+                    )
+                break
+            try:
+                member = tarfile.TarInfo.frombuf(
+                    header,
+                    encoding="utf-8",
+                    errors="strict",
+                )
+            except (UnicodeError, ValueError, tarfile.TarError) as exc:
+                raise NativeEvidenceError(
+                    "OCI archive is not a readable uncompressed tar archive"
+                ) from exc
+            member_count += 1
+            if member_count > MAX_OCI_MEMBER_COUNT:
+                raise NativeEvidenceError("OCI archive contains too many members")
             name = member.name.removeprefix("./")
             pure_name = PurePosixPath(name)
             if (
@@ -678,8 +699,28 @@ class _OciArchive:
             ):
                 raise NativeEvidenceError("OCI archive contains an unsafe member name")
             seen_names.add(name)
+            if member.type not in {
+                tarfile.REGTYPE,
+                tarfile.AREGTYPE,
+                tarfile.DIRTYPE,
+            }:
+                raise NativeEvidenceError("OCI archive contains a non-regular member")
+            if member.size < 0 or member.size > (
+                MAX_OCI_EXPANDED_BYTES - expanded_size
+            ):
+                raise NativeEvidenceError("OCI archive expands beyond its byte limit")
+            expanded_size += member.size
+            data_offset = offset + tarfile.BLOCKSIZE
+            next_offset = data_offset + (
+                (member.size + tarfile.BLOCKSIZE - 1)
+                // tarfile.BLOCKSIZE
+                * tarfile.BLOCKSIZE
+            )
+            if next_offset > self.size:
+                raise NativeEvidenceError("OCI archive member table is unreadable")
+            offset = next_offset
             if member.isdir():
-                if name not in {"blobs", "blobs/sha256"}:
+                if member.size != 0 or name not in {"blobs", "blobs/sha256"}:
                     raise NativeEvidenceError("OCI archive contains an unexpected directory")
                 continue
             if not member.isreg():
@@ -689,25 +730,17 @@ class _OciArchive:
                 allowed_files.add("manifest.json")
             if name not in allowed_files and OCI_BLOB_PATTERN.fullmatch(name) is None:
                 raise NativeEvidenceError("OCI archive contains an unexpected file")
-            expanded_size += member.size
-            if expanded_size > MAX_OCI_EXPANDED_BYTES:
-                raise NativeEvidenceError("OCI archive expands beyond its byte limit")
-            self._members[name] = member
+            self._members[name] = (data_offset, member.size)
 
     def read_member(self, name: str, maximum: int, label: str) -> bytes:
         member = self._members.get(name)
         if member is None:
             raise NativeEvidenceError(f"{label} is absent from the OCI archive")
-        if member.size > maximum:
+        offset, size = member
+        if size > maximum:
             raise NativeEvidenceError(f"{label} exceeds its byte limit")
-        try:
-            extracted = self._tar.extractfile(member)
-            if extracted is None:
-                raise NativeEvidenceError(f"{label} is unreadable")
-            data = extracted.read(maximum + 1)
-        except (EOFError, OSError, tarfile.TarError) as exc:
-            raise NativeEvidenceError(f"{label} is unreadable") from exc
-        if len(data) != member.size or len(data) > maximum:
+        data = self._archive_bytes[offset : offset + size]
+        if len(data) != size or len(data) > maximum:
             raise NativeEvidenceError(f"{label} has an invalid size")
         return data
 

@@ -301,10 +301,10 @@ def test_authoritative_audit_migration_is_one_exact_initial_set():
     assert SECURITY_AUDIT_CONTRACT.digest in source
     assert SECURITY_AUDIT_PROVISIONING_SPEC.digest in source
     assert migration.source_sha256 == \
-        "sha256:2c71a9ce8bbc98ae0e933a9e29fc0de76b142357556525f2ba9c28fab2b47373"
-    assert migration.byte_length == 163_547
+        "sha256:3daffdcb8f6dd57cb99a7b1ad2731626797ec21f1efb4a5308d7ba3a8e2bc27b"
+    assert migration.byte_length == 170_960
     assert migration_set.digest == \
-        "sha256:025aba1427f86b664c353f5f561d3a931e487e2e08126154595c883f1f699b42"
+        "sha256:d60c3533ee3581de92d5bd810cdd288ae32ba7200623538763df499ddb3db966"
     assert migration_set.prefix_digest(1) == migration_set.digest
 
 
@@ -316,6 +316,7 @@ def test_authoritative_audit_migration_has_closed_carriers_and_limits():
         _table_definition(source, qualified_name)
         for qualified_name in (
             "ofarm_security.operational_security_event",
+            "ofarm_security.operational_security_access_clock_lock",
             "ofarm_security.operational_security_quota_bucket",
             "ofarm_security.operational_security_quota_high_water",
             "ofarm_security.operational_security_event_identity_lock",
@@ -323,8 +324,17 @@ def test_authoritative_audit_migration_has_closed_carriers_and_limits():
         )
     )
 
-    assert source.count("CREATE TABLE ofarm_security.operational_security_") == 5
+    assert source.count("CREATE TABLE ofarm_security.operational_security_") == 6
     assert "CREATE TABLE ofarm_security.operational_security_event" in source
+    assert (
+        "CREATE SEQUENCE "
+        "ofarm_security.operational_security_access_clock_high_water"
+        in source
+    )
+    assert (
+        "CREATE TABLE ofarm_security.operational_security_access_clock_lock"
+        in source
+    )
     assert "CREATE TABLE ofarm_security.operational_security_quota_bucket" in source
     assert (
         "CREATE TABLE ofarm_security.operational_security_quota_high_water"
@@ -412,7 +422,7 @@ def test_authoritative_audit_migration_has_closed_carriers_and_limits():
         in source
     )
     assert (
-        "sha256:a556cb1735de900a31ce6fc4eb642f23e95553ad050563aa8d19da3152a233fb"
+        "sha256:44ba2d104cca6c92b22d61a4754e86fd333cdca6c19175e3ba60cfcd39f6d541"
         in source
     )
     assert "jsonb" not in persisted_audit_tables
@@ -446,11 +456,14 @@ def test_access_intent_serializes_writers_before_combined_cut_capture():
     writer_barrier = """    LOCK TABLE ofarm_security.operational_security_event
         IN SHARE ROW EXCLUSIVE MODE;"""
     combined_capture = """    SELECT
-        pg_catalog.clock_timestamp(),
+        access_clock.observed_at,
+        access_clock.clock_regressed,
         pg_catalog.pg_current_snapshot()
     INTO STRICT
         v_data_cut,
-        v_visibility_snapshot;"""
+        v_clock_regressed,
+        v_visibility_snapshot
+    FROM ofarm_security._observe_nonregressing_access_clock() AS access_clock;"""
 
     assert access_function.count(isolation_guard) == 1
     assert access_function.count(writer_barrier) == 1
@@ -465,6 +478,39 @@ def test_access_intent_serializes_writers_before_combined_cut_capture():
         "v_visibility_snapshot := pg_catalog.pg_current_snapshot()"
         not in access_function
     )
+
+
+def test_bounded_access_uses_one_nonregressing_clock_authority():
+    source = load_migration_set(
+        PACKAGE_ROOT, SECURITY_AUDIT_SERVICE
+    ).migrations[0].source_bytes.decode("utf-8")
+    clock_function = source.split(
+        "CREATE FUNCTION "
+        "ofarm_security._observe_nonregressing_access_clock()",
+        1,
+    )[1].split(
+        "REVOKE ALL PRIVILEGES ON FUNCTION\n"
+        "ofarm_security._observe_nonregressing_access_clock()",
+        1,
+    )[0]
+    bounded_function = source.split(
+        "CREATE FUNCTION "
+        "ofarm_security._bounded_operational_security_events(",
+        1,
+    )[1].split(
+        "REVOKE ALL PRIVILEGES ON FUNCTION\n"
+        "ofarm_security._bounded_operational_security_events(",
+        1,
+    )[0]
+
+    assert "FOR UPDATE;" in clock_function
+    assert "pg_catalog.setval(" in clock_function
+    assert "clock_regressed :=" in clock_function
+    assert bounded_function.count(
+        "ofarm_security._observe_nonregressing_access_clock()"
+    ) == 1
+    assert "v_access_expiry_microseconds <= " in bounded_function
+    assert "MESSAGE = 'audit access clock regressed'" in bounded_function
 
 
 def test_pretenant_append_rejects_fixed_snapshots_before_identity_reads():
@@ -1773,6 +1819,194 @@ def test_bounded_reader_requires_an_equal_committed_access_intent(
     assert all(row[2] > access[1] for row in rows)
 
 
+def _set_access_clock_high_water(
+    state: dict[str, object], observed_at: datetime | None
+) -> int:
+    with psycopg.connect(
+        state["target_admin_dsn"], autocommit=True
+    ) as admin:
+        high_water = admin.execute(
+            """
+            SELECT pg_catalog.floor(
+                EXTRACT(EPOCH FROM COALESCE(
+                    %s::pg_catalog.timestamptz,
+                    pg_catalog.clock_timestamp()
+                )) * 1000000
+            )::pg_catalog.int8
+            """,
+            (observed_at,),
+        ).fetchone()[0]
+        admin.execute(
+            """
+            SELECT pg_catalog.setval(
+                'ofarm_security.operational_security_access_clock_high_water'::
+                    pg_catalog.regclass,
+                %s,
+                true
+            )
+            """,
+            (high_water,),
+        )
+    return high_water
+
+
+def _assert_access_refuses_twice(
+    connection: psycopg.Connection,
+    statement: str,
+    arguments: tuple[object, ...],
+) -> None:
+    for _attempt in range(2):
+        with pytest.raises(psycopg.Error) as refused:
+            connection.execute(statement, arguments).fetchall()
+        assert refused.value.sqlstate == "42501"
+        assert "expired" in str(refused.value)
+        connection.rollback()
+
+
+def test_access_clock_advance_survives_its_transaction_rollback(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    _set_access_clock_high_water(
+        state, datetime(1970, 1, 1, tzinfo=timezone.utc)
+    )
+    try:
+        with psycopg.connect(state["target_admin_dsn"]) as admin:
+            observed = admin.execute(
+                """
+                SELECT *
+                FROM ofarm_security._observe_nonregressing_access_clock()
+                """
+            ).fetchone()
+            assert observed[1] > 0
+            assert observed[2] is False
+            admin.rollback()
+
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            retained = admin.execute(
+                """
+                SELECT last_value::pg_catalog.int8
+                FROM ofarm_security.operational_security_access_clock_high_water
+                """
+            ).fetchone()[0]
+        assert retained == observed[1]
+    finally:
+        _set_access_clock_high_water(state, None)
+
+
+def test_expired_access_intent_stays_refused_after_clock_rollback(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    with psycopg.connect(
+        _role_dsn(state, "ofarm_security_audit_control_login"),
+        autocommit=True,
+    ) as control:
+        access = control.execute(
+            """
+            SELECT * FROM ofarm_security.commit_audit_access_intent(
+                'OPERATIONAL_DIAGNOSTIC_QUERY_V1', %s,
+                NULL, NULL, 10, 100000
+            )
+            """,
+            (QUERY_IDENTITY,),
+        ).fetchone()
+
+    expiry_microseconds = _set_access_clock_high_water(state, access[2])
+
+    try:
+        with psycopg.connect(
+            _role_dsn(state, "ofarm_security_audit_reader_login")
+        ) as reader:
+            _assert_access_refuses_twice(
+                reader,
+                """
+                SELECT *
+                FROM ofarm_security.query_operational_security_events(
+                    %s, NULL, NULL, 10, 100000
+                )
+                """,
+                (access[0],),
+            )
+
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            retained_high_water = admin.execute(
+                """
+                SELECT last_value::pg_catalog.int8
+                FROM ofarm_security.operational_security_access_clock_high_water
+                """
+            ).fetchone()[0]
+        assert retained_high_water >= expiry_microseconds
+    finally:
+        _set_access_clock_high_water(state, None)
+
+
+def test_expired_break_glass_intent_stays_refused_after_clock_rollback(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    export_role = "ofarm_security_audit_export_login"
+    export_password = "issue-174-export-" + secrets.token_urlsafe(32)
+    with psycopg.connect(state["admin_dsn"], autocommit=True) as admin:
+        admin.execute(
+            sql.SQL("CREATE ROLE {} LOGIN PASSWORD {}").format(
+                sql.Identifier(export_role), sql.Literal(export_password)
+            )
+        )
+        admin.execute(
+            """
+            GRANT ofarm_security_audit_export
+            TO ofarm_security_audit_export_login
+            WITH INHERIT TRUE, SET FALSE, ADMIN FALSE
+            """
+        )
+    try:
+        with psycopg.connect(
+            _role_dsn(state, "ofarm_security_audit_control_login"),
+            autocommit=True,
+        ) as control:
+            access = control.execute(
+                """
+                SELECT * FROM ofarm_security.commit_audit_access_intent(
+                    'DUAL_APPROVED_BREAK_GLASS_EXPORT_V1',
+                    'ofarm_security.export_operational_security_events(uuid, timestamptz, uuid, integer, bigint)',
+                    NULL, NULL, 10, 100000
+                )
+                """
+            ).fetchone()
+
+        _set_access_clock_high_water(state, access[2])
+        export_dsn = _database_dsn(
+            state["admin_dsn"],
+            SECURITY_AUDIT_PROVISIONING_SPEC.database_name,
+            user=export_role,
+            password=export_password,
+        )
+        with psycopg.connect(export_dsn) as exporter:
+            _assert_access_refuses_twice(
+                exporter,
+                """
+                SELECT *
+                FROM ofarm_security.export_operational_security_events(
+                    %s, NULL, NULL, 10, 100000
+                )
+                """,
+                (access[0],),
+            )
+    finally:
+        _set_access_clock_high_water(state, None)
+        with psycopg.connect(state["admin_dsn"], autocommit=True) as admin:
+            admin.execute(
+                sql.SQL("DROP ROLE IF EXISTS {}").format(
+                    sql.Identifier(export_role)
+                )
+            )
+
+
 def test_bounded_reader_byte_ceiling_is_session_independent(
     migrated_audit_service,
 ):
@@ -2164,6 +2398,12 @@ def test_runtime_roles_have_no_direct_event_table_or_schema_authority(
     )
     denied_statements = (
         "SELECT * FROM ofarm_security.operational_security_event",
+        "SELECT * FROM "
+        "ofarm_security.operational_security_access_clock_lock",
+        "SELECT last_value FROM "
+        "ofarm_security.operational_security_access_clock_high_water",
+        "SELECT pg_catalog.nextval("
+        "'ofarm_security.operational_security_access_clock_high_water')",
         "INSERT INTO ofarm_security.operational_security_event DEFAULT VALUES",
         "UPDATE ofarm_security.operational_security_event SET reason = reason",
         "DELETE FROM ofarm_security.operational_security_event",
@@ -3802,6 +4042,66 @@ def _replace_pg_stat_activity_view(
             "CREATE OR REPLACE VIEW pg_catalog.pg_stat_activity AS {}"
         ).format(sql.SQL(definition))
     )
+
+
+def test_access_clock_structure_drift_refuses_readiness(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    with psycopg.connect(
+        state["target_admin_dsn"], autocommit=True
+    ) as admin:
+        admin.execute(
+            """
+            ALTER SEQUENCE
+                ofarm_security.operational_security_access_clock_high_water
+            CACHE 2
+            """
+        )
+    try:
+        drift = _observe_structure(state)
+        assert drift[0] is False
+        assert drift[1] >= 1
+    finally:
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            admin.execute(
+                """
+                ALTER SEQUENCE
+                    ofarm_security.operational_security_access_clock_high_water
+                CACHE 1
+                """
+            )
+    assert _observe_structure(state) == (True, 0, False)
+
+    with psycopg.connect(
+        state["target_admin_dsn"], autocommit=True
+    ) as admin:
+        admin.execute(
+            """
+            DELETE FROM
+                ofarm_security.operational_security_access_clock_lock
+            """
+        )
+    try:
+        drift = _observe_structure(state)
+        assert drift[0] is False
+        assert drift[1] >= 1
+    finally:
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            admin.execute(
+                """
+                INSERT INTO
+                    ofarm_security.operational_security_access_clock_lock (
+                        singleton
+                    )
+                VALUES (true)
+                """
+            )
+    assert _observe_structure(state) == (True, 0, False)
 
 
 def test_structural_readiness_refuses_role_attribute_and_membership_drift(
