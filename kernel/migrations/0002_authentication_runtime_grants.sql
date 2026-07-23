@@ -28,6 +28,10 @@ BEGIN
        ) = 0
        OR pg_catalog.strpos(
            verifier_definition,
+           'pg_catalog.max(migration.applied_prefix_digest)'
+       ) = 0
+       OR pg_catalog.strpos(
+           verifier_definition,
            'sha256:f7c72a008792173e110b9359006271fea263b3e26fb53c8ac6303839d0460fc4'
        ) = 0 THEN
         RAISE EXCEPTION USING
@@ -49,6 +53,11 @@ BEGIN
         revised_definition,
         'migration 0001 ledger identity differs',
         'migration ledger identity differs'
+    );
+    revised_definition := pg_catalog.replace(
+        revised_definition,
+        'pg_catalog.max(migration.applied_prefix_digest)',
+        'pg_catalog.max(migration.applied_prefix_digest) FILTER (WHERE migration.version = 2)'
     );
     revised_definition := pg_catalog.replace(
         revised_definition,

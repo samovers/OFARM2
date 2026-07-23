@@ -6643,5 +6643,6 @@ def test_readiness_observation_is_complete_after_commit(
     assert row[5] == TENANT_PROVISIONING_SPEC.digest
     assert row[6] == TENANT_SERVICE.identity
     assert row[7] == 2
+    assert row[8] == tenant_target.migration_set.digest
     assert row[9] == 2
     assert row[10] is False
