@@ -35,6 +35,9 @@ DIGEST_A = "sha256:" + "11" * 32
 DIGEST_B = "sha256:" + "22" * 32
 DIGEST_C = "sha256:" + "33" * 32
 DIGEST_D = "sha256:" + "44" * 32
+AUDIENCE = (
+    "urn:ofarm:tenant-binder:v1:11111111-1111-4111-8111-111111111111"
+)
 
 
 class _Result:
@@ -117,12 +120,20 @@ def test_resolver_folds_immutable_authority_and_never_reads_projection():
 
     def handler(query, _params):
         if "check_principal_binding_resolution_dependencies" in query:
-            return _Result(one=(None,))
+            return _Result(many=[(AUDIENCE,)])
         return _Result(many=[row])
 
     connection = _Connection(handler)
     resolver = PostgreSQLPrincipalBindingResolver(_Factory(connection))
+    with pytest.raises(
+        AuthenticationStartupError,
+        match="principal-binding resolver is not initialized",
+    ):
+        _ = resolver.audience
     resolver.initialize()
+    assert resolver.audience == AUDIENCE
+    with pytest.raises(AttributeError):
+        resolver.audience = AUDIENCE
     assert resolver.resolve(_identity()) == authority
     sql = "\n".join(query.lower() for query, _ in connection.statements)
     assert "check_principal_binding_resolution_dependencies" in sql
@@ -162,7 +173,7 @@ def test_missing_or_ambiguous_binding_fails_closed_with_safe_outcome():
 
         def handler(query, _params):
             if "check_principal_binding_resolution_dependencies" in query:
-                return _Result(one=(None,))
+                return _Result(many=[(AUDIENCE,)])
             return _Result(many=rows)
 
         resolver = PostgreSQLPrincipalBindingResolver(
@@ -173,6 +184,64 @@ def test_missing_or_ambiguous_binding_fails_closed_with_safe_outcome():
             resolver.resolve(_identity())
         assert raised.value.outcome is outcome
         assert SUBJECT not in str(raised.value)
+
+
+@pytest.mark.parametrize(
+    "rows",
+    (
+        pytest.param([], id="missing"),
+        pytest.param([(AUDIENCE,), (AUDIENCE,)], id="multiple"),
+        pytest.param([(None,)], id="null"),
+        pytest.param([("https://request.invalid/audience",)], id="malformed"),
+        pytest.param([(AUDIENCE, "extra")], id="wide-row"),
+        pytest.param([[AUDIENCE]], id="non-tuple-row"),
+    ),
+)
+def test_resolver_startup_refuses_non_exact_authoritative_audience(rows):
+    resolver = PostgreSQLPrincipalBindingResolver(
+        _Factory(
+            _Connection(
+                lambda query, _params: (
+                    _Result(many=rows)
+                    if "check_principal_binding_resolution_dependencies"
+                    in query
+                    else pytest.fail("resolver query must not run")
+                )
+            )
+        )
+    )
+
+    with pytest.raises(
+        AuthenticationStartupError,
+        match="principal-binding immutable read path is unavailable",
+    ):
+        resolver.initialize()
+    with pytest.raises(
+        AuthenticationStartupError,
+        match="principal-binding resolver is not initialized",
+    ):
+        _ = resolver.audience
+
+
+def test_resolver_reinitialization_is_idempotent_without_database_access():
+    calls = 0
+
+    def handler(query, _params):
+        nonlocal calls
+        assert "check_principal_binding_resolution_dependencies" in query
+        calls += 1
+        if calls > 1:
+            pytest.fail("initialized resolver must not query again")
+        return _Result(many=[(AUDIENCE,)])
+
+    resolver = PostgreSQLPrincipalBindingResolver(
+        _Factory(_Connection(handler))
+    )
+    resolver.initialize()
+    assert resolver.audience == AUDIENCE
+    resolver.initialize()
+    assert resolver.audience == AUDIENCE
+    assert calls == 1
 
 
 def test_control_plane_activates_only_through_hardened_functions():

@@ -732,6 +732,11 @@ LOGIN role can inherit or assume it. The resolver function accepts no table,
 column, or predicate selector, contains no dynamic SQL, and never trusts
 `principal_binding_current`. Application, worker, administrator role-switch,
 and binder credentials cannot call or assume the resolver identity.
+The application resolver initializes through the dependency-health function,
+which returns exactly one digest-verified audience from the immutable binder
+instance. The resolver accepts no caller or environment audience, pins the
+validated result, and exposes it read-only only after successful initialization.
+Repeated initialization after success is an idempotent no-I/O assertion.
 
 Backend-incarnation observation is isolated from that binder authority.
 `ofarm_backend_observer` is a NOLOGIN, INHERIT, NOBYPASSRLS role whose sole

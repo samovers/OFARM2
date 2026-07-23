@@ -19,6 +19,7 @@ from deployment.postgresql.tenant_contract import (
     OIDC_ISSUER_EQUALITY_POLICY,
     TENANT_CAPABILITY_PARTY_RECORD_KIND,
     TenantCapabilityContractError,
+    validate_binder_audience,
     validate_oidc_issuer,
 )
 
@@ -88,16 +89,42 @@ class PostgreSQLPrincipalBindingResolver:
     def __init__(self, connection_factory: ConnectionFactory):
         self._connection_factory = connection_factory
         self._initialized = False
+        self._audience: str | None = None
 
     def initialize(self) -> None:
+        if self._initialized:
+            return
+        self._initialized = False
         try:
             with self._connection_factory() as connection:
-                connection.execute(self._HEALTH_SQL).fetchone()
+                rows = connection.execute(self._HEALTH_SQL).fetchall()
+            if (
+                len(rows) != 1
+                or type(rows[0]) is not tuple
+                or len(rows[0]) != 1
+            ):
+                raise ValueError(
+                    "principal-binding audience result is not exact"
+                )
+            audience = validate_binder_audience(rows[0][0])
+            if self._audience is not None and audience != self._audience:
+                raise ValueError("principal-binding audience changed")
         except Exception as exc:
             raise AuthenticationStartupError(
                 "principal-binding immutable read path is unavailable"
             ) from exc
+        self._audience = audience
         self._initialized = True
+
+    @property
+    def audience(self) -> str:
+        """Return the PostgreSQL-pinned binder audience after initialization."""
+
+        if not self._initialized or self._audience is None:
+            raise AuthenticationStartupError(
+                "principal-binding resolver is not initialized"
+            )
+        return self._audience
 
     def resolve(self, identity: VerifiedOidcIdentity) -> PrincipalBindingAuthority:
         if not self._initialized:

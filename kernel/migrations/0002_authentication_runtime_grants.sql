@@ -245,11 +245,18 @@ END
 $resolver$;
 
 CREATE FUNCTION ofarm.check_principal_binding_resolution_dependencies()
-RETURNS pg_catalog.void
+RETURNS pg_catalog.text
 LANGUAGE plpgsql VOLATILE PARALLEL UNSAFE SECURITY DEFINER
 SET search_path = pg_catalog, pg_temp
 AS $health$
 DECLARE
+    binder_singleton pg_catalog.bool;
+    binder_instance_id pg_catalog.uuid;
+    binder_audience pg_catalog.text;
+    binder_contract_digest pg_catalog.text;
+    binder_database_name pg_catalog.text;
+    binder_created_at pg_catalog.timestamptz;
+    binder_row_digest pg_catalog.text;
     binding_digest pg_catalog.text;
     lifecycle_digest pg_catalog.text;
 BEGIN
@@ -293,6 +300,57 @@ BEGIN
         RAISE EXCEPTION USING
             ERRCODE = '42501',
             MESSAGE = 'principal-binding resolver execute privilege differs';
+    END IF;
+
+    BEGIN
+        SELECT instance.singleton,
+               instance.instance_id,
+               instance.audience,
+               instance.contract_digest::pg_catalog.text,
+               instance.database_name,
+               instance.created_at,
+               instance.row_digest::pg_catalog.text
+          INTO STRICT binder_singleton,
+                      binder_instance_id,
+                      binder_audience,
+                      binder_contract_digest,
+                      binder_database_name,
+                      binder_created_at,
+                      binder_row_digest
+          FROM ofarm.tenant_binder_instance AS instance;
+    EXCEPTION
+        WHEN NO_DATA_FOUND OR TOO_MANY_ROWS THEN
+            RAISE EXCEPTION USING
+                ERRCODE = 'PT001',
+                MESSAGE = 'tenant binder audience cardinality differs';
+    END;
+    IF binder_singleton IS DISTINCT FROM true
+       OR binder_instance_id IS NULL
+       OR binder_instance_id =
+            '00000000-0000-0000-0000-000000000000'::pg_catalog.uuid
+       OR binder_audience IS DISTINCT FROM
+            'urn:ofarm:tenant-binder:v1:' ||
+            binder_instance_id::pg_catalog.text
+       OR binder_contract_digest IS DISTINCT FROM
+            'sha256:39e979fa296122cb66d42eae5e2d7c6dc797ac77ef4324515ae1ab6020088d83'
+       OR binder_database_name IS DISTINCT FROM
+            pg_catalog.current_database()::pg_catalog.text
+       OR binder_created_at IS NULL
+       OR binder_created_at IN (
+            '-infinity'::pg_catalog.timestamptz,
+            'infinity'::pg_catalog.timestamptz
+       )
+       OR binder_row_digest IS DISTINCT FROM
+            ofarm.compute_tenant_binder_instance_digest(
+                binder_instance_id,
+                binder_audience,
+                binder_contract_digest,
+                binder_database_name,
+                binder_created_at
+            ) THEN
+        RAISE EXCEPTION USING
+            ERRCODE = 'PT001',
+            MESSAGE = 'tenant binder audience authority differs';
     END IF;
 
     PERFORM binding.equality_policy,
@@ -411,6 +469,7 @@ BEGIN
             ERRCODE = 'PT001',
             MESSAGE = 'principal-binding health digest differs';
     END IF;
+    RETURN binder_audience;
 END
 $health$;
 
@@ -437,6 +496,7 @@ ALTER FUNCTION
 OWNER TO ofarm_principal_resolver_owner;
 REVOKE CREATE ON SCHEMA ofarm FROM ofarm_principal_resolver_owner;
 GRANT SELECT ON TABLE
+    ofarm.tenant_binder_instance,
     ofarm.principal_binding,
     ofarm.principal_binding_lifecycle,
     ofarm.tenant_registry
@@ -456,6 +516,10 @@ GRANT EXECUTE ON FUNCTION
     ofarm.lp32(pg_catalog.bytea),
     ofarm.valid_ascii_id(pg_catalog.text),
     ofarm.valid_oidc_issuer(pg_catalog.text),
+    ofarm.compute_tenant_binder_instance_digest(
+        pg_catalog.uuid, pg_catalog.text, pg_catalog.text,
+        pg_catalog.text, pg_catalog.timestamptz
+    ),
     ofarm.compute_principal_binding_version_digest(
         pg_catalog.text, pg_catalog.text, pg_catalog.text, pg_catalog.uuid,
         pg_catalog.uuid, pg_catalog.text, pg_catalog.text, pg_catalog.text,
@@ -472,6 +536,7 @@ GRANT EXECUTE ON FUNCTION
 TO ofarm_principal_resolver_owner;
 
 REVOKE ALL PRIVILEGES ON TABLE
+    ofarm.tenant_binder_instance,
     ofarm.principal_binding,
     ofarm.principal_binding_lifecycle,
     ofarm.tenant_registry,
@@ -481,6 +546,10 @@ REVOKE ALL PRIVILEGES ON FUNCTION
     ofarm.lp32(pg_catalog.bytea),
     ofarm.valid_ascii_id(pg_catalog.text),
     ofarm.valid_oidc_issuer(pg_catalog.text),
+    ofarm.compute_tenant_binder_instance_digest(
+        pg_catalog.uuid, pg_catalog.text, pg_catalog.text,
+        pg_catalog.text, pg_catalog.timestamptz
+    ),
     ofarm.compute_principal_binding_version_digest(
         pg_catalog.text, pg_catalog.text, pg_catalog.text, pg_catalog.uuid,
         pg_catalog.uuid, pg_catalog.text, pg_catalog.text, pg_catalog.text,
@@ -568,7 +637,7 @@ BEGIN
     revised_definition := pg_catalog.replace(
         revised_definition,
         'sha256:f7c72a008792173e110b9359006271fea263b3e26fb53c8ac6303839d0460fc4',
-        'sha256:4c0588fa896bda3f76e3b2f547211c372cf87b67697763f39a0beb6c68ce8fb8'
+        'sha256:60accbf4e3fc16669cfc58f142e25000129bdb1f9fff11f6188c69637de4124c'
     );
     revised_definition := pg_catalog.replace(
         revised_definition,
@@ -597,7 +666,7 @@ BEGIN
     revised_definition := pg_catalog.replace(
         revised_definition,
         'relation_acl_count <> 88',
-        'relation_acl_count <> 91'
+        'relation_acl_count <> 92'
     );
     revised_definition := pg_catalog.replace(
         revised_definition,
@@ -608,6 +677,7 @@ BEGIN
                        (
                            grantee.rolname = 'ofarm_principal_resolver_owner'
                            AND class.relname IN (
+                                'tenant_binder_instance',
                                 'principal_binding',
                                 'principal_binding_lifecycle',
                                 'tenant_registry'

@@ -187,6 +187,15 @@ registry, Party-column, type, and helper privileges. No LOGIN role can inherit
 or assume that owner. Application, worker, administrator role-switch, and
 binder credentials cannot call or assume the resolver identity.
 
+`PostgreSQLPrincipalBindingResolver.initialize()` accepts no audience input.
+Its one fixed database call validates every resolution dependency and returns
+the single digest-verified audience from `tenant_binder_instance`. The resolver
+strictly validates and pins that value; its read-only `audience` property raises
+`AuthenticationStartupError` until initialization succeeds. Environment,
+OIDC-claim, request, and HTTP values cannot supply or replace the audience.
+After the first success, repeated `initialize()` calls are idempotent readiness
+assertions and do not reopen or query PostgreSQL.
+
 ## Tenant schema
 
 The tenant migration establishes:

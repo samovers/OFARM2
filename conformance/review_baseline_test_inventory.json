@@ -5236,6 +5236,11 @@
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_each_revoked_dependency[helper-binder-instance-digest]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_each_revoked_dependency[helper-binding-digest]",
       "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
@@ -5306,6 +5311,11 @@
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_each_revoked_dependency[relation-tenant_binder_instance]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_each_revoked_dependency[relation-tenant_registry]",
       "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
@@ -5332,6 +5342,26 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_each_revoked_dependency[type-tenant_local_ref]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_hostile_binder_audience_state[digest-invalid]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_hostile_binder_audience_state[malformed-audience]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_hostile_binder_audience_state[missing]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_hostile_binder_audience_state[multiple]",
       "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
@@ -5532,6 +5562,41 @@
     },
     {
       "nodeid": "kernel/tests/test_principal_binding_control_plane.py::test_resolver_folds_immutable_authority_and_never_reads_projection",
+      "sourceModule": "kernel.tests.test_principal_binding_control_plane",
+      "sourcePath": "kernel/tests/test_principal_binding_control_plane.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_control_plane.py::test_resolver_reinitialization_is_idempotent_without_database_access",
+      "sourceModule": "kernel.tests.test_principal_binding_control_plane",
+      "sourcePath": "kernel/tests/test_principal_binding_control_plane.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_control_plane.py::test_resolver_startup_refuses_non_exact_authoritative_audience[malformed]",
+      "sourceModule": "kernel.tests.test_principal_binding_control_plane",
+      "sourcePath": "kernel/tests/test_principal_binding_control_plane.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_control_plane.py::test_resolver_startup_refuses_non_exact_authoritative_audience[missing]",
+      "sourceModule": "kernel.tests.test_principal_binding_control_plane",
+      "sourcePath": "kernel/tests/test_principal_binding_control_plane.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_control_plane.py::test_resolver_startup_refuses_non_exact_authoritative_audience[multiple]",
+      "sourceModule": "kernel.tests.test_principal_binding_control_plane",
+      "sourcePath": "kernel/tests/test_principal_binding_control_plane.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_control_plane.py::test_resolver_startup_refuses_non_exact_authoritative_audience[non-tuple-row]",
+      "sourceModule": "kernel.tests.test_principal_binding_control_plane",
+      "sourcePath": "kernel/tests/test_principal_binding_control_plane.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_control_plane.py::test_resolver_startup_refuses_non_exact_authoritative_audience[null]",
+      "sourceModule": "kernel.tests.test_principal_binding_control_plane",
+      "sourcePath": "kernel/tests/test_principal_binding_control_plane.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_control_plane.py::test_resolver_startup_refuses_non_exact_authoritative_audience[wide-row]",
       "sourceModule": "kernel.tests.test_principal_binding_control_plane",
       "sourcePath": "kernel/tests/test_principal_binding_control_plane.py"
     },
@@ -8151,8 +8216,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "7f1ebfee2aec80db6f7795f2011559f5e9dcb27821748100570d6e0746e3a80a",
-  "entryCount": 1630,
+  "entriesSha256": "f9fcd2e9caff2ac707499b56b89eac2e00075329ce560d3568516d99ca08ace7",
+  "entryCount": 1643,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

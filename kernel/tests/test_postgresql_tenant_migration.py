@@ -127,6 +127,7 @@ PRINCIPAL_BINDING_READINESS_ACLS = (
             id=f"relation-{relation}",
         )
         for relation in (
+            "tenant_binder_instance",
             "principal_binding",
             "principal_binding_lifecycle",
             "tenant_registry",
@@ -188,6 +189,12 @@ PRINCIPAL_BINDING_READINESS_ACLS = (
         )
         for name, signature in (
             ("lp32", "ofarm.lp32(pg_catalog.bytea)"),
+            (
+                "binder-instance-digest",
+                "ofarm.compute_tenant_binder_instance_digest("
+                "pg_catalog.uuid, pg_catalog.text, pg_catalog.text, "
+                "pg_catalog.text, pg_catalog.timestamptz)",
+            ),
             (
                 "valid-ascii-id",
                 "ofarm.valid_ascii_id(pg_catalog.text)",
@@ -367,6 +374,7 @@ def test_principal_resolver_login_is_execute_only(
             "CURRENT_USER, 'ofarm_principal_resolver_owner', 'SET')"
         ).fetchone() == (False,)
         for relation in (
+            "tenant_binder_instance",
             "principal_binding",
             "principal_binding_lifecycle",
             "tenant_registry",
@@ -381,6 +389,10 @@ def test_principal_resolver_login_is_execute_only(
                 resolver.execute(f"SELECT * FROM ofarm.{relation}")
         for signature in (
             "ofarm.lp32(bytea)",
+            (
+                "ofarm.compute_tenant_binder_instance_digest("
+                "uuid,text,text,text,timestamp with time zone)"
+            ),
             "ofarm.valid_ascii_id(text)",
             "ofarm.valid_oidc_issuer(text)",
             (
@@ -401,6 +413,15 @@ def test_principal_resolver_login_is_execute_only(
             ).fetchone() == (False,)
         for query in (
             "SELECT ofarm.lp32('x'::pg_catalog.bytea)",
+            """
+            SELECT ofarm.compute_tenant_binder_instance_digest(
+                '00000000-0000-4000-8000-000000000001'::pg_catalog.uuid,
+                'urn:ofarm:tenant-binder:00000000-0000-4000-8000-000000000001',
+                'sha256:0000000000000000000000000000000000000000000000000000000000000000',
+                pg_catalog.current_database(),
+                '2026-01-01 00:00:00+00'::pg_catalog.timestamptz
+            )
+            """,
             "SELECT ofarm.valid_ascii_id('health-party')",
             "SELECT ofarm.valid_oidc_issuer('https://health.invalid')",
             """
@@ -515,6 +536,220 @@ def test_principal_binding_startup_refuses_each_revoked_dependency(
                 PostgreSQLPrincipalBindingResolver(connection_factory).initialize()
         finally:
             admin.execute(grant_sql)
+
+
+@pytest.mark.parametrize(
+    "tamper_kind",
+    ("missing", "multiple", "malformed-audience", "digest-invalid"),
+)
+def test_principal_binding_startup_refuses_hostile_binder_audience_state(
+    tenant_target: TenantTarget,
+    tamper_kind: str,
+) -> None:
+    def connection_factory():
+        return _principal_resolver_connection(
+            tenant_target.role_dsn("ofarm_identity_resolver")
+        )
+
+    pristine = PostgreSQLPrincipalBindingResolver(connection_factory)
+    pristine.initialize()
+    original_audience = pristine.audience
+    extra_instance_id = uuid4()
+    with psycopg.connect(
+        tenant_target.target_admin_dsn,
+        autocommit=True,
+    ) as admin:
+        original = admin.execute(
+            """
+            SELECT singleton, instance_id, audience,
+                   contract_digest::pg_catalog.text, database_name,
+                   created_at, row_digest::pg_catalog.text
+              FROM ofarm.tenant_binder_instance
+            """
+        ).fetchone()
+        assert original is not None
+        admin.execute(
+            """
+            ALTER TABLE ofarm.tenant_binder_instance
+            DISABLE TRIGGER tenant_binder_instance_reject_mutation
+            """
+        )
+        try:
+            if tamper_kind == "missing":
+                admin.execute("DELETE FROM ofarm.tenant_binder_instance")
+            elif tamper_kind == "multiple":
+                admin.execute(
+                    """
+                    ALTER TABLE ofarm.tenant_binder_instance
+                    DROP CONSTRAINT tenant_binder_instance_pkey
+                    """
+                )
+                admin.execute(
+                    """
+                    INSERT INTO ofarm.tenant_binder_instance (
+                        singleton, instance_id, audience, contract_digest,
+                        database_name, created_at, row_digest
+                    )
+                    SELECT true,
+                           %s,
+                           'urn:ofarm:tenant-binder:v1:' ||
+                               %s::pg_catalog.text,
+                           %s,
+                           pg_catalog.current_database()::pg_catalog.text,
+                           observed.created_at,
+                           ofarm.compute_tenant_binder_instance_digest(
+                               %s,
+                               'urn:ofarm:tenant-binder:v1:' ||
+                                   %s::pg_catalog.text,
+                               %s,
+                               pg_catalog.current_database()::pg_catalog.text,
+                               observed.created_at
+                           )
+                      FROM (
+                          SELECT pg_catalog.clock_timestamp() AS created_at
+                      ) AS observed
+                    """,
+                    (
+                        extra_instance_id,
+                        extra_instance_id,
+                        original[3],
+                        extra_instance_id,
+                        extra_instance_id,
+                        original[3],
+                    ),
+                )
+            elif tamper_kind == "malformed-audience":
+                admin.execute(
+                    """
+                    ALTER TABLE ofarm.tenant_binder_instance
+                    DROP CONSTRAINT tenant_binder_instance_audience_check,
+                    DROP CONSTRAINT tenant_binder_instance_digest_check
+                    """
+                )
+                admin.execute(
+                    """
+                    UPDATE ofarm.tenant_binder_instance
+                       SET audience = 'https://request.invalid/audience'
+                    """
+                )
+            else:
+                assert tamper_kind == "digest-invalid"
+                admin.execute(
+                    """
+                    ALTER TABLE ofarm.tenant_binder_instance
+                    DROP CONSTRAINT tenant_binder_instance_digest_check
+                    """
+                )
+                admin.execute(
+                    """
+                    UPDATE ofarm.tenant_binder_instance SET row_digest = %s
+                    """,
+                    (SHA256_ZERO,),
+                )
+
+            refused = PostgreSQLPrincipalBindingResolver(connection_factory)
+            with pytest.raises(
+                AuthenticationStartupError,
+                match="principal-binding immutable read path is unavailable",
+            ):
+                refused.initialize()
+            with pytest.raises(
+                AuthenticationStartupError,
+                match="principal-binding resolver is not initialized",
+            ):
+                _ = refused.audience
+        finally:
+            try:
+                if tamper_kind == "missing":
+                    admin.execute(
+                        """
+                        INSERT INTO ofarm.tenant_binder_instance (
+                            singleton, instance_id, audience, contract_digest,
+                            database_name, created_at, row_digest
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        """,
+                        original,
+                    )
+                elif tamper_kind == "multiple":
+                    admin.execute(
+                        """
+                        DELETE FROM ofarm.tenant_binder_instance
+                         WHERE instance_id = %s
+                        """,
+                        (extra_instance_id,),
+                    )
+                    admin.execute(
+                        """
+                        ALTER TABLE ofarm.tenant_binder_instance
+                        ADD CONSTRAINT tenant_binder_instance_pkey
+                        PRIMARY KEY (singleton)
+                        """
+                    )
+                elif tamper_kind == "malformed-audience":
+                    admin.execute(
+                        """
+                        UPDATE ofarm.tenant_binder_instance
+                           SET audience = %s, row_digest = %s
+                        """,
+                        (original[2], original[6]),
+                    )
+                    admin.execute(
+                        """
+                        ALTER TABLE ofarm.tenant_binder_instance
+                        ADD CONSTRAINT tenant_binder_instance_audience_check
+                        CHECK (
+                            audience =
+                                'urn:ofarm:tenant-binder:v1:' ||
+                                instance_id::pg_catalog.text
+                        ),
+                        ADD CONSTRAINT tenant_binder_instance_digest_check
+                        CHECK (
+                            row_digest::pg_catalog.text =
+                            ofarm.compute_tenant_binder_instance_digest(
+                                instance_id,
+                                audience,
+                                contract_digest::pg_catalog.text,
+                                database_name,
+                                created_at
+                            )
+                        )
+                        """
+                    )
+                else:
+                    admin.execute(
+                        """
+                        UPDATE ofarm.tenant_binder_instance
+                           SET row_digest = %s
+                        """,
+                        (original[6],),
+                    )
+                    admin.execute(
+                        """
+                        ALTER TABLE ofarm.tenant_binder_instance
+                        ADD CONSTRAINT tenant_binder_instance_digest_check
+                        CHECK (
+                            row_digest::pg_catalog.text =
+                            ofarm.compute_tenant_binder_instance_digest(
+                                instance_id,
+                                audience,
+                                contract_digest::pg_catalog.text,
+                                database_name,
+                                created_at
+                            )
+                        )
+                        """
+                    )
+            finally:
+                admin.execute(
+                    """
+                    ALTER TABLE ofarm.tenant_binder_instance
+                    ENABLE TRIGGER tenant_binder_instance_reject_mutation
+                    """
+                )
+
+    restored = PostgreSQLPrincipalBindingResolver(connection_factory)
+    restored.initialize()
+    assert restored.audience == original_audience
 
 
 def test_principal_binding_startup_refuses_resolver_owner_without_rls_bypass(
@@ -990,7 +1225,12 @@ def test_principal_binding_resolves_through_dedicated_resolver_credential(
             tenant_target.role_dsn("ofarm_identity_resolver")
         )
     )
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        expected_audience = admin.execute(
+            "SELECT audience FROM ofarm.tenant_binder_instance"
+        ).fetchone()[0]
     resolver.initialize()
+    assert resolver.audience == expected_audience
     resolved = resolver.resolve(
         VerifiedOidcIdentity(
             equality_policy=OIDC_ISSUER_EQUALITY_POLICY,
@@ -6380,7 +6620,7 @@ def test_complete_catalog_fingerprint_refuses_function_constraint_index_policy_a
             assert pristine[0] is True
             assert pristine[2] == 0
             assert pristine[3] == (
-                "sha256:4c0588fa896bda3f76e3b2f547211c372cf87b67697763f39a0beb6c68ce8fb8"
+                "sha256:60accbf4e3fc16669cfc58f142e25000129bdb1f9fff11f6188c69637de4124c"
             )
         finally:
             migrator.rollback()
@@ -7069,7 +7309,7 @@ def test_readiness_observation_is_complete_after_commit(
     assert row[1] == TENANT_CONTEXT_CONTRACT.digest
     assert row[2] == 0
     assert row[3] == (
-        "sha256:4c0588fa896bda3f76e3b2f547211c372cf87b67697763f39a0beb6c68ce8fb8"
+        "sha256:60accbf4e3fc16669cfc58f142e25000129bdb1f9fff11f6188c69637de4124c"
     )
     assert row[5] == TENANT_PROVISIONING_SPEC.digest
     assert row[6] == TENANT_SERVICE.identity
