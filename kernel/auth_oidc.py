@@ -31,6 +31,8 @@ _B64URL_SEGMENT = re.compile(r"^[A-Za-z0-9_-]+$")
 _OIDC_SUBJECT = re.compile(r"^[!-~]{1,255}$")
 _VISIBLE_ASCII = re.compile(r"^[!-~]+$")
 _MAX_JWT_BYTES = 16_384
+_MIN_NUMERIC_DATE = -62_135_596_800
+_MAX_NUMERIC_DATE = 253_402_300_799
 _PRODUCTION_ALGORITHMS = frozenset(
     {
         "RS256",
@@ -165,7 +167,13 @@ def _strict_unverified_token(token: str) -> tuple[dict[str, Any], dict[str, Any]
             object_pairs_hook=_object_without_duplicates,
         )
         _b64url_decode(segments[2])
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+    except (
+        json.JSONDecodeError,
+        UnicodeDecodeError,
+        ValueError,
+        OverflowError,
+        RecursionError,
+    ) as exc:
         raise OidcError(internal_detail="malformed token JSON") from exc
     if type(header) is not dict or type(claims) is not dict:
         raise OidcError(internal_detail="JWT header and claims must be objects")
@@ -178,13 +186,17 @@ def _numeric_date(claims: dict[str, Any], name: str, *, required: bool) -> int |
         if required:
             raise OidcError(internal_detail=f"missing {name}")
         return None
-    if (
-        isinstance(value, bool)
-        or not isinstance(value, (int, float))
-        or not math.isfinite(value)
-    ):
+    if type(value) is int:
+        numeric_date = value
+    elif type(value) is float:
+        if not math.isfinite(value):
+            raise OidcError(internal_detail=f"invalid {name}")
+        numeric_date = int(value)
+    else:
         raise OidcError(internal_detail=f"invalid {name}")
-    return int(value)
+    if not _MIN_NUMERIC_DATE <= numeric_date <= _MAX_NUMERIC_DATE:
+        raise OidcError(internal_detail=f"invalid {name}")
+    return numeric_date
 
 
 def _validate_exact_identity(issuer: object, subject: object) -> tuple[str, str]:
@@ -322,6 +334,7 @@ class ProductionOidcConfig:
     algorithms: tuple[str, ...] = ("RS256",)
     leeway_seconds: int = 0
     jwks_lifespan_seconds: int = 300
+    jwks_miss_refresh_seconds: int = 5
     timeout_seconds: int = 5
 
     def validate(self) -> None:
@@ -365,6 +378,15 @@ class ProductionOidcConfig:
             or not 60 <= self.jwks_lifespan_seconds <= 86_400
         ):
             raise AuthenticationStartupError("production JWKS lifespan is invalid")
+        if (
+            type(self.jwks_miss_refresh_seconds) is not int
+            or not 1
+            <= self.jwks_miss_refresh_seconds
+            <= min(self.jwks_lifespan_seconds, 300)
+        ):
+            raise AuthenticationStartupError(
+                "production JWKS miss refresh interval is invalid"
+            )
         if type(self.timeout_seconds) is not int or not 1 <= self.timeout_seconds <= 30:
             raise AuthenticationStartupError("production JWKS timeout is invalid")
 
@@ -402,6 +424,8 @@ class ProductionOidcVerifier:
         self._jwt: Any | None = None
         self._generation: _ValidatedJwksGeneration | None = None
         self._generation_lock = Lock()
+        self._refresh_lock = Lock()
+        self._last_miss_refresh_at: float | None = None
         self._initialized = False
 
     @property
@@ -410,7 +434,9 @@ class ProductionOidcVerifier:
 
     def initialize(self) -> None:
         self._initialized = False
-        self._generation = None
+        with self._generation_lock:
+            self._generation = None
+            self._last_miss_refresh_at = None
         self.config.validate()
         try:
             import jwt
@@ -428,12 +454,13 @@ class ProductionOidcVerifier:
                 timeout=self.config.timeout_seconds,
             )
         try:
-            with self._generation_lock:
-                self._generation = self._load_generation()
+            generation = self._load_generation()
         except _JwksProviderStateError as exc:
             raise AuthenticationStartupError(
                 "production OIDC JWKS initialization failed"
             ) from exc
+        with self._generation_lock:
+            self._generation = generation
         self._initialized = True
 
     def _load_generation(self) -> _ValidatedJwksGeneration:
@@ -498,20 +525,21 @@ class ProductionOidcVerifier:
         try:
             with self._generation_lock:
                 generation = self._generation
-                refreshed = False
-                if (
-                    generation is None
-                    or self._clock() - generation.loaded_at
-                    >= self.config.jwks_lifespan_seconds
-                ):
-                    generation = self._load_generation()
-                    self._generation = generation
-                    refreshed = True
+            refreshed_for_lifespan = False
+            if (
+                generation is None
+                or self._clock() - generation.loaded_at
+                >= self.config.jwks_lifespan_seconds
+            ):
+                generation = self._refresh_expired_generation()
+                refreshed_for_lifespan = True
+            selected = generation.select(key_id, algorithm)
+            if selected is None and not refreshed_for_lifespan:
+                generation = self._refresh_generation_for_miss(key_id, algorithm)
                 selected = generation.select(key_id, algorithm)
-                if selected is None and not refreshed:
-                    generation = self._load_generation()
-                    self._generation = generation
-                    selected = generation.select(key_id, algorithm)
+            elif selected is None:
+                with self._generation_lock:
+                    self._last_miss_refresh_at = generation.loaded_at
         except _JwksProviderStateError as exc:
             raise OidcError(
                 PreBindingOutcome.VERIFIER_UNAVAILABLE,
@@ -520,6 +548,51 @@ class ProductionOidcVerifier:
         if selected is None:
             raise OidcError(internal_detail="no matching JWKS signing key")
         return selected
+
+    def _refresh_expired_generation(self) -> _ValidatedJwksGeneration:
+        """Single-flight a lifespan refresh without blocking current-key reads."""
+
+        with self._refresh_lock:
+            with self._generation_lock:
+                generation = self._generation
+                if (
+                    generation is not None
+                    and self._clock() - generation.loaded_at
+                    < self.config.jwks_lifespan_seconds
+                ):
+                    return generation
+            refreshed = self._load_generation()
+            with self._generation_lock:
+                self._generation = refreshed
+            return refreshed
+
+    def _refresh_generation_for_miss(
+        self, key_id: str, algorithm: str
+    ) -> _ValidatedJwksGeneration:
+        """Refresh at most once per miss window across all unknown key IDs."""
+
+        with self._refresh_lock:
+            with self._generation_lock:
+                generation = self._generation
+                if generation is None:
+                    raise _JwksProviderStateError("JWKS generation is absent")
+                if generation.select(key_id, algorithm) is not None:
+                    return generation
+                now = self._clock()
+                if (
+                    self._last_miss_refresh_at is not None
+                    and now - self._last_miss_refresh_at
+                    < self.config.jwks_miss_refresh_seconds
+                ):
+                    return generation
+                self._last_miss_refresh_at = now
+            try:
+                refreshed = self._load_generation()
+            except _JwksProviderStateError:
+                return generation
+            with self._generation_lock:
+                self._generation = refreshed
+            return refreshed
 
     def verify_identity(self, token: str) -> VerifiedOidcIdentity:
         if not self._initialized or self._jwt is None or self._jwks_client is None:
@@ -592,6 +665,7 @@ class AuthenticationRuntime:
     verifier: OidcVerifier | None = None
     principal_binding_resolver: PrincipalBindingResolver | None = None
     _initialized: bool = field(default=False, init=False, repr=False)
+    _test_only_resolver_allowed: bool = field(default=False, init=False, repr=False)
 
     @classmethod
     def development(cls) -> "AuthenticationRuntime":
@@ -609,11 +683,29 @@ class AuthenticationRuntime:
         principal_binding_resolver: PrincipalBindingResolver,
     ) -> "AuthenticationRuntime":
         cls._require_production_verifier(verifier)
+        cls._require_production_resolver(principal_binding_resolver)
         return cls(
             AuthenticationMode.PRODUCTION,
             verifier=verifier,
             principal_binding_resolver=principal_binding_resolver,
         )
+
+    @classmethod
+    def production_for_test(
+        cls,
+        verifier: ProductionOidcVerifier,
+        principal_binding_resolver: PrincipalBindingResolver,
+    ) -> "AuthenticationRuntime":
+        """Explicit unit-test seam; application factories never call this."""
+
+        cls._require_production_verifier(verifier)
+        runtime = cls(
+            AuthenticationMode.PRODUCTION,
+            verifier=verifier,
+            principal_binding_resolver=principal_binding_resolver,
+        )
+        runtime._test_only_resolver_allowed = True
+        return runtime
 
     @staticmethod
     def _require_production_verifier(verifier: object) -> None:
@@ -628,6 +720,16 @@ class AuthenticationRuntime:
         if type(verifier) is not OidcConfig:
             raise AuthenticationStartupError(
                 "test mode requires the exact local OidcConfig verifier"
+            )
+
+    @staticmethod
+    def _require_production_resolver(resolver: object) -> None:
+        from .principal_binding import PostgreSQLPrincipalBindingResolver
+
+        if type(resolver) is not PostgreSQLPrincipalBindingResolver:
+            raise AuthenticationStartupError(
+                "production requires the sealed PostgreSQL principal-binding "
+                "resolver; wrapped or mutable resolvers are forbidden"
             )
 
     def initialize(self) -> None:
@@ -647,6 +749,8 @@ class AuthenticationRuntime:
                     "production verifier and principal-binding resolver are required"
                 )
             self._require_production_verifier(self.verifier)
+            if not self._test_only_resolver_allowed:
+                self._require_production_resolver(self.principal_binding_resolver)
             self.verifier.initialize()
             self.principal_binding_resolver.initialize()
         else:

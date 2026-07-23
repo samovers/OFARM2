@@ -12,7 +12,7 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Callable, Protocol
+from typing import Callable, Protocol, final
 from uuid import UUID, uuid4
 
 from deployment.postgresql.tenant_contract import (
@@ -63,6 +63,7 @@ class PrincipalBindingAuthority:
     valid_until: datetime
 
 
+@final
 class PostgreSQLPrincipalBindingResolver:
     """Resolve an exact active version without consulting the projection."""
 

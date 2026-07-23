@@ -5,7 +5,7 @@ import base64
 import re
 import time
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Protocol, final
 from uuid import UUID, uuid4
 
 from cryptography.exceptions import InvalidSignature
@@ -36,6 +36,7 @@ from .principal_binding import PrincipalBindingAuthority
 
 
 _SHA256_ID = re.compile(r"^sha256:[0-9a-f]{64}$")
+_PRODUCTION_SIGNING_EVIDENCE_MAX_AGE_MICROSECONDS = 300_000_000
 
 
 class CapabilityIssuanceError(RuntimeError):
@@ -62,14 +63,20 @@ class GoogleKmsSigningResponse:
     signature_crc32c: int
 
 
-class GoogleKmsRawSigningClient(Protocol):
-    """Narrow adapter over Cloud KMS ``cryptoKeyVersions.asymmetricSign``."""
+def _require_official_google_kms_client(client: object) -> None:
+    """Refuse duck-typed or wrapped software signers at the production boundary."""
 
-    def asymmetric_sign(
-        self, *, name: str, data: bytes, data_crc32c: int
-    ) -> GoogleKmsSigningResponse: ...
+    try:
+        from google.cloud.kms_v1.services.key_management_service.client import (
+            KeyManagementServiceClient,
+        )
+    except ImportError as exc:
+        raise TypeError("Google Cloud KMS client dependency is unavailable") from exc
+    if type(client) is not KeyManagementServiceClient:
+        raise TypeError("production signing requires the exact Google KMS client")
 
 
+@final
 class GoogleCloudKmsClientAdapter:
     """Exact adapter for a Google ``KeyManagementServiceClient`` instance.
 
@@ -79,9 +86,26 @@ class GoogleCloudKmsClientAdapter:
     """
 
     def __init__(self, client: object) -> None:
+        _require_official_google_kms_client(client)
+        self._bind_client(client, production_eligible=True)
+
+    @classmethod
+    def for_test(cls, client: object) -> "GoogleCloudKmsClientAdapter":
+        """Build a visibly non-production adapter for fixture-only tests."""
+
+        adapter = object.__new__(cls)
+        adapter._bind_client(client, production_eligible=False)
+        return adapter
+
+    def _bind_client(self, client: object, *, production_eligible: bool) -> None:
         if not callable(getattr(client, "asymmetric_sign", None)):
             raise TypeError("Google KMS client does not expose asymmetric_sign")
         self._client = client
+        self._production_eligible = production_eligible
+
+    @property
+    def production_eligible(self) -> bool:
+        return self._production_eligible is True
 
     def asymmetric_sign(
         self, *, name: str, data: bytes, data_crc32c: int
@@ -134,13 +158,14 @@ class ProductionSigningEvidence:
     valid_until_unix_microseconds: int
 
 
+@final
 class GoogleKmsEd25519Signer:
     """Sign raw canonical bytes with one pinned EC_SIGN_ED25519 HSM version."""
 
     def __init__(
         self,
         *,
-        client: GoogleKmsRawSigningClient,
+        client: GoogleCloudKmsClientAdapter,
         public_key: GoogleKmsEd25519PublicKey,
         evidence: ProductionSigningEvidence,
         now_microseconds=lambda: time.time_ns() // 1_000,
@@ -163,12 +188,20 @@ class GoogleKmsEd25519Signer:
     def audience(self) -> str:
         return self._evidence.audience
 
+    @property
+    def production_eligible(self) -> bool:
+        return (
+            type(self._client) is GoogleCloudKmsClientAdapter
+            and self._client.production_eligible
+        )
+
     def initialize(self) -> None:
         now = self._now_microseconds()
         evidence = self._evidence
         observation = self._public_key_observation
         if (
-            type(evidence) is not ProductionSigningEvidence
+            type(self._client) is not GoogleCloudKmsClientAdapter
+            or type(evidence) is not ProductionSigningEvidence
             or type(observation) is not GoogleKmsEd25519PublicKey
             or type(now) is not int
         ):
@@ -216,8 +249,13 @@ class GoogleKmsEd25519Signer:
             or type(evidence.observed_at_unix_microseconds) is not int
             or type(evidence.valid_until_unix_microseconds) is not int
             or evidence.observed_at_unix_microseconds > now
+            or now - evidence.observed_at_unix_microseconds
+            > _PRODUCTION_SIGNING_EVIDENCE_MAX_AGE_MICROSECONDS
             or evidence.observed_at_unix_microseconds
             >= evidence.valid_until_unix_microseconds
+            or evidence.valid_until_unix_microseconds
+            - evidence.observed_at_unix_microseconds
+            > _PRODUCTION_SIGNING_EVIDENCE_MAX_AGE_MICROSECONDS
             or now >= evidence.valid_until_unix_microseconds
         ):
             raise CapabilityIssuanceError(
@@ -317,6 +355,27 @@ class ProductionTenantCapabilityIssuer:
         self._lifetime_microseconds = lifetime_microseconds
         self._now_microseconds = now_microseconds
         self._initialized = False
+        self._test_only_signer_allowed = False
+
+    @classmethod
+    def for_test(
+        cls,
+        *,
+        resolver: CapabilityBindingResolver,
+        signer: CapabilitySigner,
+        lifetime_microseconds: int = 30_000_000,
+        now_microseconds=lambda: time.time_ns() // 1_000,
+    ) -> "ProductionTenantCapabilityIssuer":
+        """Explicit fixture seam; production application factories never call it."""
+
+        issuer = cls(
+            resolver=resolver,
+            signer=signer,
+            lifetime_microseconds=lifetime_microseconds,
+            now_microseconds=now_microseconds,
+        )
+        issuer._test_only_signer_allowed = True
+        return issuer
 
     def initialize(self) -> None:
         if (
@@ -329,7 +388,13 @@ class ProductionTenantCapabilityIssuer:
                 PreBindingOutcome.CONFIGURATION_REFUSED,
                 internal_detail="capability lifetime is invalid",
             )
-        if not isinstance(self._signer, GoogleKmsEd25519Signer):
+        if (
+            type(self._signer) is not GoogleKmsEd25519Signer
+            or (
+                not self._test_only_signer_allowed
+                and not self._signer.production_eligible
+            )
+        ):
             raise CapabilityIssuanceError(
                 PreBindingOutcome.CONFIGURATION_REFUSED,
                 internal_detail="production issuer requires the KMS HSM signer",
@@ -455,7 +520,6 @@ __all__ = [
     "CapabilityIssuanceError",
     "GoogleCloudKmsClientAdapter",
     "GoogleKmsEd25519Signer",
-    "GoogleKmsRawSigningClient",
     "GoogleKmsSigningResponse",
     "ProductionSigningEvidence",
     "ProductionTenantCapabilityIssuer",

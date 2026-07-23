@@ -214,6 +214,33 @@ def test_g4_non_finite_numericdate_is_fail_closed_401(store):
     assert client.post("/commit", json={"submission": sub}, headers=_bearer(nbf_nan)).status_code == 401
 
 
+def test_g4_oversized_numericdate_is_fail_closed_401(store):
+    client = _client(store)
+    sub = demo.spray_submission(
+        f"g4-huge-date:{uid()}",
+        erp_id=f"erp:g4.huge-date.{uid()}",
+        actor_ref=demo.FARMER,
+    )
+    token = issue_dev_token(
+        {
+            "sub": demo.FARMER,
+            "iss": ISSUER,
+            "aud": AUDIENCE,
+            "iat": int(time.time()),
+            "exp": 10**400,
+        },
+        secret=SECRET,
+    )
+    response = client.post(
+        "/commit", json={"submission": sub}, headers=_bearer(token)
+    )
+    assert response.status_code == 401
+    assert response.json()["detail"]["reasonCode"] == "AUTHORITY_DENIED"
+    assert "OverflowError" not in response.text
+    with pytest.raises(OidcError):
+        _cfg().verify(token)
+
+
 def test_g4_noncanonical_base64url_segment_rejected_even_if_signed(store):
     # PR #16 hostile B2: compact-JWS segments are UNPADDED base64url. A canonically-
     # PADDED payload segment (non-canonical for JWS) decodes fine on a lenient

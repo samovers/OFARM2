@@ -40,7 +40,6 @@ from kernel.tenant_capability import (
     CapabilityIssuanceError,
     GoogleCloudKmsClientAdapter,
     GoogleKmsEd25519Signer,
-    GoogleKmsSigningResponse,
     ProductionSigningEvidence,
     ProductionTenantCapabilityIssuer,
     TenantChallenge,
@@ -328,7 +327,18 @@ class _FixtureSigner:
         return self.private.sign(data)
 
 
-def _production_signer(private, audience, now_us):
+def _test_adapter(client):
+    return GoogleCloudKmsClientAdapter.for_test(client)
+
+
+def _production_signer(
+    private,
+    audience,
+    now_us,
+    *,
+    observed_at_us=None,
+    valid_until_us=None,
+):
     public = private.public_key().public_bytes_raw()
     resource = (
         "projects/ofarm1/locations/europe-west1/keyRings/auth/"
@@ -356,11 +366,15 @@ def _production_signer(private, audience, now_us):
         iam_evidence_digest=DIGEST_B,
         database_candidate_digest=DIGEST_C,
         database_lifecycle_head_digest=DIGEST_D,
-        observed_at_unix_microseconds=now_us - 1,
-        valid_until_unix_microseconds=now_us + 60_000_000,
+        observed_at_unix_microseconds=(
+            now_us - 1 if observed_at_us is None else observed_at_us
+        ),
+        valid_until_unix_microseconds=(
+            now_us + 60_000_000 if valid_until_us is None else valid_until_us
+        ),
     )
     return GoogleKmsEd25519Signer(
-        client=_KmsClient(private, resource),
+        client=_test_adapter(_KmsClient(private, resource)),
         public_key=observation,
         evidence=evidence,
         now_microseconds=lambda: now_us,
@@ -373,7 +387,7 @@ def test_capability_pins_exact_binding_head_tenant_party_and_challenge():
     now_us = 1_900_000_000_000_000
     private = Ed25519PrivateKey.generate()
     signer = _production_signer(private, audience, now_us)
-    issuer = ProductionTenantCapabilityIssuer(
+    issuer = ProductionTenantCapabilityIssuer.for_test(
         resolver=_CapabilityResolver(authority),
         signer=signer,
         now_microseconds=lambda: now_us,
@@ -411,18 +425,27 @@ class _KmsClient:
         self.resource = resource
         self.calls = []
 
-    def asymmetric_sign(self, *, name, data, data_crc32c):
+    def asymmetric_sign(self, *, request):
+        name = request["name"]
+        data = request["data"]
+        data_crc32c = request["data_crc32c"]
         assert name == self.resource
         assert data_crc32c == _crc32c(data)
         self.calls.append(data)
         signature = self.private.sign(data)
-        return GoogleKmsSigningResponse(
-            key_version_resource=name,
-            protection_level="HSM",
-            verified_data_crc32c=True,
-            signature=signature,
-            signature_crc32c=_crc32c(signature),
-        )
+        return type(
+            "Response",
+            (),
+            {
+                "name": name,
+                "protection_level": type("Protection", (), {"name": "HSM"})(),
+                "verified_data_crc32c": True,
+                "signature": signature,
+                "signature_crc32c": type(
+                    "Checksum", (), {"value": _crc32c(signature)}
+                )(),
+            },
+        )()
 
 
 def test_kms_signer_checks_resource_crc_hsm_and_signature():
@@ -458,7 +481,8 @@ def test_kms_signer_checks_resource_crc_hsm_and_signature():
         observed_at_unix_microseconds=now_us - 1,
         valid_until_unix_microseconds=now_us + 1_000_000,
     )
-    client = _KmsClient(private, resource)
+    raw_client = _KmsClient(private, resource)
+    client = _test_adapter(raw_client)
     signer = GoogleKmsEd25519Signer(
         client=client,
         public_key=observation,
@@ -469,7 +493,7 @@ def test_kms_signer_checks_resource_crc_hsm_and_signature():
     data = b"exact-jws-signing-input"
     signature = signer.sign(data)
     private.public_key().verify(signature, data)
-    assert client.calls == [data]
+    assert raw_client.calls == [data]
 
 
 def test_google_client_adapter_sends_only_raw_data_and_checksum():
@@ -494,7 +518,7 @@ def test_google_client_adapter_sends_only_raw_data_and_checksum():
             return Response()
 
     client = Client()
-    adapter = GoogleCloudKmsClientAdapter(client)
+    adapter = _test_adapter(client)
     result = adapter.asymmetric_sign(name=Response.name, data=b"raw", data_crc32c=7)
     assert client.request == {"name": Response.name, "data": b"raw", "data_crc32c": 7}
     assert "digest" not in client.request
@@ -505,7 +529,7 @@ def test_capability_wrong_audience_and_stale_signer_refuse_safely():
     authority = _authority()
     audience = derive_binder_audience(uuid4())
     now_us = 1_900_000_000_000_000
-    issuer = ProductionTenantCapabilityIssuer(
+    issuer = ProductionTenantCapabilityIssuer.for_test(
         resolver=_CapabilityResolver(authority),
         signer=_production_signer(Ed25519PrivateKey.generate(), audience, now_us),
         now_microseconds=lambda: now_us,
@@ -526,3 +550,97 @@ def test_production_issuer_rejects_local_fixture_signer():
     with pytest.raises(CapabilityIssuanceError) as raised:
         issuer.initialize()
     assert raised.value.outcome is PreBindingOutcome.CONFIGURATION_REFUSED
+
+
+def test_production_issuer_rejects_local_key_signer_subclass():
+    class LocalSignerSubclass(GoogleKmsEd25519Signer):
+        def __init__(self, private, audience):
+            self.private = private
+            self._audience = audience
+
+        @property
+        def key_id(self):
+            return "local-key"
+
+        @property
+        def public_key(self):
+            return self.private.public_key().public_bytes_raw()
+
+        @property
+        def audience(self):
+            return self._audience
+
+        def initialize(self):
+            pass
+
+        def sign(self, data):
+            return self.private.sign(data)
+
+    issuer = ProductionTenantCapabilityIssuer(
+        resolver=_CapabilityResolver(_authority()),
+        signer=LocalSignerSubclass(
+            Ed25519PrivateKey.generate(), derive_binder_audience(uuid4())
+        ),
+    )
+    with pytest.raises(CapabilityIssuanceError) as raised:
+        issuer.initialize()
+    assert raised.value.outcome is PreBindingOutcome.CONFIGURATION_REFUSED
+
+
+def test_google_adapter_rejects_duck_typed_software_signer():
+    private = Ed25519PrivateKey.generate()
+    resource = (
+        "projects/ofarm1/locations/europe-west1/keyRings/auth/"
+        "cryptoKeys/capability/cryptoKeyVersions/1"
+    )
+    with pytest.raises(TypeError, match="Google Cloud KMS|exact Google KMS"):
+        GoogleCloudKmsClientAdapter(_KmsClient(private, resource))
+
+
+def test_concrete_kms_signer_rejects_non_google_client():
+    private = Ed25519PrivateKey.generate()
+    now_us = 1_900_000_000_000_000
+    prepared = _production_signer(
+        private, derive_binder_audience(uuid4()), now_us
+    )
+    issuer = ProductionTenantCapabilityIssuer(
+        resolver=_CapabilityResolver(_authority()),
+        signer=prepared,
+        now_microseconds=lambda: now_us,
+    )
+    with pytest.raises(CapabilityIssuanceError) as issuer_error:
+        issuer.initialize()
+    assert issuer_error.value.outcome is PreBindingOutcome.CONFIGURATION_REFUSED
+
+    unsafe = GoogleKmsEd25519Signer(
+        client=_KmsClient(private, prepared._evidence.key_version_resource),
+        public_key=prepared._public_key_observation,
+        evidence=prepared._evidence,
+        now_microseconds=lambda: now_us,
+    )
+    with pytest.raises(CapabilityIssuanceError) as raised:
+        unsafe.initialize()
+    assert raised.value.outcome is PreBindingOutcome.SIGNER_UNAVAILABLE
+
+
+@pytest.mark.parametrize(
+    ("observed_offset", "valid_offset"),
+    (
+        (-300_000_001, 1),
+        (0, 300_000_001),
+    ),
+)
+def test_production_signer_rejects_unbounded_observer_evidence(
+    observed_offset, valid_offset
+):
+    now_us = 1_900_000_000_000_000
+    signer = _production_signer(
+        Ed25519PrivateKey.generate(),
+        derive_binder_audience(uuid4()),
+        now_us,
+        observed_at_us=now_us + observed_offset,
+        valid_until_us=now_us + valid_offset,
+    )
+    with pytest.raises(CapabilityIssuanceError) as raised:
+        signer.initialize()
+    assert raised.value.outcome is PreBindingOutcome.SIGNER_UNAVAILABLE

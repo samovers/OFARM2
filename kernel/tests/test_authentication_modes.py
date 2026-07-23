@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from threading import Event
 
 import jwt
 import pytest
@@ -20,6 +22,7 @@ from kernel.auth_oidc import (
     ProductionOidcConfig,
     ProductionOidcVerifier,
 )
+from kernel.principal_binding import PostgreSQLPrincipalBindingResolver
 
 
 ISSUER = "https://issuer.example.test/tenant"
@@ -82,6 +85,7 @@ def _production_verifier(
     client=None,
     clock=None,
     jwks_lifespan_seconds=300,
+    jwks_miss_refresh_seconds=5,
 ):
     _, public = rsa_keys
     selected = client or _JwksClient([_SigningKey("key-1", "RS256", public)])
@@ -92,6 +96,7 @@ def _production_verifier(
             jwks_url=JWKS_URL,
             algorithms=("RS256",),
             jwks_lifespan_seconds=jwks_lifespan_seconds,
+            jwks_miss_refresh_seconds=jwks_miss_refresh_seconds,
         ),
         jwks_client=selected,
         clock=clock,
@@ -148,7 +153,7 @@ def test_environment_modes_are_exact_and_production_forbids_hs256(monkeypatch):
 
 def test_production_startup_requires_initialized_jwks_and_binding_resolver(rsa_keys):
     unavailable = _JwksClient([], unavailable=True)
-    runtime = AuthenticationRuntime.production(
+    runtime = AuthenticationRuntime.production_for_test(
         _production_verifier(rsa_keys, client=unavailable), _Resolver()
     )
     with pytest.raises(AuthenticationStartupError, match="JWKS initialization failed"):
@@ -186,6 +191,30 @@ def test_wrapped_hs256_verifier_is_rejected_at_production_construction():
 
     with pytest.raises(AuthenticationStartupError, match="wrapped verifiers"):
         AuthenticationRuntime.production(WrappedVerifier(), _Resolver())
+
+
+def test_wrapped_or_mutable_binding_resolver_is_rejected_by_production(
+    rsa_keys, monkeypatch
+):
+    verifier = _production_verifier(rsa_keys)
+    with pytest.raises(AuthenticationStartupError, match="sealed PostgreSQL"):
+        AuthenticationRuntime.production(verifier, _Resolver())
+    with pytest.raises(AuthenticationStartupError, match="sealed PostgreSQL"):
+        AuthenticationRuntime(
+            AuthenticationMode.PRODUCTION,
+            verifier=verifier,
+            principal_binding_resolver=_Resolver(),
+        ).initialize()
+    monkeypatch.setenv("OFARM_AUTH_MODE", "production")
+    monkeypatch.setenv("OFARM_OIDC_ISSUER", ISSUER)
+    monkeypatch.setenv("OFARM_OIDC_AUDIENCE", AUDIENCE)
+    monkeypatch.setenv("OFARM_OIDC_JWKS_URL", JWKS_URL)
+    monkeypatch.delenv("OFARM_OIDC_HS256_SECRET", raising=False)
+    with pytest.raises(AuthenticationStartupError, match="sealed PostgreSQL"):
+        config.authentication_runtime_from_env(principal_binding_resolver=_Resolver())
+    sealed = PostgreSQLPrincipalBindingResolver(lambda: None)
+    runtime = AuthenticationRuntime.production(verifier, sealed)
+    assert runtime.principal_binding_resolver is sealed
 
 
 def test_legacy_oidc_argument_rejects_a_production_verifier(rsa_keys):
@@ -253,6 +282,77 @@ def test_maintained_verifier_accepts_a_new_key_id_after_jwks_rotation(rsa_keys):
         headers={"kid": "key-2"},
     )
     assert verifier.verify_identity(rotated).subject == "subject-02"
+
+
+def test_unknown_key_ids_share_one_bounded_jwks_miss_refresh(rsa_keys):
+    private, public = rsa_keys
+    now = [1_000.0]
+    client = _JwksClient([_SigningKey("key-1", "RS256", public)])
+    verifier = _production_verifier(
+        rsa_keys,
+        client=client,
+        clock=lambda: now[0],
+        jwks_miss_refresh_seconds=5,
+    )
+    verifier.initialize()
+
+    for index in range(10):
+        with pytest.raises(OidcError) as raised:
+            verifier.verify_identity(
+                _signed_token(private, key_id=f"attacker-key-{index}")
+            )
+        assert raised.value.outcome is PreBindingOutcome.INVALID_CREDENTIAL
+    assert client.refreshes == [True, True]
+
+    now[0] += 5
+    with pytest.raises(OidcError):
+        verifier.verify_identity(_signed_token(private, key_id="next-window"))
+    assert client.refreshes == [True, True, True]
+
+
+def test_failed_jwks_miss_refresh_keeps_unknown_keys_invalid_and_bounded(rsa_keys):
+    private, public = rsa_keys
+    client = _JwksClient([_SigningKey("key-1", "RS256", public)])
+    verifier = _production_verifier(rsa_keys, client=client, clock=lambda: 1_000.0)
+    verifier.initialize()
+    client.unavailable = True
+
+    for key_id in ("attacker-key-1", "attacker-key-2"):
+        with pytest.raises(OidcError) as raised:
+            verifier.verify_identity(_signed_token(private, key_id=key_id))
+        assert raised.value.outcome is PreBindingOutcome.INVALID_CREDENTIAL
+    assert client.refreshes == [True, True]
+
+
+def test_jwks_miss_refresh_does_not_lock_current_key_verification(rsa_keys):
+    private, public = rsa_keys
+    refresh_started = Event()
+    release_refresh = Event()
+
+    class BlockingRefreshClient(_JwksClient):
+        def get_jwk_set(self, *, refresh: bool):
+            if self.refreshes:
+                refresh_started.set()
+                if not release_refresh.wait(timeout=2):
+                    raise RuntimeError("test refresh was not released")
+            return super().get_jwk_set(refresh=refresh)
+
+    client = BlockingRefreshClient([_SigningKey("key-1", "RS256", public)])
+    verifier = _production_verifier(rsa_keys, client=client)
+    verifier.initialize()
+    valid = _signed_token(private)
+    unknown = _signed_token(private, key_id="attacker-key")
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        hostile_result = executor.submit(verifier.verify_identity, unknown)
+        assert refresh_started.wait(timeout=1)
+        valid_result = executor.submit(verifier.verify_identity, valid)
+        try:
+            assert valid_result.result(timeout=1).subject == "subject-01"
+        finally:
+            release_refresh.set()
+        with pytest.raises(OidcError):
+            hostile_result.result(timeout=1)
 
 
 def test_removed_used_key_expires_with_the_bounded_jwks_generation(rsa_keys):
@@ -403,9 +503,20 @@ def test_key_id_algorithm_time_and_provider_failures_are_closed(rsa_keys):
             verifier.verify_identity(token)
 
 
+def test_oversized_numeric_date_refuses_before_key_selection(rsa_keys):
+    verifier = _production_verifier(rsa_keys)
+    verifier.initialize()
+    with pytest.raises(OidcError) as raised:
+        verifier.verify_identity(_token(rsa_keys, exp=10**400))
+    assert raised.value.outcome is PreBindingOutcome.INVALID_CREDENTIAL
+    assert verifier._jwks_client.refreshes == [True]
+
+
 def test_production_runtime_uses_binding_not_subject_as_party(rsa_keys):
     resolver = _Resolver()
-    runtime = AuthenticationRuntime.production(_production_verifier(rsa_keys), resolver)
+    runtime = AuthenticationRuntime.production_for_test(
+        _production_verifier(rsa_keys), resolver
+    )
     runtime.initialize()
     party_ref, binding = runtime.resolve_principal(
         authorization=f"Bearer {_token(rsa_keys)}",

@@ -24,8 +24,11 @@ fresh JWKS at startup and caches one validated key-set generation for a bounded
 interval. It never enables PyJWT's unbounded per-key cache. Each refresh rejects
 duplicate usable `(kid, alg)` identities and keys not eligible for signature
 verification before atomically replacing the generation. Token `alg` and `kid`
-must select one exact usable key. Missing configuration, JWKS outage, an empty
-or unsuitable key set, or an unavailable binding resolver stops startup.
+must select one exact usable key. A miss can start only one provider refresh per
+`OFARM_OIDC_JWKS_MISS_REFRESH_SECONDS` window, which defaults to five seconds;
+other misses share that result and current-key verification does not wait on the
+provider call. Missing configuration, JWKS outage, an empty or unsuitable key
+set, or an unavailable binding resolver stops startup.
 
 ## Exact principal policy
 
@@ -35,12 +38,17 @@ trimmed, case-folded, Unicode-normalized, URI-normalized, or rewritten. The
 issuer and subject must satisfy the byte grammar and bounds frozen for
 `OIDC_EXACT_UTF8_V1`. Duplicate JSON members, noncanonical compact-JWS segments,
 unsupported critical or key-directing JOSE headers, and non-finite NumericDate
-values refuse.
+values refuse. NumericDate integers and floats are bounded to the representable
+UTC year-9999 range before key selection, so arbitrary-precision JSON integers
+cannot escape the safe credential-refusal path.
 
 Test mode maps `sub` directly to the test Store Party. Production does not.
 Production resolves the exact `(equality policy, issuer, subject)` through
 `fold_principal_binding_authority`, then reads only the immutable binding version
 named by that authoritative fold. It does not use `principal_binding_current`.
+Production construction requires the exact sealed
+`PostgreSQLPrincipalBindingResolver`; protocol fakes and wrappers are available
+only through the explicit unit-test runtime factory.
 The active version must pin the immutable tenant registration and ACTIVE
 `ofarm.party.v0.1` identity, schema, and payload digests. Missing, inactive,
 expired, ambiguous, or digest-inconsistent state refuses.
@@ -65,12 +73,15 @@ seconds.
 
 The production signer accepts one pinned Google Cloud KMS HSM
 `EC_SIGN_ED25519` key version and fresh startup evidence. Raw private key
-material is never accepted. It sends the exact JWS Signing Input through KMS's
-raw `data` field with CRC32C, checks response resource identity, HSM protection,
-request-checksum acknowledgement, signature checksum, and then independently
-verifies the returned Ed25519 signature before serializing the token. Stale or
-inconsistent KMS, IAM, attestation, database-key, or lifecycle evidence disables
-signing without a cached-authority fallback.
+material and duck-typed signing clients are never accepted: construction
+requires the exact maintained Google Cloud KMS client behind the sealed adapter.
+It sends the exact JWS Signing Input through KMS's raw `data` field with CRC32C,
+checks response resource identity, HSM protection, request-checksum
+acknowledgement, signature checksum, and then independently verifies the
+returned Ed25519 signature before serializing the token. Observer evidence is
+valid for no more than five minutes. Stale or inconsistent KMS, IAM,
+attestation, database-key, or lifecycle evidence disables signing without a
+cached-authority fallback.
 
 ## Safe closed outcomes
 

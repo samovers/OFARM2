@@ -172,6 +172,9 @@ def authentication_runtime_from_env(*, principal_binding_resolver=None):
             jwks_lifespan_seconds=_bounded_environment_int(
                 "OFARM_OIDC_JWKS_LIFESPAN_SECONDS", 300
             ),
+            jwks_miss_refresh_seconds=_bounded_environment_int(
+                "OFARM_OIDC_JWKS_MISS_REFRESH_SECONDS", 5
+            ),
             timeout_seconds=_bounded_environment_int(
                 "OFARM_OIDC_JWKS_TIMEOUT_SECONDS", 5
             ),
