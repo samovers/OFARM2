@@ -19,7 +19,7 @@ import uuid
 from fastapi.testclient import TestClient
 
 from kernel import context, demo
-from kernel.api import create_app
+from kernel.api import create_test_app
 
 
 def uid():
@@ -29,7 +29,7 @@ def uid():
 def _client(store):
     # shim mode: the X-Acting-Party header is the transport principal (the
     # binding contract is identical to OIDC — UNSUPPORTED_SURFACES.md)
-    return TestClient(create_app(store, oidc=None))
+    return TestClient(create_test_app(store, oidc=None))
 
 
 def _hdr(party):

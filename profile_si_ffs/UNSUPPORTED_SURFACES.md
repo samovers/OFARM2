@@ -82,23 +82,29 @@ ActiveArtifactSet's reference snapshots and the ContextSnapshot's
 `referenceSnapshotRefs`. Its import surface is still declared (mechanism), and
 its evidence attaches to Equipment identities per the sticker composite key (P3).
 
-**API authentication posture (M2 G4, declared):** the HTTP surface remains a
-**conformance/development surface, not a production-authenticated runtime**.
+**API authentication posture (M1 #172, declared):** the legacy HTTP surface
+remains a **conformance/development surface, not a production-authenticated
+runtime** until #173 supplies the tenant UnitOfWork integration.
 The transport principal is derived by `get_principal` and bound to the
 submitted/acting party — a mismatch is refused (`ACTOR_BINDING_UNRESOLVED`) and
 an absent principal is a default-deny (`401`), so body-level actor spoofing is
-denied. Two principal sources:
-- **OIDC (configured)** — a verified bearer token yields the Party principal.
-  G4 ships a **zero-dependency HS256 verifier** for this development/conformance
-  path (fail-closed: enforces issuer/audience/exp/nbf, rejects `alg=none`,
-  non-HS256, malformed, missing-claim and bad-signature tokens, constant-time
-  compare). **Production RS256 / JWKS (Keycloak per PLATFORM.md) verification is
-  NOT implemented** — it is a deliberate `NotImplemented` verifier path
-  (`kernel/auth_oidc.py`), and the verifier **never silently falls back** from
-  RS256 to HS256. HS256-here is a posture/binding stand-in, never a claim of
-  production Keycloak support; no PyJWT/jose/cryptography dependency is added.
-- **`X-Acting-Party` header (OIDC disabled)** — the development/conformance shim;
-  the header is **not authentication**, but the binding contract is identical.
+denied. `OFARM_AUTH_MODE` is mandatory and has three exact values; missing OIDC
+settings never select a fallback:
+
+- **`development`** — permits only the `X-Acting-Party` development shim. The
+  header is not production authentication.
+- **`test`** — permits only the local HS256 fixture issuer used by engineering
+  tests. It is structurally rejected by production mode.
+- **`production`** — requires the maintained PyJWT asymmetric/JWKS verifier to
+  initialize and requires an immutable principal-binding resolver. It validates
+  exact issuer, audience, configured asymmetric algorithm, `exp`/`nbf`, and
+  keyed JWKS rotation. The verified issuer/subject are carried under
+  `OIDC_EXACT_UTF8_V1`; no trimming, case folding, Unicode normalization, or URI
+  rewriting is performed. Startup or request verification failure stays closed.
+
+Production TenantCapability minting and the HSM signer boundary exist as the
+#172 application component, but that does not make this legacy Store-backed API
+a production tenant runtime; #173 owns transaction/pool/binder integration.
 
 Roles in a token map to `RoleAssignment` only and **never** synthesize a grant —
 authority still comes solely from AuthorityGrant / DelegationGrant / SharingGrant

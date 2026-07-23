@@ -1,13 +1,13 @@
 """M2 G4 — OIDC principal binding over the HTTP surface.
 
 Engineering tests, NOT part of the named conformance suite. They pin the OIDC
-principal-derivation: a VERIFIED bearer token yields the Party transport
-principal (replacing the X-Acting-Party dev header), the actor-binding contract
-and default-deny are preserved, and authority is unchanged — a role claim alone
-never authorizes (authority still comes only from grants, D4). The verifier is
-the explicit zero-dependency HS256 test path; the maintained RS256/JWKS
-production verifier is exercised separately and there is no silent fallback.
-All identifiers are fictional.
+principal-derivation in explicit test mode: a VERIFIED local bearer token yields
+the Party transport principal, the actor-binding contract and default-deny are
+preserved, and authority is unchanged — a role claim alone never authorizes.
+The verifier is the explicit zero-dependency HS256 test path; the maintained
+RS256/JWKS production verifier is exercised separately by
+test_authentication_modes.py and there is no silent fallback. All identifiers
+are fictional.
 """
 from __future__ import annotations
 
@@ -22,8 +22,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from kernel import demo
-from kernel.api import create_app
-from kernel.auth_oidc import OidcConfig, OidcError, issue_dev_token
+from kernel.api import create_app, create_test_app
+from kernel.auth_oidc import (
+    AuthenticationStartupError,
+    OidcConfig,
+    OidcError,
+    issue_dev_token,
+)
 
 ISSUER = "https://keycloak.example/realms/ofarm-dev"
 AUDIENCE = "ofarm2-kernel"
@@ -42,7 +47,9 @@ def _cfg(**over):
 
 
 def _client(store, cfg=None):
-    return TestClient(create_app(store, oidc=cfg if cfg is not None else _cfg()))
+    return TestClient(
+        create_test_app(store, oidc=cfg if cfg is not None else _cfg())
+    )
 
 
 def _token(sub, *, secret=SECRET, iss=ISSUER, aud=AUDIENCE, exp_delta=3600,
@@ -157,19 +164,15 @@ def test_g4_invalid_tokens_denied(store):
                            secret=SECRET))                        # no sub
 
 
-def test_g4_local_hs256_config_refuses_rs256_without_fallback(store):
+def test_g4_test_verifier_cannot_select_rs256_or_fallback(store):
     # The local fixture verifier cannot become a production verifier by changing
     # an algorithm string, and never falls back to HS256.
     cfg = _cfg(algorithm="RS256")
-    client = _client(store, cfg)
-    sub = demo.spray_submission("g4-rs256-1", erp_id="erp:g4.rs", actor_ref=demo.FARMER)
-    r = client.post("/commit", json={"submission": sub}, headers=_bearer(_token(demo.FARMER)))
-    assert r.status_code == 401
-    try:
+    with pytest.raises(AuthenticationStartupError, match="HS256"):
+        create_test_app(store, oidc=cfg)
+    with pytest.raises(OidcError) as raised:
         cfg.verify(_token(demo.FARMER))
-        assert False, "RS256 verify must raise"
-    except OidcError as exc:
-        assert exc.internal_detail == "test algorithm differs"
+    assert raised.value.internal_detail == "test algorithm differs"
 
 
 # ---------------------------------------------------------------------------
@@ -177,7 +180,7 @@ def test_g4_local_hs256_config_refuses_rs256_without_fallback(store):
 # ---------------------------------------------------------------------------
 
 def test_g4_shim_mode_uses_x_acting_party_when_oidc_disabled(store):
-    client = TestClient(create_app(store, oidc=None))   # forced shim
+    client = TestClient(create_test_app(store, oidc=None))   # forced shim
     sub = demo.spray_submission("g4-shim-1", erp_id="erp:g4.shim", actor_ref=demo.FARMER)
     bound = client.post("/commit", json={"submission": sub}, headers={"x-acting-party": demo.FARMER})
     assert bound.status_code == 200 and bound.json()["decisionOutcome"]
@@ -213,6 +216,33 @@ def test_g4_non_finite_numericdate_is_fail_closed_401(store):
     nbf_nan = issue_dev_token({"sub": demo.FARMER, "iss": ISSUER, "aud": AUDIENCE,
                                "exp": now + 3600, "nbf": float("nan")}, secret=SECRET)
     assert client.post("/commit", json={"submission": sub}, headers=_bearer(nbf_nan)).status_code == 401
+
+
+def test_g4_oversized_numericdate_is_fail_closed_401(store):
+    client = _client(store)
+    sub = demo.spray_submission(
+        f"g4-huge-date:{uid()}",
+        erp_id=f"erp:g4.huge-date.{uid()}",
+        actor_ref=demo.FARMER,
+    )
+    token = issue_dev_token(
+        {
+            "sub": demo.FARMER,
+            "iss": ISSUER,
+            "aud": AUDIENCE,
+            "iat": int(time.time()),
+            "exp": 10**400,
+        },
+        secret=SECRET,
+    )
+    response = client.post(
+        "/commit", json={"submission": sub}, headers=_bearer(token)
+    )
+    assert response.status_code == 401
+    assert response.json()["detail"]["reasonCode"] == "AUTHORITY_DENIED"
+    assert "OverflowError" not in response.text
+    with pytest.raises(OidcError):
+        _cfg().verify(token)
 
 
 def test_g4_noncanonical_base64url_segment_rejected_even_if_signed(store):
@@ -270,10 +300,9 @@ def test_g4_critical_jose_headers_rejected_even_if_signed(store):
             _cfg().verify(tok)
 
 
-def test_g4_from_env_default_reads_oidc_config_deterministically(store, monkeypatch):
-    # PR #16 hostile B2: create_app(store) (default _FROM_ENV) reads OIDC from the
-    # environment — with OFARM_OIDC_* set it enables OIDC, cleared it is the shim.
-    # (Conformance shim tests force oidc=None, so they are deterministic regardless.)
+def test_g4_from_env_requires_an_explicit_mode(store, monkeypatch):
+    # No issuer/audience combination selects a mode. The exact mode variable does.
+    monkeypatch.setenv("OFARM_AUTH_MODE", "test")
     monkeypatch.setenv("OFARM_OIDC_ISSUER", ISSUER)
     monkeypatch.setenv("OFARM_OIDC_AUDIENCE", AUDIENCE)
     monkeypatch.setenv("OFARM_OIDC_HS256_SECRET", SECRET)
@@ -284,9 +313,8 @@ def test_g4_from_env_default_reads_oidc_config_deterministically(store, monkeypa
                         headers={"x-acting-party": demo.FARMER}).status_code == 401  # header != auth
     assert enabled.post("/commit", json={"submission": sub},
                         headers=_bearer(_token(demo.FARMER))).status_code == 200
-    monkeypatch.delenv("OFARM_OIDC_ISSUER")
-    monkeypatch.delenv("OFARM_OIDC_AUDIENCE")
-    shim = TestClient(create_app(store))      # _FROM_ENV -> no issuer/aud -> shim
+    monkeypatch.setenv("OFARM_AUTH_MODE", "development")
+    shim = TestClient(create_app(store))
     sub2 = demo.spray_submission(f"g4-env2:{uid()}", erp_id=f"erp:g4.env2.{uid()}", actor_ref=demo.FARMER)
     assert shim.post("/commit", json={"submission": sub2},
                      headers={"x-acting-party": demo.FARMER}).status_code == 200
@@ -304,5 +332,5 @@ def test_g4_unrecorded_token_subject_is_not_a_principal(store):
     ok = client.get(f"/records/{rec_id}", headers=_bearer(_token(demo.FARMER)))
     assert ok.status_code != 401, "a recorded active party is a valid principal"
     # and an inactive/unknown party in shim mode is likewise not a principal
-    shim = TestClient(create_app(store, oidc=None))
+    shim = TestClient(create_test_app(store, oidc=None))
     assert shim.get(f"/records/{rec_id}", headers={"x-acting-party": "party:ghost"}).status_code == 401

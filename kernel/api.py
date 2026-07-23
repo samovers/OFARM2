@@ -26,9 +26,8 @@ from .runtime_bundle import RuntimeBundleBuilder, RuntimeComponentRole
 from .store import Store
 from .views import OutputGenerator
 
-# create_app default: resolve the OIDC verifier from the environment (the uvicorn
-# --factory entrypoint takes no args). Pass oidc=None to FORCE the development/
-# conformance X-Acting-Party shim; pass an OidcConfig to verify tokens.
+# The production factory resolves one explicit authentication mode from the
+# environment. Authentication fixtures are accepted only by create_test_app().
 _FROM_ENV = object()
 
 
@@ -65,9 +64,79 @@ class ReviewAcceptBody(BaseModel):
 def create_app(
     store: Store | None = None,
     *,
+    authentication=_FROM_ENV,
+    principal_binding_resolver=None,
+    deployment_image_digest=_FROM_ENV,
+) -> FastAPI:
+    if authentication is not _FROM_ENV:
+        if type(authentication) is not auth_oidc.ProductionAuthenticationRuntime:
+            raise auth_oidc.AuthenticationStartupError(
+                "create_app accepts only the exact production authentication "
+                "runtime; use create_test_app for authentication fixtures"
+            )
+        authentication_runtime = authentication
+    else:
+        authentication_runtime = config.authentication_runtime_from_env(
+            principal_binding_resolver=principal_binding_resolver
+        )
+    return _create_app_with_runtime(
+        store,
+        authentication_runtime=authentication_runtime,
+        deployment_image_digest=deployment_image_digest,
+    )
+
+
+def create_test_app(
+    store: Store | None = None,
+    *,
+    authentication=_FROM_ENV,
     oidc=_FROM_ENV,
     deployment_image_digest=_FROM_ENV,
 ) -> FastAPI:
+    """Build an application with explicit test-only authentication fixtures."""
+
+    if authentication is not _FROM_ENV and oidc is not _FROM_ENV:
+        raise auth_oidc.AuthenticationStartupError(
+            "authentication and oidc test settings cannot both be supplied"
+        )
+    if authentication is not _FROM_ENV:
+        if type(authentication) not in (
+            auth_oidc.DevelopmentAuthenticationRuntime,
+            auth_oidc.TestAuthenticationRuntime,
+            auth_oidc.ProductionAuthenticationRuntime,
+        ):
+            raise auth_oidc.AuthenticationStartupError(
+                "test authentication runtime has the wrong type"
+            )
+        authentication_runtime = authentication
+    elif oidc is not _FROM_ENV:
+        if oidc is None:
+            authentication_runtime = auth_oidc.AuthenticationRuntime.development()
+        elif type(oidc) is auth_oidc.OidcConfig:
+            authentication_runtime = auth_oidc.AuthenticationRuntime.test(oidc)
+        else:
+            raise auth_oidc.AuthenticationStartupError(
+                "oidc compatibility setting accepts only exact OidcConfig or None"
+            )
+    else:
+        raise auth_oidc.AuthenticationStartupError(
+            "create_test_app requires explicit authentication or oidc test settings"
+        )
+    return _create_app_with_runtime(
+        store,
+        authentication_runtime=authentication_runtime,
+        deployment_image_digest=deployment_image_digest,
+    )
+
+
+def _create_app_with_runtime(
+    store: Store | None,
+    *,
+    authentication_runtime: auth_oidc.AuthenticationRuntime,
+    deployment_image_digest,
+) -> FastAPI:
+    authentication_runtime.initialize()
+
     selected_image_digest = (
         deployment_image_digest_from_env()
         if deployment_image_digest is _FROM_ENV
@@ -107,7 +176,10 @@ def create_app(
         app.state.store, active_descriptor=app.state.store.active_descriptor)
     app.state.outputs = OutputGenerator(
         app.state.store, active_descriptor=app.state.store.active_descriptor)
-    app.state.oidc = config.oidc_config_from_env() if oidc is _FROM_ENV else oidc
+    app.state.authentication = authentication_runtime
+    # Compatibility observation only; request authentication uses the explicit
+    # runtime above and never infers a mode from this value.
+    app.state.oidc = authentication_runtime.verifier
 
     @app.middleware("http")
     async def runtime_bundle_receipt_header(request, call_next):
@@ -122,37 +194,31 @@ def create_app(
 
     def get_principal(authorization: str | None = Header(None),
                       x_acting_party: str | None = Header(None)) -> str:
-        """The transport principal (a recorded, ACTIVE Party ref). With OIDC
-        configured (M2 G4) it comes ONLY from a verified bearer token; otherwise the
-        development/conformance X-Acting-Party header IS the principal (NOT production
-        auth — profile_si_ffs/UNSUPPORTED_SURFACES.md). Either way the binding
-        contract is identical, an absent/invalid principal is a default-deny refusal,
-        and the principal must resolve to a recorded active Party — an issuer subject
-        that is not a known active party never becomes a principal (no public-artifact
-        read by an arbitrary token subject, PR #16 hostile B3)."""
-        oidc_cfg = app.state.oidc
-        if oidc_cfg is None:
-            if not x_acting_party:
-                _deny("No transport principal",
-                      "no X-Acting-Party principal presented; default deny",
-                      "problem:api-no-principal")
-            principal = x_acting_party
-        else:
-            if not authorization or not authorization.lower().startswith("bearer "):
-                _deny("No bearer token",
-                      "no Authorization: Bearer token presented; default deny (the "
-                      "X-Acting-Party header does not authenticate when OIDC is enabled)",
-                      "problem:api-no-token")
-            try:
-                principal = app.state.oidc.verify(authorization.split(" ", 1)[1].strip())["partyRef"]
-            except auth_oidc.OidcError as exc:
-                _deny("Token verification failed", str(exc), "problem:api-token-invalid")
-        rec = app.state.store.get_record(principal)
-        if (rec is None or rec["record_kind"] != "ofarm.party.v0.1"
-                or rec["payload"].get("partyState") != "ACTIVE"):
-            _deny("Principal is not an active Party",
-                  f"the transport principal {principal} is not a recorded active Party; "
-                  "default deny", "problem:api-principal-not-party")
+        """Resolve one transport principal under the selected explicit mode."""
+        try:
+            principal, binding = app.state.authentication.resolve_principal(
+                authorization=authorization,
+                development_header=x_acting_party,
+            )
+        except auth_oidc.OidcError as exc:
+            _deny(
+                "Authentication refused",
+                f"authentication failed closed ({exc.outcome.value})",
+                "problem:api-authentication-refused",
+            )
+        if app.state.authentication.mode is not auth_oidc.AuthenticationMode.PRODUCTION:
+            rec = app.state.store.get_record(principal)
+            if (rec is None or rec["record_kind"] != "ofarm.party.v0.1"
+                    or rec["payload"].get("partyState") != "ACTIVE"):
+                _deny("Principal is not an active Party",
+                      "the transport principal is not a recorded active Party; "
+                      "default deny", "problem:api-principal-not-party")
+        elif binding is None:
+            _deny(
+                "Authentication refused",
+                "production principal binding is absent; default deny",
+                "problem:api-authentication-refused",
+            )
         return principal
 
     app.state.get_principal = get_principal
@@ -170,9 +236,9 @@ def create_app(
         # The transport principal binds to the submitted actor BEFORE the
         # pipeline runs: a body-supplied actingPartyRef is never trusted on its
         # own (hostile review blocker 1). The principal is the OIDC-verified Party
-        # when OIDC is configured (M2 G4), else the development/conformance
-        # X-Acting-Party header (UNSUPPORTED_SURFACES.md) — the binding contract is
-        # identical: the gate's actor is the transport's actor, or it is refused.
+        # in production, the explicit test issuer in test mode, or the explicit
+        # development header. The gate's actor is the transport's actor, or it is
+        # refused.
         if body.submission.get("actingPartyRef") != principal:
             # full RuntimeProblem shape even at the transport edge; the fixed
             # problemId keeps these pre-pipeline refusals off the in-pipeline

@@ -81,23 +81,110 @@ def database_dsn() -> str:
     return f"host={socket_dir} port={port} dbname={dbname} user={user}"
 
 
-def oidc_config_from_env():
-    """The OIDC verifier config for the HTTP surface (M2 G4), or None when OIDC is
-    disabled — in which case the development/conformance X-Acting-Party principal
-    shim applies (NOT production auth; see profile_si_ffs/UNSUPPORTED_SURFACES.md).
+def _required_environment(name: str) -> str:
+    value = os.environ.get(name)
+    if value is None or value == "":
+        from .auth_oidc import AuthenticationStartupError
 
-    Enabled only when OFARM_OIDC_ISSUER and OFARM_OIDC_AUDIENCE are set. This
-    helper constructs only the explicit local HS256 test verifier. Any other
-    OFARM_OIDC_ALG value fails closed and cannot select the separate production
-    verifier."""
-    issuer = os.environ.get("OFARM_OIDC_ISSUER")
-    audience = os.environ.get("OFARM_OIDC_AUDIENCE")
-    if not (issuer and audience):
-        return None
-    from .auth_oidc import OidcConfig
-    return OidcConfig(
-        issuer=issuer, audience=audience,
-        algorithm=os.environ.get("OFARM_OIDC_ALG", "HS256"),
-        hs256_secret=os.environ.get("OFARM_OIDC_HS256_SECRET"),
-        subject_claim=os.environ.get("OFARM_OIDC_SUBJECT_CLAIM", "sub"),
-        roles_claim=os.environ.get("OFARM_OIDC_ROLES_CLAIM") or None)
+        raise AuthenticationStartupError(f"{name} is required")
+    return value
+
+
+def _bounded_environment_int(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except ValueError as exc:
+        from .auth_oidc import AuthenticationStartupError
+
+        raise AuthenticationStartupError(f"{name} must be an integer") from exc
+
+
+def authentication_runtime_from_env(*, principal_binding_resolver=None):
+    """Build exactly the authentication mode named by ``OFARM_AUTH_MODE``.
+
+    No other variable selects a mode and an absent mode is a startup refusal.
+    Production never imports the local header or HS256 fixture into its runtime
+    shape and also requires an initialized immutable-binding resolver.
+    """
+
+    from .auth_oidc import (
+        AuthenticationMode,
+        AuthenticationRuntime,
+        AuthenticationStartupError,
+        OidcConfig,
+        ProductionOidcConfig,
+        ProductionOidcVerifier,
+    )
+
+    raw_mode = os.environ.get("OFARM_AUTH_MODE")
+    try:
+        mode = AuthenticationMode(raw_mode) if raw_mode is not None else None
+    except ValueError as exc:
+        raise AuthenticationStartupError("OFARM_AUTH_MODE is invalid") from exc
+    if mode is None:
+        raise AuthenticationStartupError("OFARM_AUTH_MODE is required")
+
+    if mode is AuthenticationMode.DEVELOPMENT:
+        return AuthenticationRuntime.development()
+
+    issuer = _required_environment("OFARM_OIDC_ISSUER")
+    audience = _required_environment("OFARM_OIDC_AUDIENCE")
+    if mode is AuthenticationMode.TEST:
+        algorithm = os.environ.get("OFARM_OIDC_ALG", "HS256")
+        if algorithm != "HS256":
+            raise AuthenticationStartupError(
+                "test mode accepts only the local HS256 verifier"
+            )
+        verifier = OidcConfig(
+            issuer=issuer,
+            audience=audience,
+            algorithm=algorithm,
+            hs256_secret=_required_environment("OFARM_OIDC_HS256_SECRET"),
+            subject_claim=os.environ.get("OFARM_OIDC_SUBJECT_CLAIM", "sub"),
+            roles_claim=os.environ.get("OFARM_OIDC_ROLES_CLAIM") or None,
+            leeway_seconds=_bounded_environment_int("OFARM_OIDC_LEEWAY_SECONDS", 0),
+        )
+        return AuthenticationRuntime.test(verifier)
+
+    if os.environ.get("OFARM_OIDC_HS256_SECRET") is not None:
+        raise AuthenticationStartupError(
+            "OFARM_OIDC_HS256_SECRET is forbidden in production mode"
+        )
+    if principal_binding_resolver is None:
+        raise AuthenticationStartupError(
+            "production principal-binding resolver is required"
+        )
+    algorithms = tuple(
+        os.environ.get("OFARM_OIDC_ALGORITHMS", "RS256").split(",")
+    )
+    verifier = ProductionOidcVerifier(
+        ProductionOidcConfig(
+            issuer=issuer,
+            audience=audience,
+            jwks_url=_required_environment("OFARM_OIDC_JWKS_URL"),
+            algorithms=algorithms,
+            leeway_seconds=_bounded_environment_int(
+                "OFARM_OIDC_LEEWAY_SECONDS", 0
+            ),
+            jwks_lifespan_seconds=_bounded_environment_int(
+                "OFARM_OIDC_JWKS_LIFESPAN_SECONDS", 300
+            ),
+            jwks_miss_refresh_seconds=_bounded_environment_int(
+                "OFARM_OIDC_JWKS_MISS_REFRESH_SECONDS", 5
+            ),
+            timeout_seconds=_bounded_environment_int(
+                "OFARM_OIDC_JWKS_TIMEOUT_SECONDS", 5
+            ),
+        )
+    )
+    return AuthenticationRuntime.production(verifier, principal_binding_resolver)
+
+
+def oidc_config_from_env():
+    """Compatibility accessor for explicit test mode only."""
+
+    runtime = authentication_runtime_from_env()
+    return runtime.verifier
