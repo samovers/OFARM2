@@ -1,6 +1,46 @@
 {
   "entries": [
     {
+      "nodeid": "kernel/tests/test_authentication_read_api.py::test_broken_lifecycle_head_raises_pt001",
+      "sourceModule": "kernel.tests.test_authentication_read_api",
+      "sourcePath": "kernel/tests/test_authentication_read_api.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_read_api.py::test_missing_immutable_party_reference_guard_raises_pt001",
+      "sourceModule": "kernel.tests.test_authentication_read_api",
+      "sourcePath": "kernel/tests/test_authentication_read_api.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_read_api.py::test_resolver_returns_no_row_for_non_authority[OIDC_EXACT_UTF8_V1-HTTPS://ISSUER.EXAMPLE.TEST/TENANT-subject-tenant-01]",
+      "sourceModule": "kernel.tests.test_authentication_read_api",
+      "sourcePath": "kernel/tests/test_authentication_read_api.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_read_api.py::test_resolver_returns_no_row_for_non_authority[OIDC_EXACT_UTF8_V1-https://issuer.example.test/tenant-unknown]",
+      "sourceModule": "kernel.tests.test_authentication_read_api",
+      "sourcePath": "kernel/tests/test_authentication_read_api.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_read_api.py::test_resolver_returns_no_row_for_non_authority[OTHER-https://issuer.example.test/tenant-subject-tenant-01]",
+      "sourceModule": "kernel.tests.test_authentication_read_api",
+      "sourcePath": "kernel/tests/test_authentication_read_api.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_read_api.py::test_resolver_returns_one_exact_active_authority",
+      "sourceModule": "kernel.tests.test_authentication_read_api",
+      "sourcePath": "kernel/tests/test_authentication_read_api.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_read_api.py::test_runtime_contract_is_exact_and_execute_only",
+      "sourceModule": "kernel.tests.test_authentication_read_api",
+      "sourcePath": "kernel/tests/test_authentication_read_api.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_read_api.py::test_signing_observer_returns_the_current_database_head",
+      "sourceModule": "kernel.tests.test_authentication_read_api",
+      "sourcePath": "kernel/tests/test_authentication_read_api.py"
+    },
+    {
       "nodeid": "kernel/tests/test_conformance.py::test_01_append_only",
       "sourceModule": "kernel.tests.test_conformance",
       "sourcePath": "kernel/tests/test_conformance.py"
@@ -7526,8 +7566,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "7e59ef384144f2f9756c60490b96bc39385c7ab1730a6fcfe6752f7aa06ae7ea",
-  "entryCount": 1505,
+  "entriesSha256": "d6f84a50ff977f02ddc725eb5fa30990ad6999e7c625c202f3efe53666a0c6ca",
+  "entryCount": 1513,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

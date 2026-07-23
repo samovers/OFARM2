@@ -86,7 +86,8 @@ runtime-health threshold.
 
 The only accepted migrations are:
 
-- `kernel/migrations/0001_initial.sql`; and
+- `kernel/migrations/0001_initial.sql`;
+- `kernel/migrations/0002_authentication_read_api.sql`; and
 - `security_audit/migrations/0001_initial.sql`.
 
 `migration_sets.py` carries a literal reviewed filename, source SHA-256, source
@@ -206,6 +207,14 @@ identifier, or a default. A missing or invalid native release blocks tenant
 release operations and structural readiness. Once deployed, closed admission,
 an ineligible key, an invalid signature, a stale principal, a reused or wrong
 challenge, or any contract mismatch makes binding refuse.
+
+The additive `0002` migration exposes three read-only issue #172 entry points:
+the pinned authentication runtime contract, exact active principal authority,
+and current signing authority. They are owned by the unreachable schema owner
+and grant `ofarm_app` only `EXECUTE`; the application still has no direct
+identity, Party, tenant, or signing-control table privilege. Each observer
+recomputes the relevant immutable digests and lifecycle chain and raises
+SQLSTATE `PT001` when database authority is internally inconsistent.
 
 Issue #172 owns external identity verification, exact principal resolution, an
 independent capability codec, nonce and capability creation, and signing with
