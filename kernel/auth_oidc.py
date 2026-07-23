@@ -411,16 +411,45 @@ class _ValidatedJwksGeneration:
 class ProductionOidcVerifier:
     """Maintained PyJWT verifier with bounded, validated JWKS generations."""
 
-    def __init__(
+    def __init__(self, config: ProductionOidcConfig):
+        self._bind(
+            config,
+            jwks_client=None,
+            clock=time.monotonic,
+            production_eligible=True,
+        )
+
+    @classmethod
+    def for_test(
+        cls,
+        config: ProductionOidcConfig,
+        *,
+        jwks_client: object,
+        clock: Callable[[], float] | None = None,
+    ) -> "ProductionOidcVerifier":
+        """Build a visibly non-production verifier with fixture trust inputs."""
+
+        verifier = object.__new__(cls)
+        verifier._bind(
+            config,
+            jwks_client=jwks_client,
+            clock=time.monotonic if clock is None else clock,
+            production_eligible=False,
+        )
+        return verifier
+
+    def _bind(
         self,
         config: ProductionOidcConfig,
         *,
-        jwks_client: object | None = None,
-        clock: Callable[[], float] | None = None,
-    ):
+        jwks_client: object | None,
+        clock: Callable[[], float],
+        production_eligible: bool,
+    ) -> None:
         self.config = config
         self._jwks_client = jwks_client
-        self._clock = time.monotonic if clock is None else clock
+        self._clock = clock
+        self._production_eligible = production_eligible
         self._jwt: Any | None = None
         self._generation: _ValidatedJwksGeneration | None = None
         self._generation_lock = Lock()
@@ -431,6 +460,10 @@ class ProductionOidcVerifier:
     @property
     def initialized(self) -> bool:
         return self._initialized
+
+    @property
+    def production_eligible(self) -> bool:
+        return self._production_eligible is True
 
     def initialize(self) -> None:
         self._initialized = False
@@ -665,7 +698,9 @@ class AuthenticationRuntime:
     verifier: OidcVerifier | None = None
     principal_binding_resolver: PrincipalBindingResolver | None = None
     _initialized: bool = field(default=False, init=False, repr=False)
-    _test_only_resolver_allowed: bool = field(default=False, init=False, repr=False)
+    _test_only_dependencies_allowed: bool = field(
+        default=False, init=False, repr=False
+    )
 
     @classmethod
     def development(cls) -> "AuthenticationRuntime":
@@ -682,7 +717,7 @@ class AuthenticationRuntime:
         verifier: ProductionOidcVerifier,
         principal_binding_resolver: PrincipalBindingResolver,
     ) -> "AuthenticationRuntime":
-        cls._require_production_verifier(verifier)
+        cls._require_production_verifier(verifier, allow_test_instance=False)
         cls._require_production_resolver(principal_binding_resolver)
         return cls(
             AuthenticationMode.PRODUCTION,
@@ -698,21 +733,28 @@ class AuthenticationRuntime:
     ) -> "AuthenticationRuntime":
         """Explicit unit-test seam; application factories never call this."""
 
-        cls._require_production_verifier(verifier)
+        cls._require_production_verifier(verifier, allow_test_instance=True)
         runtime = cls(
             AuthenticationMode.PRODUCTION,
             verifier=verifier,
             principal_binding_resolver=principal_binding_resolver,
         )
-        runtime._test_only_resolver_allowed = True
+        runtime._test_only_dependencies_allowed = True
         return runtime
 
     @staticmethod
-    def _require_production_verifier(verifier: object) -> None:
+    def _require_production_verifier(
+        verifier: object, *, allow_test_instance: bool
+    ) -> None:
         if type(verifier) is not ProductionOidcVerifier:
             raise AuthenticationStartupError(
                 "production requires the sealed ProductionOidcVerifier; "
                 "local HS256 and wrapped verifiers are forbidden"
+            )
+        if not allow_test_instance and not verifier.production_eligible:
+            raise AuthenticationStartupError(
+                "production requires an internally constructed JWKS client and "
+                "monotonic clock; injected trust inputs are test-only"
             )
 
     @staticmethod
@@ -748,8 +790,11 @@ class AuthenticationRuntime:
                 raise AuthenticationStartupError(
                     "production verifier and principal-binding resolver are required"
                 )
-            self._require_production_verifier(self.verifier)
-            if not self._test_only_resolver_allowed:
+            self._require_production_verifier(
+                self.verifier,
+                allow_test_instance=self._test_only_dependencies_allowed,
+            )
+            if not self._test_only_dependencies_allowed:
                 self._require_production_resolver(self.principal_binding_resolver)
             self.verifier.initialize()
             self.principal_binding_resolver.initialize()

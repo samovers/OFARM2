@@ -86,7 +86,8 @@ runtime-health threshold.
 
 The only accepted migrations are:
 
-- `kernel/migrations/0001_initial.sql`; and
+- `kernel/migrations/0001_initial.sql`;
+- `kernel/migrations/0002_authentication_runtime_grants.sql`; and
 - `security_audit/migrations/0001_initial.sql`.
 
 `migration_sets.py` carries a literal reviewed filename, source SHA-256, source

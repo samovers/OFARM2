@@ -56,6 +56,16 @@
       "sourcePath": "kernel/tests/test_authentication_modes.py"
     },
     {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_failed_jwks_miss_refresh_keeps_unknown_keys_invalid_and_bounded",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_jwks_miss_refresh_does_not_lock_current_key_verification",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
       "nodeid": "kernel/tests/test_authentication_modes.py::test_key_id_algorithm_time_and_provider_failures_are_closed",
       "sourceModule": "kernel.tests.test_authentication_modes",
       "sourcePath": "kernel/tests/test_authentication_modes.py"
@@ -82,6 +92,16 @@
     },
     {
       "nodeid": "kernel/tests/test_authentication_modes.py::test_mode_is_required_and_never_inferred",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_oversized_numeric_date_refuses_before_key_selection",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_production_rejects_a_verifier_with_injected_trust_inputs",
       "sourceModule": "kernel.tests.test_authentication_modes",
       "sourcePath": "kernel/tests/test_authentication_modes.py"
     },
@@ -116,7 +136,17 @@
       "sourcePath": "kernel/tests/test_authentication_modes.py"
     },
     {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_unknown_key_ids_share_one_bounded_jwks_miss_refresh",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
       "nodeid": "kernel/tests/test_authentication_modes.py::test_wrapped_hs256_verifier_is_rejected_at_production_construction",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_wrapped_or_mutable_binding_resolver_is_rejected_by_production",
       "sourceModule": "kernel.tests.test_authentication_modes",
       "sourcePath": "kernel/tests/test_authentication_modes.py"
     },
@@ -642,6 +672,11 @@
     },
     {
       "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_noncanonical_base64url_segment_rejected_even_if_signed",
+      "sourceModule": "kernel.tests.test_m2_oidc",
+      "sourcePath": "kernel/tests/test_m2_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_oversized_numericdate_is_fail_closed_401",
       "sourceModule": "kernel.tests.test_m2_oidc",
       "sourcePath": "kernel/tests/test_m2_oidc.py"
     },
@@ -2434,6 +2469,11 @@
       "nodeid": "kernel/tests/test_postgresql_migration_cli.py::test_transaction_setup_failure_is_sanitized_at_the_cli_boundary[SET LOCAL]",
       "sourceModule": "kernel.tests.test_postgresql_migration_cli",
       "sourcePath": "kernel/tests/test_postgresql_migration_cli.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_accepted_authoritative_v1_upgrades_to_the_current_head",
+      "sourceModule": "kernel.tests.test_postgresql_migration_runner",
+      "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
     },
     {
       "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_admin_and_migrator_routes_cannot_be_crossed_between_services",
@@ -5506,12 +5546,32 @@
       "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
     },
     {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_concrete_kms_signer_rejects_non_google_client",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
       "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_control_plane_activates_only_through_hardened_functions",
       "sourceModule": "kernel.tests.test_principal_binding_runtime",
       "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
     },
     {
       "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_control_plane_requires_exact_head_and_predecessor_for_supersession",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_exact_google_client_with_custom_transport_cannot_be_injected",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_google_adapter_constructs_the_official_client_without_network",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_google_adapter_rejects_duck_typed_software_signer",
       "sourceModule": "kernel.tests.test_principal_binding_runtime",
       "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
     },
@@ -5531,7 +5591,27 @@
       "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
     },
     {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_production_issuer_rejects_a_fake_binding_resolver",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
       "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_production_issuer_rejects_local_fixture_signer",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_production_issuer_rejects_local_key_signer_subclass",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_production_signer_rejects_unbounded_observer_evidence[-300000001-1]",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_production_signer_rejects_unbounded_observer_evidence[0-300000001]",
       "sourceModule": "kernel.tests.test_principal_binding_runtime",
       "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
     },
@@ -7706,8 +7786,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "978fa8fafa14a4027cb3cda66b402cd9cccfc67a617590be0058113c41ea1899",
-  "entryCount": 1541,
+  "entriesSha256": "44fae62888aefa461725b05903368e1145ce537a79b02853f0b63c1497c04f25",
+  "entryCount": 1557,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

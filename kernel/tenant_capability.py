@@ -32,7 +32,10 @@ from deployment.postgresql.tenant_contract import (
 )
 
 from .auth_oidc import OidcError, PreBindingOutcome, VerifiedOidcIdentity
-from .principal_binding import PrincipalBindingAuthority
+from .principal_binding import (
+    PostgreSQLPrincipalBindingResolver,
+    PrincipalBindingAuthority,
+)
 
 
 _SHA256_ID = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -63,30 +66,31 @@ class GoogleKmsSigningResponse:
     signature_crc32c: int
 
 
-def _require_official_google_kms_client(client: object) -> None:
-    """Refuse duck-typed or wrapped software signers at the production boundary."""
-
-    try:
-        from google.cloud.kms_v1.services.key_management_service.client import (
-            KeyManagementServiceClient,
-        )
-    except ImportError as exc:
-        raise TypeError("Google Cloud KMS client dependency is unavailable") from exc
-    if type(client) is not KeyManagementServiceClient:
-        raise TypeError("production signing requires the exact Google KMS client")
-
-
 @final
 class GoogleCloudKmsClientAdapter:
-    """Exact adapter for a Google ``KeyManagementServiceClient`` instance.
+    """Adapter that constructs its Google client inside the trust boundary.
 
-    The Google client is injected so credentials remain deployment-owned.  The
-    adapter requests only raw ``data`` signing and rejects response shapes that
-    cannot be mapped without guessing or fallback.
+    The production constructor exposes no client or transport injection seam.
+    Application Default Credentials and the maintained client's default
+    transport remain deployment-owned.  Fixture clients are available only
+    through :meth:`for_test` and are never production eligible.
     """
 
-    def __init__(self, client: object) -> None:
-        _require_official_google_kms_client(client)
+    def __init__(self) -> None:
+        try:
+            from google.cloud.kms_v1.services.key_management_service.client import (
+                KeyManagementServiceClient,
+            )
+        except ImportError as exc:
+            raise TypeError("Google Cloud KMS client dependency is unavailable") from exc
+        try:
+            client = KeyManagementServiceClient()
+        except Exception as exc:
+            raise TypeError(
+                "Google Cloud KMS client construction failed"
+            ) from exc
+        if type(client) is not KeyManagementServiceClient:
+            raise TypeError("Google Cloud KMS client construction differs")
         self._bind_client(client, production_eligible=True)
 
     @classmethod
@@ -350,12 +354,30 @@ class ProductionTenantCapabilityIssuer:
         lifetime_microseconds: int = 30_000_000,
         now_microseconds=lambda: time.time_ns() // 1_000,
     ) -> None:
+        self._require_production_resolver(resolver)
+        self._bind(
+            resolver=resolver,
+            signer=signer,
+            lifetime_microseconds=lifetime_microseconds,
+            now_microseconds=now_microseconds,
+            test_only_dependencies_allowed=False,
+        )
+
+    def _bind(
+        self,
+        *,
+        resolver: CapabilityBindingResolver,
+        signer: CapabilitySigner,
+        lifetime_microseconds: int,
+        now_microseconds,
+        test_only_dependencies_allowed: bool,
+    ) -> None:
         self._resolver = resolver
         self._signer = signer
         self._lifetime_microseconds = lifetime_microseconds
         self._now_microseconds = now_microseconds
         self._initialized = False
-        self._test_only_signer_allowed = False
+        self._test_only_dependencies_allowed = test_only_dependencies_allowed
 
     @classmethod
     def for_test(
@@ -368,14 +390,26 @@ class ProductionTenantCapabilityIssuer:
     ) -> "ProductionTenantCapabilityIssuer":
         """Explicit fixture seam; production application factories never call it."""
 
-        issuer = cls(
+        issuer = object.__new__(cls)
+        issuer._bind(
             resolver=resolver,
             signer=signer,
             lifetime_microseconds=lifetime_microseconds,
             now_microseconds=now_microseconds,
+            test_only_dependencies_allowed=True,
         )
-        issuer._test_only_signer_allowed = True
         return issuer
+
+    @staticmethod
+    def _require_production_resolver(resolver: object) -> None:
+        if type(resolver) is not PostgreSQLPrincipalBindingResolver:
+            raise CapabilityIssuanceError(
+                PreBindingOutcome.CONFIGURATION_REFUSED,
+                internal_detail=(
+                    "production issuer requires the sealed PostgreSQL "
+                    "principal-binding resolver"
+                ),
+            )
 
     def initialize(self) -> None:
         if (
@@ -391,7 +425,7 @@ class ProductionTenantCapabilityIssuer:
         if (
             type(self._signer) is not GoogleKmsEd25519Signer
             or (
-                not self._test_only_signer_allowed
+                not self._test_only_dependencies_allowed
                 and not self._signer.production_eligible
             )
         ):
@@ -399,6 +433,11 @@ class ProductionTenantCapabilityIssuer:
                 PreBindingOutcome.CONFIGURATION_REFUSED,
                 internal_detail="production issuer requires the KMS HSM signer",
             )
+        if (
+            not self._test_only_dependencies_allowed
+            and type(self._resolver) is not PostgreSQLPrincipalBindingResolver
+        ):
+            self._require_production_resolver(self._resolver)
         try:
             validate_binder_audience(self._signer.audience)
             self._resolver.initialize()

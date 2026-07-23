@@ -8951,7 +8951,7 @@ AS 'DECLARE
           INTO observed_structural_catalog_digest
           FROM catalog_entry;
         IF observed_structural_catalog_digest <>
-                ''sha256:938fdd790029d2e1200373ad987c62fcf4d30dc85e1442daed2352c9c4583a5c'' THEN
+                ''sha256:f7c72a008792173e110b9359006271fea263b3e26fb53c8ac6303839d0460fc4'' THEN
             differences := pg_catalog.array_append(
                 differences, ''complete tenant catalog fingerprint differs''
             );
@@ -9046,19 +9046,12 @@ GRANT SELECT (
 
 GRANT EXECUTE ON FUNCTION ofarm.base64url_decode(pg_catalog.text),
     ofarm.base64url_encode(pg_catalog.bytea),
-    ofarm.lp32(pg_catalog.bytea),
     ofarm.valid_ascii_id(pg_catalog.text),
     ofarm.valid_oidc_issuer(pg_catalog.text),
     ofarm.tenant_capability_key_id(pg_catalog.bytea),
     ofarm.uuid_from_network(pg_catalog.bytea),
     ofarm.int8_from_network(pg_catalog.bytea),
     ofarm.parse_tenant_capability_payload(pg_catalog.bytea),
-    ofarm.compute_principal_binding_version_digest(
-        pg_catalog.text, pg_catalog.text, pg_catalog.text, pg_catalog.uuid,
-        pg_catalog.uuid, pg_catalog.text, pg_catalog.text, pg_catalog.text,
-        pg_catalog.text, pg_catalog.text, pg_catalog.text, pg_catalog.text,
-        pg_catalog.timestamptz, pg_catalog.timestamptz, pg_catalog.uuid
-    ),
     ofarm.fold_principal_binding_authority(
         pg_catalog.text, pg_catalog.text, pg_catalog.text
     ),

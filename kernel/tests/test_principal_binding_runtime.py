@@ -544,7 +544,7 @@ def test_capability_wrong_audience_and_stale_signer_refuse_safely():
 def test_production_issuer_rejects_local_fixture_signer():
     audience = derive_binder_audience(uuid4())
     issuer = ProductionTenantCapabilityIssuer(
-        resolver=_CapabilityResolver(_authority()),
+        resolver=PostgreSQLPrincipalBindingResolver(lambda: None),
         signer=_FixtureSigner(Ed25519PrivateKey.generate(), audience),
     )
     with pytest.raises(CapabilityIssuanceError) as raised:
@@ -577,7 +577,7 @@ def test_production_issuer_rejects_local_key_signer_subclass():
             return self.private.sign(data)
 
     issuer = ProductionTenantCapabilityIssuer(
-        resolver=_CapabilityResolver(_authority()),
+        resolver=PostgreSQLPrincipalBindingResolver(lambda: None),
         signer=LocalSignerSubclass(
             Ed25519PrivateKey.generate(), derive_binder_audience(uuid4())
         ),
@@ -587,14 +587,61 @@ def test_production_issuer_rejects_local_key_signer_subclass():
     assert raised.value.outcome is PreBindingOutcome.CONFIGURATION_REFUSED
 
 
+def test_production_issuer_rejects_a_fake_binding_resolver():
+    now_us = 1_900_000_000_000_000
+    signer = _production_signer(
+        Ed25519PrivateKey.generate(),
+        derive_binder_audience(uuid4()),
+        now_us,
+    )
+    with pytest.raises(CapabilityIssuanceError) as raised:
+        ProductionTenantCapabilityIssuer(
+            resolver=_CapabilityResolver(_authority()),
+            signer=signer,
+            now_microseconds=lambda: now_us,
+        )
+    assert raised.value.outcome is PreBindingOutcome.CONFIGURATION_REFUSED
+    assert "sealed PostgreSQL" in raised.value.internal_detail
+
+
 def test_google_adapter_rejects_duck_typed_software_signer():
     private = Ed25519PrivateKey.generate()
     resource = (
         "projects/ofarm1/locations/europe-west1/keyRings/auth/"
         "cryptoKeys/capability/cryptoKeyVersions/1"
     )
-    with pytest.raises(TypeError, match="Google Cloud KMS|exact Google KMS"):
+    with pytest.raises(TypeError, match="positional argument"):
         GoogleCloudKmsClientAdapter(_KmsClient(private, resource))
+
+
+def test_google_adapter_constructs_the_official_client_without_network(monkeypatch):
+    from google.cloud.kms_v1.services.key_management_service.client import (
+        KeyManagementServiceClient,
+    )
+
+    constructed = []
+
+    def offline_constructor(client):
+        constructed.append(client)
+
+    monkeypatch.setattr(KeyManagementServiceClient, "__init__", offline_constructor)
+    adapter = GoogleCloudKmsClientAdapter()
+
+    assert len(constructed) == 1
+    assert type(constructed[0]) is KeyManagementServiceClient
+    assert adapter.production_eligible is True
+
+
+def test_exact_google_client_with_custom_transport_cannot_be_injected():
+    from google.cloud.kms_v1.services.key_management_service.client import (
+        KeyManagementServiceClient,
+    )
+
+    exact_client = object.__new__(KeyManagementServiceClient)
+    exact_client._transport = object()
+
+    with pytest.raises(TypeError, match="positional argument"):
+        GoogleCloudKmsClientAdapter(exact_client)
 
 
 def test_concrete_kms_signer_rejects_non_google_client():
@@ -604,7 +651,7 @@ def test_concrete_kms_signer_rejects_non_google_client():
         private, derive_binder_audience(uuid4()), now_us
     )
     issuer = ProductionTenantCapabilityIssuer(
-        resolver=_CapabilityResolver(_authority()),
+        resolver=PostgreSQLPrincipalBindingResolver(lambda: None),
         signer=prepared,
         now_microseconds=lambda: now_us,
     )

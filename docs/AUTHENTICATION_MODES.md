@@ -49,6 +49,10 @@ named by that authoritative fold. It does not use `principal_binding_current`.
 Production construction requires the exact sealed
 `PostgreSQLPrincipalBindingResolver`; protocol fakes and wrappers are available
 only through the explicit unit-test runtime factory.
+The normal production verifier constructs its maintained PyJWT JWKS client and
+monotonic clock internally. Injected JWKS clients and clocks exist only on the
+explicit non-production test factory, and a production runtime rejects those
+instances.
 The active version must pin the immutable tenant registration and ACTIVE
 `ofarm.party.v0.1` identity, schema, and payload digests. Missing, inactive,
 expired, ambiguous, or digest-inconsistent state refuses.
@@ -74,7 +78,11 @@ seconds.
 The production signer accepts one pinned Google Cloud KMS HSM
 `EC_SIGN_ED25519` key version and fresh startup evidence. Raw private key
 material and duck-typed signing clients are never accepted: construction
-requires the exact maintained Google Cloud KMS client behind the sealed adapter.
+requires the sealed adapter to construct the maintained Google Cloud KMS client
+with its default transport internally. Exact Google clients backed by
+caller-supplied transports cannot be injected. The production capability issuer
+also requires the exact sealed PostgreSQL principal-binding resolver; protocol
+fakes remain confined to its explicit test factory.
 It sends the exact JWS Signing Input through KMS's raw `data` field with CRC32C,
 checks response resource identity, HSM protection, request-checksum
 acknowledgement, signature checksum, and then independently verifies the

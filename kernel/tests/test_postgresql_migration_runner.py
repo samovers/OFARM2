@@ -1,8 +1,8 @@
 """Real PostgreSQL 17 migration-runner boundary tests for issue #174.
 
-Every migration used here is synthetic and lives under pytest's temporary
-directory.  This module must never create either authoritative checked-in
-migration directory.
+Most migrations used here are synthetic and live under pytest's temporary
+directory.  The release-upgrade regression reads the authoritative tenant
+history but never writes either checked-in migration directory.
 """
 
 from __future__ import annotations
@@ -772,6 +772,34 @@ def test_resumes_at_0002_and_preserves_the_stable_0001_prefix(
     assert [row[0] for row in rows] == [1, 2]
     assert rows[0][4] == first_set.digest == full_set.prefix_digest(1)
     assert rows[1][4] == full_set.digest
+
+
+def test_accepted_authoritative_v1_upgrades_to_the_current_head(
+    tenant_target: _TenantTarget,
+    tmp_path: Path,
+):
+    package_root = Path(__file__).resolve().parents[2]
+    current_set = load_migration_set(package_root, TENANT_SERVICE)
+    accepted_v1 = _load_synthetic_set(
+        tmp_path / "accepted-v1",
+        {"0001_initial.sql": current_set.migrations[0].source_bytes},
+    )
+
+    first_report = _run(tenant_target, accepted_v1)
+    upgrade_report = _run(tenant_target, current_set)
+
+    assert accepted_v1.migrations[0].source_sha256 == (
+        "sha256:a51e8144cf1f6c6f553755062ed618c02e23d3749e8355cf33bdb8db4cea633d"
+    )
+    assert accepted_v1.digest == current_set.prefix_digest(1)
+    assert first_report.applied_versions == (1,)
+    assert upgrade_report.previous_version == 1
+    assert upgrade_report.final_version == 2
+    assert upgrade_report.applied_versions == (2,)
+    rows = _ledger_rows(tenant_target)
+    assert [row[0] for row in rows] == [1, 2]
+    assert rows[0][4] == current_set.prefix_digest(1)
+    assert rows[1][4] == current_set.digest
 
 
 def test_failed_ddl_and_ledger_append_roll_back_together(

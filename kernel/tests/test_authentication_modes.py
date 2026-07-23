@@ -89,7 +89,7 @@ def _production_verifier(
 ):
     _, public = rsa_keys
     selected = client or _JwksClient([_SigningKey("key-1", "RS256", public)])
-    return ProductionOidcVerifier(
+    return ProductionOidcVerifier.for_test(
         ProductionOidcConfig(
             issuer=ISSUER,
             audience=AUDIENCE,
@@ -100,6 +100,15 @@ def _production_verifier(
         ),
         jwks_client=selected,
         clock=clock,
+    )
+
+
+def _production_oidc_config() -> ProductionOidcConfig:
+    return ProductionOidcConfig(
+        issuer=ISSUER,
+        audience=AUDIENCE,
+        jwks_url=JWKS_URL,
+        algorithms=("RS256",),
     )
 
 
@@ -196,7 +205,7 @@ def test_wrapped_hs256_verifier_is_rejected_at_production_construction():
 def test_wrapped_or_mutable_binding_resolver_is_rejected_by_production(
     rsa_keys, monkeypatch
 ):
-    verifier = _production_verifier(rsa_keys)
+    verifier = ProductionOidcVerifier(_production_oidc_config())
     with pytest.raises(AuthenticationStartupError, match="sealed PostgreSQL"):
         AuthenticationRuntime.production(verifier, _Resolver())
     with pytest.raises(AuthenticationStartupError, match="sealed PostgreSQL"):
@@ -215,6 +224,31 @@ def test_wrapped_or_mutable_binding_resolver_is_rejected_by_production(
     sealed = PostgreSQLPrincipalBindingResolver(lambda: None)
     runtime = AuthenticationRuntime.production(verifier, sealed)
     assert runtime.principal_binding_resolver is sealed
+
+
+def test_production_rejects_a_verifier_with_injected_trust_inputs(rsa_keys):
+    _, public = rsa_keys
+    client = _JwksClient([_SigningKey("key-1", "RS256", public)])
+    injected = ProductionOidcVerifier.for_test(
+        _production_oidc_config(),
+        jwks_client=client,
+        clock=lambda: 1_000.0,
+    )
+    sealed = PostgreSQLPrincipalBindingResolver(lambda: None)
+
+    with pytest.raises(AuthenticationStartupError, match="injected trust inputs"):
+        AuthenticationRuntime.production(injected, sealed)
+    with pytest.raises(AuthenticationStartupError, match="injected trust inputs"):
+        AuthenticationRuntime(
+            AuthenticationMode.PRODUCTION,
+            verifier=injected,
+            principal_binding_resolver=sealed,
+        ).initialize()
+    with pytest.raises(TypeError):
+        ProductionOidcVerifier(
+            _production_oidc_config(),
+            jwks_client=client,
+        )
 
 
 def test_legacy_oidc_argument_rejects_a_production_verifier(rsa_keys):
