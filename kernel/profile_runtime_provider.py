@@ -1,47 +1,47 @@
-"""Small, explicit profile-runtime service selection.
-
-Descriptors describe package content; they do not provide executable code.
-This composition seam contains the complete code-owned provider registry and
-currently has exactly one registered implementation.
-"""
+"""Verified selection of the executable services for one runtime profile."""
 from __future__ import annotations
 
+import importlib
+import importlib.util
 from dataclasses import dataclass
-from typing import Any, Callable
+from pathlib import Path
+from typing import TYPE_CHECKING, Protocol
 
 from .profile_runtime import ProfileRuntimeDescriptor, ProfileRuntimeError
-from .runtime_bundle import (
-    RuntimeBundleError,
-    RuntimeComponent,
-    RuntimeComponentRole,
+from .runtime_bundle import RuntimeBundle, RuntimeBundleError, RuntimeComponentRole
+
+if TYPE_CHECKING:
+    from .context import ContextAssembler, SIProductRegister, SIReferenceBindings
+    from .materializer import Materializer
+    from .profile_policy import DescriptorPolicyProvider
+    from .validators import RegistryReverificationValidator
+
+
+_PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+_REGISTRY_COMPONENT_REF = (
+    "python:ofarm2-kernel-m1.0:profile-runtime-provider-registry"
 )
 
 
-ProfileRuntimeFactory = Callable[
-    [Any, ProfileRuntimeDescriptor, RuntimeComponent],
-    "ProfileRuntimeServices",
-]
+class ProfileRuntimeStore(Protocol):
+    """The loader's complete view of runtime state."""
+
+    runtime_bundle: RuntimeBundle
+
+    def require_startup_complete(self, consumer: str) -> None: ...
 
 
 @dataclass(frozen=True)
-class RuntimeServiceRequirement:
-    """One service slot and the callable capabilities its provider promises."""
-
-    service_name: str
-    capabilities: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True)
-class ProfileRuntimeProviderRegistration:
-    """One deliberately registered executable provider factory."""
+class ProfileRuntimeRegistration:
+    """Registry-owned identity of one executable profile implementation."""
 
     package_name: str
     profile_ref: str
-    factory: ProfileRuntimeFactory
-    source_component_role: RuntimeComponentRole
-    source_component_logical_ref: str
-    source_component_digest: str
-    required_services: tuple[RuntimeServiceRequirement, ...]
+    component_role: RuntimeComponentRole
+    component_ref: str
+    source_path: str
+    factory_module: str
+    factory_name: str
 
     @property
     def key(self) -> tuple[str, str]:
@@ -50,221 +50,163 @@ class ProfileRuntimeProviderRegistration:
 
 @dataclass(frozen=True)
 class ProfileRuntimeServices:
-    """Capability-specific services selected for one descriptor.
+    """All services required by the SI gate pipeline."""
 
-    The optional field defaults keep this seam usable by a future separately
-    reviewed provider without requiring a universal product-register API.
-    Each registration declares which of these fields it actually requires.
-    """
-
-    provider_key: tuple[str, str]
-    provider_source_digest: str
     descriptor: ProfileRuntimeDescriptor
-    policy_provider: Any
-    context_assembler: Any
-    materializer: Any
-    reference_bindings: Any = None
-    product_lookup: Any = None
-    registry_reverification: Any = None
+    policy_provider: DescriptorPolicyProvider
+    context_assembler: ContextAssembler
+    materializer: Materializer
+    reference_bindings: SIReferenceBindings
+    product_lookup: SIProductRegister
+    registry_reverification: RegistryReverificationValidator
 
 
-@dataclass(frozen=True)
-class ProfileRuntimeProviderRegistry:
-    """Immutable provider registrations keyed by package/profile identity."""
-
-    registrations: tuple[ProfileRuntimeProviderRegistration, ...]
-
-    def __post_init__(self) -> None:
-        keys = [registration.key for registration in self.registrations]
-        if len(keys) != len(set(keys)):
-            raise ProfileRuntimeError(
-                "profile runtime provider registry contains duplicate identities"
-            )
-
-    @property
-    def registered_identities(self) -> tuple[tuple[str, str], ...]:
-        return tuple(
-            registration.key for registration in self.registrations
-        )
-
-    @property
-    def registered_package_names(self) -> tuple[str, ...]:
-        return tuple(
-            registration.package_name for registration in self.registrations
-        )
-
-    def registration_for(
-        self,
-        package_name: str,
-        descriptor: ProfileRuntimeDescriptor,
-    ) -> ProfileRuntimeProviderRegistration:
-        if type(package_name) is not str or not package_name:
-            raise ProfileRuntimeError(
-                "profile runtime provider package name must be a non-empty string"
-            )
-        if type(descriptor) is not ProfileRuntimeDescriptor:
-            raise ProfileRuntimeError(
-                "profile runtime provider descriptor must use the trusted type"
-            )
-        key = package_name, descriptor.profile_ref
-        registration = next(
-            (
-                candidate
-                for candidate in self.registrations
-                if candidate.key == key
-            ),
-            None,
-        )
-        if registration is None:
-            raise ProfileRuntimeError(
-                "no registered executable runtime provider for profile identity "
-                f"{key!r}"
-            )
-        return registration
-
-    def build_services(
-        self,
-        store,
-        package_name: str,
-        descriptor: ProfileRuntimeDescriptor,
-    ) -> ProfileRuntimeServices:
-        """Compose and validate a fresh service graph for one pipeline."""
-        registration = self.registration_for(package_name, descriptor)
-        source_component = self._verified_source_component(store, registration)
-        services = registration.factory(store, descriptor, source_component)
-        self._validate_services(
-            registration,
-            descriptor,
-            source_component,
-            services,
-        )
-        return services
-
-    @staticmethod
-    def _verified_source_component(
-        store,
-        registration: ProfileRuntimeProviderRegistration,
-    ) -> RuntimeComponent:
-        try:
-            store.require_startup_complete("profile runtime provider composition")
-            component = store.runtime_bundle.component(
-                registration.source_component_role,
-                registration.source_component_logical_ref,
-            )
-        except (AttributeError, RuntimeBundleError) as exc:
-            raise ProfileRuntimeError(
-                "profile runtime provider source is not retained by the "
-                "startup-verified RuntimeBundle"
-            ) from exc
-        if component.content_digest != registration.source_component_digest:
-            raise ProfileRuntimeError(
-                "profile runtime provider source digest does not match its "
-                "code-owned registration"
-            )
-        return component
-
-    @staticmethod
-    def _validate_services(
-        registration: ProfileRuntimeProviderRegistration,
-        descriptor: ProfileRuntimeDescriptor,
-        source_component: RuntimeComponent,
-        services: Any,
-    ) -> None:
-        if type(services) is not ProfileRuntimeServices:
-            raise ProfileRuntimeError(
-                "profile runtime provider returned an invalid service bundle"
-            )
-        if (
-            services.provider_key != registration.key
-            or services.descriptor is not descriptor
-            or services.provider_source_digest != source_component.content_digest
-        ):
-            raise ProfileRuntimeError(
-                "profile runtime provider returned services with mismatched identity"
-            )
-        for requirement in registration.required_services:
-            service = getattr(services, requirement.service_name, None)
-            if service is None:
-                raise ProfileRuntimeError(
-                    "profile runtime provider omitted required service "
-                    f"{requirement.service_name!r}"
-                )
-            missing = [
-                capability
-                for capability in requirement.capabilities
-                if not callable(getattr(service, capability, None))
-            ]
-            if missing:
-                raise ProfileRuntimeError(
-                    "profile runtime provider service "
-                    f"{requirement.service_name!r} lacks required callable "
-                    f"capabilities {missing!r}"
-                )
-
-        policy_provider = services.policy_provider
-        if (
-            getattr(policy_provider, "policy_ref", None)
-            != descriptor.evidence_policy_ref
-        ):
-            raise ProfileRuntimeError(
-                "profile runtime provider policy_ref does not match the "
-                "descriptor evidencePolicyRef"
-            )
-        recognized_rule_refs = getattr(
-            policy_provider,
-            "recognized_rule_refs",
-            None,
-        )
-        required_rule_refs = frozenset({
-            descriptor.evidence_policy_ref,
-            descriptor.profile_ref,
-            descriptor.pack_ref,
-            descriptor.code_binding_profile_ref,
-        })
-        if (
-            type(recognized_rule_refs) is not frozenset
-            or not required_rule_refs.issubset(recognized_rule_refs)
-        ):
-            raise ProfileRuntimeError(
-                "profile runtime provider policy service has invalid "
-                "recognized_rule_refs"
-            )
-
-
-_SI_PROVIDER_SOURCE_DIGEST = (
-    "sha256:a982e3793ee11593c9a542c0cf6094e99738204c13c0dfe992fac82be61f5f1b"
-)
-# Recompute after intentional source edits: shasum -a 256 kernel/profiles/si_ffs/runtime_provider.py
-
-_SI_SERVICE_REQUIREMENTS = (
-    RuntimeServiceRequirement(
-        "policy_provider",
-        ("validation_policy", "evidence_policy"),
+_REGISTRATIONS = (
+    ProfileRuntimeRegistration(
+        package_name="profile_si_ffs",
+        profile_ref="profile:si.ffs.recordkeeping.v0_1",
+        component_role=RuntimeComponentRole.ADAPTER_SOURCE,
+        component_ref="python:profile-si-ffs-v0_1:runtime-provider",
+        source_path="kernel/profiles/si_ffs/runtime_provider.py",
+        factory_module="kernel.profiles.si_ffs.runtime_provider",
+        factory_name="build_si_runtime_services",
     ),
-    RuntimeServiceRequirement("context_assembler", ("assemble",)),
-    RuntimeServiceRequirement(
-        "materializer",
-        ("invalidate_for_sources", "recompute"),
-    ),
-    RuntimeServiceRequirement("reference_bindings"),
-    RuntimeServiceRequirement("product_lookup", ("lookup_by_decision",)),
-    RuntimeServiceRequirement("registry_reverification", ("run",)),
 )
 
-def default_profile_runtime_provider_registry() -> ProfileRuntimeProviderRegistry:
-    """Return the immutable code-owned single-provider registry."""
-    from .profiles.si_ffs.runtime_provider import build_si_runtime_services
 
-    return ProfileRuntimeProviderRegistry((
-        ProfileRuntimeProviderRegistration(
-            package_name="profile_si_ffs",
-            profile_ref="profile:si.ffs.recordkeeping.v0_1",
-            factory=build_si_runtime_services,
-            source_component_role=RuntimeComponentRole.ADAPTER_SOURCE,
-            source_component_logical_ref=(
-                "python:profile-si-ffs-v0_1:runtime-provider"
-            ),
-            source_component_digest=_SI_PROVIDER_SOURCE_DIGEST,
-            required_services=_SI_SERVICE_REQUIREMENTS,
-        ),
-    ))
+def _registration_for(
+    package_name: str,
+    descriptor: ProfileRuntimeDescriptor,
+) -> ProfileRuntimeRegistration:
+    if type(package_name) is not str or not package_name:
+        raise ProfileRuntimeError(
+            "profile runtime package name must be a non-empty string"
+        )
+    if type(descriptor) is not ProfileRuntimeDescriptor:
+        raise ProfileRuntimeError(
+            "profile runtime descriptor must use the trusted type"
+        )
+    key = package_name, descriptor.profile_ref
+    registration = next(
+        (candidate for candidate in _REGISTRATIONS if candidate.key == key),
+        None,
+    )
+    if registration is None:
+        raise ProfileRuntimeError(
+            f"no executable runtime is registered for profile identity {key!r}"
+        )
+    return registration
+
+
+def _verify_source(
+    store: ProfileRuntimeStore,
+    role: RuntimeComponentRole,
+    logical_ref: str,
+    source_path: str,
+) -> Path:
+    try:
+        component = store.runtime_bundle.component(role, logical_ref)
+        path = (_PACKAGE_ROOT / source_path).resolve(strict=True)
+        path.relative_to(_PACKAGE_ROOT)
+        source_bytes = path.read_bytes()
+    except (OSError, RuntimeBundleError, ValueError) as exc:
+        raise ProfileRuntimeError(
+            f"registered runtime source {logical_ref!r} is unavailable"
+        ) from exc
+    if component.canonical_bytes != source_bytes:
+        raise ProfileRuntimeError(
+            f"registered runtime source {logical_ref!r} differs from the "
+            "startup-verified RuntimeBundle"
+        )
+    return path
+
+
+def _load_factory(registration: ProfileRuntimeRegistration, source_path: Path):
+    spec = importlib.util.find_spec(registration.factory_module)
+    if spec is None or spec.origin is None:
+        raise ProfileRuntimeError(
+            f"runtime factory module {registration.factory_module!r} is unavailable"
+        )
+    try:
+        origin = Path(spec.origin).resolve(strict=True)
+    except OSError as exc:
+        raise ProfileRuntimeError("runtime factory module path is unavailable") from exc
+    if origin != source_path:
+        raise ProfileRuntimeError(
+            "runtime factory module does not resolve to its verified source"
+        )
+    module = importlib.import_module(registration.factory_module)
+    factory = getattr(module, registration.factory_name, None)
+    if not callable(factory):
+        raise ProfileRuntimeError(
+            f"registered runtime factory {registration.factory_name!r} is unavailable"
+        )
+    return factory
+
+
+def _validate_services(
+    services: object,
+    descriptor: ProfileRuntimeDescriptor,
+) -> ProfileRuntimeServices:
+    from .context import ContextAssembler, SIProductRegister, SIReferenceBindings
+    from .materializer import Materializer
+    from .profile_policy import DescriptorPolicyProvider
+    from .validators import RegistryReverificationValidator
+
+    if type(services) is not ProfileRuntimeServices:
+        raise ProfileRuntimeError("runtime factory returned an invalid service bundle")
+    required_types = (
+        (services.policy_provider, DescriptorPolicyProvider),
+        (services.context_assembler, ContextAssembler),
+        (services.materializer, Materializer),
+        (services.reference_bindings, SIReferenceBindings),
+        (services.product_lookup, SIProductRegister),
+        (services.registry_reverification, RegistryReverificationValidator),
+    )
+    if services.descriptor is not descriptor or any(
+        not isinstance(service, expected)
+        for service, expected in required_types
+    ):
+        raise ProfileRuntimeError(
+            "runtime factory returned incomplete or mismatched services"
+        )
+    required_rules = frozenset({
+        descriptor.evidence_policy_ref,
+        descriptor.profile_ref,
+        descriptor.pack_ref,
+        descriptor.code_binding_profile_ref,
+    })
+    if (
+        services.policy_provider.policy_ref != descriptor.evidence_policy_ref
+        or not required_rules.issubset(
+            services.policy_provider.recognized_rule_refs
+        )
+    ):
+        raise ProfileRuntimeError(
+            "runtime policy service does not match the selected descriptor"
+        )
+    return services
+
+
+def load_profile_runtime_services(
+    store: ProfileRuntimeStore,
+    package_name: str,
+    descriptor: ProfileRuntimeDescriptor,
+) -> ProfileRuntimeServices:
+    """Verify registry and provider bytes, then construct bound services."""
+    store.require_startup_complete("profile runtime service loading")
+    _verify_source(
+        store,
+        RuntimeComponentRole.ADAPTER_SOURCE,
+        _REGISTRY_COMPONENT_REF,
+        "kernel/profile_runtime_provider.py",
+    )
+    registration = _registration_for(package_name, descriptor)
+    source_path = _verify_source(
+        store,
+        registration.component_role,
+        registration.component_ref,
+        registration.source_path,
+    )
+    factory = _load_factory(registration, source_path)
+    return _validate_services(factory(store, descriptor), descriptor)

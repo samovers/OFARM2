@@ -807,7 +807,7 @@ def test_checked_in_bundle_persists_every_selected_role(migrated_store):
         )
 
     assert audit is not None
-    assert len(audit.components) == len(bundle.components) == 91
+    assert len(audit.components) == len(bundle.components) == 92
     assert sum(
         component.role == RuntimeComponentRole.VIEW_BINDING.value
         for component in audit.components

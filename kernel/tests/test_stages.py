@@ -112,8 +112,7 @@ def scratch_tx(store):
 
 def _ctx(store, cur, sub: dict) -> GateContext:
     return GateContext(
-        cur=cur, store=store, authority=None, context_assembler=None,
-        materializer=None, products=None, sub=sub,
+        cur=cur, store=store, authority=None, runtime_services=None, sub=sub,
         request_id="cir:stage-test", ingested_at="2026-06-12T00:00:00Z",
         source_digest="sha256:stage-test",
         commit_class=sub.get("commitClass", "OPERATION_CLAIM"),

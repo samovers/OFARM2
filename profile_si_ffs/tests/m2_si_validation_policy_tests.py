@@ -30,29 +30,69 @@ def _use_policy(monkeypatch, tmp_path, doc):
 
 
 def _spray(pipeline, **kw):
-    return _commit_compat(pipeline, demo.spray_submission(
+    return _commit_with_test_policy(pipeline, demo.spray_submission(
         f"d4:{uid()}", erp_id=f"erp:d4.{uid()}", **kw))
 
 
-def _commit_compat(pipeline, sub):
-    active_profile = pipeline.active_profile
+def _commit_with_test_policy(pipeline, sub):
+    services = pipeline.runtime_services
+    if isinstance(
+        services.policy_provider,
+        _ExplicitValidationPolicyProvider,
+    ):
+        return pipeline.commit(sub)
+    pipeline.runtime_services = replace(
+        services,
+        policy_provider=_TestPolicyProvider(services.descriptor),
+    )
     try:
-        pipeline.active_profile = None
         return pipeline.commit(sub)
     finally:
-        pipeline.active_profile = active_profile
+        pipeline.runtime_services = services
 
 
-def _use_explicit_operation_validation(monkeypatch, validation):
-    monkeypatch.setattr(validators, "OPERATION_SEQUENCE", (
-        validators.CarrierSchemaValidator(),
-        validators.CarrierSemanticsValidator(validation_policy=validation),
-        validators.ExecutionExtentValidator(validation_policy=validation),
-        validators.ReferenceResolutionValidator(),
-        validators.ActorAttributionValidator(),
-        validators.CodeBindingValidator(validation_policy=validation),
-        validators.RegistryReverificationValidator(),
-    ))
+class _TestPolicyProvider:
+    """Test builder for profile-policy variants; never used by production."""
+
+    def __init__(self, descriptor, validation=None):
+        self.descriptor = descriptor
+        self.policy_ref = descriptor.evidence_policy_ref
+        self.recognized_rule_refs = frozenset({
+            descriptor.evidence_policy_ref,
+            descriptor.profile_ref,
+            descriptor.pack_ref,
+            descriptor.code_binding_profile_ref,
+        })
+        self._validation = validation
+
+    def evidence_policy(self, supported_checks=None):
+        return profile_policy.load_evidence_review_policy(supported_checks)
+
+    def validation_policy(self):
+        if self._validation is not None:
+            return self._validation
+        return profile_policy.validation_policy()
+
+
+class _ExplicitValidationPolicyProvider(_TestPolicyProvider):
+    def validation_policy(self):
+        return self._validation
+
+
+def _use_explicit_operation_validation(
+        pipeline, monkeypatch, validation):
+    services = pipeline.runtime_services
+    monkeypatch.setattr(
+        pipeline,
+        "runtime_services",
+        replace(
+            services,
+            policy_provider=_ExplicitValidationPolicyProvider(
+                services.descriptor,
+                validation,
+            ),
+        ),
+    )
 
 
 class _FakeValidationContext:
@@ -200,7 +240,7 @@ def test_explicit_validator_policy_injection_uses_supplied_subdocument(
         "Explicit product binding review"
     validation["bindings"]["product"]["detailTemplate"] = \
         "explicit product state: {state}"
-    _use_explicit_operation_validation(monkeypatch, validation)
+    _use_explicit_operation_validation(pipeline, monkeypatch, validation)
 
     def fail_config_policy():
         raise profile_policy.ProfilePolicyError(
@@ -221,7 +261,7 @@ def test_explicit_validator_policy_injection_uses_supplied_subdocument(
         "targetScope": {"scopeType": "FIELD", "scopeRef": demo.FIELD},
         "extentBasisStatus": "OPERATOR_SKETCH",
     }
-    extent = _commit_compat(pipeline, partial)
+    extent = _commit_with_test_policy(pipeline, partial)
     assert extent["decisionOutcome"] == "RETAIN_DRAFT"
     assert extent["problems"][0]["title"] == "Explicit extent bound missing"
     assert "explicit treated area" in extent["problems"][0]["detail"]
@@ -239,7 +279,7 @@ def test_explicit_validator_policy_injection_uses_supplied_subdocument(
 
 def test_malformed_explicit_validator_policy_fails_closed(
         pipeline, monkeypatch):
-    _use_explicit_operation_validation(monkeypatch, None)
+    _use_explicit_operation_validation(pipeline, monkeypatch, None)
 
     r = _spray(pipeline, confirm=True)
 
@@ -251,7 +291,7 @@ def test_malformed_explicit_validator_policy_fails_closed(
 
 def test_full_evidence_policy_doc_as_validator_policy_fails_closed(
         pipeline, monkeypatch):
-    _use_explicit_operation_validation(monkeypatch, _policy_doc())
+    _use_explicit_operation_validation(pipeline, monkeypatch, _policy_doc())
 
     r = _spray(pipeline, confirm=True)
 
@@ -276,7 +316,7 @@ def test_non_whole_extent_missing_bound_uses_profile_validation_policy(
         "targetScope": {"scopeType": "FIELD", "scopeRef": demo.FIELD},
         "extentBasisStatus": "OPERATOR_SKETCH",
     }
-    r = _commit_compat(pipeline, sub)
+    r = _commit_with_test_policy(pipeline, sub)
     assert r["decisionOutcome"] == "RETAIN_DRAFT"
     problem = r["problems"][0]
     assert problem["reasonCode"] == "EVIDENCE_INSUFFICIENT"

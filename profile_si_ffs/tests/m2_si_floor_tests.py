@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from dataclasses import replace
 
 import pytest
 
@@ -40,17 +41,40 @@ def uid():
 
 
 def _spray(pipeline, **kw):
-    return _commit_compat(pipeline, demo.spray_submission(
+    return _commit_with_test_policy(pipeline, demo.spray_submission(
         f"p5:{uid()}", erp_id=f"erp:p5.{uid()}", **kw))
 
 
-def _commit_compat(pipeline, sub):
-    active_profile = pipeline.active_profile
+def _commit_with_test_policy(pipeline, sub):
+    services = pipeline.runtime_services
+    pipeline.runtime_services = replace(
+        services,
+        policy_provider=_TestPolicyProvider(services.descriptor),
+    )
     try:
-        pipeline.active_profile = None
         return pipeline.commit(sub)
     finally:
-        pipeline.active_profile = active_profile
+        pipeline.runtime_services = services
+
+
+class _TestPolicyProvider:
+    """Test builder for profile-policy variants; never used by production."""
+
+    def __init__(self, descriptor):
+        self.descriptor = descriptor
+        self.policy_ref = descriptor.evidence_policy_ref
+        self.recognized_rule_refs = frozenset({
+            descriptor.evidence_policy_ref,
+            descriptor.profile_ref,
+            descriptor.pack_ref,
+            descriptor.code_binding_profile_ref,
+        })
+
+    def evidence_policy(self, supported_checks=None):
+        return profile_policy.load_evidence_review_policy(supported_checks)
+
+    def validation_policy(self):
+        return profile_policy.validation_policy()
 
 
 def _problem_titles(result):
@@ -383,7 +407,7 @@ def test_floor_composition_from_package_changes_behavior(store, pipeline, monkey
             f"p5-nocrop:{uid()}", erp_id=f"erp:p5.nocrop.{uid()}",
             confirm=True, binding_refs=[demo.PRODUCT_BINDING])   # crop binding omitted
 
-    default = _commit_compat(pipeline, _no_crop_binding())
+    default = _commit_with_test_policy(pipeline, _no_crop_binding())
     assert default["decisionOutcome"] == "REQUIRE_REVIEW", \
         "crop-binding SOFT by default -> route to review"
 
@@ -399,7 +423,7 @@ def test_floor_composition_from_package_changes_behavior(store, pipeline, monkey
         "validation": _valid_validation(),
         "advisories": {}}))
     monkeypatch.setattr(config, "EVIDENCE_POLICY_PATH", harder)
-    refused = _commit_compat(pipeline, _no_crop_binding())
+    refused = _commit_with_test_policy(pipeline, _no_crop_binding())
     assert refused["decisionOutcome"] == "RETAIN_DRAFT", \
         "crop-binding HARD in the package policy -> refuse, not route"
     assert refused["problems"][0]["reasonCode"] == "EVIDENCE_INSUFFICIENT"

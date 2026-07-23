@@ -389,7 +389,7 @@ class PromotionEmitter:
         # recompute and re-qualify disputed on the next read (spec §6.6). The
         # dispute is recorded authoritatively on the DISPUTE edge; this trace only
         # propagates staleness (BASIS_ADVANCED family, dispute-specific reason).
-        ctx.materializer.invalidate_for_sources(
+        ctx.runtime_services.materializer.invalidate_for_sources(
             ctx.cur, [target],
             trigger_family="BASIS_ADVANCED",
             trigger_source_ref=review_id,

@@ -33,7 +33,7 @@ from .emission import PromotionTraceWriter, ReplayWriter
 from .problems import runtime_problem
 from .profile_runtime import (ProfileRuntimeError, resolve_bound_descriptor,
                               resolve_profile_route)
-from .profile_runtime_provider import default_profile_runtime_provider_registry
+from .profile_runtime_provider import load_profile_runtime_services
 from .stages import (AuthorityGate, EnvelopePersist, EvidenceSufficiencyGate,
                      GateContext, GateRefusal, GateReplay, IngressNormalizer,
                      MaterializationGate, ProfileApplicabilityGate,
@@ -60,7 +60,6 @@ class GatePipeline:
         store,
         *,
         active_descriptor=None,
-        active_profile=None,
         profile_route_records=None,
         profile_route_registry=None,
         selected_profile_package_names=None,
@@ -86,31 +85,17 @@ class GatePipeline:
         self.profile_route_registry = profile_route_registry
         self.selected_profile_package_names = selected_profile_package_names
         self.tenant_ref = tenant_ref
-        self.active_profile = resolve_bound_descriptor(
+        descriptor = resolve_bound_descriptor(
             store,
             active_descriptor=active_descriptor,
-            active_profile=active_profile,
         )
         store.require_startup_complete("GatePipeline")
-        self.runtime_bundle = store.runtime_bundle
-        self.runtime_provider_registry = default_profile_runtime_provider_registry()
-        self.runtime_provider_registration = (
-            self.runtime_provider_registry.registration_for(
-                store.active_profile_package_name,
-                self.active_profile,
-            )
-        )
-        self.runtime_services = self.runtime_provider_registry.build_services(
+        self.runtime_services = load_profile_runtime_services(
             store,
             store.active_profile_package_name,
-            self.active_profile,
+            descriptor,
         )
-        self.policy_provider = self.runtime_services.policy_provider
-        self.si_reference_bindings = self.runtime_services.reference_bindings
         self.authority = AuthorityEvaluator(store)
-        self.context = self.runtime_services.context_assembler
-        self.materializer = self.runtime_services.materializer
-        self.products = self.runtime_services.product_lookup
 
     # ======================================================================
     # the governed front door
@@ -145,39 +130,9 @@ class GatePipeline:
             {k: v for k, v in sub.items() if k != "sourcePayloadDigest"})
 
     def _new_context(self, cur, sub: dict) -> GateContext:
-        runtime_services = (
-            self.runtime_services
-            if self.active_profile == self.runtime_services.descriptor
-            else None
-        )
-        # Profile-local legacy engineering tests deliberately clear
-        # active_profile after construction to exercise their pre-descriptor
-        # policy-injection path. Governed construction cannot enter this state;
-        # retain its already-composed non-policy services only for that trusted
-        # compatibility harness.
-        compatibility_services = (
-            self.runtime_services
-            if self.active_profile is None
-            else runtime_services
-        )
         return GateContext(
             cur=cur, store=self.store, authority=self.authority,
-            context_assembler=(
-                compatibility_services.context_assembler
-                if compatibility_services else None
-            ),
-            materializer=(
-                compatibility_services.materializer if compatibility_services else None
-            ),
-            products=(
-                compatibility_services.product_lookup if compatibility_services else None
-            ),
-            active_profile=self.active_profile,
-            runtime_services=runtime_services,
-            policy_provider=(runtime_services.policy_provider if runtime_services else None),
-            si_reference_bindings=(
-                runtime_services.reference_bindings if runtime_services else None
-            ),
+            runtime_services=self.runtime_services,
             sub=sub,
             request_id=mint("cir"), ingested_at=now_iso(),
             source_digest=self._source_digest(sub),
@@ -235,30 +190,19 @@ class GatePipeline:
         return parsed
 
     def _bind_route_resolution(self, ctx: GateContext, resolution) -> None:
-        registration = self.runtime_provider_registry.registration_for(
-            resolution.candidate.package_name,
-            resolution.descriptor,
-        )
         descriptor = resolve_bound_descriptor(
             ctx.store,
             active_descriptor=resolution.descriptor,
         )
         if (
-            registration is not self.runtime_provider_registration
+            resolution.candidate.package_name
+            != ctx.store.active_profile_package_name
             or descriptor != self.runtime_services.descriptor
         ):
             raise ProfileRuntimeError(
                 "resolved profile runtime provider is not the startup-bound provider"
             )
-        services = self.runtime_services
         ctx.profile_route_resolution = resolution
-        ctx.active_profile = descriptor
-        ctx.runtime_services = services
-        ctx.policy_provider = services.policy_provider
-        ctx.context_assembler = services.context_assembler
-        ctx.materializer = services.materializer
-        ctx.products = services.product_lookup
-        ctx.si_reference_bindings = services.reference_bindings
 
     def _resolve_profile_route(self, ctx: GateContext):
         try:
