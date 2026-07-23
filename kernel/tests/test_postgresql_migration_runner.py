@@ -21,6 +21,7 @@ import pytest
 from psycopg import sql
 
 import deployment.postgresql.migration_runner as migration_runner_module
+import deployment.postgresql.provisioning as provisioning_module
 from deployment.postgresql.migration_runner import (
     MigrationDirtyError,
     MigrationExecutionError,
@@ -50,6 +51,7 @@ from deployment.postgresql.provisioning import (
 from deployment.postgresql.provisioning_specs import (
     SECURITY_AUDIT_PROVISIONING_SPEC,
     TENANT_PROVISIONING_SPEC,
+    TENANT_PROVISIONING_SPEC_V1,
     ProvisioningSpec,
 )
 from deployment.postgresql.version_policy import (
@@ -258,6 +260,35 @@ def tenant_target() -> _TenantTarget:
         )
     finally:
         _destroy_test_service(admin_dsn, spec)
+
+
+@pytest.fixture
+def tenant_v1_target() -> _TenantTarget:
+    admin_dsn = _admin_dsn()
+    old_spec = TENANT_PROVISIONING_SPEC_V1
+    _assert_clean_service(admin_dsn, old_spec)
+    passwords = _passwords(
+        old_spec,
+        "migration-runner-v1-" + secrets.token_urlsafe(12),
+    )
+    try:
+        provision_service(admin_dsn, old_spec, login_passwords=passwords)
+        yield _TenantTarget(
+            admin_dsn=admin_dsn,
+            target_admin_dsn=_database_dsn(
+                admin_dsn,
+                old_spec.database_name,
+            ),
+            migrator_dsn=_database_dsn(
+                admin_dsn,
+                old_spec.database_name,
+                user="ofarm_migrator",
+                password=passwords["ofarm_migrator"],
+            ),
+            passwords=passwords,
+        )
+    finally:
+        _destroy_test_service(admin_dsn, TENANT_PROVISIONING_SPEC)
 
 
 @pytest.fixture
@@ -775,7 +806,7 @@ def test_resumes_at_0002_and_preserves_the_stable_0001_prefix(
 
 
 def test_accepted_authoritative_v1_upgrades_to_the_current_head(
-    tenant_target: _TenantTarget,
+    tenant_v1_target: _TenantTarget,
     tmp_path: Path,
 ):
     package_root = Path(__file__).resolve().parents[2]
@@ -785,8 +816,28 @@ def test_accepted_authoritative_v1_upgrades_to_the_current_head(
         {"0001_initial.sql": current_set.migrations[0].source_bytes},
     )
 
-    first_report = _run(tenant_target, accepted_v1)
-    upgrade_report = _run(tenant_target, current_set)
+    assert set(tenant_v1_target.passwords) == set(
+        TENANT_PROVISIONING_SPEC_V1.required_password_role_names
+    )
+    first_report = _run(
+        tenant_v1_target,
+        accepted_v1,
+        spec=TENANT_PROVISIONING_SPEC_V1,
+    )
+    resolver_password = (
+        "accepted-v2-resolver-" + secrets.token_urlsafe(48)
+    )
+    upgrade_report = migrate_authoritative_service(
+        admin_dsn=tenant_v1_target.admin_dsn,
+        migrator_dsn=tenant_v1_target.migrator_dsn,
+        spec=TENANT_PROVISIONING_SPEC,
+        migration_set=current_set,
+        release_identity=RELEASE_IDENTITY,
+        execution_id=uuid4(),
+        transition_login_passwords={
+            "ofarm_identity_resolver": resolver_password,
+        },
+    )
 
     assert accepted_v1.migrations[0].source_sha256 == (
         "sha256:a51e8144cf1f6c6f553755062ed618c02e23d3749e8355cf33bdb8db4cea633d"
@@ -796,10 +847,86 @@ def test_accepted_authoritative_v1_upgrades_to_the_current_head(
     assert upgrade_report.previous_version == 1
     assert upgrade_report.final_version == 2
     assert upgrade_report.applied_versions == (2,)
-    rows = _ledger_rows(tenant_target)
+    verify_service_infrastructure(
+        tenant_v1_target.admin_dsn,
+        TENANT_PROVISIONING_SPEC,
+    )
+    rows = _ledger_rows(tenant_v1_target)
     assert [row[0] for row in rows] == [1, 2]
     assert rows[0][4] == current_set.prefix_digest(1)
     assert rows[1][4] == current_set.digest
+    assert rows[0][6] == TENANT_PROVISIONING_SPEC_V1.digest
+    assert rows[1][6] == TENANT_PROVISIONING_SPEC.digest
+
+
+def test_tenant_v1_infrastructure_transition_is_failure_atomic_and_retryable(
+    tenant_v1_target: _TenantTarget,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    package_root = Path(__file__).resolve().parents[2]
+    current_set = load_migration_set(package_root, TENANT_SERVICE)
+    accepted_v1 = _load_synthetic_set(
+        tmp_path / "accepted-v1",
+        {"0001_initial.sql": current_set.migrations[0].source_bytes},
+    )
+    _run(
+        tenant_v1_target,
+        accepted_v1,
+        spec=TENANT_PROVISIONING_SPEC_V1,
+    )
+    resolver_password = (
+        "atomic-v2-resolver-" + secrets.token_urlsafe(48)
+    )
+    original_create_membership = provisioning_module._create_membership
+
+    def fail_after_membership(connection, membership) -> None:
+        original_create_membership(connection, membership)
+        raise RuntimeError("injected tenant-v2 transition failure")
+
+    with monkeypatch.context() as transition_failure:
+        transition_failure.setattr(
+            provisioning_module,
+            "_create_membership",
+            fail_after_membership,
+        )
+        with pytest.raises(
+            RuntimeError,
+            match="injected tenant-v2 transition failure",
+        ):
+            migrate_authoritative_service(
+                admin_dsn=tenant_v1_target.admin_dsn,
+                migrator_dsn=tenant_v1_target.migrator_dsn,
+                spec=TENANT_PROVISIONING_SPEC,
+                migration_set=current_set,
+                release_identity=RELEASE_IDENTITY,
+                execution_id=uuid4(),
+                transition_login_passwords={
+                    "ofarm_identity_resolver": resolver_password,
+                },
+            )
+
+    verify_service_infrastructure(
+        tenant_v1_target.admin_dsn,
+        TENANT_PROVISIONING_SPEC_V1,
+    )
+    retry = migrate_authoritative_service(
+        admin_dsn=tenant_v1_target.admin_dsn,
+        migrator_dsn=tenant_v1_target.migrator_dsn,
+        spec=TENANT_PROVISIONING_SPEC,
+        migration_set=current_set,
+        release_identity=RELEASE_IDENTITY,
+        execution_id=uuid4(),
+        transition_login_passwords={
+            "ofarm_identity_resolver": resolver_password,
+        },
+    )
+    assert retry.previous_version == 1
+    assert retry.final_version == 2
+    verify_service_infrastructure(
+        tenant_v1_target.admin_dsn,
+        TENANT_PROVISIONING_SPEC,
+    )
 
 
 def test_failed_ddl_and_ledger_append_roll_back_together(

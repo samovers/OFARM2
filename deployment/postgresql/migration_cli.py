@@ -46,6 +46,7 @@ def run_fixed_migration_cli(
     spec: ProvisioningSpec,
     admin_dsn_environment: str,
     migrator_dsn_environment: str,
+    transition_login_password_environment: str | None = None,
     argv: Sequence[str] | None = None,
 ) -> int:
     """Run one repository-fixed service without accepting route selection."""
@@ -68,6 +69,11 @@ def run_fixed_migration_cli(
 
     admin_dsn = os.environ.get(admin_dsn_environment)
     migrator_dsn = os.environ.get(migrator_dsn_environment)
+    transition_login_password = (
+        os.environ.get(transition_login_password_environment)
+        if transition_login_password_environment is not None
+        else None
+    )
     if not admin_dsn or not migrator_dsn:
         parser.exit(
             2,
@@ -83,6 +89,11 @@ def run_fixed_migration_cli(
             migration_set=migration_set,
             release_identity=arguments.release_identity,
             execution_id=arguments.execution_id,
+            transition_login_passwords=(
+                {"ofarm_identity_resolver": transition_login_password}
+                if transition_login_password is not None
+                else None
+            ),
         )
     except (MigrationSetError, MigrationError) as exc:
         parser.exit(1, f"migration refused: {exc}\n")

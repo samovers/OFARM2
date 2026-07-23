@@ -51,6 +51,8 @@ Use the exact checked-in release in this order:
    ```bash
    export OFARM_TENANT_PROVISIONING_PG_ADMIN_DSN='...'
    export OFARM_TENANT_MIGRATOR_DSN='...'
+   # Required only when upgrading the exact accepted provisioning-v1 target:
+   export OFARM_TENANT_IDENTITY_RESOLVER_PASSWORD='...'
    python -m deployment.postgresql.run_tenant_migrations \
      --release-identity '<printable-release-id>' \
      --execution-id '<canonical-non-nil-uuid>'
@@ -61,6 +63,13 @@ Use the exact checked-in release in this order:
      --release-identity '<printable-release-id>' \
      --execution-id '<canonical-non-nil-uuid>'
    ```
+
+   The tenant runner recognizes only the exact accepted version-1
+   infrastructure and one-row migration prefix. For that target it atomically
+   creates the execute-only resolver login and its separate `NOLOGIN`
+   `SECURITY DEFINER` owner before applying migration 0002. Fresh or already
+   transitioned version-2 targets do not require the resolver-password
+   environment variable.
 
 7. Observe each migrated lane independently:
 

@@ -12,6 +12,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 from textwrap import dedent
+from typing import Mapping
 from uuid import UUID
 
 import psycopg
@@ -39,11 +40,13 @@ from deployment.postgresql.provisioning import (
     ProvisioningError,
     ProvisioningInfrastructureReport,
     migration_locked_differences,
+    transition_tenant_service_v1_to_v2,
     verify_service_infrastructure,
 )
 from deployment.postgresql.provisioning_specs import (
     SECURITY_AUDIT_PROVISIONING_SPEC,
     TENANT_PROVISIONING_SPEC,
+    TENANT_PROVISIONING_SPEC_V1,
     ProvisioningSpec,
     ProvisioningSpecError,
     require_frozen_tenant_native_verifier_authority,
@@ -170,9 +173,13 @@ def _quoted_literal(value: str) -> str:
 
 
 def _require_fixed_pair(spec: ProvisioningSpec, migration_set: MigrationSet) -> None:
-    if spec not in (TENANT_PROVISIONING_SPEC, SECURITY_AUDIT_PROVISIONING_SPEC):
+    if spec not in (
+        TENANT_PROVISIONING_SPEC_V1,
+        TENANT_PROVISIONING_SPEC,
+        SECURITY_AUDIT_PROVISIONING_SPEC,
+    ):
         raise MigrationInputError("spec must be one checked-in PostgreSQL service")
-    if spec == TENANT_PROVISIONING_SPEC:
+    if spec.migration_service == TENANT_SERVICE:
         try:
             require_frozen_tenant_native_verifier_authority()
         except ProvisioningSpecError as exc:
@@ -1370,15 +1377,27 @@ def _history_version(
         raise MigrationDirtyError("migration history is newer than the local set")
     for expected_version, row in enumerate(rows, start=1):
         migration = migration_set.migrations[expected_version - 1]
-        if row[0] != expected_version or tuple(row[1:7]) != (
+        if row[0] != expected_version or tuple(row[1:6]) != (
             migration.filename,
             migration.source_sha256,
             migration.byte_length,
             migration_set.prefix_digest(expected_version),
             spec.migration_service.identity,
-            spec.digest,
         ):
             raise MigrationDirtyError("migration history is not the exact local prefix")
+        accepted_provisioning_digests = {spec.digest}
+        if (
+            spec is TENANT_PROVISIONING_SPEC
+            and expected_version == 1
+        ):
+            accepted_provisioning_digests = {
+                TENANT_PROVISIONING_SPEC_V1.digest,
+                TENANT_PROVISIONING_SPEC.digest,
+            }
+        if row[6] not in accepted_provisioning_digests:
+            raise MigrationDirtyError(
+                "migration history provisioning prefix is not accepted"
+            )
         if _RELEASE_IDENTITY.fullmatch(row[7] or "") is None:
             raise MigrationDirtyError("migration history release identity is malformed")
         if not isinstance(row[8], UUID) or row[8].int == 0:
@@ -1482,6 +1501,89 @@ def _insert_ledger_row(
     )
 
 
+def _require_transitionable_tenant_v1(
+    *,
+    migrator_dsn: str,
+    infrastructure: ProvisioningInfrastructureReport,
+    migration_set: MigrationSet,
+) -> None:
+    try:
+        connection = psycopg.connect(migrator_dsn, autocommit=True)
+    except psycopg.Error as exc:
+        raise MigrationTargetError("migrator route is unavailable") from exc
+    with connection:
+        _target_identity(connection, infrastructure)
+        _begin_and_lock(connection, TENANT_PROVISIONING_SPEC_V1)
+        try:
+            _set_owner_role(connection, TENANT_PROVISIONING_SPEC_V1)
+            differences = _locked_boundary_differences(
+                connection,
+                TENANT_PROVISIONING_SPEC_V1,
+            )
+            if differences:
+                raise MigrationDirtyError(
+                    "accepted tenant-v1 infrastructure differs under lock: "
+                    + "; ".join(sorted(set(differences)))
+                )
+            if _ledger_oid(connection, TENANT_PROVISIONING_SPEC_V1) is None:
+                raise MigrationDirtyError(
+                    "tenant v1-to-v2 transition ledger is absent"
+                )
+            _verify_ledger_contract(connection, TENANT_PROVISIONING_SPEC_V1)
+            history = _history_version(
+                connection,
+                TENANT_PROVISIONING_SPEC_V1,
+                migration_set,
+                allow_empty=False,
+            )
+            if history.version != 1:
+                raise MigrationDirtyError(
+                    "tenant v1-to-v2 transition requires the exact version-1 prefix"
+                )
+        finally:
+            _rollback_quietly(connection)
+
+
+def _observe_or_transition_infrastructure(
+    *,
+    admin_dsn: str,
+    migrator_dsn: str,
+    spec: ProvisioningSpec,
+    migration_set: MigrationSet,
+    transition_login_passwords: Mapping[str, str] | None,
+) -> ProvisioningInfrastructureReport:
+    try:
+        return _observe_infrastructure(admin_dsn, spec)
+    except MigrationTargetError as current_error:
+        if spec is not TENANT_PROVISIONING_SPEC:
+            raise
+        try:
+            historical = _observe_infrastructure(
+                admin_dsn,
+                TENANT_PROVISIONING_SPEC_V1,
+            )
+        except MigrationTargetError:
+            raise current_error
+        _require_transitionable_tenant_v1(
+            migrator_dsn=migrator_dsn,
+            infrastructure=historical,
+            migration_set=migration_set,
+        )
+        if transition_login_passwords is None:
+            raise MigrationTargetError(
+                "tenant v1-to-v2 infrastructure transition requires "
+                "the new resolver credential"
+            )
+        try:
+            transition_tenant_service_v1_to_v2(
+                admin_dsn,
+                login_passwords=transition_login_passwords,
+            )
+        except ProvisioningError as exc:
+            raise MigrationTargetError(str(exc)) from exc
+        return _observe_infrastructure(admin_dsn, spec)
+
+
 def _commit(
     connection: psycopg.Connection,
     migration: Migration,
@@ -1529,6 +1631,7 @@ def _migrate_service(
     release_identity: str,
     execution_id: UUID,
     verify_final_structure: bool,
+    transition_login_passwords: Mapping[str, str] | None,
 ) -> MigrationRunReport:
     """Shared executor after the public or synthetic preflight boundary."""
 
@@ -1541,7 +1644,13 @@ def _migrate_service(
     if not isinstance(migrator_dsn, str) or not migrator_dsn:
         raise MigrationInputError("migrator_dsn must be non-empty")
 
-    infrastructure = _observe_infrastructure(admin_dsn, spec)
+    infrastructure = _observe_or_transition_infrastructure(
+        admin_dsn=admin_dsn,
+        migrator_dsn=migrator_dsn,
+        spec=spec,
+        migration_set=migration_set,
+        transition_login_passwords=transition_login_passwords,
+    )
     try:
         connection = psycopg.connect(migrator_dsn, autocommit=True)
     except psycopg.Error as exc:
@@ -1708,6 +1817,7 @@ def migrate_service(
     migration_set: MigrationSet,
     release_identity: str,
     execution_id: UUID,
+    transition_login_passwords: Mapping[str, str] | None = None,
 ) -> MigrationRunReport:
     """Apply only the literal authoritative release migration history."""
 
@@ -1724,6 +1834,7 @@ def migrate_service(
         release_identity=release_identity,
         execution_id=execution_id,
         verify_final_structure=True,
+        transition_login_passwords=transition_login_passwords,
     )
 
 
@@ -1735,6 +1846,7 @@ def _migrate_service_for_testing(
     migration_set: MigrationSet,
     release_identity: str,
     execution_id: UUID,
+    transition_login_passwords: Mapping[str, str] | None = None,
 ) -> MigrationRunReport:
     """Exercise runner mechanics with synthetic migration sets in tests only."""
 
@@ -1746,4 +1858,5 @@ def _migrate_service_for_testing(
         release_identity=release_identity,
         execution_id=execution_id,
         verify_final_structure=False,
+        transition_login_passwords=transition_login_passwords,
     )

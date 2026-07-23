@@ -82,6 +82,15 @@ def test_each_entry_point_has_one_fixed_service_and_route_pair(
     )
     monkeypatch.setenv(admin_environment, "admin-route")
     monkeypatch.setenv(migrator_environment, "migrator-route")
+    expected_transition_login_passwords = None
+    if module is tenant_cli:
+        monkeypatch.setenv(
+            "OFARM_TENANT_IDENTITY_RESOLVER_PASSWORD",
+            "resolver-transition-password",
+        )
+        expected_transition_login_passwords = {
+            "ofarm_identity_resolver": "resolver-transition-password"
+        }
     observed: dict[str, object] = {}
 
     def fake_migrate_service(**values):
@@ -118,6 +127,10 @@ def test_each_entry_point_has_one_fixed_service_and_route_pair(
     assert observed["migration_set"].service is service
     assert observed["release_identity"] == "ofarm-release/174"
     assert observed["execution_id"] == _EXECUTION_ID
+    assert (
+        observed["transition_login_passwords"]
+        == expected_transition_login_passwords
+    )
     output = json.loads(capsys.readouterr().out)
     assert output["serviceIdentity"] == service.identity
     assert output["executionId"] == str(_EXECUTION_ID)

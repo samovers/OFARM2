@@ -11,6 +11,7 @@ from .provisioning_specs import TENANT_PROVISIONING_SPEC
 
 TENANT_ADMIN_DSN_ENVIRONMENT = "OFARM_TENANT_PROVISIONING_PG_ADMIN_DSN"
 TENANT_MIGRATOR_DSN_ENVIRONMENT = "OFARM_TENANT_MIGRATOR_DSN"
+TENANT_RESOLVER_PASSWORD_ENVIRONMENT = "OFARM_TENANT_IDENTITY_RESOLVER_PASSWORD"
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -19,6 +20,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         spec=TENANT_PROVISIONING_SPEC,
         admin_dsn_environment=TENANT_ADMIN_DSN_ENVIRONMENT,
         migrator_dsn_environment=TENANT_MIGRATOR_DSN_ENVIRONMENT,
+        transition_login_password_environment=(
+            TENANT_RESOLVER_PASSWORD_ENVIRONMENT
+        ),
         argv=argv,
     )
 

@@ -33,6 +33,7 @@ from .auth_oidc import (
 _SHA256_ID = re.compile(r"^sha256:[0-9a-f]{64}$")
 _SUBJECT = re.compile(r"^[!-~]{1,255}$")
 _ASCII_ID = re.compile(r"^[A-Za-z0-9._:-]{1,255}$")
+_BINDING_INTEGRITY_SQLSTATE = "PT001"
 
 
 class ExecutableConnection(Protocol):
@@ -71,23 +72,18 @@ class PostgreSQLPrincipalBindingResolver:
         SELECT *
           FROM ofarm.resolve_principal_binding_authority(%s, %s, %s)
     """
+    _HEALTH_SQL = """
+        SELECT ofarm.check_principal_binding_resolution_dependencies()
+    """
 
     def __init__(self, connection_factory: ConnectionFactory):
         self._connection_factory = connection_factory
         self._initialized = False
 
     def initialize(self) -> None:
-        startup_params = (
-            OIDC_ISSUER_EQUALITY_POLICY,
-            "https://principal-binding-startup.invalid",
-            "startup-probe",
-        )
         try:
             with self._connection_factory() as connection:
-                connection.execute(
-                    self._RESOLVE_SQL,
-                    startup_params,
-                ).fetchall()
+                connection.execute(self._HEALTH_SQL).fetchone()
         except Exception as exc:
             raise AuthenticationStartupError(
                 "principal-binding immutable read path is unavailable"
@@ -114,9 +110,20 @@ class PostgreSQLPrincipalBindingResolver:
             with self._connection_factory() as connection:
                 rows = connection.execute(self._RESOLVE_SQL, params).fetchall()
         except Exception as exc:
+            outcome = (
+                PreBindingOutcome.BINDING_INTEGRITY_REFUSED
+                if getattr(exc, "sqlstate", None)
+                == _BINDING_INTEGRITY_SQLSTATE
+                else PreBindingOutcome.BINDING_UNAVAILABLE
+            )
             raise OidcError(
-                PreBindingOutcome.BINDING_UNAVAILABLE,
-                internal_detail="principal-binding authority read failed",
+                outcome,
+                internal_detail=(
+                    "principal-binding authority integrity refused"
+                    if outcome
+                    is PreBindingOutcome.BINDING_INTEGRITY_REFUSED
+                    else "principal-binding authority read failed"
+                ),
             ) from exc
         if not rows:
             raise OidcError(

@@ -38,6 +38,7 @@ from deployment.postgresql.provisioning_specs import (
     PROVISIONING_SPEC_DIGEST_POLICY,
     SECURITY_AUDIT_PROVISIONING_SPEC,
     TENANT_PROVISIONING_SPEC,
+    TENANT_PROVISIONING_SPEC_V1,
 )
 from deployment.postgresql.tenant_contract import TENANT_CONTEXT_ROUTINE_SIGNATURES
 from deployment.postgresql.version_policy import (
@@ -490,7 +491,9 @@ def test_provisioning_specs_freeze_distinct_service_and_role_boundaries():
     ).hexdigest() == \
         "17e431e33221426151a6ceb3eb2214b1abc51a7b9390d508603f233742deca28"
     assert tenant.digest == \
-        "sha256:1c6d450012cd253604b296d1b1f245c82d3e706c56fa217189f6ed35c9db9fe9"
+        "sha256:02bbcef56dcdc1e4d3c0d359b817aec4e41b1611d19238a3ec17ad8c5db31237"
+    assert TENANT_PROVISIONING_SPEC_V1.digest == \
+        "sha256:87122affe6e45127d33b50bb7ee7cb9e35f5e66d81549bcae821019b3fd15f00"
     assert audit.digest == \
         "sha256:9b9d06c6f6ac5527a32014ec1719a3cee9742d4d5ab7d8e8a4ff2797053824f7"
     assert next(
@@ -914,6 +917,11 @@ def test_binder_and_runtime_memberships_are_closed():
     resolver = next(
         role for role in tenant.roles if role.name == "ofarm_identity_resolver"
     )
+    resolver_owner = next(
+        role
+        for role in tenant.roles
+        if role.name == "ofarm_principal_resolver_owner"
+    )
 
     assert (binder.login, binder.inherit, binder.bypass_rls) == (False, False, True)
     assert (
@@ -922,7 +930,14 @@ def test_binder_and_runtime_memberships_are_closed():
         resolver.bypass_rls,
         resolver.connection_limit,
         resolver.password_required,
-    ) == (True, False, True, 8, True)
+    ) == (True, False, False, 8, True)
+    assert (
+        resolver_owner.login,
+        resolver_owner.inherit,
+        resolver_owner.bypass_rls,
+        resolver_owner.connection_limit,
+        resolver_owner.password_required,
+    ) == (False, False, True, -1, False)
     assert all(
         "ofarm_binder" not in (edge.granted_role, edge.member_role)
         for edge in tenant.memberships
@@ -933,6 +948,9 @@ def test_binder_and_runtime_memberships_are_closed():
     )
     assert "ofarm_identity_resolver" in tenant.database_connect_roles
     assert "ofarm_identity_resolver" in tenant.schema_usage_roles
+    assert "ofarm_principal_resolver_owner" not in \
+        tenant.database_connect_roles
+    assert "ofarm_principal_resolver_owner" in tenant.schema_usage_roles
     assert {
         (
             edge.granted_role,
@@ -944,6 +962,13 @@ def test_binder_and_runtime_memberships_are_closed():
         for edge in tenant.memberships
     } == {
         ("ofarm_owner", "ofarm_migrator", False, True, False),
+        (
+            "ofarm_principal_resolver_owner",
+            "ofarm_owner",
+            False,
+            True,
+            False,
+        ),
         (
             "ofarm_tenant_registrar",
             "ofarm_tenant_control_login",
@@ -1004,6 +1029,7 @@ def test_binder_and_runtime_memberships_are_closed():
     assert tenant.default_privilege_owner_roles == (
         "ofarm_owner",
         "ofarm_tenant_migration_lock_owner",
+        "ofarm_principal_resolver_owner",
         "ofarm_tenant_lock_owner",
         "ofarm_binder",
         "ofarm_admission_lock_owner",

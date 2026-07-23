@@ -29,7 +29,7 @@ RETURNS TABLE (
     valid_until pg_catalog.timestamptz,
     binding_digest_matches pg_catalog.bool
 )
-LANGUAGE plpgsql VOLATILE PARALLEL UNSAFE SECURITY INVOKER
+LANGUAGE plpgsql VOLATILE PARALLEL UNSAFE SECURITY DEFINER
 SET search_path = pg_catalog, pg_temp
 AS $resolver$
 DECLARE
@@ -90,7 +90,7 @@ BEGIN
                 IS DISTINCT FROM expected_prior_digest
            OR act_row.act_digest::pg_catalog.text <> recomputed_digest THEN
             RAISE EXCEPTION USING
-                ERRCODE = '55000',
+                ERRCODE = 'PT001',
                 MESSAGE = 'principal lifecycle authority differs';
         END IF;
 
@@ -104,7 +104,7 @@ BEGIN
                 act_row.binding_version_digest;
         IF NOT FOUND THEN
             RAISE EXCEPTION USING
-                ERRCODE = '55000',
+                ERRCODE = 'PT001',
                 MESSAGE = 'principal lifecycle binding differs';
         END IF;
 
@@ -113,7 +113,7 @@ BEGIN
                OR act_row.successor_version_id IS NOT NULL
                OR act_row.successor_version_digest IS NOT NULL THEN
                 RAISE EXCEPTION USING
-                    ERRCODE = '55000',
+                    ERRCODE = 'PT001',
                     MESSAGE = 'principal activation authority differs';
             END IF;
             fold_state := 'ACTIVE';
@@ -129,7 +129,7 @@ BEGIN
                OR act_row.successor_version_id IS NULL
                OR act_row.successor_version_digest IS NULL THEN
                 RAISE EXCEPTION USING
-                    ERRCODE = '55000',
+                    ERRCODE = 'PT001',
                     MESSAGE = 'principal supersession authority differs';
             END IF;
             PERFORM 1
@@ -143,7 +143,7 @@ BEGIN
                     act_row.successor_version_digest;
             IF NOT FOUND THEN
                 RAISE EXCEPTION USING
-                    ERRCODE = '55000',
+                    ERRCODE = 'PT001',
                     MESSAGE = 'principal successor authority differs';
             END IF;
             fold_binding_version_id := act_row.successor_version_id;
@@ -158,7 +158,7 @@ BEGIN
                OR act_row.successor_version_id IS NOT NULL
                OR act_row.successor_version_digest IS NOT NULL THEN
                 RAISE EXCEPTION USING
-                    ERRCODE = '55000',
+                    ERRCODE = 'PT001',
                     MESSAGE = 'principal inactivation authority differs';
             END IF;
             fold_state := 'INACTIVE';
@@ -166,7 +166,7 @@ BEGIN
             fold_binding_version_digest := NULL;
         ELSE
             RAISE EXCEPTION USING
-                ERRCODE = '55000',
+                ERRCODE = 'PT001',
                 MESSAGE = 'principal lifecycle kind differs';
         END IF;
 
@@ -244,27 +244,192 @@ BEGIN
 END
 $resolver$;
 
+CREATE FUNCTION ofarm.check_principal_binding_resolution_dependencies()
+RETURNS pg_catalog.void
+LANGUAGE plpgsql VOLATILE PARALLEL UNSAFE SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+AS $health$
+DECLARE
+    binding_digest pg_catalog.text;
+    lifecycle_digest pg_catalog.text;
+BEGIN
+    IF SESSION_USER <> 'ofarm_identity_resolver' THEN
+        RAISE EXCEPTION USING
+            ERRCODE = '42501',
+            MESSAGE = 'principal-binding health caller differs';
+    END IF;
+    IF NOT pg_catalog.has_function_privilege(
+        SESSION_USER,
+        'ofarm.resolve_principal_binding_authority(text,text,text)'
+            ::pg_catalog.regprocedure,
+        'EXECUTE'
+    ) THEN
+        RAISE EXCEPTION USING
+            ERRCODE = '42501',
+            MESSAGE = 'principal-binding resolver execute privilege differs';
+    END IF;
+
+    PERFORM binding.equality_policy,
+            binding.issuer,
+            binding.subject,
+            binding.binding_version_id,
+            binding.binding_version_digest,
+            binding.tenant_id,
+            binding.tenant_registration_digest,
+            binding.party_ref,
+            binding.party_record_kind,
+            binding.party_record_id,
+            binding.party_schema_digest,
+            binding.party_payload_digest,
+            binding.party_state,
+            binding.valid_from,
+            binding.valid_until,
+            binding.predecessor_version_id
+      FROM ofarm.principal_binding AS binding
+     WHERE false;
+    PERFORM act.equality_policy,
+            act.issuer,
+            act.subject,
+            act.stream_sequence,
+            act.act_id,
+            act.act_digest,
+            act.act_kind,
+            act.binding_version_id,
+            act.binding_version_digest,
+            act.prior_act_id,
+            act.prior_act_digest,
+            act.successor_version_id,
+            act.successor_version_digest,
+            act.effective_at,
+            act.decided_at,
+            act.accountable_control_ref,
+            act.reason
+      FROM ofarm.principal_binding_lifecycle AS act
+     WHERE false;
+    PERFORM registry.tenant_id,
+            registry.registration_digest
+      FROM ofarm.tenant_registry AS registry
+     WHERE false;
+    PERFORM party.tenant_id,
+            party.record_id,
+            party.record_kind,
+            party.schema_digest,
+            party.payload_digest,
+            party.party_state,
+            party.party_id
+      FROM ofarm.kernel_record AS party
+     WHERE false;
+    IF NOT pg_catalog.has_type_privilege(
+           CURRENT_USER, 'ofarm.ascii_id', 'USAGE'
+       )
+       OR NOT pg_catalog.has_type_privilege(
+           CURRENT_USER, 'ofarm.oidc_issuer', 'USAGE'
+       )
+       OR NOT pg_catalog.has_type_privilege(
+           CURRENT_USER, 'ofarm.oidc_subject', 'USAGE'
+       )
+       OR NOT pg_catalog.has_type_privilege(
+           CURRENT_USER, 'ofarm.sha256_id', 'USAGE'
+       )
+       OR NOT pg_catalog.has_type_privilege(
+           CURRENT_USER, 'ofarm.tenant_local_ref', 'USAGE'
+       ) THEN
+        RAISE EXCEPTION USING
+            ERRCODE = '42501',
+            MESSAGE = 'principal-binding resolver type privilege differs';
+    END IF;
+    PERFORM NULL::ofarm.ascii_id,
+            NULL::ofarm.oidc_issuer,
+            NULL::ofarm.oidc_subject,
+            NULL::ofarm.sha256_id,
+            NULL::ofarm.tenant_local_ref;
+
+    binding_digest := ofarm.compute_principal_binding_version_digest(
+        'OIDC_EXACT_UTF8_V1',
+        'https://principal-binding-health.invalid',
+        'health-subject',
+        '00000000-0000-0000-0000-000000000001'::pg_catalog.uuid,
+        '00000000-0000-0000-0000-000000000002'::pg_catalog.uuid,
+        'sha256:1111111111111111111111111111111111111111111111111111111111111111',
+        'health-party',
+        'ofarm.party.v0.1',
+        'health-party',
+        'sha256:2222222222222222222222222222222222222222222222222222222222222222',
+        'sha256:3333333333333333333333333333333333333333333333333333333333333333',
+        'ACTIVE',
+        '2000-01-01 00:00:00+00'::pg_catalog.timestamptz,
+        '2100-01-01 00:00:00+00'::pg_catalog.timestamptz,
+        NULL::pg_catalog.uuid
+    );
+    lifecycle_digest := ofarm.compute_principal_lifecycle_act_digest(
+        'OIDC_EXACT_UTF8_V1',
+        'https://principal-binding-health.invalid',
+        'health-subject',
+        1,
+        '00000000-0000-0000-0000-000000000003'::pg_catalog.uuid,
+        'ACTIVATE',
+        '00000000-0000-0000-0000-000000000001'::pg_catalog.uuid,
+        binding_digest,
+        NULL::pg_catalog.uuid,
+        NULL::pg_catalog.text,
+        NULL::pg_catalog.uuid,
+        NULL::pg_catalog.text,
+        '2000-01-01 00:00:00+00'::pg_catalog.timestamptz,
+        '2000-01-01 00:00:01+00'::pg_catalog.timestamptz,
+        'health-control',
+        'health-check'
+    );
+    IF binding_digest !~ '^sha256:[0-9a-f]{64}$'
+       OR lifecycle_digest !~ '^sha256:[0-9a-f]{64}$' THEN
+        RAISE EXCEPTION USING
+            ERRCODE = 'PT001',
+            MESSAGE = 'principal-binding health digest differs';
+    END IF;
+END
+$health$;
+
 REVOKE ALL PRIVILEGES ON FUNCTION
     ofarm.resolve_principal_binding_authority(
         pg_catalog.text, pg_catalog.text, pg_catalog.text
-    )
+    ),
+    ofarm.check_principal_binding_resolution_dependencies()
 FROM PUBLIC;
+GRANT CREATE ON SCHEMA ofarm TO ofarm_principal_resolver_owner;
 GRANT EXECUTE ON FUNCTION
     ofarm.resolve_principal_binding_authority(
         pg_catalog.text, pg_catalog.text, pg_catalog.text
-    )
+    ),
+    ofarm.check_principal_binding_resolution_dependencies()
 TO ofarm_identity_resolver;
+ALTER FUNCTION
+    ofarm.resolve_principal_binding_authority(
+        pg_catalog.text, pg_catalog.text, pg_catalog.text
+    )
+OWNER TO ofarm_principal_resolver_owner;
+ALTER FUNCTION
+    ofarm.check_principal_binding_resolution_dependencies()
+OWNER TO ofarm_principal_resolver_owner;
+REVOKE CREATE ON SCHEMA ofarm FROM ofarm_principal_resolver_owner;
 GRANT SELECT ON TABLE
     ofarm.principal_binding,
     ofarm.principal_binding_lifecycle,
     ofarm.tenant_registry
-TO ofarm_identity_resolver;
+TO ofarm_principal_resolver_owner;
 GRANT SELECT (
     tenant_id, record_id, record_kind, schema_digest, payload_digest,
     party_state, party_id
-) ON TABLE ofarm.kernel_record TO ofarm_identity_resolver;
+) ON TABLE ofarm.kernel_record TO ofarm_principal_resolver_owner;
+GRANT USAGE ON TYPE
+    ofarm.ascii_id,
+    ofarm.oidc_issuer,
+    ofarm.oidc_subject,
+    ofarm.sha256_id,
+    ofarm.tenant_local_ref
+TO ofarm_principal_resolver_owner;
 GRANT EXECUTE ON FUNCTION
     ofarm.lp32(pg_catalog.bytea),
+    ofarm.valid_ascii_id(pg_catalog.text),
+    ofarm.valid_oidc_issuer(pg_catalog.text),
     ofarm.compute_principal_binding_version_digest(
         pg_catalog.text, pg_catalog.text, pg_catalog.text, pg_catalog.uuid,
         pg_catalog.uuid, pg_catalog.text, pg_catalog.text, pg_catalog.text,
@@ -278,7 +443,32 @@ GRANT EXECUTE ON FUNCTION
         pg_catalog.timestamptz, pg_catalog.timestamptz,
         pg_catalog.text, pg_catalog.text
     )
-TO ofarm_identity_resolver;
+TO ofarm_principal_resolver_owner;
+
+REVOKE ALL PRIVILEGES ON TABLE
+    ofarm.principal_binding,
+    ofarm.principal_binding_lifecycle,
+    ofarm.tenant_registry,
+    ofarm.kernel_record
+FROM ofarm_identity_resolver;
+REVOKE ALL PRIVILEGES ON FUNCTION
+    ofarm.lp32(pg_catalog.bytea),
+    ofarm.valid_ascii_id(pg_catalog.text),
+    ofarm.valid_oidc_issuer(pg_catalog.text),
+    ofarm.compute_principal_binding_version_digest(
+        pg_catalog.text, pg_catalog.text, pg_catalog.text, pg_catalog.uuid,
+        pg_catalog.uuid, pg_catalog.text, pg_catalog.text, pg_catalog.text,
+        pg_catalog.text, pg_catalog.text, pg_catalog.text, pg_catalog.text,
+        pg_catalog.timestamptz, pg_catalog.timestamptz, pg_catalog.uuid
+    ),
+    ofarm.compute_principal_lifecycle_act_digest(
+        pg_catalog.text, pg_catalog.text, pg_catalog.text, pg_catalog.int8,
+        pg_catalog.uuid, pg_catalog.text, pg_catalog.uuid, pg_catalog.text,
+        pg_catalog.uuid, pg_catalog.text, pg_catalog.uuid, pg_catalog.text,
+        pg_catalog.timestamptz, pg_catalog.timestamptz,
+        pg_catalog.text, pg_catalog.text
+    )
+FROM ofarm_identity_resolver;
 
 DO $migration$
 DECLARE
@@ -308,6 +498,10 @@ BEGIN
        ) = 0
        OR pg_catalog.strpos(
            verifier_definition,
+           'pg_catalog.max(migration.provisioning_spec_digest)'
+       ) = 0
+       OR pg_catalog.strpos(
+           verifier_definition,
            'sha256:f7c72a008792173e110b9359006271fea263b3e26fb53c8ac6303839d0460fc4'
        ) = 0 THEN
         RAISE EXCEPTION USING
@@ -333,7 +527,12 @@ BEGIN
     revised_definition := pg_catalog.replace(
         revised_definition,
         'sha256:87122affe6e45127d33b50bb7ee7cb9e35f5e66d81549bcae821019b3fd15f00',
-        'sha256:1c6d450012cd253604b296d1b1f245c82d3e706c56fa217189f6ed35c9db9fe9'
+        'sha256:02bbcef56dcdc1e4d3c0d359b817aec4e41b1611d19238a3ec17ad8c5db31237'
+    );
+    revised_definition := pg_catalog.replace(
+        revised_definition,
+        'pg_catalog.max(migration.provisioning_spec_digest)',
+        'pg_catalog.max(migration.provisioning_spec_digest) FILTER (WHERE migration.version = 2)'
     );
     revised_definition := pg_catalog.replace(
         revised_definition,
@@ -343,15 +542,31 @@ BEGIN
     revised_definition := pg_catalog.replace(
         revised_definition,
         'sha256:f7c72a008792173e110b9359006271fea263b3e26fb53c8ac6303839d0460fc4',
-        'sha256:77fd37b8c76bbc23b33d2c485c564358dd31c40155d12be49d1aa5cedfb22519'
+        'sha256:ab1d352b615c7d52d61b2c3d11172d32703926d42aad2a2b13e75a7d52126dc4'
     );
     revised_definition := pg_catalog.replace(
         revised_definition,
         $roles$'ofarm_identity_control_login:false:false:false:false:true:true:false:1',
             'ofarm_identity_writer:false:false:false:false:false:false:false:-1'$roles$,
         $roles$'ofarm_identity_control_login:false:false:false:false:true:true:false:1',
-            'ofarm_identity_resolver:false:false:false:false:true:false:true:8',
+            'ofarm_identity_resolver:false:false:false:false:true:false:false:8',
             'ofarm_identity_writer:false:false:false:false:false:false:false:-1'$roles$
+    );
+    revised_definition := pg_catalog.replace(
+        revised_definition,
+        $roles$'ofarm_owner:false:false:false:false:false:false:false:-1',
+            'ofarm_readiness:false:false:false:false:true:true:false:2'$roles$,
+        $roles$'ofarm_owner:false:false:false:false:false:false:false:-1',
+            'ofarm_principal_resolver_owner:false:false:false:false:false:false:true:-1',
+            'ofarm_readiness:false:false:false:false:true:true:false:2'$roles$
+    );
+    revised_definition := pg_catalog.replace(
+        revised_definition,
+        $memberships$'ofarm_owner>ofarm_migrator:false:true:false',
+            'ofarm_runtime_bundle_publisher>ofarm_runtime_bundle_control_login:true:false:false'$memberships$,
+        $memberships$'ofarm_owner>ofarm_migrator:false:true:false',
+            'ofarm_principal_resolver_owner>ofarm_owner:false:true:false',
+            'ofarm_runtime_bundle_publisher>ofarm_runtime_bundle_control_login:true:false:false'$memberships$
     );
     revised_definition := pg_catalog.replace(
         revised_definition,
@@ -365,7 +580,7 @@ BEGIN
                            grantee.rolname = 'ofarm_admission_lock_owner'$relation_acl$,
         $relation_acl$                       OR
                        (
-                           grantee.rolname = 'ofarm_identity_resolver'
+                           grantee.rolname = 'ofarm_principal_resolver_owner'
                            AND class.relname IN (
                                 'principal_binding',
                                 'principal_binding_lifecycle',
@@ -389,7 +604,7 @@ BEGIN
                            )$column_acl$,
         $column_acl$grantee.rolname IN (
                                 'ofarm_binder', 'ofarm_admission_lock_owner',
-                                'ofarm_identity_resolver'
+                                'ofarm_principal_resolver_owner'
                            )$column_acl$
     );
     EXECUTE revised_definition;

@@ -26,9 +26,13 @@ from deployment.postgresql.catalog_identity import (
 from deployment.postgresql.catalog_classifier import (
     SCHEMA_LOCAL_OBJECT_SELECTS_SQL,
 )
+from deployment.postgresql.migration_sets import (
+    TENANT_AUTHORITATIVE_MIGRATION_SET,
+)
 from deployment.postgresql.provisioning_specs import (
     SECURITY_AUDIT_PROVISIONING_SPEC,
     TENANT_PROVISIONING_SPEC,
+    TENANT_PROVISIONING_SPEC_V1,
     MembershipSpec,
     ProvisioningSpec,
     ProvisioningSpecError,
@@ -168,11 +172,15 @@ def _target_dsn(admin_dsn: str, database_name: str) -> str:
 
 
 def _require_fixed_spec(spec: ProvisioningSpec) -> None:
-    if spec not in (TENANT_PROVISIONING_SPEC, SECURITY_AUDIT_PROVISIONING_SPEC):
+    if spec not in (
+        TENANT_PROVISIONING_SPEC_V1,
+        TENANT_PROVISIONING_SPEC,
+        SECURITY_AUDIT_PROVISIONING_SPEC,
+    ):
         raise ProvisioningTargetError(
             "spec must be one of the two checked-in PostgreSQL services"
         )
-    if spec == TENANT_PROVISIONING_SPEC:
+    if spec.migration_service == TENANT_PROVISIONING_SPEC.migration_service:
         try:
             require_frozen_tenant_native_verifier_authority()
         except ProvisioningSpecError as exc:
@@ -3185,6 +3193,216 @@ def provision_service(
                 created=created,
                 expected_identity=admin_identity,
                 allow_migration_objects=False,
+            )
+        finally:
+            _release_lock(admin, lock_key)
+
+
+def _validate_transition_passwords(
+    login_passwords: Mapping[str, str] | None,
+) -> dict[str, str]:
+    expected = {"ofarm_identity_resolver"}
+    if login_passwords is None or set(login_passwords) != expected:
+        raise ProvisioningTargetError(
+            "tenant v1-to-v2 transition requires only the new resolver password"
+        )
+    password = login_passwords["ofarm_identity_resolver"]
+    if not isinstance(password, str) or not 32 <= len(password) <= 128:
+        raise ProvisioningTargetError(
+            "resolver transition password must contain 32-128 visible ASCII characters"
+        )
+    try:
+        encoded = password.encode("ascii", errors="strict")
+    except UnicodeEncodeError as exc:
+        raise ProvisioningTargetError(
+            "resolver transition password must contain visible ASCII"
+        ) from exc
+    if any(value < 33 or value > 126 for value in encoded):
+        raise ProvisioningTargetError(
+            "resolver transition password must contain visible ASCII"
+        )
+    return dict(login_passwords)
+
+
+def _require_exact_tenant_v1_ledger(target: psycopg.Connection) -> None:
+    migration = TENANT_AUTHORITATIVE_MIGRATION_SET.migrations[0]
+    row = target.execute(
+        """
+        SELECT version,
+               filename,
+               source_sha256,
+               source_byte_length,
+               applied_prefix_digest,
+               service_identity,
+               provisioning_spec_digest,
+               release_identity ~ '^[!-~]{1,128}$',
+               execution_id <>
+                   '00000000-0000-0000-0000-000000000000'::pg_catalog.uuid,
+               applied_at NOT IN (
+                   'infinity'::pg_catalog.timestamptz,
+                   '-infinity'::pg_catalog.timestamptz
+               ),
+               pg_catalog.count(*) OVER ()
+          FROM ofarm.schema_migration
+         ORDER BY version
+        """
+    ).fetchone()
+    expected = (
+        1,
+        migration.filename,
+        migration.source_sha256,
+        migration.byte_length,
+        migration.applied_prefix_digest,
+        TENANT_PROVISIONING_SPEC_V1.migration_service.identity,
+        TENANT_PROVISIONING_SPEC_V1.digest,
+        True,
+        True,
+        True,
+        1,
+    )
+    if tuple(row or ()) != expected:
+        raise ProvisioningTargetError(
+            "tenant v1-to-v2 transition ledger is not the exact accepted prefix"
+        )
+
+
+def transition_tenant_service_v1_to_v2(
+    admin_dsn: str,
+    *,
+    login_passwords: Mapping[str, str] | None,
+) -> ProvisioningReport:
+    """Apply the one reviewed additive infrastructure transition.
+
+    The transition accepts only the exact provisioning-v1 infrastructure and
+    one-row authoritative tenant ledger. It creates the two v2 resolver roles,
+    their closed membership and grants, and no application-owned object.
+    """
+
+    passwords = _validate_transition_passwords(login_passwords)
+    old = TENANT_PROVISIONING_SPEC_V1
+    current = TENANT_PROVISIONING_SPEC
+    old_role_names = set(old.role_names)
+    added_roles = tuple(
+        role for role in current.roles if role.name not in old_role_names
+    )
+    old_memberships = set(old.memberships)
+    added_memberships = tuple(
+        membership
+        for membership in current.memberships
+        if membership not in old_memberships
+    )
+    added_connect_roles = tuple(
+        role_name
+        for role_name in current.database_connect_roles
+        if role_name not in old.database_connect_roles
+    )
+    added_usage_roles = tuple(
+        role_name
+        for role_name in current.schema_usage_roles
+        if role_name not in old.schema_usage_roles
+    )
+    added_default_owners = tuple(
+        role_name
+        for role_name in current.default_privilege_owner_roles
+        if role_name not in old.default_privilege_owner_roles
+    )
+
+    with psycopg.connect(admin_dsn, autocommit=True) as admin:
+        for assignment in CATALOG_OUTPUT_SETTING_ASSIGNMENTS:
+            admin.execute(f"SET {assignment}")
+        admin_identity = _require_dba(admin, old)
+        lock_key = _acquire_lock(admin)
+        try:
+            if not _database_exists(admin, old.database_name):
+                raise ProvisioningTargetError(
+                    "tenant v1-to-v2 transition target is absent"
+                )
+            _require_database_inventory(admin, old, target_exists=True)
+            _verify_locked(
+                admin_dsn,
+                old,
+                created=False,
+                expected_identity=admin_identity,
+                allow_migration_objects=True,
+            )
+            with psycopg.connect(
+                _target_dsn(admin_dsn, old.database_name),
+                autocommit=True,
+            ) as target:
+                for assignment in CATALOG_OUTPUT_SETTING_ASSIGNMENTS:
+                    target.execute(f"SET {assignment}")
+                _require_exact_tenant_v1_ledger(target)
+
+            with psycopg.connect(
+                _target_dsn(admin_dsn, current.database_name),
+                autocommit=True,
+            ) as target:
+                with target.transaction():
+                    target.execute(
+                        "SET LOCAL password_encryption = 'scram-sha-256'"
+                    )
+                    target.execute(
+                        "SELECT pg_catalog.set_config("
+                        "'scram_iterations', %s, true)",
+                        (str(current.scram_iterations),),
+                    )
+                    for role in added_roles:
+                        password = passwords.get(role.name)
+                        verifier = (
+                            _scram_verifier(password, current.scram_iterations)
+                            if password is not None
+                            else None
+                        )
+                        _create_role(target, role, verifier)
+                    for membership in added_memberships:
+                        _create_membership(target, membership)
+                    for role_name in added_connect_roles:
+                        target.execute(
+                            sql.SQL(
+                                "GRANT CONNECT ON DATABASE {} TO {}"
+                            ).format(
+                                sql.Identifier(current.database_name),
+                                sql.Identifier(role_name),
+                            )
+                        )
+                    for role_name in added_usage_roles:
+                        target.execute(
+                            sql.SQL("GRANT USAGE ON SCHEMA {} TO {}").format(
+                                sql.Identifier(current.schema_name),
+                                sql.Identifier(role_name),
+                            )
+                        )
+                    for owner in added_default_owners:
+                        target.execute(
+                            sql.SQL(
+                                "ALTER DEFAULT PRIVILEGES FOR ROLE {} "
+                                "REVOKE EXECUTE ON ROUTINES FROM PUBLIC"
+                            ).format(sql.Identifier(owner))
+                        )
+                        target.execute(
+                            sql.SQL(
+                                "ALTER DEFAULT PRIVILEGES FOR ROLE {} "
+                                "REVOKE USAGE ON TYPES FROM PUBLIC"
+                            ).format(sql.Identifier(owner))
+                        )
+                    for role in added_roles:
+                        for setting in role.settings:
+                            target.execute(
+                                sql.SQL(
+                                    "ALTER ROLE {} IN DATABASE {} SET {} = {}"
+                                ).format(
+                                    sql.Identifier(role.name),
+                                    sql.Identifier(current.database_name),
+                                    sql.Identifier(setting.name),
+                                    sql.Literal(setting.value),
+                                )
+                            )
+            return _verify_locked(
+                admin_dsn,
+                current,
+                created=False,
+                expected_identity=admin_identity,
+                allow_migration_objects=True,
             )
         finally:
             _release_lock(admin, lock_key)

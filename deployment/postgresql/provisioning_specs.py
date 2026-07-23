@@ -16,7 +16,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from deployment.postgresql.migration_sets import (
@@ -756,6 +756,8 @@ class ProvisioningSpec:
         """All roles that can own migration or provisioning routines."""
 
         owners = [self.schema_owner, self.migration_lock.owner_role]
+        if "ofarm_principal_resolver_owner" in self.role_names:
+            owners.append("ofarm_principal_resolver_owner")
         if self.access_clock_lock is not None:
             owners.append(self.access_clock_lock.owner_role)
         if self.tenant_write_lock is not None:
@@ -1564,7 +1566,7 @@ _TENANT_NATIVE_VERIFIER = NativeVerifierSpec(
 
 
 TENANT_PROVISIONING_SPEC = ProvisioningSpec(
-    identity="ofarm.tenant-postgresql-provisioning.v1",
+    identity="ofarm.tenant-postgresql-provisioning.v2",
     migration_service=TENANT_SERVICE,
     database_name="ofarm_tenant",
     database_owner="ofarm_owner",
@@ -1650,10 +1652,17 @@ TENANT_PROVISIONING_SPEC = ProvisioningSpec(
             "ofarm_identity_resolver",
             True,
             False,
-            True,
+            False,
             8,
             True,
             _APPLICATION_SETTINGS,
+        ),
+        RoleSpec(
+            "ofarm_principal_resolver_owner",
+            False,
+            False,
+            True,
+            -1,
         ),
         RoleSpec("ofarm_binder", False, False, True, -1),
         RoleSpec(
@@ -1673,6 +1682,13 @@ TENANT_PROVISIONING_SPEC = ProvisioningSpec(
     ),
     memberships=(
         MembershipSpec("ofarm_owner", "ofarm_migrator", False, True, False),
+        MembershipSpec(
+            "ofarm_principal_resolver_owner",
+            "ofarm_owner",
+            False,
+            True,
+            False,
+        ),
         MembershipSpec(
             "ofarm_tenant_registrar",
             "ofarm_tenant_control_login",
@@ -1726,6 +1742,7 @@ TENANT_PROVISIONING_SPEC = ProvisioningSpec(
         "ofarm_runtime_bundle_publisher",
         "ofarm_readiness",
         "ofarm_identity_resolver",
+        "ofarm_principal_resolver_owner",
         "ofarm_tenant_registrar",
         "ofarm_identity_writer",
         "ofarm_binder",
@@ -1746,6 +1763,39 @@ TENANT_PROVISIONING_SPEC = ProvisioningSpec(
         "ofarm_backup_reader",
         "ofarm_restore_operator",
         "ofarm_recovery_readiness",
+    ),
+)
+
+
+_TENANT_V2_ROLE_NAMES = frozenset(
+    {
+        "ofarm_identity_resolver",
+        "ofarm_principal_resolver_owner",
+    }
+)
+TENANT_PROVISIONING_SPEC_V1 = replace(
+    TENANT_PROVISIONING_SPEC,
+    identity="ofarm.tenant-postgresql-provisioning.v1",
+    roles=tuple(
+        role
+        for role in TENANT_PROVISIONING_SPEC.roles
+        if role.name not in _TENANT_V2_ROLE_NAMES
+    ),
+    memberships=tuple(
+        membership
+        for membership in TENANT_PROVISIONING_SPEC.memberships
+        if membership.granted_role not in _TENANT_V2_ROLE_NAMES
+        and membership.member_role not in _TENANT_V2_ROLE_NAMES
+    ),
+    database_connect_roles=tuple(
+        role_name
+        for role_name in TENANT_PROVISIONING_SPEC.database_connect_roles
+        if role_name not in _TENANT_V2_ROLE_NAMES
+    ),
+    schema_usage_roles=tuple(
+        role_name
+        for role_name in TENANT_PROVISIONING_SPEC.schema_usage_roles
+        if role_name not in _TENANT_V2_ROLE_NAMES
     ),
 )
 
@@ -2162,7 +2212,7 @@ def _validate_spec(spec: ProvisioningSpec) -> None:
     admission_lock = spec.tenant_admission_lock
     sealer = spec.tenant_initial_owner_sealer
     native_verifier = spec.native_verifier
-    if spec == TENANT_PROVISIONING_SPEC:
+    if spec.migration_service == TENANT_SERVICE:
         if tenant_lock != _TENANT_WRITE_LOCK:
             raise ProvisioningSpecError("tenant write-lock boundary is not exact")
         if admission_lock != _TENANT_ADMISSION_LOCK:
@@ -2540,8 +2590,19 @@ def _validate_spec(spec: ProvisioningSpec) -> None:
         )
 
 
-for _SPEC in (TENANT_PROVISIONING_SPEC, SECURITY_AUDIT_PROVISIONING_SPEC):
+for _SPEC in (
+    TENANT_PROVISIONING_SPEC_V1,
+    TENANT_PROVISIONING_SPEC,
+    SECURITY_AUDIT_PROVISIONING_SPEC,
+):
     _validate_spec(_SPEC)
+
+if TENANT_PROVISIONING_SPEC_V1.digest != (
+    "sha256:87122affe6e45127d33b50bb7ee7cb9e35f5e66d81549bcae821019b3fd15f00"
+):
+    raise ProvisioningSpecError(
+        "accepted tenant provisioning-v1 identity changed"
+    )
 
 if set(TENANT_PROVISIONING_SPEC.role_names) & set(
     SECURITY_AUDIT_PROVISIONING_SPEC.role_names
