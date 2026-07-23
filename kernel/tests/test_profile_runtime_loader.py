@@ -1823,6 +1823,14 @@ def test_gate_pipeline_selects_registered_si_provider(fresh_env):
     assert pipeline.runtime_services.reference_bindings is \
         pipeline.si_reference_bindings
     assert pipeline.runtime_services.product_lookup is pipeline.products
+    assert (
+        pipeline.runtime_services.registry_reverification.product_lookup
+        is pipeline.products
+    )
+    assert (
+        pipeline.runtime_services.registry_reverification.snapshot_prefix
+        == pipeline.si_reference_bindings.regsr_snapshot_prefix
+    )
     assert isinstance(pipeline.products, context.SIProductRegister)
 
 
@@ -2097,6 +2105,146 @@ def test_preloaded_provider_attribute_replacement_cannot_execute(
     assert pipeline.runtime_services.provider is not hostile_provider
 
 
+def test_provider_cache_is_bound_to_complete_registration_identity(tmp_path):
+    runtime_bundle = RuntimeBundleBuilder.from_manifest(
+        config.PACKAGE_ROOT
+    ).build()
+    default_registry = default_profile_runtime_provider_registry()
+    registration = default_registry.registration_for(
+        config.ACTIVE_PROFILE_PACKAGE_NAME,
+        config.ACTIVE_PROFILE,
+    )
+    alternate_source_path = tmp_path / "runtime_provider.py"
+    alternate_source_path.symlink_to(registration.source_path)
+    alternate_registration = replace(
+        registration,
+        source_path=alternate_source_path,
+    )
+    alternate_registry = ProfileRuntimeProviderRegistry(
+        (alternate_registration,)
+    )
+
+    with _fresh_started_store(runtime_bundle) as store:
+        alternate_services = alternate_registry.build_services(
+            store,
+            config.ACTIVE_PROFILE_PACKAGE_NAME,
+            config.ACTIVE_PROFILE,
+        )
+        default_services = default_registry.build_services(
+            store,
+            config.ACTIVE_PROFILE_PACKAGE_NAME,
+            config.ACTIVE_PROFILE,
+        )
+
+        assert default_services.provider is not alternate_services.provider
+        assert len(store._profile_runtime_provider_cache) == 2
+
+
+def test_provider_cache_hit_revalidates_complete_registration(tmp_path):
+    runtime_bundle = RuntimeBundleBuilder.from_manifest(
+        config.PACKAGE_ROOT
+    ).build()
+    registry = default_profile_runtime_provider_registry()
+    registration = registry.registration_for(
+        config.ACTIVE_PROFILE_PACKAGE_NAME,
+        config.ACTIVE_PROFILE,
+    )
+    alternate_source_path = tmp_path / "runtime_provider.py"
+    alternate_source_path.symlink_to(registration.source_path)
+    alternate_registration = replace(
+        registration,
+        source_path=alternate_source_path,
+    )
+
+    with _fresh_started_store(runtime_bundle) as store:
+        source_component = registry._verify_provider_source(
+            store,
+            registration,
+        )
+        provider = registry._load_provider(
+            store,
+            registration,
+            source_component,
+        )
+        cache_key = registry._provider_cache_key(
+            registration,
+            source_component,
+        )
+        store._retain_profile_runtime_provider(
+            cache_key,
+            profile_runtime_providers._ProfileRuntimeProviderCacheEntry(
+                registration=alternate_registration,
+                source_digest=source_component.content_digest,
+                provider=provider,
+            ),
+        )
+
+        with pytest.raises(
+            ProfileRuntimeError,
+            match="complete registration",
+        ):
+            registry.build_services(
+                store,
+                config.ACTIVE_PROFILE_PACKAGE_NAME,
+                config.ACTIVE_PROFILE,
+            )
+
+
+def test_failed_provider_service_validation_does_not_seed_cache(
+        monkeypatch):
+    runtime_bundle = RuntimeBundleBuilder.from_manifest(
+        config.PACKAGE_ROOT
+    ).build()
+    registry = default_profile_runtime_provider_registry()
+    registration = registry.registration_for(
+        config.ACTIVE_PROFILE_PACKAGE_NAME,
+        config.ACTIVE_PROFILE,
+    )
+
+    with _fresh_started_store(runtime_bundle) as store:
+        source_component = registry._verify_provider_source(
+            store,
+            registration,
+        )
+        provider = registry._load_provider(
+            store,
+            registration,
+            source_component,
+        )
+        provider_type = type(provider)
+        original_build_services = provider_type.build_services
+
+        def incomplete_build_services(self, provider_store, descriptor):
+            complete = original_build_services(
+                self,
+                provider_store,
+                descriptor,
+            )
+            return replace(complete, materializer=None)
+
+        monkeypatch.setattr(
+            provider_type,
+            "build_services",
+            incomplete_build_services,
+        )
+        monkeypatch.setattr(
+            ProfileRuntimeProviderRegistry,
+            "_load_provider",
+            staticmethod(
+                lambda _store, _registration, _source_component: provider
+            ),
+        )
+
+        with pytest.raises(ProfileRuntimeError, match="materializer"):
+            registry.build_services(
+                store,
+                config.ACTIVE_PROFILE_PACKAGE_NAME,
+                config.ACTIVE_PROFILE,
+            )
+
+        assert store._profile_runtime_provider_cache == {}
+
+
 def test_bundle_bound_policy_ignores_copied_root_filesystem_mutation(
         tmp_path):
     package_root = tmp_path / "packages"
@@ -2169,6 +2317,13 @@ def test_runtime_service_construction_refuses_missing_required_capability(
         registration,
         source_component,
     )
+    monkeypatch.setattr(
+        ProfileRuntimeProviderRegistry,
+        "_load_provider",
+        staticmethod(
+            lambda _store, _registration, _source_component: provider
+        ),
+    )
     provider_type = type(provider)
     original_build_services = provider_type.build_services
 
@@ -2197,6 +2352,8 @@ def test_runtime_service_construction_refuses_missing_required_capability(
         ("invalid_recognized_rule_refs", "recognized_rule_refs"),
         ("incomplete_recognized_rule_refs", "recognized_rule_refs"),
         ("missing_lookup_by_decision", "lookup_by_decision"),
+        ("missing_registry_reverification", "registry_reverification"),
+        ("wrong_registry_product_lookup", "not bound"),
     ],
 )
 def test_runtime_service_construction_refuses_incomplete_consumed_contract(
@@ -2212,6 +2369,13 @@ def test_runtime_service_construction_refuses_incomplete_consumed_contract(
         store,
         registration,
         source_component,
+    )
+    monkeypatch.setattr(
+        ProfileRuntimeProviderRegistry,
+        "_load_provider",
+        staticmethod(
+            lambda _store, _registration, _source_component: provider
+        ),
     )
     provider_type = type(provider)
     original_build_services = provider_type.build_services
@@ -2247,12 +2411,22 @@ def test_runtime_service_construction_refuses_incomplete_consumed_contract(
                 evidence_policy=policy.evidence_policy,
             )
         product_lookup = complete.product_lookup
+        registry_reverification = complete.registry_reverification
         if contract_defect == "missing_lookup_by_decision":
             product_lookup = SimpleNamespace()
+        elif contract_defect == "missing_registry_reverification":
+            registry_reverification = None
+        elif contract_defect == "wrong_registry_product_lookup":
+            registry_reverification = SimpleNamespace(
+                run=registry_reverification.run,
+                snapshot_prefix=registry_reverification.snapshot_prefix,
+                product_lookup=SimpleNamespace(),
+            )
         return replace(
             complete,
             policy_provider=policy,
             product_lookup=product_lookup,
+            registry_reverification=registry_reverification,
         )
 
     monkeypatch.setattr(
@@ -3317,13 +3491,13 @@ def test_descriptor_backed_pipeline_cannot_fall_back_to_legacy_validation(
     assert trace["gateSequence"][-1]["outcome"] == "FAIL_PROFILE_POLICY"
 
 
-def test_registry_reverification_prefers_context_si_reference_bindings(
-        monkeypatch):
+def test_registry_reverification_uses_provider_owned_capabilities(monkeypatch):
     seen_prefixes = []
+    lookup_calls = []
 
     def fake_current_reference_snapshot(_store, prefix):
         seen_prefixes.append(prefix)
-        return None
+        return {"referenceSnapshotId": "referencesnapshot:si.custom.regsr.current"}
 
     monkeypatch.setattr(
         validators,
@@ -3347,19 +3521,53 @@ def test_registry_reverification_prefers_context_si_reference_bindings(
                 }
             return None
 
+    class FakeProductLookup:
+        def lookup_by_decision(self, snapshot_id, decision_number):
+            lookup_calls.append((snapshot_id, decision_number))
+            return {
+                "decision": {"validUntil": "2027-12-31"},
+            }
+
     ctx = SimpleNamespace(
         store=FakeStore(),
-        sub={"payload": {"agronomicIdentityBindingRefs": ["binding:regsr"]}},
-        si_reference_bindings=SimpleNamespace(
-            regsr_snapshot_prefix="referencesnapshot:si.custom.regsr"),
+        sub={
+            "payload": {
+                "agronomicIdentityBindingRefs": ["binding:regsr"],
+            },
+            "capturedAgainstSnapshotRef": "referencesnapshot:si.old",
+        },
+        event_time="2026-06-01T00:00:00Z",
+        captured_at="2026-06-01T00:00:00Z",
+        review_route_reasons=[],
+        log=lambda *_args, **_kwargs: None,
+    )
+    capability = validators.RegistryReverificationValidator(
+        snapshot_prefix="referencesnapshot:si.custom.regsr",
+        product_lookup=FakeProductLookup(),
     )
 
-    assert validators.RegistryReverificationValidator().run(ctx) is None
+    assert capability.run(ctx) is None
     assert seen_prefixes == ["referencesnapshot:si.custom.regsr"]
+    assert lookup_calls == [(
+        "referencesnapshot:si.custom.regsr.current",
+        "U99999-50/26/context",
+    )]
 
-    ctx.si_reference_bindings = None
-    assert validators.RegistryReverificationValidator().run(ctx) is None
-    assert seen_prefixes[-1] == context.REGSR_SNAPSHOT_PREFIX
+
+def test_provider_operation_sequence_omits_unowned_registry_reverification():
+    validation_policy = profile_policy.validation_policy()
+
+    sequence = validators._operation_sequence_for_validation_policy(
+        validation_policy,
+        registry_reverification=None,
+    )
+
+    assert not any(
+        isinstance(validator, validators.RegistryReverificationValidator)
+        for validator in sequence
+    )
+    with pytest.raises(TypeError):
+        validators.RegistryReverificationValidator()
 
 
 def test_materializer_uses_active_descriptor_for_context_and_policy_freshness(

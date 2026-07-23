@@ -5816,6 +5816,11 @@
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_failed_provider_service_validation_does_not_seed_cache",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_gate_pipeline_default_missing_farm_ref_still_fails_before_route",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
@@ -6131,7 +6136,22 @@
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_registry_reverification_prefers_context_si_reference_bindings",
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_provider_cache_hit_revalidates_complete_registration",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_provider_cache_is_bound_to_complete_registration_identity",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_provider_operation_sequence_omits_unowned_registry_reverification",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_registry_reverification_uses_provider_owned_capabilities",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
@@ -6331,7 +6351,17 @@
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_runtime_service_construction_refuses_incomplete_consumed_contract[missing_registry_reverification-registry_reverification]",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_runtime_service_construction_refuses_incomplete_consumed_contract[wrong_policy_ref-descriptor evidencePolicyRef]",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_runtime_service_construction_refuses_incomplete_consumed_contract[wrong_registry_product_lookup-not bound]",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
@@ -7576,8 +7606,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "40d4ae15d20cf74493c41a68b3f255f954a010610ef0e29af4599bc91479f72c",
-  "entryCount": 1515,
+  "entriesSha256": "165fd63a24840387b051b9a5f797b5835fc99ca7f03d7aceff7d73136892ac44",
+  "entryCount": 1521,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

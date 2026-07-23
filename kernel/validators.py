@@ -1070,18 +1070,22 @@ class RegistryReverificationValidator:
     """D9: product identity is the decision number + validity dates;
     regsrCode is a page locator, NEVER identity. Re-verification across a
     snapshot advance is identity-grade only where the snapshot carries
-    decision-number data; anything weaker routes to review."""
+    decision-number data; anything weaker routes to review.
+
+    This is a provider-owned capability. Its snapshot family and lookup
+    implementation are fixed when the provider composes its service bundle;
+    the generic validation path never discovers SI services or defaults.
+    """
+
+    def __init__(self, *, snapshot_prefix: str, product_lookup):
+        self.snapshot_prefix = snapshot_prefix
+        self.product_lookup = product_lookup
 
     def run(self, ctx: GateContext) -> GateRefusal | None:
         product_binding = _verified_product_binding(ctx)
         if not (product_binding and product_binding["bindingState"] == "VERIFIED"):
             return None
-        regsr_snapshot_prefix = (
-            ctx.si_reference_bindings.regsr_snapshot_prefix
-            if ctx.si_reference_bindings is not None
-            else REGSR_SNAPSHOT_PREFIX
-        )
-        current = current_reference_snapshot(ctx.store, regsr_snapshot_prefix)
+        current = current_reference_snapshot(ctx.store, self.snapshot_prefix)
         current_id = current["referenceSnapshotId"] if current else None
         captured_against = ctx.sub.get("capturedAgainstSnapshotRef") \
             or (product_binding.get("referenceSnapshotRefs") or [None])[0]
@@ -1089,8 +1093,10 @@ class RegistryReverificationValidator:
             return None
         event_time = ctx.event_time or ctx.captured_at
         decision_number = product_binding["bindingValue"].get("registrationRef")
-        confirmed = (ctx.products.lookup_by_decision(current_id, decision_number)
-                     if decision_number else None)
+        confirmed = (
+            self.product_lookup.lookup_by_decision(current_id, decision_number)
+            if decision_number else None
+        )
         if confirmed is not None:
             valid_until = (confirmed.get("decision", {}).get("validUntil")
                            or confirmed.get("registrationValidUntil") or "")
@@ -1114,6 +1120,16 @@ class RegistryReverificationValidator:
                 "identity — D9), so the record routes to review",
                 severity="WARNING"))
         return None
+
+
+class LegacyRegistryReverificationValidator:
+    """Explicit config-backed SI compatibility path for legacy tests only."""
+
+    def run(self, ctx: GateContext) -> GateRefusal | None:
+        return RegistryReverificationValidator(
+            snapshot_prefix=REGSR_SNAPSHOT_PREFIX,
+            product_lookup=ctx.products,
+        ).run(ctx)
 
 
 class CarrierStore:
@@ -1162,7 +1178,7 @@ OPERATION_SEQUENCE = (
     ReferenceResolutionValidator(),
     ActorAttributionValidator(),
     CodeBindingValidator.from_config_for_legacy_tests(),
-    RegistryReverificationValidator(),
+    LegacyRegistryReverificationValidator(),
 )
 
 
@@ -1175,16 +1191,21 @@ def _descriptor_recognized_rule_refs(active_profile) -> frozenset[str]:
     })
 
 
-def _operation_sequence_for_validation_policy(validation_policy: dict) -> tuple:
-    return (
+def _operation_sequence_for_validation_policy(
+    validation_policy: dict,
+    registry_reverification=None,
+) -> tuple:
+    sequence = (
         CarrierSchemaValidator(),
         CarrierSemanticsValidator(validation_policy),
         ExecutionExtentValidator(validation_policy),
         ReferenceResolutionValidator(),
         ActorAttributionValidator(),
         CodeBindingValidator(validation_policy),
-        RegistryReverificationValidator(),
     )
+    if registry_reverification is not None:
+        sequence += (registry_reverification,)
+    return sequence
 
 
 class ValidationGate:
@@ -1236,8 +1257,14 @@ class ValidationGate:
                 validation_policy = ctx.policy_provider.validation_policy()
             except profile_policy.ProfilePolicyError as exc:
                 return _validation_policy_refusal(ctx, exc)
+            registry_reverification = (
+                ctx.runtime_services.registry_reverification
+                if ctx.runtime_services is not None else None
+            )
             operation_sequence = _operation_sequence_for_validation_policy(
-                validation_policy)
+                validation_policy,
+                registry_reverification,
+            )
 
         for validator in operation_sequence:
             refusal = validator.run(ctx)

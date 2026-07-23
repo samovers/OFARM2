@@ -10,6 +10,7 @@ from ...profile_runtime import ProfileRuntimeDescriptor, ProfileRuntimeError
 from ...profile_runtime_provider import ProfileRuntimeServices
 from ...runtime_bundle import RuntimeBundleError, RuntimeComponentRole
 from ...sufficiency import OPERATION_FLOOR_CHECKS
+from ...validators import RegistryReverificationValidator
 
 
 @dataclass(frozen=True)
@@ -66,6 +67,10 @@ class SIProfileRuntimeProvider:
             ),
             reference_bindings=reference_bindings,
             product_lookup=product_lookup,
+            registry_reverification=RegistryReverificationValidator(
+                snapshot_prefix=reference_bindings.regsr_snapshot_prefix,
+                product_lookup=product_lookup,
+            ),
         )
 
 

@@ -58,6 +58,15 @@ class ProfileRuntimeProviderRegistration:
 
 
 @dataclass(frozen=True)
+class _ProfileRuntimeProviderCacheEntry:
+    """Successfully composed provider bound to its complete source identity."""
+
+    registration: ProfileRuntimeProviderRegistration
+    source_digest: str
+    provider: ProfileRuntimeProvider
+
+
+@dataclass(frozen=True)
 class ProfileRuntimeServices:
     """Capability-specific services selected for one bound descriptor.
 
@@ -73,6 +82,7 @@ class ProfileRuntimeServices:
     materializer: Any
     reference_bindings: Any = None
     product_lookup: Any = None
+    registry_reverification: Any = None
 
 
 @dataclass(frozen=True)
@@ -226,8 +236,42 @@ class ProfileRuntimeProviderRegistry:
                     f"required callable capabilities {missing!r}"
                 )
         self._validate_policy_contract(services, descriptor)
+        registry_reverification = _service_attribute(
+            services,
+            "service bundle",
+            "registry_reverification",
+        )
+        if registry_reverification is not None and not callable(
+            _service_attribute(
+                registry_reverification,
+                "registry_reverification",
+                "run",
+            )
+        ):
+            raise ProfileRuntimeError(
+                "profile runtime provider registry_reverification lacks "
+                "required callable capability 'run'"
+            )
         if provider.package_name == "profile_si_ffs":
             self._validate_si_contract(services)
+        cache_entry = _ProfileRuntimeProviderCacheEntry(
+            registration=registration,
+            source_digest=source_component.content_digest,
+            provider=provider,
+        )
+        retained_entry = store._retain_profile_runtime_provider(
+            self._provider_cache_key(registration, source_component),
+            cache_entry,
+        )
+        if (
+            type(retained_entry) is not _ProfileRuntimeProviderCacheEntry
+            or retained_entry.registration != registration
+            or retained_entry.source_digest != source_component.content_digest
+            or retained_entry.provider is not provider
+        ):
+            raise ProfileRuntimeError(
+                "profile runtime provider cache changed during composition"
+            )
         return services
 
     @staticmethod
@@ -277,15 +321,26 @@ class ProfileRuntimeProviderRegistry:
         registration: ProfileRuntimeProviderRegistration,
         source_component: RuntimeComponent,
     ) -> ProfileRuntimeProvider:
-        cache_key = (
-            registration.package_name,
-            registration.profile_ref,
-            registration.source_component_role,
-            registration.source_component_logical_ref,
-            source_component.content_digest,
+        cache_key = ProfileRuntimeProviderRegistry._provider_cache_key(
+            registration,
+            source_component,
         )
-        cached_provider = store._cached_profile_runtime_provider(cache_key)
-        if cached_provider is not None:
+        cached_entry = store._cached_profile_runtime_provider(cache_key)
+        if cached_entry is not None:
+            if (
+                type(cached_entry) is not _ProfileRuntimeProviderCacheEntry
+                or cached_entry.registration != registration
+                or cached_entry.source_digest != source_component.content_digest
+            ):
+                raise ProfileRuntimeError(
+                    "profile runtime provider cache entry does not match its "
+                    "complete registration"
+                )
+            cached_provider = cached_entry.provider
+            ProfileRuntimeProviderRegistry._validate_provider_registration(
+                cached_provider,
+                registration,
+            )
             return cached_provider
 
         sealed_module = ModuleType("_ofarm_sealed_profile_runtime_provider")
@@ -316,6 +371,24 @@ class ProfileRuntimeProviderRegistry:
             ) from exc
         finally:
             sys.modules.pop(sealed_module_name, None)
+        ProfileRuntimeProviderRegistry._validate_provider_registration(
+            provider,
+            registration,
+        )
+        return provider
+
+    @staticmethod
+    def _provider_cache_key(
+        registration: ProfileRuntimeProviderRegistration,
+        source_component: RuntimeComponent,
+    ) -> tuple[ProfileRuntimeProviderRegistration, str]:
+        return registration, source_component.content_digest
+
+    @staticmethod
+    def _validate_provider_registration(
+        provider: ProfileRuntimeProvider,
+        registration: ProfileRuntimeProviderRegistration,
+    ) -> None:
         expected_attributes = {
             "package_name": registration.package_name,
             "profile_ref": registration.profile_ref,
@@ -340,7 +413,6 @@ class ProfileRuntimeProviderRegistry:
             raise ProfileRuntimeError(
                 "verified profile runtime provider does not match its registration"
             )
-        return store._retain_profile_runtime_provider(cache_key, provider)
 
     @staticmethod
     def _validate_policy_contract(
@@ -411,6 +483,34 @@ class ProfileRuntimeProviderRegistry:
             raise ProfileRuntimeError(
                 "SI profile runtime provider product_lookup lacks required "
                 "callable capability 'lookup_by_decision'"
+            )
+        registry_reverification = services.registry_reverification
+        if registry_reverification is None or not callable(
+            _service_attribute(
+                registry_reverification,
+                "registry_reverification",
+                "run",
+            )
+        ):
+            raise ProfileRuntimeError(
+                "SI profile runtime provider omitted required "
+                "registry_reverification capability"
+            )
+        if (
+            _service_attribute(
+                registry_reverification,
+                "registry_reverification",
+                "snapshot_prefix",
+            ) != regsr_snapshot_prefix
+            or _service_attribute(
+                registry_reverification,
+                "registry_reverification",
+                "product_lookup",
+            ) is not product_lookup
+        ):
+            raise ProfileRuntimeError(
+                "SI profile runtime provider registry_reverification is not "
+                "bound to its reference bindings and product lookup"
             )
 
 
