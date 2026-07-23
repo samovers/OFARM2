@@ -46,11 +46,13 @@ def test_hashed_lock_contains_the_exact_observed_distribution_set():
     packages = baseline._parse_lock(lock)
     text = lock.read_text(encoding="utf-8")
 
-    assert len(packages) == 30
+    assert len(packages) == 34
     assert packages["fastapi"] == "0.138.0"
+    assert packages["pyjwt"] == "2.13.0"
+    assert packages["cryptography"] == "49.0.0"
     assert packages["pytest"] == "9.1.1"
     assert packages["psycopg-binary"] == "3.3.4"
-    assert text.count("--hash=sha256:") == 30
+    assert text.count("--hash=sha256:") == 34
 
     pip_lock = baseline.ROOT / "requirements-review-pip.lock"
     assert baseline._parse_lock(pip_lock) == {"pip": "26.1"}
