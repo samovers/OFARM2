@@ -8,6 +8,7 @@ from ...context import ContextAssembler, SIProductRegister, SIReferenceBindings
 from ...materializer import Materializer
 from ...profile_runtime import ProfileRuntimeDescriptor, ProfileRuntimeError
 from ...profile_runtime_provider import ProfileRuntimeServices
+from ...runtime_bundle import RuntimeComponentRole
 
 
 @dataclass(frozen=True)
@@ -16,6 +17,12 @@ class SIProfileRuntimeProvider:
 
     package_name: str = "profile_si_ffs"
     profile_ref: str = "profile:si.ffs.recordkeeping.v0_1"
+    source_component_role: RuntimeComponentRole = (
+        RuntimeComponentRole.ADAPTER_SOURCE
+    )
+    source_component_logical_ref: str = (
+        "python:profile-si-ffs-v0_1:runtime-provider"
+    )
 
     def build_services(
         self,

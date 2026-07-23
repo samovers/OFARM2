@@ -47,8 +47,11 @@ from kernel.profile_runtime_provider import (
     ProfileRuntimeProviderRegistry,
     default_profile_runtime_provider_registry,
 )
+from kernel.runtime_activation import complete_store_startup
 from kernel.runtime_bundle import (
+    RuntimeBundle,
     RuntimeBundleBuilder,
+    RuntimeComponent,
     RuntimeComponentRole,
 )
 from kernel.stages import IngressNormalizer
@@ -321,6 +324,29 @@ def _fresh_unbootstrapped_store():
     )
     try:
         store.migrate()
+        yield store
+    finally:
+        store.close()
+        with psycopg.connect(_admin_dsn(), autocommit=True) as admin:
+            admin.execute(f'DROP DATABASE IF EXISTS "{dbname}"')
+
+
+@contextmanager
+def _fresh_started_store(runtime_bundle):
+    dbname = f"ofarm_profile_provider_{_uid()}"
+    with psycopg.connect(_admin_dsn(), autocommit=True) as admin:
+        admin.execute(f'DROP DATABASE IF EXISTS "{dbname}"')
+        admin.execute(f'CREATE DATABASE "{dbname}"')
+    params = psycopg.conninfo.conninfo_to_dict(_admin_dsn())
+    params["dbname"] = dbname
+    store = Store(
+        dsn=psycopg.conninfo.make_conninfo(**params),
+        tenant_ref=config.TENANT_REF,
+        runtime_bundle=runtime_bundle,
+        active_descriptor=config.ACTIVE_PROFILE,
+    )
+    try:
+        complete_store_startup(store)
         yield store
     finally:
         store.close()
@@ -1792,6 +1818,7 @@ def test_runtime_service_construction_refuses_unregistered_provider(fresh_env):
     ):
         ProfileRuntimeProviderRegistry(()).build_services(
             store,
+            "profile_si_ffs",
             config.ACTIVE_PROFILE,
         )
 
@@ -1800,22 +1827,55 @@ def test_gate_pipeline_rejects_same_identity_provider_injection(fresh_env):
     store, _, _ = fresh_env
 
     class HostileProvider:
-        package_name = "profile_si_ffs"
-        profile_ref = config.ACTIVE_PROFILE.profile_ref
         executed = False
-
-        def build_services(self, _store, _descriptor):
-            self.executed = True
-            raise AssertionError("alternate provider executed")
 
     hostile = HostileProvider()
     with pytest.raises(TypeError, match="runtime_provider_registry"):
         GatePipeline(
             store,
-            runtime_provider_registry=ProfileRuntimeProviderRegistry((hostile,)),
+            runtime_provider_registry=hostile,
         )
 
     assert hostile.executed is False
+
+
+@pytest.mark.parametrize("bundle_defect", ["omitted", "replaced"])
+def test_gate_pipeline_refuses_unbound_runtime_provider_source(bundle_defect):
+    base = RuntimeBundleBuilder.from_manifest(config.PACKAGE_ROOT).build()
+    provider = default_profile_runtime_provider_registry().provider_for(
+        "profile_si_ffs",
+        config.ACTIVE_PROFILE,
+    )
+    source = base.component(
+        provider.source_component_role,
+        provider.source_component_logical_ref,
+    )
+    components = tuple(
+        component
+        for component in base.components
+        if component is not source
+    )
+    if bundle_defect == "replaced":
+        components += (
+            RuntimeComponent.from_selected_bytes(
+                role=source.role,
+                logical_ref=source.logical_ref,
+                canonicalization=source.canonicalization,
+                placement=source.placement,
+                selected_bytes=(
+                    source.canonical_bytes
+                    + b"\n# hostile replacement provider source\n"
+                ),
+            ),
+        )
+    runtime_bundle = RuntimeBundle.create(components)
+
+    with _fresh_started_store(runtime_bundle) as store:
+        with pytest.raises(
+            ProfileRuntimeError,
+            match="profile runtime provider source",
+        ):
+            GatePipeline(store)
 
 
 @pytest.mark.parametrize("missing_service", [
@@ -1824,27 +1884,94 @@ def test_gate_pipeline_rejects_same_identity_provider_injection(fresh_env):
     "materializer",
 ])
 def test_runtime_service_construction_refuses_missing_required_capability(
-        fresh_env, missing_service):
+        fresh_env, monkeypatch, missing_service):
     store, _, _ = fresh_env
+    registry = default_profile_runtime_provider_registry()
+    provider = registry.provider_for(
+        "profile_si_ffs",
+        config.ACTIVE_PROFILE,
+    )
+    provider_type = type(provider)
+    original_build_services = provider_type.build_services
 
-    class IncompleteProvider:
-        package_name = "profile_si_ffs"
-        profile_ref = config.ACTIVE_PROFILE.profile_ref
+    def incomplete_build_services(self, provider_store, descriptor):
+        complete = original_build_services(self, provider_store, descriptor)
+        return replace(complete, **{missing_service: None})
 
-        def build_services(self, provider_store, descriptor):
-            si_provider = default_profile_runtime_provider_registry().provider_for(
-                descriptor
-            )
-            complete = si_provider.build_services(provider_store, descriptor)
-            return replace(
-                complete,
-                provider=self,
-                **{missing_service: None},
-            )
-
+    monkeypatch.setattr(
+        provider_type,
+        "build_services",
+        incomplete_build_services,
+    )
     with pytest.raises(ProfileRuntimeError, match=missing_service):
-        ProfileRuntimeProviderRegistry((IncompleteProvider(),)).build_services(
+        registry.build_services(
             store,
+            "profile_si_ffs",
+            config.ACTIVE_PROFILE,
+        )
+
+
+@pytest.mark.parametrize(
+    "contract_defect,match",
+    [
+        ("missing_policy_ref", "policy_ref"),
+        ("wrong_policy_ref", "descriptor evidencePolicyRef"),
+        ("invalid_recognized_rule_refs", "recognized_rule_refs"),
+        ("missing_lookup_by_decision", "lookup_by_decision"),
+    ],
+)
+def test_runtime_service_construction_refuses_incomplete_consumed_contract(
+        fresh_env, monkeypatch, contract_defect, match):
+    store, _, _ = fresh_env
+    registry = default_profile_runtime_provider_registry()
+    provider = registry.provider_for(
+        "profile_si_ffs",
+        config.ACTIVE_PROFILE,
+    )
+    provider_type = type(provider)
+    original_build_services = provider_type.build_services
+
+    def incomplete_build_services(self, provider_store, descriptor):
+        complete = original_build_services(self, provider_store, descriptor)
+        policy = complete.policy_provider
+        if contract_defect == "missing_policy_ref":
+            policy = SimpleNamespace(
+                recognized_rule_refs=policy.recognized_rule_refs,
+                validation_policy=policy.validation_policy,
+                evidence_policy=policy.evidence_policy,
+            )
+        elif contract_defect == "wrong_policy_ref":
+            policy = SimpleNamespace(
+                policy_ref="policy:wrong.runtime.v0_1",
+                recognized_rule_refs=policy.recognized_rule_refs,
+                validation_policy=policy.validation_policy,
+                evidence_policy=policy.evidence_policy,
+            )
+        elif contract_defect == "invalid_recognized_rule_refs":
+            policy = SimpleNamespace(
+                policy_ref=policy.policy_ref,
+                recognized_rule_refs=[policy.policy_ref],
+                validation_policy=policy.validation_policy,
+                evidence_policy=policy.evidence_policy,
+            )
+        product_lookup = complete.product_lookup
+        if contract_defect == "missing_lookup_by_decision":
+            product_lookup = SimpleNamespace()
+        return replace(
+            complete,
+            policy_provider=policy,
+            product_lookup=product_lookup,
+        )
+
+    monkeypatch.setattr(
+        provider_type,
+        "build_services",
+        incomplete_build_services,
+    )
+    with pytest.raises(ProfileRuntimeError, match=match):
+        registry.build_services(
+            store,
+            "profile_si_ffs",
             config.ACTIVE_PROFILE,
         )
 
@@ -1992,6 +2119,80 @@ def test_route_backed_gate_pipeline_refuses_unregistered_runtime_provider(
         result["problems"][0]["detail"]
     _assert_profile_route_refusal(store, result)
     assert pipeline.runtime_services.provider.package_name == "profile_si_ffs"
+
+
+def test_route_backed_gate_pipeline_refuses_alias_candidate_identity(fresh_env):
+    store, _, _ = fresh_env
+    alias = "profile_si_alias"
+    registry = _route_registry()
+    si_candidate = registry.candidate_for("profile_si_ffs")
+    alias_candidate = replace(
+        si_candidate,
+        package_name=alias,
+        enabled=True,
+    )
+    alias_registry = replace(
+        registry,
+        discoverable_package_names=(alias,),
+        descriptor_candidates=(alias_candidate,),
+        enabled_package_names=(alias,),
+    )
+    pipeline = _route_pipeline(
+        store,
+        routes=[_si_route(profile_package_name=alias)],
+        registry=alias_registry,
+        selected=(alias,),
+    )
+
+    result = pipeline.commit(demo.spray_submission(
+        f"rs1-route-alias:{_uid()}",
+        erp_id=f"erp:rs1.route.alias.{_uid()}",
+        confirm=True,
+    ))
+
+    assert "no registered executable runtime provider" in \
+        result["problems"][0]["detail"]
+    _assert_profile_route_refusal(store, result)
+
+
+def test_route_backed_gate_pipeline_refuses_symlink_alias_identity(
+        fresh_env, tmp_path):
+    store, _, _ = fresh_env
+    alias = "profile_si_symlink_alias"
+    alias_root = tmp_path / alias
+    alias_root.symlink_to(config.PROFILE_ROOT, target_is_directory=True)
+    registry = _route_registry()
+    si_candidate = registry.candidate_for("profile_si_ffs")
+    alias_candidate = replace(
+        si_candidate,
+        package_name=alias,
+        profile_root=alias_root,
+        descriptor_path=alias_root / DESCRIPTOR_FILENAME,
+        enabled=True,
+    )
+    alias_registry = replace(
+        registry,
+        package_root=tmp_path,
+        discoverable_package_names=(alias,),
+        descriptor_candidates=(alias_candidate,),
+        enabled_package_names=(alias,),
+    )
+    pipeline = _route_pipeline(
+        store,
+        routes=[_si_route(profile_package_name=alias)],
+        registry=alias_registry,
+        selected=(alias,),
+    )
+
+    result = pipeline.commit(demo.spray_submission(
+        f"rs1-route-symlink-alias:{_uid()}",
+        erp_id=f"erp:rs1.route.symlink-alias.{_uid()}",
+        confirm=True,
+    ))
+
+    assert "no registered executable runtime provider" in \
+        result["problems"][0]["detail"]
+    _assert_profile_route_refusal(store, result)
 
 
 @pytest.mark.parametrize("routes,match", [

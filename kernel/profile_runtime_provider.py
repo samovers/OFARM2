@@ -7,11 +7,13 @@ the current runtime already needs.
 """
 from __future__ import annotations
 
+import inspect
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
 from .profile_runtime import ProfileRuntimeDescriptor, ProfileRuntimeError
+from .runtime_bundle import RuntimeBundleError, RuntimeComponentRole
 
 
 _REQUIRED_SERVICE_CAPABILITIES = {
@@ -26,6 +28,8 @@ class ProfileRuntimeProvider(Protocol):
 
     package_name: str
     profile_ref: str
+    source_component_role: RuntimeComponentRole
+    source_component_logical_ref: str
 
     def build_services(
         self,
@@ -68,6 +72,43 @@ class ProfileRuntimeProviderRegistry:
             raise ProfileRuntimeError(
                 "profile runtime provider registry contains duplicate package names"
             )
+        profile_refs = [provider.profile_ref for provider in self.providers]
+        if any(
+            not isinstance(profile_ref, str) or not profile_ref
+            for profile_ref in profile_refs
+        ):
+            raise ProfileRuntimeError(
+                "profile runtime provider profile refs must be non-empty strings"
+            )
+        if len(profile_refs) != len(set(profile_refs)):
+            raise ProfileRuntimeError(
+                "profile runtime provider registry contains duplicate profile refs"
+            )
+        source_components = []
+        for provider in self.providers:
+            if (
+                type(provider.source_component_role) is not RuntimeComponentRole
+                or provider.source_component_role
+                is not RuntimeComponentRole.ADAPTER_SOURCE
+            ):
+                raise ProfileRuntimeError(
+                    "profile runtime provider source component role must be "
+                    "ADAPTER_SOURCE"
+                )
+            logical_ref = provider.source_component_logical_ref
+            if not isinstance(logical_ref, str) or not logical_ref:
+                raise ProfileRuntimeError(
+                    "profile runtime provider source component logical ref must "
+                    "be a non-empty string"
+                )
+            source_components.append(
+                (provider.source_component_role, logical_ref)
+            )
+        if len(source_components) != len(set(source_components)):
+            raise ProfileRuntimeError(
+                "profile runtime provider registry contains duplicate source "
+                "components"
+            )
 
     @property
     def registered_package_names(self) -> tuple[str, ...]:
@@ -75,9 +116,13 @@ class ProfileRuntimeProviderRegistry:
 
     def provider_for(
         self,
+        package_name: str,
         descriptor: ProfileRuntimeDescriptor,
     ) -> ProfileRuntimeProvider:
-        package_name = _descriptor_package_name(descriptor)
+        if not isinstance(package_name, str) or not package_name:
+            raise ProfileRuntimeError(
+                "profile runtime provider package name must be a non-empty string"
+            )
         provider = next(
             (
                 candidate
@@ -98,12 +143,38 @@ class ProfileRuntimeProviderRegistry:
             )
         return provider
 
+    def provider_for_profile(
+        self,
+        descriptor: ProfileRuntimeDescriptor,
+    ) -> ProfileRuntimeProvider:
+        """Select startup composition by the bundle-bound profile ref.
+
+        Route-backed execution does not use this lookup: it supplies the
+        authoritative route candidate package name to ``provider_for``.
+        """
+        provider = next(
+            (
+                candidate
+                for candidate in self.providers
+                if candidate.profile_ref == descriptor.profile_ref
+            ),
+            None,
+        )
+        if provider is None:
+            raise ProfileRuntimeError(
+                "no registered executable runtime provider for descriptor "
+                f"profileRef {descriptor.profile_ref!r}"
+            )
+        return provider
+
     def build_services(
         self,
         store,
+        package_name: str,
         descriptor: ProfileRuntimeDescriptor,
     ) -> ProfileRuntimeServices:
-        provider = self.provider_for(descriptor)
+        provider = self.provider_for(package_name, descriptor)
+        self._verify_provider_source(store, provider)
         services = provider.build_services(store, descriptor)
         if not isinstance(services, ProfileRuntimeServices):
             raise ProfileRuntimeError(
@@ -115,7 +186,7 @@ class ProfileRuntimeProviderRegistry:
                 "or descriptor"
             )
         for service_name, capabilities in _REQUIRED_SERVICE_CAPABILITIES.items():
-            service = getattr(services, service_name)
+            service = _service_attribute(services, "service bundle", service_name)
             if service is None:
                 raise ProfileRuntimeError(
                     "profile runtime provider omitted required service "
@@ -124,14 +195,115 @@ class ProfileRuntimeProviderRegistry:
             missing = [
                 capability
                 for capability in capabilities
-                if not callable(getattr(service, capability, None))
+                if not callable(
+                    _service_attribute(service, service_name, capability)
+                )
             ]
             if missing:
                 raise ProfileRuntimeError(
                     f"profile runtime provider service {service_name!r} lacks "
                     f"required callable capabilities {missing!r}"
                 )
+        self._validate_policy_contract(services, descriptor)
+        if provider.package_name == "profile_si_ffs":
+            self._validate_si_contract(services)
         return services
+
+    @staticmethod
+    def _verify_provider_source(store, provider: ProfileRuntimeProvider) -> None:
+        try:
+            store.require_startup_complete("profile runtime provider composition")
+            component = store.runtime_bundle.component(
+                provider.source_component_role,
+                provider.source_component_logical_ref,
+            )
+        except (AttributeError, RuntimeBundleError) as exc:
+            raise ProfileRuntimeError(
+                "profile runtime provider source is not retained as its exact "
+                "startup-verified RuntimeBundle component"
+            ) from exc
+
+        source_file = inspect.getsourcefile(type(provider))
+        if not source_file:
+            raise ProfileRuntimeError(
+                "profile runtime provider source file is unavailable"
+            )
+        try:
+            source_bytes = Path(source_file).resolve(strict=True).read_bytes()
+        except OSError as exc:
+            raise ProfileRuntimeError(
+                "profile runtime provider source file is unavailable"
+            ) from exc
+        if component.canonical_bytes != source_bytes:
+            raise ProfileRuntimeError(
+                "profile runtime provider source bytes do not match the exact "
+                "startup-verified RuntimeBundle component"
+            )
+
+    @staticmethod
+    def _validate_policy_contract(
+        services: ProfileRuntimeServices,
+        descriptor: ProfileRuntimeDescriptor,
+    ) -> None:
+        policy_provider = services.policy_provider
+        policy_ref = _service_attribute(
+            policy_provider,
+            "policy_provider",
+            "policy_ref",
+        )
+        if policy_ref != descriptor.evidence_policy_ref:
+            raise ProfileRuntimeError(
+                "profile runtime provider policy_ref does not match the "
+                "descriptor evidencePolicyRef"
+            )
+        recognized_rule_refs = _service_attribute(
+            policy_provider,
+            "policy_provider",
+            "recognized_rule_refs",
+        )
+        if (
+            type(recognized_rule_refs) is not frozenset
+            or not recognized_rule_refs
+            or any(
+                not isinstance(ref, str) or not ref
+                for ref in recognized_rule_refs
+            )
+            or policy_ref not in recognized_rule_refs
+        ):
+            raise ProfileRuntimeError(
+                "profile runtime provider policy_provider has invalid "
+                "recognized_rule_refs"
+            )
+
+    @staticmethod
+    def _validate_si_contract(services: ProfileRuntimeServices) -> None:
+        reference_bindings = services.reference_bindings
+        if reference_bindings is None:
+            raise ProfileRuntimeError(
+                "SI profile runtime provider omitted required reference_bindings"
+            )
+        regsr_snapshot_prefix = _service_attribute(
+            reference_bindings,
+            "reference_bindings",
+            "regsr_snapshot_prefix",
+        )
+        if not isinstance(regsr_snapshot_prefix, str) or not regsr_snapshot_prefix:
+            raise ProfileRuntimeError(
+                "SI profile runtime provider reference_bindings has an invalid "
+                "regsr_snapshot_prefix"
+            )
+        product_lookup = services.product_lookup
+        if product_lookup is None or not callable(
+            _service_attribute(
+                product_lookup,
+                "product_lookup",
+                "lookup_by_decision",
+            )
+        ):
+            raise ProfileRuntimeError(
+                "SI profile runtime provider product_lookup lacks required "
+                "callable capability 'lookup_by_decision'"
+            )
 
 
 def default_profile_runtime_provider_registry() -> ProfileRuntimeProviderRegistry:
@@ -141,15 +313,11 @@ def default_profile_runtime_provider_registry() -> ProfileRuntimeProviderRegistr
     return ProfileRuntimeProviderRegistry((SI_RUNTIME_PROVIDER,))
 
 
-def _descriptor_package_name(descriptor: ProfileRuntimeDescriptor) -> str:
+def _service_attribute(service: Any, service_name: str, attribute: str) -> Any:
     try:
-        package_name = Path(descriptor.profile_root).name
-    except (AttributeError, TypeError) as exc:
+        return getattr(service, attribute)
+    except Exception as exc:
         raise ProfileRuntimeError(
-            "profile runtime descriptor package name is unavailable"
+            f"profile runtime provider {service_name} does not expose "
+            f"{attribute!r}"
         ) from exc
-    if not package_name:
-        raise ProfileRuntimeError(
-            "profile runtime descriptor package name is unavailable"
-        )
-    return package_name

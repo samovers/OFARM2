@@ -5851,6 +5851,16 @@
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_gate_pipeline_refuses_unbound_runtime_provider_source[omitted]",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_gate_pipeline_refuses_unbound_runtime_provider_source[replaced]",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_gate_pipeline_rejects_same_identity_provider_injection",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
@@ -6171,6 +6181,11 @@
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_refuses_alias_candidate_identity",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_refuses_design_only_route_target[profile_nl_go_glmc7_2026]",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
@@ -6236,6 +6251,11 @@
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_refuses_symlink_alias_identity",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_refuses_tenant_mismatch_before_writes",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
@@ -6262,6 +6282,26 @@
     },
     {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_handoff_binds_materializer_to_resolved_descriptor",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_runtime_service_construction_refuses_incomplete_consumed_contract[invalid_recognized_rule_refs-recognized_rule_refs]",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_runtime_service_construction_refuses_incomplete_consumed_contract[missing_lookup_by_decision-lookup_by_decision]",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_runtime_service_construction_refuses_incomplete_consumed_contract[missing_policy_ref-policy_ref]",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_runtime_service_construction_refuses_incomplete_consumed_contract[wrong_policy_ref-descriptor evidencePolicyRef]",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
@@ -7506,8 +7546,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "6757b66716d9b77932c10177b9b02071cc19c9a96dc06b6f21477eeeb6086a73",
-  "entryCount": 1501,
+  "entriesSha256": "859f16466f721da89e98e849df7fc54c1ddc7769db37d64ea52d0e5e87124889",
+  "entryCount": 1509,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
