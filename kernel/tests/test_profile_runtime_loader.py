@@ -43,8 +43,17 @@ from kernel.profile_runtime import (
     resolve_profile_route,
     resolve_active_descriptor,
 )
+from kernel.profile_runtime_provider import (
+    ProfileRuntimeProviderRegistry,
+    ProfileRuntimeServices,
+    default_profile_runtime_provider_registry,
+)
 from kernel.runtime_bundle import (
+    Canonicalization,
+    ContentPlacement,
+    RuntimeBundleError,
     RuntimeBundleBuilder,
+    RuntimeComponent,
     RuntimeComponentRole,
 )
 from kernel.stages import IngressNormalizer
@@ -2754,3 +2763,290 @@ def test_materializer_dependency_index_uses_bound_policy_and_invalidates(fresh_e
             (key_digest,),
         )
         assert cur.fetchone()["freshness"] == "STALE"
+
+
+# ---------------------------------------------------------------------------
+# Issue #159: focused provider-seam acceptance
+# ---------------------------------------------------------------------------
+
+
+def test_issue_159_default_pipeline_selects_registered_si_provider(fresh_env):
+    store, pipeline, _ = fresh_env
+
+    assert pipeline.runtime_provider_registration.key == (
+        config.ACTIVE_PROFILE_PACKAGE_NAME,
+        config.ACTIVE_PROFILE.profile_ref,
+    )
+    assert pipeline.runtime_services.provider_key == \
+        pipeline.runtime_provider_registration.key
+    assert pipeline.runtime_services.descriptor is store.active_descriptor
+
+
+def test_issue_159_si_submission_behavior_remains_assertion_equivalent(
+        fresh_env):
+    store, default_pipeline, _ = fresh_env
+    explicit_pipeline = GatePipeline(
+        store,
+        active_descriptor=config.ACTIVE_PROFILE,
+    )
+
+    default = default_pipeline.commit(demo.spray_submission(
+        f"issue159-default:{_uid()}",
+        erp_id=f"erp:issue159.default.{_uid()}",
+        confirm=True,
+    ))
+    explicit = explicit_pipeline.commit(demo.spray_submission(
+        f"issue159-explicit:{_uid()}",
+        erp_id=f"erp:issue159.explicit.{_uid()}",
+        confirm=True,
+    ))
+
+    assert default["decisionOutcome"] == explicit["decisionOutcome"] == \
+        "PROMOTE_ACCEPTED"
+    assert default["problems"] == explicit["problems"] == []
+    assert [
+        entry["gate"] for entry in _trace_payload(store, default)["gateSequence"]
+    ] == [
+        entry["gate"] for entry in _trace_payload(store, explicit)["gateSequence"]
+    ]
+
+
+def test_issue_159_route_uses_composition_root_services(fresh_env):
+    store, _, _ = fresh_env
+    pipeline = _route_pipeline(store)
+    result = pipeline.commit(demo.spray_submission(
+        f"issue159-route:{_uid()}",
+        erp_id=f"erp:issue159.route.{_uid()}",
+        confirm=True,
+    ))
+    trace = _trace_payload(store, result)
+
+    assert result["decisionOutcome"] == "PROMOTE_ACCEPTED"
+    assert result["problems"] == []
+    assert any(
+        entry["outcome"] == "PROFILE_ROUTE_PASS"
+        for entry in trace["gateSequence"]
+    )
+    assert trace["gateSequence"][-1]["gate"] == "CURRENT_STATE_MATERIALIZATION"
+
+
+def test_issue_159_unregistered_identity_cannot_construct_runtime(fresh_env):
+    store, _, _ = fresh_env
+    registry = default_profile_runtime_provider_registry()
+
+    with pytest.raises(
+        ProfileRuntimeError,
+        match="no registered executable runtime provider",
+    ):
+        registry.build_services(
+            store,
+            "profile_unregistered",
+            config.ACTIVE_PROFILE,
+        )
+
+
+def test_issue_159_unregistered_route_refuses_without_si_fallback(fresh_env):
+    store, _, _ = fresh_env
+    package_name = "profile_nl_go_glmc7_2026"
+    pipeline = _route_pipeline(
+        store,
+        routes=[_si_route(profile_package_name=package_name)],
+        registry=_route_registry(enabled=("profile_si_ffs", package_name)),
+        selected=("profile_si_ffs", package_name),
+    )
+
+    result = pipeline.commit(demo.spray_submission(
+        f"issue159-unregistered-route:{_uid()}",
+        erp_id=f"erp:issue159.unregistered.route.{_uid()}",
+        confirm=True,
+    ))
+
+    assert result["decisionOutcome"] == "RETAIN_DRAFT"
+    assert result["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+    assert _trace_payload(store, result)["gateSequence"][-1]["outcome"] == \
+        "PROFILE_ROUTE_REFUSE"
+
+
+def test_issue_159_descriptor_runtime_never_uses_legacy_policy(
+        fresh_env, monkeypatch):
+    store, _, _ = fresh_env
+
+    def fail_legacy_policy(*_args, **_kwargs):
+        raise AssertionError("legacy config-backed policy executed")
+
+    monkeypatch.setattr(profile_policy, "validation_policy", fail_legacy_policy)
+    monkeypatch.setattr(
+        profile_policy,
+        "load_evidence_review_policy",
+        fail_legacy_policy,
+    )
+
+    result = GatePipeline(store).commit(demo.spray_submission(
+        f"issue159-no-legacy:{_uid()}",
+        erp_id=f"erp:issue159.no.legacy.{_uid()}",
+        confirm=True,
+    ))
+
+    assert result["decisionOutcome"] == "PROMOTE_ACCEPTED"
+
+
+def test_issue_159_descriptor_discovery_does_not_register_provider():
+    descriptor_registry = _route_registry()
+    provider_registry = default_profile_runtime_provider_registry()
+
+    assert (
+        "profile_nl_go_glmc7_2026"
+        in descriptor_registry.discoverable_package_names
+    )
+    assert provider_registry.registered_identities == ((
+        "profile_si_ffs",
+        config.ACTIVE_PROFILE.profile_ref,
+    ),)
+
+
+def test_issue_159_rs_remains_design_only_and_unexecutable(fresh_env):
+    store, _, _ = fresh_env
+    rs_root = config.PACKAGE_ROOT / "profile_rs_organic_crop"
+
+    assert rs_root.is_dir()
+    assert not (rs_root / DESCRIPTOR_FILENAME).exists()
+    with pytest.raises(
+        ProfileRuntimeError,
+        match="no registered executable runtime provider",
+    ):
+        default_profile_runtime_provider_registry().build_services(
+            store,
+            "profile_rs_organic_crop",
+            config.ACTIVE_PROFILE,
+        )
+
+
+def test_issue_159_provider_source_component_is_required():
+    registration = (
+        default_profile_runtime_provider_registry().registrations[0]
+    )
+
+    class MissingBundle:
+        @staticmethod
+        def component(_role, _logical_ref):
+            raise RuntimeBundleError("missing provider source")
+
+    store = SimpleNamespace(
+        require_startup_complete=lambda _operation: None,
+        runtime_bundle=MissingBundle(),
+    )
+
+    with pytest.raises(
+        ProfileRuntimeError,
+        match="source is not retained",
+    ):
+        default_profile_runtime_provider_registry().build_services(
+            store,
+            registration.package_name,
+            config.ACTIVE_PROFILE,
+        )
+
+
+def test_issue_159_provider_source_digest_must_match_registration():
+    registration = (
+        default_profile_runtime_provider_registry().registrations[0]
+    )
+    mismatched_component = RuntimeComponent.from_selected_bytes(
+        role=registration.source_component_role,
+        logical_ref=registration.source_component_logical_ref,
+        canonicalization=Canonicalization.EXACT_BYTES,
+        placement=ContentPlacement.GLOBAL,
+        selected_bytes=b"mismatched provider source",
+    )
+
+    class MismatchedBundle:
+        @staticmethod
+        def component(_role, _logical_ref):
+            return mismatched_component
+
+    store = SimpleNamespace(
+        require_startup_complete=lambda _operation: None,
+        runtime_bundle=MismatchedBundle(),
+    )
+
+    with pytest.raises(
+        ProfileRuntimeError,
+        match="source digest does not match",
+    ):
+        default_profile_runtime_provider_registry().build_services(
+            store,
+            registration.package_name,
+            config.ACTIVE_PROFILE,
+        )
+
+
+def test_issue_159_composition_returns_fresh_service_graphs(fresh_env):
+    store, first, _ = fresh_env
+    second = GatePipeline(store)
+
+    assert first.runtime_services is not second.runtime_services
+    assert first.policy_provider is not second.policy_provider
+    assert first.context is not second.context
+    assert first.materializer is not second.materializer
+    assert first.products is not second.products
+
+
+def test_issue_159_composition_rejects_missing_required_service(fresh_env):
+    store, _, _ = fresh_env
+    default_registration = (
+        default_profile_runtime_provider_registry().registrations[0]
+    )
+
+    def incomplete_factory(_store, descriptor, source_component):
+        return ProfileRuntimeServices(
+            provider_key=default_registration.key,
+            provider_source_digest=source_component.content_digest,
+            descriptor=descriptor,
+            policy_provider=None,
+            context_assembler=SimpleNamespace(assemble=lambda: None),
+            materializer=SimpleNamespace(
+                invalidate_for_sources=lambda: None,
+                recompute=lambda: None,
+            ),
+            reference_bindings=object(),
+            product_lookup=SimpleNamespace(lookup_by_decision=lambda: None),
+            registry_reverification=SimpleNamespace(run=lambda: None),
+        )
+
+    registry = ProfileRuntimeProviderRegistry((
+        replace(default_registration, factory=incomplete_factory),
+    ))
+
+    with pytest.raises(
+        ProfileRuntimeError,
+        match="omitted required service 'policy_provider'",
+    ):
+        registry.build_services(
+            store,
+            default_registration.package_name,
+            config.ACTIVE_PROFILE,
+        )
+
+
+def test_issue_159_policy_without_complete_runtime_services_refuses_d9(
+        fresh_env, monkeypatch):
+    store, pipeline, _ = fresh_env
+    submission = demo.spray_submission(
+        f"issue159-incomplete-runtime:{_uid()}",
+        erp_id=f"erp:issue159.incomplete.runtime.{_uid()}",
+        confirm=True,
+    )
+
+    with store.tx() as cur:
+        ctx = pipeline._new_context(cur, submission)
+        assert ctx.policy_provider is not None
+        ctx.runtime_services = None
+        monkeypatch.setattr(validators, "COMMON_SEQUENCE", ())
+
+        refusal = validators.ValidationGate().run(ctx)
+
+    assert refusal.outcome == "FAIL_PROFILE_POLICY"
+    assert refusal.final_outcome == "RETAIN_DRAFT"
+    assert refusal.problems[0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+    assert "runtime provider services are incomplete" in \
+        refusal.problems[0]["detail"]

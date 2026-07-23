@@ -145,6 +145,15 @@ class ActiveProfileSelection:
     descriptors: tuple[ProfileRuntimeDescriptor, ...]
 
     @property
+    def active_profile_package_name(self) -> str:
+        if len(self.profile_package_names) != 1:
+            raise ProfileRuntimeError(
+                "MP1 active profile selection supports exactly one active "
+                f"profile package; got {len(self.profile_package_names)}"
+            )
+        return self.profile_package_names[0]
+
+    @property
     def active_profile(self) -> ProfileRuntimeDescriptor:
         if len(self.descriptors) != 1:
             raise ProfileRuntimeError(

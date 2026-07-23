@@ -79,6 +79,11 @@ EXPECTED_EXECUTABLE_SOURCE_SELECTION = {
     ),
     (
         RuntimeComponentRole.ADAPTER_SOURCE,
+        "python:profile-si-ffs-v0_1:runtime-provider",
+        "kernel/profiles/si_ffs/runtime_provider.py",
+    ),
+    (
+        RuntimeComponentRole.ADAPTER_SOURCE,
         "python:profile-si-ffs-v0_1:regsr-parser",
         "tooling/regsr_snapshot/parse_regsr.py",
     ),
@@ -1240,7 +1245,7 @@ def test_checked_in_component_catalog_builds_the_reviewed_closed_set():
 
     assert bundle.selected_tenant_ref == "tenant:si.ffs.pilot.demo"
     assert bundle.digest == (
-        "sha256:91fa5380fd2a735c776b0224edab3dbc2299b485717114f5e8a352d567670c7a"
+        "sha256:92bb84a5c3a44f2af5b934c261603f28612565cb5b3f033afc39b575532a4bcd"
     )
 
     expected_catalog_roles = {
@@ -1260,7 +1265,7 @@ def test_checked_in_component_catalog_builds_the_reviewed_closed_set():
         RuntimeComponentRole.VIEW_BINDING,
     }
 
-    assert len(bundle.components) == 90
+    assert len(bundle.components) == 91
     assert {component.role for component in bundle.components} == expected_catalog_roles
     assert set(RuntimeComponentRole) == expected_catalog_roles
     identities = [

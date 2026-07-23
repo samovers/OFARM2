@@ -17,6 +17,7 @@ RuntimeBundle at process startup; policy files are not a hot-reload authority.
 """
 from __future__ import annotations
 
+import copy
 import json
 import re
 import string
@@ -339,6 +340,30 @@ def load_evidence_review_policy_from_path(
     )
 
 
+def load_evidence_review_policy_from_bytes(
+    canonical_policy_bytes,
+    supported_checks=None,
+    *,
+    expected_policy_ref=None,
+) -> dict:
+    """Parse and fully validate one retained RuntimeBundle policy component."""
+    if type(canonical_policy_bytes) is not bytes:
+        raise ProfilePolicyError(
+            "retained evidence-review policy content must be bytes"
+        )
+    try:
+        doc = json.loads(canonical_policy_bytes)
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise ProfilePolicyError(
+            f"retained evidence-review policy is unreadable: {exc}"
+        ) from exc
+    return _validated_evidence_review_policy(
+        doc,
+        supported_checks=supported_checks,
+        expected_policy_ref=expected_policy_ref,
+    )
+
+
 def load_evidence_review_policy_for_descriptor(descriptor, supported_checks=None) -> dict:
     """Load policy content explicitly bound to a profile runtime descriptor."""
     return load_evidence_review_policy_from_path(
@@ -371,7 +396,13 @@ class DescriptorPolicyProvider:
     the existing full evidence-review policy loader.
     """
 
-    def __init__(self, descriptor):
+    def __init__(
+        self,
+        descriptor,
+        *,
+        canonical_policy_bytes=None,
+        supported_checks=None,
+    ):
         self.descriptor = descriptor
         self.policy_ref = descriptor.evidence_policy_ref
         self.recognized_rule_refs = frozenset({
@@ -381,6 +412,31 @@ class DescriptorPolicyProvider:
             descriptor.code_binding_profile_ref,
         })
         self._evidence_policy_cache: dict[tuple[str, ...] | None, dict] = {}
+        self._bundle_policy_document = None
+        self._bundle_validated_check_keys: set[tuple[str, ...] | None] = set()
+        if canonical_policy_bytes is not None:
+            key = self._supported_checks_key(supported_checks)
+            self._bundle_policy_document = load_evidence_review_policy_from_bytes(
+                canonical_policy_bytes,
+                supported_checks=key,
+                expected_policy_ref=self.policy_ref,
+            )
+            self._bundle_validated_check_keys.update((None, key))
+
+    @classmethod
+    def from_runtime_bundle(
+        cls,
+        descriptor,
+        canonical_policy_bytes,
+        *,
+        supported_checks,
+    ):
+        """Build the governed provider from immutable selected policy bytes."""
+        return cls(
+            descriptor,
+            canonical_policy_bytes=canonical_policy_bytes,
+            supported_checks=supported_checks,
+        )
 
     @staticmethod
     def _supported_checks_key(supported_checks) -> tuple[str, ...] | None:
@@ -390,6 +446,15 @@ class DescriptorPolicyProvider:
 
     def evidence_policy(self, supported_checks=None) -> dict:
         key = self._supported_checks_key(supported_checks)
+        if self._bundle_policy_document is not None:
+            if key not in self._bundle_validated_check_keys:
+                _validated_evidence_review_policy(
+                    self._bundle_policy_document,
+                    supported_checks=key,
+                    expected_policy_ref=self.policy_ref,
+                )
+                self._bundle_validated_check_keys.add(key)
+            return copy.deepcopy(self._bundle_policy_document)
         if key not in self._evidence_policy_cache:
             self._evidence_policy_cache[key] = load_evidence_review_policy_for_descriptor(
                 self.descriptor,
