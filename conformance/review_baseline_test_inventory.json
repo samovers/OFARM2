@@ -5911,6 +5911,11 @@
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_mismatched_provider_source_does_not_import_parent_package",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_now_context_refuses_descriptor_id_profile_wrong_pack_scope",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
@@ -7571,8 +7576,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "7e905adf7c99b56a4d0a019573324481ad96387ce77b84ea6586d4c21e6ff2f8",
-  "entryCount": 1514,
+  "entriesSha256": "40d4ae15d20cf74493c41a68b3f255f954a010610ef0e29af4599bc91479f72c",
+  "entryCount": 1515,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

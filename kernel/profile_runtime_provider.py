@@ -7,9 +7,9 @@ the current runtime already needs.
 """
 from __future__ import annotations
 
-import importlib.util
 import sys
 from dataclasses import dataclass
+from importlib.machinery import PathFinder
 from pathlib import Path
 from types import ModuleType
 from typing import Any, Protocol
@@ -251,15 +251,11 @@ class ProfileRuntimeProviderRegistry:
             registered_source_path = registration.source_path.resolve(
                 strict=True
             )
-            module_spec = importlib.util.find_spec(registration.module_name)
-            module_origin = module_spec.origin if module_spec is not None else None
-            if not module_origin:
-                raise ProfileRuntimeError(
-                    "profile runtime provider module source is unavailable"
-                )
-            resolved_module_path = Path(module_origin).resolve(strict=True)
+            resolved_module_path = _resolve_module_source_without_import(
+                registration.module_name
+            )
             source_bytes = registered_source_path.read_bytes()
-        except (ImportError, OSError) as exc:
+        except OSError as exc:
             raise ProfileRuntimeError(
                 "profile runtime provider source file is unavailable"
             ) from exc
@@ -451,3 +447,37 @@ def _service_attribute(service: Any, service_name: str, attribute: str) -> Any:
             f"profile runtime provider {service_name} does not expose "
             f"{attribute!r}"
         ) from exc
+
+
+def _resolve_module_source_without_import(module_name: str) -> Path:
+    """Resolve a dotted module through filesystem finders without importing it."""
+    module_parts = module_name.split(".")
+    if any(not part or not part.isidentifier() for part in module_parts):
+        raise ProfileRuntimeError(
+            "profile runtime provider module name is invalid"
+        )
+
+    search_path = None
+    module_spec = None
+    qualified_parts = []
+    for index, module_part in enumerate(module_parts):
+        qualified_parts.append(module_part)
+        qualified_name = ".".join(qualified_parts)
+        module_spec = PathFinder.find_spec(qualified_name, search_path)
+        if module_spec is None:
+            raise ProfileRuntimeError(
+                "profile runtime provider module source is unavailable"
+            )
+        if index < len(module_parts) - 1:
+            search_path = module_spec.submodule_search_locations
+            if search_path is None:
+                raise ProfileRuntimeError(
+                    "profile runtime provider module parent is not a package"
+                )
+
+    module_origin = module_spec.origin if module_spec is not None else None
+    if not module_origin or module_origin in {"built-in", "frozen"}:
+        raise ProfileRuntimeError(
+            "profile runtime provider module source is unavailable"
+        )
+    return Path(module_origin).resolve(strict=True)

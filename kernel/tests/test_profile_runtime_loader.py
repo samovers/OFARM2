@@ -1961,6 +1961,93 @@ def test_mismatched_provider_source_cannot_execute_during_startup(
     assert module_name not in sys.modules
 
 
+def test_mismatched_provider_source_does_not_import_parent_package(tmp_path):
+    package_name = f"hostile_provider_package_{_uid()}"
+    package_root = tmp_path / package_name
+    package_root.mkdir()
+    execution_marker = tmp_path / "parent-import-executed"
+    (package_root / "__init__.py").write_text(
+        "from pathlib import Path\n"
+        f"Path({str(execution_marker)!r}).write_text('executed')\n",
+        encoding="utf-8",
+    )
+    module_path = package_root / "runtime_provider.py"
+    module_path.write_text(
+        "raise AssertionError('unverified provider source executed')\n",
+        encoding="utf-8",
+    )
+    registration = (
+        default_profile_runtime_provider_registry().registration_for(
+            config.ACTIVE_PROFILE_PACKAGE_NAME,
+            config.ACTIVE_PROFILE,
+        )
+    )
+    hostile_registration = replace(
+        registration,
+        module_name=f"{package_name}.runtime_provider",
+        provider_attribute="HOSTILE_PROVIDER",
+        source_path=module_path,
+    )
+    script = "\n".join([
+        "import sys",
+        "from pathlib import Path",
+        "from kernel import config",
+        "from kernel.profile_runtime import ProfileRuntimeError",
+        (
+            "from kernel.profile_runtime_provider import "
+            "ProfileRuntimeProviderRegistration, "
+            "ProfileRuntimeProviderRegistry"
+        ),
+        "from kernel.runtime_bundle import RuntimeComponentRole",
+        f"sys.path.insert(0, {str(tmp_path)!r})",
+        "registration = ProfileRuntimeProviderRegistration(",
+        f"    package_name={hostile_registration.package_name!r},",
+        f"    profile_ref={hostile_registration.profile_ref!r},",
+        "    source_component_role=RuntimeComponentRole.ADAPTER_SOURCE,",
+        (
+            "    source_component_logical_ref="
+            f"{hostile_registration.source_component_logical_ref!r},"
+        ),
+        f"    module_name={hostile_registration.module_name!r},",
+        (
+            "    provider_attribute="
+            f"{hostile_registration.provider_attribute!r},"
+        ),
+        f"    source_path=Path({str(hostile_registration.source_path)!r}),",
+        ")",
+        "registry = ProfileRuntimeProviderRegistry((registration,))",
+        "class RuntimeBundle:",
+        "    def component(self, _role, _logical_ref):",
+        (
+            "        return type('Component', (), "
+            "{'canonical_bytes': b'retained different bytes'})()"
+        ),
+        "class Store:",
+        "    runtime_bundle = RuntimeBundle()",
+        "    def require_startup_complete(self, _operation):",
+        "        return None",
+        "try:",
+        "    registry._verify_provider_source(Store(), registration)",
+        "except ProfileRuntimeError as exc:",
+        "    if 'source bytes do not match' not in str(exc):",
+        "        raise",
+        "else:",
+        "    raise AssertionError('mismatched provider source was accepted')",
+    ])
+
+    proc = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=config.PACKAGE_ROOT,
+        env=os.environ.copy(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert proc.returncode == 0, proc.stderr
+    assert not execution_marker.exists()
+
+
 def test_preloaded_provider_attribute_replacement_cannot_execute(
         monkeypatch):
     runtime_bundle = RuntimeBundleBuilder.from_manifest(
