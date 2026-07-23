@@ -14,8 +14,9 @@ from pydantic import BaseModel
 
 from . import auth_oidc, config
 from .contracts import ContractViolation
-from .problems import runtime_problem
 from .gates import GatePipeline
+from .principal_binding import PrincipalBindingAuthority
+from .problems import runtime_problem
 from .runtime_activation import (
     RuntimeActivationObservation,
     complete_store_startup,
@@ -23,6 +24,7 @@ from .runtime_activation import (
     require_deployment_image_digest,
 )
 from .runtime_bundle import RuntimeBundleBuilder, RuntimeComponentRole
+from .runtime_composition import ProductionApplicationRuntime
 from .store import Store
 from .views import OutputGenerator
 
@@ -68,6 +70,9 @@ def create_app(
     principal_binding_resolver=None,
     deployment_image_digest=_FROM_ENV,
 ) -> FastAPI:
+    selected_image_digest = _deployment_image_preflight(
+        deployment_image_digest
+    )
     if authentication is not _FROM_ENV:
         if type(authentication) is not auth_oidc.ProductionAuthenticationRuntime:
             raise auth_oidc.AuthenticationStartupError(
@@ -79,10 +84,17 @@ def create_app(
         authentication_runtime = config.authentication_runtime_from_env(
             principal_binding_resolver=principal_binding_resolver
         )
+    production_runtime = (
+        config.production_application_runtime(authentication_runtime)
+        if type(authentication_runtime)
+        is auth_oidc.ProductionAuthenticationRuntime
+        else None
+    )
     return _create_app_with_runtime(
         store,
         authentication_runtime=authentication_runtime,
-        deployment_image_digest=deployment_image_digest,
+        production_runtime=production_runtime,
+        selected_image_digest=selected_image_digest,
     )
 
 
@@ -95,6 +107,9 @@ def create_test_app(
 ) -> FastAPI:
     """Build an application with explicit test-only authentication fixtures."""
 
+    selected_image_digest = _deployment_image_preflight(
+        deployment_image_digest
+    )
     if authentication is not _FROM_ENV and oidc is not _FROM_ENV:
         raise auth_oidc.AuthenticationStartupError(
             "authentication and oidc test settings cannot both be supplied"
@@ -125,7 +140,16 @@ def create_test_app(
     return _create_app_with_runtime(
         store,
         authentication_runtime=authentication_runtime,
-        deployment_image_digest=deployment_image_digest,
+        production_runtime=None,
+        selected_image_digest=selected_image_digest,
+    )
+
+
+def _deployment_image_preflight(deployment_image_digest) -> str:
+    return (
+        deployment_image_digest_from_env()
+        if deployment_image_digest is _FROM_ENV
+        else require_deployment_image_digest(deployment_image_digest)
     )
 
 
@@ -133,15 +157,25 @@ def _create_app_with_runtime(
     store: Store | None,
     *,
     authentication_runtime: auth_oidc.AuthenticationRuntime,
-    deployment_image_digest,
+    production_runtime: ProductionApplicationRuntime | None,
+    selected_image_digest: str,
 ) -> FastAPI:
-    authentication_runtime.initialize()
+    production_capability_issuer = None
+    if production_runtime is None:
+        authentication_runtime.initialize()
+    else:
+        if (
+            type(production_runtime) is not ProductionApplicationRuntime
+            or production_runtime.authentication is not authentication_runtime
+        ):
+            raise auth_oidc.AuthenticationStartupError(
+                "production application composition differs"
+            )
+        production_runtime.initialize()
+        production_capability_issuer = (
+            production_runtime.capability_issuer
+        )
 
-    selected_image_digest = (
-        deployment_image_digest_from_env()
-        if deployment_image_digest is _FROM_ENV
-        else require_deployment_image_digest(deployment_image_digest)
-    )
     app = FastAPI(
         title="OFARM2 Kernel (M1)",
         description="Implementation and conformance packaging profile — not OFARM "
@@ -176,9 +210,8 @@ def _create_app_with_runtime(
         app.state.store, active_descriptor=app.state.store.active_descriptor)
     app.state.outputs = OutputGenerator(
         app.state.store, active_descriptor=app.state.store.active_descriptor)
-    app.state.authentication = authentication_runtime
-    # Compatibility observation only; request authentication uses the explicit
-    # runtime above and never infers a mode from this value.
+    # Compatibility observation only. The authoritative immutable runtime is
+    # closed over by get_principal and cannot be replaced through app.state.
     app.state.oidc = authentication_runtime.verifier
 
     @app.middleware("http")
@@ -196,7 +229,7 @@ def _create_app_with_runtime(
                       x_acting_party: str | None = Header(None)) -> str:
         """Resolve one transport principal under the selected explicit mode."""
         try:
-            principal, binding = app.state.authentication.resolve_principal(
+            principal, binding = authentication_runtime.resolve_principal(
                 authorization=authorization,
                 development_header=x_acting_party,
             )
@@ -206,18 +239,40 @@ def _create_app_with_runtime(
                 f"authentication failed closed ({exc.outcome.value})",
                 "problem:api-authentication-refused",
             )
-        if app.state.authentication.mode is not auth_oidc.AuthenticationMode.PRODUCTION:
+        if authentication_runtime.mode is not auth_oidc.AuthenticationMode.PRODUCTION:
             rec = app.state.store.get_record(principal)
             if (rec is None or rec["record_kind"] != "ofarm.party.v0.1"
                     or rec["payload"].get("partyState") != "ACTIVE"):
                 _deny("Principal is not an active Party",
                       "the transport principal is not a recorded active Party; "
                       "default deny", "problem:api-principal-not-party")
-        elif binding is None:
-            _deny(
-                "Authentication refused",
-                "production principal binding is absent; default deny",
-                "problem:api-authentication-refused",
+        else:
+            if (
+                type(authentication_runtime)
+                is auth_oidc.ProductionAuthenticationRuntime
+                and production_capability_issuer is None
+            ):
+                _deny(
+                    "Authentication refused",
+                    "production capability boundary is absent; default deny",
+                    "problem:api-authentication-refused",
+                )
+            if type(binding) is not PrincipalBindingAuthority:
+                _deny(
+                    "Authentication refused",
+                    "production principal binding differs; default deny",
+                    "problem:api-authentication-refused",
+                )
+            raise HTTPException(
+                status_code=503,
+                detail=runtime_problem(
+                    "TENANT_BOUNDARY_BLOCKED",
+                    "Production tenant surface unavailable",
+                    "the legacy Store-backed HTTP surface is refused in "
+                    "production until the tenant UnitOfWork carries the full "
+                    "immutable principal-binding authority",
+                    problem_id="problem:api-production-surface-refused",
+                ),
             )
         return principal
 

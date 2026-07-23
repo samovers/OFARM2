@@ -6,6 +6,7 @@ package-local development cluster created for M1.
 """
 from __future__ import annotations
 
+import base64
 import os
 from pathlib import Path
 
@@ -181,6 +182,105 @@ def authentication_runtime_from_env(*, principal_binding_resolver=None):
         )
     )
     return AuthenticationRuntime.production(verifier, principal_binding_resolver)
+
+
+def production_application_runtime(
+    authentication_runtime,
+):
+    """Close the exact production authentication and KMS capability graph."""
+
+    from cryptography.hazmat.primitives import serialization
+
+    from deployment.postgresql.tenant_contract import (
+        GoogleKmsEd25519PublicKey,
+        derive_ed25519_key_id,
+        raw_public_key_digest,
+        validate_google_kms_key_version_resource,
+    )
+
+    from .auth_oidc import (
+        AuthenticationStartupError,
+        ProductionAuthenticationRuntime,
+    )
+    from .runtime_composition import ProductionApplicationRuntime
+    from .tenant_capability import (
+        GoogleCloudKmsClientAdapter,
+        GoogleKmsEd25519Signer,
+        ProductionTenantCapabilityIssuer,
+    )
+
+    if type(authentication_runtime) is not ProductionAuthenticationRuntime:
+        raise AuthenticationStartupError(
+            "production capability composition requires the exact "
+            "authentication runtime"
+        )
+
+    try:
+        signing_key_resource = validate_google_kms_key_version_resource(
+            _required_environment(
+                "OFARM_TENANT_CAPABILITY_SIGNING_KEY_VERSION"
+            )
+        )
+        observer_key_resource = validate_google_kms_key_version_resource(
+            _required_environment(
+                "OFARM_SIGNING_EVIDENCE_OBSERVER_KEY_VERSION"
+            )
+        )
+        receipt_path = Path(
+            _required_environment("OFARM_SIGNING_EVIDENCE_RECEIPT_PATH")
+        )
+        if not receipt_path.is_absolute():
+            raise ValueError(
+                "production signing-evidence receipt path is not absolute"
+            )
+        if (
+            signing_key_resource.rpartition("/cryptoKeyVersions/")[0]
+            == observer_key_resource.rpartition("/cryptoKeyVersions/")[0]
+        ):
+            raise ValueError(
+                "production signing and observer CryptoKeys must differ"
+            )
+
+        kms_client = GoogleCloudKmsClientAdapter()
+        public_key = kms_client.get_ed25519_public_key(
+            name=signing_key_resource
+        )
+        raw_public_key = public_key.public_bytes(
+            serialization.Encoding.Raw,
+            serialization.PublicFormat.Raw,
+        )
+        der = public_key.public_bytes(
+            serialization.Encoding.DER,
+            serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        observation = GoogleKmsEd25519PublicKey(
+            key_version_resource=signing_key_resource,
+            der=der,
+            public_key=raw_public_key,
+            public_key_digest=raw_public_key_digest(raw_public_key),
+            x=base64.urlsafe_b64encode(raw_public_key)
+            .rstrip(b"=")
+            .decode("ascii"),
+            kid=derive_ed25519_key_id(raw_public_key),
+        )
+        signer = GoogleKmsEd25519Signer(
+            client=kms_client,
+            public_key=observation,
+        )
+        issuer = ProductionTenantCapabilityIssuer(
+            resolver=authentication_runtime.principal_binding_resolver,
+            signer=signer,
+        )
+        return ProductionApplicationRuntime(
+            authentication=authentication_runtime,
+            capability_issuer=issuer,
+        )
+    except AuthenticationStartupError:
+        raise
+    except Exception as exc:
+        raise AuthenticationStartupError(
+            "production capability boundary construction failed"
+        ) from exc
 
 
 def oidc_config_from_env():

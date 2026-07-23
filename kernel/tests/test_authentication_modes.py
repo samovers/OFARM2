@@ -4,13 +4,16 @@ from __future__ import annotations
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import FrozenInstanceError, dataclass
+from datetime import UTC, datetime, timedelta
 from threading import Event
+from uuid import uuid4
 
 import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
+from fastapi.testclient import TestClient
 
-from kernel import config
+from kernel import config, demo
 from kernel.api import create_app, create_test_app
 from kernel.auth_oidc import (
     AuthenticationMode,
@@ -23,7 +26,17 @@ from kernel.auth_oidc import (
     ProductionOidcConfig,
     ProductionOidcVerifier,
 )
-from kernel.principal_binding import PostgreSQLPrincipalBindingResolver
+from kernel.principal_binding import (
+    PostgreSQLPrincipalBindingResolver,
+    PrincipalBindingAuthority,
+)
+from kernel.runtime_activation import RuntimeActivationError
+from kernel.runtime_composition import ProductionApplicationRuntime
+from kernel.tenant_capability import (
+    CapabilityIssuanceError,
+    GoogleKmsEd25519Signer,
+    ProductionTenantCapabilityIssuer,
+)
 
 
 ISSUER = "https://issuer.example.test/tenant"
@@ -74,6 +87,21 @@ class _Resolver:
         return type("Binding", (), {"party_ref": "party:bound"})()
 
 
+class _AuthorityResolver:
+    def __init__(self, authority):
+        self.authority = authority
+        self.initialized = False
+
+    def initialize(self):
+        self.initialized = True
+
+    def resolve(self, identity):
+        assert self.initialized
+        assert identity.issuer == self.authority.issuer
+        assert identity.subject == self.authority.subject
+        return self.authority
+
+
 @pytest.fixture(scope="module")
 def rsa_keys():
     private = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -111,6 +139,46 @@ def _production_oidc_config() -> ProductionOidcConfig:
         audience=AUDIENCE,
         jwks_url=JWKS_URL,
         algorithms=("RS256",),
+    )
+
+
+def _authority() -> PrincipalBindingAuthority:
+    now = datetime.now(UTC)
+    return PrincipalBindingAuthority(
+        equality_policy="OIDC_EXACT_UTF8_V1",
+        issuer=ISSUER,
+        subject="subject-01",
+        binding_version_id=uuid4(),
+        binding_version_digest="sha256:" + "11" * 32,
+        lifecycle_head_id=uuid4(),
+        lifecycle_head_digest="sha256:" + "22" * 32,
+        tenant_id=uuid4(),
+        tenant_registration_digest="sha256:" + "33" * 32,
+        party_ref="party:bound",
+        party_record_kind="ofarm.party.v0.1",
+        party_record_id="party:bound",
+        party_schema_digest="sha256:" + "44" * 32,
+        party_payload_digest="sha256:" + "55" * 32,
+        party_state="ACTIVE",
+        valid_from=now - timedelta(days=1),
+        valid_until=now + timedelta(days=1),
+    )
+
+
+def _sealed_production_composition() -> ProductionApplicationRuntime:
+    resolver = PostgreSQLPrincipalBindingResolver(lambda: None)
+    authentication = AuthenticationRuntime.production(
+        ProductionOidcVerifier(_production_oidc_config()),
+        resolver,
+    )
+    signer = object.__new__(GoogleKmsEd25519Signer)
+    issuer = ProductionTenantCapabilityIssuer(
+        resolver=resolver,
+        signer=signer,
+    )
+    return ProductionApplicationRuntime(
+        authentication=authentication,
+        capability_issuer=issuer,
     )
 
 
@@ -742,6 +810,128 @@ def test_production_app_rejects_test_runtime_subclasses_and_mutation(rsa_keys):
         runtime.mode = AuthenticationMode.DEVELOPMENT
     with pytest.raises(FrozenInstanceError):
         runtime.principal_binding_resolver = _Resolver()
+
+
+def test_deployment_identity_preflight_precedes_runtime_construction(
+    monkeypatch,
+):
+    constructed = []
+
+    def unexpected_runtime_construction(**_kwargs):
+        constructed.append(True)
+        raise AssertionError(
+            "invalid deployment identity reached authentication construction"
+        )
+
+    monkeypatch.setattr(
+        config,
+        "authentication_runtime_from_env",
+        unexpected_runtime_construction,
+    )
+    with pytest.raises(RuntimeActivationError):
+        create_app(deployment_image_digest="sha256:not-a-deployment-digest")
+    assert constructed == []
+
+
+def test_production_composition_requires_signing_evidence_configuration(
+    monkeypatch,
+):
+    runtime = AuthenticationRuntime.production(
+        ProductionOidcVerifier(_production_oidc_config()),
+        PostgreSQLPrincipalBindingResolver(lambda: None),
+    )
+    monkeypatch.setenv(
+        "OFARM_TENANT_CAPABILITY_SIGNING_KEY_VERSION",
+        "projects/ofarm1/locations/europe-west1/keyRings/auth/"
+        "cryptoKeys/capability/cryptoKeyVersions/1",
+    )
+    monkeypatch.setenv(
+        "OFARM_SIGNING_EVIDENCE_OBSERVER_KEY_VERSION",
+        "projects/ofarm1/locations/europe-west1/keyRings/auth/"
+        "cryptoKeys/evidence-observer/cryptoKeyVersions/1",
+    )
+    monkeypatch.delenv(
+        "OFARM_SIGNING_EVIDENCE_RECEIPT_PATH",
+        raising=False,
+    )
+
+    with pytest.raises(
+        AuthenticationStartupError,
+        match="OFARM_SIGNING_EVIDENCE_RECEIPT_PATH is required",
+    ):
+        config.production_application_runtime(runtime)
+
+
+def test_production_composition_initializes_every_boundary_and_propagates_refusal(
+    monkeypatch,
+):
+    composition = _sealed_production_composition()
+    initialized = []
+
+    def initialize_authentication(_runtime):
+        initialized.append("authentication")
+
+    def refuse_stale_evidence(_issuer):
+        initialized.append("capability")
+        raise CapabilityIssuanceError(
+            PreBindingOutcome.SIGNER_UNAVAILABLE,
+            internal_detail="stale evidence detail must stay private",
+        )
+
+    monkeypatch.setattr(
+        ProductionAuthenticationRuntime,
+        "initialize",
+        initialize_authentication,
+    )
+    monkeypatch.setattr(
+        ProductionTenantCapabilityIssuer,
+        "initialize",
+        refuse_stale_evidence,
+    )
+
+    with pytest.raises(CapabilityIssuanceError) as raised:
+        composition.initialize()
+    assert raised.value.outcome is PreBindingOutcome.SIGNER_UNAVAILABLE
+    assert initialized == ["authentication", "capability"]
+    assert "stale evidence detail" not in str(raised.value)
+
+
+def test_request_authentication_is_closed_over_not_loaded_from_app_state(store):
+    app = create_test_app(store, oidc=None)
+
+    class MutableStateBypass:
+        mode = AuthenticationMode.DEVELOPMENT
+
+        def resolve_principal(self, **_kwargs):
+            return demo.FARMER, None
+
+    app.state.authentication = MutableStateBypass()
+    with TestClient(app) as client:
+        response = client.get("/records/record:not-present")
+
+    assert response.status_code == 401
+    assert response.json()["detail"]["reasonCode"] == "AUTHORITY_DENIED"
+
+
+def test_production_refuses_legacy_store_surface_with_full_binding(
+    store,
+    rsa_keys,
+):
+    authority = _authority()
+    runtime = AuthenticationRuntime.production_for_test(
+        _production_verifier(rsa_keys),
+        _AuthorityResolver(authority),
+    )
+    app = create_test_app(store, authentication=runtime)
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/records/record:not-present",
+            headers={"Authorization": f"Bearer {_token(rsa_keys)}"},
+        )
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["reasonCode"] == "TENANT_BOUNDARY_BLOCKED"
 
 
 def test_safe_failure_outcome_does_not_expose_exception_detail():

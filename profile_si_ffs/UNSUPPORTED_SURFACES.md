@@ -96,11 +96,15 @@ settings never select a fallback:
 - **`test`** — permits only the local HS256 fixture issuer used by engineering
   tests. It is structurally rejected by production mode.
 - **`production`** — requires the maintained PyJWT asymmetric/JWKS verifier to
-  initialize and requires an immutable principal-binding resolver. It validates
-  exact issuer, audience, configured asymmetric algorithm, `exp`/`nbf`, and
-  keyed JWKS rotation. The verified issuer/subject are carried under
+  initialize, an immutable principal-binding resolver, and the KMS-backed
+  TenantCapability issuer with current authenticated signing evidence. It
+  validates exact issuer, audience, configured asymmetric algorithm, `exp`/`nbf`,
+  and keyed JWKS rotation. The verified issuer/subject are carried under
   `OIDC_EXACT_UTF8_V1`; no trimming, case folding, Unicode normalization, or URI
   rewriting is performed. Startup or request verification failure stays closed.
+  Even after successful authentication, every legacy Store-backed endpoint is
+  refused with `TENANT_BOUNDARY_BLOCKED`; the full binding authority is not
+  projected onto that independently selected Store.
 
 Production TenantCapability minting and the HSM signer boundary exist as the
 #172 application component, but that does not make this legacy Store-backed API

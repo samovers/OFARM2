@@ -14,7 +14,7 @@ Its value is compared exactly and is never inferred from another setting.
 |---|---|---|
 | `development` | `X-Acting-Party` shim | No verifier or binding resolver may be present. |
 | `test` | Local HS256 fixture issuer | Exact issuer, audience, and test secret; only `HS256`. |
-| `production` | Asymmetric OIDC bearer token | Maintained JWKS verifier and immutable principal-binding resolver both initialize successfully. |
+| `production` | Asymmetric OIDC bearer token | Deployment identity, maintained JWKS verifier, immutable principal-binding resolver, and KMS-backed TenantCapability issuer all initialize successfully. |
 
 Production refuses `OFARM_OIDC_HS256_SECRET`. It requires
 `OFARM_OIDC_ISSUER`, `OFARM_OIDC_AUDIENCE`, and `OFARM_OIDC_JWKS_URL`.
@@ -31,6 +31,9 @@ A miss can start only one provider refresh per
 other misses share that result and current-key verification does not wait on the
 provider call. Missing configuration, JWKS outage, an empty or unsuitable key
 set, or an unavailable binding resolver stops startup.
+The deployment image digest is validated before the production composition is
+constructed, so malformed deployment identity cannot trigger JWKS, database,
+or KMS access.
 
 ## Exact principal policy
 
@@ -88,7 +91,10 @@ construction reads a bounded signed receipt from
 `OFARM_SIGNING_EVIDENCE_RECEIPT_PATH`, obtains the separately pinned observer
 key named by `OFARM_SIGNING_EVIDENCE_OBSERVER_KEY_VERSION` through the official
 Cloud KMS client, verifies its HSM identity, CRC32C, and Ed25519 receipt
-signature, and requires the receipt to name the exact signing key. Raw private key
+signature, and requires the receipt to name the exact signing key configured by
+`OFARM_TENANT_CAPABILITY_SIGNING_KEY_VERSION`. The signing key and observer key
+must belong to different Cloud KMS CryptoKeys, not merely different versions.
+Raw private key
 material and duck-typed signing clients are never accepted: construction
 requires the sealed adapter to construct the maintained Google Cloud KMS client
 with its default transport internally. Exact Google clients backed by
@@ -101,8 +107,17 @@ acknowledgement, the generated response's integer signature checksum, and then
 independently verifies the returned Ed25519 signature before serializing the
 token. Observer evidence is valid for no more than five minutes. Stale,
 unsigned, incorrectly signed, or inconsistent KMS, IAM, attestation,
-database-key, or lifecycle evidence disables signing without a cached-authority
-fallback.
+database-key, or lifecycle evidence disables signing. A previously accepted
+receipt can remain in use only while it is still valid; expired or
+non-monotonic evidence never becomes a fallback.
+
+The application factory closes over the initialized authentication runtime
+rather than dereferencing mutable Starlette state. Production also refuses every
+authenticated legacy Store-backed endpoint with `TENANT_BOUNDARY_BLOCKED`.
+The full immutable principal-binding authority remains attached until that
+refusal; it is never reduced to a Party reference and applied to an independently
+selected Store. #173 must supply the tenant-bound UnitOfWork before this surface
+can be enabled in production.
 
 ## Safe closed outcomes
 
