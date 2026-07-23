@@ -51,7 +51,7 @@ def _use_explicit_operation_validation(monkeypatch, validation):
         validators.ReferenceResolutionValidator(),
         validators.ActorAttributionValidator(),
         validators.CodeBindingValidator(validation_policy=validation),
-        validators.LegacyRegistryReverificationValidator(),
+        validators.RegistryReverificationValidator(),
     ))
 
 

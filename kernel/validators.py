@@ -1072,12 +1072,12 @@ class RegistryReverificationValidator:
     snapshot advance is identity-grade only where the snapshot carries
     decision-number data; anything weaker routes to review.
 
-    This is a provider-owned capability. Its snapshot family and lookup
-    implementation are fixed when the provider composes its service bundle;
-    the generic validation path never discovers SI services or defaults.
+    A selected profile provider supplies the snapshot family and lookup
+    explicitly. The optional defaults preserve the existing direct legacy-test
+    entrypoint; descriptor-backed runtime execution never uses that fallback.
     """
 
-    def __init__(self, *, snapshot_prefix: str, product_lookup):
+    def __init__(self, *, snapshot_prefix=None, product_lookup=None):
         self.snapshot_prefix = snapshot_prefix
         self.product_lookup = product_lookup
 
@@ -1085,16 +1085,22 @@ class RegistryReverificationValidator:
         product_binding = _verified_product_binding(ctx)
         if not (product_binding and product_binding["bindingState"] == "VERIFIED"):
             return None
-        current = current_reference_snapshot(ctx.store, self.snapshot_prefix)
+        snapshot_prefix = self.snapshot_prefix or (
+            ctx.si_reference_bindings.regsr_snapshot_prefix
+            if ctx.si_reference_bindings is not None
+            else REGSR_SNAPSHOT_PREFIX
+        )
+        current = current_reference_snapshot(ctx.store, snapshot_prefix)
         current_id = current["referenceSnapshotId"] if current else None
         captured_against = ctx.sub.get("capturedAgainstSnapshotRef") \
             or (product_binding.get("referenceSnapshotRefs") or [None])[0]
         if not (current_id and captured_against and captured_against != current_id):
             return None
+        product_lookup = self.product_lookup or ctx.products
         event_time = ctx.event_time or ctx.captured_at
         decision_number = product_binding["bindingValue"].get("registrationRef")
         confirmed = (
-            self.product_lookup.lookup_by_decision(current_id, decision_number)
+            product_lookup.lookup_by_decision(current_id, decision_number)
             if decision_number else None
         )
         if confirmed is not None:
@@ -1120,16 +1126,6 @@ class RegistryReverificationValidator:
                 "identity — D9), so the record routes to review",
                 severity="WARNING"))
         return None
-
-
-class LegacyRegistryReverificationValidator:
-    """Explicit config-backed SI compatibility path for legacy tests only."""
-
-    def run(self, ctx: GateContext) -> GateRefusal | None:
-        return RegistryReverificationValidator(
-            snapshot_prefix=REGSR_SNAPSHOT_PREFIX,
-            product_lookup=ctx.products,
-        ).run(ctx)
 
 
 class CarrierStore:
@@ -1178,7 +1174,7 @@ OPERATION_SEQUENCE = (
     ReferenceResolutionValidator(),
     ActorAttributionValidator(),
     CodeBindingValidator.from_config_for_legacy_tests(),
-    LegacyRegistryReverificationValidator(),
+    RegistryReverificationValidator(),
 )
 
 

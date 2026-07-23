@@ -5556,37 +5556,12 @@
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_bundle_bound_policy_ignores_copied_root_filesystem_mutation",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_config_declares_explicit_single_active_profile_selection",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_context_assembler_refuses_descriptor_outside_store_selection",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_default_gate_pipeline_refuses_unregistered_copied_package_with_si_ref",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_default_result_cannot_replay_through_route_backed_pipeline",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_default_runtime_provider_registry_registers_only_si",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_backed_pipeline_cannot_fall_back_to_legacy_validation",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
@@ -5821,11 +5796,6 @@
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_failed_provider_service_validation_does_not_seed_cache",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_gate_pipeline_default_missing_farm_ref_still_fails_before_route",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
@@ -5871,26 +5841,6 @@
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_gate_pipeline_refuses_unbound_runtime_provider_source[omitted]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_gate_pipeline_refuses_unbound_runtime_provider_source[replaced]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_gate_pipeline_rejects_same_identity_provider_injection",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_gate_pipeline_selects_registered_si_provider",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_gate_pipeline_threads_si_reference_bindings",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
@@ -5901,27 +5851,62 @@
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_long_lived_pipeline_refuses_instance_capability_override_before_use",
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_issue_159_composition_rejects_missing_required_service",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_long_lived_pipeline_refuses_mutated_service_state_before_next_commit",
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_issue_159_composition_returns_fresh_service_graphs",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_long_lived_pipeline_refuses_product_lookup_helper_replacement",
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_issue_159_default_pipeline_selects_registered_si_provider",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_long_lived_pipeline_refuses_registry_snapshot_helper_replacement",
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_issue_159_descriptor_discovery_does_not_register_provider",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_malformed_conflicting_replay_is_recorded_and_blocked",
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_issue_159_descriptor_runtime_never_uses_legacy_policy",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_issue_159_provider_source_component_is_required",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_issue_159_provider_source_digest_must_match_registration",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_issue_159_route_uses_composition_root_services",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_issue_159_rs_remains_design_only_and_unexecutable",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_issue_159_si_submission_behavior_remains_assertion_equivalent",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_issue_159_unregistered_identity_cannot_construct_runtime",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_issue_159_unregistered_route_refuses_without_si_fallback",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
@@ -5937,26 +5922,6 @@
     },
     {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_materializer_uses_active_descriptor_for_context_and_policy_freshness",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_mismatched_provider_source_cannot_execute_during_startup",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_mismatched_provider_source_does_not_import_parent_package",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_mutated_service_class_fails_before_later_composition",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_mutated_service_instance_is_not_reused_by_later_pipeline",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
@@ -5986,11 +5951,6 @@
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_preloaded_provider_attribute_replacement_cannot_execute",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_product_register_boundary_remains_single_active_si_runtime",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
@@ -6002,11 +5962,6 @@
     },
     {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_product_register_uses_explicit_si_reference_bindings",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_execution_fingerprint_is_independent_of_local_source_path",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
@@ -6181,47 +6136,7 @@
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_provider_cache_composes_fresh_services_without_mutable_provider_call",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_provider_cache_hit_revalidates_complete_registration",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_provider_cache_is_bound_to_complete_registration_identity",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_provider_cache_refuses_incomplete_capability_receipt",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_provider_operation_sequence_omits_unowned_registry_reverification",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_provider_registry_rejects_colliding_registration_subclass",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_provider_source_cannot_execute_live_dataclass_decorator",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_registry_reverification_uses_provider_owned_capabilities",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_replaced_provider_dependency_constructor_cannot_execute",
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_registry_reverification_prefers_context_si_reference_bindings",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
@@ -6296,11 +6211,6 @@
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_refuses_alias_candidate_identity",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_refuses_design_only_route_target[profile_nl_go_glmc7_2026]",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
@@ -6366,11 +6276,6 @@
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_refuses_symlink_alias_identity",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_refuses_tenant_mismatch_before_writes",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
@@ -6381,17 +6286,7 @@
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_refuses_unregistered_runtime_provider",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_refuses_unsupported_route_time_source",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_reuses_matching_route_refusal",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
@@ -6402,101 +6297,6 @@
     },
     {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_handoff_binds_materializer_to_resolved_descriptor",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_malformed_conflict_precedes_route_refusal",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_replay_refuses_different_same_provider_route",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_replay_refuses_unregistered_current_route",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_replay_reuses_only_same_execution_fingerprint",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_result_cannot_replay_through_default_pipeline",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_runtime_behavior_rejects_hostile_service_subclass_before_construction",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_runtime_behavior_rejects_policy_loader_replacement_before_composition",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_runtime_service_construction_refuses_incomplete_consumed_contract[incomplete_recognized_rule_refs-recognized_rule_refs]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_runtime_service_construction_refuses_incomplete_consumed_contract[invalid_recognized_rule_refs-recognized_rule_refs]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_runtime_service_construction_refuses_incomplete_consumed_contract[missing_lookup_by_decision-lookup_by_decision]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_runtime_service_construction_refuses_incomplete_consumed_contract[missing_policy_ref-policy_ref]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_runtime_service_construction_refuses_incomplete_consumed_contract[missing_registry_reverification-registry_reverification]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_runtime_service_construction_refuses_incomplete_consumed_contract[wrong_policy_ref-descriptor evidencePolicyRef]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_runtime_service_construction_refuses_incomplete_consumed_contract[wrong_registry_product_lookup-not bound]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_runtime_service_construction_refuses_incomplete_consumed_contract[wrong_registry_snapshot_prefix-descriptor REGSR]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_runtime_service_construction_refuses_missing_required_capability[context_assembler]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_runtime_service_construction_refuses_missing_required_capability[materializer]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_runtime_service_construction_refuses_missing_required_capability[policy_provider]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_runtime_service_construction_refuses_unregistered_provider",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
@@ -7721,8 +7521,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "a5960ea4c00532691ac1de4bdbe2533a125cb97e1d6bf4bc15c6682c9e676408",
-  "entryCount": 1544,
+  "entriesSha256": "c04a41cc65d19de4487b587291b821ce194b45bbda3dc0f8822fd3354d504043",
+  "entryCount": 1504,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

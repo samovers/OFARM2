@@ -289,7 +289,6 @@ def _second_store(first: Store) -> Store:
         dsn=first.dsn,
         tenant_ref=first.tenant_ref,
         runtime_bundle=_variant_bundle(first.runtime_bundle),
-        active_profile_package_name=first.active_profile_package_name,
         active_descriptor=first.active_descriptor,
     )
     complete_store_startup(store)
@@ -303,7 +302,6 @@ def _foreign_tenant_store(source: Store, label: str):
         dsn=source.dsn,
         tenant_ref=tenant_ref,
         runtime_bundle=_bundle_for_tenant(source.runtime_bundle, tenant_ref),
-        active_profile_package_name=source.active_profile_package_name,
         active_descriptor=source.active_descriptor,
     )
     try:
@@ -325,7 +323,6 @@ def _isolated_store(label: str):
         dsn=psycopg.conninfo.make_conninfo(**params),
         tenant_ref=config.TENANT_REF,
         runtime_bundle=_selected_bundle(),
-        active_profile_package_name=config.ACTIVE_PROFILE_PACKAGE_NAME,
         active_descriptor=config.ACTIVE_PROFILE,
     )
     try:
@@ -471,7 +468,6 @@ def test_store_requires_explicit_tenant_and_bundle_pairing():
             Store(
                 tenant_ref=invalid_tenant_ref,
                 runtime_bundle=bundle,
-                active_profile_package_name=config.ACTIVE_PROFILE_PACKAGE_NAME,
                 active_descriptor=config.ACTIVE_PROFILE,
             )
     with pytest.raises(
@@ -481,33 +477,17 @@ def test_store_requires_explicit_tenant_and_bundle_pairing():
         Store(
             tenant_ref="tenant:other",
             runtime_bundle=bundle,
-            active_profile_package_name=config.ACTIVE_PROFILE_PACKAGE_NAME,
-            active_descriptor=config.ACTIVE_PROFILE,
-        )
-    with pytest.raises(
-        RuntimeBundleBindingError,
-        match="package name does not match",
-    ):
-        Store(
-            tenant_ref=config.TENANT_REF,
-            runtime_bundle=bundle,
-            active_profile_package_name="profile_unregistered_si_copy",
             active_descriptor=config.ACTIVE_PROFILE,
         )
 
     store = Store(
         tenant_ref=config.TENANT_REF,
         runtime_bundle=bundle,
-        active_profile_package_name=config.ACTIVE_PROFILE_PACKAGE_NAME,
         active_descriptor=config.ACTIVE_PROFILE,
     )
     try:
         assert store.tenant_ref == config.TENANT_REF
         assert store.runtime_bundle_digest == bundle.digest
-        assert (
-            store.active_profile_package_name
-            == config.ACTIVE_PROFILE_PACKAGE_NAME
-        )
     finally:
         store.close()
 
@@ -523,7 +503,6 @@ def test_store_refuses_descriptor_observation_outside_selected_bundle():
         Store(
             tenant_ref=config.TENANT_REF,
             runtime_bundle=bundle,
-            active_profile_package_name=config.ACTIVE_PROFILE_PACKAGE_NAME,
             active_descriptor=changed,
         )
 
@@ -588,7 +567,6 @@ def test_profile_bootstrap_inserts_every_bundle_selected_canonical_instance():
             dsn=source_store.dsn,
             tenant_ref=source_store.tenant_ref,
             runtime_bundle=selected_bundle,
-            active_profile_package_name=source_store.active_profile_package_name,
             active_descriptor=source_store.active_descriptor,
         )
         try:
@@ -625,7 +603,6 @@ def test_profile_bootstrap_refuses_extra_selected_snapshot_mismatch_atomically()
             dsn=seed_store.dsn,
             tenant_ref=seed_store.tenant_ref,
             runtime_bundle=selected_bundle,
-            active_profile_package_name=seed_store.active_profile_package_name,
             active_descriptor=seed_store.active_descriptor,
         )
         try:
@@ -706,7 +683,6 @@ def test_application_bootstrap_uses_bundle_selected_bytes_not_profile_paths():
             dsn=store.dsn,
             tenant_ref=store.tenant_ref,
             runtime_bundle=changed_bundle,
-            active_profile_package_name=store.active_profile_package_name,
             active_descriptor=store.active_descriptor,
         )
         try:
@@ -1551,7 +1527,6 @@ def test_cold_restart_uses_same_selected_regsr_bytes_without_cache(fresh_env):
         dsn=first.dsn,
         tenant_ref=first.tenant_ref,
         runtime_bundle=reconstructed_bundle,
-        active_profile_package_name=first.active_profile_package_name,
         active_descriptor=reconstructed_descriptor,
     )
     try:
@@ -1591,7 +1566,6 @@ def test_product_authorisation_uses_only_bundle_selected_regsr_source_bytes():
             dsn=source_store.dsn,
             tenant_ref=source_store.tenant_ref,
             runtime_bundle=selected_bundle,
-            active_profile_package_name=source_store.active_profile_package_name,
             active_descriptor=source_store.active_descriptor,
         )
         try:

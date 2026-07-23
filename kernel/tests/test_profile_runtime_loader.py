@@ -7,7 +7,6 @@ before any descriptor mistake can become hidden runtime truth.
 from __future__ import annotations
 
 import copy
-import dataclasses
 import json
 import os
 import shutil
@@ -25,15 +24,7 @@ import psycopg.conninfo
 import psycopg.sql
 import pytest
 
-from kernel import (
-    config,
-    context,
-    demo,
-    profile_policy,
-    profile_runtime_provider as profile_runtime_providers,
-    sufficiency,
-    validators,
-)
+from kernel import config, context, demo, profile_policy, sufficiency, validators
 from kernel.gates import GatePipeline
 from kernel.materializer import Materializer
 from kernel.profile_runtime import (
@@ -54,11 +45,13 @@ from kernel.profile_runtime import (
 )
 from kernel.profile_runtime_provider import (
     ProfileRuntimeProviderRegistry,
+    ProfileRuntimeServices,
     default_profile_runtime_provider_registry,
 )
-from kernel.runtime_activation import complete_store_startup
 from kernel.runtime_bundle import (
-    RuntimeBundle,
+    Canonicalization,
+    ContentPlacement,
+    RuntimeBundleError,
     RuntimeBundleBuilder,
     RuntimeComponent,
     RuntimeComponentRole,
@@ -329,40 +322,10 @@ def _fresh_unbootstrapped_store():
         dsn=psycopg.conninfo.make_conninfo(**params),
         tenant_ref=config.TENANT_REF,
         runtime_bundle=RuntimeBundleBuilder.from_manifest(config.PACKAGE_ROOT).build(),
-        active_profile_package_name=config.ACTIVE_PROFILE_PACKAGE_NAME,
         active_descriptor=config.ACTIVE_PROFILE,
     )
     try:
         store.migrate()
-        yield store
-    finally:
-        store.close()
-        with psycopg.connect(_admin_dsn(), autocommit=True) as admin:
-            admin.execute(f'DROP DATABASE IF EXISTS "{dbname}"')
-
-
-@contextmanager
-def _fresh_started_store(
-    runtime_bundle,
-    *,
-    active_profile_package_name=config.ACTIVE_PROFILE_PACKAGE_NAME,
-    active_descriptor=config.ACTIVE_PROFILE,
-):
-    dbname = f"ofarm_profile_provider_{_uid()}"
-    with psycopg.connect(_admin_dsn(), autocommit=True) as admin:
-        admin.execute(f'DROP DATABASE IF EXISTS "{dbname}"')
-        admin.execute(f'CREATE DATABASE "{dbname}"')
-    params = psycopg.conninfo.conninfo_to_dict(_admin_dsn())
-    params["dbname"] = dbname
-    store = Store(
-        dsn=psycopg.conninfo.make_conninfo(**params),
-        tenant_ref=config.TENANT_REF,
-        runtime_bundle=runtime_bundle,
-        active_profile_package_name=active_profile_package_name,
-        active_descriptor=active_descriptor,
-    )
-    try:
-        complete_store_startup(store)
         yield store
     finally:
         store.close()
@@ -512,7 +475,6 @@ def _preseeded_dirty_spine_store(mutate):
         dsn=psycopg.conninfo.make_conninfo(**params),
         tenant_ref=config.TENANT_REF,
         runtime_bundle=RuntimeBundleBuilder.from_manifest(config.PACKAGE_ROOT).build(),
-        active_profile_package_name=config.ACTIVE_PROFILE_PACKAGE_NAME,
         active_descriptor=config.ACTIVE_PROFILE,
     )
     try:
@@ -1800,1073 +1762,6 @@ def test_gate_pipeline_default_sequence_remains_unrouted(fresh_env):
     assert gates[:2] == ["INGRESS_NORMALIZATION", "AUTHORITY"]
 
 
-def test_default_runtime_provider_registry_registers_only_si():
-    registry = default_profile_runtime_provider_registry()
-
-    assert registry.registered_package_names == ("profile_si_ffs",)
-    assert "profile_rs_organic_crop" not in registry.registered_package_names
-    assert not (
-        config.PACKAGE_ROOT
-        / "profile_rs_organic_crop"
-        / "runtime_profile_descriptor.json"
-    ).exists()
-
-
-def test_gate_pipeline_selects_registered_si_provider(fresh_env):
-    _store, pipeline, _ = fresh_env
-
-    assert pipeline.runtime_services.provider.package_name == "profile_si_ffs"
-    assert pipeline.runtime_services.descriptor == config.ACTIVE_PROFILE
-    assert pipeline.runtime_services.policy_provider is pipeline.policy_provider
-    assert pipeline.runtime_services.context_assembler is pipeline.context
-    assert pipeline.runtime_services.materializer is pipeline.materializer
-    assert pipeline.runtime_services.reference_bindings is \
-        pipeline.si_reference_bindings
-    assert pipeline.runtime_services.product_lookup is pipeline.products
-    assert (
-        pipeline.runtime_services.registry_reverification.product_lookup
-        is pipeline.products
-    )
-    assert (
-        pipeline.runtime_services.registry_reverification.snapshot_prefix
-        == pipeline.si_reference_bindings.regsr_snapshot_prefix
-    )
-    assert isinstance(pipeline.products, context.SIProductRegister)
-
-
-def test_runtime_service_construction_refuses_unregistered_provider(fresh_env):
-    store, _, _ = fresh_env
-
-    with pytest.raises(
-        ProfileRuntimeError,
-        match="no registered executable runtime provider",
-    ):
-        ProfileRuntimeProviderRegistry(()).build_services(
-            store,
-            "profile_si_ffs",
-            config.ACTIVE_PROFILE,
-        )
-
-
-def test_gate_pipeline_rejects_same_identity_provider_injection(fresh_env):
-    store, _, _ = fresh_env
-
-    class HostileProvider:
-        executed = False
-
-    hostile = HostileProvider()
-    with pytest.raises(TypeError, match="runtime_provider_registry"):
-        GatePipeline(
-            store,
-            runtime_provider_registry=hostile,
-        )
-
-    assert hostile.executed is False
-
-
-@pytest.mark.parametrize("bundle_defect", ["omitted", "replaced"])
-def test_gate_pipeline_refuses_unbound_runtime_provider_source(bundle_defect):
-    base = RuntimeBundleBuilder.from_manifest(config.PACKAGE_ROOT).build()
-    registration = default_profile_runtime_provider_registry().registration_for(
-        "profile_si_ffs",
-        config.ACTIVE_PROFILE,
-    )
-    source = base.component(
-        registration.source_component_role,
-        registration.source_component_logical_ref,
-    )
-    components = tuple(
-        component
-        for component in base.components
-        if component is not source
-    )
-    if bundle_defect == "replaced":
-        components += (
-            RuntimeComponent.from_selected_bytes(
-                role=source.role,
-                logical_ref=source.logical_ref,
-                canonicalization=source.canonicalization,
-                placement=source.placement,
-                selected_bytes=(
-                    source.canonical_bytes
-                    + b"\n# hostile replacement provider source\n"
-                ),
-            ),
-        )
-    runtime_bundle = RuntimeBundle.create(components)
-
-    with _fresh_started_store(runtime_bundle) as store:
-        with pytest.raises(
-            ProfileRuntimeError,
-            match="profile runtime provider source",
-        ):
-            GatePipeline(store)
-
-
-def test_default_gate_pipeline_refuses_unregistered_copied_package_with_si_ref(
-        tmp_path):
-    package_root = tmp_path / "packages"
-    package_root.mkdir()
-    package_name = "profile_unregistered_si_copy"
-    profile_root, _descriptor_doc = _copied_si_package(
-        package_root,
-        package_name,
-    )
-    descriptor = load_profile_runtime_descriptor(profile_root)
-    runtime_bundle = RuntimeBundleBuilder.from_manifest(
-        config.PACKAGE_ROOT
-    ).build()
-
-    with _fresh_started_store(
-        runtime_bundle,
-        active_profile_package_name=package_name,
-        active_descriptor=descriptor,
-    ) as store:
-        with pytest.raises(
-            ProfileRuntimeError,
-            match="no registered executable runtime provider",
-        ):
-            GatePipeline(store)
-
-
-def test_mismatched_provider_source_cannot_execute_during_startup(
-        fresh_env, monkeypatch, tmp_path):
-    store, _, _ = fresh_env
-    module_name = f"hostile_runtime_provider_{_uid()}"
-    module_path = tmp_path / f"{module_name}.py"
-    execution_marker = tmp_path / "provider-import-executed"
-    module_path.write_text(
-        "from pathlib import Path\n"
-        f"Path({str(execution_marker)!r}).write_text('executed')\n",
-        encoding="utf-8",
-    )
-    monkeypatch.syspath_prepend(str(tmp_path))
-    registration = (
-        default_profile_runtime_provider_registry().registration_for(
-            config.ACTIVE_PROFILE_PACKAGE_NAME,
-            config.ACTIVE_PROFILE,
-        )
-    )
-    hostile_registration = replace(
-        registration,
-        module_name=module_name,
-        provider_attribute="HOSTILE_PROVIDER",
-        source_path=module_path,
-    )
-    monkeypatch.setattr(
-        profile_runtime_providers,
-        "_DEFAULT_PROVIDER_REGISTRATIONS",
-        (hostile_registration,),
-    )
-
-    with pytest.raises(
-        ProfileRuntimeError,
-        match="source bytes do not match",
-    ):
-        GatePipeline(store)
-
-    assert not execution_marker.exists()
-    assert module_name not in sys.modules
-
-
-def test_mismatched_provider_source_does_not_import_parent_package(tmp_path):
-    package_name = f"hostile_provider_package_{_uid()}"
-    package_root = tmp_path / package_name
-    package_root.mkdir()
-    execution_marker = tmp_path / "parent-import-executed"
-    (package_root / "__init__.py").write_text(
-        "from pathlib import Path\n"
-        f"Path({str(execution_marker)!r}).write_text('executed')\n",
-        encoding="utf-8",
-    )
-    module_path = package_root / "runtime_provider.py"
-    module_path.write_text(
-        "raise AssertionError('unverified provider source executed')\n",
-        encoding="utf-8",
-    )
-    registration = (
-        default_profile_runtime_provider_registry().registration_for(
-            config.ACTIVE_PROFILE_PACKAGE_NAME,
-            config.ACTIVE_PROFILE,
-        )
-    )
-    hostile_registration = replace(
-        registration,
-        module_name=f"{package_name}.runtime_provider",
-        provider_attribute="HOSTILE_PROVIDER",
-        source_path=module_path,
-    )
-    script = "\n".join([
-        "import sys",
-        "from pathlib import Path",
-        "from kernel import config",
-        "from kernel.profile_runtime import ProfileRuntimeError",
-        (
-            "from kernel.profile_runtime_provider import "
-            "ProfileRuntimeProviderRegistration, "
-            "ProfileRuntimeProviderRegistry"
-        ),
-        "from kernel.runtime_bundle import RuntimeComponentRole",
-        f"sys.path.insert(0, {str(tmp_path)!r})",
-        "registration = ProfileRuntimeProviderRegistration(",
-        f"    package_name={hostile_registration.package_name!r},",
-        f"    profile_ref={hostile_registration.profile_ref!r},",
-        "    source_component_role=RuntimeComponentRole.ADAPTER_SOURCE,",
-        (
-            "    source_component_logical_ref="
-            f"{hostile_registration.source_component_logical_ref!r},"
-        ),
-        f"    module_name={hostile_registration.module_name!r},",
-        (
-            "    provider_attribute="
-            f"{hostile_registration.provider_attribute!r},"
-        ),
-        f"    source_path=Path({str(hostile_registration.source_path)!r}),",
-        ")",
-        "registry = ProfileRuntimeProviderRegistry((registration,))",
-        "class RuntimeBundle:",
-        "    def component(self, _role, _logical_ref):",
-        (
-            "        return type('Component', (), "
-            "{'canonical_bytes': b'retained different bytes'})()"
-        ),
-        "class Store:",
-        "    runtime_bundle = RuntimeBundle()",
-        "    def require_startup_complete(self, _operation):",
-        "        return None",
-        "try:",
-        "    registry._verify_provider_source(Store(), registration)",
-        "except ProfileRuntimeError as exc:",
-        "    if 'source bytes do not match' not in str(exc):",
-        "        raise",
-        "else:",
-        "    raise AssertionError('mismatched provider source was accepted')",
-    ])
-
-    proc = subprocess.run(
-        [sys.executable, "-c", script],
-        cwd=config.PACKAGE_ROOT,
-        env=os.environ.copy(),
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-    assert proc.returncode == 0, proc.stderr
-    assert not execution_marker.exists()
-
-
-def test_preloaded_provider_attribute_replacement_cannot_execute(
-        monkeypatch):
-    runtime_bundle = RuntimeBundleBuilder.from_manifest(
-        config.PACKAGE_ROOT
-    ).build()
-    registry = default_profile_runtime_provider_registry()
-    registration = registry.registration_for(
-        config.ACTIVE_PROFILE_PACKAGE_NAME,
-        config.ACTIVE_PROFILE,
-    )
-
-    class HostileProvider:
-        package_name = registration.package_name
-        profile_ref = registration.profile_ref
-        source_component_role = registration.source_component_role
-        source_component_logical_ref = (
-            registration.source_component_logical_ref
-        )
-
-        def __init__(self):
-            self.executed = False
-
-        def build_services(self, provider_store, descriptor):
-            self.executed = True
-            raise AssertionError("preloaded provider replacement executed")
-
-    hostile_provider = HostileProvider()
-    preloaded_module = type(sys)(registration.module_name)
-    setattr(
-        preloaded_module,
-        registration.provider_attribute,
-        hostile_provider,
-    )
-    monkeypatch.setitem(
-        sys.modules,
-        registration.module_name,
-        preloaded_module,
-    )
-
-    with _fresh_started_store(runtime_bundle) as store:
-        pipeline = GatePipeline(store)
-
-    assert hostile_provider.executed is False
-    assert pipeline.runtime_services.provider is not hostile_provider
-
-
-def test_replaced_provider_dependency_constructor_cannot_execute(
-        monkeypatch):
-    runtime_bundle = RuntimeBundleBuilder.from_manifest(
-        config.PACKAGE_ROOT
-    ).build()
-    trusted_constructor = context.ContextAssembler
-    replacement_executed = False
-
-    def hostile_constructor(*args, **kwargs):
-        nonlocal replacement_executed
-        replacement_executed = True
-        instance = trusted_constructor(*args, **kwargs)
-        instance.assemble = lambda *_args, **_kwargs: (
-            pytest.fail("hostile instance capability executed")
-        )
-        return instance
-
-    monkeypatch.setattr(
-        context,
-        "ContextAssembler",
-        hostile_constructor,
-    )
-
-    with _fresh_started_store(runtime_bundle) as store:
-        with pytest.raises(
-            ProfileRuntimeError,
-            match="runtime behavior dependency .*ContextAssembler",
-        ):
-            GatePipeline(store)
-
-    assert replacement_executed is False
-
-
-def test_provider_source_cannot_execute_live_dataclass_decorator(
-        monkeypatch):
-    runtime_bundle = RuntimeBundleBuilder.from_manifest(
-        config.PACKAGE_ROOT
-    ).build()
-    trusted_dataclass = dataclasses.dataclass
-    replacement_executed = False
-
-    def hostile_dataclass(*args, **kwargs):
-        nonlocal replacement_executed
-        replacement_executed = True
-        return trusted_dataclass(*args, **kwargs)
-
-    monkeypatch.setattr(dataclasses, "dataclass", hostile_dataclass)
-
-    with _fresh_started_store(runtime_bundle) as store:
-        pipeline = GatePipeline(store)
-
-    assert replacement_executed is False
-    assert pipeline.runtime_services.provider.package_name == "profile_si_ffs"
-
-
-def test_runtime_behavior_rejects_policy_loader_replacement_before_composition(
-        monkeypatch):
-    runtime_bundle = RuntimeBundleBuilder.from_manifest(
-        config.PACKAGE_ROOT
-    ).build()
-    trusted_loader = profile_policy.load_evidence_review_policy_from_bytes
-    replacement_executed = False
-
-    def hostile_loader(*args, **kwargs):
-        nonlocal replacement_executed
-        replacement_executed = True
-        return trusted_loader(*args, **kwargs)
-
-    monkeypatch.setattr(
-        profile_policy,
-        "load_evidence_review_policy_from_bytes",
-        hostile_loader,
-    )
-
-    with _fresh_started_store(runtime_bundle) as store:
-        with pytest.raises(
-            ProfileRuntimeError,
-            match="runtime behavior dependency .*"
-                  "load_evidence_review_policy_from_bytes",
-        ):
-            GatePipeline(store)
-
-    assert replacement_executed is False
-
-
-def test_runtime_behavior_rejects_hostile_service_subclass_before_construction():
-    script = "\n".join([
-        "from kernel import config, context",
-        (
-            "from kernel.profile_runtime import ProfileRuntimeError"
-        ),
-        (
-            "from kernel.profile_runtime_provider import "
-            "_capture_runtime_behavior_dependencies, "
-            "default_profile_runtime_provider_registry"
-        ),
-        "executed = [False]",
-        "class HostileContextAssembler(context.ContextAssembler):",
-        "    pass",
-        "def hostile_new(_cls, *args, **kwargs):",
-        "    executed[0] = True",
-        "    return object.__new__(HostileContextAssembler)",
-        (
-            "setattr(context.ContextAssembler, '__new__', "
-            "staticmethod(hostile_new))"
-        ),
-        "registry = default_profile_runtime_provider_registry()",
-        (
-            "registration = registry.registration_for("
-            "config.ACTIVE_PROFILE_PACKAGE_NAME, config.ACTIVE_PROFILE)"
-        ),
-        "try:",
-        "    _capture_runtime_behavior_dependencies(registration)",
-        "except ProfileRuntimeError as exc:",
-        (
-            "    if 'ContextAssembler.__new__' not in str(exc): "
-            "raise"
-        ),
-        "else:",
-        "    raise AssertionError('hostile __new__ was accepted')",
-        "if executed[0]:",
-        "    raise AssertionError('hostile __new__ executed')",
-    ])
-
-    proc = subprocess.run(
-        [sys.executable, "-c", script],
-        cwd=config.PACKAGE_ROOT,
-        env=os.environ.copy(),
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-    assert proc.returncode == 0, proc.stderr
-
-
-def test_provider_cache_is_bound_to_complete_registration_identity(tmp_path):
-    runtime_bundle = RuntimeBundleBuilder.from_manifest(
-        config.PACKAGE_ROOT
-    ).build()
-    default_registry = default_profile_runtime_provider_registry()
-    registration = default_registry.registration_for(
-        config.ACTIVE_PROFILE_PACKAGE_NAME,
-        config.ACTIVE_PROFILE,
-    )
-    alternate_source_path = tmp_path / "runtime_provider.py"
-    alternate_source_path.symlink_to(registration.source_path)
-    alternate_registration = replace(
-        registration,
-        source_path=alternate_source_path,
-    )
-    alternate_registry = ProfileRuntimeProviderRegistry(
-        (alternate_registration,)
-    )
-
-    with _fresh_started_store(runtime_bundle) as store:
-        alternate_services = alternate_registry.build_services(
-            store,
-            config.ACTIVE_PROFILE_PACKAGE_NAME,
-            config.ACTIVE_PROFILE,
-        )
-        default_services = default_registry.build_services(
-            store,
-            config.ACTIVE_PROFILE_PACKAGE_NAME,
-            config.ACTIVE_PROFILE,
-        )
-
-        assert default_services.provider is not alternate_services.provider
-        assert default_services is not alternate_services
-        # The symlink and checked-in path normalize to one primitive identity;
-        # the receipt is shared, but live services never are.
-        assert len(store._profile_runtime_provider_cache) == 1
-
-
-def test_provider_cache_hit_revalidates_complete_registration():
-    runtime_bundle = RuntimeBundleBuilder.from_manifest(
-        config.PACKAGE_ROOT
-    ).build()
-    registry = default_profile_runtime_provider_registry()
-    registration = registry.registration_for(
-        config.ACTIVE_PROFILE_PACKAGE_NAME,
-        config.ACTIVE_PROFILE,
-    )
-    with _fresh_started_store(runtime_bundle) as store:
-        source_component = registry._verify_provider_source(
-            store,
-            registration,
-        )
-        cache_key = registry._provider_cache_key(
-            registration,
-            source_component,
-        )
-        store._retain_profile_runtime_provider(
-            cache_key,
-            profile_runtime_providers._ProfileRuntimeProviderCacheEntry(
-                registration_identity=("hostile",),
-                source_digest=source_component.content_digest,
-                descriptor=config.ACTIVE_PROFILE,
-                provider_dependencies=(),
-                runtime_behavior=(),
-                service_capabilities=(),
-                service_state_digest="sha256:hostile",
-            ),
-        )
-
-        with pytest.raises(
-            ProfileRuntimeError,
-            match="canonical registration",
-        ):
-            registry.build_services(
-                store,
-                config.ACTIVE_PROFILE_PACKAGE_NAME,
-                config.ACTIVE_PROFILE,
-            )
-
-
-def test_provider_cache_composes_fresh_services_without_mutable_provider_call(
-        fresh_env, monkeypatch):
-    store, first_pipeline, _ = fresh_env
-    provider_type = type(first_pipeline.runtime_services.provider)
-    replacement_executed = False
-
-    def hostile_build_services(self, provider_store, descriptor):
-        nonlocal replacement_executed
-        replacement_executed = True
-        raise AssertionError("mutated cached provider behavior executed")
-
-    monkeypatch.setattr(
-        provider_type,
-        "build_services",
-        hostile_build_services,
-    )
-
-    second_pipeline = GatePipeline(store)
-
-    assert replacement_executed is False
-    assert second_pipeline.runtime_services is not first_pipeline.runtime_services
-    assert (
-        second_pipeline.runtime_services.provider
-        is not first_pipeline.runtime_services.provider
-    )
-
-
-def test_provider_registry_rejects_colliding_registration_subclass():
-    registration = (
-        default_profile_runtime_provider_registry().registration_for(
-            config.ACTIVE_PROFILE_PACKAGE_NAME,
-            config.ACTIVE_PROFILE,
-        )
-    )
-
-    class CollidingRegistration(
-        profile_runtime_providers.ProfileRuntimeProviderRegistration
-    ):
-        def __hash__(self):
-            return hash(registration)
-
-        def __eq__(self, _other):
-            return True
-
-    colliding = CollidingRegistration(
-        package_name=registration.package_name,
-        profile_ref=registration.profile_ref,
-        source_component_role=registration.source_component_role,
-        source_component_logical_ref=(
-            registration.source_component_logical_ref
-        ),
-        module_name=registration.module_name,
-        provider_attribute=registration.provider_attribute,
-        source_path=registration.source_path,
-    )
-
-    with pytest.raises(ProfileRuntimeError, match="invalid registration"):
-        ProfileRuntimeProviderRegistry((colliding,))
-
-
-def test_provider_cache_refuses_incomplete_capability_receipt():
-    runtime_bundle = RuntimeBundleBuilder.from_manifest(
-        config.PACKAGE_ROOT
-    ).build()
-    registry = default_profile_runtime_provider_registry()
-    registration = registry.registration_for(
-        config.ACTIVE_PROFILE_PACKAGE_NAME,
-        config.ACTIVE_PROFILE,
-    )
-
-    with _fresh_started_store(runtime_bundle) as store:
-        _, valid_receipt = registry.build_services_with_receipt(
-            store,
-            config.ACTIVE_PROFILE_PACKAGE_NAME,
-            config.ACTIVE_PROFILE,
-        )
-        store._profile_runtime_provider_cache.clear()
-        source_component = registry._verify_provider_source(store, registration)
-        cache_key = registry._provider_cache_key(
-            registration,
-            source_component,
-        )
-        store._retain_profile_runtime_provider(
-            cache_key,
-            profile_runtime_providers._ProfileRuntimeProviderCacheEntry(
-                registration_identity=(
-                    profile_runtime_providers._registration_identity(
-                        registration
-                    )
-                ),
-                source_digest=source_component.content_digest,
-                descriptor=config.ACTIVE_PROFILE,
-                provider_dependencies=valid_receipt.provider_dependencies,
-                runtime_behavior=valid_receipt.runtime_behavior,
-                service_capabilities=(),
-                service_state_digest=valid_receipt.service_state_digest,
-            ),
-        )
-
-        with pytest.raises(
-            ProfileRuntimeError,
-            match="incomplete service capability provenance",
-        ):
-            registry.build_services(
-                store,
-                config.ACTIVE_PROFILE_PACKAGE_NAME,
-                config.ACTIVE_PROFILE,
-            )
-
-
-def test_mutated_service_instance_is_not_reused_by_later_pipeline(
-        fresh_env, monkeypatch):
-    store, first_pipeline, _ = fresh_env
-    first_registry = first_pipeline.runtime_services.registry_reverification
-    replacement_executed = False
-
-    def hostile_run(_ctx):
-        nonlocal replacement_executed
-        replacement_executed = True
-        raise AssertionError("mutated service instance executed")
-
-    monkeypatch.setattr(first_registry, "run", hostile_run)
-
-    second_pipeline = GatePipeline(store)
-
-    assert replacement_executed is False
-    assert (
-        second_pipeline.runtime_services.registry_reverification
-        is not first_registry
-    )
-    assert second_pipeline.runtime_services is not first_pipeline.runtime_services
-
-
-def test_long_lived_pipeline_refuses_mutated_service_state_before_next_commit(
-        fresh_env):
-    store, pipeline, _ = fresh_env
-    registry_reverification = (
-        pipeline.runtime_services.registry_reverification
-    )
-    registry_reverification.snapshot_prefix = (
-        "referencesnapshot:hostile.runtime-state"
-    )
-    before = len(store.find_by_kind("ofarm.commitingressrequest.v0.1"))
-
-    with pytest.raises(
-        ProfileRuntimeError,
-        match="service state changed after composition",
-    ):
-        pipeline.commit(demo.spray_submission(
-            f"rs1-mutated-active-service:{_uid()}",
-            erp_id=f"erp:rs1.mutated.active.service.{_uid()}",
-            confirm=True,
-        ))
-
-    assert len(store.find_by_kind("ofarm.commitingressrequest.v0.1")) == before
-
-
-def test_long_lived_pipeline_refuses_instance_capability_override_before_use(
-        fresh_env, monkeypatch):
-    store, pipeline, _ = fresh_env
-    registry_reverification = (
-        pipeline.runtime_services.registry_reverification
-    )
-    replacement_executed = False
-
-    def hostile_run(_ctx):
-        nonlocal replacement_executed
-        replacement_executed = True
-        raise AssertionError("instance capability override executed")
-
-    monkeypatch.setattr(registry_reverification, "run", hostile_run)
-    before = len(store.find_by_kind("ofarm.commitingressrequest.v0.1"))
-
-    with pytest.raises(
-        ProfileRuntimeError,
-        match="overrides authenticated class capability 'run'",
-    ):
-        pipeline.commit(demo.spray_submission(
-            f"rs1-overridden-active-service:{_uid()}",
-            erp_id=f"erp:rs1.overridden.active.service.{_uid()}",
-            confirm=True,
-        ))
-
-    assert replacement_executed is False
-    assert len(store.find_by_kind("ofarm.commitingressrequest.v0.1")) == before
-
-
-def test_long_lived_pipeline_refuses_product_lookup_helper_replacement(
-        fresh_env, monkeypatch):
-    store, pipeline, _ = fresh_env
-    replacement_executed = False
-
-    def hostile_identities(_self, _snapshot_id, _decision_number):
-        nonlocal replacement_executed
-        replacement_executed = True
-        raise AssertionError("replaced product lookup helper executed")
-
-    monkeypatch.setattr(
-        context.SIProductRegister,
-        "identities_by_decision",
-        hostile_identities,
-    )
-    before = len(store.find_by_kind("ofarm.commitingressrequest.v0.1"))
-
-    with pytest.raises(
-        ProfileRuntimeError,
-        match="(dependency capability|runtime behavior dependency).*"
-              "identities_by_decision",
-    ):
-        pipeline.commit(demo.spray_submission(
-            f"rs1-replaced-product-helper:{_uid()}",
-            erp_id=f"erp:rs1.replaced.product.helper.{_uid()}",
-            confirm=True,
-        ))
-
-    assert replacement_executed is False
-    assert len(store.find_by_kind("ofarm.commitingressrequest.v0.1")) == before
-
-
-def test_long_lived_pipeline_refuses_registry_snapshot_helper_replacement(
-        fresh_env, monkeypatch):
-    store, pipeline, _ = fresh_env
-    replacement_executed = False
-
-    def hostile_current_snapshot(*_args, **_kwargs):
-        nonlocal replacement_executed
-        replacement_executed = True
-        raise AssertionError("replaced registry snapshot helper executed")
-
-    monkeypatch.setattr(
-        validators,
-        "current_reference_snapshot",
-        hostile_current_snapshot,
-    )
-    before = len(store.find_by_kind("ofarm.commitingressrequest.v0.1"))
-
-    with pytest.raises(
-        ProfileRuntimeError,
-        match="runtime behavior dependency .*current_reference_snapshot",
-    ):
-        pipeline.commit(demo.spray_submission(
-            f"rs1-replaced-registry-helper:{_uid()}",
-            erp_id=f"erp:rs1.replaced.registry.helper.{_uid()}",
-            confirm=True,
-        ))
-
-    assert replacement_executed is False
-    assert len(store.find_by_kind("ofarm.commitingressrequest.v0.1")) == before
-
-
-def test_mutated_service_class_fails_before_later_composition(
-        fresh_env, monkeypatch):
-    store, first_pipeline, _ = fresh_env
-    service_type = type(
-        first_pipeline.runtime_services.registry_reverification
-    )
-    replacement_executed = False
-
-    def hostile_run(self, ctx):
-        nonlocal replacement_executed
-        replacement_executed = True
-        raise AssertionError("mutated service class executed")
-
-    monkeypatch.setattr(service_type, "run", hostile_run)
-
-    with pytest.raises(
-        ProfileRuntimeError,
-        match="cached (dependency|service) capability .*run changed",
-    ):
-        GatePipeline(store)
-
-    assert replacement_executed is False
-
-
-def test_failed_provider_service_validation_does_not_seed_cache(
-        monkeypatch):
-    runtime_bundle = RuntimeBundleBuilder.from_manifest(
-        config.PACKAGE_ROOT
-    ).build()
-    registry = default_profile_runtime_provider_registry()
-    registration = registry.registration_for(
-        config.ACTIVE_PROFILE_PACKAGE_NAME,
-        config.ACTIVE_PROFILE,
-    )
-
-    with _fresh_started_store(runtime_bundle) as store:
-        source_component = registry._verify_provider_source(
-            store,
-            registration,
-        )
-        provider = registry._load_provider(
-            store,
-            registration,
-            source_component,
-        )
-        provider_dependencies = (
-            profile_runtime_providers._capture_provider_dependencies(
-                provider,
-                registration,
-            )
-        )
-        provider_type = type(provider)
-        original_build_services = provider_type.build_services
-
-        def incomplete_build_services(self, provider_store, descriptor):
-            complete = original_build_services(
-                self,
-                provider_store,
-                descriptor,
-            )
-            return replace(complete, materializer=None)
-
-        monkeypatch.setattr(
-            provider_type,
-            "build_services",
-            incomplete_build_services,
-        )
-        monkeypatch.setattr(
-            ProfileRuntimeProviderRegistry,
-            "_load_provider",
-            staticmethod(
-                lambda _store, _registration, _source_component: provider
-            ),
-        )
-        monkeypatch.setattr(
-            profile_runtime_providers,
-            "_capture_provider_dependencies",
-            lambda _provider, _registration: provider_dependencies,
-        )
-
-        with pytest.raises(ProfileRuntimeError, match="materializer"):
-            registry.build_services(
-                store,
-                config.ACTIVE_PROFILE_PACKAGE_NAME,
-                config.ACTIVE_PROFILE,
-            )
-
-        assert store._profile_runtime_provider_cache == {}
-
-
-def test_bundle_bound_policy_ignores_copied_root_filesystem_mutation(
-        tmp_path):
-    package_root = tmp_path / "packages"
-    package_root.mkdir()
-    profile_root, descriptor_doc = _copied_si_package(
-        package_root,
-        "profile_si_ffs",
-    )
-    policy_path = profile_root / descriptor_doc["evidencePolicyPath"]
-    retained_policy = json.loads(policy_path.read_text())
-    retained_policy["display"]["durableProofBundleLabel"] = (
-        "Retained copied-package policy"
-    )
-    policy_path.write_text(json.dumps(retained_policy), encoding="utf-8")
-    descriptor = load_profile_runtime_descriptor(profile_root)
-
-    base = RuntimeBundleBuilder.from_manifest(config.PACKAGE_ROOT).build()
-    selected_policy = base.component(
-        RuntimeComponentRole.PROFILE_POLICY,
-        descriptor.evidence_policy_ref,
-    )
-    replacement_policy = RuntimeComponent.from_selected_bytes(
-        role=selected_policy.role,
-        logical_ref=selected_policy.logical_ref,
-        canonicalization=selected_policy.canonicalization,
-        placement=selected_policy.placement,
-        selected_bytes=policy_path.read_bytes(),
-    )
-    runtime_bundle = RuntimeBundle.create(tuple(
-        replacement_policy if component is selected_policy else component
-        for component in base.components
-    ))
-
-    with _fresh_started_store(
-        runtime_bundle,
-        active_descriptor=descriptor,
-    ) as store:
-        pipeline = GatePipeline(store)
-        mutated_policy = copy.deepcopy(retained_policy)
-        mutated_policy["display"]["durableProofBundleLabel"] = (
-            "Unretained filesystem mutation"
-        )
-        policy_path.write_text(json.dumps(mutated_policy), encoding="utf-8")
-
-        observed = pipeline.policy_provider.evidence_policy(
-            supported_checks=sufficiency.OPERATION_FLOOR_CHECKS,
-        )
-
-    assert observed["display"]["durableProofBundleLabel"] == (
-        "Retained copied-package policy"
-    )
-
-
-@pytest.mark.parametrize("missing_service", [
-    "policy_provider",
-    "context_assembler",
-    "materializer",
-])
-def test_runtime_service_construction_refuses_missing_required_capability(
-        fresh_env, monkeypatch, missing_service):
-    store, _, _ = fresh_env
-    registry = default_profile_runtime_provider_registry()
-    registration = registry.registration_for(
-        "profile_si_ffs",
-        config.ACTIVE_PROFILE,
-    )
-    source_component = registry._verify_provider_source(store, registration)
-    provider = registry._load_provider(
-        store,
-        registration,
-        source_component,
-    )
-    provider_dependencies = (
-        profile_runtime_providers._capture_provider_dependencies(
-            provider,
-            registration,
-        )
-    )
-    monkeypatch.setattr(
-        ProfileRuntimeProviderRegistry,
-        "_load_provider",
-        staticmethod(
-            lambda _store, _registration, _source_component: provider
-        ),
-    )
-    monkeypatch.setattr(
-        profile_runtime_providers,
-        "_capture_provider_dependencies",
-        lambda _provider, _registration: provider_dependencies,
-    )
-    provider_type = type(provider)
-    original_build_services = provider_type.build_services
-
-    def incomplete_build_services(self, provider_store, descriptor):
-        complete = original_build_services(self, provider_store, descriptor)
-        return replace(complete, **{missing_service: None})
-
-    monkeypatch.setattr(
-        provider_type,
-        "build_services",
-        incomplete_build_services,
-    )
-    store._profile_runtime_provider_cache.clear()
-    with pytest.raises(ProfileRuntimeError, match=missing_service):
-        registry.build_services(
-            store,
-            "profile_si_ffs",
-            config.ACTIVE_PROFILE,
-        )
-
-
-@pytest.mark.parametrize(
-    "contract_defect,match",
-    [
-        ("missing_policy_ref", "policy_ref"),
-        ("wrong_policy_ref", "descriptor evidencePolicyRef"),
-        ("invalid_recognized_rule_refs", "recognized_rule_refs"),
-        ("incomplete_recognized_rule_refs", "recognized_rule_refs"),
-        ("missing_lookup_by_decision", "lookup_by_decision"),
-        ("missing_registry_reverification", "registry_reverification"),
-        ("wrong_registry_product_lookup", "not bound"),
-        ("wrong_registry_snapshot_prefix", "descriptor REGSR"),
-    ],
-)
-def test_runtime_service_construction_refuses_incomplete_consumed_contract(
-        fresh_env, monkeypatch, contract_defect, match):
-    store, _, _ = fresh_env
-    registry = default_profile_runtime_provider_registry()
-    registration = registry.registration_for(
-        "profile_si_ffs",
-        config.ACTIVE_PROFILE,
-    )
-    source_component = registry._verify_provider_source(store, registration)
-    provider = registry._load_provider(
-        store,
-        registration,
-        source_component,
-    )
-    provider_dependencies = (
-        profile_runtime_providers._capture_provider_dependencies(
-            provider,
-            registration,
-        )
-    )
-    monkeypatch.setattr(
-        ProfileRuntimeProviderRegistry,
-        "_load_provider",
-        staticmethod(
-            lambda _store, _registration, _source_component: provider
-        ),
-    )
-    monkeypatch.setattr(
-        profile_runtime_providers,
-        "_capture_provider_dependencies",
-        lambda _provider, _registration: provider_dependencies,
-    )
-    provider_type = type(provider)
-    original_build_services = provider_type.build_services
-
-    def incomplete_build_services(self, provider_store, descriptor):
-        complete = original_build_services(self, provider_store, descriptor)
-        policy = complete.policy_provider
-        if contract_defect == "missing_policy_ref":
-            del policy.policy_ref
-        elif contract_defect == "wrong_policy_ref":
-            policy.policy_ref = "policy:wrong.runtime.v0_1"
-        elif contract_defect == "invalid_recognized_rule_refs":
-            policy.recognized_rule_refs = [policy.policy_ref]
-        elif contract_defect == "incomplete_recognized_rule_refs":
-            policy.recognized_rule_refs = frozenset({policy.policy_ref})
-        product_lookup = complete.product_lookup
-        reference_bindings = complete.reference_bindings
-        registry_reverification = complete.registry_reverification
-        if contract_defect == "missing_lookup_by_decision":
-            product_lookup.lookup_by_decision = None
-        elif contract_defect == "missing_registry_reverification":
-            registry_reverification = None
-        elif contract_defect == "wrong_registry_product_lookup":
-            registry_reverification.product_lookup = SimpleNamespace()
-        elif contract_defect == "wrong_registry_snapshot_prefix":
-            wrong_prefix = "referencesnapshot:si.wrong.ffs-reg"
-            object.__setattr__(
-                reference_bindings,
-                "regsr_snapshot_prefix",
-                wrong_prefix,
-            )
-            registry_reverification.snapshot_prefix = wrong_prefix
-        return replace(
-            complete,
-            policy_provider=policy,
-            reference_bindings=reference_bindings,
-            product_lookup=product_lookup,
-            registry_reverification=registry_reverification,
-        )
-
-    monkeypatch.setattr(
-        provider_type,
-        "build_services",
-        incomplete_build_services,
-    )
-    store._profile_runtime_provider_cache.clear()
-    with pytest.raises(ProfileRuntimeError, match=match):
-        registry.build_services(
-            store,
-            "profile_si_ffs",
-            config.ACTIVE_PROFILE,
-        )
-
-
 def test_gate_pipeline_default_missing_farm_ref_still_fails_before_route(
         fresh_env):
     store, pipeline, _ = fresh_env
@@ -2961,366 +1856,6 @@ def test_route_backed_gate_pipeline_accepts_clean_si_operation(fresh_env):
         "AUTHORITY",
     ]
     assert trace["gateSequence"][1]["outcome"] == "PROFILE_ROUTE_PASS"
-
-
-def test_route_backed_gate_pipeline_refuses_unregistered_runtime_provider(
-        fresh_env, tmp_path):
-    store, _, _ = fresh_env
-    package_root = _copied_package_root(tmp_path)
-    package_name = "profile_unregistered_runtime"
-    profile_root, descriptor_doc = _copied_si_package(
-        package_root,
-        package_name,
-    )
-    _make_second_descriptor_unique(
-        profile_root,
-        descriptor_doc,
-        duplicate_field="",
-    )
-    registry = load_profile_descriptor_registry(
-        package_root,
-        allowed_profile_package_names=("profile_si_ffs", package_name),
-    )
-    descriptor = registry.candidate_for(package_name).descriptor
-    route = ProfileRouteRecord(
-        route_id=f"profileroute:test.unregistered.{_uid()}",
-        tenant_ref=config.TENANT_REF,
-        farm_ref=demo.FARM,
-        profile_package_name=package_name,
-        profile_ref=descriptor.profile_ref,
-        pack_ref=descriptor.pack_ref,
-        pack_activation_set_ref=descriptor.pack_activation_set_ref,
-        active_artifact_set_ref=descriptor.active_artifact_set_ref,
-        descriptor_identity=profile_runtime_descriptor_identity(descriptor),
-    )
-    pipeline = _route_pipeline(
-        store,
-        routes=[route],
-        registry=registry,
-        selected=("profile_si_ffs", package_name),
-    )
-
-    result = pipeline.commit(demo.spray_submission(
-        f"rs1-route-unregistered:{_uid()}",
-        erp_id=f"erp:rs1.route.unregistered.{_uid()}",
-        confirm=True,
-    ))
-
-    assert "no registered executable runtime provider" in \
-        result["problems"][0]["detail"]
-    _assert_profile_route_refusal(store, result)
-    assert pipeline.runtime_services.provider.package_name == "profile_si_ffs"
-
-
-def test_route_backed_replay_refuses_unregistered_current_route(
-        fresh_env, tmp_path):
-    store, _, _ = fresh_env
-    package_root = _copied_package_root(tmp_path)
-    package_name = "profile_unregistered_replay"
-    profile_root, descriptor_doc = _copied_si_package(
-        package_root,
-        package_name,
-    )
-    _make_second_descriptor_unique(
-        profile_root,
-        descriptor_doc,
-        duplicate_field="",
-    )
-    registry = load_profile_descriptor_registry(
-        package_root,
-        allowed_profile_package_names=("profile_si_ffs", package_name),
-    )
-    descriptor = registry.candidate_for(package_name).descriptor
-    routes = [_si_route()]
-    pipeline = _route_pipeline(store, routes=routes)
-    submission = demo.spray_submission(
-        f"rs1-route-replay:{_uid()}",
-        erp_id=f"erp:rs1.route.replay.{_uid()}",
-        confirm=True,
-    )
-
-    first = pipeline.commit(submission)
-    assert first["decisionOutcome"] == "PROMOTE_ACCEPTED"
-
-    pipeline.profile_route_registry = registry
-    pipeline.selected_profile_package_names = ("profile_si_ffs", package_name)
-    routes[:] = [ProfileRouteRecord(
-        route_id=f"profileroute:test.unregistered.replay.{_uid()}",
-        tenant_ref=config.TENANT_REF,
-        farm_ref=demo.FARM,
-        profile_package_name=package_name,
-        profile_ref=descriptor.profile_ref,
-        pack_ref=descriptor.pack_ref,
-        pack_activation_set_ref=descriptor.pack_activation_set_ref,
-        active_artifact_set_ref=descriptor.active_artifact_set_ref,
-        descriptor_identity=profile_runtime_descriptor_identity(descriptor),
-    )]
-
-    replay = pipeline.commit(submission)
-
-    assert replay["decisionOutcome"] == "DENY"
-    assert replay["idempotencyDisposition"] == "CONFLICTING_REPLAY_BLOCKED"
-    assert replay["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
-    assert "no registered executable runtime provider" in \
-        replay["problems"][0]["detail"]
-    trace = _trace_payload(store, replay)
-    assert [entry["gate"] for entry in trace["gateSequence"]][:2] == [
-        "INGRESS_NORMALIZATION",
-        "PACK_PROFILE_APPLICABILITY",
-    ]
-    assert any(
-        entry["outcome"] == "PROFILE_ROUTE_REFUSE"
-        for entry in trace["gateSequence"]
-    )
-
-
-def test_route_backed_replay_reuses_only_same_execution_fingerprint(
-        fresh_env):
-    store, _, _ = fresh_env
-    route = _si_route()
-    pipeline = _route_pipeline(store, routes=[route])
-    submission = demo.spray_submission(
-        f"rs1-route-replay-match:{_uid()}",
-        erp_id=f"erp:rs1.route.replay.match.{_uid()}",
-        confirm=True,
-    )
-
-    first = pipeline.commit(submission)
-    replay = pipeline.commit(submission)
-
-    assert replay["decisionOutcome"] == "REPLAY_REUSED_RESULT"
-    assert replay["idempotencyDisposition"] == "REPLAY_MATCH_REUSED_RESULT"
-    first_trace = _trace_payload(store, first)
-    replay_trace = _trace_payload(store, replay)
-    fingerprints = [
-        ref
-        for ref in first_trace["gateSequence"][1]["relatedArtifactRefs"]
-        if ref.startswith("profileexecution:sha256:")
-    ]
-    assert len(fingerprints) == 1
-    assert fingerprints[0] in replay_trace["gateSequence"][1][
-        "relatedArtifactRefs"
-    ]
-    assert [entry["gate"] for entry in replay_trace["gateSequence"]][:2] == [
-        "INGRESS_NORMALIZATION",
-        "PACK_PROFILE_APPLICABILITY",
-    ]
-
-
-def test_profile_execution_fingerprint_is_independent_of_local_source_path(
-        fresh_env):
-    store, _, _ = fresh_env
-    pipeline = _route_pipeline(store)
-    submission = demo.spray_submission(
-        f"rs1-route-path-independent:{_uid()}",
-        erp_id=f"erp:rs1.route.path.independent.{_uid()}",
-        confirm=True,
-    )
-
-    with store.tx() as cur:
-        ctx = pipeline._new_context(cur, submission)
-        ingress = IngressNormalizer().run(ctx)
-        assert not hasattr(ingress, "result")
-        assert pipeline._resolve_profile_route(ctx) is None
-
-    moved_registration = replace(
-        pipeline.runtime_provider_registration,
-        source_path=Path("/srv/ofarm/kernel/profiles/si_ffs/runtime_provider.py"),
-    )
-    moved_fingerprint = pipeline._profile_execution_fingerprint(
-        ctx.profile_route_resolution,
-        moved_registration,
-    )
-
-    assert moved_fingerprint == ctx.profile_execution_fingerprint
-
-
-def test_route_backed_result_cannot_replay_through_default_pipeline(
-        fresh_env):
-    store, _, _ = fresh_env
-    routed = _route_pipeline(store)
-    submission = demo.spray_submission(
-        f"rs1-route-replay-default:{_uid()}",
-        erp_id=f"erp:rs1.route.replay.default.{_uid()}",
-        confirm=True,
-    )
-
-    first = routed.commit(submission)
-    assert first["decisionOutcome"] == "PROMOTE_ACCEPTED"
-    replay = GatePipeline(store).commit(submission)
-
-    assert replay["decisionOutcome"] == "DENY"
-    assert replay["idempotencyDisposition"] == "CONFLICTING_REPLAY_BLOCKED"
-    assert replay["problems"][0]["reasonCode"] == "PACK_CONFLICT"
-    assert "profile execution binding" in replay["problems"][0]["title"].lower()
-
-
-def test_default_result_cannot_replay_through_route_backed_pipeline(
-        fresh_env):
-    store, default, _ = fresh_env
-    submission = demo.spray_submission(
-        f"rs1-default-replay-route:{_uid()}",
-        erp_id=f"erp:rs1.default.replay.route.{_uid()}",
-        confirm=True,
-    )
-
-    first = default.commit(submission)
-    assert first["decisionOutcome"] == "PROMOTE_ACCEPTED"
-    replay = _route_pipeline(store).commit(submission)
-
-    assert replay["decisionOutcome"] == "DENY"
-    assert replay["idempotencyDisposition"] == "CONFLICTING_REPLAY_BLOCKED"
-    assert replay["problems"][0]["reasonCode"] == "PACK_CONFLICT"
-
-
-def test_route_backed_replay_refuses_different_same_provider_route(
-        fresh_env):
-    store, _, _ = fresh_env
-    first_route = _si_route()
-    routes = [first_route]
-    pipeline = _route_pipeline(store, routes=routes)
-    submission = demo.spray_submission(
-        f"rs1-route-replay-changed-route:{_uid()}",
-        erp_id=f"erp:rs1.route.replay.changed-route.{_uid()}",
-        confirm=True,
-    )
-
-    first = pipeline.commit(submission)
-    assert first["decisionOutcome"] == "PROMOTE_ACCEPTED"
-    second_route = _si_route()
-    routes[:] = [second_route]
-
-    replay = pipeline.commit(submission)
-
-    assert replay["decisionOutcome"] == "DENY"
-    assert replay["idempotencyDisposition"] == "CONFLICTING_REPLAY_BLOCKED"
-    assert replay["problems"][0]["reasonCode"] == "PACK_CONFLICT"
-    trace = _trace_payload(store, replay)
-    assert second_route.route_id in trace["gateSequence"][1][
-        "relatedArtifactRefs"
-    ]
-    assert first_route.route_id not in trace["gateSequence"][1][
-        "relatedArtifactRefs"
-    ]
-
-
-def test_malformed_conflicting_replay_is_recorded_and_blocked(fresh_env):
-    store, pipeline, _ = fresh_env
-    submission = demo.spray_submission(
-        f"rs1-replay-malformed-class:{_uid()}",
-        erp_id=f"erp:rs1.replay.malformed-class.{_uid()}",
-        confirm=True,
-    )
-    first = pipeline.commit(submission)
-    assert first["decisionOutcome"] == "PROMOTE_ACCEPTED"
-
-    malformed = dict(submission, commitClass="UNKNOWN_COMMIT_CLASS")
-    replay = pipeline.commit(malformed)
-
-    assert replay["decisionOutcome"] == "DENY"
-    assert replay["idempotencyDisposition"] == "CONFLICTING_REPLAY_BLOCKED"
-    assert replay["problems"][0]["reasonCode"] == "IDEMPOTENCY_REPLAY_CONFLICT"
-    trace = _trace_payload(store, replay)
-    assert trace["gateSequence"][0]["gate"] == "INGRESS_NORMALIZATION"
-
-
-def test_route_backed_malformed_conflict_precedes_route_refusal(fresh_env):
-    store, _, _ = fresh_env
-    pipeline = _route_pipeline(store)
-    submission = demo.spray_submission(
-        f"rs1-route-replay-malformed-class:{_uid()}",
-        erp_id=f"erp:rs1.route.replay.malformed-class.{_uid()}",
-        confirm=True,
-    )
-    first = pipeline.commit(submission)
-    assert first["decisionOutcome"] == "PROMOTE_ACCEPTED"
-
-    malformed = dict(submission, commitClass="UNKNOWN_COMMIT_CLASS")
-    replay = pipeline.commit(malformed)
-
-    assert replay["decisionOutcome"] == "DENY"
-    assert replay["idempotencyDisposition"] == "CONFLICTING_REPLAY_BLOCKED"
-    assert replay["problems"][0]["reasonCode"] == "IDEMPOTENCY_REPLAY_CONFLICT"
-    trace = _trace_payload(store, replay)
-    assert [entry["gate"] for entry in trace["gateSequence"]][:2] == [
-        "INGRESS_NORMALIZATION",
-        "PACK_PROFILE_APPLICABILITY",
-    ]
-    assert trace["gateSequence"][1]["outcome"] == "PROFILE_ROUTE_REFUSE"
-
-
-def test_route_backed_gate_pipeline_refuses_alias_candidate_identity(fresh_env):
-    store, _, _ = fresh_env
-    alias = "profile_si_alias"
-    registry = _route_registry()
-    si_candidate = registry.candidate_for("profile_si_ffs")
-    alias_candidate = replace(
-        si_candidate,
-        package_name=alias,
-        enabled=True,
-    )
-    alias_registry = replace(
-        registry,
-        discoverable_package_names=(alias,),
-        descriptor_candidates=(alias_candidate,),
-        enabled_package_names=(alias,),
-    )
-    pipeline = _route_pipeline(
-        store,
-        routes=[_si_route(profile_package_name=alias)],
-        registry=alias_registry,
-        selected=(alias,),
-    )
-
-    result = pipeline.commit(demo.spray_submission(
-        f"rs1-route-alias:{_uid()}",
-        erp_id=f"erp:rs1.route.alias.{_uid()}",
-        confirm=True,
-    ))
-
-    assert "no registered executable runtime provider" in \
-        result["problems"][0]["detail"]
-    _assert_profile_route_refusal(store, result)
-
-
-def test_route_backed_gate_pipeline_refuses_symlink_alias_identity(
-        fresh_env, tmp_path):
-    store, _, _ = fresh_env
-    alias = "profile_si_symlink_alias"
-    alias_root = tmp_path / alias
-    alias_root.symlink_to(config.PROFILE_ROOT, target_is_directory=True)
-    registry = _route_registry()
-    si_candidate = registry.candidate_for("profile_si_ffs")
-    alias_candidate = replace(
-        si_candidate,
-        package_name=alias,
-        profile_root=alias_root,
-        descriptor_path=alias_root / DESCRIPTOR_FILENAME,
-        enabled=True,
-    )
-    alias_registry = replace(
-        registry,
-        package_root=tmp_path,
-        discoverable_package_names=(alias,),
-        descriptor_candidates=(alias_candidate,),
-        enabled_package_names=(alias,),
-    )
-    pipeline = _route_pipeline(
-        store,
-        routes=[_si_route(profile_package_name=alias)],
-        registry=alias_registry,
-        selected=(alias,),
-    )
-
-    result = pipeline.commit(demo.spray_submission(
-        f"rs1-route-symlink-alias:{_uid()}",
-        erp_id=f"erp:rs1.route.symlink-alias.{_uid()}",
-        confirm=True,
-    ))
-
-    assert "no registered executable runtime provider" in \
-        result["problems"][0]["detail"]
-    _assert_profile_route_refusal(store, result)
 
 
 @pytest.mark.parametrize("routes,match", [
@@ -3493,35 +2028,6 @@ def test_route_backed_gate_pipeline_refuses_operation_outside_route_interval(
 
     assert "no active profile route" in result["problems"][0]["detail"]
     _assert_profile_route_refusal(store, result)
-
-
-def test_route_backed_gate_pipeline_reuses_matching_route_refusal(
-        fresh_env):
-    store, _, _ = fresh_env
-    pipeline = _route_pipeline(store, routes=[_route_interval("05")])
-    submission = demo.spray_submission(
-        f"mp7-route-outside-replay:{_uid()}",
-        erp_id=f"erp:mp7.route.outside.replay.{_uid()}",
-        confirm=True,
-    )
-
-    first = pipeline.commit(submission)
-    replay = pipeline.commit(submission)
-
-    assert first["decisionOutcome"] == "RETAIN_DRAFT"
-    assert first["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
-    assert replay["decisionOutcome"] == "REPLAY_REUSED_RESULT"
-    assert replay["idempotencyDisposition"] == "REPLAY_MATCH_REUSED_RESULT"
-    assert [problem["reasonCode"] for problem in replay["problems"]] == [
-        "IDEMPOTENCY_REPLAY_REUSED",
-        "PROFILE_NOT_ACTIVE",
-    ]
-    assert replay["problems"][1] == first["problems"][0]
-    trace = _trace_payload(store, replay)
-    assert [entry["outcome"] for entry in trace["gateSequence"]][:2] == [
-        "REPLAY_MATCH_REUSED_RESULT",
-        "PROFILE_ROUTE_REFUSE",
-    ]
 
 
 def test_route_backed_gate_pipeline_refuses_missing_event_time_no_captured_fallback(
@@ -3824,7 +2330,6 @@ def test_route_backed_handoff_binds_materializer_to_resolved_descriptor(fresh_en
         assert pipeline._resolve_profile_route(ctx) is None
 
     assert ctx.profile_route_resolution.descriptor == config.ACTIVE_PROFILE
-    assert ctx.runtime_services is pipeline.runtime_services
     assert ctx.active_profile == ctx.profile_route_resolution.descriptor
     assert ctx.materializer.active_profile == ctx.profile_route_resolution.descriptor
     assert ctx.materializer.context.active_profile == ctx.profile_route_resolution.descriptor
@@ -3923,7 +2428,7 @@ def test_acceptance_sufficiency_uses_descriptor_policy_ref_without_policy_body(
     monkeypatch.setattr(profile_policy, "load_evidence_review_policy_for_descriptor",
                         fail_descriptor_policy)
 
-    submission = {
+    accepted = pipeline.commit({
         "commitClass": "GOVERNANCE_DECISION",
         "actingPartyRef": demo.FARMER,
         "farmRef": demo.FARM,
@@ -3931,12 +2436,7 @@ def test_acceptance_sufficiency_uses_descriptor_policy_ref_without_policy_body(
         "decisionTime": "2026-06-10T10:00:00Z",
         "reviewTargetAssertionRef": queued["emittedAssertionRecordRefs"][0],
         "reviewRationale": "self-review of a routine operation claim meeting the floor",
-    }
-    # This is a downstream acceptance-path unit test. It bypasses commit()'s
-    # deliberate helper-integrity check so the synthetic replacement can prove
-    # that the acceptance stage itself never calls the full policy loader.
-    with store.serialized_tx() as cur:
-        accepted = pipeline._commit_in_tx(cur, submission)
+    })
 
     assert accepted["decisionOutcome"] == "PROMOTE_ACCEPTED"
     case = _case_payload(store, accepted)
@@ -3947,9 +2447,7 @@ def test_acceptance_sufficiency_uses_descriptor_policy_ref_without_policy_body(
 
 def test_descriptor_validation_policy_failure_stops_at_validation(
         fresh_env, monkeypatch):
-    store, pipeline, _ = fresh_env
-    # This downstream unit test deliberately bypasses commit()'s tamper check
-    # so it can exercise the governed policy-error mapping in isolation.
+    store, _, _ = fresh_env
 
     def fail_validation_policy(_provider):
         raise profile_policy.ProfilePolicyError("descriptor validation unavailable")
@@ -3957,13 +2455,11 @@ def test_descriptor_validation_policy_failure_stops_at_validation(
     monkeypatch.setattr(profile_policy.DescriptorPolicyProvider, "validation_policy",
                         fail_validation_policy)
 
-    submission = demo.spray_submission(
+    result = GatePipeline(store).commit(demo.spray_submission(
         f"mp3d-validation-fail:{_uid()}",
         erp_id=f"erp:mp3d.validation.fail.{_uid()}",
         confirm=True,
-    )
-    with store.serialized_tx() as cur:
-        result = pipeline._commit_in_tx(cur, submission)
+    ))
 
     assert result["decisionOutcome"] == "RETAIN_DRAFT"
     assert result["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
@@ -3979,9 +2475,7 @@ def test_descriptor_validation_policy_failure_stops_at_validation(
 
 def test_descriptor_sufficiency_policy_failure_happens_after_validation(
         fresh_env, monkeypatch):
-    store, pipeline, _ = fresh_env
-    # See the validation-policy companion above: this is a downstream unit
-    # test, not modified class behavior passed through the governed front door.
+    store, _, _ = fresh_env
     validation = profile_policy.validation_policy_for_descriptor(config.ACTIVE_PROFILE)
 
     monkeypatch.setattr(profile_policy.DescriptorPolicyProvider, "validation_policy",
@@ -3993,13 +2487,11 @@ def test_descriptor_sufficiency_policy_failure_happens_after_validation(
     monkeypatch.setattr(profile_policy.DescriptorPolicyProvider, "evidence_policy",
                         fail_evidence_policy)
 
-    submission = demo.spray_submission(
+    result = GatePipeline(store).commit(demo.spray_submission(
         f"mp3d-sufficiency-fail:{_uid()}",
         erp_id=f"erp:mp3d.sufficiency.fail.{_uid()}",
         confirm=True,
-    )
-    with store.serialized_tx() as cur:
-        result = pipeline._commit_in_tx(cur, submission)
+    ))
 
     assert result["decisionOutcome"] == "RETAIN_DRAFT"
     assert result["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
@@ -4058,13 +2550,8 @@ def test_api_startup_refuses_non_exact_selected_profile_instance():
 
 def test_product_register_boundary_remains_single_active_si_runtime():
     assert config.ACTIVE_PROFILE_PACKAGE_NAMES == ("profile_si_ffs",)
-    assert config.ACTIVE_PROFILE_PACKAGE_NAME == "profile_si_ffs"
     assert config.ALLOWED_ACTIVE_PROFILE_PACKAGE_NAMES == ("profile_si_ffs",)
     assert config.ACTIVE_PROFILE_SELECTION.profile_package_names == ("profile_si_ffs",)
-    assert (
-        config.ACTIVE_PROFILE_SELECTION.active_profile_package_name
-        == "profile_si_ffs"
-    )
     assert context.SI_REFERENCE_BINDINGS == \
         context.SIReferenceBindings.from_runtime_descriptor(config.ACTIVE_PROFILE)
     assert context.REGSR_SNAPSHOT_PREFIX == config.ACTIVE_PROFILE.reference_family(
@@ -4161,47 +2648,16 @@ def test_gate_pipeline_omits_si_reference_bindings_when_descriptor_changes(
 
     ctx = pipeline._new_context(None, sub)
 
-    assert ctx.runtime_services is None
-    assert ctx.policy_provider is None
-    assert ctx.context_assembler is None
-    assert ctx.materializer is None
-    assert ctx.products is None
     assert ctx.si_reference_bindings is None
 
 
-def test_descriptor_backed_pipeline_cannot_fall_back_to_legacy_validation(
-        fresh_env, monkeypatch):
-    store, pipeline, _ = fresh_env
-
-    class FailIfRun:
-        def run(self, _ctx):
-            raise AssertionError("legacy config-backed validation ran")
-
-    monkeypatch.setattr(validators, "OPERATION_SEQUENCE", (FailIfRun(),))
-    pipeline.active_profile = replace(
-        config.ACTIVE_PROFILE,
-        profile_ref="profile:si.ffs.unbound-provider.v0_1",
-    )
-
-    result = pipeline.commit(demo.spray_submission(
-        f"rs1-no-legacy-policy:{_uid()}",
-        erp_id=f"erp:rs1.no-legacy-policy.{_uid()}",
-        confirm=True,
-    ))
-
-    assert result["decisionOutcome"] == "RETAIN_DRAFT"
-    assert result["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
-    trace = _trace_payload(store, result)
-    assert trace["gateSequence"][-1]["outcome"] == "FAIL_PROFILE_POLICY"
-
-
-def test_registry_reverification_uses_provider_owned_capabilities(monkeypatch):
+def test_registry_reverification_prefers_context_si_reference_bindings(
+        monkeypatch):
     seen_prefixes = []
-    lookup_calls = []
 
     def fake_current_reference_snapshot(_store, prefix):
         seen_prefixes.append(prefix)
-        return {"referenceSnapshotId": "referencesnapshot:si.custom.regsr.current"}
+        return None
 
     monkeypatch.setattr(
         validators,
@@ -4225,53 +2681,19 @@ def test_registry_reverification_uses_provider_owned_capabilities(monkeypatch):
                 }
             return None
 
-    class FakeProductLookup:
-        def lookup_by_decision(self, snapshot_id, decision_number):
-            lookup_calls.append((snapshot_id, decision_number))
-            return {
-                "decision": {"validUntil": "2027-12-31"},
-            }
-
     ctx = SimpleNamespace(
         store=FakeStore(),
-        sub={
-            "payload": {
-                "agronomicIdentityBindingRefs": ["binding:regsr"],
-            },
-            "capturedAgainstSnapshotRef": "referencesnapshot:si.old",
-        },
-        event_time="2026-06-01T00:00:00Z",
-        captured_at="2026-06-01T00:00:00Z",
-        review_route_reasons=[],
-        log=lambda *_args, **_kwargs: None,
-    )
-    capability = validators.RegistryReverificationValidator(
-        snapshot_prefix="referencesnapshot:si.custom.regsr",
-        product_lookup=FakeProductLookup(),
+        sub={"payload": {"agronomicIdentityBindingRefs": ["binding:regsr"]}},
+        si_reference_bindings=SimpleNamespace(
+            regsr_snapshot_prefix="referencesnapshot:si.custom.regsr"),
     )
 
-    assert capability.run(ctx) is None
+    assert validators.RegistryReverificationValidator().run(ctx) is None
     assert seen_prefixes == ["referencesnapshot:si.custom.regsr"]
-    assert lookup_calls == [(
-        "referencesnapshot:si.custom.regsr.current",
-        "U99999-50/26/context",
-    )]
 
-
-def test_provider_operation_sequence_omits_unowned_registry_reverification():
-    validation_policy = profile_policy.validation_policy()
-
-    sequence = validators._operation_sequence_for_validation_policy(
-        validation_policy,
-        registry_reverification=None,
-    )
-
-    assert not any(
-        isinstance(validator, validators.RegistryReverificationValidator)
-        for validator in sequence
-    )
-    with pytest.raises(TypeError):
-        validators.RegistryReverificationValidator()
+    ctx.si_reference_bindings = None
+    assert validators.RegistryReverificationValidator().run(ctx) is None
+    assert seen_prefixes[-1] == context.REGSR_SNAPSHOT_PREFIX
 
 
 def test_materializer_uses_active_descriptor_for_context_and_policy_freshness(
@@ -4341,3 +2763,266 @@ def test_materializer_dependency_index_uses_bound_policy_and_invalidates(fresh_e
             (key_digest,),
         )
         assert cur.fetchone()["freshness"] == "STALE"
+
+
+# ---------------------------------------------------------------------------
+# Issue #159: focused provider-seam acceptance
+# ---------------------------------------------------------------------------
+
+
+def test_issue_159_default_pipeline_selects_registered_si_provider(fresh_env):
+    store, pipeline, _ = fresh_env
+
+    assert pipeline.runtime_provider_registration.key == (
+        config.ACTIVE_PROFILE_PACKAGE_NAME,
+        config.ACTIVE_PROFILE.profile_ref,
+    )
+    assert pipeline.runtime_services.provider_key == \
+        pipeline.runtime_provider_registration.key
+    assert pipeline.runtime_services.descriptor is store.active_descriptor
+
+
+def test_issue_159_si_submission_behavior_remains_assertion_equivalent(
+        fresh_env):
+    store, default_pipeline, _ = fresh_env
+    explicit_pipeline = GatePipeline(
+        store,
+        active_descriptor=config.ACTIVE_PROFILE,
+    )
+
+    default = default_pipeline.commit(demo.spray_submission(
+        f"issue159-default:{_uid()}",
+        erp_id=f"erp:issue159.default.{_uid()}",
+        confirm=True,
+    ))
+    explicit = explicit_pipeline.commit(demo.spray_submission(
+        f"issue159-explicit:{_uid()}",
+        erp_id=f"erp:issue159.explicit.{_uid()}",
+        confirm=True,
+    ))
+
+    assert default["decisionOutcome"] == explicit["decisionOutcome"] == \
+        "PROMOTE_ACCEPTED"
+    assert default["problems"] == explicit["problems"] == []
+    assert [
+        entry["gate"] for entry in _trace_payload(store, default)["gateSequence"]
+    ] == [
+        entry["gate"] for entry in _trace_payload(store, explicit)["gateSequence"]
+    ]
+
+
+def test_issue_159_route_uses_composition_root_services(fresh_env):
+    store, _, _ = fresh_env
+    pipeline = _route_pipeline(store)
+    result = pipeline.commit(demo.spray_submission(
+        f"issue159-route:{_uid()}",
+        erp_id=f"erp:issue159.route.{_uid()}",
+        confirm=True,
+    ))
+    trace = _trace_payload(store, result)
+
+    assert result["decisionOutcome"] == "PROMOTE_ACCEPTED"
+    assert result["problems"] == []
+    assert any(
+        entry["outcome"] == "PROFILE_ROUTE_PASS"
+        for entry in trace["gateSequence"]
+    )
+    assert trace["gateSequence"][-1]["gate"] == "CURRENT_STATE_MATERIALIZATION"
+
+
+def test_issue_159_unregistered_identity_cannot_construct_runtime(fresh_env):
+    store, _, _ = fresh_env
+    registry = default_profile_runtime_provider_registry()
+
+    with pytest.raises(
+        ProfileRuntimeError,
+        match="no registered executable runtime provider",
+    ):
+        registry.build_services(
+            store,
+            "profile_unregistered",
+            config.ACTIVE_PROFILE,
+        )
+
+
+def test_issue_159_unregistered_route_refuses_without_si_fallback(fresh_env):
+    store, _, _ = fresh_env
+    package_name = "profile_nl_go_glmc7_2026"
+    pipeline = _route_pipeline(
+        store,
+        routes=[_si_route(profile_package_name=package_name)],
+        registry=_route_registry(enabled=("profile_si_ffs", package_name)),
+        selected=("profile_si_ffs", package_name),
+    )
+
+    result = pipeline.commit(demo.spray_submission(
+        f"issue159-unregistered-route:{_uid()}",
+        erp_id=f"erp:issue159.unregistered.route.{_uid()}",
+        confirm=True,
+    ))
+
+    assert result["decisionOutcome"] == "RETAIN_DRAFT"
+    assert result["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+    assert _trace_payload(store, result)["gateSequence"][-1]["outcome"] == \
+        "PROFILE_ROUTE_REFUSE"
+
+
+def test_issue_159_descriptor_runtime_never_uses_legacy_policy(
+        fresh_env, monkeypatch):
+    store, _, _ = fresh_env
+
+    def fail_legacy_policy(*_args, **_kwargs):
+        raise AssertionError("legacy config-backed policy executed")
+
+    monkeypatch.setattr(profile_policy, "validation_policy", fail_legacy_policy)
+    monkeypatch.setattr(
+        profile_policy,
+        "load_evidence_review_policy",
+        fail_legacy_policy,
+    )
+
+    result = GatePipeline(store).commit(demo.spray_submission(
+        f"issue159-no-legacy:{_uid()}",
+        erp_id=f"erp:issue159.no.legacy.{_uid()}",
+        confirm=True,
+    ))
+
+    assert result["decisionOutcome"] == "PROMOTE_ACCEPTED"
+
+
+def test_issue_159_descriptor_discovery_does_not_register_provider():
+    descriptor_registry = _route_registry()
+    provider_registry = default_profile_runtime_provider_registry()
+
+    assert (
+        "profile_nl_go_glmc7_2026"
+        in descriptor_registry.discoverable_package_names
+    )
+    assert provider_registry.registered_identities == ((
+        "profile_si_ffs",
+        config.ACTIVE_PROFILE.profile_ref,
+    ),)
+
+
+def test_issue_159_rs_remains_design_only_and_unexecutable(fresh_env):
+    store, _, _ = fresh_env
+    rs_root = config.PACKAGE_ROOT / "profile_rs_organic_crop"
+
+    assert rs_root.is_dir()
+    assert not (rs_root / DESCRIPTOR_FILENAME).exists()
+    with pytest.raises(
+        ProfileRuntimeError,
+        match="no registered executable runtime provider",
+    ):
+        default_profile_runtime_provider_registry().build_services(
+            store,
+            "profile_rs_organic_crop",
+            config.ACTIVE_PROFILE,
+        )
+
+
+def test_issue_159_provider_source_component_is_required():
+    registration = (
+        default_profile_runtime_provider_registry().registrations[0]
+    )
+
+    class MissingBundle:
+        @staticmethod
+        def component(_role, _logical_ref):
+            raise RuntimeBundleError("missing provider source")
+
+    store = SimpleNamespace(
+        require_startup_complete=lambda _operation: None,
+        runtime_bundle=MissingBundle(),
+    )
+
+    with pytest.raises(
+        ProfileRuntimeError,
+        match="source is not retained",
+    ):
+        default_profile_runtime_provider_registry().build_services(
+            store,
+            registration.package_name,
+            config.ACTIVE_PROFILE,
+        )
+
+
+def test_issue_159_provider_source_digest_must_match_registration():
+    registration = (
+        default_profile_runtime_provider_registry().registrations[0]
+    )
+    mismatched_component = RuntimeComponent.from_selected_bytes(
+        role=registration.source_component_role,
+        logical_ref=registration.source_component_logical_ref,
+        canonicalization=Canonicalization.EXACT_BYTES,
+        placement=ContentPlacement.GLOBAL,
+        selected_bytes=b"mismatched provider source",
+    )
+
+    class MismatchedBundle:
+        @staticmethod
+        def component(_role, _logical_ref):
+            return mismatched_component
+
+    store = SimpleNamespace(
+        require_startup_complete=lambda _operation: None,
+        runtime_bundle=MismatchedBundle(),
+    )
+
+    with pytest.raises(
+        ProfileRuntimeError,
+        match="source digest does not match",
+    ):
+        default_profile_runtime_provider_registry().build_services(
+            store,
+            registration.package_name,
+            config.ACTIVE_PROFILE,
+        )
+
+
+def test_issue_159_composition_returns_fresh_service_graphs(fresh_env):
+    store, first, _ = fresh_env
+    second = GatePipeline(store)
+
+    assert first.runtime_services is not second.runtime_services
+    assert first.policy_provider is not second.policy_provider
+    assert first.context is not second.context
+    assert first.materializer is not second.materializer
+    assert first.products is not second.products
+
+
+def test_issue_159_composition_rejects_missing_required_service(fresh_env):
+    store, _, _ = fresh_env
+    default_registration = (
+        default_profile_runtime_provider_registry().registrations[0]
+    )
+
+    def incomplete_factory(_store, descriptor, source_component):
+        return ProfileRuntimeServices(
+            provider_key=default_registration.key,
+            provider_source_digest=source_component.content_digest,
+            descriptor=descriptor,
+            policy_provider=None,
+            context_assembler=SimpleNamespace(assemble=lambda: None),
+            materializer=SimpleNamespace(
+                invalidate_for_sources=lambda: None,
+                recompute=lambda: None,
+            ),
+            reference_bindings=object(),
+            product_lookup=SimpleNamespace(lookup_by_decision=lambda: None),
+            registry_reverification=SimpleNamespace(run=lambda: None),
+        )
+
+    registry = ProfileRuntimeProviderRegistry((
+        replace(default_registration, factory=incomplete_factory),
+    ))
+
+    with pytest.raises(
+        ProfileRuntimeError,
+        match="omitted required service 'policy_provider'",
+    ):
+        registry.build_services(
+            store,
+            default_registration.package_name,
+            config.ACTIVE_PROFILE,
+        )

@@ -475,14 +475,7 @@ class ReplayWriter:
     its own recorded request envelope so the reuse/refusal is reconstructible
     across the ingress seam."""
 
-    def write(
-        self,
-        ctx: GateContext,
-        prior: dict,
-        *,
-        replay_precondition_problems: list[dict] | None = None,
-        replay_profile_route_gate: dict | None = None,
-    ) -> dict:
+    def write(self, ctx: GateContext, prior: dict) -> dict:
         stored_row = ctx.store.get_record(prior["result_record_id"])
         if stored_row is None:
             raise RuntimeError(
@@ -496,18 +489,6 @@ class ReplayWriter:
         )
         conflicting = bundle_conflict or (
             (prior["source_payload_digest"] or "") != (ctx.source_digest or "")
-        )
-        execution_binding_problem = _replay_execution_binding_problem(
-            ctx,
-            prior,
-            stored,
-        )
-        matching_route_refusal = (
-            replay_precondition_problems is not None
-            and replay_profile_route_gate is not None
-            and replay_profile_route_gate.get("outcome")
-            == "PROFILE_ROUTE_REFUSE"
-            and execution_binding_problem is None
         )
         event_ref = stored["semanticEventRef"]
 
@@ -528,67 +509,33 @@ class ReplayWriter:
         ctx.store.insert_record(ctx.cur, replay_request)
         if bundle_conflict:
             disposition, outcome = "CONFLICTING_REPLAY_BLOCKED", "DENY"
-            problems = [runtime_problem(
+            problem = runtime_problem(
                 "PACK_CONFLICT", "Cross-bundle replay blocked",
                 f"idempotency key {ctx.idem_key} belongs to tenant/bundle "
                 f"{prior['tenant_ref']}/{prior['runtime_bundle_digest']}, while this "
                 f"process is bound to {ctx.store.tenant_ref}/"
                 f"{ctx.store.runtime_bundle_digest}; an earlier runtime's result "
-                "cannot be reused as a decision by the active runtime")]
+                "cannot be reused as a decision by the active runtime")
             ctx.log("INGRESS_NORMALIZATION", "CONFLICTING_REPLAY_BLOCKED",
                     reason_code="PACK_CONFLICT")
         elif conflicting:
             disposition, outcome = "CONFLICTING_REPLAY_BLOCKED", "DENY"
-            problems = [runtime_problem(
+            problem = runtime_problem(
                 "IDEMPOTENCY_REPLAY_CONFLICT", "Conflicting replay blocked",
                 f"idempotency key {ctx.idem_key} was already processed with a "
                 "different source payload; blocked rather than silently "
-                "duplicating truth")]
+                "duplicating truth")
             ctx.log("INGRESS_NORMALIZATION", "CONFLICTING_REPLAY_BLOCKED",
                     reason_code="IDEMPOTENCY_REPLAY_CONFLICT")
-        elif replay_precondition_problems and not matching_route_refusal:
-            disposition, outcome = "CONFLICTING_REPLAY_BLOCKED", "DENY"
-            problems = list(replay_precondition_problems)
-            reason_code = problems[0].get("reasonCode", "PACK_CONFLICT")
-            ctx.log(
-                "INGRESS_NORMALIZATION",
-                "CONFLICTING_REPLAY_BLOCKED",
-                reason_code=reason_code,
-                rationale=(
-                    "IDEMPOTENCY_REPLAY: active profile route/provider "
-                    "authentication failed"
-                ),
-            )
-        elif execution_binding_problem is not None:
-            disposition, outcome = "CONFLICTING_REPLAY_BLOCKED", "DENY"
-            problems = [execution_binding_problem]
-            ctx.log(
-                "INGRESS_NORMALIZATION",
-                "CONFLICTING_REPLAY_BLOCKED",
-                reason_code=execution_binding_problem["reasonCode"],
-                rationale=(
-                    "IDEMPOTENCY_REPLAY: original and current profile execution "
-                    "bindings do not match"
-                ),
-            )
         else:
             disposition, outcome = "REPLAY_MATCH_REUSED_RESULT", "REPLAY_REUSED_RESULT"
-            problems = [runtime_problem(
+            problem = runtime_problem(
                 "IDEMPOTENCY_REPLAY_REUSED", "Replay reused earlier result",
                 f"idempotency key {ctx.idem_key} deterministically reuses the "
                 f"result of request {prior['request_id']}; no new truth was created",
-                severity="INFO")]
+                severity="INFO")
             ctx.log("INGRESS_NORMALIZATION", "REPLAY_MATCH_REUSED_RESULT",
                     reason_code="IDEMPOTENCY_REPLAY_REUSED")
-
-        if replay_profile_route_gate is not None:
-            ctx.log(
-                "PACK_PROFILE_APPLICABILITY",
-                replay_profile_route_gate["outcome"],
-                reason_code=replay_profile_route_gate.get("reason_code"),
-                rationale=replay_profile_route_gate.get("rationale"),
-                refs=replay_profile_route_gate.get("refs"),
-            )
 
         trace_id = mint("promtrace")
         trace = {
@@ -602,12 +549,13 @@ class ReplayWriter:
             "idempotencyKey": ctx.idem_key,
             "idempotencyDisposition": disposition,
             "replayOfRequestId": prior["request_id"],
-            "gateSequence": ctx.gate_sequence,
+            "gateSequence": ctx.gate_sequence,   # exactly the one logged entry
             "finalOutcome": outcome,
             "traceSummary": f"replay of {prior['request_id']}: {disposition}",
         }
         ctx.store.insert_record(ctx.cur, trace)
 
+        problems = [problem]
         if outcome == "REPLAY_REUSED_RESULT":
             # a matching replay REUSES the earlier result, so carry forward that
             # result's own problems as replayed context — never silently drop them.
@@ -615,7 +563,7 @@ class ReplayWriter:
             # / dose-range): the result warning is the only implemented advisory
             # surface (durable Advisory-twin records are deferred, ERRATA E-006), so
             # dropping them on replay would silently lose the advisory.
-            problems = [*problems, *stored.get("problems", [])]
+            problems = [problem, *stored.get("problems", [])]
 
         result = {
             "schemaVersion": "ofarm.commitingressresult.v0.1",
@@ -640,105 +588,3 @@ class ReplayWriter:
                     result[k] = stored[k]
         ctx.store.insert_record(ctx.cur, result)
         return result
-
-
-def _replay_execution_binding_problem(
-    ctx: GateContext,
-    prior: dict,
-    stored: dict,
-) -> dict | None:
-    """Require replay mode and routed execution identity to match the origin."""
-    trace_ref = stored.get("promotionTraceRef")
-    trace_row = ctx.store.get_record(trace_ref) if isinstance(trace_ref, str) else None
-    invalid_origin = (
-        trace_row is None
-        or trace_row["tenant_ref"] != ctx.store.tenant_ref
-        or trace_row["runtime_bundle_digest"] != prior["runtime_bundle_digest"]
-    )
-    prior_route_backed = False
-    prior_route_outcome = None
-    prior_route_rationale = None
-    prior_fingerprint = None
-    if not invalid_origin:
-        trace = trace_row["payload"]
-        sequence = trace.get("gateSequence")
-        if not isinstance(sequence, list):
-            invalid_origin = True
-        else:
-            route_entries = [
-                entry for entry in sequence
-                if isinstance(entry, dict)
-                and entry.get("gate") == "PACK_PROFILE_APPLICABILITY"
-                and entry.get("outcome") in {
-                    "PROFILE_ROUTE_PASS",
-                    "PROFILE_ROUTE_REFUSE",
-                }
-            ]
-            prior_route_backed = bool(route_entries)
-            if len(route_entries) == 1:
-                prior_route_outcome = route_entries[0].get("outcome")
-                prior_route_rationale = route_entries[0].get("rationale")
-            pass_entries = [
-                entry for entry in route_entries
-                if entry.get("outcome") == "PROFILE_ROUTE_PASS"
-            ]
-            fingerprints = [
-                ref
-                for entry in pass_entries
-                for ref in (
-                    entry.get("relatedArtifactRefs")
-                    if isinstance(entry.get("relatedArtifactRefs"), list)
-                    else []
-                )
-                if isinstance(ref, str)
-                and ref.startswith("profileexecution:sha256:")
-            ]
-            if prior_route_backed:
-                if len(route_entries) != 1:
-                    invalid_origin = True
-                elif prior_route_outcome == "PROFILE_ROUTE_PASS":
-                    if len(pass_entries) != 1 or len(fingerprints) != 1:
-                        invalid_origin = True
-                    else:
-                        prior_fingerprint = fingerprints[0]
-                elif prior_route_outcome == "PROFILE_ROUTE_REFUSE":
-                    if (
-                        pass_entries
-                        or fingerprints
-                        or type(prior_route_rationale) is not str
-                        or not prior_route_rationale
-                    ):
-                        invalid_origin = True
-                else:
-                    invalid_origin = True
-
-    current_route_backed = ctx.route_backed
-    current_fingerprint = ctx.profile_execution_fingerprint
-    current_route_gate = ctx.profile_route_gate
-    route_binding_matches = not prior_route_backed
-    if prior_route_outcome == "PROFILE_ROUTE_PASS":
-        route_binding_matches = (
-            isinstance(current_route_gate, dict)
-            and current_route_gate.get("outcome") == "PROFILE_ROUTE_PASS"
-            and prior_fingerprint == current_fingerprint
-        )
-    elif prior_route_outcome == "PROFILE_ROUTE_REFUSE":
-        route_binding_matches = (
-            isinstance(current_route_gate, dict)
-            and current_route_gate.get("outcome") == "PROFILE_ROUTE_REFUSE"
-            and current_route_gate.get("rationale") == prior_route_rationale
-        )
-    if (
-        not invalid_origin
-        and prior_route_backed == current_route_backed
-        and route_binding_matches
-    ):
-        return None
-
-    return runtime_problem(
-        "PACK_CONFLICT",
-        "Replay profile execution binding changed",
-        "the original idempotent result and the current request do not share "
-        "the same default/route-backed mode and exact route, package, profile, "
-        "and provider identity; the earlier result cannot be reused",
-    )

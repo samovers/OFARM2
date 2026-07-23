@@ -128,16 +128,6 @@
       "forbiddenUse": "Do not present profile-local design inventories as executed platform evidence."
     },
     {
-      "id": "review-baseline-inventory-active-si-tests",
-      "path": "conformance/review_baseline_test_inventory.json",
-      "term": "SI|REGSR",
-      "category": "CONFORMANCE_EVIDENCE_HISTORY",
-      "reason": "The deterministic review inventory records collected test identities, including active SI runtime and REGSR boundary regressions, without turning those names into generic Core requirements.",
-      "owner": "review-baseline-inventory-review",
-      "expiresWhen": "The review inventory stops being generated from collected test identities or starts presenting active SI test coverage as multi-profile runtime readiness.",
-      "forbiddenUse": "Do not treat pinned active SI test names as Serbian activation, generic country semantics, or L5 neutrality certification."
-    },
-    {
       "id": "kernel-readme-active-si-support",
       "path": "kernel/README.md",
       "term": "SI|GERK",
@@ -156,16 +146,6 @@
       "owner": "si-profile-runtime-adapter-review",
       "expiresWhen": "SI profile adapter content is imported into Core law or generalized as non-profile runtime capability.",
       "forbiddenUse": "Do not use profile-local adapter content as Core law or broad country abstraction."
-    },
-    {
-      "id": "kernel-profile-runtime-provider-active-si-support",
-      "path": "kernel/profile_runtime_provider.py",
-      "term": "SI",
-      "category": "ACTIVE_RUNTIME_SI_SUPPORT",
-      "reason": "The code-owned runtime composition root registers only the existing SI provider and documents the SI-specific optional service boundary for RS1.",
-      "owner": "profile-runtime-provider-seam-review",
-      "expiresWhen": "A separately reviewed provider registration changes the code-owned composition root or removes the SI-only runtime posture.",
-      "forbiddenUse": "Do not treat explicit SI-only provider registration as Serbian activation, multi-profile readiness, or a universal country abstraction."
     },
     {
       "id": "kernel-context-active-si-support",

@@ -188,7 +188,6 @@ def _selected_ffsnaprave_store(source_store, *artifacts):
         dsn=psycopg.conninfo.make_conninfo(**params),
         tenant_ref=source_store.tenant_ref,
         runtime_bundle=bundle,
-        active_profile_package_name=source_store.active_profile_package_name,
         active_descriptor=source_store.active_descriptor,
     )
     try:
@@ -471,7 +470,6 @@ def test_p3_attach_inspection_evidence_is_race_safe(store):
                 dsn=selected.dsn,
                 tenant_ref=selected.tenant_ref,
                 runtime_bundle=selected.runtime_bundle,
-                active_profile_package_name=selected.active_profile_package_name,
                 active_descriptor=selected.active_descriptor,
             )
             try:

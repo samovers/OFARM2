@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import hashlib
 from contextlib import contextmanager
-from pathlib import Path
 
 import psycopg
 from psycopg.rows import dict_row
@@ -71,23 +70,17 @@ class Store:
         *,
         tenant_ref: str | None = None,
         runtime_bundle: RuntimeBundle | None = None,
-        active_profile_package_name: str | None = None,
         active_descriptor=None,
     ):
         self.dsn = dsn or config.database_dsn()
         self.registry = ContractRegistry()
-        binding_values = (
-            tenant_ref,
-            runtime_bundle,
-            active_profile_package_name,
-            active_descriptor,
-        )
+        binding_values = (tenant_ref, runtime_bundle, active_descriptor)
         if any(value is not None for value in binding_values) and not all(
             value is not None for value in binding_values
         ):
             raise RuntimeBundleBindingError(
-                "Store tenant_ref, runtime_bundle, active_profile_package_name, "
-                "and active_descriptor must be supplied together")
+                "Store tenant_ref, runtime_bundle, and active_descriptor "
+                "must be supplied together")
         if tenant_ref is not None:
             try:
                 tenant_ref = require_tenant_ref(tenant_ref, "Store tenant_ref")
@@ -104,9 +97,7 @@ class Store:
                 )
         self._tenant_ref = tenant_ref
         self._runtime_bundle = runtime_bundle
-        self._active_profile_package_name = active_profile_package_name
         self._active_descriptor = active_descriptor
-        self._profile_runtime_provider_cache = {}
         self._selected_reference_snapshot_refs = frozenset(
             component.logical_ref
             for component in runtime_bundle.components
@@ -156,36 +147,12 @@ class Store:
 
     @property
     def active_profile_package_name(self) -> str:
-        if self._active_profile_package_name is None:
-            raise RuntimeBundleBindingError(
-                "this Store is intentionally unbound and has no active profile "
-                "package identity"
-            )
-        return self._active_profile_package_name
-
-    def _cached_profile_runtime_provider(self, cache_key):
-        return self._profile_runtime_provider_cache.get(cache_key)
-
-    def _retain_profile_runtime_provider(self, cache_key, provider):
-        return self._profile_runtime_provider_cache.setdefault(
-            cache_key,
-            provider,
-        )
+        self.active_descriptor
+        return config.ACTIVE_PROFILE_PACKAGE_NAME
 
     def _verify_active_descriptor_binding(self) -> None:
         descriptor = self._active_descriptor
-        package_name = self._active_profile_package_name
-        if not isinstance(package_name, str):
-            raise RuntimeBundleBindingError(
-                "active profile package name must be a string"
-            )
-        package_path = Path(package_name)
-        if (
-            not package_name.startswith("profile_")
-            or package_path.name != package_name
-            or package_path.parent != Path(".")
-            or descriptor.profile_root.name != package_name
-        ):
+        if descriptor.profile_root.name != config.ACTIVE_PROFILE_PACKAGE_NAME:
             raise RuntimeBundleBindingError(
                 "active profile package name does not match the selected "
                 "descriptor package root"

@@ -108,7 +108,6 @@ def test_high_level_services_require_committed_store_startup(fresh_env):
         dsn=ready.dsn,
         tenant_ref=ready.tenant_ref,
         runtime_bundle=ready.runtime_bundle,
-        active_profile_package_name=ready.active_profile_package_name,
         active_descriptor=ready.active_descriptor,
     )
     try:
@@ -136,7 +135,6 @@ def test_failed_store_startup_does_not_publish_service_readiness(
         dsn=ready.dsn,
         tenant_ref=ready.tenant_ref,
         runtime_bundle=ready.runtime_bundle,
-        active_profile_package_name=ready.active_profile_package_name,
         active_descriptor=ready.active_descriptor,
     )
 

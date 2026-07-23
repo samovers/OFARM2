@@ -444,7 +444,6 @@ def _bootstrapped_store_for_verify():
     store = Store(
         tenant_ref=config.TENANT_REF,
         runtime_bundle=RuntimeBundleBuilder.from_manifest(config.PACKAGE_ROOT).build(),
-        active_profile_package_name=config.ACTIVE_PROFILE_PACKAGE_NAME,
         active_descriptor=config.ACTIVE_PROFILE,
     )
     complete_store_startup(store)
