@@ -24,7 +24,15 @@ import psycopg.conninfo
 import psycopg.sql
 import pytest
 
-from kernel import config, context, demo, profile_policy, sufficiency, validators
+from kernel import (
+    config,
+    context,
+    demo,
+    policy,
+    profile_policy,
+    sufficiency,
+    validators,
+)
 from kernel.gates import GatePipeline
 from kernel.materializer import Materializer
 from kernel.profile_runtime import (
@@ -44,11 +52,14 @@ from kernel.profile_runtime import (
     resolve_active_descriptor,
 )
 from kernel.profile_runtime_provider import (
+    PROFILE_RUNTIME_PROVIDER_REGISTRY_COMPONENT_REF,
     ProfileRuntimeProviderRegistry,
     default_profile_runtime_provider_registry,
 )
 from kernel.runtime_bundle import (
+    RuntimeBundle,
     RuntimeBundleBuilder,
+    RuntimeComponent,
     RuntimeComponentRole,
 )
 from kernel.stages import IngressNormalizer
@@ -1789,12 +1800,146 @@ def test_gate_pipeline_direct_construction_refuses_unregistered_provider(
 
     with pytest.raises(
         ProfileRuntimeError,
-        match="no registered executable runtime provider",
+        match="requires the code-owned profile runtime provider registry",
     ):
         GatePipeline(
             store,
             runtime_provider_registry=ProfileRuntimeProviderRegistry(()),
         )
+
+
+def test_provider_lookup_uses_discovered_symlink_package_identity(tmp_path):
+    package_root = tmp_path / "package_root"
+    implementation_root = package_root / "impl" / "profile_si_ffs"
+    implementation_root.parent.mkdir(parents=True)
+    shutil.copytree(config.PROFILE_ROOT, implementation_root)
+    alias_name = "profile_unregistered_runtime"
+    (package_root / alias_name).symlink_to(
+        Path("impl") / "profile_si_ffs",
+        target_is_directory=True,
+    )
+    descriptor_registry = load_profile_descriptor_registry(
+        package_root,
+        allowed_profile_package_names=(alias_name,),
+    )
+    candidate = descriptor_registry.candidate_for(alias_name)
+
+    assert candidate is not None
+    assert candidate.profile_root.name == "profile_si_ffs"
+    assert candidate.descriptor.package_name == alias_name
+    assert profile_runtime_descriptor_identity(
+        candidate.descriptor
+    ).startswith(f"{alias_name}/")
+    with pytest.raises(
+        ProfileRuntimeError,
+        match="no registered executable runtime provider",
+    ):
+        default_profile_runtime_provider_registry().provider_for(
+            candidate.package_name,
+            candidate.descriptor,
+        )
+
+
+def _bundle_with_runtime_source(
+    logical_ref: str,
+    *,
+    selected_bytes: bytes | None,
+) -> RuntimeBundle:
+    bundle = RuntimeBundleBuilder.from_manifest(config.PACKAGE_ROOT).build()
+    if selected_bytes is None:
+        return RuntimeBundle.create(
+            component
+            for component in bundle.components
+            if component.logical_ref != logical_ref
+        )
+    selected = next(
+        component
+        for component in bundle.components
+        if component.logical_ref == logical_ref
+    )
+    changed = RuntimeComponent.from_selected_bytes(
+        role=selected.role,
+        logical_ref=selected.logical_ref,
+        canonicalization=selected.canonicalization,
+        placement=selected.placement,
+        selected_bytes=selected_bytes,
+    )
+    return RuntimeBundle.create(
+        changed if component is selected else component
+        for component in bundle.components
+    )
+
+
+@pytest.mark.parametrize(
+    "logical_ref",
+    (
+        PROFILE_RUNTIME_PROVIDER_REGISTRY_COMPONENT_REF,
+        "python:profile-si-ffs-v0_1:runtime-provider",
+    ),
+)
+def test_runtime_provider_refuses_omitted_selected_source(logical_ref):
+    registry = default_profile_runtime_provider_registry()
+    runtime_bundle = _bundle_with_runtime_source(
+        logical_ref,
+        selected_bytes=None,
+    )
+
+    with pytest.raises(ProfileRuntimeError, match="is not selected"):
+        registry.verify_selected_sources(runtime_bundle)
+
+
+@pytest.mark.parametrize(
+    "logical_ref",
+    (
+        PROFILE_RUNTIME_PROVIDER_REGISTRY_COMPONENT_REF,
+        "python:profile-si-ffs-v0_1:runtime-provider",
+    ),
+)
+def test_runtime_provider_refuses_substituted_selected_source(logical_ref):
+    checked_in = RuntimeBundleBuilder.from_manifest(config.PACKAGE_ROOT).build()
+    selected = next(
+        component
+        for component in checked_in.components
+        if component.logical_ref == logical_ref
+    )
+    runtime_bundle = _bundle_with_runtime_source(
+        logical_ref,
+        selected_bytes=selected.canonical_bytes + b"\n# substituted source\n",
+    )
+
+    with pytest.raises(ProfileRuntimeError, match="exact executable bytes"):
+        default_profile_runtime_provider_registry().verify_selected_sources(
+            runtime_bundle
+        )
+
+
+def test_unselected_custom_runtime_provider_never_executes():
+    class CustomProvider:
+        package_name = config.ACTIVE_PROFILE.package_name
+        profile_ref = config.ACTIVE_PROFILE.profile_ref
+        runtime_component_ref = "python:test:unselected-profile-provider"
+        runtime_component_bytes = b"unselected custom provider"
+        executed = False
+
+        def build_services(self, _store, _descriptor):
+            self.executed = True
+            raise AssertionError("unselected custom provider executed")
+
+    provider = CustomProvider()
+    registry = ProfileRuntimeProviderRegistry((provider,))
+    store = SimpleNamespace(
+        runtime_bundle=RuntimeBundleBuilder.from_manifest(
+            config.PACKAGE_ROOT
+        ).build()
+    )
+
+    with pytest.raises(ProfileRuntimeError, match="is not selected"):
+        registry.build_services(
+            store,
+            config.ACTIVE_PROFILE.package_name,
+            config.ACTIVE_PROFILE,
+        )
+    assert provider.executed is False
 
 
 def test_gate_pipeline_default_missing_farm_ref_still_fails_before_route(
@@ -2764,6 +2909,43 @@ def test_descriptor_backed_pipeline_cannot_fall_back_to_legacy_validation(
     assert result["decisionOutcome"] == "RETAIN_DRAFT"
     assert result["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
     trace = _trace_payload(store, result)
+    assert trace["gateSequence"][-1]["outcome"] == "FAIL_PROFILE_POLICY"
+
+
+@pytest.mark.parametrize(
+    "commit_class",
+    tuple(policy.COMMIT_CLASS_TO_FAMILY),
+)
+def test_unavailable_runtime_services_refuse_every_supported_commit_class(
+    fresh_env,
+    commit_class,
+):
+    store, pipeline, _ = fresh_env
+    pipeline.active_profile = replace(
+        config.ACTIVE_PROFILE,
+        profile_ref=f"profile:si.ffs.unbound-provider.{commit_class.lower()}",
+    )
+    submission = {
+        "commitClass": commit_class,
+        "actingPartyRef": (
+            demo.ADVISOR
+            if commit_class == "GOVERNANCE_DECISION"
+            else demo.FARMER
+        ),
+        "farmRef": demo.FARM,
+        "idempotencyKey": f"rs1-services-{commit_class.lower()}:{_uid()}",
+        "eventTime": "2026-06-10T09:00:00Z",
+        "decisionTime": "2026-06-10T09:00:00Z",
+        "noteText": "provider availability regression probe",
+        "dominantSemanticConsequence": "provider availability checked",
+    }
+
+    result = pipeline.commit(submission)
+
+    assert result["decisionOutcome"] == "RETAIN_DRAFT"
+    assert result["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+    trace = _trace_payload(store, result)
+    assert trace["gateSequence"][-1]["gate"] == "VALIDATION"
     assert trace["gateSequence"][-1]["outcome"] == "FAIL_PROFILE_POLICY"
 
 

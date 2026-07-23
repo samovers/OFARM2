@@ -158,6 +158,16 @@
       "forbiddenUse": "Do not hide active SI behavior behind generic wording or claim multi-profile runtime readiness."
     },
     {
+      "id": "profile-runtime-provider-registry-active-si-support",
+      "path": "kernel/profile_runtime_provider.py",
+      "term": "SI",
+      "category": "ACTIVE_RUNTIME_SI_SUPPORT",
+      "reason": "The code-owned executable-provider registry deliberately selects only the current SI runtime provider and fails closed for unregistered packages.",
+      "owner": "profile-runtime-provider-review",
+      "expiresWhen": "A separately reviewed provider is added to the code-owned registry with its exact RuntimeBundle source binding.",
+      "forbiddenUse": "Do not treat a registered SI provider as dynamic profile loading, broad country support, or Core law."
+    },
+    {
       "id": "kernel-config-active-si-support",
       "path": "kernel/config.py",
       "term": "REGSR|SI",

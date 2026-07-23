@@ -59,6 +59,11 @@ EXPECTED_EXECUTABLE_SOURCE_SELECTION = {
     ),
     (
         RuntimeComponentRole.ADAPTER_SOURCE,
+        "python:ofarm2-kernel-m1.0:profile-runtime-provider-registry",
+        "kernel/profile_runtime_provider.py",
+    ),
+    (
+        RuntimeComponentRole.ADAPTER_SOURCE,
         "python:profile-si-ffs-v0_1:regsr-adapter",
         "kernel/profiles/si_ffs/regsr_adapter.py",
     ),
@@ -1219,6 +1224,18 @@ def test_selected_adapter_byte_change_changes_bundle_identity(tmp_path):
     assert changed.digest != original.digest
 
 
+def test_selected_profile_registry_byte_change_changes_bundle_identity(tmp_path):
+    root = tmp_path / "relocated-release"
+    _copy_checked_selection(root, include_catalog=True)
+    original = RuntimeBundleBuilder.from_manifest(root).build()
+    path = root / "kernel/profile_runtime_provider.py"
+    path.write_bytes(path.read_bytes() + b"\n# changed registry source bytes\n")
+
+    changed = RuntimeBundleBuilder.from_manifest(root).build()
+
+    assert changed.digest != original.digest
+
+
 def test_context_snapshot_cannot_name_an_unretained_reference(tmp_path):
     root = tmp_path / "checkout"
     checked_in = _copy_checked_selection(root)
@@ -1245,7 +1262,7 @@ def test_checked_in_component_catalog_builds_the_reviewed_closed_set():
 
     assert bundle.selected_tenant_ref == "tenant:si.ffs.pilot.demo"
     assert bundle.digest == (
-        "sha256:395bf3d7c7905aed16d985cd61c79624e4cc5bc291ef3850fddcc9bb1a01cb5c"
+        "sha256:01e41a384a083e5d6984ba19196376c457c8eca63409fd2c9ae81e9d59cada2a"
     )
 
     expected_catalog_roles = {
@@ -1265,7 +1282,7 @@ def test_checked_in_component_catalog_builds_the_reviewed_closed_set():
         RuntimeComponentRole.VIEW_BINDING,
     }
 
-    assert len(bundle.components) == 91
+    assert len(bundle.components) == 92
     assert {component.role for component in bundle.components} == expected_catalog_roles
     assert set(RuntimeComponentRole) == expected_catalog_roles
     identities = [

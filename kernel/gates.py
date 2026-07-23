@@ -97,13 +97,19 @@ class GatePipeline:
         )
         store.require_startup_complete("GatePipeline")
         self.runtime_bundle = store.runtime_bundle
-        self.runtime_provider_registry = (
-            runtime_provider_registry
-            if runtime_provider_registry is not None
-            else default_profile_runtime_provider_registry()
-        )
+        code_owned_registry = default_profile_runtime_provider_registry()
+        if (
+            runtime_provider_registry is not None
+            and runtime_provider_registry is not code_owned_registry
+        ):
+            raise ProfileRuntimeError(
+                "GatePipeline requires the code-owned profile runtime "
+                "provider registry"
+            )
+        self.runtime_provider_registry = code_owned_registry
         self.runtime_services = self.runtime_provider_registry.build_services(
             store,
+            store.active_profile_package_name,
             self.active_profile,
         )
         self.policy_provider = self.runtime_services.policy_provider
@@ -231,7 +237,10 @@ class GatePipeline:
         return parsed
 
     def _bind_route_resolution(self, ctx: GateContext, resolution) -> None:
-        provider = self.runtime_provider_registry.provider_for(resolution.descriptor)
+        provider = self.runtime_provider_registry.provider_for(
+            resolution.candidate.package_name,
+            resolution.descriptor,
+        )
         descriptor = resolve_bound_descriptor(
             ctx.store,
             active_descriptor=resolution.descriptor,

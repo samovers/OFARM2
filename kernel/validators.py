@@ -1195,6 +1195,12 @@ class ValidationGate:
     contract (GatePass | GateRefusal)."""
 
     def run(self, ctx: GateContext) -> GatePass | GateRefusal:
+        if ctx.active_profile is not None and ctx.runtime_services is None:
+            return _validation_policy_refusal(
+                ctx,
+                "descriptor-backed runtime provider services are unavailable",
+            )
+
         for validator in COMMON_SEQUENCE:
             refusal = validator.run(ctx)
             if refusal:
@@ -1225,11 +1231,6 @@ class ValidationGate:
             return GatePass()
 
         if ctx.policy_provider is None:
-            if ctx.active_profile is not None:
-                return _validation_policy_refusal(
-                    ctx,
-                    "descriptor-backed runtime provider services are unavailable",
-                )
             operation_sequence = OPERATION_SEQUENCE
         else:
             try:

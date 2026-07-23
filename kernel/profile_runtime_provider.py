@@ -12,6 +12,15 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from .profile_runtime import ProfileRuntimeDescriptor, ProfileRuntimeError
+from .runtime_bundle import RuntimeBundleError, RuntimeComponentRole
+
+
+PROFILE_RUNTIME_PROVIDER_REGISTRY_COMPONENT_REF = (
+    "python:ofarm2-kernel-m1.0:profile-runtime-provider-registry"
+)
+_PROFILE_RUNTIME_PROVIDER_REGISTRY_SOURCE_BYTES = (
+    Path(__file__).resolve(strict=True).read_bytes()
+)
 
 
 class ProfileRuntimeProvider(Protocol):
@@ -19,6 +28,8 @@ class ProfileRuntimeProvider(Protocol):
 
     package_name: str
     profile_ref: str
+    runtime_component_ref: str
+    runtime_component_bytes: bytes
 
     def build_services(
         self,
@@ -61,6 +72,16 @@ class ProfileRuntimeProviderRegistry:
             raise ProfileRuntimeError(
                 "profile runtime provider registry contains duplicate package names"
             )
+        refs = [provider.runtime_component_ref for provider in self.providers]
+        if any(not isinstance(ref, str) or not ref for ref in refs):
+            raise ProfileRuntimeError(
+                "profile runtime provider component refs must be non-empty strings"
+            )
+
+    @property
+    def runtime_component_ref(self) -> str:
+        """The immutable selected-source identity for this selector."""
+        return PROFILE_RUNTIME_PROVIDER_REGISTRY_COMPONENT_REF
 
     @property
     def registered_package_names(self) -> tuple[str, ...]:
@@ -68,9 +89,14 @@ class ProfileRuntimeProviderRegistry:
 
     def provider_for(
         self,
+        package_name: str,
         descriptor: ProfileRuntimeDescriptor,
     ) -> ProfileRuntimeProvider:
-        package_name = _descriptor_package_name(descriptor)
+        if package_name != descriptor.package_name:
+            raise ProfileRuntimeError(
+                f"selected profile package {package_name!r} does not match "
+                f"descriptor package identity {descriptor.package_name!r}"
+            )
         provider = next(
             (
                 candidate
@@ -91,12 +117,30 @@ class ProfileRuntimeProviderRegistry:
             )
         return provider
 
+    def verify_selected_sources(self, runtime_bundle) -> None:
+        """Bind the selector and every provider to exact activated source bytes."""
+        _require_selected_source(
+            runtime_bundle,
+            self.runtime_component_ref,
+            _PROFILE_RUNTIME_PROVIDER_REGISTRY_SOURCE_BYTES,
+            "profile runtime provider registry",
+        )
+        for provider in self.providers:
+            _require_selected_source(
+                runtime_bundle,
+                provider.runtime_component_ref,
+                provider.runtime_component_bytes,
+                f"profile runtime provider for {provider.package_name!r}",
+            )
+
     def build_services(
         self,
         store,
+        package_name: str,
         descriptor: ProfileRuntimeDescriptor,
     ) -> ProfileRuntimeServices:
-        provider = self.provider_for(descriptor)
+        self.verify_selected_sources(store.runtime_bundle)
+        provider = self.provider_for(package_name, descriptor)
         services = provider.build_services(store, descriptor)
         if services.provider is not provider or services.descriptor != descriptor:
             raise ProfileRuntimeError(
@@ -110,18 +154,36 @@ def default_profile_runtime_provider_registry() -> ProfileRuntimeProviderRegistr
     """Return the code-owned registry; RS1 deliberately registers SI only."""
     from .profiles.si_ffs.runtime_provider import SI_RUNTIME_PROVIDER
 
-    return ProfileRuntimeProviderRegistry((SI_RUNTIME_PROVIDER,))
+    global _DEFAULT_PROFILE_RUNTIME_PROVIDER_REGISTRY
+    if _DEFAULT_PROFILE_RUNTIME_PROVIDER_REGISTRY is None:
+        _DEFAULT_PROFILE_RUNTIME_PROVIDER_REGISTRY = \
+            ProfileRuntimeProviderRegistry((SI_RUNTIME_PROVIDER,))
+    return _DEFAULT_PROFILE_RUNTIME_PROVIDER_REGISTRY
 
 
-def _descriptor_package_name(descriptor: ProfileRuntimeDescriptor) -> str:
+_DEFAULT_PROFILE_RUNTIME_PROVIDER_REGISTRY: ProfileRuntimeProviderRegistry | None = None
+
+
+def _require_selected_source(
+    runtime_bundle,
+    logical_ref: str,
+    executable_bytes: bytes,
+    label: str,
+) -> None:
+    if type(executable_bytes) is not bytes:
+        raise ProfileRuntimeError(f"{label} executable source bytes are unavailable")
     try:
-        package_name = Path(descriptor.profile_root).name
-    except (AttributeError, TypeError) as exc:
-        raise ProfileRuntimeError(
-            "profile runtime descriptor package name is unavailable"
-        ) from exc
-    if not package_name:
-        raise ProfileRuntimeError(
-            "profile runtime descriptor package name is unavailable"
+        component = runtime_bundle.component(
+            RuntimeComponentRole.ADAPTER_SOURCE,
+            logical_ref,
         )
-    return package_name
+    except (AttributeError, RuntimeBundleError) as exc:
+        raise ProfileRuntimeError(
+            f"{label} source {logical_ref!r} is not selected by the "
+            "activated RuntimeBundle"
+        ) from exc
+    if component.canonical_bytes != executable_bytes:
+        raise ProfileRuntimeError(
+            f"{label} source {logical_ref!r} does not match the exact "
+            "executable bytes selected by the activated RuntimeBundle"
+        )

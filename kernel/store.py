@@ -145,6 +145,11 @@ class Store:
                 "this Store is intentionally unbound and has no active descriptor")
         return self._active_descriptor
 
+    @property
+    def active_profile_package_name(self) -> str:
+        """The explicit discovery identity retained with the bound descriptor."""
+        return self.active_descriptor.package_name
+
     def _verify_active_descriptor_binding(self) -> None:
         descriptor = self._active_descriptor
         component = self.runtime_bundle.component(
@@ -154,6 +159,7 @@ class Store:
         observed = load_profile_runtime_descriptor(
             descriptor.profile_root,
             descriptor_path=descriptor.descriptor_path,
+            package_name=descriptor.package_name,
         )
         _document, canonical_bytes = strict_json_document(
             descriptor.descriptor_path.read_bytes(),

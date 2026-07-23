@@ -92,6 +92,7 @@ class ReferenceFamily:
 
 @dataclass(frozen=True)
 class ProfileRuntimeDescriptor:
+    package_name: str
     profile_root: Path
     descriptor_path: Path
     descriptor_version: str
@@ -296,7 +297,7 @@ def profile_runtime_descriptor_identity(
         digest = hashlib.sha256(descriptor_path.read_bytes()).hexdigest()
     except (AttributeError, OSError, ValueError) as exc:
         raise ProfileRuntimeError("profile runtime descriptor identity is unavailable") from exc
-    return f"{descriptor.profile_root.name}/{rel.as_posix()}#{digest}"
+    return f"{descriptor.package_name}/{rel.as_posix()}#{digest}"
 
 
 def evaluate_profile_runtime_preconditions(
@@ -514,6 +515,7 @@ def load_profile_descriptor_registry(
         descriptor = load_profile_runtime_descriptor(
             profile_root,
             descriptor_path=resolved_descriptor_path,
+            package_name=package_name,
         )
         candidates.append(ProfileDescriptorCandidate(
             package_name=package_name,
@@ -534,8 +536,14 @@ def load_profile_descriptor_registry(
 def load_profile_runtime_descriptor(
     profile_root: Path,
     descriptor_path: Path | None = None,
+    *,
+    package_name: str | None = None,
 ) -> ProfileRuntimeDescriptor:
     """Load and validate the active profile descriptor, failing closed."""
+    selected_package_name = (
+        Path(profile_root).name if package_name is None else package_name
+    )
+    _validate_profile_package_name(selected_package_name)
     root = profile_root.resolve()
     if not root.is_dir():
         raise ProfileRuntimeError(f"profile root is not a directory: {profile_root}")
@@ -561,6 +569,7 @@ def load_profile_runtime_descriptor(
     _validate_shipped_reference_refs(families, payloads)
 
     return ProfileRuntimeDescriptor(
+        package_name=selected_package_name,
         profile_root=root,
         descriptor_path=path,
         descriptor_version=doc["descriptorVersion"],
