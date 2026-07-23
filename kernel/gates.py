@@ -35,6 +35,7 @@ from .profile_runtime import (ProfileRuntimeError, resolve_bound_descriptor,
                               resolve_profile_route)
 from .profile_runtime_provider import (
     ProfileRuntimeProviderRegistry,
+    ProfileRuntimeServices,
     default_profile_runtime_provider_registry,
 )
 from .stages import (AuthorityGate, EnvelopePersist, EvidenceSufficiencyGate,
@@ -90,7 +91,7 @@ class GatePipeline:
         self.profile_route_registry = profile_route_registry
         self.selected_profile_package_names = selected_profile_package_names
         self.tenant_ref = tenant_ref
-        self.active_profile = resolve_bound_descriptor(
+        selected_descriptor = resolve_bound_descriptor(
             store,
             active_descriptor=active_descriptor,
             active_profile=active_profile,
@@ -107,10 +108,10 @@ class GatePipeline:
                 "provider registry"
             )
         self.runtime_provider_registry = code_owned_registry
-        self.runtime_services = self.runtime_provider_registry.build_services(
+        self._runtime_services = self.runtime_provider_registry.build_services(
             store,
             store.active_profile_package_name,
-            self.active_profile,
+            selected_descriptor,
         )
         self.policy_provider = self.runtime_services.policy_provider
         self.si_reference_bindings = self.runtime_services.reference_bindings
@@ -118,6 +119,46 @@ class GatePipeline:
         self.context = self.runtime_services.context_assembler
         self.materializer = self.runtime_services.materializer
         self.products = self.runtime_services.product_lookup
+
+    @property
+    def runtime_services(self) -> ProfileRuntimeServices | None:
+        """The startup-bound services; callers cannot replace this authority."""
+        return getattr(self, "_runtime_services", None)
+
+    @property
+    def active_profile(self):
+        """The descriptor selected by the startup-bound runtime services."""
+        services = self.runtime_services
+        return getattr(services, "descriptor", None)
+
+    def _available_runtime_services(self) -> ProfileRuntimeServices | None:
+        """Return a complete, still Store-bound startup service set."""
+        services = self.runtime_services
+        if not isinstance(services, ProfileRuntimeServices):
+            return None
+        descriptor = getattr(services, "descriptor", None)
+        if descriptor is None:
+            return None
+        try:
+            bound_descriptor = resolve_bound_descriptor(
+                self.store,
+                active_descriptor=descriptor,
+            )
+            provider = self.runtime_provider_registry.provider_for(
+                self.store.active_profile_package_name,
+                bound_descriptor,
+            )
+        except (AttributeError, ProfileRuntimeError):
+            return None
+        if (
+            bound_descriptor != descriptor
+            or services.provider is not provider
+            or services.policy_provider is None
+            or services.context_assembler is None
+            or services.materializer is None
+        ):
+            return None
+        return services
 
     # ======================================================================
     # the governed front door
@@ -152,29 +193,21 @@ class GatePipeline:
             {k: v for k, v in sub.items() if k != "sourcePayloadDigest"})
 
     def _new_context(self, cur, sub: dict) -> GateContext:
-        runtime_services = (
-            self.runtime_services
-            if self.active_profile == self.runtime_services.descriptor
-            else None
-        )
-        compatibility_services = (
-            self.runtime_services
-            if self.active_profile is None
-            else runtime_services
-        )
+        runtime_services = self._available_runtime_services()
+        active_profile = (
+            runtime_services.descriptor if runtime_services is not None else None)
         return GateContext(
             cur=cur, store=self.store, authority=self.authority,
             context_assembler=(
-                compatibility_services.context_assembler
-                if compatibility_services else None
+                runtime_services.context_assembler if runtime_services else None
             ),
             materializer=(
-                compatibility_services.materializer if compatibility_services else None
+                runtime_services.materializer if runtime_services else None
             ),
             products=(
-                compatibility_services.product_lookup if compatibility_services else None
+                runtime_services.product_lookup if runtime_services else None
             ),
-            active_profile=self.active_profile,
+            active_profile=active_profile,
             runtime_services=runtime_services,
             policy_provider=(runtime_services.policy_provider if runtime_services else None),
             si_reference_bindings=(
@@ -237,6 +270,10 @@ class GatePipeline:
         return parsed
 
     def _bind_route_resolution(self, ctx: GateContext, resolution) -> None:
+        services = self._available_runtime_services()
+        if services is None:
+            raise ProfileRuntimeError(
+                "startup-bound profile runtime services are unavailable")
         provider = self.runtime_provider_registry.provider_for(
             resolution.candidate.package_name,
             resolution.descriptor,
@@ -246,13 +283,12 @@ class GatePipeline:
             active_descriptor=resolution.descriptor,
         )
         if (
-            provider is not self.runtime_services.provider
-            or descriptor != self.runtime_services.descriptor
+            provider is not services.provider
+            or descriptor != services.descriptor
         ):
             raise ProfileRuntimeError(
                 "resolved profile runtime provider is not the startup-bound provider"
             )
-        services = self.runtime_services
         ctx.profile_route_resolution = resolution
         ctx.active_profile = descriptor
         ctx.runtime_services = services

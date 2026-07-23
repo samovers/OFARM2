@@ -1879,13 +1879,17 @@ def _bundle_with_runtime_source(
 )
 def test_runtime_provider_refuses_omitted_selected_source(logical_ref):
     registry = default_profile_runtime_provider_registry()
+    provider = registry.provider_for(
+        config.ACTIVE_PROFILE.package_name,
+        config.ACTIVE_PROFILE,
+    )
     runtime_bundle = _bundle_with_runtime_source(
         logical_ref,
         selected_bytes=None,
     )
 
     with pytest.raises(ProfileRuntimeError, match="is not selected"):
-        registry.verify_selected_sources(runtime_bundle)
+        registry.verify_selected_sources(runtime_bundle, provider)
 
 
 @pytest.mark.parametrize(
@@ -1896,6 +1900,11 @@ def test_runtime_provider_refuses_omitted_selected_source(logical_ref):
     ),
 )
 def test_runtime_provider_refuses_substituted_selected_source(logical_ref):
+    registry = default_profile_runtime_provider_registry()
+    provider = registry.provider_for(
+        config.ACTIVE_PROFILE.package_name,
+        config.ACTIVE_PROFILE,
+    )
     checked_in = RuntimeBundleBuilder.from_manifest(config.PACKAGE_ROOT).build()
     selected = next(
         component
@@ -1908,9 +1917,41 @@ def test_runtime_provider_refuses_substituted_selected_source(logical_ref):
     )
 
     with pytest.raises(ProfileRuntimeError, match="exact executable bytes"):
-        default_profile_runtime_provider_registry().verify_selected_sources(
-            runtime_bundle
-        )
+        registry.verify_selected_sources(runtime_bundle, provider)
+
+
+def test_runtime_provider_verifies_only_the_selected_provider(fresh_env):
+    store, _, _ = fresh_env
+    selected_provider = default_profile_runtime_provider_registry().provider_for(
+        config.ACTIVE_PROFILE.package_name,
+        config.ACTIVE_PROFILE,
+    )
+
+    class InactiveProvider:
+        package_name = "profile_inactive_test"
+        profile_ref = "profile:inactive.test.v0_1"
+        runtime_component_ref = "python:test:inactive-profile-provider"
+        runtime_component_bytes = b"inactive provider is not selected"
+        executed = False
+
+        def build_services(self, _store, _descriptor):
+            self.executed = True
+            raise AssertionError("inactive profile provider executed")
+
+    inactive_provider = InactiveProvider()
+    registry = ProfileRuntimeProviderRegistry((
+        selected_provider,
+        inactive_provider,
+    ))
+
+    services = registry.build_services(
+        store,
+        config.ACTIVE_PROFILE.package_name,
+        config.ACTIVE_PROFILE,
+    )
+
+    assert services.provider is selected_provider
+    assert inactive_provider.executed is False
 
 
 def test_unselected_custom_runtime_provider_never_executes():
@@ -2863,68 +2904,80 @@ def test_gate_pipeline_threads_si_reference_bindings(fresh_env):
     assert ctx.si_reference_bindings is pipeline.si_reference_bindings
 
 
-def test_gate_pipeline_omits_si_reference_bindings_when_descriptor_changes(
-        fresh_env):
+def test_gate_pipeline_descriptor_is_read_only_and_service_derived(fresh_env):
     _store, pipeline, _ = fresh_env
-    pipeline.active_profile = replace(
-        config.ACTIVE_PROFILE,
-        profile_ref="profile:si.ffs.changed-binding-context.v0_1",
-    )
     sub = demo.spray_submission(
-        f"issue127b-binding-context-mutated:{_uid()}",
-        erp_id=f"erp:issue127b.binding.mutated.{_uid()}",
+        f"issue127b-binding-context-derived:{_uid()}",
+        erp_id=f"erp:issue127b.binding.derived.{_uid()}",
         confirm=True,
     )
 
     ctx = pipeline._new_context(None, sub)
 
-    assert ctx.runtime_services is None
-    assert ctx.policy_provider is None
-    assert ctx.context_assembler is None
-    assert ctx.materializer is None
-    assert ctx.products is None
-    assert ctx.si_reference_bindings is None
-
-
-def test_descriptor_backed_pipeline_cannot_fall_back_to_legacy_validation(
-        fresh_env, monkeypatch):
-    store, pipeline, _ = fresh_env
-
-    class FailIfRun:
-        def run(self, _ctx):
-            raise AssertionError("legacy config-backed validation ran")
-
-    monkeypatch.setattr(validators, "OPERATION_SEQUENCE", (FailIfRun(),))
-    pipeline.active_profile = replace(
-        config.ACTIVE_PROFILE,
-        profile_ref="profile:si.ffs.unbound-provider.v0_1",
-    )
-
-    result = pipeline.commit(demo.spray_submission(
-        f"rs1-no-legacy-policy:{_uid()}",
-        erp_id=f"erp:rs1.no-legacy-policy.{_uid()}",
-        confirm=True,
-    ))
-
-    assert result["decisionOutcome"] == "RETAIN_DRAFT"
-    assert result["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
-    trace = _trace_payload(store, result)
-    assert trace["gateSequence"][-1]["outcome"] == "FAIL_PROFILE_POLICY"
+    assert pipeline.active_profile is pipeline.runtime_services.descriptor
+    assert ctx.active_profile is pipeline.runtime_services.descriptor
+    with pytest.raises(AttributeError):
+        pipeline.active_profile = None
 
 
 @pytest.mark.parametrize(
     "commit_class",
     tuple(policy.COMMIT_CLASS_TO_FAMILY),
 )
-def test_unavailable_runtime_services_refuse_every_supported_commit_class(
+@pytest.mark.parametrize(
+    "runtime_state",
+    ("cleared", "corrupt-descriptor", "missing-policy-provider"),
+)
+def test_unavailable_runtime_services_never_fall_back_to_legacy_policy(
     fresh_env,
+    monkeypatch,
     commit_class,
+    runtime_state,
 ):
     store, pipeline, _ = fresh_env
-    pipeline.active_profile = replace(
-        config.ACTIVE_PROFILE,
-        profile_ref=f"profile:si.ffs.unbound-provider.{commit_class.lower()}",
+    startup_services = pipeline.runtime_services
+
+    def fail_legacy_policy(*_args, **_kwargs):
+        raise AssertionError("legacy config-backed policy path was called")
+
+    class FailIfRun:
+        def run(self, _ctx):
+            fail_legacy_policy()
+
+    monkeypatch.setattr(validators, "OPERATION_SEQUENCE", (FailIfRun(),))
+    monkeypatch.setattr(profile_policy, "validation_policy", fail_legacy_policy)
+    monkeypatch.setattr(
+        profile_policy,
+        "load_evidence_review_policy",
+        fail_legacy_policy,
     )
+    monkeypatch.setattr(sufficiency, "build_floor_case", fail_legacy_policy)
+    monkeypatch.setattr(
+        sufficiency,
+        "operation_advisories",
+        fail_legacy_policy,
+    )
+    if runtime_state == "cleared":
+        monkeypatch.setattr(pipeline, "_runtime_services", None)
+    elif runtime_state == "corrupt-descriptor":
+        corrupt_descriptor = replace(
+            startup_services.descriptor,
+            profile_ref=(
+                "profile:si.ffs.corrupt-provider."
+                f"{commit_class.lower()}.v0_1"
+            ),
+        )
+        monkeypatch.setattr(
+            pipeline,
+            "_runtime_services",
+            replace(startup_services, descriptor=corrupt_descriptor),
+        )
+    else:
+        monkeypatch.setattr(
+            pipeline,
+            "_runtime_services",
+            replace(startup_services, policy_provider=None),
+        )
     submission = {
         "commitClass": commit_class,
         "actingPartyRef": (

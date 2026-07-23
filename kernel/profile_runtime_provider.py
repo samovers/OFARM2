@@ -117,21 +117,39 @@ class ProfileRuntimeProviderRegistry:
             )
         return provider
 
-    def verify_selected_sources(self, runtime_bundle) -> None:
-        """Bind the selector and every provider to exact activated source bytes."""
+    def verify_registry_source(self, runtime_bundle) -> None:
+        """Bind provider selection itself to the activated source bytes."""
         _require_selected_source(
             runtime_bundle,
             self.runtime_component_ref,
             _PROFILE_RUNTIME_PROVIDER_REGISTRY_SOURCE_BYTES,
             "profile runtime provider registry",
         )
-        for provider in self.providers:
-            _require_selected_source(
-                runtime_bundle,
-                provider.runtime_component_ref,
-                provider.runtime_component_bytes,
-                f"profile runtime provider for {provider.package_name!r}",
-            )
+
+    def verify_selected_provider_source(
+        self,
+        runtime_bundle,
+        provider: ProfileRuntimeProvider,
+    ) -> None:
+        """Bind only the selected provider to its activated source bytes."""
+        if not any(candidate is provider for candidate in self.providers):
+            raise ProfileRuntimeError(
+                "selected profile runtime provider is not registered")
+        _require_selected_source(
+            runtime_bundle,
+            provider.runtime_component_ref,
+            provider.runtime_component_bytes,
+            f"profile runtime provider for {provider.package_name!r}",
+        )
+
+    def verify_selected_sources(
+        self,
+        runtime_bundle,
+        provider: ProfileRuntimeProvider,
+    ) -> None:
+        """Bind the selector and selected provider to activated source bytes."""
+        self.verify_registry_source(runtime_bundle)
+        self.verify_selected_provider_source(runtime_bundle, provider)
 
     def build_services(
         self,
@@ -139,8 +157,9 @@ class ProfileRuntimeProviderRegistry:
         package_name: str,
         descriptor: ProfileRuntimeDescriptor,
     ) -> ProfileRuntimeServices:
-        self.verify_selected_sources(store.runtime_bundle)
+        self.verify_registry_source(store.runtime_bundle)
         provider = self.provider_for(package_name, descriptor)
+        self.verify_selected_provider_source(store.runtime_bundle, provider)
         services = provider.build_services(store, descriptor)
         if services.provider is not provider or services.descriptor != descriptor:
             raise ProfileRuntimeError(

@@ -921,11 +921,6 @@
       "sourcePath": "profile_si_ffs/tests/m2_si_floor_tests.py"
     },
     {
-      "nodeid": "kernel/tests/test_m2_si_floor.py::test_display_metadata_changes_case_text_without_changing_decision",
-      "sourceModule": "profile_si_ffs.tests.m2_si_floor_tests",
-      "sourcePath": "profile_si_ffs/tests/m2_si_floor_tests.py"
-    },
-    {
       "nodeid": "kernel/tests/test_m2_si_floor.py::test_dose_range_advisory_is_non_blocking",
       "sourceModule": "profile_si_ffs.tests.m2_si_floor_tests",
       "sourcePath": "profile_si_ffs/tests/m2_si_floor_tests.py"
@@ -951,11 +946,6 @@
       "sourcePath": "profile_si_ffs/tests/m2_si_floor_tests.py"
     },
     {
-      "nodeid": "kernel/tests/test_m2_si_floor.py::test_floor_composition_from_package_changes_behavior",
-      "sourceModule": "profile_si_ffs.tests.m2_si_floor_tests",
-      "sourcePath": "profile_si_ffs/tests/m2_si_floor_tests.py"
-    },
-    {
       "nodeid": "kernel/tests/test_m2_si_floor.py::test_floor_display_metadata_is_sourced_from_package_content",
       "sourceModule": "profile_si_ffs.tests.m2_si_floor_tests",
       "sourcePath": "profile_si_ffs/tests/m2_si_floor_tests.py"
@@ -971,92 +961,102 @@
       "sourcePath": "profile_si_ffs/tests/m2_si_floor_tests.py"
     },
     {
-      "nodeid": "kernel/tests/test_m2_si_floor.py::test_malformed_advisories_fails_closed",
+      "nodeid": "kernel/tests/test_m2_si_floor.py::test_legacy_display_metadata_changes_direct_case_text",
       "sourceModule": "profile_si_ffs.tests.m2_si_floor_tests",
       "sourcePath": "profile_si_ffs/tests/m2_si_floor_tests.py"
     },
     {
-      "nodeid": "kernel/tests/test_m2_si_floor.py::test_malformed_display_metadata_fails_closed[bad-insufficiency-code]",
+      "nodeid": "kernel/tests/test_m2_si_floor.py::test_legacy_floor_composition_changes_direct_case",
       "sourceModule": "profile_si_ffs.tests.m2_si_floor_tests",
       "sourcePath": "profile_si_ffs/tests/m2_si_floor_tests.py"
     },
     {
-      "nodeid": "kernel/tests/test_m2_si_floor.py::test_malformed_display_metadata_fails_closed[bad-prefix-grammar]",
+      "nodeid": "kernel/tests/test_m2_si_floor.py::test_malformed_legacy_advisories_fail_closed",
       "sourceModule": "profile_si_ffs.tests.m2_si_floor_tests",
       "sourcePath": "profile_si_ffs/tests/m2_si_floor_tests.py"
     },
     {
-      "nodeid": "kernel/tests/test_m2_si_floor.py::test_malformed_display_metadata_fails_closed[bad-review-code]",
+      "nodeid": "kernel/tests/test_m2_si_floor.py::test_malformed_legacy_display_metadata_fails_closed[bad-insufficiency-code]",
       "sourceModule": "profile_si_ffs.tests.m2_si_floor_tests",
       "sourcePath": "profile_si_ffs/tests/m2_si_floor_tests.py"
     },
     {
-      "nodeid": "kernel/tests/test_m2_si_floor.py::test_malformed_display_metadata_fails_closed[bad-rule-ref-grammar]",
+      "nodeid": "kernel/tests/test_m2_si_floor.py::test_malformed_legacy_display_metadata_fails_closed[bad-prefix-grammar]",
       "sourceModule": "profile_si_ffs.tests.m2_si_floor_tests",
       "sourcePath": "profile_si_ffs/tests/m2_si_floor_tests.py"
     },
     {
-      "nodeid": "kernel/tests/test_m2_si_floor.py::test_malformed_display_metadata_fails_closed[bad-rule-ref-scope]",
+      "nodeid": "kernel/tests/test_m2_si_floor.py::test_malformed_legacy_display_metadata_fails_closed[bad-review-code]",
       "sourceModule": "profile_si_ffs.tests.m2_si_floor_tests",
       "sourcePath": "profile_si_ffs/tests/m2_si_floor_tests.py"
     },
     {
-      "nodeid": "kernel/tests/test_m2_si_floor.py::test_malformed_display_metadata_fails_closed[bad-template-field]",
+      "nodeid": "kernel/tests/test_m2_si_floor.py::test_malformed_legacy_display_metadata_fails_closed[bad-rule-ref-grammar]",
       "sourceModule": "profile_si_ffs.tests.m2_si_floor_tests",
       "sourcePath": "profile_si_ffs/tests/m2_si_floor_tests.py"
     },
     {
-      "nodeid": "kernel/tests/test_m2_si_floor.py::test_malformed_display_metadata_fails_closed[extra-floor-item]",
+      "nodeid": "kernel/tests/test_m2_si_floor.py::test_malformed_legacy_display_metadata_fails_closed[bad-rule-ref-scope]",
       "sourceModule": "profile_si_ffs.tests.m2_si_floor_tests",
       "sourcePath": "profile_si_ffs/tests/m2_si_floor_tests.py"
     },
     {
-      "nodeid": "kernel/tests/test_m2_si_floor.py::test_malformed_display_metadata_fails_closed[missing-floor-item]",
+      "nodeid": "kernel/tests/test_m2_si_floor.py::test_malformed_legacy_display_metadata_fails_closed[bad-template-field]",
       "sourceModule": "profile_si_ffs.tests.m2_si_floor_tests",
       "sourcePath": "profile_si_ffs/tests/m2_si_floor_tests.py"
     },
     {
-      "nodeid": "kernel/tests/test_m2_si_floor.py::test_malformed_policy_fails_closed",
+      "nodeid": "kernel/tests/test_m2_si_floor.py::test_malformed_legacy_display_metadata_fails_closed[extra-floor-item]",
       "sourceModule": "profile_si_ffs.tests.m2_si_floor_tests",
       "sourcePath": "profile_si_ffs/tests/m2_si_floor_tests.py"
     },
     {
-      "nodeid": "kernel/tests/test_m2_si_floor.py::test_malformed_policy_variants_fail_closed[hard-soft-overlap]",
+      "nodeid": "kernel/tests/test_m2_si_floor.py::test_malformed_legacy_display_metadata_fails_closed[missing-floor-item]",
       "sourceModule": "profile_si_ffs.tests.m2_si_floor_tests",
       "sourcePath": "profile_si_ffs/tests/m2_si_floor_tests.py"
     },
     {
-      "nodeid": "kernel/tests/test_m2_si_floor.py::test_malformed_policy_variants_fail_closed[non-numeric-dose]",
+      "nodeid": "kernel/tests/test_m2_si_floor.py::test_malformed_legacy_policy_fails_closed",
       "sourceModule": "profile_si_ffs.tests.m2_si_floor_tests",
       "sourcePath": "profile_si_ffs/tests/m2_si_floor_tests.py"
     },
     {
-      "nodeid": "kernel/tests/test_m2_si_floor.py::test_malformed_policy_variants_fail_closed[non-string-item]",
+      "nodeid": "kernel/tests/test_m2_si_floor.py::test_malformed_legacy_policy_variants_fail_closed[hard-soft-overlap]",
       "sourceModule": "profile_si_ffs.tests.m2_si_floor_tests",
       "sourcePath": "profile_si_ffs/tests/m2_si_floor_tests.py"
     },
     {
-      "nodeid": "kernel/tests/test_m2_si_floor.py::test_malformed_policy_variants_fail_closed[null-advisory-block]",
+      "nodeid": "kernel/tests/test_m2_si_floor.py::test_malformed_legacy_policy_variants_fail_closed[non-numeric-dose]",
       "sourceModule": "profile_si_ffs.tests.m2_si_floor_tests",
       "sourcePath": "profile_si_ffs/tests/m2_si_floor_tests.py"
     },
     {
-      "nodeid": "kernel/tests/test_m2_si_floor.py::test_malformed_policy_variants_fail_closed[unknown-item]",
+      "nodeid": "kernel/tests/test_m2_si_floor.py::test_malformed_legacy_policy_variants_fail_closed[non-string-item]",
       "sourceModule": "profile_si_ffs.tests.m2_si_floor_tests",
       "sourcePath": "profile_si_ffs/tests/m2_si_floor_tests.py"
     },
     {
-      "nodeid": "kernel/tests/test_m2_si_floor.py::test_malformed_policy_variants_fail_closed[unordered-dose]",
+      "nodeid": "kernel/tests/test_m2_si_floor.py::test_malformed_legacy_policy_variants_fail_closed[null-advisory-block]",
       "sourceModule": "profile_si_ffs.tests.m2_si_floor_tests",
       "sourcePath": "profile_si_ffs/tests/m2_si_floor_tests.py"
     },
     {
-      "nodeid": "kernel/tests/test_m2_si_floor.py::test_missing_display_metadata_fails_closed",
+      "nodeid": "kernel/tests/test_m2_si_floor.py::test_malformed_legacy_policy_variants_fail_closed[unknown-item]",
       "sourceModule": "profile_si_ffs.tests.m2_si_floor_tests",
       "sourcePath": "profile_si_ffs/tests/m2_si_floor_tests.py"
     },
     {
-      "nodeid": "kernel/tests/test_m2_si_floor.py::test_missing_policy_fails_closed",
+      "nodeid": "kernel/tests/test_m2_si_floor.py::test_malformed_legacy_policy_variants_fail_closed[unordered-dose]",
+      "sourceModule": "profile_si_ffs.tests.m2_si_floor_tests",
+      "sourcePath": "profile_si_ffs/tests/m2_si_floor_tests.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_m2_si_floor.py::test_missing_legacy_display_metadata_fails_closed",
+      "sourceModule": "profile_si_ffs.tests.m2_si_floor_tests",
+      "sourcePath": "profile_si_ffs/tests/m2_si_floor_tests.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_m2_si_floor.py::test_missing_legacy_policy_fails_closed",
       "sourceModule": "profile_si_ffs.tests.m2_si_floor_tests",
       "sourcePath": "profile_si_ffs/tests/m2_si_floor_tests.py"
     },
@@ -5571,11 +5571,6 @@
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_backed_pipeline_cannot_fall_back_to_legacy_validation",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_backed_sufficiency_uses_provider_without_config_wrappers",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
@@ -5816,17 +5811,17 @@
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_gate_pipeline_descriptor_is_read_only_and_service_derived",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_gate_pipeline_direct_construction_refuses_unregistered_provider",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_gate_pipeline_explicit_active_profile_matches_default_for_clean_operation",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_gate_pipeline_omits_si_reference_bindings_when_descriptor_changes",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
@@ -6291,6 +6286,11 @@
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_runtime_provider_verifies_only_the_selected_provider",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_si_reference_binding_compatibility_aliases_are_binding_backed",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
@@ -6301,47 +6301,137 @@
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_refuse_every_supported_commit_class[ADVISORY_OUTPUT]",
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_never_fall_back_to_legacy_policy[cleared-ADVISORY_OUTPUT]",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_refuse_every_supported_commit_class[COMPLIANCE_ASSERTION]",
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_never_fall_back_to_legacy_policy[cleared-COMPLIANCE_ASSERTION]",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_refuse_every_supported_commit_class[EVIDENCE_RECORD]",
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_never_fall_back_to_legacy_policy[cleared-EVIDENCE_RECORD]",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_refuse_every_supported_commit_class[GOVERNANCE_DECISION]",
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_never_fall_back_to_legacy_policy[cleared-GOVERNANCE_DECISION]",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_refuse_every_supported_commit_class[HYPOTHESIS_ASSERTION]",
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_never_fall_back_to_legacy_policy[cleared-HYPOTHESIS_ASSERTION]",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_refuse_every_supported_commit_class[NOTE]",
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_never_fall_back_to_legacy_policy[cleared-NOTE]",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_refuse_every_supported_commit_class[OBSERVATION_ASSERTION]",
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_never_fall_back_to_legacy_policy[cleared-OBSERVATION_ASSERTION]",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_refuse_every_supported_commit_class[OPERATION_CLAIM]",
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_never_fall_back_to_legacy_policy[cleared-OPERATION_CLAIM]",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_refuse_every_supported_commit_class[STRUCTURE_ASSERTION]",
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_never_fall_back_to_legacy_policy[cleared-STRUCTURE_ASSERTION]",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_never_fall_back_to_legacy_policy[corrupt-descriptor-ADVISORY_OUTPUT]",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_never_fall_back_to_legacy_policy[corrupt-descriptor-COMPLIANCE_ASSERTION]",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_never_fall_back_to_legacy_policy[corrupt-descriptor-EVIDENCE_RECORD]",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_never_fall_back_to_legacy_policy[corrupt-descriptor-GOVERNANCE_DECISION]",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_never_fall_back_to_legacy_policy[corrupt-descriptor-HYPOTHESIS_ASSERTION]",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_never_fall_back_to_legacy_policy[corrupt-descriptor-NOTE]",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_never_fall_back_to_legacy_policy[corrupt-descriptor-OBSERVATION_ASSERTION]",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_never_fall_back_to_legacy_policy[corrupt-descriptor-OPERATION_CLAIM]",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_never_fall_back_to_legacy_policy[corrupt-descriptor-STRUCTURE_ASSERTION]",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_never_fall_back_to_legacy_policy[missing-policy-provider-ADVISORY_OUTPUT]",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_never_fall_back_to_legacy_policy[missing-policy-provider-COMPLIANCE_ASSERTION]",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_never_fall_back_to_legacy_policy[missing-policy-provider-EVIDENCE_RECORD]",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_never_fall_back_to_legacy_policy[missing-policy-provider-GOVERNANCE_DECISION]",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_never_fall_back_to_legacy_policy[missing-policy-provider-HYPOTHESIS_ASSERTION]",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_never_fall_back_to_legacy_policy[missing-policy-provider-NOTE]",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_never_fall_back_to_legacy_policy[missing-policy-provider-OBSERVATION_ASSERTION]",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_never_fall_back_to_legacy_policy[missing-policy-provider-OPERATION_CLAIM]",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_unavailable_runtime_services_never_fall_back_to_legacy_policy[missing-policy-provider-STRUCTURE_ASSERTION]",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
@@ -7566,8 +7656,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "0936bc79832194d50593ec43d669bb4af40bb7bdfd15c06b3b5a16552bda088b",
-  "entryCount": 1513,
+  "entriesSha256": "dbe21750708c3cddbbd36641b2a9423ba65dc2436e03951548fb2cb5b51256a5",
+  "entryCount": 1531,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

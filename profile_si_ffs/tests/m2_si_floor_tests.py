@@ -40,17 +40,21 @@ def uid():
 
 
 def _spray(pipeline, **kw):
-    return _commit_compat(pipeline, demo.spray_submission(
+    return pipeline.commit(demo.spray_submission(
         f"p5:{uid()}", erp_id=f"erp:p5.{uid()}", **kw))
 
 
-def _commit_compat(pipeline, sub):
-    active_profile = pipeline.active_profile
-    try:
-        pipeline.active_profile = None
-        return pipeline.commit(sub)
-    finally:
-        pipeline.active_profile = active_profile
+def _build_legacy_floor_case(store, sub):
+    """Exercise config compatibility directly, outside GatePipeline."""
+    erp_id = (sub.get("payload") or {}).get("executionRecordPayloadId")
+    return sufficiency.build_floor_case(
+        store,
+        sub,
+        "OPERATION_CLAIM",
+        demo.FARM,
+        f"assertion:p5.legacy.{uid()}",
+        erp_id,
+    )
 
 
 def _problem_titles(result):
@@ -287,34 +291,48 @@ def test_clean_operation_claim_uses_profile_display_metadata(store, pipeline):
                     for item in OPERATION_FLOOR_CHECKS}
 
 
-def test_missing_policy_fails_closed(store, pipeline, monkeypatch, tmp_path):
-    # a missing floor policy must FAIL CLOSED (governed PROFILE_NOT_ACTIVE), never
-    # crash and never silently permit
+def test_missing_legacy_policy_fails_closed(store, monkeypatch, tmp_path):
     monkeypatch.setattr(config, "EVIDENCE_POLICY_PATH", tmp_path / "absent.json")
-    r = _spray(pipeline, confirm=True)
-    assert r["decisionOutcome"] == "RETAIN_DRAFT"
-    assert r["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+    sub = demo.spray_submission(
+        f"p5:missing-legacy:{uid()}",
+        erp_id=f"erp:p5.missing.legacy.{uid()}",
+        confirm=True,
+    )
+
+    with pytest.raises(profile_policy.ProfilePolicyError, match="unreadable"):
+        _build_legacy_floor_case(store, sub)
 
 
-def test_malformed_policy_fails_closed(store, pipeline, monkeypatch, tmp_path):
+def test_malformed_legacy_policy_fails_closed(store, monkeypatch, tmp_path):
     bad = tmp_path / "bad.json"
     bad.write_text("{ not valid json")
     monkeypatch.setattr(config, "EVIDENCE_POLICY_PATH", bad)
-    r = _spray(pipeline, confirm=True)
-    assert r["decisionOutcome"] == "RETAIN_DRAFT"
-    assert r["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+    sub = demo.spray_submission(
+        f"p5:malformed-legacy:{uid()}",
+        erp_id=f"erp:p5.malformed.legacy.{uid()}",
+        confirm=True,
+    )
+
+    with pytest.raises(profile_policy.ProfilePolicyError, match="unreadable"):
+        _build_legacy_floor_case(store, sub)
 
 
-def test_missing_display_metadata_fails_closed(store, pipeline, monkeypatch, tmp_path):
+def test_missing_legacy_display_metadata_fails_closed(
+        store, monkeypatch, tmp_path):
     bad = tmp_path / "missing_display.json"
     bad.write_text(json.dumps({
         "policyId": "policy:test.missing-display",
         "operationFloor": {"hardItems": ["dose-unit"], "softItems": []},
         "advisories": {}}))
     monkeypatch.setattr(config, "EVIDENCE_POLICY_PATH", bad)
-    r = _spray(pipeline, confirm=True)
-    assert r["decisionOutcome"] == "RETAIN_DRAFT"
-    assert r["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+    sub = demo.spray_submission(
+        f"p5:missing-display-legacy:{uid()}",
+        erp_id=f"erp:p5.missing.display.legacy.{uid()}",
+        confirm=True,
+    )
+
+    with pytest.raises(profile_policy.ProfilePolicyError, match="display"):
+        _build_legacy_floor_case(store, sub)
 
 
 @pytest.mark.parametrize("variant", [
@@ -336,8 +354,8 @@ def test_missing_display_metadata_fails_closed(store, pipeline, monkeypatch, tmp
     "bad-insufficiency-code",
     "bad-review-code",
 ])
-def test_malformed_display_metadata_fails_closed(
-        store, pipeline, monkeypatch, tmp_path, variant):
+def test_malformed_legacy_display_metadata_fails_closed(
+        store, monkeypatch, tmp_path, variant):
     hard = ["dose-unit", "operator", "event-time", "parcel"]
     soft = ["product-binding", "crop-binding"]
     doc = _policy_doc(hard, soft)
@@ -368,12 +386,18 @@ def test_malformed_display_metadata_fails_closed(
     bad = tmp_path / "bad_display.json"
     bad.write_text(json.dumps(doc))
     monkeypatch.setattr(config, "EVIDENCE_POLICY_PATH", bad)
-    r = _spray(pipeline, confirm=True)
-    assert r["decisionOutcome"] == "RETAIN_DRAFT"
-    assert r["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+    sub = demo.spray_submission(
+        f"p5:malformed-display-legacy:{uid()}",
+        erp_id=f"erp:p5.malformed.display.legacy.{uid()}",
+        confirm=True,
+    )
+
+    with pytest.raises(profile_policy.ProfilePolicyError):
+        _build_legacy_floor_case(store, sub)
 
 
-def test_floor_composition_from_package_changes_behavior(store, pipeline, monkeypatch, tmp_path):
+def test_legacy_floor_composition_changes_direct_case(
+        store, monkeypatch, tmp_path):
     # changing the PACKAGE floor changes behavior WITHOUT touching kernel/: a claim
     # missing its crop binding ROUTES TO REVIEW by default (crop-binding is SOFT),
     # but REFUSES under a package policy that makes crop-binding HARD. Same claim,
@@ -383,8 +407,8 @@ def test_floor_composition_from_package_changes_behavior(store, pipeline, monkey
             f"p5-nocrop:{uid()}", erp_id=f"erp:p5.nocrop.{uid()}",
             confirm=True, binding_refs=[demo.PRODUCT_BINDING])   # crop binding omitted
 
-    default = _commit_compat(pipeline, _no_crop_binding())
-    assert default["decisionOutcome"] == "REQUIRE_REVIEW", \
+    default, _ = _build_legacy_floor_case(store, _no_crop_binding())
+    assert default["outcome"]["decision"] == "REQUIRE_REVIEW", \
         "crop-binding SOFT by default -> route to review"
 
     harder = tmp_path / "crop_hard_policy.json"
@@ -399,14 +423,13 @@ def test_floor_composition_from_package_changes_behavior(store, pipeline, monkey
         "validation": _valid_validation(),
         "advisories": {}}))
     monkeypatch.setattr(config, "EVIDENCE_POLICY_PATH", harder)
-    refused = _commit_compat(pipeline, _no_crop_binding())
-    assert refused["decisionOutcome"] == "RETAIN_DRAFT", \
+    refused, _ = _build_legacy_floor_case(store, _no_crop_binding())
+    assert refused["outcome"]["decision"] == "REFUSE", \
         "crop-binding HARD in the package policy -> refuse, not route"
-    assert refused["problems"][0]["reasonCode"] == "EVIDENCE_INSUFFICIENT"
 
 
-def test_display_metadata_changes_case_text_without_changing_decision(
-        store, pipeline, monkeypatch, tmp_path):
+def test_legacy_display_metadata_changes_direct_case_text(
+        store, monkeypatch, tmp_path):
     hard = ["dose-unit", "operator", "event-time", "parcel"]
     soft = ["product-binding", "crop-binding"]
     display = _valid_display([*hard, *soft])
@@ -417,9 +440,13 @@ def test_display_metadata_changes_case_text_without_changing_decision(
     path.write_text(json.dumps(doc))
     monkeypatch.setattr(config, "EVIDENCE_POLICY_PATH", path)
 
-    r = _spray(pipeline, confirm=True)
-    assert r["decisionOutcome"] == "PROMOTE_ACCEPTED"
-    case = _case_for_result(store, r)
+    sub = demo.spray_submission(
+        f"p5:display-legacy:{uid()}",
+        erp_id=f"erp:p5.display.legacy.{uid()}",
+        confirm=True,
+    )
+    case, _ = _build_legacy_floor_case(store, sub)
+    assert case["outcome"]["decision"] == "ALLOW"
     assert case["claims"][0]["statement"] == "custom profile-owned floor statement"
     assert case["outcome"]["rationale"] == "custom profile-owned allow rationale"
     assert {a["ruleRef"] for a in case["arguments"]} == {
@@ -592,7 +619,8 @@ def test_non_verified_binding_raises_no_authorisation_advisory(store, pipeline):
     assert not any(t == "Authorisation-mismatch advisory" for t in _problem_titles(r))
 
 
-def test_malformed_advisories_fails_closed(store, pipeline, monkeypatch, tmp_path):
+def test_malformed_legacy_advisories_fail_closed(
+        store, monkeypatch, tmp_path):
     # a present-but-non-dict advisories block is malformed -> fail closed at load
     # (the floor path refuses), never crash, never silently proceed
     bad = tmp_path / "null_advisories.json"
@@ -604,9 +632,14 @@ def test_malformed_advisories_fails_closed(store, pipeline, monkeypatch, tmp_pat
         "validation": _valid_validation(),
         "advisories": None}))
     monkeypatch.setattr(config, "EVIDENCE_POLICY_PATH", bad)
-    r = _spray(pipeline, confirm=True)
-    assert r["decisionOutcome"] == "RETAIN_DRAFT"
-    assert r["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+    sub = demo.spray_submission(
+        f"p5:malformed-advisories-legacy:{uid()}",
+        erp_id=f"erp:p5.malformed.advisories.legacy.{uid()}",
+        confirm=True,
+    )
+
+    with pytest.raises(profile_policy.ProfilePolicyError, match="advisories"):
+        _build_legacy_floor_case(store, sub)
 
 
 @pytest.mark.parametrize("policy_doc", [
@@ -618,15 +651,21 @@ def test_malformed_advisories_fails_closed(store, pipeline, monkeypatch, tmp_pat
     _policy_doc(["dose-unit"], [], advisories={"doseRange": {"min": 100, "max": 1}}),
 ], ids=["unknown-item", "hard-soft-overlap", "non-string-item",
         "null-advisory-block", "non-numeric-dose", "unordered-dose"])
-def test_malformed_policy_variants_fail_closed(store, pipeline, monkeypatch, tmp_path, policy_doc):
+def test_malformed_legacy_policy_variants_fail_closed(
+        store, monkeypatch, tmp_path, policy_doc):
     # every malformed shape the kernel later indexes/compares fails CLOSED at load
     # (governed PROFILE_NOT_ACTIVE), never a raw KeyError / AttributeError / compare
     bad = tmp_path / "bad.json"
     bad.write_text(json.dumps(policy_doc))
     monkeypatch.setattr(config, "EVIDENCE_POLICY_PATH", bad)
-    r = _spray(pipeline, confirm=True)
-    assert r["decisionOutcome"] == "RETAIN_DRAFT"
-    assert r["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+    sub = demo.spray_submission(
+        f"p5:malformed-variant-legacy:{uid()}",
+        erp_id=f"erp:p5.malformed.variant.legacy.{uid()}",
+        confirm=True,
+    )
+
+    with pytest.raises(profile_policy.ProfilePolicyError):
+        _build_legacy_floor_case(store, sub)
 
 
 def test_advisory_warning_survives_idempotency_replay(store, pipeline):
