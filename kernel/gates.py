@@ -97,12 +97,15 @@ class GatePipeline:
         # caller cannot substitute executable provider code after Store startup
         # while retaining receipts for the checked RuntimeBundle source set.
         self.runtime_provider_registry = default_profile_runtime_provider_registry()
-        startup_provider = self.runtime_provider_registry.provider_for_profile(
-            self.active_profile,
+        self.runtime_provider_registration = (
+            self.runtime_provider_registry.registration_for(
+                store.active_profile_package_name,
+                self.active_profile,
+            )
         )
         self.runtime_services = self.runtime_provider_registry.build_services(
             store,
-            startup_provider.package_name,
+            store.active_profile_package_name,
             self.active_profile,
         )
         self.policy_provider = self.runtime_services.policy_provider
@@ -230,7 +233,7 @@ class GatePipeline:
         return parsed
 
     def _bind_route_resolution(self, ctx: GateContext, resolution) -> None:
-        provider = self.runtime_provider_registry.provider_for(
+        registration = self.runtime_provider_registry.registration_for(
             resolution.candidate.package_name,
             resolution.descriptor,
         )
@@ -239,7 +242,7 @@ class GatePipeline:
             active_descriptor=resolution.descriptor,
         )
         if (
-            provider is not self.runtime_services.provider
+            registration is not self.runtime_provider_registration
             or descriptor != self.runtime_services.descriptor
         ):
             raise ProfileRuntimeError(

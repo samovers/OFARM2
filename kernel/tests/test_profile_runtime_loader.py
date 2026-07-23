@@ -24,7 +24,15 @@ import psycopg.conninfo
 import psycopg.sql
 import pytest
 
-from kernel import config, context, demo, profile_policy, sufficiency, validators
+from kernel import (
+    config,
+    context,
+    demo,
+    profile_policy,
+    profile_runtime_provider as profile_runtime_providers,
+    sufficiency,
+    validators,
+)
 from kernel.gates import GatePipeline
 from kernel.materializer import Materializer
 from kernel.profile_runtime import (
@@ -320,6 +328,7 @@ def _fresh_unbootstrapped_store():
         dsn=psycopg.conninfo.make_conninfo(**params),
         tenant_ref=config.TENANT_REF,
         runtime_bundle=RuntimeBundleBuilder.from_manifest(config.PACKAGE_ROOT).build(),
+        active_profile_package_name=config.ACTIVE_PROFILE_PACKAGE_NAME,
         active_descriptor=config.ACTIVE_PROFILE,
     )
     try:
@@ -332,7 +341,12 @@ def _fresh_unbootstrapped_store():
 
 
 @contextmanager
-def _fresh_started_store(runtime_bundle):
+def _fresh_started_store(
+    runtime_bundle,
+    *,
+    active_profile_package_name=config.ACTIVE_PROFILE_PACKAGE_NAME,
+    active_descriptor=config.ACTIVE_PROFILE,
+):
     dbname = f"ofarm_profile_provider_{_uid()}"
     with psycopg.connect(_admin_dsn(), autocommit=True) as admin:
         admin.execute(f'DROP DATABASE IF EXISTS "{dbname}"')
@@ -343,7 +357,8 @@ def _fresh_started_store(runtime_bundle):
         dsn=psycopg.conninfo.make_conninfo(**params),
         tenant_ref=config.TENANT_REF,
         runtime_bundle=runtime_bundle,
-        active_descriptor=config.ACTIVE_PROFILE,
+        active_profile_package_name=active_profile_package_name,
+        active_descriptor=active_descriptor,
     )
     try:
         complete_store_startup(store)
@@ -496,6 +511,7 @@ def _preseeded_dirty_spine_store(mutate):
         dsn=psycopg.conninfo.make_conninfo(**params),
         tenant_ref=config.TENANT_REF,
         runtime_bundle=RuntimeBundleBuilder.from_manifest(config.PACKAGE_ROOT).build(),
+        active_profile_package_name=config.ACTIVE_PROFILE_PACKAGE_NAME,
         active_descriptor=config.ACTIVE_PROFILE,
     )
     try:
@@ -1842,13 +1858,13 @@ def test_gate_pipeline_rejects_same_identity_provider_injection(fresh_env):
 @pytest.mark.parametrize("bundle_defect", ["omitted", "replaced"])
 def test_gate_pipeline_refuses_unbound_runtime_provider_source(bundle_defect):
     base = RuntimeBundleBuilder.from_manifest(config.PACKAGE_ROOT).build()
-    provider = default_profile_runtime_provider_registry().provider_for(
+    registration = default_profile_runtime_provider_registry().registration_for(
         "profile_si_ffs",
         config.ACTIVE_PROFILE,
     )
     source = base.component(
-        provider.source_component_role,
-        provider.source_component_logical_ref,
+        registration.source_component_role,
+        registration.source_component_logical_ref,
     )
     components = tuple(
         component
@@ -1878,6 +1894,72 @@ def test_gate_pipeline_refuses_unbound_runtime_provider_source(bundle_defect):
             GatePipeline(store)
 
 
+def test_default_gate_pipeline_refuses_unregistered_copied_package_with_si_ref(
+        tmp_path):
+    package_root = tmp_path / "packages"
+    package_root.mkdir()
+    package_name = "profile_unregistered_si_copy"
+    profile_root, _descriptor_doc = _copied_si_package(
+        package_root,
+        package_name,
+    )
+    descriptor = load_profile_runtime_descriptor(profile_root)
+    runtime_bundle = RuntimeBundleBuilder.from_manifest(
+        config.PACKAGE_ROOT
+    ).build()
+
+    with _fresh_started_store(
+        runtime_bundle,
+        active_profile_package_name=package_name,
+        active_descriptor=descriptor,
+    ) as store:
+        with pytest.raises(
+            ProfileRuntimeError,
+            match="no registered executable runtime provider",
+        ):
+            GatePipeline(store)
+
+
+def test_mismatched_provider_source_cannot_execute_during_startup(
+        fresh_env, monkeypatch, tmp_path):
+    store, _, _ = fresh_env
+    module_name = f"hostile_runtime_provider_{_uid()}"
+    module_path = tmp_path / f"{module_name}.py"
+    execution_marker = tmp_path / "provider-import-executed"
+    module_path.write_text(
+        "from pathlib import Path\n"
+        f"Path({str(execution_marker)!r}).write_text('executed')\n",
+        encoding="utf-8",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    registration = (
+        default_profile_runtime_provider_registry().registration_for(
+            config.ACTIVE_PROFILE_PACKAGE_NAME,
+            config.ACTIVE_PROFILE,
+        )
+    )
+    hostile_registration = replace(
+        registration,
+        module_name=module_name,
+        provider_attribute="HOSTILE_PROVIDER",
+        source_path=module_path,
+    )
+    monkeypatch.setattr(
+        profile_runtime_providers,
+        "_DEFAULT_PROVIDER_REGISTRATIONS",
+        (hostile_registration,),
+    )
+
+    with pytest.raises(
+        ProfileRuntimeError,
+        match="source bytes do not match",
+    ):
+        GatePipeline(store)
+
+    assert not execution_marker.exists()
+    assert module_name not in sys.modules
+
+
 @pytest.mark.parametrize("missing_service", [
     "policy_provider",
     "context_assembler",
@@ -1887,10 +1969,11 @@ def test_runtime_service_construction_refuses_missing_required_capability(
         fresh_env, monkeypatch, missing_service):
     store, _, _ = fresh_env
     registry = default_profile_runtime_provider_registry()
-    provider = registry.provider_for(
+    registration = registry.registration_for(
         "profile_si_ffs",
         config.ACTIVE_PROFILE,
     )
+    provider = registry._load_provider(registration)
     provider_type = type(provider)
     original_build_services = provider_type.build_services
 
@@ -1924,10 +2007,11 @@ def test_runtime_service_construction_refuses_incomplete_consumed_contract(
         fresh_env, monkeypatch, contract_defect, match):
     store, _, _ = fresh_env
     registry = default_profile_runtime_provider_registry()
-    provider = registry.provider_for(
+    registration = registry.registration_for(
         "profile_si_ffs",
         config.ACTIVE_PROFILE,
     )
+    provider = registry._load_provider(registration)
     provider_type = type(provider)
     original_build_services = provider_type.build_services
 
@@ -2888,8 +2972,13 @@ def test_api_startup_refuses_non_exact_selected_profile_instance():
 
 def test_product_register_boundary_remains_single_active_si_runtime():
     assert config.ACTIVE_PROFILE_PACKAGE_NAMES == ("profile_si_ffs",)
+    assert config.ACTIVE_PROFILE_PACKAGE_NAME == "profile_si_ffs"
     assert config.ALLOWED_ACTIVE_PROFILE_PACKAGE_NAMES == ("profile_si_ffs",)
     assert config.ACTIVE_PROFILE_SELECTION.profile_package_names == ("profile_si_ffs",)
+    assert (
+        config.ACTIVE_PROFILE_SELECTION.active_profile_package_name
+        == "profile_si_ffs"
+    )
     assert context.SI_REFERENCE_BINDINGS == \
         context.SIReferenceBindings.from_runtime_descriptor(config.ACTIVE_PROFILE)
     assert context.REGSR_SNAPSHOT_PREFIX == config.ACTIVE_PROFILE.reference_family(

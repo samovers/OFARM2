@@ -27,12 +27,14 @@ def test_g2_output_render_serializes_under_lock(store):
         dsn=store.dsn,
         tenant_ref=store.tenant_ref,
         runtime_bundle=store.runtime_bundle,
+        active_profile_package_name=store.active_profile_package_name,
         active_descriptor=store.active_descriptor,
     )
     b = Store(
         dsn=store.dsn,
         tenant_ref=store.tenant_ref,
         runtime_bundle=store.runtime_bundle,
+        active_profile_package_name=store.active_profile_package_name,
         active_descriptor=store.active_descriptor,
     )
     done = threading.Event()
@@ -70,12 +72,14 @@ def test_g2_freeze_serializes_under_lock(store):
         dsn=store.dsn,
         tenant_ref=store.tenant_ref,
         runtime_bundle=store.runtime_bundle,
+        active_profile_package_name=store.active_profile_package_name,
         active_descriptor=store.active_descriptor,
     )
     b = Store(
         dsn=store.dsn,
         tenant_ref=store.tenant_ref,
         runtime_bundle=store.runtime_bundle,
+        active_profile_package_name=store.active_profile_package_name,
         active_descriptor=store.active_descriptor,
     )
     done = threading.Event()

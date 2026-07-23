@@ -87,6 +87,7 @@ def create_app(
         store = Store(
             tenant_ref=config.TENANT_REF,
             runtime_bundle=selected_bundle,
+            active_profile_package_name=config.ACTIVE_PROFILE_PACKAGE_NAME,
             active_descriptor=config.ACTIVE_PROFILE,
         )
     selected_manifest = json.loads(next(

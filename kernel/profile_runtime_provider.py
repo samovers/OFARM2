@@ -7,7 +7,8 @@ the current runtime already needs.
 """
 from __future__ import annotations
 
-import inspect
+import importlib
+import importlib.util
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
@@ -39,6 +40,19 @@ class ProfileRuntimeProvider(Protocol):
 
 
 @dataclass(frozen=True)
+class ProfileRuntimeProviderRegistration:
+    """Import-free registration for one reviewed executable provider source."""
+
+    package_name: str
+    profile_ref: str
+    source_component_role: RuntimeComponentRole
+    source_component_logical_ref: str
+    module_name: str
+    provider_attribute: str
+    source_path: Path
+
+
+@dataclass(frozen=True)
 class ProfileRuntimeServices:
     """Capability-specific services selected for one bound descriptor.
 
@@ -60,10 +74,19 @@ class ProfileRuntimeServices:
 class ProfileRuntimeProviderRegistry:
     """Immutable executable-provider registrations owned by trusted code."""
 
-    providers: tuple[ProfileRuntimeProvider, ...]
+    registrations: tuple[ProfileRuntimeProviderRegistration, ...]
 
     def __post_init__(self) -> None:
-        names = [provider.package_name for provider in self.providers]
+        if any(
+            not isinstance(registration, ProfileRuntimeProviderRegistration)
+            for registration in self.registrations
+        ):
+            raise ProfileRuntimeError(
+                "profile runtime provider registry contains an invalid registration"
+            )
+        names = [
+            registration.package_name for registration in self.registrations
+        ]
         if any(not isinstance(name, str) or not name for name in names):
             raise ProfileRuntimeError(
                 "profile runtime provider package names must be non-empty strings"
@@ -72,7 +95,9 @@ class ProfileRuntimeProviderRegistry:
             raise ProfileRuntimeError(
                 "profile runtime provider registry contains duplicate package names"
             )
-        profile_refs = [provider.profile_ref for provider in self.providers]
+        profile_refs = [
+            registration.profile_ref for registration in self.registrations
+        ]
         if any(
             not isinstance(profile_ref, str) or not profile_ref
             for profile_ref in profile_refs
@@ -85,25 +110,37 @@ class ProfileRuntimeProviderRegistry:
                 "profile runtime provider registry contains duplicate profile refs"
             )
         source_components = []
-        for provider in self.providers:
+        for registration in self.registrations:
             if (
-                type(provider.source_component_role) is not RuntimeComponentRole
-                or provider.source_component_role
+                type(registration.source_component_role)
+                is not RuntimeComponentRole
+                or registration.source_component_role
                 is not RuntimeComponentRole.ADAPTER_SOURCE
             ):
                 raise ProfileRuntimeError(
                     "profile runtime provider source component role must be "
                     "ADAPTER_SOURCE"
                 )
-            logical_ref = provider.source_component_logical_ref
+            logical_ref = registration.source_component_logical_ref
             if not isinstance(logical_ref, str) or not logical_ref:
                 raise ProfileRuntimeError(
                     "profile runtime provider source component logical ref must "
                     "be a non-empty string"
                 )
             source_components.append(
-                (provider.source_component_role, logical_ref)
+                (registration.source_component_role, logical_ref)
             )
+            if (
+                not isinstance(registration.module_name, str)
+                or not registration.module_name
+                or not isinstance(registration.provider_attribute, str)
+                or not registration.provider_attribute
+                or not isinstance(registration.source_path, Path)
+                or not registration.source_path.is_absolute()
+            ):
+                raise ProfileRuntimeError(
+                    "profile runtime provider import registration is invalid"
+                )
         if len(source_components) != len(set(source_components)):
             raise ProfileRuntimeError(
                 "profile runtime provider registry contains duplicate source "
@@ -112,60 +149,38 @@ class ProfileRuntimeProviderRegistry:
 
     @property
     def registered_package_names(self) -> tuple[str, ...]:
-        return tuple(provider.package_name for provider in self.providers)
+        return tuple(
+            registration.package_name for registration in self.registrations
+        )
 
-    def provider_for(
+    def registration_for(
         self,
         package_name: str,
         descriptor: ProfileRuntimeDescriptor,
-    ) -> ProfileRuntimeProvider:
+    ) -> ProfileRuntimeProviderRegistration:
         if not isinstance(package_name, str) or not package_name:
             raise ProfileRuntimeError(
                 "profile runtime provider package name must be a non-empty string"
             )
-        provider = next(
+        registration = next(
             (
                 candidate
-                for candidate in self.providers
+                for candidate in self.registrations
                 if candidate.package_name == package_name
             ),
             None,
         )
-        if provider is None:
+        if registration is None:
             raise ProfileRuntimeError(
                 "no registered executable runtime provider for profile package "
                 f"{package_name!r}"
             )
-        if provider.profile_ref != descriptor.profile_ref:
+        if registration.profile_ref != descriptor.profile_ref:
             raise ProfileRuntimeError(
                 f"registered runtime provider for {package_name!r} does not support "
                 f"descriptor profileRef {descriptor.profile_ref!r}"
             )
-        return provider
-
-    def provider_for_profile(
-        self,
-        descriptor: ProfileRuntimeDescriptor,
-    ) -> ProfileRuntimeProvider:
-        """Select startup composition by the bundle-bound profile ref.
-
-        Route-backed execution does not use this lookup: it supplies the
-        authoritative route candidate package name to ``provider_for``.
-        """
-        provider = next(
-            (
-                candidate
-                for candidate in self.providers
-                if candidate.profile_ref == descriptor.profile_ref
-            ),
-            None,
-        )
-        if provider is None:
-            raise ProfileRuntimeError(
-                "no registered executable runtime provider for descriptor "
-                f"profileRef {descriptor.profile_ref!r}"
-            )
-        return provider
+        return registration
 
     def build_services(
         self,
@@ -173,8 +188,9 @@ class ProfileRuntimeProviderRegistry:
         package_name: str,
         descriptor: ProfileRuntimeDescriptor,
     ) -> ProfileRuntimeServices:
-        provider = self.provider_for(package_name, descriptor)
-        self._verify_provider_source(store, provider)
+        registration = self.registration_for(package_name, descriptor)
+        self._verify_provider_source(store, registration)
+        provider = self._load_provider(registration)
         services = provider.build_services(store, descriptor)
         if not isinstance(services, ProfileRuntimeServices):
             raise ProfileRuntimeError(
@@ -210,12 +226,15 @@ class ProfileRuntimeProviderRegistry:
         return services
 
     @staticmethod
-    def _verify_provider_source(store, provider: ProfileRuntimeProvider) -> None:
+    def _verify_provider_source(
+        store,
+        registration: ProfileRuntimeProviderRegistration,
+    ) -> None:
         try:
             store.require_startup_complete("profile runtime provider composition")
             component = store.runtime_bundle.component(
-                provider.source_component_role,
-                provider.source_component_logical_ref,
+                registration.source_component_role,
+                registration.source_component_logical_ref,
             )
         except (AttributeError, RuntimeBundleError) as exc:
             raise ProfileRuntimeError(
@@ -223,22 +242,69 @@ class ProfileRuntimeProviderRegistry:
                 "startup-verified RuntimeBundle component"
             ) from exc
 
-        source_file = inspect.getsourcefile(type(provider))
-        if not source_file:
-            raise ProfileRuntimeError(
-                "profile runtime provider source file is unavailable"
-            )
         try:
-            source_bytes = Path(source_file).resolve(strict=True).read_bytes()
-        except OSError as exc:
+            registered_source_path = registration.source_path.resolve(
+                strict=True
+            )
+            module_spec = importlib.util.find_spec(registration.module_name)
+            module_origin = module_spec.origin if module_spec is not None else None
+            if not module_origin:
+                raise ProfileRuntimeError(
+                    "profile runtime provider module source is unavailable"
+                )
+            resolved_module_path = Path(module_origin).resolve(strict=True)
+            source_bytes = registered_source_path.read_bytes()
+        except (ImportError, OSError) as exc:
             raise ProfileRuntimeError(
                 "profile runtime provider source file is unavailable"
             ) from exc
+        if resolved_module_path != registered_source_path:
+            raise ProfileRuntimeError(
+                "profile runtime provider module does not resolve to its "
+                "registered source path"
+            )
         if component.canonical_bytes != source_bytes:
             raise ProfileRuntimeError(
                 "profile runtime provider source bytes do not match the exact "
                 "startup-verified RuntimeBundle component"
             )
+
+    @staticmethod
+    def _load_provider(
+        registration: ProfileRuntimeProviderRegistration,
+    ) -> ProfileRuntimeProvider:
+        try:
+            module = importlib.import_module(registration.module_name)
+            provider = getattr(module, registration.provider_attribute)
+        except Exception as exc:
+            raise ProfileRuntimeError(
+                "verified profile runtime provider module could not be loaded"
+            ) from exc
+        expected_attributes = {
+            "package_name": registration.package_name,
+            "profile_ref": registration.profile_ref,
+            "source_component_role": registration.source_component_role,
+            "source_component_logical_ref": (
+                registration.source_component_logical_ref
+            ),
+        }
+        build_services = _service_attribute(
+            provider,
+            "provider",
+            "build_services",
+        )
+        if any(
+            _service_attribute(
+                provider,
+                "provider",
+                attribute,
+            ) != expected
+            for attribute, expected in expected_attributes.items()
+        ) or not callable(build_services):
+            raise ProfileRuntimeError(
+                "verified profile runtime provider does not match its registration"
+            )
+        return provider
 
     @staticmethod
     def _validate_policy_contract(
@@ -306,11 +372,29 @@ class ProfileRuntimeProviderRegistry:
             )
 
 
-def default_profile_runtime_provider_registry() -> ProfileRuntimeProviderRegistry:
-    """Return the code-owned registry; RS1 deliberately registers SI only."""
-    from .profiles.si_ffs.runtime_provider import SI_RUNTIME_PROVIDER
+_DEFAULT_PROVIDER_REGISTRATIONS = (
+    ProfileRuntimeProviderRegistration(
+        package_name="profile_si_ffs",
+        profile_ref="profile:si.ffs.recordkeeping.v0_1",
+        source_component_role=RuntimeComponentRole.ADAPTER_SOURCE,
+        source_component_logical_ref=(
+            "python:profile-si-ffs-v0_1:runtime-provider"
+        ),
+        module_name="kernel.profiles.si_ffs.runtime_provider",
+        provider_attribute="SI_RUNTIME_PROVIDER",
+        source_path=(
+            Path(__file__).resolve().parent
+            / "profiles"
+            / "si_ffs"
+            / "runtime_provider.py"
+        ),
+    ),
+)
 
-    return ProfileRuntimeProviderRegistry((SI_RUNTIME_PROVIDER,))
+
+def default_profile_runtime_provider_registry() -> ProfileRuntimeProviderRegistry:
+    """Return import-free code-owned registrations; RS1 registers SI only."""
+    return ProfileRuntimeProviderRegistry(_DEFAULT_PROVIDER_REGISTRATIONS)
 
 
 def _service_attribute(service: Any, service_name: str, attribute: str) -> Any:

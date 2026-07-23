@@ -53,6 +53,7 @@ def _bound_store(dsn: str | None = None) -> Store:
         dsn=dsn,
         tenant_ref=config.TENANT_REF,
         runtime_bundle=RuntimeBundleBuilder.from_manifest(config.PACKAGE_ROOT).build(),
+        active_profile_package_name=config.ACTIVE_PROFILE_PACKAGE_NAME,
         active_descriptor=config.ACTIVE_PROFILE,
     )
 

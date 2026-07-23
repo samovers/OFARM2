@@ -110,12 +110,14 @@ def test_g2_single_writer_lock_is_mutually_exclusive(store):
         dsn=store.dsn,
         tenant_ref=store.tenant_ref,
         runtime_bundle=store.runtime_bundle,
+        active_profile_package_name=store.active_profile_package_name,
         active_descriptor=store.active_descriptor,
     )
     b = Store(
         dsn=store.dsn,
         tenant_ref=store.tenant_ref,
         runtime_bundle=store.runtime_bundle,
+        active_profile_package_name=store.active_profile_package_name,
         active_descriptor=store.active_descriptor,
     )
     try:
@@ -148,6 +150,7 @@ def test_g2_concurrent_first_structure_assertions_one_governed_winner(store):
             dsn=store.dsn,
             tenant_ref=store.tenant_ref,
             runtime_bundle=store.runtime_bundle,
+            active_profile_package_name=store.active_profile_package_name,
             active_descriptor=store.active_descriptor,
         )
         try:

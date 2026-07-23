@@ -46,6 +46,7 @@ def _prospective_restart(store, suffix: str) -> tuple[Store, RuntimeBundle]:
         dsn=store.dsn,
         tenant_ref=store.tenant_ref,
         runtime_bundle=bundle,
+        active_profile_package_name=store.active_profile_package_name,
         active_descriptor=store.active_descriptor,
     ), bundle
 
@@ -104,6 +105,7 @@ def test_healthy_restart_exactly_reuses_the_installed_schema_catalog(fresh_env):
         dsn=store.dsn,
         tenant_ref=store.tenant_ref,
         runtime_bundle=store.runtime_bundle,
+        active_profile_package_name=store.active_profile_package_name,
         active_descriptor=store.active_descriptor,
     )
     try:
@@ -144,6 +146,7 @@ def test_schema_catalog_is_stable_across_independent_oid_allocations(fresh_env):
             dsn=second_dsn,
             tenant_ref=store.tenant_ref,
             runtime_bundle=store.runtime_bundle,
+            active_profile_package_name=store.active_profile_package_name,
             active_descriptor=store.active_descriptor,
         )
         second.migrate()
