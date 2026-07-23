@@ -5,6 +5,38 @@ the gate pipeline + the materializer, with the two governed outputs and the
 generated Capability Manifest. Implementation and conformance packaging
 profile — not OFARM law; claims record-keeping completeness only.
 
+## Production authentication runtime
+
+`kernel.api:create_app` is environment-only. `RuntimeConfig.from_env()` reads
+the environment once, then the production builder validates the deployment
+image, constructs the graph, initializes RS256 OIDC/JWKS, validates the
+database authentication contract and principal resolver, verifies the current
+signing evidence, and performs the fixed KMS preflight. FastAPI is created only
+after every step succeeds.
+
+Required settings:
+
+- `OFARM_AUTH_MODE=production`
+- `OFARM_DEPLOYMENT_IMAGE_DIGEST`
+- `OFARM_OIDC_ISSUER`, `OFARM_OIDC_AUDIENCE`, `OFARM_OIDC_JWKS_URL`
+- `OFARM_PG_DSN`
+- `OFARM_TENANT_CAPABILITY_KID`
+- `OFARM_SIGNING_EVIDENCE_RECEIPT_PATH`
+- `OFARM_SIGNING_EVIDENCE_OBSERVER_PUBLIC_KEY_B64`
+
+The external OIDC audience and database binder audience are distinct values.
+The first verifies credentials; the second binds database authority and signed
+capabilities. Production OIDC v1 accepts only RS256.
+
+Until issue #173 supplies transaction-bound tenant execution, every protected
+production endpoint returns `TENANT_BOUNDARY_BLOCKED`. `/health` and
+`/manifest` expose immutable runtime metadata only. Authoritative services are
+held by route closures and are never published through `app.state`.
+
+`create_test_app(...)` is the only dependency-injection surface. It constructs
+an explicit `TestRuntime` or `DevelopmentRuntime`; HS256 exists only in the
+test runtime.
+
 ## Legacy M1 development runner
 
 This section runs the pre-tenancy M1 prototype against a disposable `public`
@@ -33,17 +65,15 @@ PGBIN=$(dirname "$(which initdb)")        # e.g. /opt/homebrew/opt/postgresql@17
 "$PGBIN/pg_ctl" -D .pgrun/data -o "-p 54317 -k $(pwd)/.pgrun -c listen_addresses=''" -l .pgrun/pg.log start
 "$PGBIN/createdb" -h "$(pwd)/.pgrun" -p 54317 -U ofarm ofarm_kernel
 
-# 3. the legacy development API (installs its disposable prototype schema)
-export OFARM_DEPLOYMENT_IMAGE_DIGEST="$VERIFIED_OFARM_IMAGE_DIGEST"
-.venv/bin/uvicorn --factory kernel.api:create_app --port 8800
-
-# 4. the test suites: root conformance (tests 1-15 + regressions + the
+# 3. the test suites construct the injected legacy surface through
+#    kernel.api:create_test_app and install the disposable prototype schema.
+#    Root conformance includes tests 1-15 + regressions + the
 #    8 fixtures replayed live; uses its own database ofarm_kernel_test,
 #    recreated per run; writes a JSON evidence file under conformance/evidence/)
 #    plus the stage-contract tests (policy tables, validator dispositions)
 .venv/bin/python -m pytest kernel/tests/ -q
 
-# 5. the package self-check (before every commit — AGENTS.md rule 3)
+# 4. the package self-check (before every commit — AGENTS.md rule 3)
 python3 conformance/ofarm_pkg_contract_check.py
 ```
 
@@ -52,16 +82,15 @@ Environment overrides: `OFARM_PG_DSN` (full DSN) or `OFARM_PG_SOCKET_DIR` /
 additionally honors `OFARM_PG_ADMIN_DSN` (admin connection used to recreate
 the test database, e.g. a CI service container).
 
-`OFARM_DEPLOYMENT_IMAGE_DIGEST` must be the externally verified, full lowercase
-OCI digest (`sha256:` plus 64 hexadecimal digits). It is reported as a
-process-local activation observation and never enters RuntimeBundle identity or
-semantic receipts.
+The test factory accepts a full lowercase OCI digest (`sha256:` plus 64
+hexadecimal digits) as an explicit argument. It never reads production
+configuration.
 
 ## Client surface
 
 | Endpoint | What |
 |---|---|
-| `POST /commit` | one capture through the full gate chain; body `{"submission": {...}}`; requires `X-Acting-Party` matching `submission.actingPartyRef` (transport-principal binding — a development principal pending OIDC at M2, see `profile_si_ffs/UNSUPPORTED_SURFACES.md`); always returns the `CommitIngressResult` envelope (refusals are data with registry reason codes, not transport errors) |
+| `POST /commit` | legacy test/development capture through the gate chain; requires an injected test principal or `X-Acting-Party`; production returns `TENANT_BOUNDARY_BLOCKED` until #173 |
 | `GET /views/passport/{farmRef}` | the live spray register (View 1) — freshness, exception rows, advisory flags; header `X-Acting-Party` |
 | `POST /review/accept` | governed queue acceptance: body `{farmRef, assertionRef, rationale, evidenceRefs?, idempotencyKey?}`; the rationale is mandatory and routed insufficiencies additionally require reviewer-attached durable evidence (gate-enforced) |
 | `POST /views/inspection-register/freeze` | freeze the exportable inspection register (View 2); body `{farmRef, windowStart, windowEnd}` |
@@ -84,6 +113,12 @@ is a complete `ExecutionRecordPayload` per `contracts/core/`.
 | `store.py` | the append-only truth store; edges, gate log, idempotency, in-force queries, reachability check |
 | `problems.py` | `RuntimeProblem` factory; reason codes verbatim from the registry RFC — unknown codes refuse loudly |
 | `config.py` | deployment constants: tenant/profile/pack/policy refs, runtime version, database DSN assembly |
+| `runtime_config.py` | the single immutable production environment snapshot |
+| `application_runtime.py` | ordered production graph construction and public runtime methods |
+| `production_oidc.py` | production RS256/JWKS credential verification |
+| `principal_resolver.py` | exact database principal-authority resolution |
+| `signing_authority.py` / `tenant_capability_issuer.py` | fresh signing evidence and tenant capability minting |
+| `legacy_runtime.py` / `auth_oidc.py` | explicit injected development/test runtime; HS256 is test-only |
 | `context.py` | SI profile instance bootstrap, in-force reference snapshots, per-farm `ContextSnapshot` assembly with content-addressed reuse (basis drift mints, sameness reuses) |
 | `authority.py` | default-deny evaluator: roles, grants, delegations bounded by live source authority, sharing, prospective revocation, party lifecycle, non-human actor rule |
 | `policy.py` | runtime policy as data: commit-class ↔ action-class/promotion/consequence tables, freshness-use policy, floor items, routing-resolution rules (issue #3) |
@@ -101,7 +136,7 @@ is a complete `ExecutionRecordPayload` per `contracts/core/`.
 
 ## Deliberately not here (do not drift — M1_BRIEF.md)
 
-Mobile app (M3) · registry adapter scheduling (M2; `tooling/regsr_snapshot/`
-is the parser) · GERK importer (M2) · OIDC wiring (M2; parties/grants are
-bootstrapped) · dynamic packs · public query compiler · AI/agent runtime ·
-everything in `profile_si_ffs/UNSUPPORTED_SURFACES.md`.
+Transaction-bound tenant execution (#173) · audit persistence (#192) · mobile
+app (M3) · registry adapter scheduling · dynamic packs · public query compiler
+· AI/agent runtime · everything in
+`profile_si_ffs/UNSUPPORTED_SURFACES.md`.

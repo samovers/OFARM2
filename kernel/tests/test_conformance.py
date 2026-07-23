@@ -842,8 +842,8 @@ def test_15_manifest_grounding(store):
 
 def test_93_governed_acceptance_semantics(store, pipeline):
     from fastapi.testclient import TestClient
-    from kernel.api import create_app
-    client = TestClient(create_app(store, oidc=None))
+    from kernel.api import create_test_app
+    client = TestClient(create_test_app(store, oidc=None))
     closed = {}
 
     def queue_compliance():
@@ -1040,8 +1040,8 @@ def test_94_second_hostile_regressions(store, pipeline, materializer, outputs):
     queued = forged["emittedAssertionRecordRefs"][0]
 
     from fastapi.testclient import TestClient
-    from kernel.api import create_app
-    client = TestClient(create_app(store, oidc=None))
+    from kernel.api import create_test_app
+    client = TestClient(create_test_app(store, oidc=None))
     spoofed = client.post("/review/accept",
                           json={"farmRef": demo.FARM, "assertionRef": queued,
                                 "rationale": "spoof attempt"},
@@ -1266,8 +1266,8 @@ def test_95_hostile_review_regressions(store, pipeline, materializer):
     # B1 — the HTTP boundary binds the transport principal to the actor:
     # body-level spoofing is refused before the pipeline runs
     from fastapi.testclient import TestClient
-    from kernel.api import create_app
-    client = TestClient(create_app(store, oidc=None))
+    from kernel.api import create_test_app
+    client = TestClient(create_test_app(store, oidc=None))
     spoof = demo.spray_submission(f"hr:b1:{uid()}", erp_id=f"erp:hr.{uid()}")
     no_header = client.post("/commit", json={"submission": spoof})
     # M2 G4: an absent transport principal is an explicit default-deny (401), not a
@@ -1919,8 +1919,8 @@ def test_97_review_driven_regressions(store, pipeline):
     # (g) the read API default-denies governance/trace records: a stranger
     # gets PERMISSION_REDACTED, never the record
     from fastapi.testclient import TestClient
-    from kernel.api import create_app
-    client = TestClient(create_app(store, oidc=None))
+    from kernel.api import create_test_app
+    client = TestClient(create_test_app(store, oidc=None))
     trace_ref = first["promotionTraceRef"]
     receipt_kinds = (
         "ofarm.authorizationdecisionrequest.v0.1",

@@ -1,13 +1,11 @@
 """M2 G4 — OIDC principal binding over the HTTP surface.
 
 Engineering tests, NOT part of the named conformance suite. They pin the OIDC
-principal-derivation: a VERIFIED bearer token yields the Party transport
+principal-derivation: a verified test token yields the Party transport
 principal (replacing the X-Acting-Party dev header), the actor-binding contract
 and default-deny are preserved, and authority is unchanged — a role claim alone
-never authorizes (authority still comes only from grants, D4). The verifier is
-the zero-dependency HS256 dev/conformance path; RS256/JWKS (Keycloak) is a
-deliberate NotImplemented production path with no silent fallback. All identifiers
-fictional.
+never authorizes (authority still comes only from grants, D4). HS256 is confined
+to this injected test runtime. All identifiers are fictional.
 """
 from __future__ import annotations
 
@@ -19,31 +17,42 @@ import time
 import uuid
 
 import pytest
-
-
-def uid():
-    return uuid.uuid4().hex[:8]
-
 from fastapi.testclient import TestClient
 
 from kernel import demo
-from kernel.api import create_app
-from kernel.auth_oidc import OidcConfig, OidcError, issue_dev_token
+from kernel.api import create_test_app
+from kernel.auth_oidc import (
+    TestOidcError as OidcTestError,
+    TestOidcVerifier as OidcTestVerifier,
+    issue_test_token,
+)
 
 ISSUER = "https://keycloak.example/realms/ofarm-dev"
 AUDIENCE = "ofarm2-kernel"
 SECRET = "dev-conformance-secret-not-production"
 
 
+def uid():
+    return uuid.uuid4().hex[:8]
+
+
+def _encode_json(value: dict) -> str:
+    return base64.urlsafe_b64encode(
+        json.dumps(value, separators=(",", ":")).encode()
+    ).rstrip(b"=").decode()
+
+
 def _cfg(**over):
-    kw = dict(issuer=ISSUER, audience=AUDIENCE, algorithm="HS256",
+    kw = dict(issuer=ISSUER, audience=AUDIENCE,
               hs256_secret=SECRET, roles_claim="roles")
     kw.update(over)
-    return OidcConfig(**kw)
+    return OidcTestVerifier(**kw)
 
 
 def _client(store, cfg=None):
-    return TestClient(create_app(store, oidc=cfg if cfg is not None else _cfg()))
+    return TestClient(create_test_app(
+        store, oidc=cfg if cfg is not None else _cfg()
+    ))
 
 
 def _token(sub, *, secret=SECRET, iss=ISSUER, aud=AUDIENCE, exp_delta=3600,
@@ -54,7 +63,7 @@ def _token(sub, *, secret=SECRET, iss=ISSUER, aud=AUDIENCE, exp_delta=3600,
         claims["nbf"] = now + nbf_delta
     if roles is not None:
         claims["roles"] = roles
-    return issue_dev_token(claims, secret=secret)
+    return issue_test_token(claims, secret=secret)
 
 
 def _bearer(token):
@@ -62,16 +71,12 @@ def _bearer(token):
 
 
 def _raw_token(header: dict, payload: dict, signature: str = "x") -> str:
-    enc = lambda d: base64.urlsafe_b64encode(
-        json.dumps(d, separators=(",", ":")).encode()).rstrip(b"=").decode()
-    return f"{enc(header)}.{enc(payload)}.{signature}"
+    return f"{_encode_json(header)}.{_encode_json(payload)}.{signature}"
 
 
 def _signed(header: dict, payload: dict, secret: str = SECRET) -> str:
     """A correctly HS256-SIGNED token with a CUSTOM header (e.g. carrying crit/b64)."""
-    enc = lambda d: base64.urlsafe_b64encode(
-        json.dumps(d, separators=(",", ":")).encode()).rstrip(b"=").decode()
-    h, p = enc(header), enc(payload)
+    h, p = _encode_json(header), _encode_json(payload)
     sig = base64.urlsafe_b64encode(
         hmac.new(secret.encode(), f"{h}.{p}".encode(), hashlib.sha256).digest()).rstrip(b"=").decode()
     return f"{h}.{p}.{sig}"
@@ -148,25 +153,8 @@ def test_g4_invalid_tokens_denied(store):
                       {"sub": demo.FARMER, "iss": ISSUER, "aud": AUDIENCE,
                        "exp": int(time.time()) + 3600}))
     # a token missing required claims
-    denied(issue_dev_token({"iss": ISSUER, "aud": AUDIENCE, "exp": int(time.time()) + 3600},
+    denied(issue_test_token({"iss": ISSUER, "aud": AUDIENCE, "exp": int(time.time()) + 3600},
                            secret=SECRET))                        # no sub
-
-
-def test_g4_rs256_is_not_implemented_no_fallback(store):
-    # production RS256/JWKS is a deliberate NotImplemented path — a token is NOT
-    # silently verified by HS256 even if it would pass HS256
-    cfg = _cfg(algorithm="RS256")
-    client = _client(store, cfg)
-    sub = demo.spray_submission("g4-rs256-1", erp_id="erp:g4.rs", actor_ref=demo.FARMER)
-    r = client.post("/commit", json={"submission": sub}, headers=_bearer(_token(demo.FARMER)))
-    assert r.status_code == 401
-    # and the verifier itself raises a clear NotImplemented-style error
-    try:
-        cfg.verify(_token(demo.FARMER))
-        assert False, "RS256 verify must raise"
-    except OidcError as exc:
-        assert "RS256" in str(exc) and "not implemented" in str(exc).lower()
-        assert "fallback" in str(exc).lower()
 
 
 # ---------------------------------------------------------------------------
@@ -174,7 +162,7 @@ def test_g4_rs256_is_not_implemented_no_fallback(store):
 # ---------------------------------------------------------------------------
 
 def test_g4_shim_mode_uses_x_acting_party_when_oidc_disabled(store):
-    client = TestClient(create_app(store, oidc=None))   # forced shim
+    client = TestClient(create_test_app(store, oidc=None))
     sub = demo.spray_submission("g4-shim-1", erp_id="erp:g4.shim", actor_ref=demo.FARMER)
     bound = client.post("/commit", json={"submission": sub}, headers={"x-acting-party": demo.FARMER})
     assert bound.status_code == 200 and bound.json()["decisionOutcome"]
@@ -195,19 +183,19 @@ def test_g4_verifier_returns_party_and_roles_separately(store):
 
 def test_g4_non_finite_numericdate_is_fail_closed_401(store):
     # PR #16 hostile B1: NaN / Infinity exp or nbf must FAIL CLOSED (401), never
-    # crash int()/the endpoint into a 500. The verifier raises OidcError, not
+    # crash int()/the endpoint into a 500. The verifier raises OidcTestError, not
     # ValueError/OverflowError.
     client = _client(store)
     sub = demo.spray_submission(f"g4-nan:{uid()}", erp_id=f"erp:g4.nan.{uid()}", actor_ref=demo.FARMER)
     now = int(time.time())
     for bad in (float("nan"), float("inf"), float("-inf")):
-        tok = issue_dev_token({"sub": demo.FARMER, "iss": ISSUER, "aud": AUDIENCE,
+        tok = issue_test_token({"sub": demo.FARMER, "iss": ISSUER, "aud": AUDIENCE,
                                "iat": now, "exp": bad}, secret=SECRET)
         assert client.post("/commit", json={"submission": sub}, headers=_bearer(tok)).status_code == 401, \
             f"exp={bad} must fail closed (401), never 500"
-        with pytest.raises(OidcError):
+        with pytest.raises(OidcTestError):
             _cfg().verify(tok)
-    nbf_nan = issue_dev_token({"sub": demo.FARMER, "iss": ISSUER, "aud": AUDIENCE,
+    nbf_nan = issue_test_token({"sub": demo.FARMER, "iss": ISSUER, "aud": AUDIENCE,
                                "exp": now + 3600, "nbf": float("nan")}, secret=SECRET)
     assert client.post("/commit", json={"submission": sub}, headers=_bearer(nbf_nan)).status_code == 401
 
@@ -224,7 +212,7 @@ def test_g4_noncanonical_base64url_segment_rejected_even_if_signed(store):
     ).rstrip(b"=").decode()
     forged = f"{header_b64}.{padded}.{sig}"
     assert "=" in padded
-    with pytest.raises(OidcError):
+    with pytest.raises(OidcTestError):
         _cfg().verify(forged)
     sub = demo.spray_submission(f"g4-nc:{uid()}", erp_id=f"erp:g4.nc.{uid()}", actor_ref=demo.FARMER)
     assert _client(store).post("/commit", json={"submission": sub},
@@ -241,7 +229,7 @@ def test_g4_verifier_rejects_tampered_payload(store):
     try:
         _cfg().verify(f"{header_b64}.{forged_payload}.{sig}")
         assert False, "tampered payload must fail signature verification"
-    except OidcError as exc:
+    except OidcTestError as exc:
         assert "signature" in str(exc).lower()
 
 
@@ -263,30 +251,8 @@ def test_g4_critical_jose_headers_rejected_even_if_signed(store):
         tok = _signed(header, claims)
         assert client.post("/commit", json={"submission": sub}, headers=_bearer(tok)).status_code == 401, \
             f"critical/unsupported header {header} must be rejected"
-        with pytest.raises(OidcError):
+        with pytest.raises(OidcTestError):
             _cfg().verify(tok)
-
-
-def test_g4_from_env_default_reads_oidc_config_deterministically(store, monkeypatch):
-    # PR #16 hostile B2: create_app(store) (default _FROM_ENV) reads OIDC from the
-    # environment — with OFARM_OIDC_* set it enables OIDC, cleared it is the shim.
-    # (Conformance shim tests force oidc=None, so they are deterministic regardless.)
-    monkeypatch.setenv("OFARM_OIDC_ISSUER", ISSUER)
-    monkeypatch.setenv("OFARM_OIDC_AUDIENCE", AUDIENCE)
-    monkeypatch.setenv("OFARM_OIDC_HS256_SECRET", SECRET)
-    monkeypatch.setenv("OFARM_OIDC_ROLES_CLAIM", "roles")
-    enabled = TestClient(create_app(store))   # _FROM_ENV -> OIDC enabled
-    sub = demo.spray_submission(f"g4-env:{uid()}", erp_id=f"erp:g4.env.{uid()}", actor_ref=demo.FARMER)
-    assert enabled.post("/commit", json={"submission": sub},
-                        headers={"x-acting-party": demo.FARMER}).status_code == 401  # header != auth
-    assert enabled.post("/commit", json={"submission": sub},
-                        headers=_bearer(_token(demo.FARMER))).status_code == 200
-    monkeypatch.delenv("OFARM_OIDC_ISSUER")
-    monkeypatch.delenv("OFARM_OIDC_AUDIENCE")
-    shim = TestClient(create_app(store))      # _FROM_ENV -> no issuer/aud -> shim
-    sub2 = demo.spray_submission(f"g4-env2:{uid()}", erp_id=f"erp:g4.env2.{uid()}", actor_ref=demo.FARMER)
-    assert shim.post("/commit", json={"submission": sub2},
-                     headers={"x-acting-party": demo.FARMER}).status_code == 200
 
 
 def test_g4_unrecorded_token_subject_is_not_a_principal(store):
@@ -301,5 +267,5 @@ def test_g4_unrecorded_token_subject_is_not_a_principal(store):
     ok = client.get(f"/records/{rec_id}", headers=_bearer(_token(demo.FARMER)))
     assert ok.status_code != 401, "a recorded active party is a valid principal"
     # and an inactive/unknown party in shim mode is likewise not a principal
-    shim = TestClient(create_app(store, oidc=None))
+    shim = TestClient(create_test_app(store, oidc=None))
     assert shim.get(f"/records/{rec_id}", headers={"x-acting-party": "party:ghost"}).status_code == 401

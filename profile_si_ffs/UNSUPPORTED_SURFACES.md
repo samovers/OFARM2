@@ -82,30 +82,21 @@ ActiveArtifactSet's reference snapshots and the ContextSnapshot's
 `referenceSnapshotRefs`. Its import surface is still declared (mechanism), and
 its evidence attaches to Equipment identities per the sticker composite key (P3).
 
-**API authentication posture (M2 G4, declared):** the HTTP surface remains a
-**conformance/development surface, not a production-authenticated runtime**.
-The transport principal is derived by `get_principal` and bound to the
-submitted/acting party — a mismatch is refused (`ACTOR_BINDING_UNRESOLVED`) and
-an absent principal is a default-deny (`401`), so body-level actor spoofing is
-denied. Two principal sources:
-- **OIDC (configured)** — a verified bearer token yields the Party principal.
-  G4 retains a **zero-dependency HS256 verifier** only for this
-  development/conformance path (fail-closed: enforces
-  issuer/audience/exp/nbf, rejects `alg=none`, non-HS256, malformed,
-  missing-claim and bad-signature tokens, constant-time compare).
-  `kernel.production_oidc.ProductionOidcVerifier` implements the independent
-  production RS256/JWKS credential boundary, but production runtime composition
-  is not part of this surface yet. Neither verifier falls back between
-  algorithms; HS256 is never a production Keycloak claim.
-- **`X-Acting-Party` header (OIDC disabled)** — the development/conformance shim;
-  the header is **not authentication**, but the binding contract is identical.
+**API authentication posture:** production composition is fail-closed and
+environment-only. It initializes RS256 OIDC/JWKS verification, exact database
+principal resolution, fresh signed observer evidence, and the KMS preflight
+before publishing FastAPI. The external token audience never substitutes for
+the database binder audience. Production accepts no HS256 token.
 
-Roles in a token map to `RoleAssignment` only and **never** synthesize a grant —
-authority still comes solely from AuthorityGrant / DelegationGrant / SharingGrant
-(D4); a role claim alone authorizes nothing. Distinct-reviewer acceptance happens
-ONLY through `/review/accept` (a `GOVERNANCE_DECISION` commit under the reviewer's
-own principal); a reviewer named inside the submitter's request never promotes —
-that inline path was removed after the second hostile review.
+Transaction-bound tenant execution is still unsupported pending issue #173.
+Accordingly, all protected production routes return the same
+`TENANT_BOUNDARY_BLOCKED` response. No authenticated request reaches the legacy
+ambient Store.
+
+Development and test are explicit separate runtime types. Only the injected
+test runtime contains the HS256 verifier. The `X-Acting-Party` development shim
+is not authentication. In both legacy modes, transport principals remain bound
+to recorded active Parties, and token roles never synthesize authority.
 
 **Freshness mode `NO_CURRENT_STATE_DEPENDENCY` (M1, declared):** inside
 `Materializer.resolve_for_use` this mode is **conservatively narrowed to

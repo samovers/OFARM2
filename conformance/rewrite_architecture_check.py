@@ -24,6 +24,10 @@ PRODUCTION_BUDGETS = {
     "kernel/google_kms_signer.py": 120,
     "kernel/tenant_capability_issuer.py": 180,
     "kernel/key_control.py": 350,
+    "kernel/api.py": 450,
+    "kernel/runtime_config.py": 140,
+    "kernel/application_runtime.py": 220,
+    "kernel/legacy_runtime.py": 100,
 }
 GROUP_BUDGETS = {
     "profile runtime": (
@@ -59,6 +63,14 @@ GROUP_BUDGETS = {
             "kernel/key_control.py",
         ),
     ),
+    "application runtime": (
+        500,
+        (
+            "kernel/runtime_config.py",
+            "kernel/application_runtime.py",
+            "kernel/legacy_runtime.py",
+        ),
+    ),
 }
 TEST_GLOBS = (
     "kernel/tests/*profile_runtime*.py",
@@ -66,6 +78,8 @@ TEST_GLOBS = (
     "kernel/tests/*principal*.py",
     "kernel/tests/*signing*.py",
     "kernel/tests/*key_control*.py",
+    "kernel/tests/*application_runtime*.py",
+    "kernel/tests/*runtime_config*.py",
 )
 PROHIBITED_NAMES = {"for_test", "production_eligible"}
 
@@ -102,44 +116,71 @@ def _trust_interface_uses_any(tree: ast.Module) -> list[int]:
     return lines
 
 
-def _environment_reads(tree: ast.Module) -> list[int]:
-    os_modules = {"os"}
-    direct_readers = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            os_modules.update(
-                alias.asname or alias.name
-                for alias in node.names
-                if alias.name == "os"
-            )
-        if isinstance(node, ast.ImportFrom) and node.module == "os":
-            direct_readers.update(
+class _EnvironmentReadVisitor(ast.NodeVisitor):
+    def __init__(self) -> None:
+        self.scope: list[str] = []
+        self.lines: list[int] = []
+        self.os_modules = {"os"}
+        self.direct_readers: set[str] = set()
+
+    def _visit_scope(self, node) -> None:
+        self.scope.append(node.name)
+        self.generic_visit(node)
+        self.scope.pop()
+
+    visit_ClassDef = _visit_scope
+    visit_FunctionDef = _visit_scope
+    visit_AsyncFunctionDef = _visit_scope
+
+    def visit_Import(self, node: ast.Import) -> None:
+        self.os_modules.update(
+            alias.asname or alias.name
+            for alias in node.names
+            if alias.name == "os"
+        )
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        if node.module == "os":
+            self.direct_readers.update(
                 alias.asname or alias.name
                 for alias in node.names
                 if alias.name in {"getenv", "environ"}
             )
 
-    lines = []
-    for node in ast.walk(tree):
-        if not isinstance(node, (ast.Call, ast.Subscript)):
-            continue
-        target = node.func if isinstance(node, ast.Call) else node.value
-        if (
+    def _check(self, node, target) -> None:
+        is_environment = (
             isinstance(target, ast.Attribute)
             and isinstance(target.value, ast.Name)
             and (
                 (
-                    target.value.id in os_modules
+                    target.value.id in self.os_modules
                     and target.attr in {"getenv", "environ"}
                 )
-                or target.value.id in direct_readers
+                or target.value.id in self.direct_readers
             )
         ) or (
             isinstance(target, ast.Name)
-            and target.id in direct_readers
-        ):
-            lines.append(node.lineno)
-    return lines
+            and target.id in self.direct_readers
+        )
+        if is_environment and self.scope[-2:] != [
+            "RuntimeConfig",
+            "from_env",
+        ]:
+            self.lines.append(node.lineno)
+
+    def visit_Call(self, node: ast.Call) -> None:
+        self._check(node, node.func)
+        self.generic_visit(node)
+
+    def visit_Subscript(self, node: ast.Subscript) -> None:
+        self._check(node, node.value)
+        self.generic_visit(node)
+
+
+def _environment_reads(tree: ast.Module) -> list[int]:
+    visitor = _EnvironmentReadVisitor()
+    visitor.visit(tree)
+    return visitor.lines
 
 
 def _check_production(path: Path, budget: int) -> list[str]:
