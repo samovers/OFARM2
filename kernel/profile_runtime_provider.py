@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import sys
 from dataclasses import dataclass
+from inspect import getattr_static
 from importlib.machinery import PathFinder
 from pathlib import Path
 from types import ModuleType
@@ -27,6 +28,12 @@ _REQUIRED_SERVICE_CAPABILITIES = {
     "context_assembler": ("assemble",),
     "materializer": ("invalidate_for_sources", "recompute"),
 }
+_OPTIONAL_SERVICE_CAPABILITIES = {
+    "product_lookup": ("lookup_by_decision",),
+    "registry_reverification": ("run",),
+}
+_MISSING_CAPABILITY = object()
+_CONCRETE_PATH_TYPE = type(Path())
 
 
 class ProfileRuntimeProvider(Protocol):
@@ -78,12 +85,21 @@ class ProfileRuntimeServices:
 
 @dataclass(frozen=True)
 class _ProfileRuntimeProviderCacheEntry:
-    """Validated Store-bound services for one complete provider identity."""
+    """Authenticated composition receipt; never a live mutable service graph."""
 
-    registration: ProfileRuntimeProviderRegistration
+    registration_identity: tuple[str, ...]
     source_digest: str
     descriptor: ProfileRuntimeDescriptor
-    services: ProfileRuntimeServices
+    service_capabilities: tuple["_ServiceCapabilityReceipt", ...]
+
+
+@dataclass(frozen=True)
+class _ServiceCapabilityReceipt:
+    """Captured class capabilities checked before a later composition."""
+
+    service_name: str
+    service_type: type
+    capabilities: tuple[tuple[str, Any], ...]
 
 
 @dataclass(frozen=True)
@@ -93,8 +109,12 @@ class ProfileRuntimeProviderRegistry:
     registrations: tuple[ProfileRuntimeProviderRegistration, ...]
 
     def __post_init__(self) -> None:
+        if type(self.registrations) is not tuple:
+            raise ProfileRuntimeError(
+                "profile runtime provider registrations must use an exact tuple"
+            )
         if any(
-            not isinstance(registration, ProfileRuntimeProviderRegistration)
+            type(registration) is not ProfileRuntimeProviderRegistration
             for registration in self.registrations
         ):
             raise ProfileRuntimeError(
@@ -103,7 +123,7 @@ class ProfileRuntimeProviderRegistry:
         names = [
             registration.package_name for registration in self.registrations
         ]
-        if any(not isinstance(name, str) or not name for name in names):
+        if any(type(name) is not str or not name for name in names):
             raise ProfileRuntimeError(
                 "profile runtime provider package names must be non-empty strings"
             )
@@ -115,7 +135,7 @@ class ProfileRuntimeProviderRegistry:
             registration.profile_ref for registration in self.registrations
         ]
         if any(
-            not isinstance(profile_ref, str) or not profile_ref
+            type(profile_ref) is not str or not profile_ref
             for profile_ref in profile_refs
         ):
             raise ProfileRuntimeError(
@@ -138,7 +158,7 @@ class ProfileRuntimeProviderRegistry:
                     "ADAPTER_SOURCE"
                 )
             logical_ref = registration.source_component_logical_ref
-            if not isinstance(logical_ref, str) or not logical_ref:
+            if type(logical_ref) is not str or not logical_ref:
                 raise ProfileRuntimeError(
                     "profile runtime provider source component logical ref must "
                     "be a non-empty string"
@@ -147,11 +167,11 @@ class ProfileRuntimeProviderRegistry:
                 (registration.source_component_role, logical_ref)
             )
             if (
-                not isinstance(registration.module_name, str)
+                type(registration.module_name) is not str
                 or not registration.module_name
-                or not isinstance(registration.provider_attribute, str)
+                or type(registration.provider_attribute) is not str
                 or not registration.provider_attribute
-                or not isinstance(registration.source_path, Path)
+                or type(registration.source_path) is not _CONCRETE_PATH_TYPE
                 or not registration.source_path.is_absolute()
             ):
                 raise ProfileRuntimeError(
@@ -174,9 +194,13 @@ class ProfileRuntimeProviderRegistry:
         package_name: str,
         descriptor: ProfileRuntimeDescriptor,
     ) -> ProfileRuntimeProviderRegistration:
-        if not isinstance(package_name, str) or not package_name:
+        if type(package_name) is not str or not package_name:
             raise ProfileRuntimeError(
                 "profile runtime provider package name must be a non-empty string"
+            )
+        if type(descriptor) is not ProfileRuntimeDescriptor:
+            raise ProfileRuntimeError(
+                "profile runtime provider descriptor must use the exact trusted type"
             )
         registration = next(
             (
@@ -209,7 +233,7 @@ class ProfileRuntimeProviderRegistry:
         cache_key = self._provider_cache_key(registration, source_component)
         cached_entry = store._cached_profile_runtime_provider(cache_key)
         if cached_entry is not None:
-            return self._validated_cached_services(
+            self._validate_cached_composition_receipt(
                 cached_entry,
                 registration,
                 source_component,
@@ -218,6 +242,42 @@ class ProfileRuntimeProviderRegistry:
 
         provider = self._load_provider(store, registration, source_component)
         services = provider.build_services(store, descriptor)
+        self._validate_services(provider, services, descriptor)
+        cache_entry = _ProfileRuntimeProviderCacheEntry(
+            registration_identity=_registration_identity(registration),
+            source_digest=source_component.content_digest,
+            descriptor=descriptor,
+            service_capabilities=_capture_service_capabilities(services),
+        )
+        retained_entry = store._retain_profile_runtime_provider(
+            cache_key,
+            cache_entry,
+        )
+        self._validate_cached_composition_receipt(
+            retained_entry,
+            registration,
+            source_component,
+            descriptor,
+        )
+        if not _same_service_capabilities(
+            retained_entry.service_capabilities,
+            cache_entry.service_capabilities,
+        ):
+            raise ProfileRuntimeError(
+                "profile runtime provider capability provenance changed during "
+                "composition"
+            )
+        # Every caller receives a newly composed graph. The Store cache is only
+        # an authentication receipt and never becomes executable authority.
+        return services
+
+    @classmethod
+    def _validate_services(
+        cls,
+        provider: ProfileRuntimeProvider,
+        services: Any,
+        descriptor: ProfileRuntimeDescriptor,
+    ) -> None:
         if not isinstance(services, ProfileRuntimeServices):
             raise ProfileRuntimeError(
                 "profile runtime provider returned an invalid service bundle"
@@ -246,7 +306,7 @@ class ProfileRuntimeProviderRegistry:
                     f"profile runtime provider service {service_name!r} lacks "
                     f"required callable capabilities {missing!r}"
                 )
-        self._validate_policy_contract(services, descriptor)
+        cls._validate_policy_contract(services, descriptor)
         registry_reverification = _service_attribute(
             services,
             "service bundle",
@@ -264,52 +324,100 @@ class ProfileRuntimeProviderRegistry:
                 "required callable capability 'run'"
             )
         if provider.package_name == "profile_si_ffs":
-            self._validate_si_contract(services)
-        cache_entry = _ProfileRuntimeProviderCacheEntry(
-            registration=registration,
-            source_digest=source_component.content_digest,
-            descriptor=descriptor,
-            services=services,
-        )
-        retained_entry = store._retain_profile_runtime_provider(
-            cache_key,
-            cache_entry,
-        )
-        if (
-            retained_entry is not cache_entry
-            or self._validated_cached_services(
-                retained_entry,
-                registration,
-                source_component,
-                descriptor,
-            )
-            is not services
-        ):
-            raise ProfileRuntimeError(
-                "profile runtime provider cache changed during composition"
-            )
-        return services
+            cls._validate_si_contract(services)
 
     @staticmethod
-    def _validated_cached_services(
+    def _validate_cached_composition_receipt(
         cached_entry: Any,
         registration: ProfileRuntimeProviderRegistration,
         source_component: RuntimeComponent,
         descriptor: ProfileRuntimeDescriptor,
-    ) -> ProfileRuntimeServices:
+    ) -> None:
         if (
             type(cached_entry) is not _ProfileRuntimeProviderCacheEntry
-            or cached_entry.registration != registration
+            or type(cached_entry.registration_identity) is not tuple
+            or any(
+                type(value) is not str
+                for value in cached_entry.registration_identity
+            )
+            or cached_entry.registration_identity
+            != _registration_identity(registration)
+            or type(cached_entry.source_digest) is not str
             or cached_entry.source_digest != source_component.content_digest
+            or type(cached_entry.descriptor) is not ProfileRuntimeDescriptor
+            or type(descriptor) is not ProfileRuntimeDescriptor
             or cached_entry.descriptor != descriptor
-            or type(cached_entry.services) is not ProfileRuntimeServices
-            or cached_entry.services.descriptor != descriptor
+            or type(cached_entry.service_capabilities) is not tuple
         ):
             raise ProfileRuntimeError(
-                "profile runtime provider cache entry does not match its "
-                "complete registration and descriptor"
+                "profile runtime provider cache receipt does not match its "
+                "canonical registration and descriptor"
             )
-        return cached_entry.services
+        seen_service_names = set()
+        for service_receipt in cached_entry.service_capabilities:
+            if (
+                type(service_receipt) is not _ServiceCapabilityReceipt
+                or type(service_receipt.service_name) is not str
+                or type(service_receipt.service_type) is not type
+                or type(service_receipt.capabilities) is not tuple
+            ):
+                raise ProfileRuntimeError(
+                    "profile runtime provider cache receipt has malformed "
+                    "service capability provenance"
+                )
+            capability_contract = (
+                _REQUIRED_SERVICE_CAPABILITIES
+                | _OPTIONAL_SERVICE_CAPABILITIES
+            )
+            expected_capabilities = capability_contract.get(
+                service_receipt.service_name
+            )
+            if (
+                expected_capabilities is None
+                or service_receipt.service_name in seen_service_names
+                or tuple(
+                    capability[0]
+                    for capability in service_receipt.capabilities
+                    if type(capability) is tuple and len(capability) == 2
+                )
+                != ("__init__", *expected_capabilities)
+            ):
+                raise ProfileRuntimeError(
+                    "profile runtime provider cache receipt has incomplete "
+                    "service capability provenance"
+                )
+            seen_service_names.add(service_receipt.service_name)
+            for capability_receipt in service_receipt.capabilities:
+                if (
+                    type(capability_receipt) is not tuple
+                    or len(capability_receipt) != 2
+                ):
+                    raise ProfileRuntimeError(
+                        "profile runtime provider cache receipt has malformed "
+                        "service capability provenance"
+                    )
+                capability_name, expected = capability_receipt
+                if (
+                    type(capability_name) is not str
+                    or expected is _MISSING_CAPABILITY
+                    or getattr_static(
+                        service_receipt.service_type,
+                        capability_name,
+                        _MISSING_CAPABILITY,
+                    )
+                    is not expected
+                ):
+                    raise ProfileRuntimeError(
+                        "profile runtime provider cached service capability "
+                        f"{service_receipt.service_name}.{capability_name} changed"
+                    )
+        if not set(_REQUIRED_SERVICE_CAPABILITIES).issubset(
+            seen_service_names
+        ):
+            raise ProfileRuntimeError(
+                "profile runtime provider cache receipt has incomplete "
+                "service capability provenance"
+            )
 
     @staticmethod
     def _verify_provider_source(
@@ -396,8 +504,11 @@ class ProfileRuntimeProviderRegistry:
     def _provider_cache_key(
         registration: ProfileRuntimeProviderRegistration,
         source_component: RuntimeComponent,
-    ) -> tuple[ProfileRuntimeProviderRegistration, str]:
-        return registration, source_component.content_digest
+    ) -> tuple[str, ...]:
+        return (
+            *_registration_identity(registration),
+            source_component.content_digest,
+        )
 
     @staticmethod
     def _validate_provider_registration(
@@ -543,6 +654,113 @@ class ProfileRuntimeProviderRegistry:
                 "SI profile runtime provider registry_reverification is not "
                 "bound to its reference bindings and product lookup"
             )
+
+
+def _registration_identity(
+    registration: ProfileRuntimeProviderRegistration,
+) -> tuple[str, ...]:
+    """Canonical primitive identity for cache keys and cache receipts."""
+    if type(registration) is not ProfileRuntimeProviderRegistration:
+        raise ProfileRuntimeError(
+            "profile runtime provider registration must use the exact trusted type"
+        )
+    scalar_fields = (
+        registration.package_name,
+        registration.profile_ref,
+        registration.source_component_logical_ref,
+        registration.module_name,
+        registration.provider_attribute,
+    )
+    if any(type(value) is not str or not value for value in scalar_fields):
+        raise ProfileRuntimeError(
+            "profile runtime provider registration identity is invalid"
+        )
+    if (
+        type(registration.source_component_role) is not RuntimeComponentRole
+        or type(registration.source_path) is not _CONCRETE_PATH_TYPE
+    ):
+        raise ProfileRuntimeError(
+            "profile runtime provider registration identity uses invalid scalar types"
+        )
+    try:
+        normalized_source_path = str(
+            registration.source_path.resolve(strict=True)
+        )
+    except OSError as exc:
+        raise ProfileRuntimeError(
+            "profile runtime provider registration source path is unavailable"
+        ) from exc
+    return (
+        registration.package_name,
+        registration.profile_ref,
+        registration.source_component_role.value,
+        registration.source_component_logical_ref,
+        registration.module_name,
+        registration.provider_attribute,
+        normalized_source_path,
+    )
+
+
+def _capture_service_capabilities(
+    services: ProfileRuntimeServices,
+) -> tuple[_ServiceCapabilityReceipt, ...]:
+    """Capture class-owned behavior without retaining any live service object."""
+    receipts = []
+    capability_contract = dict(_REQUIRED_SERVICE_CAPABILITIES)
+    for service_name, capabilities in _OPTIONAL_SERVICE_CAPABILITIES.items():
+        if _service_attribute(services, "service bundle", service_name) is not None:
+            capability_contract[service_name] = capabilities
+
+    for service_name, capabilities in capability_contract.items():
+        service = _service_attribute(services, "service bundle", service_name)
+        service_type = type(service)
+        captured = []
+        for capability_name in ("__init__", *capabilities):
+            capability = getattr_static(
+                service_type,
+                capability_name,
+                _MISSING_CAPABILITY,
+            )
+            if capability is _MISSING_CAPABILITY:
+                raise ProfileRuntimeError(
+                    "profile runtime provider service "
+                    f"{service_name!r} capability {capability_name!r} is not "
+                    "class-owned and cannot be authenticated across compositions"
+                )
+            captured.append((capability_name, capability))
+        receipts.append(_ServiceCapabilityReceipt(
+            service_name=service_name,
+            service_type=service_type,
+            capabilities=tuple(captured),
+        ))
+    return tuple(receipts)
+
+
+def _same_service_capabilities(
+    left: tuple[_ServiceCapabilityReceipt, ...],
+    right: tuple[_ServiceCapabilityReceipt, ...],
+) -> bool:
+    if len(left) != len(right):
+        return False
+    for left_receipt, right_receipt in zip(left, right):
+        if (
+            type(left_receipt) is not _ServiceCapabilityReceipt
+            or type(right_receipt) is not _ServiceCapabilityReceipt
+            or left_receipt.service_name != right_receipt.service_name
+            or left_receipt.service_type is not right_receipt.service_type
+            or len(left_receipt.capabilities) != len(right_receipt.capabilities)
+        ):
+            return False
+        for left_capability, right_capability in zip(
+            left_receipt.capabilities,
+            right_receipt.capabilities,
+        ):
+            if (
+                left_capability[0] != right_capability[0]
+                or left_capability[1] is not right_capability[1]
+            ):
+                return False
+    return True
 
 
 _DEFAULT_PROVIDER_REGISTRATIONS = (

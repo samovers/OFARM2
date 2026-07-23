@@ -69,6 +69,9 @@ class GateContext:
     source_digest: str
     active_profile: Any = None
     profile_route_resolution: Any = None
+    route_backed: bool = False
+    profile_execution_fingerprint: str | None = None
+    profile_route_gate: dict | None = None
     runtime_services: Any = None
     policy_provider: Any = None
     si_reference_bindings: Any = None
@@ -154,6 +157,8 @@ class IngressNormalizer:
         prior = ctx.store.idempotency_lookup(ctx.cur, ctx.idem_key)
 
         if ctx.commit_class not in policy.COMMIT_CLASS_TO_FAMILY:
+            if prior is not None:
+                return GateReplay(prior)
             raise ContractViolation(f"unknown commit class {ctx.commit_class!r}")
         ctx.family = policy.COMMIT_CLASS_TO_FAMILY[ctx.commit_class]
 

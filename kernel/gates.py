@@ -32,8 +32,10 @@ from .contracts import sha256_of
 from .emission import PromotionTraceWriter, ReplayWriter
 from .problems import runtime_problem
 from .profile_runtime import (ProfileRuntimeError, resolve_bound_descriptor,
+                              profile_runtime_descriptor_identity,
                               resolve_profile_route)
 from .profile_runtime_provider import default_profile_runtime_provider_registry
+from .runtime_bundle import RuntimeBundleError, RuntimeComponentRole
 from .stages import (AuthorityGate, EnvelopePersist, EvidenceSufficiencyGate,
                      GateContext, GateRefusal, GateReplay, IngressNormalizer,
                      MaterializationGate, ProfileApplicabilityGate,
@@ -170,6 +172,7 @@ class GatePipeline:
                 compatibility_services.product_lookup if compatibility_services else None
             ),
             active_profile=self.active_profile,
+            route_backed=self.route_backed,
             runtime_services=runtime_services,
             policy_provider=(runtime_services.policy_provider if runtime_services else None),
             si_reference_bindings=(
@@ -256,8 +259,84 @@ class GatePipeline:
         ctx.materializer = services.materializer
         ctx.products = services.product_lookup
         ctx.si_reference_bindings = services.reference_bindings
+        ctx.profile_execution_fingerprint = self._profile_execution_fingerprint(
+            resolution,
+            registration,
+        )
 
-    def _resolve_profile_route(self, ctx: GateContext):
+    def _profile_execution_fingerprint(self, resolution, registration) -> str:
+        try:
+            provider_component = self.runtime_bundle.component(
+                registration.source_component_role,
+                registration.source_component_logical_ref,
+            )
+            descriptor_component = self.runtime_bundle.component(
+                RuntimeComponentRole.PROFILE_DESCRIPTOR,
+                resolution.descriptor.profile_ref,
+            )
+            normalized_source_path = str(
+                registration.source_path.resolve(strict=True)
+            )
+        except (AttributeError, OSError, RuntimeBundleError) as exc:
+            raise ProfileRuntimeError(
+                "profile execution identity is not retained by the RuntimeBundle"
+            ) from exc
+        route = resolution.route
+        route_identity = {
+            "routeId": route.route_id,
+            "tenantRef": route.tenant_ref,
+            "farmRef": route.farm_ref,
+            "profilePackageName": route.profile_package_name,
+            "profileRef": route.profile_ref,
+            "packRef": route.pack_ref,
+            "packActivationSetRef": route.pack_activation_set_ref,
+            "activeArtifactSetRef": route.active_artifact_set_ref,
+            "descriptorIdentity": (
+                route.descriptor_identity
+                or profile_runtime_descriptor_identity(resolution.descriptor)
+            ),
+            "effectiveFrom": (
+                route.effective_from.isoformat()
+                if route.effective_from is not None else None
+            ),
+            "effectiveUntil": (
+                route.effective_until.isoformat()
+                if route.effective_until is not None else None
+            ),
+            "status": route.status,
+        }
+        provider_identity = {
+            "packageName": registration.package_name,
+            "profileRef": registration.profile_ref,
+            "sourceComponentRole": registration.source_component_role.value,
+            "sourceComponentLogicalRef": (
+                registration.source_component_logical_ref
+            ),
+            "sourceComponentDigest": provider_component.content_digest,
+            "moduleName": registration.module_name,
+            "providerAttribute": registration.provider_attribute,
+            "normalizedSourcePath": normalized_source_path,
+        }
+        return "profileexecution:" + sha256_of({
+            "route": route_identity,
+            "descriptorDigest": descriptor_component.content_digest,
+            "provider": provider_identity,
+        })
+
+    @staticmethod
+    def _record_profile_route_gate(ctx: GateContext) -> None:
+        gate = ctx.profile_route_gate
+        if gate is None:
+            raise ProfileRuntimeError("profile route gate outcome is unavailable")
+        ctx.log(
+            "PACK_PROFILE_APPLICABILITY",
+            gate["outcome"],
+            reason_code=gate.get("reason_code"),
+            rationale=gate.get("rationale"),
+            refs=gate.get("refs"),
+        )
+
+    def _resolve_profile_route(self, ctx: GateContext, *, record_gate: bool = True):
         try:
             farm_ref = self._route_farm_ref(ctx)
             effective_time = self._route_effective_time(ctx)
@@ -271,10 +350,14 @@ class GatePipeline:
             )
             self._bind_route_resolution(ctx, resolution)
         except ProfileRuntimeError as exc:
-            ctx.log("PACK_PROFILE_APPLICABILITY", "PROFILE_ROUTE_REFUSE",
-                    reason_code="PROFILE_NOT_ACTIVE",
-                    rationale=f"PROFILE_ROUTE: {exc}")
-            return GateRefusal(
+            ctx.profile_route_gate = {
+                "outcome": "PROFILE_ROUTE_REFUSE",
+                "reason_code": "PROFILE_NOT_ACTIVE",
+                "rationale": f"PROFILE_ROUTE: {exc}",
+            }
+            if record_gate:
+                self._record_profile_route_gate(ctx)
+            refusal = GateRefusal(
                 "PACK_PROFILE_APPLICABILITY", "PROFILE_ROUTE_REFUSE",
                 "RETAIN_DRAFT",
                 [runtime_problem(
@@ -283,10 +366,19 @@ class GatePipeline:
                     f"({exc}); the claim stays a draft (fail closed)",
                     suggested_remediation="restore an explicit active "
                     "tenant/farm profile route before resubmitting")])
+            return refusal
         ctx.farm_ref = farm_ref
-        ctx.log("PACK_PROFILE_APPLICABILITY", "PROFILE_ROUTE_PASS",
-                rationale="PROFILE_ROUTE: resolved active profile route",
-                refs=[resolution.route.route_id, resolution.descriptor.profile_ref])
+        ctx.profile_route_gate = {
+            "outcome": "PROFILE_ROUTE_PASS",
+            "rationale": "PROFILE_ROUTE: resolved active profile route",
+            "refs": [
+                resolution.route.route_id,
+                resolution.descriptor.profile_ref,
+                ctx.profile_execution_fingerprint,
+            ],
+        }
+        if record_gate:
+            self._record_profile_route_gate(ctx)
         return None
 
     def _commit_in_tx(self, cur, sub: dict) -> dict:
@@ -322,11 +414,12 @@ class GatePipeline:
     def _write_authenticated_replay(self, ctx: GateContext, prior: dict) -> dict:
         route_problems = None
         if self.route_backed:
-            route_outcome = self._resolve_profile_route(ctx)
+            route_outcome = self._resolve_profile_route(ctx, record_gate=False)
             if isinstance(route_outcome, GateRefusal):
                 route_problems = route_outcome.problems
         return ReplayWriter().write(
             ctx,
             prior,
             replay_precondition_problems=route_problems,
+            replay_profile_route_gate=ctx.profile_route_gate,
         )

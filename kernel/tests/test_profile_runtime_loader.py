@@ -2137,10 +2137,13 @@ def test_provider_cache_is_bound_to_complete_registration_identity(tmp_path):
         )
 
         assert default_services.provider is not alternate_services.provider
-        assert len(store._profile_runtime_provider_cache) == 2
+        assert default_services is not alternate_services
+        # The symlink and checked-in path normalize to one primitive identity;
+        # the receipt is shared, but live services never are.
+        assert len(store._profile_runtime_provider_cache) == 1
 
 
-def test_provider_cache_hit_revalidates_complete_registration(tmp_path):
+def test_provider_cache_hit_revalidates_complete_registration():
     runtime_bundle = RuntimeBundleBuilder.from_manifest(
         config.PACKAGE_ROOT
     ).build()
@@ -2149,26 +2152,10 @@ def test_provider_cache_hit_revalidates_complete_registration(tmp_path):
         config.ACTIVE_PROFILE_PACKAGE_NAME,
         config.ACTIVE_PROFILE,
     )
-    alternate_source_path = tmp_path / "runtime_provider.py"
-    alternate_source_path.symlink_to(registration.source_path)
-    alternate_registration = replace(
-        registration,
-        source_path=alternate_source_path,
-    )
-
     with _fresh_started_store(runtime_bundle) as store:
         source_component = registry._verify_provider_source(
             store,
             registration,
-        )
-        provider = registry._load_provider(
-            store,
-            registration,
-            source_component,
-        )
-        services = provider.build_services(
-            store,
-            config.ACTIVE_PROFILE,
         )
         cache_key = registry._provider_cache_key(
             registration,
@@ -2177,16 +2164,16 @@ def test_provider_cache_hit_revalidates_complete_registration(tmp_path):
         store._retain_profile_runtime_provider(
             cache_key,
             profile_runtime_providers._ProfileRuntimeProviderCacheEntry(
-                registration=alternate_registration,
+                registration_identity=("hostile",),
                 source_digest=source_component.content_digest,
                 descriptor=config.ACTIVE_PROFILE,
-                services=services,
+                service_capabilities=(),
             ),
         )
 
         with pytest.raises(
             ProfileRuntimeError,
-            match="complete registration",
+            match="canonical registration",
         ):
             registry.build_services(
                 store,
@@ -2195,7 +2182,7 @@ def test_provider_cache_hit_revalidates_complete_registration(tmp_path):
             )
 
 
-def test_provider_cache_reuses_validated_services_without_mutable_provider_call(
+def test_provider_cache_composes_fresh_services_without_mutable_provider_call(
         fresh_env, monkeypatch):
     store, first_pipeline, _ = fresh_env
     provider_type = type(first_pipeline.runtime_services.provider)
@@ -2215,7 +2202,132 @@ def test_provider_cache_reuses_validated_services_without_mutable_provider_call(
     second_pipeline = GatePipeline(store)
 
     assert replacement_executed is False
-    assert second_pipeline.runtime_services is first_pipeline.runtime_services
+    assert second_pipeline.runtime_services is not first_pipeline.runtime_services
+    assert (
+        second_pipeline.runtime_services.provider
+        is not first_pipeline.runtime_services.provider
+    )
+
+
+def test_provider_registry_rejects_colliding_registration_subclass():
+    registration = (
+        default_profile_runtime_provider_registry().registration_for(
+            config.ACTIVE_PROFILE_PACKAGE_NAME,
+            config.ACTIVE_PROFILE,
+        )
+    )
+
+    class CollidingRegistration(
+        profile_runtime_providers.ProfileRuntimeProviderRegistration
+    ):
+        def __hash__(self):
+            return hash(registration)
+
+        def __eq__(self, _other):
+            return True
+
+    colliding = CollidingRegistration(
+        package_name=registration.package_name,
+        profile_ref=registration.profile_ref,
+        source_component_role=registration.source_component_role,
+        source_component_logical_ref=(
+            registration.source_component_logical_ref
+        ),
+        module_name=registration.module_name,
+        provider_attribute=registration.provider_attribute,
+        source_path=registration.source_path,
+    )
+
+    with pytest.raises(ProfileRuntimeError, match="invalid registration"):
+        ProfileRuntimeProviderRegistry((colliding,))
+
+
+def test_provider_cache_refuses_incomplete_capability_receipt():
+    runtime_bundle = RuntimeBundleBuilder.from_manifest(
+        config.PACKAGE_ROOT
+    ).build()
+    registry = default_profile_runtime_provider_registry()
+    registration = registry.registration_for(
+        config.ACTIVE_PROFILE_PACKAGE_NAME,
+        config.ACTIVE_PROFILE,
+    )
+
+    with _fresh_started_store(runtime_bundle) as store:
+        source_component = registry._verify_provider_source(store, registration)
+        cache_key = registry._provider_cache_key(
+            registration,
+            source_component,
+        )
+        store._retain_profile_runtime_provider(
+            cache_key,
+            profile_runtime_providers._ProfileRuntimeProviderCacheEntry(
+                registration_identity=(
+                    profile_runtime_providers._registration_identity(
+                        registration
+                    )
+                ),
+                source_digest=source_component.content_digest,
+                descriptor=config.ACTIVE_PROFILE,
+                service_capabilities=(),
+            ),
+        )
+
+        with pytest.raises(
+            ProfileRuntimeError,
+            match="incomplete service capability provenance",
+        ):
+            registry.build_services(
+                store,
+                config.ACTIVE_PROFILE_PACKAGE_NAME,
+                config.ACTIVE_PROFILE,
+            )
+
+
+def test_mutated_service_instance_is_not_reused_by_later_pipeline(
+        fresh_env, monkeypatch):
+    store, first_pipeline, _ = fresh_env
+    first_registry = first_pipeline.runtime_services.registry_reverification
+    replacement_executed = False
+
+    def hostile_run(_ctx):
+        nonlocal replacement_executed
+        replacement_executed = True
+        raise AssertionError("mutated service instance executed")
+
+    monkeypatch.setattr(first_registry, "run", hostile_run)
+
+    second_pipeline = GatePipeline(store)
+
+    assert replacement_executed is False
+    assert (
+        second_pipeline.runtime_services.registry_reverification
+        is not first_registry
+    )
+    assert second_pipeline.runtime_services is not first_pipeline.runtime_services
+
+
+def test_mutated_service_class_fails_before_later_composition(
+        fresh_env, monkeypatch):
+    store, first_pipeline, _ = fresh_env
+    service_type = type(
+        first_pipeline.runtime_services.registry_reverification
+    )
+    replacement_executed = False
+
+    def hostile_run(self, ctx):
+        nonlocal replacement_executed
+        replacement_executed = True
+        raise AssertionError("mutated service class executed")
+
+    monkeypatch.setattr(service_type, "run", hostile_run)
+
+    with pytest.raises(
+        ProfileRuntimeError,
+        match="cached service capability registry_reverification.run changed",
+    ):
+        GatePipeline(store)
+
+    assert replacement_executed is False
 
 
 def test_failed_provider_service_validation_does_not_seed_cache(
@@ -2683,10 +2795,136 @@ def test_route_backed_replay_refuses_unregistered_current_route(
     assert "no registered executable runtime provider" in \
         replay["problems"][0]["detail"]
     trace = _trace_payload(store, replay)
+    assert [entry["gate"] for entry in trace["gateSequence"]][:2] == [
+        "INGRESS_NORMALIZATION",
+        "PACK_PROFILE_APPLICABILITY",
+    ]
     assert any(
         entry["outcome"] == "PROFILE_ROUTE_REFUSE"
         for entry in trace["gateSequence"]
     )
+
+
+def test_route_backed_replay_reuses_only_same_execution_fingerprint(
+        fresh_env):
+    store, _, _ = fresh_env
+    route = _si_route()
+    pipeline = _route_pipeline(store, routes=[route])
+    submission = demo.spray_submission(
+        f"rs1-route-replay-match:{_uid()}",
+        erp_id=f"erp:rs1.route.replay.match.{_uid()}",
+        confirm=True,
+    )
+
+    first = pipeline.commit(submission)
+    replay = pipeline.commit(submission)
+
+    assert replay["decisionOutcome"] == "REPLAY_REUSED_RESULT"
+    assert replay["idempotencyDisposition"] == "REPLAY_MATCH_REUSED_RESULT"
+    first_trace = _trace_payload(store, first)
+    replay_trace = _trace_payload(store, replay)
+    fingerprints = [
+        ref
+        for ref in first_trace["gateSequence"][1]["relatedArtifactRefs"]
+        if ref.startswith("profileexecution:sha256:")
+    ]
+    assert len(fingerprints) == 1
+    assert fingerprints[0] in replay_trace["gateSequence"][1][
+        "relatedArtifactRefs"
+    ]
+    assert [entry["gate"] for entry in replay_trace["gateSequence"]][:2] == [
+        "INGRESS_NORMALIZATION",
+        "PACK_PROFILE_APPLICABILITY",
+    ]
+
+
+def test_route_backed_result_cannot_replay_through_default_pipeline(
+        fresh_env):
+    store, _, _ = fresh_env
+    routed = _route_pipeline(store)
+    submission = demo.spray_submission(
+        f"rs1-route-replay-default:{_uid()}",
+        erp_id=f"erp:rs1.route.replay.default.{_uid()}",
+        confirm=True,
+    )
+
+    first = routed.commit(submission)
+    assert first["decisionOutcome"] == "PROMOTE_ACCEPTED"
+    replay = GatePipeline(store).commit(submission)
+
+    assert replay["decisionOutcome"] == "DENY"
+    assert replay["idempotencyDisposition"] == "CONFLICTING_REPLAY_BLOCKED"
+    assert replay["problems"][0]["reasonCode"] == "PACK_CONFLICT"
+    assert "profile execution binding" in replay["problems"][0]["title"].lower()
+
+
+def test_default_result_cannot_replay_through_route_backed_pipeline(
+        fresh_env):
+    store, default, _ = fresh_env
+    submission = demo.spray_submission(
+        f"rs1-default-replay-route:{_uid()}",
+        erp_id=f"erp:rs1.default.replay.route.{_uid()}",
+        confirm=True,
+    )
+
+    first = default.commit(submission)
+    assert first["decisionOutcome"] == "PROMOTE_ACCEPTED"
+    replay = _route_pipeline(store).commit(submission)
+
+    assert replay["decisionOutcome"] == "DENY"
+    assert replay["idempotencyDisposition"] == "CONFLICTING_REPLAY_BLOCKED"
+    assert replay["problems"][0]["reasonCode"] == "PACK_CONFLICT"
+
+
+def test_route_backed_replay_refuses_different_same_provider_route(
+        fresh_env):
+    store, _, _ = fresh_env
+    first_route = _si_route()
+    routes = [first_route]
+    pipeline = _route_pipeline(store, routes=routes)
+    submission = demo.spray_submission(
+        f"rs1-route-replay-changed-route:{_uid()}",
+        erp_id=f"erp:rs1.route.replay.changed-route.{_uid()}",
+        confirm=True,
+    )
+
+    first = pipeline.commit(submission)
+    assert first["decisionOutcome"] == "PROMOTE_ACCEPTED"
+    second_route = _si_route()
+    routes[:] = [second_route]
+
+    replay = pipeline.commit(submission)
+
+    assert replay["decisionOutcome"] == "DENY"
+    assert replay["idempotencyDisposition"] == "CONFLICTING_REPLAY_BLOCKED"
+    assert replay["problems"][0]["reasonCode"] == "PACK_CONFLICT"
+    trace = _trace_payload(store, replay)
+    assert second_route.route_id in trace["gateSequence"][1][
+        "relatedArtifactRefs"
+    ]
+    assert first_route.route_id not in trace["gateSequence"][1][
+        "relatedArtifactRefs"
+    ]
+
+
+def test_malformed_conflicting_replay_is_recorded_and_blocked(fresh_env):
+    store, pipeline, _ = fresh_env
+    submission = demo.spray_submission(
+        f"rs1-replay-malformed-class:{_uid()}",
+        erp_id=f"erp:rs1.replay.malformed-class.{_uid()}",
+        confirm=True,
+    )
+    first = pipeline.commit(submission)
+    assert first["decisionOutcome"] == "PROMOTE_ACCEPTED"
+
+    malformed = dict(submission, commitClass="UNKNOWN_COMMIT_CLASS")
+    replay = pipeline.commit(malformed)
+
+    assert replay["decisionOutcome"] == "DENY"
+    assert replay["idempotencyDisposition"] == "CONFLICTING_REPLAY_BLOCKED"
+    assert replay["problems"][0]["reasonCode"] == "IDEMPOTENCY_REPLAY_CONFLICT"
+    trace = _trace_payload(store, replay)
+    assert trace["gateSequence"][0]["gate"] == "INGRESS_NORMALIZATION"
 
 
 def test_route_backed_gate_pipeline_refuses_alias_candidate_identity(fresh_env):
@@ -3354,6 +3592,10 @@ def test_acceptance_sufficiency_uses_descriptor_policy_ref_without_policy_body(
 def test_descriptor_validation_policy_failure_stops_at_validation(
         fresh_env, monkeypatch):
     store, _, _ = fresh_env
+    # This compatibility test deliberately replaces trusted class behavior;
+    # discard the earlier authenticated receipt so it can exercise the
+    # downstream governed policy-error path instead of the tamper detector.
+    store._profile_runtime_provider_cache.clear()
 
     def fail_validation_policy(_provider):
         raise profile_policy.ProfilePolicyError("descriptor validation unavailable")
@@ -3382,6 +3624,9 @@ def test_descriptor_validation_policy_failure_stops_at_validation(
 def test_descriptor_sufficiency_policy_failure_happens_after_validation(
         fresh_env, monkeypatch):
     store, _, _ = fresh_env
+    # See the validation-policy companion above: this test intentionally
+    # installs synthetic class behavior and is not a cache-integrity test.
+    store._profile_runtime_provider_cache.clear()
     validation = profile_policy.validation_policy_for_descriptor(config.ACTIVE_PROFILE)
 
     monkeypatch.setattr(profile_policy.DescriptorPolicyProvider, "validation_policy",
