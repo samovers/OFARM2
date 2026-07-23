@@ -6146,6 +6146,11 @@
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_provider_cache_reuses_validated_services_without_mutable_provider_call",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_provider_operation_sequence_omits_unowned_registry_reverification",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
@@ -6331,6 +6336,11 @@
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_replay_refuses_unregistered_current_route",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_runtime_service_construction_refuses_incomplete_consumed_contract[incomplete_recognized_rule_refs-recognized_rule_refs]",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
@@ -6362,6 +6372,11 @@
     },
     {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_runtime_service_construction_refuses_incomplete_consumed_contract[wrong_registry_product_lookup-not bound]",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_runtime_service_construction_refuses_incomplete_consumed_contract[wrong_registry_snapshot_prefix-descriptor REGSR]",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
@@ -7606,8 +7621,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "165fd63a24840387b051b9a5f797b5835fc99ca7f03d7aceff7d73136892ac44",
-  "entryCount": 1521,
+  "entriesSha256": "a1fce3f20ef3dbb6fdb3a53dd6a3fcc2d35a50974039a29128226af7f5ba99ac",
+  "entryCount": 1524,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

@@ -21,7 +21,7 @@ from typing import Any
 from . import policy, profile_policy, sufficiency
 from .context import ContextNotReconstructible, mint, parse_ts
 from .contracts import ContractViolation
-from .emission import PromotionEmitter, ReplayWriter, submission_evidence_refs
+from .emission import PromotionEmitter, submission_evidence_refs
 from .problems import runtime_problem
 
 
@@ -45,8 +45,8 @@ class GateRefusal:
 
 @dataclass
 class GateReplay:
-    """Idempotent short-circuit: the CommitIngressResult to return as-is."""
-    result: dict
+    """Idempotent short-circuit pending active route authentication."""
+    prior: dict
 
 
 # ---------------------------------------------------------------------------
@@ -152,8 +152,6 @@ class IngressNormalizer:
     def run(self, ctx: GateContext) -> GatePass | GateReplay:
         sub = ctx.sub
         prior = ctx.store.idempotency_lookup(ctx.cur, ctx.idem_key)
-        if prior is not None:
-            return GateReplay(ReplayWriter().write(ctx, prior))
 
         if ctx.commit_class not in policy.COMMIT_CLASS_TO_FAMILY:
             raise ContractViolation(f"unknown commit class {ctx.commit_class!r}")
@@ -245,6 +243,8 @@ class IngressNormalizer:
             # (PR #18 decisionOutcomeState blocker)
             ctx.review_outcome = (sub["decisionOutcomeState"]
                                   if "decisionOutcomeState" in sub else policy.ABSENT)
+        if prior is not None:
+            return GateReplay(prior)
         ctx.store.insert_record(ctx.cur, ingress_request)
         ctx.log("INGRESS_NORMALIZATION", "NORMALIZED_DRAFT")
         return GatePass()

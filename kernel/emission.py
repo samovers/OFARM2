@@ -475,7 +475,13 @@ class ReplayWriter:
     its own recorded request envelope so the reuse/refusal is reconstructible
     across the ingress seam."""
 
-    def write(self, ctx: GateContext, prior: dict) -> dict:
+    def write(
+        self,
+        ctx: GateContext,
+        prior: dict,
+        *,
+        replay_precondition_problems: list[dict] | None = None,
+    ) -> dict:
         stored_row = ctx.store.get_record(prior["result_record_id"])
         if stored_row is None:
             raise RuntimeError(
@@ -507,33 +513,46 @@ class ReplayWriter:
             "sourcePayloadDigest": ctx.source_digest,
         }
         ctx.store.insert_record(ctx.cur, replay_request)
-        if bundle_conflict:
+        if replay_precondition_problems:
             disposition, outcome = "CONFLICTING_REPLAY_BLOCKED", "DENY"
-            problem = runtime_problem(
+            problems = list(replay_precondition_problems)
+            reason_code = problems[0].get("reasonCode", "PACK_CONFLICT")
+            ctx.log(
+                "INGRESS_NORMALIZATION",
+                "CONFLICTING_REPLAY_BLOCKED",
+                reason_code=reason_code,
+                rationale=(
+                    "IDEMPOTENCY_REPLAY: active profile route/provider "
+                    "authentication failed"
+                ),
+            )
+        elif bundle_conflict:
+            disposition, outcome = "CONFLICTING_REPLAY_BLOCKED", "DENY"
+            problems = [runtime_problem(
                 "PACK_CONFLICT", "Cross-bundle replay blocked",
                 f"idempotency key {ctx.idem_key} belongs to tenant/bundle "
                 f"{prior['tenant_ref']}/{prior['runtime_bundle_digest']}, while this "
                 f"process is bound to {ctx.store.tenant_ref}/"
                 f"{ctx.store.runtime_bundle_digest}; an earlier runtime's result "
-                "cannot be reused as a decision by the active runtime")
+                "cannot be reused as a decision by the active runtime")]
             ctx.log("INGRESS_NORMALIZATION", "CONFLICTING_REPLAY_BLOCKED",
                     reason_code="PACK_CONFLICT")
         elif conflicting:
             disposition, outcome = "CONFLICTING_REPLAY_BLOCKED", "DENY"
-            problem = runtime_problem(
+            problems = [runtime_problem(
                 "IDEMPOTENCY_REPLAY_CONFLICT", "Conflicting replay blocked",
                 f"idempotency key {ctx.idem_key} was already processed with a "
                 "different source payload; blocked rather than silently "
-                "duplicating truth")
+                "duplicating truth")]
             ctx.log("INGRESS_NORMALIZATION", "CONFLICTING_REPLAY_BLOCKED",
                     reason_code="IDEMPOTENCY_REPLAY_CONFLICT")
         else:
             disposition, outcome = "REPLAY_MATCH_REUSED_RESULT", "REPLAY_REUSED_RESULT"
-            problem = runtime_problem(
+            problems = [runtime_problem(
                 "IDEMPOTENCY_REPLAY_REUSED", "Replay reused earlier result",
                 f"idempotency key {ctx.idem_key} deterministically reuses the "
                 f"result of request {prior['request_id']}; no new truth was created",
-                severity="INFO")
+                severity="INFO")]
             ctx.log("INGRESS_NORMALIZATION", "REPLAY_MATCH_REUSED_RESULT",
                     reason_code="IDEMPOTENCY_REPLAY_REUSED")
 
@@ -549,13 +568,12 @@ class ReplayWriter:
             "idempotencyKey": ctx.idem_key,
             "idempotencyDisposition": disposition,
             "replayOfRequestId": prior["request_id"],
-            "gateSequence": ctx.gate_sequence,   # exactly the one logged entry
+            "gateSequence": ctx.gate_sequence,
             "finalOutcome": outcome,
             "traceSummary": f"replay of {prior['request_id']}: {disposition}",
         }
         ctx.store.insert_record(ctx.cur, trace)
 
-        problems = [problem]
         if outcome == "REPLAY_REUSED_RESULT":
             # a matching replay REUSES the earlier result, so carry forward that
             # result's own problems as replayed context — never silently drop them.
@@ -563,7 +581,7 @@ class ReplayWriter:
             # / dose-range): the result warning is the only implemented advisory
             # surface (durable Advisory-twin records are deferred, ERRATA E-006), so
             # dropping them on replay would silently lose the advisory.
-            problems = [problem, *stored.get("problems", [])]
+            problems = [*problems, *stored.get("problems", [])]
 
         result = {
             "schemaVersion": "ofarm.commitingressresult.v0.1",

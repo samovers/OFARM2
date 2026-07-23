@@ -128,6 +128,16 @@
       "forbiddenUse": "Do not present profile-local design inventories as executed platform evidence."
     },
     {
+      "id": "review-baseline-inventory-active-si-tests",
+      "path": "conformance/review_baseline_test_inventory.json",
+      "term": "SI|REGSR",
+      "category": "CONFORMANCE_EVIDENCE_HISTORY",
+      "reason": "The deterministic review inventory records collected test identities, including active SI runtime and REGSR boundary regressions, without turning those names into generic Core requirements.",
+      "owner": "review-baseline-inventory-review",
+      "expiresWhen": "The review inventory stops being generated from collected test identities or starts presenting active SI test coverage as multi-profile runtime readiness.",
+      "forbiddenUse": "Do not treat pinned active SI test names as Serbian activation, generic country semantics, or L5 neutrality certification."
+    },
+    {
       "id": "kernel-readme-active-si-support",
       "path": "kernel/README.md",
       "term": "SI|GERK",

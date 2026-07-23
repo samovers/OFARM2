@@ -131,12 +131,11 @@ class GatePipeline:
             # (Under the single-writer lock — M2 G2 — writers serialize, so this
             # backstop is now reached only across connections that bypass it.)
             with self.store.serialized_tx() as cur:
-                prior = self.store.idempotency_lookup(
-                    cur, submission["idempotencyKey"])
-                if prior is None:
-                    raise
                 ctx = self._new_context(cur, submission)
-                return ReplayWriter().write(ctx, prior)
+                ingress = IngressNormalizer().run(ctx)
+                if not isinstance(ingress, GateReplay):
+                    raise
+                return self._write_authenticated_replay(ctx, ingress.prior)
 
     @staticmethod
     def _source_digest(sub: dict) -> str:
@@ -295,7 +294,7 @@ class GatePipeline:
 
         ingress = IngressNormalizer().run(ctx)
         if isinstance(ingress, GateReplay):
-            return ingress.result
+            return self._write_authenticated_replay(ctx, ingress.prior)
 
         if self.route_backed:
             route_outcome = self._resolve_profile_route(ctx)
@@ -319,3 +318,15 @@ class GatePipeline:
             MaterializationGate().run(ctx)
 
         return PromotionTraceWriter().write(ctx)
+
+    def _write_authenticated_replay(self, ctx: GateContext, prior: dict) -> dict:
+        route_problems = None
+        if self.route_backed:
+            route_outcome = self._resolve_profile_route(ctx)
+            if isinstance(route_outcome, GateRefusal):
+                route_problems = route_outcome.problems
+        return ReplayWriter().write(
+            ctx,
+            prior,
+            replay_precondition_problems=route_problems,
+        )

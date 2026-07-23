@@ -2166,6 +2166,10 @@ def test_provider_cache_hit_revalidates_complete_registration(tmp_path):
             registration,
             source_component,
         )
+        services = provider.build_services(
+            store,
+            config.ACTIVE_PROFILE,
+        )
         cache_key = registry._provider_cache_key(
             registration,
             source_component,
@@ -2175,7 +2179,8 @@ def test_provider_cache_hit_revalidates_complete_registration(tmp_path):
             profile_runtime_providers._ProfileRuntimeProviderCacheEntry(
                 registration=alternate_registration,
                 source_digest=source_component.content_digest,
-                provider=provider,
+                descriptor=config.ACTIVE_PROFILE,
+                services=services,
             ),
         )
 
@@ -2188,6 +2193,29 @@ def test_provider_cache_hit_revalidates_complete_registration(tmp_path):
                 config.ACTIVE_PROFILE_PACKAGE_NAME,
                 config.ACTIVE_PROFILE,
             )
+
+
+def test_provider_cache_reuses_validated_services_without_mutable_provider_call(
+        fresh_env, monkeypatch):
+    store, first_pipeline, _ = fresh_env
+    provider_type = type(first_pipeline.runtime_services.provider)
+    replacement_executed = False
+
+    def hostile_build_services(self, provider_store, descriptor):
+        nonlocal replacement_executed
+        replacement_executed = True
+        raise AssertionError("mutated cached provider behavior executed")
+
+    monkeypatch.setattr(
+        provider_type,
+        "build_services",
+        hostile_build_services,
+    )
+
+    second_pipeline = GatePipeline(store)
+
+    assert replacement_executed is False
+    assert second_pipeline.runtime_services is first_pipeline.runtime_services
 
 
 def test_failed_provider_service_validation_does_not_seed_cache(
@@ -2336,6 +2364,7 @@ def test_runtime_service_construction_refuses_missing_required_capability(
         "build_services",
         incomplete_build_services,
     )
+    store._profile_runtime_provider_cache.clear()
     with pytest.raises(ProfileRuntimeError, match=missing_service):
         registry.build_services(
             store,
@@ -2354,6 +2383,7 @@ def test_runtime_service_construction_refuses_missing_required_capability(
         ("missing_lookup_by_decision", "lookup_by_decision"),
         ("missing_registry_reverification", "registry_reverification"),
         ("wrong_registry_product_lookup", "not bound"),
+        ("wrong_registry_snapshot_prefix", "descriptor REGSR"),
     ],
 )
 def test_runtime_service_construction_refuses_incomplete_consumed_contract(
@@ -2411,6 +2441,7 @@ def test_runtime_service_construction_refuses_incomplete_consumed_contract(
                 evidence_policy=policy.evidence_policy,
             )
         product_lookup = complete.product_lookup
+        reference_bindings = complete.reference_bindings
         registry_reverification = complete.registry_reverification
         if contract_defect == "missing_lookup_by_decision":
             product_lookup = SimpleNamespace()
@@ -2422,9 +2453,21 @@ def test_runtime_service_construction_refuses_incomplete_consumed_contract(
                 snapshot_prefix=registry_reverification.snapshot_prefix,
                 product_lookup=SimpleNamespace(),
             )
+        elif contract_defect == "wrong_registry_snapshot_prefix":
+            wrong_prefix = "referencesnapshot:si.wrong.ffs-reg"
+            reference_bindings = replace(
+                reference_bindings,
+                regsr_snapshot_prefix=wrong_prefix,
+            )
+            registry_reverification = SimpleNamespace(
+                run=registry_reverification.run,
+                snapshot_prefix=wrong_prefix,
+                product_lookup=product_lookup,
+            )
         return replace(
             complete,
             policy_provider=policy,
+            reference_bindings=reference_bindings,
             product_lookup=product_lookup,
             registry_reverification=registry_reverification,
         )
@@ -2434,6 +2477,7 @@ def test_runtime_service_construction_refuses_incomplete_consumed_contract(
         "build_services",
         incomplete_build_services,
     )
+    store._profile_runtime_provider_cache.clear()
     with pytest.raises(ProfileRuntimeError, match=match):
         registry.build_services(
             store,
@@ -2585,6 +2629,64 @@ def test_route_backed_gate_pipeline_refuses_unregistered_runtime_provider(
         result["problems"][0]["detail"]
     _assert_profile_route_refusal(store, result)
     assert pipeline.runtime_services.provider.package_name == "profile_si_ffs"
+
+
+def test_route_backed_replay_refuses_unregistered_current_route(
+        fresh_env, tmp_path):
+    store, _, _ = fresh_env
+    package_root = _copied_package_root(tmp_path)
+    package_name = "profile_unregistered_replay"
+    profile_root, descriptor_doc = _copied_si_package(
+        package_root,
+        package_name,
+    )
+    _make_second_descriptor_unique(
+        profile_root,
+        descriptor_doc,
+        duplicate_field="",
+    )
+    registry = load_profile_descriptor_registry(
+        package_root,
+        allowed_profile_package_names=("profile_si_ffs", package_name),
+    )
+    descriptor = registry.candidate_for(package_name).descriptor
+    routes = [_si_route()]
+    pipeline = _route_pipeline(store, routes=routes)
+    submission = demo.spray_submission(
+        f"rs1-route-replay:{_uid()}",
+        erp_id=f"erp:rs1.route.replay.{_uid()}",
+        confirm=True,
+    )
+
+    first = pipeline.commit(submission)
+    assert first["decisionOutcome"] == "PROMOTE_ACCEPTED"
+
+    pipeline.profile_route_registry = registry
+    pipeline.selected_profile_package_names = ("profile_si_ffs", package_name)
+    routes[:] = [ProfileRouteRecord(
+        route_id=f"profileroute:test.unregistered.replay.{_uid()}",
+        tenant_ref=config.TENANT_REF,
+        farm_ref=demo.FARM,
+        profile_package_name=package_name,
+        profile_ref=descriptor.profile_ref,
+        pack_ref=descriptor.pack_ref,
+        pack_activation_set_ref=descriptor.pack_activation_set_ref,
+        active_artifact_set_ref=descriptor.active_artifact_set_ref,
+        descriptor_identity=profile_runtime_descriptor_identity(descriptor),
+    )]
+
+    replay = pipeline.commit(submission)
+
+    assert replay["decisionOutcome"] == "DENY"
+    assert replay["idempotencyDisposition"] == "CONFLICTING_REPLAY_BLOCKED"
+    assert replay["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+    assert "no registered executable runtime provider" in \
+        replay["problems"][0]["detail"]
+    trace = _trace_payload(store, replay)
+    assert any(
+        entry["outcome"] == "PROFILE_ROUTE_REFUSE"
+        for entry in trace["gateSequence"]
+    )
 
 
 def test_route_backed_gate_pipeline_refuses_alias_candidate_identity(fresh_env):

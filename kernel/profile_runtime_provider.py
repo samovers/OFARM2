@@ -58,15 +58,6 @@ class ProfileRuntimeProviderRegistration:
 
 
 @dataclass(frozen=True)
-class _ProfileRuntimeProviderCacheEntry:
-    """Successfully composed provider bound to its complete source identity."""
-
-    registration: ProfileRuntimeProviderRegistration
-    source_digest: str
-    provider: ProfileRuntimeProvider
-
-
-@dataclass(frozen=True)
 class ProfileRuntimeServices:
     """Capability-specific services selected for one bound descriptor.
 
@@ -83,6 +74,16 @@ class ProfileRuntimeServices:
     reference_bindings: Any = None
     product_lookup: Any = None
     registry_reverification: Any = None
+
+
+@dataclass(frozen=True)
+class _ProfileRuntimeProviderCacheEntry:
+    """Validated Store-bound services for one complete provider identity."""
+
+    registration: ProfileRuntimeProviderRegistration
+    source_digest: str
+    descriptor: ProfileRuntimeDescriptor
+    services: ProfileRuntimeServices
 
 
 @dataclass(frozen=True)
@@ -205,6 +206,16 @@ class ProfileRuntimeProviderRegistry:
     ) -> ProfileRuntimeServices:
         registration = self.registration_for(package_name, descriptor)
         source_component = self._verify_provider_source(store, registration)
+        cache_key = self._provider_cache_key(registration, source_component)
+        cached_entry = store._cached_profile_runtime_provider(cache_key)
+        if cached_entry is not None:
+            return self._validated_cached_services(
+                cached_entry,
+                registration,
+                source_component,
+                descriptor,
+            )
+
         provider = self._load_provider(store, registration, source_component)
         services = provider.build_services(store, descriptor)
         if not isinstance(services, ProfileRuntimeServices):
@@ -257,22 +268,48 @@ class ProfileRuntimeProviderRegistry:
         cache_entry = _ProfileRuntimeProviderCacheEntry(
             registration=registration,
             source_digest=source_component.content_digest,
-            provider=provider,
+            descriptor=descriptor,
+            services=services,
         )
         retained_entry = store._retain_profile_runtime_provider(
-            self._provider_cache_key(registration, source_component),
+            cache_key,
             cache_entry,
         )
         if (
-            type(retained_entry) is not _ProfileRuntimeProviderCacheEntry
-            or retained_entry.registration != registration
-            or retained_entry.source_digest != source_component.content_digest
-            or retained_entry.provider is not provider
+            retained_entry is not cache_entry
+            or self._validated_cached_services(
+                retained_entry,
+                registration,
+                source_component,
+                descriptor,
+            )
+            is not services
         ):
             raise ProfileRuntimeError(
                 "profile runtime provider cache changed during composition"
             )
         return services
+
+    @staticmethod
+    def _validated_cached_services(
+        cached_entry: Any,
+        registration: ProfileRuntimeProviderRegistration,
+        source_component: RuntimeComponent,
+        descriptor: ProfileRuntimeDescriptor,
+    ) -> ProfileRuntimeServices:
+        if (
+            type(cached_entry) is not _ProfileRuntimeProviderCacheEntry
+            or cached_entry.registration != registration
+            or cached_entry.source_digest != source_component.content_digest
+            or cached_entry.descriptor != descriptor
+            or type(cached_entry.services) is not ProfileRuntimeServices
+            or cached_entry.services.descriptor != descriptor
+        ):
+            raise ProfileRuntimeError(
+                "profile runtime provider cache entry does not match its "
+                "complete registration and descriptor"
+            )
+        return cached_entry.services
 
     @staticmethod
     def _verify_provider_source(
@@ -321,28 +358,6 @@ class ProfileRuntimeProviderRegistry:
         registration: ProfileRuntimeProviderRegistration,
         source_component: RuntimeComponent,
     ) -> ProfileRuntimeProvider:
-        cache_key = ProfileRuntimeProviderRegistry._provider_cache_key(
-            registration,
-            source_component,
-        )
-        cached_entry = store._cached_profile_runtime_provider(cache_key)
-        if cached_entry is not None:
-            if (
-                type(cached_entry) is not _ProfileRuntimeProviderCacheEntry
-                or cached_entry.registration != registration
-                or cached_entry.source_digest != source_component.content_digest
-            ):
-                raise ProfileRuntimeError(
-                    "profile runtime provider cache entry does not match its "
-                    "complete registration"
-                )
-            cached_provider = cached_entry.provider
-            ProfileRuntimeProviderRegistry._validate_provider_registration(
-                cached_provider,
-                registration,
-            )
-            return cached_provider
-
         sealed_module = ModuleType("_ofarm_sealed_profile_runtime_provider")
         sealed_module_name = (
             f"{registration.module_name}.__ofarm_sealed_"
@@ -471,6 +486,22 @@ class ProfileRuntimeProviderRegistry:
             raise ProfileRuntimeError(
                 "SI profile runtime provider reference_bindings has an invalid "
                 "regsr_snapshot_prefix"
+            )
+        try:
+            descriptor_regsr_snapshot_prefix = (
+                services.descriptor.reference_family(
+                    "si.uvhvvr.ffs-reg"
+                ).snapshot_prefix
+            )
+        except ProfileRuntimeError as exc:
+            raise ProfileRuntimeError(
+                "SI profile runtime provider descriptor does not select the "
+                "required REGSR reference family"
+            ) from exc
+        if regsr_snapshot_prefix != descriptor_regsr_snapshot_prefix:
+            raise ProfileRuntimeError(
+                "SI profile runtime provider regsr_snapshot_prefix does not "
+                "match the descriptor REGSR reference family"
             )
         product_lookup = services.product_lookup
         if product_lookup is None or not callable(
