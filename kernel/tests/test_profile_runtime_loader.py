@@ -7,6 +7,7 @@ before any descriptor mistake can become hidden runtime truth.
 from __future__ import annotations
 
 import copy
+import importlib
 import json
 import os
 import shutil
@@ -1960,6 +1961,108 @@ def test_mismatched_provider_source_cannot_execute_during_startup(
     assert module_name not in sys.modules
 
 
+def test_preloaded_provider_attribute_replacement_cannot_execute(
+        monkeypatch):
+    runtime_bundle = RuntimeBundleBuilder.from_manifest(
+        config.PACKAGE_ROOT
+    ).build()
+    registry = default_profile_runtime_provider_registry()
+    registration = registry.registration_for(
+        config.ACTIVE_PROFILE_PACKAGE_NAME,
+        config.ACTIVE_PROFILE,
+    )
+    imported_module = importlib.import_module(registration.module_name)
+    original_provider = getattr(
+        imported_module,
+        registration.provider_attribute,
+    )
+
+    class HostileProvider:
+        package_name = registration.package_name
+        profile_ref = registration.profile_ref
+        source_component_role = registration.source_component_role
+        source_component_logical_ref = (
+            registration.source_component_logical_ref
+        )
+
+        def __init__(self):
+            self.executed = False
+
+        def build_services(self, provider_store, descriptor):
+            self.executed = True
+            services = original_provider.build_services(
+                provider_store,
+                descriptor,
+            )
+            return replace(services, provider=self)
+
+    hostile_provider = HostileProvider()
+    monkeypatch.setattr(
+        imported_module,
+        registration.provider_attribute,
+        hostile_provider,
+    )
+
+    with _fresh_started_store(runtime_bundle) as store:
+        pipeline = GatePipeline(store)
+
+    assert hostile_provider.executed is False
+    assert pipeline.runtime_services.provider is not hostile_provider
+
+
+def test_bundle_bound_policy_ignores_copied_root_filesystem_mutation(
+        tmp_path):
+    package_root = tmp_path / "packages"
+    package_root.mkdir()
+    profile_root, descriptor_doc = _copied_si_package(
+        package_root,
+        "profile_si_ffs",
+    )
+    policy_path = profile_root / descriptor_doc["evidencePolicyPath"]
+    retained_policy = json.loads(policy_path.read_text())
+    retained_policy["display"]["durableProofBundleLabel"] = (
+        "Retained copied-package policy"
+    )
+    policy_path.write_text(json.dumps(retained_policy), encoding="utf-8")
+    descriptor = load_profile_runtime_descriptor(profile_root)
+
+    base = RuntimeBundleBuilder.from_manifest(config.PACKAGE_ROOT).build()
+    selected_policy = base.component(
+        RuntimeComponentRole.PROFILE_POLICY,
+        descriptor.evidence_policy_ref,
+    )
+    replacement_policy = RuntimeComponent.from_selected_bytes(
+        role=selected_policy.role,
+        logical_ref=selected_policy.logical_ref,
+        canonicalization=selected_policy.canonicalization,
+        placement=selected_policy.placement,
+        selected_bytes=policy_path.read_bytes(),
+    )
+    runtime_bundle = RuntimeBundle.create(tuple(
+        replacement_policy if component is selected_policy else component
+        for component in base.components
+    ))
+
+    with _fresh_started_store(
+        runtime_bundle,
+        active_descriptor=descriptor,
+    ) as store:
+        pipeline = GatePipeline(store)
+        mutated_policy = copy.deepcopy(retained_policy)
+        mutated_policy["display"]["durableProofBundleLabel"] = (
+            "Unretained filesystem mutation"
+        )
+        policy_path.write_text(json.dumps(mutated_policy), encoding="utf-8")
+
+        observed = pipeline.policy_provider.evidence_policy(
+            supported_checks=sufficiency.OPERATION_FLOOR_CHECKS,
+        )
+
+    assert observed["display"]["durableProofBundleLabel"] == (
+        "Retained copied-package policy"
+    )
+
+
 @pytest.mark.parametrize("missing_service", [
     "policy_provider",
     "context_assembler",
@@ -1973,7 +2076,12 @@ def test_runtime_service_construction_refuses_missing_required_capability(
         "profile_si_ffs",
         config.ACTIVE_PROFILE,
     )
-    provider = registry._load_provider(registration)
+    source_component = registry._verify_provider_source(store, registration)
+    provider = registry._load_provider(
+        store,
+        registration,
+        source_component,
+    )
     provider_type = type(provider)
     original_build_services = provider_type.build_services
 
@@ -2000,6 +2108,7 @@ def test_runtime_service_construction_refuses_missing_required_capability(
         ("missing_policy_ref", "policy_ref"),
         ("wrong_policy_ref", "descriptor evidencePolicyRef"),
         ("invalid_recognized_rule_refs", "recognized_rule_refs"),
+        ("incomplete_recognized_rule_refs", "recognized_rule_refs"),
         ("missing_lookup_by_decision", "lookup_by_decision"),
     ],
 )
@@ -2011,7 +2120,12 @@ def test_runtime_service_construction_refuses_incomplete_consumed_contract(
         "profile_si_ffs",
         config.ACTIVE_PROFILE,
     )
-    provider = registry._load_provider(registration)
+    source_component = registry._verify_provider_source(store, registration)
+    provider = registry._load_provider(
+        store,
+        registration,
+        source_component,
+    )
     provider_type = type(provider)
     original_build_services = provider_type.build_services
 
@@ -2035,6 +2149,13 @@ def test_runtime_service_construction_refuses_incomplete_consumed_contract(
             policy = SimpleNamespace(
                 policy_ref=policy.policy_ref,
                 recognized_rule_refs=[policy.policy_ref],
+                validation_policy=policy.validation_policy,
+                evidence_policy=policy.evidence_policy,
+            )
+        elif contract_defect == "incomplete_recognized_rule_refs":
+            policy = SimpleNamespace(
+                policy_ref=policy.policy_ref,
+                recognized_rule_refs=frozenset({policy.policy_ref}),
                 validation_policy=policy.validation_policy,
                 evidence_policy=policy.evidence_policy,
             )

@@ -106,6 +106,7 @@ class Store:
         self._runtime_bundle = runtime_bundle
         self._active_profile_package_name = active_profile_package_name
         self._active_descriptor = active_descriptor
+        self._profile_runtime_provider_cache = {}
         self._selected_reference_snapshot_refs = frozenset(
             component.logical_ref
             for component in runtime_bundle.components
@@ -161,6 +162,15 @@ class Store:
                 "package identity"
             )
         return self._active_profile_package_name
+
+    def _cached_profile_runtime_provider(self, cache_key):
+        return self._profile_runtime_provider_cache.get(cache_key)
+
+    def _retain_profile_runtime_provider(self, cache_key, provider):
+        return self._profile_runtime_provider_cache.setdefault(
+            cache_key,
+            provider,
+        )
 
     def _verify_active_descriptor_binding(self) -> None:
         descriptor = self._active_descriptor

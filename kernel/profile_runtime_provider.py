@@ -7,14 +7,19 @@ the current runtime already needs.
 """
 from __future__ import annotations
 
-import importlib
 import importlib.util
+import sys
 from dataclasses import dataclass
 from pathlib import Path
+from types import ModuleType
 from typing import Any, Protocol
 
 from .profile_runtime import ProfileRuntimeDescriptor, ProfileRuntimeError
-from .runtime_bundle import RuntimeBundleError, RuntimeComponentRole
+from .runtime_bundle import (
+    RuntimeBundleError,
+    RuntimeComponent,
+    RuntimeComponentRole,
+)
 
 
 _REQUIRED_SERVICE_CAPABILITIES = {
@@ -189,8 +194,8 @@ class ProfileRuntimeProviderRegistry:
         descriptor: ProfileRuntimeDescriptor,
     ) -> ProfileRuntimeServices:
         registration = self.registration_for(package_name, descriptor)
-        self._verify_provider_source(store, registration)
-        provider = self._load_provider(registration)
+        source_component = self._verify_provider_source(store, registration)
+        provider = self._load_provider(store, registration, source_component)
         services = provider.build_services(store, descriptor)
         if not isinstance(services, ProfileRuntimeServices):
             raise ProfileRuntimeError(
@@ -229,7 +234,7 @@ class ProfileRuntimeProviderRegistry:
     def _verify_provider_source(
         store,
         registration: ProfileRuntimeProviderRegistration,
-    ) -> None:
+    ) -> RuntimeComponent:
         try:
             store.require_startup_complete("profile runtime provider composition")
             component = store.runtime_bundle.component(
@@ -268,18 +273,53 @@ class ProfileRuntimeProviderRegistry:
                 "profile runtime provider source bytes do not match the exact "
                 "startup-verified RuntimeBundle component"
             )
+        return component
 
     @staticmethod
     def _load_provider(
+        store,
         registration: ProfileRuntimeProviderRegistration,
+        source_component: RuntimeComponent,
     ) -> ProfileRuntimeProvider:
+        cache_key = (
+            registration.package_name,
+            registration.profile_ref,
+            registration.source_component_role,
+            registration.source_component_logical_ref,
+            source_component.content_digest,
+        )
+        cached_provider = store._cached_profile_runtime_provider(cache_key)
+        if cached_provider is not None:
+            return cached_provider
+
+        sealed_module = ModuleType("_ofarm_sealed_profile_runtime_provider")
+        sealed_module_name = (
+            f"{registration.module_name}.__ofarm_sealed_"
+            f"{source_component.content_digest}_{id(sealed_module):x}"
+        )
+        sealed_module.__name__ = sealed_module_name
+        sealed_module.__file__ = str(registration.source_path)
+        sealed_module.__package__ = registration.module_name.rpartition(".")[0]
+        if sealed_module_name in sys.modules:
+            raise ProfileRuntimeError(
+                "sealed profile runtime provider module identity collision"
+            )
         try:
-            module = importlib.import_module(registration.module_name)
-            provider = getattr(module, registration.provider_attribute)
+            code = compile(
+                source_component.canonical_bytes,
+                str(registration.source_path),
+                "exec",
+                dont_inherit=True,
+            )
+            sys.modules[sealed_module_name] = sealed_module
+            exec(code, sealed_module.__dict__)
+            provider = getattr(sealed_module, registration.provider_attribute)
         except Exception as exc:
             raise ProfileRuntimeError(
                 "verified profile runtime provider module could not be loaded"
             ) from exc
+        finally:
+            sys.modules.pop(sealed_module_name, None)
         expected_attributes = {
             "package_name": registration.package_name,
             "profile_ref": registration.profile_ref,
@@ -304,7 +344,7 @@ class ProfileRuntimeProviderRegistry:
             raise ProfileRuntimeError(
                 "verified profile runtime provider does not match its registration"
             )
-        return provider
+        return store._retain_profile_runtime_provider(cache_key, provider)
 
     @staticmethod
     def _validate_policy_contract(
@@ -327,6 +367,12 @@ class ProfileRuntimeProviderRegistry:
             "policy_provider",
             "recognized_rule_refs",
         )
+        required_rule_refs = frozenset({
+            descriptor.evidence_policy_ref,
+            descriptor.profile_ref,
+            descriptor.pack_ref,
+            descriptor.code_binding_profile_ref,
+        })
         if (
             type(recognized_rule_refs) is not frozenset
             or not recognized_rule_refs
@@ -334,7 +380,7 @@ class ProfileRuntimeProviderRegistry:
                 not isinstance(ref, str) or not ref
                 for ref in recognized_rule_refs
             )
-            or policy_ref not in recognized_rule_refs
+            or not required_rule_refs.issubset(recognized_rule_refs)
         ):
             raise ProfileRuntimeError(
                 "profile runtime provider policy_provider has invalid "

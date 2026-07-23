@@ -8,7 +8,8 @@ from ...context import ContextAssembler, SIProductRegister, SIReferenceBindings
 from ...materializer import Materializer
 from ...profile_runtime import ProfileRuntimeDescriptor, ProfileRuntimeError
 from ...profile_runtime_provider import ProfileRuntimeServices
-from ...runtime_bundle import RuntimeComponentRole
+from ...runtime_bundle import RuntimeBundleError, RuntimeComponentRole
+from ...sufficiency import OPERATION_FLOOR_CHECKS
 
 
 @dataclass(frozen=True)
@@ -33,7 +34,21 @@ class SIProfileRuntimeProvider:
             raise ProfileRuntimeError(
                 "the SI runtime provider received an unsupported profile descriptor"
             )
-        policy_provider = profile_policy.DescriptorPolicyProvider(descriptor)
+        try:
+            policy_component = store.runtime_bundle.component(
+                RuntimeComponentRole.PROFILE_POLICY,
+                descriptor.evidence_policy_ref,
+            )
+        except (AttributeError, RuntimeBundleError) as exc:
+            raise ProfileRuntimeError(
+                "the SI runtime provider policy is not retained as its exact "
+                "startup-verified RuntimeBundle component"
+            ) from exc
+        policy_provider = profile_policy.DescriptorPolicyProvider.from_runtime_bundle(
+            descriptor,
+            policy_component.canonical_bytes,
+            supported_checks=OPERATION_FLOOR_CHECKS,
+        )
         reference_bindings = SIReferenceBindings.from_runtime_descriptor(descriptor)
         product_lookup = SIProductRegister(reference_bindings)
         product_lookup.load_from_store(store)
