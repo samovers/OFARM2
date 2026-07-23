@@ -555,11 +555,13 @@ class _ObserverPublicKeyClient:
         *,
         entered=None,
         release=None,
+        block_on_call=2,
     ):
         self.private = private
         self.resource = resource
         self.entered = entered
         self.release = release
+        self.block_on_call = block_on_call
         self.calls = 0
 
     def asymmetric_sign(self, *, request):
@@ -568,7 +570,10 @@ class _ObserverPublicKeyClient:
     def get_public_key(self, *, request):
         assert request == {"name": self.resource}
         self.calls += 1
-        if self.entered is not None and self.calls > 1:
+        if (
+            self.entered is not None
+            and self.calls == self.block_on_call
+        ):
             self.entered.set()
             assert self.release is not None
             assert self.release.wait(timeout=5)
@@ -595,6 +600,76 @@ class _ObserverPublicKeyClient:
                 "pem_crc32c": _crc32c(pem),
             },
         )()
+
+
+def _refreshing_signer_fixture(
+    now,
+    *,
+    initial_valid_until=None,
+    observer_entered=None,
+    observer_release=None,
+    observer_block_on_call=2,
+):
+    signing_private = Ed25519PrivateKey.generate()
+    signing_key = _signing_key(signing_private)
+    audience = derive_binder_audience(uuid4())
+    observer_private = Ed25519PrivateKey.generate()
+    observer_resource = (
+        "projects/ofarm1/locations/europe-west1/keyRings/auth/"
+        "cryptoKeys/evidence-observer/cryptoKeyVersions/1"
+    )
+    valid_until = (
+        now[0] + 60_000_000
+        if initial_valid_until is None
+        else initial_valid_until
+    )
+    payload = _evidence_payload(
+        signing_key,
+        audience,
+        now[0] - 1,
+        valid_until,
+    )
+    observer_client = _ObserverPublicKeyClient(
+        observer_private,
+        observer_resource,
+        entered=observer_entered,
+        release=observer_release,
+        block_on_call=observer_block_on_call,
+    )
+    observer = GoogleKmsSigningEvidenceObserver.for_test(
+        client=_test_adapter(observer_client),
+        observer_key_resource=observer_resource,
+        receipt_bytes=_signed_evidence_receipt(
+            observer_private,
+            payload,
+        ),
+    )
+    raw_kms = _KmsClient(
+        signing_private,
+        signing_key.key_version_resource,
+    )
+    signer = GoogleKmsEd25519Signer.for_test(
+        client=_test_adapter(raw_kms),
+        public_key=signing_key,
+        evidence=_production_evidence(
+            signing_key,
+            audience,
+            now[0] - 1,
+            valid_until,
+        ),
+        evidence_observer=observer,
+        now_microseconds=lambda: now[0],
+    )
+    return (
+        signer,
+        observer,
+        observer_private,
+        observer_client,
+        raw_kms,
+        signing_key,
+        audience,
+        valid_until,
+    )
 
 
 def test_kms_signer_checks_resource_crc_hsm_and_signature():
@@ -919,6 +994,35 @@ def test_kms_readiness_preflight_rejects_permission_denial():
     assert signer._initialized is False
 
 
+def test_kms_readiness_preflight_recovers_after_endpoint_failure():
+    class UnavailableKmsClient(_KmsClient):
+        unavailable = True
+
+        def asymmetric_sign(self, *, request):
+            if self.unavailable:
+                raise ConnectionError("KMS endpoint unavailable")
+            return super().asymmetric_sign(request=request)
+
+    signer = _production_signer(
+        Ed25519PrivateKey.generate(),
+        derive_binder_audience(uuid4()),
+        1_900_000_000_000_000,
+        client_factory=UnavailableKmsClient,
+    )
+    raw_client = signer._client._client
+
+    with pytest.raises(CapabilityIssuanceError) as raised:
+        signer.initialize()
+    assert raised.value.outcome is PreBindingOutcome.SIGNER_UNAVAILABLE
+    assert "KMS signing call failed" in raised.value.internal_detail
+    assert signer._initialized is False
+
+    raw_client.unavailable = False
+    signer.initialize()
+    assert signer._initialized is True
+    assert raw_client.calls == [TENANT_CAPABILITY_PREFLIGHT_PROBE]
+
+
 def test_kms_readiness_preflight_rejects_disabled_evidence():
     signer = _production_signer(
         Ed25519PrivateKey.generate(),
@@ -1043,6 +1147,123 @@ def test_kms_refresh_is_failure_atomic_and_recovers_without_restart():
     )
 
 
+@pytest.mark.parametrize(
+    ("candidate_kind", "detail"),
+    (
+        ("older", "observation rolls back"),
+        ("conflicting", "conflicts at one observation time"),
+    ),
+)
+def test_kms_refresh_rejects_authenticated_receipt_replay(
+    candidate_kind,
+    detail,
+):
+    now = [1_900_000_000_000_000]
+    (
+        signer,
+        observer,
+        observer_private,
+        _,
+        _,
+        signing_key,
+        audience,
+        initial_valid_until,
+    ) = _refreshing_signer_fixture(now)
+    signer.initialize()
+    accepted = signer._evidence
+    now[0] = initial_valid_until - 20_000_000
+
+    if candidate_kind == "older":
+        candidate = _evidence_payload(
+            signing_key,
+            audience,
+            accepted.observed_at_unix_microseconds - 10_000_000,
+            now[0] + 100_000_000,
+        )
+    else:
+        candidate = _evidence_payload(
+            signing_key,
+            audience,
+            accepted.observed_at_unix_microseconds,
+            now[0] + 100_000_000,
+        )
+        candidate["iamEvidenceDigest"] = DIGEST_C
+    observer._receipt_bytes = _signed_evidence_receipt(
+        observer_private,
+        candidate,
+    )
+
+    with pytest.raises(CapabilityIssuanceError) as raised:
+        signer.initialize()
+    assert detail in raised.value.internal_detail
+    assert signer._evidence is accepted
+    assert signer._last_accepted_evidence is accepted
+    assert signer._initialized is True
+    signer.sign(b"last-accepted-snapshot-remains-usable")
+
+
+def test_kms_refresh_backs_off_when_receipt_does_not_advance():
+    now = [1_900_000_000_000_000]
+    (
+        signer,
+        _,
+        _,
+        observer_client,
+        raw_kms,
+        _,
+        _,
+        initial_valid_until,
+    ) = _refreshing_signer_fixture(now)
+    signer.initialize()
+    accepted = signer._evidence
+    now[0] = initial_valid_until - 20_000_000
+
+    signer.sign(b"unchanged-receipt-0")
+    signer.sign(b"unchanged-receipt-1")
+
+    assert signer._evidence is accepted
+    assert observer_client.calls == 2
+    assert raw_kms.calls == [
+        TENANT_CAPABILITY_PREFLIGHT_PROBE,
+        TENANT_CAPABILITY_PREFLIGHT_PROBE,
+        b"unchanged-receipt-0",
+        b"unchanged-receipt-1",
+    ]
+
+    now[0] += 1_000_001
+    signer.sign(b"unchanged-receipt-after-backoff")
+    assert observer_client.calls == 3
+
+
+def test_kms_refresh_rechecks_expiry_inside_publication_lock(monkeypatch):
+    now = [1_900_000_000_000_000]
+    initial_valid_until = now[0] + 5
+    signer, *_ = _refreshing_signer_fixture(
+        now,
+        initial_valid_until=initial_valid_until,
+    )
+    original_progress_check = (
+        GoogleKmsEd25519Signer._candidate_is_no_progress
+    )
+
+    def expire_before_publication(candidate, previous):
+        no_progress = original_progress_check(candidate, previous)
+        now[0] = candidate.valid_until_unix_microseconds
+        return no_progress
+
+    monkeypatch.setattr(
+        GoogleKmsEd25519Signer,
+        "_candidate_is_no_progress",
+        staticmethod(expire_before_publication),
+    )
+
+    with pytest.raises(CapabilityIssuanceError) as raised:
+        signer.initialize()
+    assert "expired before publication" in raised.value.internal_detail
+    assert signer._last_accepted_evidence is None
+    assert signer._initialized is False
+
+
 def test_kms_refresh_never_publishes_evidence_expired_during_preflight():
     now = [1_900_000_000_000_000]
 
@@ -1120,6 +1341,126 @@ def test_kms_refresh_never_publishes_evidence_expired_during_preflight():
     assert "expired during KMS call" in raised.value.internal_detail
     assert signer._evidence is accepted
     assert signer._initialized is True
+
+
+def test_kms_cold_start_waiters_share_one_refresh_attempt():
+    class WaitTrackingCondition(threading.Condition):
+        def __init__(self, expected_waiters):
+            super().__init__()
+            self.expected_waiters = expected_waiters
+            self.waiter_count = 0
+            self.all_waiting = threading.Event()
+
+        def wait(self, timeout=None):
+            self.waiter_count += 1
+            if self.waiter_count == self.expected_waiters:
+                self.all_waiting.set()
+            return super().wait(timeout=timeout)
+
+    now = [1_900_000_000_000_000]
+    entered = threading.Event()
+    release = threading.Event()
+    (
+        signer,
+        _,
+        _,
+        observer_client,
+        raw_kms,
+        _,
+        _,
+        _,
+    ) = _refreshing_signer_fixture(
+        now,
+        observer_entered=entered,
+        observer_release=release,
+        observer_block_on_call=1,
+    )
+    condition = WaitTrackingCondition(expected_waiters=2)
+    signer._state_condition = condition
+
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        leader = executor.submit(signer.initialize)
+        assert entered.wait(timeout=5)
+        waiters = [
+            executor.submit(signer.initialize)
+            for _ in range(2)
+        ]
+        try:
+            assert condition.all_waiting.wait(timeout=5)
+        finally:
+            release.set()
+        leader.result(timeout=5)
+        for waiter in waiters:
+            waiter.result(timeout=5)
+
+    assert signer._initialized is True
+    assert observer_client.calls == 1
+    assert raw_kms.calls == [TENANT_CAPABILITY_PREFLIGHT_PROBE]
+
+
+def test_kms_expired_waiter_times_out_and_recovers_with_leader(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        "kernel.tenant_capability."
+        "_SIGNING_EVIDENCE_REFRESH_WAIT_SECONDS",
+        0.01,
+    )
+    now = [1_900_000_000_000_000]
+    entered = threading.Event()
+    release = threading.Event()
+    (
+        signer,
+        observer,
+        observer_private,
+        observer_client,
+        _,
+        signing_key,
+        audience,
+        initial_valid_until,
+    ) = _refreshing_signer_fixture(
+        now,
+        observer_entered=entered,
+        observer_release=release,
+    )
+    signer.initialize()
+    now[0] = initial_valid_until
+    rotated_valid_until = now[0] + 60_000_000
+    observer._receipt_bytes = _signed_evidence_receipt(
+        observer_private,
+        _evidence_payload(
+            signing_key,
+            audience,
+            now[0],
+            rotated_valid_until,
+        ),
+    )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        leader = executor.submit(signer.sign, b"expired-refresh-leader")
+        assert entered.wait(timeout=5)
+        waiter = executor.submit(
+            signer.sign,
+            b"expired-refresh-waiter",
+        )
+        try:
+            with pytest.raises(CapabilityIssuanceError) as raised:
+                waiter.result(timeout=1)
+            assert (
+                "refresh did not complete"
+                in raised.value.internal_detail
+            )
+        finally:
+            release.set()
+        leader.result(timeout=5)
+
+    signer.sign(b"recovered-after-waiter-timeout")
+    assert signer._initialized is True
+    assert observer_client.calls == 2
+    assert (
+        signer._evidence.valid_until_unix_microseconds
+        == rotated_valid_until
+    )
 
 
 def test_kms_refresh_is_single_flight_for_concurrent_signers():

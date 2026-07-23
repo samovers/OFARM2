@@ -532,6 +532,7 @@ class GoogleKmsEd25519Signer:
         self._state_condition = threading.Condition()
         self._refresh_in_progress = False
         self._next_refresh_attempt_unix_microseconds = 0
+        self._last_accepted_evidence: ProductionSigningEvidence | None = None
 
     @property
     def key_id(self) -> str:
@@ -693,6 +694,38 @@ class GoogleKmsEd25519Signer:
             )
         return evidence
 
+    @staticmethod
+    def _candidate_is_no_progress(
+        candidate: ProductionSigningEvidence,
+        previous: ProductionSigningEvidence | None,
+    ) -> bool:
+        if previous is None:
+            return False
+        if (
+            candidate.observed_at_unix_microseconds
+            < previous.observed_at_unix_microseconds
+        ):
+            raise CapabilityIssuanceError(
+                PreBindingOutcome.SIGNER_UNAVAILABLE,
+                internal_detail=(
+                    "production signing evidence observation rolls back"
+                ),
+            )
+        if (
+            candidate.observed_at_unix_microseconds
+            == previous.observed_at_unix_microseconds
+        ):
+            if candidate != previous:
+                raise CapabilityIssuanceError(
+                    PreBindingOutcome.SIGNER_UNAVAILABLE,
+                    internal_detail=(
+                        "production signing evidence conflicts at one "
+                        "observation time"
+                    ),
+                )
+            return True
+        return False
+
     def _refresh_evidence(
         self,
         *,
@@ -703,6 +736,7 @@ class GoogleKmsEd25519Signer:
         refresh_started = False
         with self._state_condition:
             current = self._evidence if self._initialized else None
+            previous_accepted = self._last_accepted_evidence
             observer = self._evidence_observer
             if observer is None:
                 if not force and self._is_current(current, now):
@@ -768,6 +802,44 @@ class GoogleKmsEd25519Signer:
             if observer is not None:
                 candidate = self._observe_candidate()
             accepted = self._validate_candidate(candidate)
+            no_progress = self._candidate_is_no_progress(
+                accepted,
+                previous_accepted,
+            )
+            with self._state_condition:
+                published_at = self._now()
+                if not self._is_current(accepted, published_at):
+                    raise CapabilityIssuanceError(
+                        PreBindingOutcome.SIGNER_UNAVAILABLE,
+                        internal_detail=(
+                            "production signing evidence expired before "
+                            "publication"
+                        ),
+                    )
+                if self._last_accepted_evidence is not previous_accepted:
+                    raise CapabilityIssuanceError(
+                        PreBindingOutcome.SIGNER_UNAVAILABLE,
+                        internal_detail=(
+                            "production signing evidence changed during "
+                            "refresh"
+                        ),
+                    )
+                if no_progress:
+                    assert previous_accepted is not None
+                    self._evidence = previous_accepted
+                    accepted = previous_accepted
+                    self._next_refresh_attempt_unix_microseconds = (
+                        published_at
+                        + _SIGNING_EVIDENCE_REFRESH_RETRY_MICROSECONDS
+                    )
+                else:
+                    self._evidence = accepted
+                    self._last_accepted_evidence = accepted
+                    self._next_refresh_attempt_unix_microseconds = 0
+                self._initialized = True
+                self._refresh_in_progress = False
+                self._state_condition.notify_all()
+                return accepted
         except Exception as exc:
             failure = (
                 exc
@@ -799,14 +871,6 @@ class GoogleKmsEd25519Signer:
             if failure is exc:
                 raise
             raise failure from exc
-
-        with self._state_condition:
-            self._evidence = accepted
-            self._initialized = True
-            self._refresh_in_progress = False
-            self._next_refresh_attempt_unix_microseconds = 0
-            self._state_condition.notify_all()
-            return accepted
 
     def initialize(self) -> None:
         self._refresh_evidence(force=True, allow_previous=False)
