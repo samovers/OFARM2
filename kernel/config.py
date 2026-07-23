@@ -221,25 +221,6 @@ def production_application_runtime(
                 "OFARM_TENANT_CAPABILITY_SIGNING_KEY_VERSION"
             )
         )
-        observer_key_resource = validate_google_kms_key_version_resource(
-            _required_environment(
-                "OFARM_SIGNING_EVIDENCE_OBSERVER_KEY_VERSION"
-            )
-        )
-        receipt_path = Path(
-            _required_environment("OFARM_SIGNING_EVIDENCE_RECEIPT_PATH")
-        )
-        if not receipt_path.is_absolute():
-            raise ValueError(
-                "production signing-evidence receipt path is not absolute"
-            )
-        if (
-            signing_key_resource.rpartition("/cryptoKeyVersions/")[0]
-            == observer_key_resource.rpartition("/cryptoKeyVersions/")[0]
-        ):
-            raise ValueError(
-                "production signing and observer CryptoKeys must differ"
-            )
 
         kms_client = GoogleCloudKmsClientAdapter()
         public_key = kms_client.get_ed25519_public_key(

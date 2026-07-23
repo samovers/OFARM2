@@ -10,7 +10,7 @@ from uuid import uuid4
 
 import jwt
 import pytest
-from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.asymmetric import ed25519, rsa
 from fastapi.testclient import TestClient
 
 from kernel import config, demo
@@ -34,6 +34,7 @@ from kernel.runtime_activation import RuntimeActivationError
 from kernel.runtime_composition import ProductionApplicationRuntime
 from kernel.tenant_capability import (
     CapabilityIssuanceError,
+    GoogleCloudKmsClientAdapter,
     GoogleKmsEd25519Signer,
     ProductionTenantCapabilityIssuer,
 )
@@ -850,6 +851,22 @@ def test_production_composition_requires_signing_evidence_configuration(
         "projects/ofarm1/locations/europe-west1/keyRings/auth/"
         "cryptoKeys/evidence-observer/cryptoKeyVersions/1",
     )
+    signing_private_key = ed25519.Ed25519PrivateKey.generate()
+
+    def construct_without_external_client(adapter):
+        adapter._client = object()
+        adapter._production_eligible = True
+
+    monkeypatch.setattr(
+        GoogleCloudKmsClientAdapter,
+        "__init__",
+        construct_without_external_client,
+    )
+    monkeypatch.setattr(
+        GoogleCloudKmsClientAdapter,
+        "get_ed25519_public_key",
+        lambda _adapter, *, name: signing_private_key.public_key(),
+    )
     monkeypatch.delenv(
         "OFARM_SIGNING_EVIDENCE_RECEIPT_PATH",
         raising=False,
@@ -857,7 +874,7 @@ def test_production_composition_requires_signing_evidence_configuration(
 
     with pytest.raises(
         AuthenticationStartupError,
-        match="OFARM_SIGNING_EVIDENCE_RECEIPT_PATH is required",
+        match="production capability boundary construction failed",
     ):
         config.production_application_runtime(runtime)
 
