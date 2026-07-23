@@ -140,6 +140,11 @@ PRINCIPAL_BINDING_READINESS_ACLS = (
         """,
         id="binding-digest",
     ),
+    pytest.param(
+        "REVOKE EXECUTE ON FUNCTION ofarm.lp32(pg_catalog.bytea) FROM ofarm_binder",
+        "GRANT EXECUTE ON FUNCTION ofarm.lp32(pg_catalog.bytea) TO ofarm_binder",
+        id="binding-digest-framing",
+    ),
 )
 
 
@@ -5944,7 +5949,7 @@ def test_complete_catalog_fingerprint_refuses_function_constraint_index_policy_a
             assert pristine[0] is True
             assert pristine[2] == 0
             assert pristine[3] == (
-                "sha256:f7c72a008792173e110b9359006271fea263b3e26fb53c8ac6303839d0460fc4"
+                "sha256:938fdd790029d2e1200373ad987c62fcf4d30dc85e1442daed2352c9c4583a5c"
             )
         finally:
             migrator.rollback()
@@ -6633,7 +6638,7 @@ def test_readiness_observation_is_complete_after_commit(
     assert row[1] == TENANT_CONTEXT_CONTRACT.digest
     assert row[2] == 0
     assert row[3] == (
-        "sha256:f7c72a008792173e110b9359006271fea263b3e26fb53c8ac6303839d0460fc4"
+        "sha256:938fdd790029d2e1200373ad987c62fcf4d30dc85e1442daed2352c9c4583a5c"
     )
     assert row[5] == TENANT_PROVISIONING_SPEC.digest
     assert row[6] == TENANT_SERVICE.identity
