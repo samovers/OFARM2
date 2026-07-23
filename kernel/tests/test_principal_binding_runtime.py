@@ -9,7 +9,6 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
-from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from google.api_core.exceptions import FailedPrecondition
 
@@ -40,6 +39,7 @@ from kernel.tenant_capability import (
     GoogleKmsSigningEvidenceObserver,
     ProductionSigningEvidence,
     ProductionTenantCapabilityIssuer,
+    SigningEvidenceHighWaterStore,
     TenantChallenge,
 )
 
@@ -121,7 +121,8 @@ class _FixtureSigner:
     def initialize(self):
         pass
 
-    def sign(self, data):
+    def sign(self, data, *, expected_audience):
+        assert expected_audience == self._audience
         return self.private.sign(data)
 
 
@@ -183,6 +184,7 @@ def _production_signer(
     return GoogleKmsEd25519Signer.for_test(
         client=_test_adapter(raw_client),
         public_key=observation,
+        audience=audience,
         evidence=evidence,
         evidence_observer=evidence_observer,
         now_microseconds=(
@@ -371,7 +373,12 @@ class _ObserverPublicKeyClient:
         raise AssertionError(request)
 
     def get_public_key(self, *, request):
-        assert request == {"name": self.resource}
+        from google.cloud.kms_v1.types import PublicKey
+
+        assert request == {
+            "name": self.resource,
+            "public_key_format": PublicKey.PublicKeyFormat.DER,
+        }
         self.calls += 1
         if (
             self.entered is not None
@@ -380,29 +387,20 @@ class _ObserverPublicKeyClient:
             self.entered.set()
             assert self.release is not None
             assert self.release.wait(timeout=5)
-        pem = self.private.public_key().public_bytes(
-            serialization.Encoding.PEM,
-            serialization.PublicFormat.SubjectPublicKeyInfo,
+        der = (
+            TENANT_CAPABILITY_RFC8410_PREFIX
+            + self.private.public_key().public_bytes_raw()
         )
-        return type(
-            "PublicKeyResponse",
-            (),
-            {
-                "name": self.resource,
-                "algorithm": type(
-                    "Algorithm",
-                    (),
-                    {"name": GOOGLE_KMS_KEY_ALGORITHM},
-                )(),
-                "protection_level": type(
-                    "Protection",
-                    (),
-                    {"name": GOOGLE_KMS_PROTECTION_LEVEL},
-                )(),
-                "pem": pem.decode("ascii"),
-                "pem_crc32c": _crc32c(pem),
+        return PublicKey(
+            name=self.resource,
+            algorithm=GOOGLE_KMS_KEY_ALGORITHM,
+            protection_level=GOOGLE_KMS_PROTECTION_LEVEL,
+            public_key_format=PublicKey.PublicKeyFormat.DER,
+            public_key={
+                "data": der,
+                "crc32c_checksum": _crc32c(der),
             },
-        )()
+        )
 
 
 def _refreshing_signer_fixture(
@@ -460,6 +458,7 @@ def _refreshing_signer_fixture(
     signer = GoogleKmsEd25519Signer.for_test(
         client=_test_adapter(raw_kms),
         public_key=signing_key,
+        audience=audience,
         evidence=_production_evidence(
             signing_key,
             audience,
@@ -479,6 +478,69 @@ def _refreshing_signer_fixture(
         audience,
         valid_until,
     )
+
+
+def _signer_with_shared_high_water(
+    *,
+    signing_private,
+    signing_key,
+    observer_private,
+    observer_resource,
+    audience,
+    now_us,
+    observed_at_us,
+    key_state,
+    high_water_store,
+    clock=None,
+    kms_client_factory=None,
+):
+    valid_until = now_us + 60_000_000
+    observer = GoogleKmsSigningEvidenceObserver.for_test(
+        client=_test_adapter(
+            _ObserverPublicKeyClient(
+                observer_private,
+                observer_resource,
+            )
+        ),
+        observer_key_resource=observer_resource,
+        receipt_bytes=_signed_evidence_receipt(
+            observer_private,
+            _evidence_payload(
+                signing_key,
+                audience,
+                observed_at_us,
+                valid_until,
+                key_state=key_state,
+            ),
+        ),
+    )
+    selected_kms_client_factory = (
+        _KmsClient
+        if kms_client_factory is None
+        else kms_client_factory
+    )
+    raw_kms = selected_kms_client_factory(
+        signing_private,
+        signing_key.key_version_resource,
+    )
+    signer = GoogleKmsEd25519Signer.for_test(
+        client=_test_adapter(raw_kms),
+        public_key=signing_key,
+        audience=audience,
+        evidence=_production_evidence(
+            signing_key,
+            audience,
+            observed_at_us,
+            valid_until,
+            key_state=key_state,
+        ),
+        evidence_observer=observer,
+        high_water_store=high_water_store,
+        now_microseconds=(
+            (lambda: now_us) if clock is None else clock
+        ),
+    )
+    return signer, raw_kms
 
 
 def test_kms_signer_checks_resource_crc_hsm_and_signature():
@@ -519,12 +581,13 @@ def test_kms_signer_checks_resource_crc_hsm_and_signature():
     signer = GoogleKmsEd25519Signer.for_test(
         client=client,
         public_key=observation,
+        audience=evidence.audience,
         evidence=evidence,
         now_microseconds=lambda: now_us,
     )
     signer.initialize()
     data = b"exact-jws-signing-input"
-    signature = signer.sign(data)
+    signature = signer.sign(data, expected_audience=signer.audience)
     private.public_key().verify(signature, data)
     assert raw_client.calls == [TENANT_CAPABILITY_PREFLIGHT_PROBE, data]
 
@@ -550,7 +613,10 @@ def test_kms_signer_rechecks_evidence_after_slow_signing_response():
     signer.initialize()
 
     with pytest.raises(CapabilityIssuanceError) as raised:
-        signer.sign(b"exact-jws-signing-input")
+        signer.sign(
+            b"exact-jws-signing-input",
+            expected_audience=signer.audience,
+        )
     assert raised.value.outcome is PreBindingOutcome.SIGNER_UNAVAILABLE
     assert "expired during KMS call" in raised.value.internal_detail
 
@@ -700,23 +766,29 @@ def test_signed_observer_receipt_authenticates_production_evidence():
         sort_keys=True,
         separators=(",", ":"),
     ).encode("ascii")
-    pem = observer_private.public_key().public_bytes(
-        serialization.Encoding.PEM,
-        serialization.PublicFormat.SubjectPublicKeyInfo,
-    ).decode("ascii")
+    der = (
+        TENANT_CAPABILITY_RFC8410_PREFIX
+        + observer_private.public_key().public_bytes_raw()
+    )
 
     class Client:
         def asymmetric_sign(self, *, request):
             raise AssertionError(request)
 
         def get_public_key(self, *, request):
-            assert request == {"name": observer_resource}
+            assert request == {
+                "name": observer_resource,
+                "public_key_format": PublicKey.PublicKeyFormat.DER,
+            }
             return PublicKey(
                 name=observer_resource,
                 algorithm=GOOGLE_KMS_KEY_ALGORITHM,
                 protection_level=GOOGLE_KMS_PROTECTION_LEVEL,
-                pem=pem,
-                pem_crc32c=_crc32c(pem.encode("ascii")),
+                public_key_format=PublicKey.PublicKeyFormat.DER,
+                public_key={
+                    "data": der,
+                    "crc32c_checksum": _crc32c(der),
+                },
             )
 
     observer = GoogleKmsSigningEvidenceObserver.for_test(
@@ -752,6 +824,95 @@ def test_signed_observer_receipt_authenticates_production_evidence():
         tampered_observer.observe(signing_key)
 
 
+@pytest.mark.parametrize(
+    ("mutation", "detail"),
+    (
+        ("name", "shape differs"),
+        ("algorithm", "shape differs"),
+        ("protection", "shape differs"),
+        ("format", "shape differs"),
+        ("checksum", "checksum differs"),
+        ("der", "shape differs"),
+    ),
+)
+def test_observer_public_key_requires_exact_checksummed_der(
+    mutation,
+    detail,
+):
+    from google.cloud.kms_v1.types import PublicKey
+
+    private = Ed25519PrivateKey.generate()
+    resource = (
+        "projects/ofarm1/locations/europe-west1/keyRings/auth/"
+        "cryptoKeys/evidence-observer/cryptoKeyVersions/1"
+    )
+    der = (
+        TENANT_CAPABILITY_RFC8410_PREFIX
+        + private.public_key().public_bytes_raw()
+    )
+
+    class Client:
+        def asymmetric_sign(self, *, request):
+            raise AssertionError(request)
+
+        def get_public_key(self, *, request):
+            assert request == {
+                "name": resource,
+                "public_key_format": PublicKey.PublicKeyFormat.DER,
+            }
+            selected_der = der[:-1] if mutation == "der" else der
+            return type(
+                "Response",
+                (),
+                {
+                    "name": "other" if mutation == "name" else resource,
+                    "algorithm": type(
+                        "Algorithm",
+                        (),
+                        {
+                            "name": (
+                                "RSA_SIGN_PSS_2048_SHA256"
+                                if mutation == "algorithm"
+                                else GOOGLE_KMS_KEY_ALGORITHM
+                            )
+                        },
+                    )(),
+                    "protection_level": type(
+                        "Protection",
+                        (),
+                        {
+                            "name": (
+                                "SOFTWARE"
+                                if mutation == "protection"
+                                else GOOGLE_KMS_PROTECTION_LEVEL
+                            )
+                        },
+                    )(),
+                    "public_key_format": (
+                        PublicKey.PublicKeyFormat.PEM
+                        if mutation == "format"
+                        else PublicKey.PublicKeyFormat.DER
+                    ),
+                    "public_key": type(
+                        "ChecksummedData",
+                        (),
+                        {
+                            "data": selected_der,
+                            "crc32c_checksum": (
+                                _crc32c(selected_der) + 1
+                                if mutation == "checksum"
+                                else _crc32c(selected_der)
+                            ),
+                        },
+                    )(),
+                },
+            )()
+
+    adapter = _test_adapter(Client())
+    with pytest.raises(ValueError, match=detail):
+        adapter.get_ed25519_public_key(name=resource)
+
+
 def test_observer_requires_a_different_crypto_key_parent():
     now_us = 1_900_000_000_000_000
     signing_key = _signing_key(Ed25519PrivateKey.generate())
@@ -782,6 +943,38 @@ def test_observer_requires_a_different_crypto_key_parent():
     with pytest.raises(ValueError, match="CryptoKey must differ"):
         observer.observe(signing_key)
     assert observer_client.calls == 0
+
+
+def test_observer_requires_a_cryptographically_distinct_public_key():
+    now_us = 1_900_000_000_000_000
+    signing_private = Ed25519PrivateKey.generate()
+    signing_key = _signing_key(signing_private)
+    observer_resource = (
+        "projects/ofarm1/locations/europe-west1/keyRings/auth/"
+        "cryptoKeys/evidence-observer/cryptoKeyVersions/1"
+    )
+    evidence = _evidence_payload(
+        signing_key,
+        derive_binder_audience(uuid4()),
+        now_us - 1,
+        now_us + 60_000_000,
+    )
+    observer_client = _ObserverPublicKeyClient(
+        signing_private,
+        observer_resource,
+    )
+    observer = GoogleKmsSigningEvidenceObserver.for_test(
+        client=_test_adapter(observer_client),
+        observer_key_resource=observer_resource,
+        receipt_bytes=_signed_evidence_receipt(
+            signing_private,
+            evidence,
+        ),
+    )
+
+    with pytest.raises(ValueError, match="public key must differ"):
+        observer.observe(signing_key)
+    assert observer_client.calls == 1
 
 
 def test_kms_readiness_preflight_rejects_permission_denial():
@@ -877,7 +1070,7 @@ def test_kms_readiness_preflight_rejects_an_actually_disabled_key():
     assert signer._initialized is False
 
 
-def test_kms_refresh_retains_prior_evidence_when_key_becomes_disabled():
+def test_kms_refresh_blocks_prior_evidence_when_new_head_cannot_preflight():
     class StatefulKmsClient(_KmsClient):
         disabled = False
 
@@ -926,10 +1119,14 @@ def test_kms_refresh_retains_prior_evidence_when_key_becomes_disabled():
     assert "KMS signing call failed" in raised.value.internal_detail
     assert signer._evidence is accepted
     assert signer._last_accepted_evidence is accepted
-    assert signer._initialized is True
+    assert signer._initialized is False
 
     raw_kms.disabled = False
-    signer.sign(b"prior-evidence-remains-usable")
+    with pytest.raises(CapabilityIssuanceError):
+        signer.sign(
+            b"prior-evidence-is-not-the-durable-head",
+            expected_audience=signer.audience,
+        )
 
 
 def test_kms_readiness_preflight_rejects_public_key_mismatch():
@@ -952,7 +1149,7 @@ def test_kms_readiness_preflight_rejects_public_key_mismatch():
     assert "signature verification failed" in raised.value.internal_detail
 
 
-def test_kms_refresh_is_failure_atomic_and_recovers_without_restart():
+def test_kms_refresh_negative_head_blocks_old_evidence_and_recovers():
     now = [1_900_000_000_000_000]
     signing_private = Ed25519PrivateKey.generate()
     signing_key = _signing_key(signing_private)
@@ -988,6 +1185,7 @@ def test_kms_refresh_is_failure_atomic_and_recovers_without_restart():
     signer = GoogleKmsEd25519Signer.for_test(
         client=_test_adapter(raw_kms),
         public_key=signing_key,
+        audience=audience,
         evidence=_production_evidence(
             signing_key,
             audience,
@@ -1014,11 +1212,20 @@ def test_kms_refresh_is_failure_atomic_and_recovers_without_restart():
     with pytest.raises(CapabilityIssuanceError):
         signer.initialize()
     assert signer._evidence is accepted
-    signer.sign(b"old-evidence-remains-valid")
+    assert signer._initialized is False
+    with pytest.raises(CapabilityIssuanceError):
+        signer.sign(
+            b"old-evidence-is-blocked",
+            expected_audience=signer.audience,
+        )
 
     now[0] = initial_valid_until - 20_000_000
     observer._receipt_bytes = b"not-a-signed-receipt"
-    signer.sign(b"observer-failure-uses-current-snapshot")
+    with pytest.raises(CapabilityIssuanceError):
+        signer.sign(
+            b"observer-failure-cannot-revive-old-evidence",
+            expected_audience=signer.audience,
+        )
     assert signer._evidence is accepted
 
     now[0] += 1_000_001
@@ -1033,7 +1240,10 @@ def test_kms_refresh_is_failure_atomic_and_recovers_without_restart():
         observer_private,
         rotated,
     )
-    signer.sign(b"rotation-recovers-without-restart")
+    signer.sign(
+        b"rotation-recovers-without-restart",
+        expected_audience=signer.audience,
+    )
     assert signer._evidence is not accepted
     assert (
         signer._evidence.valid_until_unix_microseconds
@@ -1041,11 +1251,476 @@ def test_kms_refresh_is_failure_atomic_and_recovers_without_restart():
     )
 
 
+def test_kms_expired_signer_retries_after_transient_refresh_failure():
+    now = [1_900_000_000_000_000]
+    (
+        signer,
+        observer,
+        observer_private,
+        _,
+        _,
+        signing_key,
+        audience,
+        initial_valid_until,
+    ) = _refreshing_signer_fixture(now)
+    signer.initialize()
+    now[0] = initial_valid_until
+    observer._receipt_bytes = b"temporarily unavailable"
+
+    with pytest.raises(CapabilityIssuanceError):
+        signer.sign(
+            b"expired-refresh-fails",
+            expected_audience=audience,
+        )
+    assert signer._initialized is False
+    assert signer._ever_initialized is True
+
+    now[0] += 1_000_001
+    observer._receipt_bytes = _signed_evidence_receipt(
+        observer_private,
+        _evidence_payload(
+            signing_key,
+            audience,
+            now[0],
+            now[0] + 60_000_000,
+        ),
+    )
+    signer.sign(
+        b"expired-refresh-recovers",
+        expected_audience=audience,
+    )
+    assert signer._initialized is True
+
+
+def test_kms_signer_pins_audience_across_receipt_refresh():
+    now = [1_900_000_000_000_000]
+    (
+        signer,
+        observer,
+        observer_private,
+        _,
+        raw_kms,
+        signing_key,
+        audience,
+        initial_valid_until,
+    ) = _refreshing_signer_fixture(now)
+    signer.initialize()
+    configured_audience = signer.audience
+    now[0] = initial_valid_until - 20_000_000
+    observer._receipt_bytes = _signed_evidence_receipt(
+        observer_private,
+        _evidence_payload(
+            signing_key,
+            derive_binder_audience(uuid4()),
+            now[0],
+            now[0] + 60_000_000,
+        ),
+    )
+
+    with pytest.raises(CapabilityIssuanceError) as raised:
+        signer.sign(
+            b"wrong-audience-refresh",
+            expected_audience=configured_audience,
+        )
+    assert "evidence differs or is stale" in raised.value.internal_detail
+    assert signer.audience == configured_audience == audience
+    assert signer._initialized is False
+    assert raw_kms.calls == [TENANT_CAPABILITY_PREFLIGHT_PROBE]
+
+
+def test_durable_high_water_rejects_t1_after_t2_in_fresh_signer(
+    tmp_path,
+):
+    now_us = 1_900_000_000_000_000
+    signing_private = Ed25519PrivateKey.generate()
+    signing_key = _signing_key(signing_private)
+    observer_private = Ed25519PrivateKey.generate()
+    observer_resource = (
+        "projects/ofarm1/locations/europe-west1/keyRings/auth/"
+        "cryptoKeys/evidence-observer/cryptoKeyVersions/1"
+    )
+    audience = derive_binder_audience(uuid4())
+    path = tmp_path / "signing-evidence-high-water.json"
+    scope = {
+        "audience": audience,
+        "signing_key_resource": signing_key.key_version_resource,
+        "observer_key_resource": observer_resource,
+        "path": path,
+    }
+    t2_signer, _ = _signer_with_shared_high_water(
+        signing_private=signing_private,
+        signing_key=signing_key,
+        observer_private=observer_private,
+        observer_resource=observer_resource,
+        audience=audience,
+        now_us=now_us,
+        observed_at_us=now_us - 1,
+        key_state="ENABLED",
+        high_water_store=SigningEvidenceHighWaterStore.for_test(**scope),
+    )
+    t2_signer.initialize()
+
+    restarted_t2_signer, restarted_t2_kms = (
+        _signer_with_shared_high_water(
+            signing_private=signing_private,
+            signing_key=signing_key,
+            observer_private=observer_private,
+            observer_resource=observer_resource,
+            audience=audience,
+            now_us=now_us,
+            observed_at_us=now_us - 1,
+            key_state="ENABLED",
+            high_water_store=SigningEvidenceHighWaterStore.for_test(
+                **scope
+            ),
+        )
+    )
+    restarted_t2_signer.initialize()
+    assert restarted_t2_kms.calls == [
+        TENANT_CAPABILITY_PREFLIGHT_PROBE
+    ]
+
+    t1_signer, t1_kms = _signer_with_shared_high_water(
+        signing_private=signing_private,
+        signing_key=signing_key,
+        observer_private=observer_private,
+        observer_resource=observer_resource,
+        audience=audience,
+        now_us=now_us,
+        observed_at_us=now_us - 2,
+        key_state="ENABLED",
+        high_water_store=SigningEvidenceHighWaterStore.for_test(**scope),
+    )
+    with pytest.raises(CapabilityIssuanceError) as raised:
+        t1_signer.initialize()
+    assert "rolls back the durable head" in raised.value.internal_detail
+    assert t1_kms.calls == []
+    state = json.loads(path.read_text(encoding="utf-8"))
+    assert state["observedAtUnixMicroseconds"] == now_us - 1
+    assert state["accepted"] is True
+
+
+def test_shared_negative_high_water_blocks_an_initialized_replica(
+    tmp_path,
+):
+    now_us = 1_900_000_000_000_000
+    signing_private = Ed25519PrivateKey.generate()
+    signing_key = _signing_key(signing_private)
+    observer_private = Ed25519PrivateKey.generate()
+    observer_resource = (
+        "projects/ofarm1/locations/europe-west1/keyRings/auth/"
+        "cryptoKeys/evidence-observer/cryptoKeyVersions/1"
+    )
+    audience = derive_binder_audience(uuid4())
+    path = tmp_path / "shared-signing-evidence-high-water.json"
+    scope = {
+        "audience": audience,
+        "signing_key_resource": signing_key.key_version_resource,
+        "observer_key_resource": observer_resource,
+        "path": path,
+    }
+    first_signer, first_kms = _signer_with_shared_high_water(
+        signing_private=signing_private,
+        signing_key=signing_key,
+        observer_private=observer_private,
+        observer_resource=observer_resource,
+        audience=audience,
+        now_us=now_us,
+        observed_at_us=now_us - 2,
+        key_state="ENABLED",
+        high_water_store=SigningEvidenceHighWaterStore.for_test(**scope),
+    )
+    first_signer.initialize()
+    second_signer, second_kms = _signer_with_shared_high_water(
+        signing_private=signing_private,
+        signing_key=signing_key,
+        observer_private=observer_private,
+        observer_resource=observer_resource,
+        audience=audience,
+        now_us=now_us,
+        observed_at_us=now_us - 1,
+        key_state="DISABLED",
+        high_water_store=SigningEvidenceHighWaterStore.for_test(**scope),
+    )
+
+    with pytest.raises(CapabilityIssuanceError):
+        second_signer.initialize()
+    with pytest.raises(CapabilityIssuanceError) as raised:
+        first_signer.sign(
+            b"replica-must-observe-negative-head",
+            expected_audience=audience,
+        )
+    assert "durable accepted head" in raised.value.internal_detail
+    assert first_kms.calls == [TENANT_CAPABILITY_PREFLIGHT_PROBE]
+    assert second_kms.calls == []
+
+
+def test_newer_negative_never_falls_back_when_high_water_write_fails(
+    tmp_path,
+    monkeypatch,
+):
+    now = [1_900_000_000_000_000]
+    signing_private = Ed25519PrivateKey.generate()
+    signing_key = _signing_key(signing_private)
+    observer_private = Ed25519PrivateKey.generate()
+    observer_resource = (
+        "projects/ofarm1/locations/europe-west1/keyRings/auth/"
+        "cryptoKeys/evidence-observer/cryptoKeyVersions/1"
+    )
+    audience = derive_binder_audience(uuid4())
+    store = SigningEvidenceHighWaterStore.for_test(
+        audience=audience,
+        signing_key_resource=signing_key.key_version_resource,
+        observer_key_resource=observer_resource,
+        path=tmp_path / "failed-write-high-water.json",
+    )
+    signer, raw_kms = _signer_with_shared_high_water(
+        signing_private=signing_private,
+        signing_key=signing_key,
+        observer_private=observer_private,
+        observer_resource=observer_resource,
+        audience=audience,
+        now_us=now[0],
+        observed_at_us=now[0] - 1,
+        key_state="ENABLED",
+        high_water_store=store,
+        clock=lambda: now[0],
+    )
+    signer.initialize()
+    now[0] += 40_000_000
+    signer._evidence_observer._receipt_bytes = _signed_evidence_receipt(
+        observer_private,
+        _evidence_payload(
+            signing_key,
+            audience,
+            now[0],
+            now[0] + 60_000_000,
+            key_state="DISABLED",
+        ),
+    )
+
+    def fail_write(descriptor, state):
+        del descriptor, state
+        raise OSError("injected durable write failure")
+
+    monkeypatch.setattr(store, "_write_state", fail_write)
+    with pytest.raises(CapabilityIssuanceError) as raised:
+        signer.sign(
+            b"negative-write-failure-must-not-sign",
+            expected_audience=audience,
+        )
+    assert raised.value.outcome is PreBindingOutcome.SIGNER_UNAVAILABLE
+    assert "durable state is unavailable" in raised.value.internal_detail
+    assert signer._initialized is False
+    assert raw_kms.calls == [TENANT_CAPABILITY_PREFLIGHT_PROBE]
+
+
+def test_corrupt_high_water_after_startup_is_a_closed_signer_outcome(
+    tmp_path,
+):
+    now_us = 1_900_000_000_000_000
+    signing_private = Ed25519PrivateKey.generate()
+    signing_key = _signing_key(signing_private)
+    observer_private = Ed25519PrivateKey.generate()
+    observer_resource = (
+        "projects/ofarm1/locations/europe-west1/keyRings/auth/"
+        "cryptoKeys/evidence-observer/cryptoKeyVersions/1"
+    )
+    audience = derive_binder_audience(uuid4())
+    path = tmp_path / "corrupt-high-water.json"
+    store = SigningEvidenceHighWaterStore.for_test(
+        audience=audience,
+        signing_key_resource=signing_key.key_version_resource,
+        observer_key_resource=observer_resource,
+        path=path,
+    )
+    signer, raw_kms = _signer_with_shared_high_water(
+        signing_private=signing_private,
+        signing_key=signing_key,
+        observer_private=observer_private,
+        observer_resource=observer_resource,
+        audience=audience,
+        now_us=now_us,
+        observed_at_us=now_us - 1,
+        key_state="ENABLED",
+        high_water_store=store,
+    )
+    signer.initialize()
+    path.write_bytes(b"{")
+
+    with pytest.raises(CapabilityIssuanceError) as raised:
+        signer.sign(
+            b"corrupt-high-water-must-not-sign",
+            expected_audience=audience,
+        )
+    assert raised.value.outcome is PreBindingOutcome.SIGNER_UNAVAILABLE
+    assert "durable state is unavailable" in raised.value.internal_detail
+    assert raw_kms.calls == [TENANT_CAPABILITY_PREFLIGHT_PROBE]
+
+
+def test_high_water_path_rejects_aliases_and_untrusted_parents(
+    tmp_path,
+    monkeypatch,
+):
+    signing_key = _signing_key(Ed25519PrivateKey.generate())
+    observer_resource = (
+        "projects/ofarm1/locations/europe-west1/keyRings/auth/"
+        "cryptoKeys/evidence-observer/cryptoKeyVersions/1"
+    )
+    audience = derive_binder_audience(uuid4())
+    receipt = tmp_path / "receipt.json"
+    receipt.write_bytes(b"receipt")
+    alias = tmp_path / "high-water-alias.json"
+    alias.symlink_to(receipt)
+    monkeypatch.setenv(
+        "OFARM_SIGNING_EVIDENCE_RECEIPT_PATH",
+        str(receipt),
+    )
+    monkeypatch.setenv(
+        "OFARM_SIGNING_EVIDENCE_HIGH_WATER_PATH",
+        str(alias),
+    )
+    with pytest.raises(TypeError, match="high-water path"):
+        SigningEvidenceHighWaterStore(
+            audience=audience,
+            signing_key_resource=signing_key.key_version_resource,
+            observer_key_resource=observer_resource,
+        )
+
+    real_parent = tmp_path / "real-parent"
+    real_parent.mkdir(mode=0o700)
+    linked_parent = tmp_path / "linked-parent"
+    linked_parent.symlink_to(real_parent, target_is_directory=True)
+    with pytest.raises(TypeError, match="parent"):
+        SigningEvidenceHighWaterStore.for_test(
+            audience=audience,
+            signing_key_resource=signing_key.key_version_resource,
+            observer_key_resource=observer_resource,
+            path=linked_parent / "state.json",
+        )
+
+    insecure_parent = tmp_path / "insecure-parent"
+    insecure_parent.mkdir(mode=0o770)
+    insecure_parent.chmod(0o770)
+    with pytest.raises(TypeError, match="parent"):
+        SigningEvidenceHighWaterStore.for_test(
+            audience=audience,
+            signing_key_resource=signing_key.key_version_resource,
+            observer_key_resource=observer_resource,
+            path=insecure_parent / "state.json",
+        )
+
+
+def test_high_water_rejects_parent_replacement_after_binding(tmp_path):
+    now_us = 1_900_000_000_000_000
+    signing_key = _signing_key(Ed25519PrivateKey.generate())
+    observer_resource = (
+        "projects/ofarm1/locations/europe-west1/keyRings/auth/"
+        "cryptoKeys/evidence-observer/cryptoKeyVersions/1"
+    )
+    audience = derive_binder_audience(uuid4())
+    parent = tmp_path / "pinned-parent"
+    parent.mkdir(mode=0o700)
+    store = SigningEvidenceHighWaterStore.for_test(
+        audience=audience,
+        signing_key_resource=signing_key.key_version_resource,
+        observer_key_resource=observer_resource,
+        path=parent / "state.json",
+    )
+    parent.rename(tmp_path / "original-parent")
+    parent.mkdir(mode=0o700)
+
+    with pytest.raises(CapabilityIssuanceError) as raised:
+        store.record_authenticated(
+            _production_evidence(
+                signing_key,
+                audience,
+                now_us - 1,
+                now_us + 60_000_000,
+            )
+        )
+    assert raised.value.outcome is PreBindingOutcome.SIGNER_UNAVAILABLE
+    assert "durable state is unavailable" in raised.value.internal_detail
+
+
+def test_newer_negative_blocks_signature_already_in_flight(
+    tmp_path,
+):
+    entered = threading.Event()
+    release = threading.Event()
+
+    class BlockingKmsClient(_KmsClient):
+        def asymmetric_sign(self, *, request):
+            if request["data"] != TENANT_CAPABILITY_PREFLIGHT_PROBE:
+                entered.set()
+                assert release.wait(timeout=5)
+            return super().asymmetric_sign(request=request)
+
+    now_us = 1_900_000_000_000_000
+    signing_private = Ed25519PrivateKey.generate()
+    signing_key = _signing_key(signing_private)
+    observer_private = Ed25519PrivateKey.generate()
+    observer_resource = (
+        "projects/ofarm1/locations/europe-west1/keyRings/auth/"
+        "cryptoKeys/evidence-observer/cryptoKeyVersions/1"
+    )
+    audience = derive_binder_audience(uuid4())
+    path = tmp_path / "in-flight-high-water.json"
+    scope = {
+        "audience": audience,
+        "signing_key_resource": signing_key.key_version_resource,
+        "observer_key_resource": observer_resource,
+        "path": path,
+    }
+    first_signer, first_kms = _signer_with_shared_high_water(
+        signing_private=signing_private,
+        signing_key=signing_key,
+        observer_private=observer_private,
+        observer_resource=observer_resource,
+        audience=audience,
+        now_us=now_us,
+        observed_at_us=now_us - 2,
+        key_state="ENABLED",
+        high_water_store=SigningEvidenceHighWaterStore.for_test(**scope),
+        kms_client_factory=BlockingKmsClient,
+    )
+    first_signer.initialize()
+    second_signer, _ = _signer_with_shared_high_water(
+        signing_private=signing_private,
+        signing_key=signing_key,
+        observer_private=observer_private,
+        observer_resource=observer_resource,
+        audience=audience,
+        now_us=now_us,
+        observed_at_us=now_us - 1,
+        key_state="DISABLED",
+        high_water_store=SigningEvidenceHighWaterStore.for_test(**scope),
+    )
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        signing = executor.submit(
+            first_signer.sign,
+            b"in-flight-signature",
+            expected_audience=audience,
+        )
+        assert entered.wait(timeout=5)
+        with pytest.raises(CapabilityIssuanceError):
+            second_signer.initialize()
+        release.set()
+        with pytest.raises(CapabilityIssuanceError) as raised:
+            signing.result(timeout=5)
+    assert "durable accepted head" in raised.value.internal_detail
+    assert first_kms.calls == [
+        TENANT_CAPABILITY_PREFLIGHT_PROBE,
+        b"in-flight-signature",
+    ]
+
+
 @pytest.mark.parametrize(
     ("candidate_kind", "detail"),
     (
-        ("older", "observation rolls back"),
-        ("conflicting", "conflicts at one observation time"),
+        ("older", "rolls back the durable head"),
+        ("conflicting", "conflicts at the durable head"),
     ),
 )
 def test_kms_refresh_rejects_authenticated_receipt_replay(
@@ -1092,8 +1767,19 @@ def test_kms_refresh_rejects_authenticated_receipt_replay(
     assert detail in raised.value.internal_detail
     assert signer._evidence is accepted
     assert signer._last_accepted_evidence is accepted
-    assert signer._initialized is True
-    signer.sign(b"last-accepted-snapshot-remains-usable")
+    if candidate_kind == "older":
+        assert signer._initialized is True
+        signer.sign(
+            b"last-accepted-snapshot-remains-usable",
+            expected_audience=signer.audience,
+        )
+    else:
+        assert signer._initialized is False
+        with pytest.raises(CapabilityIssuanceError):
+            signer.sign(
+                b"conflicting-snapshot-blocks-signing",
+                expected_audience=signer.audience,
+            )
 
 
 def test_kms_refresh_backs_off_when_receipt_does_not_advance():
@@ -1112,8 +1798,14 @@ def test_kms_refresh_backs_off_when_receipt_does_not_advance():
     accepted = signer._evidence
     now[0] = initial_valid_until - 20_000_000
 
-    signer.sign(b"unchanged-receipt-0")
-    signer.sign(b"unchanged-receipt-1")
+    signer.sign(
+        b"unchanged-receipt-0",
+        expected_audience=signer.audience,
+    )
+    signer.sign(
+        b"unchanged-receipt-1",
+        expected_audience=signer.audience,
+    )
 
     assert signer._evidence is accepted
     assert observer_client.calls == 2
@@ -1125,7 +1817,10 @@ def test_kms_refresh_backs_off_when_receipt_does_not_advance():
     ]
 
     now[0] += 1_000_001
-    signer.sign(b"unchanged-receipt-after-backoff")
+    signer.sign(
+        b"unchanged-receipt-after-backoff",
+        expected_audience=signer.audience,
+    )
     assert observer_client.calls == 3
 
 
@@ -1207,6 +1902,7 @@ def test_kms_refresh_never_publishes_evidence_expired_during_preflight():
     signer = GoogleKmsEd25519Signer.for_test(
         client=_test_adapter(raw_kms),
         public_key=signing_key,
+        audience=audience,
         evidence=_production_evidence(
             signing_key,
             audience,
@@ -1234,7 +1930,7 @@ def test_kms_refresh_never_publishes_evidence_expired_during_preflight():
         signer.initialize()
     assert "expired during KMS call" in raised.value.internal_detail
     assert signer._evidence is accepted
-    assert signer._initialized is True
+    assert signer._initialized is False
 
 
 def test_kms_cold_start_waiters_share_one_refresh_attempt():
@@ -1331,11 +2027,16 @@ def test_kms_expired_waiter_times_out_and_recovers_with_leader(
     )
 
     with ThreadPoolExecutor(max_workers=2) as executor:
-        leader = executor.submit(signer.sign, b"expired-refresh-leader")
+        leader = executor.submit(
+            signer.sign,
+            b"expired-refresh-leader",
+            expected_audience=audience,
+        )
         assert entered.wait(timeout=5)
         waiter = executor.submit(
             signer.sign,
             b"expired-refresh-waiter",
+            expected_audience=audience,
         )
         try:
             with pytest.raises(CapabilityIssuanceError) as raised:
@@ -1348,7 +2049,10 @@ def test_kms_expired_waiter_times_out_and_recovers_with_leader(
             release.set()
         leader.result(timeout=5)
 
-    signer.sign(b"recovered-after-waiter-timeout")
+    signer.sign(
+        b"recovered-after-waiter-timeout",
+        expected_audience=signer.audience,
+    )
     assert signer._initialized is True
     assert observer_client.calls == 2
     assert (
@@ -1396,6 +2100,7 @@ def test_kms_refresh_is_single_flight_for_concurrent_signers():
     signer = GoogleKmsEd25519Signer.for_test(
         client=_test_adapter(raw_kms),
         public_key=signing_key,
+        audience=audience,
         evidence=_production_evidence(
             signing_key,
             audience,
@@ -1419,12 +2124,17 @@ def test_kms_refresh_is_single_flight_for_concurrent_signers():
         ),
     )
     with ThreadPoolExecutor(max_workers=4) as executor:
-        first = executor.submit(signer.sign, b"concurrent-0")
+        first = executor.submit(
+            signer.sign,
+            b"concurrent-0",
+            expected_audience=audience,
+        )
         assert entered.wait(timeout=5)
         others = [
             executor.submit(
                 signer.sign,
                 f"concurrent-{index}".encode("ascii"),
+                expected_audience=audience,
             )
             for index in range(1, 4)
         ]
@@ -1490,7 +2200,8 @@ def test_production_issuer_rejects_local_key_signer_subclass():
         def initialize(self):
             pass
 
-        def sign(self, data):
+        def sign(self, data, *, expected_audience):
+            assert expected_audience == self._audience
             return self.private.sign(data)
 
     issuer = ProductionTenantCapabilityIssuer(

@@ -57,6 +57,28 @@ OCI digest (`sha256:` plus 64 hexadecimal digits). It is reported as a
 process-local activation observation and never enters RuntimeBundle identity or
 semantic receipts.
 
+## Production capability signing custody
+
+Production capability signing uses one pinned Google Cloud KMS
+`EC_SIGN_ED25519` HSM key version. The independently signed lifecycle receipt
+and its observer key version are configured with
+`OFARM_SIGNING_EVIDENCE_RECEIPT_PATH` and
+`OFARM_SIGNING_EVIDENCE_OBSERVER_KEY_VERSION`.
+
+`OFARM_SIGNING_EVIDENCE_HIGH_WATER_PATH` must name a separate absolute file on
+a durable, shared, POSIX-lock-capable volume used by every replica for that
+audience and signing/observer key pair. The path must be canonical and its
+directory must be owned by the service account with no group or other write
+permission. The signer pins that directory identity, uses no-follow
+directory-relative opens, verifies the locked pathname and inode, creates the
+file as mode `0600`, locks it across each state transition, and fsyncs both
+state and initial directory entry. The durable record prevents an older signed
+receipt from becoming authoritative after restart and makes a newer
+authenticated negative receipt stop all replicas. Missing, malformed,
+rolled-back, conflicting, or non-current state fails closed. Do not place this
+file on replica-local ephemeral storage or reuse/alias the lifecycle receipt
+path.
+
 ## Client surface
 
 | Endpoint | What |
@@ -81,6 +103,7 @@ is a complete `ExecutionRecordPayload` per `contracts/core/`.
 | `schema.sql` / `schema_posture.py` | Legacy M1 disposable-schema DDL and posture verification; not an issue #174 production migration or startup path |
 | `contracts.py` | contract registry: every write validated against `contracts/` (canonical lane) or `contracts/drafts_reference/` (draft lane, D16) |
 | `profile_runtime.py` | active profile runtime descriptor loader: validates profile-local runtime inputs fail-closed while keeping tenant/demo binding outside the descriptor |
+| `tenant_capability.py` | production tenant-capability issuer, exact Google KMS HSM signing adapter, signed lifecycle observer, and durable evidence high-water barrier |
 | `store.py` | the append-only truth store; edges, gate log, idempotency, in-force queries, reachability check |
 | `problems.py` | `RuntimeProblem` factory; reason codes verbatim from the registry RFC — unknown codes refuse loudly |
 | `config.py` | deployment constants: tenant/profile/pack/policy refs, runtime version, database DSN assembly |

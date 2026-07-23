@@ -5606,6 +5606,251 @@
       "sourcePath": "kernel/tests/test_principal_binding_control_plane.py"
     },
     {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_capability_expiry_is_rechecked_after_slow_signing_response",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_capability_pins_exact_binding_head_tenant_party_and_challenge",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_capability_wrong_audience_and_stale_signer_refuse_safely",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_concrete_kms_signer_rejects_non_google_client",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_corrupt_high_water_after_startup_is_a_closed_signer_outcome",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_durable_high_water_rejects_t1_after_t2_in_fresh_signer",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_exact_google_client_with_custom_transport_cannot_be_injected",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_google_adapter_constructs_the_official_client_without_network",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_google_adapter_rejects_duck_typed_software_signer",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_google_client_adapter_accepts_generated_kms_signing_response",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_google_client_adapter_sends_only_raw_data_and_checksum",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_high_water_path_rejects_aliases_and_untrusted_parents",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_high_water_rejects_parent_replacement_after_binding",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_kms_cold_start_waiters_share_one_refresh_attempt",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_kms_expired_signer_retries_after_transient_refresh_failure",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_kms_expired_waiter_times_out_and_recovers_with_leader",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_kms_readiness_preflight_recovers_after_endpoint_failure",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_kms_readiness_preflight_rejects_an_actually_disabled_key",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_kms_readiness_preflight_rejects_disabled_evidence",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_kms_readiness_preflight_rejects_permission_denial",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_kms_readiness_preflight_rejects_public_key_mismatch",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_kms_refresh_backs_off_when_receipt_does_not_advance",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_kms_refresh_blocks_prior_evidence_when_new_head_cannot_preflight",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_kms_refresh_is_single_flight_for_concurrent_signers",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_kms_refresh_negative_head_blocks_old_evidence_and_recovers",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_kms_refresh_never_publishes_evidence_expired_during_preflight",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_kms_refresh_rechecks_expiry_inside_publication_lock",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_kms_refresh_rejects_authenticated_receipt_replay[conflicting-conflicts at the durable head]",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_kms_refresh_rejects_authenticated_receipt_replay[older-rolls back the durable head]",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_kms_signer_checks_resource_crc_hsm_and_signature",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_kms_signer_pins_audience_across_receipt_refresh",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_kms_signer_rechecks_evidence_after_slow_signing_response",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_newer_negative_blocks_signature_already_in_flight",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_newer_negative_never_falls_back_when_high_water_write_fails",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_observer_public_key_requires_exact_checksummed_der[algorithm-shape differs]",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_observer_public_key_requires_exact_checksummed_der[checksum-checksum differs]",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_observer_public_key_requires_exact_checksummed_der[der-shape differs]",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_observer_public_key_requires_exact_checksummed_der[format-shape differs]",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_observer_public_key_requires_exact_checksummed_der[name-shape differs]",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_observer_public_key_requires_exact_checksummed_der[protection-shape differs]",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_observer_requires_a_cryptographically_distinct_public_key",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_observer_requires_a_different_crypto_key_parent",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_production_issuer_rejects_a_fake_binding_resolver",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_production_issuer_rejects_local_fixture_signer",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_production_issuer_rejects_local_key_signer_subclass",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_production_signer_rejects_unbounded_observer_evidence[-300000001-1]",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_production_signer_rejects_unbounded_observer_evidence[0-300000001]",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_shared_negative_high_water_blocks_an_initialized_replica",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_signed_observer_receipt_authenticates_production_evidence",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
       "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_absent_authorization_is_no_credential",
       "sourceModule": "kernel.tests.test_production_oidc_verifier",
       "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
@@ -8216,8 +8461,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "f9fcd2e9caff2ac707499b56b89eac2e00075329ce560d3568516d99ca08ace7",
-  "entryCount": 1643,
+  "entriesSha256": "95c5eed9af2317db7ac59f12be5a2c6ffbc84bc7b4ffb366865e67a84de9b2a0",
+  "entryCount": 1692,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

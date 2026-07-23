@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import base64
+import fcntl
+import hashlib
 import json
 import os
 import re
@@ -14,7 +16,6 @@ from typing import Protocol, final
 from uuid import UUID, uuid4
 
 from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 from deployment.postgresql.tenant_contract import (
@@ -53,6 +54,10 @@ _SIGNING_EVIDENCE_RECEIPT_PATH_ENV = "OFARM_SIGNING_EVIDENCE_RECEIPT_PATH"
 _SIGNING_EVIDENCE_OBSERVER_KEY_ENV = (
     "OFARM_SIGNING_EVIDENCE_OBSERVER_KEY_VERSION"
 )
+_SIGNING_EVIDENCE_HIGH_WATER_PATH_ENV = (
+    "OFARM_SIGNING_EVIDENCE_HIGH_WATER_PATH"
+)
+_SIGNING_EVIDENCE_HIGH_WATER_MAX_BYTES = 4_096
 _SIGNING_EVIDENCE_REFRESH_WINDOW_MICROSECONDS = 30_000_000
 _SIGNING_EVIDENCE_REFRESH_RETRY_MICROSECONDS = 1_000_000
 _SIGNING_EVIDENCE_REFRESH_WAIT_SECONDS = 5.0
@@ -158,24 +163,42 @@ class GoogleCloudKmsClientAdapter:
         )
 
     def get_ed25519_public_key(self, *, name: str) -> Ed25519PublicKey:
-        response = self._client.get_public_key(request={"name": name})
+        from google.cloud.kms_v1.types import PublicKey
+
+        der_format = PublicKey.PublicKeyFormat.DER
+        response = self._client.get_public_key(
+            request={
+                "name": name,
+                "public_key_format": der_format,
+            }
+        )
         algorithm = getattr(response, "algorithm", None)
         protection = getattr(response, "protection_level", None)
-        pem = getattr(response, "pem", None)
-        pem_crc32c = getattr(response, "pem_crc32c", None)
+        public_key_format = getattr(response, "public_key_format", None)
+        checksummed_key = getattr(response, "public_key", None)
+        der = getattr(checksummed_key, "data", None)
+        der_crc32c = getattr(checksummed_key, "crc32c_checksum", None)
         if (
             getattr(response, "name", None) != name
             or getattr(algorithm, "name", None) != GOOGLE_KMS_KEY_ALGORITHM
             or getattr(protection, "name", None) != GOOGLE_KMS_PROTECTION_LEVEL
-            or type(pem) is not str
-            or type(pem_crc32c) is not int
-            or not 0 <= pem_crc32c <= 0xFFFFFFFF
+            or public_key_format != der_format
+            or type(der) is not bytes
+            or type(der_crc32c) is not int
+            or not 0 <= der_crc32c <= 0xFFFFFFFF
+            or len(der)
+            != len(TENANT_CAPABILITY_RFC8410_PREFIX) + 32
+            or not der.startswith(TENANT_CAPABILITY_RFC8410_PREFIX)
         ):
             raise ValueError("Google KMS public-key response shape differs")
-        pem_bytes = pem.encode("ascii", errors="strict")
-        if _crc32c(pem_bytes) != pem_crc32c:
+        if _crc32c(der) != der_crc32c:
             raise ValueError("Google KMS public-key checksum differs")
-        public_key = serialization.load_pem_public_key(pem_bytes)
+        try:
+            public_key = Ed25519PublicKey.from_public_bytes(
+                der[len(TENANT_CAPABILITY_RFC8410_PREFIX):]
+            )
+        except ValueError as exc:
+            raise ValueError("Google KMS observer key algorithm differs") from exc
         if not isinstance(public_key, Ed25519PublicKey):
             raise ValueError("Google KMS observer key algorithm differs")
         return public_key
@@ -220,6 +243,518 @@ def _canonical_evidence_bytes(value: dict[str, object]) -> bytes:
             separators=(",", ":"),
         )
     ).encode("ascii")
+
+
+def _production_signing_evidence_value(
+    evidence: ProductionSigningEvidence,
+) -> dict[str, object]:
+    if type(evidence) is not ProductionSigningEvidence:
+        raise ValueError("production signing evidence shape differs")
+    return {
+        "audience": evidence.audience,
+        "keyVersionResource": evidence.key_version_resource,
+        "keyId": evidence.key_id,
+        "publicKeyDigest": "sha256:" + evidence.public_key_digest.hex(),
+        "keyPurpose": evidence.key_purpose,
+        "keyAlgorithm": evidence.key_algorithm,
+        "protectionLevel": evidence.protection_level,
+        "keyState": evidence.key_state,
+        "attestationEvidenceDigest": evidence.attestation_evidence_digest,
+        "iamEvidenceDigest": evidence.iam_evidence_digest,
+        "databaseCandidateDigest": evidence.database_candidate_digest,
+        "databaseLifecycleHeadDigest": (
+            evidence.database_lifecycle_head_digest
+        ),
+        "observedAtUnixMicroseconds": (
+            evidence.observed_at_unix_microseconds
+        ),
+        "validUntilUnixMicroseconds": evidence.valid_until_unix_microseconds,
+    }
+
+
+def _production_signing_evidence_digest(
+    evidence: ProductionSigningEvidence,
+) -> str:
+    return "sha256:" + hashlib.sha256(
+        _canonical_evidence_bytes(
+            _production_signing_evidence_value(evidence)
+        )
+    ).hexdigest()
+
+
+@dataclass(frozen=True, slots=True)
+class _SigningEvidenceHighWaterObservation:
+    advanced: bool
+    accepted: bool
+
+
+@final
+class SigningEvidenceHighWaterStore:
+    """Coordinate the authenticated evidence head across restarts and replicas."""
+
+    _FIELDS = {
+        "schemaVersion",
+        "audience",
+        "signingKeyVersionResource",
+        "observerKeyVersionResource",
+        "observedAtUnixMicroseconds",
+        "evidenceDigest",
+        "accepted",
+    }
+
+    def __init__(
+        self,
+        *,
+        audience: str,
+        signing_key_resource: str,
+        observer_key_resource: str,
+    ) -> None:
+        path_value = os.environ.get(
+            _SIGNING_EVIDENCE_HIGH_WATER_PATH_ENV
+        )
+        receipt_path_value = os.environ.get(
+            _SIGNING_EVIDENCE_RECEIPT_PATH_ENV
+        )
+        if (
+            type(path_value) is not str
+            or not path_value
+            or not self._is_normalized_absolute_path(Path(path_value))
+            or (
+                type(receipt_path_value) is str
+                and os.path.realpath(path_value)
+                == os.path.realpath(receipt_path_value)
+            )
+        ):
+            raise TypeError(
+                "production signing-evidence high-water path is invalid"
+            )
+        self._bind(
+            path=Path(path_value),
+            audience=audience,
+            signing_key_resource=signing_key_resource,
+            observer_key_resource=observer_key_resource,
+            production_eligible=True,
+        )
+
+    @classmethod
+    def for_test(
+        cls,
+        *,
+        audience: str,
+        signing_key_resource: str,
+        observer_key_resource: str,
+        path: Path | None = None,
+    ) -> "SigningEvidenceHighWaterStore":
+        """Build a non-production in-memory or file-backed fixture store."""
+
+        store = object.__new__(cls)
+        store._bind(
+            path=path,
+            audience=audience,
+            signing_key_resource=signing_key_resource,
+            observer_key_resource=observer_key_resource,
+            production_eligible=False,
+        )
+        return store
+
+    def _bind(
+        self,
+        *,
+        path: Path | None,
+        audience: str,
+        signing_key_resource: str,
+        observer_key_resource: str,
+        production_eligible: bool,
+    ) -> None:
+        try:
+            validate_binder_audience(audience)
+            validate_google_kms_key_version_resource(signing_key_resource)
+            validate_google_kms_key_version_resource(observer_key_resource)
+        except TenantCapabilityContractError as exc:
+            raise TypeError(
+                "signing-evidence high-water scope is invalid"
+            ) from exc
+        if path is not None and (
+            not isinstance(path, Path)
+            or not self._is_normalized_absolute_path(path)
+        ):
+            raise TypeError("signing-evidence high-water path is invalid")
+        parent_identity = None
+        if path is not None:
+            try:
+                parent_identity = self._validated_parent_identity(path)
+            except (OSError, ValueError) as exc:
+                raise TypeError(
+                    "signing-evidence high-water parent is invalid"
+                ) from exc
+        self._path = path
+        self._parent_identity = parent_identity
+        self._audience = audience
+        self._signing_key_resource = signing_key_resource
+        self._observer_key_resource = observer_key_resource
+        self._production_eligible = production_eligible
+        self._memory_lock = threading.Lock()
+        self._memory_state: dict[str, object] | None = None
+
+    @property
+    def production_eligible(self) -> bool:
+        return (
+            self._production_eligible is True
+            and isinstance(self._path, Path)
+            and self._path.is_absolute()
+            and self._parent_identity is not None
+        )
+
+    @staticmethod
+    def _is_normalized_absolute_path(path: Path) -> bool:
+        return (
+            path.is_absolute()
+            and path.name not in {"", ".", ".."}
+            and ".." not in path.parts
+            and os.fspath(path) == os.path.normpath(os.fspath(path))
+        )
+
+    @staticmethod
+    def _validated_parent_identity(path: Path) -> tuple[int, int]:
+        parent = os.fspath(path.parent)
+        if os.path.realpath(parent) != parent:
+            raise ValueError(
+                "signing-evidence high-water parent is not canonical"
+            )
+        metadata = os.stat(parent, follow_symlinks=False)
+        if (
+            not stat.S_ISDIR(metadata.st_mode)
+            or metadata.st_uid != os.geteuid()
+            or stat.S_IMODE(metadata.st_mode) & 0o022
+        ):
+            raise ValueError(
+                "signing-evidence high-water parent is not private"
+            )
+        return metadata.st_dev, metadata.st_ino
+
+    def _candidate_state(
+        self,
+        evidence: ProductionSigningEvidence,
+        *,
+        accepted: bool,
+    ) -> dict[str, object]:
+        return {
+            "schemaVersion": 1,
+            "audience": self._audience,
+            "signingKeyVersionResource": self._signing_key_resource,
+            "observerKeyVersionResource": self._observer_key_resource,
+            "observedAtUnixMicroseconds": (
+                evidence.observed_at_unix_microseconds
+            ),
+            "evidenceDigest": _production_signing_evidence_digest(evidence),
+            "accepted": accepted,
+        }
+
+    def _decode_state(self, raw: bytes) -> dict[str, object] | None:
+        if not raw:
+            return None
+        if len(raw) > _SIGNING_EVIDENCE_HIGH_WATER_MAX_BYTES:
+            raise ValueError("signing-evidence high-water state is oversized")
+        try:
+            state = json.loads(
+                raw.decode("utf-8", errors="strict"),
+                object_pairs_hook=_json_object_without_duplicates,
+                parse_constant=lambda value: (_ for _ in ()).throw(
+                    ValueError(
+                        "signing-evidence high-water constant is invalid"
+                    )
+                ),
+            )
+        except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+            raise ValueError(
+                "signing-evidence high-water state is malformed"
+            ) from exc
+        if (
+            type(state) is not dict
+            or set(state) != self._FIELDS
+            or state["schemaVersion"] != 1
+            or state["audience"] != self._audience
+            or state["signingKeyVersionResource"]
+            != self._signing_key_resource
+            or state["observerKeyVersionResource"]
+            != self._observer_key_resource
+            or type(state["observedAtUnixMicroseconds"]) is not int
+            or state["observedAtUnixMicroseconds"] < 0
+            or type(state["evidenceDigest"]) is not str
+            or _SHA256_ID.fullmatch(state["evidenceDigest"]) is None
+            or type(state["accepted"]) is not bool
+        ):
+            raise ValueError(
+                "signing-evidence high-water state differs"
+            )
+        return state
+
+    @staticmethod
+    def _write_all(descriptor: int, value: bytes) -> None:
+        offset = 0
+        while offset < len(value):
+            written = os.write(descriptor, value[offset:])
+            if written <= 0:
+                raise OSError("signing-evidence high-water write stalled")
+            offset += written
+
+    def _write_state(
+        self,
+        descriptor: int,
+        state: dict[str, object],
+    ) -> None:
+        encoded = _canonical_evidence_bytes(state) + b"\n"
+        if len(encoded) > _SIGNING_EVIDENCE_HIGH_WATER_MAX_BYTES:
+            raise ValueError("signing-evidence high-water state is oversized")
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        self._write_all(descriptor, encoded)
+        os.ftruncate(descriptor, len(encoded))
+        os.fsync(descriptor)
+
+    def _read_file_state(self, descriptor: int) -> dict[str, object] | None:
+        metadata = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_nlink != 1
+            or metadata.st_uid != os.geteuid()
+            or stat.S_IMODE(metadata.st_mode) != 0o600
+            or metadata.st_size
+            > _SIGNING_EVIDENCE_HIGH_WATER_MAX_BYTES
+        ):
+            raise ValueError(
+                "signing-evidence high-water file is invalid"
+            )
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        raw = os.read(
+            descriptor, _SIGNING_EVIDENCE_HIGH_WATER_MAX_BYTES + 1
+        )
+        if len(raw) != metadata.st_size or os.read(descriptor, 1):
+            raise ValueError(
+                "signing-evidence high-water file changed while read"
+            )
+        return self._decode_state(raw)
+
+    def _assert_parent_descriptor(self, descriptor: int) -> None:
+        metadata = os.fstat(descriptor)
+        pathname_metadata = os.stat(
+            self._path.parent,
+            follow_symlinks=False,
+        )
+        expected_identity = self._parent_identity
+        if (
+            expected_identity is None
+            or (metadata.st_dev, metadata.st_ino) != expected_identity
+            or (
+                pathname_metadata.st_dev,
+                pathname_metadata.st_ino,
+            )
+            != expected_identity
+            or not stat.S_ISDIR(metadata.st_mode)
+            or metadata.st_uid != os.geteuid()
+            or stat.S_IMODE(metadata.st_mode) & 0o022
+        ):
+            raise ValueError(
+                "signing-evidence high-water parent changed"
+            )
+
+    def _assert_file_descriptor(
+        self,
+        parent_descriptor: int,
+        descriptor: int,
+    ) -> None:
+        descriptor_metadata = os.fstat(descriptor)
+        pathname_metadata = os.stat(
+            self._path.name,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
+        if (
+            descriptor_metadata.st_dev != pathname_metadata.st_dev
+            or descriptor_metadata.st_ino != pathname_metadata.st_ino
+            or descriptor_metadata.st_nlink != 1
+            or pathname_metadata.st_nlink != 1
+        ):
+            raise ValueError(
+                "signing-evidence high-water file identity changed"
+            )
+
+    def _operate(self, operation):
+        if self._path is None:
+            with self._memory_lock:
+                new_state, result = operation(self._memory_state)
+                if new_state is not None:
+                    self._memory_state = new_state
+                return result
+
+        directory_flags = os.O_RDONLY
+        if hasattr(os, "O_CLOEXEC"):
+            directory_flags |= os.O_CLOEXEC
+        if hasattr(os, "O_DIRECTORY"):
+            directory_flags |= os.O_DIRECTORY
+        if hasattr(os, "O_NOFOLLOW"):
+            directory_flags |= os.O_NOFOLLOW
+        parent_descriptor = os.open(
+            self._path.parent,
+            directory_flags,
+        )
+        try:
+            self._assert_parent_descriptor(parent_descriptor)
+        except Exception:
+            os.close(parent_descriptor)
+            raise
+
+        flags = os.O_RDWR
+        if hasattr(os, "O_CLOEXEC"):
+            flags |= os.O_CLOEXEC
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        created = False
+        persisted = False
+        try:
+            try:
+                descriptor = os.open(
+                    self._path.name,
+                    flags | os.O_CREAT | os.O_EXCL,
+                    0o600,
+                    dir_fd=parent_descriptor,
+                )
+                created = True
+            except FileExistsError:
+                descriptor = os.open(
+                    self._path.name,
+                    flags,
+                    dir_fd=parent_descriptor,
+                )
+            try:
+                fcntl.flock(descriptor, fcntl.LOCK_EX)
+                self._assert_parent_descriptor(parent_descriptor)
+                self._assert_file_descriptor(
+                    parent_descriptor,
+                    descriptor,
+                )
+                current = self._read_file_state(descriptor)
+                new_state, result = operation(current)
+                if new_state is not None:
+                    self._write_state(descriptor, new_state)
+                    persisted = True
+                self._assert_parent_descriptor(parent_descriptor)
+                self._assert_file_descriptor(
+                    parent_descriptor,
+                    descriptor,
+                )
+                if created and persisted:
+                    os.fsync(parent_descriptor)
+            finally:
+                try:
+                    fcntl.flock(descriptor, fcntl.LOCK_UN)
+                finally:
+                    os.close(descriptor)
+        finally:
+            os.close(parent_descriptor)
+        return result
+
+    def _checked_operate(self, operation):
+        try:
+            return self._operate(operation)
+        except CapabilityIssuanceError:
+            raise
+        except Exception as exc:
+            raise self._refuse(
+                "production signing-evidence durable state is unavailable"
+            ) from exc
+
+    @staticmethod
+    def _refuse(detail: str) -> CapabilityIssuanceError:
+        return CapabilityIssuanceError(
+            PreBindingOutcome.SIGNER_UNAVAILABLE,
+            internal_detail=detail,
+        )
+
+    def record_authenticated(
+        self,
+        evidence: ProductionSigningEvidence,
+    ) -> _SigningEvidenceHighWaterObservation:
+        try:
+            candidate = self._candidate_state(evidence, accepted=False)
+        except Exception as exc:
+            raise self._refuse(
+                "production signing-evidence durable state is unavailable"
+            ) from exc
+
+        def operation(current):
+            if current is None:
+                return candidate, _SigningEvidenceHighWaterObservation(
+                    advanced=True,
+                    accepted=False,
+                )
+            candidate_time = candidate["observedAtUnixMicroseconds"]
+            current_time = current["observedAtUnixMicroseconds"]
+            if candidate_time < current_time:
+                raise self._refuse(
+                    "production signing evidence rolls back the durable head"
+                )
+            if candidate_time == current_time:
+                if candidate["evidenceDigest"] != current["evidenceDigest"]:
+                    raise self._refuse(
+                        "production signing evidence conflicts at the durable head"
+                    )
+                return None, _SigningEvidenceHighWaterObservation(
+                    advanced=False,
+                    accepted=current["accepted"],
+                )
+            return candidate, _SigningEvidenceHighWaterObservation(
+                advanced=True,
+                accepted=False,
+            )
+
+        return self._checked_operate(operation)
+
+    def mark_accepted(self, evidence: ProductionSigningEvidence) -> None:
+        try:
+            candidate = self._candidate_state(evidence, accepted=True)
+        except Exception as exc:
+            raise self._refuse(
+                "production signing-evidence durable state is unavailable"
+            ) from exc
+
+        def operation(current):
+            if (
+                current is None
+                or current["observedAtUnixMicroseconds"]
+                != candidate["observedAtUnixMicroseconds"]
+                or current["evidenceDigest"] != candidate["evidenceDigest"]
+            ):
+                raise self._refuse(
+                    "production signing evidence changed during validation"
+                )
+            if current["accepted"] is True:
+                return None, None
+            return candidate, None
+
+        self._checked_operate(operation)
+
+    def require_accepted(self, evidence: ProductionSigningEvidence) -> None:
+        try:
+            candidate = self._candidate_state(evidence, accepted=True)
+        except Exception as exc:
+            raise self._refuse(
+                "production signing-evidence durable state is unavailable"
+            ) from exc
+
+        def operation(current):
+            if (
+                current is None
+                or current["observedAtUnixMicroseconds"]
+                != candidate["observedAtUnixMicroseconds"]
+                or current["evidenceDigest"] != candidate["evidenceDigest"]
+                or current["accepted"] is not True
+            ):
+                raise self._refuse(
+                    "production signing evidence is not the durable accepted head"
+                )
+            return None, None
+
+        self._checked_operate(operation)
 
 
 def _decode_receipt_signature(value: object) -> bytes:
@@ -406,6 +941,10 @@ class GoogleKmsSigningEvidenceObserver:
             and self._client.production_eligible
         )
 
+    @property
+    def observer_key_resource(self) -> str:
+        return self._observer_key_resource
+
     def _read_receipt(self) -> bytes:
         if self._receipt_bytes is not None:
             return self._receipt_bytes
@@ -458,6 +997,10 @@ class GoogleKmsSigningEvidenceObserver:
         observer_public_key = self._client.get_ed25519_public_key(
             name=self._observer_key_resource
         )
+        if observer_public_key.public_bytes_raw() == signing_key.public_key:
+            raise ValueError(
+                "signing-evidence observer public key must differ"
+            )
         evidence = _decode_signing_evidence_receipt(
             self._read_receipt(), observer_public_key
         )
@@ -479,12 +1022,22 @@ class GoogleKmsEd25519Signer:
         *,
         client: GoogleCloudKmsClientAdapter,
         public_key: GoogleKmsEd25519PublicKey,
+        audience: str,
     ) -> None:
+        evidence_observer = GoogleKmsSigningEvidenceObserver()
         self._bind(
             client=client,
             public_key=public_key,
+            audience=audience,
             evidence=None,
-            evidence_observer=GoogleKmsSigningEvidenceObserver(),
+            evidence_observer=evidence_observer,
+            high_water_store=SigningEvidenceHighWaterStore(
+                audience=audience,
+                signing_key_resource=public_key.key_version_resource,
+                observer_key_resource=(
+                    evidence_observer.observer_key_resource
+                ),
+            ),
             now_microseconds=lambda: time.time_ns() // 1_000,
             production_eligible=True,
         )
@@ -495,18 +1048,39 @@ class GoogleKmsEd25519Signer:
         *,
         client: GoogleCloudKmsClientAdapter,
         public_key: GoogleKmsEd25519PublicKey,
+        audience: str,
         evidence: ProductionSigningEvidence,
         evidence_observer: GoogleKmsSigningEvidenceObserver | None = None,
+        high_water_store: SigningEvidenceHighWaterStore | None = None,
         now_microseconds=lambda: time.time_ns() // 1_000,
     ) -> "GoogleKmsEd25519Signer":
         """Build a visibly non-production signer with a controllable clock."""
 
+        observer_resource = (
+            evidence_observer.observer_key_resource
+            if type(evidence_observer) is GoogleKmsSigningEvidenceObserver
+            else (
+                "projects/ofarm1/locations/europe-west1/keyRings/auth/"
+                "cryptoKeys/evidence-observer/cryptoKeyVersions/1"
+            )
+        )
+        selected_high_water_store = (
+            SigningEvidenceHighWaterStore.for_test(
+                audience=audience,
+                signing_key_resource=public_key.key_version_resource,
+                observer_key_resource=observer_resource,
+            )
+            if high_water_store is None
+            else high_water_store
+        )
         signer = object.__new__(cls)
         signer._bind(
             client=client,
             public_key=public_key,
+            audience=audience,
             evidence=evidence,
             evidence_observer=evidence_observer,
+            high_water_store=selected_high_water_store,
             now_microseconds=now_microseconds,
             production_eligible=False,
         )
@@ -517,18 +1091,31 @@ class GoogleKmsEd25519Signer:
         *,
         client: GoogleCloudKmsClientAdapter,
         public_key: GoogleKmsEd25519PublicKey,
+        audience: str,
         evidence: ProductionSigningEvidence | None,
         evidence_observer: GoogleKmsSigningEvidenceObserver | None,
+        high_water_store: SigningEvidenceHighWaterStore,
         now_microseconds,
         production_eligible: bool,
     ) -> None:
+        try:
+            validate_binder_audience(audience)
+        except TenantCapabilityContractError as exc:
+            raise TypeError("production signer audience is invalid") from exc
+        if type(high_water_store) is not SigningEvidenceHighWaterStore:
+            raise TypeError(
+                "production signing-evidence high-water store differs"
+            )
         self._client = client
         self._public_key_observation = public_key
+        self._audience = audience
         self._evidence = evidence
         self._evidence_observer = evidence_observer
+        self._high_water_store = high_water_store
         self._now_microseconds = now_microseconds
         self._production_eligible = production_eligible
         self._initialized = False
+        self._ever_initialized = False
         self._state_condition = threading.Condition()
         self._refresh_in_progress = False
         self._next_refresh_attempt_unix_microseconds = 0
@@ -544,14 +1131,7 @@ class GoogleKmsEd25519Signer:
 
     @property
     def audience(self) -> str:
-        with self._state_condition:
-            evidence = self._evidence
-        if type(evidence) is not ProductionSigningEvidence:
-            raise CapabilityIssuanceError(
-                PreBindingOutcome.SIGNER_UNAVAILABLE,
-                internal_detail="authenticated production signing evidence is absent",
-            )
-        return evidence.audience
+        return self._audience
 
     @property
     def production_eligible(self) -> bool:
@@ -562,6 +1142,9 @@ class GoogleKmsEd25519Signer:
             and type(self._evidence_observer)
             is GoogleKmsSigningEvidenceObserver
             and self._evidence_observer.production_eligible
+            and type(self._high_water_store)
+            is SigningEvidenceHighWaterStore
+            and self._high_water_store.production_eligible
         )
 
     def _now(self) -> int:
@@ -644,7 +1227,9 @@ class GoogleKmsEd25519Signer:
                 internal_detail="signing evidence grammar differs",
             ) from exc
         if (
-            observation.key_version_resource != evidence.key_version_resource
+            evidence.audience != self._audience
+            or observation.key_version_resource
+            != evidence.key_version_resource
             or observation.kid != evidence.key_id
             or observation.public_key_digest != evidence.public_key_digest
             or observation.public_key_digest != expected_public_digest
@@ -684,6 +1269,8 @@ class GoogleKmsEd25519Signer:
         self._sign_with_evidence(
             TENANT_CAPABILITY_PREFLIGHT_PROBE,
             evidence,
+            expected_audience=self._audience,
+            enforce_high_water=False,
         )
         if self._now() >= evidence.valid_until_unix_microseconds:
             raise CapabilityIssuanceError(
@@ -734,6 +1321,7 @@ class GoogleKmsEd25519Signer:
     ) -> ProductionSigningEvidence:
         now = self._now()
         refresh_started = False
+        authenticated_candidate: ProductionSigningEvidence | None = None
         with self._state_condition:
             current = self._evidence if self._initialized else None
             previous_accepted = self._last_accepted_evidence
@@ -801,11 +1389,22 @@ class GoogleKmsEd25519Signer:
         try:
             if observer is not None:
                 candidate = self._observe_candidate()
+                authenticated_candidate = candidate
+            high_water_observation = (
+                self._high_water_store.record_authenticated(candidate)
+            )
             accepted = self._validate_candidate(candidate)
+            self._high_water_store.mark_accepted(accepted)
             no_progress = self._candidate_is_no_progress(
                 accepted,
                 previous_accepted,
             )
+            if (
+                previous_accepted is not None
+                and not high_water_observation.advanced
+                and high_water_observation.accepted
+            ):
+                no_progress = True
             with self._state_condition:
                 published_at = self._now()
                 if not self._is_current(accepted, published_at):
@@ -837,6 +1436,7 @@ class GoogleKmsEd25519Signer:
                     self._last_accepted_evidence = accepted
                     self._next_refresh_attempt_unix_microseconds = 0
                 self._initialized = True
+                self._ever_initialized = True
                 self._refresh_in_progress = False
                 self._state_condition.notify_all()
                 return accepted
@@ -862,10 +1462,41 @@ class GoogleKmsEd25519Signer:
                 )
                 prior = self._evidence if self._initialized else None
                 prior_is_current = self._is_current(prior, failed_at)
-                if not prior_is_current:
+                prior_is_durable = False
+                candidate_allows_fallback = (
+                    authenticated_candidate is None
+                    or (
+                        type(prior) is ProductionSigningEvidence
+                        and (
+                            authenticated_candidate == prior
+                            or (
+                                authenticated_candidate
+                                .observed_at_unix_microseconds
+                                < prior.observed_at_unix_microseconds
+                            )
+                        )
+                    )
+                )
+                if prior_is_current:
+                    try:
+                        assert type(prior) is ProductionSigningEvidence
+                        self._high_water_store.require_accepted(prior)
+                        prior_is_durable = True
+                    except Exception:
+                        prior_is_durable = False
+                if (
+                    not prior_is_current
+                    or not prior_is_durable
+                    or not candidate_allows_fallback
+                ):
                     self._initialized = False
                 self._state_condition.notify_all()
-                if allow_previous and prior_is_current:
+                if (
+                    allow_previous
+                    and prior_is_current
+                    and prior_is_durable
+                    and candidate_allows_fallback
+                ):
                     assert type(prior) is ProductionSigningEvidence
                     return prior
             if failure is exc:
@@ -879,7 +1510,21 @@ class GoogleKmsEd25519Signer:
         self,
         data: bytes,
         evidence: ProductionSigningEvidence,
+        *,
+        expected_audience: str,
+        enforce_high_water: bool,
     ) -> bytes:
+        if (
+            type(expected_audience) is not str
+            or expected_audience != self._audience
+            or evidence.audience != self._audience
+        ):
+            raise CapabilityIssuanceError(
+                PreBindingOutcome.SIGNER_UNAVAILABLE,
+                internal_detail="production signing audience differs",
+            )
+        if enforce_high_water:
+            self._high_water_store.require_accepted(evidence)
         before_signing = self._now()
         if before_signing >= evidence.valid_until_unix_microseconds:
             raise CapabilityIssuanceError(
@@ -929,16 +1574,26 @@ class GoogleKmsEd25519Signer:
                 PreBindingOutcome.SIGNER_UNAVAILABLE,
                 internal_detail="KMS signature verification failed",
             ) from exc
+        if enforce_high_water:
+            self._high_water_store.require_accepted(evidence)
         return response.signature
 
-    def sign(self, data: bytes) -> bytes:
+    def sign(self, data: bytes, *, expected_audience: str) -> bytes:
         if type(data) is not bytes or not data or len(data) > 8_192:
             raise CapabilityIssuanceError(
                 PreBindingOutcome.CAPABILITY_REFUSED,
                 internal_detail="signing input is outside the bound",
             )
+        if (
+            type(expected_audience) is not str
+            or expected_audience != self._audience
+        ):
+            raise CapabilityIssuanceError(
+                PreBindingOutcome.CAPABILITY_REFUSED,
+                internal_detail="signing audience differs",
+            )
         with self._state_condition:
-            if not self._initialized:
+            if not self._initialized and not self._ever_initialized:
                 raise CapabilityIssuanceError(
                     PreBindingOutcome.SIGNER_UNAVAILABLE,
                     internal_detail="production signer is not initialized",
@@ -947,7 +1602,12 @@ class GoogleKmsEd25519Signer:
             force=False,
             allow_previous=True,
         )
-        return self._sign_with_evidence(data, evidence)
+        return self._sign_with_evidence(
+            data,
+            evidence,
+            expected_audience=expected_audience,
+            enforce_high_water=True,
+        )
 
 
 class CapabilitySigner(Protocol):
@@ -962,10 +1622,13 @@ class CapabilitySigner(Protocol):
 
     def initialize(self) -> None: ...
 
-    def sign(self, data: bytes) -> bytes: ...
+    def sign(self, data: bytes, *, expected_audience: str) -> bytes: ...
 
 
 class CapabilityBindingResolver(Protocol):
+    @property
+    def audience(self) -> str: ...
+
     def initialize(self) -> None: ...
 
     def resolve(self, identity: VerifiedOidcIdentity) -> PrincipalBindingAuthority: ...
@@ -1067,7 +1730,15 @@ class ProductionTenantCapabilityIssuer:
         ):
             self._require_production_resolver(self._resolver)
         try:
-            self._resolver.initialize()
+            if self._test_only_dependencies_allowed:
+                self._resolver.initialize()
+            elif self._resolver.audience != self._signer.audience:
+                raise CapabilityIssuanceError(
+                    PreBindingOutcome.CONFIGURATION_REFUSED,
+                    internal_detail=(
+                        "database and signing audiences differ"
+                    ),
+                )
             self._signer.initialize()
             validate_binder_audience(self._signer.audience)
         except CapabilityIssuanceError:
@@ -1149,7 +1820,10 @@ class ProductionTenantCapabilityIssuer:
         try:
             validate_tenant_capability(capability, now_unix_microseconds=now)
             signing_input = canonical_jws_signing_input(capability)
-            signature = self._signer.sign(signing_input)
+            signature = self._signer.sign(
+                signing_input,
+                expected_audience=challenge.audience,
+            )
             Ed25519PublicKey.from_public_bytes(self._signer.public_key).verify(
                 signature, signing_input
             )
@@ -1196,5 +1870,6 @@ __all__ = [
     "GoogleKmsSigningResponse",
     "ProductionSigningEvidence",
     "ProductionTenantCapabilityIssuer",
+    "SigningEvidenceHighWaterStore",
     "TenantChallenge",
 ]
