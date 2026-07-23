@@ -85,6 +85,7 @@ def _production_verifier(
     *,
     client=None,
     clock=None,
+    algorithms=("RS256",),
     jwks_lifespan_seconds=300,
     jwks_miss_refresh_seconds=5,
 ):
@@ -95,7 +96,7 @@ def _production_verifier(
             issuer=ISSUER,
             audience=AUDIENCE,
             jwks_url=JWKS_URL,
-            algorithms=("RS256",),
+            algorithms=algorithms,
             jwks_lifespan_seconds=jwks_lifespan_seconds,
             jwks_miss_refresh_seconds=jwks_miss_refresh_seconds,
         ),
@@ -113,7 +114,7 @@ def _production_oidc_config() -> ProductionOidcConfig:
     )
 
 
-def _signed_token(private, *, key_id="key-1", **claims):
+def _signed_token(private, *, key_id="key-1", algorithm="RS256", **claims):
     now = int(time.time())
     payload = {
         "iss": ISSUER,
@@ -127,7 +128,7 @@ def _signed_token(private, *, key_id="key-1", **claims):
     return jwt.encode(
         payload,
         private,
-        algorithm="RS256",
+        algorithm=algorithm,
         headers={"kid": key_id},
     )
 
@@ -310,6 +311,30 @@ def test_maintained_verifier_accepts_a_new_key_id_after_jwks_rotation(rsa_keys):
         headers={"kid": "key-2"},
     )
     assert verifier.verify_identity(rotated).subject == "subject-02"
+
+
+def test_alg_less_rsa_jwk_supports_configured_ps256(rsa_keys):
+    private, public = rsa_keys
+    jwk_data = jwt.algorithms.RSAAlgorithm.to_jwk(public, as_dict=True)
+    jwk_data.update({"kid": "key-ps256", "use": "sig"})
+    assert "alg" not in jwk_data
+    alg_less_key = jwt.PyJWK.from_dict(jwk_data)
+    assert alg_less_key.algorithm_name == "RS256"
+    client = _JwksClient([alg_less_key])
+    verifier = _production_verifier(
+        rsa_keys,
+        client=client,
+        algorithms=("PS256",),
+    )
+    verifier.initialize()
+
+    token = _signed_token(
+        private,
+        key_id="key-ps256",
+        algorithm="PS256",
+        sub="subject-ps256",
+    )
+    assert verifier.verify_identity(token).subject == "subject-ps256"
 
 
 def test_unknown_key_ids_share_one_bounded_jwks_miss_refresh(rsa_keys):
@@ -543,6 +568,62 @@ def test_provider_outage_after_jwks_expiry_is_verifier_unavailable(rsa_keys):
         verifier.verify_identity(_token(rsa_keys))
     assert raised.value.outcome is PreBindingOutcome.VERIFIER_UNAVAILABLE
     assert "provider detail" not in str(raised.value)
+
+
+def test_slow_failed_expiry_refresh_is_non_blocking_and_retry_bounded(rsa_keys):
+    private, public = rsa_keys
+    now = [5_000.0]
+    refresh_started = Event()
+    release_refresh = Event()
+
+    class SlowFailingRefreshClient(_JwksClient):
+        def get_jwk_set(self, *, refresh: bool):
+            self.refreshes.append(refresh)
+            if len(self.refreshes) > 1:
+                refresh_started.set()
+                if not release_refresh.wait(timeout=2):
+                    raise RuntimeError("test refresh was not released")
+                raise RuntimeError("provider detail must stay private")
+            return _JwkSet(self.keys)
+
+    client = SlowFailingRefreshClient(
+        [_SigningKey("key-1", "RS256", public)]
+    )
+    verifier = _production_verifier(
+        rsa_keys,
+        client=client,
+        clock=lambda: now[0],
+        jwks_lifespan_seconds=60,
+    )
+    verifier.initialize()
+    token = _signed_token(private)
+    now[0] += 60
+
+    with ThreadPoolExecutor(max_workers=18) as executor:
+        first_refresh = executor.submit(verifier.verify_identity, token)
+        assert refresh_started.wait(timeout=1)
+        concurrent_requests = [
+            executor.submit(verifier.verify_identity, token)
+            for _ in range(16)
+        ]
+        for result in concurrent_requests:
+            with pytest.raises(OidcError) as raised:
+                result.result(timeout=1)
+            assert raised.value.outcome is PreBindingOutcome.VERIFIER_UNAVAILABLE
+        release_refresh.set()
+        with pytest.raises(OidcError) as raised:
+            first_refresh.result(timeout=1)
+        assert raised.value.outcome is PreBindingOutcome.VERIFIER_UNAVAILABLE
+
+    with pytest.raises(OidcError) as raised:
+        verifier.verify_identity(token)
+    assert raised.value.outcome is PreBindingOutcome.VERIFIER_UNAVAILABLE
+    assert client.refreshes == [True, True]
+
+    now[0] += 5
+    with pytest.raises(OidcError):
+        verifier.verify_identity(token)
+    assert client.refreshes == [True, True, True]
 
 
 @pytest.mark.parametrize(

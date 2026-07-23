@@ -455,6 +455,7 @@ class ProductionOidcVerifier:
         self._generation_lock = Lock()
         self._refresh_lock = Lock()
         self._last_miss_refresh_at: float | None = None
+        self._next_expired_refresh_at: float | None = None
         self._initialized = False
 
     @property
@@ -470,6 +471,7 @@ class ProductionOidcVerifier:
         with self._generation_lock:
             self._generation = None
             self._last_miss_refresh_at = None
+            self._next_expired_refresh_at = None
         self.config.validate()
         try:
             import jwt
@@ -530,11 +532,8 @@ class ProductionOidcVerifier:
                 or "verify" not in key_operations
             ):
                 continue
-            algorithm = getattr(key, "algorithm_name", None)
             key_id = getattr(key, "key_id", None)
             verifier_key = getattr(key, "key", None)
-            if algorithm not in self.config.algorithms:
-                continue
             if (
                 type(key_id) is not str
                 or _VISIBLE_ASCII.fullmatch(key_id) is None
@@ -542,17 +541,51 @@ class ProductionOidcVerifier:
                 or verifier_key is None
             ):
                 continue
-            identity = (key_id, algorithm)
-            if identity in identities:
-                raise _JwksProviderStateError(
-                    "JWKS contains an ambiguous signing-key identity"
-                )
-            identities.add(identity)
-            signing_keys.append((key_id, algorithm, verifier_key))
+            for algorithm in self._key_algorithms(key, jwk_data):
+                identity = (key_id, algorithm)
+                if identity in identities:
+                    raise _JwksProviderStateError(
+                        "JWKS contains an ambiguous signing-key identity"
+                    )
+                identities.add(identity)
+                signing_keys.append((key_id, algorithm, verifier_key))
 
         if not signing_keys:
             raise _JwksProviderStateError("JWKS has no usable signing key")
         return tuple(signing_keys)
+
+    def _key_algorithms(
+        self, key: object, jwk_data: object
+    ) -> tuple[str, ...]:
+        inferred = getattr(key, "algorithm_name", None)
+        if type(jwk_data) is not dict:
+            return (inferred,) if inferred in self.config.algorithms else ()
+        if "alg" in jwk_data:
+            declared = jwk_data["alg"]
+            return (declared,) if declared in self.config.algorithms else ()
+
+        key_type = jwk_data.get("kty")
+        curve = jwk_data.get("crv")
+        compatible: frozenset[str]
+        if key_type == "RSA":
+            compatible = frozenset(
+                {"RS256", "RS384", "RS512", "PS256", "PS384", "PS512"}
+            )
+        elif key_type == "EC":
+            compatible = {
+                "P-256": frozenset({"ES256"}),
+                "P-384": frozenset({"ES384"}),
+                "P-521": frozenset({"ES512"}),
+            }.get(curve, frozenset())
+        elif key_type == "OKP" and curve in ("Ed25519", "Ed448"):
+            compatible = frozenset({"EdDSA"})
+        else:
+            compatible = frozenset()
+        return tuple(
+            algorithm
+            for algorithm in self.config.algorithms
+            if algorithm in compatible
+        )
 
     def _select_signing_key(self, key_id: str, algorithm: str) -> object:
         try:
@@ -583,21 +616,41 @@ class ProductionOidcVerifier:
         return selected
 
     def _refresh_expired_generation(self) -> _ValidatedJwksGeneration:
-        """Single-flight a lifespan refresh without blocking current-key reads."""
+        """Non-blocking single-flight a lifespan refresh with failure cooldown."""
 
-        with self._refresh_lock:
+        if not self._refresh_lock.acquire(blocking=False):
+            raise _JwksProviderStateError("JWKS refresh is already in progress")
+        try:
             with self._generation_lock:
                 generation = self._generation
+                now = self._clock()
                 if (
                     generation is not None
-                    and self._clock() - generation.loaded_at
-                    < self.config.jwks_lifespan_seconds
+                    and now - generation.loaded_at < self.config.jwks_lifespan_seconds
                 ):
                     return generation
-            refreshed = self._load_generation()
+                if (
+                    self._next_expired_refresh_at is not None
+                    and now < self._next_expired_refresh_at
+                ):
+                    raise _JwksProviderStateError(
+                        "JWKS lifespan refresh is in failure cooldown"
+                    )
+            try:
+                refreshed = self._load_generation()
+            except _JwksProviderStateError:
+                with self._generation_lock:
+                    self._next_expired_refresh_at = self._clock() + max(
+                        self.config.jwks_miss_refresh_seconds,
+                        self.config.timeout_seconds,
+                    )
+                raise
             with self._generation_lock:
                 self._generation = refreshed
+                self._next_expired_refresh_at = None
             return refreshed
+        finally:
+            self._refresh_lock.release()
 
     def _refresh_generation_for_miss(
         self, key_id: str, algorithm: str

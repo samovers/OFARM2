@@ -530,6 +530,36 @@ def test_kms_signer_rechecks_evidence_after_slow_signing_response():
     assert "expired during KMS call" in raised.value.internal_detail
 
 
+def test_capability_expiry_is_rechecked_after_slow_signing_response():
+    now = [1_900_000_000_000_000]
+
+    class SlowKmsClient(_KmsClient):
+        def asymmetric_sign(self, *, request):
+            response = super().asymmetric_sign(request=request)
+            now[0] += 10
+            return response
+
+    audience = derive_binder_audience(uuid4())
+    signer = _production_signer(
+        Ed25519PrivateKey.generate(),
+        audience,
+        now[0],
+        client_factory=SlowKmsClient,
+        now_microseconds=lambda: now[0],
+    )
+    issuer = ProductionTenantCapabilityIssuer.for_test(
+        resolver=_CapabilityResolver(_authority()),
+        signer=signer,
+        lifetime_microseconds=5,
+        now_microseconds=lambda: now[0],
+    )
+    issuer.initialize()
+
+    with pytest.raises(CapabilityIssuanceError) as raised:
+        issuer.mint(_identity(), TenantChallenge(uuid4(), audience))
+    assert raised.value.outcome is PreBindingOutcome.CAPABILITY_REFUSED
+
+
 def test_google_client_adapter_sends_only_raw_data_and_checksum():
     class Protection:
         name = "HSM"

@@ -577,6 +577,11 @@ class ProductionTenantCapabilityIssuer:
             Ed25519PublicKey.from_public_bytes(self._signer.public_key).verify(
                 signature, signing_input
             )
+            completed_at = self._now_microseconds()
+            validate_tenant_capability(
+                capability,
+                now_unix_microseconds=completed_at,
+            )
             return serialize_tenant_capability_jws(capability, signature)
         except CapabilityIssuanceError:
             raise
