@@ -337,6 +337,38 @@ def test_alg_less_rsa_jwk_supports_configured_ps256(rsa_keys):
     assert verifier.verify_identity(token).subject == "subject-ps256"
 
 
+@pytest.mark.parametrize(
+    ("algorithm", "declared"),
+    (
+        ("RS256", True),
+        ("RS256", False),
+        ("PS256", True),
+        ("PS256", False),
+    ),
+)
+def test_undersized_rsa_jwks_refuses_declared_and_alg_less_keys(
+    rsa_keys, algorithm, declared
+):
+    weak_private = rsa.generate_private_key(public_exponent=65537, key_size=1024)
+    jwk_data = jwt.algorithms.RSAAlgorithm.to_jwk(
+        weak_private.public_key(), as_dict=True
+    )
+    jwk_data.update({"kid": "weak-key", "use": "sig"})
+    if declared:
+        jwk_data["alg"] = algorithm
+    weak_key = jwt.PyJWK.from_dict(jwk_data)
+    verifier = _production_verifier(
+        rsa_keys,
+        client=_JwksClient([weak_key]),
+        algorithms=(algorithm,),
+    )
+
+    with pytest.raises(
+        AuthenticationStartupError, match="JWKS initialization failed"
+    ):
+        verifier.initialize()
+
+
 def test_unknown_key_ids_share_one_bounded_jwks_miss_refresh(rsa_keys):
     private, public = rsa_keys
     now = [1_000.0]

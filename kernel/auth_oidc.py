@@ -541,6 +541,17 @@ class ProductionOidcVerifier:
                 or verifier_key is None
             ):
                 continue
+            if (
+                type(jwk_data) is dict
+                and jwk_data.get("kty") == "RSA"
+                and (
+                    type(getattr(verifier_key, "key_size", None)) is not int
+                    or verifier_key.key_size < 2_048
+                )
+            ):
+                raise _JwksProviderStateError(
+                    "JWKS contains an undersized RSA signing key"
+                )
             for algorithm in self._key_algorithms(key, jwk_data):
                 identity = (key_id, algorithm)
                 if identity in identities:
@@ -732,6 +743,7 @@ class ProductionOidcVerifier:
                     "verify_iat": True,
                     "verify_aud": True,
                     "verify_iss": True,
+                    "enforce_minimum_key_length": True,
                 },
             )
         except self._jwt.exceptions.InvalidTokenError as exc:

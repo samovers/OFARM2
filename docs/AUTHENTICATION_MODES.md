@@ -24,7 +24,9 @@ fresh JWKS at startup and caches one validated key-set generation for a bounded
 interval. It never enables PyJWT's unbounded per-key cache. Each refresh rejects
 duplicate usable `(kid, alg)` identities and keys not eligible for signature
 verification before atomically replacing the generation. Token `alg` and `kid`
-must select one exact usable key. A miss can start only one provider refresh per
+must select one exact usable key. RSA signing keys below 2048 bits refuse both
+at JWKS-generation validation and again in PyJWT's strict verification path.
+A miss can start only one provider refresh per
 `OFARM_OIDC_JWKS_MISS_REFRESH_SECONDS` window, which defaults to five seconds;
 other misses share that result and current-key verification does not wait on the
 provider call. Missing configuration, JWKS outage, an empty or unsuitable key
@@ -43,9 +45,13 @@ UTC year-9999 range before key selection, so arbitrary-precision JSON integers
 cannot escape the safe credential-refusal path.
 
 Test mode maps `sub` directly to the test Store Party. Production does not.
-Production resolves the exact `(equality policy, issuer, subject)` through
-`fold_principal_binding_authority`, then reads only the immutable binding version
-named by that authoritative fold. It does not use `principal_binding_current`.
+Production calls the fixed `resolve_principal_binding_authority` database
+function through the separately provisioned `ofarm_identity_resolver` login.
+That read-only, non-assumable credential has no membership and only the minimum
+cross-tenant read grants required to reconstruct the lifecycle fold and compare
+the exact immutable binding, tenant registration, and pinned Party tuple. The
+function never uses `principal_binding_current`; application, worker,
+administrator-role-switch, and binder credentials cannot call it.
 Production construction requires the exact sealed
 `PostgreSQLPrincipalBindingResolver`; protocol fakes and wrappers are available
 only through the explicit unit-test runtime factory.
@@ -56,9 +62,9 @@ instances.
 The active version must pin the immutable tenant registration and ACTIVE
 `ofarm.party.v0.1` identity, schema, and payload digests. Missing, inactive,
 expired, ambiguous, or digest-inconsistent state refuses.
-Startup executes this complete query with a reserved no-match identity and
-separately prepares its exact digest call, so missing grants, relations,
-columns, functions, or types refuse before traffic is served.
+Startup executes this complete fixed function with a reserved no-match identity,
+so a wrong credential, missing grant, missing function, or unresolved database
+dependency refuses before traffic is served.
 
 Lifecycle mutations use only #174's digest functions and
 `transition_principal_binding` with an expected lifecycle head. The controller
@@ -76,7 +82,13 @@ one database challenge and audience, a UUIDv4 nonce, and an expiry of at most 60
 seconds.
 
 The production signer accepts one pinned Google Cloud KMS HSM
-`EC_SIGN_ED25519` key version and fresh startup evidence. Raw private key
+`EC_SIGN_ED25519` key version and fresh authenticated startup evidence. Raw
+evidence fields are accepted only by the explicit test factory. Normal
+construction reads a bounded signed receipt from
+`OFARM_SIGNING_EVIDENCE_RECEIPT_PATH`, obtains the separately pinned observer
+key named by `OFARM_SIGNING_EVIDENCE_OBSERVER_KEY_VERSION` through the official
+Cloud KMS client, verifies its HSM identity, CRC32C, and Ed25519 receipt
+signature, and requires the receipt to name the exact signing key. Raw private key
 material and duck-typed signing clients are never accepted: construction
 requires the sealed adapter to construct the maintained Google Cloud KMS client
 with its default transport internally. Exact Google clients backed by
@@ -85,11 +97,12 @@ also requires the exact sealed PostgreSQL principal-binding resolver; protocol
 fakes remain confined to its explicit test factory.
 It sends the exact JWS Signing Input through KMS's raw `data` field with CRC32C,
 checks response resource identity, HSM protection, request-checksum
-acknowledgement, signature checksum, and then independently verifies the
-returned Ed25519 signature before serializing the token. Observer evidence is
-valid for no more than five minutes. Stale or inconsistent KMS, IAM,
-attestation, database-key, or lifecycle evidence disables signing without a
-cached-authority fallback.
+acknowledgement, the generated response's integer signature checksum, and then
+independently verifies the returned Ed25519 signature before serializing the
+token. Observer evidence is valid for no more than five minutes. Stale,
+unsigned, incorrectly signed, or inconsistent KMS, IAM, attestation,
+database-key, or lifecycle evidence disables signing without a cached-authority
+fallback.
 
 ## Safe closed outcomes
 

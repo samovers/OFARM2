@@ -157,6 +157,15 @@ those privileges. The exact view definition, ordered columns, routine
 properties, owners, and ACLs are structural posture; any sibling routine,
 definition change, or widened grant refuses.
 
+The tenant service provisions a separate `ofarm_identity_resolver` LOGIN for
+the production authentication boundary. It is `NOINHERIT`, has no memberships
+or mutation privileges, and uses a separate connection pool. Its `BYPASSRLS`
+attribute is required only to compare the pre-binding principal result with the
+pinned Party tuple. It may execute only the fixed principal-resolution
+function and read the minimum immutable lifecycle, binding, registry, Party,
+and digest inputs that function uses. Application, worker, administrator role
+switch, and binder credentials cannot call or assume this resolver identity.
+
 ## Tenant schema
 
 The tenant migration establishes:
@@ -164,6 +173,10 @@ The tenant migration establishes:
 - an immutable tenant registry and append-only principal-binding versions and
   lifecycle acts;
 - a rebuildable current-binding projection that is never authority by itself;
+- the fixed `resolve_principal_binding_authority` pre-binding function, which
+  accepts only one exact issuer/subject tuple, reconstructs the authoritative
+  lifecycle without the projection, and contains no dynamic SQL or selectable
+  relation/column input;
 - one exact, shared Python/PostgreSQL issuer-storage grammar and exact UTF-8
   issuer equality;
 - one immutable binder installation identity and derived audience, immutable

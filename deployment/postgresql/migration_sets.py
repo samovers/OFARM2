@@ -171,15 +171,15 @@ TENANT_AUTHORITATIVE_MIGRATION_SET = AuthoritativeMigrationSet(
             version=2,
             filename="0002_authentication_runtime_grants.sql",
             source_sha256=(
-                "sha256:7b2af2b762d7b88c7b3166d76df0e3e3da9c88a1e796a6446719856d412a9fee"
+                "sha256:fbc0189fc62defecfe1122d9e2de179a9d92e78d134a02984dcbb583b2fe5c56"
             ),
-            byte_length=2871,
+            byte_length=17117,
             applied_prefix_digest=(
-                "sha256:4023fca50f411285810de013398e45683ee65715bf48f0a1a19b875751fbd86d"
+                "sha256:0a7b04a1511c462fbfd0269c65b3ada13eaf46cb1051f31f3ec4ebf8165f2b3b"
             ),
         ),
     ),
-    digest="sha256:4023fca50f411285810de013398e45683ee65715bf48f0a1a19b875751fbd86d",
+    digest="sha256:0a7b04a1511c462fbfd0269c65b3ada13eaf46cb1051f31f3ec4ebf8165f2b3b",
 )
 
 SECURITY_AUDIT_AUTHORITATIVE_MIGRATION_SET = AuthoritativeMigrationSet(

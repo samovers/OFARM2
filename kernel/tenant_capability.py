@@ -2,13 +2,18 @@
 from __future__ import annotations
 
 import base64
+import json
+import os
 import re
+import stat
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Protocol, final
 from uuid import UUID, uuid4
 
 from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 from deployment.postgresql.tenant_contract import (
@@ -40,6 +45,12 @@ from .principal_binding import (
 
 _SHA256_ID = re.compile(r"^sha256:[0-9a-f]{64}$")
 _PRODUCTION_SIGNING_EVIDENCE_MAX_AGE_MICROSECONDS = 300_000_000
+_SIGNING_EVIDENCE_RECEIPT_DOMAIN = b"OFARM_PRODUCTION_SIGNING_EVIDENCE_V1"
+_SIGNING_EVIDENCE_RECEIPT_MAX_BYTES = 16_384
+_SIGNING_EVIDENCE_RECEIPT_PATH_ENV = "OFARM_SIGNING_EVIDENCE_RECEIPT_PATH"
+_SIGNING_EVIDENCE_OBSERVER_KEY_ENV = (
+    "OFARM_SIGNING_EVIDENCE_OBSERVER_KEY_VERSION"
+)
 
 
 class CapabilityIssuanceError(RuntimeError):
@@ -124,13 +135,13 @@ class GoogleCloudKmsClientAdapter:
         protection = getattr(response, "protection_level", None)
         protection_name = getattr(protection, "name", None)
         signature_checksum = getattr(response, "signature_crc32c", None)
-        signature_checksum_value = getattr(signature_checksum, "value", None)
         if (
             type(getattr(response, "name", None)) is not str
             or type(protection_name) is not str
             or type(getattr(response, "verified_data_crc32c", None)) is not bool
             or type(getattr(response, "signature", None)) is not bytes
-            or type(signature_checksum_value) is not int
+            or type(signature_checksum) is not int
+            or not 0 <= signature_checksum <= 0xFFFFFFFF
         ):
             raise ValueError("Google KMS signing response shape differs")
         return GoogleKmsSigningResponse(
@@ -138,13 +149,36 @@ class GoogleCloudKmsClientAdapter:
             protection_level=protection_name,
             verified_data_crc32c=response.verified_data_crc32c,
             signature=response.signature,
-            signature_crc32c=signature_checksum_value,
+            signature_crc32c=signature_checksum,
         )
+
+    def get_ed25519_public_key(self, *, name: str) -> Ed25519PublicKey:
+        response = self._client.get_public_key(request={"name": name})
+        algorithm = getattr(response, "algorithm", None)
+        protection = getattr(response, "protection_level", None)
+        pem = getattr(response, "pem", None)
+        pem_crc32c = getattr(response, "pem_crc32c", None)
+        if (
+            getattr(response, "name", None) != name
+            or getattr(algorithm, "name", None) != GOOGLE_KMS_KEY_ALGORITHM
+            or getattr(protection, "name", None) != GOOGLE_KMS_PROTECTION_LEVEL
+            or type(pem) is not str
+            or type(pem_crc32c) is not int
+            or not 0 <= pem_crc32c <= 0xFFFFFFFF
+        ):
+            raise ValueError("Google KMS public-key response shape differs")
+        pem_bytes = pem.encode("ascii", errors="strict")
+        if _crc32c(pem_bytes) != pem_crc32c:
+            raise ValueError("Google KMS public-key checksum differs")
+        public_key = serialization.load_pem_public_key(pem_bytes)
+        if not isinstance(public_key, Ed25519PublicKey):
+            raise ValueError("Google KMS observer key algorithm differs")
+        return public_key
 
 
 @dataclass(frozen=True, slots=True)
 class ProductionSigningEvidence:
-    """Fresh observer output required before the signer becomes usable."""
+    """Fixture-only decoded evidence; production accepts only a signed receipt."""
 
     audience: str
     key_version_resource: str
@@ -162,6 +196,251 @@ class ProductionSigningEvidence:
     valid_until_unix_microseconds: int
 
 
+def _json_object_without_duplicates(pairs):
+    parsed = {}
+    for key, value in pairs:
+        if key in parsed:
+            raise ValueError("signing-evidence receipt has duplicate fields")
+        parsed[key] = value
+    return parsed
+
+
+def _canonical_evidence_bytes(value: dict[str, object]) -> bytes:
+    return (
+        json.dumps(
+            value,
+            ensure_ascii=True,
+            allow_nan=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    ).encode("ascii")
+
+
+def _decode_receipt_signature(value: object) -> bytes:
+    if (
+        type(value) is not str
+        or not value
+        or "=" in value
+        or re.fullmatch(r"[A-Za-z0-9_-]+", value) is None
+    ):
+        raise ValueError("signing-evidence receipt signature is malformed")
+    try:
+        decoded = base64.urlsafe_b64decode(
+            value.encode("ascii") + b"=" * (-len(value) % 4)
+        )
+    except (UnicodeError, ValueError) as exc:
+        raise ValueError("signing-evidence receipt signature is malformed") from exc
+    if (
+        len(decoded) != 64
+        or base64.urlsafe_b64encode(decoded).rstrip(b"=").decode("ascii")
+        != value
+    ):
+        raise ValueError("signing-evidence receipt signature is malformed")
+    return decoded
+
+
+def _decode_signing_evidence_receipt(
+    receipt_bytes: bytes,
+    observer_public_key: Ed25519PublicKey,
+) -> ProductionSigningEvidence:
+    if (
+        type(receipt_bytes) is not bytes
+        or not receipt_bytes
+        or len(receipt_bytes) > _SIGNING_EVIDENCE_RECEIPT_MAX_BYTES
+    ):
+        raise ValueError("signing-evidence receipt size is invalid")
+    try:
+        receipt = json.loads(
+            receipt_bytes.decode("utf-8", errors="strict"),
+            object_pairs_hook=_json_object_without_duplicates,
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+        raise ValueError("signing-evidence receipt JSON is malformed") from exc
+    if type(receipt) is not dict or set(receipt) != {"evidence", "signature"}:
+        raise ValueError("signing-evidence receipt fields are not exact")
+    evidence = receipt["evidence"]
+    expected_fields = {
+        "audience",
+        "keyVersionResource",
+        "keyId",
+        "publicKeyDigest",
+        "keyPurpose",
+        "keyAlgorithm",
+        "protectionLevel",
+        "keyState",
+        "attestationEvidenceDigest",
+        "iamEvidenceDigest",
+        "databaseCandidateDigest",
+        "databaseLifecycleHeadDigest",
+        "observedAtUnixMicroseconds",
+        "validUntilUnixMicroseconds",
+    }
+    if type(evidence) is not dict or set(evidence) != expected_fields:
+        raise ValueError("signing-evidence fields are not exact")
+    signature = _decode_receipt_signature(receipt["signature"])
+    signing_input = (
+        _SIGNING_EVIDENCE_RECEIPT_DOMAIN
+        + b"\x00"
+        + _canonical_evidence_bytes(evidence)
+    )
+    try:
+        observer_public_key.verify(signature, signing_input)
+    except InvalidSignature as exc:
+        raise ValueError("signing-evidence receipt signature differs") from exc
+
+    public_key_digest = evidence["publicKeyDigest"]
+    if (
+        type(public_key_digest) is not str
+        or _SHA256_ID.fullmatch(public_key_digest) is None
+    ):
+        raise ValueError("signing-evidence public-key digest is malformed")
+    integer_fields = (
+        evidence["observedAtUnixMicroseconds"],
+        evidence["validUntilUnixMicroseconds"],
+    )
+    if any(type(value) is not int for value in integer_fields):
+        raise ValueError("signing-evidence time fields are malformed")
+    text_fields = tuple(
+        value
+        for key, value in evidence.items()
+        if key
+        not in {
+            "observedAtUnixMicroseconds",
+            "validUntilUnixMicroseconds",
+        }
+    )
+    if any(type(value) is not str for value in text_fields):
+        raise ValueError("signing-evidence text fields are malformed")
+    return ProductionSigningEvidence(
+        audience=evidence["audience"],
+        key_version_resource=evidence["keyVersionResource"],
+        key_id=evidence["keyId"],
+        public_key_digest=bytes.fromhex(
+            public_key_digest.removeprefix("sha256:")
+        ),
+        key_purpose=evidence["keyPurpose"],
+        key_algorithm=evidence["keyAlgorithm"],
+        protection_level=evidence["protectionLevel"],
+        key_state=evidence["keyState"],
+        attestation_evidence_digest=evidence["attestationEvidenceDigest"],
+        iam_evidence_digest=evidence["iamEvidenceDigest"],
+        database_candidate_digest=evidence["databaseCandidateDigest"],
+        database_lifecycle_head_digest=evidence[
+            "databaseLifecycleHeadDigest"
+        ],
+        observed_at_unix_microseconds=evidence[
+            "observedAtUnixMicroseconds"
+        ],
+        valid_until_unix_microseconds=evidence[
+            "validUntilUnixMicroseconds"
+        ],
+    )
+
+
+@final
+class GoogleKmsSigningEvidenceObserver:
+    """Authenticate an out-of-process lifecycle observation receipt."""
+
+    def __init__(self) -> None:
+        receipt_path = os.environ.get(_SIGNING_EVIDENCE_RECEIPT_PATH_ENV)
+        observer_key_resource = os.environ.get(
+            _SIGNING_EVIDENCE_OBSERVER_KEY_ENV
+        )
+        if (
+            type(receipt_path) is not str
+            or not receipt_path
+            or not Path(receipt_path).is_absolute()
+        ):
+            raise TypeError("production signing-evidence receipt path is invalid")
+        try:
+            validate_google_kms_key_version_resource(observer_key_resource)
+        except TenantCapabilityContractError as exc:
+            raise TypeError(
+                "production signing-evidence observer key is invalid"
+            ) from exc
+        self._client = GoogleCloudKmsClientAdapter()
+        self._receipt_path = Path(receipt_path)
+        self._observer_key_resource = observer_key_resource
+        self._receipt_bytes: bytes | None = None
+        self._production_eligible = True
+
+    @classmethod
+    def for_test(
+        cls,
+        *,
+        client: GoogleCloudKmsClientAdapter,
+        observer_key_resource: str,
+        receipt_bytes: bytes,
+    ) -> "GoogleKmsSigningEvidenceObserver":
+        observer = object.__new__(cls)
+        observer._client = client
+        observer._receipt_path = None
+        observer._observer_key_resource = observer_key_resource
+        observer._receipt_bytes = receipt_bytes
+        observer._production_eligible = False
+        return observer
+
+    @property
+    def production_eligible(self) -> bool:
+        return (
+            self._production_eligible is True
+            and type(self._client) is GoogleCloudKmsClientAdapter
+            and self._client.production_eligible
+        )
+
+    def _read_receipt(self) -> bytes:
+        if self._receipt_bytes is not None:
+            return self._receipt_bytes
+        assert self._receipt_path is not None
+        flags = os.O_RDONLY
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        descriptor = os.open(self._receipt_path, flags)
+        try:
+            metadata = os.fstat(descriptor)
+            if (
+                not stat.S_ISREG(metadata.st_mode)
+                or not 0 < metadata.st_size
+                <= _SIGNING_EVIDENCE_RECEIPT_MAX_BYTES
+            ):
+                raise ValueError("signing-evidence receipt file is invalid")
+            receipt_bytes = os.read(
+                descriptor, _SIGNING_EVIDENCE_RECEIPT_MAX_BYTES + 1
+            )
+            if (
+                len(receipt_bytes) != metadata.st_size
+                or os.read(descriptor, 1)
+            ):
+                raise ValueError("signing-evidence receipt changed while read")
+            return receipt_bytes
+        finally:
+            os.close(descriptor)
+
+    def observe(
+        self,
+        signing_key: GoogleKmsEd25519PublicKey,
+    ) -> ProductionSigningEvidence:
+        if (
+            type(signing_key) is not GoogleKmsEd25519PublicKey
+            or self._observer_key_resource == signing_key.key_version_resource
+        ):
+            raise ValueError("signing-evidence observer identity differs")
+        observer_public_key = self._client.get_ed25519_public_key(
+            name=self._observer_key_resource
+        )
+        evidence = _decode_signing_evidence_receipt(
+            self._read_receipt(), observer_public_key
+        )
+        if (
+            evidence.key_version_resource != signing_key.key_version_resource
+            or evidence.key_id != signing_key.kid
+            or evidence.public_key_digest != signing_key.public_key_digest
+        ):
+            raise ValueError("signing-evidence receipt names another signing key")
+        return evidence
+
+
 @final
 class GoogleKmsEd25519Signer:
     """Sign raw canonical bytes with one pinned EC_SIGN_ED25519 HSM version."""
@@ -171,12 +450,12 @@ class GoogleKmsEd25519Signer:
         *,
         client: GoogleCloudKmsClientAdapter,
         public_key: GoogleKmsEd25519PublicKey,
-        evidence: ProductionSigningEvidence,
     ) -> None:
         self._bind(
             client=client,
             public_key=public_key,
-            evidence=evidence,
+            evidence=None,
+            evidence_observer=GoogleKmsSigningEvidenceObserver(),
             now_microseconds=lambda: time.time_ns() // 1_000,
             production_eligible=True,
         )
@@ -197,6 +476,7 @@ class GoogleKmsEd25519Signer:
             client=client,
             public_key=public_key,
             evidence=evidence,
+            evidence_observer=None,
             now_microseconds=now_microseconds,
             production_eligible=False,
         )
@@ -207,13 +487,15 @@ class GoogleKmsEd25519Signer:
         *,
         client: GoogleCloudKmsClientAdapter,
         public_key: GoogleKmsEd25519PublicKey,
-        evidence: ProductionSigningEvidence,
+        evidence: ProductionSigningEvidence | None,
+        evidence_observer: GoogleKmsSigningEvidenceObserver | None,
         now_microseconds,
         production_eligible: bool,
     ) -> None:
         self._client = client
         self._public_key_observation = public_key
         self._evidence = evidence
+        self._evidence_observer = evidence_observer
         self._now_microseconds = now_microseconds
         self._production_eligible = production_eligible
         self._initialized = False
@@ -228,7 +510,13 @@ class GoogleKmsEd25519Signer:
 
     @property
     def audience(self) -> str:
-        return self._evidence.audience
+        evidence = self._evidence
+        if type(evidence) is not ProductionSigningEvidence:
+            raise CapabilityIssuanceError(
+                PreBindingOutcome.SIGNER_UNAVAILABLE,
+                internal_detail="authenticated production signing evidence is absent",
+            )
+        return evidence.audience
 
     @property
     def production_eligible(self) -> bool:
@@ -236,12 +524,33 @@ class GoogleKmsEd25519Signer:
             self._production_eligible is True
             and type(self._client) is GoogleCloudKmsClientAdapter
             and self._client.production_eligible
+            and type(self._evidence_observer)
+            is GoogleKmsSigningEvidenceObserver
+            and self._evidence_observer.production_eligible
         )
 
     def initialize(self) -> None:
         now = self._now_microseconds()
-        evidence = self._evidence
         observation = self._public_key_observation
+        if self._production_eligible:
+            try:
+                if (
+                    type(self._evidence_observer)
+                    is not GoogleKmsSigningEvidenceObserver
+                    or not self._evidence_observer.production_eligible
+                ):
+                    raise ValueError("production evidence observer differs")
+                evidence = self._evidence_observer.observe(observation)
+            except Exception as exc:
+                raise CapabilityIssuanceError(
+                    PreBindingOutcome.SIGNER_UNAVAILABLE,
+                    internal_detail=(
+                        "authenticated production signing evidence is unavailable"
+                    ),
+                ) from exc
+            self._evidence = evidence
+        else:
+            evidence = self._evidence
         if (
             type(self._client) is not GoogleCloudKmsClientAdapter
             or type(evidence) is not ProductionSigningEvidence
@@ -318,10 +627,16 @@ class GoogleKmsEd25519Signer:
                 PreBindingOutcome.CAPABILITY_REFUSED,
                 internal_detail="signing input is outside the bound",
             )
+        evidence = self._evidence
+        if type(evidence) is not ProductionSigningEvidence:
+            raise CapabilityIssuanceError(
+                PreBindingOutcome.SIGNER_UNAVAILABLE,
+                internal_detail="authenticated production signing evidence is absent",
+            )
         before_signing = self._now_microseconds()
         if (
             type(before_signing) is not int
-            or before_signing >= self._evidence.valid_until_unix_microseconds
+            or before_signing >= evidence.valid_until_unix_microseconds
         ):
             raise CapabilityIssuanceError(
                 PreBindingOutcome.SIGNER_UNAVAILABLE,
@@ -329,7 +644,7 @@ class GoogleKmsEd25519Signer:
             )
         try:
             response = self._client.asymmetric_sign(
-                name=self._evidence.key_version_resource,
+                name=evidence.key_version_resource,
                 data=data,
                 data_crc32c=_crc32c(data),
             )
@@ -341,7 +656,7 @@ class GoogleKmsEd25519Signer:
         after_signing = self._now_microseconds()
         if (
             type(after_signing) is not int
-            or after_signing >= self._evidence.valid_until_unix_microseconds
+            or after_signing >= evidence.valid_until_unix_microseconds
         ):
             raise CapabilityIssuanceError(
                 PreBindingOutcome.SIGNER_UNAVAILABLE,
@@ -349,7 +664,7 @@ class GoogleKmsEd25519Signer:
             )
         if (
             type(response) is not GoogleKmsSigningResponse
-            or response.key_version_resource != self._evidence.key_version_resource
+            or response.key_version_resource != evidence.key_version_resource
             or response.protection_level != GOOGLE_KMS_PROTECTION_LEVEL
             or response.verified_data_crc32c is not True
             or type(response.signature) is not bytes
@@ -491,9 +806,9 @@ class ProductionTenantCapabilityIssuer:
         ):
             self._require_production_resolver(self._resolver)
         try:
-            validate_binder_audience(self._signer.audience)
             self._resolver.initialize()
             self._signer.initialize()
+            validate_binder_audience(self._signer.audience)
         except CapabilityIssuanceError:
             raise
         except Exception as exc:
@@ -616,6 +931,7 @@ __all__ = [
     "CapabilityIssuanceError",
     "GoogleCloudKmsClientAdapter",
     "GoogleKmsEd25519Signer",
+    "GoogleKmsSigningEvidenceObserver",
     "GoogleKmsSigningResponse",
     "ProductionSigningEvidence",
     "ProductionTenantCapabilityIssuer",

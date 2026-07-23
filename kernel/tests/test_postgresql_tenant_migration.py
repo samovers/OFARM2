@@ -48,7 +48,7 @@ from deployment.postgresql.tenant_contract import (
     valid_oidc_issuer,
     validate_tenant_capability,
 )
-from kernel.auth_oidc import AuthenticationStartupError
+from kernel.auth_oidc import AuthenticationStartupError, VerifiedOidcIdentity
 from kernel.principal_binding import PostgreSQLPrincipalBindingResolver
 from kernel.tests.tenant_capability_fixture import (
     RFC8032_TEST_PUBLIC_KEY,
@@ -82,68 +82,19 @@ RUNTIME_LOGICAL_REF_MAX = RUNTIME_LOGICAL_REF_PREFIX + "a" * (
 )
 PRINCIPAL_BINDING_READINESS_ACLS = (
     pytest.param(
-        "REVOKE SELECT ON TABLE ofarm.principal_binding FROM ofarm_binder",
-        "GRANT SELECT ON TABLE ofarm.principal_binding TO ofarm_binder",
-        id="principal-binding",
-    ),
-    pytest.param(
-        "REVOKE SELECT ON TABLE ofarm.tenant_registry FROM ofarm_binder",
-        "GRANT SELECT ON TABLE ofarm.tenant_registry TO ofarm_binder",
-        id="tenant-registry",
-    ),
-    pytest.param(
-        """
-        REVOKE SELECT (
-            tenant_id, record_id, record_kind, schema_digest, payload_digest,
-            party_state, party_id
-        ) ON TABLE ofarm.kernel_record FROM ofarm_binder
-        """,
-        """
-        GRANT SELECT (
-            tenant_id, record_id, record_kind, schema_digest, payload_digest,
-            party_state, party_id
-        ) ON TABLE ofarm.kernel_record TO ofarm_binder
-        """,
-        id="party-record",
-    ),
-    pytest.param(
-        """
-        REVOKE EXECUTE ON FUNCTION ofarm.fold_principal_binding_authority(
-            pg_catalog.text, pg_catalog.text, pg_catalog.text
-        ) FROM ofarm_binder
-        """,
-        """
-        GRANT EXECUTE ON FUNCTION ofarm.fold_principal_binding_authority(
-            pg_catalog.text, pg_catalog.text, pg_catalog.text
-        ) TO ofarm_binder
-        """,
-        id="authority-fold",
-    ),
-    pytest.param(
         """
         REVOKE EXECUTE ON FUNCTION
-        ofarm.compute_principal_binding_version_digest(
-            pg_catalog.text, pg_catalog.text, pg_catalog.text, pg_catalog.uuid,
-            pg_catalog.uuid, pg_catalog.text, pg_catalog.text, pg_catalog.text,
-            pg_catalog.text, pg_catalog.text, pg_catalog.text, pg_catalog.text,
-            pg_catalog.timestamptz, pg_catalog.timestamptz, pg_catalog.uuid
-        ) FROM ofarm_binder
+        ofarm.resolve_principal_binding_authority(
+            pg_catalog.text, pg_catalog.text, pg_catalog.text
+        ) FROM ofarm_identity_resolver
         """,
         """
         GRANT EXECUTE ON FUNCTION
-        ofarm.compute_principal_binding_version_digest(
-            pg_catalog.text, pg_catalog.text, pg_catalog.text, pg_catalog.uuid,
-            pg_catalog.uuid, pg_catalog.text, pg_catalog.text, pg_catalog.text,
-            pg_catalog.text, pg_catalog.text, pg_catalog.text, pg_catalog.text,
-            pg_catalog.timestamptz, pg_catalog.timestamptz, pg_catalog.uuid
-        ) TO ofarm_binder
+        ofarm.resolve_principal_binding_authority(
+            pg_catalog.text, pg_catalog.text, pg_catalog.text
+        ) TO ofarm_identity_resolver
         """,
-        id="binding-digest",
-    ),
-    pytest.param(
-        "REVOKE EXECUTE ON FUNCTION ofarm.lp32(pg_catalog.bytea) FROM ofarm_binder",
-        "GRANT EXECUTE ON FUNCTION ofarm.lp32(pg_catalog.bytea) TO ofarm_binder",
-        id="binding-digest-framing",
+        id="fixed-resolver-boundary",
     ),
 )
 
@@ -214,9 +165,11 @@ def _admin_dsn() -> str:
 
 
 @contextmanager
-def _binder_connection(target_admin_dsn: str):
-    with psycopg.connect(target_admin_dsn) as connection:
-        connection.execute("SET LOCAL ROLE ofarm_binder")
+def _principal_resolver_connection(resolver_dsn: str):
+    with psycopg.connect(resolver_dsn) as connection:
+        assert connection.execute(
+            "SELECT SESSION_USER::pg_catalog.text"
+        ).fetchone() == ("ofarm_identity_resolver",)
         yield connection
 
 
@@ -271,9 +224,49 @@ def test_principal_binding_startup_refuses_each_revoked_dependency(
     grant_sql: str,
 ) -> None:
     def connection_factory():
-        return _binder_connection(tenant_target.target_admin_dsn)
+        return _principal_resolver_connection(
+            tenant_target.role_dsn("ofarm_identity_resolver")
+        )
 
     PostgreSQLPrincipalBindingResolver(connection_factory).initialize()
+
+    with psycopg.connect(
+        tenant_target.role_dsn("ofarm_app"), autocommit=True
+    ) as application:
+        for query in (
+            "SELECT * FROM ofarm.principal_binding",
+            "SELECT * FROM ofarm.tenant_registry",
+            "SELECT * FROM ofarm.kernel_record",
+            (
+                "SELECT * FROM ofarm.resolve_principal_binding_authority("
+                "'OIDC_EXACT_UTF8_V1', 'https://issuer.invalid', 'subject')"
+            ),
+            (
+                "SELECT * FROM ofarm.fold_principal_binding_authority("
+                "'OIDC_EXACT_UTF8_V1', 'https://issuer.invalid', 'subject')"
+            ),
+        ):
+            with pytest.raises(psycopg.errors.InsufficientPrivilege):
+                application.execute(query)
+
+    with psycopg.connect(
+        tenant_target.role_dsn("ofarm_identity_resolver"),
+        autocommit=True,
+    ) as resolver:
+        assert resolver.execute(
+            "SELECT pg_catalog.pg_has_role("
+            "CURRENT_USER, 'ofarm_binder', 'SET')"
+        ).fetchone() == (False,)
+        assert resolver.execute(
+            "SELECT pg_catalog.has_table_privilege("
+            "CURRENT_USER, 'ofarm.principal_binding', "
+            "'INSERT,UPDATE,DELETE')"
+        ).fetchone() == (False,)
+        assert resolver.execute(
+            "SELECT pg_catalog.has_table_privilege("
+            "CURRENT_USER, 'ofarm.principal_binding_lifecycle', "
+            "'INSERT,UPDATE,DELETE')"
+        ).fetchone() == (False,)
 
     with psycopg.connect(
         tenant_target.target_admin_dsn,
@@ -679,6 +672,38 @@ def authority(
         runtime_bundle_digest=bundle_digest,
         batch_id=batch_id,
     )
+
+
+def test_principal_binding_resolves_through_dedicated_resolver_credential(
+    tenant_target: TenantTarget,
+    authority: TenantAuthority,
+) -> None:
+    resolver = PostgreSQLPrincipalBindingResolver(
+        lambda: _principal_resolver_connection(
+            tenant_target.role_dsn("ofarm_identity_resolver")
+        )
+    )
+    resolver.initialize()
+    resolved = resolver.resolve(
+        VerifiedOidcIdentity(
+            equality_policy=OIDC_ISSUER_EQUALITY_POLICY,
+            issuer=ISSUER,
+            subject=SUBJECT,
+            claims={},
+        )
+    )
+
+    assert resolved.binding_version_id == authority.binding_version_id
+    assert resolved.binding_version_digest == authority.binding_version_digest
+    assert resolved.lifecycle_head_id == authority.lifecycle_head_id
+    assert resolved.lifecycle_head_digest == authority.lifecycle_head_digest
+    assert resolved.tenant_id == authority.tenant_id
+    assert resolved.tenant_registration_digest == (
+        authority.tenant_registration_digest
+    )
+    assert resolved.party_ref == authority.party_ref
+    assert resolved.party_schema_digest == authority.party_schema_digest
+    assert resolved.party_payload_digest == authority.party_payload_digest
 
 
 def _register_capability_key_candidate(
@@ -5949,7 +5974,7 @@ def test_complete_catalog_fingerprint_refuses_function_constraint_index_policy_a
             assert pristine[0] is True
             assert pristine[2] == 0
             assert pristine[3] == (
-                "sha256:938fdd790029d2e1200373ad987c62fcf4d30dc85e1442daed2352c9c4583a5c"
+                "sha256:77fd37b8c76bbc23b33d2c485c564358dd31c40155d12be49d1aa5cedfb22519"
             )
         finally:
             migrator.rollback()
@@ -6638,7 +6663,7 @@ def test_readiness_observation_is_complete_after_commit(
     assert row[1] == TENANT_CONTEXT_CONTRACT.digest
     assert row[2] == 0
     assert row[3] == (
-        "sha256:938fdd790029d2e1200373ad987c62fcf4d30dc85e1442daed2352c9c4583a5c"
+        "sha256:77fd37b8c76bbc23b33d2c485c564358dd31c40155d12be49d1aa5cedfb22519"
     )
     assert row[5] == TENANT_PROVISIONING_SPEC.digest
     assert row[6] == TENANT_SERVICE.identity

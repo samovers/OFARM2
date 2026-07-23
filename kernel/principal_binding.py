@@ -65,100 +65,11 @@ class PrincipalBindingAuthority:
 
 @final
 class PostgreSQLPrincipalBindingResolver:
-    """Resolve an exact active version without consulting the projection."""
+    """Resolve through the fixed production credential boundary."""
 
     _RESOLVE_SQL = """
-        WITH observed AS MATERIALIZED (
-            SELECT pg_catalog.clock_timestamp() AS database_now
-        ),
-        folded AS MATERIALIZED (
-            SELECT current_state,
-                   binding_version_id,
-                   binding_version_digest,
-                   lifecycle_head_id,
-                   lifecycle_head_digest
-              FROM ofarm.fold_principal_binding_authority(%s, %s, %s)
-        )
-        SELECT %s::pg_catalog.text AS equality_policy,
-               %s::pg_catalog.text AS issuer,
-               %s::pg_catalog.text AS subject,
-               binding.binding_version_id,
-               binding.binding_version_digest::pg_catalog.text,
-               folded.lifecycle_head_id,
-               folded.lifecycle_head_digest,
-               binding.tenant_id,
-               binding.tenant_registration_digest::pg_catalog.text,
-               binding.party_ref::pg_catalog.text,
-               binding.party_record_kind,
-               binding.party_record_id::pg_catalog.text,
-               binding.party_schema_digest::pg_catalog.text,
-               binding.party_payload_digest::pg_catalog.text,
-               binding.party_state,
-               binding.valid_from,
-               binding.valid_until,
-               binding.binding_version_digest::pg_catalog.text =
-                   ofarm.compute_principal_binding_version_digest(
-                       binding.equality_policy,
-                       binding.issuer::pg_catalog.text,
-                       binding.subject::pg_catalog.text,
-                       binding.binding_version_id,
-                       binding.tenant_id,
-                       binding.tenant_registration_digest::pg_catalog.text,
-                       binding.party_ref::pg_catalog.text,
-                       binding.party_record_kind,
-                       binding.party_record_id::pg_catalog.text,
-                       binding.party_schema_digest::pg_catalog.text,
-                       binding.party_payload_digest::pg_catalog.text,
-                       binding.party_state,
-                       binding.valid_from,
-                       binding.valid_until,
-                       binding.predecessor_version_id
-                   ) AS binding_digest_matches
-          FROM folded
-          CROSS JOIN observed
-          JOIN ofarm.principal_binding AS binding
-            ON binding.equality_policy = %s
-           AND binding.issuer::pg_catalog.text = %s
-           AND binding.subject::pg_catalog.text = %s
-           AND binding.binding_version_id = folded.binding_version_id
-           AND binding.binding_version_digest::pg_catalog.text =
-               folded.binding_version_digest
-          JOIN ofarm.tenant_registry AS registry
-            ON registry.tenant_id = binding.tenant_id
-           AND registry.registration_digest = binding.tenant_registration_digest
-          JOIN ofarm.kernel_record AS party
-            ON party.tenant_id = binding.tenant_id
-           AND party.record_id = binding.party_record_id
-           AND party.record_kind = binding.party_record_kind
-           AND party.schema_digest = binding.party_schema_digest
-           AND party.payload_digest = binding.party_payload_digest
-           AND party.party_state = binding.party_state
-           AND party.party_id = binding.party_ref
-         WHERE folded.current_state = 'ACTIVE'
-           AND binding.party_record_kind = 'ofarm.party.v0.1'
-           AND binding.party_record_id = binding.party_ref
-           AND binding.party_state = 'ACTIVE'
-           AND binding.valid_from <= observed.database_now
-           AND observed.database_now < binding.valid_until
-    """
-    _DIGEST_READINESS_SQL = """
-        SELECT ofarm.compute_principal_binding_version_digest(
-            NULL::pg_catalog.text,
-            NULL::pg_catalog.text,
-            NULL::pg_catalog.text,
-            NULL::pg_catalog.uuid,
-            NULL::pg_catalog.uuid,
-            NULL::pg_catalog.text,
-            NULL::pg_catalog.text,
-            NULL::pg_catalog.text,
-            NULL::pg_catalog.text,
-            NULL::pg_catalog.text,
-            NULL::pg_catalog.text,
-            NULL::pg_catalog.text,
-            NULL::pg_catalog.timestamptz,
-            NULL::pg_catalog.timestamptz,
-            NULL::pg_catalog.uuid
-        )
+        SELECT *
+          FROM ofarm.resolve_principal_binding_authority(%s, %s, %s)
     """
 
     def __init__(self, connection_factory: ConnectionFactory):
@@ -170,14 +81,13 @@ class PostgreSQLPrincipalBindingResolver:
             OIDC_ISSUER_EQUALITY_POLICY,
             "https://principal-binding-startup.invalid",
             "startup-probe",
-        ) * 3
+        )
         try:
             with self._connection_factory() as connection:
                 connection.execute(
                     self._RESOLVE_SQL,
                     startup_params,
                 ).fetchall()
-                connection.execute(self._DIGEST_READINESS_SQL).fetchone()
         except Exception as exc:
             raise AuthenticationStartupError(
                 "principal-binding immutable read path is unavailable"
@@ -196,12 +106,6 @@ class PostgreSQLPrincipalBindingResolver:
                 internal_detail="principal equality policy differs",
             )
         params = (
-            identity.equality_policy,
-            identity.issuer,
-            identity.subject,
-            identity.equality_policy,
-            identity.issuer,
-            identity.subject,
             identity.equality_policy,
             identity.issuer,
             identity.subject,

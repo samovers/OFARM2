@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import base64
+import json
 from contextlib import AbstractContextManager
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from deployment.postgresql.tenant_contract import (
@@ -40,6 +42,7 @@ from kernel.tenant_capability import (
     CapabilityIssuanceError,
     GoogleCloudKmsClientAdapter,
     GoogleKmsEd25519Signer,
+    GoogleKmsSigningEvidenceObserver,
     ProductionSigningEvidence,
     ProductionTenantCapabilityIssuer,
     TenantChallenge,
@@ -139,28 +142,17 @@ def test_resolver_folds_immutable_authority_and_never_reads_projection():
     resolver.initialize()
     assert resolver.resolve(_identity()) == authority
     sql = "\n".join(query.lower() for query, _ in connection.statements)
-    assert "fold_principal_binding_authority" in sql
+    assert "resolve_principal_binding_authority" in sql
     assert "principal_binding_current" not in sql
-    assert "join ofarm.principal_binding" in sql
-    assert "join ofarm.tenant_registry" in sql
-    assert "join ofarm.kernel_record" in sql
+    assert "join ofarm.principal_binding" not in sql
+    assert "join ofarm.tenant_registry" not in sql
+    assert "join ofarm.kernel_record" not in sql
 
 
-@pytest.mark.parametrize(
-    "dependency",
-    (
-        "from ofarm.fold_principal_binding_authority",
-        "join ofarm.principal_binding as binding",
-        "join ofarm.tenant_registry as registry",
-        "join ofarm.kernel_record as party",
-        "ofarm.compute_principal_binding_version_digest(",
-    ),
-)
-def test_resolver_startup_refuses_each_unavailable_read_dependency(dependency):
+def test_resolver_startup_refuses_unavailable_fixed_database_boundary():
     def handler(query, _params):
-        if dependency in query.lower():
-            raise PermissionError(f"simulated revoked dependency: {dependency}")
-        return _Result(many=[])
+        assert "resolve_principal_binding_authority" in query.lower()
+        raise PermissionError("simulated unavailable fixed resolver boundary")
 
     resolver = PostgreSQLPrincipalBindingResolver(
         _Factory(_Connection(handler))
@@ -450,9 +442,7 @@ class _KmsClient:
                 "protection_level": type("Protection", (), {"name": "HSM"})(),
                 "verified_data_crc32c": True,
                 "signature": signature,
-                "signature_crc32c": type(
-                    "Checksum", (), {"value": _crc32c(signature)}
-                )(),
+                "signature_crc32c": _crc32c(signature),
             },
         )()
 
@@ -564,15 +554,12 @@ def test_google_client_adapter_sends_only_raw_data_and_checksum():
     class Protection:
         name = "HSM"
 
-    class Checksum:
-        value = 123
-
     class Response:
         name = "projects/ofarm1/locations/europe-west1/keyRings/auth/cryptoKeys/capability/cryptoKeyVersions/1"
         protection_level = Protection()
         verified_data_crc32c = True
         signature = b"x" * 64
-        signature_crc32c = Checksum()
+        signature_crc32c = 123
 
     class Client:
         request = None
@@ -587,6 +574,147 @@ def test_google_client_adapter_sends_only_raw_data_and_checksum():
     assert client.request == {"name": Response.name, "data": b"raw", "data_crc32c": 7}
     assert "digest" not in client.request
     assert result.protection_level == "HSM"
+
+
+def test_google_client_adapter_accepts_generated_kms_signing_response():
+    from google.cloud.kms_v1.types import AsymmetricSignResponse
+
+    resource = (
+        "projects/ofarm1/locations/europe-west1/keyRings/auth/"
+        "cryptoKeys/capability/cryptoKeyVersions/1"
+    )
+    generated = AsymmetricSignResponse(
+        name=resource,
+        protection_level="HSM",
+        verified_data_crc32c=True,
+        signature=b"x" * 64,
+        signature_crc32c=123,
+    )
+
+    class Client:
+        def asymmetric_sign(self, *, request):
+            assert request["name"] == resource
+            return generated
+
+    result = _test_adapter(Client()).asymmetric_sign(
+        name=resource,
+        data=b"raw",
+        data_crc32c=7,
+    )
+    assert type(generated.signature_crc32c) is int
+    assert result.signature_crc32c == 123
+
+
+def test_signed_observer_receipt_authenticates_production_evidence():
+    from google.cloud.kms_v1.types import PublicKey
+
+    observer_private = Ed25519PrivateKey.generate()
+    observer_resource = (
+        "projects/ofarm1/locations/europe-west1/keyRings/auth/"
+        "cryptoKeys/evidence-observer/cryptoKeyVersions/1"
+    )
+    signing_private = Ed25519PrivateKey.generate()
+    signing_public = signing_private.public_key().public_bytes_raw()
+    signing_resource = (
+        "projects/ofarm1/locations/europe-west1/keyRings/auth/"
+        "cryptoKeys/capability/cryptoKeyVersions/1"
+    )
+    signing_key = GoogleKmsEd25519PublicKey(
+        key_version_resource=signing_resource,
+        der=TENANT_CAPABILITY_RFC8410_PREFIX + signing_public,
+        public_key=signing_public,
+        public_key_digest=raw_public_key_digest(signing_public),
+        x=base64.urlsafe_b64encode(signing_public).rstrip(b"=").decode("ascii"),
+        kid=derive_ed25519_key_id(signing_public),
+    )
+    evidence = {
+        "audience": derive_binder_audience(uuid4()),
+        "keyVersionResource": signing_resource,
+        "keyId": signing_key.kid,
+        "publicKeyDigest": "sha256:" + signing_key.public_key_digest.hex(),
+        "keyPurpose": GOOGLE_KMS_KEY_PURPOSE,
+        "keyAlgorithm": GOOGLE_KMS_KEY_ALGORITHM,
+        "protectionLevel": GOOGLE_KMS_PROTECTION_LEVEL,
+        "keyState": "ENABLED",
+        "attestationEvidenceDigest": DIGEST_A,
+        "iamEvidenceDigest": DIGEST_B,
+        "databaseCandidateDigest": DIGEST_C,
+        "databaseLifecycleHeadDigest": DIGEST_D,
+        "observedAtUnixMicroseconds": 1_900_000_000_000_000,
+        "validUntilUnixMicroseconds": 1_900_000_060_000_000,
+    }
+    canonical = json.dumps(
+        evidence,
+        ensure_ascii=True,
+        allow_nan=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("ascii")
+    signature = observer_private.sign(
+        b"OFARM_PRODUCTION_SIGNING_EVIDENCE_V1\x00" + canonical
+    )
+    receipt = json.dumps(
+        {
+            "evidence": evidence,
+            "signature": base64.urlsafe_b64encode(signature)
+            .rstrip(b"=")
+            .decode("ascii"),
+        },
+        ensure_ascii=True,
+        allow_nan=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("ascii")
+    pem = observer_private.public_key().public_bytes(
+        serialization.Encoding.PEM,
+        serialization.PublicFormat.SubjectPublicKeyInfo,
+    ).decode("ascii")
+
+    class Client:
+        def asymmetric_sign(self, *, request):
+            raise AssertionError(request)
+
+        def get_public_key(self, *, request):
+            assert request == {"name": observer_resource}
+            return PublicKey(
+                name=observer_resource,
+                algorithm=GOOGLE_KMS_KEY_ALGORITHM,
+                protection_level=GOOGLE_KMS_PROTECTION_LEVEL,
+                pem=pem,
+                pem_crc32c=_crc32c(pem.encode("ascii")),
+            )
+
+    observer = GoogleKmsSigningEvidenceObserver.for_test(
+        client=_test_adapter(Client()),
+        observer_key_resource=observer_resource,
+        receipt_bytes=receipt,
+    )
+    observed = observer.observe(signing_key)
+    assert observed.key_version_resource == signing_resource
+    assert observed.public_key_digest == signing_key.public_key_digest
+    assert observer.production_eligible is False
+
+    tampered_evidence = dict(evidence)
+    tampered_evidence["iamEvidenceDigest"] = DIGEST_C
+    tampered_receipt = json.dumps(
+        {
+            "evidence": tampered_evidence,
+            "signature": base64.urlsafe_b64encode(signature)
+            .rstrip(b"=")
+            .decode("ascii"),
+        },
+        ensure_ascii=True,
+        allow_nan=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("ascii")
+    tampered_observer = GoogleKmsSigningEvidenceObserver.for_test(
+        client=_test_adapter(Client()),
+        observer_key_resource=observer_resource,
+        receipt_bytes=tampered_receipt,
+    )
+    with pytest.raises(ValueError, match="receipt signature differs"):
+        tampered_observer.observe(signing_key)
 
 
 def test_capability_wrong_audience_and_stale_signer_refuse_safely():
@@ -721,20 +849,17 @@ def test_concrete_kms_signer_rejects_non_google_client():
         issuer.initialize()
     assert issuer_error.value.outcome is PreBindingOutcome.CONFIGURATION_REFUSED
 
-    unsafe = GoogleKmsEd25519Signer(
-        client=_KmsClient(private, prepared._evidence.key_version_resource),
-        public_key=prepared._public_key_observation,
-        evidence=prepared._evidence,
-    )
-    with pytest.raises(CapabilityIssuanceError) as raised:
-        unsafe.initialize()
-    assert raised.value.outcome is PreBindingOutcome.SIGNER_UNAVAILABLE
+    with pytest.raises(TypeError, match="evidence"):
+        GoogleKmsEd25519Signer(
+            client=prepared._client,
+            public_key=prepared._public_key_observation,
+            evidence=prepared._evidence,
+        )
 
     with pytest.raises(TypeError, match="now_microseconds"):
         GoogleKmsEd25519Signer(
             client=prepared._client,
             public_key=prepared._public_key_observation,
-            evidence=prepared._evidence,
             now_microseconds=lambda: now_us,
         )
     with pytest.raises(TypeError, match="now_microseconds"):
