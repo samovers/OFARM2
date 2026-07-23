@@ -8,18 +8,34 @@ the current runtime already needs.
 from __future__ import annotations
 
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, fields, is_dataclass
+from enum import Enum
 from inspect import getattr_static
 from importlib.machinery import PathFinder
 from pathlib import Path
 from types import ModuleType
 from typing import Any, Protocol
 
+from . import profile_policy as _trusted_profile_policy
+from .context import (
+    ContextAssembler as _TrustedContextAssembler,
+    SIProductRegister as _TrustedSIProductRegister,
+    SIReferenceBindings as _TrustedSIReferenceBindings,
+)
+from .contracts import canonical_json, sha256_of
+from .materializer import Materializer as _TrustedMaterializer
+from .profile_policy import (
+    DescriptorPolicyProvider as _TrustedDescriptorPolicyProvider,
+)
 from .profile_runtime import ProfileRuntimeDescriptor, ProfileRuntimeError
 from .runtime_bundle import (
     RuntimeBundleError,
     RuntimeComponent,
     RuntimeComponentRole,
+)
+from .sufficiency import OPERATION_FLOOR_CHECKS as _TRUSTED_OPERATION_FLOOR_CHECKS
+from .validators import (
+    RegistryReverificationValidator as _TrustedRegistryReverificationValidator,
 )
 
 
@@ -31,6 +47,7 @@ _REQUIRED_SERVICE_CAPABILITIES = {
 _OPTIONAL_SERVICE_CAPABILITIES = {
     "product_lookup": ("lookup_by_decision",),
     "registry_reverification": ("run",),
+    "materializer_context": ("assemble",),
 }
 _MISSING_CAPABILITY = object()
 _CONCRETE_PATH_TYPE = type(Path())
@@ -84,13 +101,112 @@ class ProfileRuntimeServices:
 
 
 @dataclass(frozen=True)
+class _ProviderDependencyReceipt:
+    """Exact code-owned constructor and capability provenance."""
+
+    dependency_path: tuple[str, ...]
+    dependency: Any
+    capabilities: tuple[tuple[str, Any], ...]
+
+
+def _dependency_spec(
+    dependency_path: tuple[str, ...],
+    dependency: Any,
+    capabilities: tuple[str, ...] = (),
+) -> tuple[
+    tuple[str, ...],
+    Any,
+    tuple[tuple[str, Any], ...],
+]:
+    return (
+        dependency_path,
+        dependency,
+        tuple(
+            (capability, getattr_static(dependency, capability))
+            for capability in capabilities
+        ),
+    )
+
+
+# These exact identities are captured when the trusted composition module is
+# imported, before any provider source is executed. The sealed SI provider may
+# import them, but it cannot redefine which live constructors or methods count
+# as authenticated dependencies.
+_SI_PROVIDER_DEPENDENCY_SPECS = (
+    _dependency_spec(("profile_policy",), _trusted_profile_policy),
+    _dependency_spec(
+        ("profile_policy", "DescriptorPolicyProvider"),
+        _TrustedDescriptorPolicyProvider,
+        (
+            "__init__",
+            "from_runtime_bundle",
+            "validation_policy",
+            "evidence_policy",
+        ),
+    ),
+    _dependency_spec(
+        ("ContextAssembler",),
+        _TrustedContextAssembler,
+        ("__init__", "assemble"),
+    ),
+    _dependency_spec(
+        ("SIProductRegister",),
+        _TrustedSIProductRegister,
+        (
+            "__init__",
+            "load_from_store",
+            "register_artifact",
+            "lookup_by_decision",
+        ),
+    ),
+    _dependency_spec(
+        ("SIReferenceBindings",),
+        _TrustedSIReferenceBindings,
+        (
+            "__init__",
+            "from_runtime_descriptor",
+            "_from_descriptor",
+        ),
+    ),
+    _dependency_spec(
+        ("Materializer",),
+        _TrustedMaterializer,
+        ("__init__", "invalidate_for_sources", "recompute"),
+    ),
+    _dependency_spec(
+        ("RegistryReverificationValidator",),
+        _TrustedRegistryReverificationValidator,
+        ("__init__", "run"),
+    ),
+    _dependency_spec(
+        ("ProfileRuntimeServices",),
+        ProfileRuntimeServices,
+        ("__init__",),
+    ),
+    _dependency_spec(
+        ("ProfileRuntimeDescriptor",),
+        ProfileRuntimeDescriptor,
+    ),
+    _dependency_spec(("ProfileRuntimeError",), ProfileRuntimeError),
+    _dependency_spec(("RuntimeBundleError",), RuntimeBundleError),
+    _dependency_spec(("RuntimeComponentRole",), RuntimeComponentRole),
+    _dependency_spec(
+        ("OPERATION_FLOOR_CHECKS",),
+        _TRUSTED_OPERATION_FLOOR_CHECKS,
+    ),
+)
+
+
+@dataclass(frozen=True)
 class _ProfileRuntimeProviderCacheEntry:
     """Authenticated composition receipt; never a live mutable service graph."""
 
     registration_identity: tuple[str, ...]
     source_digest: str
     descriptor: ProfileRuntimeDescriptor
+    provider_dependencies: tuple[_ProviderDependencyReceipt, ...]
     service_capabilities: tuple["_ServiceCapabilityReceipt", ...]
+    service_state_digest: str
 
 
 @dataclass(frozen=True)
@@ -228,6 +344,19 @@ class ProfileRuntimeProviderRegistry:
         package_name: str,
         descriptor: ProfileRuntimeDescriptor,
     ) -> ProfileRuntimeServices:
+        services, _ = self.build_services_with_receipt(
+            store,
+            package_name,
+            descriptor,
+        )
+        return services
+
+    def build_services_with_receipt(
+        self,
+        store,
+        package_name: str,
+        descriptor: ProfileRuntimeDescriptor,
+    ) -> tuple[ProfileRuntimeServices, _ProfileRuntimeProviderCacheEntry]:
         registration = self.registration_for(package_name, descriptor)
         source_component = self._verify_provider_source(store, registration)
         cache_key = self._provider_cache_key(registration, source_component)
@@ -241,13 +370,26 @@ class ProfileRuntimeProviderRegistry:
             )
 
         provider = self._load_provider(store, registration, source_component)
+        provider_dependencies = _capture_provider_dependencies(
+            provider,
+            registration,
+        )
         services = provider.build_services(store, descriptor)
+        self._validate_service_bundle_identity(provider, services, descriptor)
         self._validate_services(provider, services, descriptor)
+        service_capabilities = _capture_service_capabilities(services)
+        service_state_digest = _capture_service_state_digest(
+            services,
+            store,
+            descriptor,
+        )
         cache_entry = _ProfileRuntimeProviderCacheEntry(
             registration_identity=_registration_identity(registration),
             source_digest=source_component.content_digest,
             descriptor=descriptor,
-            service_capabilities=_capture_service_capabilities(services),
+            provider_dependencies=provider_dependencies,
+            service_capabilities=service_capabilities,
+            service_state_digest=service_state_digest,
         )
         retained_entry = store._retain_profile_runtime_provider(
             cache_key,
@@ -259,17 +401,90 @@ class ProfileRuntimeProviderRegistry:
             source_component,
             descriptor,
         )
-        if not _same_service_capabilities(
-            retained_entry.service_capabilities,
-            cache_entry.service_capabilities,
+        if (
+            not _same_provider_dependencies(
+                retained_entry.provider_dependencies,
+                cache_entry.provider_dependencies,
+            )
+            or not _same_service_capabilities(
+                retained_entry.service_capabilities,
+                cache_entry.service_capabilities,
+            )
+            or retained_entry.service_state_digest
+            != cache_entry.service_state_digest
         ):
             raise ProfileRuntimeError(
-                "profile runtime provider capability provenance changed during "
-                "composition"
+                "profile runtime provider dependency, capability, or state "
+                "provenance changed during composition"
             )
         # Every caller receives a newly composed graph. The Store cache is only
         # an authentication receipt and never becomes executable authority.
-        return services
+        return services, retained_entry
+
+    def validate_services_for_execution(
+        self,
+        store,
+        package_name: str,
+        descriptor: ProfileRuntimeDescriptor,
+        services: ProfileRuntimeServices,
+        expected_receipt: _ProfileRuntimeProviderCacheEntry,
+    ) -> None:
+        """Re-authenticate one long-lived pipeline before every governed use."""
+        registration = self.registration_for(package_name, descriptor)
+        source_component = self._verify_provider_source(store, registration)
+        cache_key = self._provider_cache_key(registration, source_component)
+        retained_entry = store._cached_profile_runtime_provider(cache_key)
+        if retained_entry is not expected_receipt:
+            raise ProfileRuntimeError(
+                "profile runtime provider execution receipt is no longer retained"
+            )
+        self._validate_cached_composition_receipt(
+            expected_receipt,
+            registration,
+            source_component,
+            descriptor,
+        )
+        self._validate_provider_registration(services.provider, registration)
+        self._validate_service_bundle_identity(
+            services.provider,
+            services,
+            descriptor,
+        )
+        current_capabilities = _capture_service_capabilities(services)
+        if not _same_service_capabilities(
+            expected_receipt.service_capabilities,
+            current_capabilities,
+        ):
+            raise ProfileRuntimeError(
+                "profile runtime provider service capabilities changed after "
+                "composition"
+            )
+        current_state_digest = _capture_service_state_digest(
+            services,
+            store,
+            descriptor,
+        )
+        if current_state_digest != expected_receipt.service_state_digest:
+            raise ProfileRuntimeError(
+                "profile runtime provider service state changed after composition"
+            )
+        self._validate_services(services.provider, services, descriptor)
+
+    @staticmethod
+    def _validate_service_bundle_identity(
+        provider: ProfileRuntimeProvider,
+        services: Any,
+        descriptor: ProfileRuntimeDescriptor,
+    ) -> None:
+        if type(services) is not ProfileRuntimeServices:
+            raise ProfileRuntimeError(
+                "profile runtime provider returned an invalid service bundle"
+            )
+        if services.provider is not provider or services.descriptor is not descriptor:
+            raise ProfileRuntimeError(
+                "profile runtime provider returned services for a different provider "
+                "or descriptor"
+            )
 
     @classmethod
     def _validate_services(
@@ -278,15 +493,7 @@ class ProfileRuntimeProviderRegistry:
         services: Any,
         descriptor: ProfileRuntimeDescriptor,
     ) -> None:
-        if not isinstance(services, ProfileRuntimeServices):
-            raise ProfileRuntimeError(
-                "profile runtime provider returned an invalid service bundle"
-            )
-        if services.provider is not provider or services.descriptor != descriptor:
-            raise ProfileRuntimeError(
-                "profile runtime provider returned services for a different provider "
-                "or descriptor"
-            )
+        cls._validate_service_bundle_identity(provider, services, descriptor)
         for service_name, capabilities in _REQUIRED_SERVICE_CAPABILITIES.items():
             service = _service_attribute(services, "service bundle", service_name)
             if service is None:
@@ -347,12 +554,19 @@ class ProfileRuntimeProviderRegistry:
             or type(cached_entry.descriptor) is not ProfileRuntimeDescriptor
             or type(descriptor) is not ProfileRuntimeDescriptor
             or cached_entry.descriptor != descriptor
+            or type(cached_entry.provider_dependencies) is not tuple
             or type(cached_entry.service_capabilities) is not tuple
+            or type(cached_entry.service_state_digest) is not str
+            or not cached_entry.service_state_digest.startswith("sha256:")
         ):
             raise ProfileRuntimeError(
                 "profile runtime provider cache receipt does not match its "
                 "canonical registration and descriptor"
             )
+        _validate_provider_dependency_receipts(
+            cached_entry.provider_dependencies,
+            registration,
+        )
         seen_service_names = set()
         for service_receipt in cached_entry.service_capabilities:
             if (
@@ -701,18 +915,202 @@ def _registration_identity(
     )
 
 
+def _provider_dependency_specs(
+    registration: ProfileRuntimeProviderRegistration,
+):
+    if registration.package_name != "profile_si_ffs":
+        raise ProfileRuntimeError(
+            "profile runtime provider has no authenticated dependency table"
+        )
+    return _SI_PROVIDER_DEPENDENCY_SPECS
+
+
+def _resolve_dependency_path(
+    namespace: dict[str, Any],
+    dependency_path: tuple[str, ...],
+) -> Any:
+    current = namespace.get(dependency_path[0], _MISSING_CAPABILITY)
+    for attribute in dependency_path[1:]:
+        if current is _MISSING_CAPABILITY:
+            break
+        current = getattr_static(
+            current,
+            attribute,
+            _MISSING_CAPABILITY,
+        )
+    return current
+
+
+def _capture_provider_dependencies(
+    provider: ProfileRuntimeProvider,
+    registration: ProfileRuntimeProviderRegistration,
+) -> tuple[_ProviderDependencyReceipt, ...]:
+    provider_type = type(provider)
+    build_services = getattr_static(
+        provider_type,
+        "build_services",
+        _MISSING_CAPABILITY,
+    )
+    if (
+        build_services is _MISSING_CAPABILITY
+        or getattr_static(
+            provider,
+            "build_services",
+            _MISSING_CAPABILITY,
+        )
+        is not build_services
+        or type(getattr(build_services, "__globals__", None)) is not dict
+    ):
+        raise ProfileRuntimeError(
+            "verified profile runtime provider build_services is not a sealed "
+            "class-owned function"
+        )
+    namespace = build_services.__globals__
+    receipts = []
+    for dependency_path, expected_dependency, expected_capabilities in (
+        _provider_dependency_specs(registration)
+    ):
+        dependency = _resolve_dependency_path(namespace, dependency_path)
+        if dependency is not expected_dependency:
+            raise ProfileRuntimeError(
+                "verified profile runtime provider imported unauthenticated "
+                f"dependency {'.'.join(dependency_path)!r}"
+            )
+        for capability_name, expected_capability in expected_capabilities:
+            if getattr_static(
+                dependency,
+                capability_name,
+                _MISSING_CAPABILITY,
+            ) is not expected_capability:
+                raise ProfileRuntimeError(
+                    "verified profile runtime provider dependency capability "
+                    f"{'.'.join(dependency_path)}.{capability_name} changed"
+                )
+        receipts.append(_ProviderDependencyReceipt(
+            dependency_path=dependency_path,
+            dependency=dependency,
+            capabilities=expected_capabilities,
+        ))
+    return tuple(receipts)
+
+
+def _validate_provider_dependency_receipts(
+    receipts: tuple[_ProviderDependencyReceipt, ...],
+    registration: ProfileRuntimeProviderRegistration,
+) -> None:
+    specs = _provider_dependency_specs(registration)
+    if len(receipts) != len(specs):
+        raise ProfileRuntimeError(
+            "profile runtime provider cache receipt has incomplete dependency "
+            "provenance"
+        )
+    for receipt, spec in zip(receipts, specs):
+        dependency_path, expected_dependency, expected_capabilities = spec
+        if (
+            type(receipt) is not _ProviderDependencyReceipt
+            or receipt.dependency_path != dependency_path
+            or receipt.dependency is not expected_dependency
+            or type(receipt.capabilities) is not tuple
+            or len(receipt.capabilities) != len(expected_capabilities)
+        ):
+            raise ProfileRuntimeError(
+                "profile runtime provider cache receipt has malformed dependency "
+                "provenance"
+            )
+        for retained_capability, expected_capability in zip(
+            receipt.capabilities,
+            expected_capabilities,
+        ):
+            if (
+                type(retained_capability) is not tuple
+                or len(retained_capability) != 2
+                or retained_capability[0] != expected_capability[0]
+                or retained_capability[1] is not expected_capability[1]
+                or getattr_static(
+                    expected_dependency,
+                    expected_capability[0],
+                    _MISSING_CAPABILITY,
+                )
+                is not expected_capability[1]
+            ):
+                raise ProfileRuntimeError(
+                    "profile runtime provider cached dependency capability "
+                    f"{'.'.join(dependency_path)}."
+                    f"{expected_capability[0]} changed"
+                )
+
+
+def _same_provider_dependencies(
+    left: tuple[_ProviderDependencyReceipt, ...],
+    right: tuple[_ProviderDependencyReceipt, ...],
+) -> bool:
+    if len(left) != len(right):
+        return False
+    for left_receipt, right_receipt in zip(left, right):
+        if (
+            type(left_receipt) is not _ProviderDependencyReceipt
+            or type(right_receipt) is not _ProviderDependencyReceipt
+            or left_receipt.dependency_path != right_receipt.dependency_path
+            or left_receipt.dependency is not right_receipt.dependency
+            or len(left_receipt.capabilities)
+            != len(right_receipt.capabilities)
+        ):
+            return False
+        for left_capability, right_capability in zip(
+            left_receipt.capabilities,
+            right_receipt.capabilities,
+        ):
+            if (
+                left_capability[0] != right_capability[0]
+                or left_capability[1] is not right_capability[1]
+            ):
+                return False
+    return True
+
+
+def _service_capability_targets(
+    services: ProfileRuntimeServices,
+) -> tuple[tuple[str, Any, tuple[str, ...]], ...]:
+    targets = []
+    for service_name, capabilities in _REQUIRED_SERVICE_CAPABILITIES.items():
+        targets.append((
+            service_name,
+            _service_attribute(services, "service bundle", service_name),
+            capabilities,
+        ))
+    for service_name, capabilities in _OPTIONAL_SERVICE_CAPABILITIES.items():
+        if service_name == "materializer_context":
+            materializer = _service_attribute(
+                services,
+                "service bundle",
+                "materializer",
+            )
+            service = getattr_static(
+                materializer,
+                "context",
+                _MISSING_CAPABILITY,
+            )
+        else:
+            service = _service_attribute(
+                services,
+                "service bundle",
+                service_name,
+            )
+        if service is not None and service is not _MISSING_CAPABILITY:
+            targets.append((service_name, service, capabilities))
+    return tuple(targets)
+
+
 def _capture_service_capabilities(
     services: ProfileRuntimeServices,
 ) -> tuple[_ServiceCapabilityReceipt, ...]:
     """Capture class-owned behavior without retaining any live service object."""
+    if type(services) is not ProfileRuntimeServices:
+        raise ProfileRuntimeError(
+            "profile runtime provider returned an invalid service bundle"
+        )
     receipts = []
-    capability_contract = dict(_REQUIRED_SERVICE_CAPABILITIES)
-    for service_name, capabilities in _OPTIONAL_SERVICE_CAPABILITIES.items():
-        if _service_attribute(services, "service bundle", service_name) is not None:
-            capability_contract[service_name] = capabilities
-
-    for service_name, capabilities in capability_contract.items():
-        service = _service_attribute(services, "service bundle", service_name)
+    for service_name, service, capabilities in _service_capability_targets(services):
         service_type = type(service)
         captured = []
         for capability_name in ("__init__", *capabilities):
@@ -727,6 +1125,16 @@ def _capture_service_capabilities(
                     f"{service_name!r} capability {capability_name!r} is not "
                     "class-owned and cannot be authenticated across compositions"
                 )
+            if getattr_static(
+                service,
+                capability_name,
+                _MISSING_CAPABILITY,
+            ) is not capability:
+                raise ProfileRuntimeError(
+                    "profile runtime provider service "
+                    f"{service_name!r} overrides authenticated class capability "
+                    f"{capability_name!r} on its instance"
+                )
             captured.append((capability_name, capability))
         receipts.append(_ServiceCapabilityReceipt(
             service_name=service_name,
@@ -734,6 +1142,195 @@ def _capture_service_capabilities(
             capabilities=tuple(captured),
         ))
     return tuple(receipts)
+
+
+def _state_attribute(value: Any, name: str, owner: str) -> Any:
+    attribute = getattr_static(value, name, _MISSING_CAPABILITY)
+    if attribute is _MISSING_CAPABILITY:
+        raise ProfileRuntimeError(
+            f"profile runtime provider {owner} state lacks {name!r}"
+        )
+    return attribute
+
+
+def _canonical_state_value(value: Any) -> Any:
+    if value is None or type(value) in {bool, int, float, str}:
+        return value
+    if isinstance(value, Path):
+        return {"path": str(value)}
+    if isinstance(value, Enum):
+        return {
+            "enum": f"{type(value).__module__}.{type(value).__qualname__}",
+            "value": _canonical_state_value(value.value),
+        }
+    if is_dataclass(value) and not isinstance(value, type):
+        return {
+            "dataclass": f"{type(value).__module__}.{type(value).__qualname__}",
+            "fields": {
+                field.name: _canonical_state_value(getattr(value, field.name))
+                for field in fields(value)
+            },
+        }
+    if type(value) is dict:
+        items = [
+            (
+                _canonical_state_value(key),
+                _canonical_state_value(item),
+            )
+            for key, item in value.items()
+        ]
+        items.sort(key=lambda item: canonical_json({"key": item[0]}))
+        return {"dict": items}
+    if type(value) in {list, tuple}:
+        return {
+            type(value).__name__: [
+                _canonical_state_value(item)
+                for item in value
+            ],
+        }
+    if type(value) in {set, frozenset}:
+        items = [_canonical_state_value(item) for item in value]
+        items.sort(key=lambda item: canonical_json({"item": item}))
+        return {type(value).__name__: items}
+    raise ProfileRuntimeError(
+        "profile runtime provider service state contains an unsupported "
+        f"value of type {type(value).__name__}"
+    )
+
+
+def _capture_service_state_digest(
+    services: ProfileRuntimeServices,
+    store,
+    descriptor: ProfileRuntimeDescriptor,
+) -> str:
+    policy_provider = services.policy_provider
+    context_assembler = services.context_assembler
+    materializer = services.materializer
+    materializer_context = _state_attribute(
+        materializer,
+        "context",
+        "materializer",
+    )
+    reference_bindings = services.reference_bindings
+    product_lookup = services.product_lookup
+    registry_reverification = services.registry_reverification
+    bindings = (
+        _state_attribute(product_lookup, "bindings", "product_lookup")
+        if product_lookup is not None else None
+    )
+    product_state = (
+        _state_attribute(product_lookup, "_by_snapshot", "product_lookup")
+        if product_lookup is not None else None
+    )
+    state_bindings = (
+        services.descriptor is descriptor,
+        _state_attribute(policy_provider, "descriptor", "policy_provider")
+        is descriptor,
+        _state_attribute(context_assembler, "store", "context_assembler")
+        is store,
+        _state_attribute(
+            context_assembler,
+            "active_profile",
+            "context_assembler",
+        )
+        is descriptor,
+        _state_attribute(
+            context_assembler,
+            "runtime_bundle",
+            "context_assembler",
+        )
+        is store.runtime_bundle,
+        _state_attribute(materializer, "store", "materializer") is store,
+        _state_attribute(
+            materializer,
+            "active_profile",
+            "materializer",
+        )
+        is descriptor,
+        _state_attribute(
+            materializer,
+            "runtime_bundle",
+            "materializer",
+        )
+        is store.runtime_bundle,
+        _state_attribute(
+            materializer_context,
+            "store",
+            "materializer.context",
+        )
+        is store,
+        _state_attribute(
+            materializer_context,
+            "active_profile",
+            "materializer.context",
+        )
+        is descriptor,
+        _state_attribute(
+            materializer_context,
+            "runtime_bundle",
+            "materializer.context",
+        )
+        is store.runtime_bundle,
+        bindings == reference_bindings,
+        (
+            _state_attribute(
+                registry_reverification,
+                "product_lookup",
+                "registry_reverification",
+            )
+            is product_lookup
+            if registry_reverification is not None else True
+        ),
+    )
+    if not all(state_bindings):
+        raise ProfileRuntimeError(
+            "profile runtime provider service state is not bound to its exact "
+            "Store, descriptor, RuntimeBundle, and peer services"
+        )
+    payload = {
+        "descriptor": _canonical_state_value(descriptor),
+        "policyProvider": {
+            "policyRef": _canonical_state_value(
+                _state_attribute(
+                    policy_provider,
+                    "policy_ref",
+                    "policy_provider",
+                )
+            ),
+            "recognizedRuleRefs": _canonical_state_value(
+                _state_attribute(
+                    policy_provider,
+                    "recognized_rule_refs",
+                    "policy_provider",
+                )
+            ),
+            "bundlePolicyDocument": _canonical_state_value(
+                _state_attribute(
+                    policy_provider,
+                    "_bundle_policy_document",
+                    "policy_provider",
+                )
+            ),
+        },
+        "referenceBindings": _canonical_state_value(reference_bindings),
+        "productLookup": {
+            "bindings": _canonical_state_value(bindings),
+            "snapshots": _canonical_state_value(product_state),
+        },
+        "registryReverification": {
+            "snapshotPrefix": _canonical_state_value(
+                _state_attribute(
+                    registry_reverification,
+                    "snapshot_prefix",
+                    "registry_reverification",
+                )
+                if registry_reverification is not None else None
+            ),
+        },
+        "runtimeBundleDigest": store.runtime_bundle_digest,
+        "tenantRef": store.tenant_ref,
+    }
+    return sha256_of(payload)
 
 
 def _same_service_capabilities(
@@ -784,7 +1381,7 @@ _DEFAULT_PROVIDER_REGISTRATIONS = (
 
 
 def default_profile_runtime_provider_registry() -> ProfileRuntimeProviderRegistry:
-    """Return import-free code-owned registrations; RS1 registers SI only."""
+    """Return provider-module-free code-owned registrations; RS1 registers SI."""
     return ProfileRuntimeProviderRegistry(_DEFAULT_PROVIDER_REGISTRATIONS)
 
 

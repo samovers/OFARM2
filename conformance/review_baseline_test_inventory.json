@@ -5901,6 +5901,16 @@
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_long_lived_pipeline_refuses_instance_capability_override_before_use",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_long_lived_pipeline_refuses_mutated_service_state_before_next_commit",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_malformed_conflicting_replay_is_recorded_and_blocked",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
@@ -6191,6 +6201,11 @@
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_replaced_provider_dependency_constructor_cannot_execute",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_resolve_active_descriptor_explicit_does_not_import_config",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
@@ -6362,6 +6377,11 @@
     },
     {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_handoff_binds_materializer_to_resolved_descriptor",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_malformed_conflict_precedes_route_refusal",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
@@ -7666,8 +7686,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "c25f0ed8caf52052fb1a0861af4a0a1fb764654c8f4d0f87360bab02b11bb515",
-  "entryCount": 1533,
+  "entriesSha256": "1e54dffc1a7f188ab91ef44f0f0d13d89508e0ff7487fd0f545bd1765e5af781",
+  "entryCount": 1537,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

@@ -519,20 +519,7 @@ class ReplayWriter:
             "sourcePayloadDigest": ctx.source_digest,
         }
         ctx.store.insert_record(ctx.cur, replay_request)
-        if replay_precondition_problems:
-            disposition, outcome = "CONFLICTING_REPLAY_BLOCKED", "DENY"
-            problems = list(replay_precondition_problems)
-            reason_code = problems[0].get("reasonCode", "PACK_CONFLICT")
-            ctx.log(
-                "INGRESS_NORMALIZATION",
-                "CONFLICTING_REPLAY_BLOCKED",
-                reason_code=reason_code,
-                rationale=(
-                    "IDEMPOTENCY_REPLAY: active profile route/provider "
-                    "authentication failed"
-                ),
-            )
-        elif bundle_conflict:
+        if bundle_conflict:
             disposition, outcome = "CONFLICTING_REPLAY_BLOCKED", "DENY"
             problems = [runtime_problem(
                 "PACK_CONFLICT", "Cross-bundle replay blocked",
@@ -552,6 +539,19 @@ class ReplayWriter:
                 "duplicating truth")]
             ctx.log("INGRESS_NORMALIZATION", "CONFLICTING_REPLAY_BLOCKED",
                     reason_code="IDEMPOTENCY_REPLAY_CONFLICT")
+        elif replay_precondition_problems:
+            disposition, outcome = "CONFLICTING_REPLAY_BLOCKED", "DENY"
+            problems = list(replay_precondition_problems)
+            reason_code = problems[0].get("reasonCode", "PACK_CONFLICT")
+            ctx.log(
+                "INGRESS_NORMALIZATION",
+                "CONFLICTING_REPLAY_BLOCKED",
+                reason_code=reason_code,
+                rationale=(
+                    "IDEMPOTENCY_REPLAY: active profile route/provider "
+                    "authentication failed"
+                ),
+            )
         elif execution_binding_problem is not None:
             disposition, outcome = "CONFLICTING_REPLAY_BLOCKED", "DENY"
             problems = [execution_binding_problem]

@@ -2105,6 +2105,39 @@ def test_preloaded_provider_attribute_replacement_cannot_execute(
     assert pipeline.runtime_services.provider is not hostile_provider
 
 
+def test_replaced_provider_dependency_constructor_cannot_execute(
+        monkeypatch):
+    runtime_bundle = RuntimeBundleBuilder.from_manifest(
+        config.PACKAGE_ROOT
+    ).build()
+    trusted_constructor = context.ContextAssembler
+    replacement_executed = False
+
+    def hostile_constructor(*args, **kwargs):
+        nonlocal replacement_executed
+        replacement_executed = True
+        instance = trusted_constructor(*args, **kwargs)
+        instance.assemble = lambda *_args, **_kwargs: (
+            pytest.fail("hostile instance capability executed")
+        )
+        return instance
+
+    monkeypatch.setattr(
+        context,
+        "ContextAssembler",
+        hostile_constructor,
+    )
+
+    with _fresh_started_store(runtime_bundle) as store:
+        with pytest.raises(
+            ProfileRuntimeError,
+            match="unauthenticated dependency 'ContextAssembler'",
+        ):
+            GatePipeline(store)
+
+    assert replacement_executed is False
+
+
 def test_provider_cache_is_bound_to_complete_registration_identity(tmp_path):
     runtime_bundle = RuntimeBundleBuilder.from_manifest(
         config.PACKAGE_ROOT
@@ -2167,7 +2200,9 @@ def test_provider_cache_hit_revalidates_complete_registration():
                 registration_identity=("hostile",),
                 source_digest=source_component.content_digest,
                 descriptor=config.ACTIVE_PROFILE,
+                provider_dependencies=(),
                 service_capabilities=(),
+                service_state_digest="sha256:hostile",
             ),
         )
 
@@ -2253,6 +2288,12 @@ def test_provider_cache_refuses_incomplete_capability_receipt():
     )
 
     with _fresh_started_store(runtime_bundle) as store:
+        _, valid_receipt = registry.build_services_with_receipt(
+            store,
+            config.ACTIVE_PROFILE_PACKAGE_NAME,
+            config.ACTIVE_PROFILE,
+        )
+        store._profile_runtime_provider_cache.clear()
         source_component = registry._verify_provider_source(store, registration)
         cache_key = registry._provider_cache_key(
             registration,
@@ -2268,7 +2309,9 @@ def test_provider_cache_refuses_incomplete_capability_receipt():
                 ),
                 source_digest=source_component.content_digest,
                 descriptor=config.ACTIVE_PROFILE,
+                provider_dependencies=valid_receipt.provider_dependencies,
                 service_capabilities=(),
+                service_state_digest=valid_receipt.service_state_digest,
             ),
         )
 
@@ -2306,6 +2349,60 @@ def test_mutated_service_instance_is_not_reused_by_later_pipeline(
     assert second_pipeline.runtime_services is not first_pipeline.runtime_services
 
 
+def test_long_lived_pipeline_refuses_mutated_service_state_before_next_commit(
+        fresh_env):
+    store, pipeline, _ = fresh_env
+    registry_reverification = (
+        pipeline.runtime_services.registry_reverification
+    )
+    registry_reverification.snapshot_prefix = (
+        "referencesnapshot:hostile.runtime-state"
+    )
+    before = len(store.find_by_kind("ofarm.commitingressrequest.v0.1"))
+
+    with pytest.raises(
+        ProfileRuntimeError,
+        match="service state changed after composition",
+    ):
+        pipeline.commit(demo.spray_submission(
+            f"rs1-mutated-active-service:{_uid()}",
+            erp_id=f"erp:rs1.mutated.active.service.{_uid()}",
+            confirm=True,
+        ))
+
+    assert len(store.find_by_kind("ofarm.commitingressrequest.v0.1")) == before
+
+
+def test_long_lived_pipeline_refuses_instance_capability_override_before_use(
+        fresh_env, monkeypatch):
+    store, pipeline, _ = fresh_env
+    registry_reverification = (
+        pipeline.runtime_services.registry_reverification
+    )
+    replacement_executed = False
+
+    def hostile_run(_ctx):
+        nonlocal replacement_executed
+        replacement_executed = True
+        raise AssertionError("instance capability override executed")
+
+    monkeypatch.setattr(registry_reverification, "run", hostile_run)
+    before = len(store.find_by_kind("ofarm.commitingressrequest.v0.1"))
+
+    with pytest.raises(
+        ProfileRuntimeError,
+        match="overrides authenticated class capability 'run'",
+    ):
+        pipeline.commit(demo.spray_submission(
+            f"rs1-overridden-active-service:{_uid()}",
+            erp_id=f"erp:rs1.overridden.active.service.{_uid()}",
+            confirm=True,
+        ))
+
+    assert replacement_executed is False
+    assert len(store.find_by_kind("ofarm.commitingressrequest.v0.1")) == before
+
+
 def test_mutated_service_class_fails_before_later_composition(
         fresh_env, monkeypatch):
     store, first_pipeline, _ = fresh_env
@@ -2323,7 +2420,7 @@ def test_mutated_service_class_fails_before_later_composition(
 
     with pytest.raises(
         ProfileRuntimeError,
-        match="cached service capability registry_reverification.run changed",
+        match="cached (dependency|service) capability .*run changed",
     ):
         GatePipeline(store)
 
@@ -2351,6 +2448,12 @@ def test_failed_provider_service_validation_does_not_seed_cache(
             registration,
             source_component,
         )
+        provider_dependencies = (
+            profile_runtime_providers._capture_provider_dependencies(
+                provider,
+                registration,
+            )
+        )
         provider_type = type(provider)
         original_build_services = provider_type.build_services
 
@@ -2373,6 +2476,11 @@ def test_failed_provider_service_validation_does_not_seed_cache(
             staticmethod(
                 lambda _store, _registration, _source_component: provider
             ),
+        )
+        monkeypatch.setattr(
+            profile_runtime_providers,
+            "_capture_provider_dependencies",
+            lambda _provider, _registration: provider_dependencies,
         )
 
         with pytest.raises(ProfileRuntimeError, match="materializer"):
@@ -2457,12 +2565,23 @@ def test_runtime_service_construction_refuses_missing_required_capability(
         registration,
         source_component,
     )
+    provider_dependencies = (
+        profile_runtime_providers._capture_provider_dependencies(
+            provider,
+            registration,
+        )
+    )
     monkeypatch.setattr(
         ProfileRuntimeProviderRegistry,
         "_load_provider",
         staticmethod(
             lambda _store, _registration, _source_component: provider
         ),
+    )
+    monkeypatch.setattr(
+        profile_runtime_providers,
+        "_capture_provider_dependencies",
+        lambda _provider, _registration: provider_dependencies,
     )
     provider_type = type(provider)
     original_build_services = provider_type.build_services
@@ -2512,12 +2631,23 @@ def test_runtime_service_construction_refuses_incomplete_consumed_contract(
         registration,
         source_component,
     )
+    provider_dependencies = (
+        profile_runtime_providers._capture_provider_dependencies(
+            provider,
+            registration,
+        )
+    )
     monkeypatch.setattr(
         ProfileRuntimeProviderRegistry,
         "_load_provider",
         staticmethod(
             lambda _store, _registration, _source_component: provider
         ),
+    )
+    monkeypatch.setattr(
+        profile_runtime_providers,
+        "_capture_provider_dependencies",
+        lambda _provider, _registration: provider_dependencies,
     )
     provider_type = type(provider)
     original_build_services = provider_type.build_services
@@ -2925,6 +3055,31 @@ def test_malformed_conflicting_replay_is_recorded_and_blocked(fresh_env):
     assert replay["problems"][0]["reasonCode"] == "IDEMPOTENCY_REPLAY_CONFLICT"
     trace = _trace_payload(store, replay)
     assert trace["gateSequence"][0]["gate"] == "INGRESS_NORMALIZATION"
+
+
+def test_route_backed_malformed_conflict_precedes_route_refusal(fresh_env):
+    store, _, _ = fresh_env
+    pipeline = _route_pipeline(store)
+    submission = demo.spray_submission(
+        f"rs1-route-replay-malformed-class:{_uid()}",
+        erp_id=f"erp:rs1.route.replay.malformed-class.{_uid()}",
+        confirm=True,
+    )
+    first = pipeline.commit(submission)
+    assert first["decisionOutcome"] == "PROMOTE_ACCEPTED"
+
+    malformed = dict(submission, commitClass="UNKNOWN_COMMIT_CLASS")
+    replay = pipeline.commit(malformed)
+
+    assert replay["decisionOutcome"] == "DENY"
+    assert replay["idempotencyDisposition"] == "CONFLICTING_REPLAY_BLOCKED"
+    assert replay["problems"][0]["reasonCode"] == "IDEMPOTENCY_REPLAY_CONFLICT"
+    trace = _trace_payload(store, replay)
+    assert [entry["gate"] for entry in trace["gateSequence"]][:2] == [
+        "INGRESS_NORMALIZATION",
+        "PACK_PROFILE_APPLICABILITY",
+    ]
+    assert trace["gateSequence"][1]["outcome"] == "PROFILE_ROUTE_REFUSE"
 
 
 def test_route_backed_gate_pipeline_refuses_alias_candidate_identity(fresh_env):
@@ -3591,11 +3746,9 @@ def test_acceptance_sufficiency_uses_descriptor_policy_ref_without_policy_body(
 
 def test_descriptor_validation_policy_failure_stops_at_validation(
         fresh_env, monkeypatch):
-    store, _, _ = fresh_env
-    # This compatibility test deliberately replaces trusted class behavior;
-    # discard the earlier authenticated receipt so it can exercise the
-    # downstream governed policy-error path instead of the tamper detector.
-    store._profile_runtime_provider_cache.clear()
+    store, pipeline, _ = fresh_env
+    # This downstream unit test deliberately bypasses commit()'s tamper check
+    # so it can exercise the governed policy-error mapping in isolation.
 
     def fail_validation_policy(_provider):
         raise profile_policy.ProfilePolicyError("descriptor validation unavailable")
@@ -3603,11 +3756,13 @@ def test_descriptor_validation_policy_failure_stops_at_validation(
     monkeypatch.setattr(profile_policy.DescriptorPolicyProvider, "validation_policy",
                         fail_validation_policy)
 
-    result = GatePipeline(store).commit(demo.spray_submission(
+    submission = demo.spray_submission(
         f"mp3d-validation-fail:{_uid()}",
         erp_id=f"erp:mp3d.validation.fail.{_uid()}",
         confirm=True,
-    ))
+    )
+    with store.serialized_tx() as cur:
+        result = pipeline._commit_in_tx(cur, submission)
 
     assert result["decisionOutcome"] == "RETAIN_DRAFT"
     assert result["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
@@ -3623,10 +3778,9 @@ def test_descriptor_validation_policy_failure_stops_at_validation(
 
 def test_descriptor_sufficiency_policy_failure_happens_after_validation(
         fresh_env, monkeypatch):
-    store, _, _ = fresh_env
-    # See the validation-policy companion above: this test intentionally
-    # installs synthetic class behavior and is not a cache-integrity test.
-    store._profile_runtime_provider_cache.clear()
+    store, pipeline, _ = fresh_env
+    # See the validation-policy companion above: this is a downstream unit
+    # test, not modified class behavior passed through the governed front door.
     validation = profile_policy.validation_policy_for_descriptor(config.ACTIVE_PROFILE)
 
     monkeypatch.setattr(profile_policy.DescriptorPolicyProvider, "validation_policy",
@@ -3638,11 +3792,13 @@ def test_descriptor_sufficiency_policy_failure_happens_after_validation(
     monkeypatch.setattr(profile_policy.DescriptorPolicyProvider, "evidence_policy",
                         fail_evidence_policy)
 
-    result = GatePipeline(store).commit(demo.spray_submission(
+    submission = demo.spray_submission(
         f"mp3d-sufficiency-fail:{_uid()}",
         erp_id=f"erp:mp3d.sufficiency.fail.{_uid()}",
         confirm=True,
-    ))
+    )
+    with store.serialized_tx() as cur:
+        result = pipeline._commit_in_tx(cur, submission)
 
     assert result["decisionOutcome"] == "RETAIN_DRAFT"
     assert result["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"

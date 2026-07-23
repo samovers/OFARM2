@@ -105,7 +105,10 @@ class GatePipeline:
                 self.active_profile,
             )
         )
-        self.runtime_services = self.runtime_provider_registry.build_services(
+        (
+            self.runtime_services,
+            self.runtime_services_receipt,
+        ) = self.runtime_provider_registry.build_services_with_receipt(
             store,
             store.active_profile_package_name,
             self.active_profile,
@@ -124,6 +127,13 @@ class GatePipeline:
     def commit(self, submission: dict) -> dict:
         """Run one capture through the full chain. Returns the
         CommitIngressResult payload. One call = one transaction (D3)."""
+        self.runtime_provider_registry.validate_services_for_execution(
+            self.store,
+            self.store.active_profile_package_name,
+            self.runtime_services.descriptor,
+            self.runtime_services,
+            self.runtime_services_receipt,
+        )
         try:
             with self.store.serialized_tx() as cur:
                 return self._commit_in_tx(cur, submission)
