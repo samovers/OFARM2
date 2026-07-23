@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
+from urllib.request import HTTPRedirectHandler, Request
 
 import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 
+import kernel.auth_oidc as auth_oidc
 from kernel.auth_oidc import (
     AuthenticationStartupError,
     ProductionOidcConfig,
@@ -46,6 +48,35 @@ class _JwksClient:
         if self.unavailable:
             raise RuntimeError("provider detail must stay private")
         return _JwkSet(self.keys)
+
+
+class _RedirectedResponse:
+    def __init__(self, final_url: str):
+        self.final_url = final_url
+        self.body_read = False
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def geturl(self) -> str:
+        return self.final_url
+
+    def read(self, *args):
+        self.body_read = True
+        raise AssertionError("a redirected JWKS body must not be read")
+
+
+class _RedirectingOpener:
+    def __init__(self, final_url: str):
+        self.response = _RedirectedResponse(final_url)
+
+    def open(self, request: Request, *, timeout: int):
+        assert request.full_url == JWKS_URL
+        assert timeout == 5
+        return self.response
 
 
 @pytest.fixture(scope="module")
@@ -148,6 +179,85 @@ def test_provider_outage_is_a_safe_unavailable_outcome(rsa_keys):
     verifier = _verifier(
         public_key,
         client=_JwksClient([], unavailable=True),
+    )
+
+    with pytest.raises(AuthenticationStartupError, match="JWKS initialization failed"):
+        verifier.initialize()
+
+
+def test_production_jwks_transport_disables_every_redirect() -> None:
+    opener = auth_oidc._build_no_redirect_jwks_opener()
+    redirect_handlers = [
+        handler
+        for handler in opener.handlers
+        if isinstance(handler, HTTPRedirectHandler)
+    ]
+
+    assert len(redirect_handlers) == 1
+    assert type(redirect_handlers[0]) is auth_oidc._RejectJwksRedirectHandler
+    assert redirect_handlers[0].redirect_request(
+        Request(JWKS_URL),
+        object(),
+        302,
+        "Found",
+        {},
+        "https://issuer.example.test/tenant/new-jwks",
+    ) is None
+
+
+@pytest.mark.parametrize(
+    "redirect_target",
+    (
+        "http://issuer.example.test/tenant/jwks",
+        "ftp://issuer.example.test/tenant/jwks",
+    ),
+)
+def test_production_jwks_refuses_downgraded_final_target(
+    monkeypatch: pytest.MonkeyPatch,
+    redirect_target: str,
+) -> None:
+    opener = _RedirectingOpener(redirect_target)
+    monkeypatch.setattr(
+        auth_oidc,
+        "_build_no_redirect_jwks_opener",
+        lambda: opener,
+    )
+    verifier = ProductionOidcVerifier(_config())
+
+    with pytest.raises(AuthenticationStartupError, match="JWKS initialization failed"):
+        verifier.initialize()
+
+    assert opener.response.body_read is False
+
+
+@pytest.mark.parametrize(
+    ("key_type", "curve", "declared_algorithm"),
+    (
+        ("EC", "P-256", "ES384"),
+        ("EC", "P-384", "ES256"),
+        ("OKP", "X25519", "EdDSA"),
+        ("OKP", "Ed448", "EdDSA"),
+    ),
+)
+def test_incompatible_declared_jwk_algorithm_is_rejected_at_startup(
+    key_type: str,
+    curve: str,
+    declared_algorithm: str,
+) -> None:
+    key = _SigningKey(
+        "key-1",
+        declared_algorithm,
+        object(),
+        _jwk_data={
+            "kty": key_type,
+            "crv": curve,
+            "alg": declared_algorithm,
+        },
+    )
+    verifier = _verifier(
+        object(),
+        client=_JwksClient([key]),
+        algorithms=(declared_algorithm,),
     )
 
     with pytest.raises(AuthenticationStartupError, match="JWKS initialization failed"):

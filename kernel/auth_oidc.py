@@ -18,7 +18,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from threading import Lock
 from typing import Any, Callable, Protocol, final, runtime_checkable
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from deployment.postgresql.tenant_contract import (
     OIDC_ISSUER_EQUALITY_POLICY,
@@ -328,6 +330,13 @@ class OidcConfig:
 
 @dataclass(frozen=True, slots=True)
 class ProductionOidcConfig:
+    """Pinned production trust inputs.
+
+    ``jwks_url`` must name the final HTTPS resource. The verifier follows no
+    redirect, so neither same-origin nor cross-origin target changes are
+    allowed.
+    """
+
     issuer: str
     audience: str
     jwks_url: str
@@ -393,6 +402,74 @@ class ProductionOidcConfig:
 
 class _JwksProviderStateError(RuntimeError):
     """A provider fetch or key-set state cannot safely verify credentials."""
+
+
+class _RejectJwksRedirectHandler(HTTPRedirectHandler):
+    """Refuse every JWKS redirect, including same-origin HTTPS redirects."""
+
+    def redirect_request(
+        self,
+        request: object,
+        response: object,
+        code: int,
+        message: str,
+        headers: object,
+        new_url: str,
+    ) -> None:
+        return None
+
+
+def _build_no_redirect_jwks_opener() -> object:
+    return build_opener(_RejectJwksRedirectHandler())
+
+
+@final
+class _ProductionJwksClient:
+    """Fetch only the configured final HTTPS URL; origin changes are forbidden."""
+
+    def __init__(
+        self,
+        jwt_module: Any,
+        *,
+        uri: str,
+        timeout_seconds: int,
+    ) -> None:
+        self._jwt = jwt_module
+        self._uri = uri
+        self._timeout_seconds = timeout_seconds
+        self._opener = _build_no_redirect_jwks_opener()
+
+    def get_jwk_set(self, *, refresh: bool) -> object:
+        del refresh
+        try:
+            request = Request(url=self._uri)
+            with self._opener.open(
+                request,
+                timeout=self._timeout_seconds,
+            ) as response:
+                response_url = response.geturl()
+                if (
+                    type(response_url) is not str
+                    or response_url != self._uri
+                    or urlsplit(response_url).scheme != "https"
+                ):
+                    raise _JwksProviderStateError(
+                        "JWKS response target differs from configured HTTPS URL"
+                    )
+                jwk_data = json.load(response)
+        except _JwksProviderStateError:
+            raise
+        except HTTPError as exc:
+            exc.close()
+            raise _JwksProviderStateError("JWKS HTTPS fetch failed") from exc
+        except (URLError, TimeoutError) as exc:
+            raise _JwksProviderStateError("JWKS HTTPS fetch failed") from exc
+        if type(jwk_data) is not dict:
+            raise _JwksProviderStateError("JWKS endpoint returned a non-object")
+        try:
+            return self._jwt.PyJWKSet.from_dict(jwk_data)
+        except Exception as exc:
+            raise _JwksProviderStateError("JWKS provider state is invalid") from exc
 
 
 @dataclass(frozen=True, slots=True)
@@ -481,12 +558,10 @@ class ProductionOidcVerifier:
             ) from exc
         self._jwt = jwt
         if self._jwks_client is None:
-            self._jwks_client = jwt.PyJWKClient(
-                self.config.jwks_url,
-                cache_keys=False,
-                cache_jwk_set=True,
-                lifespan=self.config.jwks_lifespan_seconds,
-                timeout=self.config.timeout_seconds,
+            self._jwks_client = _ProductionJwksClient(
+                jwt,
+                uri=self.config.jwks_url,
+                timeout_seconds=self.config.timeout_seconds,
             )
         try:
             generation = self._load_generation()
@@ -571,9 +646,6 @@ class ProductionOidcVerifier:
         inferred = getattr(key, "algorithm_name", None)
         if type(jwk_data) is not dict:
             return (inferred,) if inferred in self.config.algorithms else ()
-        if "alg" in jwk_data:
-            declared = jwk_data["alg"]
-            return (declared,) if declared in self.config.algorithms else ()
 
         key_type = jwk_data.get("kty")
         curve = jwk_data.get("crv")
@@ -588,10 +660,17 @@ class ProductionOidcVerifier:
                 "P-384": frozenset({"ES384"}),
                 "P-521": frozenset({"ES512"}),
             }.get(curve, frozenset())
-        elif key_type == "OKP" and curve in ("Ed25519", "Ed448"):
+        elif key_type == "OKP" and curve == "Ed25519":
             compatible = frozenset({"EdDSA"})
         else:
             compatible = frozenset()
+        if "alg" in jwk_data:
+            declared = jwk_data["alg"]
+            compatible = (
+                compatible.intersection({declared})
+                if type(declared) is str
+                else frozenset()
+            )
         return tuple(
             algorithm
             for algorithm in self.config.algorithms
