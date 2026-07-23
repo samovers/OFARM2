@@ -11,6 +11,8 @@ from deployment.postgresql.tenant_contract import (
     OIDC_ISSUER_EQUALITY_POLICY,
     TENANT_CAPABILITY_CONTRACT,
 )
+from kernel.authentication import VerifiedIdentity
+from kernel.principal_resolver import PrincipalBindingResolver
 from kernel.tests import test_postgresql_tenant_migration as baseline
 
 tenant_target = baseline.tenant_target
@@ -86,6 +88,35 @@ def test_resolver_returns_one_exact_active_authority(tenant_target, authority):
             authority.party_payload_digest,
             "ACTIVE",
         )
+
+
+def test_python_resolver_consumes_the_exact_read_api(tenant_target, authority):
+    with psycopg.connect(
+        tenant_target.role_dsn("ofarm_app")
+    ) as application:
+        audience = application.execute(
+            "SELECT audience FROM "
+            "ofarm.observe_authentication_runtime_contract()"
+        ).fetchone()[0]
+    resolver = PrincipalBindingResolver(
+        lambda: psycopg.connect(tenant_target.role_dsn("ofarm_app")),
+        expected_audience=audience,
+    )
+    resolver.initialize()
+
+    principal = resolver.resolve(
+        VerifiedIdentity(
+            equality_policy=OIDC_ISSUER_EQUALITY_POLICY,
+            issuer=baseline.ISSUER,
+            subject=authority.subject,
+        )
+    )
+
+    assert principal.authority.binding_version_id == (
+        authority.binding_version_id
+    )
+    assert principal.authority.lifecycle_head_id == authority.lifecycle_head_id
+    assert principal.authority.tenant_id == authority.tenant_id
 
 
 @pytest.mark.parametrize(
