@@ -264,8 +264,8 @@ def test_real_structural_logins_prove_independent_read_only_lanes(
     )
 
     assert tenant_report.service_identity == TENANT_SERVICE.identity
-    assert tenant_report.supported_version == 1
-    assert tenant_report.observed_version == 1
+    assert tenant_report.supported_version == 2
+    assert tenant_report.observed_version == 2
     assert audit_report.service_identity == SECURITY_AUDIT_SERVICE.identity
     assert audit_report.supported_version == 1
     assert audit_report.observed_version == 1
@@ -345,11 +345,11 @@ def test_crossed_structural_routes_and_newer_history_refuse(
                     applied_prefix_digest, service_identity,
                     provisioning_spec_digest, release_identity, execution_id
                 )
-                SELECT 2, '0002_future.sql', source_sha256, source_byte_length,
+                SELECT 3, '0003_future.sql', source_sha256, source_byte_length,
                        applied_prefix_digest, service_identity,
                        provisioning_spec_digest, 'hostile-structural-test',
                        pg_catalog.gen_random_uuid()
-                FROM ofarm.schema_migration WHERE version = 1
+                FROM ofarm.schema_migration WHERE version = 2
                 """
             )
         with pytest.raises(
@@ -365,7 +365,7 @@ def test_crossed_structural_routes_and_newer_history_refuse(
             autocommit=True,
         ) as admin:
             admin.execute(
-                "DELETE FROM ofarm.schema_migration WHERE version = 2"
+                "DELETE FROM ofarm.schema_migration WHERE version = 3"
             )
             admin.execute(
                 "ALTER TABLE ofarm.schema_migration ENABLE TRIGGER ALL"

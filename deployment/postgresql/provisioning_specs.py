@@ -1646,6 +1646,15 @@ TENANT_PROVISIONING_SPEC = ProvisioningSpec(
             True,
             _CONTROL_SETTINGS,
         ),
+        RoleSpec(
+            "ofarm_identity_resolver",
+            True,
+            False,
+            True,
+            8,
+            True,
+            _APPLICATION_SETTINGS,
+        ),
         RoleSpec("ofarm_binder", False, False, True, -1),
         RoleSpec(
             "ofarm_capability_key_controller", False, False, False, -1
@@ -1706,6 +1715,7 @@ TENANT_PROVISIONING_SPEC = ProvisioningSpec(
         "ofarm_worker",
         "ofarm_runtime_bundle_publisher",
         "ofarm_readiness",
+        "ofarm_identity_resolver",
         "ofarm_tenant_registrar",
         "ofarm_identity_writer",
         "ofarm_capability_key_controller",
@@ -1715,6 +1725,7 @@ TENANT_PROVISIONING_SPEC = ProvisioningSpec(
         "ofarm_worker",
         "ofarm_runtime_bundle_publisher",
         "ofarm_readiness",
+        "ofarm_identity_resolver",
         "ofarm_tenant_registrar",
         "ofarm_identity_writer",
         "ofarm_binder",

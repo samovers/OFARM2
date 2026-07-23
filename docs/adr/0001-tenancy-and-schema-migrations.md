@@ -718,6 +718,18 @@ Compromise of `ofarm_binder` is therefore an explicit privileged-boundary
 compromise outside RLS, while possession of application credentials or raw SQL
 cannot exercise its bypass as a general tenant-data read path.
 
+Production principal resolution instead uses the separately credentialed
+`ofarm_identity_resolver` LOGIN. It is `NOINHERIT`, has no memberships or
+mutation privileges, and has a connection limit of eight for a separate
+pre-binding pool. `BYPASSRLS` is limited to the minimum pre-binding comparison
+of one resolved principal with its pinned Party tuple. The credential may call
+only `resolve_principal_binding_authority(text,text,text)` and directly read
+only the immutable lifecycle, binding, registry, Party, and digest inputs that
+fixed SECURITY INVOKER function needs. The function accepts no table, column,
+or predicate selector, contains no dynamic SQL, and never trusts
+`principal_binding_current`. Application, worker, administrator role-switch,
+and binder credentials cannot call or assume this resolver identity.
+
 Backend-incarnation observation is isolated from that binder authority.
 `ofarm_backend_observer` is a NOLOGIN, INHERIT, NOBYPASSRLS role whose sole
 membership is `pg_read_all_stats` with `INHERIT TRUE`, `SET FALSE`, and `ADMIN
@@ -1037,6 +1049,11 @@ The role model is:
   principal-binding lifecycle transition but has no direct DML on binding
   versions, lifecycle acts, or projection, no tenant-truth read role, and no
   application membership;
+- ofarm_identity_resolver: separately credentialed LOGIN with NOINHERIT,
+  BYPASSRLS, a connection limit of eight, no membership or role-assumption
+  path, no mutation privileges, and only the fixed principal-resolution
+  function plus the minimum immutable lifecycle, binding, registry, Party, and
+  digest reads required before a TenantBinding exists;
 - ofarm_capability_key_controller:
   an exact `NOSUPERUSER`, `NOCREATEDB`, `NOCREATEROLE`, `NOREPLICATION`,
   `NOBYPASSRLS`, `NOLOGIN`, `NOINHERIT` capability with EXECUTE only on closed

@@ -490,7 +490,7 @@ def test_provisioning_specs_freeze_distinct_service_and_role_boundaries():
     ).hexdigest() == \
         "17e431e33221426151a6ceb3eb2214b1abc51a7b9390d508603f233742deca28"
     assert tenant.digest == \
-        "sha256:87122affe6e45127d33b50bb7ee7cb9e35f5e66d81549bcae821019b3fd15f00"
+        "sha256:1c6d450012cd253604b296d1b1f245c82d3e706c56fa217189f6ed35c9db9fe9"
     assert audit.digest == \
         "sha256:9b9d06c6f6ac5527a32014ec1719a3cee9742d4d5ab7d8e8a4ff2797053824f7"
     assert next(
@@ -911,12 +911,28 @@ def test_infrastructure_report_cannot_claim_a_migration_phase():
 def test_binder_and_runtime_memberships_are_closed():
     tenant = TENANT_PROVISIONING_SPEC
     binder = next(role for role in tenant.roles if role.name == "ofarm_binder")
+    resolver = next(
+        role for role in tenant.roles if role.name == "ofarm_identity_resolver"
+    )
 
     assert (binder.login, binder.inherit, binder.bypass_rls) == (False, False, True)
+    assert (
+        resolver.login,
+        resolver.inherit,
+        resolver.bypass_rls,
+        resolver.connection_limit,
+        resolver.password_required,
+    ) == (True, False, True, 8, True)
     assert all(
         "ofarm_binder" not in (edge.granted_role, edge.member_role)
         for edge in tenant.memberships
     )
+    assert all(
+        "ofarm_identity_resolver" not in (edge.granted_role, edge.member_role)
+        for edge in tenant.memberships
+    )
+    assert "ofarm_identity_resolver" in tenant.database_connect_roles
+    assert "ofarm_identity_resolver" in tenant.schema_usage_roles
     assert {
         (
             edge.granted_role,
