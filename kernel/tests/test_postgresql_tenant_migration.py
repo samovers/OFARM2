@@ -517,6 +517,37 @@ def test_principal_binding_startup_refuses_each_revoked_dependency(
             admin.execute(grant_sql)
 
 
+def test_principal_binding_startup_refuses_resolver_owner_without_rls_bypass(
+    tenant_target: TenantTarget,
+) -> None:
+    def connection_factory():
+        return _principal_resolver_connection(
+            tenant_target.role_dsn("ofarm_identity_resolver")
+        )
+
+    PostgreSQLPrincipalBindingResolver(connection_factory).initialize()
+    with psycopg.connect(
+        tenant_target.target_admin_dsn,
+        autocommit=True,
+    ) as admin:
+        admin.execute(
+            "ALTER ROLE ofarm_principal_resolver_owner NOBYPASSRLS"
+        )
+        try:
+            with pytest.raises(
+                AuthenticationStartupError,
+                match="principal-binding immutable read path is unavailable",
+            ):
+                PostgreSQLPrincipalBindingResolver(
+                    connection_factory
+                ).initialize()
+        finally:
+            admin.execute(
+                "ALTER ROLE ofarm_principal_resolver_owner BYPASSRLS"
+            )
+    PostgreSQLPrincipalBindingResolver(connection_factory).initialize()
+
+
 def test_principal_binding_permission_failure_remains_unavailable(
     tenant_target: TenantTarget,
 ) -> None:
@@ -6349,7 +6380,7 @@ def test_complete_catalog_fingerprint_refuses_function_constraint_index_policy_a
             assert pristine[0] is True
             assert pristine[2] == 0
             assert pristine[3] == (
-                "sha256:ab1d352b615c7d52d61b2c3d11172d32703926d42aad2a2b13e75a7d52126dc4"
+                "sha256:4c0588fa896bda3f76e3b2f547211c372cf87b67697763f39a0beb6c68ce8fb8"
             )
         finally:
             migrator.rollback()
@@ -7038,7 +7069,7 @@ def test_readiness_observation_is_complete_after_commit(
     assert row[1] == TENANT_CONTEXT_CONTRACT.digest
     assert row[2] == 0
     assert row[3] == (
-        "sha256:ab1d352b615c7d52d61b2c3d11172d32703926d42aad2a2b13e75a7d52126dc4"
+        "sha256:4c0588fa896bda3f76e3b2f547211c372cf87b67697763f39a0beb6c68ce8fb8"
     )
     assert row[5] == TENANT_PROVISIONING_SPEC.digest
     assert row[6] == TENANT_SERVICE.identity

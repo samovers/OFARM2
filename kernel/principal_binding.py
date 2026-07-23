@@ -36,6 +36,15 @@ _ASCII_ID = re.compile(r"^[A-Za-z0-9._:-]{1,255}$")
 _BINDING_INTEGRITY_SQLSTATE = "PT001"
 
 
+def _is_aware_datetime(value: object) -> bool:
+    if type(value) is not datetime or value.tzinfo is None:
+        return False
+    try:
+        return value.utcoffset() is not None
+    except Exception:
+        return False
+
+
 class ExecutableConnection(Protocol):
     def execute(self, query: str, params: object = None) -> object: ...
 
@@ -172,8 +181,8 @@ def _validate_authority(
         or authority.lifecycle_head_id.int == 0
         or type(authority.tenant_id) is not UUID
         or authority.tenant_id.int == 0
-        or type(authority.valid_from) is not datetime
-        or type(authority.valid_until) is not datetime
+        or not _is_aware_datetime(authority.valid_from)
+        or not _is_aware_datetime(authority.valid_until)
         or not authority.valid_from < authority.valid_until
         or any(
             type(value) is not str or _SHA256_ID.fullmatch(value) is None
@@ -256,6 +265,17 @@ class PrincipalBindingControlError(RuntimeError):
     """Closed control-plane refusal; database exception text is not exposed."""
 
 
+class PrincipalBindingControlOutcomeUnknown(PrincipalBindingControlError):
+    """A transition may have committed and must be reconciled by act ID."""
+
+    def __init__(self, act_id: UUID):
+        self.act_id = act_id
+        super().__init__(
+            "principal binding transition outcome is unknown; "
+            f"reconcile act {act_id}"
+        )
+
+
 class PrincipalBindingControlPlane:
     """Invoke only #174's hardened control functions with expected-head data."""
 
@@ -289,6 +309,7 @@ class PrincipalBindingControlPlane:
         act_id = request.act_id or uuid4()
         if act_id.int == 0:
             raise PrincipalBindingControlError("principal binding transition refused")
+        transition_executed = False
         try:
             with self._connection_factory() as connection:
                 candidate_digest = (
@@ -382,12 +403,19 @@ class PrincipalBindingControlPlane:
                         request.reason,
                     ),
                 ).fetchone()
+                transition_executed = True
         except PrincipalBindingControlError:
             raise
         except Exception as exc:
+            if transition_executed:
+                raise PrincipalBindingControlOutcomeUnknown(act_id) from exc
             raise PrincipalBindingControlError(
                 "principal binding transition refused"
             ) from exc
+        except BaseException as exc:
+            if transition_executed:
+                raise PrincipalBindingControlOutcomeUnknown(act_id) from exc
+            raise
         return BindingTransitionReceipt(
             act_id=act_id,
             act_digest=act_digest,
@@ -443,10 +471,8 @@ def _validate_transition_request(request: BindingTransitionRequest) -> None:
         or _ASCII_ID.fullmatch(request.accountable_control_ref) is None
         or type(request.reason) is not str
         or _ASCII_ID.fullmatch(request.reason) is None
-        or type(request.effective_at) is not datetime
-        or type(request.decided_at) is not datetime
-        or request.effective_at.tzinfo is None
-        or request.decided_at.tzinfo is None
+        or not _is_aware_datetime(request.effective_at)
+        or not _is_aware_datetime(request.decided_at)
         or request.effective_at > request.decided_at
     ):
         raise PrincipalBindingControlError("principal binding transition refused")
@@ -521,8 +547,8 @@ def _validate_transition_request(request: BindingTransitionRequest) -> None:
             or candidate.party_record_id != candidate.party_ref
             or candidate.party_state != "ACTIVE"
             or _ASCII_ID.fullmatch(candidate.party_ref) is None
-            or type(candidate.valid_from) is not datetime
-            or type(candidate.valid_until) is not datetime
+            or not _is_aware_datetime(candidate.valid_from)
+            or not _is_aware_datetime(candidate.valid_until)
             or not candidate.valid_from < candidate.valid_until
             or any(
                 type(value) is not str or _SHA256_ID.fullmatch(value) is None
@@ -554,5 +580,6 @@ __all__ = [
     "PrincipalBindingAct",
     "PrincipalBindingAuthority",
     "PrincipalBindingControlError",
+    "PrincipalBindingControlOutcomeUnknown",
     "PrincipalBindingControlPlane",
 ]

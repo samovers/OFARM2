@@ -2316,6 +2316,11 @@
       "sourcePath": "kernel/tests/test_postgresql_migration_cli.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_accepted_authoritative_v1_upgrades_to_the_current_head",
+      "sourceModule": "kernel.tests.test_postgresql_migration_runner",
+      "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_admin_and_migrator_routes_cannot_be_crossed_between_services",
       "sourceModule": "kernel.tests.test_postgresql_migration_runner",
       "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
@@ -2647,6 +2652,21 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_tampered_history_refuses_without_repair[source_sha256-sha256:0000000000000000000000000000000000000000000000000000000000000000-False]",
+      "sourceModule": "kernel.tests.test_postgresql_migration_runner",
+      "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_tenant_v1_infrastructure_transition_is_failure_atomic_and_retryable",
+      "sourceModule": "kernel.tests.test_postgresql_migration_runner",
+      "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_tenant_v1_transition_connection_loss_has_an_explicit_unknown_outcome",
+      "sourceModule": "kernel.tests.test_postgresql_migration_runner",
+      "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_tenant_v1_transition_database_rejection_is_a_closed_migration_error",
       "sourceModule": "kernel.tests.test_postgresql_migration_runner",
       "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
     },
@@ -5191,6 +5211,141 @@
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_integrity_sqlstate_is_not_classified_as_outage",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_permission_failure_remains_unavailable",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_resolves_through_dedicated_resolver_credential",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_each_revoked_dependency[fixed-resolver-boundary]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_each_revoked_dependency[health-entry]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_each_revoked_dependency[helper-binding-digest]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_each_revoked_dependency[helper-lifecycle-digest]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_each_revoked_dependency[helper-lp32]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_each_revoked_dependency[helper-valid-ascii-id]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_each_revoked_dependency[helper-valid-oidc-issuer]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_each_revoked_dependency[kernel-record-column-party_id]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_each_revoked_dependency[kernel-record-column-party_state]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_each_revoked_dependency[kernel-record-column-payload_digest]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_each_revoked_dependency[kernel-record-column-record_id]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_each_revoked_dependency[kernel-record-column-record_kind]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_each_revoked_dependency[kernel-record-column-schema_digest]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_each_revoked_dependency[kernel-record-column-tenant_id]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_each_revoked_dependency[relation-principal_binding]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_each_revoked_dependency[relation-principal_binding_lifecycle]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_each_revoked_dependency[relation-tenant_registry]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_each_revoked_dependency[type-ascii_id]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_each_revoked_dependency[type-oidc_issuer]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_each_revoked_dependency[type-oidc_subject]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_each_revoked_dependency[type-sha256_id]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_each_revoked_dependency[type-tenant_local_ref]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_resolver_owner_without_rls_bypass",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_resolver_login_is_execute_only",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_revoke_anti_barging_after_savepoint_retry",
       "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
@@ -5344,6 +5499,46 @@
       "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_transition_refuses_ineligible_party_state_and_payload_id[mismatched-party-id]",
       "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_control_plane.py::test_control_plane_activates_only_through_hardened_functions",
+      "sourceModule": "kernel.tests.test_principal_binding_control_plane",
+      "sourcePath": "kernel/tests/test_principal_binding_control_plane.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_control_plane.py::test_control_plane_preserves_generated_act_id_when_commit_is_unknown",
+      "sourceModule": "kernel.tests.test_principal_binding_control_plane",
+      "sourcePath": "kernel/tests/test_principal_binding_control_plane.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_control_plane.py::test_control_plane_rejects_naive_candidate_validity_without_database_access[valid_from]",
+      "sourceModule": "kernel.tests.test_principal_binding_control_plane",
+      "sourcePath": "kernel/tests/test_principal_binding_control_plane.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_control_plane.py::test_control_plane_rejects_naive_candidate_validity_without_database_access[valid_until]",
+      "sourceModule": "kernel.tests.test_principal_binding_control_plane",
+      "sourcePath": "kernel/tests/test_principal_binding_control_plane.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_control_plane.py::test_control_plane_requires_exact_head_and_predecessor_for_supersession",
+      "sourceModule": "kernel.tests.test_principal_binding_control_plane",
+      "sourcePath": "kernel/tests/test_principal_binding_control_plane.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_control_plane.py::test_missing_or_ambiguous_binding_fails_closed_with_safe_outcome",
+      "sourceModule": "kernel.tests.test_principal_binding_control_plane",
+      "sourcePath": "kernel/tests/test_principal_binding_control_plane.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_control_plane.py::test_resolver_folds_immutable_authority_and_never_reads_projection",
+      "sourceModule": "kernel.tests.test_principal_binding_control_plane",
+      "sourcePath": "kernel/tests/test_principal_binding_control_plane.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_control_plane.py::test_resolver_startup_refuses_unavailable_fixed_database_boundary",
+      "sourceModule": "kernel.tests.test_principal_binding_control_plane",
+      "sourcePath": "kernel/tests/test_principal_binding_control_plane.py"
     },
     {
       "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_absent_authorization_is_no_credential",
@@ -7956,8 +8151,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "73f8055af7aa27e519a0c9d648aa414d7f3ee25ae20ce51ead7fba8b8aa25ae9",
-  "entryCount": 1591,
+  "entriesSha256": "7f1ebfee2aec80db6f7795f2011559f5e9dcb27821748100570d6e0746e3a80a",
+  "entryCount": 1630,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

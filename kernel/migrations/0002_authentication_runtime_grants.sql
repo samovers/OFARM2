@@ -258,6 +258,32 @@ BEGIN
             ERRCODE = '42501',
             MESSAGE = 'principal-binding health caller differs';
     END IF;
+    IF CURRENT_USER <> 'ofarm_principal_resolver_owner'
+       OR NOT EXISTS (
+            SELECT 1
+              FROM pg_catalog.pg_roles AS owner
+              JOIN pg_catalog.pg_proc AS resolver
+                ON resolver.oid = (
+                    'ofarm.resolve_principal_binding_authority(text,text,text)'
+                        ::pg_catalog.regprocedure
+                )
+              JOIN pg_catalog.pg_proc AS health
+                ON health.oid = (
+                    'ofarm.check_principal_binding_resolution_dependencies()'
+                        ::pg_catalog.regprocedure
+                )
+             WHERE owner.rolname = 'ofarm_principal_resolver_owner'
+               AND NOT owner.rolcanlogin
+               AND owner.rolbypassrls
+               AND resolver.proowner = owner.oid
+               AND health.proowner = owner.oid
+               AND resolver.prosecdef
+               AND health.prosecdef
+       ) THEN
+        RAISE EXCEPTION USING
+            ERRCODE = '42501',
+            MESSAGE = 'principal-binding resolver owner posture differs';
+    END IF;
     IF NOT pg_catalog.has_function_privilege(
         SESSION_USER,
         'ofarm.resolve_principal_binding_authority(text,text,text)'
@@ -542,7 +568,7 @@ BEGIN
     revised_definition := pg_catalog.replace(
         revised_definition,
         'sha256:f7c72a008792173e110b9359006271fea263b3e26fb53c8ac6303839d0460fc4',
-        'sha256:ab1d352b615c7d52d61b2c3d11172d32703926d42aad2a2b13e75a7d52126dc4'
+        'sha256:4c0588fa896bda3f76e3b2f547211c372cf87b67697763f39a0beb6c68ce8fb8'
     );
     revised_definition := pg_catalog.replace(
         revised_definition,

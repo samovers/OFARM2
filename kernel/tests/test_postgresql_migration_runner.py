@@ -24,7 +24,9 @@ import deployment.postgresql.migration_runner as migration_runner_module
 import deployment.postgresql.provisioning as provisioning_module
 from deployment.postgresql.migration_runner import (
     MigrationDirtyError,
+    MigrationError,
     MigrationExecutionError,
+    MigrationInfrastructureTransitionOutcomeUnknown,
     MigrationInputError,
     MigrationOutcomeUnknown,
     MigrationRunReport,
@@ -769,6 +771,109 @@ def test_commit_phase_interrupt_has_an_explicit_unknown_outcome(tmp_path: Path):
 
     assert raised.value.execution_id == execution_id
     assert raised.value.version == 1
+
+
+def test_tenant_v1_transition_connection_loss_has_an_explicit_unknown_outcome(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    package_root = Path(__file__).resolve().parents[2]
+    current_set = load_migration_set(package_root, TENANT_SERVICE)
+    execution_id = uuid4()
+
+    def observe(_admin_dsn, spec):
+        if spec is TENANT_PROVISIONING_SPEC:
+            raise MigrationTargetError("current infrastructure is absent")
+        assert spec is TENANT_PROVISIONING_SPEC_V1
+        return object()
+
+    def lose_connection(*_args, **_kwargs):
+        raise psycopg.OperationalError(
+            "SECRET-TRANSITION-CONNECTION-SENTINEL"
+        )
+
+    monkeypatch.setattr(
+        migration_runner_module,
+        "_observe_infrastructure",
+        observe,
+    )
+    monkeypatch.setattr(
+        migration_runner_module,
+        "_require_transitionable_tenant_v1",
+        lambda **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        migration_runner_module,
+        "transition_tenant_service_v1_to_v2",
+        lose_connection,
+    )
+
+    with pytest.raises(
+        MigrationInfrastructureTransitionOutcomeUnknown
+    ) as raised:
+        migration_runner_module._observe_or_transition_infrastructure(
+            admin_dsn="admin-route",
+            migrator_dsn="migrator-route",
+            spec=TENANT_PROVISIONING_SPEC,
+            migration_set=current_set,
+            execution_id=execution_id,
+            transition_login_passwords={
+                "ofarm_identity_resolver": "resolver-password"
+            },
+        )
+
+    assert isinstance(raised.value, MigrationError)
+    assert raised.value.execution_id == execution_id
+    assert "SECRET-TRANSITION" not in str(raised.value)
+
+
+def test_tenant_v1_transition_database_rejection_is_a_closed_migration_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    package_root = Path(__file__).resolve().parents[2]
+    current_set = load_migration_set(package_root, TENANT_SERVICE)
+
+    def observe(_admin_dsn, spec):
+        if spec is TENANT_PROVISIONING_SPEC:
+            raise MigrationTargetError("current infrastructure is absent")
+        assert spec is TENANT_PROVISIONING_SPEC_V1
+        return object()
+
+    def reject_transition(*_args, **_kwargs):
+        raise psycopg.DatabaseError("SECRET-TRANSITION-DATABASE-SENTINEL")
+
+    monkeypatch.setattr(
+        migration_runner_module,
+        "_observe_infrastructure",
+        observe,
+    )
+    monkeypatch.setattr(
+        migration_runner_module,
+        "_require_transitionable_tenant_v1",
+        lambda **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        migration_runner_module,
+        "transition_tenant_service_v1_to_v2",
+        reject_transition,
+    )
+
+    with pytest.raises(MigrationTargetError) as raised:
+        migration_runner_module._observe_or_transition_infrastructure(
+            admin_dsn="admin-route",
+            migrator_dsn="migrator-route",
+            spec=TENANT_PROVISIONING_SPEC,
+            migration_set=current_set,
+            execution_id=uuid4(),
+            transition_login_passwords={
+                "ofarm_identity_resolver": "resolver-password"
+            },
+        )
+
+    assert isinstance(raised.value, MigrationError)
+    assert str(raised.value) == (
+        "tenant v1-to-v2 infrastructure transition was rejected"
+    )
+    assert "SECRET-TRANSITION" not in str(raised.value)
 
 
 def test_resumes_at_0002_and_preserves_the_stable_0001_prefix(

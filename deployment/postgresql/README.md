@@ -28,48 +28,54 @@ Use the exact checked-in release in this order:
    refuse provisional, incomplete, stale, or otherwise invalid native
    authority. This gate does not claim that a production KMS signer or its IAM
    controls have been deployed.
-2. Provision or verify the tenant infrastructure with
-   `TENANT_PROVISIONING_SPEC` and externally supplied SCRAM passwords.
-3. Provision or verify the security-audit infrastructure with
-   `SECURITY_AUDIT_PROVISIONING_SPEC` and different externally supplied SCRAM
-   passwords.
-4. Call `verify_provisioned_system_identifier_separation` with both
-   administrator routes. It requires the pinned PostgreSQL build
-   `17.10 (Debian 17.10-1.pgdg13+1)` and directly observes different system
-   identifiers. That observation does not prove origin, clone history,
-   continuity, promotion authority, or recovery lineage.
-5. Preflight both immutable migration sets without connecting to PostgreSQL:
+2. Preflight both immutable migration sets without connecting to PostgreSQL:
 
    ```bash
    python -m deployment.postgresql.preflight_tenant_migrations
    python -m deployment.postgresql.preflight_security_audit_migrations
    ```
 
-6. Run the two migrations as separate release steps. The commands accept no
-   service, database, schema, or migration-directory selector:
+3. Provision or verify the security-audit infrastructure with
+   `SECURITY_AUDIT_PROVISIONING_SPEC` and externally supplied SCRAM passwords.
+4. Choose exactly one tenant path:
+
+   - For a fresh target or an existing current target, provision or verify with
+     `TENANT_PROVISIONING_SPEC` and externally supplied SCRAM passwords. Before
+     either service is migrated, call
+     `verify_provisioned_system_identifier_separation` with both administrator
+     routes.
+   - For an existing exact accepted provisioning-v1 target, do **not** call the
+     current-v2 provisioning verifier first. Leave the target unchanged and set
+     `OFARM_TENANT_IDENTITY_RESOLVER_PASSWORD`. The tenant runner first verifies
+     the exact v1 infrastructure and one-row migration prefix under its locks,
+     then atomically creates the execute-only resolver login and separate
+     `NOLOGIN`/`BYPASSRLS` `SECURITY DEFINER` owner before applying migration
+     0002. Any partial, extra, or merely similar v1 target is refused.
+
+5. Run the tenant migration. The command accepts no service, database, schema,
+   or migration-directory selector:
 
    ```bash
    export OFARM_TENANT_PROVISIONING_PG_ADMIN_DSN='...'
    export OFARM_TENANT_MIGRATOR_DSN='...'
-   # Required only when upgrading the exact accepted provisioning-v1 target:
-   export OFARM_TENANT_IDENTITY_RESOLVER_PASSWORD='...'
+   # Set only for the accepted-v1 path described above:
+   # export OFARM_TENANT_IDENTITY_RESOLVER_PASSWORD='...'
    python -m deployment.postgresql.run_tenant_migrations \
      --release-identity '<printable-release-id>' \
      --execution-id '<canonical-non-nil-uuid>'
+   ```
 
+   Fresh or already transitioned version-2 targets do not require the
+   resolver-password environment variable.
+6. Run the security-audit migration as a separate release step:
+
+   ```bash
    export OFARM_SECURITY_AUDIT_PG_ADMIN_DSN='...'
    export OFARM_SECURITY_AUDIT_MIGRATOR_DSN='...'
    python -m deployment.postgresql.run_security_audit_migrations \
      --release-identity '<printable-release-id>' \
      --execution-id '<canonical-non-nil-uuid>'
    ```
-
-   The tenant runner recognizes only the exact accepted version-1
-   infrastructure and one-row migration prefix. For that target it atomically
-   creates the execute-only resolver login and its separate `NOLOGIN`
-   `SECURITY DEFINER` owner before applying migration 0002. Fresh or already
-   transitioned version-2 targets do not require the resolver-password
-   environment variable.
 
 7. Observe each migrated lane independently:
 
@@ -81,10 +87,13 @@ Use the exact checked-in release in this order:
      structural route.
 
    Neither call opens, loads, or makes a policy decision for the other lane.
-8. Where deployment evidence needs a fresh pair check, call
+8. For both tenant paths, call
    `verify_postgresql_service_separation` with both structural routes. Its only
    claim is that the fixed tenant and audit routes expose different PostgreSQL
-   system identifiers.
+   system identifiers on the pinned PostgreSQL build. That observation does
+   not prove origin, clone history, continuity, promotion authority, recovery
+   lineage, current disks, WAL routes, pools, credentials, network routes, or
+   backup targets.
 
 Issue #173 owns composing the tenant structural report with its application,
 UnitOfWork, repository, and pool policy. Issue #192 independently owns the audit
@@ -168,12 +177,15 @@ definition change, or widened grant refuses.
 
 The tenant service provisions a separate `ofarm_identity_resolver` LOGIN for
 the production authentication boundary. It is `NOINHERIT`, has no memberships
-or mutation privileges, and uses a separate connection pool. Its `BYPASSRLS`
-attribute is required only to compare the pre-binding principal result with the
-pinned Party tuple. It may execute only the fixed principal-resolution
-function and read the minimum immutable lifecycle, binding, registry, Party,
-and digest inputs that function uses. Application, worker, administrator role
-switch, and binder credentials cannot call or assume this resolver identity.
+or mutation privileges, is `NOBYPASSRLS`, and uses a separate connection pool.
+It receives `EXECUTE` only on the fixed principal-resolution and dependency
+health functions, with no direct relation, column, type, or digest-helper
+privileges. A separate `ofarm_principal_resolver_owner` role is `NOLOGIN`,
+`NOINHERIT`, and `BYPASSRLS`; it owns those fixed-search-path `SECURITY
+DEFINER` functions and holds only their minimum immutable lifecycle, binding,
+registry, Party-column, type, and helper privileges. No LOGIN role can inherit
+or assume that owner. Application, worker, administrator role-switch, and
+binder credentials cannot call or assume the resolver identity.
 
 ## Tenant schema
 

@@ -113,6 +113,17 @@ class MigrationOutcomeUnknown(MigrationError):
         )
 
 
+class MigrationInfrastructureTransitionOutcomeUnknown(MigrationError):
+    """The tenant v1-to-v2 infrastructure commit may have succeeded."""
+
+    def __init__(self, execution_id: UUID):
+        self.execution_id = execution_id
+        super().__init__(
+            "tenant v1-to-v2 infrastructure transition outcome is unknown; "
+            f"reconcile target before retrying execution {execution_id}"
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class MigrationRunReport:
     """Exact observed outcome of one release-runner invocation."""
@@ -1550,6 +1561,7 @@ def _observe_or_transition_infrastructure(
     migrator_dsn: str,
     spec: ProvisioningSpec,
     migration_set: MigrationSet,
+    execution_id: UUID,
     transition_login_passwords: Mapping[str, str] | None,
 ) -> ProvisioningInfrastructureReport:
     try:
@@ -1579,6 +1591,14 @@ def _observe_or_transition_infrastructure(
                 admin_dsn,
                 login_passwords=transition_login_passwords,
             )
+        except (psycopg.OperationalError, psycopg.InterfaceError) as exc:
+            raise MigrationInfrastructureTransitionOutcomeUnknown(
+                execution_id
+            ) from exc
+        except psycopg.Error as exc:
+            raise MigrationTargetError(
+                "tenant v1-to-v2 infrastructure transition was rejected"
+            ) from exc
         except ProvisioningError as exc:
             raise MigrationTargetError(str(exc)) from exc
         return _observe_infrastructure(admin_dsn, spec)
@@ -1649,6 +1669,7 @@ def _migrate_service(
         migrator_dsn=migrator_dsn,
         spec=spec,
         migration_set=migration_set,
+        execution_id=execution_id,
         transition_login_passwords=transition_login_passwords,
     )
     try:

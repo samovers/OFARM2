@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from contextlib import AbstractContextManager
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -22,6 +23,7 @@ from kernel.principal_binding import (
     PrincipalBindingAct,
     PrincipalBindingAuthority,
     PrincipalBindingControlError,
+    PrincipalBindingControlOutcomeUnknown,
     PrincipalBindingControlPlane,
 )
 
@@ -48,14 +50,17 @@ class _Result:
 
 
 class _Connection(AbstractContextManager):
-    def __init__(self, handler):
+    def __init__(self, handler, *, exit_error: BaseException | None = None):
         self.handler = handler
+        self.exit_error = exit_error
         self.statements: list[tuple[str, object]] = []
 
     def __enter__(self):
         return self
 
     def __exit__(self, *args):
+        if self.exit_error is not None:
+            raise self.exit_error
         return False
 
     def execute(self, query, params=None):
@@ -219,6 +224,113 @@ def test_control_plane_activates_only_through_hardened_functions():
     assert not any(
         word in sql for word in ("insert into", "update ", "delete from")
     )
+
+
+def test_control_plane_preserves_generated_act_id_when_commit_is_unknown():
+    now = datetime.now(UTC)
+    candidate = BindingVersionCandidate(
+        binding_version_id=uuid4(),
+        tenant_id=uuid4(),
+        tenant_registration_digest=DIGEST_A,
+        party_ref=PARTY,
+        party_record_kind="ofarm.party.v0.1",
+        party_record_id=PARTY,
+        party_schema_digest=DIGEST_B,
+        party_payload_digest=DIGEST_C,
+        party_state="ACTIVE",
+        valid_from=now - timedelta(minutes=1),
+        valid_until=now + timedelta(days=1),
+    )
+
+    def handler(query, _params):
+        if "compute_principal_binding_version_digest" in query:
+            return _Result(one=(DIGEST_D,))
+        if "compute_principal_lifecycle_act_digest" in query:
+            return _Result(one=("sha256:" + "66" * 32,))
+        if "transition_principal_binding" in query:
+            return _Result(one=(None,))
+        raise AssertionError(query)
+
+    controller = PrincipalBindingControlPlane(
+        _Factory(
+            _Connection(
+                handler,
+                exit_error=ConnectionError("lost commit acknowledgement"),
+            )
+        )
+    )
+    with pytest.raises(PrincipalBindingControlOutcomeUnknown) as raised:
+        controller.transition(
+            BindingTransitionRequest(
+                act_kind=PrincipalBindingAct.ACTIVATE,
+                issuer=ISSUER,
+                subject=SUBJECT,
+                expected_head=None,
+                effective_at=now,
+                decided_at=now,
+                accountable_control_ref="control:identity-admin",
+                reason="initial-activation",
+                candidate=candidate,
+            )
+        )
+
+    assert type(raised.value.act_id) is UUID
+    assert raised.value.act_id.int != 0
+    assert str(raised.value.act_id) in str(raised.value)
+
+
+@pytest.mark.parametrize("naive_bound", ("valid_from", "valid_until"))
+def test_control_plane_rejects_naive_candidate_validity_without_database_access(
+    naive_bound: str,
+) -> None:
+    now = datetime.now(UTC)
+    candidate = BindingVersionCandidate(
+        binding_version_id=uuid4(),
+        tenant_id=uuid4(),
+        tenant_registration_digest=DIGEST_A,
+        party_ref=PARTY,
+        party_record_kind="ofarm.party.v0.1",
+        party_record_id=PARTY,
+        party_schema_digest=DIGEST_B,
+        party_payload_digest=DIGEST_C,
+        party_state="ACTIVE",
+        valid_from=now - timedelta(minutes=1),
+        valid_until=now + timedelta(days=1),
+    )
+    candidate = replace(
+        candidate,
+        **{
+            naive_bound: (
+                candidate.valid_from if naive_bound == "valid_from"
+                else candidate.valid_until
+            ).replace(tzinfo=None)
+        },
+    )
+    controller = PrincipalBindingControlPlane(
+        _Factory(
+            _Connection(
+                lambda *_: pytest.fail("database must not be called")
+            )
+        )
+    )
+
+    with pytest.raises(
+        PrincipalBindingControlError,
+        match="principal binding transition refused",
+    ):
+        controller.transition(
+            BindingTransitionRequest(
+                act_kind=PrincipalBindingAct.ACTIVATE,
+                issuer=ISSUER,
+                subject=SUBJECT,
+                expected_head=None,
+                effective_at=now,
+                decided_at=now,
+                accountable_control_ref="control:identity-admin",
+                reason="initial-activation",
+                candidate=candidate,
+            )
+        )
 
 
 def test_control_plane_requires_exact_head_and_predecessor_for_supersession():

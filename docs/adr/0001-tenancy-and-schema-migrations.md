@@ -720,15 +720,18 @@ cannot exercise its bypass as a general tenant-data read path.
 
 Production principal resolution instead uses the separately credentialed
 `ofarm_identity_resolver` LOGIN. It is `NOINHERIT`, has no memberships or
-mutation privileges, and has a connection limit of eight for a separate
-pre-binding pool. `BYPASSRLS` is limited to the minimum pre-binding comparison
-of one resolved principal with its pinned Party tuple. The credential may call
-only `resolve_principal_binding_authority(text,text,text)` and directly read
-only the immutable lifecycle, binding, registry, Party, and digest inputs that
-fixed SECURITY INVOKER function needs. The function accepts no table, column,
-or predicate selector, contains no dynamic SQL, and never trusts
+mutation privileges, is `NOBYPASSRLS`, and has a connection limit of eight for
+a separate pre-binding pool. The credential receives `EXECUTE` only on
+`resolve_principal_binding_authority(text,text,text)` and its fixed dependency
+health function; it has no direct relation, column, type, or digest-helper
+privilege. A separate `ofarm_principal_resolver_owner` role is `NOLOGIN`,
+`NOINHERIT`, and `BYPASSRLS`. It owns those fixed-search-path `SECURITY
+DEFINER` functions and receives only the immutable lifecycle, binding,
+registry, pinned Party-column, type, and helper privileges they require. No
+LOGIN role can inherit or assume it. The resolver function accepts no table,
+column, or predicate selector, contains no dynamic SQL, and never trusts
 `principal_binding_current`. Application, worker, administrator role-switch,
-and binder credentials cannot call or assume this resolver identity.
+and binder credentials cannot call or assume the resolver identity.
 
 Backend-incarnation observation is isolated from that binder authority.
 `ofarm_backend_observer` is a NOLOGIN, INHERIT, NOBYPASSRLS role whose sole
@@ -1050,10 +1053,14 @@ The role model is:
   versions, lifecycle acts, or projection, no tenant-truth read role, and no
   application membership;
 - ofarm_identity_resolver: separately credentialed LOGIN with NOINHERIT,
-  BYPASSRLS, a connection limit of eight, no membership or role-assumption
-  path, no mutation privileges, and only the fixed principal-resolution
-  function plus the minimum immutable lifecycle, binding, registry, Party, and
-  digest reads required before a TenantBinding exists;
+  NOBYPASSRLS, a connection limit of eight, no membership or role-assumption
+  path, no mutation or direct-read privileges, and EXECUTE only on the fixed
+  principal-resolution and dependency-health functions;
+- ofarm_principal_resolver_owner: NOSUPERUSER, NOCREATEDB, NOCREATEROLE,
+  NOREPLICATION, NOLOGIN, NOINHERIT, and BYPASSRLS, with no membership or
+  role-assumption path. It owns only the two fixed-search-path SECURITY DEFINER
+  resolver functions and receives only their exact immutable lifecycle,
+  binding, registry, Party-column, type, and digest-helper privileges;
 - ofarm_capability_key_controller:
   an exact `NOSUPERUSER`, `NOCREATEDB`, `NOCREATEROLE`, `NOREPLICATION`,
   `NOBYPASSRLS`, `NOLOGIN`, `NOINHERIT` capability with EXECUTE only on closed
