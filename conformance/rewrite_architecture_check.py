@@ -19,6 +19,11 @@ PRODUCTION_BUDGETS = {
     "kernel/principal.py": 170,
     "kernel/principal_resolver.py": 110,
     "kernel/principal_control.py": 350,
+    "kernel/signing_receipt.py": 250,
+    "kernel/signing_authority.py": 250,
+    "kernel/google_kms_signer.py": 120,
+    "kernel/tenant_capability_issuer.py": 180,
+    "kernel/key_control.py": 350,
 }
 GROUP_BUDGETS = {
     "profile runtime": (
@@ -44,11 +49,23 @@ GROUP_BUDGETS = {
             "kernel/principal_control.py",
         ),
     ),
+    "capability signing": (
+        1_000,
+        (
+            "kernel/signing_receipt.py",
+            "kernel/signing_authority.py",
+            "kernel/google_kms_signer.py",
+            "kernel/tenant_capability_issuer.py",
+            "kernel/key_control.py",
+        ),
+    ),
 }
 TEST_GLOBS = (
     "kernel/tests/*profile_runtime*.py",
     "kernel/tests/*oidc*.py",
     "kernel/tests/*principal*.py",
+    "kernel/tests/*signing*.py",
+    "kernel/tests/*key_control*.py",
 )
 PROHIBITED_NAMES = {"for_test", "production_eligible"}
 
