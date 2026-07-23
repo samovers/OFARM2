@@ -502,6 +502,13 @@ class ReplayWriter:
             prior,
             stored,
         )
+        matching_route_refusal = (
+            replay_precondition_problems is not None
+            and replay_profile_route_gate is not None
+            and replay_profile_route_gate.get("outcome")
+            == "PROFILE_ROUTE_REFUSE"
+            and execution_binding_problem is None
+        )
         event_ref = stored["semanticEventRef"]
 
         replay_request = {
@@ -539,7 +546,7 @@ class ReplayWriter:
                 "duplicating truth")]
             ctx.log("INGRESS_NORMALIZATION", "CONFLICTING_REPLAY_BLOCKED",
                     reason_code="IDEMPOTENCY_REPLAY_CONFLICT")
-        elif replay_precondition_problems:
+        elif replay_precondition_problems and not matching_route_refusal:
             disposition, outcome = "CONFLICTING_REPLAY_BLOCKED", "DENY"
             problems = list(replay_precondition_problems)
             reason_code = problems[0].get("reasonCode", "PACK_CONFLICT")
@@ -649,6 +656,8 @@ def _replay_execution_binding_problem(
         or trace_row["runtime_bundle_digest"] != prior["runtime_bundle_digest"]
     )
     prior_route_backed = False
+    prior_route_outcome = None
+    prior_route_rationale = None
     prior_fingerprint = None
     if not invalid_origin:
         trace = trace_row["payload"]
@@ -666,6 +675,9 @@ def _replay_execution_binding_problem(
                 }
             ]
             prior_route_backed = bool(route_entries)
+            if len(route_entries) == 1:
+                prior_route_outcome = route_entries[0].get("outcome")
+                prior_route_rationale = route_entries[0].get("rationale")
             pass_entries = [
                 entry for entry in route_entries
                 if entry.get("outcome") == "PROFILE_ROUTE_PASS"
@@ -681,24 +693,45 @@ def _replay_execution_binding_problem(
                 if isinstance(ref, str)
                 and ref.startswith("profileexecution:sha256:")
             ]
-            if prior_route_backed and (
-                len(route_entries) != 1
-                or len(pass_entries) != 1
-                or len(fingerprints) != 1
-            ):
-                invalid_origin = True
-            elif fingerprints:
-                prior_fingerprint = fingerprints[0]
+            if prior_route_backed:
+                if len(route_entries) != 1:
+                    invalid_origin = True
+                elif prior_route_outcome == "PROFILE_ROUTE_PASS":
+                    if len(pass_entries) != 1 or len(fingerprints) != 1:
+                        invalid_origin = True
+                    else:
+                        prior_fingerprint = fingerprints[0]
+                elif prior_route_outcome == "PROFILE_ROUTE_REFUSE":
+                    if (
+                        pass_entries
+                        or fingerprints
+                        or type(prior_route_rationale) is not str
+                        or not prior_route_rationale
+                    ):
+                        invalid_origin = True
+                else:
+                    invalid_origin = True
 
     current_route_backed = ctx.route_backed
     current_fingerprint = ctx.profile_execution_fingerprint
+    current_route_gate = ctx.profile_route_gate
+    route_binding_matches = not prior_route_backed
+    if prior_route_outcome == "PROFILE_ROUTE_PASS":
+        route_binding_matches = (
+            isinstance(current_route_gate, dict)
+            and current_route_gate.get("outcome") == "PROFILE_ROUTE_PASS"
+            and prior_fingerprint == current_fingerprint
+        )
+    elif prior_route_outcome == "PROFILE_ROUTE_REFUSE":
+        route_binding_matches = (
+            isinstance(current_route_gate, dict)
+            and current_route_gate.get("outcome") == "PROFILE_ROUTE_REFUSE"
+            and current_route_gate.get("rationale") == prior_route_rationale
+        )
     if (
         not invalid_origin
         and prior_route_backed == current_route_backed
-        and (
-            not prior_route_backed
-            or prior_fingerprint == current_fingerprint
-        )
+        and route_binding_matches
     ):
         return None
 

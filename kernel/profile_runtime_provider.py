@@ -13,10 +13,13 @@ from enum import Enum
 from inspect import getattr_static
 from importlib.machinery import PathFinder
 from pathlib import Path
-from types import ModuleType
+from types import FunctionType, ModuleType
 from typing import Any, Protocol
 
+from . import context as _trusted_context
+from . import materializer as _trusted_materializer_module
 from . import profile_policy as _trusted_profile_policy
+from . import validators as _trusted_validators
 from .context import (
     ContextAssembler as _TrustedContextAssembler,
     SIProductRegister as _TrustedSIProductRegister,
@@ -109,6 +112,28 @@ class _ProviderDependencyReceipt:
     capabilities: tuple[tuple[str, Any], ...]
 
 
+@dataclass(frozen=True)
+class _RuntimeBehaviorBindingReceipt:
+    """Exact class/module/global binding used by authenticated behavior."""
+
+    binding_path: str
+    owner: Any
+    attribute: str
+    dependency: Any
+    owner_is_globals: bool = False
+
+
+@dataclass(frozen=True)
+class _RuntimeFunctionReceipt:
+    """Mutable Python-function internals retained as executable provenance."""
+
+    function_path: str
+    function: FunctionType
+    code: Any
+    defaults: Any
+    kwdefaults: Any
+
+
 def _dependency_spec(
     dependency_path: tuple[str, ...],
     dependency: Any,
@@ -129,15 +154,15 @@ def _dependency_spec(
 
 
 # These exact identities are captured when the trusted composition module is
-# imported, before any provider source is executed. The sealed SI provider may
-# import them, but it cannot redefine which live constructors or methods count
-# as authenticated dependencies.
+# imported, before any provider source is executed. The sealed SI provider
+# receives these objects directly in its isolated namespace; it performs no
+# live imports and cannot redefine which constructors or methods are trusted.
 _SI_PROVIDER_DEPENDENCY_SPECS = (
-    _dependency_spec(("profile_policy",), _trusted_profile_policy),
     _dependency_spec(
-        ("profile_policy", "DescriptorPolicyProvider"),
+        ("DescriptorPolicyProvider",),
         _TrustedDescriptorPolicyProvider,
         (
+            "__new__",
             "__init__",
             "from_runtime_bundle",
             "validation_policy",
@@ -147,15 +172,17 @@ _SI_PROVIDER_DEPENDENCY_SPECS = (
     _dependency_spec(
         ("ContextAssembler",),
         _TrustedContextAssembler,
-        ("__init__", "assemble"),
+        ("__new__", "__init__", "assemble"),
     ),
     _dependency_spec(
         ("SIProductRegister",),
         _TrustedSIProductRegister,
         (
+            "__new__",
             "__init__",
             "load_from_store",
             "register_artifact",
+            "identities_by_decision",
             "lookup_by_decision",
         ),
     ),
@@ -163,6 +190,7 @@ _SI_PROVIDER_DEPENDENCY_SPECS = (
         ("SIReferenceBindings",),
         _TrustedSIReferenceBindings,
         (
+            "__new__",
             "__init__",
             "from_runtime_descriptor",
             "_from_descriptor",
@@ -171,17 +199,17 @@ _SI_PROVIDER_DEPENDENCY_SPECS = (
     _dependency_spec(
         ("Materializer",),
         _TrustedMaterializer,
-        ("__init__", "invalidate_for_sources", "recompute"),
+        ("__new__", "__init__", "invalidate_for_sources", "recompute"),
     ),
     _dependency_spec(
         ("RegistryReverificationValidator",),
         _TrustedRegistryReverificationValidator,
-        ("__init__", "run"),
+        ("__new__", "__init__", "run"),
     ),
     _dependency_spec(
         ("ProfileRuntimeServices",),
         ProfileRuntimeServices,
-        ("__init__",),
+        ("__new__", "__init__"),
     ),
     _dependency_spec(
         ("ProfileRuntimeDescriptor",),
@@ -189,12 +217,211 @@ _SI_PROVIDER_DEPENDENCY_SPECS = (
     ),
     _dependency_spec(("ProfileRuntimeError",), ProfileRuntimeError),
     _dependency_spec(("RuntimeBundleError",), RuntimeBundleError),
-    _dependency_spec(("RuntimeComponentRole",), RuntimeComponentRole),
+    _dependency_spec(
+        ("PROVIDER_SOURCE_COMPONENT_ROLE",),
+        RuntimeComponentRole.ADAPTER_SOURCE,
+    ),
+    _dependency_spec(
+        ("PROFILE_POLICY_COMPONENT_ROLE",),
+        RuntimeComponentRole.PROFILE_POLICY,
+    ),
     _dependency_spec(
         ("OPERATION_FLOOR_CHECKS",),
         _TRUSTED_OPERATION_FLOOR_CHECKS,
     ),
 )
+
+
+_SI_TRUSTED_SERVICE_TYPES = {
+    "policy_provider": _TrustedDescriptorPolicyProvider,
+    "context_assembler": _TrustedContextAssembler,
+    "materializer": _TrustedMaterializer,
+    "reference_bindings": _TrustedSIReferenceBindings,
+    "product_lookup": _TrustedSIProductRegister,
+    "registry_reverification": _TrustedRegistryReverificationValidator,
+    "materializer_context": _TrustedContextAssembler,
+}
+_SI_TRUSTED_IMPLEMENTATION_MODULES = (
+    _trusted_context,
+    _trusted_materializer_module,
+    _trusted_profile_policy,
+    _trusted_validators,
+)
+
+
+def _descriptor_functions(value: Any) -> tuple[FunctionType, ...]:
+    if type(value) is FunctionType:
+        return (value,)
+    if type(value) in {classmethod, staticmethod}:
+        function = value.__func__
+        return (function,) if type(function) is FunctionType else ()
+    if type(value) is property:
+        return tuple(
+            function
+            for function in (value.fget, value.fset, value.fdel)
+            if type(function) is FunctionType
+        )
+    return ()
+
+
+def _build_runtime_behavior_specs() -> tuple[
+    _RuntimeBehaviorBindingReceipt | _RuntimeFunctionReceipt,
+    ...,
+]:
+    """Close over mutable Python behavior reachable from SI service roots."""
+    receipts: list[
+        _RuntimeBehaviorBindingReceipt | _RuntimeFunctionReceipt
+    ] = []
+    seen_bindings: set[tuple[int, str, bool]] = set()
+    seen_functions: set[int] = set()
+    pending_functions: list[tuple[str, FunctionType]] = []
+
+    def add_binding(
+        binding_path: str,
+        owner: Any,
+        attribute: str,
+        dependency: Any,
+        *,
+        owner_is_globals: bool = False,
+    ) -> None:
+        key = (id(owner), attribute, owner_is_globals)
+        if key in seen_bindings:
+            return
+        seen_bindings.add(key)
+        receipts.append(_RuntimeBehaviorBindingReceipt(
+            binding_path=binding_path,
+            owner=owner,
+            attribute=attribute,
+            dependency=dependency,
+            owner_is_globals=owner_is_globals,
+        ))
+
+    def add_function(function_path: str, function: FunctionType) -> None:
+        if id(function) in seen_functions:
+            return
+        seen_functions.add(id(function))
+        receipts.append(_RuntimeFunctionReceipt(
+            function_path=function_path,
+            function=function,
+            code=function.__code__,
+            defaults=function.__defaults__,
+            kwdefaults=function.__kwdefaults__,
+        ))
+        pending_functions.append((function_path, function))
+
+    for trusted_module in _SI_TRUSTED_IMPLEMENTATION_MODULES:
+        add_binding(
+            trusted_module.__name__,
+            sys.modules,
+            trusted_module.__name__,
+            trusted_module,
+            owner_is_globals=True,
+        )
+
+    trusted_types = tuple(dict.fromkeys((
+        *_SI_TRUSTED_SERVICE_TYPES.values(),
+        ProfileRuntimeServices,
+    )))
+    for trusted_type in trusted_types:
+        type_path = f"{trusted_type.__module__}.{trusted_type.__qualname__}"
+        defining_module = sys.modules[trusted_type.__module__]
+        add_binding(
+            type_path,
+            defining_module,
+            trusted_type.__name__,
+            trusted_type,
+        )
+        for attribute in ("__new__", "__init__"):
+            dependency = getattr_static(
+                trusted_type,
+                attribute,
+                _MISSING_CAPABILITY,
+            )
+            add_binding(
+                f"{type_path}.{attribute}",
+                trusted_type,
+                attribute,
+                dependency,
+            )
+            for function in _descriptor_functions(dependency):
+                add_function(f"{type_path}.{attribute}", function)
+        for attribute, dependency in sorted(trusted_type.__dict__.items()):
+            functions = _descriptor_functions(dependency)
+            if not functions:
+                continue
+            add_binding(
+                f"{type_path}.{attribute}",
+                trusted_type,
+                attribute,
+                dependency,
+            )
+            for function in functions:
+                add_function(f"{type_path}.{attribute}", function)
+
+    while pending_functions:
+        function_path, function = pending_functions.pop()
+        names = set(function.__code__.co_names)
+        namespace = function.__globals__
+        for name in sorted(names):
+            dependency = namespace.get(name, _MISSING_CAPABILITY)
+            dependency_module = getattr(dependency, "__module__", "")
+            if (
+                dependency is not _MISSING_CAPABILITY
+                and callable(dependency)
+                and isinstance(dependency_module, str)
+                and dependency_module.startswith("kernel.")
+            ):
+                add_binding(
+                    f"{function_path}.__globals__.{name}",
+                    namespace,
+                    name,
+                    dependency,
+                    owner_is_globals=True,
+                )
+                if type(dependency) is FunctionType:
+                    add_function(
+                        f"{dependency.__module__}.{dependency.__qualname__}",
+                        dependency,
+                    )
+            if (
+                type(dependency) is ModuleType
+                and dependency.__name__.startswith("kernel.")
+            ):
+                for module_attribute in sorted(names):
+                    module_dependency = getattr_static(
+                        dependency,
+                        module_attribute,
+                        _MISSING_CAPABILITY,
+                    )
+                    module_dependency_name = getattr(
+                        module_dependency,
+                        "__module__",
+                        "",
+                    )
+                    if (
+                        module_dependency is _MISSING_CAPABILITY
+                        or not callable(module_dependency)
+                        or not isinstance(module_dependency_name, str)
+                        or not module_dependency_name.startswith("kernel.")
+                    ):
+                        continue
+                    add_binding(
+                        f"{dependency.__name__}.{module_attribute}",
+                        dependency,
+                        module_attribute,
+                        module_dependency,
+                    )
+                    if type(module_dependency) is FunctionType:
+                        add_function(
+                            f"{module_dependency.__module__}."
+                            f"{module_dependency.__qualname__}",
+                            module_dependency,
+                        )
+
+    return tuple(receipts)
+
+
+_SI_RUNTIME_BEHAVIOR_SPECS = _build_runtime_behavior_specs()
 
 
 @dataclass(frozen=True)
@@ -205,6 +432,10 @@ class _ProfileRuntimeProviderCacheEntry:
     source_digest: str
     descriptor: ProfileRuntimeDescriptor
     provider_dependencies: tuple[_ProviderDependencyReceipt, ...]
+    runtime_behavior: tuple[
+        _RuntimeBehaviorBindingReceipt | _RuntimeFunctionReceipt,
+        ...,
+    ]
     service_capabilities: tuple["_ServiceCapabilityReceipt", ...]
     service_state_digest: str
 
@@ -374,6 +605,9 @@ class ProfileRuntimeProviderRegistry:
             provider,
             registration,
         )
+        runtime_behavior = _capture_runtime_behavior_dependencies(
+            registration,
+        )
         services = provider.build_services(store, descriptor)
         self._validate_service_bundle_identity(provider, services, descriptor)
         self._validate_services(provider, services, descriptor)
@@ -388,6 +622,7 @@ class ProfileRuntimeProviderRegistry:
             source_digest=source_component.content_digest,
             descriptor=descriptor,
             provider_dependencies=provider_dependencies,
+            runtime_behavior=runtime_behavior,
             service_capabilities=service_capabilities,
             service_state_digest=service_state_digest,
         )
@@ -405,6 +640,10 @@ class ProfileRuntimeProviderRegistry:
             not _same_provider_dependencies(
                 retained_entry.provider_dependencies,
                 cache_entry.provider_dependencies,
+            )
+            or not _same_runtime_behavior_dependencies(
+                retained_entry.runtime_behavior,
+                cache_entry.runtime_behavior,
             )
             or not _same_service_capabilities(
                 retained_entry.service_capabilities,
@@ -494,6 +733,8 @@ class ProfileRuntimeProviderRegistry:
         descriptor: ProfileRuntimeDescriptor,
     ) -> None:
         cls._validate_service_bundle_identity(provider, services, descriptor)
+        if provider.package_name == "profile_si_ffs":
+            cls._validate_si_service_types(services)
         for service_name, capabilities in _REQUIRED_SERVICE_CAPABILITIES.items():
             service = _service_attribute(services, "service bundle", service_name)
             if service is None:
@@ -555,6 +796,7 @@ class ProfileRuntimeProviderRegistry:
             or type(descriptor) is not ProfileRuntimeDescriptor
             or cached_entry.descriptor != descriptor
             or type(cached_entry.provider_dependencies) is not tuple
+            or type(cached_entry.runtime_behavior) is not tuple
             or type(cached_entry.service_capabilities) is not tuple
             or type(cached_entry.service_state_digest) is not str
             or not cached_entry.service_state_digest.startswith("sha256:")
@@ -565,6 +807,10 @@ class ProfileRuntimeProviderRegistry:
             )
         _validate_provider_dependency_receipts(
             cached_entry.provider_dependencies,
+            registration,
+        )
+        _validate_runtime_behavior_dependency_receipts(
+            cached_entry.runtime_behavior,
             registration,
         )
         seen_service_names = set()
@@ -594,7 +840,7 @@ class ProfileRuntimeProviderRegistry:
                     for capability in service_receipt.capabilities
                     if type(capability) is tuple and len(capability) == 2
                 )
-                != ("__init__", *expected_capabilities)
+                != ("__new__", "__init__", *expected_capabilities)
             ):
                 raise ProfileRuntimeError(
                     "profile runtime provider cache receipt has incomplete "
@@ -680,6 +926,7 @@ class ProfileRuntimeProviderRegistry:
         registration: ProfileRuntimeProviderRegistration,
         source_component: RuntimeComponent,
     ) -> ProfileRuntimeProvider:
+        _capture_runtime_behavior_dependencies(registration)
         sealed_module = ModuleType("_ofarm_sealed_profile_runtime_provider")
         sealed_module_name = (
             f"{registration.module_name}.__ofarm_sealed_"
@@ -688,6 +935,9 @@ class ProfileRuntimeProviderRegistry:
         sealed_module.__name__ = sealed_module_name
         sealed_module.__file__ = str(registration.source_path)
         sealed_module.__package__ = registration.module_name.rpartition(".")[0]
+        sealed_module.__dict__.update(
+            _provider_execution_namespace(registration)
+        )
         if sealed_module_name in sys.modules:
             raise ProfileRuntimeError(
                 "sealed profile runtime provider module identity collision"
@@ -796,12 +1046,43 @@ class ProfileRuntimeProviderRegistry:
             )
 
     @staticmethod
+    def _validate_si_service_types(
+        services: ProfileRuntimeServices,
+    ) -> None:
+        exact_services = {
+            "policy_provider": services.policy_provider,
+            "context_assembler": services.context_assembler,
+            "materializer": services.materializer,
+            "reference_bindings": services.reference_bindings,
+            "product_lookup": services.product_lookup,
+            "registry_reverification": services.registry_reverification,
+        }
+        for service_name, service in exact_services.items():
+            expected_type = _SI_TRUSTED_SERVICE_TYPES[service_name]
+            if type(service) is not expected_type:
+                raise ProfileRuntimeError(
+                    "SI profile runtime provider service "
+                    f"{service_name!r} must use the exact trusted "
+                    f"{expected_type.__name__} type"
+                )
+        materializer_context = _service_attribute(
+            services.materializer,
+            "materializer",
+            "context",
+        )
+        expected_context_type = _SI_TRUSTED_SERVICE_TYPES[
+            "materializer_context"
+        ]
+        if type(materializer_context) is not expected_context_type:
+            raise ProfileRuntimeError(
+                "SI profile runtime provider service 'materializer_context' "
+                f"must use the exact trusted {expected_context_type.__name__} "
+                "type"
+            )
+
+    @staticmethod
     def _validate_si_contract(services: ProfileRuntimeServices) -> None:
         reference_bindings = services.reference_bindings
-        if reference_bindings is None:
-            raise ProfileRuntimeError(
-                "SI profile runtime provider omitted required reference_bindings"
-            )
         regsr_snapshot_prefix = _service_attribute(
             reference_bindings,
             "reference_bindings",
@@ -829,7 +1110,7 @@ class ProfileRuntimeProviderRegistry:
                 "match the descriptor REGSR reference family"
             )
         product_lookup = services.product_lookup
-        if product_lookup is None or not callable(
+        if not callable(
             _service_attribute(
                 product_lookup,
                 "product_lookup",
@@ -841,7 +1122,7 @@ class ProfileRuntimeProviderRegistry:
                 "callable capability 'lookup_by_decision'"
             )
         registry_reverification = services.registry_reverification
-        if registry_reverification is None or not callable(
+        if not callable(
             _service_attribute(
                 registry_reverification,
                 "registry_reverification",
@@ -923,6 +1204,150 @@ def _provider_dependency_specs(
             "profile runtime provider has no authenticated dependency table"
         )
     return _SI_PROVIDER_DEPENDENCY_SPECS
+
+
+def _provider_execution_namespace(
+    registration: ProfileRuntimeProviderRegistration,
+) -> dict[str, Any]:
+    _provider_dependency_specs(registration)
+    return {
+        "DescriptorPolicyProvider": _TrustedDescriptorPolicyProvider,
+        "ContextAssembler": _TrustedContextAssembler,
+        "SIProductRegister": _TrustedSIProductRegister,
+        "SIReferenceBindings": _TrustedSIReferenceBindings,
+        "Materializer": _TrustedMaterializer,
+        "RegistryReverificationValidator": (
+            _TrustedRegistryReverificationValidator
+        ),
+        "ProfileRuntimeServices": ProfileRuntimeServices,
+        "ProfileRuntimeDescriptor": ProfileRuntimeDescriptor,
+        "ProfileRuntimeError": ProfileRuntimeError,
+        "RuntimeBundleError": RuntimeBundleError,
+        "PROVIDER_SOURCE_COMPONENT_ROLE": RuntimeComponentRole.ADAPTER_SOURCE,
+        "PROFILE_POLICY_COMPONENT_ROLE": RuntimeComponentRole.PROFILE_POLICY,
+        "OPERATION_FLOOR_CHECKS": _TRUSTED_OPERATION_FLOOR_CHECKS,
+    }
+
+
+def _runtime_behavior_specs(
+    registration: ProfileRuntimeProviderRegistration,
+) -> tuple[
+    _RuntimeBehaviorBindingReceipt | _RuntimeFunctionReceipt,
+    ...,
+]:
+    _provider_dependency_specs(registration)
+    return _SI_RUNTIME_BEHAVIOR_SPECS
+
+
+def _current_behavior_binding(
+    receipt: _RuntimeBehaviorBindingReceipt,
+) -> Any:
+    if receipt.owner_is_globals:
+        if type(receipt.owner) is not dict:
+            return _MISSING_CAPABILITY
+        return receipt.owner.get(receipt.attribute, _MISSING_CAPABILITY)
+    return getattr_static(
+        receipt.owner,
+        receipt.attribute,
+        _MISSING_CAPABILITY,
+    )
+
+
+def _capture_runtime_behavior_dependencies(
+    registration: ProfileRuntimeProviderRegistration,
+) -> tuple[
+    _RuntimeBehaviorBindingReceipt | _RuntimeFunctionReceipt,
+    ...,
+]:
+    specs = _runtime_behavior_specs(registration)
+    _validate_runtime_behavior_dependency_receipts(specs, registration)
+    return specs
+
+
+def _validate_runtime_behavior_dependency_receipts(
+    receipts: tuple[
+        _RuntimeBehaviorBindingReceipt | _RuntimeFunctionReceipt,
+        ...,
+    ],
+    registration: ProfileRuntimeProviderRegistration,
+) -> None:
+    specs = _runtime_behavior_specs(registration)
+    if len(receipts) != len(specs):
+        raise ProfileRuntimeError(
+            "profile runtime provider cache receipt has incomplete runtime "
+            "behavior provenance"
+        )
+    for receipt, spec in zip(receipts, specs):
+        if type(receipt) is not type(spec):
+            raise ProfileRuntimeError(
+                "profile runtime provider cache receipt has malformed runtime "
+                "behavior provenance"
+            )
+        if type(spec) is _RuntimeBehaviorBindingReceipt:
+            if (
+                receipt.binding_path != spec.binding_path
+                or receipt.owner is not spec.owner
+                or receipt.attribute != spec.attribute
+                or receipt.dependency is not spec.dependency
+                or receipt.owner_is_globals is not spec.owner_is_globals
+                or _current_behavior_binding(spec) is not spec.dependency
+            ):
+                raise ProfileRuntimeError(
+                    "profile runtime provider runtime behavior dependency "
+                    f"{spec.binding_path} changed"
+                )
+            continue
+        if (
+            receipt.function_path != spec.function_path
+            or receipt.function is not spec.function
+            or receipt.code is not spec.code
+            or receipt.defaults is not spec.defaults
+            or receipt.kwdefaults is not spec.kwdefaults
+            or spec.function.__code__ is not spec.code
+            or spec.function.__defaults__ is not spec.defaults
+            or spec.function.__kwdefaults__ is not spec.kwdefaults
+        ):
+            raise ProfileRuntimeError(
+                "profile runtime provider runtime behavior function "
+                f"{spec.function_path} changed"
+            )
+
+
+def _same_runtime_behavior_dependencies(
+    left: tuple[
+        _RuntimeBehaviorBindingReceipt | _RuntimeFunctionReceipt,
+        ...,
+    ],
+    right: tuple[
+        _RuntimeBehaviorBindingReceipt | _RuntimeFunctionReceipt,
+        ...,
+    ],
+) -> bool:
+    if len(left) != len(right):
+        return False
+    for left_receipt, right_receipt in zip(left, right):
+        if type(left_receipt) is not type(right_receipt):
+            return False
+        if type(left_receipt) is _RuntimeBehaviorBindingReceipt:
+            if (
+                left_receipt.binding_path != right_receipt.binding_path
+                or left_receipt.owner is not right_receipt.owner
+                or left_receipt.attribute != right_receipt.attribute
+                or left_receipt.dependency is not right_receipt.dependency
+                or left_receipt.owner_is_globals
+                is not right_receipt.owner_is_globals
+            ):
+                return False
+            continue
+        if (
+            left_receipt.function_path != right_receipt.function_path
+            or left_receipt.function is not right_receipt.function
+            or left_receipt.code is not right_receipt.code
+            or left_receipt.defaults is not right_receipt.defaults
+            or left_receipt.kwdefaults is not right_receipt.kwdefaults
+        ):
+            return False
+    return True
 
 
 def _resolve_dependency_path(
@@ -1113,7 +1538,7 @@ def _capture_service_capabilities(
     for service_name, service, capabilities in _service_capability_targets(services):
         service_type = type(service)
         captured = []
-        for capability_name in ("__init__", *capabilities):
+        for capability_name in ("__new__", "__init__", *capabilities):
             capability = getattr_static(
                 service_type,
                 capability_name,

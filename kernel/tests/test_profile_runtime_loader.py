@@ -7,7 +7,7 @@ before any descriptor mistake can become hidden runtime truth.
 from __future__ import annotations
 
 import copy
-import importlib
+import dataclasses
 import json
 import os
 import shutil
@@ -2066,11 +2066,6 @@ def test_preloaded_provider_attribute_replacement_cannot_execute(
         config.ACTIVE_PROFILE_PACKAGE_NAME,
         config.ACTIVE_PROFILE,
     )
-    imported_module = importlib.import_module(registration.module_name)
-    original_provider = getattr(
-        imported_module,
-        registration.provider_attribute,
-    )
 
     class HostileProvider:
         package_name = registration.package_name
@@ -2085,17 +2080,19 @@ def test_preloaded_provider_attribute_replacement_cannot_execute(
 
         def build_services(self, provider_store, descriptor):
             self.executed = True
-            services = original_provider.build_services(
-                provider_store,
-                descriptor,
-            )
-            return replace(services, provider=self)
+            raise AssertionError("preloaded provider replacement executed")
 
     hostile_provider = HostileProvider()
-    monkeypatch.setattr(
-        imported_module,
+    preloaded_module = type(sys)(registration.module_name)
+    setattr(
+        preloaded_module,
         registration.provider_attribute,
         hostile_provider,
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        registration.module_name,
+        preloaded_module,
     )
 
     with _fresh_started_store(runtime_bundle) as store:
@@ -2131,11 +2128,114 @@ def test_replaced_provider_dependency_constructor_cannot_execute(
     with _fresh_started_store(runtime_bundle) as store:
         with pytest.raises(
             ProfileRuntimeError,
-            match="unauthenticated dependency 'ContextAssembler'",
+            match="runtime behavior dependency .*ContextAssembler",
         ):
             GatePipeline(store)
 
     assert replacement_executed is False
+
+
+def test_provider_source_cannot_execute_live_dataclass_decorator(
+        monkeypatch):
+    runtime_bundle = RuntimeBundleBuilder.from_manifest(
+        config.PACKAGE_ROOT
+    ).build()
+    trusted_dataclass = dataclasses.dataclass
+    replacement_executed = False
+
+    def hostile_dataclass(*args, **kwargs):
+        nonlocal replacement_executed
+        replacement_executed = True
+        return trusted_dataclass(*args, **kwargs)
+
+    monkeypatch.setattr(dataclasses, "dataclass", hostile_dataclass)
+
+    with _fresh_started_store(runtime_bundle) as store:
+        pipeline = GatePipeline(store)
+
+    assert replacement_executed is False
+    assert pipeline.runtime_services.provider.package_name == "profile_si_ffs"
+
+
+def test_runtime_behavior_rejects_policy_loader_replacement_before_composition(
+        monkeypatch):
+    runtime_bundle = RuntimeBundleBuilder.from_manifest(
+        config.PACKAGE_ROOT
+    ).build()
+    trusted_loader = profile_policy.load_evidence_review_policy_from_bytes
+    replacement_executed = False
+
+    def hostile_loader(*args, **kwargs):
+        nonlocal replacement_executed
+        replacement_executed = True
+        return trusted_loader(*args, **kwargs)
+
+    monkeypatch.setattr(
+        profile_policy,
+        "load_evidence_review_policy_from_bytes",
+        hostile_loader,
+    )
+
+    with _fresh_started_store(runtime_bundle) as store:
+        with pytest.raises(
+            ProfileRuntimeError,
+            match="runtime behavior dependency .*"
+                  "load_evidence_review_policy_from_bytes",
+        ):
+            GatePipeline(store)
+
+    assert replacement_executed is False
+
+
+def test_runtime_behavior_rejects_hostile_service_subclass_before_construction():
+    script = "\n".join([
+        "from kernel import config, context",
+        (
+            "from kernel.profile_runtime import ProfileRuntimeError"
+        ),
+        (
+            "from kernel.profile_runtime_provider import "
+            "_capture_runtime_behavior_dependencies, "
+            "default_profile_runtime_provider_registry"
+        ),
+        "executed = [False]",
+        "class HostileContextAssembler(context.ContextAssembler):",
+        "    pass",
+        "def hostile_new(_cls, *args, **kwargs):",
+        "    executed[0] = True",
+        "    return object.__new__(HostileContextAssembler)",
+        (
+            "setattr(context.ContextAssembler, '__new__', "
+            "staticmethod(hostile_new))"
+        ),
+        "registry = default_profile_runtime_provider_registry()",
+        (
+            "registration = registry.registration_for("
+            "config.ACTIVE_PROFILE_PACKAGE_NAME, config.ACTIVE_PROFILE)"
+        ),
+        "try:",
+        "    _capture_runtime_behavior_dependencies(registration)",
+        "except ProfileRuntimeError as exc:",
+        (
+            "    if 'ContextAssembler.__new__' not in str(exc): "
+            "raise"
+        ),
+        "else:",
+        "    raise AssertionError('hostile __new__ was accepted')",
+        "if executed[0]:",
+        "    raise AssertionError('hostile __new__ executed')",
+    ])
+
+    proc = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=config.PACKAGE_ROOT,
+        env=os.environ.copy(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert proc.returncode == 0, proc.stderr
 
 
 def test_provider_cache_is_bound_to_complete_registration_identity(tmp_path):
@@ -2201,6 +2301,7 @@ def test_provider_cache_hit_revalidates_complete_registration():
                 source_digest=source_component.content_digest,
                 descriptor=config.ACTIVE_PROFILE,
                 provider_dependencies=(),
+                runtime_behavior=(),
                 service_capabilities=(),
                 service_state_digest="sha256:hostile",
             ),
@@ -2310,6 +2411,7 @@ def test_provider_cache_refuses_incomplete_capability_receipt():
                 source_digest=source_component.content_digest,
                 descriptor=config.ACTIVE_PROFILE,
                 provider_dependencies=valid_receipt.provider_dependencies,
+                runtime_behavior=valid_receipt.runtime_behavior,
                 service_capabilities=(),
                 service_state_digest=valid_receipt.service_state_digest,
             ),
@@ -2396,6 +2498,69 @@ def test_long_lived_pipeline_refuses_instance_capability_override_before_use(
         pipeline.commit(demo.spray_submission(
             f"rs1-overridden-active-service:{_uid()}",
             erp_id=f"erp:rs1.overridden.active.service.{_uid()}",
+            confirm=True,
+        ))
+
+    assert replacement_executed is False
+    assert len(store.find_by_kind("ofarm.commitingressrequest.v0.1")) == before
+
+
+def test_long_lived_pipeline_refuses_product_lookup_helper_replacement(
+        fresh_env, monkeypatch):
+    store, pipeline, _ = fresh_env
+    replacement_executed = False
+
+    def hostile_identities(_self, _snapshot_id, _decision_number):
+        nonlocal replacement_executed
+        replacement_executed = True
+        raise AssertionError("replaced product lookup helper executed")
+
+    monkeypatch.setattr(
+        context.SIProductRegister,
+        "identities_by_decision",
+        hostile_identities,
+    )
+    before = len(store.find_by_kind("ofarm.commitingressrequest.v0.1"))
+
+    with pytest.raises(
+        ProfileRuntimeError,
+        match="(dependency capability|runtime behavior dependency).*"
+              "identities_by_decision",
+    ):
+        pipeline.commit(demo.spray_submission(
+            f"rs1-replaced-product-helper:{_uid()}",
+            erp_id=f"erp:rs1.replaced.product.helper.{_uid()}",
+            confirm=True,
+        ))
+
+    assert replacement_executed is False
+    assert len(store.find_by_kind("ofarm.commitingressrequest.v0.1")) == before
+
+
+def test_long_lived_pipeline_refuses_registry_snapshot_helper_replacement(
+        fresh_env, monkeypatch):
+    store, pipeline, _ = fresh_env
+    replacement_executed = False
+
+    def hostile_current_snapshot(*_args, **_kwargs):
+        nonlocal replacement_executed
+        replacement_executed = True
+        raise AssertionError("replaced registry snapshot helper executed")
+
+    monkeypatch.setattr(
+        validators,
+        "current_reference_snapshot",
+        hostile_current_snapshot,
+    )
+    before = len(store.find_by_kind("ofarm.commitingressrequest.v0.1"))
+
+    with pytest.raises(
+        ProfileRuntimeError,
+        match="runtime behavior dependency .*current_reference_snapshot",
+    ):
+        pipeline.commit(demo.spray_submission(
+            f"rs1-replaced-registry-helper:{_uid()}",
+            erp_id=f"erp:rs1.replaced.registry.helper.{_uid()}",
             confirm=True,
         ))
 
@@ -2656,56 +2821,30 @@ def test_runtime_service_construction_refuses_incomplete_consumed_contract(
         complete = original_build_services(self, provider_store, descriptor)
         policy = complete.policy_provider
         if contract_defect == "missing_policy_ref":
-            policy = SimpleNamespace(
-                recognized_rule_refs=policy.recognized_rule_refs,
-                validation_policy=policy.validation_policy,
-                evidence_policy=policy.evidence_policy,
-            )
+            del policy.policy_ref
         elif contract_defect == "wrong_policy_ref":
-            policy = SimpleNamespace(
-                policy_ref="policy:wrong.runtime.v0_1",
-                recognized_rule_refs=policy.recognized_rule_refs,
-                validation_policy=policy.validation_policy,
-                evidence_policy=policy.evidence_policy,
-            )
+            policy.policy_ref = "policy:wrong.runtime.v0_1"
         elif contract_defect == "invalid_recognized_rule_refs":
-            policy = SimpleNamespace(
-                policy_ref=policy.policy_ref,
-                recognized_rule_refs=[policy.policy_ref],
-                validation_policy=policy.validation_policy,
-                evidence_policy=policy.evidence_policy,
-            )
+            policy.recognized_rule_refs = [policy.policy_ref]
         elif contract_defect == "incomplete_recognized_rule_refs":
-            policy = SimpleNamespace(
-                policy_ref=policy.policy_ref,
-                recognized_rule_refs=frozenset({policy.policy_ref}),
-                validation_policy=policy.validation_policy,
-                evidence_policy=policy.evidence_policy,
-            )
+            policy.recognized_rule_refs = frozenset({policy.policy_ref})
         product_lookup = complete.product_lookup
         reference_bindings = complete.reference_bindings
         registry_reverification = complete.registry_reverification
         if contract_defect == "missing_lookup_by_decision":
-            product_lookup = SimpleNamespace()
+            product_lookup.lookup_by_decision = None
         elif contract_defect == "missing_registry_reverification":
             registry_reverification = None
         elif contract_defect == "wrong_registry_product_lookup":
-            registry_reverification = SimpleNamespace(
-                run=registry_reverification.run,
-                snapshot_prefix=registry_reverification.snapshot_prefix,
-                product_lookup=SimpleNamespace(),
-            )
+            registry_reverification.product_lookup = SimpleNamespace()
         elif contract_defect == "wrong_registry_snapshot_prefix":
             wrong_prefix = "referencesnapshot:si.wrong.ffs-reg"
-            reference_bindings = replace(
+            object.__setattr__(
                 reference_bindings,
-                regsr_snapshot_prefix=wrong_prefix,
+                "regsr_snapshot_prefix",
+                wrong_prefix,
             )
-            registry_reverification = SimpleNamespace(
-                run=registry_reverification.run,
-                snapshot_prefix=wrong_prefix,
-                product_lookup=product_lookup,
-            )
+            registry_reverification.snapshot_prefix = wrong_prefix
         return replace(
             complete,
             policy_provider=policy,
@@ -2966,6 +3105,34 @@ def test_route_backed_replay_reuses_only_same_execution_fingerprint(
         "INGRESS_NORMALIZATION",
         "PACK_PROFILE_APPLICABILITY",
     ]
+
+
+def test_profile_execution_fingerprint_is_independent_of_local_source_path(
+        fresh_env):
+    store, _, _ = fresh_env
+    pipeline = _route_pipeline(store)
+    submission = demo.spray_submission(
+        f"rs1-route-path-independent:{_uid()}",
+        erp_id=f"erp:rs1.route.path.independent.{_uid()}",
+        confirm=True,
+    )
+
+    with store.tx() as cur:
+        ctx = pipeline._new_context(cur, submission)
+        ingress = IngressNormalizer().run(ctx)
+        assert not hasattr(ingress, "result")
+        assert pipeline._resolve_profile_route(ctx) is None
+
+    moved_registration = replace(
+        pipeline.runtime_provider_registration,
+        source_path=Path("/srv/ofarm/kernel/profiles/si_ffs/runtime_provider.py"),
+    )
+    moved_fingerprint = pipeline._profile_execution_fingerprint(
+        ctx.profile_route_resolution,
+        moved_registration,
+    )
+
+    assert moved_fingerprint == ctx.profile_execution_fingerprint
 
 
 def test_route_backed_result_cannot_replay_through_default_pipeline(
@@ -3326,6 +3493,35 @@ def test_route_backed_gate_pipeline_refuses_operation_outside_route_interval(
 
     assert "no active profile route" in result["problems"][0]["detail"]
     _assert_profile_route_refusal(store, result)
+
+
+def test_route_backed_gate_pipeline_reuses_matching_route_refusal(
+        fresh_env):
+    store, _, _ = fresh_env
+    pipeline = _route_pipeline(store, routes=[_route_interval("05")])
+    submission = demo.spray_submission(
+        f"mp7-route-outside-replay:{_uid()}",
+        erp_id=f"erp:mp7.route.outside.replay.{_uid()}",
+        confirm=True,
+    )
+
+    first = pipeline.commit(submission)
+    replay = pipeline.commit(submission)
+
+    assert first["decisionOutcome"] == "RETAIN_DRAFT"
+    assert first["problems"][0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+    assert replay["decisionOutcome"] == "REPLAY_REUSED_RESULT"
+    assert replay["idempotencyDisposition"] == "REPLAY_MATCH_REUSED_RESULT"
+    assert [problem["reasonCode"] for problem in replay["problems"]] == [
+        "IDEMPOTENCY_REPLAY_REUSED",
+        "PROFILE_NOT_ACTIVE",
+    ]
+    assert replay["problems"][1] == first["problems"][0]
+    trace = _trace_payload(store, replay)
+    assert [entry["outcome"] for entry in trace["gateSequence"]][:2] == [
+        "REPLAY_MATCH_REUSED_RESULT",
+        "PROFILE_ROUTE_REFUSE",
+    ]
 
 
 def test_route_backed_gate_pipeline_refuses_missing_event_time_no_captured_fallback(
@@ -3727,7 +3923,7 @@ def test_acceptance_sufficiency_uses_descriptor_policy_ref_without_policy_body(
     monkeypatch.setattr(profile_policy, "load_evidence_review_policy_for_descriptor",
                         fail_descriptor_policy)
 
-    accepted = pipeline.commit({
+    submission = {
         "commitClass": "GOVERNANCE_DECISION",
         "actingPartyRef": demo.FARMER,
         "farmRef": demo.FARM,
@@ -3735,7 +3931,12 @@ def test_acceptance_sufficiency_uses_descriptor_policy_ref_without_policy_body(
         "decisionTime": "2026-06-10T10:00:00Z",
         "reviewTargetAssertionRef": queued["emittedAssertionRecordRefs"][0],
         "reviewRationale": "self-review of a routine operation claim meeting the floor",
-    })
+    }
+    # This is a downstream acceptance-path unit test. It bypasses commit()'s
+    # deliberate helper-integrity check so the synthetic replacement can prove
+    # that the acceptance stage itself never calls the full policy loader.
+    with store.serialized_tx() as cur:
+        accepted = pipeline._commit_in_tx(cur, submission)
 
     assert accepted["decisionOutcome"] == "PROMOTE_ACCEPTED"
     case = _case_payload(store, accepted)

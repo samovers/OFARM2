@@ -284,10 +284,7 @@ class GatePipeline:
                 RuntimeComponentRole.PROFILE_DESCRIPTOR,
                 resolution.descriptor.profile_ref,
             )
-            normalized_source_path = str(
-                registration.source_path.resolve(strict=True)
-            )
-        except (AttributeError, OSError, RuntimeBundleError) as exc:
+        except (AttributeError, RuntimeBundleError) as exc:
             raise ProfileRuntimeError(
                 "profile execution identity is not retained by the RuntimeBundle"
             ) from exc
@@ -325,7 +322,6 @@ class GatePipeline:
             "sourceComponentDigest": provider_component.content_digest,
             "moduleName": registration.module_name,
             "providerAttribute": registration.provider_attribute,
-            "normalizedSourcePath": normalized_source_path,
         }
         return "profileexecution:" + sha256_of({
             "route": route_identity,
