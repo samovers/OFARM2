@@ -25,7 +25,7 @@ an exact baseline match.
 ```bash
 # 1. environment (Python 3.11+, PostgreSQL 15+)
 python3 -m venv .venv
-.venv/bin/pip install fastapi uvicorn pytest "psycopg[binary]" jsonschema rfc3339-validator httpx "PyJWT[crypto]"
+.venv/bin/pip install fastapi uvicorn pytest "psycopg[binary]" jsonschema rfc3339-validator httpx "PyJWT[crypto]" google-cloud-kms
 
 # 2. a scratch cluster on a unix socket (no TCP listener)
 PGBIN=$(dirname "$(which initdb)")        # e.g. /opt/homebrew/opt/postgresql@17/bin
