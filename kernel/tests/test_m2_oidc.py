@@ -153,20 +153,18 @@ def test_g4_invalid_tokens_denied(store):
 
 
 def test_g4_rs256_is_not_implemented_no_fallback(store):
-    # production RS256/JWKS is a deliberate NotImplemented path — a token is NOT
-    # silently verified by HS256 even if it would pass HS256
+    # The local fixture verifier cannot become a production verifier by changing
+    # an algorithm string, and never falls back to HS256.
     cfg = _cfg(algorithm="RS256")
     client = _client(store, cfg)
     sub = demo.spray_submission("g4-rs256-1", erp_id="erp:g4.rs", actor_ref=demo.FARMER)
     r = client.post("/commit", json={"submission": sub}, headers=_bearer(_token(demo.FARMER)))
     assert r.status_code == 401
-    # and the verifier itself raises a clear NotImplemented-style error
     try:
         cfg.verify(_token(demo.FARMER))
         assert False, "RS256 verify must raise"
     except OidcError as exc:
-        assert "RS256" in str(exc) and "not implemented" in str(exc).lower()
-        assert "fallback" in str(exc).lower()
+        assert exc.internal_detail == "test algorithm differs"
 
 
 # ---------------------------------------------------------------------------
@@ -242,7 +240,7 @@ def test_g4_verifier_rejects_tampered_payload(store):
         _cfg().verify(f"{header_b64}.{forged_payload}.{sig}")
         assert False, "tampered payload must fail signature verification"
     except OidcError as exc:
-        assert "signature" in str(exc).lower()
+        assert "signature" in exc.internal_detail.lower()
 
 
 # ---------------------------------------------------------------------------

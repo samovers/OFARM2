@@ -13,9 +13,11 @@ The prior hosted-runner image build number is recorded for provenance, but
 GitHub does not expose a selector for that hosted image build; the workflow
 pins the available `ubuntu-24.04` runner label and records the actual image
 version in every new envelope.
-`requirements-review-baseline.lock` contains the 30 direct and transitive
-Linux wheel versions observed in green run 28176813292, with the exact selected
-wheel hashes. It does not upgrade that resolution.
+`requirements-review-baseline.lock` contains 34 direct and transitive Linux
+wheel versions with exact selected wheel hashes. Thirty were observed in green
+run 28176813292. #172 adds the maintained PyJWT verifier plus cryptography,
+cffi, and pycparser at explicitly selected, hash-verified versions; the next
+clean CI run will be their first baseline observation.
 
 The old run did not record its pip patch version. `pip==26.1` is therefore a
 new, explicit first-rerun pin in `requirements-review-pip.lock`, not a claim
