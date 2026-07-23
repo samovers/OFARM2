@@ -3026,3 +3026,27 @@ def test_issue_159_composition_rejects_missing_required_service(fresh_env):
             default_registration.package_name,
             config.ACTIVE_PROFILE,
         )
+
+
+def test_issue_159_policy_without_complete_runtime_services_refuses_d9(
+        fresh_env, monkeypatch):
+    store, pipeline, _ = fresh_env
+    submission = demo.spray_submission(
+        f"issue159-incomplete-runtime:{_uid()}",
+        erp_id=f"erp:issue159.incomplete.runtime.{_uid()}",
+        confirm=True,
+    )
+
+    with store.tx() as cur:
+        ctx = pipeline._new_context(cur, submission)
+        assert ctx.policy_provider is not None
+        ctx.runtime_services = None
+        monkeypatch.setattr(validators, "COMMON_SEQUENCE", ())
+
+        refusal = validators.ValidationGate().run(ctx)
+
+    assert refusal.outcome == "FAIL_PROFILE_POLICY"
+    assert refusal.final_outcome == "RETAIN_DRAFT"
+    assert refusal.problems[0]["reasonCode"] == "PROFILE_NOT_ACTIVE"
+    assert "runtime provider services are incomplete" in \
+        refusal.problems[0]["detail"]

@@ -150,6 +150,11 @@ class GatePipeline:
             if self.active_profile == self.runtime_services.descriptor
             else None
         )
+        # Profile-local legacy engineering tests deliberately clear
+        # active_profile after construction to exercise their pre-descriptor
+        # policy-injection path. Governed construction cannot enter this state;
+        # retain its already-composed non-policy services only for that trusted
+        # compatibility harness.
         compatibility_services = (
             self.runtime_services
             if self.active_profile is None

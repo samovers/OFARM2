@@ -1085,10 +1085,14 @@ class RegistryReverificationValidator:
         product_binding = _verified_product_binding(ctx)
         if not (product_binding and product_binding["bindingState"] == "VERIFIED"):
             return None
-        snapshot_prefix = self.snapshot_prefix or (
-            ctx.si_reference_bindings.regsr_snapshot_prefix
-            if ctx.si_reference_bindings is not None
-            else REGSR_SNAPSHOT_PREFIX
+        snapshot_prefix = (
+            self.snapshot_prefix
+            if self.snapshot_prefix is not None
+            else (
+                ctx.si_reference_bindings.regsr_snapshot_prefix
+                if ctx.si_reference_bindings is not None
+                else REGSR_SNAPSHOT_PREFIX
+            )
         )
         current = current_reference_snapshot(ctx.store, snapshot_prefix)
         current_id = current["referenceSnapshotId"] if current else None
@@ -1096,7 +1100,11 @@ class RegistryReverificationValidator:
             or (product_binding.get("referenceSnapshotRefs") or [None])[0]
         if not (current_id and captured_against and captured_against != current_id):
             return None
-        product_lookup = self.product_lookup or ctx.products
+        product_lookup = (
+            self.product_lookup
+            if self.product_lookup is not None
+            else ctx.products
+        )
         event_time = ctx.event_time or ctx.captured_at
         decision_number = product_binding["bindingValue"].get("registrationRef")
         confirmed = (
@@ -1249,17 +1257,18 @@ class ValidationGate:
                 )
             operation_sequence = OPERATION_SEQUENCE
         else:
+            if ctx.runtime_services is None:
+                return _validation_policy_refusal(
+                    ctx,
+                    "descriptor-backed runtime provider services are incomplete",
+                )
             try:
                 validation_policy = ctx.policy_provider.validation_policy()
             except profile_policy.ProfilePolicyError as exc:
                 return _validation_policy_refusal(ctx, exc)
-            registry_reverification = (
-                ctx.runtime_services.registry_reverification
-                if ctx.runtime_services is not None else None
-            )
             operation_sequence = _operation_sequence_for_validation_policy(
                 validation_policy,
-                registry_reverification,
+                ctx.runtime_services.registry_reverification,
             )
 
         for validator in operation_sequence:

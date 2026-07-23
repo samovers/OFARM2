@@ -98,6 +98,7 @@ class Store:
         self._tenant_ref = tenant_ref
         self._runtime_bundle = runtime_bundle
         self._active_descriptor = active_descriptor
+        self._active_profile_package_name = None
         self._selected_reference_snapshot_refs = frozenset(
             component.logical_ref
             for component in runtime_bundle.components
@@ -105,6 +106,7 @@ class Store:
         ) if runtime_bundle is not None else frozenset()
         if runtime_bundle is not None:
             self._verify_active_descriptor_binding()
+            self._active_profile_package_name = active_descriptor.profile_root.name
         self._conn: psycopg.Connection | None = None
         self._startup_complete = False
 
@@ -147,8 +149,12 @@ class Store:
 
     @property
     def active_profile_package_name(self) -> str:
-        self.active_descriptor
-        return config.ACTIVE_PROFILE_PACKAGE_NAME
+        if self._active_profile_package_name is None:
+            raise RuntimeBundleBindingError(
+                "this Store is intentionally unbound and has no active "
+                "profile package"
+            )
+        return self._active_profile_package_name
 
     def _verify_active_descriptor_binding(self) -> None:
         descriptor = self._active_descriptor

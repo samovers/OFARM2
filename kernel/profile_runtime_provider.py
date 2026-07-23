@@ -234,6 +234,7 @@ class ProfileRuntimeProviderRegistry:
 _SI_PROVIDER_SOURCE_DIGEST = (
     "sha256:a982e3793ee11593c9a542c0cf6094e99738204c13c0dfe992fac82be61f5f1b"
 )
+# Recompute after intentional source edits: shasum -a 256 kernel/profiles/si_ffs/runtime_provider.py
 
 _SI_SERVICE_REQUIREMENTS = (
     RuntimeServiceRequirement(
@@ -250,25 +251,20 @@ _SI_SERVICE_REQUIREMENTS = (
     RuntimeServiceRequirement("registry_reverification", ("run",)),
 )
 
-from .profiles.si_ffs.runtime_provider import (  # noqa: E402
-    build_si_runtime_services as _build_si_runtime_services,
-)
-
-_DEFAULT_PROFILE_RUNTIME_PROVIDER_REGISTRY = ProfileRuntimeProviderRegistry((
-    ProfileRuntimeProviderRegistration(
-        package_name="profile_si_ffs",
-        profile_ref="profile:si.ffs.recordkeeping.v0_1",
-        factory=_build_si_runtime_services,
-        source_component_role=RuntimeComponentRole.ADAPTER_SOURCE,
-        source_component_logical_ref=(
-            "python:profile-si-ffs-v0_1:runtime-provider"
-        ),
-        source_component_digest=_SI_PROVIDER_SOURCE_DIGEST,
-        required_services=_SI_SERVICE_REQUIREMENTS,
-    ),
-))
-
-
 def default_profile_runtime_provider_registry() -> ProfileRuntimeProviderRegistry:
     """Return the immutable code-owned single-provider registry."""
-    return _DEFAULT_PROFILE_RUNTIME_PROVIDER_REGISTRY
+    from .profiles.si_ffs.runtime_provider import build_si_runtime_services
+
+    return ProfileRuntimeProviderRegistry((
+        ProfileRuntimeProviderRegistration(
+            package_name="profile_si_ffs",
+            profile_ref="profile:si.ffs.recordkeeping.v0_1",
+            factory=build_si_runtime_services,
+            source_component_role=RuntimeComponentRole.ADAPTER_SOURCE,
+            source_component_logical_ref=(
+                "python:profile-si-ffs-v0_1:runtime-provider"
+            ),
+            source_component_digest=_SI_PROVIDER_SOURCE_DIGEST,
+            required_services=_SI_SERVICE_REQUIREMENTS,
+        ),
+    ))

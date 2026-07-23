@@ -5876,6 +5876,11 @@
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
     },
     {
+      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_issue_159_policy_without_complete_runtime_services_refuses_d9",
+      "sourceModule": "kernel.tests.test_profile_runtime_loader",
+      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+    },
+    {
       "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_issue_159_provider_source_component_is_required",
       "sourceModule": "kernel.tests.test_profile_runtime_loader",
       "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
@@ -7521,8 +7526,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "c04a41cc65d19de4487b587291b821ce194b45bbda3dc0f8822fd3354d504043",
-  "entryCount": 1504,
+  "entriesSha256": "7e59ef384144f2f9756c60490b96bc39385c7ab1730a6fcfe6752f7aa06ae7ea",
+  "entryCount": 1505,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
