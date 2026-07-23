@@ -15,7 +15,7 @@ from psycopg import sql
 
 from kernel import config, context, demo
 from kernel.adapters import ImportRunner, ParseResult
-from kernel.api import create_app
+from kernel.api import create_test_app
 from kernel.authority import AuthorityEvaluator
 from kernel.contracts import sha256_of
 from kernel.gates import GatePipeline
@@ -570,7 +570,7 @@ def test_profile_bootstrap_inserts_every_bundle_selected_canonical_instance():
             active_descriptor=source_store.active_descriptor,
         )
         try:
-            create_app(selected_store, oidc=None)
+            create_test_app(selected_store, oidc=None)
 
             selected_components = [
                 component for component in selected_bundle.components
@@ -610,7 +610,7 @@ def test_profile_bootstrap_refuses_extra_selected_snapshot_mismatch_atomically()
                 context.ContextNotReconstructible,
                 match="not the exact selected contract and payload",
             ):
-                create_app(refusing_store, oidc=None)
+                create_test_app(refusing_store, oidc=None)
 
             assert seed_store.conn.execute(
                 "SELECT COUNT(*) AS count FROM runtime_bundle "
@@ -686,7 +686,7 @@ def test_application_bootstrap_uses_bundle_selected_bytes_not_profile_paths():
             active_descriptor=store.active_descriptor,
         )
         try:
-            create_app(refusing_store, oidc=None)
+            create_test_app(refusing_store, oidc=None)
             row = refusing_store.get_record(changed.logical_ref)
             assert row is not None
             assert row["payload"] == changed_payload
@@ -745,7 +745,7 @@ def test_every_operational_carrier_has_the_exact_runtime_receipt(fresh_env):
                 (f"request:wrong-bundle.{_uid()}", "tenant:other", digest),
             )
 
-    with TestClient(create_app(store, oidc=None)) as client:
+    with TestClient(create_test_app(store, oidc=None)) as client:
         health = client.get("/health")
         assert health.status_code == 200
         assert health.headers["x-ofarm-runtime-bundle-digest"] == digest
@@ -1004,7 +1004,7 @@ def test_foreign_tenant_party_and_grant_do_not_bind_local_authority(fresh_env):
         assert decision.outcome == "DENY"
         assert foreign_grant not in decision.result_payload["grantBasisUsed"]
 
-        with TestClient(create_app(store, oidc=None)) as client:
+        with TestClient(create_test_app(store, oidc=None)) as client:
             response = client.get(
                 f"/records/{foreign_party}",
                 headers={"x-acting-party": foreign_party},
@@ -1569,7 +1569,7 @@ def test_product_authorisation_uses_only_bundle_selected_regsr_source_bytes():
             active_descriptor=source_store.active_descriptor,
         )
         try:
-            create_app(selected_store, oidc=None)
+            create_test_app(selected_store, oidc=None)
             evidence = next(
                 payload for payload in demo.substrate_records()
                 if payload.get("evidenceRecordId") == demo.ONBOARDING_EVIDENCE

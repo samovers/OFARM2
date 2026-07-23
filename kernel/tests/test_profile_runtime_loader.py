@@ -2624,13 +2624,13 @@ def test_api_startup_refuses_non_exact_selected_profile_instance():
         ]
 
     with _preseeded_dirty_spine_store(mutate) as store:
-        from kernel.api import create_app
+        from kernel.api import create_test_app
 
         with pytest.raises(
             context.ContextNotReconstructible,
             match="not the exact selected contract and payload",
         ):
-            create_app(store, oidc=None)
+            create_test_app(store, oidc=None)
 
 
 def test_product_register_boundary_remains_single_active_si_runtime():

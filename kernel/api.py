@@ -26,9 +26,8 @@ from .runtime_bundle import RuntimeBundleBuilder, RuntimeComponentRole
 from .store import Store
 from .views import OutputGenerator
 
-# The factory entrypoint resolves one explicit authentication mode from the
-# environment. ``oidc=`` remains a test compatibility seam: None means explicit
-# development mode and an OidcConfig means explicit test mode.
+# The production factory resolves one explicit authentication mode from the
+# environment. Authentication fixtures are accepted only by create_test_app().
 _FROM_ENV = object()
 
 
@@ -66,15 +65,49 @@ def create_app(
     store: Store | None = None,
     *,
     authentication=_FROM_ENV,
-    oidc=_FROM_ENV,
     principal_binding_resolver=None,
     deployment_image_digest=_FROM_ENV,
 ) -> FastAPI:
+    if authentication is not _FROM_ENV:
+        if type(authentication) is not auth_oidc.ProductionAuthenticationRuntime:
+            raise auth_oidc.AuthenticationStartupError(
+                "create_app accepts only the exact production authentication "
+                "runtime; use create_test_app for authentication fixtures"
+            )
+        authentication_runtime = authentication
+    else:
+        authentication_runtime = config.authentication_runtime_from_env(
+            principal_binding_resolver=principal_binding_resolver
+        )
+    return _create_app_with_runtime(
+        store,
+        authentication_runtime=authentication_runtime,
+        deployment_image_digest=deployment_image_digest,
+    )
+
+
+def create_test_app(
+    store: Store | None = None,
+    *,
+    authentication=_FROM_ENV,
+    oidc=_FROM_ENV,
+    deployment_image_digest=_FROM_ENV,
+) -> FastAPI:
+    """Build an application with explicit test-only authentication fixtures."""
+
     if authentication is not _FROM_ENV and oidc is not _FROM_ENV:
         raise auth_oidc.AuthenticationStartupError(
-            "authentication and oidc compatibility settings cannot both be supplied"
+            "authentication and oidc test settings cannot both be supplied"
         )
     if authentication is not _FROM_ENV:
+        if type(authentication) not in (
+            auth_oidc.DevelopmentAuthenticationRuntime,
+            auth_oidc.TestAuthenticationRuntime,
+            auth_oidc.ProductionAuthenticationRuntime,
+        ):
+            raise auth_oidc.AuthenticationStartupError(
+                "test authentication runtime has the wrong type"
+            )
         authentication_runtime = authentication
     elif oidc is not _FROM_ENV:
         if oidc is None:
@@ -86,13 +119,22 @@ def create_app(
                 "oidc compatibility setting accepts only exact OidcConfig or None"
             )
     else:
-        authentication_runtime = config.authentication_runtime_from_env(
-            principal_binding_resolver=principal_binding_resolver
-        )
-    if not isinstance(authentication_runtime, auth_oidc.AuthenticationRuntime):
         raise auth_oidc.AuthenticationStartupError(
-            "authentication runtime has the wrong type"
+            "create_test_app requires explicit authentication or oidc test settings"
         )
+    return _create_app_with_runtime(
+        store,
+        authentication_runtime=authentication_runtime,
+        deployment_image_digest=deployment_image_digest,
+    )
+
+
+def _create_app_with_runtime(
+    store: Store | None,
+    *,
+    authentication_runtime: auth_oidc.AuthenticationRuntime,
+    deployment_image_digest,
+) -> FastAPI:
     authentication_runtime.initialize()
 
     selected_image_digest = (

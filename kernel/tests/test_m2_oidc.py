@@ -20,7 +20,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from kernel import demo
-from kernel.api import create_app
+from kernel.api import create_app, create_test_app
 from kernel.auth_oidc import (
     AuthenticationStartupError,
     OidcConfig,
@@ -45,7 +45,9 @@ def _cfg(**over):
 
 
 def _client(store, cfg=None):
-    return TestClient(create_app(store, oidc=cfg if cfg is not None else _cfg()))
+    return TestClient(
+        create_test_app(store, oidc=cfg if cfg is not None else _cfg())
+    )
 
 
 def _token(sub, *, secret=SECRET, iss=ISSUER, aud=AUDIENCE, exp_delta=3600,
@@ -165,7 +167,7 @@ def test_g4_test_verifier_cannot_select_rs256_or_fallback(store):
     # an algorithm string, and never falls back to HS256.
     cfg = _cfg(algorithm="RS256")
     with pytest.raises(AuthenticationStartupError, match="HS256"):
-        create_app(store, oidc=cfg)
+        create_test_app(store, oidc=cfg)
     with pytest.raises(OidcError) as raised:
         cfg.verify(_token(demo.FARMER))
     assert raised.value.internal_detail == "test algorithm differs"
@@ -176,7 +178,7 @@ def test_g4_test_verifier_cannot_select_rs256_or_fallback(store):
 # ---------------------------------------------------------------------------
 
 def test_g4_shim_mode_uses_x_acting_party_when_oidc_disabled(store):
-    client = TestClient(create_app(store, oidc=None))   # forced shim
+    client = TestClient(create_test_app(store, oidc=None))   # forced shim
     sub = demo.spray_submission("g4-shim-1", erp_id="erp:g4.shim", actor_ref=demo.FARMER)
     bound = client.post("/commit", json={"submission": sub}, headers={"x-acting-party": demo.FARMER})
     assert bound.status_code == 200 and bound.json()["decisionOutcome"]
@@ -328,5 +330,5 @@ def test_g4_unrecorded_token_subject_is_not_a_principal(store):
     ok = client.get(f"/records/{rec_id}", headers=_bearer(_token(demo.FARMER)))
     assert ok.status_code != 401, "a recorded active party is a valid principal"
     # and an inactive/unknown party in shim mode is likewise not a principal
-    shim = TestClient(create_app(store, oidc=None))
+    shim = TestClient(create_test_app(store, oidc=None))
     assert shim.get(f"/records/{rec_id}", headers={"x-acting-party": "party:ghost"}).status_code == 401

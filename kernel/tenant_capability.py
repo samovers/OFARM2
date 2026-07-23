@@ -172,12 +172,50 @@ class GoogleKmsEd25519Signer:
         client: GoogleCloudKmsClientAdapter,
         public_key: GoogleKmsEd25519PublicKey,
         evidence: ProductionSigningEvidence,
+    ) -> None:
+        self._bind(
+            client=client,
+            public_key=public_key,
+            evidence=evidence,
+            now_microseconds=lambda: time.time_ns() // 1_000,
+            production_eligible=True,
+        )
+
+    @classmethod
+    def for_test(
+        cls,
+        *,
+        client: GoogleCloudKmsClientAdapter,
+        public_key: GoogleKmsEd25519PublicKey,
+        evidence: ProductionSigningEvidence,
         now_microseconds=lambda: time.time_ns() // 1_000,
+    ) -> "GoogleKmsEd25519Signer":
+        """Build a visibly non-production signer with a controllable clock."""
+
+        signer = object.__new__(cls)
+        signer._bind(
+            client=client,
+            public_key=public_key,
+            evidence=evidence,
+            now_microseconds=now_microseconds,
+            production_eligible=False,
+        )
+        return signer
+
+    def _bind(
+        self,
+        *,
+        client: GoogleCloudKmsClientAdapter,
+        public_key: GoogleKmsEd25519PublicKey,
+        evidence: ProductionSigningEvidence,
+        now_microseconds,
+        production_eligible: bool,
     ) -> None:
         self._client = client
         self._public_key_observation = public_key
         self._evidence = evidence
         self._now_microseconds = now_microseconds
+        self._production_eligible = production_eligible
         self._initialized = False
 
     @property
@@ -195,7 +233,8 @@ class GoogleKmsEd25519Signer:
     @property
     def production_eligible(self) -> bool:
         return (
-            type(self._client) is GoogleCloudKmsClientAdapter
+            self._production_eligible is True
+            and type(self._client) is GoogleCloudKmsClientAdapter
             and self._client.production_eligible
         )
 
@@ -279,7 +318,11 @@ class GoogleKmsEd25519Signer:
                 PreBindingOutcome.CAPABILITY_REFUSED,
                 internal_detail="signing input is outside the bound",
             )
-        if self._now_microseconds() >= self._evidence.valid_until_unix_microseconds:
+        before_signing = self._now_microseconds()
+        if (
+            type(before_signing) is not int
+            or before_signing >= self._evidence.valid_until_unix_microseconds
+        ):
             raise CapabilityIssuanceError(
                 PreBindingOutcome.SIGNER_UNAVAILABLE,
                 internal_detail="production signing evidence expired",
@@ -295,6 +338,15 @@ class GoogleKmsEd25519Signer:
                 PreBindingOutcome.SIGNER_UNAVAILABLE,
                 internal_detail="KMS signing call failed",
             ) from exc
+        after_signing = self._now_microseconds()
+        if (
+            type(after_signing) is not int
+            or after_signing >= self._evidence.valid_until_unix_microseconds
+        ):
+            raise CapabilityIssuanceError(
+                PreBindingOutcome.SIGNER_UNAVAILABLE,
+                internal_detail="production signing evidence expired during KMS call",
+            )
         if (
             type(response) is not GoogleKmsSigningResponse
             or response.key_version_resource != self._evidence.key_version_resource
@@ -343,6 +395,7 @@ class CapabilityBindingResolver(Protocol):
     def resolve(self, identity: VerifiedOidcIdentity) -> PrincipalBindingAuthority: ...
 
 
+@final
 class ProductionTenantCapabilityIssuer:
     """Mint one exact, short-lived capability for one fresh DB challenge."""
 
@@ -352,14 +405,13 @@ class ProductionTenantCapabilityIssuer:
         resolver: CapabilityBindingResolver,
         signer: CapabilitySigner,
         lifetime_microseconds: int = 30_000_000,
-        now_microseconds=lambda: time.time_ns() // 1_000,
     ) -> None:
         self._require_production_resolver(resolver)
         self._bind(
             resolver=resolver,
             signer=signer,
             lifetime_microseconds=lifetime_microseconds,
-            now_microseconds=now_microseconds,
+            now_microseconds=lambda: time.time_ns() // 1_000,
             test_only_dependencies_allowed=False,
         )
 

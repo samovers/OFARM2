@@ -602,9 +602,16 @@ class ProductionOidcVerifier:
     def _refresh_generation_for_miss(
         self, key_id: str, algorithm: str
     ) -> _ValidatedJwksGeneration:
-        """Refresh at most once per miss window across all unknown key IDs."""
+        """Non-blocking single-flight refresh across all unknown key IDs."""
 
-        with self._refresh_lock:
+        if not self._refresh_lock.acquire(blocking=False):
+            with self._generation_lock:
+                generation = self._generation
+                if generation is None:
+                    raise _JwksProviderStateError("JWKS generation is absent")
+                return generation
+
+        try:
             with self._generation_lock:
                 generation = self._generation
                 if generation is None:
@@ -618,14 +625,18 @@ class ProductionOidcVerifier:
                     < self.config.jwks_miss_refresh_seconds
                 ):
                     return generation
-                self._last_miss_refresh_at = now
             try:
                 refreshed = self._load_generation()
             except _JwksProviderStateError:
+                with self._generation_lock:
+                    self._last_miss_refresh_at = self._clock()
                 return generation
             with self._generation_lock:
                 self._generation = refreshed
+                self._last_miss_refresh_at = self._clock()
             return refreshed
+        finally:
+            self._refresh_lock.release()
 
     def verify_identity(self, token: str) -> VerifiedOidcIdentity:
         if not self._initialized or self._jwt is None or self._jwks_client is None:
@@ -690,26 +701,20 @@ class ProductionOidcVerifier:
         )
 
 
-@dataclass(slots=True)
 class AuthenticationRuntime:
-    """One explicit mode and only the dependencies permitted in that mode."""
-
-    mode: AuthenticationMode
-    verifier: OidcVerifier | None = None
-    principal_binding_resolver: PrincipalBindingResolver | None = None
-    _initialized: bool = field(default=False, init=False, repr=False)
-    _test_only_dependencies_allowed: bool = field(
-        default=False, init=False, repr=False
-    )
+    """Factory facade for immutable, mode-specific authentication runtimes."""
 
     @classmethod
     def development(cls) -> "AuthenticationRuntime":
-        return cls(AuthenticationMode.DEVELOPMENT)
+        return DevelopmentAuthenticationRuntime()
 
     @classmethod
     def test(cls, verifier: OidcConfig) -> "AuthenticationRuntime":
-        cls._require_test_verifier(verifier)
-        return cls(AuthenticationMode.TEST, verifier=verifier)
+        _require_test_verifier(verifier)
+        return TestAuthenticationRuntime(
+            mode=AuthenticationMode.TEST,
+            verifier=verifier,
+        )
 
     @classmethod
     def production(
@@ -717,10 +722,9 @@ class AuthenticationRuntime:
         verifier: ProductionOidcVerifier,
         principal_binding_resolver: PrincipalBindingResolver,
     ) -> "AuthenticationRuntime":
-        cls._require_production_verifier(verifier, allow_test_instance=False)
-        cls._require_production_resolver(principal_binding_resolver)
-        return cls(
-            AuthenticationMode.PRODUCTION,
+        _require_production_verifier(verifier, allow_test_instance=False)
+        _require_production_resolver(principal_binding_resolver)
+        return ProductionAuthenticationRuntime(
             verifier=verifier,
             principal_binding_resolver=principal_binding_resolver,
         )
@@ -731,76 +735,62 @@ class AuthenticationRuntime:
         verifier: ProductionOidcVerifier,
         principal_binding_resolver: PrincipalBindingResolver,
     ) -> "AuthenticationRuntime":
-        """Explicit unit-test seam; application factories never call this."""
+        """Explicit unit-test seam rejected by the production app factory."""
 
-        cls._require_production_verifier(verifier, allow_test_instance=True)
-        runtime = cls(
-            AuthenticationMode.PRODUCTION,
+        _require_production_verifier(verifier, allow_test_instance=True)
+        return TestAuthenticationRuntime(
+            mode=AuthenticationMode.PRODUCTION,
             verifier=verifier,
             principal_binding_resolver=principal_binding_resolver,
         )
-        runtime._test_only_dependencies_allowed = True
-        return runtime
 
-    @staticmethod
-    def _require_production_verifier(
-        verifier: object, *, allow_test_instance: bool
-    ) -> None:
-        if type(verifier) is not ProductionOidcVerifier:
-            raise AuthenticationStartupError(
-                "production requires the sealed ProductionOidcVerifier; "
-                "local HS256 and wrapped verifiers are forbidden"
-            )
-        if not allow_test_instance and not verifier.production_eligible:
-            raise AuthenticationStartupError(
-                "production requires an internally constructed JWKS client and "
-                "monotonic clock; injected trust inputs are test-only"
-            )
 
-    @staticmethod
-    def _require_test_verifier(verifier: object) -> None:
-        if type(verifier) is not OidcConfig:
-            raise AuthenticationStartupError(
-                "test mode requires the exact local OidcConfig verifier"
-            )
+def _require_production_verifier(
+    verifier: object, *, allow_test_instance: bool
+) -> None:
+    if type(verifier) is not ProductionOidcVerifier:
+        raise AuthenticationStartupError(
+            "production requires the sealed ProductionOidcVerifier; "
+            "local HS256 and wrapped verifiers are forbidden"
+        )
+    if not allow_test_instance and not verifier.production_eligible:
+        raise AuthenticationStartupError(
+            "production requires an internally constructed JWKS client and "
+            "monotonic clock; injected trust inputs are test-only"
+        )
 
-    @staticmethod
-    def _require_production_resolver(resolver: object) -> None:
-        from .principal_binding import PostgreSQLPrincipalBindingResolver
 
-        if type(resolver) is not PostgreSQLPrincipalBindingResolver:
-            raise AuthenticationStartupError(
-                "production requires the sealed PostgreSQL principal-binding "
-                "resolver; wrapped or mutable resolvers are forbidden"
-            )
+def _require_test_verifier(verifier: object) -> None:
+    if type(verifier) is not OidcConfig:
+        raise AuthenticationStartupError(
+            "test mode requires the exact local OidcConfig verifier"
+        )
+
+
+def _require_production_resolver(resolver: object) -> None:
+    from .principal_binding import PostgreSQLPrincipalBindingResolver
+
+    if type(resolver) is not PostgreSQLPrincipalBindingResolver:
+        raise AuthenticationStartupError(
+            "production requires the sealed PostgreSQL principal-binding "
+            "resolver; wrapped or mutable resolvers are forbidden"
+        )
+
+
+@final
+@dataclass(frozen=True, slots=True)
+class DevelopmentAuthenticationRuntime(AuthenticationRuntime):
+    """Header-only development runtime with no replaceable dependencies."""
+
+    mode: AuthenticationMode = field(
+        default=AuthenticationMode.DEVELOPMENT, init=False
+    )
+    verifier: None = field(default=None, init=False)
+    principal_binding_resolver: None = field(default=None, init=False)
+    _initialized: bool = field(default=False, init=False, repr=False, compare=False)
 
     def initialize(self) -> None:
-        if self.mode is AuthenticationMode.DEVELOPMENT:
-            if self.verifier is not None or self.principal_binding_resolver is not None:
-                raise AuthenticationStartupError(
-                    "development mode cannot contain production authentication dependencies"
-                )
-        elif self.mode is AuthenticationMode.TEST:
-            if self.verifier is None or self.principal_binding_resolver is not None:
-                raise AuthenticationStartupError("test authentication shape is invalid")
-            self._require_test_verifier(self.verifier)
-            self.verifier.initialize()
-        elif self.mode is AuthenticationMode.PRODUCTION:
-            if self.verifier is None or self.principal_binding_resolver is None:
-                raise AuthenticationStartupError(
-                    "production verifier and principal-binding resolver are required"
-                )
-            self._require_production_verifier(
-                self.verifier,
-                allow_test_instance=self._test_only_dependencies_allowed,
-            )
-            if not self._test_only_dependencies_allowed:
-                self._require_production_resolver(self.principal_binding_resolver)
-            self.verifier.initialize()
-            self.principal_binding_resolver.initialize()
-        else:
-            raise AuthenticationStartupError("authentication mode is invalid")
-        self._initialized = True
+        object.__setattr__(self, "_initialized", True)
 
     def resolve_principal(
         self,
@@ -813,16 +803,114 @@ class AuthenticationRuntime:
                 PreBindingOutcome.CONFIGURATION_REFUSED,
                 internal_detail="authentication runtime is not initialized",
             )
-        if self.mode is AuthenticationMode.DEVELOPMENT:
-            if type(development_header) is not str or not development_header:
-                raise OidcError(PreBindingOutcome.NO_CREDENTIAL)
-            return development_header, None
+        if type(development_header) is not str or not development_header:
+            raise OidcError(PreBindingOutcome.NO_CREDENTIAL)
+        return development_header, None
+
+
+@final
+@dataclass(frozen=True, slots=True)
+class TestAuthenticationRuntime(AuthenticationRuntime):
+    """Test-only runtime, including the production-binding fixture shape."""
+
+    mode: AuthenticationMode
+    verifier: OidcVerifier
+    principal_binding_resolver: PrincipalBindingResolver | None = None
+    _initialized: bool = field(default=False, init=False, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        if self.mode is AuthenticationMode.TEST:
+            _require_test_verifier(self.verifier)
+            if self.principal_binding_resolver is not None:
+                raise AuthenticationStartupError(
+                    "test authentication shape is invalid"
+                )
+        elif self.mode is AuthenticationMode.PRODUCTION:
+            _require_production_verifier(
+                self.verifier, allow_test_instance=True
+            )
+            if self.principal_binding_resolver is None:
+                raise AuthenticationStartupError(
+                    "test production-binding resolver is required"
+                )
+        else:
+            raise AuthenticationStartupError("test authentication mode is invalid")
+
+    def initialize(self) -> None:
+        self.verifier.initialize()
+        if self.principal_binding_resolver is not None:
+            self.principal_binding_resolver.initialize()
+        object.__setattr__(self, "_initialized", True)
+
+    def resolve_principal(
+        self,
+        *,
+        authorization: str | None,
+        development_header: str | None,
+    ) -> tuple[str, object | None]:
+        if not self._initialized:
+            raise OidcError(
+                PreBindingOutcome.CONFIGURATION_REFUSED,
+                internal_detail="authentication runtime is not initialized",
+            )
         token = _bearer_token(authorization)
-        assert self.verifier is not None
         identity = self.verifier.verify_identity(token)
         if self.mode is AuthenticationMode.TEST:
             return identity.subject, identity
         assert self.principal_binding_resolver is not None
+        try:
+            resolved = self.principal_binding_resolver.resolve(identity)
+        except OidcError:
+            raise
+        except Exception as exc:
+            raise OidcError(
+                PreBindingOutcome.BINDING_INTEGRITY_REFUSED,
+                internal_detail="principal binding resolver refused",
+            ) from exc
+        party_ref = getattr(resolved, "party_ref", None)
+        if type(party_ref) is not str or not party_ref:
+            raise OidcError(
+                PreBindingOutcome.BINDING_INTEGRITY_REFUSED,
+                internal_detail="resolved Party reference is invalid",
+            )
+        return party_ref, resolved
+
+
+@final
+@dataclass(frozen=True, slots=True)
+class ProductionAuthenticationRuntime(AuthenticationRuntime):
+    """Sealed production runtime with immutable verifier and resolver bindings."""
+
+    verifier: ProductionOidcVerifier
+    principal_binding_resolver: PrincipalBindingResolver
+    mode: AuthenticationMode = field(
+        default=AuthenticationMode.PRODUCTION, init=False
+    )
+    _initialized: bool = field(default=False, init=False, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        _require_production_verifier(self.verifier, allow_test_instance=False)
+        _require_production_resolver(self.principal_binding_resolver)
+
+    def initialize(self) -> None:
+        _require_production_verifier(self.verifier, allow_test_instance=False)
+        _require_production_resolver(self.principal_binding_resolver)
+        self.verifier.initialize()
+        self.principal_binding_resolver.initialize()
+        object.__setattr__(self, "_initialized", True)
+
+    def resolve_principal(
+        self,
+        *,
+        authorization: str | None,
+        development_header: str | None,
+    ) -> tuple[str, object | None]:
+        if not self._initialized:
+            raise OidcError(
+                PreBindingOutcome.CONFIGURATION_REFUSED,
+                internal_detail="authentication runtime is not initialized",
+            )
+        identity = self.verifier.verify_identity(_bearer_token(authorization))
         try:
             resolved = self.principal_binding_resolver.resolve(identity)
         except OidcError:
@@ -875,11 +963,14 @@ __all__ = [
     "AuthenticationMode",
     "AuthenticationRuntime",
     "AuthenticationStartupError",
+    "DevelopmentAuthenticationRuntime",
     "OidcConfig",
     "OidcError",
     "PreBindingOutcome",
+    "ProductionAuthenticationRuntime",
     "ProductionOidcConfig",
     "ProductionOidcVerifier",
+    "TestAuthenticationRuntime",
     "VerifiedOidcIdentity",
     "issue_dev_token",
 ]

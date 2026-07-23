@@ -338,6 +338,8 @@ def _production_signer(
     *,
     observed_at_us=None,
     valid_until_us=None,
+    client_factory=None,
+    now_microseconds=None,
 ):
     public = private.public_key().public_bytes_raw()
     resource = (
@@ -373,11 +375,18 @@ def _production_signer(
             now_us + 60_000_000 if valid_until_us is None else valid_until_us
         ),
     )
-    return GoogleKmsEd25519Signer(
-        client=_test_adapter(_KmsClient(private, resource)),
+    raw_client = (
+        _KmsClient(private, resource)
+        if client_factory is None
+        else client_factory(private, resource)
+    )
+    return GoogleKmsEd25519Signer.for_test(
+        client=_test_adapter(raw_client),
         public_key=observation,
         evidence=evidence,
-        now_microseconds=lambda: now_us,
+        now_microseconds=(
+            (lambda: now_us) if now_microseconds is None else now_microseconds
+        ),
     )
 
 
@@ -483,7 +492,7 @@ def test_kms_signer_checks_resource_crc_hsm_and_signature():
     )
     raw_client = _KmsClient(private, resource)
     client = _test_adapter(raw_client)
-    signer = GoogleKmsEd25519Signer(
+    signer = GoogleKmsEd25519Signer.for_test(
         client=client,
         public_key=observation,
         evidence=evidence,
@@ -494,6 +503,31 @@ def test_kms_signer_checks_resource_crc_hsm_and_signature():
     signature = signer.sign(data)
     private.public_key().verify(signature, data)
     assert raw_client.calls == [data]
+
+
+def test_kms_signer_rechecks_evidence_after_slow_signing_response():
+    now = [1_900_000_000_000_000]
+
+    class ExpiringKmsClient(_KmsClient):
+        def asymmetric_sign(self, *, request):
+            response = super().asymmetric_sign(request=request)
+            now[0] += 10
+            return response
+
+    signer = _production_signer(
+        Ed25519PrivateKey.generate(),
+        derive_binder_audience(uuid4()),
+        now[0],
+        valid_until_us=now[0] + 5,
+        client_factory=ExpiringKmsClient,
+        now_microseconds=lambda: now[0],
+    )
+    signer.initialize()
+
+    with pytest.raises(CapabilityIssuanceError) as raised:
+        signer.sign(b"exact-jws-signing-input")
+    assert raised.value.outcome is PreBindingOutcome.SIGNER_UNAVAILABLE
+    assert "expired during KMS call" in raised.value.internal_detail
 
 
 def test_google_client_adapter_sends_only_raw_data_and_checksum():
@@ -598,7 +632,6 @@ def test_production_issuer_rejects_a_fake_binding_resolver():
         ProductionTenantCapabilityIssuer(
             resolver=_CapabilityResolver(_authority()),
             signer=signer,
-            now_microseconds=lambda: now_us,
         )
     assert raised.value.outcome is PreBindingOutcome.CONFIGURATION_REFUSED
     assert "sealed PostgreSQL" in raised.value.internal_detail
@@ -653,7 +686,6 @@ def test_concrete_kms_signer_rejects_non_google_client():
     issuer = ProductionTenantCapabilityIssuer(
         resolver=PostgreSQLPrincipalBindingResolver(lambda: None),
         signer=prepared,
-        now_microseconds=lambda: now_us,
     )
     with pytest.raises(CapabilityIssuanceError) as issuer_error:
         issuer.initialize()
@@ -663,11 +695,24 @@ def test_concrete_kms_signer_rejects_non_google_client():
         client=_KmsClient(private, prepared._evidence.key_version_resource),
         public_key=prepared._public_key_observation,
         evidence=prepared._evidence,
-        now_microseconds=lambda: now_us,
     )
     with pytest.raises(CapabilityIssuanceError) as raised:
         unsafe.initialize()
     assert raised.value.outcome is PreBindingOutcome.SIGNER_UNAVAILABLE
+
+    with pytest.raises(TypeError, match="now_microseconds"):
+        GoogleKmsEd25519Signer(
+            client=prepared._client,
+            public_key=prepared._public_key_observation,
+            evidence=prepared._evidence,
+            now_microseconds=lambda: now_us,
+        )
+    with pytest.raises(TypeError, match="now_microseconds"):
+        ProductionTenantCapabilityIssuer(
+            resolver=PostgreSQLPrincipalBindingResolver(lambda: None),
+            signer=prepared,
+            now_microseconds=lambda: now_us,
+        )
 
 
 @pytest.mark.parametrize(

@@ -101,6 +101,11 @@
       "sourcePath": "kernel/tests/test_authentication_modes.py"
     },
     {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_production_app_rejects_test_runtime_subclasses_and_mutation",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
       "nodeid": "kernel/tests/test_authentication_modes.py::test_production_rejects_a_verifier_with_injected_trust_inputs",
       "sourceModule": "kernel.tests.test_authentication_modes",
       "sourcePath": "kernel/tests/test_authentication_modes.py"
@@ -132,6 +137,11 @@
     },
     {
       "nodeid": "kernel/tests/test_authentication_modes.py::test_same_kid_key_replacement_takes_effect_after_jwks_lifespan",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_slow_unknown_key_refresh_is_non_blocking_and_completion_bounded",
       "sourceModule": "kernel.tests.test_authentication_modes",
       "sourcePath": "kernel/tests/test_authentication_modes.py"
     },
@@ -5586,6 +5596,11 @@
       "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
     },
     {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_kms_signer_rechecks_evidence_after_slow_signing_response",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
       "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_missing_or_ambiguous_binding_fails_closed_with_safe_outcome",
       "sourceModule": "kernel.tests.test_principal_binding_runtime",
       "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
@@ -7786,8 +7801,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "44fae62888aefa461725b05903368e1145ce537a79b02853f0b63c1497c04f25",
-  "entryCount": 1557,
+  "entriesSha256": "7664a08517a509a74bca641cbb177fa30b2185298cbefe12cec4d8ac062b2bdd",
+  "entryCount": 1560,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import FrozenInstanceError, dataclass
 from threading import Event
 
 import jwt
@@ -11,7 +11,7 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 
 from kernel import config
-from kernel.api import create_app
+from kernel.api import create_app, create_test_app
 from kernel.auth_oidc import (
     AuthenticationMode,
     AuthenticationRuntime,
@@ -19,6 +19,7 @@ from kernel.auth_oidc import (
     OidcConfig,
     OidcError,
     PreBindingOutcome,
+    ProductionAuthenticationRuntime,
     ProductionOidcConfig,
     ProductionOidcVerifier,
 )
@@ -168,10 +169,15 @@ def test_production_startup_requires_initialized_jwks_and_binding_resolver(rsa_k
     with pytest.raises(AuthenticationStartupError, match="JWKS initialization failed"):
         runtime.initialize()
     with pytest.raises(AuthenticationStartupError, match="resolver"):
+        AuthenticationRuntime.production_for_test(
+            _production_verifier(rsa_keys),
+            None,
+        )
+    with pytest.raises(TypeError):
         AuthenticationRuntime(
             AuthenticationMode.PRODUCTION,
             verifier=_production_verifier(rsa_keys),
-        ).initialize()
+        )
 
 
 def test_local_hs256_verifier_is_structurally_rejected_by_production():
@@ -208,12 +214,6 @@ def test_wrapped_or_mutable_binding_resolver_is_rejected_by_production(
     verifier = ProductionOidcVerifier(_production_oidc_config())
     with pytest.raises(AuthenticationStartupError, match="sealed PostgreSQL"):
         AuthenticationRuntime.production(verifier, _Resolver())
-    with pytest.raises(AuthenticationStartupError, match="sealed PostgreSQL"):
-        AuthenticationRuntime(
-            AuthenticationMode.PRODUCTION,
-            verifier=verifier,
-            principal_binding_resolver=_Resolver(),
-        ).initialize()
     monkeypatch.setenv("OFARM_AUTH_MODE", "production")
     monkeypatch.setenv("OFARM_OIDC_ISSUER", ISSUER)
     monkeypatch.setenv("OFARM_OIDC_AUDIENCE", AUDIENCE)
@@ -238,12 +238,6 @@ def test_production_rejects_a_verifier_with_injected_trust_inputs(rsa_keys):
 
     with pytest.raises(AuthenticationStartupError, match="injected trust inputs"):
         AuthenticationRuntime.production(injected, sealed)
-    with pytest.raises(AuthenticationStartupError, match="injected trust inputs"):
-        AuthenticationRuntime(
-            AuthenticationMode.PRODUCTION,
-            verifier=injected,
-            principal_binding_resolver=sealed,
-        ).initialize()
     with pytest.raises(TypeError):
         ProductionOidcVerifier(
             _production_oidc_config(),
@@ -254,7 +248,7 @@ def test_production_rejects_a_verifier_with_injected_trust_inputs(rsa_keys):
 def test_legacy_oidc_argument_rejects_a_production_verifier(rsa_keys):
     production = _production_verifier(rsa_keys)
     with pytest.raises(AuthenticationStartupError, match="exact OidcConfig or None"):
-        create_app(oidc=production)
+        create_test_app(oidc=production)
     with pytest.raises(AuthenticationStartupError, match="exact local OidcConfig"):
         AuthenticationRuntime.test(production)
 
@@ -387,6 +381,60 @@ def test_jwks_miss_refresh_does_not_lock_current_key_verification(rsa_keys):
             release_refresh.set()
         with pytest.raises(OidcError):
             hostile_result.result(timeout=1)
+
+
+def test_slow_unknown_key_refresh_is_non_blocking_and_completion_bounded(rsa_keys):
+    private, public = rsa_keys
+    now = [1_000.0]
+    refresh_started = Event()
+    release_refresh = Event()
+
+    class SlowRefreshClient(_JwksClient):
+        def get_jwk_set(self, *, refresh: bool):
+            if self.refreshes:
+                now[0] += 2
+                refresh_started.set()
+                if not release_refresh.wait(timeout=2):
+                    raise RuntimeError("test refresh was not released")
+            return super().get_jwk_set(refresh=refresh)
+
+    client = SlowRefreshClient([_SigningKey("key-1", "RS256", public)])
+    verifier = _production_verifier(
+        rsa_keys,
+        client=client,
+        clock=lambda: now[0],
+        jwks_miss_refresh_seconds=1,
+    )
+    verifier.initialize()
+    valid = _signed_token(private)
+
+    with ThreadPoolExecutor(max_workers=24) as executor:
+        first_miss = executor.submit(
+            verifier.verify_identity,
+            _signed_token(private, key_id="attacker-key-first"),
+        )
+        assert refresh_started.wait(timeout=1)
+        concurrent_misses = [
+            executor.submit(
+                verifier.verify_identity,
+                _signed_token(private, key_id=f"attacker-key-{index}"),
+            )
+            for index in range(16)
+        ]
+        valid_result = executor.submit(verifier.verify_identity, valid)
+        assert valid_result.result(timeout=1).subject == "subject-01"
+        for result in concurrent_misses:
+            with pytest.raises(OidcError):
+                result.result(timeout=1)
+        release_refresh.set()
+        with pytest.raises(OidcError):
+            first_miss.result(timeout=1)
+
+    with pytest.raises(OidcError):
+        verifier.verify_identity(
+            _signed_token(private, key_id="attacker-key-after-completion")
+        )
+    assert client.refreshes == [True, True]
 
 
 def test_removed_used_key_expires_with_the_bounded_jwks_generation(rsa_keys):
@@ -559,6 +607,28 @@ def test_production_runtime_uses_binding_not_subject_as_party(rsa_keys):
     assert resolver.initialized
     assert party_ref == "party:bound"
     assert binding.party_ref == "party:bound"
+
+
+def test_production_app_rejects_test_runtime_subclasses_and_mutation(rsa_keys):
+    resolver = _Resolver()
+    runtime = AuthenticationRuntime.production_for_test(
+        _production_verifier(rsa_keys), resolver
+    )
+    with pytest.raises(AuthenticationStartupError, match="exact production"):
+        create_app(authentication=runtime)
+
+    class RuntimeSubclass(ProductionAuthenticationRuntime):
+        def initialize(self):
+            raise AssertionError("subclass method must not run")
+
+    with pytest.raises(AuthenticationStartupError, match="exact production"):
+        create_app(authentication=object.__new__(RuntimeSubclass))
+
+    runtime.initialize()
+    with pytest.raises(FrozenInstanceError):
+        runtime.mode = AuthenticationMode.DEVELOPMENT
+    with pytest.raises(FrozenInstanceError):
+        runtime.principal_binding_resolver = _Resolver()
 
 
 def test_safe_failure_outcome_does_not_expose_exception_detail():

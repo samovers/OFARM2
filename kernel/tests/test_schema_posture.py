@@ -9,7 +9,7 @@ import pytest
 from psycopg import sql
 
 from kernel import config
-from kernel.api import create_app
+from kernel.api import create_test_app
 from kernel.runtime_bundle import (
     Canonicalization,
     ContentPlacement,
@@ -57,7 +57,7 @@ def _assert_startup_refuses_without_mutation(store, restarted, bundle) -> None:
             SchemaPostureError,
             match="live database schema catalog does not match",
         ):
-            create_app(restarted, oidc=None)
+            create_test_app(restarted, oidc=None)
 
         assert _counts(store) == before_counts
         assert store.conn.execute(
