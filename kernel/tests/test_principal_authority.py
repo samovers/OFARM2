@@ -162,10 +162,7 @@ def _initialized_resolver(
            "ofarm.authentication-runtime.v1")]]
     )
     resolution = _Connection([resolve_rows])
-    resolver = PrincipalBindingResolver(
-        _Factory(contract, resolution),
-        expected_audience=AUDIENCE,
-    )
+    resolver = PrincipalBindingResolver(_Factory(contract, resolution))
     resolver.initialize()
     return resolver, resolution
 
@@ -176,6 +173,7 @@ def test_resolver_maps_one_exact_authority_row():
 
     principal = resolver.resolve(IDENTITY)
 
+    assert resolver.audience == AUDIENCE
     assert principal.identity is IDENTITY
     assert principal.authority.binding_version_id == row[3]
     assert principal.authority.tenant_id == row[7]
@@ -189,7 +187,7 @@ def test_resolver_maps_one_exact_authority_row():
 
 def test_resolver_requires_initialization_without_opening_a_connection():
     factory = _Factory(_Connection([]))
-    resolver = PrincipalBindingResolver(factory, expected_audience=AUDIENCE)
+    resolver = PrincipalBindingResolver(factory)
 
     with pytest.raises(PrincipalResolutionError) as raised:
         resolver.resolve(IDENTITY)
@@ -227,10 +225,7 @@ def test_resolver_refuses_a_mismatched_database_contract():
     connection = _Connection(
         [[(AUDIENCE, DIGEST_A, "ofarm.authentication-runtime.v1")]]
     )
-    resolver = PrincipalBindingResolver(
-        _Factory(connection),
-        expected_audience=AUDIENCE,
-    )
+    resolver = PrincipalBindingResolver(_Factory(connection))
 
     with pytest.raises(PrincipalResolutionStartupError):
         resolver.initialize()

@@ -99,10 +99,10 @@ def test_python_resolver_consumes_the_exact_read_api(tenant_target, authority):
             "ofarm.observe_authentication_runtime_contract()"
         ).fetchone()[0]
     resolver = PrincipalBindingResolver(
-        lambda: psycopg.connect(tenant_target.role_dsn("ofarm_app")),
-        expected_audience=audience,
+        lambda: psycopg.connect(tenant_target.role_dsn("ofarm_app"))
     )
     resolver.initialize()
+    assert resolver.audience == audience
 
     principal = resolver.resolve(
         VerifiedIdentity(
