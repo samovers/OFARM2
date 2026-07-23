@@ -11,6 +11,7 @@ from uuid import uuid4
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from google.api_core.exceptions import FailedPrecondition
 
 from deployment.postgresql.tenant_contract import (
     GOOGLE_KMS_KEY_ALGORITHM,
@@ -411,6 +412,7 @@ def _refreshing_signer_fixture(
     observer_entered=None,
     observer_release=None,
     observer_block_on_call=2,
+    kms_client_factory=None,
 ):
     signing_private = Ed25519PrivateKey.generate()
     signing_key = _signing_key(signing_private)
@@ -446,7 +448,12 @@ def _refreshing_signer_fixture(
             payload,
         ),
     )
-    raw_kms = _KmsClient(
+    selected_kms_client_factory = (
+        _KmsClient
+        if kms_client_factory is None
+        else kms_client_factory
+    )
+    raw_kms = selected_kms_client_factory(
         signing_private,
         signing_key.key_version_resource,
     )
@@ -838,6 +845,91 @@ def test_kms_readiness_preflight_rejects_disabled_evidence():
     assert raised.value.outcome is PreBindingOutcome.SIGNER_UNAVAILABLE
     assert "differs or is stale" in raised.value.internal_detail
     assert signer._client._client.calls == []
+
+
+def test_kms_readiness_preflight_rejects_an_actually_disabled_key():
+    class DisabledKmsClient(_KmsClient):
+        def asymmetric_sign(self, *, request):
+            assert request["name"] == self.resource
+            assert request["data"] == TENANT_CAPABILITY_PREFLIGHT_PROBE
+            assert request["data_crc32c"] == _crc32c(request["data"])
+            self.calls.append(request["data"])
+            raise FailedPrecondition(
+                "CryptoKeyVersion state is DISABLED"
+            )
+
+    signer = _production_signer(
+        Ed25519PrivateKey.generate(),
+        derive_binder_audience(uuid4()),
+        1_900_000_000_000_000,
+        client_factory=DisabledKmsClient,
+    )
+
+    with pytest.raises(CapabilityIssuanceError) as raised:
+        signer.initialize()
+    assert raised.value.outcome is PreBindingOutcome.SIGNER_UNAVAILABLE
+    assert "KMS signing call failed" in raised.value.internal_detail
+    assert signer._client._client.calls == [
+        TENANT_CAPABILITY_PREFLIGHT_PROBE
+    ]
+    assert signer._evidence is not signer._last_accepted_evidence
+    assert signer._last_accepted_evidence is None
+    assert signer._initialized is False
+
+
+def test_kms_refresh_retains_prior_evidence_when_key_becomes_disabled():
+    class StatefulKmsClient(_KmsClient):
+        disabled = False
+
+        def asymmetric_sign(self, *, request):
+            if self.disabled:
+                assert request["name"] == self.resource
+                assert request["data"] == TENANT_CAPABILITY_PREFLIGHT_PROBE
+                assert request["data_crc32c"] == _crc32c(request["data"])
+                self.calls.append(request["data"])
+                raise FailedPrecondition(
+                    "CryptoKeyVersion state is DESTROY_SCHEDULED"
+                )
+            return super().asymmetric_sign(request=request)
+
+    now = [1_900_000_000_000_000]
+    (
+        signer,
+        observer,
+        observer_private,
+        _,
+        raw_kms,
+        signing_key,
+        audience,
+        initial_valid_until,
+    ) = _refreshing_signer_fixture(
+        now,
+        kms_client_factory=StatefulKmsClient,
+    )
+    signer.initialize()
+    accepted = signer._evidence
+    now[0] = initial_valid_until - 20_000_000
+    observer._receipt_bytes = _signed_evidence_receipt(
+        observer_private,
+        _evidence_payload(
+            signing_key,
+            audience,
+            now[0],
+            now[0] + 60_000_000,
+        ),
+    )
+    raw_kms.disabled = True
+
+    with pytest.raises(CapabilityIssuanceError) as raised:
+        signer.initialize()
+    assert raised.value.outcome is PreBindingOutcome.SIGNER_UNAVAILABLE
+    assert "KMS signing call failed" in raised.value.internal_detail
+    assert signer._evidence is accepted
+    assert signer._last_accepted_evidence is accepted
+    assert signer._initialized is True
+
+    raw_kms.disabled = False
+    signer.sign(b"prior-evidence-remains-usable")
 
 
 def test_kms_readiness_preflight_rejects_public_key_mismatch():
