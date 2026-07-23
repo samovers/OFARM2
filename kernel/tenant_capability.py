@@ -6,6 +6,7 @@ import json
 import os
 import re
 import stat
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,6 +24,7 @@ from deployment.postgresql.tenant_contract import (
     OIDC_ISSUER_EQUALITY_POLICY,
     TENANT_CAPABILITY_CONTRACT,
     TENANT_CAPABILITY_MAX_TTL_MICROSECONDS,
+    TENANT_CAPABILITY_PREFLIGHT_PROBE,
     TENANT_CAPABILITY_RFC8410_PREFIX,
     GoogleKmsEd25519PublicKey,
     TenantCapability,
@@ -51,6 +53,9 @@ _SIGNING_EVIDENCE_RECEIPT_PATH_ENV = "OFARM_SIGNING_EVIDENCE_RECEIPT_PATH"
 _SIGNING_EVIDENCE_OBSERVER_KEY_ENV = (
     "OFARM_SIGNING_EVIDENCE_OBSERVER_KEY_VERSION"
 )
+_SIGNING_EVIDENCE_REFRESH_WINDOW_MICROSECONDS = 30_000_000
+_SIGNING_EVIDENCE_REFRESH_RETRY_MICROSECONDS = 1_000_000
+_SIGNING_EVIDENCE_REFRESH_WAIT_SECONDS = 5.0
 
 
 class CapabilityIssuanceError(RuntimeError):
@@ -338,6 +343,18 @@ def _decode_signing_evidence_receipt(
     )
 
 
+def _google_kms_crypto_key_parent(value: object) -> str:
+    """Return the IAM-grantable CryptoKey parent of one exact key version."""
+
+    resource = validate_google_kms_key_version_resource(value)
+    parent, separator, version = resource.rpartition("/cryptoKeyVersions/")
+    if not separator or not parent or not version:
+        raise TenantCapabilityContractError(
+            "KMS CryptoKey parent resource differs"
+        )
+    return parent
+
+
 @final
 class GoogleKmsSigningEvidenceObserver:
     """Authenticate an out-of-process lifecycle observation receipt."""
@@ -421,11 +438,23 @@ class GoogleKmsSigningEvidenceObserver:
         self,
         signing_key: GoogleKmsEd25519PublicKey,
     ) -> ProductionSigningEvidence:
-        if (
-            type(signing_key) is not GoogleKmsEd25519PublicKey
-            or self._observer_key_resource == signing_key.key_version_resource
-        ):
+        if type(signing_key) is not GoogleKmsEd25519PublicKey:
             raise ValueError("signing-evidence observer identity differs")
+        try:
+            observer_parent = _google_kms_crypto_key_parent(
+                self._observer_key_resource
+            )
+            signing_parent = _google_kms_crypto_key_parent(
+                signing_key.key_version_resource
+            )
+        except TenantCapabilityContractError as exc:
+            raise ValueError(
+                "signing-evidence observer identity differs"
+            ) from exc
+        if observer_parent == signing_parent:
+            raise ValueError(
+                "signing-evidence observer CryptoKey must differ"
+            )
         observer_public_key = self._client.get_ed25519_public_key(
             name=self._observer_key_resource
         )
@@ -467,6 +496,7 @@ class GoogleKmsEd25519Signer:
         client: GoogleCloudKmsClientAdapter,
         public_key: GoogleKmsEd25519PublicKey,
         evidence: ProductionSigningEvidence,
+        evidence_observer: GoogleKmsSigningEvidenceObserver | None = None,
         now_microseconds=lambda: time.time_ns() // 1_000,
     ) -> "GoogleKmsEd25519Signer":
         """Build a visibly non-production signer with a controllable clock."""
@@ -476,7 +506,7 @@ class GoogleKmsEd25519Signer:
             client=client,
             public_key=public_key,
             evidence=evidence,
-            evidence_observer=None,
+            evidence_observer=evidence_observer,
             now_microseconds=now_microseconds,
             production_eligible=False,
         )
@@ -499,6 +529,9 @@ class GoogleKmsEd25519Signer:
         self._now_microseconds = now_microseconds
         self._production_eligible = production_eligible
         self._initialized = False
+        self._state_condition = threading.Condition()
+        self._refresh_in_progress = False
+        self._next_refresh_attempt_unix_microseconds = 0
 
     @property
     def key_id(self) -> str:
@@ -510,7 +543,8 @@ class GoogleKmsEd25519Signer:
 
     @property
     def audience(self) -> str:
-        evidence = self._evidence
+        with self._state_condition:
+            evidence = self._evidence
         if type(evidence) is not ProductionSigningEvidence:
             raise CapabilityIssuanceError(
                 PreBindingOutcome.SIGNER_UNAVAILABLE,
@@ -529,33 +563,59 @@ class GoogleKmsEd25519Signer:
             and self._evidence_observer.production_eligible
         )
 
-    def initialize(self) -> None:
+    def _now(self) -> int:
         now = self._now_microseconds()
+        if type(now) is not int:
+            raise CapabilityIssuanceError(
+                PreBindingOutcome.SIGNER_UNAVAILABLE,
+                internal_detail="production signing clock differs",
+            )
+        return now
+
+    @staticmethod
+    def _is_current(
+        evidence: object,
+        now_unix_microseconds: int,
+    ) -> bool:
+        return (
+            type(evidence) is ProductionSigningEvidence
+            and type(evidence.valid_until_unix_microseconds) is int
+            and now_unix_microseconds
+            < evidence.valid_until_unix_microseconds
+        )
+
+    def _observe_candidate(self) -> ProductionSigningEvidence:
+        observer = self._evidence_observer
+        if type(observer) is not GoogleKmsSigningEvidenceObserver:
+            raise CapabilityIssuanceError(
+                PreBindingOutcome.SIGNER_UNAVAILABLE,
+                internal_detail="production evidence observer differs",
+            )
+        if self._production_eligible and not observer.production_eligible:
+            raise CapabilityIssuanceError(
+                PreBindingOutcome.SIGNER_UNAVAILABLE,
+                internal_detail="production evidence observer differs",
+            )
+        try:
+            return observer.observe(self._public_key_observation)
+        except Exception as exc:
+            raise CapabilityIssuanceError(
+                PreBindingOutcome.SIGNER_UNAVAILABLE,
+                internal_detail=(
+                    "authenticated production signing evidence is unavailable"
+                ),
+            ) from exc
+
+    def _validate_candidate(
+        self,
+        evidence: object,
+    ) -> ProductionSigningEvidence:
+        now = self._now()
         observation = self._public_key_observation
-        if self._production_eligible:
-            try:
-                if (
-                    type(self._evidence_observer)
-                    is not GoogleKmsSigningEvidenceObserver
-                    or not self._evidence_observer.production_eligible
-                ):
-                    raise ValueError("production evidence observer differs")
-                evidence = self._evidence_observer.observe(observation)
-            except Exception as exc:
-                raise CapabilityIssuanceError(
-                    PreBindingOutcome.SIGNER_UNAVAILABLE,
-                    internal_detail=(
-                        "authenticated production signing evidence is unavailable"
-                    ),
-                ) from exc
-            self._evidence = evidence
-        else:
-            evidence = self._evidence
         if (
             type(self._client) is not GoogleCloudKmsClientAdapter
             or type(evidence) is not ProductionSigningEvidence
             or type(observation) is not GoogleKmsEd25519PublicKey
-            or type(now) is not int
         ):
             raise CapabilityIssuanceError(
                 PreBindingOutcome.SIGNER_UNAVAILABLE,
@@ -563,9 +623,15 @@ class GoogleKmsEd25519Signer:
             )
         try:
             validate_binder_audience(evidence.audience)
-            validate_google_kms_key_version_resource(evidence.key_version_resource)
-            expected_public_digest = raw_public_key_digest(observation.public_key)
-            expected_key_id = derive_ed25519_key_id(observation.public_key)
+            validate_google_kms_key_version_resource(
+                evidence.key_version_resource
+            )
+            expected_public_digest = raw_public_key_digest(
+                observation.public_key
+            )
+            expected_key_id = derive_ed25519_key_id(
+                observation.public_key
+            )
             expected_x = (
                 base64.urlsafe_b64encode(observation.public_key)
                 .rstrip(b"=")
@@ -614,30 +680,144 @@ class GoogleKmsEd25519Signer:
                 PreBindingOutcome.SIGNER_UNAVAILABLE,
                 internal_detail="production signing evidence differs or is stale",
             )
-        self._initialized = True
+        self._sign_with_evidence(
+            TENANT_CAPABILITY_PREFLIGHT_PROBE,
+            evidence,
+        )
+        if self._now() >= evidence.valid_until_unix_microseconds:
+            raise CapabilityIssuanceError(
+                PreBindingOutcome.SIGNER_UNAVAILABLE,
+                internal_detail=(
+                    "production signing evidence expired during preflight"
+                ),
+            )
+        return evidence
 
-    def sign(self, data: bytes) -> bytes:
-        if not self._initialized:
-            raise CapabilityIssuanceError(
-                PreBindingOutcome.SIGNER_UNAVAILABLE,
-                internal_detail="production signer is not initialized",
+    def _refresh_evidence(
+        self,
+        *,
+        force: bool,
+        allow_previous: bool,
+    ) -> ProductionSigningEvidence:
+        now = self._now()
+        refresh_started = False
+        with self._state_condition:
+            current = self._evidence if self._initialized else None
+            observer = self._evidence_observer
+            if observer is None:
+                if not force and self._is_current(current, now):
+                    assert type(current) is ProductionSigningEvidence
+                    return current
+                if not force:
+                    raise CapabilityIssuanceError(
+                        PreBindingOutcome.SIGNER_UNAVAILABLE,
+                        internal_detail="production signing evidence expired",
+                    )
+                candidate = self._evidence
+            else:
+                if type(observer) is not GoogleKmsSigningEvidenceObserver:
+                    raise CapabilityIssuanceError(
+                        PreBindingOutcome.SIGNER_UNAVAILABLE,
+                        internal_detail="production evidence observer differs",
+                    )
+                if (
+                    not force
+                    and self._is_current(current, now)
+                    and current.valid_until_unix_microseconds - now
+                    > _SIGNING_EVIDENCE_REFRESH_WINDOW_MICROSECONDS
+                ):
+                    assert type(current) is ProductionSigningEvidence
+                    return current
+                if self._refresh_in_progress:
+                    if self._is_current(current, now):
+                        assert type(current) is ProductionSigningEvidence
+                        return current
+                    self._state_condition.wait(
+                        timeout=_SIGNING_EVIDENCE_REFRESH_WAIT_SECONDS
+                    )
+                    completed = self._evidence if self._initialized else None
+                    completed_at = self._now()
+                    if self._is_current(completed, completed_at):
+                        assert type(completed) is ProductionSigningEvidence
+                        return completed
+                    raise CapabilityIssuanceError(
+                        PreBindingOutcome.SIGNER_UNAVAILABLE,
+                        internal_detail=(
+                            "signing-evidence refresh did not complete"
+                        ),
+                    )
+                if (
+                    not force
+                    and now
+                    < self._next_refresh_attempt_unix_microseconds
+                ):
+                    if self._is_current(current, now):
+                        assert type(current) is ProductionSigningEvidence
+                        return current
+                    raise CapabilityIssuanceError(
+                        PreBindingOutcome.SIGNER_UNAVAILABLE,
+                        internal_detail=(
+                            "signing-evidence refresh retry is deferred"
+                        ),
+                    )
+                self._refresh_in_progress = True
+                refresh_started = True
+                candidate = None
+
+        try:
+            if observer is not None:
+                candidate = self._observe_candidate()
+            accepted = self._validate_candidate(candidate)
+        except Exception as exc:
+            failure = (
+                exc
+                if isinstance(exc, CapabilityIssuanceError)
+                else CapabilityIssuanceError(
+                    PreBindingOutcome.SIGNER_UNAVAILABLE,
+                    internal_detail="signing-evidence refresh failed",
+                )
             )
-        if type(data) is not bytes or not data or len(data) > 8_192:
-            raise CapabilityIssuanceError(
-                PreBindingOutcome.CAPABILITY_REFUSED,
-                internal_detail="signing input is outside the bound",
-            )
-        evidence = self._evidence
-        if type(evidence) is not ProductionSigningEvidence:
-            raise CapabilityIssuanceError(
-                PreBindingOutcome.SIGNER_UNAVAILABLE,
-                internal_detail="authenticated production signing evidence is absent",
-            )
-        before_signing = self._now_microseconds()
-        if (
-            type(before_signing) is not int
-            or before_signing >= evidence.valid_until_unix_microseconds
-        ):
+            try:
+                failed_at = self._now()
+            except CapabilityIssuanceError:
+                failed_at = now
+            with self._state_condition:
+                if refresh_started:
+                    self._refresh_in_progress = False
+                self._next_refresh_attempt_unix_microseconds = (
+                    failed_at
+                    + _SIGNING_EVIDENCE_REFRESH_RETRY_MICROSECONDS
+                )
+                prior = self._evidence if self._initialized else None
+                prior_is_current = self._is_current(prior, failed_at)
+                if not prior_is_current:
+                    self._initialized = False
+                self._state_condition.notify_all()
+                if allow_previous and prior_is_current:
+                    assert type(prior) is ProductionSigningEvidence
+                    return prior
+            if failure is exc:
+                raise
+            raise failure from exc
+
+        with self._state_condition:
+            self._evidence = accepted
+            self._initialized = True
+            self._refresh_in_progress = False
+            self._next_refresh_attempt_unix_microseconds = 0
+            self._state_condition.notify_all()
+            return accepted
+
+    def initialize(self) -> None:
+        self._refresh_evidence(force=True, allow_previous=False)
+
+    def _sign_with_evidence(
+        self,
+        data: bytes,
+        evidence: ProductionSigningEvidence,
+    ) -> bytes:
+        before_signing = self._now()
+        if before_signing >= evidence.valid_until_unix_microseconds:
             raise CapabilityIssuanceError(
                 PreBindingOutcome.SIGNER_UNAVAILABLE,
                 internal_detail="production signing evidence expired",
@@ -653,14 +833,13 @@ class GoogleKmsEd25519Signer:
                 PreBindingOutcome.SIGNER_UNAVAILABLE,
                 internal_detail="KMS signing call failed",
             ) from exc
-        after_signing = self._now_microseconds()
-        if (
-            type(after_signing) is not int
-            or after_signing >= evidence.valid_until_unix_microseconds
-        ):
+        after_signing = self._now()
+        if after_signing >= evidence.valid_until_unix_microseconds:
             raise CapabilityIssuanceError(
                 PreBindingOutcome.SIGNER_UNAVAILABLE,
-                internal_detail="production signing evidence expired during KMS call",
+                internal_detail=(
+                    "production signing evidence expired during KMS call"
+                ),
             )
         if (
             type(response) is not GoogleKmsSigningResponse
@@ -687,6 +866,24 @@ class GoogleKmsEd25519Signer:
                 internal_detail="KMS signature verification failed",
             ) from exc
         return response.signature
+
+    def sign(self, data: bytes) -> bytes:
+        if type(data) is not bytes or not data or len(data) > 8_192:
+            raise CapabilityIssuanceError(
+                PreBindingOutcome.CAPABILITY_REFUSED,
+                internal_detail="signing input is outside the bound",
+            )
+        with self._state_condition:
+            if not self._initialized:
+                raise CapabilityIssuanceError(
+                    PreBindingOutcome.SIGNER_UNAVAILABLE,
+                    internal_detail="production signer is not initialized",
+                )
+        evidence = self._refresh_evidence(
+            force=False,
+            allow_previous=True,
+        )
+        return self._sign_with_evidence(data, evidence)
 
 
 class CapabilitySigner(Protocol):

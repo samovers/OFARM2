@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import base64
 import json
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import AbstractContextManager
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
@@ -15,6 +17,7 @@ from deployment.postgresql.tenant_contract import (
     GOOGLE_KMS_KEY_ALGORITHM,
     GOOGLE_KMS_KEY_PURPOSE,
     GOOGLE_KMS_PROTECTION_LEVEL,
+    TENANT_CAPABILITY_PREFLIGHT_PROBE,
     GoogleKmsEd25519PublicKey,
     TENANT_CAPABILITY_RFC8410_PREFIX,
     decode_tenant_capability_jws,
@@ -330,7 +333,9 @@ def _production_signer(
     *,
     observed_at_us=None,
     valid_until_us=None,
+    key_state="ENABLED",
     client_factory=None,
+    evidence_observer=None,
     now_microseconds=None,
 ):
     public = private.public_key().public_bytes_raw()
@@ -355,7 +360,7 @@ def _production_signer(
         key_purpose=GOOGLE_KMS_KEY_PURPOSE,
         key_algorithm=GOOGLE_KMS_KEY_ALGORITHM,
         protection_level=GOOGLE_KMS_PROTECTION_LEVEL,
-        key_state="ENABLED",
+        key_state=key_state,
         attestation_evidence_digest=DIGEST_A,
         iam_evidence_digest=DIGEST_B,
         database_candidate_digest=DIGEST_C,
@@ -376,6 +381,7 @@ def _production_signer(
         client=_test_adapter(raw_client),
         public_key=observation,
         evidence=evidence,
+        evidence_observer=evidence_observer,
         now_microseconds=(
             (lambda: now_us) if now_microseconds is None else now_microseconds
         ),
@@ -447,6 +453,150 @@ class _KmsClient:
         )()
 
 
+def _signed_evidence_receipt(observer_private, evidence):
+    canonical = json.dumps(
+        evidence,
+        ensure_ascii=True,
+        allow_nan=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("ascii")
+    signature = observer_private.sign(
+        b"OFARM_PRODUCTION_SIGNING_EVIDENCE_V1\x00" + canonical
+    )
+    return json.dumps(
+        {
+            "evidence": evidence,
+            "signature": base64.urlsafe_b64encode(signature)
+            .rstrip(b"=")
+            .decode("ascii"),
+        },
+        ensure_ascii=True,
+        allow_nan=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("ascii")
+
+
+def _evidence_payload(
+    signing_key,
+    audience,
+    observed_at,
+    valid_until,
+    *,
+    key_state="ENABLED",
+):
+    return {
+        "audience": audience,
+        "keyVersionResource": signing_key.key_version_resource,
+        "keyId": signing_key.kid,
+        "publicKeyDigest": "sha256:" + signing_key.public_key_digest.hex(),
+        "keyPurpose": GOOGLE_KMS_KEY_PURPOSE,
+        "keyAlgorithm": GOOGLE_KMS_KEY_ALGORITHM,
+        "protectionLevel": GOOGLE_KMS_PROTECTION_LEVEL,
+        "keyState": key_state,
+        "attestationEvidenceDigest": DIGEST_A,
+        "iamEvidenceDigest": DIGEST_B,
+        "databaseCandidateDigest": DIGEST_C,
+        "databaseLifecycleHeadDigest": DIGEST_D,
+        "observedAtUnixMicroseconds": observed_at,
+        "validUntilUnixMicroseconds": valid_until,
+    }
+
+
+def _production_evidence(
+    signing_key,
+    audience,
+    observed_at,
+    valid_until,
+    *,
+    key_state="ENABLED",
+):
+    return ProductionSigningEvidence(
+        audience=audience,
+        key_version_resource=signing_key.key_version_resource,
+        key_id=signing_key.kid,
+        public_key_digest=signing_key.public_key_digest,
+        key_purpose=GOOGLE_KMS_KEY_PURPOSE,
+        key_algorithm=GOOGLE_KMS_KEY_ALGORITHM,
+        protection_level=GOOGLE_KMS_PROTECTION_LEVEL,
+        key_state=key_state,
+        attestation_evidence_digest=DIGEST_A,
+        iam_evidence_digest=DIGEST_B,
+        database_candidate_digest=DIGEST_C,
+        database_lifecycle_head_digest=DIGEST_D,
+        observed_at_unix_microseconds=observed_at,
+        valid_until_unix_microseconds=valid_until,
+    )
+
+
+def _signing_key(private, resource=None):
+    if resource is None:
+        resource = (
+            "projects/ofarm1/locations/europe-west1/keyRings/auth/"
+            "cryptoKeys/capability/cryptoKeyVersions/1"
+        )
+    public = private.public_key().public_bytes_raw()
+    return GoogleKmsEd25519PublicKey(
+        key_version_resource=resource,
+        der=TENANT_CAPABILITY_RFC8410_PREFIX + public,
+        public_key=public,
+        public_key_digest=raw_public_key_digest(public),
+        x=base64.urlsafe_b64encode(public).rstrip(b"=").decode("ascii"),
+        kid=derive_ed25519_key_id(public),
+    )
+
+
+class _ObserverPublicKeyClient:
+    def __init__(
+        self,
+        private,
+        resource,
+        *,
+        entered=None,
+        release=None,
+    ):
+        self.private = private
+        self.resource = resource
+        self.entered = entered
+        self.release = release
+        self.calls = 0
+
+    def asymmetric_sign(self, *, request):
+        raise AssertionError(request)
+
+    def get_public_key(self, *, request):
+        assert request == {"name": self.resource}
+        self.calls += 1
+        if self.entered is not None and self.calls > 1:
+            self.entered.set()
+            assert self.release is not None
+            assert self.release.wait(timeout=5)
+        pem = self.private.public_key().public_bytes(
+            serialization.Encoding.PEM,
+            serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        return type(
+            "PublicKeyResponse",
+            (),
+            {
+                "name": self.resource,
+                "algorithm": type(
+                    "Algorithm",
+                    (),
+                    {"name": GOOGLE_KMS_KEY_ALGORITHM},
+                )(),
+                "protection_level": type(
+                    "Protection",
+                    (),
+                    {"name": GOOGLE_KMS_PROTECTION_LEVEL},
+                )(),
+                "pem": pem.decode("ascii"),
+                "pem_crc32c": _crc32c(pem),
+            },
+        )()
+
+
 def test_kms_signer_checks_resource_crc_hsm_and_signature():
     private = Ed25519PrivateKey.generate()
     public = private.public_key().public_bytes_raw()
@@ -492,7 +642,7 @@ def test_kms_signer_checks_resource_crc_hsm_and_signature():
     data = b"exact-jws-signing-input"
     signature = signer.sign(data)
     private.public_key().verify(signature, data)
-    assert raw_client.calls == [data]
+    assert raw_client.calls == [TENANT_CAPABILITY_PREFLIGHT_PROBE, data]
 
 
 def test_kms_signer_rechecks_evidence_after_slow_signing_response():
@@ -501,7 +651,8 @@ def test_kms_signer_rechecks_evidence_after_slow_signing_response():
     class ExpiringKmsClient(_KmsClient):
         def asymmetric_sign(self, *, request):
             response = super().asymmetric_sign(request=request)
-            now[0] += 10
+            if request["data"] != TENANT_CAPABILITY_PREFLIGHT_PROBE:
+                now[0] += 10
             return response
 
     signer = _production_signer(
@@ -715,6 +866,345 @@ def test_signed_observer_receipt_authenticates_production_evidence():
     )
     with pytest.raises(ValueError, match="receipt signature differs"):
         tampered_observer.observe(signing_key)
+
+
+def test_observer_requires_a_different_crypto_key_parent():
+    now_us = 1_900_000_000_000_000
+    signing_key = _signing_key(Ed25519PrivateKey.generate())
+    observer_private = Ed25519PrivateKey.generate()
+    observer_resource = (
+        "projects/ofarm1/locations/europe-west1/keyRings/auth/"
+        "cryptoKeys/capability/cryptoKeyVersions/2"
+    )
+    evidence = _evidence_payload(
+        signing_key,
+        derive_binder_audience(uuid4()),
+        now_us - 1,
+        now_us + 60_000_000,
+    )
+    observer_client = _ObserverPublicKeyClient(
+        observer_private,
+        observer_resource,
+    )
+    observer = GoogleKmsSigningEvidenceObserver.for_test(
+        client=_test_adapter(observer_client),
+        observer_key_resource=observer_resource,
+        receipt_bytes=_signed_evidence_receipt(
+            observer_private,
+            evidence,
+        ),
+    )
+
+    with pytest.raises(ValueError, match="CryptoKey must differ"):
+        observer.observe(signing_key)
+    assert observer_client.calls == 0
+
+
+def test_kms_readiness_preflight_rejects_permission_denial():
+    class DeniedKmsClient(_KmsClient):
+        def asymmetric_sign(self, *, request):
+            raise PermissionError(request["name"])
+
+    signer = _production_signer(
+        Ed25519PrivateKey.generate(),
+        derive_binder_audience(uuid4()),
+        1_900_000_000_000_000,
+        client_factory=DeniedKmsClient,
+    )
+
+    with pytest.raises(CapabilityIssuanceError) as raised:
+        signer.initialize()
+    assert raised.value.outcome is PreBindingOutcome.SIGNER_UNAVAILABLE
+    assert "KMS signing call failed" in raised.value.internal_detail
+    assert signer._initialized is False
+
+
+def test_kms_readiness_preflight_rejects_disabled_evidence():
+    signer = _production_signer(
+        Ed25519PrivateKey.generate(),
+        derive_binder_audience(uuid4()),
+        1_900_000_000_000_000,
+        key_state="DISABLED",
+    )
+
+    with pytest.raises(CapabilityIssuanceError) as raised:
+        signer.initialize()
+    assert raised.value.outcome is PreBindingOutcome.SIGNER_UNAVAILABLE
+    assert "differs or is stale" in raised.value.internal_detail
+    assert signer._client._client.calls == []
+
+
+def test_kms_readiness_preflight_rejects_public_key_mismatch():
+    wrong_private = Ed25519PrivateKey.generate()
+
+    def wrong_key_client(private, resource):
+        del private
+        return _KmsClient(wrong_private, resource)
+
+    signer = _production_signer(
+        Ed25519PrivateKey.generate(),
+        derive_binder_audience(uuid4()),
+        1_900_000_000_000_000,
+        client_factory=wrong_key_client,
+    )
+
+    with pytest.raises(CapabilityIssuanceError) as raised:
+        signer.initialize()
+    assert raised.value.outcome is PreBindingOutcome.SIGNER_UNAVAILABLE
+    assert "signature verification failed" in raised.value.internal_detail
+
+
+def test_kms_refresh_is_failure_atomic_and_recovers_without_restart():
+    now = [1_900_000_000_000_000]
+    signing_private = Ed25519PrivateKey.generate()
+    signing_key = _signing_key(signing_private)
+    observer_private = Ed25519PrivateKey.generate()
+    observer_resource = (
+        "projects/ofarm1/locations/europe-west1/keyRings/auth/"
+        "cryptoKeys/evidence-observer/cryptoKeyVersions/1"
+    )
+    audience = derive_binder_audience(uuid4())
+    initial_valid_until = now[0] + 60_000_000
+    initial_payload = _evidence_payload(
+        signing_key,
+        audience,
+        now[0] - 1,
+        initial_valid_until,
+    )
+    observer_client = _ObserverPublicKeyClient(
+        observer_private,
+        observer_resource,
+    )
+    observer = GoogleKmsSigningEvidenceObserver.for_test(
+        client=_test_adapter(observer_client),
+        observer_key_resource=observer_resource,
+        receipt_bytes=_signed_evidence_receipt(
+            observer_private,
+            initial_payload,
+        ),
+    )
+    raw_kms = _KmsClient(
+        signing_private,
+        signing_key.key_version_resource,
+    )
+    signer = GoogleKmsEd25519Signer.for_test(
+        client=_test_adapter(raw_kms),
+        public_key=signing_key,
+        evidence=_production_evidence(
+            signing_key,
+            audience,
+            now[0] - 1,
+            initial_valid_until,
+        ),
+        evidence_observer=observer,
+        now_microseconds=lambda: now[0],
+    )
+    signer.initialize()
+    accepted = signer._evidence
+
+    disabled = _evidence_payload(
+        signing_key,
+        audience,
+        now[0],
+        now[0] + 60_000_000,
+        key_state="DISABLED",
+    )
+    observer._receipt_bytes = _signed_evidence_receipt(
+        observer_private,
+        disabled,
+    )
+    with pytest.raises(CapabilityIssuanceError):
+        signer.initialize()
+    assert signer._evidence is accepted
+    signer.sign(b"old-evidence-remains-valid")
+
+    now[0] = initial_valid_until - 20_000_000
+    observer._receipt_bytes = b"not-a-signed-receipt"
+    signer.sign(b"observer-failure-uses-current-snapshot")
+    assert signer._evidence is accepted
+
+    now[0] += 1_000_001
+    rotated_valid_until = now[0] + 60_000_000
+    rotated = _evidence_payload(
+        signing_key,
+        audience,
+        now[0],
+        rotated_valid_until,
+    )
+    observer._receipt_bytes = _signed_evidence_receipt(
+        observer_private,
+        rotated,
+    )
+    signer.sign(b"rotation-recovers-without-restart")
+    assert signer._evidence is not accepted
+    assert (
+        signer._evidence.valid_until_unix_microseconds
+        == rotated_valid_until
+    )
+
+
+def test_kms_refresh_never_publishes_evidence_expired_during_preflight():
+    now = [1_900_000_000_000_000]
+
+    class ExpiringPreflightClient(_KmsClient):
+        expire_during_preflight = False
+
+        def asymmetric_sign(self, *, request):
+            response = super().asymmetric_sign(request=request)
+            if (
+                self.expire_during_preflight
+                and request["data"] == TENANT_CAPABILITY_PREFLIGHT_PROBE
+            ):
+                now[0] += 10
+            return response
+
+    signing_private = Ed25519PrivateKey.generate()
+    signing_key = _signing_key(signing_private)
+    audience = derive_binder_audience(uuid4())
+    observer_private = Ed25519PrivateKey.generate()
+    observer_resource = (
+        "projects/ofarm1/locations/europe-west1/keyRings/auth/"
+        "cryptoKeys/evidence-observer/cryptoKeyVersions/1"
+    )
+    initial_valid_until = now[0] + 60_000_000
+    observer = GoogleKmsSigningEvidenceObserver.for_test(
+        client=_test_adapter(
+            _ObserverPublicKeyClient(
+                observer_private,
+                observer_resource,
+            )
+        ),
+        observer_key_resource=observer_resource,
+        receipt_bytes=_signed_evidence_receipt(
+            observer_private,
+            _evidence_payload(
+                signing_key,
+                audience,
+                now[0] - 1,
+                initial_valid_until,
+            ),
+        ),
+    )
+    raw_kms = ExpiringPreflightClient(
+        signing_private,
+        signing_key.key_version_resource,
+    )
+    signer = GoogleKmsEd25519Signer.for_test(
+        client=_test_adapter(raw_kms),
+        public_key=signing_key,
+        evidence=_production_evidence(
+            signing_key,
+            audience,
+            now[0] - 1,
+            initial_valid_until,
+        ),
+        evidence_observer=observer,
+        now_microseconds=lambda: now[0],
+    )
+    signer.initialize()
+    accepted = signer._evidence
+
+    candidate_valid_until = now[0] + 5
+    observer._receipt_bytes = _signed_evidence_receipt(
+        observer_private,
+        _evidence_payload(
+            signing_key,
+            audience,
+            now[0],
+            candidate_valid_until,
+        ),
+    )
+    raw_kms.expire_during_preflight = True
+    with pytest.raises(CapabilityIssuanceError) as raised:
+        signer.initialize()
+    assert "expired during KMS call" in raised.value.internal_detail
+    assert signer._evidence is accepted
+    assert signer._initialized is True
+
+
+def test_kms_refresh_is_single_flight_for_concurrent_signers():
+    now = [1_900_000_000_000_000]
+    signing_private = Ed25519PrivateKey.generate()
+    signing_key = _signing_key(signing_private)
+    audience = derive_binder_audience(uuid4())
+    observer_private = Ed25519PrivateKey.generate()
+    observer_resource = (
+        "projects/ofarm1/locations/europe-west1/keyRings/auth/"
+        "cryptoKeys/evidence-observer/cryptoKeyVersions/1"
+    )
+    entered = threading.Event()
+    release = threading.Event()
+    observer_client = _ObserverPublicKeyClient(
+        observer_private,
+        observer_resource,
+        entered=entered,
+        release=release,
+    )
+    initial_valid_until = now[0] + 60_000_000
+    observer = GoogleKmsSigningEvidenceObserver.for_test(
+        client=_test_adapter(observer_client),
+        observer_key_resource=observer_resource,
+        receipt_bytes=_signed_evidence_receipt(
+            observer_private,
+            _evidence_payload(
+                signing_key,
+                audience,
+                now[0] - 1,
+                initial_valid_until,
+            ),
+        ),
+    )
+    raw_kms = _KmsClient(
+        signing_private,
+        signing_key.key_version_resource,
+    )
+    signer = GoogleKmsEd25519Signer.for_test(
+        client=_test_adapter(raw_kms),
+        public_key=signing_key,
+        evidence=_production_evidence(
+            signing_key,
+            audience,
+            now[0] - 1,
+            initial_valid_until,
+        ),
+        evidence_observer=observer,
+        now_microseconds=lambda: now[0],
+    )
+    signer.initialize()
+
+    now[0] = initial_valid_until - 20_000_000
+    rotated_valid_until = now[0] + 60_000_000
+    observer._receipt_bytes = _signed_evidence_receipt(
+        observer_private,
+        _evidence_payload(
+            signing_key,
+            audience,
+            now[0],
+            rotated_valid_until,
+        ),
+    )
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        first = executor.submit(signer.sign, b"concurrent-0")
+        assert entered.wait(timeout=5)
+        others = [
+            executor.submit(
+                signer.sign,
+                f"concurrent-{index}".encode("ascii"),
+            )
+            for index in range(1, 4)
+        ]
+        release.set()
+        signatures = [first.result(timeout=5)]
+        signatures.extend(
+            future.result(timeout=5) for future in others
+        )
+
+    assert len(signatures) == 4
+    assert observer_client.calls == 2
+    assert (
+        signer._evidence.valid_until_unix_microseconds
+        == rotated_valid_until
+    )
 
 
 def test_capability_wrong_audience_and_stale_signer_refuse_safely():
