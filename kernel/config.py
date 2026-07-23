@@ -86,10 +86,10 @@ def oidc_config_from_env():
     disabled — in which case the development/conformance X-Acting-Party principal
     shim applies (NOT production auth; see profile_si_ffs/UNSUPPORTED_SURFACES.md).
 
-    Enabled only when OFARM_OIDC_ISSUER and OFARM_OIDC_AUDIENCE are set. The
-    algorithm defaults to HS256 (the only path implemented in this build); setting
-    OFARM_OIDC_ALG=RS256 selects the deliberate NotImplemented production path
-    (the verifier fails closed, never falling back to HS256)."""
+    Enabled only when OFARM_OIDC_ISSUER and OFARM_OIDC_AUDIENCE are set. This
+    helper constructs only the explicit local HS256 test verifier. Any other
+    OFARM_OIDC_ALG value fails closed and cannot select the separate production
+    verifier."""
     issuer = os.environ.get("OFARM_OIDC_ISSUER")
     audience = os.environ.get("OFARM_OIDC_AUDIENCE")
     if not (issuer and audience):

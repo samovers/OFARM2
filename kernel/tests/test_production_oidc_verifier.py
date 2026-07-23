@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+import json
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from email.message import Message
 from threading import Event
 from urllib.request import HTTPRedirectHandler, Request
 
 import jwt
 import pytest
-from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.asymmetric import ec, ed25519, rsa
 
 import kernel.auth_oidc as auth_oidc
 from kernel.auth_oidc import (
@@ -34,6 +36,13 @@ class _SigningKey:
     key: object
     public_key_use: str | None = None
     _jwk_data: dict[str, object] | None = None
+
+    def __post_init__(self) -> None:
+        if self._jwk_data is None and isinstance(self.key, rsa.RSAPublicKey):
+            self._jwk_data = {
+                "kty": "RSA",
+                "alg": self.algorithm_name,
+            }
 
 
 @dataclass
@@ -83,6 +92,69 @@ class _RedirectingOpener:
         return self.response
 
 
+class _StreamingResponse:
+    def __init__(
+        self,
+        body: bytes,
+        *,
+        chunk_bytes: int = auth_oidc._JWKS_READ_CHUNK_BYTES,
+        content_lengths: tuple[str, ...] = (),
+        advance_clock=None,
+    ):
+        self._body = body
+        self._offset = 0
+        self._chunk_bytes = chunk_bytes
+        self._advance_clock = advance_clock
+        self.closed = False
+        self.read_sizes: list[int] = []
+        self.headers = Message()
+        for value in content_lengths:
+            self.headers.add_header("Content-Length", value)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
+        return False
+
+    def geturl(self) -> str:
+        return JWKS_URL
+
+    def read1(self, size: int) -> bytes:
+        self.read_sizes.append(size)
+        if self._advance_clock is not None:
+            self._advance_clock()
+        if self.closed or self._offset >= len(self._body):
+            return b""
+        end = min(
+            len(self._body),
+            self._offset + size,
+            self._offset + self._chunk_bytes,
+        )
+        chunk = self._body[self._offset:end]
+        self._offset = end
+        return chunk
+
+    def read(self, size: int) -> bytes:
+        raise AssertionError(f"bounded transport must use read1(), not read({size})")
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class _StaticOpener:
+    def __init__(self, response: _StreamingResponse, *, on_open=None):
+        self.response = response
+        self._on_open = on_open
+
+    def open(self, request: Request, *, timeout: int):
+        assert request.full_url == JWKS_URL
+        if self._on_open is not None:
+            self._on_open()
+        return self.response
+
+
 @pytest.fixture(scope="module")
 def rsa_keys():
     private = rsa.generate_private_key(public_exponent=65_537, key_size=2_048)
@@ -92,16 +164,19 @@ def rsa_keys():
 def _config(
     *,
     algorithms=("RS256",),
+    jwks_url=JWKS_URL,
     jwks_lifespan_seconds=60,
     jwks_miss_refresh_seconds=5,
+    timeout_seconds=5,
 ) -> ProductionOidcConfig:
     return ProductionOidcConfig(
         issuer=ISSUER,
         audience=AUDIENCE,
-        jwks_url=JWKS_URL,
+        jwks_url=jwks_url,
         algorithms=algorithms,
         jwks_lifespan_seconds=jwks_lifespan_seconds,
         jwks_miss_refresh_seconds=jwks_miss_refresh_seconds,
+        timeout_seconds=timeout_seconds,
     )
 
 
@@ -151,6 +226,32 @@ def _token(
         algorithm=algorithm,
         headers={"kid": key_id},
     )
+
+
+def _public_rsa_jwks_bytes(public_key: rsa.RSAPublicKey) -> bytes:
+    jwk_data = jwt.algorithms.RSAAlgorithm.to_jwk(public_key, as_dict=True)
+    jwk_data.update({"kid": "key-1", "alg": "RS256", "use": "sig"})
+    return json.dumps(
+        {"keys": [jwk_data]},
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
+def _transport_client(
+    response: _StreamingResponse,
+    *,
+    clock=time.monotonic,
+    timeout_seconds=5,
+    on_open=None,
+):
+    client = auth_oidc._ProductionJwksClient(
+        jwt,
+        uri=JWKS_URL,
+        timeout_seconds=timeout_seconds,
+        monotonic_clock=clock,
+    )
+    client._opener = _StaticOpener(response, on_open=on_open)
+    return client
 
 
 def test_production_verifier_accepts_one_exact_asymmetric_identity(rsa_keys):
@@ -255,6 +356,113 @@ def test_production_jwks_refuses_downgraded_final_target(
     assert opener.response.body_read is False
 
 
+def test_malformed_ipv6_jwks_url_is_a_startup_error() -> None:
+    with pytest.raises(
+        AuthenticationStartupError,
+        match="JWKS URL must be an HTTPS URL",
+    ):
+        _config(jwks_url="https://[invalid").validate()
+
+
+def test_jwks_transport_accepts_a_valid_chunked_document(rsa_keys) -> None:
+    _, public_key = rsa_keys
+    response = _StreamingResponse(
+        _public_rsa_jwks_bytes(public_key),
+        chunk_bytes=7,
+    )
+
+    jwk_set = _transport_client(response).get_jwk_set(refresh=True)
+
+    assert len(jwk_set.keys) == 1
+    assert len(response.read_sizes) > 2
+    assert max(response.read_sizes) <= auth_oidc._JWKS_READ_CHUNK_BYTES
+
+
+@pytest.mark.parametrize("declared", (False, True))
+def test_jwks_transport_rejects_oversized_response_bytes(declared: bool) -> None:
+    body = b"x" * (auth_oidc._MAX_JWKS_BYTES + 1)
+    content_lengths = (str(len(body)),) if declared else ()
+    response = _StreamingResponse(body, content_lengths=content_lengths)
+
+    with pytest.raises(
+        auth_oidc._JwksProviderStateError,
+        match="byte bound",
+    ):
+        _transport_client(response).get_jwk_set(refresh=True)
+
+    if declared:
+        assert response.read_sizes == []
+    else:
+        assert len(response.read_sizes) > 1
+
+
+def test_jwks_transport_enforces_one_monotonic_end_to_end_deadline() -> None:
+    now = [100.0]
+
+    def advance_open() -> None:
+        now[0] += 3.0
+
+    def drip_one_second() -> None:
+        now[0] += 1.0
+
+    response = _StreamingResponse(
+        b'{"keys":[]}',
+        chunk_bytes=1,
+        advance_clock=drip_one_second,
+    )
+    client = _transport_client(
+        response,
+        clock=lambda: now[0],
+        timeout_seconds=5,
+        on_open=advance_open,
+    )
+
+    with pytest.raises(
+        auth_oidc._JwksProviderStateError,
+        match="deadline exceeded",
+    ):
+        client.get_jwk_set(refresh=True)
+
+    assert len(response.read_sizes) <= 2
+
+
+@pytest.mark.parametrize(
+    "raw_document",
+    (
+        b'{"keys":[],"keys":[]}',
+        b'{"keys":[{"kty":"RSA","kid":"one","kid":"two"}]}',
+        b'{"keys":[],"extension":NaN}',
+        b'{"keys":[],"extension":Infinity}',
+    ),
+)
+def test_jwks_transport_rejects_non_strict_json(raw_document: bytes) -> None:
+    response = _StreamingResponse(raw_document)
+
+    with pytest.raises(
+        auth_oidc._JwksProviderStateError,
+        match="JSON is invalid",
+    ):
+        _transport_client(response).get_jwk_set(refresh=True)
+
+
+def test_jwks_key_count_is_bounded_before_materialization() -> None:
+    document = {
+        "keys": [
+            {"kty": "unsupported", "kid": f"key-{index}"}
+            for index in range(auth_oidc._MAX_JWKS_KEYS + 1)
+        ]
+    }
+    response = _StreamingResponse(
+        json.dumps(document, separators=(",", ":")).encode("utf-8")
+    )
+
+    with pytest.raises(
+        auth_oidc._JwksProviderStateError,
+        match="key count",
+    ):
+        _transport_client(response).get_jwk_set(refresh=True)
+
+
 @pytest.mark.parametrize(
     ("key_type", "curve", "declared_algorithm"),
     (
@@ -283,6 +491,105 @@ def test_incompatible_declared_jwk_algorithm_is_rejected_at_startup(
         object(),
         client=_JwksClient([key]),
         algorithms=(declared_algorithm,),
+    )
+
+    with pytest.raises(AuthenticationStartupError, match="JWKS initialization failed"):
+        verifier.initialize()
+
+
+@pytest.mark.parametrize("key_type", ("RSA", "EC", "OKP"))
+def test_private_jwk_material_is_rejected_at_startup(key_type: str) -> None:
+    if key_type == "RSA":
+        private_key = rsa.generate_private_key(
+            public_exponent=65_537,
+            key_size=2_048,
+        )
+        algorithm_adapter = jwt.algorithms.RSAAlgorithm
+        algorithm = "RS256"
+    elif key_type == "EC":
+        private_key = ec.generate_private_key(ec.SECP256R1())
+        algorithm_adapter = jwt.algorithms.ECAlgorithm
+        algorithm = "ES256"
+    else:
+        private_key = ed25519.Ed25519PrivateKey.generate()
+        algorithm_adapter = jwt.algorithms.OKPAlgorithm
+        algorithm = "EdDSA"
+    private_jwk = algorithm_adapter.to_jwk(private_key, as_dict=True)
+    private_jwk.update({"kid": "private-key", "alg": algorithm, "use": "sig"})
+    parsed_set = jwt.PyJWKSet.from_dict({"keys": [private_jwk]})
+    client = _JwksClient(list(parsed_set.keys))
+    verifier = _verifier(
+        object(),
+        client=client,
+        algorithms=(algorithm,),
+    )
+
+    with pytest.raises(AuthenticationStartupError, match="JWKS initialization failed"):
+        verifier.initialize()
+
+
+@pytest.mark.parametrize(
+    ("jwk_data", "verifier_key", "algorithm"),
+    (
+        (
+            {"kty": "RSA", "alg": "RS256"},
+            ec.generate_private_key(ec.SECP256R1()).public_key(),
+            "RS256",
+        ),
+        (
+            {"kty": "EC", "crv": "P-256", "alg": "ES256"},
+            ec.generate_private_key(ec.SECP384R1()).public_key(),
+            "ES256",
+        ),
+        (
+            {"kty": "OKP", "crv": "Ed25519", "alg": "EdDSA"},
+            rsa.generate_private_key(
+                public_exponent=65_537,
+                key_size=2_048,
+            ).public_key(),
+            "EdDSA",
+        ),
+    ),
+)
+def test_jwk_type_or_curve_mismatch_is_rejected_at_startup(
+    jwk_data: dict[str, object],
+    verifier_key: object,
+    algorithm: str,
+) -> None:
+    key = _SigningKey(
+        "key-1",
+        algorithm,
+        verifier_key,
+        _jwk_data=jwk_data,
+    )
+    verifier = _verifier(
+        object(),
+        client=_JwksClient([key]),
+        algorithms=(algorithm,),
+    )
+
+    with pytest.raises(AuthenticationStartupError, match="JWKS initialization failed"):
+        verifier.initialize()
+
+
+def test_generated_jwks_signing_entry_count_is_bounded(rsa_keys) -> None:
+    _, public_key = rsa_keys
+    algorithms = ("RS256", "RS384", "RS512", "PS256", "PS384", "PS512")
+    entries_per_key = len(algorithms)
+    key_count = auth_oidc._MAX_JWKS_SIGNING_ENTRIES // entries_per_key + 1
+    keys = [
+        _SigningKey(
+            f"key-{index}",
+            "RS256",
+            public_key,
+            _jwk_data={"kty": "RSA"},
+        )
+        for index in range(key_count)
+    ]
+    verifier = _verifier(
+        public_key,
+        client=_JwksClient(keys),
+        algorithms=algorithms,
     )
 
     with pytest.raises(AuthenticationStartupError, match="JWKS initialization failed"):
@@ -736,3 +1043,35 @@ def test_oversized_numeric_date_refuses_before_key_selection(rsa_keys):
         verifier.verify_identity(_token(private_key, exp=10**400))
     assert raised.value.outcome is PreBindingOutcome.INVALID_CREDENTIAL
     assert verifier._jwks_client.refreshes == [True]
+
+
+def test_absent_authorization_is_no_credential() -> None:
+    with pytest.raises(OidcError) as raised:
+        auth_oidc._bearer_token(None)
+
+    assert raised.value.outcome is PreBindingOutcome.NO_CREDENTIAL
+
+
+@pytest.mark.parametrize(
+    "authorization",
+    (
+        "",
+        "Basic dXNlcjpwYXNz",
+        "Bearer",
+        "Bearer ",
+        "Bearer  token",
+        "Bearer\ttoken",
+        object(),
+    ),
+)
+def test_present_malformed_authorization_is_invalid_credential(
+    authorization: object,
+) -> None:
+    with pytest.raises(OidcError) as raised:
+        auth_oidc._bearer_token(authorization)
+
+    assert raised.value.outcome is PreBindingOutcome.INVALID_CREDENTIAL
+
+
+def test_bearer_scheme_is_case_insensitive_but_shape_is_exact() -> None:
+    assert auth_oidc._bearer_token("bEaReR token") == "token"

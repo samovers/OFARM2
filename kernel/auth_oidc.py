@@ -16,7 +16,7 @@ import re
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from threading import Lock
+from threading import Event, Lock, Thread
 from typing import Any, Callable, Protocol, final, runtime_checkable
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
@@ -33,6 +33,11 @@ _B64URL_SEGMENT = re.compile(r"^[A-Za-z0-9_-]+$")
 _OIDC_SUBJECT = re.compile(r"^[!-~]{1,255}$")
 _VISIBLE_ASCII = re.compile(r"^[!-~]+$")
 _MAX_JWT_BYTES = 16_384
+_MAX_JWKS_BYTES = 1_048_576
+_JWKS_READ_CHUNK_BYTES = 16_384
+_MAX_JWKS_KEYS = 100
+_MAX_JWKS_SIGNING_ENTRIES = 256
+_RSA_PRIVATE_JWK_MEMBERS = frozenset({"d", "p", "q", "dp", "dq", "qi", "oth"})
 _MIN_NUMERIC_DATE = -62_135_596_800
 _MAX_NUMERIC_DATE = 253_402_300_799
 _PRODUCTION_ALGORITHMS = frozenset(
@@ -124,7 +129,7 @@ def _object_without_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
         if key in result:
-            raise OidcError(internal_detail="duplicate JWT object member")
+            raise OidcError(internal_detail="duplicate JSON object member")
         result[key] = value
     return result
 
@@ -363,13 +368,23 @@ class ProductionOidcConfig:
             or _VISIBLE_ASCII.fullmatch(self.jwks_url) is None
         ):
             raise AuthenticationStartupError("production JWKS URL must be an HTTPS URL")
-        parsed_jwks = urlsplit(self.jwks_url)
+        try:
+            parsed_jwks = urlsplit(self.jwks_url)
+            parsed_hostname = parsed_jwks.hostname
+            parsed_username = parsed_jwks.username
+            parsed_password = parsed_jwks.password
+            parsed_port = parsed_jwks.port
+        except ValueError as exc:
+            raise AuthenticationStartupError(
+                "production JWKS URL must be an HTTPS URL"
+            ) from exc
         if (
             parsed_jwks.scheme != "https"
             or not parsed_jwks.netloc
-            or not parsed_jwks.hostname
-            or parsed_jwks.username is not None
-            or parsed_jwks.password is not None
+            or not parsed_hostname
+            or parsed_username is not None
+            or parsed_password is not None
+            or (parsed_port is not None and not 1 <= parsed_port <= 65_535)
             or parsed_jwks.fragment
         ):
             raise AuthenticationStartupError("production JWKS URL must be an HTTPS URL")
@@ -423,6 +438,17 @@ def _build_no_redirect_jwks_opener() -> object:
     return build_opener(_RejectJwksRedirectHandler())
 
 
+@dataclass(slots=True)
+class _JwksFetchState:
+    """One bounded background fetch; a timed-out fetch cannot multiply."""
+
+    deadline: float
+    completed: Event = field(default_factory=Event)
+    response: object | None = None
+    result: object | None = None
+    error: BaseException | None = None
+
+
 @final
 class _ProductionJwksClient:
     """Fetch only the configured final HTTPS URL; origin changes are forbidden."""
@@ -433,20 +459,57 @@ class _ProductionJwksClient:
         *,
         uri: str,
         timeout_seconds: int,
+        monotonic_clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._jwt = jwt_module
         self._uri = uri
         self._timeout_seconds = timeout_seconds
+        self._clock = monotonic_clock
         self._opener = _build_no_redirect_jwks_opener()
+        self._fetch_lock = Lock()
+        self._active_fetch: _JwksFetchState | None = None
 
     def get_jwk_set(self, *, refresh: bool) -> object:
         del refresh
+        state = _JwksFetchState(
+            deadline=self._clock() + self._timeout_seconds,
+        )
+        with self._fetch_lock:
+            active = self._active_fetch
+            if active is not None and not active.completed.is_set():
+                raise _JwksProviderStateError("JWKS HTTPS fetch is already in progress")
+            self._active_fetch = state
+            worker = Thread(
+                target=self._run_fetch,
+                args=(state,),
+                name="ofarm-jwks-fetch",
+                daemon=True,
+            )
+            worker.start()
+
+        remaining = state.deadline - self._clock()
+        if remaining <= 0 or not state.completed.wait(timeout=remaining):
+            self._abort_response(state.response)
+            raise _JwksProviderStateError("JWKS HTTPS fetch deadline exceeded")
+        if self._clock() > state.deadline:
+            self._abort_response(state.response)
+            raise _JwksProviderStateError("JWKS HTTPS fetch deadline exceeded")
+        if state.error is not None:
+            if isinstance(state.error, _JwksProviderStateError):
+                raise state.error
+            raise _JwksProviderStateError("JWKS HTTPS fetch failed") from state.error
+        if state.result is None:
+            raise _JwksProviderStateError("JWKS provider state is invalid")
+        return state.result
+
+    def _run_fetch(self, state: _JwksFetchState) -> None:
         try:
             request = Request(url=self._uri)
             with self._opener.open(
                 request,
                 timeout=self._timeout_seconds,
             ) as response:
+                state.response = response
                 response_url = response.geturl()
                 if (
                     type(response_url) is not str
@@ -456,20 +519,132 @@ class _ProductionJwksClient:
                     raise _JwksProviderStateError(
                         "JWKS response target differs from configured HTTPS URL"
                     )
-                jwk_data = json.load(response)
-        except _JwksProviderStateError:
-            raise
+                jwk_data = self._read_jwks_document(
+                    response,
+                    deadline=state.deadline,
+                )
+                raw_keys = jwk_data.get("keys")
+                if (
+                    type(raw_keys) is not list
+                    or not 1 <= len(raw_keys) <= _MAX_JWKS_KEYS
+                    or any(type(key) is not dict for key in raw_keys)
+                ):
+                    raise _JwksProviderStateError(
+                        "JWKS key count or shape is invalid"
+                    )
+                state.result = self._jwt.PyJWKSet.from_dict(jwk_data)
+        except _JwksProviderStateError as exc:
+            state.error = exc
         except HTTPError as exc:
             exc.close()
-            raise _JwksProviderStateError("JWKS HTTPS fetch failed") from exc
-        except (URLError, TimeoutError) as exc:
-            raise _JwksProviderStateError("JWKS HTTPS fetch failed") from exc
-        if type(jwk_data) is not dict:
-            raise _JwksProviderStateError("JWKS endpoint returned a non-object")
+            state.error = exc
+        except (URLError, TimeoutError, OSError, ValueError) as exc:
+            state.error = exc
+        except Exception:
+            state.error = _JwksProviderStateError(
+                "JWKS provider state is invalid"
+            )
+        finally:
+            state.completed.set()
+
+    def _read_jwks_document(
+        self,
+        response: object,
+        *,
+        deadline: float,
+    ) -> dict[str, Any]:
+        declared_length = self._declared_content_length(response)
+        if declared_length is not None and declared_length > _MAX_JWKS_BYTES:
+            raise _JwksProviderStateError("JWKS response exceeds the byte bound")
+
+        reader = getattr(response, "read1", None)
+        if not callable(reader):
+            reader = getattr(response, "read", None)
+        if not callable(reader):
+            raise _JwksProviderStateError("JWKS response is not readable")
+
+        body = bytearray()
+        while True:
+            if self._clock() >= deadline:
+                raise _JwksProviderStateError("JWKS HTTPS fetch deadline exceeded")
+            requested = min(
+                _JWKS_READ_CHUNK_BYTES,
+                _MAX_JWKS_BYTES + 1 - len(body),
+            )
+            chunk = reader(requested)
+            if self._clock() > deadline:
+                raise _JwksProviderStateError("JWKS HTTPS fetch deadline exceeded")
+            if type(chunk) is not bytes:
+                raise _JwksProviderStateError("JWKS response bytes are invalid")
+            if len(chunk) > requested:
+                raise _JwksProviderStateError("JWKS response chunk exceeds the bound")
+            if not chunk:
+                break
+            body.extend(chunk)
+            if len(body) > _MAX_JWKS_BYTES:
+                raise _JwksProviderStateError("JWKS response exceeds the byte bound")
+
+        if declared_length is not None and len(body) != declared_length:
+            raise _JwksProviderStateError("JWKS response length differs")
         try:
-            return self._jwt.PyJWKSet.from_dict(jwk_data)
-        except Exception as exc:
-            raise _JwksProviderStateError("JWKS provider state is invalid") from exc
+            parsed = json.loads(
+                body.decode("utf-8", errors="strict"),
+                parse_constant=_reject_json_constant,
+                object_pairs_hook=_object_without_duplicates,
+            )
+        except (
+            json.JSONDecodeError,
+            OidcError,
+            UnicodeDecodeError,
+            ValueError,
+            OverflowError,
+            RecursionError,
+        ) as exc:
+            raise _JwksProviderStateError("JWKS response JSON is invalid") from exc
+        if type(parsed) is not dict:
+            raise _JwksProviderStateError("JWKS endpoint returned a non-object")
+        return parsed
+
+    @staticmethod
+    def _declared_content_length(response: object) -> int | None:
+        headers = getattr(response, "headers", None)
+        if headers is None:
+            return None
+        get_all = getattr(headers, "get_all", None)
+        if callable(get_all):
+            values = get_all("Content-Length")
+            if values is not None:
+                if len(values) != 1:
+                    raise _JwksProviderStateError(
+                        "JWKS response length is ambiguous"
+                    )
+                raw_length = values[0]
+            else:
+                raw_length = None
+        else:
+            getter = getattr(headers, "get", None)
+            raw_length = getter("Content-Length") if callable(getter) else None
+        if raw_length is None:
+            return None
+        if type(raw_length) is not str:
+            raise _JwksProviderStateError("JWKS response length is invalid")
+        normalized_length = raw_length.strip()
+        significant_length = normalized_length.lstrip("0") or "0"
+        if (
+            not normalized_length.isdigit()
+            or len(significant_length) > len(str(_MAX_JWKS_BYTES))
+        ):
+            raise _JwksProviderStateError("JWKS response length is invalid")
+        return int(significant_length)
+
+    @staticmethod
+    def _abort_response(response: object | None) -> None:
+        closer = getattr(response, "close", None)
+        if callable(closer):
+            try:
+                closer()
+            except Exception:
+                pass
 
 
 @dataclass(frozen=True, slots=True)
@@ -577,7 +752,13 @@ class ProductionOidcVerifier:
         assert self._jwks_client is not None
         try:
             jwk_set = self._jwks_client.get_jwk_set(refresh=True)
-            raw_keys = tuple(jwk_set.keys)
+            provider_keys = getattr(jwk_set, "keys", None)
+            if (
+                type(provider_keys) not in (list, tuple)
+                or not 1 <= len(provider_keys) <= _MAX_JWKS_KEYS
+            ):
+                raise _JwksProviderStateError("JWKS key count is invalid")
+            raw_keys = tuple(provider_keys)
             signing_keys = self._validate_signing_keys(raw_keys)
         except _JwksProviderStateError:
             raise
@@ -595,11 +776,14 @@ class ProductionOidcVerifier:
         signing_keys: list[tuple[str, str, object]] = []
         identities: set[tuple[str, str]] = set()
         for key in raw_keys:
+            jwk_data = getattr(key, "_jwk_data", None)
+            if type(jwk_data) is not dict:
+                raise _JwksProviderStateError("JWKS key material is invalid")
+            self._reject_private_jwk_material(jwk_data)
             public_key_use = getattr(key, "public_key_use", None)
             if public_key_use not in (None, "sig"):
                 continue
-            jwk_data = getattr(key, "_jwk_data", None)
-            key_operations = jwk_data.get("key_ops") if type(jwk_data) is dict else None
+            key_operations = jwk_data.get("key_ops")
             if key_operations is not None and (
                 type(key_operations) is not list
                 or not key_operations
@@ -616,22 +800,26 @@ class ProductionOidcVerifier:
                 or verifier_key is None
             ):
                 continue
-            if (
-                type(jwk_data) is dict
-                and jwk_data.get("kty") == "RSA"
-                and (
-                    type(getattr(verifier_key, "key_size", None)) is not int
-                    or verifier_key.key_size < 2_048
-                )
+            algorithms = self._key_algorithms(key, jwk_data)
+            if not algorithms:
+                continue
+            self._require_public_verification_key(jwk_data, verifier_key)
+            if jwk_data.get("kty") == "RSA" and (
+                type(getattr(verifier_key, "key_size", None)) is not int
+                or verifier_key.key_size < 2_048
             ):
                 raise _JwksProviderStateError(
                     "JWKS contains an undersized RSA signing key"
                 )
-            for algorithm in self._key_algorithms(key, jwk_data):
+            for algorithm in algorithms:
                 identity = (key_id, algorithm)
                 if identity in identities:
                     raise _JwksProviderStateError(
                         "JWKS contains an ambiguous signing-key identity"
+                    )
+                if len(signing_keys) >= _MAX_JWKS_SIGNING_ENTRIES:
+                    raise _JwksProviderStateError(
+                        "JWKS signing-key entry count is invalid"
                     )
                 identities.add(identity)
                 signing_keys.append((key_id, algorithm, verifier_key))
@@ -639,6 +827,47 @@ class ProductionOidcVerifier:
         if not signing_keys:
             raise _JwksProviderStateError("JWKS has no usable signing key")
         return tuple(signing_keys)
+
+    @staticmethod
+    def _reject_private_jwk_material(jwk_data: dict[str, Any]) -> None:
+        key_type = jwk_data.get("kty")
+        if key_type == "RSA" and _RSA_PRIVATE_JWK_MEMBERS.intersection(jwk_data):
+            raise _JwksProviderStateError("JWKS contains private RSA key material")
+        if key_type in ("EC", "OKP") and "d" in jwk_data:
+            raise _JwksProviderStateError(
+                "JWKS contains private elliptic-curve key material"
+            )
+
+    @staticmethod
+    def _require_public_verification_key(
+        jwk_data: dict[str, Any],
+        verifier_key: object,
+    ) -> None:
+        from cryptography.hazmat.primitives.asymmetric import ec, ed25519, rsa
+
+        key_type = jwk_data.get("kty")
+        curve = jwk_data.get("crv")
+        if key_type == "RSA":
+            valid = isinstance(verifier_key, rsa.RSAPublicKey)
+        elif key_type == "EC":
+            expected_curve = {
+                "P-256": ec.SECP256R1,
+                "P-384": ec.SECP384R1,
+                "P-521": ec.SECP521R1,
+            }.get(curve)
+            valid = (
+                isinstance(verifier_key, ec.EllipticCurvePublicKey)
+                and expected_curve is not None
+                and isinstance(verifier_key.curve, expected_curve)
+            )
+        elif key_type == "OKP" and curve == "Ed25519":
+            valid = isinstance(verifier_key, ed25519.Ed25519PublicKey)
+        else:
+            valid = False
+        if not valid:
+            raise _JwksProviderStateError(
+                "JWKS signing key is not the required public key type"
+            )
 
     def _key_algorithms(
         self, key: object, jwk_data: object
@@ -1074,11 +1303,13 @@ class ProductionAuthenticationRuntime(AuthenticationRuntime):
 
 
 def _bearer_token(authorization: object) -> str:
-    if type(authorization) is not str:
+    if authorization is None:
         raise OidcError(PreBindingOutcome.NO_CREDENTIAL)
+    if type(authorization) is not str:
+        raise OidcError(PreBindingOutcome.INVALID_CREDENTIAL)
     pieces = authorization.split(" ")
     if len(pieces) != 2 or pieces[0].lower() != "bearer" or not pieces[1]:
-        raise OidcError(PreBindingOutcome.NO_CREDENTIAL)
+        raise OidcError(PreBindingOutcome.INVALID_CREDENTIAL)
     return pieces[1]
 
 

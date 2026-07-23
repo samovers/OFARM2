@@ -5,9 +5,9 @@ principal-derivation: a VERIFIED bearer token yields the Party transport
 principal (replacing the X-Acting-Party dev header), the actor-binding contract
 and default-deny are preserved, and authority is unchanged — a role claim alone
 never authorizes (authority still comes only from grants, D4). The verifier is
-the zero-dependency HS256 dev/conformance path; RS256/JWKS (Keycloak) is a
-deliberate NotImplemented production path with no silent fallback. All identifiers
-fictional.
+the explicit zero-dependency HS256 test path; the maintained RS256/JWKS
+production verifier is exercised separately and there is no silent fallback.
+All identifiers are fictional.
 """
 from __future__ import annotations
 
@@ -19,11 +19,6 @@ import time
 import uuid
 
 import pytest
-
-
-def uid():
-    return uuid.uuid4().hex[:8]
-
 from fastapi.testclient import TestClient
 
 from kernel import demo
@@ -33,6 +28,10 @@ from kernel.auth_oidc import OidcConfig, OidcError, issue_dev_token
 ISSUER = "https://keycloak.example/realms/ofarm-dev"
 AUDIENCE = "ofarm2-kernel"
 SECRET = "dev-conformance-secret-not-production"
+
+
+def uid():
+    return uuid.uuid4().hex[:8]
 
 
 def _cfg(**over):
@@ -61,17 +60,23 @@ def _bearer(token):
     return {"Authorization": f"Bearer {token}"}
 
 
+def _encode_json_segment(document: dict) -> str:
+    return base64.urlsafe_b64encode(
+        json.dumps(document, separators=(",", ":")).encode()
+    ).rstrip(b"=").decode()
+
+
 def _raw_token(header: dict, payload: dict, signature: str = "x") -> str:
-    enc = lambda d: base64.urlsafe_b64encode(
-        json.dumps(d, separators=(",", ":")).encode()).rstrip(b"=").decode()
-    return f"{enc(header)}.{enc(payload)}.{signature}"
+    return (
+        f"{_encode_json_segment(header)}."
+        f"{_encode_json_segment(payload)}."
+        f"{signature}"
+    )
 
 
 def _signed(header: dict, payload: dict, secret: str = SECRET) -> str:
     """A correctly HS256-SIGNED token with a CUSTOM header (e.g. carrying crit/b64)."""
-    enc = lambda d: base64.urlsafe_b64encode(
-        json.dumps(d, separators=(",", ":")).encode()).rstrip(b"=").decode()
-    h, p = enc(header), enc(payload)
+    h, p = _encode_json_segment(header), _encode_json_segment(payload)
     sig = base64.urlsafe_b64encode(
         hmac.new(secret.encode(), f"{h}.{p}".encode(), hashlib.sha256).digest()).rstrip(b"=").decode()
     return f"{h}.{p}.{sig}"
@@ -152,7 +157,7 @@ def test_g4_invalid_tokens_denied(store):
                            secret=SECRET))                        # no sub
 
 
-def test_g4_rs256_is_not_implemented_no_fallback(store):
+def test_g4_local_hs256_config_refuses_rs256_without_fallback(store):
     # The local fixture verifier cannot become a production verifier by changing
     # an algorithm string, and never falls back to HS256.
     cfg = _cfg(algorithm="RS256")

@@ -516,6 +516,11 @@
       "sourcePath": "kernel/tests/test_m2_oidc.py"
     },
     {
+      "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_local_hs256_config_refuses_rs256_without_fallback",
+      "sourceModule": "kernel.tests.test_m2_oidc",
+      "sourcePath": "kernel/tests/test_m2_oidc.py"
+    },
+    {
       "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_non_finite_numericdate_is_fail_closed_401",
       "sourceModule": "kernel.tests.test_m2_oidc",
       "sourcePath": "kernel/tests/test_m2_oidc.py"
@@ -527,11 +532,6 @@
     },
     {
       "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_role_claim_alone_does_not_authorize",
-      "sourceModule": "kernel.tests.test_m2_oidc",
-      "sourcePath": "kernel/tests/test_m2_oidc.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_rs256_is_not_implemented_no_fallback",
       "sourceModule": "kernel.tests.test_m2_oidc",
       "sourcePath": "kernel/tests/test_m2_oidc.py"
     },
@@ -5346,6 +5346,306 @@
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
     {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_absent_authorization_is_no_credential",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_alg_less_rsa_jwk_supports_configured_ps256",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_bearer_scheme_is_case_insensitive_but_shape_is_exact",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_duplicate_or_encryption_only_jwks_refuses_startup",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_duplicate_signing_identity_after_refresh_is_verifier_unavailable",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_exact_identity_policy_refuses_noncanonical_values[claims0]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_exact_identity_policy_refuses_noncanonical_values[claims1]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_exact_identity_policy_refuses_noncanonical_values[claims2]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_exact_identity_policy_refuses_noncanonical_values[claims3]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_exact_identity_policy_refuses_noncanonical_values[claims4]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_exact_identity_policy_refuses_noncanonical_values[claims5]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_exact_identity_policy_refuses_noncanonical_values[claims6]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_failed_jwks_miss_refresh_keeps_unknown_keys_invalid_and_bounded",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_generated_jwks_signing_entry_count_is_bounded",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_incompatible_declared_jwk_algorithm_is_rejected_at_startup[EC-P-256-ES384]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_incompatible_declared_jwk_algorithm_is_rejected_at_startup[EC-P-384-ES256]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_incompatible_declared_jwk_algorithm_is_rejected_at_startup[OKP-Ed448-EdDSA]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_incompatible_declared_jwk_algorithm_is_rejected_at_startup[OKP-X25519-EdDSA]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_jwk_type_or_curve_mismatch_is_rejected_at_startup[jwk_data0-verifier_key0-RS256]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_jwk_type_or_curve_mismatch_is_rejected_at_startup[jwk_data1-verifier_key1-ES256]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_jwk_type_or_curve_mismatch_is_rejected_at_startup[jwk_data2-verifier_key2-EdDSA]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_jwks_key_count_is_bounded_before_materialization",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_jwks_miss_refresh_does_not_lock_current_key_verification",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_jwks_transport_accepts_a_valid_chunked_document",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_jwks_transport_enforces_one_monotonic_end_to_end_deadline",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_jwks_transport_rejects_non_strict_json[{\"keys\":[],\"extension\":Infinity}]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_jwks_transport_rejects_non_strict_json[{\"keys\":[],\"extension\":NaN}]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_jwks_transport_rejects_non_strict_json[{\"keys\":[],\"keys\":[]}]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_jwks_transport_rejects_non_strict_json[{\"keys\":[{\"kty\":\"RSA\",\"kid\":\"one\",\"kid\":\"two\"}]}]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_jwks_transport_rejects_oversized_response_bytes[False]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_jwks_transport_rejects_oversized_response_bytes[True]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_key_id_and_time_failures_are_closed",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_malformed_ipv6_jwks_url_is_a_startup_error",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_oversized_numeric_date_refuses_before_key_selection",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_present_malformed_authorization_is_invalid_credential[Basic dXNlcjpwYXNz]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_present_malformed_authorization_is_invalid_credential[Bearer  token]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_present_malformed_authorization_is_invalid_credential[Bearer ]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_present_malformed_authorization_is_invalid_credential[Bearer/ttoken]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_present_malformed_authorization_is_invalid_credential[Bearer]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_present_malformed_authorization_is_invalid_credential[]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_present_malformed_authorization_is_invalid_credential[authorization6]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_private_jwk_material_is_rejected_at_startup[EC]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_private_jwk_material_is_rejected_at_startup[OKP]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_private_jwk_material_is_rejected_at_startup[RSA]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_production_jwks_refuses_downgraded_final_target[ftp://issuer.example.test/tenant/jwks]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_production_jwks_refuses_downgraded_final_target[http://issuer.example.test/tenant/jwks]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_production_jwks_transport_disables_every_redirect",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_production_verifier_accepts_a_new_key_id_after_jwks_rotation",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_production_verifier_accepts_one_exact_asymmetric_identity",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_provider_outage_after_jwks_expiry_is_verifier_unavailable",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_provider_outage_is_a_safe_unavailable_outcome",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_removed_used_key_expires_with_the_bounded_jwks_generation",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_same_kid_key_replacement_takes_effect_after_jwks_lifespan",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_slow_failed_expiry_refresh_is_non_blocking_and_retry_bounded",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_slow_unknown_key_refresh_is_non_blocking_and_completion_bounded",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_undersized_rsa_jwks_is_rejected[PS256-False]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_undersized_rsa_jwks_is_rejected[PS256-True]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_undersized_rsa_jwks_is_rejected[RS256-False]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_undersized_rsa_jwks_is_rejected[RS256-True]",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc_verifier.py::test_unknown_key_ids_share_one_bounded_jwks_miss_refresh",
+      "sourceModule": "kernel.tests.test_production_oidc_verifier",
+      "sourcePath": "kernel/tests/test_production_oidc_verifier.py"
+    },
+    {
       "nodeid": "kernel/tests/test_profile_harness_bridge.py::test_profile_harness_declared_modules_have_root_collection_bridges",
       "sourceModule": "kernel.tests.test_profile_harness_bridge",
       "sourcePath": "kernel/tests/test_profile_harness_bridge.py"
@@ -7656,8 +7956,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "dbe21750708c3cddbbd36641b2a9423ba65dc2436e03951548fb2cb5b51256a5",
-  "entryCount": 1531,
+  "entriesSha256": "73f8055af7aa27e519a0c9d648aa414d7f3ee25ae20ce51ead7fba8b8aa25ae9",
+  "entryCount": 1591,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
