@@ -94,6 +94,15 @@ Cloud KMS client, verifies its HSM identity, CRC32C, and Ed25519 receipt
 signature, and requires the receipt to name the exact signing key configured by
 `OFARM_TENANT_CAPABILITY_SIGNING_KEY_VERSION`. The signing key and observer key
 must belong to different Cloud KMS CryptoKeys, not merely different versions.
+Before constructing any Cloud KMS client, application composition validates
+both complete key-version resources and requires distinct absolute
+`OFARM_SIGNING_EVIDENCE_RECEIPT_PATH` and
+`OFARM_SIGNING_EVIDENCE_HIGH_WATER_PATH` values.
+It then initializes authentication once, consumes the resolver's validated
+database-pinned `tenant_binder_instance` audience, and only then constructs the
+KMS boundary. The OIDC token audience is never reused as the binder audience,
+and repeated application-runtime initialization performs no second
+authentication initialization.
 Raw private key
 material and duck-typed signing clients are never accepted: construction
 requires the sealed adapter to construct the maintained Google Cloud KMS client
@@ -112,8 +121,11 @@ receipt can remain in use only while it is still valid; expired or
 non-monotonic evidence never becomes a fallback.
 
 The application factory closes over the initialized authentication runtime
-rather than dereferencing mutable Starlette state. Production also refuses every
-authenticated legacy Store-backed endpoint with `TENANT_BOUNDARY_BLOCKED`.
+rather than dereferencing mutable Starlette state. Starlette state exposes only
+frozen authentication mode and verifier-kind metadata; it exposes no verifier,
+resolver, authentication runtime, or principal-dependency alias. Production
+also refuses every authenticated legacy Store-backed endpoint with
+`TENANT_BOUNDARY_BLOCKED`.
 The full immutable principal-binding authority remains attached until that
 refusal; it is never reduced to a Party reference and applied to an independently
 selected Store. #173 must supply the tenant-bound UnitOfWork before this surface

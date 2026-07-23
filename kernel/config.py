@@ -7,6 +7,7 @@ package-local development cluster created for M1.
 from __future__ import annotations
 
 import base64
+from dataclasses import dataclass
 import os
 from pathlib import Path
 
@@ -103,6 +104,78 @@ def _bounded_environment_int(name: str, default: int) -> int:
         raise AuthenticationStartupError(f"{name} must be an integer") from exc
 
 
+@dataclass(frozen=True, slots=True)
+class _ProductionSigningConfiguration:
+    signing_key_resource: str
+    observer_key_resource: str
+    receipt_path: Path
+    high_water_path: Path
+
+
+def _production_signing_configuration_from_env(
+) -> _ProductionSigningConfiguration:
+    """Validate every static signing input before a KMS client can exist."""
+
+    from deployment.postgresql.tenant_contract import (
+        TenantCapabilityContractError,
+        validate_google_kms_key_version_resource,
+    )
+
+    from .auth_oidc import AuthenticationStartupError
+
+    try:
+        signing_key_resource = validate_google_kms_key_version_resource(
+            os.environ.get(
+                "OFARM_TENANT_CAPABILITY_SIGNING_KEY_VERSION"
+            )
+        )
+        observer_key_resource = validate_google_kms_key_version_resource(
+            os.environ.get(
+                "OFARM_SIGNING_EVIDENCE_OBSERVER_KEY_VERSION"
+            )
+        )
+    except TenantCapabilityContractError as exc:
+        raise AuthenticationStartupError(
+            "production KMS key resource configuration is invalid"
+        ) from exc
+
+    receipt_value = os.environ.get(
+        "OFARM_SIGNING_EVIDENCE_RECEIPT_PATH"
+    )
+    high_water_value = os.environ.get(
+        "OFARM_SIGNING_EVIDENCE_HIGH_WATER_PATH"
+    )
+    if (
+        type(receipt_value) is not str
+        or not receipt_value
+        or not Path(receipt_value).is_absolute()
+        or type(high_water_value) is not str
+        or not high_water_value
+        or not Path(high_water_value).is_absolute()
+        or Path(receipt_value) == Path(high_water_value)
+    ):
+        raise AuthenticationStartupError(
+            "production signing-evidence path configuration is invalid"
+        )
+
+    signing_key_parent = signing_key_resource.rpartition(
+        "/cryptoKeyVersions/"
+    )[0]
+    observer_key_parent = observer_key_resource.rpartition(
+        "/cryptoKeyVersions/"
+    )[0]
+    if signing_key_parent == observer_key_parent:
+        raise AuthenticationStartupError(
+            "production signing and observer CryptoKeys must differ"
+        )
+    return _ProductionSigningConfiguration(
+        signing_key_resource=signing_key_resource,
+        observer_key_resource=observer_key_resource,
+        receipt_path=Path(receipt_value),
+        high_water_path=Path(high_water_value),
+    )
+
+
 def authentication_runtime_from_env(*, principal_binding_resolver=None):
     """Build exactly the authentication mode named by ``OFARM_AUTH_MODE``.
 
@@ -195,7 +268,6 @@ def production_application_runtime(
         GoogleKmsEd25519PublicKey,
         derive_ed25519_key_id,
         raw_public_key_digest,
-        validate_google_kms_key_version_resource,
     )
 
     from .auth_oidc import (
@@ -216,10 +288,13 @@ def production_application_runtime(
         )
 
     try:
-        signing_key_resource = validate_google_kms_key_version_resource(
-            _required_environment(
-                "OFARM_TENANT_CAPABILITY_SIGNING_KEY_VERSION"
-            )
+        signing_configuration = (
+            _production_signing_configuration_from_env()
+        )
+        signing_key_resource = signing_configuration.signing_key_resource
+        authentication_runtime.initialize()
+        binder_audience = (
+            authentication_runtime.principal_binding_resolver.audience
         )
 
         kms_client = GoogleCloudKmsClientAdapter()
@@ -247,12 +322,13 @@ def production_application_runtime(
         signer = GoogleKmsEd25519Signer(
             client=kms_client,
             public_key=observation,
+            audience=binder_audience,
         )
         issuer = ProductionTenantCapabilityIssuer(
             resolver=authentication_runtime.principal_binding_resolver,
             signer=signer,
         )
-        return ProductionApplicationRuntime(
+        return ProductionApplicationRuntime.from_initialized_authentication(
             authentication=authentication_runtime,
             capability_issuer=issuer,
         )

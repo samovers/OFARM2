@@ -24,7 +24,10 @@ from .runtime_activation import (
     require_deployment_image_digest,
 )
 from .runtime_bundle import RuntimeBundleBuilder, RuntimeComponentRole
-from .runtime_composition import ProductionApplicationRuntime
+from .runtime_composition import (
+    AuthenticationRuntimeMetadata,
+    ProductionApplicationRuntime,
+)
 from .store import Store
 from .views import OutputGenerator
 
@@ -210,9 +213,14 @@ def _create_app_with_runtime(
         app.state.store, active_descriptor=app.state.store.active_descriptor)
     app.state.outputs = OutputGenerator(
         app.state.store, active_descriptor=app.state.store.active_descriptor)
-    # Compatibility observation only. The authoritative immutable runtime is
-    # closed over by get_principal and cannot be replaced through app.state.
-    app.state.oidc = authentication_runtime.verifier
+    app.state.authentication = AuthenticationRuntimeMetadata(
+        mode=authentication_runtime.mode,
+        verifier_kind=(
+            "none"
+            if authentication_runtime.verifier is None
+            else type(authentication_runtime.verifier).__name__
+        ),
+    )
 
     @app.middleware("http")
     async def runtime_bundle_receipt_header(request, call_next):
@@ -275,8 +283,6 @@ def _create_app_with_runtime(
                 ),
             )
         return principal
-
-    app.state.get_principal = get_principal
 
     @app.get("/health")
     def health():

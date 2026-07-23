@@ -1,6 +1,106 @@
 {
   "entries": [
     {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_deployment_identity_preflight_precedes_runtime_construction",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_environment_modes_are_exact_and_production_forbids_hs256",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_legacy_oidc_argument_rejects_a_production_verifier",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_local_hs256_verifier_is_structurally_rejected_by_production",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_mode_is_required_and_never_inferred",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_production_app_rejects_test_runtime_subclasses_and_mutation",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_production_composition_initializes_every_boundary_and_propagates_refusal",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_production_refuses_legacy_store_surface_with_full_binding",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_production_rejects_a_verifier_with_injected_trust_inputs",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_production_runtime_uses_binding_not_subject_as_party",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_production_signer_uses_db_pinned_audience_without_reinitializing_auth",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_production_signing_configuration_refuses_before_any_kms_client[OFARM_SIGNING_EVIDENCE_HIGH_WATER_PATH-relative/head.json]",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_production_signing_configuration_refuses_before_any_kms_client[OFARM_SIGNING_EVIDENCE_OBSERVER_KEY_VERSION-not-a-kms-key-version]",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_production_signing_configuration_refuses_before_any_kms_client[OFARM_SIGNING_EVIDENCE_RECEIPT_PATH-relative/receipt.json]",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_production_signing_configuration_refuses_before_any_kms_client[OFARM_TENANT_CAPABILITY_SIGNING_KEY_VERSION-not-a-kms-key-version]",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_production_startup_requires_initialized_jwks_and_binding_resolver",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_request_authentication_has_no_mutable_app_state_authority_alias",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_safe_failure_outcome_does_not_expose_exception_detail",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_wrapped_hs256_verifier_is_rejected_at_production_construction",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_wrapped_or_mutable_binding_resolver_is_rejected_by_production",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
       "nodeid": "kernel/tests/test_conformance.py::test_01_append_only",
       "sourceModule": "kernel.tests.test_conformance",
       "sourcePath": "kernel/tests/test_conformance.py"
@@ -506,17 +606,12 @@
       "sourcePath": "kernel/tests/test_m2_oidc.py"
     },
     {
-      "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_from_env_default_reads_oidc_config_deterministically",
+      "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_from_env_requires_an_explicit_mode",
       "sourceModule": "kernel.tests.test_m2_oidc",
       "sourcePath": "kernel/tests/test_m2_oidc.py"
     },
     {
       "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_invalid_tokens_denied",
-      "sourceModule": "kernel.tests.test_m2_oidc",
-      "sourcePath": "kernel/tests/test_m2_oidc.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_local_hs256_config_refuses_rs256_without_fallback",
       "sourceModule": "kernel.tests.test_m2_oidc",
       "sourcePath": "kernel/tests/test_m2_oidc.py"
     },
@@ -531,12 +626,22 @@
       "sourcePath": "kernel/tests/test_m2_oidc.py"
     },
     {
+      "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_oversized_numericdate_is_fail_closed_401",
+      "sourceModule": "kernel.tests.test_m2_oidc",
+      "sourcePath": "kernel/tests/test_m2_oidc.py"
+    },
+    {
       "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_role_claim_alone_does_not_authorize",
       "sourceModule": "kernel.tests.test_m2_oidc",
       "sourcePath": "kernel/tests/test_m2_oidc.py"
     },
     {
       "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_shim_mode_uses_x_acting_party_when_oidc_disabled",
+      "sourceModule": "kernel.tests.test_m2_oidc",
+      "sourcePath": "kernel/tests/test_m2_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_test_verifier_cannot_select_rs256_or_fallback",
       "sourceModule": "kernel.tests.test_m2_oidc",
       "sourcePath": "kernel/tests/test_m2_oidc.py"
     },
@@ -8461,8 +8566,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "95c5eed9af2317db7ac59f12be5a2c6ffbc84bc7b4ffb366865e67a84de9b2a0",
-  "entryCount": 1692,
+  "entriesSha256": "72e2532c3ea949007324bf99741197b17a5d92268c3435fb350523e73f5d0356",
+  "entryCount": 1713,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

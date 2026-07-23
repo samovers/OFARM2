@@ -9,8 +9,10 @@ from uuid import uuid4
 import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import ed25519, rsa
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
+from deployment.postgresql.tenant_contract import derive_binder_audience
 from kernel import config, demo
 from kernel.api import create_app, create_test_app
 from kernel.auth_oidc import (
@@ -29,7 +31,10 @@ from kernel.principal_binding import (
     PrincipalBindingAuthority,
 )
 from kernel.runtime_activation import RuntimeActivationError
-from kernel.runtime_composition import ProductionApplicationRuntime
+from kernel.runtime_composition import (
+    AuthenticationRuntimeMetadata,
+    ProductionApplicationRuntime,
+)
 from kernel.tenant_capability import (
     CapabilityIssuanceError,
     GoogleCloudKmsClientAdapter,
@@ -49,6 +54,14 @@ class _SigningKey:
     algorithm_name: str
     key: object
     public_key_use: str | None = None
+    _jwk_data: dict[str, object] | None = None
+
+    def __post_init__(self) -> None:
+        if self._jwk_data is None and isinstance(self.key, rsa.RSAPublicKey):
+            self._jwk_data = {
+                "kty": "RSA",
+                "alg": self.algorithm_name,
+            }
 
 
 @dataclass
@@ -379,8 +392,26 @@ def test_deployment_identity_preflight_precedes_runtime_construction(
     assert constructed == []
 
 
-def test_production_composition_requires_signing_evidence_configuration(
+@pytest.mark.parametrize(
+    ("invalid_name", "invalid_value"),
+    (
+        (
+            "OFARM_TENANT_CAPABILITY_SIGNING_KEY_VERSION",
+            "not-a-kms-key-version",
+        ),
+        (
+            "OFARM_SIGNING_EVIDENCE_OBSERVER_KEY_VERSION",
+            "not-a-kms-key-version",
+        ),
+        ("OFARM_SIGNING_EVIDENCE_RECEIPT_PATH", "relative/receipt.json"),
+        ("OFARM_SIGNING_EVIDENCE_HIGH_WATER_PATH", "relative/head.json"),
+    ),
+)
+def test_production_signing_configuration_refuses_before_any_kms_client(
     monkeypatch,
+    tmp_path,
+    invalid_name,
+    invalid_value,
 ):
     runtime = AuthenticationRuntime.production(
         ProductionOidcVerifier(_production_oidc_config()),
@@ -395,6 +426,89 @@ def test_production_composition_requires_signing_evidence_configuration(
         "OFARM_SIGNING_EVIDENCE_OBSERVER_KEY_VERSION",
         "projects/ofarm1/locations/europe-west1/keyRings/auth/"
         "cryptoKeys/evidence-observer/cryptoKeyVersions/1",
+    )
+    monkeypatch.setenv(
+        "OFARM_SIGNING_EVIDENCE_RECEIPT_PATH",
+        str(tmp_path / "receipt.json"),
+    )
+    monkeypatch.setenv(
+        "OFARM_SIGNING_EVIDENCE_HIGH_WATER_PATH",
+        str(tmp_path / "high-water.json"),
+    )
+    monkeypatch.setenv(invalid_name, invalid_value)
+    constructions = []
+    authority_initializations = []
+    monkeypatch.setattr(
+        ProductionAuthenticationRuntime,
+        "initialize",
+        lambda _runtime: authority_initializations.append(True),
+    )
+    monkeypatch.setattr(
+        GoogleCloudKmsClientAdapter,
+        "__init__",
+        lambda _adapter: constructions.append(True),
+    )
+
+    with pytest.raises(
+        AuthenticationStartupError,
+        match="production (KMS key resource|signing-evidence path) "
+        "configuration is invalid",
+    ):
+        config.production_application_runtime(runtime)
+    assert constructions == []
+    assert authority_initializations == []
+
+
+def test_production_signer_uses_db_pinned_audience_without_reinitializing_auth(
+    monkeypatch,
+    tmp_path,
+):
+    resolver = PostgreSQLPrincipalBindingResolver(lambda: None)
+    runtime = AuthenticationRuntime.production(
+        ProductionOidcVerifier(_production_oidc_config()),
+        resolver,
+    )
+    binder_audience = derive_binder_audience(uuid4())
+    assert binder_audience != AUDIENCE
+    monkeypatch.setattr(
+        PostgreSQLPrincipalBindingResolver,
+        "audience",
+        property(lambda _resolver: binder_audience),
+        raising=False,
+    )
+    initialization_order = []
+
+    def initialize_authentication(selected_runtime):
+        initialization_order.append("authentication")
+        object.__setattr__(selected_runtime, "_initialized", True)
+
+    monkeypatch.setattr(
+        ProductionAuthenticationRuntime,
+        "initialize",
+        initialize_authentication,
+    )
+    monkeypatch.setattr(
+        ProductionTenantCapabilityIssuer,
+        "initialize",
+        lambda _issuer: initialization_order.append("capability"),
+    )
+    monkeypatch.setenv(
+        "OFARM_TENANT_CAPABILITY_SIGNING_KEY_VERSION",
+        "projects/ofarm1/locations/europe-west1/keyRings/auth/"
+        "cryptoKeys/capability/cryptoKeyVersions/1",
+    )
+    monkeypatch.setenv(
+        "OFARM_SIGNING_EVIDENCE_OBSERVER_KEY_VERSION",
+        "projects/ofarm1/locations/europe-west1/keyRings/auth/"
+        "cryptoKeys/evidence-observer/cryptoKeyVersions/1",
+    )
+    monkeypatch.setenv(
+        "OFARM_SIGNING_EVIDENCE_RECEIPT_PATH",
+        str(tmp_path / "receipt.json"),
+    )
+    monkeypatch.setenv(
+        "OFARM_SIGNING_EVIDENCE_HIGH_WATER_PATH",
+        str(tmp_path / "high-water.json"),
     )
     signing_private_key = ed25519.Ed25519PrivateKey.generate()
 
@@ -412,16 +526,26 @@ def test_production_composition_requires_signing_evidence_configuration(
         "get_ed25519_public_key",
         lambda _adapter, *, name: signing_private_key.public_key(),
     )
-    monkeypatch.delenv(
-        "OFARM_SIGNING_EVIDENCE_RECEIPT_PATH",
-        raising=False,
+    observed_audiences = []
+
+    def capture_audience(_signer, *, client, public_key, audience):
+        assert type(client) is GoogleCloudKmsClientAdapter
+        assert public_key.public_key == (
+            signing_private_key.public_key().public_bytes_raw()
+        )
+        observed_audiences.append(audience)
+
+    monkeypatch.setattr(
+        GoogleKmsEd25519Signer,
+        "__init__",
+        capture_audience,
     )
 
-    with pytest.raises(
-        AuthenticationStartupError,
-        match="production capability boundary construction failed",
-    ):
-        config.production_application_runtime(runtime)
+    composition = config.production_application_runtime(runtime)
+    assert observed_audiences == [binder_audience]
+    composition.initialize()
+    composition.initialize()
+    assert initialization_order == ["authentication", "capability"]
 
 
 def test_production_composition_initializes_every_boundary_and_propagates_refusal(
@@ -458,7 +582,9 @@ def test_production_composition_initializes_every_boundary_and_propagates_refusa
     assert "stale evidence detail" not in str(raised.value)
 
 
-def test_request_authentication_is_closed_over_not_loaded_from_app_state(store):
+def test_request_authentication_has_no_mutable_app_state_authority_alias(
+    store,
+):
     app = create_test_app(store, oidc=None)
 
     class MutableStateBypass:
@@ -467,12 +593,47 @@ def test_request_authentication_is_closed_over_not_loaded_from_app_state(store):
         def resolve_principal(self, **_kwargs):
             return demo.FARMER, None
 
-    app.state.authentication = MutableStateBypass()
-    with TestClient(app) as client:
-        response = client.get("/records/record:not-present")
+        def get_record(self, _record_ref):
+            return {
+                "record_kind": "ofarm.party.v0.1",
+                "payload": {"partyState": "ACTIVE"},
+            }
 
-    assert response.status_code == 401
-    assert response.json()["detail"]["reasonCode"] == "AUTHORITY_DENIED"
+    exposed = app.state._state
+    assert "oidc" not in exposed
+    assert "get_principal" not in exposed
+    assert type(exposed["authentication"]) is AuthenticationRuntimeMetadata
+    with pytest.raises(FrozenInstanceError):
+        exposed["authentication"].mode = AuthenticationMode.PRODUCTION
+
+    principal_dependencies = {
+        dependency.call
+        for route in app.routes
+        for dependency in getattr(
+            getattr(route, "dependant", None),
+            "dependencies",
+            (),
+        )
+        if getattr(dependency.call, "__name__", None) == "get_principal"
+    }
+    assert len(principal_dependencies) == 1
+    get_principal = principal_dependencies.pop()
+
+    for name, original in tuple(exposed.items()):
+        setattr(app.state, name, MutableStateBypass())
+        try:
+            with pytest.raises(HTTPException) as raised:
+                get_principal(
+                    authorization=None,
+                    x_acting_party=None,
+                )
+            assert raised.value.status_code == 401
+            assert (
+                raised.value.detail["reasonCode"]
+                == "AUTHORITY_DENIED"
+            )
+        finally:
+            setattr(app.state, name, original)
 
 
 def test_production_refuses_legacy_store_surface_with_full_binding(
