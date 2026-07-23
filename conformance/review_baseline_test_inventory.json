@@ -1,6 +1,21 @@
 {
   "entries": [
     {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_default_pyjwt_client_disables_unbounded_per_key_cache",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_duplicate_or_encryption_only_jwks_refuses_startup",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_duplicate_signing_identity_after_refresh_is_verifier_unavailable",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
       "nodeid": "kernel/tests/test_authentication_modes.py::test_environment_modes_are_exact_and_production_forbids_hs256",
       "sourceModule": "kernel.tests.test_authentication_modes",
       "sourcePath": "kernel/tests/test_authentication_modes.py"
@@ -46,6 +61,11 @@
       "sourcePath": "kernel/tests/test_authentication_modes.py"
     },
     {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_legacy_oidc_argument_rejects_a_production_verifier",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
       "nodeid": "kernel/tests/test_authentication_modes.py::test_local_hs256_verifier_is_structurally_rejected_by_production",
       "sourceModule": "kernel.tests.test_authentication_modes",
       "sourcePath": "kernel/tests/test_authentication_modes.py"
@@ -76,7 +96,27 @@
       "sourcePath": "kernel/tests/test_authentication_modes.py"
     },
     {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_provider_outage_after_jwks_expiry_is_verifier_unavailable",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_removed_used_key_expires_with_the_bounded_jwks_generation",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
       "nodeid": "kernel/tests/test_authentication_modes.py::test_safe_failure_outcome_does_not_expose_exception_detail",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_same_kid_key_replacement_takes_effect_after_jwks_lifespan",
+      "sourceModule": "kernel.tests.test_authentication_modes",
+      "sourcePath": "kernel/tests/test_authentication_modes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_modes.py::test_wrapped_hs256_verifier_is_rejected_at_production_construction",
       "sourceModule": "kernel.tests.test_authentication_modes",
       "sourcePath": "kernel/tests/test_authentication_modes.py"
     },
@@ -5271,6 +5311,31 @@
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_each_revoked_dependency[authority-fold]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_each_revoked_dependency[binding-digest]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_each_revoked_dependency[party-record]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_each_revoked_dependency[principal-binding]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_binding_startup_refuses_each_revoked_dependency[tenant-registry]",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_revoke_anti_barging_after_savepoint_retry",
       "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
@@ -5467,6 +5532,31 @@
     },
     {
       "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_resolver_folds_immutable_authority_and_never_reads_projection",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_resolver_startup_refuses_each_unavailable_read_dependency[from ofarm.fold_principal_binding_authority]",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_resolver_startup_refuses_each_unavailable_read_dependency[join ofarm.kernel_record as party]",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_resolver_startup_refuses_each_unavailable_read_dependency[join ofarm.principal_binding as binding]",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_resolver_startup_refuses_each_unavailable_read_dependency[join ofarm.tenant_registry as registry]",
+      "sourceModule": "kernel.tests.test_principal_binding_runtime",
+      "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_binding_runtime.py::test_resolver_startup_refuses_each_unavailable_read_dependency[ofarm.compute_principal_binding_version_digest(]",
       "sourceModule": "kernel.tests.test_principal_binding_runtime",
       "sourcePath": "kernel/tests/test_principal_binding_runtime.py"
     },
@@ -7611,8 +7701,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "da7d6e1a5fccacdd38875f0602747a63c6797f424f3afa3e0adae3efe4935b3d",
-  "entryCount": 1522,
+  "entriesSha256": "b1bed8ddd451d22a40cc22bcbba9bcc876df55f0fd08a98f8608d643cd192a8c",
+  "entryCount": 1540,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

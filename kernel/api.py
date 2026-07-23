@@ -77,11 +77,14 @@ def create_app(
     if authentication is not _FROM_ENV:
         authentication_runtime = authentication
     elif oidc is not _FROM_ENV:
-        authentication_runtime = (
-            auth_oidc.AuthenticationRuntime.development()
-            if oidc is None
-            else auth_oidc.AuthenticationRuntime.test(oidc)
-        )
+        if oidc is None:
+            authentication_runtime = auth_oidc.AuthenticationRuntime.development()
+        elif type(oidc) is auth_oidc.OidcConfig:
+            authentication_runtime = auth_oidc.AuthenticationRuntime.test(oidc)
+        else:
+            raise auth_oidc.AuthenticationStartupError(
+                "oidc compatibility setting accepts only exact OidcConfig or None"
+            )
     else:
         authentication_runtime = config.authentication_runtime_from_env(
             principal_binding_resolver=principal_binding_resolver

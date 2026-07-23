@@ -16,7 +16,8 @@ import re
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Protocol, runtime_checkable
+from threading import Lock
+from typing import Any, Callable, Protocol, final, runtime_checkable
 from urllib.parse import urlsplit
 
 from deployment.postgresql.tenant_contract import (
@@ -368,13 +369,39 @@ class ProductionOidcConfig:
             raise AuthenticationStartupError("production JWKS timeout is invalid")
 
 
-class ProductionOidcVerifier:
-    """Maintained PyJWT verifier with bounded cached JWKS rotation."""
+class _JwksProviderStateError(RuntimeError):
+    """A provider fetch or key-set state cannot safely verify credentials."""
 
-    def __init__(self, config: ProductionOidcConfig, *, jwks_client: object | None = None):
+
+@dataclass(frozen=True, slots=True)
+class _ValidatedJwksGeneration:
+    loaded_at: float
+    signing_keys: tuple[tuple[str, str, object], ...]
+
+    def select(self, key_id: str, algorithm: str) -> object | None:
+        for candidate_id, candidate_algorithm, candidate_key in self.signing_keys:
+            if candidate_id == key_id and candidate_algorithm == algorithm:
+                return candidate_key
+        return None
+
+
+@final
+class ProductionOidcVerifier:
+    """Maintained PyJWT verifier with bounded, validated JWKS generations."""
+
+    def __init__(
+        self,
+        config: ProductionOidcConfig,
+        *,
+        jwks_client: object | None = None,
+        clock: Callable[[], float] | None = None,
+    ):
         self.config = config
         self._jwks_client = jwks_client
+        self._clock = time.monotonic if clock is None else clock
         self._jwt: Any | None = None
+        self._generation: _ValidatedJwksGeneration | None = None
+        self._generation_lock = Lock()
         self._initialized = False
 
     @property
@@ -382,6 +409,8 @@ class ProductionOidcVerifier:
         return self._initialized
 
     def initialize(self) -> None:
+        self._initialized = False
+        self._generation = None
         self.config.validate()
         try:
             import jwt
@@ -393,30 +422,104 @@ class ProductionOidcVerifier:
         if self._jwks_client is None:
             self._jwks_client = jwt.PyJWKClient(
                 self.config.jwks_url,
-                cache_keys=True,
-                max_cached_keys=16,
+                cache_keys=False,
                 cache_jwk_set=True,
                 lifespan=self.config.jwks_lifespan_seconds,
                 timeout=self.config.timeout_seconds,
             )
         try:
-            jwk_set = self._jwks_client.get_jwk_set(refresh=True)
-            keys = tuple(jwk_set.keys)
-        except Exception as exc:
+            with self._generation_lock:
+                self._generation = self._load_generation()
+        except _JwksProviderStateError as exc:
             raise AuthenticationStartupError(
                 "production OIDC JWKS initialization failed"
             ) from exc
-        if not keys or not any(
-            getattr(key, "algorithm_name", None) in self.config.algorithms
-            and type(getattr(key, "key_id", None)) is str
-            and _VISIBLE_ASCII.fullmatch(getattr(key, "key_id")) is not None
-            and 1 <= len(getattr(key, "key_id")) <= 255
-            for key in keys
-        ):
-            raise AuthenticationStartupError(
-                "production OIDC JWKS has no usable keyed verifier"
-            )
         self._initialized = True
+
+    def _load_generation(self) -> _ValidatedJwksGeneration:
+        assert self._jwks_client is not None
+        try:
+            jwk_set = self._jwks_client.get_jwk_set(refresh=True)
+            raw_keys = tuple(jwk_set.keys)
+            signing_keys = self._validate_signing_keys(raw_keys)
+        except _JwksProviderStateError:
+            raise
+        except Exception as exc:
+            raise _JwksProviderStateError("JWKS provider fetch failed") from exc
+        return _ValidatedJwksGeneration(
+            loaded_at=self._clock(),
+            signing_keys=signing_keys,
+        )
+
+    def _validate_signing_keys(
+        self,
+        raw_keys: tuple[object, ...],
+    ) -> tuple[tuple[str, str, object], ...]:
+        signing_keys: list[tuple[str, str, object]] = []
+        identities: set[tuple[str, str]] = set()
+        for key in raw_keys:
+            public_key_use = getattr(key, "public_key_use", None)
+            if public_key_use not in (None, "sig"):
+                continue
+            jwk_data = getattr(key, "_jwk_data", None)
+            key_operations = jwk_data.get("key_ops") if type(jwk_data) is dict else None
+            if key_operations is not None and (
+                type(key_operations) is not list
+                or not key_operations
+                or any(type(operation) is not str for operation in key_operations)
+                or "verify" not in key_operations
+            ):
+                continue
+            algorithm = getattr(key, "algorithm_name", None)
+            key_id = getattr(key, "key_id", None)
+            verifier_key = getattr(key, "key", None)
+            if algorithm not in self.config.algorithms:
+                continue
+            if (
+                type(key_id) is not str
+                or _VISIBLE_ASCII.fullmatch(key_id) is None
+                or not 1 <= len(key_id.encode("ascii")) <= 255
+                or verifier_key is None
+            ):
+                continue
+            identity = (key_id, algorithm)
+            if identity in identities:
+                raise _JwksProviderStateError(
+                    "JWKS contains an ambiguous signing-key identity"
+                )
+            identities.add(identity)
+            signing_keys.append((key_id, algorithm, verifier_key))
+
+        if not signing_keys:
+            raise _JwksProviderStateError("JWKS has no usable signing key")
+        return tuple(signing_keys)
+
+    def _select_signing_key(self, key_id: str, algorithm: str) -> object:
+        try:
+            with self._generation_lock:
+                generation = self._generation
+                refreshed = False
+                if (
+                    generation is None
+                    or self._clock() - generation.loaded_at
+                    >= self.config.jwks_lifespan_seconds
+                ):
+                    generation = self._load_generation()
+                    self._generation = generation
+                    refreshed = True
+                selected = generation.select(key_id, algorithm)
+                if selected is None and not refreshed:
+                    generation = self._load_generation()
+                    self._generation = generation
+                    selected = generation.select(key_id, algorithm)
+        except _JwksProviderStateError as exc:
+            raise OidcError(
+                PreBindingOutcome.VERIFIER_UNAVAILABLE,
+                internal_detail="JWKS provider state is unavailable",
+            ) from exc
+        if selected is None:
+            raise OidcError(internal_detail="no matching JWKS signing key")
+        return selected
 
     def verify_identity(self, token: str) -> VerifiedOidcIdentity:
         if not self._initialized or self._jwt is None or self._jwks_client is None:
@@ -442,16 +545,11 @@ class ProductionOidcVerifier:
         _numeric_date(unverified_claims, "exp", required=True)
         _numeric_date(unverified_claims, "nbf", required=False)
         _numeric_date(unverified_claims, "iat", required=False)
+        verifier_key = self._select_signing_key(key_id, algorithm)
         try:
-            signing_key = self._jwks_client.get_signing_key(key_id)
-            if (
-                signing_key.key_id != key_id
-                or signing_key.algorithm_name != algorithm
-            ):
-                raise OidcError(internal_detail="selected JWKS key differs")
             claims = self._jwt.decode(
                 token,
-                signing_key.key,
+                verifier_key,
                 algorithms=[algorithm],
                 audience=self.config.audience,
                 issuer=self.config.issuer,
@@ -466,10 +564,13 @@ class ProductionOidcVerifier:
                     "verify_iss": True,
                 },
             )
-        except OidcError:
-            raise
-        except Exception as exc:
+        except self._jwt.exceptions.InvalidTokenError as exc:
             raise OidcError(internal_detail="maintained verifier refused token") from exc
+        except Exception as exc:
+            raise OidcError(
+                PreBindingOutcome.VERIFIER_UNAVAILABLE,
+                internal_detail="maintained verifier failed unexpectedly",
+            ) from exc
         if type(claims) is not dict or claims != unverified_claims:
             raise OidcError(internal_detail="verified claims representation differs")
         if claims.get("iss") != self.config.issuer:
@@ -497,20 +598,37 @@ class AuthenticationRuntime:
         return cls(AuthenticationMode.DEVELOPMENT)
 
     @classmethod
-    def test(cls, verifier: OidcVerifier) -> "AuthenticationRuntime":
+    def test(cls, verifier: OidcConfig) -> "AuthenticationRuntime":
+        cls._require_test_verifier(verifier)
         return cls(AuthenticationMode.TEST, verifier=verifier)
 
     @classmethod
     def production(
         cls,
-        verifier: OidcVerifier,
+        verifier: ProductionOidcVerifier,
         principal_binding_resolver: PrincipalBindingResolver,
     ) -> "AuthenticationRuntime":
+        cls._require_production_verifier(verifier)
         return cls(
             AuthenticationMode.PRODUCTION,
             verifier=verifier,
             principal_binding_resolver=principal_binding_resolver,
         )
+
+    @staticmethod
+    def _require_production_verifier(verifier: object) -> None:
+        if type(verifier) is not ProductionOidcVerifier:
+            raise AuthenticationStartupError(
+                "production requires the sealed ProductionOidcVerifier; "
+                "local HS256 and wrapped verifiers are forbidden"
+            )
+
+    @staticmethod
+    def _require_test_verifier(verifier: object) -> None:
+        if type(verifier) is not OidcConfig:
+            raise AuthenticationStartupError(
+                "test mode requires the exact local OidcConfig verifier"
+            )
 
     def initialize(self) -> None:
         if self.mode is AuthenticationMode.DEVELOPMENT:
@@ -521,16 +639,14 @@ class AuthenticationRuntime:
         elif self.mode is AuthenticationMode.TEST:
             if self.verifier is None or self.principal_binding_resolver is not None:
                 raise AuthenticationStartupError("test authentication shape is invalid")
+            self._require_test_verifier(self.verifier)
             self.verifier.initialize()
         elif self.mode is AuthenticationMode.PRODUCTION:
             if self.verifier is None or self.principal_binding_resolver is None:
                 raise AuthenticationStartupError(
                     "production verifier and principal-binding resolver are required"
                 )
-            if isinstance(self.verifier, OidcConfig):
-                raise AuthenticationStartupError(
-                    "the local HS256 verifier is unavailable in production"
-                )
+            self._require_production_verifier(self.verifier)
             self.verifier.initialize()
             self.principal_binding_resolver.initialize()
         else:

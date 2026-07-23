@@ -66,10 +66,6 @@ class PrincipalBindingAuthority:
 class PostgreSQLPrincipalBindingResolver:
     """Resolve an exact active version without consulting the projection."""
 
-    _PROBE_SQL = """
-        SELECT current_state
-          FROM ofarm.fold_principal_binding_authority(%s, %s, %s)
-    """
     _RESOLVE_SQL = """
         WITH observed AS MATERIALIZED (
             SELECT pg_catalog.clock_timestamp() AS database_now
@@ -144,25 +140,46 @@ class PostgreSQLPrincipalBindingResolver:
            AND binding.valid_from <= observed.database_now
            AND observed.database_now < binding.valid_until
     """
+    _DIGEST_READINESS_SQL = """
+        SELECT ofarm.compute_principal_binding_version_digest(
+            NULL::pg_catalog.text,
+            NULL::pg_catalog.text,
+            NULL::pg_catalog.text,
+            NULL::pg_catalog.uuid,
+            NULL::pg_catalog.uuid,
+            NULL::pg_catalog.text,
+            NULL::pg_catalog.text,
+            NULL::pg_catalog.text,
+            NULL::pg_catalog.text,
+            NULL::pg_catalog.text,
+            NULL::pg_catalog.text,
+            NULL::pg_catalog.text,
+            NULL::pg_catalog.timestamptz,
+            NULL::pg_catalog.timestamptz,
+            NULL::pg_catalog.uuid
+        )
+    """
 
     def __init__(self, connection_factory: ConnectionFactory):
         self._connection_factory = connection_factory
         self._initialized = False
 
     def initialize(self) -> None:
+        startup_params = (
+            OIDC_ISSUER_EQUALITY_POLICY,
+            "https://principal-binding-startup.invalid",
+            "startup-probe",
+        ) * 3
         try:
             with self._connection_factory() as connection:
                 connection.execute(
-                    self._PROBE_SQL,
-                    (
-                        OIDC_ISSUER_EQUALITY_POLICY,
-                        "https://principal-binding-startup.invalid",
-                        "startup-probe",
-                    ),
+                    self._RESOLVE_SQL,
+                    startup_params,
                 ).fetchall()
+                connection.execute(self._DIGEST_READINESS_SQL).fetchone()
         except Exception as exc:
             raise AuthenticationStartupError(
-                "principal-binding authority fold is unavailable"
+                "principal-binding immutable read path is unavailable"
             ) from exc
         self._initialized = True
 

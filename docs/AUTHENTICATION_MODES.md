@@ -20,9 +20,12 @@ Production refuses `OFARM_OIDC_HS256_SECRET`. It requires
 `OFARM_OIDC_ISSUER`, `OFARM_OIDC_AUDIENCE`, and `OFARM_OIDC_JWKS_URL`.
 `OFARM_OIDC_ALGORITHMS` is an explicit comma-separated asymmetric allow-list
 and defaults to `RS256`; whitespace is not normalized. The verifier fetches a
-fresh JWKS at startup and caches it for a bounded interval. Token `alg` and
-`kid` must select one exact usable key. Missing configuration, JWKS outage, an
-empty or unsuitable key set, or an unavailable binding resolver stops startup.
+fresh JWKS at startup and caches one validated key-set generation for a bounded
+interval. It never enables PyJWT's unbounded per-key cache. Each refresh rejects
+duplicate usable `(kid, alg)` identities and keys not eligible for signature
+verification before atomically replacing the generation. Token `alg` and `kid`
+must select one exact usable key. Missing configuration, JWKS outage, an empty
+or unsuitable key set, or an unavailable binding resolver stops startup.
 
 ## Exact principal policy
 
@@ -41,6 +44,9 @@ named by that authoritative fold. It does not use `principal_binding_current`.
 The active version must pin the immutable tenant registration and ACTIVE
 `ofarm.party.v0.1` identity, schema, and payload digests. Missing, inactive,
 expired, ambiguous, or digest-inconsistent state refuses.
+Startup executes this complete query with a reserved no-match identity and
+separately prepares its exact digest call, so missing grants, relations,
+columns, functions, or types refuse before traffic is served.
 
 Lifecycle mutations use only #174's digest functions and
 `transition_principal_binding` with an expected lifecycle head. The controller
@@ -83,3 +89,6 @@ Only these enum values may cross the future #192 pre-binding audit seam:
 They carry no token, issuer, subject, Party or tenant value, key or signature,
 request value, SQL detail, provider response, stack trace, or raw exception
 text. #192 may persist the closed outcome later; this implementation does not.
+Malformed, unreachable, or expired-cache JWKS provider state is
+`VERIFIER_UNAVAILABLE`; malformed tokens, unknown keys in a healthy generation,
+bad signatures, and invalid claims are `INVALID_CREDENTIAL`.

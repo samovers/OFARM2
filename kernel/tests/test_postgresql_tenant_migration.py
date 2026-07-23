@@ -8,6 +8,7 @@ import os
 import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Mapping
@@ -47,6 +48,8 @@ from deployment.postgresql.tenant_contract import (
     valid_oidc_issuer,
     validate_tenant_capability,
 )
+from kernel.auth_oidc import AuthenticationStartupError
+from kernel.principal_binding import PostgreSQLPrincipalBindingResolver
 from kernel.tests.tenant_capability_fixture import (
     RFC8032_TEST_PUBLIC_KEY,
     RFC8032_TEST_SEED,
@@ -76,6 +79,67 @@ SHA256_ZERO = "sha256:" + "00" * 32
 RUNTIME_LOGICAL_REF_PREFIX = "rules/reference#v1/"
 RUNTIME_LOGICAL_REF_MAX = RUNTIME_LOGICAL_REF_PREFIX + "a" * (
     1024 - len(RUNTIME_LOGICAL_REF_PREFIX)
+)
+PRINCIPAL_BINDING_READINESS_ACLS = (
+    pytest.param(
+        "REVOKE SELECT ON TABLE ofarm.principal_binding FROM ofarm_binder",
+        "GRANT SELECT ON TABLE ofarm.principal_binding TO ofarm_binder",
+        id="principal-binding",
+    ),
+    pytest.param(
+        "REVOKE SELECT ON TABLE ofarm.tenant_registry FROM ofarm_binder",
+        "GRANT SELECT ON TABLE ofarm.tenant_registry TO ofarm_binder",
+        id="tenant-registry",
+    ),
+    pytest.param(
+        """
+        REVOKE SELECT (
+            tenant_id, record_id, record_kind, schema_digest, payload_digest,
+            party_state, party_id
+        ) ON TABLE ofarm.kernel_record FROM ofarm_binder
+        """,
+        """
+        GRANT SELECT (
+            tenant_id, record_id, record_kind, schema_digest, payload_digest,
+            party_state, party_id
+        ) ON TABLE ofarm.kernel_record TO ofarm_binder
+        """,
+        id="party-record",
+    ),
+    pytest.param(
+        """
+        REVOKE EXECUTE ON FUNCTION ofarm.fold_principal_binding_authority(
+            pg_catalog.text, pg_catalog.text, pg_catalog.text
+        ) FROM ofarm_binder
+        """,
+        """
+        GRANT EXECUTE ON FUNCTION ofarm.fold_principal_binding_authority(
+            pg_catalog.text, pg_catalog.text, pg_catalog.text
+        ) TO ofarm_binder
+        """,
+        id="authority-fold",
+    ),
+    pytest.param(
+        """
+        REVOKE EXECUTE ON FUNCTION
+        ofarm.compute_principal_binding_version_digest(
+            pg_catalog.text, pg_catalog.text, pg_catalog.text, pg_catalog.uuid,
+            pg_catalog.uuid, pg_catalog.text, pg_catalog.text, pg_catalog.text,
+            pg_catalog.text, pg_catalog.text, pg_catalog.text, pg_catalog.text,
+            pg_catalog.timestamptz, pg_catalog.timestamptz, pg_catalog.uuid
+        ) FROM ofarm_binder
+        """,
+        """
+        GRANT EXECUTE ON FUNCTION
+        ofarm.compute_principal_binding_version_digest(
+            pg_catalog.text, pg_catalog.text, pg_catalog.text, pg_catalog.uuid,
+            pg_catalog.uuid, pg_catalog.text, pg_catalog.text, pg_catalog.text,
+            pg_catalog.text, pg_catalog.text, pg_catalog.text, pg_catalog.text,
+            pg_catalog.timestamptz, pg_catalog.timestamptz, pg_catalog.uuid
+        ) TO ofarm_binder
+        """,
+        id="binding-digest",
+    ),
 )
 
 
@@ -144,6 +208,13 @@ def _admin_dsn() -> str:
     return value
 
 
+@contextmanager
+def _binder_connection(target_admin_dsn: str):
+    with psycopg.connect(target_admin_dsn) as connection:
+        connection.execute("SET LOCAL ROLE ofarm_binder")
+        yield connection
+
+
 @pytest.fixture(scope="module")
 def tenant_target() -> TenantTarget:
     admin_dsn = _admin_dsn()
@@ -186,6 +257,32 @@ def tenant_target() -> TenantTarget:
         )
     finally:
         _destroy_test_service(admin_dsn, spec)
+
+
+@pytest.mark.parametrize(("revoke_sql", "grant_sql"), PRINCIPAL_BINDING_READINESS_ACLS)
+def test_principal_binding_startup_refuses_each_revoked_dependency(
+    tenant_target: TenantTarget,
+    revoke_sql: str,
+    grant_sql: str,
+) -> None:
+    def connection_factory():
+        return _binder_connection(tenant_target.target_admin_dsn)
+
+    PostgreSQLPrincipalBindingResolver(connection_factory).initialize()
+
+    with psycopg.connect(
+        tenant_target.target_admin_dsn,
+        autocommit=True,
+    ) as admin:
+        admin.execute(revoke_sql)
+        try:
+            with pytest.raises(
+                AuthenticationStartupError,
+                match="principal-binding immutable read path is unavailable",
+            ):
+                PostgreSQLPrincipalBindingResolver(connection_factory).initialize()
+        finally:
+            admin.execute(grant_sql)
 
 
 def _sha256_id(value: bytes) -> str:

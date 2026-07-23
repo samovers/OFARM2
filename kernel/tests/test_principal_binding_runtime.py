@@ -20,7 +20,12 @@ from deployment.postgresql.tenant_contract import (
     derive_ed25519_key_id,
     raw_public_key_digest,
 )
-from kernel.auth_oidc import OidcError, PreBindingOutcome, VerifiedOidcIdentity
+from kernel.auth_oidc import (
+    AuthenticationStartupError,
+    OidcError,
+    PreBindingOutcome,
+    VerifiedOidcIdentity,
+)
 from kernel.principal_binding import (
     BindingLifecycleHead,
     BindingTransitionRequest,
@@ -140,6 +145,32 @@ def test_resolver_folds_immutable_authority_and_never_reads_projection():
     assert "join ofarm.principal_binding" in sql
     assert "join ofarm.tenant_registry" in sql
     assert "join ofarm.kernel_record" in sql
+
+
+@pytest.mark.parametrize(
+    "dependency",
+    (
+        "from ofarm.fold_principal_binding_authority",
+        "join ofarm.principal_binding as binding",
+        "join ofarm.tenant_registry as registry",
+        "join ofarm.kernel_record as party",
+        "ofarm.compute_principal_binding_version_digest(",
+    ),
+)
+def test_resolver_startup_refuses_each_unavailable_read_dependency(dependency):
+    def handler(query, _params):
+        if dependency in query.lower():
+            raise PermissionError(f"simulated revoked dependency: {dependency}")
+        return _Result(many=[])
+
+    resolver = PostgreSQLPrincipalBindingResolver(
+        _Factory(_Connection(handler))
+    )
+    with pytest.raises(
+        AuthenticationStartupError,
+        match="principal-binding immutable read path is unavailable",
+    ):
+        resolver.initialize()
 
 
 def test_missing_or_ambiguous_binding_fails_closed_with_safe_outcome():

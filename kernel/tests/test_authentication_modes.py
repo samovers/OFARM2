@@ -9,6 +9,7 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 
 from kernel import config
+from kernel.api import create_app
 from kernel.auth_oidc import (
     AuthenticationMode,
     AuthenticationRuntime,
@@ -31,6 +32,7 @@ class _SigningKey:
     key_id: str
     algorithm_name: str
     key: object
+    public_key_use: str | None = None
 
 
 @dataclass
@@ -74,7 +76,13 @@ def rsa_keys():
     return private, private.public_key()
 
 
-def _production_verifier(rsa_keys, *, client=None):
+def _production_verifier(
+    rsa_keys,
+    *,
+    client=None,
+    clock=None,
+    jwks_lifespan_seconds=300,
+):
     _, public = rsa_keys
     selected = client or _JwksClient([_SigningKey("key-1", "RS256", public)])
     return ProductionOidcVerifier(
@@ -83,13 +91,14 @@ def _production_verifier(rsa_keys, *, client=None):
             audience=AUDIENCE,
             jwks_url=JWKS_URL,
             algorithms=("RS256",),
+            jwks_lifespan_seconds=jwks_lifespan_seconds,
         ),
         jwks_client=selected,
+        clock=clock,
     )
 
 
-def _token(rsa_keys, **claims):
-    private, _ = rsa_keys
+def _signed_token(private, *, key_id="key-1", **claims):
     now = int(time.time())
     payload = {
         "iss": ISSUER,
@@ -100,7 +109,17 @@ def _token(rsa_keys, **claims):
         "exp": now + 60,
     }
     payload.update(claims)
-    return jwt.encode(payload, private, algorithm="RS256", headers={"kid": "key-1"})
+    return jwt.encode(
+        payload,
+        private,
+        algorithm="RS256",
+        headers={"kid": key_id},
+    )
+
+
+def _token(rsa_keys, **claims):
+    private, _ = rsa_keys
+    return _signed_token(private, **claims)
 
 
 def test_mode_is_required_and_never_inferred(monkeypatch):
@@ -151,6 +170,32 @@ def test_local_hs256_verifier_is_structurally_rejected_by_production():
         AuthenticationRuntime.production(local, _Resolver()).initialize()
 
 
+def test_wrapped_hs256_verifier_is_rejected_at_production_construction():
+    local = OidcConfig(
+        issuer=ISSUER,
+        audience=AUDIENCE,
+        hs256_secret="test-only",
+    )
+
+    class WrappedVerifier:
+        def initialize(self):
+            local.initialize()
+
+        def verify_identity(self, token):
+            return local.verify_identity(token)
+
+    with pytest.raises(AuthenticationStartupError, match="wrapped verifiers"):
+        AuthenticationRuntime.production(WrappedVerifier(), _Resolver())
+
+
+def test_legacy_oidc_argument_rejects_a_production_verifier(rsa_keys):
+    production = _production_verifier(rsa_keys)
+    with pytest.raises(AuthenticationStartupError, match="exact OidcConfig or None"):
+        create_app(oidc=production)
+    with pytest.raises(AuthenticationStartupError, match="exact local OidcConfig"):
+        AuthenticationRuntime.test(production)
+
+
 def test_maintained_verifier_accepts_exact_identity_and_initializes_fresh_jwks(rsa_keys):
     verifier = _production_verifier(rsa_keys)
     verifier.initialize()
@@ -159,6 +204,31 @@ def test_maintained_verifier_accepts_exact_identity_and_initializes_fresh_jwks(r
     assert identity.subject == "subject-01"
     assert identity.equality_policy == "OIDC_EXACT_UTF8_V1"
     assert verifier._jwks_client.refreshes == [True]
+
+
+def test_default_pyjwt_client_disables_unbounded_per_key_cache(rsa_keys, monkeypatch):
+    _, public = rsa_keys
+    client = _JwksClient([_SigningKey("key-1", "RS256", public)])
+    observed = {}
+
+    def client_factory(url, **kwargs):
+        observed["url"] = url
+        observed.update(kwargs)
+        return client
+
+    monkeypatch.setattr(jwt, "PyJWKClient", client_factory)
+    verifier = ProductionOidcVerifier(
+        ProductionOidcConfig(
+            issuer=ISSUER,
+            audience=AUDIENCE,
+            jwks_url=JWKS_URL,
+            algorithms=("RS256",),
+        )
+    )
+    verifier.initialize()
+    assert observed["url"] == JWKS_URL
+    assert observed["cache_keys"] is False
+    assert "max_cached_keys" not in observed
 
 
 def test_maintained_verifier_accepts_a_new_key_id_after_jwks_rotation(rsa_keys):
@@ -183,6 +253,114 @@ def test_maintained_verifier_accepts_a_new_key_id_after_jwks_rotation(rsa_keys):
         headers={"kid": "key-2"},
     )
     assert verifier.verify_identity(rotated).subject == "subject-02"
+
+
+def test_removed_used_key_expires_with_the_bounded_jwks_generation(rsa_keys):
+    private, public = rsa_keys
+    backup_private = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    now = [1_000.0]
+    client = _JwksClient(
+        [
+            _SigningKey("key-1", "RS256", public),
+            _SigningKey("key-2", "RS256", backup_private.public_key()),
+        ]
+    )
+    verifier = _production_verifier(
+        rsa_keys,
+        client=client,
+        clock=lambda: now[0],
+        jwks_lifespan_seconds=60,
+    )
+    token = _signed_token(private)
+    verifier.initialize()
+    assert verifier.verify_identity(token).subject == "subject-01"
+
+    client.keys = [_SigningKey("key-2", "RS256", backup_private.public_key())]
+    assert verifier.verify_identity(token).subject == "subject-01"
+    now[0] += 60
+    with pytest.raises(OidcError) as raised:
+        verifier.verify_identity(token)
+    assert raised.value.outcome is PreBindingOutcome.INVALID_CREDENTIAL
+    assert client.refreshes == [True, True]
+
+
+def test_same_kid_key_replacement_takes_effect_after_jwks_lifespan(rsa_keys):
+    old_private, old_public = rsa_keys
+    new_private = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    now = [2_000.0]
+    client = _JwksClient([_SigningKey("key-1", "RS256", old_public)])
+    verifier = _production_verifier(
+        rsa_keys,
+        client=client,
+        clock=lambda: now[0],
+        jwks_lifespan_seconds=60,
+    )
+    old_token = _signed_token(old_private)
+    new_token = _signed_token(new_private, sub="subject-02")
+    verifier.initialize()
+    assert verifier.verify_identity(old_token).subject == "subject-01"
+
+    client.keys = [_SigningKey("key-1", "RS256", new_private.public_key())]
+    now[0] += 60
+    with pytest.raises(OidcError) as raised:
+        verifier.verify_identity(old_token)
+    assert raised.value.outcome is PreBindingOutcome.INVALID_CREDENTIAL
+    assert verifier.verify_identity(new_token).subject == "subject-02"
+
+
+def test_duplicate_or_encryption_only_jwks_refuses_startup(rsa_keys):
+    _, public = rsa_keys
+    duplicate = _JwksClient(
+        [
+            _SigningKey("key-1", "RS256", public),
+            _SigningKey("key-1", "RS256", public),
+        ]
+    )
+    with pytest.raises(AuthenticationStartupError, match="JWKS initialization failed"):
+        _production_verifier(rsa_keys, client=duplicate).initialize()
+
+    encryption_only = _JwksClient(
+        [_SigningKey("key-1", "RS256", public, public_key_use="enc")]
+    )
+    with pytest.raises(AuthenticationStartupError, match="JWKS initialization failed"):
+        _production_verifier(rsa_keys, client=encryption_only).initialize()
+
+
+def test_duplicate_signing_identity_after_refresh_is_verifier_unavailable(rsa_keys):
+    _, public = rsa_keys
+    now = [3_000.0]
+    client = _JwksClient([_SigningKey("key-1", "RS256", public)])
+    verifier = _production_verifier(
+        rsa_keys,
+        client=client,
+        clock=lambda: now[0],
+        jwks_lifespan_seconds=60,
+    )
+    verifier.initialize()
+    client.keys.append(_SigningKey("key-1", "RS256", public))
+    now[0] += 60
+    with pytest.raises(OidcError) as raised:
+        verifier.verify_identity(_token(rsa_keys))
+    assert raised.value.outcome is PreBindingOutcome.VERIFIER_UNAVAILABLE
+
+
+def test_provider_outage_after_jwks_expiry_is_verifier_unavailable(rsa_keys):
+    _, public = rsa_keys
+    now = [4_000.0]
+    client = _JwksClient([_SigningKey("key-1", "RS256", public)])
+    verifier = _production_verifier(
+        rsa_keys,
+        client=client,
+        clock=lambda: now[0],
+        jwks_lifespan_seconds=60,
+    )
+    verifier.initialize()
+    client.unavailable = True
+    now[0] += 60
+    with pytest.raises(OidcError) as raised:
+        verifier.verify_identity(_token(rsa_keys))
+    assert raised.value.outcome is PreBindingOutcome.VERIFIER_UNAVAILABLE
+    assert "provider detail" not in str(raised.value)
 
 
 @pytest.mark.parametrize(
