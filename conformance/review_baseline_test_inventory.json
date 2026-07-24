@@ -8181,6 +8181,116 @@
       "sourcePath": "kernel/tests/test_schema_posture.py"
     },
     {
+      "nodeid": "kernel/tests/test_security_audit_client.py::test_ambiguous_commit_retries_once_with_identical_parameters",
+      "sourceModule": "kernel.tests.test_security_audit_client",
+      "sourcePath": "kernel/tests/test_security_audit_client.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_client.py::test_append_requires_the_validated_correlation_hmac_type",
+      "sourceModule": "kernel.tests.test_security_audit_client",
+      "sourcePath": "kernel/tests/test_security_audit_client.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_client.py::test_autocommit_and_unregistered_reason_refuse_before_append",
+      "sourceModule": "kernel.tests.test_security_audit_client",
+      "sourcePath": "kernel/tests/test_security_audit_client.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_client.py::test_correlation_hmac_accepts_only_active_v2[length]",
+      "sourceModule": "kernel.tests.test_security_audit_client",
+      "sourcePath": "kernel/tests/test_security_audit_client.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_client.py::test_correlation_hmac_accepts_only_active_v2[missing-version]",
+      "sourceModule": "kernel.tests.test_security_audit_client",
+      "sourcePath": "kernel/tests/test_security_audit_client.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_client.py::test_correlation_hmac_accepts_only_active_v2[type]",
+      "sourceModule": "kernel.tests.test_security_audit_client",
+      "sourcePath": "kernel/tests/test_security_audit_client.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_client.py::test_correlation_hmac_accepts_only_active_v2[v1]",
+      "sourceModule": "kernel.tests.test_security_audit_client",
+      "sourcePath": "kernel/tests/test_security_audit_client.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_client.py::test_correlation_hmac_accepts_only_active_v2[v3]",
+      "sourceModule": "kernel.tests.test_security_audit_client",
+      "sourcePath": "kernel/tests/test_security_audit_client.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_client.py::test_correlation_hmac_hides_value_from_repr",
+      "sourceModule": "kernel.tests.test_security_audit_client",
+      "sourcePath": "kernel/tests/test_security_audit_client.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_client.py::test_deterministic_database_refusal_is_not_retried",
+      "sourceModule": "kernel.tests.test_security_audit_client",
+      "sourcePath": "kernel/tests/test_security_audit_client.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_client.py::test_individual_append_generates_identity_and_maps_exact_parameters",
+      "sourceModule": "kernel.tests.test_security_audit_client",
+      "sourcePath": "kernel/tests/test_security_audit_client.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_client.py::test_live_postgresql_append_maps_real_role_and_result",
+      "sourceModule": "kernel.tests.test_security_audit_client",
+      "sourcePath": "kernel/tests/test_security_audit_client.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_client.py::test_malformed_database_results_are_unavailable[append_rows0]",
+      "sourceModule": "kernel.tests.test_security_audit_client",
+      "sourcePath": "kernel/tests/test_security_audit_client.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_client.py::test_malformed_database_results_are_unavailable[append_rows1]",
+      "sourceModule": "kernel.tests.test_security_audit_client",
+      "sourcePath": "kernel/tests/test_security_audit_client.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_client.py::test_malformed_database_results_are_unavailable[append_rows2]",
+      "sourceModule": "kernel.tests.test_security_audit_client",
+      "sourcePath": "kernel/tests/test_security_audit_client.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_client.py::test_malformed_database_results_are_unavailable[append_rows3]",
+      "sourceModule": "kernel.tests.test_security_audit_client",
+      "sourcePath": "kernel/tests/test_security_audit_client.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_client.py::test_overflow_result_is_bound_to_verified_producer",
+      "sourceModule": "kernel.tests.test_security_audit_client",
+      "sourcePath": "kernel/tests/test_security_audit_client.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_client.py::test_pre_submission_unavailability_is_not_retried",
+      "sourceModule": "kernel.tests.test_security_audit_client",
+      "sourcePath": "kernel/tests/test_security_audit_client.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_client.py::test_retry_refusal_preserves_first_ambiguous_outcome",
+      "sourceModule": "kernel.tests.test_security_audit_client",
+      "sourcePath": "kernel/tests/test_security_audit_client.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_client.py::test_retry_unavailability_preserves_first_ambiguous_outcome",
+      "sourceModule": "kernel.tests.test_security_audit_client",
+      "sourcePath": "kernel/tests/test_security_audit_client.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_client.py::test_second_ambiguity_preserves_possible_overflow_bucket",
+      "sourceModule": "kernel.tests.test_security_audit_client",
+      "sourcePath": "kernel/tests/test_security_audit_client.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_client.py::test_wrong_session_user_refuses_before_append",
+      "sourceModule": "kernel.tests.test_security_audit_client",
+      "sourcePath": "kernel/tests/test_security_audit_client.py"
+    },
+    {
       "nodeid": "kernel/tests/test_signing_authority.py::test_database_authority_absence_or_malformed_shape_is_closed[rows0]",
       "sourceModule": "kernel.tests.test_signing_authority",
       "sourcePath": "kernel/tests/test_signing_authority.py"
@@ -8356,8 +8466,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "3dde3204a40c4ebc4df7dde4182fd1779115ac3e90d0fcc1f868a659e5919a12",
-  "entryCount": 1671,
+  "entriesSha256": "45e160ae3efda767ba8310291665a6b50af5d7f42cf868d2fb5a66c8f8331a26",
+  "entryCount": 1693,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
