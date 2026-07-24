@@ -8431,6 +8431,196 @@
       "sourcePath": "kernel/tests/test_security_audit_client.py"
     },
     {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_absent_retention_deadline_is_reported_explicitly",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_constructor_refuses_invalid_static_configuration[projects/EXAMPLE/locations/europe-west1/keyRings/ofarm/cryptoKeys/pretenant-correlation-5]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_constructor_refuses_invalid_static_configuration[projects/example/locations/europe-west1/keyRings/ofarm/cryptoKeys/pretenant-correlation-0]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_constructor_refuses_invalid_static_configuration[projects/example/locations/europe-west1/keyRings/ofarm/cryptoKeys/pretenant-correlation-31]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_constructor_refuses_invalid_static_configuration[projects/example/locations/europe-west1/keyRings/ofarm/cryptoKeys/pretenant-correlation-5]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_constructor_refuses_invalid_static_configuration[projects/example/locations/europe-west1/keyRings/ofarm/cryptoKeys/pretenant-correlation-True]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_constructor_refuses_invalid_static_configuration[projects/example/locations/europe-west1/keyRings/ofarm/cryptoKeys/pretenant-correlation/cryptoKeyVersions/2-5]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_current_returns_one_frozen_exact_posture_after_database_closes",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_database_autocommit_or_failure_is_closed_before_kms",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_database_shape_or_active_version_conflicts_fail_before_kms[rows0]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_database_shape_or_active_version_conflicts_fail_before_kms[rows1]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_database_shape_or_active_version_conflicts_fail_before_kms[rows2]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_database_shape_or_active_version_conflicts_fail_before_kms[rows3]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_database_shape_or_active_version_conflicts_fail_before_kms[rows4]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_database_shape_or_active_version_conflicts_fail_before_kms[rows5]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_database_shape_or_active_version_conflicts_fail_before_kms[rows6]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_database_shape_or_active_version_conflicts_fail_before_kms[rows7]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_inactive_state_is_reported_without_mutation[1-CorrelationHmacVersionDisposition.RETIREMENT_REQUIRED]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_inactive_state_is_reported_without_mutation[2-CorrelationHmacVersionDisposition.RETIREMENT_REQUIRED]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_inactive_state_is_reported_without_mutation[3-CorrelationHmacVersionDisposition.DESTROYED_OBSERVED]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_inactive_state_is_reported_without_mutation[4-CorrelationHmacVersionDisposition.DESTROY_SCHEDULED_OBSERVED]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_kms_list_must_be_one_exact_nonduplicated_version_set[listed0-]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_kms_list_must_be_one_exact_nonduplicated_version_set[listed1-]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_kms_list_must_be_one_exact_nonduplicated_version_set[listed2-]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_kms_list_must_be_one_exact_nonduplicated_version_set[listed3-]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_kms_list_must_be_one_exact_nonduplicated_version_set[listed4-another-page]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_kms_unavailability_is_closed_without_retry[get]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_kms_unavailability_is_closed_without_retry[list]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_malformed_or_inconsistent_kms_version_fails_closed[1-changes4]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_malformed_or_inconsistent_kms_version_fails_closed[1-changes5]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_malformed_or_inconsistent_kms_version_fails_closed[1-changes6]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_malformed_or_inconsistent_kms_version_fails_closed[1-changes7]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_malformed_or_inconsistent_kms_version_fails_closed[1-changes8]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_malformed_or_inconsistent_kms_version_fails_closed[2-changes0]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_malformed_or_inconsistent_kms_version_fails_closed[2-changes1]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_malformed_or_inconsistent_kms_version_fails_closed[2-changes2]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_malformed_or_inconsistent_kms_version_fails_closed[2-changes3]",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_hmac_posture.py::test_public_kms_protocol_has_read_methods_only",
+      "sourceModule": "kernel.tests.test_security_audit_hmac_posture",
+      "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
+    },
+    {
       "nodeid": "kernel/tests/test_signing_authority.py::test_database_authority_absence_or_malformed_shape_is_closed[rows0]",
       "sourceModule": "kernel.tests.test_signing_authority",
       "sourcePath": "kernel/tests/test_signing_authority.py"
@@ -8606,8 +8796,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "bb3aac07a9489b221b739bbf1ca9b00cb02916f66c3723eb8d79220071b5c084",
-  "entryCount": 1721,
+  "entriesSha256": "d9678aed272aaad3719980c34f3ce61e69374b5515aa4e64c16b75fc7631391a",
+  "entryCount": 1759,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
