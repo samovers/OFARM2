@@ -118,7 +118,6 @@ def test_issuer_builds_the_frozen_capability_and_reads_each_mint():
     challenge = TenantChallenge(
         challenge_id=uuid4(),
         audience=AUDIENCE,
-        created_at_us=NOW_US - 1_000_000,
     )
 
     first = issuer.mint(IDENTITY, authority, challenge)
@@ -142,7 +141,7 @@ def test_issuer_builds_the_frozen_capability_and_reads_each_mint():
     assert decoded.capability.nonce == first_nonce
     assert decoded.capability.issued_at_unix_microseconds == NOW_US
     assert decoded.capability.expires_at_unix_microseconds == (
-        challenge.created_at_us + 60_000_000
+        NOW_US + 60_000_000
     )
 
 
@@ -156,7 +155,6 @@ def test_issuer_refuses_cross_audience_challenge_before_kms():
     challenge = TenantChallenge(
         uuid4(),
         AUDIENCE.replace("a58b", "b58b"),
-        NOW_US,
     )
 
     with pytest.raises(CapabilityMintError):
@@ -173,7 +171,7 @@ def test_issuer_refuses_identity_authority_mismatch_without_reading_key():
         kid=KID,
     )
     authority = replace(principal_authority(), subject="subject:Other")
-    challenge = TenantChallenge(uuid4(), AUDIENCE, NOW_US)
+    challenge = TenantChallenge(uuid4(), AUDIENCE)
 
     with pytest.raises(CapabilityMintError):
         issuer.mint(IDENTITY, authority, challenge)
@@ -193,5 +191,5 @@ def test_issuer_refuses_when_database_issuance_window_is_exhausted():
         issuer.mint(
             IDENTITY,
             principal_authority(),
-            TenantChallenge(uuid4(), AUDIENCE, NOW_US),
+            TenantChallenge(uuid4(), AUDIENCE),
         )

@@ -33,7 +33,6 @@ class CapabilityMintError(RuntimeError):
 class TenantChallenge:
     challenge_id: UUID
     audience: str
-    created_at_us: int
 
 
 def _raw_digest(value: str) -> bytes:
@@ -84,7 +83,6 @@ def _capability(
         not_before_unix_microseconds=issued_at,
         expires_at_unix_microseconds=min(
             issued_at + TENANT_CAPABILITY_MAX_TTL_MICROSECONDS,
-            challenge.created_at_us + TENANT_CAPABILITY_MAX_TTL_MICROSECONDS,
             signing.issuance_end_us,
         ),
         nonce=nonce,
@@ -117,7 +115,6 @@ class TenantCapabilityIssuer:
             type(challenge) is not TenantChallenge
             or type(challenge.challenge_id) is not UUID
             or challenge.challenge_id.int == 0
-            or type(challenge.created_at_us) is not int
             or (
                 identity.equality_policy,
                 identity.issuer,
@@ -144,9 +141,6 @@ class TenantCapabilityIssuer:
             validate_tenant_capability(
                 capability,
                 now_unix_microseconds=signing.observed_at_us,
-                challenge_created_at_unix_microseconds=(
-                    challenge.created_at_us
-                ),
             )
             signature = self._signer.sign(
                 canonical_jws_signing_input(capability),
