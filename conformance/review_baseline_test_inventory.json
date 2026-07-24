@@ -5526,6 +5526,11 @@
       "sourcePath": "kernel/tests/test_production_oidc.py"
     },
     {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_mixed_use_jwks_keeps_only_compatible_signing_keys",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
       "nodeid": "kernel/tests/test_production_oidc.py::test_monotonic_overall_deadline_is_enforced",
       "sourceModule": "kernel.tests.test_production_oidc",
       "sourcePath": "kernel/tests/test_production_oidc.py"
@@ -5542,6 +5547,11 @@
     },
     {
       "nodeid": "kernel/tests/test_production_oidc.py::test_private_jwk_material_is_refused",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_private_material_refuses_the_whole_mixed_use_jwks",
       "sourceModule": "kernel.tests.test_production_oidc",
       "sourcePath": "kernel/tests/test_production_oidc.py"
     },
@@ -7816,8 +7826,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "5aa557d27d65e68e57301433c11be264e8b442c00241bae3b40767fccacb7341",
-  "entryCount": 1563,
+  "entriesSha256": "306bd89262058a831ec2118815139844476d509aaada3d4cdd2b4d05b52c720f",
+  "entryCount": 1565,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

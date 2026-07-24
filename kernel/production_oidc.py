@@ -196,26 +196,30 @@ def _token_header(token: str, max_bytes: int) -> dict[str, object]:
     return header
 
 
-def _rsa_public_key(jwk: dict[str, object]) -> tuple[str, RSAPublicKey]:
+def _rsa_public_key(
+    jwk: dict[str, object],
+) -> tuple[str, RSAPublicKey] | None:
     if _PRIVATE_JWK_MEMBERS & set(jwk):
         raise _unavailable("JWKS contains private key material")
-    kid = jwk.get("kid")
     if (
-        type(kid) is not str
-        or _KID.fullmatch(kid) is None
-        or jwk.get("kty") != "RSA"
+        jwk.get("kty") != "RSA"
         or jwk.get("alg", "RS256") != "RS256"
         or jwk.get("use", "sig") != "sig"
     ):
-        raise _unavailable("JWKS contains an incompatible key")
+        return None
+    kid = jwk.get("kid")
+    if type(kid) is not str or _KID.fullmatch(kid) is None:
+        raise _unavailable("JWKS signing key kid is invalid")
     key_ops = jwk.get("key_ops", ["verify"])
     if (
         type(key_ops) is not list
         or any(type(operation) is not str for operation in key_ops)
-        or "verify" not in key_ops
-        or any(operation != "verify" for operation in key_ops)
     ):
-        raise _unavailable("JWKS key operations are incompatible")
+        raise _unavailable("JWKS key operations are malformed")
+    if "verify" not in key_ops or any(
+        operation != "verify" for operation in key_ops
+    ):
+        return None
     modulus = jwk.get("n")
     exponent = jwk.get("e")
     if type(modulus) is not str or type(exponent) is not str:
@@ -243,8 +247,7 @@ def _jwks_keys(raw: bytes, maximum: int) -> dict[str, RSAPublicKey]:
         raise _unavailable("JWKS JSON is invalid") from exc
     values = document.get("keys")
     if (
-        set(document) != {"keys"}
-        or type(values) is not list
+        type(values) is not list
         or not 1 <= len(values) <= maximum
     ):
         raise _unavailable("JWKS key set is invalid")
@@ -252,10 +255,15 @@ def _jwks_keys(raw: bytes, maximum: int) -> dict[str, RSAPublicKey]:
     for value in values:
         if type(value) is not dict:
             raise _unavailable("JWKS key entry is invalid")
-        kid, key = _rsa_public_key(value)
+        parsed = _rsa_public_key(value)
+        if parsed is None:
+            continue
+        kid, key = parsed
         if kid in keys:
             raise _unavailable("JWKS contains duplicate kid")
         keys[kid] = key
+    if not keys:
+        raise _unavailable("JWKS contains no compatible signing key")
     return keys
 
 
