@@ -135,6 +135,40 @@ def test_initialize_and_verify_preserve_exact_identity_bytes():
     client.close()
 
 
+def test_authentication_outcomes_are_the_exact_audit_safe_failures():
+    assert tuple(AuthenticationOutcome) == (
+        AuthenticationOutcome.NO_CREDENTIAL,
+        AuthenticationOutcome.CREDENTIAL_MALFORMED,
+        AuthenticationOutcome.VERIFICATION_REFUSED,
+        AuthenticationOutcome.VERIFIER_UNAVAILABLE,
+    )
+
+
+@pytest.mark.parametrize(
+    ("credential", "expected"),
+    [
+        (None, AuthenticationOutcome.NO_CREDENTIAL),
+        (0, AuthenticationOutcome.CREDENTIAL_MALFORMED),
+        ("", AuthenticationOutcome.CREDENTIAL_MALFORMED),
+        ("not-a-jws", AuthenticationOutcome.CREDENTIAL_MALFORMED),
+        ("é", AuthenticationOutcome.CREDENTIAL_MALFORMED),
+    ],
+)
+def test_missing_and_malformed_credentials_are_distinct(
+    credential,
+    expected,
+):
+    _private, jwk = _key("kid-entry")
+    verifier, client, calls = _initialized_verifier(jwk)
+
+    with pytest.raises(AuthenticationError) as raised:
+        verifier.verify(credential)
+
+    assert raised.value.outcome is expected
+    assert calls == [1]
+    client.close()
+
+
 def test_signature_from_another_key_cannot_claim_a_known_kid():
     _trusted_private, trusted_jwk = _key("kid-trusted")
     attacker_private, _attacker_jwk = _key("kid-attacker")
@@ -143,7 +177,7 @@ def test_signature_from_another_key_cannot_claim_a_known_kid():
     with pytest.raises(AuthenticationError) as raised:
         verifier.verify(_token(attacker_private, "kid-trusted"))
 
-    assert raised.value.outcome is AuthenticationOutcome.INVALID_CREDENTIAL
+    assert raised.value.outcome is AuthenticationOutcome.VERIFICATION_REFUSED
     assert calls == [1]
     client.close()
 
@@ -168,7 +202,7 @@ def test_unsigned_alg_none_token_is_refused():
     with pytest.raises(AuthenticationError) as raised:
         verifier.verify(token)
 
-    assert raised.value.outcome is AuthenticationOutcome.INVALID_CREDENTIAL
+    assert raised.value.outcome is AuthenticationOutcome.CREDENTIAL_MALFORMED
     assert calls == [1]
     client.close()
 
@@ -185,7 +219,7 @@ def test_not_before_claim_honors_only_the_configured_leeway():
     with pytest.raises(AuthenticationError) as raised:
         strict.verify(token)
 
-    assert raised.value.outcome is AuthenticationOutcome.INVALID_CREDENTIAL
+    assert raised.value.outcome is AuthenticationOutcome.VERIFICATION_REFUSED
     assert tolerant.verify(token).subject == "subject:Exact-01"
     strict_client.close()
     tolerant_client.close()
@@ -223,7 +257,7 @@ def test_verified_signature_does_not_bypass_claim_validation(claims):
     with pytest.raises(AuthenticationError) as raised:
         verifier.verify(_token(private, "kid-claims", **claims))
 
-    assert raised.value.outcome is AuthenticationOutcome.INVALID_CREDENTIAL
+    assert raised.value.outcome is AuthenticationOutcome.VERIFICATION_REFUSED
     client.close()
 
 
@@ -237,7 +271,7 @@ def test_verified_subject_must_match_the_exact_transport_grammar(subject):
     with pytest.raises(AuthenticationError) as raised:
         verifier.verify(_token(private, "kid-subject", subject))
 
-    assert raised.value.outcome is AuthenticationOutcome.INVALID_CREDENTIAL
+    assert raised.value.outcome is AuthenticationOutcome.VERIFICATION_REFUSED
     client.close()
 
 
@@ -259,7 +293,7 @@ def test_token_size_bound_is_checked_before_key_lookup():
     with pytest.raises(AuthenticationError) as raised:
         verifier.verify(_token(private, "kid-token-size"))
 
-    assert raised.value.outcome is AuthenticationOutcome.INVALID_CREDENTIAL
+    assert raised.value.outcome is AuthenticationOutcome.CREDENTIAL_MALFORMED
     assert calls == [1]
     client.close()
 
@@ -441,7 +475,7 @@ def test_malformed_or_non_rs256_jose_headers_are_refused(header):
     with pytest.raises(AuthenticationError) as raised:
         verifier.verify(token)
 
-    assert raised.value.outcome is AuthenticationOutcome.INVALID_CREDENTIAL
+    assert raised.value.outcome is AuthenticationOutcome.CREDENTIAL_MALFORMED
     client.close()
 
 
@@ -467,8 +501,9 @@ def test_duplicate_token_json_members_are_refused(header, claims):
     verifier = ProductionOidcVerifier(_config(), client)
     verifier.initialize()
 
-    with pytest.raises(AuthenticationError):
+    with pytest.raises(AuthenticationError) as raised:
         verifier.verify(_raw_signed(private, header, claims))
+    assert raised.value.outcome is AuthenticationOutcome.CREDENTIAL_MALFORMED
     client.close()
 
 
@@ -488,9 +523,10 @@ def test_unknown_kid_refreshes_once_then_throttles_repeated_misses():
     verifier.initialize()
 
     assert verifier.verify(_token(private_2, "kid-2")).subject
-    with pytest.raises(AuthenticationError):
+    with pytest.raises(AuthenticationError) as raised:
         verifier.verify(_token(private_1, "kid-missing"))
 
+    assert raised.value.outcome is AuthenticationOutcome.VERIFICATION_REFUSED
     assert len(calls) == 2
     client.close()
 

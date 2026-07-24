@@ -5941,6 +5941,11 @@
       "sourcePath": "kernel/tests/test_principal_authority.py"
     },
     {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_authentication_outcomes_are_the_exact_audit_safe_failures",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
       "nodeid": "kernel/tests/test_production_oidc.py::test_client_redirect_mode_and_non_https_url_are_configuration_errors",
       "sourceModule": "kernel.tests.test_production_oidc",
       "sourcePath": "kernel/tests/test_production_oidc.py"
@@ -6037,6 +6042,31 @@
     },
     {
       "nodeid": "kernel/tests/test_production_oidc.py::test_malformed_or_non_rs256_jose_headers_are_refused[header4]",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_missing_and_malformed_credentials_are_distinct[-CREDENTIAL_MALFORMED]",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_missing_and_malformed_credentials_are_distinct[/xe9-CREDENTIAL_MALFORMED]",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_missing_and_malformed_credentials_are_distinct[0-CREDENTIAL_MALFORMED]",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_missing_and_malformed_credentials_are_distinct[None-NO_CREDENTIAL]",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_missing_and_malformed_credentials_are_distinct[not-a-jws-CREDENTIAL_MALFORMED]",
       "sourceModule": "kernel.tests.test_production_oidc",
       "sourcePath": "kernel/tests/test_production_oidc.py"
     },
@@ -8796,8 +8826,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "d9678aed272aaad3719980c34f3ce61e69374b5515aa4e64c16b75fc7631391a",
-  "entryCount": 1759,
+  "entriesSha256": "a1b9ea54be023c2deebd9632277187d9f3cb33b770c69a7c5ac465fb319e276b",
+  "entryCount": 1765,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

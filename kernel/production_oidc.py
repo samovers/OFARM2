@@ -39,9 +39,17 @@ _ALLOWED_HEADERS = frozenset({"alg", "kid", "typ"})
 
 def _refusal(
     detail: str,
-    outcome: AuthenticationOutcome = AuthenticationOutcome.INVALID_CREDENTIAL,
+    outcome: AuthenticationOutcome,
 ) -> AuthenticationError:
     return AuthenticationError(outcome, internal_detail=detail)
+
+
+def _malformed(detail: str) -> AuthenticationError:
+    return _refusal(detail, AuthenticationOutcome.CREDENTIAL_MALFORMED)
+
+
+def _verification_refused(detail: str) -> AuthenticationError:
+    return _refusal(detail, AuthenticationOutcome.VERIFICATION_REFUSED)
 
 
 def _unavailable(detail: str) -> AuthenticationError:
@@ -124,13 +132,13 @@ def _duplicate_rejecting_object(
     result: dict[str, object] = {}
     for key, value in pairs:
         if key in result:
-            raise _refusal("duplicate JSON member")
+            raise _malformed("duplicate JSON member")
         result[key] = value
     return result
 
 
 def _reject_constant(value: str) -> None:
-    raise _refusal(f"non-finite JSON constant {value!r}")
+    raise _malformed(f"non-finite JSON constant {value!r}")
 
 
 def _json_object(raw: bytes, label: str) -> dict[str, object]:
@@ -148,51 +156,56 @@ def _json_object(raw: bytes, label: str) -> dict[str, object]:
         RecursionError,
         ValueError,
     ) as exc:
-        raise _refusal(f"malformed {label} JSON") from exc
+        raise _malformed(f"malformed {label} JSON") from exc
     if type(value) is not dict:
-        raise _refusal(f"{label} must be a JSON object")
+        raise _malformed(f"{label} must be a JSON object")
     return value
 
 
 def _b64url_decode(segment: str, label: str) -> bytes:
     if type(segment) is not str or _B64URL.fullmatch(segment) is None:
-        raise _refusal(f"{label} is not canonical base64url")
+        raise _malformed(f"{label} is not canonical base64url")
     try:
         decoded = base64.urlsafe_b64decode(
             segment + "=" * (-len(segment) % 4)
         )
     except (binascii.Error, ValueError) as exc:
-        raise _refusal(f"{label} is malformed") from exc
+        raise _malformed(f"{label} is malformed") from exc
     canonical = base64.urlsafe_b64encode(decoded).rstrip(b"=").decode("ascii")
     if canonical != segment:
-        raise _refusal(f"{label} is not canonical base64url")
+        raise _malformed(f"{label} is not canonical base64url")
     return decoded
 
 
-def _token_header(token: str, max_bytes: int) -> dict[str, object]:
+def _token_header(token: object, max_bytes: int) -> dict[str, object]:
+    if token is None:
+        raise _refusal(
+            "credential is not present",
+            AuthenticationOutcome.NO_CREDENTIAL,
+        )
     if type(token) is not str:
-        raise _refusal("credential is not text", AuthenticationOutcome.NO_CREDENTIAL)
+        raise _malformed("credential is not text")
     try:
         token_bytes = token.encode("ascii", errors="strict")
     except UnicodeEncodeError as exc:
-        raise _refusal("credential is not ASCII") from exc
+        raise _malformed("credential is not ASCII") from exc
     if not 1 <= len(token_bytes) <= max_bytes:
-        raise _refusal("credential size is outside the bound")
+        raise _malformed("credential size is outside the bound")
     segments = token.split(".")
     if len(segments) != 3 or not all(segments):
-        raise _refusal("credential is not compact JWS")
+        raise _malformed("credential is not compact JWS")
     header = _json_object(_b64url_decode(segments[0], "header"), "header")
     _json_object(_b64url_decode(segments[1], "claims"), "claims")
     _b64url_decode(segments[2], "signature")
     if set(header) - _ALLOWED_HEADERS:
-        raise _refusal("unsupported JOSE header")
+        raise _malformed("unsupported JOSE header")
     if header.get("alg") != "RS256":
-        raise _refusal("production OIDC accepts only RS256")
+        raise _malformed("production OIDC accepts only RS256")
     kid = header.get("kid")
     if type(kid) is not str or _KID.fullmatch(kid) is None:
-        raise _refusal("JOSE kid is invalid")
+        raise _malformed("JOSE kid is invalid")
     if "typ" in header and header["typ"] != "JWT":
-        raise _refusal("JOSE typ is invalid")
+        raise _malformed("JOSE typ is invalid")
     return header
 
 
@@ -371,9 +384,9 @@ class ProductionOidcVerifier:
                 key = generation.keys.get(kid)
                 if key is not None:
                     return key
-        raise _refusal("JOSE kid is unknown")
+        raise _verification_refused("JOSE kid is unknown")
 
-    def verify(self, token: str) -> VerifiedIdentity:
+    def verify(self, token: object) -> VerifiedIdentity:
         header = _token_header(token, self._config.max_token_bytes)
         key = self._key(header["kid"])
         try:
@@ -387,18 +400,22 @@ class ProductionOidcVerifier:
                 options={"require": ["iss", "sub", "aud", "exp"]},
             )
         except jwt.PyJWTError as exc:
-            raise _refusal("JWT verification failed") from exc
+            raise _verification_refused("JWT verification failed") from exc
         issuer = claims.get("iss")
         audience = claims.get("aud")
         subject = claims.get("sub")
         if audience != self._config.audience:
-            raise _refusal("verified audience must be one exact value")
+            raise _verification_refused(
+                "verified audience must be one exact value"
+            )
         try:
             exact_issuer = validate_oidc_issuer(issuer)
         except TenantCapabilityContractError as exc:
-            raise _refusal("verified issuer grammar refused") from exc
+            raise _verification_refused(
+                "verified issuer grammar refused"
+            ) from exc
         if type(subject) is not str or _SUBJECT.fullmatch(subject) is None:
-            raise _refusal("verified subject grammar refused")
+            raise _verification_refused("verified subject grammar refused")
         return VerifiedIdentity(
             equality_policy=OIDC_ISSUER_EQUALITY_POLICY,
             issuer=exact_issuer,
