@@ -53,8 +53,11 @@ def _key(kid: str, *, size: int = 2048):
     return private, jwk
 
 
-def _jwks(*keys: dict) -> bytes:
-    return json.dumps({"keys": list(keys)}, separators=(",", ":")).encode()
+def _jwks(*keys: dict, **members: object) -> bytes:
+    return json.dumps(
+        {"keys": list(keys), **members},
+        separators=(",", ":"),
+    ).encode()
 
 
 def _token(private, kid: str, subject: str = "subject:Exact-01", **claims):
@@ -271,6 +274,39 @@ def test_incompatible_jwk_is_refused(mutation):
     _private, jwk = _key("kid-incompatible")
     mutation(jwk)
     client = _client(lambda _request: httpx.Response(200, content=_jwks(jwk)))
+
+    with pytest.raises(AuthenticationStartupError):
+        ProductionOidcVerifier(_config(), client).initialize()
+    client.close()
+
+
+def test_mixed_use_jwks_keeps_only_compatible_signing_keys():
+    _private, signing = _key("kid-signing")
+    _private, encryption = _key("kid-encryption")
+    encryption.update(use="enc", alg="RSA-OAEP")
+    client = _client(
+        lambda _request: httpx.Response(
+            200,
+            content=_jwks(encryption, signing, extra="permitted"),
+        )
+    )
+    verifier = ProductionOidcVerifier(_config(), client)
+
+    verifier.initialize()
+
+    client.close()
+
+
+def test_private_material_refuses_the_whole_mixed_use_jwks():
+    _private, signing = _key("kid-signing")
+    _private, encryption = _key("kid-encryption")
+    encryption.update(use="enc", alg="RSA-OAEP", d="AQAB")
+    client = _client(
+        lambda _request: httpx.Response(
+            200,
+            content=_jwks(encryption, signing),
+        )
+    )
 
     with pytest.raises(AuthenticationStartupError):
         ProductionOidcVerifier(_config(), client).initialize()
