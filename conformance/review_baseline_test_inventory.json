@@ -26,6 +26,16 @@
       "sourcePath": "kernel/tests/test_authentication_read_api.py"
     },
     {
+      "nodeid": "kernel/tests/test_authentication_read_api.py::test_python_controller_executes_activation_and_revocation",
+      "sourceModule": "kernel.tests.test_authentication_read_api",
+      "sourcePath": "kernel/tests/test_authentication_read_api.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_read_api.py::test_python_resolver_consumes_the_exact_read_api",
+      "sourceModule": "kernel.tests.test_authentication_read_api",
+      "sourcePath": "kernel/tests/test_authentication_read_api.py"
+    },
+    {
       "nodeid": "kernel/tests/test_authentication_read_api.py::test_resolver_returns_no_row_for_inactive_authority[EXPIRE]",
       "sourceModule": "kernel.tests.test_authentication_read_api",
       "sourcePath": "kernel/tests/test_authentication_read_api.py"
@@ -5426,6 +5436,141 @@
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
     {
+      "nodeid": "kernel/tests/test_principal_authority.py::test_activation_maps_digest_and_transition_parameters_exactly",
+      "sourceModule": "kernel.tests.test_principal_authority",
+      "sourcePath": "kernel/tests/test_principal_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_authority.py::test_autocommit_connection_is_refused_before_statements",
+      "sourceModule": "kernel.tests.test_principal_authority",
+      "sourcePath": "kernel/tests/test_principal_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_authority.py::test_connection_failure_after_transition_submission_is_unknown[None]",
+      "sourceModule": "kernel.tests.test_principal_authority",
+      "sourcePath": "kernel/tests/test_principal_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_authority.py::test_connection_failure_after_transition_submission_is_unknown[commit_error1]",
+      "sourceModule": "kernel.tests.test_principal_authority",
+      "sourcePath": "kernel/tests/test_principal_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_authority.py::test_connection_failure_before_submission_is_unavailable",
+      "sourceModule": "kernel.tests.test_principal_authority",
+      "sourcePath": "kernel/tests/test_principal_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_authority.py::test_database_refusal_after_submission_is_not_reported_as_unknown",
+      "sourceModule": "kernel.tests.test_principal_authority",
+      "sourcePath": "kernel/tests/test_principal_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_authority.py::test_malformed_identity_is_refused_before_connection",
+      "sourceModule": "kernel.tests.test_principal_authority",
+      "sourcePath": "kernel/tests/test_principal_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_authority.py::test_nil_caller_supplied_act_id_is_refused_before_connection",
+      "sourceModule": "kernel.tests.test_principal_authority",
+      "sourcePath": "kernel/tests/test_principal_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_authority.py::test_non_initial_transition_mapping_is_closed_by_kind[EXPIRE]",
+      "sourceModule": "kernel.tests.test_principal_authority",
+      "sourcePath": "kernel/tests/test_principal_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_authority.py::test_non_initial_transition_mapping_is_closed_by_kind[REVOKE]",
+      "sourceModule": "kernel.tests.test_principal_authority",
+      "sourcePath": "kernel/tests/test_principal_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_authority.py::test_non_initial_transition_mapping_is_closed_by_kind[SUPERSEDE]",
+      "sourceModule": "kernel.tests.test_principal_authority",
+      "sourcePath": "kernel/tests/test_principal_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_authority.py::test_principal_authority_refuses_invalid_database_rows[changes0]",
+      "sourceModule": "kernel.tests.test_principal_authority",
+      "sourcePath": "kernel/tests/test_principal_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_authority.py::test_principal_authority_refuses_invalid_database_rows[changes1]",
+      "sourceModule": "kernel.tests.test_principal_authority",
+      "sourcePath": "kernel/tests/test_principal_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_authority.py::test_principal_authority_refuses_invalid_database_rows[changes2]",
+      "sourceModule": "kernel.tests.test_principal_authority",
+      "sourcePath": "kernel/tests/test_principal_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_authority.py::test_resolver_exposes_only_closed_resolution_outcomes[rows0-UNRESOLVED]",
+      "sourceModule": "kernel.tests.test_principal_authority",
+      "sourcePath": "kernel/tests/test_principal_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_authority.py::test_resolver_exposes_only_closed_resolution_outcomes[rows1-AUTHORITY_UNAVAILABLE]",
+      "sourceModule": "kernel.tests.test_principal_authority",
+      "sourcePath": "kernel/tests/test_principal_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_authority.py::test_resolver_exposes_only_closed_resolution_outcomes[rows2-AUTHORITY_UNAVAILABLE]",
+      "sourceModule": "kernel.tests.test_principal_authority",
+      "sourcePath": "kernel/tests/test_principal_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_authority.py::test_resolver_maps_one_exact_authority_row",
+      "sourceModule": "kernel.tests.test_principal_authority",
+      "sourcePath": "kernel/tests/test_principal_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_authority.py::test_resolver_refuses_a_mismatched_database_contract",
+      "sourceModule": "kernel.tests.test_principal_authority",
+      "sourcePath": "kernel/tests/test_principal_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_authority.py::test_resolver_refuses_a_non_binder_database_audience",
+      "sourceModule": "kernel.tests.test_principal_authority",
+      "sourcePath": "kernel/tests/test_principal_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_authority.py::test_resolver_requires_initialization_without_opening_a_connection",
+      "sourceModule": "kernel.tests.test_principal_authority",
+      "sourcePath": "kernel/tests/test_principal_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_authority.py::test_transition_refuses_invalid_digests_and_timestamps_before_connection[transition_request0]",
+      "sourceModule": "kernel.tests.test_principal_authority",
+      "sourcePath": "kernel/tests/test_principal_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_authority.py::test_transition_refuses_invalid_digests_and_timestamps_before_connection[transition_request1]",
+      "sourceModule": "kernel.tests.test_principal_authority",
+      "sourcePath": "kernel/tests/test_principal_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_authority.py::test_transition_refuses_invalid_digests_and_timestamps_before_connection[transition_request2]",
+      "sourceModule": "kernel.tests.test_principal_authority",
+      "sourcePath": "kernel/tests/test_principal_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_authority.py::test_transition_refuses_invalid_digests_and_timestamps_before_connection[transition_request3]",
+      "sourceModule": "kernel.tests.test_principal_authority",
+      "sourcePath": "kernel/tests/test_principal_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_authority.py::test_transition_refuses_invalid_digests_and_timestamps_before_connection[transition_request4]",
+      "sourceModule": "kernel.tests.test_principal_authority",
+      "sourcePath": "kernel/tests/test_principal_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_authority.py::test_transition_refuses_invalid_digests_and_timestamps_before_connection[transition_request5]",
+      "sourceModule": "kernel.tests.test_principal_authority",
+      "sourcePath": "kernel/tests/test_principal_authority.py"
+    },
+    {
       "nodeid": "kernel/tests/test_production_oidc.py::test_client_redirect_mode_and_non_https_url_are_configuration_errors",
       "sourceModule": "kernel.tests.test_production_oidc",
       "sourcePath": "kernel/tests/test_production_oidc.py"
@@ -7826,8 +7971,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "306bd89262058a831ec2118815139844476d509aaada3d4cdd2b4d05b52c720f",
-  "entryCount": 1565,
+  "entriesSha256": "40f1c7fd50c9dec6c349126ee5db3f044cf7688efcb367118f31ee1e35a1bceb",
+  "entryCount": 1594,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

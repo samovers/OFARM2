@@ -16,6 +16,9 @@ PRODUCTION_BUDGETS = {
     "kernel/authentication.py": 100,
     "kernel/auth_oidc.py": 200,
     "kernel/production_oidc.py": 450,
+    "kernel/principal.py": 170,
+    "kernel/principal_resolver.py": 110,
+    "kernel/principal_control.py": 350,
 }
 GROUP_BUDGETS = {
     "profile runtime": (
@@ -33,10 +36,19 @@ GROUP_BUDGETS = {
             "kernel/production_oidc.py",
         ),
     ),
+    "principal authority": (
+        600,
+        (
+            "kernel/principal.py",
+            "kernel/principal_resolver.py",
+            "kernel/principal_control.py",
+        ),
+    ),
 }
 TEST_GLOBS = (
     "kernel/tests/*profile_runtime*.py",
     "kernel/tests/*oidc*.py",
+    "kernel/tests/*principal*.py",
 )
 PROHIBITED_NAMES = {"for_test", "production_eligible"}
 
