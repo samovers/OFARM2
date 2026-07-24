@@ -13,7 +13,10 @@ from deployment.postgresql.migration_sets import (
     SECURITY_AUDIT_SERVICE,
     load_migration_set,
 )
-from kernel.tests.postgresql_audit_support import role_dsn as _role_dsn
+from kernel.tests.postgresql_audit_support import (
+    audit_service_fixture,  # noqa: F401
+    role_dsn as _role_dsn,
+)
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
@@ -249,6 +252,27 @@ def test_key_retention_observation_is_one_closed_control_row(
                 """
             ).fetchall()
     assert unauthorized.value.sqlstate == "42501"
+
+
+def test_overflow_observation_refuses_wrong_role(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    with psycopg.connect(
+        _role_dsn(
+            state, "ofarm_security_authentication_producer_login"
+        ),
+        autocommit=True,
+    ) as producer:
+        with pytest.raises(psycopg.Error) as refusal:
+            producer.execute(
+                """
+                SELECT * FROM
+                    ofarm_security.observe_next_closeable_overflow_bucket()
+                """
+            ).fetchall()
+
+    assert refusal.value.sqlstate == "42501"
 
 
 def test_overflow_observation_returns_one_oldest_closeable_bucket(

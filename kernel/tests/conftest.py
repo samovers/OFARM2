@@ -26,8 +26,6 @@ from kernel.runtime_bundle import RuntimeBundleBuilder  # noqa: E402
 from kernel.store import Store  # noqa: E402
 from kernel.views import OutputGenerator  # noqa: E402
 
-pytest_plugins = ("kernel.tests.postgresql_audit_support",)
-
 EVIDENCE_DIR = config.PACKAGE_ROOT / "conformance" / "evidence"
 PLATFORM_MVP_EVIDENCE_SUITE = manifest.PLATFORM_MVP_TEST_SUITE_REF
 _RESULTS: list[dict] = []

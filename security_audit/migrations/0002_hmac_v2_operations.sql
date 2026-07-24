@@ -17,6 +17,9 @@ ALTER TABLE ofarm_security.operational_security_event
         )
     );
 
+-- Rotation changes the shape allowlist above, the observer allowlist below,
+-- and the observer's active-version predicate as one policy.
+
 -- Preserve the reviewed append state machine and change only its active key.
 -- Its committed-event and overflow-receipt checks deliberately precede this
 -- policy check, which is the stable retry identity rule for historical V1.

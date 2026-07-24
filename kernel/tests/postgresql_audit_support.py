@@ -94,8 +94,8 @@ def role_dsn(state: dict[str, object], role: str) -> str:
     )
 
 
-@pytest.fixture(scope="module")
-def migrated_audit_service():
+@pytest.fixture(scope="module", name="migrated_audit_service")
+def audit_service_fixture():
     admin_dsn = os.environ.get(AUDIT_ADMIN_ENV)
     if not admin_dsn:
         pytest.skip(f"{AUDIT_ADMIN_ENV} is required for real PostgreSQL tests")

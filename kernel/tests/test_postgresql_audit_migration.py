@@ -38,6 +38,7 @@ from deployment.postgresql.provisioning_specs import (
     SECURITY_AUDIT_PROVISIONING_SPEC,
 )
 from kernel.tests.postgresql_audit_support import (
+    audit_service_fixture,  # noqa: F401
     database_dsn as _database_dsn,
     destroy_audit_service as _destroy_service,
     role_dsn as _role_dsn,
@@ -195,10 +196,10 @@ def test_authoritative_audit_migration_preserves_initial_and_adds_exact_v2():
         "sha256:5e648e0127ca386363c3a1d979a5718cbd5b4846b3ad98ceaee5e7684b278517"
     assert initial.byte_length == 169_237
     assert operations.source_sha256 == \
-        "sha256:114fab5070b2a1bbb3dbe05f019989e610dd9b7aa7be7fe2d33d0a520aa71bef"
-    assert operations.byte_length == 11_165
+        "sha256:b60e9a27a7267fd00673ea1c22e57ae59e979112b71ddf24863ee57093c0897a"
+    assert operations.byte_length == 11_305
     assert migration_set.digest == \
-        "sha256:be3589f5ff13cc2b5a2958c50a9470ed28a809d629eb59dbe5e52c76dbdb56ba"
+        "sha256:d020b1025224ecb5db7c356b0d79eb428724eb3919e51589de79726f75d2dbb0"
     assert migration_set.prefix_digest(1) == \
         "sha256:e3752c1f7d54dff7b749367a29a53b48b5ca3258e51b1a8388dacdcd830392b6"
     assert migration_set.prefix_digest(2) == migration_set.digest
