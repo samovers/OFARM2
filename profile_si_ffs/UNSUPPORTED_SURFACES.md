@@ -89,14 +89,14 @@ submitted/acting party — a mismatch is refused (`ACTOR_BINDING_UNRESOLVED`) an
 an absent principal is a default-deny (`401`), so body-level actor spoofing is
 denied. Two principal sources:
 - **OIDC (configured)** — a verified bearer token yields the Party principal.
-  G4 ships a **zero-dependency HS256 verifier** for this development/conformance
-  path (fail-closed: enforces issuer/audience/exp/nbf, rejects `alg=none`,
-  non-HS256, malformed, missing-claim and bad-signature tokens, constant-time
-  compare). **Production RS256 / JWKS (Keycloak per PLATFORM.md) verification is
-  NOT implemented** — it is a deliberate `NotImplemented` verifier path
-  (`kernel/auth_oidc.py`), and the verifier **never silently falls back** from
-  RS256 to HS256. HS256-here is a posture/binding stand-in, never a claim of
-  production Keycloak support; no PyJWT/jose/cryptography dependency is added.
+  G4 retains a **zero-dependency HS256 verifier** only for this
+  development/conformance path (fail-closed: enforces
+  issuer/audience/exp/nbf, rejects `alg=none`, non-HS256, malformed,
+  missing-claim and bad-signature tokens, constant-time compare).
+  `kernel.production_oidc.ProductionOidcVerifier` implements the independent
+  production RS256/JWKS credential boundary, but production runtime composition
+  is not part of this surface yet. Neither verifier falls back between
+  algorithms; HS256 is never a production Keycloak claim.
 - **`X-Acting-Party` header (OIDC disabled)** — the development/conformance shim;
   the header is **not authentication**, but the binding contract is identical.
 

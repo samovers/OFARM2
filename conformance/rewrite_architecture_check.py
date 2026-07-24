@@ -13,14 +13,31 @@ MAX_TEST_LINES = 800
 PRODUCTION_BUDGETS = {
     "kernel/profile_runtime_provider.py": 350,
     "kernel/profiles/si_ffs/runtime_provider.py": 350,
+    "kernel/authentication.py": 100,
+    "kernel/auth_oidc.py": 200,
+    "kernel/production_oidc.py": 450,
 }
 GROUP_BUDGETS = {
     "profile runtime": (
         350,
-        tuple(PRODUCTION_BUDGETS),
+        (
+            "kernel/profile_runtime_provider.py",
+            "kernel/profiles/si_ffs/runtime_provider.py",
+        ),
+    ),
+    "OIDC verification": (
+        650,
+        (
+            "kernel/authentication.py",
+            "kernel/auth_oidc.py",
+            "kernel/production_oidc.py",
+        ),
     ),
 }
-TEST_GLOBS = ("kernel/tests/*profile_runtime*.py",)
+TEST_GLOBS = (
+    "kernel/tests/*profile_runtime*.py",
+    "kernel/tests/*oidc*.py",
+)
 PROHIBITED_NAMES = {"for_test", "production_eligible"}
 
 

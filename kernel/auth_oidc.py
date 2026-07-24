@@ -1,18 +1,6 @@
-"""OIDC principal verification (M2 G4) — a PLUGGABLE, fail-closed verifier that
-turns a bearer token into a Party transport principal.
+"""Development-only HS256 token verification for the existing HTTP surface.
 
-POSTURE (decided, not a production claim): this build ships a zero-dependency
-HS256 verifier for the DEVELOPMENT / CONFORMANCE OIDC path only. Production
-RS256 / JWKS (Keycloak) verification is a deliberate `NotImplemented` path — the
-boundary is executable and obvious, never a silent fallback. The HTTP surface
-remains a development/conformance surface, not a production-authenticated runtime
-(see profile_si_ffs/UNSUPPORTED_SURFACES.md). No PyJWT / jose / cryptography /
-authlib dependency is introduced.
-
-Authority is unchanged by this module: a verified token yields a Party id (the
-transport principal) and, separately, any role claims — but roles map to
-`RoleAssignment` only and NEVER synthesize authority. Authority still comes solely
-from AuthorityGrant / DelegationGrant / SharingGrant (kernel/authority.py, D4).
+Production uses ``ProductionOidcVerifier``; neither path grants authority.
 """
 from __future__ import annotations
 
@@ -26,11 +14,7 @@ import re
 import time
 from dataclasses import dataclass
 
-# compact-JWS segments are UNPADDED base64url — strictly this alphabet, no "="
-# padding, no other characters. Enforcing canonical form before decode keeps the
-# verifier fail-closed: a non-canonical segment is rejected even if it would
-# otherwise decode (base64 decoders silently drop stray characters) and even if it
-# was signed over that exact mutated segment (PR #16 hostile B2).
+# Canonical segments prevent decoder/signature ambiguity (PR #16).
 _B64URL_SEGMENT = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
@@ -54,8 +38,7 @@ def _b64url_decode(segment: str) -> bytes:
 
 
 def _numeric_date(claims: dict, name: str, *, required: bool):
-    """A JWT NumericDate (epoch seconds): a FINITE, non-bool int/float. Rejects
-    missing (when required), bool, NaN/Infinity (PR #16 hostile B1)."""
+    """Return a finite, non-boolean JWT NumericDate."""
     value = claims.get(name)
     if value is None:
         if required:
@@ -82,10 +65,7 @@ def _claim_path(claims: dict, path: str):
 
 def _verify_hs256(token: str, *, secret: str, issuer: str, audience: str,
                   leeway_seconds: int = 0) -> dict:
-    """Verify a compact-JWS HS256 token, fail-closed. Rejects alg=none /
-    non-HS256, missing/short structure, malformed base64url or JSON, a bad or
-    missing signature (constant-time compare), and missing/invalid iss / aud /
-    exp (and nbf if present). Returns the decoded claims on success."""
+    """Verify one development-only compact HS256 token."""
     if not secret:
         raise OidcError("no HS256 secret configured; cannot verify")
     parts = token.split(".")
@@ -102,10 +82,8 @@ def _verify_hs256(token: str, *, secret: str, issuer: str, audience: str,
     if not isinstance(header, dict) or not isinstance(claims, dict):
         raise OidcError("token header/payload is not a JSON object")
 
-    # This minimal verifier understands NO critical JOSE header extensions, so any
-    # `crit` (RFC 7515 §4.1.11) must be rejected, and `b64` (RFC 7797 — unencoded
-    # payload, which would change the signing input) is unsupported. Fail closed
-    # rather than ignore them (PR #16 hostile B1), e.g. {"b64": false, "crit": ["b64"]}.
+    # `crit` and RFC 7797 `b64` change JOSE processing; this verifier implements
+    # neither and must reject them instead of silently ignoring them (PR #16).
     if "crit" in header:
         raise OidcError("unsupported critical JOSE header(s) 'crit' — rejected (no extensions understood)")
     if "b64" in header:
@@ -144,8 +122,7 @@ def _verify_hs256(token: str, *, secret: str, issuer: str, audience: str,
 
 @dataclass(frozen=True)
 class OidcConfig:
-    """A pluggable verifier config. `algorithm` selects the verification path;
-    RS256 / JWKS is a deliberate NotImplemented production path."""
+    """Configuration for the legacy development verifier."""
     issuer: str
     audience: str
     algorithm: str = "HS256"
@@ -155,9 +132,7 @@ class OidcConfig:
     leeway_seconds: int = 0
 
     def verify(self, token: str) -> dict:
-        """Verify the token and return {partyRef, roles, claims}. Raises OidcError
-        on any failure (fail closed). `partyRef` is the Party transport principal;
-        `roles` are recognised RoleAssignment-level roles that NEVER grant authority."""
+        """Verify and return the development transport identity."""
         if not isinstance(token, str) or not token.strip():
             raise OidcError("no token presented")
         if self.algorithm == "HS256":
@@ -182,9 +157,7 @@ class OidcConfig:
 
 
 def issue_dev_token(claims: dict, *, secret: str) -> str:
-    """Issue an HS256 token for the DEVELOPMENT / CONFORMANCE flow (a stand-in for
-    a real IdP, which the production RS256/JWKS path will replace). NOT a security
-    boundary — only the verifier is. Used by conformance tests and local dev."""
+    """Issue one development-only HS256 token."""
     header_b64 = _b64url_encode(json.dumps({"alg": "HS256", "typ": "JWT"},
                                            separators=(",", ":")).encode("utf-8"))
     payload_b64 = _b64url_encode(json.dumps(claims, separators=(",", ":")).encode("utf-8"))

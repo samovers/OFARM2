@@ -5426,6 +5426,191 @@
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
     {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_client_redirect_mode_and_non_https_url_are_configuration_errors",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_concurrent_verifies_share_one_expired_generation_refresh",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_duplicate_kid_and_oversized_key_set_are_refused",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_duplicate_token_json_members_are_refused[{\"alg\":\"RS256\",\"alg\":\"RS256\",\"kid\":\"kid-duplicate-json\"}-{\"iss\":\"https://issuer.example.test/tenant\",\"sub\":\"subject:one\",\"aud\":\"ofarm2-api\",\"exp\":4102444800}]",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_duplicate_token_json_members_are_refused[{\"alg\":\"RS256\",\"kid\":\"kid-duplicate-json\"}-{\"iss\":\"https://issuer.example.test/tenant\",\"sub\":\"subject:one\",\"sub\":\"subject:two\",\"aud\":\"ofarm2-api\",\"exp\":4102444800}]",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_expiry_causes_only_one_refresh_for_an_unknown_kid",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_failed_expiry_refresh_cools_down_without_using_stale_keys",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_incompatible_jwk_is_refused[<lambda>0]",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_incompatible_jwk_is_refused[<lambda>1]",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_incompatible_jwk_is_refused[<lambda>2]",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_incompatible_jwk_is_refused[<lambda>3]",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_initialize_and_verify_preserve_exact_identity_bytes",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_jwks_shape_and_duplicate_members_are_refused[{\"keys\":[],\"extra\":true}]",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_jwks_shape_and_duplicate_members_are_refused[{\"keys\":[],\"keys\":[]}]",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_jwks_shape_and_duplicate_members_are_refused[{\"keys\":[]}]",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_malformed_or_non_rs256_jose_headers_are_refused[header0]",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_malformed_or_non_rs256_jose_headers_are_refused[header1]",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_malformed_or_non_rs256_jose_headers_are_refused[header2]",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_malformed_or_non_rs256_jose_headers_are_refused[header3]",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_malformed_or_non_rs256_jose_headers_are_refused[header4]",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_monotonic_overall_deadline_is_enforced",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_oversized_jwks_is_refused_while_streaming[False]",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_oversized_jwks_is_refused_while_streaming[True]",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_private_jwk_material_is_refused",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_redirect_is_refused_and_never_followed",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_rsa_keys_below_2048_bits_are_refused",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_token_size_bound_is_checked_before_key_lookup",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_unknown_kid_refreshes_once_then_throttles_repeated_misses",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_verified_signature_does_not_bypass_claim_validation[claims0]",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_verified_signature_does_not_bypass_claim_validation[claims1]",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_verified_signature_does_not_bypass_claim_validation[claims2]",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_verified_signature_does_not_bypass_claim_validation[claims3]",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_verified_subject_must_match_the_exact_transport_grammar[/n]",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_verified_subject_must_match_the_exact_transport_grammar[]",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_verified_subject_must_match_the_exact_transport_grammar[ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss]",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_verified_subject_must_match_the_exact_transport_grammar[subj/xe9ct]",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_verify_before_initialize_performs_no_network_io",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
       "nodeid": "kernel/tests/test_profile_harness_bridge.py::test_profile_harness_declared_modules_have_root_collection_bridges",
       "sourceModule": "kernel.tests.test_profile_harness_bridge",
       "sourcePath": "kernel/tests/test_profile_harness_bridge.py"
@@ -7631,8 +7816,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "7c4c80b5723a5f50916e46b9a7be2acca9bcff40b1313bbe0c5e09181846d287",
-  "entryCount": 1526,
+  "entriesSha256": "5aa557d27d65e68e57301433c11be264e8b442c00241bae3b40767fccacb7341",
+  "entryCount": 1563,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
