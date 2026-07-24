@@ -35,6 +35,13 @@ This is the **OFARM2 implementation repository**: the working surface for buildi
 Use this workflow for ordinary tasks. Routine work does not require the full
 design contract or an approval stop.
 
+OFARM2 is pre-deployment development work. Prefer the best coherent design now
+over preserving a temporary implementation. Do not defer a justified redesign,
+rewrite, or refactor solely to avoid changing existing code; change is
+comparatively cheap before production. It is not free: preserve accepted
+contracts, evidence, explicit invariants, and stated boundaries, and verify
+changes in proportion to their risk.
+
 Before editing, state:
 
 - the one problem being solved and the primary boundary being changed;
@@ -71,10 +78,26 @@ non-blocking hardening become Follow-ups and do not reopen review.
 
 ## Full design contract for high-risk trust-boundary work
 
-Use the complete Phase A design contract in `TASK_PROMPT.md` only when a task
-changes authentication or authorization, signing or key authority, tenant
-isolation, database transaction or migration semantics, audit integrity, or
-irreversible data behavior.
+The full Phase A design contract in `TASK_PROMPT.md` is required when a task
+materially changes any of these areas:
+
+- authentication, credential verification, principal resolution, or
+  authorization;
+- signing, key custody, or key authority;
+- tenant isolation;
+- database roles, transactions, migrations, or durability semantics;
+- runtime integration, startup readiness, or security-audit behavior;
+- irreversible data behavior.
+
+If classification is unclear, treat the task as high-risk until the boundary
+is explicitly narrowed.
+
+OFARM2 is pre-deployment development work. Prefer the best coherent design now
+over preserving a temporary implementation. Do not defer a justified redesign,
+rewrite, or refactor solely to avoid changing existing code; change is
+comparatively cheap before production. It is not free: preserve accepted
+contracts, evidence, explicit invariants, and stated boundaries, and verify
+changes in proportion to their risk.
 
 For those tasks, inspect first and write a Phase A design contract before
 editing. It must define the problem and non-goals, trust model, authority map,

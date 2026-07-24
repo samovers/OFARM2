@@ -15,10 +15,10 @@ Inputs:
 
 ## Choose the contract
 
-Use the complete Phase A design contract when the task changes a trust
-boundary or authority, including credential verification, principal resolution
-and authorization, database roles or migrations, key custody and signing,
-runtime integration and readiness, or security audit behavior.
+Use the complete Phase A design contract when the task materially changes an
+area in the canonical high-risk trigger list in `AGENTS.md`. If classification
+is unclear, treat the task as high-risk until the boundary is explicitly
+narrowed.
 
 Use the routine contract for documentation, generated files, and mechanical
 work that does not change authority or a trust boundary. If inspection shows
