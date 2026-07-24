@@ -5536,864 +5536,244 @@
       "sourcePath": "kernel/tests/test_profile_harness_bridge.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_acceptance_sufficiency_uses_descriptor_policy_ref_without_policy_body",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_active_profile_env_import_fails_closed_for_blank_tokens[,profile_si_ffs]",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_active_profile_env_import_fails_closed_for_blank_tokens[,profile_si_ffs]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_active_profile_env_import_fails_closed_for_blank_tokens[]",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_active_profile_env_import_fails_closed_for_blank_tokens[]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_active_profile_env_import_fails_closed_for_blank_tokens[profile_si_ffs,,profile_si_ffs]",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_active_profile_env_import_fails_closed_for_blank_tokens[profile_si_ffs,,profile_si_ffs]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_active_profile_env_import_fails_closed_for_blank_tokens[profile_si_ffs,]",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_active_profile_env_import_fails_closed_for_blank_tokens[profile_si_ffs,]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_active_profile_env_rejects_blank_tokens[,profile_si_ffs]",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_active_profile_env_rejects_blank_tokens[,profile_si_ffs]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_active_profile_env_rejects_blank_tokens[]",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_active_profile_env_rejects_blank_tokens[]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_active_profile_env_rejects_blank_tokens[profile_si_ffs,,profile_si_ffs]",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_active_profile_env_rejects_blank_tokens[profile_si_ffs,,profile_si_ffs]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_active_profile_env_rejects_blank_tokens[profile_si_ffs,]",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_active_profile_env_rejects_blank_tokens[profile_si_ffs,]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_active_profile_selection_rejects_design_only_profile_slice",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_active_profile_selection_rejects_design_only_profile_slice",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_active_profile_selection_rejects_multiple_profiles_in_mp1",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_active_profile_selection_rejects_multiple_profiles_in_mp1",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_active_profile_selection_rejects_profile_not_enabled_for_mp1",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_active_profile_selection_rejects_profile_not_enabled_for_mp1",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_active_profile_selection_requires_explicit_enabled_allow_list",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_active_profile_selection_rejects_unsafe_or_non_profile_names[profile_si_ffs-must be a sequence]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_active_profile_selection_uses_registry_and_preserves_si_activation",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_active_profile_selection_rejects_unsafe_or_non_profile_names[selection0-must not be empty]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_config_declares_explicit_single_active_profile_selection",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_active_profile_selection_rejects_unsafe_or_non_profile_names[selection2-simple repository-local]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_descriptor_constructor_alias_conflict_fails_closed",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_active_profile_selection_rejects_unsafe_or_non_profile_names[selection3-simple repository-local]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_descriptor_drives_existing_si_config_without_tenant_binding",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_active_profile_selection_rejects_unsafe_or_non_profile_names[selection4-profile_]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_descriptor_policy_provider_evidence_policy_does_not_call_config_wrapper",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_active_profile_selection_requires_explicit_enabled_allow_list",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_descriptor_policy_provider_recognized_rule_refs_are_descriptor_derived",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_active_profile_selection_uses_registry_and_preserves_si_activation",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_descriptor_registry_discovers_si_candidate_and_nl_design_only_package",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_api_startup_refuses_non_exact_selected_profile_instance",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_descriptor_registry_marks_unenabled_candidate_without_activating_it",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_config_declares_explicit_single_active_profile_selection",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_descriptor_registry_rejects_unsafe_enabled_package_name",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_context_assembler_refuses_descriptor_outside_store_selection",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_descriptor_registry_without_allow_list_does_not_enable_candidates",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_backed_sufficiency_uses_provider_without_config_wrappers",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_profile_route_rejects_descriptor_ref_mismatch[active_artifact_set_ref-activeartifactset:si.ffs.route-mismatch.v0_1-active_artifact_set_ref]",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_backed_validation_uses_provider_without_config_wrapper",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_profile_route_rejects_descriptor_ref_mismatch[pack_activation_set_ref-packactivationset:si.ffs.route-mismatch.v0_1-pack_activation_set_ref]",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_compliance_recognized_refs_are_exact",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_profile_route_rejects_descriptor_ref_mismatch[pack_ref-pack:si.ffs.route-mismatch.v0_1-pack_ref]",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_constructor_alias_conflict_fails_closed",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_profile_route_rejects_descriptor_ref_mismatch[profile_ref-profile:si.ffs.route-mismatch.v0_1-profile_ref]",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_drives_existing_si_config_without_tenant_binding",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_profile_route_rejects_design_only_descriptorless_packages[profile_nl_go_glmc7_2026]",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_policy_provider_evidence_policy_does_not_call_config_wrapper",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_profile_route_rejects_design_only_descriptorless_packages[profile_rs_organic_crop]",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_policy_provider_recognized_rule_refs_are_descriptor_derived",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_profile_route_rejects_package_not_enabled",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_reference_selection_omits_optional_missing_family",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_profile_route_rejects_package_not_selected",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_reference_selection_refuses_required_missing_family",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_profile_route_resolves_current_si_descriptor",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_registry_discovers_si_candidate_and_nl_design_only_package",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_profile_runtime_preconditions_accumulate_missing_surface_blockers",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_registry_marks_unenabled_candidate_without_activating_it",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_profile_runtime_preconditions_allow_empty_selection_as_not_selected",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_registry_rejects_descriptor_file_escape",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_profile_runtime_preconditions_are_passive_for_active_runtime",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_registry_rejects_descriptor_symlink_escape",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_profile_runtime_preconditions_block_bad_descriptor_policy",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_registry_rejects_duplicate_descriptor_refs[activeArtifactSetRef-duplicate active_artifact_set_ref]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_profile_runtime_preconditions_block_candidate_not_enabled",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_registry_rejects_duplicate_descriptor_refs[codeBindingProfileRef-duplicate code_binding_profile_ref]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_profile_runtime_preconditions_block_descriptorless_design_packages[profile_nl_go_glmc7_2026]",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_registry_rejects_duplicate_descriptor_refs[contextSnapshotIdPrefix-duplicate context_snapshot_id_prefix]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_profile_runtime_preconditions_block_descriptorless_design_packages[profile_rs_organic_crop]",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_registry_rejects_duplicate_descriptor_refs[evidencePolicyRef-duplicate evidence_policy_ref]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_profile_runtime_preconditions_pass_with_explicit_inventory_only",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_registry_rejects_duplicate_descriptor_refs[packActivationSetRef-duplicate pack_activation_set_ref]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_profile_runtime_preconditions_reject_malformed_inventory_shape",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_registry_rejects_duplicate_descriptor_refs[packRef-duplicate pack_ref]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_profile_runtime_preconditions_return_invalid_package_blocker",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_registry_rejects_duplicate_descriptor_refs[profileRef-duplicate profile_ref]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_profile_runtime_surface_inventory_rejects_invalid_package_names",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_registry_rejects_malformed_descriptor_candidate",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_profile_runtime_surface_inventory_rejects_malformed_collections[profile_si_ffs]",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_registry_rejects_unsafe_enabled_package_name",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_profile_runtime_surface_inventory_rejects_malformed_collections[value1]",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_registry_without_allow_list_does_not_enable_candidates",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_resolve_active_descriptor_explicit_does_not_import_config",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_rejects_bad_profile_instance_path",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_resolve_active_descriptor_requires_explicit_without_config_default",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_rejects_bad_profile_paths[evidencePolicyPath-../evidence_review_policy_v0_1.json-//.//.]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_si_reference_binding_compatibility_aliases_are_binding_backed",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_rejects_bad_profile_paths[evidencePolicyPath-/tmp/evidence_review_policy_v0_1.json-absolute]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_rejects_code_binding_profile_wrong_pack_scope",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_rejects_incoherent_active_spine",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_rejects_inconsistent_reference_family_behavior",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_rejects_malformed_refs",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_rejects_mismatched_shipped_snapshot_ref",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_rejects_missing_active_spine_ref",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_rejects_multiple_active_packs_or_profiles",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_rejects_unknown_fields[profilePackageRoot-profile_si_ffs]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_rejects_unknown_fields[surprise-True]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_rejects_unknown_fields[tenantRef-tenant:si.ffs.pilot.demo]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_sufficiency_policy_failure_happens_after_validation",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_validation_policy_failure_stops_at_validation",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_wraps_malformed_profile_instance_json",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_descriptor_wraps_unreadable_profile_instance_json",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_explicit_descriptor_asof_context_matches_wrapper",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_explicit_descriptor_bootstrap_inserts_expected_profile_instances",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_explicit_descriptor_bootstrap_matches_compatibility_wrapper",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_explicit_descriptor_context_assembly_matches_wrapper",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_explicit_descriptor_now_context_uses_descriptor_spine_not_later_store_rows",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_explicit_descriptor_reference_snapshots_match_wrapper",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_gate_pipeline_default_missing_farm_ref_still_fails_before_route",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_gate_pipeline_default_sequence_remains_unrouted",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_gate_pipeline_explicit_active_profile_matches_default_for_clean_operation",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_gate_pipeline_omits_si_reference_bindings_when_descriptor_changes",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_gate_pipeline_partial_route_config_fails_closed[kwargs0]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_gate_pipeline_partial_route_config_fails_closed[kwargs1]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_gate_pipeline_partial_route_config_fails_closed[kwargs2]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_gate_pipeline_partial_route_config_fails_closed[kwargs3]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_gate_pipeline_partial_route_config_fails_closed[kwargs4]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_gate_pipeline_threads_si_reference_bindings",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_global_operation_sequence_uses_named_compatibility_constructors",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_issue_159_composition_rejects_missing_required_service",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_issue_159_composition_returns_fresh_service_graphs",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_issue_159_default_pipeline_selects_registered_si_provider",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_issue_159_descriptor_discovery_does_not_register_provider",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_issue_159_descriptor_runtime_never_uses_legacy_policy",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_issue_159_policy_without_complete_runtime_services_refuses_d9",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_issue_159_provider_source_component_is_required",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_issue_159_provider_source_digest_must_match_registration",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_issue_159_route_uses_composition_root_services",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_issue_159_rs_remains_design_only_and_unexecutable",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_issue_159_si_submission_behavior_remains_assertion_equivalent",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_issue_159_unregistered_identity_cannot_construct_runtime",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_issue_159_unregistered_route_refuses_without_si_fallback",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_materializer_dependency_index_uses_bound_policy_and_invalidates",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_materializer_missing_context_spine_refuses_use_governably",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_materializer_uses_active_descriptor_for_context_and_policy_freshness",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_now_context_refuses_descriptor_id_profile_wrong_pack_scope",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_now_context_refuses_descriptor_id_spine_missing_evidence_policy",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_now_context_refuses_descriptor_id_spine_with_wrong_pack_profile",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_now_context_uses_descriptor_spine_not_later_store_rows",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_output_generator_explicit_descriptor_matches_default_profile_refs",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_product_register_boundary_remains_single_active_si_runtime",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_product_register_load_from_store_uses_only_selected_source_data",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_product_register_uses_explicit_si_reference_bindings",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_route_effective_time_uses_half_open_intervals",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_route_inactive_records_do_not_count_as_matches[DRAFT]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_route_inactive_records_do_not_count_as_matches[RETIRED]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_route_inactive_records_do_not_count_as_matches[REVOKED]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_route_rejects_descriptor_identity_mismatch",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_route_rejects_descriptor_ref_mismatch[active_artifact_set_ref-activeartifactset:si.ffs.route-mismatch.v0_1-active_artifact_set_ref]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_route_rejects_descriptor_ref_mismatch[pack_activation_set_ref-packactivationset:si.ffs.route-mismatch.v0_1-pack_activation_set_ref]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_route_rejects_descriptor_ref_mismatch[pack_ref-pack:si.ffs.route-mismatch.v0_1-pack_ref]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_route_rejects_descriptor_ref_mismatch[profile_ref-profile:si.ffs.route-mismatch.v0_1-profile_ref]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_route_rejects_design_only_descriptorless_packages[profile_nl_go_glmc7_2026]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_route_rejects_design_only_descriptorless_packages[profile_rs_organic_crop]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_route_rejects_malformed_route_values[route0-profile_]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_route_rejects_malformed_route_values[route1-status]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_route_rejects_malformed_time_values",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_route_rejects_overlapping_time_bounded_active_routes",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_route_rejects_package_not_enabled",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_route_rejects_package_not_selected",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_route_rejects_scalar_route_records",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_route_requires_one_active_matching_route",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_route_resolves_current_si_descriptor",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_route_validates_inactive_record_structure",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_runtime_preconditions_accumulate_missing_surface_blockers",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_runtime_preconditions_allow_empty_selection_as_not_selected",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_runtime_preconditions_are_passive_for_active_runtime",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_runtime_preconditions_block_bad_descriptor_policy",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_runtime_preconditions_block_candidate_not_enabled",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_runtime_preconditions_block_descriptorless_design_packages[profile_nl_go_glmc7_2026]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_runtime_preconditions_block_descriptorless_design_packages[profile_rs_organic_crop]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_runtime_preconditions_pass_with_explicit_inventory_only",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_runtime_preconditions_reject_malformed_inventory_shape",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_runtime_preconditions_return_invalid_package_blocker",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_runtime_surface_inventory_rejects_invalid_package_names",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_runtime_surface_inventory_rejects_malformed_collections[profile_si_ffs]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_profile_runtime_surface_inventory_rejects_malformed_collections[value1]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_registry_reverification_prefers_context_si_reference_bindings",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_resolve_active_descriptor_explicit_does_not_import_config",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_resolve_active_descriptor_requires_explicit_without_config_default",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_accepts_clean_si_operation",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_accepts_time_bounded_operation_route",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_counts_malformed_farm_scope_entries[malformed_farm_scope0]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_counts_malformed_farm_scope_entries[malformed_farm_scope1]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_governance_does_not_use_event_time_fallback",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_governance_requires_decision_time[None-decisionTime]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_governance_requires_decision_time[not-a-time-decisionTime]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_governance_uses_decision_time",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_ignores_inactive_time_bounded_route",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_ignores_other_farm_time_bounded_route",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_ignores_other_tenant_time_bounded_route",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_operation_event_time_selects_half_open_route",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_refuses_design_only_route_target[profile_nl_go_glmc7_2026]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_refuses_design_only_route_target[profile_rs_organic_crop]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_refuses_farm_ref_scope_mismatch",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_refuses_missing_event_time_no_captured_fallback",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_refuses_missing_farm_context",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_refuses_multiple_farm_scope_entries[scopes0]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_refuses_multiple_farm_scope_entries[scopes1]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_refuses_operation_decision_time_fallback",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_refuses_operation_outside_route_interval",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_refuses_route_resolution_failures[routes0-no active profile route]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_refuses_route_resolution_failures[routes1-multiple active overlapping]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_refuses_route_resolution_failures[routes2-descriptor identity]",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_refuses_same_context_time_bounded_route",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_refuses_tenant_mismatch_before_writes",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_refuses_unparseable_event_time_no_fallback",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_refuses_unsupported_route_time_source",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_gate_pipeline_uses_descriptor_backed_policy_paths",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_route_backed_handoff_binds_materializer_to_resolved_descriptor",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_si_reference_binding_compatibility_aliases_are_binding_backed",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_loader.py::test_si_reference_bindings_are_descriptor_derived",
-      "sourceModule": "kernel.tests.test_profile_runtime_loader",
-      "sourcePath": "kernel/tests/test_profile_runtime_loader.py"
+      "nodeid": "kernel/tests/test_profile_runtime_descriptor.py::test_si_reference_bindings_are_descriptor_derived",
+      "sourceModule": "kernel.tests.test_profile_runtime_descriptor",
+      "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
       "nodeid": "kernel/tests/test_profile_runtime_readiness_check.py::test_docs_navigation_and_source_manifests_do_not_populate_inventory",
@@ -6444,6 +5824,626 @@
       "nodeid": "kernel/tests/test_profile_runtime_readiness_check.py::test_well_shaped_profile_evidence_counts_for_matching_package_only",
       "sourceModule": "kernel.tests.test_profile_runtime_readiness_check",
       "sourcePath": "kernel/tests/test_profile_runtime_readiness_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_routes.py::test_output_generator_explicit_descriptor_matches_default_profile_refs",
+      "sourceModule": "kernel.tests.test_profile_runtime_routes",
+      "sourcePath": "kernel/tests/test_profile_runtime_routes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_routes.py::test_route_backed_gate_pipeline_accepts_clean_si_operation",
+      "sourceModule": "kernel.tests.test_profile_runtime_routes",
+      "sourcePath": "kernel/tests/test_profile_runtime_routes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_routes.py::test_route_backed_gate_pipeline_accepts_time_bounded_operation_route",
+      "sourceModule": "kernel.tests.test_profile_runtime_routes",
+      "sourcePath": "kernel/tests/test_profile_runtime_routes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_routes.py::test_route_backed_gate_pipeline_counts_malformed_farm_scope_entries[malformed_farm_scope0]",
+      "sourceModule": "kernel.tests.test_profile_runtime_routes",
+      "sourcePath": "kernel/tests/test_profile_runtime_routes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_routes.py::test_route_backed_gate_pipeline_counts_malformed_farm_scope_entries[malformed_farm_scope1]",
+      "sourceModule": "kernel.tests.test_profile_runtime_routes",
+      "sourcePath": "kernel/tests/test_profile_runtime_routes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_routes.py::test_route_backed_gate_pipeline_governance_does_not_use_event_time_fallback",
+      "sourceModule": "kernel.tests.test_profile_runtime_routes",
+      "sourcePath": "kernel/tests/test_profile_runtime_routes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_routes.py::test_route_backed_gate_pipeline_governance_requires_decision_time[None-decisionTime]",
+      "sourceModule": "kernel.tests.test_profile_runtime_routes",
+      "sourcePath": "kernel/tests/test_profile_runtime_routes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_routes.py::test_route_backed_gate_pipeline_governance_requires_decision_time[not-a-time-decisionTime]",
+      "sourceModule": "kernel.tests.test_profile_runtime_routes",
+      "sourcePath": "kernel/tests/test_profile_runtime_routes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_routes.py::test_route_backed_gate_pipeline_governance_uses_decision_time",
+      "sourceModule": "kernel.tests.test_profile_runtime_routes",
+      "sourcePath": "kernel/tests/test_profile_runtime_routes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_routes.py::test_route_backed_gate_pipeline_ignores_inactive_time_bounded_route",
+      "sourceModule": "kernel.tests.test_profile_runtime_routes",
+      "sourcePath": "kernel/tests/test_profile_runtime_routes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_routes.py::test_route_backed_gate_pipeline_ignores_other_farm_time_bounded_route",
+      "sourceModule": "kernel.tests.test_profile_runtime_routes",
+      "sourcePath": "kernel/tests/test_profile_runtime_routes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_routes.py::test_route_backed_gate_pipeline_ignores_other_tenant_time_bounded_route",
+      "sourceModule": "kernel.tests.test_profile_runtime_routes",
+      "sourcePath": "kernel/tests/test_profile_runtime_routes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_routes.py::test_route_backed_gate_pipeline_operation_event_time_selects_half_open_route",
+      "sourceModule": "kernel.tests.test_profile_runtime_routes",
+      "sourcePath": "kernel/tests/test_profile_runtime_routes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_routes.py::test_route_backed_gate_pipeline_refuses_design_only_route_target[profile_nl_go_glmc7_2026]",
+      "sourceModule": "kernel.tests.test_profile_runtime_routes",
+      "sourcePath": "kernel/tests/test_profile_runtime_routes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_routes.py::test_route_backed_gate_pipeline_refuses_design_only_route_target[profile_rs_organic_crop]",
+      "sourceModule": "kernel.tests.test_profile_runtime_routes",
+      "sourcePath": "kernel/tests/test_profile_runtime_routes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_routes.py::test_route_backed_gate_pipeline_refuses_farm_ref_scope_mismatch",
+      "sourceModule": "kernel.tests.test_profile_runtime_routes",
+      "sourcePath": "kernel/tests/test_profile_runtime_routes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_routes.py::test_route_backed_gate_pipeline_refuses_missing_event_time_no_captured_fallback",
+      "sourceModule": "kernel.tests.test_profile_runtime_routes",
+      "sourcePath": "kernel/tests/test_profile_runtime_routes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_routes.py::test_route_backed_gate_pipeline_refuses_missing_farm_context",
+      "sourceModule": "kernel.tests.test_profile_runtime_routes",
+      "sourcePath": "kernel/tests/test_profile_runtime_routes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_routes.py::test_route_backed_gate_pipeline_refuses_multiple_farm_scope_entries[scopes0]",
+      "sourceModule": "kernel.tests.test_profile_runtime_routes",
+      "sourcePath": "kernel/tests/test_profile_runtime_routes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_routes.py::test_route_backed_gate_pipeline_refuses_multiple_farm_scope_entries[scopes1]",
+      "sourceModule": "kernel.tests.test_profile_runtime_routes",
+      "sourcePath": "kernel/tests/test_profile_runtime_routes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_routes.py::test_route_backed_gate_pipeline_refuses_operation_decision_time_fallback",
+      "sourceModule": "kernel.tests.test_profile_runtime_routes",
+      "sourcePath": "kernel/tests/test_profile_runtime_routes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_routes.py::test_route_backed_gate_pipeline_refuses_operation_outside_route_interval",
+      "sourceModule": "kernel.tests.test_profile_runtime_routes",
+      "sourcePath": "kernel/tests/test_profile_runtime_routes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_routes.py::test_route_backed_gate_pipeline_refuses_route_resolution_failures[routes0-no active profile route]",
+      "sourceModule": "kernel.tests.test_profile_runtime_routes",
+      "sourcePath": "kernel/tests/test_profile_runtime_routes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_routes.py::test_route_backed_gate_pipeline_refuses_route_resolution_failures[routes1-multiple active overlapping]",
+      "sourceModule": "kernel.tests.test_profile_runtime_routes",
+      "sourcePath": "kernel/tests/test_profile_runtime_routes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_routes.py::test_route_backed_gate_pipeline_refuses_route_resolution_failures[routes2-descriptor identity]",
+      "sourceModule": "kernel.tests.test_profile_runtime_routes",
+      "sourcePath": "kernel/tests/test_profile_runtime_routes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_routes.py::test_route_backed_gate_pipeline_refuses_same_context_time_bounded_route",
+      "sourceModule": "kernel.tests.test_profile_runtime_routes",
+      "sourcePath": "kernel/tests/test_profile_runtime_routes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_routes.py::test_route_backed_gate_pipeline_refuses_tenant_mismatch_before_writes",
+      "sourceModule": "kernel.tests.test_profile_runtime_routes",
+      "sourcePath": "kernel/tests/test_profile_runtime_routes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_routes.py::test_route_backed_gate_pipeline_refuses_unparseable_event_time_no_fallback",
+      "sourceModule": "kernel.tests.test_profile_runtime_routes",
+      "sourcePath": "kernel/tests/test_profile_runtime_routes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_routes.py::test_route_backed_gate_pipeline_refuses_unsupported_route_time_source",
+      "sourceModule": "kernel.tests.test_profile_runtime_routes",
+      "sourcePath": "kernel/tests/test_profile_runtime_routes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_routes.py::test_route_backed_gate_pipeline_uses_descriptor_backed_policy_paths",
+      "sourceModule": "kernel.tests.test_profile_runtime_routes",
+      "sourcePath": "kernel/tests/test_profile_runtime_routes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_routes.py::test_route_backed_handoff_binds_materializer_to_resolved_descriptor",
+      "sourceModule": "kernel.tests.test_profile_runtime_routes",
+      "sourcePath": "kernel/tests/test_profile_runtime_routes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_active_profile_selection_rejects_unsafe_or_non_profile_names[profile_si_ffs-must be a sequence]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_active_profile_selection_rejects_unsafe_or_non_profile_names[selection0-must not be empty]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_active_profile_selection_rejects_unsafe_or_non_profile_names[selection2-simple repository-local]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_active_profile_selection_rejects_unsafe_or_non_profile_names[selection3-simple repository-local]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_active_profile_selection_rejects_unsafe_or_non_profile_names[selection4-profile_]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_context_assembler_refuses_descriptor_outside_store_selection",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_descriptor_reference_selection_omits_optional_missing_family",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_descriptor_reference_selection_refuses_required_missing_family",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_descriptor_registry_rejects_descriptor_file_escape",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_descriptor_registry_rejects_descriptor_symlink_escape",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_descriptor_registry_rejects_duplicate_descriptor_refs[activeArtifactSetRef-duplicate active_artifact_set_ref]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_descriptor_registry_rejects_duplicate_descriptor_refs[codeBindingProfileRef-duplicate code_binding_profile_ref]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_descriptor_registry_rejects_duplicate_descriptor_refs[contextSnapshotIdPrefix-duplicate context_snapshot_id_prefix]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_descriptor_registry_rejects_duplicate_descriptor_refs[evidencePolicyRef-duplicate evidence_policy_ref]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_descriptor_registry_rejects_duplicate_descriptor_refs[packActivationSetRef-duplicate pack_activation_set_ref]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_descriptor_registry_rejects_duplicate_descriptor_refs[packRef-duplicate pack_ref]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_descriptor_registry_rejects_duplicate_descriptor_refs[profileRef-duplicate profile_ref]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_descriptor_registry_rejects_malformed_descriptor_candidate",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_descriptor_rejects_bad_profile_instance_path",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_descriptor_rejects_bad_profile_paths[evidencePolicyPath-../evidence_review_policy_v0_1.json-//.//.]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_descriptor_rejects_bad_profile_paths[evidencePolicyPath-/tmp/evidence_review_policy_v0_1.json-absolute]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_descriptor_rejects_code_binding_profile_wrong_pack_scope",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_descriptor_rejects_incoherent_active_spine",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_descriptor_rejects_inconsistent_reference_family_behavior",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_descriptor_rejects_malformed_refs",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_descriptor_rejects_mismatched_shipped_snapshot_ref",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_descriptor_rejects_missing_active_spine_ref",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_descriptor_rejects_multiple_active_packs_or_profiles",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_descriptor_rejects_unknown_fields[profilePackageRoot-profile_si_ffs]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_descriptor_rejects_unknown_fields[surprise-True]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_descriptor_rejects_unknown_fields[tenantRef-tenant:si.ffs.pilot.demo]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_descriptor_wraps_malformed_profile_instance_json",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_descriptor_wraps_unreadable_profile_instance_json",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_explicit_descriptor_asof_context_matches_wrapper",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_explicit_descriptor_bootstrap_inserts_expected_profile_instances",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_explicit_descriptor_bootstrap_matches_compatibility_wrapper",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_explicit_descriptor_context_assembly_matches_wrapper",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_explicit_descriptor_now_context_uses_descriptor_spine_not_later_store_rows",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_explicit_descriptor_reference_snapshots_match_wrapper",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_gate_pipeline_default_missing_farm_ref_still_fails_before_route",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_gate_pipeline_default_sequence_remains_unrouted",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_gate_pipeline_explicit_descriptor_matches_default_for_clean_operation",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_gate_pipeline_partial_route_config_fails_closed[kwargs0]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_gate_pipeline_partial_route_config_fails_closed[kwargs1]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_gate_pipeline_partial_route_config_fails_closed[kwargs2]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_gate_pipeline_partial_route_config_fails_closed[kwargs3]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_gate_pipeline_partial_route_config_fails_closed[kwargs4]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_now_context_refuses_descriptor_id_profile_wrong_pack_scope",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_now_context_refuses_descriptor_id_spine_missing_evidence_policy",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_now_context_refuses_descriptor_id_spine_with_wrong_pack_profile",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_now_context_uses_descriptor_spine_not_later_store_rows",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_profile_route_effective_time_uses_half_open_intervals",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_profile_route_inactive_records_do_not_count_as_matches[DRAFT]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_profile_route_inactive_records_do_not_count_as_matches[RETIRED]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_profile_route_inactive_records_do_not_count_as_matches[REVOKED]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_profile_route_rejects_descriptor_identity_mismatch",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_profile_route_rejects_malformed_route_values[route0-profile_]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_profile_route_rejects_malformed_route_values[route1-status]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_profile_route_rejects_malformed_time_values",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_profile_route_rejects_overlapping_time_bounded_active_routes",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_profile_route_rejects_scalar_route_records",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_profile_route_requires_one_active_matching_route",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_profile_route_validates_inactive_record_structure",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_acceptance_sufficiency_uses_descriptor_policy_ref_without_policy_body",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_api_startup_refuses_non_exact_selected_profile_instance",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_descriptor_backed_sufficiency_uses_provider_without_config_wrappers",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_descriptor_backed_validation_uses_provider_without_config_wrapper",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_descriptor_compliance_recognized_refs_are_exact",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_descriptor_sufficiency_policy_failure_happens_after_validation",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_descriptor_validation_policy_failure_stops_at_validation",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_gate_pipeline_threads_si_reference_bindings",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_159_composition_rejects_missing_required_service",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_159_composition_returns_fresh_service_graphs",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_159_default_pipeline_selects_registered_si_provider",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_159_descriptor_discovery_does_not_register_provider",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_159_descriptor_runtime_never_uses_legacy_policy",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_159_factory_executes_verified_bytes_not_disk_or_module_cache",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_159_provider_bytes_are_verified_before_import",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_159_provider_source_component_is_required",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_159_route_uses_composition_root_services",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_159_rs_remains_design_only_and_unexecutable",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_159_service_bundle_has_no_optional_slots",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_159_si_submission_behavior_remains_assertion_equivalent",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_159_unregistered_identity_cannot_construct_runtime",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_159_unregistered_route_refuses_without_si_fallback",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_materializer_dependency_index_uses_bound_policy_and_invalidates",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_materializer_missing_context_spine_refuses_use_governably",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_materializer_uses_active_descriptor_for_context_and_policy_freshness",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_product_register_boundary_remains_single_active_si_runtime",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_product_register_load_from_store_uses_only_selected_source_data",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_product_register_uses_explicit_si_reference_bindings",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_registry_reverification_uses_bound_snapshot_prefix",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_validation_services_require_explicit_profile_policy",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
     },
     {
       "nodeid": "kernel/tests/test_profile_si_demo_payloads.py::test_d2_identity_payload_facades_match_profile_helpers",
@@ -6729,6 +6729,31 @@
       "nodeid": "kernel/tests/test_review_fixes.py::test_m3_partial_extent_without_bound_stays_draft",
       "sourceModule": "kernel.tests.test_review_fixes",
       "sourcePath": "kernel/tests/test_review_fixes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_environment_reads_detect_import_styles[from os import environ as environment/nenvironment.get('SETTING')/n-2]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_environment_reads_detect_import_styles[from os import getenv/ngetenv('SETTING')/n-2]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_environment_reads_detect_import_styles[import os as environment/nenvironment.environ['SETTING']/n-2]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_environment_reads_detect_import_styles[import os/nos.getenv('SETTING')/n-2]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_environment_reads_ignore_environment_free_modules",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
     {
       "nodeid": "kernel/tests/test_runtime_activation.py::test_closed_verified_connection_refuses_before_governed_mutation",
@@ -7606,8 +7631,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "1b3a4ff68697c07e4baf71ffa79ab76658cdc7a6c6f4d5d2f4fc1c0a3ed399dd",
-  "entryCount": 1521,
+  "entriesSha256": "7c4c80b5723a5f50916e46b9a7be2acca9bcff40b1313bbe0c5e09181846d287",
+  "entryCount": 1526,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

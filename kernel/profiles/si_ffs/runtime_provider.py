@@ -1,4 +1,4 @@
-"""Existing Slovenian runtime services behind the issue #159 provider seam."""
+"""Construct the complete Slovenian runtime service graph."""
 
 from ...context import (
     ContextAssembler,
@@ -9,36 +9,22 @@ from ...materializer import Materializer
 from ...profile_policy import DescriptorPolicyProvider
 from ...profile_runtime import ProfileRuntimeDescriptor, ProfileRuntimeError
 from ...profile_runtime_provider import ProfileRuntimeServices
-from ...runtime_bundle import (
-    RuntimeBundleError,
-    RuntimeComponent,
-    RuntimeComponentRole,
-)
+from ...runtime_bundle import RuntimeBundleError, RuntimeComponentRole
 from ...sufficiency import OPERATION_FLOOR_CHECKS
 from ...validators import RegistryReverificationValidator
 
 
-_PACKAGE_NAME = "profile_si_ffs"
 _PROFILE_REF = "profile:si.ffs.recordkeeping.v0_1"
 
 
 def build_si_runtime_services(
     store,
     descriptor: ProfileRuntimeDescriptor,
-    provider_source_component: RuntimeComponent,
 ) -> ProfileRuntimeServices:
-    """Construct a fresh graph using the already selected SI implementation."""
+    """Construct a fresh graph for the already verified SI implementation."""
     if descriptor.profile_ref != _PROFILE_REF:
         raise ProfileRuntimeError(
             "the SI runtime provider received an unsupported profile descriptor"
-        )
-    if (
-        provider_source_component.role is not RuntimeComponentRole.ADAPTER_SOURCE
-        or provider_source_component.logical_ref
-        != "python:profile-si-ffs-v0_1:runtime-provider"
-    ):
-        raise ProfileRuntimeError(
-            "the SI runtime provider source component identity is invalid"
         )
     try:
         policy_component = store.runtime_bundle.component(
@@ -61,8 +47,6 @@ def build_si_runtime_services(
     product_lookup.load_from_store(store)
 
     return ProfileRuntimeServices(
-        provider_key=(_PACKAGE_NAME, _PROFILE_REF),
-        provider_source_digest=provider_source_component.content_digest,
         descriptor=descriptor,
         policy_provider=policy_provider,
         context_assembler=ContextAssembler(

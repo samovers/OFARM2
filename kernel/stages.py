@@ -16,13 +16,16 @@ pin.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from . import policy, profile_policy, sufficiency
 from .context import ContextNotReconstructible, mint, parse_ts
 from .contracts import ContractViolation
 from .emission import PromotionEmitter, ReplayWriter, submission_evidence_refs
 from .problems import runtime_problem
+
+if TYPE_CHECKING:
+    from .profile_runtime_provider import ProfileRuntimeServices
 
 
 # ---------------------------------------------------------------------------
@@ -59,19 +62,13 @@ class GateContext:
     cur: Any
     store: Any
     authority: Any
-    context_assembler: Any
-    materializer: Any
-    products: Any
+    runtime_services: ProfileRuntimeServices
     # the submission and its normalized identity
     sub: dict
     request_id: str
     ingested_at: str
     source_digest: str
-    active_profile: Any = None
     profile_route_resolution: Any = None
-    runtime_services: Any = None
-    policy_provider: Any = None
-    si_reference_bindings: Any = None
     commit_class: str = ""
     family: str = ""
     farm_ref: str = ""
@@ -379,7 +376,9 @@ class EnvelopePersist:
 class ProfileApplicabilityGate:
     def run(self, ctx: GateContext) -> GatePass | GateRefusal:
         try:
-            snapshot = ctx.context_assembler.assemble(ctx.cur, ctx.farm_ref)
+            snapshot = ctx.runtime_services.context_assembler.assemble(
+                ctx.cur, ctx.farm_ref
+            )
         except ContextNotReconstructible as exc:
             ctx.log("PACK_PROFILE_APPLICABILITY", "NOT_APPLICABLE",
                     reason_code="PROFILE_NOT_ACTIVE", rationale=str(exc))
@@ -410,14 +409,10 @@ class EvidenceSufficiencyGate:
         # ReviewDecision — any existing sufficiency case is left unchanged
         # (PR #18 review B2). The branch was resolved by the prior ValidationGate.
         if ctx.acceptance_target and ctx.review_branch == "ACCEPT":
-            kwargs = {}
-            if ctx.policy_provider is not None:
-                kwargs["policy_ref"] = ctx.policy_provider.policy_ref
-            elif ctx.active_profile is not None:
-                kwargs["policy_ref"] = ctx.active_profile.evidence_policy_ref
             case = sufficiency.build_acceptance_case(
                 ctx.store, ctx.sub, ctx.farm_ref, ctx.acceptance_payload,
-                **kwargs)
+                policy_ref=ctx.runtime_services.policy_provider.policy_ref,
+            )
             if case["outcome"]["decision"] == "REFUSE":
                 ctx.log("EVIDENCE_SUFFICIENCY", "INSUFFICIENT",
                         reason_code="EVIDENCE_INSUFFICIENT",
@@ -440,24 +435,19 @@ class EvidenceSufficiencyGate:
 
         if ctx.commit_class in ("OPERATION_CLAIM", "COMPLIANCE_ASSERTION"):
             try:
-                if ctx.policy_provider is None:
-                    case, floor_failures = sufficiency.build_floor_case(
-                        ctx.store, ctx.sub, ctx.commit_class, ctx.farm_ref,
-                        ctx.assertion_id, ctx.erp_id)
-                    evidence_policy = None
-                else:
-                    evidence_policy = ctx.policy_provider.evidence_policy(
-                        supported_checks=(
-                            sufficiency.OPERATION_FLOOR_CHECKS
-                            if ctx.commit_class == "OPERATION_CLAIM"
-                            else None),
-                    )
-                    case, floor_failures = sufficiency.build_floor_case_with_policy(
-                        ctx.store, ctx.sub, ctx.commit_class, ctx.farm_ref,
-                        ctx.assertion_id, ctx.erp_id,
-                        evidence_policy=evidence_policy,
-                        policy_ref=ctx.policy_provider.policy_ref,
-                        recognized_rule_refs=ctx.policy_provider.recognized_rule_refs)
+                policy_provider = ctx.runtime_services.policy_provider
+                evidence_policy = policy_provider.evidence_policy(
+                    supported_checks=(
+                        sufficiency.OPERATION_FLOOR_CHECKS
+                        if ctx.commit_class == "OPERATION_CLAIM"
+                        else None),
+                )
+                case, floor_failures = sufficiency.build_floor_case_with_policy(
+                    ctx.store, ctx.sub, ctx.commit_class, ctx.farm_ref,
+                    ctx.assertion_id, ctx.erp_id,
+                    evidence_policy=evidence_policy,
+                    policy_ref=policy_provider.policy_ref,
+                    recognized_rule_refs=policy_provider.recognized_rule_refs)
             except profile_policy.ProfilePolicyError as exc:
                 # P5: the floor composition is package content; a missing/malformed
                 # policy fails CLOSED with a governed RuntimeProblem (never a silent
@@ -488,11 +478,8 @@ class EvidenceSufficiencyGate:
             # routed to review (not review_route_reasons) and never changing the
             # outcome. A clean claim still promotes even when an advisory is raised.
             if ctx.commit_class == "OPERATION_CLAIM":
-                if ctx.policy_provider is None:
-                    advisories = sufficiency.operation_advisories(ctx.store, ctx.sub)
-                else:
-                    advisories = sufficiency.operation_advisories_with_policy(
-                        ctx.store, ctx.sub, evidence_policy)
+                advisories = sufficiency.operation_advisories_with_policy(
+                    ctx.store, ctx.sub, evidence_policy)
                 ctx.problems.extend(advisories)
             ctx.log("EVIDENCE_SUFFICIENCY", "SATISFIED")
             return GatePass()
@@ -647,13 +634,14 @@ class ReviewPromotionGate:
 
 class MaterializationGate:
     def run(self, ctx: GateContext) -> GatePass:
-        ctx.materializer.invalidate_for_sources(
+        materializer = ctx.runtime_services.materializer
+        materializer.invalidate_for_sources(
             ctx.cur, ctx.invalidation_sources or [ctx.trigger_source],
             trigger_family="BASIS_ADVANCED",
             trigger_source_ref=ctx.trigger_source,
             farm_scope_ref=ctx.farm_ref,
             reason_code="TRUTH_BASIS_ADVANCED")
-        mat = ctx.materializer.recompute(ctx.cur, ctx.farm_ref)
+        mat = materializer.recompute(ctx.cur, ctx.farm_ref)
         # NOTE: no materializationResultRef on the trace — the commit-time
         # recompute emits Basis+Snapshot, not a boundary Result; those
         # receipts ride the gateSequence entry below

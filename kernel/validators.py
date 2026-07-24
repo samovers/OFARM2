@@ -13,7 +13,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from . import config, policy, profile_policy, sufficiency
-from .context import REGSR_SNAPSHOT_PREFIX, current_reference_snapshot, parse_ts
+from .context import current_reference_snapshot, parse_ts
 from .contracts import ContractViolation, UnknownContract, sha256_of
 from .problems import runtime_problem
 from .stages import GateContext, GatePass, GateRefusal
@@ -1072,12 +1072,10 @@ class RegistryReverificationValidator:
     snapshot advance is identity-grade only where the snapshot carries
     decision-number data; anything weaker routes to review.
 
-    A selected profile provider supplies the snapshot family and lookup
-    explicitly. The optional defaults preserve the existing direct legacy-test
-    entrypoint; descriptor-backed runtime execution never uses that fallback.
+    A selected profile provider supplies the snapshot family and lookup.
     """
 
-    def __init__(self, *, snapshot_prefix=None, product_lookup=None):
+    def __init__(self, *, snapshot_prefix, product_lookup):
         self.snapshot_prefix = snapshot_prefix
         self.product_lookup = product_lookup
 
@@ -1085,30 +1083,16 @@ class RegistryReverificationValidator:
         product_binding = _verified_product_binding(ctx)
         if not (product_binding and product_binding["bindingState"] == "VERIFIED"):
             return None
-        snapshot_prefix = (
-            self.snapshot_prefix
-            if self.snapshot_prefix is not None
-            else (
-                ctx.si_reference_bindings.regsr_snapshot_prefix
-                if ctx.si_reference_bindings is not None
-                else REGSR_SNAPSHOT_PREFIX
-            )
-        )
-        current = current_reference_snapshot(ctx.store, snapshot_prefix)
+        current = current_reference_snapshot(ctx.store, self.snapshot_prefix)
         current_id = current["referenceSnapshotId"] if current else None
         captured_against = ctx.sub.get("capturedAgainstSnapshotRef") \
             or (product_binding.get("referenceSnapshotRefs") or [None])[0]
         if not (current_id and captured_against and captured_against != current_id):
             return None
-        product_lookup = (
-            self.product_lookup
-            if self.product_lookup is not None
-            else ctx.products
-        )
         event_time = ctx.event_time or ctx.captured_at
         decision_number = product_binding["bindingValue"].get("registrationRef")
         confirmed = (
-            product_lookup.lookup_by_decision(current_id, decision_number)
+            self.product_lookup.lookup_by_decision(current_id, decision_number)
             if decision_number else None
         )
         if confirmed is not None:
@@ -1175,29 +1159,9 @@ COMMON_SEQUENCE = (
 # operation claims additionally run these, in this order; CarrierStore runs
 # AFTER the PASS log (a carrier-id conflict surfaces as PASS-then-FAIL on the
 # trace — the validation checks passed, the storage step refused)
-OPERATION_SEQUENCE = (
-    CarrierSchemaValidator(),
-    CarrierSemanticsValidator.from_config_for_legacy_tests(),
-    ExecutionExtentValidator.from_config_for_legacy_tests(),
-    ReferenceResolutionValidator(),
-    ActorAttributionValidator(),
-    CodeBindingValidator.from_config_for_legacy_tests(),
-    RegistryReverificationValidator(),
-)
-
-
-def _descriptor_recognized_rule_refs(active_profile) -> frozenset[str]:
-    return frozenset({
-        active_profile.evidence_policy_ref,
-        active_profile.profile_ref,
-        active_profile.pack_ref,
-        active_profile.code_binding_profile_ref,
-    })
-
-
 def _operation_sequence_for_validation_policy(
     validation_policy: dict,
-    registry_reverification=None,
+    registry_reverification,
 ) -> tuple:
     sequence = (
         CarrierSchemaValidator(),
@@ -1207,9 +1171,7 @@ def _operation_sequence_for_validation_policy(
         ActorAttributionValidator(),
         CodeBindingValidator(validation_policy),
     )
-    if registry_reverification is not None:
-        sequence += (registry_reverification,)
-    return sequence
+    return sequence + (registry_reverification,)
 
 
 class ValidationGate:
@@ -1232,12 +1194,9 @@ class ValidationGate:
         if ctx.commit_class == "GOVERNANCE_DECISION":
             return GovernanceAcceptanceValidator().run(ctx) or GatePass()
         if ctx.commit_class == "COMPLIANCE_ASSERTION":
-            if ctx.policy_provider is not None:
-                recognized_refs = ctx.policy_provider.recognized_rule_refs
-            else:
-                recognized_refs = (
-                    _descriptor_recognized_rule_refs(ctx.active_profile)
-                    if ctx.active_profile is not None else None)
+            recognized_refs = (
+                ctx.runtime_services.policy_provider.recognized_rule_refs
+            )
             return ComplianceClaimValidator(
                 recognized_rule_refs=recognized_refs).run(ctx) or GatePass()
         if ctx.commit_class == "STRUCTURE_ASSERTION":
@@ -1249,27 +1208,16 @@ class ValidationGate:
             ctx.log("VALIDATION", "PASS")
             return GatePass()
 
-        if ctx.policy_provider is None:
-            if ctx.active_profile is not None:
-                return _validation_policy_refusal(
-                    ctx,
-                    "descriptor-backed runtime provider services are unavailable",
-                )
-            operation_sequence = OPERATION_SEQUENCE
-        else:
-            if ctx.runtime_services is None:
-                return _validation_policy_refusal(
-                    ctx,
-                    "descriptor-backed runtime provider services are incomplete",
-                )
-            try:
-                validation_policy = ctx.policy_provider.validation_policy()
-            except profile_policy.ProfilePolicyError as exc:
-                return _validation_policy_refusal(ctx, exc)
-            operation_sequence = _operation_sequence_for_validation_policy(
-                validation_policy,
-                ctx.runtime_services.registry_reverification,
+        try:
+            validation_policy = (
+                ctx.runtime_services.policy_provider.validation_policy()
             )
+        except profile_policy.ProfilePolicyError as exc:
+            return _validation_policy_refusal(ctx, exc)
+        operation_sequence = _operation_sequence_for_validation_policy(
+            validation_policy,
+            ctx.runtime_services.registry_reverification,
+        )
 
         for validator in operation_sequence:
             refusal = validator.run(ctx)

@@ -1618,7 +1618,7 @@ def test_imported_reference_snapshot_remains_inactive_under_current_bundle(
     fresh_env,
 ):
     store, pipeline_before, _ = fresh_env
-    bindings = pipeline_before.si_reference_bindings
+    bindings = pipeline_before.runtime_services.reference_bindings
     selected_before = context.current_reference_snapshot(
         store, bindings.regsr_snapshot_prefix
     )
@@ -1670,10 +1670,10 @@ def test_imported_reference_snapshot_remains_inactive_under_current_bundle(
     }
 
     pipeline_after = GatePipeline(store)
-    assert pipeline_before.products.lookup_by_decision(
+    assert pipeline_before.runtime_services.product_lookup.lookup_by_decision(
         candidate_id, candidate_decision
     ) is None
-    assert pipeline_after.products.lookup_by_decision(
+    assert pipeline_after.runtime_services.product_lookup.lookup_by_decision(
         candidate_id, candidate_decision
     ) is None
 
