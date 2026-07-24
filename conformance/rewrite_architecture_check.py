@@ -31,6 +31,7 @@ PRODUCTION_BUDGETS = {
     "kernel/legacy_runtime.py": 100,
     "kernel/security_audit.py": 130,
     "kernel/security_audit_client.py": 220,
+    "kernel/google_kms_correlation_hmac.py": 220,
 }
 GROUP_BUDGETS = {
     "profile runtime": (
@@ -85,6 +86,10 @@ GROUP_BUDGETS = {
             "kernel/security_audit_client.py",
         ),
     ),
+    "security audit HMAC": (
+        220,
+        ("kernel/google_kms_correlation_hmac.py",),
+    ),
 }
 TEST_GLOBS = (
     "kernel/tests/*profile_runtime*.py",
@@ -96,6 +101,7 @@ TEST_GLOBS = (
     "kernel/tests/*runtime_config*.py",
     "kernel/tests/*tenant_uow*.py",
     "kernel/tests/*security_audit_client*.py",
+    "kernel/tests/*google_kms_correlation_hmac*.py",
 )
 PROHIBITED_NAMES = {"for_test", "production_eligible"}
 
