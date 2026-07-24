@@ -1,6 +1,7 @@
 """Ordered production graph construction and its sealed public surface."""
 from __future__ import annotations
 
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -86,8 +87,17 @@ class ApplicationRuntime:
         return self._issuer.mint(identity, authority, challenge)
 
     def close(self) -> None:
-        self._oidc_client.close()
-        self._kms_client.close()
+        _close_runtime_clients(self._oidc_client, self._kms_client)
+
+
+def _close_runtime_clients(
+    oidc_client: httpx.Client,
+    kms_client: kms_v1.KeyManagementServiceClient,
+) -> None:
+    try:
+        oidc_client.close()
+    finally:
+        kms_client.transport.close()
 
 
 def _receipt_source(path: Path) -> bytes:
@@ -117,7 +127,8 @@ def build_application_runtime(config: RuntimeConfig) -> ApplicationRuntime:
     try:
         kms_client = kms_v1.KeyManagementServiceClient()
     except Exception:
-        oidc_client.close()
+        with suppress(Exception):
+            oidc_client.close()
         raise
     connection_factory = _connection_factory(config.pg_dsn)
     verifier = ProductionOidcVerifier(
@@ -150,8 +161,8 @@ def build_application_runtime(config: RuntimeConfig) -> ApplicationRuntime:
             raise RuntimeStartupError("database runtime audiences differ")
         signer.sign(TENANT_CAPABILITY_PREFLIGHT_PROBE, signing)
     except Exception:
-        oidc_client.close()
-        kms_client.close()
+        with suppress(Exception):
+            _close_runtime_clients(oidc_client, kms_client)
         raise
     metadata = RuntimeMetadata(
         mode=RuntimeMode.PRODUCTION,

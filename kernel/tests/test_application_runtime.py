@@ -106,14 +106,24 @@ def test_image_identity_is_validated_before_runtime_io(monkeypatch):
     assert events == []
 
 
-def _install_graph_fakes(monkeypatch, events):
+def _install_graph_fakes(monkeypatch, events, failures=None):
+    failures = failures or {}
+
     class Client:
         def close(self):
             events.append("http.close")
+            if failure := failures.get("http.close"):
+                raise failure
 
-    class KmsClient:
+    class KmsTransport:
         def close(self):
             events.append("kms.close")
+            if failure := failures.get("kms.close"):
+                raise failure
+
+    class KmsClient:
+        def __init__(self):
+            self.transport = KmsTransport()
 
     class Verifier:
         def __init__(self, config, client):
@@ -123,6 +133,8 @@ def _install_graph_fakes(monkeypatch, events):
 
         def initialize(self):
             events.append("verifier.initialize")
+            if failure := failures.get("verifier.initialize"):
+                raise failure
 
     class Resolver:
         audience = "binder-audience"
@@ -206,6 +218,26 @@ def test_production_graph_initializes_in_fixed_order(monkeypatch):
     assert runtime.metadata.oidc_audience == "external-api"
     assert runtime.metadata.binder_audience == "binder-audience"
     runtime.close()
+    assert events[-2:] == ["http.close", "kms.close"]
+
+
+def test_startup_failure_is_preserved_and_every_client_closes(monkeypatch):
+    events = []
+    startup_error = RuntimeStartupError("startup refused")
+    _install_graph_fakes(
+        monkeypatch,
+        events,
+        {
+            "verifier.initialize": startup_error,
+            "http.close": RuntimeError("HTTP close failed"),
+            "kms.close": RuntimeError("KMS close failed"),
+        },
+    )
+
+    with pytest.raises(RuntimeStartupError) as raised:
+        application_runtime.build_application_runtime(_config())
+
+    assert raised.value is startup_error
     assert events[-2:] == ["http.close", "kms.close"]
 
 

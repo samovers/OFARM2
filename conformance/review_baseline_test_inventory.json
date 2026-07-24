@@ -1,6 +1,76 @@
 {
   "entries": [
     {
+      "nodeid": "kernel/tests/test_application_runtime.py::test_application_is_not_published_after_startup_failure",
+      "sourceModule": "kernel.tests.test_application_runtime",
+      "sourcePath": "kernel/tests/test_application_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_application_runtime.py::test_create_app_has_no_injection_arguments",
+      "sourceModule": "kernel.tests.test_application_runtime",
+      "sourcePath": "kernel/tests/test_application_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_application_runtime.py::test_image_identity_is_validated_before_runtime_io",
+      "sourceModule": "kernel.tests.test_application_runtime",
+      "sourcePath": "kernel/tests/test_application_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_application_runtime.py::test_production_and_development_imports_exclude_test_hs256",
+      "sourceModule": "kernel.tests.test_application_runtime",
+      "sourcePath": "kernel/tests/test_application_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_application_runtime.py::test_production_app_exposes_only_metadata_and_closes_shared_surface",
+      "sourceModule": "kernel.tests.test_application_runtime",
+      "sourcePath": "kernel/tests/test_application_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_application_runtime.py::test_production_graph_initializes_in_fixed_order",
+      "sourceModule": "kernel.tests.test_application_runtime",
+      "sourcePath": "kernel/tests/test_application_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_application_runtime.py::test_runtime_config_is_one_immutable_environment_snapshot",
+      "sourceModule": "kernel.tests.test_application_runtime",
+      "sourcePath": "kernel/tests/test_application_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_application_runtime.py::test_runtime_config_rejects_invalid_static_settings[OFARM_AUTH_MODE-test]",
+      "sourceModule": "kernel.tests.test_application_runtime",
+      "sourcePath": "kernel/tests/test_application_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_application_runtime.py::test_runtime_config_rejects_invalid_static_settings[OFARM_OIDC_JWKS_URL-http://issuer.example/jwks]",
+      "sourceModule": "kernel.tests.test_application_runtime",
+      "sourcePath": "kernel/tests/test_application_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_application_runtime.py::test_runtime_config_rejects_invalid_static_settings[OFARM_PG_DSN-broken==]",
+      "sourceModule": "kernel.tests.test_application_runtime",
+      "sourcePath": "kernel/tests/test_application_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_application_runtime.py::test_runtime_config_rejects_invalid_static_settings[OFARM_SIGNING_EVIDENCE_OBSERVER_PUBLIC_KEY_B64-not-base64]",
+      "sourceModule": "kernel.tests.test_application_runtime",
+      "sourcePath": "kernel/tests/test_application_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_application_runtime.py::test_runtime_config_rejects_invalid_static_settings[OFARM_SIGNING_EVIDENCE_RECEIPT_PATH-relative/receipt]",
+      "sourceModule": "kernel.tests.test_application_runtime",
+      "sourcePath": "kernel/tests/test_application_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_application_runtime.py::test_runtime_config_rejects_invalid_static_settings[OFARM_TENANT_CAPABILITY_KID-short]",
+      "sourceModule": "kernel.tests.test_application_runtime",
+      "sourcePath": "kernel/tests/test_application_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_application_runtime.py::test_startup_failure_is_preserved_and_every_client_closes",
+      "sourceModule": "kernel.tests.test_application_runtime",
+      "sourcePath": "kernel/tests/test_application_runtime.py"
+    },
+    {
       "nodeid": "kernel/tests/test_authentication_read_api.py::test_authority_observers_reject_non_application_session[contract]",
       "sourceModule": "kernel.tests.test_authentication_read_api",
       "sourcePath": "kernel/tests/test_authentication_read_api.py"
@@ -691,11 +761,6 @@
       "sourcePath": "kernel/tests/test_m2_oidc.py"
     },
     {
-      "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_from_env_default_reads_oidc_config_deterministically",
-      "sourceModule": "kernel.tests.test_m2_oidc",
-      "sourcePath": "kernel/tests/test_m2_oidc.py"
-    },
-    {
       "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_invalid_tokens_denied",
       "sourceModule": "kernel.tests.test_m2_oidc",
       "sourcePath": "kernel/tests/test_m2_oidc.py"
@@ -712,11 +777,6 @@
     },
     {
       "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_role_claim_alone_does_not_authorize",
-      "sourceModule": "kernel.tests.test_m2_oidc",
-      "sourcePath": "kernel/tests/test_m2_oidc.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_m2_oidc.py::test_g4_rs256_is_not_implemented_no_fallback",
       "sourceModule": "kernel.tests.test_m2_oidc",
       "sourcePath": "kernel/tests/test_m2_oidc.py"
     },
@@ -7166,6 +7226,16 @@
       "sourcePath": "kernel/tests/test_review_fixes.py"
     },
     {
+      "nodeid": "kernel/tests/test_rewrite_architecture.py::test_rewrite_architecture_budgets",
+      "sourceModule": "kernel.tests.test_rewrite_architecture",
+      "sourcePath": "kernel/tests/test_rewrite_architecture.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture.py::test_runtime_config_from_env_is_the_only_environment_reader",
+      "sourceModule": "kernel.tests.test_rewrite_architecture",
+      "sourcePath": "kernel/tests/test_rewrite_architecture.py"
+    },
+    {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_environment_reads_detect_import_styles[from os import environ as environment/nenvironment.get('SETTING')/n-2]",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
@@ -8156,8 +8226,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "3450c655c8f4433f0cd958040585abd2c4bcff6a59be8be7d36b15d4335deb10",
-  "entryCount": 1631,
+  "entriesSha256": "a1ae7f400a8add610a712316acc0fdde9cb766ab47be2aa67cb062d672b3368d",
+  "entryCount": 1645,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
