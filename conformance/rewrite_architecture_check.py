@@ -29,6 +29,8 @@ PRODUCTION_BUDGETS = {
     "kernel/runtime_config.py": 140,
     "kernel/application_runtime.py": 220,
     "kernel/legacy_runtime.py": 100,
+    "kernel/security_audit.py": 130,
+    "kernel/security_audit_client.py": 220,
 }
 GROUP_BUDGETS = {
     "profile runtime": (
@@ -76,6 +78,13 @@ GROUP_BUDGETS = {
         450,
         ("kernel/tenant_uow.py",),
     ),
+    "security audit ingest": (
+        350,
+        (
+            "kernel/security_audit.py",
+            "kernel/security_audit_client.py",
+        ),
+    ),
 }
 TEST_GLOBS = (
     "kernel/tests/*profile_runtime*.py",
@@ -86,6 +95,7 @@ TEST_GLOBS = (
     "kernel/tests/*application_runtime*.py",
     "kernel/tests/*runtime_config*.py",
     "kernel/tests/*tenant_uow*.py",
+    "kernel/tests/*security_audit_client*.py",
 )
 PROHIBITED_NAMES = {"for_test", "production_eligible"}
 
