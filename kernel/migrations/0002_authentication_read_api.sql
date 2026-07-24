@@ -145,8 +145,10 @@ BEGIN
             SELECT row.* INTO STRICT binding
               FROM ofarm.principal_binding AS row
              WHERE row.equality_policy = requested_equality_policy
-               AND row.issuer::pg_catalog.text = requested_issuer
-               AND row.subject::pg_catalog.text = requested_subject
+               AND row.issuer::pg_catalog.text COLLATE pg_catalog."C" =
+                   requested_issuer COLLATE pg_catalog."C"
+               AND row.subject::pg_catalog.text COLLATE pg_catalog."C" =
+                   requested_subject COLLATE pg_catalog."C"
                AND row.binding_version_id = act.binding_version_id
                AND row.binding_version_digest = act.binding_version_digest;
         EXCEPTION WHEN NO_DATA_FOUND OR TOO_MANY_ROWS THEN
@@ -189,8 +191,10 @@ BEGIN
         SELECT row.* INTO STRICT projected
           FROM ofarm.principal_binding_current AS row
          WHERE row.equality_policy = requested_equality_policy
-           AND row.issuer::pg_catalog.text = requested_issuer
-           AND row.subject::pg_catalog.text = requested_subject;
+           AND row.issuer::pg_catalog.text COLLATE pg_catalog."C" =
+               requested_issuer COLLATE pg_catalog."C"
+           AND row.subject::pg_catalog.text COLLATE pg_catalog."C" =
+               requested_subject COLLATE pg_catalog."C";
         SELECT row.* INTO STRICT binding
           FROM ofarm.principal_binding AS row
          WHERE row.binding_version_id = active_id
@@ -459,7 +463,7 @@ BEGIN
     verifier := pg_catalog.replace(
         verifier,
         'sha256:f7c72a008792173e110b9359006271fea263b3e26fb53c8ac6303839d0460fc4',
-        'sha256:8fb33bdb7538ff76b79ba0e527a5d09ddaa4776e76e102200aec6891ad81285b'
+        'sha256:897001ea090224da95746e9de94a6f0098c8a2eae01abab68ac1f32b6509e950'
     );
     EXECUTE verifier;
 END

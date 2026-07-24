@@ -215,6 +215,9 @@ and grant `ofarm_app` only `EXECUTE`; the application still has no direct
 identity, Party, tenant, or signing-control table privilege. Each observer
 recomputes the relevant immutable digests and lifecycle chain and raises
 SQLSTATE `PT001` when database authority is internally inconsistent.
+That full-chain validation is deliberate and linear in the relevant lifecycle
+history. Callers observe authority at the decision point and must not reuse a
+signing result across mints or retain a principal result after its request.
 
 Issue #172 owns external identity verification, exact principal resolution, an
 independent capability codec, nonce and capability creation, and signing with

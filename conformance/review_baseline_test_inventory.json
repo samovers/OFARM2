@@ -1,12 +1,37 @@
 {
   "entries": [
     {
+      "nodeid": "kernel/tests/test_authentication_read_api.py::test_authority_observers_reject_non_application_session[contract]",
+      "sourceModule": "kernel.tests.test_authentication_read_api",
+      "sourcePath": "kernel/tests/test_authentication_read_api.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_read_api.py::test_authority_observers_reject_non_application_session[principal]",
+      "sourceModule": "kernel.tests.test_authentication_read_api",
+      "sourcePath": "kernel/tests/test_authentication_read_api.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_read_api.py::test_authority_observers_reject_non_application_session[signing]",
+      "sourceModule": "kernel.tests.test_authentication_read_api",
+      "sourcePath": "kernel/tests/test_authentication_read_api.py"
+    },
+    {
       "nodeid": "kernel/tests/test_authentication_read_api.py::test_broken_lifecycle_head_raises_pt001",
       "sourceModule": "kernel.tests.test_authentication_read_api",
       "sourcePath": "kernel/tests/test_authentication_read_api.py"
     },
     {
       "nodeid": "kernel/tests/test_authentication_read_api.py::test_missing_immutable_party_reference_guard_raises_pt001",
+      "sourceModule": "kernel.tests.test_authentication_read_api",
+      "sourcePath": "kernel/tests/test_authentication_read_api.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_read_api.py::test_resolver_returns_no_row_for_inactive_authority[EXPIRE]",
+      "sourceModule": "kernel.tests.test_authentication_read_api",
+      "sourcePath": "kernel/tests/test_authentication_read_api.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_read_api.py::test_resolver_returns_no_row_for_inactive_authority[REVOKE]",
       "sourceModule": "kernel.tests.test_authentication_read_api",
       "sourcePath": "kernel/tests/test_authentication_read_api.py"
     },
@@ -36,7 +61,22 @@
       "sourcePath": "kernel/tests/test_authentication_read_api.py"
     },
     {
+      "nodeid": "kernel/tests/test_authentication_read_api.py::test_signing_observer_returns_no_row_for_non_authority[malformed]",
+      "sourceModule": "kernel.tests.test_authentication_read_api",
+      "sourcePath": "kernel/tests/test_authentication_read_api.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_read_api.py::test_signing_observer_returns_no_row_for_non_authority[unknown]",
+      "sourceModule": "kernel.tests.test_authentication_read_api",
+      "sourcePath": "kernel/tests/test_authentication_read_api.py"
+    },
+    {
       "nodeid": "kernel/tests/test_authentication_read_api.py::test_signing_observer_returns_the_current_database_head",
+      "sourceModule": "kernel.tests.test_authentication_read_api",
+      "sourcePath": "kernel/tests/test_authentication_read_api.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_authentication_read_api.py::test_tampered_principal_binding_digest_raises_pt001",
       "sourceModule": "kernel.tests.test_authentication_read_api",
       "sourcePath": "kernel/tests/test_authentication_read_api.py"
     },
@@ -7566,8 +7606,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "d6f84a50ff977f02ddc725eb5fa30990ad6999e7c625c202f3efe53666a0c6ca",
-  "entryCount": 1513,
+  "entriesSha256": "1b3a4ff68697c07e4baf71ffa79ab76658cdc7a6c6f4d5d2f4fc1c0a3ed399dd",
+  "entryCount": 1521,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

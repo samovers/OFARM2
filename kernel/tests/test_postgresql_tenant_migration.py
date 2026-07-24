@@ -5847,7 +5847,7 @@ def test_complete_catalog_fingerprint_refuses_function_constraint_index_policy_a
             assert pristine[0] is True
             assert pristine[2] == 0
             assert pristine[3] == (
-                "sha256:8fb33bdb7538ff76b79ba0e527a5d09ddaa4776e76e102200aec6891ad81285b"
+                "sha256:897001ea090224da95746e9de94a6f0098c8a2eae01abab68ac1f32b6509e950"
             )
         finally:
             migrator.rollback()
@@ -6536,7 +6536,7 @@ def test_readiness_observation_is_complete_after_commit(
     assert row[1] == TENANT_CONTEXT_CONTRACT.digest
     assert row[2] == 0
     assert row[3] == (
-        "sha256:8fb33bdb7538ff76b79ba0e527a5d09ddaa4776e76e102200aec6891ad81285b"
+        "sha256:897001ea090224da95746e9de94a6f0098c8a2eae01abab68ac1f32b6509e950"
     )
     assert row[5] == TENANT_PROVISIONING_SPEC.digest
     assert row[6] == TENANT_SERVICE.identity
