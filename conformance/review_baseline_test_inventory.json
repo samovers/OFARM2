@@ -296,6 +296,146 @@
       "sourcePath": "kernel/tests/test_conformance.py"
     },
     {
+      "nodeid": "kernel/tests/test_google_kms_correlation_hmac.py::test_component_pins_the_exact_v2_policy",
+      "sourceModule": "kernel.tests.test_google_kms_correlation_hmac",
+      "sourcePath": "kernel/tests/test_google_kms_correlation_hmac.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_correlation_hmac.py::test_constructor_refuses_invalid_timeout[-1]",
+      "sourceModule": "kernel.tests.test_google_kms_correlation_hmac",
+      "sourcePath": "kernel/tests/test_google_kms_correlation_hmac.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_correlation_hmac.py::test_constructor_refuses_invalid_timeout[0]",
+      "sourceModule": "kernel.tests.test_google_kms_correlation_hmac",
+      "sourcePath": "kernel/tests/test_google_kms_correlation_hmac.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_correlation_hmac.py::test_constructor_refuses_invalid_timeout[31]",
+      "sourceModule": "kernel.tests.test_google_kms_correlation_hmac",
+      "sourcePath": "kernel/tests/test_google_kms_correlation_hmac.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_correlation_hmac.py::test_constructor_refuses_invalid_timeout[5]",
+      "sourceModule": "kernel.tests.test_google_kms_correlation_hmac",
+      "sourcePath": "kernel/tests/test_google_kms_correlation_hmac.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_correlation_hmac.py::test_constructor_refuses_invalid_timeout[True]",
+      "sourceModule": "kernel.tests.test_google_kms_correlation_hmac",
+      "sourcePath": "kernel/tests/test_google_kms_correlation_hmac.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_correlation_hmac.py::test_constructor_refuses_non_v2_or_malformed_resource[7]",
+      "sourceModule": "kernel.tests.test_google_kms_correlation_hmac",
+      "sourcePath": "kernel/tests/test_google_kms_correlation_hmac.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_correlation_hmac.py::test_constructor_refuses_non_v2_or_malformed_resource[projects/EXAMPLE/locations/europe-west1/keyRings/ofarm/cryptoKeys/pretenant-correlation/cryptoKeyVersions/2]",
+      "sourceModule": "kernel.tests.test_google_kms_correlation_hmac",
+      "sourcePath": "kernel/tests/test_google_kms_correlation_hmac.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_correlation_hmac.py::test_constructor_refuses_non_v2_or_malformed_resource[projects/example/locations/europe-west1/keyRings/ofarm/cryptoKeys/pretenant-correlation/cryptoKeyVersions/1]",
+      "sourceModule": "kernel.tests.test_google_kms_correlation_hmac",
+      "sourcePath": "kernel/tests/test_google_kms_correlation_hmac.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_correlation_hmac.py::test_constructor_refuses_non_v2_or_malformed_resource[projects/example/locations/europe-west1/keyRings/ofarm/cryptoKeys/pretenant-correlation/cryptoKeyVersions/2/extra]",
+      "sourceModule": "kernel.tests.test_google_kms_correlation_hmac",
+      "sourcePath": "kernel/tests/test_google_kms_correlation_hmac.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_correlation_hmac.py::test_constructor_refuses_non_v2_or_malformed_resource[projects/example/locations/europe-west1/keyRings/ofarm/cryptoKeys/pretenant-correlation/cryptoKeyVersions]",
+      "sourceModule": "kernel.tests.test_google_kms_correlation_hmac",
+      "sourcePath": "kernel/tests/test_google_kms_correlation_hmac.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_correlation_hmac.py::test_create_before_initialize_performs_no_work",
+      "sourceModule": "kernel.tests.test_google_kms_correlation_hmac",
+      "sourcePath": "kernel/tests/test_google_kms_correlation_hmac.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_correlation_hmac.py::test_create_has_no_caller_data_and_uses_exact_framing",
+      "sourceModule": "kernel.tests.test_google_kms_correlation_hmac",
+      "sourcePath": "kernel/tests/test_google_kms_correlation_hmac.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_correlation_hmac.py::test_each_create_samples_fresh_entropy_and_makes_one_kms_call",
+      "sourceModule": "kernel.tests.test_google_kms_correlation_hmac",
+      "sourcePath": "kernel/tests/test_google_kms_correlation_hmac.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_correlation_hmac.py::test_initialize_checks_exact_version_and_preflights_once",
+      "sourceModule": "kernel.tests.test_google_kms_correlation_hmac",
+      "sourcePath": "kernel/tests/test_google_kms_correlation_hmac.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_correlation_hmac.py::test_initialize_refuses_preflight_response_substitution[changes0]",
+      "sourceModule": "kernel.tests.test_google_kms_correlation_hmac",
+      "sourcePath": "kernel/tests/test_google_kms_correlation_hmac.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_correlation_hmac.py::test_initialize_refuses_preflight_response_substitution[changes1]",
+      "sourceModule": "kernel.tests.test_google_kms_correlation_hmac",
+      "sourcePath": "kernel/tests/test_google_kms_correlation_hmac.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_correlation_hmac.py::test_initialize_refuses_preflight_response_substitution[changes2]",
+      "sourceModule": "kernel.tests.test_google_kms_correlation_hmac",
+      "sourcePath": "kernel/tests/test_google_kms_correlation_hmac.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_correlation_hmac.py::test_initialize_refuses_preflight_response_substitution[changes3]",
+      "sourceModule": "kernel.tests.test_google_kms_correlation_hmac",
+      "sourcePath": "kernel/tests/test_google_kms_correlation_hmac.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_correlation_hmac.py::test_initialize_refuses_preflight_response_substitution[changes4]",
+      "sourceModule": "kernel.tests.test_google_kms_correlation_hmac",
+      "sourcePath": "kernel/tests/test_google_kms_correlation_hmac.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_correlation_hmac.py::test_initialize_refuses_wrong_key_version_posture[changes0]",
+      "sourceModule": "kernel.tests.test_google_kms_correlation_hmac",
+      "sourcePath": "kernel/tests/test_google_kms_correlation_hmac.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_correlation_hmac.py::test_initialize_refuses_wrong_key_version_posture[changes1]",
+      "sourceModule": "kernel.tests.test_google_kms_correlation_hmac",
+      "sourcePath": "kernel/tests/test_google_kms_correlation_hmac.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_correlation_hmac.py::test_initialize_refuses_wrong_key_version_posture[changes2]",
+      "sourceModule": "kernel.tests.test_google_kms_correlation_hmac",
+      "sourcePath": "kernel/tests/test_google_kms_correlation_hmac.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_correlation_hmac.py::test_initialize_refuses_wrong_key_version_posture[changes3]",
+      "sourceModule": "kernel.tests.test_google_kms_correlation_hmac",
+      "sourcePath": "kernel/tests/test_google_kms_correlation_hmac.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_correlation_hmac.py::test_invalid_entropy_refuses_before_kms[short]",
+      "sourceModule": "kernel.tests.test_google_kms_correlation_hmac",
+      "sourcePath": "kernel/tests/test_google_kms_correlation_hmac.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_correlation_hmac.py::test_invalid_entropy_refuses_before_kms[value1]",
+      "sourceModule": "kernel.tests.test_google_kms_correlation_hmac",
+      "sourcePath": "kernel/tests/test_google_kms_correlation_hmac.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_correlation_hmac.py::test_kms_unavailability_is_closed_without_retry",
+      "sourceModule": "kernel.tests.test_google_kms_correlation_hmac",
+      "sourcePath": "kernel/tests/test_google_kms_correlation_hmac.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_google_kms_correlation_hmac.py::test_raw_correlation_is_absent_from_public_failure_traceback",
+      "sourceModule": "kernel.tests.test_google_kms_correlation_hmac",
+      "sourcePath": "kernel/tests/test_google_kms_correlation_hmac.py"
+    },
+    {
       "nodeid": "kernel/tests/test_google_kms_signing.py::test_issuer_builds_the_frozen_capability_and_reads_each_mint",
       "sourceModule": "kernel.tests.test_google_kms_signing",
       "sourcePath": "kernel/tests/test_google_kms_signing.py"
@@ -8466,8 +8606,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "45e160ae3efda767ba8310291665a6b50af5d7f42cf868d2fb5a66c8f8331a26",
-  "entryCount": 1693,
+  "entriesSha256": "bb3aac07a9489b221b739bbf1ca9b00cb02916f66c3723eb8d79220071b5c084",
+  "entryCount": 1721,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
