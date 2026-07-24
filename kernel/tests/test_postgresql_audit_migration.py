@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import os
 import secrets
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
@@ -38,9 +37,13 @@ from deployment.postgresql.provisioning import provision_service
 from deployment.postgresql.provisioning_specs import (
     SECURITY_AUDIT_PROVISIONING_SPEC,
 )
+from kernel.tests.postgresql_audit_support import (
+    database_dsn as _database_dsn,
+    destroy_audit_service as _destroy_service,
+    role_dsn as _role_dsn,
+)
 
 
-AUDIT_ADMIN_ENV = "OFARM_SECURITY_AUDIT_PG_ADMIN_DSN"
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 QUERY_IDENTITY = (
     "ofarm_security.query_operational_security_events"
@@ -97,77 +100,11 @@ BACKEND_STATISTICS_ROUTINE_IDENTITIES = (
 )
 
 
-def _database_dsn(admin_dsn: str, database_name: str, **overrides: str) -> str:
-    parameters = psycopg.conninfo.conninfo_to_dict(admin_dsn)
-    parameters["dbname"] = database_name
-    parameters.update(overrides)
-    return psycopg.conninfo.make_conninfo(**parameters)
-
-
 def _table_definition(source: str, qualified_name: str) -> str:
     marker = f"CREATE TABLE {qualified_name} ("
     start = source.index(marker)
     end = source.index("\n);", start) + len("\n);")
     return source[start:end]
-
-
-def _destroy_service(admin_dsn: str) -> None:
-    spec = SECURITY_AUDIT_PROVISIONING_SPEC
-    with psycopg.connect(admin_dsn, autocommit=True) as connection:
-        connection.execute(
-            """
-            SELECT pg_catalog.pg_terminate_backend(pid)
-            FROM pg_catalog.pg_stat_activity
-            WHERE datname = %s AND pid <> pg_catalog.pg_backend_pid()
-            """,
-            (spec.database_name,),
-        )
-        connection.execute(
-            sql.SQL("DROP DATABASE IF EXISTS {}").format(
-                sql.Identifier(spec.database_name)
-            )
-        )
-        roles = [
-            row[0]
-            for row in connection.execute(
-                r"""
-                SELECT rolname::text
-                FROM pg_catalog.pg_roles
-                WHERE rolname::text LIKE 'ofarm\_%' ESCAPE '\'
-                ORDER BY rolname
-                """
-            ).fetchall()
-        ]
-        if roles:
-            connection.execute(
-                sql.SQL("DROP ROLE {}").format(
-                    sql.SQL(", ").join(sql.Identifier(role) for role in roles)
-                )
-            )
-        for database_name in ("postgres", "template0", "template1"):
-            connection.execute(
-                sql.SQL("GRANT CONNECT ON DATABASE {} TO PUBLIC").format(
-                    sql.Identifier(database_name)
-                )
-            )
-        connection.execute(
-            "GRANT TEMPORARY ON DATABASE postgres TO PUBLIC"
-        )
-        for database_name in ("template0", "template1"):
-            connection.execute(
-                sql.SQL("REVOKE TEMPORARY ON DATABASE {} FROM PUBLIC").format(
-                    sql.Identifier(database_name)
-                )
-            )
-
-
-def _role_dsn(state: dict[str, object], role: str) -> str:
-    return _database_dsn(
-        state["admin_dsn"],
-        SECURITY_AUDIT_PROVISIONING_SPEC.database_name,
-        user=role,
-        password=state["passwords"][role],
-    )
 
 
 def _wait_for_event_relation_lock(
@@ -235,77 +172,36 @@ def _wait_for_blocked_event_writer(
         f"{application_name} did not block while holding the event writer lock"
     )
 
-
-@pytest.fixture(scope="module")
-def migrated_audit_service():
-    admin_dsn = os.environ.get(AUDIT_ADMIN_ENV)
-    if not admin_dsn:
-        pytest.skip(f"{AUDIT_ADMIN_ENV} is required for real PostgreSQL tests")
-    spec = SECURITY_AUDIT_PROVISIONING_SPEC
-    with psycopg.connect(admin_dsn, autocommit=True) as connection:
-        existing_database = connection.execute(
-            "SELECT 1 FROM pg_catalog.pg_database WHERE datname = %s",
-            (spec.database_name,),
-        ).fetchone()
-        existing_roles = connection.execute(
-            r"""
-            SELECT 1 FROM pg_catalog.pg_roles
-            WHERE rolname::text LIKE 'ofarm\_%' ESCAPE '\' LIMIT 1
-            """
-        ).fetchone()
-    assert existing_database is None
-    assert existing_roles is None
-
-    passwords = {
-        role: f"audit-0001-{index}-{secrets.token_urlsafe(32)}"
-        for index, role in enumerate(spec.required_password_role_names)
-    }
-    try:
-        provision_service(admin_dsn, spec, login_passwords=passwords)
-        migration_set = load_migration_set(PACKAGE_ROOT, SECURITY_AUDIT_SERVICE)
-        report = migrate_service(
-            admin_dsn=admin_dsn,
-            migrator_dsn=_database_dsn(
-                admin_dsn,
-                spec.database_name,
-                user="ofarm_migrator",
-                password=passwords["ofarm_migrator"],
-            ),
-            spec=spec,
-            migration_set=migration_set,
-            release_identity="issue-174-audit-0001-test",
-            execution_id=uuid4(),
-        )
-        yield {
-            "admin_dsn": admin_dsn,
-            "target_admin_dsn": _database_dsn(admin_dsn, spec.database_name),
-            "passwords": passwords,
-            "migration_set": migration_set,
-            "report": report,
-        }
-    finally:
-        _destroy_service(admin_dsn)
-
-
-def test_authoritative_audit_migration_is_one_exact_initial_set():
+def test_authoritative_audit_migration_preserves_initial_and_adds_exact_v2():
     migration_set = load_migration_set(PACKAGE_ROOT, SECURITY_AUDIT_SERVICE)
-    migration = migration_set.migrations[0]
-    source = migration.source_bytes.decode("utf-8")
+    initial, operations = migration_set.migrations
+    initial_source = initial.source_bytes.decode("utf-8")
+    operations_source = operations.source_bytes.decode("utf-8")
 
-    assert len(migration_set.migrations) == 1
-    assert migration.filename == "0001_initial.sql"
+    assert len(migration_set.migrations) == 2
+    assert initial.filename == "0001_initial.sql"
     assert validate_migration_source(
-        migration.source_bytes, migration.filename
-    ) == source
-    assert initial_ledger_sql(SECURITY_AUDIT_PROVISIONING_SPEC) in source
-    assert SECURITY_AUDIT_CONTRACT.digest in source
-    assert SECURITY_AUDIT_PROVISIONING_SPEC.digest in source
-    assert migration.source_sha256 == \
+        initial.source_bytes, initial.filename
+    ) == initial_source
+    assert validate_migration_source(
+        operations.source_bytes, operations.filename
+    ) == operations_source
+    assert initial_ledger_sql(
+        SECURITY_AUDIT_PROVISIONING_SPEC
+    ) in initial_source
+    assert SECURITY_AUDIT_CONTRACT.digest in operations_source
+    assert SECURITY_AUDIT_PROVISIONING_SPEC.digest in initial_source
+    assert initial.source_sha256 == \
         "sha256:5e648e0127ca386363c3a1d979a5718cbd5b4846b3ad98ceaee5e7684b278517"
-    assert migration.byte_length == 169_237
+    assert initial.byte_length == 169_237
+    assert operations.source_sha256 == \
+        "sha256:114fab5070b2a1bbb3dbe05f019989e610dd9b7aa7be7fe2d33d0a520aa71bef"
+    assert operations.byte_length == 11_165
     assert migration_set.digest == \
+        "sha256:be3589f5ff13cc2b5a2958c50a9470ed28a809d629eb59dbe5e52c76dbdb56ba"
+    assert migration_set.prefix_digest(1) == \
         "sha256:e3752c1f7d54dff7b749367a29a53b48b5ca3258e51b1a8388dacdcd830392b6"
-    assert migration_set.prefix_digest(1) == migration_set.digest
+    assert migration_set.prefix_digest(2) == migration_set.digest
 
 
 def test_authoritative_audit_migration_has_closed_carriers_and_limits():
@@ -626,15 +522,20 @@ def test_audit_observer_requires_zero_prepared_transaction_capacity():
 
 
 def test_authoritative_audit_migration_installs_exact_public_functions():
-    source = load_migration_set(
+    migrations = load_migration_set(
         PACKAGE_ROOT, SECURITY_AUDIT_SERVICE
-    ).migrations[0].source_bytes.decode("utf-8")
+    ).migrations
+    sources = tuple(
+        migration.source_bytes.decode("utf-8") for migration in migrations
+    )
+    combined_source = "\n".join(sources)
 
     for function in SECURITY_AUDIT_CONTRACT.public_functions:
-        assert f"CREATE FUNCTION {function.qualified_name}" in source
-        assert f"TO {function.capability_role};" in source
-    assert source.count("SECURITY DEFINER") == 10
-    assert "FROM PUBLIC;" in source
+        assert f"CREATE FUNCTION {function.qualified_name}" in combined_source
+        assert f"TO {function.capability_role};" in combined_source
+    assert sources[0].count("SECURITY DEFINER") == 10
+    assert sources[1].count("SECURITY DEFINER") == 2
+    assert all("FROM PUBLIC;" in source for source in sources)
 
 
 def test_migrated_audit_structure_observes_exact_ready_contract(
@@ -642,8 +543,8 @@ def test_migrated_audit_structure_observes_exact_ready_contract(
 ):
     state = migrated_audit_service
     report = state["report"]
-    assert report.applied_versions == (1,)
-    assert report.final_version == 1
+    assert report.applied_versions == (1, 2)
+    assert report.final_version == 2
     assert report.migration_set_digest == state["migration_set"].digest
 
     with psycopg.connect(
@@ -656,7 +557,7 @@ def test_migrated_audit_structure_observes_exact_ready_contract(
     assert row[0] == SECURITY_AUDIT_CONTRACT.identity
     assert row[1] == SECURITY_AUDIT_CONTRACT.digest
     assert row[8] == SECURITY_AUDIT_PROVISIONING_SPEC.digest
-    assert row[9] == 1
+    assert row[9] == 2
     assert row[10] == state["migration_set"].digest
     assert row[11:] == (True, False)
 
@@ -965,7 +866,7 @@ def test_pretenant_append_is_attributed_bounded_and_exactly_idempotent(
         "CREDENTIAL_MISSING",
         bytes(range(32)),
         "OFARM_PRETENANT_CORRELATION_V1",
-        1,
+        2,
     )
     with psycopg.connect(
         _role_dsn(state, "ofarm_security_authentication_producer_login"),
@@ -1045,7 +946,7 @@ def test_retention_duration_is_fixed_across_caller_timezone_dst_transition(
                 )::pg_catalog.int8
                 FROM ofarm_security.append_pretenant_failure(
                     %s, 'CREDENTIAL_MISSING', %s,
-                    'OFARM_PRETENANT_CORRELATION_V1', 1
+                    'OFARM_PRETENANT_CORRELATION_V1', 2
                 ) AS appended
                 """,
                 (uuid4(), bytes(range(32))),
@@ -1393,7 +1294,7 @@ def _assert_adjacent_bucket_event_identity_serialization(
             "CREDENTIAL_MISSING",
             bytes.fromhex("41" * 32),
             "OFARM_PRETENANT_CORRELATION_V1",
-            1,
+            2,
         )
         exact_results = _run_coordinated_adjacent_bucket_appends(
             state,
@@ -1411,7 +1312,7 @@ def _assert_adjacent_bucket_event_identity_serialization(
         mismatch_common = (
             bytes.fromhex("42" * 32),
             "OFARM_PRETENANT_CORRELATION_V1",
-            1,
+            2,
         )
         mismatch_results = _run_coordinated_adjacent_bucket_appends(
             state,
@@ -1439,7 +1340,7 @@ def _assert_adjacent_bucket_event_identity_serialization(
             "CREDENTIAL_MISSING",
             bytes.fromhex("43" * 32),
             "OFARM_PRETENANT_CORRELATION_V1",
-            1,
+            2,
         )
         accepted_overflow_results = _run_ordered_accepted_then_overflow_retry(
             state,
@@ -1461,7 +1362,7 @@ def _assert_adjacent_bucket_event_identity_serialization(
             "CREDENTIAL_MISSING",
             bytes.fromhex("44" * 32),
             "OFARM_PRETENANT_CORRELATION_V1",
-            1,
+            2,
         )
         first_overflow = _concurrent_append_at(
             state,
@@ -1493,7 +1394,7 @@ def _assert_adjacent_bucket_event_identity_serialization(
                 "VERIFIER_UNAVAILABLE",
                 bytes.fromhex("44" * 32),
                 "OFARM_PRETENANT_CORRELATION_V1",
-                1,
+                2,
             ),
             bucket_starts[7] + timedelta(seconds=30),
             f"a174_overflow_receipt_{uuid4().hex}_2",
@@ -1601,7 +1502,7 @@ def _assert_repeatable_read_append_refusal(
         "CREDENTIAL_MISSING",
         bytes.fromhex("45" * 32),
         "OFARM_PRETENANT_CORRELATION_V1",
-        1,
+        2,
     )
     _reset_quota_state(state, producer_name, component)
 
@@ -1755,7 +1656,7 @@ def test_concurrent_same_event_retry_matches_and_mismatch_refuses_once(
         "CREDENTIAL_MISSING",
         bytes(range(32)),
         "OFARM_PRETENANT_CORRELATION_V1",
-        1,
+        2,
     )
     exact_results = _run_concurrent_appends(
         state, role, (exact_arguments, exact_arguments)
@@ -1769,7 +1670,7 @@ def test_concurrent_same_event_retry_matches_and_mismatch_refuses_once(
     common = (
         bytes(reversed(range(32))),
         "OFARM_PRETENANT_CORRELATION_V1",
-        1,
+        2,
     )
     mismatch_results = _run_concurrent_appends(
         state,
@@ -2125,7 +2026,7 @@ def test_bounded_reader_byte_ceiling_is_session_independent(
                 """
                 SELECT * FROM ofarm_security.append_pretenant_failure(
                     %s, 'CREDENTIAL_MISSING', %s,
-                    'OFARM_PRETENANT_CORRELATION_V1', 1
+                    'OFARM_PRETENANT_CORRELATION_V1', 2
                 )
                 """,
                 (event_id, bytes(range(32))),
@@ -2291,7 +2192,7 @@ def test_access_intent_serializes_earlier_and_later_event_writers(
                 """
                 SELECT * FROM ofarm_security.append_pretenant_failure(
                     %s, 'CREDENTIAL_MISSING', %s,
-                    'OFARM_PRETENANT_CORRELATION_V1', 1
+                    'OFARM_PRETENANT_CORRELATION_V1', 2
                 )
                 """,
                 (later_event_id, bytes.fromhex("42" * 32)),
@@ -2304,7 +2205,7 @@ def test_access_intent_serializes_earlier_and_later_event_writers(
             """
             SELECT * FROM ofarm_security.append_pretenant_failure(
                 %s, 'CREDENTIAL_MISSING', %s,
-                'OFARM_PRETENANT_CORRELATION_V1', 1
+                'OFARM_PRETENANT_CORRELATION_V1', 2
             )
             """,
             (earlier_event_id, bytes.fromhex("41" * 32)),
@@ -2391,7 +2292,7 @@ def test_access_intent_refuses_a_repeatable_read_stale_snapshot(
                 """
                 SELECT * FROM ofarm_security.append_pretenant_failure(
                     %s, 'CREDENTIAL_MISSING', %s,
-                    'OFARM_PRETENANT_CORRELATION_V1', 1
+                    'OFARM_PRETENANT_CORRELATION_V1', 2
                 )
                 """,
                 (committed_event_id, bytes.fromhex("42" * 32)),
@@ -2455,7 +2356,7 @@ def test_wrong_producer_reasons_and_cross_capabilities_refuse(
                 connection.execute(
                     """
                     SELECT ofarm_security.append_pretenant_failure(
-                        %s, %s, %s, 'OFARM_PRETENANT_CORRELATION_V1', 1
+                        %s, %s, %s, 'OFARM_PRETENANT_CORRELATION_V1', 2
                     )
                     """,
                     (uuid4(), wrong_reason, bytes(range(32))),
@@ -2468,7 +2369,7 @@ def test_wrong_producer_reasons_and_cross_capabilities_refuse(
         "ofarm_security_audit_control_login": (
             "SELECT ofarm_security.append_pretenant_failure("
             "gen_random_uuid(), 'CREDENTIAL_MISSING', decode(repeat('ab',32),'hex'), "
-            "'OFARM_PRETENANT_CORRELATION_V1', 1)",
+            "'OFARM_PRETENANT_CORRELATION_V1', 2)",
             "SELECT * FROM ofarm_security.query_operational_security_events("
             "gen_random_uuid(), NULL, NULL, 1, 1)",
         ),
@@ -2580,7 +2481,7 @@ def test_same_login_cannot_observe_peer_activity_surface_while_append_works(
                 """
                 SELECT * FROM ofarm_security.append_pretenant_failure(
                     %s, 'CREDENTIAL_MISSING', %s,
-                    'OFARM_PRETENANT_CORRELATION_V1', 1
+                    'OFARM_PRETENANT_CORRELATION_V1', 2
                 )
                 """,
                 (event_id, bytes(range(32))),
@@ -2772,7 +2673,7 @@ def _bulk_append_in_one_bucket(
                             pg_catalog.repeat('cd', 32), 'hex'
                         ),
                         'OFARM_PRETENANT_CORRELATION_V1',
-                        1
+                        2
                     ) AS result
                 )
                 SELECT pg_catalog.count(*) FILTER (WHERE stored_individually),
@@ -2861,7 +2762,7 @@ def test_overflow_receipt_collision_makes_count_unknown(
                 "CREDENTIAL_MISSING",
                 bytes.fromhex("ef" * 32),
                 "OFARM_PRETENANT_CORRELATION_V1",
-                1,
+                2,
             )
             first = _concurrent_append_at(
                 state, role, Barrier(1), (event_ids[0], *common),
@@ -2959,7 +2860,7 @@ def test_concurrent_writes_at_quota_boundary_store_one_and_overflow_one(
             "BINDER_REFUSED",
             bytes.fromhex("ab" * 32),
             "OFARM_PRETENANT_CORRELATION_V1",
-            1,
+            2,
         )
         results = _run_concurrent_appends(
             state,
@@ -3250,7 +3151,7 @@ def test_exact_overflow_receipt_survives_close_through_marker_retention(
                     append_input_fingerprint =
                         ofarm_security._pretenant_event_fingerprint(
                             %s, %s, %s, %s,
-                            'OFARM_PRETENANT_CORRELATION_V1', 1, %s
+                            'OFARM_PRETENANT_CORRELATION_V1', 2, %s
                         ),
                     bucket_start = %s,
                     purge_after = 'infinity'::pg_catalog.timestamptz
@@ -3293,7 +3194,7 @@ def test_exact_overflow_receipt_survives_close_through_marker_retention(
             retry = producer.execute(
                 """
                 SELECT * FROM ofarm_security.append_pretenant_failure(
-                    %s, %s, %s, 'OFARM_PRETENANT_CORRELATION_V1', 1
+                    %s, %s, %s, 'OFARM_PRETENANT_CORRELATION_V1', 2
                 )
                 """,
                 (event_id, reason, hmac_value),
@@ -3424,7 +3325,7 @@ def test_overflow_close_waits_for_old_bucket_append_and_cannot_reopen(
                 """
                 SELECT * FROM ofarm_security.append_pretenant_failure(
                     %s, 'CREDENTIAL_MISSING', %s,
-                    'OFARM_PRETENANT_CORRELATION_V1', 1
+                    'OFARM_PRETENANT_CORRELATION_V1', 2
                 )
                 """,
                 (event_id, bytes.fromhex("43" * 32)),
@@ -3492,7 +3393,7 @@ def test_overflow_close_waits_for_old_bucket_append_and_cannot_reopen(
                     """
                     SELECT * FROM ofarm_security.append_pretenant_failure(
                         %s, 'CREDENTIAL_MISSING', %s,
-                        'OFARM_PRETENANT_CORRELATION_V1', 1
+                        'OFARM_PRETENANT_CORRELATION_V1', 2
                     )
                     """,
                     (uuid4(), bytes.fromhex("43" * 32)),
@@ -3630,7 +3531,7 @@ def test_retention_waits_for_delayed_writer_and_cannot_reset_quota(
                 """
                 SELECT * FROM ofarm_security.append_pretenant_failure(
                     %s, 'BINDER_REFUSED', %s,
-                    'OFARM_PRETENANT_CORRELATION_V1', 1
+                    'OFARM_PRETENANT_CORRELATION_V1', 2
                 )
                 """,
                 (event_id, bytes.fromhex("44" * 32)),
@@ -3804,7 +3705,7 @@ def test_retention_deleted_bucket_cannot_reopen_after_clock_rollback(
                         """
                         SELECT * FROM ofarm_security.append_pretenant_failure(
                             %s, 'BINDER_REFUSED', %s,
-                            'OFARM_PRETENANT_CORRELATION_V1', 1
+                            'OFARM_PRETENANT_CORRELATION_V1', 2
                         )
                         """,
                         (uuid4(), bytes.fromhex("45" * 32)),

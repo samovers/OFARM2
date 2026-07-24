@@ -19,6 +19,7 @@ from deployment.postgresql.audit_contract import (
     CORRELATION_HMAC_ALGORITHM,
     CORRELATION_HMAC_DOMAIN,
     CORRELATION_HMAC_KEY_VERSION,
+    CORRELATION_HMAC_KNOWN_KEY_VERSIONS,
     CORRELATION_HMAC_LENGTH_BYTES,
     EVENT_FORMAT_IDENTITY,
     EVENT_IDENTITY_LOCK_STRIPES,
@@ -101,11 +102,13 @@ def test_digest_and_resource_bounds_are_exact():
         CORRELATION_HMAC_LENGTH_BYTES,
         CORRELATION_HMAC_DOMAIN,
         CORRELATION_HMAC_KEY_VERSION,
+        CORRELATION_HMAC_KNOWN_KEY_VERSIONS,
     ) == (
         "HMAC-SHA-256",
         32,
         "OFARM_PRETENANT_CORRELATION_V1",
-        1,
+        2,
+        (1, 2),
     )
     assert (
         APPEND_INPUT_FINGERPRINT_ALGORITHM,
@@ -183,6 +186,10 @@ def test_public_function_identities_and_capability_grants_are_exact():
             "ofarm_security_audit_export",
         "ofarm_security.purge_expired_operational_security_events()":
             "ofarm_security_audit_retention",
+        "ofarm_security.observe_correlation_hmac_key_retention(integer)":
+            "ofarm_security_audit_control",
+        "ofarm_security.observe_next_closeable_overflow_bucket()":
+            "ofarm_security_audit_control",
         "ofarm_security.observe_security_audit_contract()":
             "ofarm_security_audit_readiness",
         "ofarm_security.verify_security_audit_structure()":
@@ -274,7 +281,7 @@ def test_manifest_is_canonical_ascii_and_has_domain_separated_golden_digest():
     assert json.loads(without_digest) == contract.manifest_without_digest()
     assert json.loads(canonical) == contract.manifest()
     assert contract.digest == \
-        "sha256:013b5e00232c86f6ef9824c98184c18b899a412305151ee31eb9991a633dc8db"
+        "sha256:ea38388e813f1aa3ce32d9a46bcbe0012ddcbc736b5f5007f4a87e12bba12c74"
     assert contract.digest == "sha256:" + hashlib.sha256(
         SECURITY_AUDIT_CONTRACT_DIGEST_POLICY.encode("ascii")
         + b"\x00"
@@ -354,7 +361,10 @@ def _replace_break_glass(**changes):
         lambda value: _replace_hmac(algorithm="HMAC-SHA-512"),
         lambda value: _replace_hmac(length_bytes=64),
         lambda value: _replace_hmac(domain="OTHER_HMAC_DOMAIN_V1"),
-        lambda value: _replace_hmac(key_version=2),
+        lambda value: _replace_hmac(key_version=3),
+        lambda value: replace(
+            value, correlation_hmac_known_key_versions=(2,)
+        ),
         lambda value: _replace_hmac(framing="LP32_BE"),
         lambda value: _replace_fingerprint(algorithm="SHA-512"),
         lambda value: _replace_fingerprint(length_bytes=64),

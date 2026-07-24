@@ -22,7 +22,8 @@ EVENT_FORMAT_IDENTITY = "OFARM_PRETENANT_SECURITY_EVENT_V1"
 CORRELATION_HMAC_ALGORITHM = "HMAC-SHA-256"
 CORRELATION_HMAC_LENGTH_BYTES = 32
 CORRELATION_HMAC_DOMAIN = "OFARM_PRETENANT_CORRELATION_V1"
-CORRELATION_HMAC_KEY_VERSION = 1
+CORRELATION_HMAC_KEY_VERSION = 2
+CORRELATION_HMAC_KNOWN_KEY_VERSIONS = (1, 2)
 APPEND_INPUT_FINGERPRINT_ALGORITHM = "SHA-256"
 APPEND_INPUT_FINGERPRINT_LENGTH_BYTES = 32
 APPEND_INPUT_FINGERPRINT_FRAMING = "PRESENCE_U8_LP32_BE"
@@ -238,6 +239,7 @@ class SecurityAuditContract:
     event_kinds: tuple[str, ...]
     event_format_identity: str
     correlation_hmac: DigestSpec
+    correlation_hmac_known_key_versions: tuple[int, ...]
     append_input_fingerprint: DigestSpec
     event_identity_serialization_identity: str
     event_identity_lock_stripes: int
@@ -274,6 +276,9 @@ class SecurityAuditContract:
             "eventKinds": list(self.event_kinds),
             "eventFormatIdentity": self.event_format_identity,
             "correlationHmac": self.correlation_hmac.manifest(),
+            "correlationHmacKnownKeyVersions": list(
+                self.correlation_hmac_known_key_versions
+            ),
             "appendInputFingerprint": self.append_input_fingerprint.manifest(),
             "eventIdentitySerialization": {
                 "identity": self.event_identity_serialization_identity,
@@ -432,6 +437,9 @@ def _expected_contract() -> SecurityAuditContract:
             domain=CORRELATION_HMAC_DOMAIN,
             key_version=CORRELATION_HMAC_KEY_VERSION,
         ),
+        correlation_hmac_known_key_versions=(
+            CORRELATION_HMAC_KNOWN_KEY_VERSIONS
+        ),
         append_input_fingerprint=DigestSpec(
             algorithm=APPEND_INPUT_FINGERPRINT_ALGORITHM,
             length_bytes=APPEND_INPUT_FINGERPRINT_LENGTH_BYTES,
@@ -520,6 +528,21 @@ def _expected_contract() -> SecurityAuditContract:
                 (),
                 "ofarm_security.audit_retention_result",
                 "ofarm_security_audit_retention",
+            ),
+            _public_function(
+                "observe_correlation_hmac_key_retention",
+                ("integer",),
+                (
+                    "TABLE(key_version integer, active boolean, "
+                    "greatest_purge_after timestamptz)"
+                ),
+                "ofarm_security_audit_control",
+            ),
+            _public_function(
+                "observe_next_closeable_overflow_bucket",
+                (),
+                "TABLE(producer text, component text, bucket_start timestamptz)",
+                "ofarm_security_audit_control",
             ),
             _public_function(
                 "observe_security_audit_contract",
@@ -661,6 +684,19 @@ def validate_security_audit_contract(contract: SecurityAuditContract) -> None:
             not digest_spec.framing or not digest_spec.framing.isascii()
         ):
             raise SecurityAuditContractError(f"{label} framing must be ASCII")
+    known_key_versions = contract.correlation_hmac_known_key_versions
+    if not known_key_versions or len(known_key_versions) != len(
+        set(known_key_versions)
+    ):
+        raise SecurityAuditContractError(
+            "correlation HMAC key versions must be non-empty and unique"
+        )
+    for key_version in known_key_versions:
+        _require_exact_int(key_version, "correlation HMAC known key version")
+    if contract.correlation_hmac.key_version not in known_key_versions:
+        raise SecurityAuditContractError(
+            "active correlation HMAC key version must be known"
+        )
 
     function_identities: set[str] = set()
     for function in contract.public_functions:
@@ -726,6 +762,7 @@ __all__ = (
     "CORRELATION_HMAC_ALGORITHM",
     "CORRELATION_HMAC_DOMAIN",
     "CORRELATION_HMAC_KEY_VERSION",
+    "CORRELATION_HMAC_KNOWN_KEY_VERSIONS",
     "CORRELATION_HMAC_LENGTH_BYTES",
     "DigestSpec",
     "EVENT_FORMAT_IDENTITY",
