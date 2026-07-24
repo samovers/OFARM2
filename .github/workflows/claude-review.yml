@@ -15,6 +15,9 @@
 # `claude setup-token` on a Pro/Max plan (Settings -> Secrets and variables ->
 # Actions). The action is pinned to a release commit per this repo's
 # supply-chain convention; bump the SHA (and the trailing comment) to upgrade.
+#
+# Model: pinned to Claude Opus 4.8 for deep reasoning on this repo's conceptual
+# guards. Change --model to claude-sonnet-5 below to cut plan usage.
 
 name: claude-review
 
@@ -39,6 +42,7 @@ jobs:
           plugins: "code-review@claude-code-plugins"
           prompt: "/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}"
           claude_args: >-
+            --model claude-opus-4-8
             --append-system-prompt "OFARM2 implementation repo. Apply the review
             guards, the seven Kernel rules, and the claim limits defined in
             AGENTS.md. Flag any current-compliance, certification,
