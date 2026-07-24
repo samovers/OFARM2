@@ -15,6 +15,9 @@
 # `claude setup-token` on a Pro/Max plan (Settings -> Secrets and variables ->
 # Actions). The action is pinned to a release commit per this repo's
 # supply-chain convention; bump the SHA (and the trailing comment) to upgrade.
+#
+# Model: pinned to Claude Opus 4.8 for deep reasoning on this repo's conceptual
+# guards. Change --model to claude-sonnet-5 below to cut plan usage.
 
 name: claude-review
 
@@ -32,13 +35,18 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0  # full history so the reviewer can diff the PR against main
       - uses: anthropics/claude-code-action@c3d45e8e941e1b2ad7b278c57482d9c5bf1f35b3 # v1.0.99
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}  # post via the workflow token; no Claude GitHub App / id-token needed
           plugin_marketplaces: "https://github.com/anthropics/claude-code.git"
           plugins: "code-review@claude-code-plugins"
           prompt: "/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}"
           claude_args: >-
+            --model claude-opus-4-8
             --append-system-prompt "OFARM2 implementation repo. Apply the review
             guards, the seven Kernel rules, and the claim limits defined in
             AGENTS.md. Flag any current-compliance, certification,
