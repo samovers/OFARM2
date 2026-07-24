@@ -1,0 +1,47 @@
+# Claude — independent pull-request reviewer.
+#
+# On each new PR, Anthropic's code-review agent analyses the diff against the
+# surrounding codebase and posts findings as inline review comments. It reviews
+# only: it never approves, blocks a merge, or pushes commits, and it asserts no
+# production-readiness claim (AGENTS.md claim limits).
+#
+# Repo-specific review guards, the seven Kernel rules, and claim limits live in
+# AGENTS.md (loaded through CLAUDE.md's `@AGENTS.md` import), so the reviewer
+# inherits them. The appended prompt below points at them explicitly and
+# enforces privacy rule 1: every finding must be paste-safe — counts, masked
+# IDs, booleans, never personal data.
+#
+# Setup: add repo secret CLAUDE_CODE_OAUTH_TOKEN, generated locally with
+# `claude setup-token` on a Pro/Max plan (Settings -> Secrets and variables ->
+# Actions). The action is pinned to a release commit per this repo's
+# supply-chain convention; bump the SHA (and the trailing comment) to upgrade.
+
+name: claude-review
+
+on:
+  pull_request:
+    types: [opened, ready_for_review]
+
+permissions:
+  contents: read        # read the diff and surrounding code
+  pull-requests: write  # post inline review comments
+  issues: write         # post the summary comment
+
+jobs:
+  review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: anthropics/claude-code-action@c3d45e8e941e1b2ad7b278c57482d9c5bf1f35b3 # v1.0.99
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          plugin_marketplaces: "https://github.com/anthropics/claude-code.git"
+          plugins: "code-review@claude-code-plugins"
+          prompt: "/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}"
+          claude_args: >-
+            --append-system-prompt "OFARM2 implementation repo. Apply the review
+            guards, the seven Kernel rules, and the claim limits defined in
+            AGENTS.md. Flag any current-compliance, certification,
+            production-readiness, or legal-advice claim. Keep every finding
+            paste-safe (privacy rule 1): report counts, masked IDs, and
+            booleans; never quote or echo personal data."
