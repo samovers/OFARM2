@@ -1070,9 +1070,9 @@ def test_authoritative_source_ledger_contract_and_apply_noop(
     assert TENANT_CONTEXT_CONTRACT.digest == (
         "sha256:39e979fa296122cb66d42eae5e2d7c6dc797ac77ef4324515ae1ab6020088d83"
     )
-    assert tenant_target.first_report.applied_versions == (1,)
+    assert tenant_target.first_report.applied_versions == (1, 2)
     assert tenant_target.noop_report.applied_versions == ()
-    assert tenant_target.noop_report.final_version == 1
+    assert tenant_target.noop_report.final_version == 2
 
 
 def test_tenant_catalog_fingerprint_has_exact_shared_schema_class_parity() -> None:
@@ -5847,7 +5847,7 @@ def test_complete_catalog_fingerprint_refuses_function_constraint_index_policy_a
             assert pristine[0] is True
             assert pristine[2] == 0
             assert pristine[3] == (
-                "sha256:f7c72a008792173e110b9359006271fea263b3e26fb53c8ac6303839d0460fc4"
+                "sha256:897001ea090224da95746e9de94a6f0098c8a2eae01abab68ac1f32b6509e950"
             )
         finally:
             migrator.rollback()
@@ -6536,10 +6536,10 @@ def test_readiness_observation_is_complete_after_commit(
     assert row[1] == TENANT_CONTEXT_CONTRACT.digest
     assert row[2] == 0
     assert row[3] == (
-        "sha256:f7c72a008792173e110b9359006271fea263b3e26fb53c8ac6303839d0460fc4"
+        "sha256:897001ea090224da95746e9de94a6f0098c8a2eae01abab68ac1f32b6509e950"
     )
     assert row[5] == TENANT_PROVISIONING_SPEC.digest
     assert row[6] == TENANT_SERVICE.identity
-    assert row[7] == 1
-    assert row[9] == 1
+    assert row[7] == 2
+    assert row[9] == 2
     assert row[10] is False

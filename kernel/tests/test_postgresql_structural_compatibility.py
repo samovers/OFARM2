@@ -37,6 +37,14 @@ PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 TENANT_ADMIN_ENV = "OFARM_TENANT_PROVISIONING_PG_ADMIN_DSN"
 AUDIT_ADMIN_ENV = "OFARM_SECURITY_AUDIT_PG_ADMIN_DSN"
 MAINTENANCE_DATABASES = ("postgres", "template0", "template1")
+TENANT_LATEST_VERSION = load_authoritative_migration_set(
+    PACKAGE_ROOT,
+    TENANT_SERVICE,
+).migrations[-1].version
+AUDIT_LATEST_VERSION = load_authoritative_migration_set(
+    PACKAGE_ROOT,
+    SECURITY_AUDIT_SERVICE,
+).migrations[-1].version
 
 
 @dataclass(frozen=True, slots=True)
@@ -264,11 +272,11 @@ def test_real_structural_logins_prove_independent_read_only_lanes(
     )
 
     assert tenant_report.service_identity == TENANT_SERVICE.identity
-    assert tenant_report.supported_version == 1
-    assert tenant_report.observed_version == 1
+    assert tenant_report.supported_version == TENANT_LATEST_VERSION
+    assert tenant_report.observed_version == TENANT_LATEST_VERSION
     assert audit_report.service_identity == SECURITY_AUDIT_SERVICE.identity
-    assert audit_report.supported_version == 1
-    assert audit_report.observed_version == 1
+    assert audit_report.supported_version == AUDIT_LATEST_VERSION
+    assert audit_report.observed_version == AUDIT_LATEST_VERSION
     assert not hasattr(tenant_report, "ready")
     assert not hasattr(audit_report, "ready")
     assert separation.manifest()["distinctPostgreSQLSystemIdentifiers"] is True
@@ -321,6 +329,7 @@ def test_structural_observation_fixes_catalog_output_settings(
 def test_crossed_structural_routes_and_newer_history_refuse(
     structural_pair: _StructuralPair,
 ):
+    future_version = TENANT_LATEST_VERSION + 1
     with pytest.raises(PostgreSQLVerificationError):
         verify_tenant_structural_compatibility(
             tenant_structural_dsn=structural_pair.audit_readiness_dsn,
@@ -345,12 +354,17 @@ def test_crossed_structural_routes_and_newer_history_refuse(
                     applied_prefix_digest, service_identity,
                     provisioning_spec_digest, release_identity, execution_id
                 )
-                SELECT 2, '0002_future.sql', source_sha256, source_byte_length,
+                SELECT %s, %s, source_sha256, source_byte_length,
                        applied_prefix_digest, service_identity,
                        provisioning_spec_digest, 'hostile-structural-test',
                        pg_catalog.gen_random_uuid()
-                FROM ofarm.schema_migration WHERE version = 1
-                """
+                FROM ofarm.schema_migration WHERE version = %s
+                """,
+                (
+                    future_version,
+                    f"{future_version:04d}_future.sql",
+                    TENANT_LATEST_VERSION,
+                ),
             )
         with pytest.raises(
             PostgreSQLVerificationError,
@@ -365,7 +379,8 @@ def test_crossed_structural_routes_and_newer_history_refuse(
             autocommit=True,
         ) as admin:
             admin.execute(
-                "DELETE FROM ofarm.schema_migration WHERE version = 2"
+                "DELETE FROM ofarm.schema_migration WHERE version = %s",
+                (future_version,),
             )
             admin.execute(
                 "ALTER TABLE ofarm.schema_migration ENABLE TRIGGER ALL"
