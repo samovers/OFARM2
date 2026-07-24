@@ -31,6 +31,11 @@
       "sourcePath": "kernel/tests/test_application_runtime.py"
     },
     {
+      "nodeid": "kernel/tests/test_application_runtime.py::test_pool_startup_failure_closes_the_complete_graph",
+      "sourceModule": "kernel.tests.test_application_runtime",
+      "sourcePath": "kernel/tests/test_application_runtime.py"
+    },
+    {
       "nodeid": "kernel/tests/test_application_runtime.py::test_production_and_development_imports_exclude_test_hs256",
       "sourceModule": "kernel.tests.test_application_runtime",
       "sourcePath": "kernel/tests/test_application_runtime.py"
@@ -5606,6 +5611,16 @@
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_tenant_uow.py::test_asgi_concurrency_keeps_two_actors_in_two_tenants",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_uow",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_uow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_uow.py::test_real_pool_binds_allocates_rolls_back_and_reuses_idle_backend",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_uow",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_uow.py"
+    },
+    {
       "nodeid": "kernel/tests/test_principal_authority.py::test_activation_maps_digest_and_transition_parameters_exactly",
       "sourceModule": "kernel.tests.test_principal_authority",
       "sourcePath": "kernel/tests/test_principal_authority.py"
@@ -8259,10 +8274,45 @@
       "nodeid": "kernel/tests/test_stages.py::test_temporal_validator_contract",
       "sourceModule": "kernel.tests.test_stages",
       "sourcePath": "kernel/tests/test_stages.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow.py::test_ambiguous_commit_discards_connection",
+      "sourceModule": "kernel.tests.test_tenant_uow",
+      "sourcePath": "kernel/tests/test_tenant_uow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow.py::test_binding_mismatch_is_one_closed_outcome_and_rolls_back",
+      "sourceModule": "kernel.tests.test_tenant_uow",
+      "sourcePath": "kernel/tests/test_tenant_uow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow.py::test_cancellation_rolls_back_before_pool_return",
+      "sourceModule": "kernel.tests.test_tenant_uow",
+      "sourcePath": "kernel/tests/test_tenant_uow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow.py::test_non_idle_checkout_is_discarded_without_binding",
+      "sourceModule": "kernel.tests.test_tenant_uow",
+      "sourcePath": "kernel/tests/test_tenant_uow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow.py::test_operation_exception_rolls_back_and_preserves_exception",
+      "sourceModule": "kernel.tests.test_tenant_uow",
+      "sourcePath": "kernel/tests/test_tenant_uow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow.py::test_repository_surface_cannot_issue_transaction_control",
+      "sourceModule": "kernel.tests.test_tenant_uow",
+      "sourcePath": "kernel/tests/test_tenant_uow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow.py::test_unit_of_work_binds_allocates_one_batch_and_commits",
+      "sourceModule": "kernel.tests.test_tenant_uow",
+      "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "05f09eb4b2645abe3a1ad99ef14f337c76924441dbfda505cc3e5aee3396ff2d",
-  "entryCount": 1652,
+  "entriesSha256": "5a2192dab3fa40c3469c5b02f5279c1a42d00b1ec19917eee0449dbd025db093",
+  "entryCount": 1662,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

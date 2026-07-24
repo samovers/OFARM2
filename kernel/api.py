@@ -83,17 +83,17 @@ def _production_app(runtime: ApplicationRuntime) -> FastAPI:
     def manifest():
         return {
             "runtime": runtime.metadata.as_dict(),
-            "protectedSurface": "TENANT_BOUNDARY_BLOCKED",
+            "protectedSurface": "GOVERNED_SURFACE_BLOCKED",
         }
 
     def blocked():
         raise HTTPException(
             status_code=503,
             detail=runtime_problem(
-                "TENANT_BOUNDARY_BLOCKED",
-                "Tenant transaction boundary unavailable",
-                "protected production endpoints remain closed until issue #173",
-                problem_id="problem:tenant-boundary-blocked",
+                "GOVERNED_SURFACE_BLOCKED",
+                "Governed production surface unavailable",
+                "tenant binding is ready; downstream governed semantics remain closed",
+                problem_id="problem:governed-surface-blocked",
             ),
         )
 

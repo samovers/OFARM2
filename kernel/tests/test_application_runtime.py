@@ -21,6 +21,7 @@ from kernel.runtime_config import (
     RuntimeConfigurationError,
     RuntimeMode,
 )
+from kernel.tenant_uow import TenantUnitOfWorkStartupError
 
 
 IMAGE = "sha256:" + "1" * 64
@@ -188,6 +189,18 @@ def _install_graph_fakes(monkeypatch, events, failures=None):
             events.append("issuer.mint")
             return "capability"
 
+    class Pool:
+        def open(self, *, wait, timeout):
+            assert wait is True
+            assert timeout == 5.0
+            events.append("pool.initialize")
+            if failure := failures.get("pool.initialize"):
+                raise failure
+
+        def close(self, *, timeout=5.0):
+            assert timeout == 5.0
+            events.append("pool.close")
+
     monkeypatch.setattr(
         application_runtime.httpx,
         "Client",
@@ -210,6 +223,13 @@ def _install_graph_fakes(monkeypatch, events, failures=None):
     )
     monkeypatch.setattr(application_runtime, "GoogleKmsSigner", Signer)
     monkeypatch.setattr(application_runtime, "TenantCapabilityIssuer", Issuer)
+    monkeypatch.setattr(
+        application_runtime,
+        "create_tenant_connection_pool",
+        lambda dsn: (
+            events.append(("pool.build", dsn)) or Pool()
+        ),
+    )
 
 
 def test_production_graph_initializes_in_fixed_order(monkeypatch):
@@ -227,15 +247,17 @@ def test_production_graph_initializes_in_fixed_order(monkeypatch):
         "reader.build",
         "signer.build",
         "issuer.build",
+        ("pool.build", "dbname=ofarm user=ofarm_app"),
         "verifier.initialize",
         "resolver.initialize",
         "reader.current",
         "signer.sign",
+        "pool.initialize",
     ]
     assert runtime.metadata.oidc_audience == "external-api"
     assert runtime.metadata.binder_audience == "binder-audience"
     runtime.close()
-    assert events[-2:] == ["http.close", "kms.close"]
+    assert events[-3:] == ["pool.close", "http.close", "kms.close"]
 
 
 def test_startup_failure_is_preserved_and_every_client_closes(monkeypatch):
@@ -281,6 +303,26 @@ def test_graph_construction_failure_closes_every_client(
         application_runtime.build_application_runtime(_config())
 
     assert raised.value is construction_error
+    assert events[-2:] == ["http.close", "kms.close"]
+
+
+def test_pool_startup_failure_closes_the_complete_graph(monkeypatch):
+    events = []
+    pool_error = RuntimeStartupError("pool refused")
+    _install_graph_fakes(
+        monkeypatch,
+        events,
+        {
+            "pool.initialize": pool_error,
+            "http.close": RuntimeError("HTTP close failed"),
+            "kms.close": RuntimeError("KMS close failed"),
+        },
+    )
+
+    with pytest.raises(TenantUnitOfWorkStartupError) as raised:
+        application_runtime.build_application_runtime(_config())
+
+    assert raised.value.__cause__ is pool_error
     assert events[-2:] == ["http.close", "kms.close"]
 
 
@@ -359,7 +401,7 @@ def test_production_app_exposes_only_metadata_and_closes_shared_surface():
     assert {response.status_code for response in responses} == {503}
     assert {
         response.json()["detail"]["reasonCode"] for response in responses
-    } == {"TENANT_BOUNDARY_BLOCKED"}
+    } == {"GOVERNED_SURFACE_BLOCKED"}
 
 
 def test_application_is_not_published_after_startup_failure(monkeypatch):

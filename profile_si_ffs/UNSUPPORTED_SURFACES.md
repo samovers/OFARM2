@@ -88,10 +88,10 @@ principal resolution, fresh signed observer evidence, and the KMS preflight
 before publishing FastAPI. The external token audience never substitutes for
 the database binder audience. Production accepts no HS256 token.
 
-Transaction-bound tenant execution is still unsupported pending issue #173.
-Accordingly, all protected production routes return the same
-`TENANT_BOUNDARY_BLOCKED` response. No authenticated request reaches the legacy
-ambient Store.
+Transaction-bound tenant execution now has one bounded pool and one verified
+TenantBinding per UnitOfWork. Governed production handlers remain downstream,
+so all protected production routes return the same `GOVERNED_SURFACE_BLOCKED`
+response. No authenticated request reaches the legacy ambient Store.
 
 Development and test are explicit separate runtime types. Only the injected
 test runtime contains the HS256 verifier. The `X-Acting-Party` development shim
