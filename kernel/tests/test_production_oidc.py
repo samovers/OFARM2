@@ -509,3 +509,6 @@ def test_client_redirect_mode_and_non_https_url_are_configuration_errors():
 
     with pytest.raises(AuthenticationStartupError):
         _config(jwks_url="http://issuer.example.test/jwks")
+
+    with pytest.raises(AuthenticationStartupError):
+        _config(cache_ttl_seconds=4, refresh_cooldown_seconds=5)

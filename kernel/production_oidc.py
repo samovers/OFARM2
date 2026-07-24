@@ -97,6 +97,8 @@ class ProductionOidcConfig:
             raise AuthenticationStartupError(
                 "OIDC I/O timeout exceeds its overall deadline"
             )
+        if self.refresh_cooldown_seconds > self.cache_ttl_seconds:
+            raise AuthenticationStartupError("OIDC refresh cooldown exceeds cache TTL")
         integer_bounds = (
             (self.leeway_seconds, 0, 300),
             (self.max_token_bytes, 1, 1_048_576),
