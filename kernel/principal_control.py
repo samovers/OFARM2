@@ -15,10 +15,9 @@ from deployment.postgresql.tenant_contract import (
 )
 
 from .authentication import VerifiedIdentity
-
+from .principal import _digest, _time
 
 ConnectionFactory = Callable[[], psycopg.Connection[tuple[object, ...]]]
-
 
 class PrincipalTransitionKind(str, Enum):
     ACTIVATE = "ACTIVATE"
@@ -26,26 +25,21 @@ class PrincipalTransitionKind(str, Enum):
     EXPIRE = "EXPIRE"
     SUPERSEDE = "SUPERSEDE"
 
-
 class PrincipalControlError(RuntimeError):
     pass
 
-
 class PrincipalControlUnavailable(PrincipalControlError):
     pass
-
 
 class TransitionRefused(PrincipalControlError):
     def __init__(self, act_id: UUID) -> None:
         self.act_id = act_id
         super().__init__(f"principal transition refused ({act_id})")
 
-
 class TransitionOutcomeUnknown(PrincipalControlError):
     def __init__(self, act_id: UUID) -> None:
         self.act_id = act_id
         super().__init__(f"principal transition outcome is unknown ({act_id})")
-
 
 @dataclass(frozen=True, slots=True)
 class PrincipalBindingCandidate:
@@ -59,7 +53,6 @@ class PrincipalBindingCandidate:
     valid_from: datetime
     valid_until: datetime
     predecessor_version_id: UUID | None = None
-
 
 @dataclass(frozen=True, slots=True)
 class PrincipalBindingTransitionRequest:
@@ -77,12 +70,10 @@ class PrincipalBindingTransitionRequest:
     accountable_control_ref: str
     reason: str
 
-
 @dataclass(frozen=True, slots=True)
 class PrincipalBindingTransitionResult:
     act_id: UUID
     act_digest: str
-
 
 @dataclass(frozen=True, slots=True)
 class _TransitionValues:
@@ -91,10 +82,37 @@ class _TransitionValues:
     candidate_version_id: UUID | None
     candidate_version_digest: str | None
 
-
 def _valid_uuid(value: UUID | None) -> bool:
     return type(value) is UUID and value.int != 0
 
+def _validate_scalar_shape(request: PrincipalBindingTransitionRequest) -> None:
+    candidate = request.candidate
+    if candidate is not None and type(candidate) is not PrincipalBindingCandidate:
+        raise PrincipalControlError("principal transition candidate is invalid")
+    digests = (
+        request.expected_head_digest,
+        request.active_binding_version_digest,
+        candidate.tenant_registration_digest if candidate else None,
+        candidate.party_schema_digest if candidate else None,
+        candidate.party_payload_digest if candidate else None,
+    )
+    times = (
+        request.effective_at,
+        request.decided_at,
+        candidate.valid_from if candidate else None,
+        candidate.valid_until if candidate else None,
+    )
+    try:
+        for digest in digests:
+            if digest is not None:
+                _digest(digest, "principal transition digest")
+        for value in times:
+            if value is not None:
+                _time(value, "principal transition timestamp")
+    except ValueError as exc:
+        raise PrincipalControlError(
+            "principal transition scalar is invalid"
+        ) from exc
 
 def _validate_request(request: PrincipalBindingTransitionRequest) -> None:
     if (
@@ -106,11 +124,12 @@ def _validate_request(request: PrincipalBindingTransitionRequest) -> None:
         or request.stream_sequence < 1
     ):
         raise PrincipalControlError("principal transition request is invalid")
+    _validate_scalar_shape(request)
     has_head = _valid_uuid(request.expected_head_id)
-    if has_head != (type(request.expected_head_digest) is str):
+    if has_head != (request.expected_head_digest is not None):
         raise PrincipalControlError("principal lifecycle head is partial")
     has_active = _valid_uuid(request.active_binding_version_id)
-    if has_active != (type(request.active_binding_version_digest) is str):
+    if has_active != (request.active_binding_version_digest is not None):
         raise PrincipalControlError("principal active binding is partial")
     if request.kind is PrincipalTransitionKind.ACTIVATE:
         valid_shape = (
@@ -138,7 +157,6 @@ def _validate_request(request: PrincipalBindingTransitionRequest) -> None:
         )
     if not valid_shape:
         raise PrincipalControlError("principal transition shape is invalid")
-
 
 def _candidate_digest(
     connection: psycopg.Connection[tuple[object, ...]],
@@ -174,7 +192,6 @@ def _candidate_digest(
         raise PrincipalControlError("binding digest result differs")
     return row[0]
 
-
 def _transition_values(
     connection: psycopg.Connection[tuple[object, ...]],
     request: PrincipalBindingTransitionRequest,
@@ -203,7 +220,6 @@ def _transition_values(
         ),
         candidate_version_digest=candidate_digest,
     )
-
 
 def _act_digest(
     connection: psycopg.Connection[tuple[object, ...]],
@@ -250,7 +266,6 @@ def _act_digest(
         raise PrincipalControlError("lifecycle digest result differs")
     return row[0]
 
-
 def _transition_parameters(
     request: PrincipalBindingTransitionRequest,
     values: _TransitionValues,
@@ -286,7 +301,6 @@ def _transition_parameters(
         request.accountable_control_ref,
         request.reason,
     )
-
 
 class PrincipalBindingController:
     def __init__(self, connection_factory: ConnectionFactory) -> None:

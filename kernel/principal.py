@@ -14,53 +14,40 @@ from deployment.postgresql.tenant_contract import (
 
 from .authentication import VerifiedIdentity
 
-
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 _PARTY_REF = re.compile(r"[A-Za-z0-9._:-]{1,255}")
-
 
 class PrincipalResolutionOutcome(str, Enum):
     UNRESOLVED = "UNRESOLVED"
     AUTHORITY_UNAVAILABLE = "AUTHORITY_UNAVAILABLE"
-
 
 class PrincipalResolutionError(RuntimeError):
     def __init__(self, outcome: PrincipalResolutionOutcome) -> None:
         self.outcome = outcome
         super().__init__(f"principal resolution refused ({outcome.value})")
 
-
 class PrincipalResolutionStartupError(RuntimeError):
     pass
-
 
 def _uuid(value: object, label: str) -> UUID:
     if type(value) is not UUID or value.int == 0:
         raise ValueError(f"{label} is invalid")
     return value
 
-
 def _digest(value: object, label: str) -> str:
     if type(value) is not str or _DIGEST.fullmatch(value) is None:
         raise ValueError(f"{label} is invalid")
     return value
-
 
 def _text(value: object, label: str) -> str:
     if type(value) is not str or not value:
         raise ValueError(f"{label} is invalid")
     return value
 
-
 def _time(value: object, label: str) -> datetime:
-    if (
-        type(value) is not datetime
-        or value.tzinfo is None
-        or value.utcoffset() is None
-    ):
+    if type(value) is not datetime or value.tzinfo is None or value.utcoffset() is None:
         raise ValueError(f"{label} is invalid")
     return value
-
 
 @dataclass(frozen=True, slots=True)
 class PrincipalAuthority:
@@ -148,7 +135,6 @@ class PrincipalAuthority:
             valid_from=checked_from,
             valid_until=checked_until,
         )
-
 
 @dataclass(frozen=True, slots=True)
 class AuthenticatedPrincipal:

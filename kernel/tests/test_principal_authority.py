@@ -15,6 +15,7 @@ from deployment.postgresql.tenant_contract import (
 )
 from kernel.authentication import VerifiedIdentity
 from kernel.principal import (
+    PrincipalAuthority,
     PrincipalResolutionError,
     PrincipalResolutionOutcome,
     PrincipalResolutionStartupError,
@@ -145,8 +146,10 @@ def _authority_row(**changes) -> tuple[object, ...]:
     indexes = {
         "issuer": 1,
         "subject": 2,
+        "binding_version_digest": 4,
         "party_record_id": 11,
         "party_state": 14,
+        "valid_from": 15,
         "valid_until": 16,
     }
     for name, value in changes.items():
@@ -229,6 +232,36 @@ def test_resolver_refuses_a_mismatched_database_contract():
 
     with pytest.raises(PrincipalResolutionStartupError):
         resolver.initialize()
+
+
+def test_resolver_refuses_a_non_binder_database_audience():
+    connection = _Connection(
+        [[("oidc-client", TENANT_CAPABILITY_CONTRACT.digest,
+           "ofarm.authentication-runtime.v1")]]
+    )
+    resolver = PrincipalBindingResolver(_Factory(connection))
+
+    with pytest.raises(PrincipalResolutionStartupError):
+        resolver.initialize()
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"binding_version_digest": ""},
+        {"valid_from": NOW.replace(tzinfo=None)},
+        {
+            "valid_from": NOW + timedelta(days=1),
+            "valid_until": NOW - timedelta(days=1),
+        },
+    ],
+)
+def test_principal_authority_refuses_invalid_database_rows(changes):
+    with pytest.raises(ValueError):
+        PrincipalAuthority.from_database_row(
+            _authority_row(**changes),
+            IDENTITY,
+        )
 
 
 def _candidate(
@@ -362,6 +395,39 @@ def test_nil_caller_supplied_act_id_is_refused_before_connection():
 
     with pytest.raises(PrincipalControlError):
         PrincipalBindingController(factory).transition(invalid)
+
+    assert factory.calls == 0
+
+
+@pytest.mark.parametrize(
+    "transition_request",
+    [
+        replace(_request(PrincipalTransitionKind.REVOKE),
+                expected_head_digest=""),
+        replace(_request(PrincipalTransitionKind.REVOKE),
+                active_binding_version_digest="invalid"),
+        replace(_request(), effective_at=NOW.replace(tzinfo=None)),
+        replace(_request(), decided_at=NOW.replace(tzinfo=None)),
+        replace(
+            _request(),
+            candidate=replace(_candidate(), party_schema_digest=""),
+        ),
+        replace(
+            _request(),
+            candidate=replace(
+                _candidate(),
+                valid_until=NOW.replace(tzinfo=None),
+            ),
+        ),
+    ],
+)
+def test_transition_refuses_invalid_digests_and_timestamps_before_connection(
+    transition_request,
+):
+    factory = _Factory(_Connection([]))
+
+    with pytest.raises(PrincipalControlError):
+        PrincipalBindingController(factory).transition(transition_request)
 
     assert factory.calls == 0
 
