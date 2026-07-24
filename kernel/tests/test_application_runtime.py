@@ -130,11 +130,17 @@ def _install_graph_fakes(monkeypatch, events, failures=None):
             assert config.audience == "external-api"
             assert isinstance(client, Client)
             events.append("verifier.build")
+            if failure := failures.get("verifier.build"):
+                raise failure
 
         def initialize(self):
             events.append("verifier.initialize")
             if failure := failures.get("verifier.initialize"):
                 raise failure
+
+        def verify(self, token):
+            events.append(("verifier.verify", token))
+            return "identity"
 
     class Resolver:
         audience = "binder-audience"
@@ -144,6 +150,16 @@ def _install_graph_fakes(monkeypatch, events, failures=None):
 
         def initialize(self):
             events.append("resolver.initialize")
+
+        def resolve(self, identity):
+            events.append(("resolver.resolve", identity))
+            return "principal"
+
+    class ReceiptVerifier:
+        def __init__(self, key):
+            events.append(("receipt-verifier.build", key))
+            if failure := failures.get("receipt-verifier.build"):
+                raise failure
 
     class Reader:
         def __init__(self, _factory, _source, _verifier):
@@ -169,6 +185,7 @@ def _install_graph_fakes(monkeypatch, events, failures=None):
             events.append("issuer.build")
 
         def mint(self, _identity, _authority, _challenge):
+            events.append("issuer.mint")
             return "capability"
 
     monkeypatch.setattr(
@@ -189,7 +206,7 @@ def _install_graph_fakes(monkeypatch, events, failures=None):
     monkeypatch.setattr(
         application_runtime,
         "SigningEvidenceVerifier",
-        lambda key: events.append(("receipt-verifier.build", key)) or object(),
+        ReceiptVerifier,
     )
     monkeypatch.setattr(application_runtime, "GoogleKmsSigner", Signer)
     monkeypatch.setattr(application_runtime, "TenantCapabilityIssuer", Issuer)
@@ -239,6 +256,49 @@ def test_startup_failure_is_preserved_and_every_client_closes(monkeypatch):
 
     assert raised.value is startup_error
     assert events[-2:] == ["http.close", "kms.close"]
+
+
+@pytest.mark.parametrize(
+    "failure_stage",
+    ["verifier.build", "receipt-verifier.build"],
+)
+def test_graph_construction_failure_closes_every_client(
+    monkeypatch, failure_stage
+):
+    events = []
+    construction_error = RuntimeStartupError("construction refused")
+    _install_graph_fakes(
+        monkeypatch,
+        events,
+        {
+            failure_stage: construction_error,
+            "http.close": RuntimeError("HTTP close failed"),
+            "kms.close": RuntimeError("KMS close failed"),
+        },
+    )
+
+    with pytest.raises(RuntimeStartupError) as raised:
+        application_runtime.build_application_runtime(_config())
+
+    assert raised.value is construction_error
+    assert events[-2:] == ["http.close", "kms.close"]
+
+
+def test_application_runtime_delegates_public_operations(monkeypatch):
+    events = []
+    _install_graph_fakes(monkeypatch, events)
+    runtime = application_runtime.build_application_runtime(_config())
+
+    assert runtime.authenticate("token") == "principal"
+    assert runtime.mint_capability(
+        "identity", "authority", "challenge"
+    ) == "capability"
+    assert events[-3:] == [
+        ("verifier.verify", "token"),
+        ("resolver.resolve", "identity"),
+        "issuer.mint",
+    ]
+    runtime.close()
 
 
 def test_create_app_has_no_injection_arguments():

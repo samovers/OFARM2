@@ -147,22 +147,21 @@ class _EnvironmentReadVisitor(ast.NodeVisitor):
                 if alias.name in {"getenv", "environ"}
             )
 
+    def _is_environment_reference(self, target) -> bool:
+        if isinstance(target, ast.Name):
+            return target.id in self.direct_readers
+        if not isinstance(target, ast.Attribute):
+            return False
+        if (
+            isinstance(target.value, ast.Name)
+            and target.value.id in self.os_modules
+            and target.attr in {"getenv", "environ"}
+        ):
+            return True
+        return self._is_environment_reference(target.value)
+
     def _check(self, node, target) -> None:
-        is_environment = (
-            isinstance(target, ast.Attribute)
-            and isinstance(target.value, ast.Name)
-            and (
-                (
-                    target.value.id in self.os_modules
-                    and target.attr in {"getenv", "environ"}
-                )
-                or target.value.id in self.direct_readers
-            )
-        ) or (
-            isinstance(target, ast.Name)
-            and target.id in self.direct_readers
-        )
-        if is_environment and self.scope[-2:] != [
+        if self._is_environment_reference(target) and self.scope[-2:] != [
             "RuntimeConfig",
             "from_env",
         ]:

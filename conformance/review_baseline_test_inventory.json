@@ -6,7 +6,22 @@
       "sourcePath": "kernel/tests/test_application_runtime.py"
     },
     {
+      "nodeid": "kernel/tests/test_application_runtime.py::test_application_runtime_delegates_public_operations",
+      "sourceModule": "kernel.tests.test_application_runtime",
+      "sourcePath": "kernel/tests/test_application_runtime.py"
+    },
+    {
       "nodeid": "kernel/tests/test_application_runtime.py::test_create_app_has_no_injection_arguments",
+      "sourceModule": "kernel.tests.test_application_runtime",
+      "sourcePath": "kernel/tests/test_application_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_application_runtime.py::test_graph_construction_failure_closes_every_client[receipt-verifier.build]",
+      "sourceModule": "kernel.tests.test_application_runtime",
+      "sourcePath": "kernel/tests/test_application_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_application_runtime.py::test_graph_construction_failure_closes_every_client[verifier.build]",
       "sourceModule": "kernel.tests.test_application_runtime",
       "sourcePath": "kernel/tests/test_application_runtime.py"
     },
@@ -7251,6 +7266,11 @@
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
     {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_environment_reads_detect_import_styles[import os/nos.environ.get('SETTING')/n-2]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_environment_reads_detect_import_styles[import os/nos.getenv('SETTING')/n-2]",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
@@ -8226,8 +8246,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "a1ae7f400a8add610a712316acc0fdde9cb766ab47be2aa67cb062d672b3368d",
-  "entryCount": 1645,
+  "entriesSha256": "b5a3855c7002d6ce830cf8f4d772e70e93ad1efe973c7a2797f079765ad3023c",
+  "entryCount": 1649,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

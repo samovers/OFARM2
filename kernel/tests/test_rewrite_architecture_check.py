@@ -11,6 +11,7 @@ from conformance import rewrite_architecture_check
     "source,expected_line",
     [
         ("import os\nos.getenv('SETTING')\n", 2),
+        ("import os\nos.environ.get('SETTING')\n", 2),
         ("import os as environment\nenvironment.environ['SETTING']\n", 2),
         ("from os import getenv\ngetenv('SETTING')\n", 2),
         (

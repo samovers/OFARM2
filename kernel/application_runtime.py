@@ -130,53 +130,53 @@ def build_application_runtime(config: RuntimeConfig) -> ApplicationRuntime:
         with suppress(Exception):
             oidc_client.close()
         raise
-    connection_factory = _connection_factory(config.pg_dsn)
-    verifier = ProductionOidcVerifier(
-        ProductionOidcConfig(
-            issuer=config.oidc_issuer,
-            audience=config.oidc_audience,
-            jwks_url=config.oidc_jwks_url,
-        ),
-        oidc_client,
-    )
-    resolver = PrincipalBindingResolver(connection_factory)
-    signing_reader = SigningAuthorityReader(
-        connection_factory,
-        lambda: _receipt_source(config.signing_evidence_receipt_path),
-        SigningEvidenceVerifier(
-            config.signing_evidence_observer_public_key
-        ),
-    )
-    signer = GoogleKmsSigner(kms_client)
-    issuer = TenantCapabilityIssuer(
-        signing_reader,
-        signer,
-        kid=config.tenant_capability_kid,
-    )
     try:
+        connection_factory = _connection_factory(config.pg_dsn)
+        verifier = ProductionOidcVerifier(
+            ProductionOidcConfig(
+                issuer=config.oidc_issuer,
+                audience=config.oidc_audience,
+                jwks_url=config.oidc_jwks_url,
+            ),
+            oidc_client,
+        )
+        resolver = PrincipalBindingResolver(connection_factory)
+        signing_reader = SigningAuthorityReader(
+            connection_factory,
+            lambda: _receipt_source(config.signing_evidence_receipt_path),
+            SigningEvidenceVerifier(
+                config.signing_evidence_observer_public_key
+            ),
+        )
+        signer = GoogleKmsSigner(kms_client)
+        issuer = TenantCapabilityIssuer(
+            signing_reader,
+            signer,
+            kid=config.tenant_capability_kid,
+        )
         verifier.initialize()
         resolver.initialize()
         signing = signing_reader.current(config.tenant_capability_kid)
         if signing.audience != resolver.audience:
             raise RuntimeStartupError("database runtime audiences differ")
         signer.sign(TENANT_CAPABILITY_PREFLIGHT_PROBE, signing)
+        metadata = RuntimeMetadata(
+            mode=RuntimeMode.PRODUCTION,
+            deployment_image_digest=image_digest,
+            oidc_issuer=config.oidc_issuer,
+            oidc_audience=config.oidc_audience,
+            binder_audience=resolver.audience,
+            tenant_capability_kid=config.tenant_capability_kid,
+        )
+        return ApplicationRuntime(
+            verifier,
+            resolver,
+            issuer,
+            metadata,
+            oidc_client,
+            kms_client,
+        )
     except Exception:
         with suppress(Exception):
             _close_runtime_clients(oidc_client, kms_client)
         raise
-    metadata = RuntimeMetadata(
-        mode=RuntimeMode.PRODUCTION,
-        deployment_image_digest=image_digest,
-        oidc_issuer=config.oidc_issuer,
-        oidc_audience=config.oidc_audience,
-        binder_audience=resolver.audience,
-        tenant_capability_kid=config.tenant_capability_kid,
-    )
-    return ApplicationRuntime(
-        verifier,
-        resolver,
-        issuer,
-        metadata,
-        oidc_client,
-        kms_client,
-    )
