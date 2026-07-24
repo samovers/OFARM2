@@ -1,7 +1,7 @@
 """Ordered production graph construction and its sealed public surface."""
 from __future__ import annotations
 
-from contextlib import suppress
+from contextlib import AbstractContextManager, suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -30,6 +30,11 @@ from .tenant_capability_issuer import (
     TenantCapabilityIssuer,
     TenantChallenge,
 )
+from .tenant_uow import (
+    TenantUnitOfWork,
+    TenantUnitOfWorkManager,
+    create_tenant_connection_pool,
+)
 
 
 class RuntimeStartupError(RuntimeError):
@@ -44,7 +49,7 @@ class RuntimeMetadata:
     oidc_audience: str
     binder_audience: str
     tenant_capability_kid: str
-    tenant_boundary: str = "blocked"
+    tenant_boundary: str = "transaction-bound"
 
     def as_dict(self) -> dict[str, str]:
         return {
@@ -67,6 +72,7 @@ class ApplicationRuntime:
         metadata: RuntimeMetadata,
         oidc_client: httpx.Client,
         kms_client: kms_v1.KeyManagementServiceClient,
+        tenant_uow: TenantUnitOfWorkManager,
     ) -> None:
         self._verifier = verifier
         self._resolver = resolver
@@ -74,6 +80,7 @@ class ApplicationRuntime:
         self.metadata = metadata
         self._oidc_client = oidc_client
         self._kms_client = kms_client
+        self._tenant_uow = tenant_uow
 
     def authenticate(self, token: str) -> AuthenticatedPrincipal:
         return self._resolver.resolve(self._verifier.verify(token))
@@ -86,8 +93,17 @@ class ApplicationRuntime:
     ) -> str:
         return self._issuer.mint(identity, authority, challenge)
 
+    def tenant_unit_of_work(
+        self,
+        principal: AuthenticatedPrincipal,
+    ) -> AbstractContextManager[TenantUnitOfWork]:
+        return self._tenant_uow.unit_of_work(principal)
+
     def close(self) -> None:
-        _close_runtime_clients(self._oidc_client, self._kms_client)
+        try:
+            self._tenant_uow.close()
+        finally:
+            _close_runtime_clients(self._oidc_client, self._kms_client)
 
 
 def _close_runtime_clients(
@@ -130,6 +146,7 @@ def build_application_runtime(config: RuntimeConfig) -> ApplicationRuntime:
         with suppress(Exception):
             oidc_client.close()
         raise
+    tenant_uow = None
     try:
         connection_factory = _connection_factory(config.pg_dsn)
         verifier = ProductionOidcVerifier(
@@ -154,12 +171,17 @@ def build_application_runtime(config: RuntimeConfig) -> ApplicationRuntime:
             signer,
             kid=config.tenant_capability_kid,
         )
+        tenant_uow = TenantUnitOfWorkManager(
+            create_tenant_connection_pool(config.pg_dsn),
+            issuer,
+        )
         verifier.initialize()
         resolver.initialize()
         signing = signing_reader.current(config.tenant_capability_kid)
         if signing.audience != resolver.audience:
             raise RuntimeStartupError("database runtime audiences differ")
         signer.sign(TENANT_CAPABILITY_PREFLIGHT_PROBE, signing)
+        tenant_uow.initialize()
         metadata = RuntimeMetadata(
             mode=RuntimeMode.PRODUCTION,
             deployment_image_digest=image_digest,
@@ -175,8 +197,12 @@ def build_application_runtime(config: RuntimeConfig) -> ApplicationRuntime:
             metadata,
             oidc_client,
             kms_client,
+            tenant_uow,
         )
     except Exception:
+        if tenant_uow is not None:
+            with suppress(Exception):
+                tenant_uow.close()
         with suppress(Exception):
             _close_runtime_clients(oidc_client, kms_client)
         raise

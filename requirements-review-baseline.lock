@@ -1,7 +1,8 @@
 # Exact CPython 3.12 / x86_64 Linux wheel baseline. The original resolution was
 # observed in green GitHub Actions run 28176813292 at
 # fc800d5a1be35c95a8f348fda9d8453b06e37018. The authentication rewrite adds
-# hash-pinned PyJWT, cryptography, Google Cloud KMS, and their transitive wheels.
+# hash-pinned PyJWT, cryptography, Google Cloud KMS, Psycopg pool, and their
+# transitive wheels.
 # Install with --require-hashes --only-binary=:all: --no-deps.  Every direct
 # and transitive distribution is listed; this is a lock, not an upgrade plan.
 annotated-doc==0.0.4 \
@@ -64,6 +65,8 @@ psycopg==3.3.4 \
     --hash=sha256:b6bbc25ccf05c8fad3b061d9db2ef0909a555171b84b07f29458a447253d679a
 psycopg-binary==3.3.4 \
     --hash=sha256:e7510c37550f91a187e3660a8cc50d4b760f8c3b8b2f89ebc5698cd2c7f2c85d
+psycopg-pool==3.3.1 \
+    --hash=sha256:2af5b432941c4c9ad5c87b3fa410aec910ec8f7c122855897983a06c45f2e4b5
 pyasn1==0.6.4 \
     --hash=sha256:deda9277cfd454080ec40b207fb6df82206a3a2688735233cdcd8d3d565f088b
 pyasn1-modules==0.4.2 \

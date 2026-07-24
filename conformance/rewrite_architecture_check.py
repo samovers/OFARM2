@@ -24,6 +24,7 @@ PRODUCTION_BUDGETS = {
     "kernel/google_kms_signer.py": 120,
     "kernel/tenant_capability_issuer.py": 180,
     "kernel/key_control.py": 350,
+    "kernel/tenant_uow.py": 450,
     "kernel/api.py": 450,
     "kernel/runtime_config.py": 140,
     "kernel/application_runtime.py": 220,
@@ -71,6 +72,10 @@ GROUP_BUDGETS = {
             "kernel/legacy_runtime.py",
         ),
     ),
+    "tenant transaction": (
+        450,
+        ("kernel/tenant_uow.py",),
+    ),
 }
 TEST_GLOBS = (
     "kernel/tests/*profile_runtime*.py",
@@ -80,6 +85,7 @@ TEST_GLOBS = (
     "kernel/tests/*key_control*.py",
     "kernel/tests/*application_runtime*.py",
     "kernel/tests/*runtime_config*.py",
+    "kernel/tests/*tenant_uow*.py",
 )
 PROHIBITED_NAMES = {"for_test", "production_eligible"}
 

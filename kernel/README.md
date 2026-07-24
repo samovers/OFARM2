@@ -28,10 +28,15 @@ The external OIDC audience and database binder audience are distinct values.
 The first verifies credentials; the second binds database authority and signed
 capabilities. Production OIDC v1 accepts only RS256.
 
-Until issue #173 supplies transaction-bound tenant execution, every protected
-production endpoint returns `TENANT_BOUNDARY_BLOCKED`. `/health` and
-`/manifest` expose immutable runtime metadata only. Authoritative services are
-held by route closures and are never published through `app.state`.
+Production owns a bounded connection pool and one transaction-bound
+`TenantUnitOfWork` per verified tenant operation. The UnitOfWork creates and
+spends the database challenge on one backend, exposes the exact protected
+`TenantBinding`, and proves an idle transaction before pool return.
+
+Governed production handlers are still downstream work, so protected endpoints
+return `GOVERNED_SURFACE_BLOCKED`. `/health` and `/manifest` expose immutable
+runtime metadata only. Authoritative services are held by route closures and
+are never published through `app.state`.
 
 `create_test_app(...)` is the only dependency-injection surface. It constructs
 an explicit `TestRuntime` or `DevelopmentRuntime`; HS256 exists only in the
@@ -42,10 +47,10 @@ test runtime.
 This section runs the pre-tenancy M1 prototype against a disposable `public`
 schema. It is not an issue #174 tenant or security-audit deployment path and
 must never be pointed at either provisioned service. Its historical startup
-DDL remains quarantined here until #173 replaces the ambient Store with the
-tenant UnitOfWork integration. The #174 production database boundary uses only
-the external numbered runners and independent read-only structural observations
-documented in
+DDL and ambient Store remain permanently quarantined to this explicit legacy
+surface; production tenant work uses `TenantUnitOfWork`. The #174 production
+database boundary uses only the external numbered runners and independent
+read-only structural observations documented in
 `deployment/postgresql/README.md`.
 
 For the exact evidence-only review environment and the single complete Kernel
@@ -57,7 +62,7 @@ an exact baseline match.
 ```bash
 # 1. environment (Python 3.11+, PostgreSQL 15+)
 python3 -m venv .venv
-.venv/bin/pip install fastapi uvicorn pytest "psycopg[binary]" jsonschema rfc3339-validator httpx
+.venv/bin/pip install fastapi uvicorn pytest "psycopg[binary,pool]" jsonschema rfc3339-validator httpx
 
 # 2. a scratch cluster on a unix socket (no TCP listener)
 PGBIN=$(dirname "$(which initdb)")        # e.g. /opt/homebrew/opt/postgresql@17/bin
@@ -90,7 +95,7 @@ configuration.
 
 | Endpoint | What |
 |---|---|
-| `POST /commit` | legacy test/development capture through the gate chain; requires an injected test principal or `X-Acting-Party`; production returns `TENANT_BOUNDARY_BLOCKED` until #173 |
+| `POST /commit` | legacy test/development capture through the gate chain; requires an injected test principal or `X-Acting-Party`; production returns `GOVERNED_SURFACE_BLOCKED` until the governed handlers land |
 | `GET /views/passport/{farmRef}` | the live spray register (View 1) — freshness, exception rows, advisory flags; header `X-Acting-Party` |
 | `POST /review/accept` | governed queue acceptance: body `{farmRef, assertionRef, rationale, evidenceRefs?, idempotencyKey?}`; the rationale is mandatory and routed insufficiencies additionally require reviewer-attached durable evidence (gate-enforced) |
 | `POST /views/inspection-register/freeze` | freeze the exportable inspection register (View 2); body `{farmRef, windowStart, windowEnd}` |
