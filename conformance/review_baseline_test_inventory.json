@@ -2071,6 +2071,11 @@
       "sourcePath": "kernel/tests/test_postgresql_audit_contract.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_audit_contract.py::test_exhaustive_validation_refuses_every_contract_change[<lambda>65]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_contract",
+      "sourcePath": "kernel/tests/test_postgresql_audit_contract.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_audit_contract.py::test_exhaustive_validation_refuses_every_contract_change[<lambda>6]",
       "sourceModule": "kernel.tests.test_postgresql_audit_contract",
       "sourcePath": "kernel/tests/test_postgresql_audit_contract.py"
@@ -2181,7 +2186,7 @@
       "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_authoritative_audit_migration_is_one_exact_initial_set",
+      "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_authoritative_audit_migration_preserves_initial_and_adds_exact_v2",
       "sourceModule": "kernel.tests.test_postgresql_audit_migration",
       "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
     },
@@ -2364,6 +2369,46 @@
       "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_wrong_producer_reasons_and_cross_capabilities_refuse",
       "sourceModule": "kernel.tests.test_postgresql_audit_migration",
       "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_operations.py::test_key_retention_observation_is_one_closed_control_row",
+      "sourceModule": "kernel.tests.test_postgresql_audit_operations",
+      "sourcePath": "kernel/tests/test_postgresql_audit_operations.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_operations.py::test_operations_migration_is_bounded_and_keeps_0001_immutable",
+      "sourceModule": "kernel.tests.test_postgresql_audit_operations",
+      "sourcePath": "kernel/tests/test_postgresql_audit_operations.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_operations.py::test_overflow_observation_refuses_wrong_role",
+      "sourceModule": "kernel.tests.test_postgresql_audit_operations",
+      "sourcePath": "kernel/tests/test_postgresql_audit_operations.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_operations.py::test_overflow_observation_returns_one_oldest_closeable_bucket",
+      "sourceModule": "kernel.tests.test_postgresql_audit_operations",
+      "sourcePath": "kernel/tests/test_postgresql_audit_operations.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_operations.py::test_unknown_hmac_key_version_is_an_explicit_refusal[0]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_operations",
+      "sourcePath": "kernel/tests/test_postgresql_audit_operations.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_operations.py::test_unknown_hmac_key_version_is_an_explicit_refusal[3]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_operations",
+      "sourcePath": "kernel/tests/test_postgresql_audit_operations.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_operations.py::test_unknown_hmac_key_version_is_an_explicit_refusal[None]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_operations",
+      "sourcePath": "kernel/tests/test_postgresql_audit_operations.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_operations.py::test_v1_requires_exact_committed_retry_identity",
+      "sourceModule": "kernel.tests.test_postgresql_audit_operations",
+      "sourcePath": "kernel/tests/test_postgresql_audit_operations.py"
     },
     {
       "nodeid": "kernel/tests/test_postgresql_catalog_identity_unit.py::test_catalog_failure_uses_closed_diagnostic",
@@ -8311,8 +8356,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "5a2192dab3fa40c3469c5b02f5279c1a42d00b1ec19917eee0449dbd025db093",
-  "entryCount": 1662,
+  "entriesSha256": "3dde3204a40c4ebc4df7dde4182fd1779115ac3e90d0fcc1f868a659e5919a12",
+  "entryCount": 1671,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

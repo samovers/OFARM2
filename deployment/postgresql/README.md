@@ -87,8 +87,9 @@ runtime-health threshold.
 The only accepted migrations are:
 
 - `kernel/migrations/0001_initial.sql`;
-- `kernel/migrations/0002_authentication_read_api.sql`; and
-- `security_audit/migrations/0001_initial.sql`.
+- `kernel/migrations/0002_authentication_read_api.sql`;
+- `security_audit/migrations/0001_initial.sql`; and
+- `security_audit/migrations/0002_hmac_v2_operations.sql`.
 
 `migration_sets.py` carries a literal reviewed filename, source SHA-256, source
 byte length, prefix digest, and complete set digest for each service. A
@@ -243,6 +244,8 @@ The security-audit migration establishes a separate, non-tenant lane with:
   validation, database time, quotas, overflow markers, and bounded query APIs;
 - append-only event evidence, visibility-stable access cuts, an event-writer
   close barrier, and protected disposable quota state that cannot reopen;
+- HMAC V2 for fresh appends, exact committed-identity V1 retries, and bounded
+  control observations for overflow closure and key-retention deadlines;
 - declared gap markers and an exact empty-store recreation posture; and
 - distinct ingest, control, reader, retention, readiness, and deliberately
   absent recovery/break-glass capabilities.

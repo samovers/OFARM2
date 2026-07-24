@@ -196,8 +196,19 @@ SECURITY_AUDIT_AUTHORITATIVE_MIGRATION_SET = AuthoritativeMigrationSet(
                 "sha256:e3752c1f7d54dff7b749367a29a53b48b5ca3258e51b1a8388dacdcd830392b6"
             ),
         ),
+        AuthoritativeMigration(
+            version=2,
+            filename="0002_hmac_v2_operations.sql",
+            source_sha256=(
+                "sha256:99b5bc1016a2544dab54ebd9359d6cedd697e2adf3c749ef3634485103544133"
+            ),
+            byte_length=12471,
+            applied_prefix_digest=(
+                "sha256:c1fb1dd7348dadacb234e85dad8c943024d820543c7d5cb06f309e526cdac5ac"
+            ),
+        ),
     ),
-    digest="sha256:e3752c1f7d54dff7b749367a29a53b48b5ca3258e51b1a8388dacdcd830392b6",
+    digest="sha256:c1fb1dd7348dadacb234e85dad8c943024d820543c7d5cb06f309e526cdac5ac",
 )
 
 AUTHORITATIVE_MIGRATION_SETS = (
