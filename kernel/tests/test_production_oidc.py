@@ -97,6 +97,19 @@ def _config(**changes) -> ProductionOidcConfig:
     return ProductionOidcConfig(**values)
 
 
+def _initialized_verifier(jwk: dict, **config_changes):
+    calls = []
+
+    def handler(_request):
+        calls.append(1)
+        return httpx.Response(200, content=_jwks(jwk))
+
+    client = _client(handler)
+    verifier = ProductionOidcVerifier(_config(**config_changes), client)
+    verifier.initialize()
+    return verifier, client, calls
+
+
 def _raw_signed(private, header: bytes, claims: bytes) -> str:
     def encode(value):
         return base64.urlsafe_b64encode(value).rstrip(b"=")
@@ -120,6 +133,62 @@ def test_initialize_and_verify_preserve_exact_identity_bytes():
     assert identity.issuer == ISSUER
     assert identity.subject == "subject:Exact-01"
     client.close()
+
+
+def test_signature_from_another_key_cannot_claim_a_known_kid():
+    _trusted_private, trusted_jwk = _key("kid-trusted")
+    attacker_private, _attacker_jwk = _key("kid-attacker")
+    verifier, client, calls = _initialized_verifier(trusted_jwk)
+
+    with pytest.raises(AuthenticationError) as raised:
+        verifier.verify(_token(attacker_private, "kid-trusted"))
+
+    assert raised.value.outcome is AuthenticationOutcome.INVALID_CREDENTIAL
+    assert calls == [1]
+    client.close()
+
+
+def test_unsigned_alg_none_token_is_refused():
+    _private, jwk = _key("kid-none")
+    verifier, client, calls = _initialized_verifier(jwk)
+    now = int(time.time())
+    token = jwt.encode(
+        {
+            "iss": ISSUER,
+            "sub": "subject:unsigned",
+            "aud": AUDIENCE,
+            "iat": now,
+            "exp": now + 300,
+        },
+        key="",
+        algorithm="none",
+        headers={"kid": "kid-none", "typ": "JWT"},
+    )
+
+    with pytest.raises(AuthenticationError) as raised:
+        verifier.verify(token)
+
+    assert raised.value.outcome is AuthenticationOutcome.INVALID_CREDENTIAL
+    assert calls == [1]
+    client.close()
+
+
+def test_not_before_claim_honors_only_the_configured_leeway():
+    private, jwk = _key("kid-not-before")
+    token = _token(private, "kid-not-before", nbf=int(time.time()) + 60)
+    strict, strict_client, _ = _initialized_verifier(jwk)
+    tolerant, tolerant_client, _ = _initialized_verifier(
+        jwk,
+        leeway_seconds=120,
+    )
+
+    with pytest.raises(AuthenticationError) as raised:
+        strict.verify(token)
+
+    assert raised.value.outcome is AuthenticationOutcome.INVALID_CREDENTIAL
+    assert tolerant.verify(token).subject == "subject:Exact-01"
+    strict_client.close()
+    tolerant_client.close()
 
 
 def test_verify_before_initialize_performs_no_network_io():

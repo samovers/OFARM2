@@ -5851,6 +5851,11 @@
       "sourcePath": "kernel/tests/test_production_oidc.py"
     },
     {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_not_before_claim_honors_only_the_configured_leeway",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
       "nodeid": "kernel/tests/test_production_oidc.py::test_oversized_jwks_is_refused_while_streaming[False]",
       "sourceModule": "kernel.tests.test_production_oidc",
       "sourcePath": "kernel/tests/test_production_oidc.py"
@@ -5881,12 +5886,22 @@
       "sourcePath": "kernel/tests/test_production_oidc.py"
     },
     {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_signature_from_another_key_cannot_claim_a_known_kid",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
       "nodeid": "kernel/tests/test_production_oidc.py::test_token_size_bound_is_checked_before_key_lookup",
       "sourceModule": "kernel.tests.test_production_oidc",
       "sourcePath": "kernel/tests/test_production_oidc.py"
     },
     {
       "nodeid": "kernel/tests/test_production_oidc.py::test_unknown_kid_refreshes_once_then_throttles_repeated_misses",
+      "sourceModule": "kernel.tests.test_production_oidc",
+      "sourcePath": "kernel/tests/test_production_oidc.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_production_oidc.py::test_unsigned_alg_none_token_is_refused",
       "sourceModule": "kernel.tests.test_production_oidc",
       "sourcePath": "kernel/tests/test_production_oidc.py"
     },
@@ -8246,8 +8261,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "b5a3855c7002d6ce830cf8f4d772e70e93ad1efe973c7a2797f079765ad3023c",
-  "entryCount": 1649,
+  "entriesSha256": "05f09eb4b2645abe3a1ad99ef14f337c76924441dbfda505cc3e5aee3396ff2d",
+  "entryCount": 1652,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
