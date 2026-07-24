@@ -44,13 +44,17 @@ def _refusal(
     return AuthenticationError(outcome, internal_detail=detail)
 
 
+def _unavailable(detail: str) -> AuthenticationError:
+    return _refusal(detail, AuthenticationOutcome.VERIFIER_UNAVAILABLE)
+
+
 @dataclass(frozen=True, slots=True)
 class ProductionOidcConfig:
     issuer: str
     audience: str
     jwks_url: str
     cache_ttl_seconds: float = 300
-    unknown_kid_cooldown_seconds: float = 30
+    refresh_cooldown_seconds: float = 30
     connect_timeout_seconds: float = 2
     read_timeout_seconds: float = 2
     overall_deadline_seconds: float = 5
@@ -73,7 +77,7 @@ class ProductionOidcConfig:
             raise AuthenticationStartupError("JWKS URL must use HTTPS")
         positive = (
             self.cache_ttl_seconds,
-            self.unknown_kid_cooldown_seconds,
+            self.refresh_cooldown_seconds,
             self.connect_timeout_seconds,
             self.read_timeout_seconds,
             self.overall_deadline_seconds,
@@ -192,10 +196,7 @@ def _token_header(token: str, max_bytes: int) -> dict[str, object]:
 
 def _rsa_public_key(jwk: dict[str, object]) -> tuple[str, RSAPublicKey]:
     if _PRIVATE_JWK_MEMBERS & set(jwk):
-        raise _refusal(
-            "JWKS contains private key material",
-            AuthenticationOutcome.VERIFIER_UNAVAILABLE,
-        )
+        raise _unavailable("JWKS contains private key material")
     kid = jwk.get("kid")
     if (
         type(kid) is not str
@@ -204,10 +205,7 @@ def _rsa_public_key(jwk: dict[str, object]) -> tuple[str, RSAPublicKey]:
         or jwk.get("alg", "RS256") != "RS256"
         or jwk.get("use", "sig") != "sig"
     ):
-        raise _refusal(
-            "JWKS contains an incompatible key",
-            AuthenticationOutcome.VERIFIER_UNAVAILABLE,
-        )
+        raise _unavailable("JWKS contains an incompatible key")
     key_ops = jwk.get("key_ops", ["verify"])
     if (
         type(key_ops) is not list
@@ -215,42 +213,24 @@ def _rsa_public_key(jwk: dict[str, object]) -> tuple[str, RSAPublicKey]:
         or "verify" not in key_ops
         or any(operation != "verify" for operation in key_ops)
     ):
-        raise _refusal(
-            "JWKS key operations are incompatible",
-            AuthenticationOutcome.VERIFIER_UNAVAILABLE,
-        )
+        raise _unavailable("JWKS key operations are incompatible")
     modulus = jwk.get("n")
     exponent = jwk.get("e")
     if type(modulus) is not str or type(exponent) is not str:
-        raise _refusal(
-            "RSA JWK parameters are missing",
-            AuthenticationOutcome.VERIFIER_UNAVAILABLE,
-        )
+        raise _unavailable("RSA JWK parameters are missing")
     try:
         n_value = int.from_bytes(_b64url_decode(modulus, "RSA modulus"), "big")
         e_value = int.from_bytes(_b64url_decode(exponent, "RSA exponent"), "big")
     except AuthenticationError as exc:
-        raise _refusal(
-            "RSA JWK parameters are malformed",
-            AuthenticationOutcome.VERIFIER_UNAVAILABLE,
-        ) from exc
+        raise _unavailable("RSA JWK parameters are malformed") from exc
     if n_value.bit_length() < 2048 or e_value < 3 or e_value % 2 == 0:
-        raise _refusal(
-            "RSA JWK strength is invalid",
-            AuthenticationOutcome.VERIFIER_UNAVAILABLE,
-        )
+        raise _unavailable("RSA JWK strength is invalid")
     try:
         key = RSAAlgorithm.from_jwk(json.dumps(jwk))
     except (TypeError, ValueError, jwt.PyJWTError) as exc:
-        raise _refusal(
-            "RSA JWK construction failed",
-            AuthenticationOutcome.VERIFIER_UNAVAILABLE,
-        ) from exc
+        raise _unavailable("RSA JWK construction failed") from exc
     if not isinstance(key, RSAPublicKey):
-        raise _refusal(
-            "JWK did not produce an RSA public key",
-            AuthenticationOutcome.VERIFIER_UNAVAILABLE,
-        )
+        raise _unavailable("JWK did not produce an RSA public key")
     return kid, key
 
 
@@ -258,33 +238,21 @@ def _jwks_keys(raw: bytes, maximum: int) -> dict[str, RSAPublicKey]:
     try:
         document = _json_object(raw, "JWKS")
     except AuthenticationError as exc:
-        raise _refusal(
-            "JWKS JSON is invalid",
-            AuthenticationOutcome.VERIFIER_UNAVAILABLE,
-        ) from exc
+        raise _unavailable("JWKS JSON is invalid") from exc
     values = document.get("keys")
     if (
         set(document) != {"keys"}
         or type(values) is not list
         or not 1 <= len(values) <= maximum
     ):
-        raise _refusal(
-            "JWKS key set is invalid",
-            AuthenticationOutcome.VERIFIER_UNAVAILABLE,
-        )
+        raise _unavailable("JWKS key set is invalid")
     keys: dict[str, RSAPublicKey] = {}
     for value in values:
         if type(value) is not dict:
-            raise _refusal(
-                "JWKS key entry is invalid",
-                AuthenticationOutcome.VERIFIER_UNAVAILABLE,
-            )
+            raise _unavailable("JWKS key entry is invalid")
         kid, key = _rsa_public_key(value)
         if kid in keys:
-            raise _refusal(
-                "JWKS contains duplicate kid",
-                AuthenticationOutcome.VERIFIER_UNAVAILABLE,
-            )
+            raise _unavailable("JWKS contains duplicate kid")
         keys[kid] = key
     return keys
 
@@ -308,7 +276,7 @@ class ProductionOidcVerifier:
         self._monotonic = monotonic
         self._lock = Lock()
         self._generation: _JwksGeneration | None = None
-        self._last_unknown_refresh = float("-inf")
+        self._next_refresh_at = float("-inf")
 
     def initialize(self) -> None:
         try:
@@ -337,85 +305,62 @@ class ProductionOidcVerifier:
                 timeout=timeout,
             ) as response:
                 if response.history or 300 <= response.status_code < 400:
-                    raise _refusal(
-                        "JWKS redirect refused",
-                        AuthenticationOutcome.VERIFIER_UNAVAILABLE,
-                    )
+                    raise _unavailable("JWKS redirect refused")
                 if response.status_code != 200:
-                    raise _refusal(
-                        "JWKS endpoint did not return 200",
-                        AuthenticationOutcome.VERIFIER_UNAVAILABLE,
-                    )
+                    raise _unavailable("JWKS endpoint did not return 200")
                 length = response.headers.get("content-length")
                 if length is not None and (
                     len(length) > 16
+                    or not length.isascii()
                     or not length.isdigit()
                     or int(length) > config.max_jwks_bytes
                 ):
-                    raise _refusal(
-                        "JWKS body exceeds the byte bound",
-                        AuthenticationOutcome.VERIFIER_UNAVAILABLE,
-                    )
+                    raise _unavailable("JWKS body exceeds the byte bound")
                 for chunk in response.iter_bytes():
                     if self._monotonic() - started > (
                         config.overall_deadline_seconds
                     ):
-                        raise _refusal(
-                            "JWKS overall deadline exceeded",
-                            AuthenticationOutcome.VERIFIER_UNAVAILABLE,
-                        )
+                        raise _unavailable("JWKS overall deadline exceeded")
                     body.extend(chunk)
                     if len(body) > config.max_jwks_bytes:
-                        raise _refusal(
-                            "JWKS body exceeds the byte bound",
-                            AuthenticationOutcome.VERIFIER_UNAVAILABLE,
-                        )
+                        raise _unavailable("JWKS body exceeds the byte bound")
         except AuthenticationError:
             raise
         except httpx.HTTPError as exc:
-            raise _refusal(
-                "JWKS request failed",
-                AuthenticationOutcome.VERIFIER_UNAVAILABLE,
-            ) from exc
+            raise _unavailable("JWKS request failed") from exc
         if self._monotonic() - started > config.overall_deadline_seconds:
-            raise _refusal(
-                "JWKS overall deadline exceeded",
-                AuthenticationOutcome.VERIFIER_UNAVAILABLE,
-            )
+            raise _unavailable("JWKS overall deadline exceeded")
         keys = _jwks_keys(bytes(body), config.max_jwks_keys)
         return _JwksGeneration(
             keys=keys,
             expires_at=self._monotonic() + config.cache_ttl_seconds,
         )
 
+    def _refresh(self, now: float) -> _JwksGeneration:
+        self._next_refresh_at = now + self._config.refresh_cooldown_seconds
+        generation = self._fetch_generation()
+        self._generation = generation
+        return generation
+
     def _key(self, kid: str) -> RSAPublicKey:
         now = self._monotonic()
         with self._lock:
             generation = self._generation
             if generation is None:
-                raise _refusal(
-                    "production OIDC verifier is not initialized",
-                    AuthenticationOutcome.VERIFIER_UNAVAILABLE,
-                )
-            refreshed = False
-            if now >= generation.expires_at:
-                generation = self._fetch_generation()
-                self._generation = generation
-                refreshed = True
+                raise _unavailable("production OIDC verifier is not initialized")
+            expired = now >= generation.expires_at
+            if expired:
+                if now < self._next_refresh_at:
+                    raise _unavailable("JWKS refresh is cooling down")
+                generation = self._refresh(now)
             key = generation.keys.get(kid)
             if key is not None:
                 return key
-            if not refreshed and now - self._last_unknown_refresh >= (
-                self._config.unknown_kid_cooldown_seconds
-            ):
-                self._last_unknown_refresh = now
-                generation = self._fetch_generation()
-                self._generation = generation
+            if not expired and now >= self._next_refresh_at:
+                generation = self._refresh(now)
                 key = generation.keys.get(kid)
                 if key is not None:
                     return key
-            elif refreshed:
-                self._last_unknown_refresh = now
         raise _refusal("JOSE kid is unknown")
 
     def verify(self, token: str) -> VerifiedIdentity:
@@ -434,7 +379,10 @@ class ProductionOidcVerifier:
         except jwt.PyJWTError as exc:
             raise _refusal("JWT verification failed") from exc
         issuer = claims.get("iss")
+        audience = claims.get("aud")
         subject = claims.get("sub")
+        if audience != self._config.audience:
+            raise _refusal("verified audience must be one exact value")
         try:
             exact_issuer = validate_oidc_issuer(issuer)
         except TenantCapabilityContractError as exc:

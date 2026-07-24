@@ -4,7 +4,9 @@ from __future__ import annotations
 import base64
 import json
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from threading import Barrier
 
 import httpx
 import jwt
@@ -86,7 +88,7 @@ def _config(**changes) -> ProductionOidcConfig:
         "audience": AUDIENCE,
         "jwks_url": JWKS_URL,
         "cache_ttl_seconds": 10,
-        "unknown_kid_cooldown_seconds": 5,
+        "refresh_cooldown_seconds": 5,
     }
     values.update(changes)
     return ProductionOidcConfig(**values)
@@ -135,6 +137,7 @@ def test_verify_before_initialize_performs_no_network_io():
     "claims",
     [
         {"aud": "other-api"},
+        {"aud": [AUDIENCE, "other-api"]},
         {"iss": "https://other.example.test"},
         {"exp": 0},
     ],
@@ -149,6 +152,43 @@ def test_verified_signature_does_not_bypass_claim_validation(claims):
         verifier.verify(_token(private, "kid-claims", **claims))
 
     assert raised.value.outcome is AuthenticationOutcome.INVALID_CREDENTIAL
+    client.close()
+
+
+@pytest.mark.parametrize("subject", ["", "\n", "subjéct", "s" * 256])
+def test_verified_subject_must_match_the_exact_transport_grammar(subject):
+    private, jwk = _key("kid-subject")
+    client = _client(lambda _request: httpx.Response(200, content=_jwks(jwk)))
+    verifier = ProductionOidcVerifier(_config(), client)
+    verifier.initialize()
+
+    with pytest.raises(AuthenticationError) as raised:
+        verifier.verify(_token(private, "kid-subject", subject))
+
+    assert raised.value.outcome is AuthenticationOutcome.INVALID_CREDENTIAL
+    client.close()
+
+
+def test_token_size_bound_is_checked_before_key_lookup():
+    private, jwk = _key("kid-token-size")
+    calls = []
+
+    def handler(_request):
+        calls.append(1)
+        return httpx.Response(200, content=_jwks(jwk))
+
+    client = _client(handler)
+    verifier = ProductionOidcVerifier(
+        _config(max_token_bytes=64),
+        client,
+    )
+    verifier.initialize()
+
+    with pytest.raises(AuthenticationError) as raised:
+        verifier.verify(_token(private, "kid-token-size"))
+
+    assert raised.value.outcome is AuthenticationOutcome.INVALID_CREDENTIAL
+    assert calls == [1]
     client.close()
 
 
@@ -350,7 +390,7 @@ def test_unknown_kid_refreshes_once_then_throttles_repeated_misses():
     client.close()
 
 
-def test_expired_generation_is_never_used_after_refresh_failure():
+def test_failed_expiry_refresh_cools_down_without_using_stale_keys():
     private, jwk = _key("kid-stale")
     calls = 0
 
@@ -367,11 +407,17 @@ def test_expired_generation_is_never_used_after_refresh_failure():
     verifier.initialize()
     clock.value = 11
 
-    with pytest.raises(AuthenticationError) as raised:
-        verifier.verify(_token(private, "kid-stale"))
+    for _attempt in range(2):
+        with pytest.raises(AuthenticationError) as raised:
+            verifier.verify(_token(private, "kid-stale"))
+        assert raised.value.outcome is AuthenticationOutcome.VERIFIER_UNAVAILABLE
 
-    assert raised.value.outcome is AuthenticationOutcome.VERIFIER_UNAVAILABLE
     assert calls == 2
+
+    clock.value = 17
+    with pytest.raises(AuthenticationError):
+        verifier.verify(_token(private, "kid-stale"))
+    assert calls == 3
     client.close()
 
 
@@ -392,6 +438,39 @@ def test_expiry_causes_only_one_refresh_for_an_unknown_kid():
 
     with pytest.raises(AuthenticationError):
         verifier.verify(_token(private, "kid-unknown-after-expiry"))
+
+    assert calls == 2
+    client.close()
+
+
+def test_concurrent_verifies_share_one_expired_generation_refresh():
+    private, jwk = _key("kid-concurrent")
+    calls = 0
+
+    def handler(_request):
+        nonlocal calls
+        calls += 1
+        return httpx.Response(200, content=_jwks(jwk))
+
+    clock = _Clock()
+    client = _client(handler)
+    verifier = ProductionOidcVerifier(_config(), client, monotonic=clock)
+    verifier.initialize()
+    clock.value = 11
+    barrier = Barrier(3)
+    token = _token(private, "kid-concurrent")
+
+    def verify():
+        barrier.wait(timeout=5)
+        return verifier.verify(token).subject
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(verify) for _index in range(2)]
+        barrier.wait(timeout=5)
+        assert [future.result(timeout=5) for future in futures] == [
+            "subject:Exact-01",
+            "subject:Exact-01",
+        ]
 
     assert calls == 2
     client.close()

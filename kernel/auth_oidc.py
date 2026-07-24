@@ -14,7 +14,7 @@ import re
 import time
 from dataclasses import dataclass
 
-# Compact-JWS segments are canonical, unpadded base64url.
+# Canonical segments prevent decoder/signature ambiguity (PR #16).
 _B64URL_SEGMENT = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
@@ -82,7 +82,8 @@ def _verify_hs256(token: str, *, secret: str, issuer: str, audience: str,
     if not isinstance(header, dict) or not isinstance(claims, dict):
         raise OidcError("token header/payload is not a JSON object")
 
-    # This verifier implements no critical JOSE extensions.
+    # `crit` and RFC 7797 `b64` change JOSE processing; this verifier implements
+    # neither and must reject them instead of silently ignoring them (PR #16).
     if "crit" in header:
         raise OidcError("unsupported critical JOSE header(s) 'crit' — rejected (no extensions understood)")
     if "b64" in header:
