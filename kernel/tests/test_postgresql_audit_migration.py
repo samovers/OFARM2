@@ -196,10 +196,10 @@ def test_authoritative_audit_migration_preserves_initial_and_adds_exact_v2():
         "sha256:5e648e0127ca386363c3a1d979a5718cbd5b4846b3ad98ceaee5e7684b278517"
     assert initial.byte_length == 169_237
     assert operations.source_sha256 == \
-        "sha256:b60e9a27a7267fd00673ea1c22e57ae59e979112b71ddf24863ee57093c0897a"
-    assert operations.byte_length == 11_305
+        "sha256:99b5bc1016a2544dab54ebd9359d6cedd697e2adf3c749ef3634485103544133"
+    assert operations.byte_length == 12_471
     assert migration_set.digest == \
-        "sha256:d020b1025224ecb5db7c356b0d79eb428724eb3919e51589de79726f75d2dbb0"
+        "sha256:c1fb1dd7348dadacb234e85dad8c943024d820543c7d5cb06f309e526cdac5ac"
     assert migration_set.prefix_digest(1) == \
         "sha256:e3752c1f7d54dff7b749367a29a53b48b5ca3258e51b1a8388dacdcd830392b6"
     assert migration_set.prefix_digest(2) == migration_set.digest

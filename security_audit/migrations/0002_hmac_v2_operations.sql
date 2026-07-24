@@ -47,6 +47,15 @@ BEGIN
        OR pg_catalog.strpos(
             definition,
             'p_correlation_hmac_key_version <> 1'
+       ) = 0
+       OR pg_catalog.strpos(
+            definition,
+            $old$    IF p_reason IS NULL OR p_correlation_hmac IS NULL
+            OR p_correlation_hmac_domain IS NULL
+            OR p_correlation_hmac_key_version IS NULL THEN
+        RAISE EXCEPTION USING ERRCODE = '22004',
+            MESSAGE = 'pre-tenant event input is incomplete';
+    END IF;$old$
        ) = 0 THEN
         RAISE EXCEPTION USING ERRCODE = '55000',
             MESSAGE = 'version-1 pre-tenant append source differs';
@@ -55,6 +64,24 @@ BEGIN
         definition,
         'p_correlation_hmac_key_version <> 1',
         'p_correlation_hmac_key_version <> 2'
+    );
+    definition := pg_catalog.replace(
+        definition,
+        $old$    IF p_reason IS NULL OR p_correlation_hmac IS NULL
+            OR p_correlation_hmac_domain IS NULL
+            OR p_correlation_hmac_key_version IS NULL THEN
+        RAISE EXCEPTION USING ERRCODE = '22004',
+            MESSAGE = 'pre-tenant event input is incomplete';
+    END IF;$old$,
+        $new$    IF p_correlation_hmac_key_version IS NULL THEN
+        RAISE EXCEPTION USING ERRCODE = '22023',
+            MESSAGE = 'correlation HMAC policy is not active';
+    END IF;
+    IF p_reason IS NULL OR p_correlation_hmac IS NULL
+            OR p_correlation_hmac_domain IS NULL THEN
+        RAISE EXCEPTION USING ERRCODE = '22004',
+            MESSAGE = 'pre-tenant event input is incomplete';
+    END IF;$new$
     );
     EXECUTE definition;
 
@@ -273,12 +300,12 @@ BEGIN
     verifier := pg_catalog.replace(
         verifier,
         'aadb04a6c86ebe27e142ec71c95a1a48422a5930e942fdfa61cd2095340a3934',
-        'a614ea8089ff2cdd0769e95b4186dc6ad52cb12dc8e688ac09e79db98853d10b'
+        '356ff27c8e9442025acfe5edfc6112740492ea64053f6e5a8f50cd5a41213bcb'
     );
     verifier := pg_catalog.replace(
         verifier,
         'sha256:90f439c108b77a33e44cc987a057b601c27dfe2e4a4c3bb1e128d4cb2106f663',
-        'sha256:452118f0c24fc15be4fc7c3e1046283306826580590c0d3aef8573479463a0d8'
+        'sha256:c4cc6e1f6f0188dd40817fdacd37dda6304f5a2a48f77df92978ee83429c0703'
     );
     EXECUTE verifier;
 END

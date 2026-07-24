@@ -145,6 +145,15 @@ def test_v1_requires_exact_committed_retry_identity(
                 """,
                 (uuid4(), *arguments[1:]),
             )
+        with pytest.raises(psycopg.Error) as null_version:
+            producer.execute(
+                """
+                SELECT * FROM ofarm_security.append_pretenant_failure(
+                    %s, %s, %s, %s, NULL
+                )
+                """,
+                (uuid4(), *arguments[1:4]),
+            )
 
     assert retry == (
         event_id,
@@ -156,6 +165,8 @@ def test_v1_requires_exact_committed_retry_identity(
     )
     assert mismatched.value.sqlstate == "22000"
     assert fresh.value.sqlstate == "22023"
+    assert null_version.value.sqlstate == "22023"
+    assert "correlation HMAC policy is not active" in str(null_version.value)
 
 
 @pytest.mark.parametrize("unknown_version", (None, 0, 3))
