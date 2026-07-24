@@ -8,12 +8,12 @@ import pytest
 from google.cloud import kms_v1
 
 from deployment.postgresql.tenant_contract import (
+    crc32c,
     decode_tenant_capability_jws,
 )
 from kernel.google_kms_signer import (
     GoogleKmsSigner,
     KmsSigningError,
-    _crc32c,
 )
 from kernel.tenant_capability_issuer import (
     CapabilityMintError,
@@ -46,7 +46,7 @@ class _KmsClient:
         values = {
             "name": RESOURCE,
             "signature": signature,
-            "signature_crc32c": _crc32c(signature),
+            "signature_crc32c": crc32c(signature),
             "verified_data_crc32c": True,
             "verified_digest_crc32c": False,
             "protection_level": kms_v1.ProtectionLevel.HSM,
@@ -67,7 +67,7 @@ def test_kms_signer_uses_raw_data_crc_no_retry_and_bounded_timeout():
     request, retry, timeout = client.calls[0]
     assert request.name == RESOURCE
     assert request.data == data
-    assert request.data_crc32c == _crc32c(data)
+    assert request.data_crc32c == crc32c(data)
     assert not request.digest.sha256
     assert retry is None
     assert timeout == 4

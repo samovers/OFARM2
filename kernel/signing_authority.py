@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from uuid import UUID
 
 import psycopg
@@ -64,9 +64,10 @@ class SigningAuthority:
         row: tuple[object, ...],
         requested_kid: str,
     ) -> SigningAuthority:
-        if len(row) != 19:
+        if len(row) != len(_SIGNING_AUTHORITY_COLUMNS):
             raise ValueError("signing authority row shape differs")
-        authority = cls(*row)
+        values = dict(zip(_SIGNING_AUTHORITY_COLUMNS, row, strict=True))
+        authority = cls(**values)
         authority._validate(requested_kid)
         return authority
 
@@ -158,6 +159,13 @@ class SigningAuthority:
             )
 
 
+_SIGNING_AUTHORITY_COLUMNS = tuple(field.name for field in fields(SigningAuthority))
+_SIGNING_AUTHORITY_QUERY = (
+    "SELECT " + ", ".join(_SIGNING_AUTHORITY_COLUMNS)
+    + " FROM ofarm.observe_signing_authority(%s)"
+)
+
+
 class SigningAuthorityReader:
     def __init__(
         self,
@@ -173,7 +181,7 @@ class SigningAuthorityReader:
         try:
             with self._connection_factory() as connection:
                 cursor = connection.execute(
-                    "SELECT * FROM ofarm.observe_signing_authority(%s)",
+                    _SIGNING_AUTHORITY_QUERY,
                     (kid,),
                 )
                 row = cursor.fetchone()

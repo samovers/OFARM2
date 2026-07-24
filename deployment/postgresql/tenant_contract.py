@@ -494,7 +494,7 @@ def _extract_google_kms_ed25519_public_key(
         or not 0 <= crc32c_checksum <= 0xFFFFFFFF
     ):
         raise TenantCapabilityContractError("KMS public-key CRC32C is not uint32")
-    if _crc32c(der) != crc32c_checksum:
+    if crc32c(der) != crc32c_checksum:
         raise TenantCapabilityContractError("KMS public-key CRC32C differs")
     public_key = extract_rfc8410_ed25519_public_key(der)
     x = _base64url_encode(public_key).decode("ascii")
@@ -888,7 +888,7 @@ def _checked_in_manifest() -> tuple[dict[str, object], bytes]:
     return parsed, source
 
 
-def _crc32c(value: bytes) -> int:
+def crc32c(value: bytes) -> int:
     """Return CRC-32C/Castagnoli with the standard reflected parameters."""
 
     checksum = 0xFFFFFFFF

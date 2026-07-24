@@ -8,6 +8,8 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from google.api_core import exceptions as google_exceptions
 from google.cloud import kms_v1
 
+from deployment.postgresql.tenant_contract import crc32c
+
 from .signing_authority import SigningAuthority
 
 
@@ -23,17 +25,6 @@ class KmsSigningClient(Protocol):
 
 class KmsSigningError(RuntimeError):
     pass
-
-
-def _crc32c(data: bytes) -> int:
-    crc = 0xFFFFFFFF
-    for byte in data:
-        crc ^= byte
-        for _ in range(8):
-            crc = (crc >> 1) ^ (
-                0x82F63B78 if crc & 1 else 0
-            )
-    return (~crc) & 0xFFFFFFFF
 
 
 class GoogleKmsSigner:
@@ -59,11 +50,10 @@ class GoogleKmsSigner:
     ) -> bytes:
         if type(data) is not bytes or not 1 <= len(data) <= 16_384:
             raise KmsSigningError("KMS signing data is invalid")
-        checksum = _crc32c(data)
         request = kms_v1.AsymmetricSignRequest(
             name=signing_authority.kms_key_version_resource,
             data=data,
-            data_crc32c=checksum,
+            data_crc32c=crc32c(data),
         )
         try:
             response = self._client.asymmetric_sign(
@@ -85,7 +75,7 @@ class GoogleKmsSigner:
             or response.verified_digest_crc32c is not False
             or type(signature) is not bytes
             or len(signature) != 64
-            or response.signature_crc32c != _crc32c(signature)
+            or response.signature_crc32c != crc32c(signature)
         ):
             raise KmsSigningError("KMS signing response differs")
         try:

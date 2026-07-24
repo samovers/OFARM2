@@ -117,12 +117,10 @@ def test_reader_composes_one_database_row_and_matching_receipt():
     result = reader.current(KID)
 
     assert result == authority
-    assert connection.executions == [
-        (
-            "SELECT * FROM ofarm.observe_signing_authority(%s)",
-            (KID,),
-        )
-    ]
+    statement, parameters = connection.executions[0]
+    assert statement.startswith("SELECT binder_instance_id, audience, ")
+    assert statement.endswith(" FROM ofarm.observe_signing_authority(%s)")
+    assert parameters == (KID,)
 
 
 @pytest.mark.parametrize(

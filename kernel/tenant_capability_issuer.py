@@ -92,6 +92,8 @@ def _capability(
 
 
 class TenantCapabilityIssuer:
+    """Pin one key; rebuild on rotation; spend challenges and nonces once."""
+
     def __init__(
         self,
         signing_authority_reader: SigningAuthorityReader,
