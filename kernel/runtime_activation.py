@@ -1,14 +1,12 @@
 """Process-local observations for one verified runtime activation."""
 from __future__ import annotations
 
-import os
 import re
 from dataclasses import dataclass
 
 from .schema_posture import DatabaseObservation
 
 
-DEPLOYMENT_IMAGE_DIGEST_ENV = "OFARM_DEPLOYMENT_IMAGE_DIGEST"
 _DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
@@ -23,15 +21,6 @@ def require_deployment_image_digest(value: object) -> str:
             "hexadecimal digits"
         )
     return value
-
-
-def deployment_image_digest_from_env() -> str:
-    value = os.environ.get(DEPLOYMENT_IMAGE_DIGEST_ENV)
-    if value is None:
-        raise RuntimeActivationError(
-            f"{DEPLOYMENT_IMAGE_DIGEST_ENV} is required at process startup"
-        )
-    return require_deployment_image_digest(value)
 
 
 def complete_store_startup(store) -> DatabaseObservation:

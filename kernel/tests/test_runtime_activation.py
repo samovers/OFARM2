@@ -9,13 +9,9 @@ from fastapi.testclient import TestClient
 
 from kernel import config
 from kernel.adapters import ImportRunner
-from kernel.api import create_app
+from kernel.api import create_test_app
 from kernel.gates import GatePipeline
-from kernel.runtime_activation import (
-    DEPLOYMENT_IMAGE_DIGEST_ENV,
-    RuntimeActivationError,
-    complete_store_startup,
-)
+from kernel.runtime_activation import RuntimeActivationError, complete_store_startup
 from kernel.runtime_bundle import RuntimeComponentRole, sha256_bytes
 from kernel.store import RuntimeBundleBindingError, Store
 from kernel.tests.conftest import TEST_DEPLOYMENT_IMAGE_DIGEST
@@ -32,36 +28,35 @@ class _NoDatabaseAccess:
     "value",
     [None, "", "sha256:abc", "sha256:" + "A" * 64, "sha512:" + "a" * 64],
 )
-def test_invalid_deployment_identity_refuses_before_database_access(monkeypatch, value):
-    if value is None:
-        monkeypatch.delenv(DEPLOYMENT_IMAGE_DIGEST_ENV, raising=False)
-    else:
-        monkeypatch.setenv(DEPLOYMENT_IMAGE_DIGEST_ENV, value)
-
-    with pytest.raises(RuntimeActivationError, match="required|deployment image digest"):
-        create_app(_NoDatabaseAccess(), oidc=None)
+def test_invalid_deployment_identity_refuses_before_database_access(value):
+    with pytest.raises(RuntimeActivationError, match="deployment image digest"):
+        create_test_app(
+            _NoDatabaseAccess(),
+            oidc=None,
+            deployment_image_digest=value,
+        )
 
 
 def test_deployment_observation_does_not_change_runtime_bundle_identity(fresh_env):
     store, _, _ = fresh_env
-    first = create_app(
+    first = create_test_app(
         store, oidc=None, deployment_image_digest="sha256:" + "1" * 64
     )
-    second = create_app(
+    second = create_test_app(
         store, oidc=None, deployment_image_digest="sha256:" + "2" * 64
     )
 
-    assert first.state.runtime_activation.runtime_bundle_digest == \
-        second.state.runtime_activation.runtime_bundle_digest
-    assert first.state.runtime_activation.deployment_image_digest != \
-        second.state.runtime_activation.deployment_image_digest
+    assert first.state.runtime_metadata.runtime_bundle_digest == \
+        second.state.runtime_metadata.runtime_bundle_digest
+    assert first.state.runtime_metadata.deployment_image_digest != \
+        second.state.runtime_metadata.deployment_image_digest
     assert store.runtime_bundle.digest == \
-        first.state.runtime_activation.runtime_bundle_digest
+        first.state.runtime_metadata.runtime_bundle_digest
 
 
 def test_health_reports_committed_bundle_deployment_and_schema_observations(fresh_env):
     store, _, _ = fresh_env
-    app = create_app(
+    app = create_test_app(
         store,
         oidc=None,
         deployment_image_digest=TEST_DEPLOYMENT_IMAGE_DIGEST,
@@ -95,7 +90,7 @@ def test_manifest_endpoint_matches_the_selected_bundle_bytes(fresh_env):
         item for item in store.runtime_bundle.components
         if item.role is RuntimeComponentRole.ACTIVE_MANIFEST
     )
-    with TestClient(create_app(store, oidc=None)) as client:
+    with TestClient(create_test_app(store, oidc=None)) as client:
         response = client.get("/manifest")
 
     assert response.status_code == 200
@@ -171,7 +166,7 @@ def test_failed_repeat_startup_preserves_prior_committed_readiness(
 
 def test_closed_verified_connection_refuses_before_governed_mutation(fresh_env):
     store, _, _ = fresh_env
-    app = create_app(
+    create_test_app(
         store,
         oidc=None,
         deployment_image_digest=TEST_DEPLOYMENT_IMAGE_DIGEST,
@@ -189,8 +184,8 @@ def test_closed_verified_connection_refuses_before_governed_mutation(fresh_env):
             RuntimeBundleBindingError,
             match="database connection is closed",
         ):
-            with app.state.store.serialized_tx() as cur:
-                app.state.store.log_gate(
+            with store.serialized_tx() as cur:
+                store.log_gate(
                     cur,
                     marker,
                     "CONNECTION_LIFECYCLE",
