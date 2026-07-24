@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import uuid4
 
 import psycopg
@@ -12,12 +13,44 @@ from deployment.postgresql.tenant_contract import (
     TENANT_CAPABILITY_CONTRACT,
 )
 from kernel.authentication import VerifiedIdentity
+from kernel.principal import PrincipalResolutionError, PrincipalResolutionOutcome
+from kernel.principal_control import (
+    PrincipalBindingCandidate,
+    PrincipalBindingController,
+    PrincipalBindingTransitionRequest,
+    PrincipalTransitionKind,
+)
 from kernel.principal_resolver import PrincipalBindingResolver
 from kernel.tests import test_postgresql_tenant_migration as baseline
 
 tenant_target = baseline.tenant_target
 authority = baseline.authority
 capability_key = baseline.capability_key
+
+
+def _observed_lifecycle_times(
+    tenant_target,
+) -> tuple[datetime, datetime, datetime, datetime]:
+    with psycopg.connect(
+        tenant_target.role_dsn("ofarm_identity_control_login")
+    ) as identity:
+        return identity.execute(
+            """
+            SELECT
+                pg_catalog.date_trunc(
+                    'microseconds', pg_catalog.clock_timestamp() - INTERVAL '1 day'
+                ),
+                pg_catalog.date_trunc(
+                    'microseconds', pg_catalog.clock_timestamp() + INTERVAL '1 day'
+                ),
+                pg_catalog.date_trunc(
+                    'microseconds', pg_catalog.clock_timestamp() - INTERVAL '2 seconds'
+                ),
+                pg_catalog.date_trunc(
+                    'microseconds', pg_catalog.clock_timestamp() - INTERVAL '1 second'
+                )
+            """
+        ).fetchone()
 
 
 def test_runtime_contract_is_exact_and_execute_only(tenant_target):
@@ -117,6 +150,77 @@ def test_python_resolver_consumes_the_exact_read_api(tenant_target, authority):
     )
     assert principal.authority.lifecycle_head_id == authority.lifecycle_head_id
     assert principal.authority.tenant_id == authority.tenant_id
+
+
+def test_python_controller_executes_activation_and_revocation(tenant_target, authority):
+    identity = VerifiedIdentity(
+        equality_policy=OIDC_ISSUER_EQUALITY_POLICY,
+        issuer=baseline.ISSUER,
+        subject="subject-controller-integration",
+    )
+    control_dsn = tenant_target.role_dsn("ofarm_identity_control_login")
+    controller = PrincipalBindingController(lambda: psycopg.connect(control_dsn))
+    valid_from, valid_until, effective_at, decided_at = (
+        _observed_lifecycle_times(tenant_target)
+    )
+    candidate = PrincipalBindingCandidate(
+        binding_version_id=uuid4(),
+        tenant_id=authority.tenant_id,
+        tenant_registration_digest=authority.tenant_registration_digest,
+        party_ref=authority.party_ref,
+        party_record_id=authority.party_ref,
+        party_schema_digest=authority.party_schema_digest,
+        party_payload_digest=authority.party_payload_digest,
+        valid_from=valid_from,
+        valid_until=valid_until,
+    )
+    activation = controller.transition(
+        PrincipalBindingTransitionRequest(
+            identity=identity,
+            act_id=uuid4(),
+            kind=PrincipalTransitionKind.ACTIVATE,
+            stream_sequence=1,
+            expected_head_id=None,
+            expected_head_digest=None,
+            active_binding_version_id=None,
+            active_binding_version_digest=None,
+            candidate=candidate,
+            effective_at=effective_at,
+            decided_at=decided_at,
+            accountable_control_ref=baseline.ACCOUNTABLE_CONTROL,
+            reason="controller-integration-activate",
+        )
+    )
+    resolver = PrincipalBindingResolver(
+        lambda: psycopg.connect(tenant_target.role_dsn("ofarm_app"))
+    )
+    resolver.initialize()
+    active = resolver.resolve(identity).authority
+    assert active.binding_version_id == candidate.binding_version_id
+    assert active.lifecycle_head_id == activation.act_id
+    assert active.lifecycle_head_digest == activation.act_digest
+
+    _, _, effective_at, decided_at = _observed_lifecycle_times(tenant_target)
+    controller.transition(
+        PrincipalBindingTransitionRequest(
+            identity=identity,
+            act_id=uuid4(),
+            kind=PrincipalTransitionKind.REVOKE,
+            stream_sequence=2,
+            expected_head_id=active.lifecycle_head_id,
+            expected_head_digest=active.lifecycle_head_digest,
+            active_binding_version_id=active.binding_version_id,
+            active_binding_version_digest=active.binding_version_digest,
+            candidate=None,
+            effective_at=effective_at,
+            decided_at=decided_at,
+            accountable_control_ref=baseline.ACCOUNTABLE_CONTROL,
+            reason="controller-integration-revoke",
+        )
+    )
+    with pytest.raises(PrincipalResolutionError) as raised:
+        resolver.resolve(identity)
+    assert raised.value.outcome is PrincipalResolutionOutcome.UNRESOLVED
 
 
 @pytest.mark.parametrize(

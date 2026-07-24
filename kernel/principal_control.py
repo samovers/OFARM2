@@ -119,9 +119,9 @@ def _validate_request(request: PrincipalBindingTransitionRequest) -> None:
         type(request) is not PrincipalBindingTransitionRequest
         or not _valid_uuid(request.act_id)
         or type(request.kind) is not PrincipalTransitionKind
+        or type(request.identity) is not VerifiedIdentity
         or request.identity.equality_policy != OIDC_ISSUER_EQUALITY_POLICY
-        or type(request.stream_sequence) is not int
-        or request.stream_sequence < 1
+        or type(request.stream_sequence) is not int or request.stream_sequence < 1
     ):
         raise PrincipalControlError("principal transition request is invalid")
     _validate_scalar_shape(request)

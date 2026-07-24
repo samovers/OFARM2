@@ -399,6 +399,17 @@ def test_nil_caller_supplied_act_id_is_refused_before_connection():
     assert factory.calls == 0
 
 
+def test_malformed_identity_is_refused_before_connection():
+    factory = _Factory(_Connection([]))
+
+    with pytest.raises(PrincipalControlError):
+        PrincipalBindingController(factory).transition(
+            replace(_request(), identity=object())
+        )
+
+    assert factory.calls == 0
+
+
 @pytest.mark.parametrize(
     "transition_request",
     [
