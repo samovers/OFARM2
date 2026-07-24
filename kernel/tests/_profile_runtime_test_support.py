@@ -85,8 +85,12 @@ from kernel.store import Store
 
 from kernel.views import OutputGenerator
 
+
 def _base_doc() -> dict:
-    return json.loads((config.PROFILE_ROOT / "runtime_profile_descriptor.json").read_text())
+    return json.loads(
+        (config.PROFILE_ROOT / "runtime_profile_descriptor.json").read_text()
+    )
+
 
 def _load_modified(tmp_path, mutate):
     doc = copy.deepcopy(_base_doc())
@@ -95,15 +99,18 @@ def _load_modified(tmp_path, mutate):
     path.write_text(json.dumps(doc), encoding="utf-8")
     return load_profile_runtime_descriptor(config.PROFILE_ROOT, descriptor_path=path)
 
+
 def _copied_profile_root(tmp_path):
     root = tmp_path / f"profile_si_ffs_{_uid()}"
     root.mkdir()
     doc = _base_doc()
     (root / "runtime_profile_descriptor.json").write_text(
-        json.dumps(doc), encoding="utf-8")
+        json.dumps(doc), encoding="utf-8"
+    )
     for rel in [doc["evidencePolicyPath"], *doc["profileInstanceFiles"]]:
         shutil.copy2(config.PROFILE_ROOT / rel, root / rel)
     return root, doc
+
 
 def _copied_package_root(tmp_path):
     root = tmp_path / f"package_root_{_uid()}"
@@ -114,11 +121,13 @@ def _copied_package_root(tmp_path):
     (nl_root / "README.md").write_text("design-only profile slice\n", encoding="utf-8")
     return root
 
+
 def _copied_si_package(package_root: Path, package_name: str) -> tuple[Path, dict]:
     target = package_root / package_name
     shutil.copytree(config.PROFILE_ROOT, target)
     doc_path = target / DESCRIPTOR_FILENAME
     return target, json.loads(doc_path.read_text())
+
 
 def _profile_file_by_id(profile_root: Path, doc: dict, id_field: str, expected: str):
     for rel in doc["profileInstanceFiles"]:
@@ -127,6 +136,7 @@ def _profile_file_by_id(profile_root: Path, doc: dict, id_field: str, expected: 
         if payload.get(id_field) == expected:
             return path, payload
     raise AssertionError(f"missing profile instance {id_field}={expected}")
+
 
 def _make_second_descriptor_unique(
     profile_root: Path,
@@ -154,37 +164,43 @@ def _make_second_descriptor_unique(
     policy_path.write_text(json.dumps(policy), encoding="utf-8")
 
     profile_path, profile = _profile_file_by_id(
-        profile_root, base, "agronomicCodeBindingProfileId",
-        base["codeBindingProfileRef"])
+        profile_root,
+        base,
+        "agronomicCodeBindingProfileId",
+        base["codeBindingProfileRef"],
+    )
     profile["agronomicCodeBindingProfileId"] = doc["codeBindingProfileRef"]
     profile["profileScope"]["packRefs"] = [doc["packRef"]]
     profile_path.write_text(json.dumps(profile), encoding="utf-8")
 
     activation_path, activation = _profile_file_by_id(
-        profile_root, base, "packActivationSetId",
-        base["packActivationSetRef"])
+        profile_root, base, "packActivationSetId", base["packActivationSetRef"]
+    )
     activation["packActivationSetId"] = doc["packActivationSetRef"]
     activation["activePackRefs"] = [doc["packRef"]]
     activation["activeProfileRefs"] = [doc["profileRef"]]
     activation_path.write_text(json.dumps(activation), encoding="utf-8")
 
     artifact_path, artifact = _profile_file_by_id(
-        profile_root, base, "activeArtifactSetId",
-        base["activeArtifactSetRef"])
+        profile_root, base, "activeArtifactSetId", base["activeArtifactSetRef"]
+    )
     artifact["activeArtifactSetId"] = doc["activeArtifactSetRef"]
     artifact["sourcePackActivationSetRefs"] = [doc["packActivationSetRef"]]
     artifact["activePackRefs"] = [doc["packRef"]]
     artifact["activeProfileRefs"] = [doc["profileRef"]]
     artifact["activeArtifactRefs"] = [
-        ref for ref in artifact["activeArtifactRefs"]
+        ref
+        for ref in artifact["activeArtifactRefs"]
         if ref not in {base["codeBindingProfileRef"], base["evidencePolicyRef"]}
     ] + [doc["codeBindingProfileRef"], doc["evidencePolicyRef"]]
     artifact_path.write_text(json.dumps(artifact), encoding="utf-8")
 
     (profile_root / DESCRIPTOR_FILENAME).write_text(json.dumps(doc), encoding="utf-8")
 
+
 def _uid():
     return uuid.uuid4().hex[:8]
+
 
 def _si_route(**overrides) -> ProfileRouteRecord:
     values = {
@@ -196,19 +212,22 @@ def _si_route(**overrides) -> ProfileRouteRecord:
         "pack_ref": config.ACTIVE_PROFILE.pack_ref,
         "pack_activation_set_ref": config.ACTIVE_PROFILE.pack_activation_set_ref,
         "active_artifact_set_ref": config.ACTIVE_PROFILE.active_artifact_set_ref,
-        "descriptor_identity": profile_runtime_descriptor_identity(config.ACTIVE_PROFILE),
+        "descriptor_identity": profile_runtime_descriptor_identity(
+            config.ACTIVE_PROFILE
+        ),
     }
     values.update(overrides)
     return ProfileRouteRecord(**values)
+
 
 def _route_registry(*, enabled=None):
     return load_profile_descriptor_registry(
         config.PACKAGE_ROOT,
         allowed_profile_package_names=(
-            config.ALLOWED_ACTIVE_PROFILE_PACKAGE_NAMES
-            if enabled is None else enabled
+            config.ALLOWED_ACTIVE_PROFILE_PACKAGE_NAMES if enabled is None else enabled
         ),
     )
+
 
 def _surface_inventory(*package_names: str) -> ProfileRuntimeSurfaceInventory:
     packages = frozenset(package_names)
@@ -218,6 +237,7 @@ def _surface_inventory(*package_names: str) -> ProfileRuntimeSurfaceInventory:
         profile_executed_evidence_lane_package_names=packages,
         generated_or_verified_manifest_grounding_package_names=packages,
     )
+
 
 def _route_pipeline(store, *, routes=None, registry=None, selected=None, tenant=None):
     return GatePipeline(
@@ -230,6 +250,7 @@ def _route_pipeline(store, *, routes=None, registry=None, selected=None, tenant=
         tenant_ref=config.TENANT_REF if tenant is None else tenant,
     )
 
+
 def _route_interval(month: str, *, route_id: str | None = None) -> ProfileRouteRecord:
     start = datetime.fromisoformat(f"2026-{month}-01T00:00:00+00:00")
     end = datetime.fromisoformat(f"2026-{int(month) + 1:02d}-01T00:00:00+00:00")
@@ -238,6 +259,7 @@ def _route_interval(month: str, *, route_id: str | None = None) -> ProfileRouteR
         effective_from=start,
         effective_until=end,
     )
+
 
 def _assert_profile_route_refusal(store, result: dict) -> dict:
     assert result["decisionOutcome"] == "RETAIN_DRAFT"
@@ -250,14 +272,18 @@ def _assert_profile_route_refusal(store, result: dict) -> dict:
     assert trace["gateSequence"][-1]["outcome"] == "PROFILE_ROUTE_REFUSE"
     return trace
 
+
 def _admin_dsn() -> str:
     explicit = os.environ.get("OFARM_PG_ADMIN_DSN")
     if explicit:
         return explicit
-    socket_dir = os.environ.get("OFARM_PG_SOCKET_DIR", str(config.PACKAGE_ROOT / ".pgrun"))
+    socket_dir = os.environ.get(
+        "OFARM_PG_SOCKET_DIR", str(config.PACKAGE_ROOT / ".pgrun")
+    )
     port = os.environ.get("OFARM_PG_PORT", "54317")
     user = os.environ.get("OFARM_PG_USER", "ofarm")
     return f"host={socket_dir} port={port} dbname=postgres user={user}"
+
 
 def _payload(store, kind: str, record_id: str, id_field: str) -> dict:
     for row in store.find_by_kind(kind):
@@ -265,6 +291,7 @@ def _payload(store, kind: str, record_id: str, id_field: str) -> dict:
         if payload.get(id_field) == record_id:
             return payload
     raise AssertionError(f"missing {kind} {record_id}")
+
 
 def _insert_decoy_spine(store) -> dict:
     """Insert a coherent but non-descriptor active spine after bootstrap.
@@ -274,32 +301,39 @@ def _insert_decoy_spine(store) -> dict:
     """
     suffix = _uid()
     profile = _payload(
-        store, "ofarm.agronomiccodebindingprofile.v0.1",
+        store,
+        "ofarm.agronomiccodebindingprofile.v0.1",
         config.ACTIVE_PROFILE.code_binding_profile_ref,
-        "agronomicCodeBindingProfileId")
+        "agronomicCodeBindingProfileId",
+    )
     profile_id = f"codebindingprofile:si.ffs.decoy.{suffix}"
     profile["agronomicCodeBindingProfileId"] = profile_id
     profile["issuedAt"] = context.now_iso()
     profile["profileState"] = "ACTIVE"
 
     activation = _payload(
-        store, "ofarm.packactivationset.v0.1",
+        store,
+        "ofarm.packactivationset.v0.1",
         config.ACTIVE_PROFILE.pack_activation_set_ref,
-        "packActivationSetId")
+        "packActivationSetId",
+    )
     activation_id = f"packactivationset:si.ffs.decoy.{suffix}"
     activation["packActivationSetId"] = activation_id
     activation["evaluatedAt"] = context.now_iso()
 
     artifact = _payload(
-        store, "ofarm.activeartifactset.v0.1",
+        store,
+        "ofarm.activeartifactset.v0.1",
         config.ACTIVE_PROFILE.active_artifact_set_ref,
-        "activeArtifactSetId")
+        "activeArtifactSetId",
+    )
     artifact_id = f"activeartifactset:si.ffs.decoy.{suffix}"
     artifact["activeArtifactSetId"] = artifact_id
     artifact["generatedAt"] = context.now_iso()
     artifact["sourcePackActivationSetRefs"] = [activation_id]
     artifact["activeArtifactRefs"] = [
-        ref for ref in artifact["activeArtifactRefs"]
+        ref
+        for ref in artifact["activeArtifactRefs"]
         if not ref.startswith("codebindingprofile:")
     ] + [profile_id]
 
@@ -309,12 +343,14 @@ def _insert_decoy_spine(store) -> dict:
         store.insert_record(cur, artifact)
     return {"profile": profile_id, "activation": activation_id, "artifact": artifact_id}
 
+
 def _profile_instance_payload(id_field: str, expected: str) -> dict:
     for path in config.ACTIVE_PROFILE.profile_instance_paths:
         payload = json.loads(path.read_text())
         if payload.get(id_field) == expected:
             return payload
     raise AssertionError(f"missing profile instance {id_field}={expected}")
+
 
 @contextmanager
 def _fresh_unbootstrapped_store():
@@ -338,15 +374,18 @@ def _fresh_unbootstrapped_store():
         with psycopg.connect(_admin_dsn(), autocommit=True) as admin:
             admin.execute(f'DROP DATABASE IF EXISTS "{dbname}"')
 
+
 def _expected_profile_instance_ids(store, _active_profile) -> list[str]:
     return [
         component.logical_ref
         for component in store.runtime_bundle.components
-        if component.role in {
+        if component.role
+        in {
             RuntimeComponentRole.PROFILE_INSTANCE,
             RuntimeComponentRole.REFERENCE_SNAPSHOT,
         }
     ]
+
 
 def _bootstrap_demo_substrate_only(store) -> None:
     for payload in demo.substrate_records():
@@ -357,17 +396,23 @@ def _bootstrap_demo_substrate_only(store) -> None:
         with store.tx() as cur:
             store.insert_record(cur, payload)
 
+
 def _trace_payload(store, result: dict) -> dict:
     return store.get_payload(result["promotionTraceRef"])
 
+
 def _case_payload(store, result: dict) -> dict:
-    return store.get_payload(_trace_payload(store, result)["evidenceSufficiencyCaseRef"])
+    return store.get_payload(
+        _trace_payload(store, result)["evidenceSufficiencyCaseRef"]
+    )
+
 
 def _policy_dimension(vector: dict) -> dict:
     for dimension in vector["versionDimensions"]:
         if dimension["dimensionFamily"] == "RULE_EVIDENCE_POLICY":
             return dimension
     raise AssertionError("missing RULE_EVIDENCE_POLICY dimension")
+
 
 def _regsr_artifact(*, decision: str) -> dict:
     return {
@@ -394,6 +439,7 @@ def _regsr_artifact(*, decision: str) -> dict:
         ],
     }
 
+
 def _custom_si_descriptor_with_regsr_artifact(tmp_path):
     root = tmp_path / f"profile_si_ffs_custom_{_uid()}"
     examples = root / "examples"
@@ -401,21 +447,27 @@ def _custom_si_descriptor_with_regsr_artifact(tmp_path):
     decision = f"U9{_uid()[:4]}-50/26/b"
     artifact_name = "custom_regsr_snapshot.json"
     artifact_path = examples / artifact_name
-    artifact_path.write_text(json.dumps(_regsr_artifact(decision=decision)),
-                             encoding="utf-8")
+    artifact_path.write_text(
+        json.dumps(_regsr_artifact(decision=decision)), encoding="utf-8"
+    )
 
     regsr_prefix = f"referencesnapshot:si.custom.ffs-reg.{_uid()}"
     regsr_ref = f"{regsr_prefix}.2026-06-11"
     snapshot_path = root / "OFARM_ReferenceSnapshot_custom_regsr.json"
-    snapshot_path.write_text(json.dumps({
-        "schemaVersion": "ofarm.referencesnapshot.v0.1",
-        "referenceSnapshotId": regsr_ref,
-        "issuedAt": "2026-06-11T00:00:00Z",
-        "effectiveFrom": "2026-06-11T00:00:00Z",
-        "effectiveUntil": None,
-        "sourceArtifactRefs": [f"artifact:{artifact_name}"],
-        "issuingAuthorityRef": "party:si.uvhvvr",
-    }), encoding="utf-8")
+    snapshot_path.write_text(
+        json.dumps(
+            {
+                "schemaVersion": "ofarm.referencesnapshot.v0.1",
+                "referenceSnapshotId": regsr_ref,
+                "issuedAt": "2026-06-11T00:00:00Z",
+                "effectiveFrom": "2026-06-11T00:00:00Z",
+                "effectiveUntil": None,
+                "sourceArtifactRefs": [f"artifact:{artifact_name}"],
+                "issuingAuthorityRef": "party:si.uvhvvr",
+            }
+        ),
+        encoding="utf-8",
+    )
 
     regsr_family = ReferenceFamily(
         family_id="si.uvhvvr.ffs-reg",
@@ -449,6 +501,7 @@ def _custom_si_descriptor_with_regsr_artifact(tmp_path):
     )
     return descriptor, artifact_path.resolve(), decision
 
+
 def _note_submission(idem_key: str) -> dict:
     return {
         "commitClass": "NOTE",
@@ -458,6 +511,7 @@ def _note_submission(idem_key: str) -> dict:
         "noteText": "issue #125 profile applicability probe",
         "eventTime": "2026-06-10T09:00:00Z",
     }
+
 
 @contextmanager
 def _preseeded_dirty_spine_store(mutate):
@@ -478,13 +532,14 @@ def _preseeded_dirty_spine_store(mutate):
         store.migrate()
         profile = _profile_instance_payload(
             "agronomicCodeBindingProfileId",
-            config.ACTIVE_PROFILE.code_binding_profile_ref)
+            config.ACTIVE_PROFILE.code_binding_profile_ref,
+        )
         activation = _profile_instance_payload(
-            "packActivationSetId",
-            config.ACTIVE_PROFILE.pack_activation_set_ref)
+            "packActivationSetId", config.ACTIVE_PROFILE.pack_activation_set_ref
+        )
         artifact = _profile_instance_payload(
-            "activeArtifactSetId",
-            config.ACTIVE_PROFILE.active_artifact_set_ref)
+            "activeArtifactSetId", config.ACTIVE_PROFILE.active_artifact_set_ref
+        )
         mutate(profile, activation, artifact)
         with store.tx() as cur:
             store.insert_record(cur, profile)
@@ -515,6 +570,7 @@ def _preseeded_dirty_spine_store(mutate):
         with psycopg.connect(_admin_dsn(), autocommit=True) as admin:
             admin.execute(f'DROP DATABASE IF EXISTS "{dbname}"')
 
+
 def _missing_family(required: bool) -> ReferenceFamily:
     behavior = REFUSE_CONTEXT if required else OMIT_FROM_CONTEXT
     return ReferenceFamily(
@@ -528,8 +584,10 @@ def _missing_family(required: bool) -> ReferenceFamily:
         shipped_snapshot_ref=None,
     )
 
-def _governance_submission(idem_key: str, *, decision_time=None,
-                           event_time=None, target="assert:demo.pending") -> dict:
+
+def _governance_submission(
+    idem_key: str, *, decision_time=None, event_time=None, target="assert:demo.pending"
+) -> dict:
     sub = {
         "commitClass": "GOVERNANCE_DECISION",
         "actingPartyRef": demo.FARMER,
@@ -543,5 +601,6 @@ def _governance_submission(idem_key: str, *, decision_time=None,
     if event_time is not None:
         sub["eventTime"] = event_time
     return sub
+
 
 __all__ = [name for name in globals() if not name.startswith("__")]

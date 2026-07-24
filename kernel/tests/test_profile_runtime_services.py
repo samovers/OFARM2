@@ -595,13 +595,13 @@ def test_issue_159_provider_bytes_are_verified_before_import(monkeypatch):
         runtime_bundle=MismatchedBundle(),
     )
 
-    def import_must_not_run(_name):
-        raise AssertionError("provider imported before its bytes were verified")
+    def load_must_not_run(*_args):
+        raise AssertionError("provider loaded before its bytes were verified")
 
     monkeypatch.setattr(
-        profile_runtime_provider.importlib,
-        "import_module",
-        import_must_not_run,
+        profile_runtime_provider,
+        "_load_factory",
+        load_must_not_run,
     )
     with pytest.raises(ProfileRuntimeError, match="differs from"):
         load_profile_runtime_services(
@@ -609,6 +609,41 @@ def test_issue_159_provider_bytes_are_verified_before_import(monkeypatch):
             registration.package_name,
             config.ACTIVE_PROFILE,
         )
+
+
+def test_issue_159_factory_executes_verified_bytes_not_disk_or_module_cache(
+    tmp_path,
+    monkeypatch,
+):
+    module_name = f"ofarm_test_runtime_provider_{_uid()}"
+    source_path = tmp_path / "runtime_provider.py"
+    verified_bytes = (
+        b"def build(_store, _descriptor):\n"
+        b"    return 'verified provider bytes'\n"
+    )
+    source_path.write_bytes(verified_bytes)
+    registration = replace(
+        profile_runtime_provider._REGISTRATIONS[0],
+        source_path=str(source_path),
+        factory_module=module_name,
+        factory_name="build",
+    )
+    cached = SimpleNamespace(build=lambda _store, _descriptor: "cached module")
+    monkeypatch.setitem(sys.modules, module_name, cached)
+    source_path.write_text(
+        "def build(_store, _descriptor):\n"
+        "    return 'mutated disk bytes'\n",
+        encoding="utf-8",
+    )
+
+    factory = profile_runtime_provider._load_factory(
+        registration,
+        source_path,
+        verified_bytes,
+    )
+
+    assert factory(None, None) == "verified provider bytes"
+    assert sys.modules[module_name] is not cached
 
 
 def test_issue_159_composition_returns_fresh_service_graphs(fresh_env):
@@ -644,7 +679,7 @@ def test_issue_159_composition_rejects_missing_required_service(
     monkeypatch.setattr(
         profile_runtime_provider,
         "_load_factory",
-        lambda _registration, _path: incomplete_factory,
+        lambda _registration, _path, _bytes: incomplete_factory,
     )
     with pytest.raises(ProfileRuntimeError, match="incomplete or mismatched"):
         load_profile_runtime_services(

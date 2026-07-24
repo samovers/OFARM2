@@ -57,6 +57,22 @@ def _trust_interface_uses_any(tree: ast.Module) -> list[int]:
 
 
 def _environment_reads(tree: ast.Module) -> list[int]:
+    os_modules = {"os"}
+    direct_readers = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            os_modules.update(
+                alias.asname or alias.name
+                for alias in node.names
+                if alias.name == "os"
+            )
+        if isinstance(node, ast.ImportFrom) and node.module == "os":
+            direct_readers.update(
+                alias.asname or alias.name
+                for alias in node.names
+                if alias.name in {"getenv", "environ"}
+            )
+
     lines = []
     for node in ast.walk(tree):
         if not isinstance(node, (ast.Call, ast.Subscript)):
@@ -65,8 +81,16 @@ def _environment_reads(tree: ast.Module) -> list[int]:
         if (
             isinstance(target, ast.Attribute)
             and isinstance(target.value, ast.Name)
-            and target.value.id == "os"
-            and target.attr in {"getenv", "environ"}
+            and (
+                (
+                    target.value.id in os_modules
+                    and target.attr in {"getenv", "environ"}
+                )
+                or target.value.id in direct_readers
+            )
+        ) or (
+            isinstance(target, ast.Name)
+            and target.id in direct_readers
         ):
             lines.append(node.lineno)
     return lines

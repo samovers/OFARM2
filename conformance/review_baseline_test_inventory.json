@@ -6361,6 +6361,11 @@
       "sourcePath": "kernel/tests/test_profile_runtime_services.py"
     },
     {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_159_factory_executes_verified_bytes_not_disk_or_module_cache",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
       "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_159_provider_bytes_are_verified_before_import",
       "sourceModule": "kernel.tests.test_profile_runtime_services",
       "sourcePath": "kernel/tests/test_profile_runtime_services.py"
@@ -6724,6 +6729,31 @@
       "nodeid": "kernel/tests/test_review_fixes.py::test_m3_partial_extent_without_bound_stays_draft",
       "sourceModule": "kernel.tests.test_review_fixes",
       "sourcePath": "kernel/tests/test_review_fixes.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_environment_reads_detect_import_styles[from os import environ as environment/nenvironment.get('SETTING')/n-2]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_environment_reads_detect_import_styles[from os import getenv/ngetenv('SETTING')/n-2]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_environment_reads_detect_import_styles[import os as environment/nenvironment.environ['SETTING']/n-2]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_environment_reads_detect_import_styles[import os/nos.getenv('SETTING')/n-2]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_environment_reads_ignore_environment_free_modules",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
     {
       "nodeid": "kernel/tests/test_runtime_activation.py::test_closed_verified_connection_refuses_before_governed_mutation",
@@ -7601,8 +7631,8 @@
       "sourcePath": "kernel/tests/test_stages.py"
     }
   ],
-  "entriesSha256": "bc840c91ec9af0aa297ed16d74cb94e90cd9e8c1d275de26e12056f9db5e96fc",
-  "entryCount": 1520,
+  "entriesSha256": "7c4c80b5723a5f50916e46b9a7be2acca9bcff40b1313bbe0c5e09181846d287",
+  "entryCount": 1526,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

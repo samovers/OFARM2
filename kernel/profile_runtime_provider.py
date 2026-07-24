@@ -1,8 +1,8 @@
 """Verified selection of the executable services for one runtime profile."""
 from __future__ import annotations
 
-import importlib
 import importlib.util
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
@@ -103,7 +103,7 @@ def _verify_source(
     role: RuntimeComponentRole,
     logical_ref: str,
     source_path: str,
-) -> Path:
+) -> tuple[Path, bytes]:
     try:
         component = store.runtime_bundle.component(role, logical_ref)
         path = (_PACKAGE_ROOT / source_path).resolve(strict=True)
@@ -118,11 +118,18 @@ def _verify_source(
             f"registered runtime source {logical_ref!r} differs from the "
             "startup-verified RuntimeBundle"
         )
-    return path
+    return path, source_bytes
 
 
-def _load_factory(registration: ProfileRuntimeRegistration, source_path: Path):
-    spec = importlib.util.find_spec(registration.factory_module)
+def _load_factory(
+    registration: ProfileRuntimeRegistration,
+    source_path: Path,
+    source_bytes: bytes,
+):
+    spec = importlib.util.spec_from_file_location(
+        registration.factory_module,
+        source_path,
+    )
     if spec is None or spec.origin is None:
         raise ProfileRuntimeError(
             f"runtime factory module {registration.factory_module!r} is unavailable"
@@ -135,12 +142,25 @@ def _load_factory(registration: ProfileRuntimeRegistration, source_path: Path):
         raise ProfileRuntimeError(
             "runtime factory module does not resolve to its verified source"
         )
-    module = importlib.import_module(registration.factory_module)
+    try:
+        module = importlib.util.module_from_spec(spec)
+        code = compile(
+            source_bytes,
+            str(source_path),
+            "exec",
+            dont_inherit=True,
+        )
+        exec(code, module.__dict__)
+    except Exception as exc:
+        raise ProfileRuntimeError(
+            f"runtime factory module {registration.factory_module!r} is unavailable"
+        ) from exc
     factory = getattr(module, registration.factory_name, None)
     if not callable(factory):
         raise ProfileRuntimeError(
             f"registered runtime factory {registration.factory_name!r} is unavailable"
         )
+    sys.modules[registration.factory_module] = module
     return factory
 
 
@@ -202,11 +222,11 @@ def load_profile_runtime_services(
         "kernel/profile_runtime_provider.py",
     )
     registration = _registration_for(package_name, descriptor)
-    source_path = _verify_source(
+    source_path, source_bytes = _verify_source(
         store,
         registration.component_role,
         registration.component_ref,
         registration.source_path,
     )
-    factory = _load_factory(registration, source_path)
+    factory = _load_factory(registration, source_path, source_bytes)
     return _validate_services(factory(store, descriptor), descriptor)
