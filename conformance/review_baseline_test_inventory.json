@@ -2551,6 +2551,141 @@
       "sourcePath": "kernel/tests/test_postgresql_audit_operations.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_audit_reason_vocabulary.py::test_contract_observer_reports_v3_vocabulary",
+      "sourceModule": "kernel.tests.test_postgresql_audit_reason_vocabulary",
+      "sourcePath": "kernel/tests/test_postgresql_audit_reason_vocabulary.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_reason_vocabulary.py::test_cross_producer_reasons_are_refused[ofarm_security_authentication_producer_login-BINDER_REFUSED]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_reason_vocabulary",
+      "sourcePath": "kernel/tests/test_postgresql_audit_reason_vocabulary.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_reason_vocabulary.py::test_cross_producer_reasons_are_refused[ofarm_security_authentication_producer_login-TENANT_BOUNDARY_UNAVAILABLE]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_reason_vocabulary",
+      "sourcePath": "kernel/tests/test_postgresql_audit_reason_vocabulary.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_reason_vocabulary.py::test_cross_producer_reasons_are_refused[ofarm_security_request_router_producer_login-AUTHORITY_INTEGRITY_REFUSED]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_reason_vocabulary",
+      "sourcePath": "kernel/tests/test_postgresql_audit_reason_vocabulary.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_reason_vocabulary.py::test_cross_producer_reasons_are_refused[ofarm_security_request_router_producer_login-AUTHORITY_UNAVAILABLE]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_reason_vocabulary",
+      "sourcePath": "kernel/tests/test_postgresql_audit_reason_vocabulary.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_reason_vocabulary.py::test_cross_producer_reasons_are_refused[ofarm_security_request_router_producer_login-CREDENTIAL_MALFORMED]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_reason_vocabulary",
+      "sourcePath": "kernel/tests/test_postgresql_audit_reason_vocabulary.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_reason_vocabulary.py::test_cross_producer_reasons_are_refused[ofarm_security_request_router_producer_login-CREDENTIAL_MISSING]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_reason_vocabulary",
+      "sourcePath": "kernel/tests/test_postgresql_audit_reason_vocabulary.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_reason_vocabulary.py::test_cross_producer_reasons_are_refused[ofarm_security_request_router_producer_login-PRINCIPAL_BINDING_REFUSED]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_reason_vocabulary",
+      "sourcePath": "kernel/tests/test_postgresql_audit_reason_vocabulary.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_reason_vocabulary.py::test_cross_producer_reasons_are_refused[ofarm_security_request_router_producer_login-VERIFICATION_REFUSED]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_reason_vocabulary",
+      "sourcePath": "kernel/tests/test_postgresql_audit_reason_vocabulary.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_reason_vocabulary.py::test_cross_producer_reasons_are_refused[ofarm_security_request_router_producer_login-VERIFIER_UNAVAILABLE]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_reason_vocabulary",
+      "sourcePath": "kernel/tests/test_postgresql_audit_reason_vocabulary.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_reason_vocabulary.py::test_every_active_reason_is_accepted_fresh[ofarm_security_authentication_producer_login-AUTHORITY_INTEGRITY_REFUSED]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_reason_vocabulary",
+      "sourcePath": "kernel/tests/test_postgresql_audit_reason_vocabulary.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_reason_vocabulary.py::test_every_active_reason_is_accepted_fresh[ofarm_security_authentication_producer_login-AUTHORITY_UNAVAILABLE]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_reason_vocabulary",
+      "sourcePath": "kernel/tests/test_postgresql_audit_reason_vocabulary.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_reason_vocabulary.py::test_every_active_reason_is_accepted_fresh[ofarm_security_authentication_producer_login-CREDENTIAL_MALFORMED]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_reason_vocabulary",
+      "sourcePath": "kernel/tests/test_postgresql_audit_reason_vocabulary.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_reason_vocabulary.py::test_every_active_reason_is_accepted_fresh[ofarm_security_authentication_producer_login-CREDENTIAL_MISSING]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_reason_vocabulary",
+      "sourcePath": "kernel/tests/test_postgresql_audit_reason_vocabulary.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_reason_vocabulary.py::test_every_active_reason_is_accepted_fresh[ofarm_security_authentication_producer_login-PRINCIPAL_BINDING_REFUSED]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_reason_vocabulary",
+      "sourcePath": "kernel/tests/test_postgresql_audit_reason_vocabulary.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_reason_vocabulary.py::test_every_active_reason_is_accepted_fresh[ofarm_security_authentication_producer_login-VERIFICATION_REFUSED]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_reason_vocabulary",
+      "sourcePath": "kernel/tests/test_postgresql_audit_reason_vocabulary.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_reason_vocabulary.py::test_every_active_reason_is_accepted_fresh[ofarm_security_authentication_producer_login-VERIFIER_UNAVAILABLE]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_reason_vocabulary",
+      "sourcePath": "kernel/tests/test_postgresql_audit_reason_vocabulary.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_reason_vocabulary.py::test_every_active_reason_is_accepted_fresh[ofarm_security_request_router_producer_login-BINDER_REFUSED]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_reason_vocabulary",
+      "sourcePath": "kernel/tests/test_postgresql_audit_reason_vocabulary.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_reason_vocabulary.py::test_every_active_reason_is_accepted_fresh[ofarm_security_request_router_producer_login-CAPABILITY_REFUSED]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_reason_vocabulary",
+      "sourcePath": "kernel/tests/test_postgresql_audit_reason_vocabulary.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_reason_vocabulary.py::test_every_active_reason_is_accepted_fresh[ofarm_security_request_router_producer_login-TENANT_BOUNDARY_UNAVAILABLE]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_reason_vocabulary",
+      "sourcePath": "kernel/tests/test_postgresql_audit_reason_vocabulary.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_reason_vocabulary.py::test_retired_historical_exact_retries_preserve_original_outcome[event]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_reason_vocabulary",
+      "sourcePath": "kernel/tests/test_postgresql_audit_reason_vocabulary.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_reason_vocabulary.py::test_retired_historical_exact_retries_preserve_original_outcome[receipt]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_reason_vocabulary",
+      "sourcePath": "kernel/tests/test_postgresql_audit_reason_vocabulary.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_reason_vocabulary.py::test_retired_reasons_are_refused_for_fresh_appends[ofarm_security_authentication_producer_login-CAPABILITY_REFUSED]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_reason_vocabulary",
+      "sourcePath": "kernel/tests/test_postgresql_audit_reason_vocabulary.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_reason_vocabulary.py::test_retired_reasons_are_refused_for_fresh_appends[ofarm_security_authentication_producer_login-TENANT_PARTY_PIN_REFUSED]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_reason_vocabulary",
+      "sourcePath": "kernel/tests/test_postgresql_audit_reason_vocabulary.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_reason_vocabulary.py::test_retired_reasons_are_refused_for_fresh_appends[ofarm_security_request_router_producer_login-ACTOR_BINDING_REFUSED]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_reason_vocabulary",
+      "sourcePath": "kernel/tests/test_postgresql_audit_reason_vocabulary.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_reason_vocabulary.py::test_retired_reasons_are_refused_for_fresh_appends[ofarm_security_request_router_producer_login-SECURITY_ROUTE_REFUSED]",
+      "sourceModule": "kernel.tests.test_postgresql_audit_reason_vocabulary",
+      "sourcePath": "kernel/tests/test_postgresql_audit_reason_vocabulary.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_audit_reason_vocabulary.py::test_vocabulary_migration_is_additive_and_bounded",
+      "sourceModule": "kernel.tests.test_postgresql_audit_reason_vocabulary",
+      "sourcePath": "kernel/tests/test_postgresql_audit_reason_vocabulary.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_catalog_identity_unit.py::test_catalog_failure_uses_closed_diagnostic",
       "sourceModule": "kernel.tests.test_postgresql_catalog_identity_unit",
       "sourcePath": "kernel/tests/test_postgresql_catalog_identity_unit.py"
@@ -8861,8 +8996,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "7641c365130deb8a41652b100fb92ce74c096a8e341edcce9aecb8b0ca8fc156",
-  "entryCount": 1772,
+  "entriesSha256": "9d314a1a26e9b774fa2ea9f92475f7c6004a361e3eccd733276648feaa3a7a66",
+  "entryCount": 1799,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

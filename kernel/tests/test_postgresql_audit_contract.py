@@ -59,14 +59,13 @@ def test_reason_matrix_event_kinds_and_policy_identities_are_exact():
         "VERIFIER_UNAVAILABLE",
         "VERIFICATION_REFUSED",
         "PRINCIPAL_BINDING_REFUSED",
-        "TENANT_PARTY_PIN_REFUSED",
-        "CAPABILITY_REFUSED",
+        "AUTHORITY_INTEGRITY_REFUSED",
+        "AUTHORITY_UNAVAILABLE",
     )
     assert REQUEST_ROUTER_REASONS == (
-        "SECURITY_ROUTE_REFUSED",
+        "TENANT_BOUNDARY_UNAVAILABLE",
         "CAPABILITY_REFUSED",
         "BINDER_REFUSED",
-        "ACTOR_BINDING_REFUSED",
     )
     assert EVENT_KINDS == (
         "PRE_TENANT_FAILURE",
@@ -281,7 +280,7 @@ def test_manifest_is_canonical_ascii_and_has_domain_separated_golden_digest():
     assert json.loads(without_digest) == contract.manifest_without_digest()
     assert json.loads(canonical) == contract.manifest()
     assert contract.digest == \
-        "sha256:ea38388e813f1aa3ce32d9a46bcbe0012ddcbc736b5f5007f4a87e12bba12c74"
+        "sha256:4807acc1b06366b5594c539ca9b8da86dc1dcbcbcead48e761fca9f6be9342e2"
     assert contract.digest == "sha256:" + hashlib.sha256(
         SECURITY_AUDIT_CONTRACT_DIGEST_POLICY.encode("ascii")
         + b"\x00"

@@ -66,7 +66,7 @@ def _insert_historical_v1(
 
 def test_operations_migration_is_bounded_and_keeps_0001_immutable():
     migration_set = load_migration_set(PACKAGE_ROOT, SECURITY_AUDIT_SERVICE)
-    initial, operations = migration_set.migrations
+    initial, operations, *_later = migration_set.migrations
     initial_source = initial.source_bytes.decode("utf-8")
     source = operations.source_bytes.decode("utf-8")
 
