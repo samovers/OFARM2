@@ -32,6 +32,7 @@ PRODUCTION_BUDGETS = {
     "kernel/security_audit.py": 130,
     "kernel/security_audit_client.py": 220,
     "kernel/authentication_audit.py": 140,
+    "kernel/request_router_audit.py": 120,
     "kernel/google_kms_correlation_hmac.py": 220,
     "kernel/security_audit_hmac_posture.py": 260,
 }
@@ -92,6 +93,10 @@ GROUP_BUDGETS = {
         140,
         ("kernel/authentication_audit.py",),
     ),
+    "request-router audit producer": (
+        120,
+        ("kernel/request_router_audit.py",),
+    ),
     "security audit HMAC": (
         220,
         ("kernel/google_kms_correlation_hmac.py",),
@@ -112,6 +117,7 @@ TEST_GLOBS = (
     "kernel/tests/*tenant_uow*.py",
     "kernel/tests/*security_audit_client*.py",
     "kernel/tests/*authentication_audit*.py",
+    "kernel/tests/*request_router_audit*.py",
     "kernel/tests/*google_kms_correlation_hmac*.py",
     "kernel/tests/*security_audit_hmac_posture*.py",
 )
