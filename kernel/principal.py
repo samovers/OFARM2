@@ -18,7 +18,8 @@ _DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 _PARTY_REF = re.compile(r"[A-Za-z0-9._:-]{1,255}")
 
 class PrincipalResolutionOutcome(str, Enum):
-    UNRESOLVED = "UNRESOLVED"
+    PRINCIPAL_BINDING_REFUSED = "PRINCIPAL_BINDING_REFUSED"
+    AUTHORITY_INTEGRITY_REFUSED = "AUTHORITY_INTEGRITY_REFUSED"
     AUTHORITY_UNAVAILABLE = "AUTHORITY_UNAVAILABLE"
 
 class PrincipalResolutionError(RuntimeError):
