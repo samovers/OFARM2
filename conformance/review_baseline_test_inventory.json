@@ -7491,6 +7491,91 @@
       "sourcePath": "profile_si_ffs/tests/d2_demo_fixture_refs_tests.py"
     },
     {
+      "nodeid": "kernel/tests/test_request_router_audit.py::test_append_failure_propagates_without_producer_retry[audit_error0]",
+      "sourceModule": "kernel.tests.test_request_router_audit",
+      "sourcePath": "kernel/tests/test_request_router_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_request_router_audit.py::test_append_failure_propagates_without_producer_retry[audit_error1]",
+      "sourceModule": "kernel.tests.test_request_router_audit",
+      "sourcePath": "kernel/tests/test_request_router_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_request_router_audit.py::test_append_failure_propagates_without_producer_retry[audit_error2]",
+      "sourceModule": "kernel.tests.test_request_router_audit",
+      "sourcePath": "kernel/tests/test_request_router_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_request_router_audit.py::test_closed_entry_failure_is_audited_before_original_denial[BINDING_REFUSED-BINDER_REFUSED]",
+      "sourceModule": "kernel.tests.test_request_router_audit",
+      "sourcePath": "kernel/tests/test_request_router_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_request_router_audit.py::test_closed_entry_failure_is_audited_before_original_denial[CAPABILITY_REFUSED-CAPABILITY_REFUSED]",
+      "sourceModule": "kernel.tests.test_request_router_audit",
+      "sourcePath": "kernel/tests/test_request_router_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_request_router_audit.py::test_closed_entry_failure_is_audited_before_original_denial[UNAVAILABLE-TENANT_BOUNDARY_UNAVAILABLE]",
+      "sourceModule": "kernel.tests.test_request_router_audit",
+      "sourcePath": "kernel/tests/test_request_router_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_request_router_audit.py::test_finalization_outcome_on_entry_is_not_a_pretenant_reason",
+      "sourceModule": "kernel.tests.test_request_router_audit",
+      "sourcePath": "kernel/tests/test_request_router_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_request_router_audit.py::test_hmac_failure_propagates_without_append_or_authorization",
+      "sourceModule": "kernel.tests.test_request_router_audit",
+      "sourcePath": "kernel/tests/test_request_router_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_request_router_audit.py::test_live_postgresql_uses_exact_router_role_and_reason",
+      "sourceModule": "kernel.tests.test_request_router_audit",
+      "sourcePath": "kernel/tests/test_request_router_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_request_router_audit.py::test_phase_a_line_budgets_are_fixed",
+      "sourceModule": "kernel.tests.test_request_router_audit",
+      "sourcePath": "kernel/tests/test_request_router_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_request_router_audit.py::test_post_binding_failure_never_uses_isolated_audit[body-BINDING_REFUSED]",
+      "sourceModule": "kernel.tests.test_request_router_audit",
+      "sourcePath": "kernel/tests/test_request_router_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_request_router_audit.py::test_post_binding_failure_never_uses_isolated_audit[exit-FINALIZATION_UNKNOWN]",
+      "sourceModule": "kernel.tests.test_request_router_audit",
+      "sourcePath": "kernel/tests/test_request_router_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_request_router_audit.py::test_reason_cases_are_exact_and_exhaustive",
+      "sourceModule": "kernel.tests.test_request_router_audit",
+      "sourcePath": "kernel/tests/test_request_router_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_request_router_audit.py::test_stored_and_overflow_results_complete_before_denial[result0]",
+      "sourceModule": "kernel.tests.test_request_router_audit",
+      "sourcePath": "kernel/tests/test_request_router_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_request_router_audit.py::test_stored_and_overflow_results_complete_before_denial[result1]",
+      "sourceModule": "kernel.tests.test_request_router_audit",
+      "sourcePath": "kernel/tests/test_request_router_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_request_router_audit.py::test_success_yields_exact_unit_without_audit_work",
+      "sourceModule": "kernel.tests.test_request_router_audit",
+      "sourcePath": "kernel/tests/test_request_router_audit.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_request_router_audit.py::test_unexpected_entry_failure_gets_no_audit_classification",
+      "sourceModule": "kernel.tests.test_request_router_audit",
+      "sourcePath": "kernel/tests/test_request_router_audit.py"
+    },
+    {
       "nodeid": "kernel/tests/test_review_baseline.py::test_authoritative_target_requires_linux_x86_64_cpython",
       "sourceModule": "kernel.tests.test_review_baseline",
       "sourcePath": "kernel/tests/test_review_baseline.py"
@@ -9091,8 +9176,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "05b2bad9ce7d284e260554e94805a0338ebea6ac631b58bcfef39c77c3d3863e",
-  "entryCount": 1818,
+  "entriesSha256": "19fc47ff3e3501b9aaaef68925abf296cd62983944ff8ed1de91c5c169db6b34",
+  "entryCount": 1835,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
