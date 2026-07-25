@@ -65,9 +65,7 @@ class PrincipalBindingResolver:
 
     def resolve(self, identity: VerifiedIdentity) -> AuthenticatedPrincipal:
         if not self._initialized:
-            raise PrincipalResolutionError(
-                PrincipalResolutionOutcome.AUTHORITY_UNAVAILABLE
-            )
+            raise PrincipalResolutionError(PrincipalResolutionOutcome.AUTHORITY_UNAVAILABLE)
         try:
             with self._connection_factory() as connection:
                 cursor = connection.execute(
@@ -84,21 +82,22 @@ class PrincipalBindingResolver:
                 row = cursor.fetchone()
                 duplicate = cursor.fetchone()
         except psycopg.Error as exc:
-            raise PrincipalResolutionError(
-                PrincipalResolutionOutcome.AUTHORITY_UNAVAILABLE
-            ) from exc
-        if row is None:
-            raise PrincipalResolutionError(
-                PrincipalResolutionOutcome.UNRESOLVED
+            outcome = (
+                PrincipalResolutionOutcome.AUTHORITY_INTEGRITY_REFUSED
+                if exc.sqlstate == "PT001"
+                else PrincipalResolutionOutcome.AUTHORITY_UNAVAILABLE
             )
+            raise PrincipalResolutionError(outcome) from exc
+        if row is None:
+            raise PrincipalResolutionError(PrincipalResolutionOutcome.PRINCIPAL_BINDING_REFUSED)
         if type(row) is not tuple or duplicate is not None:
             raise PrincipalResolutionError(
-                PrincipalResolutionOutcome.AUTHORITY_UNAVAILABLE
+                PrincipalResolutionOutcome.AUTHORITY_INTEGRITY_REFUSED
             )
         try:
             authority = PrincipalAuthority.from_database_row(row, identity)
         except (TypeError, ValueError) as exc:
             raise PrincipalResolutionError(
-                PrincipalResolutionOutcome.AUTHORITY_UNAVAILABLE
+                PrincipalResolutionOutcome.AUTHORITY_INTEGRITY_REFUSED
             ) from exc
         return AuthenticatedPrincipal(identity=identity, authority=authority)

@@ -220,7 +220,9 @@ def test_python_controller_executes_activation_and_revocation(tenant_target, aut
     )
     with pytest.raises(PrincipalResolutionError) as raised:
         resolver.resolve(identity)
-    assert raised.value.outcome is PrincipalResolutionOutcome.UNRESOLVED
+    assert raised.value.outcome is (
+        PrincipalResolutionOutcome.PRINCIPAL_BINDING_REFUSED
+    )
 
 
 @pytest.mark.parametrize(

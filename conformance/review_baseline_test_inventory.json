@@ -5876,17 +5876,37 @@
       "sourcePath": "kernel/tests/test_principal_authority.py"
     },
     {
-      "nodeid": "kernel/tests/test_principal_authority.py::test_resolver_exposes_only_closed_resolution_outcomes[rows0-UNRESOLVED]",
+      "nodeid": "kernel/tests/test_principal_authority.py::test_principal_resolution_outcomes_are_exact_and_closed",
       "sourceModule": "kernel.tests.test_principal_authority",
       "sourcePath": "kernel/tests/test_principal_authority.py"
     },
     {
-      "nodeid": "kernel/tests/test_principal_authority.py::test_resolver_exposes_only_closed_resolution_outcomes[rows1-AUTHORITY_UNAVAILABLE]",
+      "nodeid": "kernel/tests/test_principal_authority.py::test_resolver_classifies_database_failures[failure0-AUTHORITY_INTEGRITY_REFUSED]",
       "sourceModule": "kernel.tests.test_principal_authority",
       "sourcePath": "kernel/tests/test_principal_authority.py"
     },
     {
-      "nodeid": "kernel/tests/test_principal_authority.py::test_resolver_exposes_only_closed_resolution_outcomes[rows2-AUTHORITY_UNAVAILABLE]",
+      "nodeid": "kernel/tests/test_principal_authority.py::test_resolver_classifies_database_failures[failure1-AUTHORITY_UNAVAILABLE]",
+      "sourceModule": "kernel.tests.test_principal_authority",
+      "sourcePath": "kernel/tests/test_principal_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_authority.py::test_resolver_exposes_only_closed_resolution_outcomes[rows0-PRINCIPAL_BINDING_REFUSED]",
+      "sourceModule": "kernel.tests.test_principal_authority",
+      "sourcePath": "kernel/tests/test_principal_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_authority.py::test_resolver_exposes_only_closed_resolution_outcomes[rows1-AUTHORITY_INTEGRITY_REFUSED]",
+      "sourceModule": "kernel.tests.test_principal_authority",
+      "sourcePath": "kernel/tests/test_principal_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_authority.py::test_resolver_exposes_only_closed_resolution_outcomes[rows2-AUTHORITY_INTEGRITY_REFUSED]",
+      "sourceModule": "kernel.tests.test_principal_authority",
+      "sourcePath": "kernel/tests/test_principal_authority.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_principal_authority.py::test_resolver_exposes_only_closed_resolution_outcomes[rows3-AUTHORITY_INTEGRITY_REFUSED]",
       "sourceModule": "kernel.tests.test_principal_authority",
       "sourcePath": "kernel/tests/test_principal_authority.py"
     },
@@ -8826,8 +8846,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "a1b9ea54be023c2deebd9632277187d9f3cb33b770c69a7c5ac465fb319e276b",
-  "entryCount": 1765,
+  "entriesSha256": "8eb182bf3da7795c9718144ca363e849ecfc52bb5302fda25ec6e8ee4c367b15",
+  "entryCount": 1769,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

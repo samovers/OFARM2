@@ -123,6 +123,10 @@ class _Factory:
         return self.connections.pop(0)
 
 
+class _AuthorityIntegrityError(psycopg.Error):
+    sqlstate = "PT001"
+
+
 def _authority_row(**changes) -> tuple[object, ...]:
     values = [
         OIDC_ISSUER_EQUALITY_POLICY,
@@ -201,23 +205,60 @@ def test_resolver_requires_initialization_without_opening_a_connection():
     assert factory.calls == 0
 
 
+def test_principal_resolution_outcomes_are_exact_and_closed():
+    outcomes = {member.value: member for member in PrincipalResolutionOutcome}
+    assert PrincipalResolutionOutcome.__members__ == outcomes and set(outcomes) == {
+        "PRINCIPAL_BINDING_REFUSED", "AUTHORITY_INTEGRITY_REFUSED",
+        "AUTHORITY_UNAVAILABLE",
+    }
+
+
 @pytest.mark.parametrize(
     ("rows", "outcome"),
     [
-        ([], PrincipalResolutionOutcome.UNRESOLVED),
+        ([], PrincipalResolutionOutcome.PRINCIPAL_BINDING_REFUSED),
         (
             [_authority_row(issuer=ISSUER + "/changed")],
-            PrincipalResolutionOutcome.AUTHORITY_UNAVAILABLE,
+            PrincipalResolutionOutcome.AUTHORITY_INTEGRITY_REFUSED,
         ),
         (
             [_authority_row(), _authority_row()],
-            PrincipalResolutionOutcome.AUTHORITY_UNAVAILABLE,
+            PrincipalResolutionOutcome.AUTHORITY_INTEGRITY_REFUSED,
         ),
+        ([("malformed",)], PrincipalResolutionOutcome.AUTHORITY_INTEGRITY_REFUSED),
     ],
 )
 def test_resolver_exposes_only_closed_resolution_outcomes(rows, outcome):
     resolver, _connection = _initialized_resolver(rows)
 
+    with pytest.raises(PrincipalResolutionError) as raised:
+        resolver.resolve(IDENTITY)
+    assert raised.value.outcome is outcome
+    assert str(raised.value) == f"principal resolution refused ({outcome.value})"
+    assert ISSUER not in str(raised.value) and SUBJECT not in str(raised.value)
+
+
+@pytest.mark.parametrize(
+    ("failure", "outcome"),
+    [
+        (
+            _AuthorityIntegrityError("authority integrity refused"),
+            PrincipalResolutionOutcome.AUTHORITY_INTEGRITY_REFUSED,
+        ),
+        (
+            psycopg.OperationalError("database unavailable"),
+            PrincipalResolutionOutcome.AUTHORITY_UNAVAILABLE,
+        ),
+    ],
+)
+def test_resolver_classifies_database_failures(failure, outcome):
+    contract = _Connection(
+        [[(AUDIENCE, TENANT_CAPABILITY_CONTRACT.digest,
+           "ofarm.authentication-runtime.v1")]]
+    )
+    resolution = _Connection([], fail_at=1, failure=failure)
+    resolver = PrincipalBindingResolver(_Factory(contract, resolution))
+    resolver.initialize()
     with pytest.raises(PrincipalResolutionError) as raised:
         resolver.resolve(IDENTITY)
 
