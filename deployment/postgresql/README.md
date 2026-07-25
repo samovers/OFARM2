@@ -88,8 +88,9 @@ The only accepted migrations are:
 
 - `kernel/migrations/0001_initial.sql`;
 - `kernel/migrations/0002_authentication_read_api.sql`;
-- `security_audit/migrations/0001_initial.sql`; and
-- `security_audit/migrations/0002_hmac_v2_operations.sql`.
+- `security_audit/migrations/0001_initial.sql`;
+- `security_audit/migrations/0002_hmac_v2_operations.sql`; and
+- `security_audit/migrations/0003_outcome_reason_vocabulary.sql`.
 
 `migration_sets.py` carries a literal reviewed filename, source SHA-256, source
 byte length, prefix digest, and complete set digest for each service. A
