@@ -45,6 +45,7 @@ class CapabilityMinter(Protocol):
 
 class TenantBoundaryOutcome(str, Enum):
     UNAVAILABLE = "UNAVAILABLE"
+    CAPABILITY_REFUSED = "CAPABILITY_REFUSED"
     BINDING_REFUSED = "BINDING_REFUSED"
     FINALIZATION_UNKNOWN = "FINALIZATION_UNKNOWN"
 
@@ -399,7 +400,12 @@ class TenantUnitOfWorkManager:
         try:
             connection.execute("BEGIN ISOLATION LEVEL READ COMMITTED")
             binding = self._bind(connection, principal)
-        except (CapabilityMintError, psycopg.Error, TypeError, ValueError):
+        except CapabilityMintError:
+            _rollback_or_discard(connection)
+            raise TenantBoundaryError(
+                TenantBoundaryOutcome.CAPABILITY_REFUSED
+            ) from None
+        except (psycopg.Error, TypeError, ValueError):
             _rollback_or_discard(connection)
             raise TenantBoundaryError(
                 TenantBoundaryOutcome.BINDING_REFUSED

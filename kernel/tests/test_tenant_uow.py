@@ -16,6 +16,7 @@ from kernel.tenant_uow import (
     TenantBoundaryOutcome,
     TenantUnitOfWorkManager,
 )
+from kernel.tenant_capability_issuer import CapabilityMintError
 from kernel.tests._signing_support import (
     AUDIENCE,
     IDENTITY,
@@ -67,13 +68,21 @@ def _binding_row(principal, *, subject=None):
 
 
 class _Connection:
-    def __init__(self, principal, *, context_row=None, commit_error=None):
+    def __init__(
+        self,
+        principal,
+        *,
+        context_row=None,
+        commit_error=None,
+        rollback_error=None,
+    ):
         self.info = _Info()
         self.closed = False
         self.events = []
         self._principal = principal
         self._context_row = context_row or _binding_row(principal)
         self._commit_error = commit_error
+        self._rollback_error = rollback_error
 
     def execute(self, query, parameters=()):
         compact = " ".join(query.split())
@@ -113,6 +122,8 @@ class _Connection:
 
     def rollback(self):
         self.events.append(("ROLLBACK", ()))
+        if self._rollback_error is not None:
+            raise self._rollback_error
         self.info.transaction_status = TransactionStatus.IDLE
 
     def close(self):
@@ -152,21 +163,35 @@ class _Pool:
 
 
 class _Minter:
-    def __init__(self):
+    def __init__(self, error=None):
         self.challenges = []
         self.authorities = []
+        self._error = error
 
     def mint(self, identity, authority, challenge):
         assert identity == IDENTITY
         assert authority.subject == identity.subject
         self.authorities.append(authority)
         self.challenges.append(challenge)
+        if self._error is not None:
+            raise self._error
         return "signed-capability"
 
 
 @pytest.fixture
 def principal():
     return AuthenticatedPrincipal(IDENTITY, principal_authority())
+
+
+def test_tenant_boundary_outcomes_are_exact_and_unique():
+    expected = (
+        "UNAVAILABLE",
+        "CAPABILITY_REFUSED",
+        "BINDING_REFUSED",
+        "FINALIZATION_UNKNOWN",
+    )
+    assert tuple(TenantBoundaryOutcome.__members__) == expected
+    assert tuple(outcome.value for outcome in TenantBoundaryOutcome) == expected
 
 
 def test_unit_of_work_binds_allocates_one_batch_and_commits(principal):
@@ -201,6 +226,34 @@ def test_unit_of_work_binds_allocates_one_batch_and_commits(principal):
     assert pool.returned == [connection]
     with pytest.raises(RuntimeError, match="closed"):
         unit.fetch_one("SELECT tenant")
+
+
+@pytest.mark.parametrize(
+    ("rollback_error", "connection_closed"),
+    ((None, False), (OSError("rollback reply lost"), True)),
+    ids=("rollback-succeeds", "rollback-fails"),
+)
+def test_capability_refusal_rolls_back_or_discards_without_binding(
+    principal,
+    rollback_error,
+    connection_closed,
+):
+    connection = _Connection(principal, rollback_error=rollback_error)
+    pool = _Pool(connection)
+    minter = _Minter(CapabilityMintError("sensitive signing refusal"))
+    manager = TenantUnitOfWorkManager(pool, minter)
+
+    with pytest.raises(TenantBoundaryError) as raised:
+        with manager.unit_of_work(principal):
+            pytest.fail("capability refusal exposed a UnitOfWork")
+
+    assert raised.value.outcome is TenantBoundaryOutcome.CAPABILITY_REFUSED
+    assert str(raised.value) == "tenant boundary refused (CAPABILITY_REFUSED)"
+    queries = tuple(query for query, _parameters in connection.events)
+    assert not any("bind_tenant_capability" in query for query in queries)
+    assert not any("current_tenant_context" in query for query in queries)
+    assert connection.closed is connection_closed
+    assert pool.returned == [connection]
 
 
 def test_binding_mismatch_is_one_closed_outcome_and_rolls_back(principal):

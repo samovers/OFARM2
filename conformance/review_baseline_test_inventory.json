@@ -8826,6 +8826,16 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     },
     {
+      "nodeid": "kernel/tests/test_tenant_uow.py::test_capability_refusal_rolls_back_or_discards_without_binding[rollback-fails]",
+      "sourceModule": "kernel.tests.test_tenant_uow",
+      "sourcePath": "kernel/tests/test_tenant_uow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow.py::test_capability_refusal_rolls_back_or_discards_without_binding[rollback-succeeds]",
+      "sourceModule": "kernel.tests.test_tenant_uow",
+      "sourcePath": "kernel/tests/test_tenant_uow.py"
+    },
+    {
       "nodeid": "kernel/tests/test_tenant_uow.py::test_non_idle_checkout_is_discarded_without_binding",
       "sourceModule": "kernel.tests.test_tenant_uow",
       "sourcePath": "kernel/tests/test_tenant_uow.py"
@@ -8841,13 +8851,18 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     },
     {
+      "nodeid": "kernel/tests/test_tenant_uow.py::test_tenant_boundary_outcomes_are_exact_and_unique",
+      "sourceModule": "kernel.tests.test_tenant_uow",
+      "sourcePath": "kernel/tests/test_tenant_uow.py"
+    },
+    {
       "nodeid": "kernel/tests/test_tenant_uow.py::test_unit_of_work_binds_allocates_one_batch_and_commits",
       "sourceModule": "kernel.tests.test_tenant_uow",
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "8eb182bf3da7795c9718144ca363e849ecfc52bb5302fda25ec6e8ee4c367b15",
-  "entryCount": 1769,
+  "entriesSha256": "7641c365130deb8a41652b100fb92ce74c096a8e341edcce9aecb8b0ca8fc156",
+  "entryCount": 1772,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
