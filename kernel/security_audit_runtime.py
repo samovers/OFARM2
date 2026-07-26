@@ -2,17 +2,14 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from contextlib import AbstractContextManager
+from collections.abc import Callable, Iterator
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 from types import MappingProxyType
 
 import psycopg
 from google.cloud import kms_v1
 
-from deployment.postgresql.audit_contract import (
-    SECURITY_AUDIT_CONTRACT,
-    ProducerReasonSpec,
-)
+from deployment.postgresql import audit_contract
 from deployment.postgresql.readiness import (
     verify_postgresql_service_separation,
     verify_security_audit_structural_compatibility,
@@ -27,17 +24,15 @@ from .production_oidc import ProductionOidcVerifier
 from .request_router_audit import RequestRouterAuditProducer
 from .runtime_config import RuntimeConfig
 from .security_audit_client import PreTenantAuditClient
-from .security_audit_hmac_posture import (
-    CorrelationHmacLifecyclePosture,
-    CorrelationHmacLifecycleObserver,
-    CorrelationHmacVersionDisposition,
-)
+from . import security_audit_hmac_posture as hmac_posture
 from .tenant_uow import TenantUnitOfWork, TenantUnitOfWorkManager
 
 
 Connection = psycopg.Connection[tuple[object, ...]]
-ConnectionFactory = Callable[[], Connection]
+Connect = Callable[[], Connection]
 _READ_ONLY = "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY"
+_CONTROL_DSN = "security_audit_control_pg_dsn"
+_OPTIONS = "-c statement_timeout=2000"
 _DATABASE_SESSION_USERS = MappingProxyType(
     {
         "tenant_readiness_pg_dsn": "ofarm_readiness",
@@ -74,14 +69,16 @@ class PreTenantAuditRuntime:
         return self._request_router.unit_of_work(principal)
 
 
-def _connection_factory(dsn: str) -> ConnectionFactory:
+def _connection_factory(dsn: str, *, startup: bool = False) -> Connect:
     def connect() -> Connection:
+        if startup:
+            return psycopg.connect(dsn, connect_timeout=5, options=_OPTIONS)
         return psycopg.connect(dsn)
-
     return connect
 
 
-def _require_session_user(factory: ConnectionFactory, expected: str) -> None:
+@contextmanager
+def _require_session_user(factory: Connect, expected: str) -> Iterator[Connection]:
     try:
         with factory() as connection:
             if connection.autocommit is not False:
@@ -93,23 +90,35 @@ def _require_session_user(factory: ConnectionFactory, expected: str) -> None:
                 duplicate = cursor.fetchone()
                 if row != (expected,) or duplicate is not None:
                     raise PreTenantAuditRuntimeUnavailable()
+            yield connection
     except PreTenantAuditRuntimeUnavailable:
         raise
     except Exception as exc:
         raise PreTenantAuditRuntimeUnavailable() from exc
 
 
-def _verify_database_authorities(config: RuntimeConfig) -> None:
+def _verify_database_authorities(
+    config: RuntimeConfig, kms_client: kms_v1.KeyManagementServiceClient
+) -> hmac_posture.CorrelationHmacLifecyclePosture:
+    posture = None
     for field, expected in _DATABASE_SESSION_USERS.items():
-        factory = _connection_factory(getattr(config, field))
-        _require_session_user(factory, expected)
+        factory = _connection_factory(getattr(config, field), startup=True)
+        with _require_session_user(factory, expected) as connection:
+            if field == _CONTROL_DSN:
+                posture = hmac_posture.CorrelationHmacLifecycleObserver(
+                    lambda: nullcontext(connection),
+                    kms_client,
+                    config.correlation_hmac_kms_key_resource,
+                ).current()
+    if posture is None:
+        raise PreTenantAuditRuntimeUnavailable()
+    return posture
 
 
-def _producer(component: str) -> ProducerReasonSpec:
+def _producer(component: str) -> audit_contract.ProducerReasonSpec:
     matches = tuple(
-        producer
-        for producer in SECURITY_AUDIT_CONTRACT.reason_matrix
-        if producer.component == component
+        value for value in audit_contract.SECURITY_AUDIT_CONTRACT.reason_matrix
+        if value.component == component
     )
     if len(matches) != 1:
         raise PreTenantAuditRuntimeUnavailable()
@@ -118,12 +127,11 @@ def _producer(component: str) -> ProducerReasonSpec:
 
 def _active_resource(
     config: RuntimeConfig,
-    posture: CorrelationHmacLifecyclePosture,
+    posture: hmac_posture.CorrelationHmacLifecyclePosture,
 ) -> str:
     active = tuple(
-        version
-        for version in posture.versions
-        if version.disposition is CorrelationHmacVersionDisposition.ACTIVE
+        value for value in posture.versions
+        if value.disposition is hmac_posture.CorrelationHmacVersionDisposition.ACTIVE
     )
     if len(active) != 1:
         raise PreTenantAuditRuntimeUnavailable()
@@ -148,17 +156,9 @@ def build_pretenant_audit_runtime(
         tenant_structural_dsn=config.tenant_readiness_pg_dsn,
         audit_structural_dsn=config.security_audit_readiness_pg_dsn,
     )
-    _verify_database_authorities(config)
-    control_factory = _connection_factory(config.security_audit_control_pg_dsn)
-    posture = CorrelationHmacLifecycleObserver(
-        control_factory,
-        kms_client,
-        config.correlation_hmac_kms_key_resource,
-    ).current()
-    correlation_hmac = GoogleKmsCorrelationHmac(
-        kms_client,
-        _active_resource(config, posture),
-    )
+    posture = _verify_database_authorities(config, kms_client)
+    resource = _active_resource(config, posture)
+    correlation_hmac = GoogleKmsCorrelationHmac(kms_client, resource)
     correlation_hmac.initialize()
     authentication = AuthenticationAuditProducer(
         verifier,
