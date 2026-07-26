@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from dataclasses import FrozenInstanceError
 from datetime import datetime, timezone
 
@@ -120,6 +121,7 @@ class _KmsClient:
         changes=None,
         list_error=None,
         get_error=None,
+        expect_connection_closed=True,
     ):
         self.connection = connection
         self.listed = listed if listed is not None else [_version(1), _version(2)]
@@ -127,12 +129,13 @@ class _KmsClient:
         self.changes = changes or {}
         self.list_error = list_error
         self.get_error = get_error
+        self.expect_connection_closed = expect_connection_closed
         self.list_calls = []
         self.get_calls = []
         self.pager = None
 
     def list_crypto_key_versions(self, *, request, retry, timeout):
-        assert self.connection.closed
+        assert self.connection.closed is self.expect_connection_closed
         self.list_calls.append((request, retry, timeout))
         if self.list_error is not None:
             raise self.list_error
@@ -215,6 +218,24 @@ def test_current_returns_one_frozen_exact_posture_after_database_closes():
     ]
     with pytest.raises(FrozenInstanceError):
         posture.versions = ()
+
+
+def test_current_uses_runtime_borrowed_open_control_connection():
+    connection = _Connection()
+    borrowed = []
+
+    def borrow():
+        borrowed.append(connection)
+        return nullcontext(connection)
+
+    client = _KmsClient(connection, expect_connection_closed=False)
+    observer = CorrelationHmacLifecycleObserver(borrow, client, PARENT)
+
+    posture = observer.current()
+
+    assert borrowed == [connection]
+    assert not connection.closed
+    assert [value.key_version for value in posture.versions] == [1, 2]
 
 
 @pytest.mark.parametrize(

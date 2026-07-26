@@ -6,6 +6,7 @@ from contextlib import nullcontext
 from pathlib import Path
 
 import pytest
+from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
 from kernel import security_audit_runtime
 from kernel.runtime_config import RuntimeConfig, RuntimeMode
@@ -164,7 +165,7 @@ def _install_observer(monkeypatch, observed_connections):
 def test_database_authority_map_is_fixed_in_production_code():
     assert dict(security_audit_runtime._DATABASE_SESSION_USERS) == _AUTHORITIES
     assert len(_AUTHORITIES) == 5
-    assert security_audit_runtime._CONTROL_DSN in _AUTHORITIES
+    assert "security_audit_control_pg_dsn" in _AUTHORITIES
 
 
 def test_five_bounded_connections_reuse_control_for_observation(monkeypatch):
@@ -210,23 +211,26 @@ def test_code_owned_startup_timeouts_override_conflicting_dsn_values(
         "dbname=audit connect_timeout=999 "
         "options='-c statement_timeout=999999'"
     )
-    calls = []
+    merged = []
+
+    def connect(value, **kwargs):
+        merged.append(conninfo_to_dict(make_conninfo(value, **kwargs)))
+        return object()
+
     monkeypatch.setattr(
         security_audit_runtime.psycopg,
         "connect",
-        lambda value, **kwargs: calls.append((value, kwargs)) or object(),
+        connect,
     )
 
     security_audit_runtime._connection_factory(dsn, startup=True)()
 
-    assert calls == [
-        (
-            dsn,
-            {
-                "connect_timeout": 5,
-                "options": "-c statement_timeout=2000",
-            },
-        )
+    assert merged == [
+        {
+            "connect_timeout": "5",
+            "dbname": "audit",
+            "options": "-c statement_timeout=2000",
+        }
     ]
 
 
@@ -404,7 +408,8 @@ def test_pretenant_audit_graph_has_one_fixed_startup_order(monkeypatch):
         security_audit_runtime,
         "_verify_database_authorities",
         lambda _config, _kms: (
-            events.append("database-authorities") or posture
+            events.extend(("database-authorities", "lifecycle.current"))
+            or posture
         ),
     )
 
@@ -463,6 +468,7 @@ def test_pretenant_audit_graph_has_one_fixed_startup_order(monkeypatch):
         "audit-structure",
         "service-separation",
         "database-authorities",
+        "lifecycle.current",
         "hmac.build",
         "hmac.initialize",
         "client.AUTHENTICATION",

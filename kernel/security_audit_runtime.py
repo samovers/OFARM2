@@ -1,5 +1,4 @@
 """Production composition and startup admission for pre-tenant audit."""
-
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
@@ -31,8 +30,8 @@ from .tenant_uow import TenantUnitOfWork, TenantUnitOfWorkManager
 Connection = psycopg.Connection[tuple[object, ...]]
 Connect = Callable[[], Connection]
 _READ_ONLY = "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY"
-_CONTROL_DSN = "security_audit_control_pg_dsn"
-_OPTIONS = "-c statement_timeout=2000"
+_CONNECT_TIMEOUT_SECONDS = 5
+_STATEMENT_TIMEOUT_MILLISECONDS = 2_000
 _DATABASE_SESSION_USERS = MappingProxyType(
     {
         "tenant_readiness_pg_dsn": "ofarm_readiness",
@@ -72,7 +71,10 @@ class PreTenantAuditRuntime:
 def _connection_factory(dsn: str, *, startup: bool = False) -> Connect:
     def connect() -> Connection:
         if startup:
-            return psycopg.connect(dsn, connect_timeout=5, options=_OPTIONS)
+            return psycopg.connect(
+                dsn, connect_timeout=_CONNECT_TIMEOUT_SECONDS,
+                options=f"-c statement_timeout={_STATEMENT_TIMEOUT_MILLISECONDS}",
+            )
         return psycopg.connect(dsn)
     return connect
 
@@ -86,9 +88,7 @@ def _require_session_user(factory: Connect, expected: str) -> Iterator[Connectio
             with connection.transaction():
                 connection.execute(_READ_ONLY)
                 cursor = connection.execute("SELECT SESSION_USER::text")
-                row = cursor.fetchone()
-                duplicate = cursor.fetchone()
-                if row != (expected,) or duplicate is not None:
+                if cursor.fetchone() != (expected,) or cursor.fetchone() is not None:
                     raise PreTenantAuditRuntimeUnavailable()
             yield connection
     except PreTenantAuditRuntimeUnavailable:
@@ -104,7 +104,7 @@ def _verify_database_authorities(
     for field, expected in _DATABASE_SESSION_USERS.items():
         factory = _connection_factory(getattr(config, field), startup=True)
         with _require_session_user(factory, expected) as connection:
-            if field == _CONTROL_DSN:
+            if field == "security_audit_control_pg_dsn":
                 posture = hmac_posture.CorrelationHmacLifecycleObserver(
                     lambda: nullcontext(connection),
                     kms_client,
@@ -117,8 +117,8 @@ def _verify_database_authorities(
 
 def _producer(component: str) -> audit_contract.ProducerReasonSpec:
     matches = tuple(
-        value for value in audit_contract.SECURITY_AUDIT_CONTRACT.reason_matrix
-        if value.component == component
+        producer for producer in audit_contract.SECURITY_AUDIT_CONTRACT.reason_matrix
+        if producer.component == component
     )
     if len(matches) != 1:
         raise PreTenantAuditRuntimeUnavailable()
@@ -130,8 +130,8 @@ def _active_resource(
     posture: hmac_posture.CorrelationHmacLifecyclePosture,
 ) -> str:
     active = tuple(
-        value for value in posture.versions
-        if value.disposition is hmac_posture.CorrelationHmacVersionDisposition.ACTIVE
+        version for version in posture.versions
+        if version.disposition is hmac_posture.CorrelationHmacVersionDisposition.ACTIVE
     )
     if len(active) != 1:
         raise PreTenantAuditRuntimeUnavailable()
