@@ -10,9 +10,11 @@ profile — not OFARM law; claims record-keeping completeness only.
 `kernel.api:create_app` is environment-only. `RuntimeConfig.from_env()` reads
 the environment once, then the production builder validates the deployment
 image, constructs the graph, initializes RS256 OIDC/JWKS, validates the
-database authentication contract and principal resolver, verifies the current
-signing evidence, and performs the fixed KMS preflight. FastAPI is created only
-after every step succeeds.
+database authentication contract and principal resolver, proves that the
+tenant and security-audit structures use separate PostgreSQL services, checks
+every startup connection's exact database role, observes the correlation-HMAC
+lifecycle, performs the HMAC and signing KMS preflights, and opens the tenant
+pool. FastAPI is created only after every step succeeds.
 
 Required settings:
 
@@ -20,6 +22,12 @@ Required settings:
 - `OFARM_DEPLOYMENT_IMAGE_DIGEST`
 - `OFARM_OIDC_ISSUER`, `OFARM_OIDC_AUDIENCE`, `OFARM_OIDC_JWKS_URL`
 - `OFARM_PG_DSN`
+- `OFARM_TENANT_READINESS_PG_DSN`
+- `OFARM_SECURITY_AUDIT_READINESS_PG_DSN`
+- `OFARM_SECURITY_AUDIT_AUTHENTICATION_PG_DSN`
+- `OFARM_SECURITY_AUDIT_REQUEST_ROUTER_PG_DSN`
+- `OFARM_SECURITY_AUDIT_CONTROL_PG_DSN`
+- `OFARM_CORRELATION_HMAC_KMS_KEY_RESOURCE`
 - `OFARM_TENANT_CAPABILITY_KID`
 - `OFARM_SIGNING_EVIDENCE_RECEIPT_PATH`
 - `OFARM_SIGNING_EVIDENCE_OBSERVER_PUBLIC_KEY_B64`
@@ -27,6 +35,24 @@ Required settings:
 The external OIDC audience and database binder audience are distinct values.
 The first verifies credentials; the second binds database authority and signed
 capabilities. Production OIDC v1 accepts only RS256.
+
+Database locations and credentials come from the environment, but database
+authority does not. Production code requires these exact `SESSION_USER`
+identities:
+
+| Connection | Required role |
+|---|---|
+| Tenant readiness | `ofarm_readiness` |
+| Security-audit readiness | `ofarm_security_audit_readiness_login` |
+| Authentication producer | `ofarm_security_authentication_producer_login` |
+| Request-router producer | `ofarm_security_request_router_producer_login` |
+| Audit control | `ofarm_security_audit_control_login` |
+
+Every connection is queried during startup and any different role prevents
+application publication. Startup performs no audit append or control mutation.
+Authentication and request-router refusals append synchronously through their
+distinct producer credentials; failure never falls back to an unaudited tenant
+write.
 
 Production owns a bounded connection pool and one transaction-bound
 `TenantUnitOfWork` per verified tenant operation. The UnitOfWork creates and
@@ -120,6 +146,8 @@ is a complete `ExecutionRecordPayload` per `contracts/core/`.
 | `config.py` | deployment constants: tenant/profile/pack/policy refs, runtime version, database DSN assembly |
 | `runtime_config.py` | the single immutable production environment snapshot |
 | `application_runtime.py` | ordered production graph construction and public runtime methods |
+| `security_audit_runtime.py` | pre-tenant audit composition, fixed database-role admission, and HMAC readiness |
+| `authentication_audit.py` / `request_router_audit.py` | synchronous fail-closed production of classified pre-tenant failure evidence |
 | `production_oidc.py` | production RS256/JWKS credential verification |
 | `principal_resolver.py` | exact database principal-authority resolution |
 | `signing_authority.py` / `tenant_capability_issuer.py` | fresh signing evidence and tenant capability minting |
@@ -141,7 +169,7 @@ is a complete `ExecutionRecordPayload` per `contracts/core/`.
 
 ## Deliberately not here (do not drift — M1_BRIEF.md)
 
-Transaction-bound tenant execution (#173) · audit persistence (#192) · mobile
-app (M3) · registry adapter scheduling · dynamic packs · public query compiler
-· AI/agent runtime · everything in
+Dynamic audit health, gap, retention, and recovery operations · mobile app
+(M3) · registry adapter scheduling · dynamic packs · public query compiler ·
+AI/agent runtime · everything in
 `profile_si_ffs/UNSUPPORTED_SURFACES.md`.

@@ -61,12 +61,22 @@
       "sourcePath": "kernel/tests/test_application_runtime.py"
     },
     {
+      "nodeid": "kernel/tests/test_application_runtime.py::test_runtime_config_rejects_invalid_static_settings[OFARM_CORRELATION_HMAC_KMS_KEY_RESOURCE-projects/ofarm2/locations/europe-west1/keyRings/security-audit/cryptoKeys/correlation/cryptoKeyVersions/2]",
+      "sourceModule": "kernel.tests.test_application_runtime",
+      "sourcePath": "kernel/tests/test_application_runtime.py"
+    },
+    {
       "nodeid": "kernel/tests/test_application_runtime.py::test_runtime_config_rejects_invalid_static_settings[OFARM_OIDC_JWKS_URL-http://issuer.example/jwks]",
       "sourceModule": "kernel.tests.test_application_runtime",
       "sourcePath": "kernel/tests/test_application_runtime.py"
     },
     {
       "nodeid": "kernel/tests/test_application_runtime.py::test_runtime_config_rejects_invalid_static_settings[OFARM_PG_DSN-broken==]",
+      "sourceModule": "kernel.tests.test_application_runtime",
+      "sourcePath": "kernel/tests/test_application_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_application_runtime.py::test_runtime_config_rejects_invalid_static_settings[OFARM_SECURITY_AUDIT_CONTROL_PG_DSN-broken==]",
       "sourceModule": "kernel.tests.test_application_runtime",
       "sourcePath": "kernel/tests/test_application_runtime.py"
     },
@@ -86,7 +96,42 @@
       "sourcePath": "kernel/tests/test_application_runtime.py"
     },
     {
-      "nodeid": "kernel/tests/test_application_runtime.py::test_startup_failure_is_preserved_and_every_client_closes",
+      "nodeid": "kernel/tests/test_application_runtime.py::test_runtime_config_requires_every_audit_startup_setting[OFARM_CORRELATION_HMAC_KMS_KEY_RESOURCE]",
+      "sourceModule": "kernel.tests.test_application_runtime",
+      "sourcePath": "kernel/tests/test_application_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_application_runtime.py::test_runtime_config_requires_every_audit_startup_setting[OFARM_SECURITY_AUDIT_AUTHENTICATION_PG_DSN]",
+      "sourceModule": "kernel.tests.test_application_runtime",
+      "sourcePath": "kernel/tests/test_application_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_application_runtime.py::test_runtime_config_requires_every_audit_startup_setting[OFARM_SECURITY_AUDIT_CONTROL_PG_DSN]",
+      "sourceModule": "kernel.tests.test_application_runtime",
+      "sourcePath": "kernel/tests/test_application_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_application_runtime.py::test_runtime_config_requires_every_audit_startup_setting[OFARM_SECURITY_AUDIT_READINESS_PG_DSN]",
+      "sourceModule": "kernel.tests.test_application_runtime",
+      "sourcePath": "kernel/tests/test_application_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_application_runtime.py::test_runtime_config_requires_every_audit_startup_setting[OFARM_SECURITY_AUDIT_REQUEST_ROUTER_PG_DSN]",
+      "sourceModule": "kernel.tests.test_application_runtime",
+      "sourcePath": "kernel/tests/test_application_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_application_runtime.py::test_runtime_config_requires_every_audit_startup_setting[OFARM_TENANT_READINESS_PG_DSN]",
+      "sourceModule": "kernel.tests.test_application_runtime",
+      "sourcePath": "kernel/tests/test_application_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_application_runtime.py::test_startup_failure_is_preserved_and_every_client_closes[audit.initialize]",
+      "sourceModule": "kernel.tests.test_application_runtime",
+      "sourcePath": "kernel/tests/test_application_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_application_runtime.py::test_startup_failure_is_preserved_and_every_client_closes[verifier.initialize]",
       "sourceModule": "kernel.tests.test_application_runtime",
       "sourcePath": "kernel/tests/test_application_runtime.py"
     },
@@ -8986,6 +9031,166 @@
       "sourcePath": "kernel/tests/test_security_audit_hmac_posture.py"
     },
     {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_active_hmac_resource_requires_one_observed_active_version",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_database_authority_map_is_fixed_in_production_code",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_pretenant_audit_graph_has_one_fixed_startup_order",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_startup_accepts_the_exact_code_owned_database_authorities",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_startup_refuses_every_swapped_or_unexpected_database_role[security_audit_authentication_pg_dsn-ofarm_readiness]",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_startup_refuses_every_swapped_or_unexpected_database_role[security_audit_authentication_pg_dsn-ofarm_security_audit_control_login]",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_startup_refuses_every_swapped_or_unexpected_database_role[security_audit_authentication_pg_dsn-ofarm_security_audit_readiness_login]",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_startup_refuses_every_swapped_or_unexpected_database_role[security_audit_authentication_pg_dsn-ofarm_security_request_router_producer_login]",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_startup_refuses_every_swapped_or_unexpected_database_role[security_audit_authentication_pg_dsn-unexpected_startup_login]",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_startup_refuses_every_swapped_or_unexpected_database_role[security_audit_control_pg_dsn-ofarm_readiness]",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_startup_refuses_every_swapped_or_unexpected_database_role[security_audit_control_pg_dsn-ofarm_security_audit_readiness_login]",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_startup_refuses_every_swapped_or_unexpected_database_role[security_audit_control_pg_dsn-ofarm_security_authentication_producer_login]",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_startup_refuses_every_swapped_or_unexpected_database_role[security_audit_control_pg_dsn-ofarm_security_request_router_producer_login]",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_startup_refuses_every_swapped_or_unexpected_database_role[security_audit_control_pg_dsn-unexpected_startup_login]",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_startup_refuses_every_swapped_or_unexpected_database_role[security_audit_readiness_pg_dsn-ofarm_readiness]",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_startup_refuses_every_swapped_or_unexpected_database_role[security_audit_readiness_pg_dsn-ofarm_security_audit_control_login]",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_startup_refuses_every_swapped_or_unexpected_database_role[security_audit_readiness_pg_dsn-ofarm_security_authentication_producer_login]",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_startup_refuses_every_swapped_or_unexpected_database_role[security_audit_readiness_pg_dsn-ofarm_security_request_router_producer_login]",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_startup_refuses_every_swapped_or_unexpected_database_role[security_audit_readiness_pg_dsn-unexpected_startup_login]",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_startup_refuses_every_swapped_or_unexpected_database_role[security_audit_request_router_pg_dsn-ofarm_readiness]",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_startup_refuses_every_swapped_or_unexpected_database_role[security_audit_request_router_pg_dsn-ofarm_security_audit_control_login]",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_startup_refuses_every_swapped_or_unexpected_database_role[security_audit_request_router_pg_dsn-ofarm_security_audit_readiness_login]",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_startup_refuses_every_swapped_or_unexpected_database_role[security_audit_request_router_pg_dsn-ofarm_security_authentication_producer_login]",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_startup_refuses_every_swapped_or_unexpected_database_role[security_audit_request_router_pg_dsn-unexpected_startup_login]",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_startup_refuses_every_swapped_or_unexpected_database_role[tenant_readiness_pg_dsn-ofarm_security_audit_control_login]",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_startup_refuses_every_swapped_or_unexpected_database_role[tenant_readiness_pg_dsn-ofarm_security_audit_readiness_login]",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_startup_refuses_every_swapped_or_unexpected_database_role[tenant_readiness_pg_dsn-ofarm_security_authentication_producer_login]",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_startup_refuses_every_swapped_or_unexpected_database_role[tenant_readiness_pg_dsn-ofarm_security_request_router_producer_login]",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_startup_refuses_every_swapped_or_unexpected_database_role[tenant_readiness_pg_dsn-unexpected_startup_login]",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_startup_refuses_malformed_session_user_observations[rows0]",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_startup_refuses_malformed_session_user_observations[rows1]",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_startup_refuses_malformed_session_user_observations[rows2]",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
       "nodeid": "kernel/tests/test_signing_authority.py::test_database_authority_absence_or_malformed_shape_is_closed[rows0]",
       "sourceModule": "kernel.tests.test_signing_authority",
       "sourcePath": "kernel/tests/test_signing_authority.py"
@@ -9176,8 +9381,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "19fc47ff3e3501b9aaaef68925abf296cd62983944ff8ed1de91c5c169db6b34",
-  "entryCount": 1835,
+  "entriesSha256": "26a95e9eef0b6332025211bff54592c5c46bcc0f9785aa9915b29678c1ec92e1",
+  "entryCount": 1876,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

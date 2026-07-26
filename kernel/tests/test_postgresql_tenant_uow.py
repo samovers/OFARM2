@@ -371,9 +371,18 @@ def test_asgi_concurrency_keeps_two_actors_in_two_tenants(
         def resolve(self, identity):
             return by_subject[identity.subject]
 
+    verifier = Verifier()
+    resolver = Resolver()
+
+    class SecurityAudit:
+        def authenticate(self, token):
+            return resolver.resolve(verifier.verify(token))
+
+        def unit_of_work(self, principal):
+            return tenant_manager.unit_of_work(principal)
+
     runtime = ApplicationRuntime(
-        Verifier(),
-        Resolver(),
+        SecurityAudit(),
         object(),
         RuntimeMetadata(
             mode=RuntimeMode.PRODUCTION,
