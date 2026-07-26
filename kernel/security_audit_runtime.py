@@ -1,4 +1,5 @@
 """Production composition and startup admission for pre-tenant audit."""
+
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
@@ -32,6 +33,7 @@ Connect = Callable[[], Connection]
 _READ_ONLY = "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY"
 _CONNECT_TIMEOUT_SECONDS = 5
 _STATEMENT_TIMEOUT_MILLISECONDS = 2_000
+_CONTROL_DSN = "security_audit_control_pg_dsn"
 _DATABASE_SESSION_USERS = MappingProxyType(
     {
         "tenant_readiness_pg_dsn": "ofarm_readiness",
@@ -68,14 +70,19 @@ class PreTenantAuditRuntime:
         return self._request_router.unit_of_work(principal)
 
 
-def _connection_factory(dsn: str, *, startup: bool = False) -> Connect:
+def _connection_factory(dsn: str) -> Connect:
     def connect() -> Connection:
-        if startup:
-            return psycopg.connect(
-                dsn, connect_timeout=_CONNECT_TIMEOUT_SECONDS,
-                options=f"-c statement_timeout={_STATEMENT_TIMEOUT_MILLISECONDS}",
-            )
         return psycopg.connect(dsn)
+    return connect
+
+
+def _startup_connection_factory(dsn: str) -> Connect:
+    def connect() -> Connection:
+        return psycopg.connect(
+            dsn,
+            connect_timeout=_CONNECT_TIMEOUT_SECONDS,
+            options=f"-c statement_timeout={_STATEMENT_TIMEOUT_MILLISECONDS}",
+        )
     return connect
 
 
@@ -88,7 +95,9 @@ def _require_session_user(factory: Connect, expected: str) -> Iterator[Connectio
             with connection.transaction():
                 connection.execute(_READ_ONLY)
                 cursor = connection.execute("SELECT SESSION_USER::text")
-                if cursor.fetchone() != (expected,) or cursor.fetchone() is not None:
+                row = cursor.fetchone()
+                duplicate = cursor.fetchone()
+                if row != (expected,) or duplicate is not None:
                     raise PreTenantAuditRuntimeUnavailable()
             yield connection
     except PreTenantAuditRuntimeUnavailable:
@@ -102,9 +111,9 @@ def _verify_database_authorities(
 ) -> hmac_posture.CorrelationHmacLifecyclePosture:
     posture = None
     for field, expected in _DATABASE_SESSION_USERS.items():
-        factory = _connection_factory(getattr(config, field), startup=True)
+        factory = _startup_connection_factory(getattr(config, field))
         with _require_session_user(factory, expected) as connection:
-            if field == "security_audit_control_pg_dsn":
+            if field == _CONTROL_DSN:
                 posture = hmac_posture.CorrelationHmacLifecycleObserver(
                     lambda: nullcontext(connection),
                     kms_client,

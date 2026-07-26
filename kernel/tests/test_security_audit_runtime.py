@@ -223,7 +223,7 @@ def test_code_owned_startup_timeouts_override_conflicting_dsn_values(
         connect,
     )
 
-    security_audit_runtime._connection_factory(dsn, startup=True)()
+    security_audit_runtime._startup_connection_factory(dsn)()
 
     assert merged == [
         {
@@ -407,10 +407,7 @@ def test_pretenant_audit_graph_has_one_fixed_startup_order(monkeypatch):
     monkeypatch.setattr(
         security_audit_runtime,
         "_verify_database_authorities",
-        lambda _config, _kms: (
-            events.extend(("database-authorities", "lifecycle.current"))
-            or posture
-        ),
+        lambda _config, _kms: events.append("database-authorities") or posture,
     )
 
     class Hmac:
@@ -468,7 +465,6 @@ def test_pretenant_audit_graph_has_one_fixed_startup_order(monkeypatch):
         "audit-structure",
         "service-separation",
         "database-authorities",
-        "lifecycle.current",
         "hmac.build",
         "hmac.initialize",
         "client.AUTHENTICATION",
