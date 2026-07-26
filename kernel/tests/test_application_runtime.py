@@ -27,6 +27,10 @@ from kernel.tenant_uow import TenantUnitOfWorkStartupError
 IMAGE = "sha256:" + "1" * 64
 KID = "k" * 43
 OBSERVER_KEY = b"o" * 32
+HMAC_KEY = (
+    "projects/ofarm2/locations/europe-west1/"
+    "keyRings/security-audit/cryptoKeys/correlation"
+)
 
 
 def _environment() -> dict[str, str]:
@@ -37,6 +41,26 @@ def _environment() -> dict[str, str]:
         "OFARM_OIDC_AUDIENCE": "external-api",
         "OFARM_OIDC_JWKS_URL": "https://issuer.example/jwks",
         "OFARM_PG_DSN": "dbname=ofarm user=ofarm_app",
+        "OFARM_TENANT_READINESS_PG_DSN": (
+            "dbname=ofarm_tenant user=ofarm_readiness"
+        ),
+        "OFARM_SECURITY_AUDIT_READINESS_PG_DSN": (
+            "dbname=ofarm_security_audit "
+            "user=ofarm_security_audit_readiness_login"
+        ),
+        "OFARM_SECURITY_AUDIT_AUTHENTICATION_PG_DSN": (
+            "dbname=ofarm_security_audit "
+            "user=ofarm_security_authentication_producer_login"
+        ),
+        "OFARM_SECURITY_AUDIT_REQUEST_ROUTER_PG_DSN": (
+            "dbname=ofarm_security_audit "
+            "user=ofarm_security_request_router_producer_login"
+        ),
+        "OFARM_SECURITY_AUDIT_CONTROL_PG_DSN": (
+            "dbname=ofarm_security_audit "
+            "user=ofarm_security_audit_control_login"
+        ),
+        "OFARM_CORRELATION_HMAC_KMS_KEY_RESOURCE": HMAC_KEY,
         "OFARM_TENANT_CAPABILITY_KID": KID,
         "OFARM_SIGNING_EVIDENCE_RECEIPT_PATH": "/run/ofarm/receipt",
         "OFARM_SIGNING_EVIDENCE_OBSERVER_PUBLIC_KEY_B64": (
@@ -53,6 +77,26 @@ def _config(*, image: str = IMAGE) -> RuntimeConfig:
         oidc_audience="external-api",
         oidc_jwks_url="https://issuer.example/jwks",
         pg_dsn="dbname=ofarm user=ofarm_app",
+        tenant_readiness_pg_dsn=(
+            "dbname=ofarm_tenant user=ofarm_readiness"
+        ),
+        security_audit_readiness_pg_dsn=(
+            "dbname=ofarm_security_audit "
+            "user=ofarm_security_audit_readiness_login"
+        ),
+        security_audit_authentication_pg_dsn=(
+            "dbname=ofarm_security_audit "
+            "user=ofarm_security_authentication_producer_login"
+        ),
+        security_audit_request_router_pg_dsn=(
+            "dbname=ofarm_security_audit "
+            "user=ofarm_security_request_router_producer_login"
+        ),
+        security_audit_control_pg_dsn=(
+            "dbname=ofarm_security_audit "
+            "user=ofarm_security_audit_control_login"
+        ),
+        correlation_hmac_kms_key_resource=HMAC_KEY,
         tenant_capability_kid=KID,
         signing_evidence_receipt_path=Path("/run/ofarm/receipt"),
         signing_evidence_observer_public_key=OBSERVER_KEY,
@@ -77,6 +121,11 @@ def test_runtime_config_is_one_immutable_environment_snapshot(monkeypatch):
         ("OFARM_AUTH_MODE", "test"),
         ("OFARM_OIDC_JWKS_URL", "http://issuer.example/jwks"),
         ("OFARM_PG_DSN", "broken=="),
+        ("OFARM_SECURITY_AUDIT_CONTROL_PG_DSN", "broken=="),
+        (
+            "OFARM_CORRELATION_HMAC_KMS_KEY_RESOURCE",
+            f"{HMAC_KEY}/cryptoKeyVersions/2",
+        ),
         ("OFARM_TENANT_CAPABILITY_KID", "short"),
         ("OFARM_SIGNING_EVIDENCE_RECEIPT_PATH", "relative/receipt"),
         ("OFARM_SIGNING_EVIDENCE_OBSERVER_PUBLIC_KEY_B64", "not-base64"),
@@ -87,6 +136,28 @@ def test_runtime_config_rejects_invalid_static_settings(
 ):
     values = _environment()
     values[name] = value
+    monkeypatch.setattr("kernel.runtime_config.os.environ", values)
+
+    with pytest.raises(RuntimeConfigurationError):
+        RuntimeConfig.from_env()
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "OFARM_TENANT_READINESS_PG_DSN",
+        "OFARM_SECURITY_AUDIT_READINESS_PG_DSN",
+        "OFARM_SECURITY_AUDIT_AUTHENTICATION_PG_DSN",
+        "OFARM_SECURITY_AUDIT_REQUEST_ROUTER_PG_DSN",
+        "OFARM_SECURITY_AUDIT_CONTROL_PG_DSN",
+        "OFARM_CORRELATION_HMAC_KMS_KEY_RESOURCE",
+    ],
+)
+def test_runtime_config_requires_every_audit_startup_setting(
+    monkeypatch, name
+):
+    values = _environment()
+    del values[name]
     monkeypatch.setattr("kernel.runtime_config.os.environ", values)
 
     with pytest.raises(RuntimeConfigurationError):
@@ -189,6 +260,15 @@ def _install_graph_fakes(monkeypatch, events, failures=None):
             events.append("issuer.mint")
             return "capability"
 
+    class SecurityAudit:
+        def authenticate(self, token):
+            events.append(("audit.authenticate", token))
+            return "principal"
+
+        def unit_of_work(self, principal):
+            events.append(("audit.unit-of-work", principal))
+            return "unit-of-work"
+
     class Pool:
         def open(self, *, wait, timeout):
             assert wait is True
@@ -223,6 +303,18 @@ def _install_graph_fakes(monkeypatch, events, failures=None):
     )
     monkeypatch.setattr(application_runtime, "GoogleKmsSigner", Signer)
     monkeypatch.setattr(application_runtime, "TenantCapabilityIssuer", Issuer)
+
+    def build_security_audit(*_args):
+        events.append("audit.initialize")
+        if failure := failures.get("audit.initialize"):
+            raise failure
+        return SecurityAudit()
+
+    monkeypatch.setattr(
+        application_runtime,
+        "build_pretenant_audit_runtime",
+        build_security_audit,
+    )
     monkeypatch.setattr(
         application_runtime,
         "create_tenant_connection_pool",
@@ -250,6 +342,7 @@ def test_production_graph_initializes_in_fixed_order(monkeypatch):
         ("pool.build", "dbname=ofarm user=ofarm_app"),
         "verifier.initialize",
         "resolver.initialize",
+        "audit.initialize",
         "reader.current",
         "signer.sign",
         "pool.initialize",
@@ -260,14 +353,21 @@ def test_production_graph_initializes_in_fixed_order(monkeypatch):
     assert events[-3:] == ["pool.close", "http.close", "kms.close"]
 
 
-def test_startup_failure_is_preserved_and_every_client_closes(monkeypatch):
+@pytest.mark.parametrize(
+    "failure_stage",
+    ["verifier.initialize", "audit.initialize"],
+)
+def test_startup_failure_is_preserved_and_every_client_closes(
+    monkeypatch,
+    failure_stage,
+):
     events = []
     startup_error = RuntimeStartupError("startup refused")
     _install_graph_fakes(
         monkeypatch,
         events,
         {
-            "verifier.initialize": startup_error,
+            failure_stage: startup_error,
             "http.close": RuntimeError("HTTP close failed"),
             "kms.close": RuntimeError("KMS close failed"),
         },
@@ -335,10 +435,11 @@ def test_application_runtime_delegates_public_operations(monkeypatch):
     assert runtime.mint_capability(
         "identity", "authority", "challenge"
     ) == "capability"
+    assert runtime.tenant_unit_of_work("principal") == "unit-of-work"
     assert events[-3:] == [
-        ("verifier.verify", "token"),
-        ("resolver.resolve", "identity"),
+        ("audit.authenticate", "token"),
         "issuer.mint",
+        ("audit.unit-of-work", "principal"),
     ]
     runtime.close()
 

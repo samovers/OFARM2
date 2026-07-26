@@ -21,6 +21,10 @@ from .principal_resolver import PrincipalBindingResolver
 from .production_oidc import ProductionOidcConfig, ProductionOidcVerifier
 from .runtime_activation import require_deployment_image_digest
 from .runtime_config import RuntimeConfig, RuntimeMode
+from .security_audit_runtime import (
+    PreTenantAuditRuntime,
+    build_pretenant_audit_runtime,
+)
 from .signing_authority import SigningAuthorityReader
 from .signing_receipt import (
     SIGNING_EVIDENCE_MAX_BYTES,
@@ -66,16 +70,14 @@ class RuntimeMetadata:
 class ApplicationRuntime:
     def __init__(
         self,
-        verifier: ProductionOidcVerifier,
-        resolver: PrincipalBindingResolver,
+        security_audit: PreTenantAuditRuntime,
         issuer: TenantCapabilityIssuer,
         metadata: RuntimeMetadata,
         oidc_client: httpx.Client,
         kms_client: kms_v1.KeyManagementServiceClient,
         tenant_uow: TenantUnitOfWorkManager,
     ) -> None:
-        self._verifier = verifier
-        self._resolver = resolver
+        self._security_audit = security_audit
         self._issuer = issuer
         self.metadata = metadata
         self._oidc_client = oidc_client
@@ -83,7 +85,7 @@ class ApplicationRuntime:
         self._tenant_uow = tenant_uow
 
     def authenticate(self, token: str) -> AuthenticatedPrincipal:
-        return self._resolver.resolve(self._verifier.verify(token))
+        return self._security_audit.authenticate(token)
 
     def mint_capability(
         self,
@@ -97,7 +99,7 @@ class ApplicationRuntime:
         self,
         principal: AuthenticatedPrincipal,
     ) -> AbstractContextManager[TenantUnitOfWork]:
-        return self._tenant_uow.unit_of_work(principal)
+        return self._security_audit.unit_of_work(principal)
 
     def close(self) -> None:
         try:
@@ -177,6 +179,13 @@ def build_application_runtime(config: RuntimeConfig) -> ApplicationRuntime:
         )
         verifier.initialize()
         resolver.initialize()
+        security_audit = build_pretenant_audit_runtime(
+            config,
+            verifier,
+            resolver,
+            tenant_uow,
+            kms_client,
+        )
         signing = signing_reader.current(config.tenant_capability_kid)
         if signing.audience != resolver.audience:
             raise RuntimeStartupError("database runtime audiences differ")
@@ -191,8 +200,7 @@ def build_application_runtime(config: RuntimeConfig) -> ApplicationRuntime:
             tenant_capability_kid=config.tenant_capability_kid,
         )
         return ApplicationRuntime(
-            verifier,
-            resolver,
+            security_audit,
             issuer,
             metadata,
             oidc_client,
