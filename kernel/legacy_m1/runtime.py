@@ -4,17 +4,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from .gates import GatePipeline
-from .runtime_activation import (
+from ..deployment_identity import require_deployment_image_digest
+from ..gates import GatePipeline
+from ..runtime_activation import (
     RuntimeActivationObservation,
     complete_store_startup,
-    require_deployment_image_digest,
 )
-from .store import Store
-from .views import OutputGenerator
+from ..store import Store
+from ..views import OutputGenerator
 
 if TYPE_CHECKING:
-    from .auth_oidc import TestOidcVerifier
+    from ..auth_oidc import TestOidcVerifier
 
 
 @dataclass(frozen=True, slots=True)

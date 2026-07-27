@@ -19,7 +19,7 @@ import uuid
 from fastapi.testclient import TestClient
 
 from kernel import context, demo
-from kernel.api import create_test_app
+from kernel.legacy_m1.api import create_test_app
 
 
 def uid():

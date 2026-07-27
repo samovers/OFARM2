@@ -185,7 +185,7 @@ def test_api_startup_refuses_non_exact_selected_profile_instance():
         ]
 
     with _preseeded_dirty_spine_store(mutate) as store:
-        from kernel.api import create_test_app
+        from kernel.legacy_m1.api import create_test_app
 
         with pytest.raises(
             context.ContextNotReconstructible,

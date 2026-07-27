@@ -15,11 +15,11 @@ from deployment.postgresql.tenant_contract import (
 )
 
 from .authentication import VerifiedIdentity
+from .deployment_identity import require_deployment_image_digest
 from .google_kms_signer import GoogleKmsSigner
 from .principal import AuthenticatedPrincipal, PrincipalAuthority
 from .principal_resolver import PrincipalBindingResolver
 from .production_oidc import ProductionOidcConfig, ProductionOidcVerifier
-from .runtime_activation import require_deployment_image_digest
 from .runtime_config import RuntimeConfig, RuntimeMode
 from .security_audit_runtime import (
     PreTenantAuditRuntime,

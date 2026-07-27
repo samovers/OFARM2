@@ -1,9 +1,16 @@
-# OFARM2 Kernel — M1 implementation
+# OFARM2 Kernel — production foundation and legacy M1 prototype
 
-The running Kernel from `M1_BRIEF.md`: PostgreSQL append-only truth store +
-the gate pipeline + the materializer, with the two governed outputs and the
-generated Capability Manifest. Implementation and conformance packaging
-profile — not OFARM law; claims record-keeping completeness only.
+The Kernel contains two deliberately separate runtime generations:
+
+- `kernel.api:create_app` is the production trust and storage foundation.
+  Its governed semantic endpoints remain closed.
+- `kernel.legacy_m1.api` is the injected development and conformance surface
+  for the pre-tenancy M1 Store, gates, materializer, and SI outputs.
+
+The architecture checker walks the production import closure and refuses any
+dependency on the legacy package, Store, prototype startup path, legacy
+authentication, or SI semantic/output modules. The legacy surface is evidence
+for record-keeping completeness, not production authority or OFARM law.
 
 ## Production authentication runtime
 
@@ -72,9 +79,9 @@ return `GOVERNED_SURFACE_BLOCKED`. `/health` and `/manifest` expose immutable
 runtime metadata only. Authoritative services are held by route closures and
 are never published through `app.state`.
 
-`create_test_app(...)` is the only dependency-injection surface. It constructs
-an explicit `TestRuntime` or `DevelopmentRuntime`; HS256 exists only in the
-test runtime.
+Production exports no dependency-injection constructor. Importing
+`kernel.api` does not load the legacy Store, startup posture, HS256 verifier,
+gate pipeline, or SI output generator.
 
 ## Legacy M1 development runner
 
@@ -105,7 +112,7 @@ PGBIN=$(dirname "$(which initdb)")        # e.g. /opt/homebrew/opt/postgresql@17
 "$PGBIN/createdb" -h "$(pwd)/.pgrun" -p 54317 -U ofarm ofarm_kernel
 
 # 3. the test suites construct the injected legacy surface through
-#    kernel.api:create_test_app and install the disposable prototype schema.
+#    kernel.legacy_m1.api:create_test_app and install the disposable prototype schema.
 #    Root conformance includes tests 1-15 + regressions + the
 #    8 fixtures replayed live; uses its own database ofarm_kernel_test,
 #    recreated per run; writes a JSON evidence file under conformance/evidence/)
@@ -121,9 +128,11 @@ Environment overrides: `OFARM_PG_DSN` (full DSN) or `OFARM_PG_SOCKET_DIR` /
 additionally honors `OFARM_PG_ADMIN_DSN` (admin connection used to recreate
 the test database, e.g. a CI service container).
 
-The test factory accepts a full lowercase OCI digest (`sha256:` plus 64
-hexadecimal digits) as an explicit argument. It never reads production
-configuration.
+`kernel.legacy_m1.api:create_test_app` and
+`kernel.legacy_m1.api:create_development_app` are the only injected legacy
+constructors. They accept a full lowercase OCI digest (`sha256:` plus 64
+hexadecimal digits) as an explicit argument and never read production
+configuration. HS256 exists only in the test runtime.
 
 ## Client surface
 
@@ -152,6 +161,8 @@ is a complete `ExecutionRecordPayload` per `contracts/core/`.
 | `store.py` | the append-only truth store; edges, gate log, idempotency, in-force queries, reachability check |
 | `problems.py` | `RuntimeProblem` factory; reason codes verbatim from the registry RFC — unknown codes refuse loudly |
 | `config.py` | deployment constants: tenant/profile/pack/policy refs, runtime version, database DSN assembly |
+| `api.py` | production-only FastAPI composition; governed semantics remain blocked |
+| `deployment_identity.py` | pure deployment-image identity validation shared without database authority |
 | `runtime_config.py` | the single immutable production environment snapshot |
 | `application_runtime.py` | ordered production graph construction and public runtime methods |
 | `security_audit_runtime.py` | pre-tenant audit composition, fixed database-role admission, and HMAC readiness |
@@ -159,7 +170,8 @@ is a complete `ExecutionRecordPayload` per `contracts/core/`.
 | `production_oidc.py` | production RS256/JWKS credential verification |
 | `principal_resolver.py` | exact database principal-authority resolution |
 | `signing_authority.py` / `tenant_capability_issuer.py` | fresh signing evidence and tenant capability minting |
-| `legacy_runtime.py` / `auth_oidc.py` | explicit injected development/test runtime; HS256 is test-only |
+| `legacy_m1/api.py` / `legacy_m1/runtime.py` | explicit injected legacy development and conformance composition |
+| `auth_oidc.py` | quarantined legacy HS256 verifier; test-only |
 | `context.py` | SI profile instance bootstrap, in-force reference snapshots, per-farm `ContextSnapshot` assembly with content-addressed reuse (basis drift mints, sameness reuses) |
 | `authority.py` | default-deny evaluator: roles, grants, delegations bounded by live source authority, sharing, prospective revocation, party lifecycle, non-human actor rule |
 | `policy.py` | runtime policy as data: commit-class ↔ action-class/promotion/consequence tables, freshness-use policy, floor items, routing-resolution rules (issue #3) |
@@ -171,7 +183,6 @@ is a complete `ExecutionRecordPayload` per `contracts/core/`.
 | `materializer.py` | deterministic recompute with `MaterializationBasis` receipts; basis-set invalidation (D12); the four explainable-evidence draft shapes behind Kernel law (D16) |
 | `views.py` | View 1 (PassportView) + View 2 (DocumentAssembly freeze/file) with `ResultQualificationEnvelope`s and refusal behavior |
 | `manifest.py` | Capability Manifest + ActiveArtifactSet generation from actual runtime surfaces + grounding verification |
-| `api.py` | the FastAPI surface above |
 | `demo.py` | fictional format-true onboarding + spray submission builders (the package's worked example) |
 | `tests/` | conformance suite (tests 1–15, fixtures replayed live, JSON evidence) + stage-contract tests (`test_stages.py`; engineering tests, excluded from the conformance evidence file) |
 

@@ -9,7 +9,7 @@ import pytest
 from psycopg import sql
 
 from kernel import config
-from kernel.api import create_test_app
+from kernel.legacy_m1.api import create_test_app
 from kernel.runtime_bundle import (
     Canonicalization,
     ContentPlacement,

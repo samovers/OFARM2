@@ -9,9 +9,10 @@ from fastapi.testclient import TestClient
 
 from kernel import config
 from kernel.adapters import ImportRunner
-from kernel.api import create_test_app
+from kernel.deployment_identity import RuntimeActivationError
+from kernel.legacy_m1.api import create_test_app
 from kernel.gates import GatePipeline
-from kernel.runtime_activation import RuntimeActivationError, complete_store_startup
+from kernel.runtime_activation import complete_store_startup
 from kernel.runtime_bundle import RuntimeComponentRole, sha256_bytes
 from kernel.store import RuntimeBundleBindingError, Store
 from kernel.tests.conftest import TEST_DEPLOYMENT_IMAGE_DIGEST
