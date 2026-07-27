@@ -68,7 +68,10 @@ import kernel.profile_runtime_provider as profile_runtime_provider
 from kernel.profile_runtime_provider import (
     load_profile_runtime_services,
 )
-from kernel.profile_runtime_services import ProfileRuntimeServices
+from kernel.profile_runtime_services import (
+    MaterializationSpecification,
+    ProfileRuntimeServices,
+)
 
 from kernel.runtime_bundle import (
     Canonicalization,
@@ -86,6 +89,13 @@ from kernel.stages import (
 )
 
 from kernel.store import Store
+
+TEST_MATERIALIZATION_SPECIFICATION = MaterializationSpecification(
+    policy_ref="policy:test.materialization.v0_1",
+    default_result_shape_family="test.materialization.default.v0_1",
+    identity_registry_result_shape_family="test.materialization.identity.v0_1",
+)
+
 
 def _base_doc() -> dict:
     return json.loads(

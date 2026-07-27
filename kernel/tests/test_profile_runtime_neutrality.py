@@ -23,9 +23,12 @@ from kernel.runtime_bundle import (
 
 
 def test_synthetic_second_profile_uses_only_profile_local_services():
-    from kernel.tests._synthetic_profile_runtime import (
-        build_synthetic_runtime_services,
-    )
+    def resolve_synthetic_factory():
+        from kernel.tests._synthetic_profile_runtime import (
+            build_synthetic_runtime_services,
+        )
+
+        return build_synthetic_runtime_services
 
     descriptor = replace(
         config.ACTIVE_PROFILE,
@@ -40,8 +43,9 @@ def test_synthetic_second_profile_uses_only_profile_local_services():
         component_role=RuntimeComponentRole.ADAPTER_SOURCE,
         component_ref="python:synthetic-profile:runtime-provider",
         source_path="kernel/tests/_synthetic_profile_runtime.py",
+        factory_module="kernel.tests._synthetic_profile_runtime",
         factory_name="build_synthetic_runtime_services",
-        factory_resolver=lambda: build_synthetic_runtime_services,
+        factory_resolver=resolve_synthetic_factory,
     )
     registry_component = RuntimeComponent.from_selected_bytes(
         role=RuntimeComponentRole.ADAPTER_SOURCE,

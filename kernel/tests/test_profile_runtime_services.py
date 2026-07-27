@@ -2,9 +2,6 @@
 # ruff: noqa: F403, F405
 
 from kernel.tests._profile_runtime_test_support import *
-from kernel.profiles.si_ffs.runtime_provider import (
-    SI_MATERIALIZATION_SPECIFICATION,
-)
 
 
 def test_descriptor_backed_validation_uses_provider_without_config_wrapper(
@@ -170,7 +167,7 @@ def test_materializer_missing_context_spine_refuses_use_governably():
     with _fresh_unbootstrapped_store() as store:
         materializer = Materializer(
             store,
-            specification=SI_MATERIALIZATION_SPECIFICATION,
+            specification=TEST_MATERIALIZATION_SPECIFICATION,
             context_assembler=context.ContextAssembler(
                 store,
                 active_descriptor=config.ACTIVE_PROFILE,
