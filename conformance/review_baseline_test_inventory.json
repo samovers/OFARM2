@@ -8791,16 +8791,6 @@
       "sourcePath": "kernel/tests/test_security_audit_client.py"
     },
     {
-      "nodeid": "kernel/tests/test_security_audit_client.py::test_live_postgresql_request_policy_enforces_lock_timeout",
-      "sourceModule": "kernel.tests.test_security_audit_client",
-      "sourcePath": "kernel/tests/test_security_audit_client.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_security_audit_client.py::test_live_postgresql_request_policy_enforces_statement_timeout",
-      "sourceModule": "kernel.tests.test_security_audit_client",
-      "sourcePath": "kernel/tests/test_security_audit_client.py"
-    },
-    {
       "nodeid": "kernel/tests/test_security_audit_client.py::test_malformed_database_results_are_unavailable[append_rows0]",
       "sourceModule": "kernel.tests.test_security_audit_client",
       "sourcePath": "kernel/tests/test_security_audit_client.py"
@@ -8837,16 +8827,6 @@
     },
     {
       "nodeid": "kernel/tests/test_security_audit_client.py::test_pre_submission_unavailability_is_not_retried",
-      "sourceModule": "kernel.tests.test_security_audit_client",
-      "sourcePath": "kernel/tests/test_security_audit_client.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_security_audit_client.py::test_production_connection_policy_matches_provisioned_role_defaults",
-      "sourceModule": "kernel.tests.test_security_audit_client",
-      "sourcePath": "kernel/tests/test_security_audit_client.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_security_audit_client.py::test_production_connection_policy_overrides_conflicting_dsn_values",
       "sourceModule": "kernel.tests.test_security_audit_client",
       "sourcePath": "kernel/tests/test_security_audit_client.py"
     },
@@ -9111,7 +9091,27 @@
       "sourcePath": "kernel/tests/test_security_audit_runtime.py"
     },
     {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_live_postgresql_request_policy_enforces_lock_timeout",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_live_postgresql_request_policy_enforces_statement_timeout",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
       "nodeid": "kernel/tests/test_security_audit_runtime.py::test_pretenant_audit_graph_has_one_fixed_startup_order",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_production_connection_policy_matches_provisioned_role_defaults",
+      "sourceModule": "kernel.tests.test_security_audit_runtime",
+      "sourcePath": "kernel/tests/test_security_audit_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_security_audit_runtime.py::test_production_connection_policy_overrides_conflicting_dsn_values",
       "sourceModule": "kernel.tests.test_security_audit_runtime",
       "sourcePath": "kernel/tests/test_security_audit_runtime.py"
     },
@@ -9451,7 +9451,7 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "66ec17d26b97ea2b6356e9eb76be9a5763fcd8abe29dac91baaede991dede66a",
+  "entriesSha256": "a2a6e80025d82ffa93c7764f429fd8a55df4d86207c34092d66a58a2511421b9",
   "entryCount": 1890,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"

@@ -5,15 +5,26 @@ from __future__ import annotations
 from contextlib import nullcontext
 from pathlib import Path
 
+import psycopg
 import pytest
 from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
+from deployment.postgresql.audit_contract import SECURITY_AUDIT_CONTRACT
+from deployment.postgresql.provisioning_specs import (
+    SECURITY_AUDIT_PROVISIONING_SPEC,
+)
 from kernel import security_audit_runtime
 from kernel.runtime_config import RuntimeConfig, RuntimeMode
+from kernel.security_audit import CorrelationHmac, SecurityAuditOutcomeUnknown
+from kernel.security_audit_client import PreTenantAuditClient
 from kernel.security_audit_hmac_posture import (
     CorrelationHmacLifecyclePosture,
     CorrelationHmacVersionDisposition,
     CorrelationHmacVersionPosture,
+)
+from kernel.tests.postgresql_audit_support import (
+    audit_service_fixture,  # noqa: F401
+    role_dsn,
 )
 
 
@@ -39,6 +50,12 @@ _HMAC_KEY = (
     "projects/ofarm2/locations/europe-west1/"
     "keyRings/security-audit/cryptoKeys/correlation"
 )
+_HMAC_POLICY = SECURITY_AUDIT_CONTRACT.correlation_hmac
+
+
+def _hmac() -> CorrelationHmac:
+    assert _HMAC_POLICY.key_version is not None
+    return CorrelationHmac(b"h" * 32, _HMAC_POLICY.key_version)
 
 
 def _config() -> RuntimeConfig:
@@ -232,6 +249,53 @@ def test_code_owned_startup_timeouts_override_conflicting_dsn_values(
             "options": "-c statement_timeout=2000",
         }
     ]
+
+
+def test_production_connection_policy_overrides_conflicting_dsn_values(
+    monkeypatch,
+):
+    dsn = (
+        "dbname=audit connect_timeout=999 "
+        "options='-c statement_timeout=999999 -c lock_timeout=999999'"
+    )
+    merged = []
+
+    def connect(value, **kwargs):
+        merged.append(conninfo_to_dict(make_conninfo(value, **kwargs)))
+        return object()
+
+    monkeypatch.setattr(security_audit_runtime.psycopg, "connect", connect)
+
+    security_audit_runtime._audit_producer_connection_factory(dsn)()
+
+    assert merged == [
+        {
+            "connect_timeout": "5",
+            "dbname": "audit",
+            "options": "-c statement_timeout=2000 -c lock_timeout=250",
+        }
+    ]
+
+
+def test_production_connection_policy_matches_provisioned_role_defaults():
+    producer_roles = {
+        security_audit_runtime._producer(component).session_user
+        for component in ("AUTHENTICATION", "REQUEST_ROUTER")
+    }
+    roles = {
+        role.name: {setting.name: setting.value for setting in role.settings}
+        for role in SECURITY_AUDIT_PROVISIONING_SPEC.roles
+        if role.name in producer_roles
+    }
+
+    assert set(roles) == producer_roles
+    assert all(
+        settings["statement_timeout"]
+        == str(security_audit_runtime._STATEMENT_TIMEOUT_MILLISECONDS)
+        and settings["lock_timeout"]
+        == str(security_audit_runtime._LOCK_TIMEOUT_MILLISECONDS)
+        for settings in roles.values()
+    )
 
 
 def test_startup_connection_timeout_is_a_closed_refusal(monkeypatch):
@@ -489,6 +553,60 @@ def test_pretenant_audit_graph_has_one_fixed_startup_order(monkeypatch):
     with runtime.unit_of_work("principal") as unit:
         assert unit == "unit"
     assert "append" not in events
+
+
+def test_live_postgresql_request_policy_enforces_statement_timeout(
+    migrated_audit_service,
+):
+    producer = security_audit_runtime._producer("AUTHENTICATION")
+    factory = security_audit_runtime._audit_producer_connection_factory(
+        role_dsn(
+            migrated_audit_service,
+            producer.session_user,
+        )
+    )
+    connection = factory()
+
+    with pytest.raises(psycopg.errors.QueryCanceled):
+        with connection:
+            connection.execute("SELECT pg_catalog.pg_sleep(3)")
+
+    assert connection.closed is True
+
+
+def test_live_postgresql_request_policy_enforces_lock_timeout(
+    migrated_audit_service,
+):
+    producer = security_audit_runtime._producer("AUTHENTICATION")
+    factory = security_audit_runtime._audit_producer_connection_factory(
+        role_dsn(
+            migrated_audit_service,
+            producer.session_user,
+        )
+    )
+    connections = []
+
+    def connect():
+        connection = factory()
+        connections.append(connection)
+        return connection
+
+    with psycopg.connect(
+        migrated_audit_service["target_admin_dsn"]
+    ) as blocker:
+        blocker.execute(
+            "LOCK TABLE ofarm_security.operational_security_event "
+            "IN ACCESS EXCLUSIVE MODE"
+        )
+        with pytest.raises(SecurityAuditOutcomeUnknown) as raised:
+            PreTenantAuditClient(
+                connect,
+                producer,
+            ).append("CREDENTIAL_MISSING", _hmac())
+
+    assert len(connections) == 2
+    assert all(connection.closed for connection in connections)
+    assert isinstance(raised.value.__cause__, psycopg.errors.LockNotAvailable)
 
 
 def test_active_hmac_resource_requires_one_observed_active_version():

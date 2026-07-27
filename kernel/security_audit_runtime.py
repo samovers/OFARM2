@@ -23,10 +23,7 @@ from .principal_resolver import PrincipalBindingResolver
 from .production_oidc import ProductionOidcVerifier
 from .request_router_audit import RequestRouterAuditProducer
 from .runtime_config import RuntimeConfig
-from .security_audit_client import (
-    PreTenantAuditClient,
-    production_audit_connection_factory,
-)
+from .security_audit_client import PreTenantAuditClient
 from . import security_audit_hmac_posture as hmac_posture
 from .tenant_uow import TenantUnitOfWork, TenantUnitOfWorkManager
 
@@ -36,6 +33,16 @@ Connect = Callable[[], Connection]
 _READ_ONLY = "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY"
 _CONNECT_TIMEOUT_SECONDS = 5
 _STATEMENT_TIMEOUT_MILLISECONDS = 2_000
+_LOCK_TIMEOUT_MILLISECONDS = 250
+_AUDIT_PRODUCER_CONNECTION_PARAMETERS = MappingProxyType(
+    {
+        "connect_timeout": _CONNECT_TIMEOUT_SECONDS,
+        "options": (
+            f"-c statement_timeout={_STATEMENT_TIMEOUT_MILLISECONDS} "
+            f"-c lock_timeout={_LOCK_TIMEOUT_MILLISECONDS}"
+        ),
+    }
+)
 _CONTROL_DSN = "security_audit_control_pg_dsn"
 _DATABASE_SESSION_USERS = MappingProxyType(
     {
@@ -71,6 +78,12 @@ class PreTenantAuditRuntime:
         principal: AuthenticatedPrincipal,
     ) -> AbstractContextManager[TenantUnitOfWork]:
         return self._request_router.unit_of_work(principal)
+
+
+def _audit_producer_connection_factory(dsn: str) -> Connect:
+    def connect() -> Connection:
+        return psycopg.connect(dsn, **_AUDIT_PRODUCER_CONNECTION_PARAMETERS)
+    return connect
 
 
 def _startup_connection_factory(dsn: str) -> Connect:
@@ -171,7 +184,7 @@ def build_pretenant_audit_runtime(
         resolver,
         correlation_hmac,
         PreTenantAuditClient(
-            production_audit_connection_factory(
+            _audit_producer_connection_factory(
                 config.security_audit_authentication_pg_dsn
             ),
             _producer("AUTHENTICATION"),
@@ -181,7 +194,7 @@ def build_pretenant_audit_runtime(
         tenant_boundary,
         correlation_hmac,
         PreTenantAuditClient(
-            production_audit_connection_factory(
+            _audit_producer_connection_factory(
                 config.security_audit_request_router_pg_dsn
             ),
             _producer("REQUEST_ROUTER"),

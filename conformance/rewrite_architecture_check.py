@@ -35,7 +35,7 @@ PRODUCTION_BUDGETS = {
     "kernel/request_router_audit.py": 120,
     "kernel/google_kms_correlation_hmac.py": 220,
     "kernel/security_audit_hmac_posture.py": 260,
-    "kernel/security_audit_runtime.py": 200,
+    "kernel/security_audit_runtime.py": 210,
 }
 GROUP_BUDGETS = {
     "profile runtime": (
@@ -107,7 +107,7 @@ GROUP_BUDGETS = {
         ("kernel/security_audit_hmac_posture.py",),
     ),
     "security audit runtime": (
-        200,
+        210,
         ("kernel/security_audit_runtime.py",),
     ),
 }
