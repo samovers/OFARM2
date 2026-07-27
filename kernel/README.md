@@ -48,6 +48,12 @@ identities:
 | Request-router producer | `ofarm_security_request_router_producer_login` |
 | Audit control | `ofarm_security_audit_control_login` |
 
+Authority-probe connections use a code-owned five-second libpq timeout per host
+attempt and install `statement_timeout=2000` before their first SQL statement.
+Those startup options replace any `options` embedded in a DSN. The audit-control
+connection remains open, idle, and outside a transaction during the bounded KMS
+posture calls so its database observation does not require a sixth connection.
+
 Every connection is queried during startup and any different role prevents
 application publication. Startup performs no audit append or control mutation.
 Authentication and request-router refusals append synchronously through their

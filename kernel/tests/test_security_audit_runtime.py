@@ -6,6 +6,7 @@ from contextlib import nullcontext
 from pathlib import Path
 
 import pytest
+from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
 from kernel import security_audit_runtime
 from kernel.runtime_config import RuntimeConfig, RuntimeMode
@@ -68,6 +69,19 @@ def _config() -> RuntimeConfig:
     )
 
 
+def _posture() -> CorrelationHmacLifecyclePosture:
+    return CorrelationHmacLifecyclePosture(
+        (
+            CorrelationHmacVersionPosture(
+                2,
+                "ENABLED",
+                CorrelationHmacVersionDisposition.ACTIVE,
+                None,
+            ),
+        )
+    )
+
+
 class _Cursor:
     def __init__(self, rows):
         self._rows = iter(rows)
@@ -77,63 +91,257 @@ class _Cursor:
 
 
 class _Transaction:
-    def __init__(self, events):
+    def __init__(self, field, events):
+        self._field = field
         self._events = events
 
     def __enter__(self):
-        self._events.append("transaction.begin")
+        self._events.append(("transaction.begin", self._field))
         return self
 
     def __exit__(self, *_args):
-        self._events.append("transaction.end")
+        self._events.append(("transaction.end", self._field))
 
 
 class _Connection:
     autocommit = False
 
-    def __init__(self, rows, events):
+    def __init__(self, field, rows, events):
+        self.field = field
         self._rows = rows
         self._events = events
 
     def __enter__(self):
-        self._events.append("connection.open")
+        self._events.append(("connection.open", self.field))
         return self
 
     def __exit__(self, *_args):
-        self._events.append("connection.close")
+        self._events.append(("connection.close", self.field))
 
     def transaction(self):
-        return _Transaction(self._events)
+        return _Transaction(self.field, self._events)
 
     def execute(self, statement):
-        self._events.append(statement)
+        self._events.append(("execute", self.field, statement))
         rows = self._rows if statement == "SELECT SESSION_USER::text" else ()
         return _Cursor(rows)
 
 
 def _install_connections(monkeypatch, roles, events):
     dsn_to_field = {dsn: field for field, dsn in _DSNS.items()}
+    calls = []
+    connections = {}
 
-    def connect(dsn):
+    def connect(dsn, **kwargs):
         field = dsn_to_field[dsn]
-        return _Connection(((roles[field],),), events)
+        calls.append((field, dsn, kwargs))
+        events.append(("connect", field, kwargs))
+        connection = _Connection(field, ((roles[field],),), events)
+        connections[field] = connection
+        return connection
 
     monkeypatch.setattr(security_audit_runtime.psycopg, "connect", connect)
+    return calls, connections
+
+
+def _install_observer(monkeypatch, observed_connections):
+    class Observer:
+        def __init__(self, factory, _client, parent):
+            assert parent == _HMAC_KEY
+            self._factory = factory
+
+        def current(self):
+            with self._factory() as connection:
+                observed_connections.append(connection)
+            return _posture()
+
+    monkeypatch.setattr(
+        security_audit_runtime.hmac_posture,
+        "CorrelationHmacLifecycleObserver",
+        Observer,
+    )
 
 
 def test_database_authority_map_is_fixed_in_production_code():
     assert dict(security_audit_runtime._DATABASE_SESSION_USERS) == _AUTHORITIES
+    assert len(_AUTHORITIES) == 5
+    assert "security_audit_control_pg_dsn" in _AUTHORITIES
 
 
-def test_startup_accepts_the_exact_code_owned_database_authorities(monkeypatch):
+def test_five_bounded_connections_reuse_control_for_observation(monkeypatch):
     events = []
-    _install_connections(monkeypatch, dict(_AUTHORITIES), events)
+    observed_connections = []
+    calls, connections = _install_connections(
+        monkeypatch,
+        dict(_AUTHORITIES),
+        events,
+    )
+    _install_observer(monkeypatch, observed_connections)
 
-    security_audit_runtime._verify_database_authorities(_config())
+    posture = security_audit_runtime._verify_database_authorities(
+        _config(),
+        object(),
+    )
 
-    assert events.count("SELECT SESSION_USER::text") == 5
-    assert events.count(security_audit_runtime._READ_ONLY) == 5
-    assert events.count("connection.close") == 5
+    expected_options = {
+        "connect_timeout": 5,
+        "options": "-c statement_timeout=2000",
+    }
+    assert len(calls) == 5
+    assert [field for field, _dsn, _kwargs in calls] == list(_AUTHORITIES)
+    assert all(kwargs == expected_options for _field, _dsn, kwargs in calls)
+    assert observed_connections == [
+        connections["security_audit_control_pg_dsn"]
+    ]
+    assert posture == _posture()
+    assert sum(event[0] == "execute" for event in events) == 10
+    assert sum(event[0] == "connection.close" for event in events) == 5
+    for field in _AUTHORITIES:
+        field_events = [event for event in events if event[1] == field]
+        assert field_events[0] == ("connect", field, expected_options)
+        assert ("execute", field, security_audit_runtime._READ_ONLY) in field_events
+        assert ("execute", field, "SELECT SESSION_USER::text") in field_events
+        assert field_events[-1] == ("connection.close", field)
+
+
+def test_code_owned_startup_timeouts_override_conflicting_dsn_values(
+    monkeypatch,
+):
+    dsn = (
+        "dbname=audit connect_timeout=999 "
+        "options='-c statement_timeout=999999'"
+    )
+    merged = []
+
+    def connect(value, **kwargs):
+        merged.append(conninfo_to_dict(make_conninfo(value, **kwargs)))
+        return object()
+
+    monkeypatch.setattr(
+        security_audit_runtime.psycopg,
+        "connect",
+        connect,
+    )
+
+    security_audit_runtime._startup_connection_factory(dsn)()
+
+    assert merged == [
+        {
+            "connect_timeout": "5",
+            "dbname": "audit",
+            "options": "-c statement_timeout=2000",
+        }
+    ]
+
+
+def test_request_time_factory_remains_unchanged(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        security_audit_runtime.psycopg,
+        "connect",
+        lambda value, **kwargs: calls.append((value, kwargs)) or object(),
+    )
+
+    security_audit_runtime._connection_factory("dbname=audit")()
+
+    assert calls == [("dbname=audit", {})]
+
+
+def test_startup_connection_timeout_is_a_closed_refusal(monkeypatch):
+    timeout = TimeoutError("connect timed out")
+    monkeypatch.setattr(
+        security_audit_runtime.psycopg,
+        "connect",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(timeout),
+    )
+
+    with pytest.raises(
+        security_audit_runtime.PreTenantAuditRuntimeUnavailable
+    ) as raised:
+        security_audit_runtime._verify_database_authorities(
+            _config(),
+            object(),
+        )
+
+    assert raised.value.__cause__ is timeout
+
+
+def test_first_statement_timeout_closes_the_connection(monkeypatch):
+    events = []
+    timeout = TimeoutError("statement timed out")
+
+    class Connection(_Connection):
+        def execute(self, statement):
+            if statement == security_audit_runtime._READ_ONLY:
+                raise timeout
+            return super().execute(statement)
+
+    monkeypatch.setattr(
+        security_audit_runtime.psycopg,
+        "connect",
+        lambda *_args, **_kwargs: Connection(
+            "tenant_readiness_pg_dsn",
+            (),
+            events,
+        ),
+    )
+
+    with pytest.raises(
+        security_audit_runtime.PreTenantAuditRuntimeUnavailable
+    ) as raised:
+        security_audit_runtime._verify_database_authorities(
+            _config(),
+            object(),
+        )
+
+    assert raised.value.__cause__ is timeout
+    assert events[-1] == ("connection.close", "tenant_readiness_pg_dsn")
+
+
+def test_control_observation_timeout_closes_the_same_fifth_connection(
+    monkeypatch,
+):
+    events = []
+    observed_connections = []
+    timeout = TimeoutError("control observation timed out")
+    calls, connections = _install_connections(
+        monkeypatch,
+        dict(_AUTHORITIES),
+        events,
+    )
+
+    class Observer:
+        def __init__(self, factory, _client, _parent):
+            self._factory = factory
+
+        def current(self):
+            with self._factory() as connection:
+                observed_connections.append(connection)
+                raise timeout
+
+    monkeypatch.setattr(
+        security_audit_runtime.hmac_posture,
+        "CorrelationHmacLifecycleObserver",
+        Observer,
+    )
+
+    with pytest.raises(
+        security_audit_runtime.PreTenantAuditRuntimeUnavailable
+    ) as raised:
+        security_audit_runtime._verify_database_authorities(
+            _config(),
+            object(),
+        )
+
+    assert raised.value.__cause__ is timeout
+    assert len(calls) == 5
+    assert observed_connections == [
+        connections["security_audit_control_pg_dsn"]
+    ]
+    assert events[-1] == (
+        "connection.close",
+        "security_audit_control_pg_dsn",
+    )
 
 
 @pytest.mark.parametrize(("field", "observed_role"), _ROLE_CASES)
@@ -149,7 +357,10 @@ def test_startup_refuses_every_swapped_or_unexpected_database_role(
     with pytest.raises(
         security_audit_runtime.PreTenantAuditRuntimeUnavailable
     ):
-        security_audit_runtime._verify_database_authorities(_config())
+        security_audit_runtime._verify_database_authorities(
+            _config(),
+            object(),
+        )
 
 
 @pytest.mark.parametrize(
@@ -161,30 +372,22 @@ def test_startup_refuses_every_swapped_or_unexpected_database_role(
     ],
 )
 def test_startup_refuses_malformed_session_user_observations(rows):
-    connection = _Connection(rows, [])
+    connection = _Connection("tenant_readiness_pg_dsn", rows, [])
 
     with pytest.raises(
         security_audit_runtime.PreTenantAuditRuntimeUnavailable
     ):
-        security_audit_runtime._require_session_user(
+        with security_audit_runtime._require_session_user(
             lambda: connection,
             "ofarm_readiness",
-        )
+        ):
+            pass
 
 
 def test_pretenant_audit_graph_has_one_fixed_startup_order(monkeypatch):
     events = []
     producer_specs = []
-    posture = CorrelationHmacLifecyclePosture(
-        (
-            CorrelationHmacVersionPosture(
-                2,
-                "ENABLED",
-                CorrelationHmacVersionDisposition.ACTIVE,
-                None,
-            ),
-        )
-    )
+    posture = _posture()
 
     monkeypatch.setattr(
         security_audit_runtime,
@@ -204,17 +407,8 @@ def test_pretenant_audit_graph_has_one_fixed_startup_order(monkeypatch):
     monkeypatch.setattr(
         security_audit_runtime,
         "_verify_database_authorities",
-        lambda _config: events.append("database-authorities"),
+        lambda _config, _kms: events.append("database-authorities") or posture,
     )
-
-    class Observer:
-        def __init__(self, _factory, _client, parent):
-            assert parent == _HMAC_KEY
-            events.append("lifecycle.build")
-
-        def current(self):
-            events.append("lifecycle.current")
-            return posture
 
     class Hmac:
         def __init__(self, _client, resource):
@@ -232,11 +426,6 @@ def test_pretenant_audit_graph_has_one_fixed_startup_order(monkeypatch):
         def append(self, *_args):
             events.append("append")
 
-    monkeypatch.setattr(
-        security_audit_runtime,
-        "CorrelationHmacLifecycleObserver",
-        Observer,
-    )
     monkeypatch.setattr(
         security_audit_runtime,
         "GoogleKmsCorrelationHmac",
@@ -276,8 +465,6 @@ def test_pretenant_audit_graph_has_one_fixed_startup_order(monkeypatch):
         "audit-structure",
         "service-separation",
         "database-authorities",
-        "lifecycle.build",
-        "lifecycle.current",
         "hmac.build",
         "hmac.initialize",
         "client.AUTHENTICATION",
