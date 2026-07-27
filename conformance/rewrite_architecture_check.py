@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import re
 import sys
 from collections import deque
 from dataclasses import dataclass
@@ -206,6 +207,7 @@ PROFILE_NEUTRAL_MODULES = (
     "kernel.legacy_m1.runtime",
 )
 PROFILE_LOADER_MODULE = "kernel.profile_runtime_provider"
+SI_SPECIFIC_NAME = re.compile(r"^SI(?![a-z])")
 
 
 @dataclass(frozen=True, slots=True)
@@ -530,20 +532,20 @@ def _profile_neutrality_violations(
                 violations.add(
                     (node.lineno, f"import from {imported!r}")
                 )
-        elif (
-            isinstance(node, ast.Name)
-            and len(node.id) > 2
-            and node.id.startswith("SI")
-            and node.id[2].isupper()
-        ):
+        elif isinstance(node, ast.Name) and _is_si_specific_name(node.id):
             violations.add(
                 (node.lineno, f"SI-specific name {node.id!r}")
             )
         elif (
             isinstance(node, ast.Attribute)
-            and len(node.attr) > 2
-            and node.attr.startswith("SI")
-            and node.attr[2].isupper()
+            and node.attr.lower() == "si_ffs"
+        ):
+            violations.add(
+                (node.lineno, f"SI-specific attribute {node.attr!r}")
+            )
+        elif (
+            isinstance(node, ast.Attribute)
+            and _is_si_specific_name(node.attr)
         ):
             violations.add(
                 (node.lineno, f"SI-specific attribute {node.attr!r}")
@@ -557,6 +559,22 @@ def _profile_neutrality_violations(
                 (node.lineno, "SI semantic literal")
             )
     return sorted(violations)
+
+
+def _is_si_specific_name(value: str) -> bool:
+    """Recognize the SI acronym without treating ordinary SI words as refs."""
+    if SI_SPECIFIC_NAME.match(value) is None:
+        return False
+    suffix = value[2:]
+    return (
+        not suffix
+        or suffix.startswith("_")
+        or (
+            len(suffix) > 1
+            and suffix[0].isupper()
+            and suffix[1].islower()
+        )
+    )
 
 
 def _profile_loader_violations(tree: ast.Module) -> list[tuple[int, str]]:
@@ -646,6 +664,9 @@ def _check_import_firewall(root: Path = ROOT) -> list[str]:
         )
     for module in PROFILE_NEUTRAL_MODULES:
         if module not in trees:
+            failures.append(
+                f"required profile-neutral module {module!r} is missing"
+            )
             continue
         for line, reason in _profile_neutrality_violations(
             trees[module],
@@ -654,7 +675,12 @@ def _check_import_firewall(root: Path = ROOT) -> list[str]:
             failures.append(
                 f"{relative}:{line}: profile-neutral module contains {reason}"
             )
-    if PROFILE_LOADER_MODULE in trees:
+    if PROFILE_LOADER_MODULE not in trees:
+        failures.append(
+            f"required profile provider loader module "
+            f"{PROFILE_LOADER_MODULE!r} is missing"
+        )
+    else:
         for line, reason in _profile_loader_violations(
             trees[PROFILE_LOADER_MODULE]
         ):

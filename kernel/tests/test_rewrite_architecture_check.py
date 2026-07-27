@@ -127,6 +127,13 @@ def test_provider_import_policy_allows_read_only_module_attestation():
         "from kernel.profiles.si_ffs.outputs import SIOutputAssembler\n",
         "from .profiles import si_ffs\n",
         "binding = SIReferenceBindings()\n",
+        "specification = SI_OUTPUT_SPECIFICATION\n",
+        "specification = SI_MATERIALIZATION_SPECIFICATION\n",
+        (
+            "from . import profiles\n"
+            "specification = profiles.si_ffs.outputs.SI_OUTPUT_SPECIFICATION\n"
+        ),
+        "PROFILE = 'PROFILE:SI.FFS.RECORDKEEPING.V0_1'\n",
         (
             "from typing import TYPE_CHECKING\n"
             "if TYPE_CHECKING:\n"
@@ -137,6 +144,23 @@ def test_provider_import_policy_allows_read_only_module_attestation():
 def test_profile_neutral_modules_reject_si_dependencies_and_literals(source):
     assert rewrite_architecture_check._profile_neutrality_violations(
         ast.parse(source)
+    )
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "SIZE_LIMIT = 10\n",
+        "SIGNATURE = 'sha256'\n",
+        "SIGNAL = object()\n",
+    ],
+)
+def test_profile_neutral_modules_allow_ordinary_si_prefix_names(source):
+    assert (
+        rewrite_architecture_check._profile_neutrality_violations(
+            ast.parse(source)
+        )
+        == []
     )
 
 
@@ -177,6 +201,34 @@ def _firewall_tree(tmp_path: Path, api_source: str) -> None:
     _write_module(tmp_path, "kernel/__init__.py")
     _write_module(tmp_path, "kernel/api.py", api_source)
     _write_module(tmp_path, "kernel/application_runtime.py")
+    for module in (
+        *rewrite_architecture_check.PROFILE_NEUTRAL_MODULES,
+        rewrite_architecture_check.PROFILE_LOADER_MODULE,
+    ):
+        _write_module(tmp_path, f"{module.replace('.', '/')}.py")
+
+
+@pytest.mark.parametrize(
+    "module",
+    [
+        *rewrite_architecture_check.PROFILE_NEUTRAL_MODULES,
+        rewrite_architecture_check.PROFILE_LOADER_MODULE,
+    ],
+)
+def test_firewall_rejects_missing_required_profile_modules(tmp_path, module):
+    _firewall_tree(tmp_path, "")
+    (tmp_path / f"{module.replace('.', '/')}.py").unlink()
+
+    if module == rewrite_architecture_check.PROFILE_LOADER_MODULE:
+        expected = (
+            f"required profile provider loader module {module!r} is missing"
+        )
+    else:
+        expected = f"required profile-neutral module {module!r} is missing"
+
+    assert rewrite_architecture_check._check_import_firewall(tmp_path) == [
+        expected
+    ]
 
 
 def _provider_policy_tree(
