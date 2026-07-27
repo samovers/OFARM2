@@ -12,9 +12,6 @@ from deployment.postgresql.audit_contract import (
     SECURITY_AUDIT_CONTRACT,
     ProducerReasonSpec,
 )
-from deployment.postgresql.provisioning_specs import (
-    SECURITY_AUDIT_PROVISIONING_SPEC,
-)
 from kernel.security_audit import (
     CorrelationHmac,
     OverflowAuditAppend,
@@ -46,7 +43,6 @@ def _producer(session_user: str) -> ProducerReasonSpec:
 
 AUTHENTICATION = _producer("ofarm_security_authentication_producer_login")
 ROUTER = _producer("ofarm_security_request_router_producer_login")
-_PRODUCER_ROLES = (AUTHENTICATION.session_user, ROUTER.session_user)
 
 
 def _hmac(value: bytes = b"h" * 32) -> CorrelationHmac:
@@ -155,21 +151,6 @@ def _append_parameters(connection):
         parameters
         for statement, parameters in connection.executions
         if "append_pretenant_failure" in statement
-    )
-
-
-def test_production_connection_policy_matches_provisioned_role_defaults():
-    roles = {
-        role.name: {setting.name: setting.value for setting in role.settings}
-        for role in SECURITY_AUDIT_PROVISIONING_SPEC.roles
-        if role.name in _PRODUCER_ROLES
-    }
-
-    assert set(roles) == set(_PRODUCER_ROLES)
-    assert all(
-        settings["statement_timeout"] == "2000"
-        and settings["lock_timeout"] == "250"
-        for settings in roles.values()
     )
 
 

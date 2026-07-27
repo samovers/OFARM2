@@ -10,6 +10,9 @@ import pytest
 from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
 from deployment.postgresql.audit_contract import SECURITY_AUDIT_CONTRACT
+from deployment.postgresql.provisioning_specs import (
+    SECURITY_AUDIT_PROVISIONING_SPEC,
+)
 from kernel import security_audit_runtime
 from kernel.runtime_config import RuntimeConfig, RuntimeMode
 from kernel.security_audit import CorrelationHmac, SecurityAuditOutcomeUnknown
@@ -272,6 +275,27 @@ def test_production_connection_policy_overrides_conflicting_dsn_values(
             "options": "-c statement_timeout=2000 -c lock_timeout=250",
         }
     ]
+
+
+def test_production_connection_policy_matches_provisioned_role_defaults():
+    producer_roles = {
+        security_audit_runtime._producer(component).session_user
+        for component in ("AUTHENTICATION", "REQUEST_ROUTER")
+    }
+    roles = {
+        role.name: {setting.name: setting.value for setting in role.settings}
+        for role in SECURITY_AUDIT_PROVISIONING_SPEC.roles
+        if role.name in producer_roles
+    }
+
+    assert set(roles) == producer_roles
+    assert all(
+        settings["statement_timeout"]
+        == str(security_audit_runtime._STATEMENT_TIMEOUT_MILLISECONDS)
+        and settings["lock_timeout"]
+        == str(security_audit_runtime._LOCK_TIMEOUT_MILLISECONDS)
+        for settings in roles.values()
+    )
 
 
 def test_startup_connection_timeout_is_a_closed_refusal(monkeypatch):
