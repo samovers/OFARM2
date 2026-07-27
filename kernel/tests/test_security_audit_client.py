@@ -16,7 +16,7 @@ from deployment.postgresql.audit_contract import (
 from deployment.postgresql.provisioning_specs import (
     SECURITY_AUDIT_PROVISIONING_SPEC,
 )
-from kernel import security_audit_client
+from kernel import security_audit_runtime
 from kernel.security_audit import (
     CorrelationHmac,
     OverflowAuditAppend,
@@ -25,10 +25,7 @@ from kernel.security_audit import (
     SecurityAuditUnavailable,
     StoredAuditAppend,
 )
-from kernel.security_audit_client import (
-    PreTenantAuditClient,
-    production_audit_connection_factory,
-)
+from kernel.security_audit_client import PreTenantAuditClient
 from kernel.tests.postgresql_audit_support import (
     audit_service_fixture,  # noqa: F401
     role_dsn,
@@ -176,9 +173,9 @@ def test_production_connection_policy_overrides_conflicting_dsn_values(
         merged.append(conninfo_to_dict(make_conninfo(value, **kwargs)))
         return object()
 
-    monkeypatch.setattr(security_audit_client.psycopg, "connect", connect)
+    monkeypatch.setattr(security_audit_runtime.psycopg, "connect", connect)
 
-    production_audit_connection_factory(dsn)()
+    security_audit_runtime._audit_producer_connection_factory(dsn)()
 
     assert merged == [
         {
@@ -537,7 +534,7 @@ def test_live_postgresql_append_maps_real_role_and_result(
 def test_live_postgresql_request_policy_enforces_statement_timeout(
     migrated_audit_service,
 ):
-    factory = production_audit_connection_factory(
+    factory = security_audit_runtime._audit_producer_connection_factory(
         role_dsn(
             migrated_audit_service,
             AUTHENTICATION.session_user,
@@ -555,7 +552,7 @@ def test_live_postgresql_request_policy_enforces_statement_timeout(
 def test_live_postgresql_request_policy_enforces_lock_timeout(
     migrated_audit_service,
 ):
-    factory = production_audit_connection_factory(
+    factory = security_audit_runtime._audit_producer_connection_factory(
         role_dsn(
             migrated_audit_service,
             AUTHENTICATION.session_user,
