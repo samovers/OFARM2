@@ -499,10 +499,10 @@ class ReplayWriter:
             "ingressChannel": ctx.sub.get("ingressChannel", "MANUAL_UI"),
             "commitClass": stored["commitClass"],
             "semanticEventRef": event_ref,
-            "actingPartyRef": ctx.sub["actingPartyRef"],
+            "actingPartyRef": ctx.acting_party,
             "targetScopes": ctx.sub.get("targetScopes")
                             or [{"scopeType": "FARM",
-                                 "scopeRef": ctx.sub["farmRef"]}],
+                                 "scopeRef": ctx.farm_ref}],
             "idempotencyKey": ctx.idem_key,
             "sourcePayloadDigest": ctx.source_digest,
         }

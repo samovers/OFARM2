@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from ..contracts import ContractViolation
 from ..problems import runtime_problem
+from ..stages import IngressHeaderViolation
 
 if TYPE_CHECKING:
     from ..auth_oidc import TestOidcVerifier
@@ -18,6 +19,7 @@ if TYPE_CHECKING:
 
 
 TEST_DEPLOYMENT_IMAGE_DIGEST = "sha256:" + "a" * 64
+_MALFORMED_INGRESS_HEADER_DETAIL = "malformed ingress submission header"
 PUBLIC_ARTIFACT_KINDS = {
     "ofarm.referencesnapshot.v0.1",
     "ofarm.agronomiccodebindingprofile.v0.1",
@@ -152,7 +154,12 @@ def _install_commit_route(app, pipeline, principal) -> None:
             )
         try:
             return pipeline.commit(body.submission)
-        except (ContractViolation, KeyError) as exc:
+        except IngressHeaderViolation:
+            raise HTTPException(
+                status_code=422,
+                detail=_MALFORMED_INGRESS_HEADER_DETAIL,
+            ) from None
+        except ContractViolation as exc:
             raise HTTPException(status_code=422, detail=str(exc))
 
 
@@ -196,7 +203,12 @@ def _install_review_routes(app, pipeline, principal) -> None:
     def submit(kind: str, body, party_ref: str):
         try:
             return pipeline.commit(_review_submission(kind, body, party_ref))
-        except (ContractViolation, KeyError) as exc:
+        except IngressHeaderViolation:
+            raise HTTPException(
+                status_code=422,
+                detail=_MALFORMED_INGRESS_HEADER_DETAIL,
+            ) from None
+        except ContractViolation as exc:
             raise HTTPException(status_code=422, detail=str(exc))
 
     @app.post("/review/accept")

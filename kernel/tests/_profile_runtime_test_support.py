@@ -79,7 +79,11 @@ from kernel.runtime_bundle import (
     RuntimeComponentRole,
 )
 
-from kernel.stages import IngressNormalizer
+from kernel.stages import (
+    IngressHeaderViolation,
+    IngressNormalizer,
+    parse_ingress_header,
+)
 
 from kernel.store import Store
 

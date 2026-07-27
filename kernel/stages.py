@@ -29,8 +29,52 @@ if TYPE_CHECKING:
 
 
 # ---------------------------------------------------------------------------
-# typed stage results
+# typed ingress and stage results
 # ---------------------------------------------------------------------------
+
+@dataclass(frozen=True, slots=True)
+class IngressHeader:
+    """The exact transport fields needed before a GateContext can exist."""
+
+    commit_class: str
+    farm_ref: str
+    acting_party_ref: str
+    idempotency_key: str
+
+
+class IngressHeaderViolation(Exception):
+    """The submission cannot establish a typed ingress header."""
+
+
+def parse_ingress_header(submission: object) -> IngressHeader:
+    """Extract only the transport shape needed to enter the governed chain.
+
+    Domain membership, identifier grammar, and all semantic validation remain
+    downstream authorities. Values that are usable strings are preserved
+    exactly; this function never trims, folds, coerces, or normalizes them.
+    """
+    if not isinstance(submission, dict):
+        raise IngressHeaderViolation
+
+    values = {}
+    for field_name in (
+        "commitClass",
+        "farmRef",
+        "actingPartyRef",
+        "idempotencyKey",
+    ):
+        value = submission.get(field_name)
+        if not isinstance(value, str) or not value:
+            raise IngressHeaderViolation
+        values[field_name] = value
+
+    return IngressHeader(
+        commit_class=values["commitClass"],
+        farm_ref=values["farmRef"],
+        acting_party_ref=values["actingPartyRef"],
+        idempotency_key=values["idempotencyKey"],
+    )
+
 
 @dataclass
 class GatePass:

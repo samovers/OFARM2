@@ -151,6 +151,12 @@ contract; `kernel/demo.py:spray_submission()` is the canonical worked example
 (fictional, format-true — privacy rule 1). For an operation claim, `payload`
 is a complete `ExecutionRecordPayload` per `contracts/core/`.
 
+Before opening a transaction, the legacy pipeline requires non-empty string
+values for `commitClass`, `farmRef`, `actingPartyRef`, and `idempotencyKey`.
+Unusable transport shape receives a fixed HTTP 422 response; it is not a
+governed `RuntimeProblem`, trace, receipt, or domain outcome. Usable strings
+remain exact and continue to the existing normalization and contract checks.
+
 ## Module map
 
 | Module | Role |
