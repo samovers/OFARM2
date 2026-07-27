@@ -1,13 +1,12 @@
 """Verified selection of the executable services for one runtime profile."""
 from __future__ import annotations
 
-import importlib.util
-import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol
+from typing import Callable, TYPE_CHECKING, Protocol
 
 from .profile_runtime import ProfileRuntimeDescriptor, ProfileRuntimeError
+from .provider_import_policy import ProviderImportError, load_provider_factory
 from .runtime_bundle import RuntimeBundle, RuntimeBundleError, RuntimeComponentRole
 
 if TYPE_CHECKING:
@@ -42,6 +41,7 @@ class ProfileRuntimeRegistration:
     source_path: str
     factory_module: str
     factory_name: str
+    factory_resolver: Callable[[], object]
 
     @property
     def key(self) -> tuple[str, str]:
@@ -61,6 +61,12 @@ class ProfileRuntimeServices:
     registry_reverification: RegistryReverificationValidator
 
 
+def _resolve_si_factory():
+    from .profiles.si_ffs.runtime_provider import build_si_runtime_services
+
+    return build_si_runtime_services
+
+
 _REGISTRATIONS = (
     ProfileRuntimeRegistration(
         package_name="profile_si_ffs",
@@ -70,6 +76,7 @@ _REGISTRATIONS = (
         source_path="kernel/profiles/si_ffs/runtime_provider.py",
         factory_module="kernel.profiles.si_ffs.runtime_provider",
         factory_name="build_si_runtime_services",
+        factory_resolver=_resolve_si_factory,
     ),
 )
 
@@ -126,42 +133,19 @@ def _load_factory(
     source_path: Path,
     source_bytes: bytes,
 ):
-    spec = importlib.util.spec_from_file_location(
-        registration.factory_module,
-        source_path,
-    )
-    if spec is None or spec.origin is None:
-        raise ProfileRuntimeError(
-            f"runtime factory module {registration.factory_module!r} is unavailable"
-        )
     try:
-        origin = Path(spec.origin).resolve(strict=True)
-    except OSError as exc:
-        raise ProfileRuntimeError("runtime factory module path is unavailable") from exc
-    if origin != source_path:
-        raise ProfileRuntimeError(
-            "runtime factory module does not resolve to its verified source"
+        return load_provider_factory(
+            module_name=registration.factory_module,
+            component_ref=registration.component_ref,
+            source_path=source_path,
+            source_bytes=source_bytes,
+            factory_name=registration.factory_name,
+            factory_resolver=registration.factory_resolver,
         )
-    try:
-        module = importlib.util.module_from_spec(spec)
-        code = compile(
-            source_bytes,
-            str(source_path),
-            "exec",
-            dont_inherit=True,
-        )
-        exec(code, module.__dict__)
-    except Exception as exc:
+    except ProviderImportError as exc:
         raise ProfileRuntimeError(
             f"runtime factory module {registration.factory_module!r} is unavailable"
         ) from exc
-    factory = getattr(module, registration.factory_name, None)
-    if not callable(factory):
-        raise ProfileRuntimeError(
-            f"registered runtime factory {registration.factory_name!r} is unavailable"
-        )
-    sys.modules[registration.factory_module] = module
-    return factory
 
 
 def _validate_services(

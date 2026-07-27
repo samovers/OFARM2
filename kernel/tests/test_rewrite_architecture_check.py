@@ -81,6 +81,46 @@ def test_dynamic_import_check_does_not_track_general_function_flow():
     assert rewrite_architecture_check._dynamic_import_violations(tree) == []
 
 
+@pytest.mark.parametrize(
+    "source",
+    [
+        "import importlib\n",
+        "factory = compile(source, path, 'exec')\n",
+        "builtins.exec(code)\n",
+        "sys.modules['provider'] = module\n",
+        "sys.modules['provider'], other = module, value\n",
+        "del sys.modules['provider']\n",
+        "sys.modules.update({'provider': module})\n",
+    ],
+    ids=[
+        "importlib",
+        "compile",
+        "exec",
+        "module-assignment",
+        "module-unpack-assignment",
+        "module-deletion",
+        "module-update",
+    ],
+)
+def test_provider_import_policy_rejects_direct_loader_bypasses(source):
+    violations = (
+        rewrite_architecture_check._provider_import_policy_violations(
+            ast.parse(source)
+        )
+    )
+
+    assert violations
+
+
+def test_provider_import_policy_allows_read_only_module_attestation():
+    tree = ast.parse("module = sys.modules.get(module_name)\n")
+
+    assert (
+        rewrite_architecture_check._provider_import_policy_violations(tree)
+        == []
+    )
+
+
 def _write_module(root: Path, relative: str, source: str = "") -> None:
     path = root / relative
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -91,6 +131,51 @@ def _firewall_tree(tmp_path: Path, api_source: str) -> None:
     _write_module(tmp_path, "kernel/__init__.py")
     _write_module(tmp_path, "kernel/api.py", api_source)
     _write_module(tmp_path, "kernel/application_runtime.py")
+
+
+def _provider_policy_tree(
+    tmp_path: Path,
+    *,
+    loader_source: str = "",
+    policy_source: str = "",
+) -> None:
+    _write_module(tmp_path, "kernel/__init__.py")
+    _write_module(
+        tmp_path,
+        "kernel/profile_runtime_provider.py",
+        loader_source,
+    )
+    _write_module(
+        tmp_path,
+        "kernel/provider_import_policy.py",
+        policy_source,
+    )
+
+
+def test_provider_import_policy_reports_file_and_line(tmp_path):
+    _provider_policy_tree(
+        tmp_path,
+        loader_source="value = 1\nbuiltins.exec(code)\n",
+    )
+
+    assert rewrite_architecture_check._check_provider_import_policy(
+        tmp_path
+    ) == [
+        "kernel/profile_runtime_provider.py:2: forbidden provider import "
+        "mechanism (attribute reference to 'exec')"
+    ]
+
+
+def test_provider_import_policy_requires_both_modules(tmp_path):
+    _write_module(tmp_path, "kernel/__init__.py")
+    _write_module(tmp_path, "kernel/profile_runtime_provider.py")
+
+    assert rewrite_architecture_check._check_provider_import_policy(
+        tmp_path
+    ) == [
+        "required provider import policy module "
+        "'kernel.provider_import_policy' is missing"
+    ]
 
 
 def test_firewall_reports_indirect_dynamic_import_path(tmp_path):

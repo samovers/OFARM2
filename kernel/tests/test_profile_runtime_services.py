@@ -611,7 +611,7 @@ def test_issue_159_provider_bytes_are_verified_before_import(monkeypatch):
         )
 
 
-def test_issue_159_factory_executes_verified_bytes_not_disk_or_module_cache(
+def test_issue_159_factory_refuses_module_loaded_before_trusted_admission(
     tmp_path,
     monkeypatch,
 ):
@@ -627,23 +627,20 @@ def test_issue_159_factory_executes_verified_bytes_not_disk_or_module_cache(
         source_path=str(source_path),
         factory_module=module_name,
         factory_name="build",
+        factory_resolver=lambda: cached.build,
     )
     cached = SimpleNamespace(build=lambda _store, _descriptor: "cached module")
     monkeypatch.setitem(sys.modules, module_name, cached)
-    source_path.write_text(
-        "def build(_store, _descriptor):\n"
-        "    return 'mutated disk bytes'\n",
-        encoding="utf-8",
-    )
 
-    factory = profile_runtime_provider._load_factory(
-        registration,
-        source_path,
-        verified_bytes,
-    )
-
-    assert factory(None, None) == "verified provider bytes"
-    assert sys.modules[module_name] is not cached
+    with pytest.raises(
+        ProfileRuntimeError,
+        match="runtime factory module .* is unavailable",
+    ):
+        profile_runtime_provider._load_factory(
+            registration,
+            source_path,
+            verified_bytes,
+        )
 
 
 def test_issue_159_composition_returns_fresh_service_graphs(fresh_env):

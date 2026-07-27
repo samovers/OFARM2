@@ -83,6 +83,20 @@ Production exports no dependency-injection constructor. Importing
 `kernel.api` does not load the legacy Store, startup posture, HS256 verifier,
 gate pipeline, or SI output generator.
 
+## Runtime provider import trust
+
+The provider registry and its import-policy module are startup bootstrap code
+and are protected by the reviewed deployment artifact. The selected provider
+source is separately governed by the startup-verified `RuntimeBundle`.
+
+Before the provider's registry-owned literal import, the loader compares the
+source file with the verified bundle bytes and installs a private, empty Python
+bytecode-cache prefix with bytecode writes disabled. It refuses a provider
+module already present before admission. Later loads reuse only the exact
+attested module and factory after rechecking the source and bytecode posture.
+The architecture check forbids dynamic import, `compile`, `exec`, and
+`sys.modules` mutation in this boundary.
+
 ## Legacy M1 development runner
 
 This section runs the pre-tenancy M1 prototype against a disposable `public`
@@ -164,6 +178,7 @@ remain exact and continue to the existing normalization and contract checks.
 | `schema.sql` / `schema_posture.py` | Legacy M1 disposable-schema DDL and posture verification; not an issue #174 production migration or startup path |
 | `contracts.py` | contract registry: every write validated against `contracts/` (canonical lane) or `contracts/drafts_reference/` (draft lane, D16) |
 | `profile_runtime.py` | active profile runtime descriptor loader: validates profile-local runtime inputs fail-closed while keeping tenant/demo binding outside the descriptor |
+| `profile_runtime_provider.py` / `provider_import_policy.py` | verified provider selection plus source-only import admission and exact reuse attestation |
 | `store.py` | the append-only truth store; edges, gate log, idempotency, in-force queries, reachability check |
 | `problems.py` | `RuntimeProblem` factory; reason codes verbatim from the registry RFC — unknown codes refuse loudly |
 | `config.py` | deployment constants: tenant/profile/pack/policy refs, runtime version, database DSN assembly |
