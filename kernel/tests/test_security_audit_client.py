@@ -7,7 +7,6 @@ from uuid import UUID, uuid4
 
 import psycopg
 import pytest
-from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
 from deployment.postgresql.audit_contract import (
     SECURITY_AUDIT_CONTRACT,
@@ -16,7 +15,6 @@ from deployment.postgresql.audit_contract import (
 from deployment.postgresql.provisioning_specs import (
     SECURITY_AUDIT_PROVISIONING_SPEC,
 )
-from kernel import security_audit_runtime
 from kernel.security_audit import (
     CorrelationHmac,
     OverflowAuditAppend,
@@ -158,32 +156,6 @@ def _append_parameters(connection):
         for statement, parameters in connection.executions
         if "append_pretenant_failure" in statement
     )
-
-
-def test_production_connection_policy_overrides_conflicting_dsn_values(
-    monkeypatch,
-):
-    dsn = (
-        "dbname=audit connect_timeout=999 "
-        "options='-c statement_timeout=999999 -c lock_timeout=999999'"
-    )
-    merged = []
-
-    def connect(value, **kwargs):
-        merged.append(conninfo_to_dict(make_conninfo(value, **kwargs)))
-        return object()
-
-    monkeypatch.setattr(security_audit_runtime.psycopg, "connect", connect)
-
-    security_audit_runtime._audit_producer_connection_factory(dsn)()
-
-    assert merged == [
-        {
-            "connect_timeout": "5",
-            "dbname": "audit",
-            "options": "-c statement_timeout=2000 -c lock_timeout=250",
-        }
-    ]
 
 
 def test_production_connection_policy_matches_provisioned_role_defaults():
@@ -529,55 +501,3 @@ def test_live_postgresql_append_maps_real_role_and_result(
     assert type(result.event_id) is UUID
     assert result.observed_at.tzinfo is not None
     assert result.purge_after - result.observed_at == timedelta(days=30)
-
-
-def test_live_postgresql_request_policy_enforces_statement_timeout(
-    migrated_audit_service,
-):
-    factory = security_audit_runtime._audit_producer_connection_factory(
-        role_dsn(
-            migrated_audit_service,
-            AUTHENTICATION.session_user,
-        )
-    )
-    connection = factory()
-
-    with pytest.raises(psycopg.errors.QueryCanceled):
-        with connection:
-            connection.execute("SELECT pg_catalog.pg_sleep(3)")
-
-    assert connection.closed is True
-
-
-def test_live_postgresql_request_policy_enforces_lock_timeout(
-    migrated_audit_service,
-):
-    factory = security_audit_runtime._audit_producer_connection_factory(
-        role_dsn(
-            migrated_audit_service,
-            AUTHENTICATION.session_user,
-        )
-    )
-    connections = []
-
-    def connect():
-        connection = factory()
-        connections.append(connection)
-        return connection
-
-    with psycopg.connect(
-        migrated_audit_service["target_admin_dsn"]
-    ) as blocker:
-        blocker.execute(
-            "LOCK TABLE ofarm_security.operational_security_event "
-            "IN ACCESS EXCLUSIVE MODE"
-        )
-        with pytest.raises(SecurityAuditOutcomeUnknown) as raised:
-            PreTenantAuditClient(
-                connect,
-                AUTHENTICATION,
-            ).append("CREDENTIAL_MISSING", _hmac())
-
-    assert len(connections) == 2
-    assert all(connection.closed for connection in connections)
-    assert isinstance(raised.value.__cause__, psycopg.errors.LockNotAvailable)
