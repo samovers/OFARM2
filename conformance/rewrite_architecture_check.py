@@ -14,6 +14,7 @@ MAX_FUNCTION_LINES = 80
 MAX_TEST_LINES = 800
 MODULE_BUDGETS = {
     "kernel/profile_runtime_provider.py": 350,
+    "kernel/provider_import_policy.py": 260,
     "kernel/profiles/si_ffs/runtime_provider.py": 350,
     "kernel/authentication.py": 100,
     "kernel/auth_oidc.py": 200,
@@ -43,9 +44,10 @@ MODULE_BUDGETS = {
 }
 GROUP_BUDGETS = {
     "profile runtime": (
-        350,
+        550,
         (
             "kernel/profile_runtime_provider.py",
+            "kernel/provider_import_policy.py",
             "kernel/profiles/si_ffs/runtime_provider.py",
         ),
     ),
@@ -141,6 +143,10 @@ TEST_GLOBS = (
 PROHIBITED_NAMES = {"for_test", "production_eligible"}
 PRODUCTION_IMPORT_ROOTS = ("kernel.api", "kernel.application_runtime")
 LEGACY_IMPORT_ROOTS = ("kernel.legacy_m1.api", "kernel.legacy_m1.runtime")
+PROVIDER_IMPORT_POLICY_MODULES = (
+    "kernel.profile_runtime_provider",
+    "kernel.provider_import_policy",
+)
 LEGACY_MODULE_PREFIXES = ("kernel.legacy_m1", "kernel.profiles.si_ffs")
 LEGACY_MODULES = frozenset(
     {
@@ -382,6 +388,99 @@ def _dynamic_import_violations(
     return sorted(violations)
 
 
+def _is_sys_modules(node: ast.AST) -> bool:
+    return (
+        isinstance(node, ast.Attribute)
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "sys"
+        and node.attr == "modules"
+    )
+
+
+def _mutates_sys_modules(node: ast.AST) -> bool:
+    if _is_sys_modules(node) or (
+        isinstance(node, ast.Subscript) and _is_sys_modules(node.value)
+    ):
+        return True
+    if isinstance(node, ast.Starred):
+        return _mutates_sys_modules(node.value)
+    if isinstance(node, (ast.List, ast.Tuple)):
+        return any(_mutates_sys_modules(item) for item in node.elts)
+    return False
+
+
+def _provider_import_policy_violations(
+    tree: ast.Module,
+) -> list[tuple[int, str]]:
+    violations = set(_dynamic_import_violations(tree))
+    mutating_methods = {
+        "__delitem__",
+        "__setitem__",
+        "clear",
+        "pop",
+        "popitem",
+        "setdefault",
+        "update",
+    }
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Name)
+            and node.id in {"compile", "exec"}
+        ):
+            violations.add(
+                (node.lineno, f"reference to built-in {node.id!r}")
+            )
+        elif (
+            isinstance(node, ast.Attribute)
+            and node.attr in {"compile", "exec"}
+        ):
+            violations.add(
+                (node.lineno, f"attribute reference to {node.attr!r}")
+            )
+        elif isinstance(node, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
+            targets = (
+                node.targets
+                if isinstance(node, ast.Assign)
+                else (node.target,)
+            )
+            if any(_mutates_sys_modules(target) for target in targets):
+                violations.add(
+                    (node.lineno, "mutation of sys.modules")
+                )
+        elif isinstance(node, ast.Delete) and any(
+            _mutates_sys_modules(target) for target in node.targets
+        ):
+            violations.add((node.lineno, "mutation of sys.modules"))
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and _is_sys_modules(node.func.value)
+            and node.func.attr in mutating_methods
+        ):
+            violations.add((node.lineno, "mutation of sys.modules"))
+    return sorted(violations)
+
+
+def _check_provider_import_policy(root: Path = ROOT) -> list[str]:
+    sources = _module_sources(root)
+    failures = []
+    for module in PROVIDER_IMPORT_POLICY_MODULES:
+        path = sources.get(module)
+        if path is None:
+            failures.append(
+                f"required provider import policy module {module!r} is missing"
+            )
+            continue
+        relative = path.relative_to(root).as_posix()
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=relative)
+        for line, reason in _provider_import_policy_violations(tree):
+            failures.append(
+                f"{relative}:{line}: forbidden provider import mechanism "
+                f"({reason})"
+            )
+    return failures
+
+
 def _legacy_resource_violations(
     tree: ast.Module,
 ) -> list[tuple[int, str]]:
@@ -572,6 +671,7 @@ def _check_production(path: Path, budget: int) -> list[str]:
 
 def main() -> int:
     failures = _check_import_firewall()
+    failures.extend(_check_provider_import_policy())
     for relative, budget in MODULE_BUDGETS.items():
         failures.extend(_check_production(ROOT / relative, budget))
     for name, (budget, relatives) in GROUP_BUDGETS.items():

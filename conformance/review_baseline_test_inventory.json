@@ -7036,6 +7036,41 @@
       "sourcePath": "kernel/tests/test_profile_runtime_descriptor.py"
     },
     {
+      "nodeid": "kernel/tests/test_profile_runtime_import_policy.py::test_code_owned_posture_ignores_timestamp_valid_provider_bytecode",
+      "sourceModule": "kernel.tests.test_profile_runtime_import_policy",
+      "sourcePath": "kernel/tests/test_profile_runtime_import_policy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_import_policy.py::test_provider_import_refuses_changed_posture_on_reuse",
+      "sourceModule": "kernel.tests.test_profile_runtime_import_policy",
+      "sourcePath": "kernel/tests/test_profile_runtime_import_policy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_import_policy.py::test_provider_import_refuses_factory_from_another_module",
+      "sourceModule": "kernel.tests.test_profile_runtime_import_policy",
+      "sourcePath": "kernel/tests/test_profile_runtime_import_policy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_import_policy.py::test_provider_import_refuses_replaced_attested_module",
+      "sourceModule": "kernel.tests.test_profile_runtime_import_policy",
+      "sourcePath": "kernel/tests/test_profile_runtime_import_policy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_import_policy.py::test_provider_import_refuses_source_changed_after_attestation",
+      "sourceModule": "kernel.tests.test_profile_runtime_import_policy",
+      "sourcePath": "kernel/tests/test_profile_runtime_import_policy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_import_policy.py::test_provider_import_refuses_unattested_preloaded_module",
+      "sourceModule": "kernel.tests.test_profile_runtime_import_policy",
+      "sourcePath": "kernel/tests/test_profile_runtime_import_policy.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_import_policy.py::test_provider_import_reuses_only_one_attested_literal_import",
+      "sourceModule": "kernel.tests.test_profile_runtime_import_policy",
+      "sourcePath": "kernel/tests/test_profile_runtime_import_policy.py"
+    },
+    {
       "nodeid": "kernel/tests/test_profile_runtime_readiness_check.py::test_docs_navigation_and_source_manifests_do_not_populate_inventory",
       "sourceModule": "kernel.tests.test_profile_runtime_readiness_check",
       "sourcePath": "kernel/tests/test_profile_runtime_readiness_check.py"
@@ -7621,7 +7656,7 @@
       "sourcePath": "kernel/tests/test_profile_runtime_services.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_159_factory_executes_verified_bytes_not_disk_or_module_cache",
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_issue_159_factory_refuses_module_loaded_before_trusted_admission",
       "sourceModule": "kernel.tests.test_profile_runtime_services",
       "sourcePath": "kernel/tests/test_profile_runtime_services.py"
     },
@@ -8187,6 +8222,56 @@
     },
     {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_firewall_reports_indirect_legacy_import_path",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_provider_import_policy_allows_read_only_module_attestation",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_provider_import_policy_rejects_direct_loader_bypasses[compile]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_provider_import_policy_rejects_direct_loader_bypasses[exec]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_provider_import_policy_rejects_direct_loader_bypasses[importlib]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_provider_import_policy_rejects_direct_loader_bypasses[module-assignment]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_provider_import_policy_rejects_direct_loader_bypasses[module-deletion]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_provider_import_policy_rejects_direct_loader_bypasses[module-unpack-assignment]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_provider_import_policy_rejects_direct_loader_bypasses[module-update]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_provider_import_policy_reports_file_and_line",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_provider_import_policy_requires_both_modules",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
@@ -9736,8 +9821,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "3e57d1c761e00a9fc918c88441843f907e5bded1abbc5a5eab4a75c637d90079",
-  "entryCount": 1947,
+  "entriesSha256": "caee153eadcfadd65f015216c04e57c7f74850f28dad9fd895a5953ac61fe655",
+  "entryCount": 1964,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
