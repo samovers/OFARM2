@@ -18,9 +18,11 @@ kernel/emission.py — stages and validators store their own gate records
 (authority decisions, sufficiency cases, carriers) where they decide them.
 
 The invariants are unchanged: every authoritative write crosses the chain
-inside ONE transaction (D3); every refusal is a registry-coded RuntimeProblem
-(Kernel rule 7); every outcome lands in the gate log and the PromotionTrace;
-capture is not commitment (Kernel rule 3).
+inside ONE transaction (D3); every governed refusal after context construction
+is a registry-coded RuntimeProblem (Kernel rule 7); every governed outcome
+lands in the gate log and the PromotionTrace; capture is not commitment
+(Kernel rule 3). An unusable transport header is rejected before the governed
+chain and cannot invent a trace or domain outcome.
 """
 from __future__ import annotations
 
@@ -35,9 +37,10 @@ from .profile_runtime import (ProfileRuntimeError, resolve_bound_descriptor,
                               resolve_profile_route)
 from .profile_runtime_provider import load_profile_runtime_services
 from .stages import (AuthorityGate, EnvelopePersist, EvidenceSufficiencyGate,
-                     GateContext, GateRefusal, GateReplay, IngressNormalizer,
-                     MaterializationGate, ProfileApplicabilityGate,
-                     ReviewPromotionGate)
+                     GateContext, GateRefusal, GateReplay, IngressHeader,
+                     IngressNormalizer, MaterializationGate,
+                     ProfileApplicabilityGate, ReviewPromotionGate,
+                     parse_ingress_header)
 from .validators import ValidationGate
 
 # law-pinned stage order (PLATFORM.md gate pipeline); validation's internal
@@ -101,12 +104,16 @@ class GatePipeline:
     # the governed front door
     # ======================================================================
 
-    def commit(self, submission: dict) -> dict:
-        """Run one capture through the full chain. Returns the
-        CommitIngressResult payload. One call = one transaction (D3)."""
+    def commit(self, submission: object) -> dict:
+        """Run one typed capture through the full chain.
+
+        A valid call returns its CommitIngressResult from one transaction
+        (D3). Unusable transport shape is rejected before a transaction exists.
+        """
+        header = parse_ingress_header(submission)
         try:
             with self.store.serialized_tx() as cur:
-                return self._commit_in_tx(cur, submission)
+                return self._commit_in_tx(cur, submission, header)
         except psycopg.errors.UniqueViolation:
             # a concurrent commit won the idempotency-key race; our transaction
             # rolled back completely — serve the replay path against the winner.
@@ -114,10 +121,10 @@ class GatePipeline:
             # backstop is now reached only across connections that bypass it.)
             with self.store.serialized_tx() as cur:
                 prior = self.store.idempotency_lookup(
-                    cur, submission["idempotencyKey"])
+                    cur, header.idempotency_key)
                 if prior is None:
                     raise
-                ctx = self._new_context(cur, submission)
+                ctx = self._new_context(cur, submission, header)
                 return ReplayWriter().write(ctx, prior)
 
     @staticmethod
@@ -129,15 +136,21 @@ class GatePipeline:
         return sha256_of(
             {k: v for k, v in sub.items() if k != "sourcePayloadDigest"})
 
-    def _new_context(self, cur, sub: dict) -> GateContext:
+    def _new_context(
+        self,
+        cur,
+        sub: dict,
+        header: IngressHeader,
+    ) -> GateContext:
         return GateContext(
             cur=cur, store=self.store, authority=self.authority,
             runtime_services=self.runtime_services,
             sub=sub,
             request_id=mint("cir"), ingested_at=now_iso(),
             source_digest=self._source_digest(sub),
-            commit_class=sub["commitClass"], farm_ref=sub["farmRef"],
-            acting_party=sub["actingPartyRef"], idem_key=sub["idempotencyKey"],
+            commit_class=header.commit_class, farm_ref=header.farm_ref,
+            acting_party=header.acting_party_ref,
+            idem_key=header.idempotency_key,
             event_id=mint("event"), assertion_id=mint("assert"))
 
     @staticmethod
@@ -236,8 +249,13 @@ class GatePipeline:
                 refs=[resolution.route.route_id, resolution.descriptor.profile_ref])
         return None
 
-    def _commit_in_tx(self, cur, sub: dict) -> dict:
-        ctx = self._new_context(cur, sub)
+    def _commit_in_tx(
+        self,
+        cur,
+        sub: dict,
+        header: IngressHeader,
+    ) -> dict:
+        ctx = self._new_context(cur, sub, header)
 
         ingress = IngressNormalizer().run(ctx)
         if isinstance(ingress, GateReplay):

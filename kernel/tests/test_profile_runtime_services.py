@@ -273,7 +273,7 @@ def test_gate_pipeline_threads_si_reference_bindings(fresh_env):
         confirm=True,
     )
 
-    ctx = pipeline._new_context(None, sub)
+    ctx = pipeline._new_context(None, sub, parse_ingress_header(sub))
 
     services = pipeline.runtime_services
     assert services.product_lookup.bindings == services.reference_bindings

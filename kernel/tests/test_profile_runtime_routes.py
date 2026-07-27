@@ -169,7 +169,7 @@ def test_route_backed_gate_pipeline_counts_malformed_farm_scope_entries(
     )
 
     with store.tx() as cur:
-        ctx = pipeline._new_context(cur, sub)
+        ctx = pipeline._new_context(cur, sub, parse_ingress_header(sub))
         ctx.envelope = {
             "anchorScopes": [
                 {"scopeType": "FARM", "scopeRef": demo.FARM},
@@ -516,7 +516,7 @@ def test_route_backed_handoff_binds_materializer_to_resolved_descriptor(fresh_en
     )
 
     with store.tx() as cur:
-        ctx = pipeline._new_context(cur, sub)
+        ctx = pipeline._new_context(cur, sub, parse_ingress_header(sub))
         ingress = IngressNormalizer().run(ctx)
         assert not hasattr(ingress, "result")
         assert pipeline._resolve_profile_route(ctx) is None

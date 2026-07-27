@@ -659,7 +659,7 @@ def test_gate_pipeline_default_missing_farm_ref_still_fails_before_route(
     del sub["farmRef"]
     before = len(store.find_by_kind("ofarm.promotiontrace.v0.1"))
 
-    with pytest.raises(KeyError, match="farmRef"):
+    with pytest.raises(IngressHeaderViolation):
         pipeline.commit(sub)
 
     assert len(store.find_by_kind("ofarm.promotiontrace.v0.1")) == before
