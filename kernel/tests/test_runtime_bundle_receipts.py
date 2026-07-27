@@ -15,7 +15,7 @@ from psycopg import sql
 
 from kernel import config, context, demo
 from kernel.adapters import ImportRunner, ParseResult
-from kernel.api import create_test_app
+from kernel.legacy_m1.api import create_test_app
 from kernel.authority import AuthorityEvaluator
 from kernel.contracts import sha256_of
 from kernel.gates import GatePipeline

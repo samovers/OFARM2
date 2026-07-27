@@ -36,17 +36,17 @@
       "sourcePath": "kernel/tests/test_application_runtime.py"
     },
     {
-      "nodeid": "kernel/tests/test_application_runtime.py::test_production_and_development_imports_exclude_test_hs256",
-      "sourceModule": "kernel.tests.test_application_runtime",
-      "sourcePath": "kernel/tests/test_application_runtime.py"
-    },
-    {
       "nodeid": "kernel/tests/test_application_runtime.py::test_production_app_exposes_only_metadata_and_closes_shared_surface",
       "sourceModule": "kernel.tests.test_application_runtime",
       "sourcePath": "kernel/tests/test_application_runtime.py"
     },
     {
       "nodeid": "kernel/tests/test_application_runtime.py::test_production_graph_initializes_in_fixed_order",
+      "sourceModule": "kernel.tests.test_application_runtime",
+      "sourcePath": "kernel/tests/test_application_runtime.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_application_runtime.py::test_production_import_excludes_the_legacy_runtime_closure",
       "sourceModule": "kernel.tests.test_application_runtime",
       "sourcePath": "kernel/tests/test_application_runtime.py"
     },
@@ -7876,6 +7876,61 @@
       "sourcePath": "kernel/tests/test_rewrite_architecture.py"
     },
     {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_dynamic_import_check_does_not_track_general_function_flow",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_dynamic_import_direct_forms_are_rejected[builtin-reference]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_dynamic_import_direct_forms_are_rejected[builtins-attribute]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_dynamic_import_direct_forms_are_rejected[builtins-from-alias]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_dynamic_import_direct_forms_are_rejected[getattr-literal]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_dynamic_import_direct_forms_are_rejected[importlib-alias]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_dynamic_import_direct_forms_are_rejected[importlib-from-alias]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_dynamic_import_direct_forms_are_rejected[importlib-submodule]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_dynamic_import_direct_forms_are_rejected[nested-type-checking]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_dynamic_import_direct_forms_are_rejected[subscript-literal]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_dynamic_import_in_legacy_only_module_is_outside_production_rule",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_environment_reads_detect_import_styles[from os import environ as environment/nenvironment.get('SETTING')/n-2]",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
@@ -7902,6 +7957,26 @@
     },
     {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_environment_reads_ignore_environment_free_modules",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_firewall_rejects_legacy_reverse_import",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_firewall_rejects_prototype_schema_reference",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_firewall_reports_indirect_dynamic_import_path",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_firewall_reports_indirect_legacy_import_path",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
@@ -9451,8 +9526,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "a2a6e80025d82ffa93c7764f429fd8a55df4d86207c34092d66a58a2511421b9",
-  "entryCount": 1890,
+  "entriesSha256": "f447c1b6d4b223f91fa7f167ae60dadbf6d578a9f3025f7f8904f46655497335",
+  "entryCount": 1905,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

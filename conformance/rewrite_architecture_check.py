@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import ast
 import sys
+from collections import deque
+from dataclasses import dataclass
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent.parent
 MAX_FUNCTION_LINES = 80
 MAX_TEST_LINES = 800
-PRODUCTION_BUDGETS = {
+MODULE_BUDGETS = {
     "kernel/profile_runtime_provider.py": 350,
     "kernel/profiles/si_ffs/runtime_provider.py": 350,
     "kernel/authentication.py": 100,
@@ -25,10 +27,12 @@ PRODUCTION_BUDGETS = {
     "kernel/tenant_capability_issuer.py": 180,
     "kernel/key_control.py": 350,
     "kernel/tenant_uow.py": 450,
-    "kernel/api.py": 450,
+    "kernel/api.py": 120,
+    "kernel/deployment_identity.py": 50,
     "kernel/runtime_config.py": 140,
     "kernel/application_runtime.py": 220,
-    "kernel/legacy_runtime.py": 100,
+    "kernel/legacy_m1/api.py": 370,
+    "kernel/legacy_m1/runtime.py": 100,
     "kernel/security_audit.py": 130,
     "kernel/security_audit_client.py": 220,
     "kernel/authentication_audit.py": 140,
@@ -76,7 +80,14 @@ GROUP_BUDGETS = {
         (
             "kernel/runtime_config.py",
             "kernel/application_runtime.py",
-            "kernel/legacy_runtime.py",
+            "kernel/deployment_identity.py",
+        ),
+    ),
+    "legacy M1 composition": (
+        450,
+        (
+            "kernel/legacy_m1/api.py",
+            "kernel/legacy_m1/runtime.py",
         ),
     ),
     "tenant transaction": (
@@ -128,10 +139,310 @@ TEST_GLOBS = (
     "kernel/tests/*security_audit_runtime*.py",
 )
 PROHIBITED_NAMES = {"for_test", "production_eligible"}
+PRODUCTION_IMPORT_ROOTS = ("kernel.api", "kernel.application_runtime")
+LEGACY_IMPORT_ROOTS = ("kernel.legacy_m1.api", "kernel.legacy_m1.runtime")
+LEGACY_MODULE_PREFIXES = ("kernel.legacy_m1", "kernel.profiles.si_ffs")
+LEGACY_MODULES = frozenset(
+    {
+        "kernel.adapters",
+        "kernel.auth_oidc",
+        "kernel.authority",
+        "kernel.config",
+        "kernel.context",
+        "kernel.contracts",
+        "kernel.demo",
+        "kernel.emission",
+        "kernel.gates",
+        "kernel.manifest",
+        "kernel.materializer",
+        "kernel.policy",
+        "kernel.profile_policy",
+        "kernel.runtime_activation",
+        "kernel.schema_posture",
+        "kernel.stages",
+        "kernel.store",
+        "kernel.sufficiency",
+        "kernel.validators",
+        "kernel.verification",
+        "kernel.views",
+    }
+)
+PRODUCTION_COMPOSITION_MODULES = frozenset(
+    {
+        "kernel.api",
+        "kernel.application_runtime",
+        "kernel.authentication_audit",
+        "kernel.google_kms_correlation_hmac",
+        "kernel.google_kms_signer",
+        "kernel.key_control",
+        "kernel.principal",
+        "kernel.principal_control",
+        "kernel.principal_resolver",
+        "kernel.production_oidc",
+        "kernel.request_router_audit",
+        "kernel.runtime_config",
+        "kernel.security_audit",
+        "kernel.security_audit_client",
+        "kernel.security_audit_hmac_posture",
+        "kernel.security_audit_runtime",
+        "kernel.signing_authority",
+        "kernel.signing_receipt",
+        "kernel.tenant_capability_issuer",
+        "kernel.tenant_uow",
+    }
+)
+LEGACY_RESOURCE_NAMES = frozenset({"schema.sql"})
+
+
+@dataclass(frozen=True, slots=True)
+class _ImportEdge:
+    target: str
+    line: int
 
 
 def _line_count(path: Path) -> int:
     return len(path.read_text(encoding="utf-8").splitlines())
+
+
+def _module_name(root: Path, path: Path) -> str:
+    parts = list(path.relative_to(root).with_suffix("").parts)
+    if parts[-1] == "__init__":
+        parts.pop()
+    return ".".join(parts)
+
+
+def _module_sources(root: Path) -> dict[str, Path]:
+    sources = {}
+    for path in root.rglob("*.py"):
+        relative = path.relative_to(root)
+        if "__pycache__" in relative.parts or any(
+            part.startswith(".") for part in relative.parts
+        ):
+            continue
+        sources[_module_name(root, path)] = path
+    return sources
+
+
+def _from_import_base(
+    module: str,
+    path: Path,
+    node: ast.ImportFrom,
+) -> str:
+    if node.level == 0:
+        return node.module or ""
+    package = module.split(".")
+    if path.name != "__init__.py":
+        package.pop()
+    keep = len(package) - node.level + 1
+    if keep < 0:
+        return ""
+    base = package[:keep]
+    if node.module:
+        base.extend(node.module.split("."))
+    return ".".join(base)
+
+
+def _import_edges(
+    module: str,
+    path: Path,
+    tree: ast.Module,
+    known_modules: set[str],
+) -> tuple[_ImportEdge, ...]:
+    edges = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name in known_modules:
+                    edges.add(_ImportEdge(alias.name, node.lineno))
+        elif isinstance(node, ast.ImportFrom):
+            base = _from_import_base(module, path, node)
+            if base in known_modules:
+                edges.add(_ImportEdge(base, node.lineno))
+            for alias in node.names:
+                candidate = f"{base}.{alias.name}" if base else alias.name
+                if candidate in known_modules:
+                    edges.add(_ImportEdge(candidate, node.lineno))
+    return tuple(sorted(edges, key=lambda edge: (edge.line, edge.target)))
+
+
+def _import_graph(
+    sources: dict[str, Path],
+) -> tuple[dict[str, tuple[_ImportEdge, ...]], dict[str, ast.Module]]:
+    known_modules = set(sources)
+    trees = {}
+    graph = {}
+    for module, path in sorted(sources.items()):
+        tree = ast.parse(
+            path.read_text(encoding="utf-8"),
+            filename=path.as_posix(),
+        )
+        trees[module] = tree
+        graph[module] = _import_edges(module, path, tree, known_modules)
+    return graph, trees
+
+
+def _reachable_paths(
+    graph: dict[str, tuple[_ImportEdge, ...]],
+    roots: tuple[str, ...],
+) -> dict[str, tuple[str, ...]]:
+    paths = {}
+    pending = deque()
+    for root in roots:
+        if root in graph:
+            paths[root] = (root,)
+            pending.append(root)
+    while pending:
+        module = pending.popleft()
+        for edge in graph[module]:
+            if edge.target not in paths:
+                paths[edge.target] = (*paths[module], edge.target)
+                pending.append(edge.target)
+    return paths
+
+
+def _is_legacy_module(module: str) -> bool:
+    return module in LEGACY_MODULES or any(
+        module == prefix or module.startswith(f"{prefix}.")
+        for prefix in LEGACY_MODULE_PREFIXES
+    )
+
+
+def _incoming_edge(
+    graph: dict[str, tuple[_ImportEdge, ...]],
+    path: tuple[str, ...],
+) -> tuple[str, _ImportEdge] | None:
+    if len(path) < 2:
+        return None
+    source, target = path[-2:]
+    edge = next(edge for edge in graph[source] if edge.target == target)
+    return source, edge
+
+
+def _dynamic_import_violations(
+    tree: ast.Module,
+) -> list[tuple[int, str]]:
+    violations = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "importlib" or alias.name.startswith(
+                    "importlib."
+                ):
+                    violations.add(
+                        (node.lineno, f"import of {alias.name!r}")
+                    )
+        elif isinstance(node, ast.ImportFrom):
+            if node.module and (
+                node.module == "importlib"
+                or node.module.startswith("importlib.")
+            ):
+                violations.add(
+                    (node.lineno, f"import from {node.module!r}")
+                )
+            if any(alias.name == "__import__" for alias in node.names):
+                violations.add(
+                    (node.lineno, "import of built-in '__import__'")
+                )
+        elif isinstance(node, ast.Name) and node.id == "__import__":
+            violations.add(
+                (node.lineno, "reference to built-in '__import__'")
+            )
+        elif isinstance(node, ast.Attribute) and node.attr == "__import__":
+            violations.add(
+                (node.lineno, "attribute reference to '__import__'")
+            )
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, (ast.Name, ast.Attribute))
+            and (
+                (
+                    isinstance(node.func, ast.Name)
+                    and node.func.id == "getattr"
+                )
+                or (
+                    isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "getattr"
+                )
+            )
+            and len(node.args) >= 2
+            and isinstance(node.args[1], ast.Constant)
+            and node.args[1].value == "__import__"
+        ):
+            violations.add(
+                (node.lineno, "literal reflective access to '__import__'")
+            )
+        elif (
+            isinstance(node, ast.Subscript)
+            and isinstance(node.slice, ast.Constant)
+            and node.slice.value == "__import__"
+        ):
+            violations.add(
+                (node.lineno, "literal subscript access to '__import__'")
+            )
+    return sorted(violations)
+
+
+def _legacy_resource_violations(
+    tree: ast.Module,
+) -> list[tuple[int, str]]:
+    violations = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Constant) or not isinstance(node.value, str):
+            continue
+        normalized = node.value.replace("\\", "/")
+        if normalized in LEGACY_RESOURCE_NAMES or any(
+            normalized.endswith(f"/kernel/{name}")
+            for name in LEGACY_RESOURCE_NAMES
+        ):
+            violations.add((node.lineno, normalized))
+    return sorted(violations)
+
+
+def _check_import_firewall(root: Path = ROOT) -> list[str]:
+    sources = _module_sources(root)
+    graph, trees = _import_graph(sources)
+    failures = []
+
+    production_paths = _reachable_paths(graph, PRODUCTION_IMPORT_ROOTS)
+    for module, path in sorted(production_paths.items()):
+        rendered_path = " -> ".join(path)
+        if _is_legacy_module(module):
+            incoming = _incoming_edge(graph, path)
+            if incoming is not None:
+                source, edge = incoming
+                relative = sources[source].relative_to(root).as_posix()
+                failures.append(
+                    f"{relative}:{edge.line}: production import path "
+                    f"{rendered_path} reaches legacy module {module!r}"
+                )
+        for line, reason in _dynamic_import_violations(trees[module]):
+            relative = sources[module].relative_to(root).as_posix()
+            failures.append(
+                f"{relative}:{line}: forbidden dynamic import mechanism "
+                f"({reason}); production import path {rendered_path}"
+            )
+        for line, resource in _legacy_resource_violations(trees[module]):
+            relative = sources[module].relative_to(root).as_posix()
+            failures.append(
+                f"{relative}:{line}: production references legacy resource "
+                f"{resource!r}; production import path {rendered_path}"
+            )
+
+    legacy_paths = _reachable_paths(graph, LEGACY_IMPORT_ROOTS)
+    for module, path in sorted(legacy_paths.items()):
+        if module not in PRODUCTION_COMPOSITION_MODULES:
+            continue
+        incoming = _incoming_edge(graph, path)
+        if incoming is None:
+            continue
+        source, edge = incoming
+        relative = sources[source].relative_to(root).as_posix()
+        failures.append(
+            f"{relative}:{edge.line}: legacy import path "
+            f"{' -> '.join(path)} reaches production composition "
+            f"module {module!r}"
+        )
+    return failures
 
 
 def _annotation_uses_any(annotation: ast.expr | None) -> bool:
@@ -260,8 +571,8 @@ def _check_production(path: Path, budget: int) -> list[str]:
 
 
 def main() -> int:
-    failures = []
-    for relative, budget in PRODUCTION_BUDGETS.items():
+    failures = _check_import_firewall()
+    for relative, budget in MODULE_BUDGETS.items():
         failures.extend(_check_production(ROOT / relative, budget))
     for name, (budget, relatives) in GROUP_BUDGETS.items():
         total = sum(_line_count(ROOT / relative) for relative in relatives)
@@ -284,7 +595,7 @@ def main() -> int:
     if failures:
         print("\n".join(f"FAIL {failure}" for failure in failures))
         return 1
-    print("rewrite architecture budgets: PASS")
+    print("rewrite architecture constraints: PASS")
     return 0
 
 

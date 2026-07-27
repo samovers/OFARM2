@@ -11,11 +11,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from kernel import api, application_runtime
+from kernel.deployment_identity import RuntimeActivationError
 from kernel.application_runtime import (
     RuntimeMetadata,
     RuntimeStartupError,
 )
-from kernel.runtime_activation import RuntimeActivationError
 from kernel.runtime_config import (
     RuntimeConfig,
     RuntimeConfigurationError,
@@ -446,16 +446,30 @@ def test_application_runtime_delegates_public_operations(monkeypatch):
 
 def test_create_app_has_no_injection_arguments():
     assert list(inspect.signature(api.create_app).parameters) == []
-    assert "store" in inspect.signature(api.create_test_app).parameters
+    assert not hasattr(api, "create_test_app")
+    assert not hasattr(api, "create_development_app")
+
+    from kernel.legacy_m1 import api as legacy_api
+
+    assert "store" in inspect.signature(legacy_api.create_test_app).parameters
+    assert "mode" not in inspect.signature(legacy_api.create_test_app).parameters
+    assert "store" in inspect.signature(
+        legacy_api.create_development_app
+    ).parameters
 
 
-def test_production_and_development_imports_exclude_test_hs256():
+def test_production_import_excludes_the_legacy_runtime_closure():
     result = subprocess.run(
         [
             sys.executable,
             "-c",
-            "import sys; import kernel.api, kernel.legacy_runtime; "
-            "assert 'kernel.auth_oidc' not in sys.modules",
+            "import sys; import kernel.api; "
+            "forbidden={'kernel.legacy_m1','kernel.legacy_m1.api',"
+            "'kernel.legacy_m1.runtime','kernel.auth_oidc','kernel.store',"
+            "'kernel.runtime_activation','kernel.schema_posture',"
+            "'kernel.gates','kernel.views'}; "
+            "loaded=forbidden.intersection(sys.modules); "
+            "assert not loaded, sorted(loaded)",
         ],
         check=False,
         capture_output=True,

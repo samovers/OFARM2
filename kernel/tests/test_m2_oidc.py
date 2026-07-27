@@ -20,7 +20,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from kernel import demo
-from kernel.api import create_test_app
+from kernel.legacy_m1.api import create_test_app
 from kernel.auth_oidc import (
     TestOidcError as OidcTestError,
     TestOidcVerifier as OidcTestVerifier,
