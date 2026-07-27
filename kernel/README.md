@@ -85,17 +85,25 @@ gate pipeline, or SI output generator.
 
 ## Runtime provider import trust
 
-The provider registry and its import-policy module are startup bootstrap code
-and are protected by the reviewed deployment artifact. The selected provider
-source is separately governed by the startup-verified `RuntimeBundle`.
+The provider registry and its import-policy module are startup bootstrap code.
+Both are catalogued as exact-byte `RuntimeBundle` components so their reviewed
+deployment identity changes when either file changes; this records artifact
+coverage rather than claiming that bootstrap code can authenticate itself.
+The selected provider file is separately governed by the startup-verified
+`RuntimeBundle`.
 
 Before the provider's registry-owned literal import, the loader compares the
 source file with the verified bundle bytes and installs a private, empty Python
-bytecode-cache prefix with bytecode writes disabled. It refuses a provider
-module already present before admission. Later loads reuse only the exact
-attested module and factory after rechecking the source and bytecode posture.
-The architecture check forbids dynamic import, `compile`, `exec`, and
-`sys.modules` mutation in this boundary.
+bytecode-cache prefix with bytecode writes disabled. That posture is permanent
+and process-wide. It refuses the selected provider module when that module was
+already present before admission. Later loads reuse only the exact attested
+module and factory identities after rechecking the source and bytecode posture.
+This mechanism attests the selected provider file, not its parent packages,
+complete import closure, or mutable module state; those remain deployment and
+excluded in-process integrity concerns. Concurrent local source substitution
+during the verify-import-verify interval is likewise excluded deployment
+compromise. The architecture check forbids dynamic import, `compile`, `exec`,
+and `sys.modules` mutation in this boundary.
 
 ## Legacy M1 development runner
 
