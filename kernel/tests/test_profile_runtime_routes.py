@@ -531,13 +531,20 @@ def test_route_backed_handoff_binds_materializer_to_resolved_descriptor(fresh_en
         ctx.profile_route_resolution.descriptor
     assert services.policy_provider.descriptor == \
         ctx.profile_route_resolution.descriptor
-    assert services.reference_bindings.regsr_shipped_snapshot_ref == \
+    assert (
+        services.registry_reverification.product_lookup.bindings
+        .regsr_shipped_snapshot_ref
+    ) == \
         context.SI_REFERENCE_BINDINGS.regsr_shipped_snapshot_ref
 
 
 def test_output_generator_explicit_descriptor_matches_default_profile_refs(fresh_env):
     store, _, outputs = fresh_env
-    explicit = OutputGenerator(store, active_descriptor=config.ACTIVE_PROFILE)
+    explicit = load_profile_runtime_services(
+        store,
+        store.active_profile_package_name,
+        config.ACTIVE_PROFILE,
+    ).output_assembler
 
     default_view = outputs.passport_view(demo.FARM, demo.FARMER)
     explicit_view = explicit.passport_view(demo.FARM, demo.FARMER)

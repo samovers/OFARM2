@@ -8,13 +8,22 @@ from ...context import (
 from ...materializer import Materializer
 from ...profile_policy import DescriptorPolicyProvider
 from ...profile_runtime import ProfileRuntimeDescriptor, ProfileRuntimeError
-from ...profile_runtime_provider import ProfileRuntimeServices
+from ...profile_runtime_services import (
+    MaterializationSpecification,
+    ProfileRuntimeServices,
+)
 from ...runtime_bundle import RuntimeBundleError, RuntimeComponentRole
 from ...sufficiency import OPERATION_FLOOR_CHECKS
 from ...validators import RegistryReverificationValidator
+from .outputs import SI_OUTPUT_SPECIFICATION, SIOutputAssembler
 
 
 _PROFILE_REF = "profile:si.ffs.recordkeeping.v0_1"
+SI_MATERIALIZATION_SPECIFICATION = MaterializationSpecification(
+    policy_ref="policy:si.ffs.materialization.v0_1",
+    default_result_shape_family="si.ffs.spray-register.v0_1",
+    identity_registry_result_shape_family="ofarm.identity-registry.v0_1",
+)
 
 
 def build_si_runtime_services(
@@ -45,22 +54,32 @@ def build_si_runtime_services(
     reference_bindings = SIReferenceBindings.from_runtime_descriptor(descriptor)
     product_lookup = SIProductRegister(reference_bindings)
     product_lookup.load_from_store(store)
+    context_assembler = ContextAssembler(
+        store,
+        active_descriptor=descriptor,
+    )
+    materializer = Materializer(
+        store,
+        specification=SI_MATERIALIZATION_SPECIFICATION,
+        context_assembler=context_assembler,
+        active_descriptor=descriptor,
+    )
 
     return ProfileRuntimeServices(
         descriptor=descriptor,
         policy_provider=policy_provider,
-        context_assembler=ContextAssembler(
-            store,
-            active_descriptor=descriptor,
-        ),
-        materializer=Materializer(
-            store,
-            active_descriptor=descriptor,
-        ),
-        reference_bindings=reference_bindings,
-        product_lookup=product_lookup,
+        context_assembler=context_assembler,
+        materialization_specification=SI_MATERIALIZATION_SPECIFICATION,
+        materializer=materializer,
         registry_reverification=RegistryReverificationValidator(
             snapshot_prefix=reference_bindings.regsr_snapshot_prefix,
             product_lookup=product_lookup,
+        ),
+        output_specification=SI_OUTPUT_SPECIFICATION,
+        output_assembler=SIOutputAssembler(
+            store,
+            specification=SI_OUTPUT_SPECIFICATION,
+            materializer=materializer,
+            active_descriptor=descriptor,
         ),
     )

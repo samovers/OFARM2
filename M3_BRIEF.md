@@ -157,8 +157,8 @@ the audit lane never authorizes a request or permits fallback to tenant storage.
 
 ### Outputs
 
-No public query authoring is added. The centralized guard lives at the shared
-`OutputGenerator` boundary, before a blocked query, materialization,
+No public query authoring is added. The centralized guard lives at the bound
+`ProfileOutputAssembler` boundary, before a blocked query, materialization,
 qualification, assembly, persistence, or release path executes. It covers the
 new M3 façade, existing `GET /views/passport/{farm_ref}` and
 `POST /views/inspection-register/freeze` routes, and direct service calls.
@@ -221,7 +221,7 @@ Minimum backend façade:
 - `GET /m3/sync-status/{idempotencyKey}` — returns replay/current sync status without creating new truth.
 - `POST /review/accept` or existing equivalent — records deliberate self-review/advisor acceptance through the governed review path.
 - `POST /review/reject` and `POST /review/contest` if existing backend support is exposed to the M3 exception queue.
-- `GET /m3/register/passport` — remains unexposed until reason-code governance supplies the exact registered low-consequence readiness code; it then reaches the shared `OutputGenerator` readiness guard before NOW/current-read or qualification work.
+- `GET /m3/register/passport` — remains unexposed until reason-code governance supplies the exact registered low-consequence readiness code; it then reaches the shared `ProfileOutputAssembler` readiness guard before NOW/current-read or qualification work.
 - `POST /m3/register/document-assembly/freeze` — reaches the same shared guard and returns `HIGH_CONSEQUENCE_BLOCKED` before the WINDOW query/materialization/publication path; it may freeze only after its additional temporal and active-artifact prerequisites are accepted and activated.
 
 No M3 release endpoint is exposed until the versioned release contract can
@@ -236,7 +236,7 @@ Stop if any endpoint requires new law, hidden profile selection, direct projecti
 |---|---|
 | Any tenant-bound M3 endpoint | #172 authentication and TenantCapability; #173 request UnitOfWork/binding; #174 migrations, RLS, tenant-qualified storage, and binding primitives; #192 isolated pre-tenant audit integration; governed-batch/knowledge-position portion of #176 |
 | Spray-register PassportView readiness guard | Reviewed reason-code governance supplying an exact registered low-consequence code; M3.6 must then pin that code and response before implementation |
-| M3.1 output exposure | The centralized M3.6 `OutputGenerator` guard and its route/direct-call regression tests; output helpers stay out of M3.1 until this exists |
+| M3.1 output exposure | The centralized M3.6 `ProfileOutputAssembler` guard and its route/direct-call regression tests; output helpers stay out of M3.1 until this exists |
 | M3.3–M3.5 temporal behavior | Applicable #176 valid-time carrier and governed replacement-set behavior |
 | Spray-register PassportView success | #176 current-read dual cuts; versioned stable content-qualification and release surfaces; #177, #181, and #182 as applicable |
 | Inspection-register DocumentAssembly freeze success | All shared output dependencies plus ADR 0002 carrier/window/date semantics, versioned contracts, #177/#181/#182, and separately governed SI query/plan and active-artifact replacement |
@@ -380,7 +380,7 @@ Stop if:
 
 Allowed change:
 
-- Add one shared `OutputGenerator` guard before blocked query, materialization,
+- Add one shared `ProfileOutputAssembler` guard before blocked query, materialization,
   qualification, assembly, persistence, or release work.
 - Keep `view:si.ffs.spray-register.passportview.v0_1` unexposed until reviewed
   reason-code governance supplies the exact registered low-consequence
@@ -395,7 +395,7 @@ Allowed change:
 
 Required proof:
 
-- The M3 façade, both existing `/views/**` routes, and direct `OutputGenerator`
+- The M3 façade, both existing `/views/**` routes, and direct profile-output
   calls all reach the same guard.
 - PassportView is unavailable until the reason-code predecessor lands; after
   M3.6 pins it, the readiness refusal does not execute its NOW query,

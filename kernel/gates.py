@@ -36,6 +36,7 @@ from .problems import runtime_problem
 from .profile_runtime import (ProfileRuntimeError, resolve_bound_descriptor,
                               resolve_profile_route)
 from .profile_runtime_provider import load_profile_runtime_services
+from .profile_runtime_services import ProfileRuntimeServices
 from .stages import (AuthorityGate, EnvelopePersist, EvidenceSufficiencyGate,
                      GateContext, GateRefusal, GateReplay, IngressHeader,
                      IngressNormalizer, MaterializationGate,
@@ -67,6 +68,7 @@ class GatePipeline:
         profile_route_registry=None,
         selected_profile_package_names=None,
         tenant_ref=None,
+        runtime_services: ProfileRuntimeServices | None = None,
     ):
         self.store = store
         route_inputs = (
@@ -93,11 +95,20 @@ class GatePipeline:
             active_descriptor=active_descriptor,
         )
         store.require_startup_complete("GatePipeline")
-        self.runtime_services = load_profile_runtime_services(
-            store,
-            store.active_profile_package_name,
-            descriptor,
-        )
+        if runtime_services is None:
+            runtime_services = load_profile_runtime_services(
+                store,
+                store.active_profile_package_name,
+                descriptor,
+            )
+        elif (
+            type(runtime_services) is not ProfileRuntimeServices
+            or runtime_services.descriptor is not descriptor
+        ):
+            raise ProfileRuntimeError(
+                "GatePipeline requires services bound to its exact descriptor"
+            )
+        self.runtime_services = runtime_services
         self.authority = AuthorityEvaluator(store)
 
     # ======================================================================

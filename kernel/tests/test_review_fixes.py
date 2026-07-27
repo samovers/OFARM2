@@ -12,7 +12,6 @@ import uuid
 import pytest
 
 from kernel import demo, policy
-from kernel.store import Store
 
 
 def uid() -> str:
@@ -188,8 +187,7 @@ def test_h1_as_of_reconstruction_is_coherent_across_supersession(pipeline, store
     # commit a spray, then correct (supersede) it; AS_OF state taken AFTER the
     # correction must show exactly the correction in force for the field —
     # never a hole (both gone) or a duplicate (both present) at the boundary.
-    from kernel import context, materializer as mat_mod
-    materializer = mat_mod.Materializer(store)
+    from kernel import context
 
     first = pipeline.commit(demo.spray_submission(
         f"h1a:{uid()}", erp_id=f"erp:h1.{uid()}"))

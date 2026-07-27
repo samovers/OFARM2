@@ -66,9 +66,9 @@ from kernel.profile_runtime import (
 import kernel.profile_runtime_provider as profile_runtime_provider
 
 from kernel.profile_runtime_provider import (
-    ProfileRuntimeServices,
     load_profile_runtime_services,
 )
+from kernel.profile_runtime_services import ProfileRuntimeServices
 
 from kernel.runtime_bundle import (
     Canonicalization,
@@ -86,9 +86,6 @@ from kernel.stages import (
 )
 
 from kernel.store import Store
-
-from kernel.views import OutputGenerator
-
 
 def _base_doc() -> dict:
     return json.loads(

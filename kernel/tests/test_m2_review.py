@@ -494,11 +494,11 @@ def test_freeze_refuses_on_disputed_basis(fresh_env):
     store, pipeline, outputs = fresh_env
     client = _client(store)
     c1 = _inforce_consequence(pipeline)
-    clean = outputs.freeze_inspection_register(demo.FARM, demo.FARMER, *WINDOW)
+    clean = outputs.freeze_document_assembly(demo.FARM, demo.FARMER, *WINDOW)
     assert clean["refused"] is False, "a clean basis freezes"
     assert _contest(client, c1).json()["decisionOutcome"] == "RETAIN_DRAFT"
     # the freeze refuses on the DISPUTE axis even though it recomputes FRESH
-    disputed = outputs.freeze_inspection_register(demo.FARM, demo.FARMER, *WINDOW)
+    disputed = outputs.freeze_document_assembly(demo.FARM, demo.FARMER, *WINDOW)
     assert disputed["refused"] is True
     assert disputed["problem"]["reasonCode"] == "DISPUTE_OPEN"
 
@@ -521,7 +521,7 @@ def test_contest_resolution_by_correction_derives_corrected(fresh_env):
     after = outputs.passport_view(demo.FARM, demo.FARMER)
     assert after["qualification"]["disputeStatus"] == "CORRECTED"
     # and the freeze no longer refuses (the dispute is resolved)
-    assert outputs.freeze_inspection_register(demo.FARM, demo.FARMER, *WINDOW)["refused"] is False
+    assert outputs.freeze_document_assembly(demo.FARM, demo.FARMER, *WINDOW)["refused"] is False
 
 
 def test_contest_decision_is_reachable_as_a_receipt(store, pipeline):

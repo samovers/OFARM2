@@ -1,4 +1,4 @@
-"""Output generator (M1 brief task 6): the two governed outputs.
+"""SI output assembler (M1 brief task 6): the two governed outputs.
 
 View 1 — PassportView `view:si.ffs.spray-register.passportview.v0_1`:
 live register, freshness and gaps always visible; STALE renders only with a
@@ -19,26 +19,46 @@ import hashlib
 
 from psycopg.types.json import Jsonb
 
-from . import config
-from .authority import AuthorityEvaluator
-from .contracts import canonical_json
-from .materializer import Materializer
-from .problems import runtime_problem
-from .context import mint as _mint, now_iso, parse_ts
-from .profile_runtime import resolve_bound_descriptor
+from ...authority import AuthorityEvaluator
+from ...contracts import canonical_json
+from ...materializer import Materializer
+from ...problems import runtime_problem
+from ...context import mint as _mint, now_iso, parse_ts
+from ...profile_runtime import resolve_bound_descriptor
+from ...profile_runtime_services import (
+    GovernedViewBinding,
+    OutputSpecification,
+)
 
-PASSPORT_VIEW_REF = "view:si.ffs.spray-register.passportview.v0_1"
-DOCASM_VIEW_REF = "view:si.ffs.inspection-register.documentassembly.v0_1"
-PASSPORT_QUERYSPEC = "queryspec:si.ffs.spray-register.passportview.v0_1"
-PASSPORT_QUERYPLAN = "queryplan:si.ffs.spray-register.passportview.v0_1"
-DOCASM_QUERYSPEC = "queryspec:si.ffs.inspection-register.documentassembly.v0_1"
-DOCASM_QUERYPLAN = "queryplan:si.ffs.inspection-register.documentassembly.v0_1"
 
-CLAIM_STATEMENT = ("This register faithfully and traceably reflects what the farm "
-                   "recorded, with gaps, disputes, and unresolved bindings visible. "
-                   "It claims record-keeping completeness only — never current-"
-                   "compliance against the authorisation register, certification, "
-                   "or legal advice.")
+SI_OUTPUT_SPECIFICATION = OutputSpecification(
+    passport_view=GovernedViewBinding(
+        view_ref="view:si.ffs.spray-register.passportview.v0_1",
+        query_specification_ref=(
+            "queryspec:si.ffs.spray-register.passportview.v0_1"
+        ),
+        query_plan_ref="queryplan:si.ffs.spray-register.passportview.v0_1",
+    ),
+    document_assembly=GovernedViewBinding(
+        view_ref="view:si.ffs.inspection-register.documentassembly.v0_1",
+        query_specification_ref=(
+            "queryspec:si.ffs.inspection-register.documentassembly.v0_1"
+        ),
+        query_plan_ref=(
+            "queryplan:si.ffs.inspection-register.documentassembly.v0_1"
+        ),
+    ),
+    claim_statement=(
+        "This register faithfully and traceably reflects what the farm "
+        "recorded, with gaps, disputes, and unresolved bindings visible. "
+        "It claims record-keeping completeness only — never current-"
+        "compliance against the authorisation register, certification, "
+        "or legal advice."
+    ),
+    freeze_rule_ref="rule:si.ffs.freeze.fresh-basis",
+    durable_artifact_prefix="document:si.ffs.inspection-register.",
+    version_label_prefix="si.ffs.inspection-register.",
+)
 
 
 def _qualification(*, surface_class: str, staleness: str, sufficiency: str,
@@ -80,18 +100,31 @@ def _qualification(*, surface_class: str, staleness: str, sufficiency: str,
     return env
 
 
-class OutputGenerator:
-    def __init__(self, store, *, active_descriptor=None, active_profile=None):
+class SIOutputAssembler:
+    def __init__(
+        self,
+        store,
+        *,
+        specification: OutputSpecification,
+        materializer: Materializer,
+        active_descriptor=None,
+        active_profile=None,
+    ):
+        if type(specification) is not OutputSpecification:
+            raise TypeError(
+                "SI output assembler requires a trusted output specification"
+            )
         self.store = store
+        self.specification = specification
         self.active_profile = resolve_bound_descriptor(
             store,
             active_descriptor=active_descriptor,
             active_profile=active_profile,
         )
-        store.require_startup_complete("OutputGenerator")
+        store.require_startup_complete("SIOutputAssembler")
         self.runtime_bundle = store.runtime_bundle
         self.authority = AuthorityEvaluator(store)
-        self.materializer = Materializer(store, active_descriptor=self.active_profile)
+        self.materializer = materializer
 
     # ---------------------------------------------------------------- shared --
 
@@ -215,6 +248,8 @@ class OutputGenerator:
         """allow_recompute=False is a real render mode (cheap/offline serve):
         a STALE materialization renders only with the banner and is barred
         from export; a missing basis refuses (views/VIEWS.md)."""
+        binding = self.specification.passport_view
+        claim_statement = self.specification.claim_statement
         # sharing/authority re-evaluated per request (D12) — a revoked
         # inspector loses access on this call, not at next recompute
         access = self.authority.evaluate_read(
@@ -251,7 +286,9 @@ class OutputGenerator:
 
             stale = resolution["freshness"] != "FRESH"
             trace_refs = [mat["basis_record_id"], mat["snapshot_record_id"],
-                          mat["context_snapshot_ref"], PASSPORT_QUERYSPEC, PASSPORT_QUERYPLAN]
+                          mat["context_snapshot_ref"],
+                          binding.query_specification_ref,
+                          binding.query_plan_ref]
             # disputeStatus is DERIVED, never assumed NONE (spec §6.5, closes the
             # latent M4 over-claim); the passport SHOWS a disputed basis
             # (informational), never hides it (Kernel rule 7). The register
@@ -269,7 +306,7 @@ class OutputGenerator:
                 blocked=(["EXPORT_API_PAYLOAD", "HIGH_CONSEQUENCE_DECISION"] if stale
                          else ["HIGH_CONSEQUENCE_DECISION"]),
                 safe_label="Spray register (record-keeping view)",
-                user_message=CLAIM_STATEMENT,
+                user_message=claim_statement,
                 dispute=dispute,
                 mat_result_ref=resolution["materializationResult"]["resultId"])
 
@@ -281,8 +318,8 @@ class OutputGenerator:
                 "generatedAt": now_iso(),
                 "twin": "COMPLIANCE",
                 "freezeState": "LIVE_RECOMPUTABLE",
-                "querySpecificationRef": PASSPORT_QUERYSPEC,
-                "queryPlanRef": PASSPORT_QUERYPLAN,
+                "querySpecificationRef": binding.query_specification_ref,
+                "queryPlanRef": binding.query_plan_ref,
                 "contextSnapshotRef": mat["context_snapshot_ref"],
                 "materializationResultRef": resolution["materializationResult"]["resultId"],
                 "representationModes": ["HUMAN_READABLE", "MACHINE_READABLE"],
@@ -292,7 +329,7 @@ class OutputGenerator:
             }
 
             body = {
-                "viewRef": PASSPORT_VIEW_REF,
+                "viewRef": binding.view_ref,
                 "register": mat["current_state"]["entries"],
                 "exceptions": self._pending_claims(farm_ref),
                 "advisoryFlags": self._advisory_flags(farm_ref),
@@ -300,7 +337,7 @@ class OutputGenerator:
                 "staleBanner": ("STALE — recompute before any reliance; export barred"
                                 if stale else None),
                 "exportAllowed": not stale,
-                "completeness": CLAIM_STATEMENT,
+                "completeness": claim_statement,
             }
             # outputs validate against their contracts before leaving the gate
             self.store.registry.validate(metadata)
@@ -316,9 +353,9 @@ class OutputGenerator:
 
     # ------------------------------------------------------- DocumentAssembly --
 
-    def freeze_inspection_register(self, farm_ref: str, requesting_party_ref: str,
-                                   window_start: str, window_end: str, *,
-                                   as_submission: bool = False) -> dict:
+    def freeze_document_assembly(self, farm_ref: str, requesting_party_ref: str,
+                                 window_start: str, window_end: str, *,
+                                 as_submission: bool = False) -> dict:
         """Freeze the exportable inspection register for a period.
 
         as_submission=True files it as a SUBMISSION_ASSEMBLY export artifact.
@@ -326,6 +363,8 @@ class OutputGenerator:
         does not exist until the state publishes it (D13); "filed" means the
         frozen submission artifact left the publication gate complete.
         """
+        binding = self.specification.document_assembly
+        claim_statement = self.specification.claim_statement
         publication_action = ("FILE_SUBMISSION_ASSEMBLY" if as_submission
                               else "FREEZE_DOCUMENT_ASSEMBLY")
         output_kind = "SUBMISSION_ASSEMBLY" if as_submission else "REPORT_ASSEMBLY"
@@ -470,7 +509,7 @@ class OutputGenerator:
                     "argumentId": "arg:freeze:basis",
                     "supportsClaimIds": ["claim:freeze"],
                     "policyRef": self.active_profile.evidence_policy_ref,
-                    "ruleRef": "rule:si.ffs.freeze.fresh-basis",
+                    "ruleRef": self.specification.freeze_rule_ref,
                     "conclusion": "SUPPORTED",
                 }],
                 "evidenceBundles": [{
@@ -502,8 +541,8 @@ class OutputGenerator:
 
             frozen_at = now_iso()
             document = {
-                "viewRef": DOCASM_VIEW_REF,
-                "claimStatement": CLAIM_STATEMENT,
+                "viewRef": binding.view_ref,
+                "claimStatement": claim_statement,
                 "window": {"start": window_start, "end": window_end},
                 "acceptedEntries": entries,
                 "annex": {
@@ -530,8 +569,13 @@ class OutputGenerator:
             }
             digest = "sha256:" + hashlib.sha256(
                 canonical_json(document).encode()).hexdigest()
-            durable_ref = f"document:si.ffs.inspection-register.{digest[7:]}"
-            version_label = f"si.ffs.inspection-register.{window_start[:10]}.{window_end[:10]}"
+            durable_ref = (
+                f"{self.specification.durable_artifact_prefix}{digest[7:]}"
+            )
+            version_label = (
+                f"{self.specification.version_label_prefix}"
+                f"{window_start[:10]}.{window_end[:10]}"
+            )
 
             metadata = {
                 "schemaVersion": "ofarm.documentassemblymetadata.v0.1",
@@ -542,8 +586,8 @@ class OutputGenerator:
                 "generatedAt": frozen_at,
                 "frozenAt": frozen_at,
                 "twin": "COMPLIANCE",
-                "querySpecificationRefs": [DOCASM_QUERYSPEC],
-                "queryPlanRefs": [DOCASM_QUERYPLAN],
+                "querySpecificationRefs": [binding.query_specification_ref],
+                "queryPlanRefs": [binding.query_plan_ref],
                 "contextSnapshotRef": mat["context_snapshot_ref"],
                 "materializationBasisRef": mat["basis_record_id"],
                 "materializationSnapshotRef": mat["snapshot_record_id"],
@@ -563,12 +607,13 @@ class OutputGenerator:
                 high_consequence_allowed=True,
                 trace_refs=[mat["basis_record_id"], mat["snapshot_record_id"],
                             mat["context_snapshot_ref"], case_id,
-                            DOCASM_QUERYSPEC, DOCASM_QUERYPLAN],
+                            binding.query_specification_ref,
+                            binding.query_plan_ref],
                 allowed=["COMPLIANCE_REVIEW", "COMPLIANCE_OUTPUT_INPUT",
                          "EXPORT_API_PAYLOAD"],
                 blocked=["HIGH_CONSEQUENCE_DECISION"],
                 safe_label="Frozen inspection register (record-keeping)",
-                user_message=CLAIM_STATEMENT,
+                user_message=claim_statement,
                 dispute=window_dispute,   # NONE or CORRECTED here (any open dispute refused above)
                 mat_result_ref=resolution["materializationResult"]["resultId"])
 

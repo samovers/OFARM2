@@ -313,7 +313,7 @@ def _replay_publication_fixture(store, pipeline, outputs, materializer, fixture)
         materializer.resolve_for_use(cur, demo.FARM, use_class="ATTESTED_OUTPUT",
                                      time_policy=window,
                                      high_consequence=True)
-    result = outputs.freeze_inspection_register(
+    result = outputs.freeze_document_assembly(
         demo.FARM, demo.FARMER, window["windowStart"], window["windowEnd"],
         as_submission=True)
     assert result["refused"] is False
@@ -649,7 +649,7 @@ def test_10_document_assembly_freeze_trace(store, pipeline, outputs):
     pending_result = pipeline.commit(pending)
     pending_ref = pending_result["emittedAssertionRecordRefs"][0]
 
-    doc = outputs.freeze_inspection_register(
+    doc = outputs.freeze_document_assembly(
         demo.FARM, demo.FARMER, "2026-01-01T00:00:00Z", "2026-12-31T23:59:59Z")
     assert doc["refused"] is False
     meta = doc["metadata"]
@@ -1207,7 +1207,7 @@ def test_94_second_hostile_regressions(store, pipeline, materializer, outputs):
     with store.conn.cursor() as cur:
         cur.execute("SELECT count(*) AS n FROM export_artifact")
         artifacts_before = cur.fetchone()["n"]
-    inverted = outputs.freeze_inspection_register(
+    inverted = outputs.freeze_document_assembly(
         demo.FARM, demo.FARMER, "2026-12-31T23:59:59Z", "2026-01-01T00:00:00Z")
     assert inverted["refused"] is True
     assert inverted["problem"]["reasonCode"] == "HIGH_CONSEQUENCE_BLOCKED"

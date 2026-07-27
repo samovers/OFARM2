@@ -121,6 +121,52 @@ def test_provider_import_policy_allows_read_only_module_attestation():
     )
 
 
+@pytest.mark.parametrize(
+    "source",
+    [
+        "from kernel.profiles.si_ffs.outputs import SIOutputAssembler\n",
+        "from .profiles import si_ffs\n",
+        "binding = SIReferenceBindings()\n",
+        (
+            "from typing import TYPE_CHECKING\n"
+            "if TYPE_CHECKING:\n"
+            "    PROFILE = 'profile:si.ffs.recordkeeping.v0_1'\n"
+        ),
+    ],
+)
+def test_profile_neutral_modules_reject_si_dependencies_and_literals(source):
+    assert rewrite_architecture_check._profile_neutrality_violations(
+        ast.parse(source)
+    )
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "import importlib\n",
+        "from importlib.util import spec_from_file_location\n",
+        "code = compile(source, path, 'exec')\n",
+        "exec(code, namespace)\n",
+        "sys.modules[name] = module\n",
+        "factory = __import__('kernel.profiles.si_ffs.runtime_provider')\n",
+    ],
+)
+def test_profile_loader_rejects_second_module_execution_primitives(source):
+    assert rewrite_architecture_check._profile_loader_violations(
+        ast.parse(source)
+    )
+
+
+def test_profile_loader_allows_one_literal_normal_import():
+    tree = ast.parse(
+        "def resolve():\n"
+        "    from kernel.profiles.si_ffs.runtime_provider import build\n"
+        "    return build\n"
+    )
+
+    assert rewrite_architecture_check._profile_loader_violations(tree) == []
+
+
 def _write_module(root: Path, relative: str, source: str = "") -> None:
     path = root / relative
     path.parent.mkdir(parents=True, exist_ok=True)

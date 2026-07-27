@@ -12,11 +12,19 @@ from kernel.adapters import ImportRunner
 from kernel.deployment_identity import RuntimeActivationError
 from kernel.legacy_m1.api import create_test_app
 from kernel.gates import GatePipeline
+from kernel.profile_runtime_provider import load_profile_runtime_services
 from kernel.runtime_activation import complete_store_startup
 from kernel.runtime_bundle import RuntimeComponentRole, sha256_bytes
 from kernel.store import RuntimeBundleBindingError, Store
 from kernel.tests.conftest import TEST_DEPLOYMENT_IMAGE_DIGEST
-from kernel.views import OutputGenerator
+
+
+def _output_assembler(store):
+    return load_profile_runtime_services(
+        store,
+        store.active_profile_package_name,
+        store.active_descriptor,
+    ).output_assembler
 
 
 class _NoDatabaseAccess:
@@ -108,7 +116,7 @@ def test_high_level_services_require_committed_store_startup(fresh_env):
     )
     try:
         store.conn
-        for service in (GatePipeline, ImportRunner, OutputGenerator):
+        for service in (GatePipeline, ImportRunner, _output_assembler):
             with pytest.raises(
                 RuntimeBundleBindingError,
                 match="requires completed schema, bundle, and profile startup",
@@ -118,7 +126,7 @@ def test_high_level_services_require_committed_store_startup(fresh_env):
         complete_store_startup(store)
         GatePipeline(store)
         ImportRunner(store)
-        OutputGenerator(store)
+        _output_assembler(store)
     finally:
         store.close()
 
@@ -141,7 +149,7 @@ def test_failed_store_startup_does_not_publish_service_readiness(
     try:
         with pytest.raises(RuntimeError, match="fictional startup refusal"):
             complete_store_startup(store)
-        for service in (GatePipeline, ImportRunner, OutputGenerator):
+        for service in (GatePipeline, ImportRunner, _output_assembler):
             with pytest.raises(RuntimeBundleBindingError):
                 service(store)
     finally:
@@ -162,7 +170,7 @@ def test_failed_repeat_startup_preserves_prior_committed_readiness(
 
     GatePipeline(store)
     ImportRunner(store)
-    OutputGenerator(store)
+    _output_assembler(store)
 
 
 def test_closed_verified_connection_refuses_before_governed_mutation(fresh_env):

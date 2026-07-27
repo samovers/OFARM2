@@ -20,19 +20,16 @@ from __future__ import annotations
 import hashlib
 
 from . import config, policy
-from .context import (ContextAssembler, ContextNotReconstructible,
-                      mint as _mint, now_iso, parse_ts)
+from .context import (ContextNotReconstructible, mint as _mint, now_iso,
+                      parse_ts)
 from .contracts import canonical_json
 from .profile_runtime import resolve_bound_descriptor
+from .profile_runtime_services import (
+    MaterializationSpecification,
+    ProfileContextAssembler,
+)
 from psycopg.types.json import Jsonb
 
-MATERIALIZATION_POLICY_REF = "policy:si.ffs.materialization.v0_1"
-RESULT_SHAPE_FAMILY = "si.ffs.spray-register.v0_1"
-# the generic identity registry (G1): current typed payload per identity,
-# derived from in-force structural consequences. A distinct result-shape
-# family gives it its own MaterializationKey/derived row, separate from the
-# spray register, so the two never collide or inflate each other.
-IDENTITY_REGISTRY_SHAPE_FAMILY = "ofarm.identity-registry.v0_1"
 INVALIDATION_TRACE_KIND = ("ofarm.explainableCurrentStateEvidence."
                            "invalidationEvaluationTrace.v0.1-draft")
 
@@ -65,21 +62,43 @@ def _digest(obj) -> str:
 
 
 class Materializer:
-    def __init__(self, store, *, active_descriptor=None, active_profile=None):
-        self.store = store
+    def __init__(
+        self,
+        store,
+        *,
+        specification: MaterializationSpecification,
+        context_assembler: ProfileContextAssembler,
+        active_descriptor=None,
+        active_profile=None,
+    ):
+        if type(specification) is not MaterializationSpecification:
+            raise TypeError(
+                "materializer requires a trusted profile specification"
+            )
         self.active_profile = resolve_bound_descriptor(
             store,
             active_descriptor=active_descriptor,
             active_profile=active_profile,
         )
+        if not isinstance(context_assembler, ProfileContextAssembler):
+            raise TypeError(
+                "materializer requires a profile context assembler"
+            )
+        self.store = store
+        self.specification = specification
         self.runtime_bundle = store.runtime_bundle
-        self.context = ContextAssembler(store, active_descriptor=self.active_profile)
+        self.context = context_assembler
 
     # ------------------------------------------------------------------ key --
 
     def build_key(self, farm_ref: str, *, twin: str, use_class: str,
                   time_policy: dict, context_snapshot_ref: str,
-                  result_shape_family: str = RESULT_SHAPE_FAMILY) -> dict:
+                  result_shape_family: str | None = None) -> dict:
+        result_shape = (
+            self.specification.default_result_shape_family
+            if result_shape_family is None
+            else result_shape_family
+        )
         key_core = {
             "deploymentScope": {
                 "scopeType": "TENANT", "scopeRef": self.store.tenant_ref},
@@ -87,10 +106,10 @@ class Materializer:
             "anchorScopes": [{"scopeType": "FARM", "scopeRef": farm_ref}],
             "evaluationTimePolicy": time_policy,
             "contextSnapshotRef": context_snapshot_ref,
-            "materializationPolicyRef": MATERIALIZATION_POLICY_REF,
+            "materializationPolicyRef": self.specification.policy_ref,
             "useClass": use_class,
-            "resultShapeFamily": result_shape_family,
-            "policyVersionRef": MATERIALIZATION_POLICY_REF,
+            "resultShapeFamily": result_shape,
+            "policyVersionRef": self.specification.policy_ref,
         }
         key_identity = {
             **key_core,
@@ -172,8 +191,8 @@ class Materializer:
              "sourceRef": self.active_profile.evidence_policy_ref,
              "observedVersionRef": self.active_profile.evidence_policy_ref},
             {"dimensionFamily": "QUERY_PLAN_OR_MATERIALIZATION_POLICY",
-             "sourceRef": MATERIALIZATION_POLICY_REF,
-             "observedVersionRef": MATERIALIZATION_POLICY_REF},
+             "sourceRef": self.specification.policy_ref,
+             "observedVersionRef": self.specification.policy_ref},
         ]
         for ref in reference_refs:
             dims.append({"dimensionFamily": "REFERENCE_SNAPSHOT",
@@ -291,7 +310,7 @@ class Materializer:
         entries.sort(key=lambda e: e.get("eventTime") or e["acceptedAt"], reverse=True)
         generated_at = now_iso()
         current_state = {
-            "stateKind": RESULT_SHAPE_FAMILY,
+            "stateKind": self.specification.default_result_shape_family,
             "derived": True,
             "farmRef": farm_ref,
             "targetTwin": twin,
@@ -415,7 +434,10 @@ class Materializer:
         reference_refs = ctx.get("referenceSnapshotRefs", [])
         key = self.build_key(farm_ref, twin=twin, use_class=use_class,
                              time_policy=time_policy, context_snapshot_ref=ctx_ref,
-                             result_shape_family=IDENTITY_REGISTRY_SHAPE_FAMILY)
+                             result_shape_family=(
+                                 self.specification
+                                 .identity_registry_result_shape_family
+                             ))
         self._require_exact_key_reuse(cur, key)
         key_id = key["materializationKeyId"]
 
@@ -494,7 +516,9 @@ class Materializer:
 
         generated_at = now_iso()
         current_state = {
-            "stateKind": IDENTITY_REGISTRY_SHAPE_FAMILY,
+            "stateKind": (
+                self.specification.identity_registry_result_shape_family
+            ),
             "derived": True,
             "farmRef": farm_ref,
             "targetTwin": twin,
@@ -648,7 +672,7 @@ class Materializer:
             "promotedToCurrentDefault": False,
             "dependencyIndexId": _mint("depidx"),
             "generatedAt": now_iso(),
-            "indexPolicyVersion": MATERIALIZATION_POLICY_REF,
+            "indexPolicyVersion": self.specification.policy_ref,
             "derivedOnly": True,
             "doesNotCreateCanonicalFarmTruth": True,
             "derivationSources": ["MATERIALIZATION_POLICY"],
@@ -725,7 +749,7 @@ class Materializer:
                 "statusBefore": "FRESH",
                 "statusAfter": "STALE",
                 "reasonCode": reason_code,
-                "policyRef": MATERIALIZATION_POLICY_REF,
+                "policyRef": self.specification.policy_ref,
                 "decisionTime": now_iso(),
                 "evaluatorRuntimeVersion": RUNTIME_VERSION,
                 "fanout": {

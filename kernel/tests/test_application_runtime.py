@@ -467,7 +467,7 @@ def test_production_import_excludes_the_legacy_runtime_closure():
             "forbidden={'kernel.legacy_m1','kernel.legacy_m1.api',"
             "'kernel.legacy_m1.runtime','kernel.auth_oidc','kernel.store',"
             "'kernel.runtime_activation','kernel.schema_posture',"
-            "'kernel.gates','kernel.views'}; "
+            "'kernel.gates','kernel.profiles.si_ffs.outputs'}; "
             "loaded=forbidden.intersection(sys.modules); "
             "assert not loaded, sorted(loaded)",
         ],

@@ -9,8 +9,8 @@ from __future__ import annotations
 import threading
 
 from kernel.runtime_activation import complete_store_startup
+from kernel.profile_runtime_provider import load_profile_runtime_services
 from kernel.store import Store
-from kernel.views import OutputGenerator
 from profile_si_ffs.test_fixtures import demo
 
 
@@ -18,6 +18,14 @@ __all__ = [
     "test_g2_output_render_serializes_under_lock",
     "test_g2_freeze_serializes_under_lock",
 ]
+
+
+def _outputs(store):
+    return load_profile_runtime_services(
+        store,
+        store.active_profile_package_name,
+        store.active_descriptor,
+    ).output_assembler
 
 
 def test_g2_output_render_serializes_under_lock(store):
@@ -41,7 +49,10 @@ def test_g2_output_render_serializes_under_lock(store):
 
     def render():
         try:
-            box["result"] = OutputGenerator(b).passport_view(demo.FARM, demo.FARMER)
+            box["result"] = _outputs(b).passport_view(
+                demo.FARM,
+                demo.FARMER,
+            )
         except Exception as exc:
             box["err"] = repr(exc)
         finally:
@@ -84,7 +95,7 @@ def test_g2_freeze_serializes_under_lock(store):
 
     def freeze():
         try:
-            box["result"] = OutputGenerator(b).freeze_inspection_register(
+            box["result"] = _outputs(b).freeze_document_assembly(
                 demo.FARM, demo.FARMER, "2026-01-01T00:00:00Z", "2026-12-31T23:59:59Z")
         except Exception as exc:
             box["err"] = repr(exc)

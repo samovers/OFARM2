@@ -15,7 +15,8 @@ MAX_TEST_LINES = 800
 MODULE_BUDGETS = {
     "kernel/profile_runtime_provider.py": 350,
     "kernel/provider_import_policy.py": 260,
-    "kernel/profiles/si_ffs/runtime_provider.py": 350,
+    "kernel/profile_runtime_services.py": 230,
+    "kernel/profiles/si_ffs/runtime_provider.py": 120,
     "kernel/authentication.py": 100,
     "kernel/auth_oidc.py": 200,
     "kernel/production_oidc.py": 450,
@@ -44,10 +45,11 @@ MODULE_BUDGETS = {
 }
 GROUP_BUDGETS = {
     "profile runtime": (
-        550,
+        800,
         (
             "kernel/profile_runtime_provider.py",
             "kernel/provider_import_policy.py",
+            "kernel/profile_runtime_services.py",
             "kernel/profiles/si_ffs/runtime_provider.py",
         ),
     ),
@@ -170,7 +172,6 @@ LEGACY_MODULES = frozenset(
         "kernel.sufficiency",
         "kernel.validators",
         "kernel.verification",
-        "kernel.views",
     }
 )
 PRODUCTION_COMPOSITION_MODULES = frozenset(
@@ -198,6 +199,13 @@ PRODUCTION_COMPOSITION_MODULES = frozenset(
     }
 )
 LEGACY_RESOURCE_NAMES = frozenset({"schema.sql"})
+PROFILE_NEUTRAL_MODULES = (
+    "kernel.profile_runtime_services",
+    "kernel.materializer",
+    "kernel.gates",
+    "kernel.legacy_m1.runtime",
+)
+PROFILE_LOADER_MODULE = "kernel.profile_runtime_provider"
 
 
 @dataclass(frozen=True, slots=True)
@@ -497,6 +505,101 @@ def _legacy_resource_violations(
     return sorted(violations)
 
 
+def _profile_neutrality_violations(
+    tree: ast.Module,
+) -> list[tuple[int, str]]:
+    violations = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name.startswith("kernel.profiles.si_ffs"):
+                    violations.add(
+                        (node.lineno, f"import of {alias.name!r}")
+                    )
+        elif isinstance(node, ast.ImportFrom):
+            imported = node.module or ""
+            if (
+                imported.startswith("kernel.profiles.si_ffs")
+                or imported == "profiles.si_ffs"
+                or imported.startswith("profiles.si_ffs.")
+                or (
+                    imported.endswith("profiles")
+                    and any(alias.name == "si_ffs" for alias in node.names)
+                )
+            ):
+                violations.add(
+                    (node.lineno, f"import from {imported!r}")
+                )
+        elif (
+            isinstance(node, ast.Name)
+            and len(node.id) > 2
+            and node.id.startswith("SI")
+            and node.id[2].isupper()
+        ):
+            violations.add(
+                (node.lineno, f"SI-specific name {node.id!r}")
+            )
+        elif (
+            isinstance(node, ast.Attribute)
+            and len(node.attr) > 2
+            and node.attr.startswith("SI")
+            and node.attr[2].isupper()
+        ):
+            violations.add(
+                (node.lineno, f"SI-specific attribute {node.attr!r}")
+            )
+        elif (
+            isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and "si.ffs" in node.value.lower()
+        ):
+            violations.add(
+                (node.lineno, "SI semantic literal")
+            )
+    return sorted(violations)
+
+
+def _profile_loader_violations(tree: ast.Module) -> list[tuple[int, str]]:
+    violations = set(_dynamic_import_violations(tree))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "importlib" or alias.name.startswith(
+                    "importlib."
+                ):
+                    violations.add(
+                        (node.lineno, f"import of {alias.name!r}")
+                    )
+        elif isinstance(node, ast.ImportFrom) and node.module and (
+            node.module == "importlib"
+            or node.module.startswith("importlib.")
+        ):
+            violations.add(
+                (node.lineno, f"import from {node.module!r}")
+            )
+        elif isinstance(node, ast.Name) and node.id in {"compile", "exec"}:
+            violations.add(
+                (node.lineno, f"reference to {node.id!r}")
+            )
+        elif (
+            isinstance(node, ast.Attribute)
+            and node.attr in {"compile", "exec"}
+        ):
+            violations.add(
+                (node.lineno, f"attribute reference to {node.attr!r}")
+            )
+        elif (
+            isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "sys"
+            and node.attr == "modules"
+        ):
+            violations.add(
+                (node.lineno, "reference to 'sys.modules'")
+            )
+    return sorted(violations)
+
+
 def _check_import_firewall(root: Path = ROOT) -> list[str]:
     sources = _module_sources(root)
     graph, trees = _import_graph(sources)
@@ -541,6 +644,26 @@ def _check_import_firewall(root: Path = ROOT) -> list[str]:
             f"{' -> '.join(path)} reaches production composition "
             f"module {module!r}"
         )
+    for module in PROFILE_NEUTRAL_MODULES:
+        if module not in trees:
+            continue
+        for line, reason in _profile_neutrality_violations(
+            trees[module],
+        ):
+            relative = sources[module].relative_to(root).as_posix()
+            failures.append(
+                f"{relative}:{line}: profile-neutral module contains {reason}"
+            )
+    if PROFILE_LOADER_MODULE in trees:
+        for line, reason in _profile_loader_violations(
+            trees[PROFILE_LOADER_MODULE]
+        ):
+            relative = sources[PROFILE_LOADER_MODULE].relative_to(
+                root
+            ).as_posix()
+            failures.append(
+                f"{relative}:{line}: profile provider loader contains {reason}"
+            )
     return failures
 
 

@@ -312,7 +312,7 @@ def _install_read_routes(app, store, outputs, principal) -> None:
 
     @app.post("/views/inspection-register/freeze")
     def freeze(body: FreezeBody, party_ref: str = Depends(principal)):
-        return outputs.freeze_inspection_register(
+        return outputs.freeze_document_assembly(
             body.farmRef,
             party_ref,
             body.windowStart,

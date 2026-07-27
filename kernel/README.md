@@ -186,7 +186,8 @@ remain exact and continue to the existing normalization and contract checks.
 | `schema.sql` / `schema_posture.py` | Legacy M1 disposable-schema DDL and posture verification; not an issue #174 production migration or startup path |
 | `contracts.py` | contract registry: every write validated against `contracts/` (canonical lane) or `contracts/drafts_reference/` (draft lane, D16) |
 | `profile_runtime.py` | active profile runtime descriptor loader: validates profile-local runtime inputs fail-closed while keeping tenant/demo binding outside the descriptor |
-| `profile_runtime_provider.py` / `provider_import_policy.py` | verified provider selection plus source-only import admission and exact reuse attestation |
+| `profile_runtime_services.py` / `profile_runtime_provider.py` / `provider_import_policy.py` | private profile-neutral service protocols and immutable specifications plus the closed executable-provider registry, source-only import admission, and exact reuse attestation |
+| `profiles/si_ffs/runtime_provider.py` / `profiles/si_ffs/outputs.py` | SI-owned service graph, materialization/output identities, PassportView, and DocumentAssembly assembly; SI is the only production registration |
 | `store.py` | the append-only truth store; edges, gate log, idempotency, in-force queries, reachability check |
 | `problems.py` | `RuntimeProblem` factory; reason codes verbatim from the registry RFC — unknown codes refuse loudly |
 | `config.py` | deployment constants: tenant/profile/pack/policy refs, runtime version, database DSN assembly |
@@ -209,8 +210,7 @@ remain exact and continue to the existing normalization and contract checks.
 | `validators.py` | the named validation units (temporal, target, containment, supersession, governance acceptance, compliance claim, carrier, references, attribution, code binding, registry re-verification) in law-pinned order |
 | `sufficiency.py` | `EvidenceSufficiencyCase` builders — floor cases, acceptance cases, routing amendments — auto-generated, never hand-authored |
 | `emission.py` | every record emission: `PromotionEmitter` (both promotion flavors share it), `PromotionTraceWriter` (reachability accounting), `ReplayWriter` |
-| `materializer.py` | deterministic recompute with `MaterializationBasis` receipts; basis-set invalidation (D12); the four explainable-evidence draft shapes behind Kernel law (D16) |
-| `views.py` | View 1 (PassportView) + View 2 (DocumentAssembly freeze/file) with `ResultQualificationEnvelope`s and refusal behavior |
+| `materializer.py` | profile-neutral deterministic recompute with an explicit profile-owned specification, `MaterializationBasis` receipts, basis-set invalidation (D12), and the four explainable-evidence draft shapes behind Kernel law (D16) |
 | `manifest.py` | Capability Manifest + ActiveArtifactSet generation from actual runtime surfaces + grounding verification |
 | `demo.py` | fictional format-true onboarding + spray submission builders (the package's worked example) |
 | `tests/` | conformance suite (tests 1–15, fixtures replayed live, JSON evidence) + stage-contract tests (`test_stages.py`; engineering tests, excluded from the conformance evidence file) |

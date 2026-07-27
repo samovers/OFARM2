@@ -2,6 +2,9 @@
 # ruff: noqa: F403, F405
 
 from kernel.tests._profile_runtime_test_support import *
+from kernel.profiles.si_ffs.runtime_provider import (
+    SI_MATERIALIZATION_SPECIFICATION,
+)
 
 
 def test_descriptor_drives_existing_si_config_without_tenant_binding():
@@ -134,6 +137,8 @@ def test_descriptor_constructor_alias_conflict_fails_closed():
     with pytest.raises(ProfileRuntimeError, match="active_descriptor and active_profile"):
         Materializer(
             object(),
+            specification=SI_MATERIALIZATION_SPECIFICATION,
+            context_assembler=object(),
             active_descriptor=config.ACTIVE_PROFILE,
             active_profile=conflict,
         )

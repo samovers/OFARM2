@@ -19,10 +19,11 @@ from kernel.legacy_m1.api import create_test_app
 from kernel.authority import AuthorityEvaluator
 from kernel.contracts import sha256_of
 from kernel.gates import GatePipeline
-from kernel.materializer import MaterializationIdentityError, Materializer
+from kernel.materializer import MaterializationIdentityError
 from kernel.profiles.si_ffs.gerk_adapter import GerkLayer
 from kernel.profiles.si_ffs import si_bindings as sib
 from kernel.profile_runtime import load_profile_runtime_descriptor
+from kernel.profile_runtime_provider import load_profile_runtime_services
 from kernel.runtime_bundle import (
     Canonicalization,
     ContentPlacement,
@@ -36,7 +37,6 @@ from kernel.runtime_activation import complete_store_startup
 from kernel.schema_posture import SchemaPostureError
 from kernel.store import RuntimeBundleBindingError, Store
 from kernel.tests.conftest import _admin_dsn
-from kernel.views import OutputGenerator
 
 
 RECEIPT_TABLES = (
@@ -63,6 +63,14 @@ CONTINUATION_BUSINESS_KINDS = (
 
 def _uid() -> str:
     return uuid.uuid4().hex[:10]
+
+
+def _materializer(store: Store):
+    return load_profile_runtime_services(
+        store,
+        store.active_profile_package_name,
+        store.active_descriptor,
+    ).materializer
 
 
 def _continuation_business_state(store: Store) -> tuple:
@@ -714,7 +722,7 @@ def test_every_operational_carrier_has_the_exact_runtime_receipt(fresh_env):
     assert refused["refused"] is True
     assert refused["runtimeReceipt"]["runtimeBundleDigest"] == digest
 
-    frozen = outputs.freeze_inspection_register(
+    frozen = outputs.freeze_document_assembly(
         demo.FARM, demo.FARMER,
         "2026-01-01T00:00:00Z", "2026-12-31T23:59:59Z")
     assert frozen["refused"] is False
@@ -761,7 +769,7 @@ def test_every_operational_carrier_has_the_exact_runtime_receipt(fresh_env):
 
 def test_materialization_key_reuse_requires_exact_identity_inputs(fresh_env):
     store, _pipeline, _outputs = fresh_env
-    materializer = Materializer(store)
+    materializer = _materializer(store)
     time_policy = {
         "policyType": "AS_OF",
         "asOfTime": "2099-01-01T00:00:00Z",
@@ -1053,7 +1061,7 @@ def test_foreign_tenant_history_cannot_enter_materialization_or_output(fresh_env
         }
 
         with store.serialized_tx() as cur:
-            resolution = Materializer(store).resolve_for_use(
+            resolution = _materializer(store).resolve_for_use(
                 cur,
                 demo.FARM,
                 time_policy={
@@ -1171,7 +1179,10 @@ def test_cross_bundle_queue_acceptance_refuses_but_rejection_can_close_history(
         assert _continuation_business_state(store_b) == business_before
         assert target in {
             row["assertionRef"]
-            for row in OutputGenerator(store_b)._pending_claims(demo.FARM)
+            for row in (
+                pipeline_b.runtime_services.output_assembler
+                ._pending_claims(demo.FARM)
+            )
         }
         assert store_b.get_record(refused["resultId"])["runtime_bundle_digest"] == \
             store_b.runtime_bundle_digest
@@ -1188,7 +1199,10 @@ def test_cross_bundle_queue_acceptance_refuses_but_rejection_can_close_history(
             "ofarm.acceptedeventconsequence.v0.1")) == consequences_before
         assert target not in {
             row["assertionRef"]
-            for row in OutputGenerator(store_b)._pending_claims(demo.FARM)
+            for row in (
+                pipeline_b.runtime_services.output_assembler
+                ._pending_claims(demo.FARM)
+            )
         }
         later = pipeline_b.commit(_accept_submission(
             target, f"queue-after-reject-b:{_uid()}"))
@@ -1280,7 +1294,7 @@ def test_cross_bundle_materialization_recomputes_and_reuses_only_its_own_cache(
     fresh_env,
 ):
     store_a, pipeline_a, _ = fresh_env
-    materializer_a = Materializer(store_a)
+    materializer_a = _materializer(store_a)
     with store_a.serialized_tx() as cur:
         first = materializer_a.resolve_for_use(cur, demo.FARM)
     row_a = first["materialization"]
@@ -1290,7 +1304,7 @@ def test_cross_bundle_materialization_recomputes_and_reuses_only_its_own_cache(
         assert context.bootstrap_for_descriptor(
             store_b, config.ACTIVE_PROFILE
         ) == [], "unchanged selected bytes may be reused across bundles"
-        materializer_b = Materializer(store_b)
+        materializer_b = _materializer(store_b)
         with store_b.serialized_tx() as cur:
             second = materializer_b.resolve_for_use(cur, demo.FARM)
         assert second["decision"] == "RECOMPUTE_REQUIRED"
@@ -1618,7 +1632,10 @@ def test_imported_reference_snapshot_remains_inactive_under_current_bundle(
     fresh_env,
 ):
     store, pipeline_before, _ = fresh_env
-    bindings = pipeline_before.runtime_services.reference_bindings
+    bindings = (
+        pipeline_before.runtime_services.registry_reverification
+        .product_lookup.bindings
+    )
     selected_before = context.current_reference_snapshot(
         store, bindings.regsr_snapshot_prefix
     )
@@ -1670,11 +1687,13 @@ def test_imported_reference_snapshot_remains_inactive_under_current_bundle(
     }
 
     pipeline_after = GatePipeline(store)
-    assert pipeline_before.runtime_services.product_lookup.lookup_by_decision(
-        candidate_id, candidate_decision
+    assert (
+        pipeline_before.runtime_services.registry_reverification.product_lookup
+        .lookup_by_decision(candidate_id, candidate_decision)
     ) is None
-    assert pipeline_after.runtime_services.product_lookup.lookup_by_decision(
-        candidate_id, candidate_decision
+    assert (
+        pipeline_after.runtime_services.registry_reverification.product_lookup
+        .lookup_by_decision(candidate_id, candidate_decision)
     ) is None
 
 
