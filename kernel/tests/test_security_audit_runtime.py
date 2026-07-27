@@ -234,19 +234,6 @@ def test_code_owned_startup_timeouts_override_conflicting_dsn_values(
     ]
 
 
-def test_request_time_factory_remains_unchanged(monkeypatch):
-    calls = []
-    monkeypatch.setattr(
-        security_audit_runtime.psycopg,
-        "connect",
-        lambda value, **kwargs: calls.append((value, kwargs)) or object(),
-    )
-
-    security_audit_runtime._connection_factory("dbname=audit")()
-
-    assert calls == [("dbname=audit", {})]
-
-
 def test_startup_connection_timeout_is_a_closed_refusal(monkeypatch):
     timeout = TimeoutError("connect timed out")
     monkeypatch.setattr(
@@ -386,6 +373,7 @@ def test_startup_refuses_malformed_session_user_observations(rows):
 
 def test_pretenant_audit_graph_has_one_fixed_startup_order(monkeypatch):
     events = []
+    producer_factories = []
     producer_specs = []
     posture = _posture()
 
@@ -419,7 +407,8 @@ def test_pretenant_audit_graph_has_one_fixed_startup_order(monkeypatch):
             events.append("hmac.initialize")
 
     class AuditClient:
-        def __init__(self, _factory, producer):
+        def __init__(self, factory, producer):
+            producer_factories.append(factory)
             producer_specs.append(producer)
             events.append(f"client.{producer.component}")
 
@@ -473,6 +462,28 @@ def test_pretenant_audit_graph_has_one_fixed_startup_order(monkeypatch):
     assert [spec.session_user for spec in producer_specs] == [
         "ofarm_security_authentication_producer_login",
         "ofarm_security_request_router_producer_login",
+    ]
+    connections = []
+    monkeypatch.setattr(
+        security_audit_runtime.psycopg,
+        "connect",
+        lambda dsn, **kwargs: connections.append((dsn, kwargs)) or object(),
+    )
+    for factory in producer_factories:
+        factory()
+    expected_parameters = {
+        "connect_timeout": 5,
+        "options": "-c statement_timeout=2000 -c lock_timeout=250",
+    }
+    assert connections == [
+        (
+            _DSNS["security_audit_authentication_pg_dsn"],
+            expected_parameters,
+        ),
+        (
+            _DSNS["security_audit_request_router_pg_dsn"],
+            expected_parameters,
+        ),
     ]
     assert runtime.authenticate("token") == "principal"
     with runtime.unit_of_work("principal") as unit:

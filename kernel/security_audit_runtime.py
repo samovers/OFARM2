@@ -23,7 +23,10 @@ from .principal_resolver import PrincipalBindingResolver
 from .production_oidc import ProductionOidcVerifier
 from .request_router_audit import RequestRouterAuditProducer
 from .runtime_config import RuntimeConfig
-from .security_audit_client import PreTenantAuditClient
+from .security_audit_client import (
+    PreTenantAuditClient,
+    production_audit_connection_factory,
+)
 from . import security_audit_hmac_posture as hmac_posture
 from .tenant_uow import TenantUnitOfWork, TenantUnitOfWorkManager
 
@@ -68,12 +71,6 @@ class PreTenantAuditRuntime:
         principal: AuthenticatedPrincipal,
     ) -> AbstractContextManager[TenantUnitOfWork]:
         return self._request_router.unit_of_work(principal)
-
-
-def _connection_factory(dsn: str) -> Connect:
-    def connect() -> Connection:
-        return psycopg.connect(dsn)
-    return connect
 
 
 def _startup_connection_factory(dsn: str) -> Connect:
@@ -174,7 +171,9 @@ def build_pretenant_audit_runtime(
         resolver,
         correlation_hmac,
         PreTenantAuditClient(
-            _connection_factory(config.security_audit_authentication_pg_dsn),
+            production_audit_connection_factory(
+                config.security_audit_authentication_pg_dsn
+            ),
             _producer("AUTHENTICATION"),
         ),
     )
@@ -182,7 +181,9 @@ def build_pretenant_audit_runtime(
         tenant_boundary,
         correlation_hmac,
         PreTenantAuditClient(
-            _connection_factory(config.security_audit_request_router_pg_dsn),
+            production_audit_connection_factory(
+                config.security_audit_request_router_pg_dsn
+            ),
             _producer("REQUEST_ROUTER"),
         ),
     )

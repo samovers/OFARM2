@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import datetime
+from types import MappingProxyType
 from uuid import UUID, uuid4
 
 import psycopg
@@ -33,6 +34,19 @@ _APPEND = """
     SELECT *
     FROM ofarm_security.append_pretenant_failure(%s, %s, %s, %s, %s)
 """
+_PRODUCTION_CONNECTION_PARAMETERS = MappingProxyType(
+    {
+        "connect_timeout": 5,
+        "options": "-c statement_timeout=2000 -c lock_timeout=250",
+    }
+)
+
+
+def production_audit_connection_factory(dsn: str) -> ConnectionFactory:
+    """Create direct producer connections with the fixed request-time policy."""
+    def connect() -> Connection:
+        return psycopg.connect(dsn, **_PRODUCTION_CONNECTION_PARAMETERS)
+    return connect
 
 
 def _aware_time(value: object) -> datetime | None:

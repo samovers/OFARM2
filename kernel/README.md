@@ -57,8 +57,10 @@ posture calls so its database observation does not require a sixth connection.
 Every connection is queried during startup and any different role prevents
 application publication. Startup performs no audit append or control mutation.
 Authentication and request-router refusals append synchronously through their
-distinct producer credentials; failure never falls back to an unaudited tenant
-write.
+distinct producer credentials. Those request-time connections replace any DSN
+timeout options with a code-owned five-second connect timeout per host attempt,
+`statement_timeout=2000`, and `lock_timeout=250`. Failure never falls back to an
+unaudited tenant write.
 
 Production owns a bounded connection pool and one transaction-bound
 `TenantUnitOfWork` per verified tenant operation. The UnitOfWork creates and
