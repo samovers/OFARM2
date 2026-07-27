@@ -178,6 +178,33 @@ def test_legacy_http_maps_transport_violation_to_one_fixed_safe_422(
     assert store.transaction_calls == 0
 
 
+def test_legacy_http_preserves_downstream_key_error_mapping():
+    class DownstreamKeyErrorPipeline:
+        @staticmethod
+        def commit(_submission):
+            raise KeyError("downstreamField")
+
+    app = FastAPI()
+
+    def resolved_principal() -> str:
+        return "party:transport-test"
+
+    _install_commit_route(
+        app,
+        DownstreamKeyErrorPipeline(),
+        resolved_principal,
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/commit",
+        json={"submission": _valid_submission()},
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": "'downstreamField'"}
+
+
 @pytest.mark.parametrize(
     "actor",
     (

@@ -104,7 +104,7 @@ class GatePipeline:
     # the governed front door
     # ======================================================================
 
-    def commit(self, submission: dict) -> dict:
+    def commit(self, submission: object) -> dict:
         """Run one typed capture through the full chain.
 
         A valid call returns its CommitIngressResult from one transaction

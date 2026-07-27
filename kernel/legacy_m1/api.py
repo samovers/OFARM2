@@ -159,7 +159,7 @@ def _install_commit_route(app, pipeline, principal) -> None:
                 status_code=422,
                 detail=_MALFORMED_INGRESS_HEADER_DETAIL,
             ) from None
-        except ContractViolation as exc:
+        except (ContractViolation, KeyError) as exc:
             raise HTTPException(status_code=422, detail=str(exc))
 
 
@@ -208,7 +208,7 @@ def _install_review_routes(app, pipeline, principal) -> None:
                 status_code=422,
                 detail=_MALFORMED_INGRESS_HEADER_DETAIL,
             ) from None
-        except ContractViolation as exc:
+        except (ContractViolation, KeyError) as exc:
             raise HTTPException(status_code=422, detail=str(exc))
 
     @app.post("/review/accept")

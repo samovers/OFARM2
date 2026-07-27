@@ -681,6 +681,11 @@
       "sourcePath": "kernel/tests/test_ingress_normalization.py"
     },
     {
+      "nodeid": "kernel/tests/test_ingress_normalization.py::test_legacy_http_preserves_downstream_key_error_mapping",
+      "sourceModule": "kernel.tests.test_ingress_normalization",
+      "sourcePath": "kernel/tests/test_ingress_normalization.py"
+    },
+    {
       "nodeid": "kernel/tests/test_ingress_normalization.py::test_malformed_direct_header_raises_only_typed_transport_violation[actingPartyRef-boolean]",
       "sourceModule": "kernel.tests.test_ingress_normalization",
       "sourcePath": "kernel/tests/test_ingress_normalization.py"
@@ -9731,8 +9736,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "e0e37d3f3b8fd94b67d4e5f709957fba166f3eff5fb6d9f6e22c14da263e70eb",
-  "entryCount": 1946,
+  "entriesSha256": "3e57d1c761e00a9fc918c88441843f907e5bded1abbc5a5eab4a75c637d90079",
+  "entryCount": 1947,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
