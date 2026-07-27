@@ -33,6 +33,12 @@ Connect = Callable[[], Connection]
 _READ_ONLY = "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY"
 _CONNECT_TIMEOUT_SECONDS = 5
 _STATEMENT_TIMEOUT_MILLISECONDS = 2_000
+_AUDIT_PRODUCER_CONNECTION_PARAMETERS = MappingProxyType(
+    {
+        "connect_timeout": 5,
+        "options": "-c statement_timeout=2000 -c lock_timeout=250",
+    }
+)
 _CONTROL_DSN = "security_audit_control_pg_dsn"
 _DATABASE_SESSION_USERS = MappingProxyType(
     {
@@ -70,9 +76,9 @@ class PreTenantAuditRuntime:
         return self._request_router.unit_of_work(principal)
 
 
-def _connection_factory(dsn: str) -> Connect:
+def _audit_producer_connection_factory(dsn: str) -> Connect:
     def connect() -> Connection:
-        return psycopg.connect(dsn)
+        return psycopg.connect(dsn, **_AUDIT_PRODUCER_CONNECTION_PARAMETERS)
     return connect
 
 
@@ -174,7 +180,9 @@ def build_pretenant_audit_runtime(
         resolver,
         correlation_hmac,
         PreTenantAuditClient(
-            _connection_factory(config.security_audit_authentication_pg_dsn),
+            _audit_producer_connection_factory(
+                config.security_audit_authentication_pg_dsn
+            ),
             _producer("AUTHENTICATION"),
         ),
     )
@@ -182,7 +190,9 @@ def build_pretenant_audit_runtime(
         tenant_boundary,
         correlation_hmac,
         PreTenantAuditClient(
-            _connection_factory(config.security_audit_request_router_pg_dsn),
+            _audit_producer_connection_factory(
+                config.security_audit_request_router_pg_dsn
+            ),
             _producer("REQUEST_ROUTER"),
         ),
     )
