@@ -25,7 +25,13 @@ def _provider_fixture(tmp_path: Path, *, hostile_cache: bool = False) -> Path:
         assert len(MALICIOUS_SOURCE) == len(VERIFIED_SOURCE)
         source.write_text(MALICIOUS_SOURCE, encoding="utf-8")
         original = source.stat()
-        py_compile.compile(str(source), doraise=True)
+        cache_directory = source.parent / "__pycache__"
+        cache_directory.mkdir()
+        cache = (
+            cache_directory
+            / f"provider.{sys.implementation.cache_tag}.pyc"
+        )
+        py_compile.compile(str(source), cfile=str(cache), doraise=True)
         source.write_text(VERIFIED_SOURCE, encoding="utf-8")
         os.utime(
             source,
