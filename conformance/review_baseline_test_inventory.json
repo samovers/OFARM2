@@ -7071,6 +7071,16 @@
       "sourcePath": "kernel/tests/test_profile_runtime_import_policy.py"
     },
     {
+      "nodeid": "kernel/tests/test_profile_runtime_neutrality.py::test_profile_runtime_registry_rejects_duplicate_identity",
+      "sourceModule": "kernel.tests.test_profile_runtime_neutrality",
+      "sourcePath": "kernel/tests/test_profile_runtime_neutrality.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_neutrality.py::test_synthetic_second_profile_uses_only_profile_local_services",
+      "sourceModule": "kernel.tests.test_profile_runtime_neutrality",
+      "sourcePath": "kernel/tests/test_profile_runtime_neutrality.py"
+    },
+    {
       "nodeid": "kernel/tests/test_profile_runtime_readiness_check.py::test_docs_navigation_and_source_manifests_do_not_populate_inventory",
       "sourceModule": "kernel.tests.test_profile_runtime_readiness_check",
       "sourcePath": "kernel/tests/test_profile_runtime_readiness_check.py"
@@ -7597,6 +7607,11 @@
     },
     {
       "nodeid": "kernel/tests/test_profile_runtime_services.py::test_api_startup_refuses_non_exact_selected_profile_instance",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_composition_rejects_cross_profile_service_binding",
       "sourceModule": "kernel.tests.test_profile_runtime_services",
       "sourcePath": "kernel/tests/test_profile_runtime_services.py"
     },
@@ -8211,6 +8226,31 @@
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
     {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_firewall_rejects_missing_required_profile_modules[kernel.gates]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_firewall_rejects_missing_required_profile_modules[kernel.legacy_m1.runtime]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_firewall_rejects_missing_required_profile_modules[kernel.materializer]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_firewall_rejects_missing_required_profile_modules[kernel.profile_runtime_provider]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_firewall_rejects_missing_required_profile_modules[kernel.profile_runtime_services]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_firewall_rejects_prototype_schema_reference",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
@@ -8222,6 +8262,96 @@
     },
     {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_firewall_reports_indirect_legacy_import_path",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_loader_allows_one_literal_normal_import",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_loader_rejects_second_module_execution_primitives[code = compile(source, path, 'exec')/n]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_loader_rejects_second_module_execution_primitives[exec(code, namespace)/n]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_loader_rejects_second_module_execution_primitives[factory = __import__('kernel.profiles.si_ffs.runtime_provider')/n]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_loader_rejects_second_module_execution_primitives[from importlib.util import spec_from_file_location/n]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_loader_rejects_second_module_execution_primitives[import importlib/n]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_loader_rejects_second_module_execution_primitives[sys.modules[name] = module/n]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_neutral_modules_allow_ordinary_si_prefix_names[SIGNAL = object()/n]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_neutral_modules_allow_ordinary_si_prefix_names[SIGNATURE = 'sha256'/n]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_neutral_modules_allow_ordinary_si_prefix_names[SIZE_LIMIT = 10/n]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_neutral_modules_reject_si_dependencies_and_literals[PROFILE = 'PROFILE:SI.FFS.RECORDKEEPING.V0_1'/n]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_neutral_modules_reject_si_dependencies_and_literals[binding = SIReferenceBindings()/n]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_neutral_modules_reject_si_dependencies_and_literals[from . import profiles/nspecification = profiles.si_ffs.outputs.SI_OUTPUT_SPECIFICATION/n]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_neutral_modules_reject_si_dependencies_and_literals[from .profiles import si_ffs/n]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_neutral_modules_reject_si_dependencies_and_literals[from kernel.profiles.si_ffs.outputs import SIOutputAssembler/n]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_neutral_modules_reject_si_dependencies_and_literals[from typing import TYPE_CHECKING/nif TYPE_CHECKING:/n    PROFILE = 'profile:si.ffs.recordkeeping.v0_1'/n]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_neutral_modules_reject_si_dependencies_and_literals[specification = SI_MATERIALIZATION_SPECIFICATION/n]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_profile_neutral_modules_reject_si_dependencies_and_literals[specification = SI_OUTPUT_SPECIFICATION/n]",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
@@ -9821,8 +9951,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "caee153eadcfadd65f015216c04e57c7f74850f28dad9fd895a5953ac61fe655",
-  "entryCount": 1964,
+  "entriesSha256": "4476ff838b31f0f2113908b773d12a24e3c46317ecb0594e82d2f17c25bfbe9e",
+  "entryCount": 1990,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

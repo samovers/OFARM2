@@ -69,6 +69,11 @@ EXPECTED_EXECUTABLE_SOURCE_SELECTION = {
     ),
     (
         RuntimeComponentRole.ADAPTER_SOURCE,
+        "python:ofarm2-kernel-m1.0:profile-runtime-services",
+        "kernel/profile_runtime_services.py",
+    ),
+    (
+        RuntimeComponentRole.ADAPTER_SOURCE,
         "python:profile-si-ffs-v0_1:regsr-adapter",
         "kernel/profiles/si_ffs/regsr_adapter.py",
     ),
@@ -105,7 +110,7 @@ EXPECTED_EXECUTABLE_SOURCE_SELECTION = {
     (
         RuntimeComponentRole.QUERY_OUTPUT_SOURCE,
         "python:ofarm2-kernel-m1.0:query-output",
-        "kernel/views.py",
+        "kernel/profiles/si_ffs/outputs.py",
     ),
 }
 
@@ -1255,7 +1260,7 @@ def test_checked_in_component_catalog_builds_the_reviewed_closed_set():
 
     assert bundle.selected_tenant_ref == "tenant:si.ffs.pilot.demo"
     assert bundle.digest == (
-        "sha256:d7bbac4e802436b73cf3241e1893ab3cdbe8ab188d4da710dac21f62d0e57ebd"
+        "sha256:c48a7d8b246954cb79c350296aff4dd11ae630dc20066f58f8d88d6e0901a9f4"
     )
 
     expected_catalog_roles = {
@@ -1275,7 +1280,7 @@ def test_checked_in_component_catalog_builds_the_reviewed_closed_set():
         RuntimeComponentRole.VIEW_BINDING,
     }
 
-    assert len(bundle.components) == 93
+    assert len(bundle.components) == 94
     assert {component.role for component in bundle.components} == expected_catalog_roles
     assert set(RuntimeComponentRole) == expected_catalog_roles
     identities = [

@@ -165,7 +165,15 @@ def test_descriptor_compliance_recognized_refs_are_exact():
 
 def test_materializer_missing_context_spine_refuses_use_governably():
     with _fresh_unbootstrapped_store() as store:
-        materializer = Materializer(store)
+        materializer = Materializer(
+            store,
+            specification=TEST_MATERIALIZATION_SPECIFICATION,
+            context_assembler=context.ContextAssembler(
+                store,
+                active_descriptor=config.ACTIVE_PROFILE,
+            ),
+            active_descriptor=config.ACTIVE_PROFILE,
+        )
 
         with store.tx() as cur:
             result = materializer.resolve_for_use(cur, demo.FARM)
@@ -276,7 +284,9 @@ def test_gate_pipeline_threads_si_reference_bindings(fresh_env):
     ctx = pipeline._new_context(None, sub, parse_ingress_header(sub))
 
     services = pipeline.runtime_services
-    assert services.product_lookup.bindings == services.reference_bindings
+    revalidator = services.registry_reverification
+    assert revalidator.product_lookup.bindings.regsr_snapshot_prefix == \
+        revalidator.snapshot_prefix
     assert ctx.runtime_services is services
 
 
@@ -335,7 +345,11 @@ def test_materializer_uses_active_descriptor_for_context_and_policy_freshness(
     assert pipeline.runtime_services.materializer.context.active_profile is \
         config.ACTIVE_PROFILE
 
-    explicit = Materializer(store, active_profile=config.ACTIVE_PROFILE)
+    explicit = load_profile_runtime_services(
+        store,
+        store.active_profile_package_name,
+        config.ACTIVE_PROFILE,
+    ).materializer
     vector = explicit.build_freshness_vector(
         {"materializationKeyId": "matkey:mp3d.policy"},
         "matbasis:mp3d.policy",
@@ -352,9 +366,9 @@ def test_materializer_uses_active_descriptor_for_context_and_policy_freshness(
 
 
 def test_materializer_dependency_index_uses_bound_policy_and_invalidates(fresh_env):
-    store, _, _ = fresh_env
+    store, pipeline, _ = fresh_env
     policy_ref = store.active_descriptor.evidence_policy_ref
-    materializer = Materializer(store)
+    materializer = pipeline.runtime_services.materializer
 
     with store.tx() as cur:
         materialized = materializer.recompute(cur, demo.FARM)
@@ -654,8 +668,8 @@ def test_issue_159_composition_returns_fresh_service_graphs(fresh_env):
         second.runtime_services.context_assembler
     assert first.runtime_services.materializer is not \
         second.runtime_services.materializer
-    assert first.runtime_services.product_lookup is not \
-        second.runtime_services.product_lookup
+    assert first.runtime_services.registry_reverification.product_lookup is not \
+        second.runtime_services.registry_reverification.product_lookup
 
 
 def test_issue_159_composition_rejects_missing_required_service(
@@ -663,22 +677,53 @@ def test_issue_159_composition_rejects_missing_required_service(
     store, _, _ = fresh_env
 
     def incomplete_factory(_store, descriptor):
-        return ProfileRuntimeServices(
-            descriptor=descriptor,
-            policy_provider=None,
-            context_assembler=None,
-            materializer=None,
-            reference_bindings=object(),
-            product_lookup=None,
-            registry_reverification=None,
+        complete = (
+            profile_runtime_provider._resolve_si_factory()(
+                _store,
+                descriptor,
+            )
         )
+        return replace(complete, policy_provider=None)
 
     monkeypatch.setattr(
         profile_runtime_provider,
         "_load_factory",
-        lambda _registration, _path, _bytes: incomplete_factory,
+        lambda _registration, _path, _source: incomplete_factory,
     )
     with pytest.raises(ProfileRuntimeError, match="incomplete or mismatched"):
+        load_profile_runtime_services(
+            store,
+            config.ACTIVE_PROFILE_PACKAGE_NAME,
+            config.ACTIVE_PROFILE,
+        )
+
+
+def test_composition_rejects_cross_profile_service_binding(
+        fresh_env, monkeypatch):
+    store, _, _ = fresh_env
+
+    def mismatched_factory(_store, descriptor):
+        services = (
+            profile_runtime_provider._resolve_si_factory()(
+                _store,
+                descriptor,
+            )
+        )
+        services.output_assembler.active_profile = replace(
+            descriptor,
+            profile_ref="profile:synthetic.mismatch.v0_1",
+        )
+        return services
+
+    monkeypatch.setattr(
+        profile_runtime_provider,
+        "_load_factory",
+        lambda _registration, _path, _source: mismatched_factory,
+    )
+    with pytest.raises(
+        ProfileRuntimeError,
+        match="different profile bindings",
+    ):
         load_profile_runtime_services(
             store,
             config.ACTIVE_PROFILE_PACKAGE_NAME,

@@ -10,18 +10,18 @@ from ..runtime_activation import (
     RuntimeActivationObservation,
     complete_store_startup,
 )
+from ..profile_runtime_provider import load_profile_runtime_services
+from ..profile_runtime_services import ProfileOutputAssembler
 from ..store import Store
-from ..views import OutputGenerator
 
 if TYPE_CHECKING:
     from ..auth_oidc import TestOidcVerifier
-
 
 @dataclass(frozen=True, slots=True)
 class DevelopmentRuntime:
     store: Store
     pipeline: GatePipeline
-    outputs: OutputGenerator
+    outputs: ProfileOutputAssembler
     activation: RuntimeActivationObservation
 
 
@@ -29,7 +29,7 @@ class DevelopmentRuntime:
 class TestRuntime:
     store: Store
     pipeline: GatePipeline
-    outputs: OutputGenerator
+    outputs: ProfileOutputAssembler
     activation: RuntimeActivationObservation
     oidc: TestOidcVerifier | None
 
@@ -37,7 +37,7 @@ class TestRuntime:
 def _components(
     store: Store,
     deployment_image_digest: str,
-) -> tuple[GatePipeline, OutputGenerator, RuntimeActivationObservation]:
+) -> tuple[GatePipeline, ProfileOutputAssembler, RuntimeActivationObservation]:
     image_digest = require_deployment_image_digest(deployment_image_digest)
     database = complete_store_startup(store)
     activation = RuntimeActivationObservation(
@@ -47,9 +47,18 @@ def _components(
         deployment_image_digest=image_digest,
         database=database,
     )
+    services = load_profile_runtime_services(
+        store,
+        store.active_profile_package_name,
+        store.active_descriptor,
+    )
     return (
-        GatePipeline(store, active_descriptor=store.active_descriptor),
-        OutputGenerator(store, active_descriptor=store.active_descriptor),
+        GatePipeline(
+            store,
+            active_descriptor=store.active_descriptor,
+            runtime_services=services,
+        ),
+        services.output_assembler,
         activation,
     )
 

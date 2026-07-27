@@ -134,6 +134,8 @@ def test_descriptor_constructor_alias_conflict_fails_closed():
     with pytest.raises(ProfileRuntimeError, match="active_descriptor and active_profile"):
         Materializer(
             object(),
+            specification=TEST_MATERIALIZATION_SPECIFICATION,
+            context_assembler=object(),
             active_descriptor=config.ACTIVE_PROFILE,
             active_profile=conflict,
         )

@@ -219,13 +219,23 @@
     },
     {
       "id": "root-active-runtime-tests",
-      "path": "kernel/tests/test_profile_runtime_loader.py|kernel/tests/test_m2_manifest.py|kernel/tests/test_conformance.py",
+      "path": "kernel/tests/test_profile_runtime_*.py|kernel/tests/_profile_runtime_test_support.py|kernel/tests/test_m2_manifest.py|kernel/tests/test_conformance.py",
       "term": "SI|REGSR|GERK|FFSNaprave",
       "category": "ACTIVE_RUNTIME_SI_SUPPORT",
-      "reason": "Root tests pin active profile loader, manifest grounding, and active-pilot conformance behavior.",
+      "reason": "Root tests pin active profile descriptor, provider, routing, service, manifest-grounding, and active-pilot conformance behavior.",
       "owner": "active-runtime-test-review",
       "expiresWhen": "A multi-profile harness and evidence-lane design preserves coverage without root active-pilot assumptions.",
       "forbiddenUse": "Do not treat active SI pilot tests as generic multi-profile runtime support."
+    },
+    {
+      "id": "profile-neutrality-architecture-guard",
+      "path": "conformance/rewrite_architecture_check.py",
+      "term": "SI",
+      "category": "REVIEW_GUARD_OR_NON_CLAIM",
+      "reason": "The architecture checker names the current SI semantic prefix only to reject it from designated profile-neutral runtime modules.",
+      "owner": "profile-service-boundary-review",
+      "expiresWhen": "The profile-neutrality guard becomes profile-agnostic without weakening its negative coverage.",
+      "forbiddenUse": "Do not treat a negative architecture guard as generic SI runtime law, second-profile activation, or profile capability evidence."
     },
     {
       "id": "generic-root-test-guards",

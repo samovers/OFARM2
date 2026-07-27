@@ -25,7 +25,7 @@ from .emission import PromotionEmitter, ReplayWriter, submission_evidence_refs
 from .problems import runtime_problem
 
 if TYPE_CHECKING:
-    from .profile_runtime_provider import ProfileRuntimeServices
+    from .profile_runtime_services import ProfileRuntimeServices
 
 
 # ---------------------------------------------------------------------------

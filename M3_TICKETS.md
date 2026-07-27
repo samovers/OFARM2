@@ -55,7 +55,7 @@ package-architecture stop condition.
 |---|---|
 | Any tenant-bound endpoint | #172, #173, #174, #192, and the governed-batch/knowledge-position portion of #176 |
 | Spray-register PassportView readiness guard | Reviewed reason-code governance supplying an exact registered low-consequence code; M3.6 then pins that code and response before implementation |
-| M3.1 output exposure | Centralized M3.6 `OutputGenerator` guard plus façade, existing-route, and direct-call regression tests; output stays out of M3.1 until then |
+| M3.1 output exposure | Centralized M3.6 `ProfileOutputAssembler` guard plus façade, existing-route, and direct-call regression tests; output stays out of M3.1 until then |
 | M3.3–M3.5 temporal behavior | Applicable #176 valid-time carrier and governed correction replacement-set implementation |
 | Successful spray-register PassportView | #176 current-read cuts; versioned stable content-qualification/release surfaces; #177, #181, and #182 as applicable |
 | Successful inspection-register DocumentAssembly freeze | All shared output dependencies plus ADR 0002 carrier/window/date semantics, versioned contracts, #177/#181/#182, and separately governed SI query/plan and active-artifact replacement |
@@ -559,7 +559,7 @@ Status: blocked on reviewed PassportView reason-code governance, then planned.
 
 Goal:
 
-- Add one shared `OutputGenerator` guard before blocked query, materialization,
+- Add one shared `ProfileOutputAssembler` guard before blocked query, materialization,
   qualification, assembly, persistence, or release work.
 - Keep the NOW-based `view:si.ffs.spray-register.passportview.v0_1` unexposed
   until reviewed reason-code governance supplies an exact registered
@@ -573,7 +573,7 @@ Goal:
 Likely touched files:
 
 - PWA register/freeze refusal views
-- `kernel/views.py` shared output-service guard
+- `kernel/profiles/si_ffs/outputs.py` SI output-service guard behind the neutral boundary
 - `kernel/api.py` only to route new façade calls through that service
 - backend façade, existing-route, and direct-service tests
 - scenario fixtures for output qualification
@@ -595,14 +595,15 @@ Read first:
 - `PLATFORM.md`
 - `views/VIEWS.md`
 - `profile_si_ffs/views/VIEWS.md`
-- `kernel/views.py`
+- `kernel/profile_runtime_services.py`
+- `kernel/profiles/si_ffs/outputs.py`
 - `kernel/materializer.py`
 
 Behavior change:
 
 - The M3 façade, existing `GET /views/passport/{farm_ref}` and
   `POST /views/inspection-register/freeze` routes, and direct
-  `OutputGenerator` calls reach the same centralized stop.
+  profile-output service calls reach the same centralized stop.
 - The centralized stop is a nondurable readiness/unsupported-surface refusal
   before a governed output operation begins. It creates no governed tenant or
   publication refusal evidence and must not be reported as publication-gate evidence.

@@ -20,11 +20,9 @@ os.environ.setdefault("OFARM_DEPLOYMENT_IMAGE_DIGEST", TEST_DEPLOYMENT_IMAGE_DIG
 
 from kernel import config, demo, manifest  # noqa: E402
 from kernel.gates import GatePipeline  # noqa: E402
-from kernel.materializer import Materializer  # noqa: E402
 from kernel.runtime_activation import complete_store_startup  # noqa: E402
 from kernel.runtime_bundle import RuntimeBundleBuilder  # noqa: E402
 from kernel.store import Store  # noqa: E402
-from kernel.views import OutputGenerator  # noqa: E402
 
 EVIDENCE_DIR = config.PACKAGE_ROOT / "conformance" / "evidence"
 PLATFORM_MVP_EVIDENCE_SUITE = manifest.PLATFORM_MVP_TEST_SUITE_REF
@@ -76,13 +74,13 @@ def pipeline(store):
 
 
 @pytest.fixture(scope="session")
-def outputs(store):
-    return OutputGenerator(store)
+def outputs(pipeline):
+    return pipeline.runtime_services.output_assembler
 
 
 @pytest.fixture(scope="session")
-def materializer(store):
-    return Materializer(store)
+def materializer(pipeline):
+    return pipeline.runtime_services.materializer
 
 
 @pytest.fixture
@@ -93,7 +91,6 @@ def fresh_env():
     import uuid as _uuid
     import psycopg.conninfo
     from kernel.gates import GatePipeline
-    from kernel.views import OutputGenerator
     base = os.environ.get("OFARM_PG_DBNAME", "ofarm_kernel_test")
     dbname = f"{base[:40]}_iso_{_uuid.uuid4().hex[:8]}"
     with psycopg.connect(_admin_dsn(), autocommit=True) as admin:
@@ -108,7 +105,8 @@ def fresh_env():
     s = _bound_store(psycopg.conninfo.make_conninfo(**params))
     complete_store_startup(s)
     demo.bootstrap(s)
-    yield s, GatePipeline(s), OutputGenerator(s)
+    pipeline = GatePipeline(s)
+    yield s, pipeline, pipeline.runtime_services.output_assembler
     s.close()
     with psycopg.connect(_admin_dsn(), autocommit=True) as admin:
         admin.execute(f'DROP DATABASE IF EXISTS "{dbname}"')

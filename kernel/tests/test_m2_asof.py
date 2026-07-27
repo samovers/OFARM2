@@ -28,7 +28,7 @@ import pytest
 
 from kernel import demo
 from kernel.context import ContextAssembler, ContextNotReconstructible
-from kernel.materializer import Materializer
+from kernel.profile_runtime_provider import load_profile_runtime_services
 
 
 def uid():
@@ -93,7 +93,12 @@ def _asof(store, as_of: str):
 
 def _resolve_asof(store, as_of: str):
     with store.tx() as cur:
-        return Materializer(store).resolve_for_use(
+        materializer = load_profile_runtime_services(
+            store,
+            store.active_profile_package_name,
+            store.active_descriptor,
+        ).materializer
+        return materializer.resolve_for_use(
             cur, demo.FARM,
             time_policy={"policyType": "AS_OF", "asOfTime": as_of},
             recompute_if_needed=True)

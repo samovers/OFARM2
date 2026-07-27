@@ -112,7 +112,7 @@ would have to misreport freshness. The mode's actual no-current-state intent
 is honored at the **QueryPlanIR step layer**: the two shipped views mark
 exactly their direct-substrate-read steps (pending claims, advisory flags)
 with this requirement, and those steps never touch the materializer
-(`kernel/views.py`). No production caller routes this mode through
+(`kernel/profiles/si_ffs/outputs.py`). No production caller routes this mode through
 `resolve_for_use`.
 
 **Runtime evidence level** (Performance & Explainable Current-State Evidence
