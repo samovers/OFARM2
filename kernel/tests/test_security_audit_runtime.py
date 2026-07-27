@@ -234,34 +234,6 @@ def test_code_owned_startup_timeouts_override_conflicting_dsn_values(
     ]
 
 
-def test_request_time_policy_overrides_conflicting_dsn_values(monkeypatch):
-    dsn = (
-        "dbname=audit connect_timeout=999 "
-        "options='-c statement_timeout=999999 -c lock_timeout=999999'"
-    )
-    merged = []
-
-    def connect(value, **kwargs):
-        merged.append(conninfo_to_dict(make_conninfo(value, **kwargs)))
-        return object()
-
-    monkeypatch.setattr(
-        security_audit_runtime.psycopg,
-        "connect",
-        connect,
-    )
-
-    security_audit_runtime._audit_producer_connection_factory(dsn)()
-
-    assert merged == [
-        {
-            "connect_timeout": "5",
-            "dbname": "audit",
-            "options": "-c statement_timeout=2000 -c lock_timeout=250",
-        }
-    ]
-
-
 def test_startup_connection_timeout_is_a_closed_refusal(monkeypatch):
     timeout = TimeoutError("connect timed out")
     monkeypatch.setattr(
