@@ -8,7 +8,9 @@ Checks, in order:
    deliberately small JSON Schema subset validator (the subset the OFARM
    machine contracts actually use: type, const, enum, required, properties,
    additionalProperties:false, pattern, items, minItems, minLength, oneOf).
-4. rewritten trust-boundary modules satisfy their architecture and size gates.
+4. the non-default temporal-coordinate candidate satisfies its semantic and
+   non-activation contract; and
+5. rewritten trust-boundary modules satisfy their architecture and size gates.
 
 This tool is package tooling, not OFARM law and not a full JSON Schema
 implementation. If a schema uses a keyword outside the subset, the check
@@ -199,6 +201,17 @@ def main() -> int:
             print(f"INVALID {inst_rel}: {err}")
         failures += len(errs)
     print("instance validation done")
+
+    temporal_candidate = subprocess.run(
+        [
+            sys.executable,
+            str(PKG / "conformance/temporal_contract_candidate_check.py"),
+        ],
+        check=False,
+    )
+    if temporal_candidate.returncode != 0:
+        failures += 1
+    print("temporal candidate check done")
 
     architecture = subprocess.run(
         [sys.executable, str(PKG / "conformance/rewrite_architecture_check.py")],

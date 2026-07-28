@@ -477,6 +477,15 @@
       "sha256": "af46ea052ac1516375bdb6b7ff908fd3a999499128513d4c2df231065bd91201",
       "status": "EXTRACTED_VERBATIM",
       "currentnessNote": "DRAFT_NON_DEFAULT on canonical main; carried for M1 implementation reference; NOT promoted by this package."
+    },
+    {
+      "packagePath": "contracts/candidates/temporal_coordinate/OFARM_TemporalCoordinate_schema_v0_1.json",
+      "sourcePath": null,
+      "sha256": "040183984d7c64194b5e5dad3ef080f4677fafffe59aaa8f66ed02d99350e003",
+      "status": "NEW_CANDIDATE",
+      "promotionLadderStage": "CANDIDATE_ARTIFACT",
+      "currentnessNote": "Package-local candidate for issue #176; not active, promoted, or selected by the production RuntimeBundle.",
+      "lawBasis": "ADR 0002 and docs/rfcs/OFARM_Temporal_Coordinate_Candidate_RFC_v0_1.md"
     }
   ],
   "fixtureEntries": [

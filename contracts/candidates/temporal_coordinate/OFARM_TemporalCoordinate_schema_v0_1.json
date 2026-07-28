@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/temporal-coordinate/v0.1",
+  "title": "OFARM TemporalCoordinate v0.1 (candidate)",
+  "$comment": "NEW_CANDIDATE package-local contract implementing ADR 0002 temporal meanings. Candidate per Constitution RC2.1 section 6.16; not active law, not a promoted machine contract, and not admitted to the production RuntimeBundle or any ActiveArtifactSet.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "validCut",
+    "knowledgeCut"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.temporal-coordinate.v0.1"
+    },
+    "validCut": {
+      "$ref": "#/$defs/validCut"
+    },
+    "knowledgeCut": {
+      "$ref": "#/$defs/knowledgeCut"
+    }
+  },
+  "$defs": {
+    "canonicalUtcInstant": {
+      "$comment": "Durable UTC instant. Semantic validation also proves the Gregorian date is real and never rounds or truncates excess precision.",
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\\.[0-9]{1,6})?Z$"
+    },
+    "validInterval": {
+      "$comment": "Half-open [validFrom, validUntil). When validUntil is present, semantic validation requires validFrom < validUntil.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "validFrom"
+      ],
+      "properties": {
+        "validFrom": {
+          "$ref": "#/$defs/canonicalUtcInstant"
+        },
+        "validUntil": {
+          "$ref": "#/$defs/canonicalUtcInstant"
+        }
+      }
+    },
+    "pointValidCut": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cutType",
+        "validAt"
+      ],
+      "properties": {
+        "cutType": {
+          "const": "POINT"
+        },
+        "validAt": {
+          "$ref": "#/$defs/canonicalUtcInstant"
+        }
+      }
+    },
+    "windowValidCut": {
+      "$comment": "Half-open [windowStart, windowEnd). Semantic validation requires windowStart < windowEnd.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cutType",
+        "windowStart",
+        "windowEnd"
+      ],
+      "properties": {
+        "cutType": {
+          "const": "WINDOW"
+        },
+        "windowStart": {
+          "$ref": "#/$defs/canonicalUtcInstant"
+        },
+        "windowEnd": {
+          "$ref": "#/$defs/canonicalUtcInstant"
+        }
+      }
+    },
+    "validCut": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/pointValidCut"
+        },
+        {
+          "$ref": "#/$defs/windowValidCut"
+        }
+      ]
+    },
+    "knowledgeCut": {
+      "$comment": "Tenant-scoped knowledge boundary. Position zero is the state before the first committed governed batch; positive positions order complete committed batches for this tenant only.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tenantId",
+        "position"
+      ],
+      "properties": {
+        "tenantId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "position": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        }
+      }
+    },
+    "windowMeaning": {
+      "$comment": "Required per temporal selection step by a future carrier contract; never one hidden query-wide convention.",
+      "enum": [
+        "EVENT_OCCURRENCE",
+        "STATE_OVERLAP"
+      ]
+    }
+  }
+}
