@@ -16,8 +16,9 @@ MAX_TEST_LINES = 800
 MODULE_BUDGETS = {
     "kernel/profile_runtime_provider.py": 350,
     "kernel/provider_import_policy.py": 260,
-    "kernel/profile_runtime_services.py": 230,
+    "kernel/profile_runtime_services.py": 250,
     "kernel/profiles/si_ffs/runtime_provider.py": 120,
+    "kernel/profiles/si_ffs/manifest_inputs.py": 90,
     "kernel/authentication.py": 100,
     "kernel/auth_oidc.py": 200,
     "kernel/production_oidc.py": 450,
@@ -46,12 +47,13 @@ MODULE_BUDGETS = {
 }
 GROUP_BUDGETS = {
     "profile runtime": (
-        800,
+        900,
         (
             "kernel/profile_runtime_provider.py",
             "kernel/provider_import_policy.py",
             "kernel/profile_runtime_services.py",
             "kernel/profiles/si_ffs/runtime_provider.py",
+            "kernel/profiles/si_ffs/manifest_inputs.py",
         ),
     ),
     "OIDC verification": (
@@ -201,6 +203,8 @@ PRODUCTION_COMPOSITION_MODULES = frozenset(
 )
 LEGACY_RESOURCE_NAMES = frozenset({"schema.sql"})
 PROFILE_NEUTRAL_MODULES = (
+    "conformance.ofarm_profile_runtime_readiness_check",
+    "kernel.manifest",
     "kernel.profile_runtime_services",
     "kernel.materializer",
     "kernel.gates",

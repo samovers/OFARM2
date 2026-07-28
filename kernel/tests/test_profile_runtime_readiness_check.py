@@ -1,62 +1,36 @@
 """MP7.6 profile runtime readiness command tests."""
 from __future__ import annotations
 
+import inspect
 import json
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from kernel import config
+from kernel.profile_runtime import ProfileRuntimeSurfaceInventory
+from kernel.profile_runtime_services import ProfileManifestEvidenceSpecification
 
 from conformance import ofarm_profile_runtime_readiness_check as readiness
-
-
-def _evidence_payload(
-    package_name: str,
-    *,
-    failed: int = 0,
-    profile_package: str | None = None,
-) -> dict:
-    total = 1
-    return {
-        "evidenceKind": "PROFILE_EXECUTED_EVIDENCE",
-        "profilePackage": profile_package or package_name,
-        "profileRef": f"profile:{package_name.removeprefix('profile_')}.test.v0_1",
-        "suiteId": f"profile:{package_name}.engineering-tests.v0_1",
-        "harnessDescriptorIdentity": f"{package_name}/tests/profile_test_harness.json#test",
-        "command": "pytest profile tests",
-        "generatedAt": "2026-06-25T10:00:00Z",
-        "resultRecords": [{
-            "nodeId": f"{package_name}.tests.test_demo::test_demo",
-            "module": f"{package_name}.tests.test_demo",
-            "outcome": "failed" if failed else "passed",
-        }],
-        "summary": {
-            "total": total,
-            "passed": total - failed,
-            "failed": failed,
-        },
-        "nonClaims": [
-            "not platform MVP evidence",
-            "not production readiness",
-        ],
-        "honestyNote": "Synthetic test-only profile evidence shape.",
-    }
-
-
-def _write_profile_evidence(root: Path, package_name: str, payload: dict) -> Path:
-    evidence_dir = root / package_name / "evidence"
-    evidence_dir.mkdir(parents=True)
-    path = evidence_dir / "profile_executed_engineering_results_test.json"
-    path.write_text(json.dumps(payload), encoding="utf-8")
-    return path
 
 
 def _copy_si_profile(root: Path) -> Path:
     target = root / "profile_si_ffs"
     shutil.copytree(config.PROFILE_ROOT, target)
     return target
+
+
+def _inventory(*package_names: str) -> ProfileRuntimeSurfaceInventory:
+    packages = frozenset(package_names)
+    return ProfileRuntimeSurfaceInventory(
+        adapter_supported_package_names=packages,
+        harness_covered_package_names=packages,
+        profile_executed_evidence_lane_package_names=frozenset(),
+        generated_or_verified_manifest_grounding_package_names=packages,
+    )
 
 
 def test_runtime_readiness_command_exits_zero_and_reports_current_boundaries():
@@ -126,11 +100,11 @@ def test_readiness_policy_check_rejects_unsupported_operation_floor_item(tmp_pat
     policy["operationFloor"]["hardItems"].append("unsupported-floor-item")
     policy_path.write_text(json.dumps(policy), encoding="utf-8")
 
-    report = readiness.build_readiness_report(
+    report = readiness._assemble_readiness_report(
         root,
         allowed_package_names=("profile_si_ffs",),
         selected_package_names=("profile_si_ffs",),
-        manifest_packages=frozenset({"profile_si_ffs"}),
+        inventory=_inventory("profile_si_ffs"),
     )
 
     profile = report["profiles"][0]
@@ -139,9 +113,11 @@ def test_readiness_policy_check_rejects_unsupported_operation_floor_item(tmp_pat
 
 
 def test_selected_descriptorless_package_is_overclaim_drift():
-    report = readiness.build_readiness_report(
+    report = readiness._assemble_readiness_report(
+        config.PACKAGE_ROOT,
+        allowed_package_names=config.ALLOWED_ACTIVE_PROFILE_PACKAGE_NAMES,
         selected_package_names=("profile_nl_go_glmc7_2026",),
-        manifest_packages=frozenset({"profile_si_ffs"}),
+        inventory=_inventory("profile_si_ffs"),
     )
 
     assert any(
@@ -152,9 +128,11 @@ def test_selected_descriptorless_package_is_overclaim_drift():
 
 
 def test_selected_undiscoverable_package_is_overclaim_drift():
-    report = readiness.build_readiness_report(
+    report = readiness._assemble_readiness_report(
+        config.PACKAGE_ROOT,
+        allowed_package_names=config.ALLOWED_ACTIVE_PROFILE_PACKAGE_NAMES,
         selected_package_names=("profile_missing",),
-        manifest_packages=frozenset({"profile_si_ffs"}),
+        inventory=_inventory("profile_si_ffs"),
     )
 
     assert any(
@@ -163,71 +141,51 @@ def test_selected_undiscoverable_package_is_overclaim_drift():
     )
 
 
-def test_root_platform_evidence_never_counts_as_profile_evidence(tmp_path):
-    root = tmp_path / "package_root"
-    (root / "conformance" / "evidence").mkdir(parents=True)
-    (root / "conformance" / "evidence" / "platform_mvp_results_test.json").write_text(
-        json.dumps({"suite": "conformance:root", "executed": True}),
+def test_production_readiness_entry_points_accept_no_authority_inputs():
+    assert tuple(inspect.signature(readiness.build_surface_inventory).parameters) == ()
+    assert tuple(inspect.signature(readiness.build_readiness_report).parameters) == ()
+
+
+def test_root_platform_evidence_never_counts_as_profile_evidence():
+    inventory, failures = readiness.build_surface_inventory()
+
+    assert failures == ()
+    assert inventory.profile_executed_evidence_lane_package_names == frozenset()
+
+
+def test_profile_executed_evidence_cannot_be_claimed_without_new_governance():
+    with pytest.raises(
+        ValueError,
+        match="profile executed evidence is not admitted",
+    ):
+        ProfileManifestEvidenceSpecification(
+            manifest_id="manifest:synthetic.runtime.v0_1",
+            manifest_filename="synthetic_manifest.json",
+            active_artifact_set_filename="synthetic_artifact_set.json",
+            source_component_ref="python:synthetic-profile:manifest-inputs",
+            supported_import_bindings=(),
+            artifact_set_notes="Synthetic test-only artifact set.",
+            profile_executed_evidence_refs=("evidence:synthetic.runtime.v0_1",),
+        )
+
+
+def test_synthetic_evidence_directory_cannot_enter_production_readiness(tmp_path):
+    marker = "profile_synthetic_readiness_test"
+    evidence_dir = tmp_path / marker / "evidence"
+    evidence_dir.mkdir(parents=True)
+    (evidence_dir / "passing.json").write_text(
+        json.dumps({
+            "evidenceKind": "PROFILE_EXECUTED_EVIDENCE",
+            "profilePackage": marker,
+            "summary": {"total": 1, "passed": 1, "failed": 0},
+        }),
         encoding="utf-8",
     )
-    (root / "profile_si_ffs").mkdir()
 
-    packages, failures = readiness.profile_executed_evidence_package_names(root)
+    rendered = json.dumps(readiness.build_readiness_report(), sort_keys=True)
 
-    assert packages == frozenset()
-    assert failures == ()
-
-
-def test_harness_descriptor_alone_does_not_count_as_profile_evidence(tmp_path):
-    root = tmp_path / "package_root"
-    root.mkdir()
-    _copy_si_profile(root)
-
-    packages, failures = readiness.profile_executed_evidence_package_names(root)
-
-    assert packages == frozenset()
-    assert failures == ()
-
-
-def test_well_shaped_profile_evidence_counts_for_matching_package_only(tmp_path):
-    root = tmp_path / "package_root"
-    package_name = "profile_example"
-    _write_profile_evidence(root, package_name, _evidence_payload(package_name))
-
-    packages, failures = readiness.profile_executed_evidence_package_names(root)
-
-    assert packages == frozenset({package_name})
-    assert failures == ()
-
-
-def test_profile_evidence_with_failures_does_not_count(tmp_path):
-    root = tmp_path / "package_root"
-    package_name = "profile_example"
-    _write_profile_evidence(
-        root,
-        package_name,
-        _evidence_payload(package_name, failed=1),
-    )
-
-    packages, failures = readiness.profile_executed_evidence_package_names(root)
-
-    assert packages == frozenset()
-    assert failures == ()
-
-
-def test_profile_evidence_cannot_credit_another_package(tmp_path):
-    root = tmp_path / "package_root"
-    _write_profile_evidence(
-        root,
-        "profile_a",
-        _evidence_payload("profile_a", profile_package="profile_b"),
-    )
-
-    packages, failures = readiness.profile_executed_evidence_package_names(root)
-
-    assert packages == frozenset()
-    assert failures
-    assert "profilePackage does not match" in failures[0]
+    assert marker not in rendered
+    assert "passing.json" not in rendered
 
 
 def test_docs_navigation_and_source_manifests_do_not_populate_inventory(tmp_path):
@@ -241,15 +199,16 @@ def test_docs_navigation_and_source_manifests_do_not_populate_inventory(tmp_path
         encoding="utf-8",
     )
 
-    inventory, failures = readiness.build_surface_inventory(
+    report = readiness._assemble_readiness_report(
         root,
-        manifest_packages=frozenset(),
+        allowed_package_names=("profile_docs",),
+        selected_package_names=(),
+        inventory=ProfileRuntimeSurfaceInventory(),
     )
 
-    assert failures == ()
-    assert "profile_docs" not in inventory.adapter_supported_package_names
-    assert "profile_docs" not in inventory.harness_covered_package_names
-    assert "profile_docs" not in inventory.profile_executed_evidence_lane_package_names
-    assert "profile_docs" not in (
-        inventory.generated_or_verified_manifest_grounding_package_names
+    profile = next(
+        item for item in report["profiles"]
+        if item["packageName"] == "profile_docs"
     )
+    assert profile["category"] == "DESIGN_ONLY_PROFILE_PACKAGE"
+    assert profile["preconditionsSatisfied"] is False

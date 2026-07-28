@@ -5,6 +5,7 @@ from kernel.profile_runtime_services import (
     GovernedViewBinding,
     MaterializationSpecification,
     OutputSpecification,
+    ProfileManifestEvidenceSpecification,
     ProfileRuntimeServices,
 )
 
@@ -176,5 +177,14 @@ def build_synthetic_runtime_services(_store, descriptor):
             descriptor,
             outputs,
             materializer,
+        ),
+        manifest_evidence_specification=ProfileManifestEvidenceSpecification(
+            manifest_id="manifest:synthetic.runtime.v0_1",
+            manifest_filename="synthetic_manifest.json",
+            active_artifact_set_filename="synthetic_artifact_set.json",
+            source_component_ref="python:synthetic-profile:manifest-inputs",
+            supported_import_bindings=(),
+            artifact_set_notes="Synthetic test-only profile artifacts.",
+            profile_executed_evidence_refs=(),
         ),
     )

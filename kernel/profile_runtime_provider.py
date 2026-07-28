@@ -11,6 +11,7 @@ from .profile_runtime_services import (
     MaterializationSpecification,
     OutputSpecification,
     ProfileContextAssembler,
+    ProfileManifestEvidenceSpecification,
     ProfileMaterializer,
     ProfileOutputAssembler,
     ProfilePolicyService,
@@ -178,6 +179,8 @@ def _validate_services(
         or type(services.materialization_specification)
         is not MaterializationSpecification
         or type(services.output_specification) is not OutputSpecification
+        or type(services.manifest_evidence_specification)
+        is not ProfileManifestEvidenceSpecification
         or any(
         not isinstance(service, expected)
         for service, expected in required_types

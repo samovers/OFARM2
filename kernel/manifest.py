@@ -27,42 +27,86 @@ from . import config
 from .context import now_iso
 from .policy import (COMMIT_CLASS_TO_AUTHORITY_ACTION_CLASS,
                      COMMIT_CLASS_TO_FAMILY, NON_COMMIT_ACTION_CLASSES)
+from .profile_runtime import ProfileRuntimeError
+from .profile_runtime_provider import load_profile_runtime_services
+from .runtime_bundle import RuntimeBundleError, RuntimeComponentRole
 
-MANIFEST_ID = "manifest:si.ffs.pilot.v0_1"
-MANIFEST_PATH = config.PROFILE_ROOT / "OFARM_Capability_Manifest_si_ffs_pilot_v0_1.json"
-ARTIFACT_SET_PATH = config.PROFILE_ROOT / "OFARM_ActiveArtifactSet_example_si_ffs_pilot_v0_1.json"
 PLATFORM_MVP_TEST_SUITE_REF = (
     "conformance:ofarm2.platform-mvp.tests-1-15-plus-regressions.v0_2"
 )
+_PLATFORM_ACTIVE_ARTIFACT_REFS = (
+    "contract:ofarm.assertionrecord.v0.1",
+    "contract:ofarm.semanticeventenvelope.v0.1",
+    "contract:ofarm.evidencerecord.v0.1",
+    "contract:ofarm.reviewdecision.v0.1",
+    "contract:ofarm.acceptedeventconsequence.v0.1",
+    "contract:ofarm.executionrecordpayload.v0.1",
+    "contract:ofarm.partialextent.v0.1",
+    "contract:ofarm.complianceclaim.v0.1",
+    "contract:ofarm.agronomicidentitybinding.v0.1",
+    "contract:ofarm.referencesnapshot.v0.1",
+)
 
-VIEW_ARTIFACTS = [
-    "queryspec:si.ffs.spray-register.passportview.v0_1",
-    "queryplan:si.ffs.spray-register.passportview.v0_1",
-    "queryspec:si.ffs.inspection-register.documentassembly.v0_1",
-    "queryplan:si.ffs.inspection-register.documentassembly.v0_1",
-]
 
-# the SINGLE-HOMED source of truth for which import targets actually have a
-# SUPPORTED import adapter riding the generic G2 mechanism: import-target scheme
-# -> the adapter module behind it. build_manifest derives the IMPORT_MAPPING
-# surfaces FROM this map, and verify_grounding requires every declared import
-# surface to be BOTH a scheme the code-binding profile declares AND a key here
-# whose adapter actually imports — so a scheme the profile merely names in its
-# vocabulary (EPPO, KMG-MID, …) can never be declared a SUPPORTED import surface
-# without a real adapter behind it. "SUPPORTED" covers the governed snapshot-import
-# MECHANISM only (parser reuse + G2 import + fixtures); never live fetch / cron /
-# currentness / current-compliance (D9; UNSUPPORTED_SURFACES.md). Per-target scope:
-#  - REGSR (P1): unofficial HTML surface, decision-number identity, weekly cadence.
-#  - GERK  (P2): ATTRIBUTE import only (existence / raw AREA / use code); geometry P2.
-#  - FFSNaprave (P3): official yearly downloads (D7) + composite-key inspection evidence.
-SUPPORTED_IMPORT_SURFACES = {
-    "scheme:si.uvhvvr.ffs-reg.html-surface": "kernel.profiles.si_ffs.regsr_adapter",
-    "scheme:si.gerk-pid": "kernel.profiles.si_ffs.gerk_adapter",
-    "scheme:si.ffs-naprave": "kernel.profiles.si_ffs.ffsnaprave_adapter",
-}
+def _profile_manifest_context(store):
+    """Resolve manifest inputs only through the production profile authority."""
+    descriptor = store.active_descriptor
+    package_name = config.ACTIVE_PROFILE_PACKAGE_NAME
+    if (
+        descriptor != config.ACTIVE_PROFILE
+        or descriptor.profile_root.name != package_name
+        or config.ACTIVE_PROFILE_PACKAGE_NAMES != (package_name,)
+    ):
+        raise ProfileRuntimeError(
+            "manifest assembly requires the code-selected active profile"
+        )
+    services = load_profile_runtime_services(store, package_name, descriptor)
+    try:
+        store.runtime_bundle.component(
+            RuntimeComponentRole.ADAPTER_SOURCE,
+            services.manifest_evidence_specification.source_component_ref,
+        )
+    except (AttributeError, RuntimeBundleError) as exc:
+        raise ProfileRuntimeError(
+            "profile manifest input source is absent from the RuntimeBundle"
+        ) from exc
+    return package_name, descriptor, services
+
+
+def _profile_output_paths(store):
+    _, descriptor, services = _profile_manifest_context(store)
+    specification = services.manifest_evidence_specification
+    return (
+        descriptor.profile_root / specification.manifest_filename,
+        descriptor.profile_root / specification.active_artifact_set_filename,
+    )
+
+
+def _view_artifact_refs(output_specification) -> tuple[str, ...]:
+    passport = output_specification.passport_view
+    document = output_specification.document_assembly
+    return (
+        passport.view_ref,
+        document.view_ref,
+        passport.query_specification_ref,
+        passport.query_plan_ref,
+        document.query_specification_ref,
+        document.query_plan_ref,
+    )
+
+
+def _import_bindings(specification) -> dict[str, tuple[str, str]]:
+    return {
+        target_ref: (adapter_module, component_ref)
+        for target_ref, adapter_module, component_ref
+        in specification.supported_import_bindings
+    }
 
 
 def build_manifest(store) -> dict:
+    _, descriptor, services = _profile_manifest_context(store)
+    specification = services.manifest_evidence_specification
+    import_bindings = _import_bindings(specification)
     registry_kinds = [k for k in store.registry.kinds()
                       if store.registry.get(k).lane == "canonical"]
     commit_classes = sorted(
@@ -70,7 +114,7 @@ def build_manifest(store) -> dict:
     event_families = sorted(set(COMMIT_CLASS_TO_FAMILY.values()))
     return {
         "schemaVersion": "ofarm.capabilitymanifest.v0.1",
-        "manifestId": MANIFEST_ID,
+        "manifestId": specification.manifest_id,
         "status": "ACTIVE",
         "ofarmVersion": "RC2.1",
         "platformVersion": config.RUNTIME_VERSION,
@@ -82,8 +126,8 @@ def build_manifest(store) -> dict:
             },
             "packSupport": {
                 "supportsPackActivation": True,
-                "activePackRefs": [config.PACK_REF],
-                "activeProfileRefs": [config.PROFILE_REF],
+                "activePackRefs": [descriptor.pack_ref],
+                "activeProfileRefs": [descriptor.profile_ref],
                 "supportedPrecedenceClasses": ["JURISDICTION_LAW_SAFETY"],
                 "supportedSurfaceFamilies": [
                     "VOCABULARY_BINDINGS", "EVIDENCE_POLICY", "VALIDATION_RULE",
@@ -125,16 +169,14 @@ def build_manifest(store) -> dict:
                 "supportsHumanOnlyRestrictions": True,
             },
             "importExportSupport": {
-                # the IMPORT_MAPPING surfaces are DERIVED from SUPPORTED_IMPORT_SURFACES
-                # (single-homed) — a surface cannot be declared SUPPORTED unless a real
-                # adapter rides it; per-target scope is documented on the map.
                 "declaredSurfaces": [
                     {"surfaceType": "IMPORT_MAPPING", "targetRef": target,
                      "direction": "IMPORT", "status": "SUPPORTED"}
-                    for target in SUPPORTED_IMPORT_SURFACES
+                    for target in import_bindings
                 ] + [
                     {"surfaceType": "EXPORT_MAPPING",
-                     "targetRef": "view:si.ffs.inspection-register.documentassembly.v0_1",
+                     "targetRef":
+                         services.output_specification.document_assembly.view_ref,
                      "direction": "EXPORT",
                      "status": "SUPPORTED"},
                     {"surfaceType": "API_CONTRACT",
@@ -159,7 +201,7 @@ def build_manifest(store) -> dict:
         "registryRelation": {
             "manifestRegistryRef": "registry:ofarm2-implementation-package.v0_1",
             "artifactRegistryRef": "registry:ofarm2-implementation-package.v0_1",
-            "activeArtifactSetRef": "activeartifactset:si.ffs.pilot.v0_1",
+            "activeArtifactSetRef": descriptor.active_artifact_set_ref,
             "discoveryVisibility": "PRIVATE",
         },
         "conformance": {
@@ -171,71 +213,65 @@ def build_manifest(store) -> dict:
             # ref, not a level claim.
             "minimumConformanceLevel": "NONE",
             "testSuiteRefs": [PLATFORM_MVP_TEST_SUITE_REF],
-            "declaredProfileRefs": [config.PROFILE_REF],
+            "declaredProfileRefs": [descriptor.profile_ref],
         },
     }
 
 
-def build_artifact_set() -> dict:
-    """Current active SI ActiveArtifactSet generated/verified from the runtime
-    surfaces: the PartialExtent extent-carrier now active (G7), the REGSR/GERK/
-    FFSNaprave import adapters, the SI bindings, and the evidence-review floor
-    policy; the manifest declares the matching surfaces."""
+def build_artifact_set(store) -> dict:
+    """Build the active artifact set from platform and profile authorities."""
+    _, descriptor, services = _profile_manifest_context(store)
+    specification = services.manifest_evidence_specification
+    shipped_snapshots = tuple(
+        family.shipped_snapshot_ref
+        for family in descriptor.reference_families
+        if family.shipped_snapshot_ref is not None
+    )
     return {
         "schemaVersion": "ofarm.activeartifactset.v0.1",
-        "activeArtifactSetId": "activeartifactset:si.ffs.pilot.v0_1",
+        "activeArtifactSetId": descriptor.active_artifact_set_ref,
         "generatedAt": now_iso(),
         "deploymentScope": {"scopeType": "TENANT", "scopeRef": config.TENANT_REF},
         "artifactRegistryRef": "registry:ofarm2-implementation-package.v0_1",
-        "activePackRefs": [config.PACK_REF],
-        "activeProfileRefs": [config.PROFILE_REF],
+        "activePackRefs": [descriptor.pack_ref],
+        "activeProfileRefs": [descriptor.profile_ref],
         "activeArtifactRefs": [
-            "contract:ofarm.assertionrecord.v0.1",
-            "contract:ofarm.semanticeventenvelope.v0.1",
-            "contract:ofarm.evidencerecord.v0.1",
-            "contract:ofarm.reviewdecision.v0.1",
-            "contract:ofarm.acceptedeventconsequence.v0.1",
-            "contract:ofarm.executionrecordpayload.v0.1",
-            "contract:ofarm.partialextent.v0.1",
-            "contract:ofarm.complianceclaim.v0.1",
-            "contract:ofarm.agronomicidentitybinding.v0.1",
-            "contract:ofarm.referencesnapshot.v0.1",
-            "view:si.ffs.spray-register.passportview.v0_1",
-            "view:si.ffs.inspection-register.documentassembly.v0_1",
-            *VIEW_ARTIFACTS,
-            config.EVIDENCE_POLICY_REF,
-            config.CODE_BINDING_PROFILE_REF,
-            config.SHIPPED_REGSR_SNAPSHOT_REF,
-            "referencesnapshot:si.mkgp.gerk-layer.2025-06-30",
-            MANIFEST_ID,
+            *_PLATFORM_ACTIVE_ARTIFACT_REFS,
+            *_view_artifact_refs(services.output_specification),
+            descriptor.evidence_policy_ref,
+            descriptor.code_binding_profile_ref,
+            *shipped_snapshots,
+            specification.manifest_id,
         ],
-        "sourcePackActivationSetRefs": ["packactivationset:si.ffs.pilot.v0_1"],
-        "notes": "Current active SI artifact set generated/verified from runtime "
-                 "surfaces: the operation/record contracts (incl. the PartialExtent "
-                 "extent-carrier now active for partial-extent bounds, G7), the four "
-                 "authored QuerySpecification/QueryPlanIR view artifacts, the "
-                 "Capability Manifest (which declares the REGSR/GERK/FFSNaprave "
-                 "import surfaces and inspection-register export), the evidence-review "
-                 "floor policy, both shipped ReferenceSnapshots, and the cut SI "
-                 "code-binding profile. "
-                 "Unsupported-surface posture: see UNSUPPORTED_SURFACES.md (manifest "
-                 "contract carries no free text).",
+        "sourcePackActivationSetRefs": [descriptor.pack_activation_set_ref],
+        "notes": specification.artifact_set_notes,
     }
 
 
 def verify_grounding(store, manifest: dict, artifact_set: dict) -> list[str]:
     """Manifest-grounding check (conformance test 15): every claim the
     manifest makes must match the ActiveArtifactSet and the real runtime."""
+    _, descriptor, services = _profile_manifest_context(store)
+    specification = services.manifest_evidence_specification
+    import_bindings = _import_bindings(specification)
     failures = []
+    if manifest.get("manifestId") != specification.manifest_id:
+        failures.append("manifest identity differs from the active profile")
     if manifest["registryRelation"]["activeArtifactSetRef"] != \
             artifact_set["activeArtifactSetId"]:
         failures.append("manifest does not reference the regenerated artifact set")
+    if artifact_set["activeArtifactSetId"] != descriptor.active_artifact_set_ref:
+        failures.append("artifact set identity differs from the active profile")
     refs = set(artifact_set["activeArtifactRefs"])
-    if MANIFEST_ID not in refs:
+    if specification.manifest_id not in refs:
         failures.append("artifact set does not list the manifest")
-    for ref in VIEW_ARTIFACTS:
+    for ref in _view_artifact_refs(services.output_specification):
         if ref not in refs:
             failures.append(f"artifact set missing authored view artifact {ref}")
+    if manifest["conformance"]["declaredProfileRefs"] != [descriptor.profile_ref]:
+        failures.append("manifest profile claim differs from the active profile")
+    if artifact_set["activeProfileRefs"] != [descriptor.profile_ref]:
+        failures.append("artifact set profile claim differs from the active profile")
     # contract claims must exist in the registry
     for ref in sorted(refs):
         if ref.startswith("contract:"):
@@ -267,13 +303,15 @@ def verify_grounding(store, manifest: dict, artifact_set: dict) -> list[str]:
     # every declared IMPORT_MAPPING surface must ground TWICE: in a scheme the
     # code-binding profile actually declares (a standardRef — the manifest must not
     # claim an import for a scheme the profile does not bind), AND in a real
-    # SUPPORTED import adapter (a SUPPORTED_IMPORT_SURFACES key whose adapter module
-    # imports) — so the SUPPORTED claim is grounded in actual import support, not
+    # profile-owned import binding whose adapter imports — so the SUPPORTED claim
+    # is grounded in actual import support, not
     # just profile vocabulary (M2 P6 steward re-review).
     import_targets = [s["targetRef"] for s in manifest["capabilitySections"]
                       ["importExportSupport"]["declaredSurfaces"]
                       if s["surfaceType"] == "IMPORT_MAPPING"]
-    profile = store.get_payload(config.CODE_BINDING_PROFILE_REF)
+    if set(import_targets) != set(import_bindings):
+        failures.append("manifest import surfaces differ from the active profile")
+    profile = store.get_payload(descriptor.code_binding_profile_ref)
     scheme_refs = _standard_refs(profile) if profile is not None else None
     if scheme_refs is None:
         failures.append("code-binding profile not loaded; cannot ground import surfaces")
@@ -281,12 +319,24 @@ def verify_grounding(store, manifest: dict, artifact_set: dict) -> list[str]:
         if scheme_refs is not None and target not in scheme_refs:
             failures.append(f"import surface {target} is not a scheme the code-binding "
                             "profile declares (ungrounded import-surface claim)")
-        adapter = SUPPORTED_IMPORT_SURFACES.get(target)
-        if adapter is None:
+        binding = import_bindings.get(target)
+        if binding is None:
             failures.append(f"import surface {target} has no supported import adapter "
-                            "(absent from SUPPORTED_IMPORT_SURFACES) — a profile-declared "
+                            "in the active profile — a profile-declared "
                             "scheme without an adapter cannot be a SUPPORTED import surface")
         else:
+            adapter, component_ref = binding
+            try:
+                store.runtime_bundle.component(
+                    RuntimeComponentRole.ADAPTER_SOURCE,
+                    component_ref,
+                )
+            except (AttributeError, RuntimeBundleError):
+                failures.append(
+                    f"import surface {target} adapter is absent from the "
+                    "RuntimeBundle"
+                )
+                continue
             try:
                 importlib.import_module(adapter)
             except Exception as exc:  # the adapter the map names must actually load
@@ -313,9 +363,10 @@ def _standard_refs(obj) -> set[str]:
 
 def write_artifacts(store) -> tuple[dict, dict]:
     manifest = build_manifest(store)
-    artifact_set = build_artifact_set()
-    MANIFEST_PATH.write_text(json.dumps(manifest, indent=2) + "\n")
-    ARTIFACT_SET_PATH.write_text(json.dumps(artifact_set, indent=2) + "\n")
+    artifact_set = build_artifact_set(store)
+    manifest_path, artifact_set_path = _profile_output_paths(store)
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+    artifact_set_path.write_text(json.dumps(artifact_set, indent=2) + "\n")
     return manifest, artifact_set
 
 
@@ -386,13 +437,14 @@ def verify_generated_artifacts(store) -> list[str]:
     """
     failures: list[str] = []
     generated_manifest = build_manifest(store)
-    generated_artifact_set = build_artifact_set()
+    generated_artifact_set = build_artifact_set(store)
+    manifest_path, artifact_set_path = _profile_output_paths(store)
 
     committed_manifest, load_failures = _load_committed_json(
-        MANIFEST_PATH, "committed capability manifest")
+        manifest_path, "committed capability manifest")
     failures.extend(load_failures)
     committed_artifact_set, load_failures = _load_committed_json(
-        ARTIFACT_SET_PATH, "committed active artifact set")
+        artifact_set_path, "committed active artifact set")
     failures.extend(load_failures)
     if committed_manifest is None or committed_artifact_set is None:
         return failures
