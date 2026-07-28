@@ -1246,6 +1246,11 @@
       "sourcePath": "kernel/tests/test_m2_manifest.py"
     },
     {
+      "nodeid": "kernel/tests/test_m2_manifest.py::test_manifest_input_source_must_be_in_the_runtime_bundle",
+      "sourceModule": "kernel.tests.test_m2_manifest",
+      "sourcePath": "kernel/tests/test_m2_manifest.py"
+    },
+    {
       "nodeid": "kernel/tests/test_m2_manifest.py::test_manifest_suite_ref_matches_evidence_writer",
       "sourceModule": "kernel.tests.test_m2_manifest",
       "sourcePath": "kernel/tests/test_m2_manifest.py"
@@ -1256,7 +1261,22 @@
       "sourcePath": "kernel/tests/test_m2_manifest.py"
     },
     {
+      "nodeid": "kernel/tests/test_m2_manifest.py::test_production_generators_accept_no_profile_authority_injection",
+      "sourceModule": "kernel.tests.test_m2_manifest",
+      "sourcePath": "kernel/tests/test_m2_manifest.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_m2_manifest.py::test_profile_provider_owns_artifact_paths_and_empty_evidence_claim",
+      "sourceModule": "kernel.tests.test_m2_manifest",
+      "sourcePath": "kernel/tests/test_m2_manifest.py"
+    },
+    {
       "nodeid": "kernel/tests/test_m2_manifest.py::test_supported_import_surfaces_drive_the_declared_surfaces",
+      "sourceModule": "kernel.tests.test_m2_manifest",
+      "sourcePath": "kernel/tests/test_m2_manifest.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_m2_manifest.py::test_synthetic_profile_fixture_cannot_enter_production_artifacts",
       "sourceModule": "kernel.tests.test_m2_manifest",
       "sourcePath": "kernel/tests/test_m2_manifest.py"
     },
@@ -7086,17 +7106,12 @@
       "sourcePath": "kernel/tests/test_profile_runtime_readiness_check.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_readiness_check.py::test_harness_descriptor_alone_does_not_count_as_profile_evidence",
+      "nodeid": "kernel/tests/test_profile_runtime_readiness_check.py::test_production_readiness_entry_points_accept_no_authority_inputs",
       "sourceModule": "kernel.tests.test_profile_runtime_readiness_check",
       "sourcePath": "kernel/tests/test_profile_runtime_readiness_check.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_readiness_check.py::test_profile_evidence_cannot_credit_another_package",
-      "sourceModule": "kernel.tests.test_profile_runtime_readiness_check",
-      "sourcePath": "kernel/tests/test_profile_runtime_readiness_check.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_profile_runtime_readiness_check.py::test_profile_evidence_with_failures_does_not_count",
+      "nodeid": "kernel/tests/test_profile_runtime_readiness_check.py::test_profile_executed_evidence_cannot_be_claimed_without_new_governance",
       "sourceModule": "kernel.tests.test_profile_runtime_readiness_check",
       "sourcePath": "kernel/tests/test_profile_runtime_readiness_check.py"
     },
@@ -7126,7 +7141,7 @@
       "sourcePath": "kernel/tests/test_profile_runtime_readiness_check.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_readiness_check.py::test_well_shaped_profile_evidence_counts_for_matching_package_only",
+      "nodeid": "kernel/tests/test_profile_runtime_readiness_check.py::test_synthetic_evidence_directory_cannot_enter_production_readiness",
       "sourceModule": "kernel.tests.test_profile_runtime_readiness_check",
       "sourcePath": "kernel/tests/test_profile_runtime_readiness_check.py"
     },
@@ -7612,6 +7627,11 @@
     },
     {
       "nodeid": "kernel/tests/test_profile_runtime_services.py::test_composition_rejects_cross_profile_service_binding",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_composition_requires_trusted_manifest_evidence_inputs",
       "sourceModule": "kernel.tests.test_profile_runtime_services",
       "sourcePath": "kernel/tests/test_profile_runtime_services.py"
     },
@@ -8226,12 +8246,22 @@
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
     {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_firewall_rejects_missing_required_profile_modules[conformance.ofarm_profile_runtime_readiness_check]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_firewall_rejects_missing_required_profile_modules[kernel.gates]",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
     {
       "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_firewall_rejects_missing_required_profile_modules[kernel.legacy_m1.runtime]",
+      "sourceModule": "kernel.tests.test_rewrite_architecture_check",
+      "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_rewrite_architecture_check.py::test_firewall_rejects_missing_required_profile_modules[kernel.manifest]",
       "sourceModule": "kernel.tests.test_rewrite_architecture_check",
       "sourcePath": "kernel/tests/test_rewrite_architecture_check.py"
     },
@@ -9951,8 +9981,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "4476ff838b31f0f2113908b773d12a24e3c46317ecb0594e82d2f17c25bfbe9e",
-  "entryCount": 1990,
+  "entriesSha256": "393111dbf86cde0a8545eb2a92f1932f96c2724957c7d389f11c2de4419e8e6b",
+  "entryCount": 1996,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

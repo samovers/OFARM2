@@ -80,6 +80,57 @@ class OutputSpecification:
         _require_ref(self.version_label_prefix, "version label prefix")
 
 
+@dataclass(frozen=True, slots=True)
+class ProfileManifestEvidenceSpecification:
+    """Profile-owned inputs for neutral manifest and readiness assembly."""
+
+    manifest_id: str
+    manifest_filename: str
+    active_artifact_set_filename: str
+    source_component_ref: str
+    supported_import_bindings: tuple[tuple[str, str, str], ...]
+    artifact_set_notes: str
+    profile_executed_evidence_refs: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        _require_ref(self.manifest_id, "capability manifest id")
+        _require_filename(self.manifest_filename, "capability manifest filename")
+        _require_filename(
+            self.active_artifact_set_filename,
+            "active artifact set filename",
+        )
+        _require_ref(self.source_component_ref, "manifest input source component")
+        if (
+            type(self.supported_import_bindings) is not tuple
+            or any(
+                type(binding) is not tuple
+                or len(binding) != 3
+                or any(type(value) is not str or not value for value in binding)
+                for binding in self.supported_import_bindings
+            )
+        ):
+            raise ValueError(
+                "supported import bindings must be exact string triples"
+            )
+        targets = tuple(binding[0] for binding in self.supported_import_bindings)
+        if len(targets) != len(set(targets)):
+            raise ValueError("supported import targets must be unique")
+        _require_ref(self.artifact_set_notes, "active artifact set notes")
+        if type(self.profile_executed_evidence_refs) is not tuple:
+            raise ValueError("profile executed evidence refs must be a tuple")
+        if self.profile_executed_evidence_refs:
+            raise ValueError(
+                "profile executed evidence is not admitted by this runtime"
+            )
+
+
+def _require_filename(value: object, label: str) -> str:
+    _require_ref(value, label)
+    if "/" in value or "\\" in value or not value.endswith(".json"):
+        raise ValueError(f"{label} must be one JSON basename")
+    return value
+
+
 @runtime_checkable
 class ProfilePolicyService(Protocol):
     descriptor: ProfileRuntimeDescriptor
@@ -183,3 +234,4 @@ class ProfileRuntimeServices:
     registry_reverification: ProfileRegistryReverification
     output_specification: OutputSpecification
     output_assembler: ProfileOutputAssembler
+    manifest_evidence_specification: ProfileManifestEvidenceSpecification

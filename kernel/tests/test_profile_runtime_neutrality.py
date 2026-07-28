@@ -112,6 +112,8 @@ def test_synthetic_second_profile_uses_only_profile_local_services():
             services.materialization_specification.default_result_shape_family,
             services.output_specification.passport_view.view_ref,
             services.output_specification.document_assembly.view_ref,
+            services.manifest_evidence_specification.manifest_id,
+            services.manifest_evidence_specification.manifest_filename,
         )
     )
 

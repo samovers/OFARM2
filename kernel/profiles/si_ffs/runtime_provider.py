@@ -15,6 +15,7 @@ from ...profile_runtime_services import (
 from ...runtime_bundle import RuntimeBundleError, RuntimeComponentRole
 from ...sufficiency import OPERATION_FLOOR_CHECKS
 from ...validators import RegistryReverificationValidator
+from .manifest_inputs import SI_MANIFEST_EVIDENCE_SPECIFICATION
 from .outputs import SI_OUTPUT_SPECIFICATION, SIOutputAssembler
 
 
@@ -82,4 +83,5 @@ def build_si_runtime_services(
             materializer=materializer,
             active_descriptor=descriptor,
         ),
+        manifest_evidence_specification=SI_MANIFEST_EVIDENCE_SPECIFICATION,
     )

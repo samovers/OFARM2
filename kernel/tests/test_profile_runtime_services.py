@@ -731,6 +731,30 @@ def test_composition_rejects_cross_profile_service_binding(
         )
 
 
+def test_composition_requires_trusted_manifest_evidence_inputs(
+        fresh_env, monkeypatch):
+    store, _, _ = fresh_env
+
+    def untrusted_factory(_store, descriptor):
+        services = profile_runtime_provider._resolve_si_factory()(
+            _store,
+            descriptor,
+        )
+        return replace(services, manifest_evidence_specification=object())
+
+    monkeypatch.setattr(
+        profile_runtime_provider,
+        "_load_factory",
+        lambda _registration, _path, _source: untrusted_factory,
+    )
+    with pytest.raises(ProfileRuntimeError, match="incomplete or mismatched"):
+        load_profile_runtime_services(
+            store,
+            config.ACTIVE_PROFILE_PACKAGE_NAME,
+            config.ACTIVE_PROFILE,
+        )
+
+
 def test_issue_159_service_bundle_has_no_optional_slots():
     with pytest.raises(TypeError):
         ProfileRuntimeServices(descriptor=config.ACTIVE_PROFILE)

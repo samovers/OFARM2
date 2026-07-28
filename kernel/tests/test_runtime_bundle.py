@@ -99,6 +99,11 @@ EXPECTED_EXECUTABLE_SOURCE_SELECTION = {
     ),
     (
         RuntimeComponentRole.ADAPTER_SOURCE,
+        "python:profile-si-ffs-v0_1:manifest-inputs",
+        "kernel/profiles/si_ffs/manifest_inputs.py",
+    ),
+    (
+        RuntimeComponentRole.ADAPTER_SOURCE,
         "python:profile-si-ffs-v0_1:regsr-parser",
         "tooling/regsr_snapshot/parse_regsr.py",
     ),
@@ -1260,7 +1265,7 @@ def test_checked_in_component_catalog_builds_the_reviewed_closed_set():
 
     assert bundle.selected_tenant_ref == "tenant:si.ffs.pilot.demo"
     assert bundle.digest == (
-        "sha256:c48a7d8b246954cb79c350296aff4dd11ae630dc20066f58f8d88d6e0901a9f4"
+        "sha256:e3022473ba97897ecc68bd8fb93a747aa3cc80149442e248e3e39f7b8b28268a"
     )
 
     expected_catalog_roles = {
@@ -1280,9 +1285,18 @@ def test_checked_in_component_catalog_builds_the_reviewed_closed_set():
         RuntimeComponentRole.VIEW_BINDING,
     }
 
-    assert len(bundle.components) == 94
+    assert len(bundle.components) == 95
     assert {component.role for component in bundle.components} == expected_catalog_roles
     assert set(RuntimeComponentRole) == expected_catalog_roles
+    assert {
+        component.logical_ref
+        for component in bundle.components
+        if component.role is RuntimeComponentRole.PROFILE_DESCRIPTOR
+    } == {"profile:si.ffs.recordkeeping.v0_1"}
+    assert all(
+        "synthetic" not in component.logical_ref
+        for component in bundle.components
+    )
     identities = [
         (component.role.value, component.logical_ref)
         for component in bundle.components

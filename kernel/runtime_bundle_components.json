@@ -185,6 +185,13 @@
     },
     {
       "role": "ADAPTER_SOURCE",
+      "logicalRef": "python:profile-si-ffs-v0_1:manifest-inputs",
+      "path": "kernel/profiles/si_ffs/manifest_inputs.py",
+      "canonicalization": "EXACT_BYTES_V1",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT"
+    },
+    {
+      "role": "ADAPTER_SOURCE",
       "logicalRef": "python:profile-si-ffs-v0_1:regsr-parser",
       "path": "tooling/regsr_snapshot/parse_regsr.py",
       "canonicalization": "EXACT_BYTES_V1",

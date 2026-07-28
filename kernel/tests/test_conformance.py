@@ -807,14 +807,15 @@ def test_14_reachability(store, pipeline):
 
 def test_15_manifest_grounding(store):
     from kernel import manifest as m
-    manifest = json.loads(m.MANIFEST_PATH.read_text())
-    artifact_set = json.loads(m.ARTIFACT_SET_PATH.read_text())
+    manifest_path, artifact_set_path = m._profile_output_paths(store)
+    manifest = json.loads(manifest_path.read_text())
+    artifact_set = json.loads(artifact_set_path.read_text())
     failures = m.verify_grounding(store, manifest, artifact_set)
     assert failures == [], f"manifest grounding failures: {failures}"
 
     pairs = [
-        (m.MANIFEST_PATH, "contracts/platform/OFARM_Capability_Manifest_schema_v0_1.json"),
-        (m.ARTIFACT_SET_PATH, "contracts/platform/OFARM_ActiveArtifactSet_schema_v0_1.json"),
+        (manifest_path, "contracts/platform/OFARM_Capability_Manifest_schema_v0_1.json"),
+        (artifact_set_path, "contracts/platform/OFARM_ActiveArtifactSet_schema_v0_1.json"),
         (config.PROFILE_ROOT / "views/OFARM_QuerySpecification_si_ffs_spray_register_passportview_v0_1.json",
          "contracts/platform/OFARM_QuerySpecification_schema_v0_1.json"),
         (config.PROFILE_ROOT / "views/OFARM_QueryPlanIR_si_ffs_spray_register_passportview_v0_1.json",
