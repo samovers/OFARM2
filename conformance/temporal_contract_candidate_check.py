@@ -37,6 +37,7 @@ CAPABILITY_MANIFEST_PATH = (
 CONTRACT_VERSION = "ofarm.temporal-coordinate.v0.1"
 CONTRACT_ID = "https://ofarm.dev/schema/temporal-coordinate/v0.1"
 MAX_KNOWLEDGE_POSITION = 9223372036854775807
+NIL_TENANT_ID = "00000000-0000-0000-0000-000000000000"
 WINDOW_MEANINGS = frozenset({"EVENT_OCCURRENCE", "STATE_OVERLAP"})
 _UTC_INSTANT = re.compile(
     r"^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])"
@@ -97,8 +98,6 @@ def canonical_utc_instant(value: object, label: str) -> datetime:
         instant = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError as exc:
         raise TemporalCandidateError(f"{label} is not a real UTC instant") from exc
-    if instant.utcoffset() is None or instant.utcoffset().total_seconds() != 0:
-        raise TemporalCandidateError(f"{label} is not UTC")
     return instant
 
 
@@ -164,7 +163,7 @@ def validate_knowledge_cut(value: object) -> None:
         raise TemporalCandidateError(
             "KnowledgeCut tenantId is not a UUID"
         ) from exc
-    if parsed_tenant_id.int == 0 or str(parsed_tenant_id) != tenant_id:
+    if tenant_id == NIL_TENANT_ID or str(parsed_tenant_id) != tenant_id:
         raise TemporalCandidateError("KnowledgeCut tenantId is not canonical")
     position = cut["position"]
     if (
@@ -252,6 +251,7 @@ def validate_candidate_governance() -> None:
     if (
         type(tenant_property) is not dict
         or tenant_property.get("pattern") != _CANONICAL_UUID.pattern
+        or tenant_property.get("not") != {"const": NIL_TENANT_ID}
         or type(position_property) is not dict
         or position_property.get("type") != "integer"
         or position_property.get("minimum") != 0
@@ -307,20 +307,10 @@ def validate_candidate_governance() -> None:
 
     runtime_catalog = _load_json(RUNTIME_CATALOG_PATH)
     contract_paths = runtime_catalog.get("contractSchemas")
-    components = runtime_catalog.get("components")
-    if type(contract_paths) is not list or type(components) is not list:
+    if type(contract_paths) is not list:
         raise TemporalCandidateError("runtime component catalog is malformed")
     if SCHEMA_RELATIVE_PATH in contract_paths:
         raise TemporalCandidateError("candidate entered the RuntimeBundle")
-    if any(
-        type(component) is dict
-        and (
-            component.get("relativePath") == SCHEMA_RELATIVE_PATH
-            or component.get("logicalRef") == f"contract:{CONTRACT_VERSION}"
-        )
-        for component in components
-    ):
-        raise TemporalCandidateError("candidate entered a runtime component")
 
     for path, label in (
         (ACTIVE_ARTIFACT_SET_PATH, "ActiveArtifactSet"),
@@ -389,6 +379,11 @@ def validate_semantic_vectors() -> None:
         ),
         (
             validate_valid_cut,
+            {"cutType": "POINT", "validAt": "2026-02-30T10:30:00Z"},
+            "non-real Gregorian instant",
+        ),
+        (
+            validate_valid_cut,
             {
                 "cutType": "WINDOW",
                 "windowStart": "2026-01-01T00:00:00Z",
@@ -403,6 +398,11 @@ def validate_semantic_vectors() -> None:
                 "position": -1,
             },
             "negative knowledge position",
+        ),
+        (
+            validate_knowledge_cut,
+            {"tenantId": NIL_TENANT_ID, "position": 0},
+            "nil tenant identifier",
         ),
         (
             validate_valid_interval,

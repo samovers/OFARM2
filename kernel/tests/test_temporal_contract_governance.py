@@ -99,6 +99,12 @@ def test_point_and_window_coordinates_validate_against_schema_and_semantics():
             "not canonical",
         ),
         (
+            lambda value: value["knowledgeCut"].update(
+                {"tenantId": temporal.NIL_TENANT_ID}
+            ),
+            "not canonical",
+        ),
+        (
             lambda value: value.update({"asOf": "2026-07-28T10:30:00Z"}),
             "unknown or missing fields",
         ),
@@ -111,6 +117,7 @@ def test_point_and_window_coordinates_validate_against_schema_and_semantics():
         "negative-position",
         "boolean-position",
         "tenant-alias",
+        "nil-tenant",
         "unknown-coordinate-field",
     ),
 )
@@ -143,6 +150,17 @@ def test_valid_interval_must_be_non_empty_and_half_open(interval):
         match="non-empty and half-open",
     ):
         temporal.validate_valid_interval(interval)
+
+
+def test_non_real_gregorian_instant_refuses_semantically():
+    value = _coordinate()
+    value["validCut"]["validAt"] = "2026-02-30T10:30:00Z"
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="not a real UTC instant",
+    ):
+        temporal.validate_temporal_coordinate(value)
 
 
 def test_window_meaning_is_a_closed_per_step_vocabulary():

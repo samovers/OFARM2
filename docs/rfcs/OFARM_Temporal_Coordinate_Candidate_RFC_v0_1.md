@@ -4,7 +4,7 @@
 
 **Schema version:** `ofarm.temporal-coordinate.v0.1`
 
-**Schema digest:** `sha256:040183984d7c64194b5e5dad3ef080f4677fafffe59aaa8f66ed02d99350e003`
+**Schema digest:** `sha256:f567d63454cd37ff46e23d8e8dab1b825a2b6a2d5baac592fb30a3c82d66ea6b`
 
 **Primary implementation ticket:** #176
 
@@ -117,7 +117,8 @@ both events and states.
 }
 ```
 
-`tenantId` is the exact canonical UUID installed by trusted `TenantBinding`.
+`tenantId` is the exact canonical, non-nil UUID installed by trusted
+`TenantBinding`. ADR 0003's UUID encoding rule forbids the all-zero UUID.
 Request-supplied tenant, Party, or farm aliases cannot substitute for it.
 
 `position` is an exact integer from zero through signed int64 maximum. Zero
@@ -161,7 +162,7 @@ Contract or semantic validation refuses:
 - empty or reversed state intervals;
 - literal `NOW` in durable temporal evidence;
 - naive, unknown-offset, leap-second, non-real, or over-precision instants;
-- missing or non-canonical tenant UUIDs;
+- missing, nil, or non-canonical tenant UUIDs;
 - negative, non-integer, or larger-than-int64 knowledge positions;
 - using one tenant's cut for another tenant;
 - a cut above the committed tenant head;
@@ -180,12 +181,21 @@ canonicalization, bound, or predicate change requires a new schema version and
 artifact identity.
 
 The candidate lives outside active contract-registry directories. It is absent
-from the production RuntimeBundle, ActiveArtifactSet, Capability Manifest, and
-all profiles. Existing frozen v0.1 contracts remain unchanged.
+from the checked-in production RuntimeBundle catalog and that catalog's
+production ActiveArtifactSet and Capability Manifest inputs. This
+non-activation check does not inspect, import, or grant authority to legacy
+profile trees. Existing frozen v0.1 contracts remain unchanged.
 
 Future contracts must consume this exact version and digest rather than copy
 similar fields or hide the meanings in notes, references, timestamp
 conventions, or mutable relational annotations.
+
+`validInterval` and `windowMeaning` are named vocabulary fragments, not root
+instance fields. This candidate does not establish cross-document `$ref`
+resolution, a schema registry, or a carrier binding. A future governed carrier
+contract must choose that binding mechanism, pin this exact version and digest,
+and make the applicable fragment reachable from its own validation root before
+either fragment can govern a production instance.
 
 ## Required future boundaries
 

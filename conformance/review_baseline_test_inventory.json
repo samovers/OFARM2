@@ -9966,12 +9966,22 @@
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
     },
     {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_invalid_temporal_coordinates_refuse[nil-tenant]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
       "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_invalid_temporal_coordinates_refuse[tenant-alias]",
       "sourceModule": "kernel.tests.test_temporal_contract_governance",
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
     },
     {
       "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_invalid_temporal_coordinates_refuse[unknown-coordinate-field]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_non_real_gregorian_instant_refuses_semantically",
       "sourceModule": "kernel.tests.test_temporal_contract_governance",
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
     },
@@ -10051,8 +10061,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "98440bd2862132d66b1caffea904df03f97cd63ace390b100dd30d31398717b8",
-  "entryCount": 2010,
+  "entriesSha256": "42a255a704b375d341174528f084c048ea624fba02b0b599caf329a885df38a9",
+  "entryCount": 2012,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
