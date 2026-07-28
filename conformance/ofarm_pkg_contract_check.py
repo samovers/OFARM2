@@ -8,8 +8,8 @@ Checks, in order:
    deliberately small JSON Schema subset validator (the subset the OFARM
    machine contracts actually use: type, const, enum, required, properties,
    additionalProperties:false, pattern, items, minItems, minLength, oneOf).
-4. the non-default temporal-coordinate candidate satisfies its semantic and
-   non-activation contract; and
+4. the non-default temporal-governance coordinate and carrier-matrix
+   candidates satisfy their semantic and non-activation contract; and
 5. rewritten trust-boundary modules satisfy their architecture and size gates.
 
 This tool is package tooling, not OFARM law and not a full JSON Schema

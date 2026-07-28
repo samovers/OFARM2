@@ -481,10 +481,28 @@
     {
       "packagePath": "contracts/candidates/temporal_coordinate/OFARM_TemporalCoordinate_schema_v0_1.json",
       "sourcePath": null,
-      "sha256": "f567d63454cd37ff46e23d8e8dab1b825a2b6a2d5baac592fb30a3c82d66ea6b",
+      "sha256": "b81e4c7b0aacebb11ff8bf0d186cdb36150fade31180552b46f7be9e13c551eb",
       "status": "NEW_CANDIDATE",
       "promotionLadderStage": "CANDIDATE_ARTIFACT",
-      "currentnessNote": "Package-local candidate for issue #176; not active, promoted, or selected by the production RuntimeBundle.",
+      "currentnessNote": "Package-local temporal-coordinate candidate for issue #176; not active, promoted, or selected by the production RuntimeBundle.",
+      "lawBasis": "ADR 0002 and docs/rfcs/OFARM_Temporal_Coordinate_Candidate_RFC_v0_1.md"
+    },
+    {
+      "packagePath": "contracts/candidates/temporal_coordinate/OFARM_TemporalCarrierMatrix_schema_v0_1.json",
+      "sourcePath": null,
+      "sha256": "cdb5c09ec033cc3b4de1dea9eb383c499045d8a3bfc5b80fd7abeab579a566ed",
+      "status": "NEW_CANDIDATE",
+      "promotionLadderStage": "CANDIDATE_ARTIFACT",
+      "currentnessNote": "Package-local temporal carrier-matrix schema candidate for issue #176; classification-only, inactive, and not selected by the production RuntimeBundle.",
+      "lawBasis": "ADR 0002 and docs/rfcs/OFARM_Temporal_Coordinate_Candidate_RFC_v0_1.md"
+    },
+    {
+      "packagePath": "contracts/candidates/temporal_coordinate/OFARM_TemporalCarrierMatrix_ADR0002_candidate_v0_1.json",
+      "sourcePath": null,
+      "sha256": "7cb26513b5abdbcadecaf6f9b47d874a742ba8fa05a332c9130deebe449d7fc6",
+      "status": "NEW_CANDIDATE",
+      "promotionLadderStage": "CANDIDATE_ARTIFACT",
+      "currentnessNote": "Package-local ADR 0002 carrier-matrix candidate for issue #176; classification-only, inactive, and not selected by the production RuntimeBundle.",
       "lawBasis": "ADR 0002 and docs/rfcs/OFARM_Temporal_Coordinate_Candidate_RFC_v0_1.md"
     }
   ],

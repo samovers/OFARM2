@@ -1,10 +1,18 @@
-# OFARM Temporal Coordinate Candidate RFC v0.1
+# OFARM Temporal Governance Candidate RFC v0.1
 
 **Status:** package-local `CANDIDATE_ARTIFACT`; non-default and inactive
 
-**Schema version:** `ofarm.temporal-coordinate.v0.1`
+**Temporal coordinate schema version:** `ofarm.temporal-coordinate.v0.1`
 
-**Schema digest:** `sha256:f567d63454cd37ff46e23d8e8dab1b825a2b6a2d5baac592fb30a3c82d66ea6b`
+**Temporal coordinate schema digest:** `sha256:b81e4c7b0aacebb11ff8bf0d186cdb36150fade31180552b46f7be9e13c551eb`
+
+**Temporal carrier matrix schema version:** `ofarm.temporal-carrier-matrix.v0.1`
+
+**Temporal carrier matrix schema digest:** `sha256:cdb5c09ec033cc3b4de1dea9eb383c499045d8a3bfc5b80fd7abeab579a566ed`
+
+**Temporal carrier matrix instance:** `ofarm.temporal-carrier-matrix.adr0002.v0.1`
+
+**Temporal carrier matrix instance digest:** `sha256:7cb26513b5abdbcadecaf6f9b47d874a742ba8fa05a332c9130deebe449d7fc6`
 
 **Primary implementation ticket:** #176
 
@@ -24,8 +32,10 @@ immutable `TemporalCoordinate` containing two independent axes:
 Neither cut may be omitted, derived from the other, or replaced by an
 unclassified `as_of`, `record_time`, capture time, or other wall clock.
 
-This candidate is a necessary vocabulary only. It does not authorize temporal
-storage, carrier selection, historical queries, materialization, or outputs.
+This package supplies the necessary coordinate vocabulary and an immutable
+classification transcription of ADR 0002's carrier matrix. It does not
+authorize temporal storage, executable carrier selection, historical queries,
+materialization, outputs, or production activation.
 
 ## Canonical UTC instants
 
@@ -96,15 +106,34 @@ WINDOW is always the non-empty half-open interval
 request syntax, not a durable cut; a future current-read boundary must resolve
 it exactly once to a POINT.
 
-`ValidCut` does not choose a record-family carrier. A later governed carrier
-contract must bind every selection step to an immutable carrier-matrix version
-and digest. Every WINDOW step must also declare exactly one meaning:
+`ValidCut` does not choose a record-family carrier. Every future governed
+selection step must bind an immutable carrier-matrix version, matrix digest,
+and executable selector approved by the later carrier-selection boundary.
+Every WINDOW step must also declare exactly one meaning:
 
 - `EVENT_OCCURRENCE`: `windowStart <= occurrenceTime < windowEnd`
 - `STATE_OVERLAP`: the interval-overlap predicate above
 
 The meaning belongs to each selection step because one assembly may select
 both events and states.
+
+## Candidate carrier matrix
+
+`ofarm.temporal-carrier-matrix.adr0002.v0.1` transcribes the 15 rows in ADR
+0002's “Governed carrier and window-meaning matrix.” Its schema closes the row
+identity set and requires the authoritative-carrier, secondary-time consistency,
+and window/refusal rule for each row. Conformance proves that every rule string
+comes from that ADR section after markup removal and that the matrix binds this
+exact coordinate-schema digest.
+
+The matrix has execution posture
+`CLASSIFICATION_ONLY_RUNTIME_UNSUPPORTED`. Its rule text is immutable
+classification evidence, not executable field-selector syntax. It does not
+amend any record schema, select a production field, activate a profile, or
+permit runtime interpretation of a row. A later approved valid-time carrier
+boundary must define closed executable selectors, bind each selector to the
+applicable row and matrix digest, and carry that binding through the governed
+query and evidence surfaces before any row can execute.
 
 ## KnowledgeCut
 
@@ -121,10 +150,13 @@ both events and states.
 `TenantBinding`. ADR 0003's UUID encoding rule forbids the all-zero UUID.
 Request-supplied tenant, Party, or farm aliases cannot substitute for it.
 
-`position` is an exact integer from zero through signed int64 maximum. Zero
-means the tenant state before its first committed governed batch. Positive
-positions order complete committed batches for that tenant only. Cross-tenant
-positions are incomparable.
+`position` is an exact JSON integer from zero through `9007199254740991`
+(`2^53−1`, the IEEE-754 maximum safe integer). Zero means the tenant state
+before its first committed governed batch. Positive positions order complete
+committed batches for that tenant only. Cross-tenant positions are
+incomparable. The portable contract bound prevents ordinary JSON runtimes from
+rounding a valid position; a future database may use a wider internal integer
+type but must refuse allocation above the contract maximum.
 
 A future storage implementation must make each batch wholly visible at its
 position, publish no position on rollback, never reuse a committed position,
@@ -163,7 +195,8 @@ Contract or semantic validation refuses:
 - literal `NOW` in durable temporal evidence;
 - naive, unknown-offset, leap-second, non-real, or over-precision instants;
 - missing, nil, or non-canonical tenant UUIDs;
-- negative, non-integer, or larger-than-int64 knowledge positions;
+- negative, non-integer, or larger-than-`9007199254740991` knowledge
+  positions;
 - using one tenant's cut for another tenant;
 - a cut above the committed tenant head;
 - missing, conflicting, or semantically unclassified valid-time carriers;
@@ -176,15 +209,22 @@ absence of their implementation keeps the operation unsupported.
 
 ## Versioning and currentness
 
-The schema is closed and digest-pinned. Any semantic, field, enum,
-canonicalization, bound, or predicate change requires a new schema version and
-artifact identity.
+Each candidate artifact is closed and digest-pinned. Before a specific digest
+receives an explicit governed promotion/currentness decision, pre-promotion
+candidate revisions may retain the `v0.1` candidate identity; every revision
+must update all manifest and RFC digest bindings and remains reviewable by
+digest. Once a reviewed digest is promoted to a governed artifact, any
+semantic, field, enum, canonicalization, bound, predicate, carrier row, or
+refusal change requires a new version and artifact identity. Test success or
+this Phase A implementation approval is not a promotion/currentness decision.
 
-The candidate lives outside active contract-registry directories. It is absent
-from the checked-in production RuntimeBundle catalog and that catalog's
-production ActiveArtifactSet and Capability Manifest inputs. This
-non-activation check does not inspect, import, or grant authority to legacy
-profile trees. Existing frozen v0.1 contracts remain unchanged.
+The candidate package lives under `contracts/candidates/`, outside active
+contract-registry directories. It is absent from `kernel/runtime_bundle_components.json`,
+`profile_si_ffs/OFARM_ActiveArtifactSet_example_si_ffs_pilot_v0_1.json`, and
+`profile_si_ffs/OFARM_Capability_Manifest_si_ffs_pilot_v0_1.json`. Those are the
+only profile files inspected by this candidate check. Other profile trees are
+neither inspected nor granted authority. Existing frozen v0.1 contracts remain
+unchanged.
 
 Future contracts must consume this exact version and digest rather than copy
 similar fields or hide the meanings in notes, references, timestamp
@@ -192,17 +232,71 @@ conventions, or mutable relational annotations.
 
 `validInterval` and `windowMeaning` are named vocabulary fragments, not root
 instance fields. This candidate does not establish cross-document `$ref`
-resolution, a schema registry, or a carrier binding. A future governed carrier
-contract must choose that binding mechanism, pin this exact version and digest,
-and make the applicable fragment reachable from its own validation root before
-either fragment can govern a production instance.
+resolution, a production schema registry, or an executable carrier binding. A
+future governed carrier contract must choose that binding mechanism, pin the
+exact coordinate and matrix versions and digests, and make the applicable
+fragment reachable from its own validation root before either fragment can
+govern a production instance.
+
+The package's deliberately small built-in schema validator does not implement
+every Draft 2020-12 keyword used by these candidates. Before promotion or
+registration of production instances, the package must bind a complete Draft
+2020-12 validation path covering `$ref`, `$defs`, `format`, numeric bounds, and
+`not`, with conformance fixtures proving the same refusal surface. The current
+dedicated checker and pytest validation are candidate verification only; they
+do not activate a general registry validator.
+
+## Authority map
+
+- ADR 0002 owns the two-axis meanings, half-open predicates, matrix row
+  content, and downstream stop conditions.
+- ADR 0003 and trusted `TenantBinding` own the canonical non-nil tenant
+  identity consumed by `KnowledgeCut`.
+- The candidate schemas own only the closed inactive serialization shapes.
+- The candidate matrix owns only the digest-pinned ADR classification
+  transcription; it owns no executable selector.
+- `CONTRACTS_MANIFEST.json` and this RFC own candidate provenance, currentness,
+  and digest binding.
+- Existing frozen contracts, RuntimeBundle selection, production activation
+  inputs, profiles, storage, runtime, output, and #192 authorities remain
+  unchanged.
+
+## Invariants
+
+- `TemporalCoordinate` always contains independent `ValidCut` and
+  tenant-scoped `KnowledgeCut` values.
+- Valid intervals and query windows are non-empty and half-open.
+- Knowledge positions are exact, tenant-local, whole-batch boundaries within
+  the portable safe-integer range.
+- Every carrier-matrix row is present exactly once and its rule text is
+  traceable to ADR 0002.
+- Every artifact is closed, digest-bound, inactive, and absent from production
+  registries and activation inputs.
+- Test or conformance success never promotes or activates a candidate.
+
+## Non-goals
+
+This phase does not add or alter database storage, allocation, migrations,
+runtime temporal selection, executable carrier selectors, semantic routes,
+materialization, historical or WINDOW execution, current-state output,
+qualification, authorization, receipts, delivery, profile activation, frozen
+contracts, or #192 audit-runtime behavior.
+
+## Verification
+
+Candidate verification must prove strict JSON parsing; complete Draft 2020-12
+schema validity in the pinned pytest environment; exact schema and matrix
+shape; shared positive and refusal vectors; ADR row transcription; manifest and
+RFC digests; ERRATA linkage; production non-activation by contract path and
+component path; and unchanged RuntimeBundle closure. The repository package
+contract check must invoke the dedicated candidate checker before every commit.
 
 ## Required future boundaries
 
 Separate approved Phase A contracts are required before:
 
 - a migration stores or allocates tenant knowledge positions;
-- code selects a record-family valid-time carrier;
+- code turns a carrier-matrix row into an executable record-family selector;
 - a production command emits a governed batch position;
 - QuerySpecification, QueryPlanIR, context, basis, key, result, or snapshot
   supports AS_OF or WINDOW;

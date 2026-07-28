@@ -9931,57 +9931,27 @@
       "sourcePath": "kernel/tests/test_stages.py"
     },
     {
-      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_candidate_does_not_enter_runtime_or_active_profile_artifacts",
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_candidate_does_not_enter_runtime_or_production_activation_inputs",
       "sourceModule": "kernel.tests.test_temporal_contract_governance",
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
     },
     {
-      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_invalid_temporal_coordinates_refuse[boolean-position]",
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_candidate_paths_are_not_frozen_or_active_contract_directories",
       "sourceModule": "kernel.tests.test_temporal_contract_governance",
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
     },
     {
-      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_invalid_temporal_coordinates_refuse[excess-fractional-precision]",
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_candidate_schemas_and_carrier_matrix_are_full_draft_2020_12_valid",
       "sourceModule": "kernel.tests.test_temporal_contract_governance",
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
     },
     {
-      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_invalid_temporal_coordinates_refuse[leap-second]",
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_carrier_matrix_schema_and_adr_rows_are_pinned",
       "sourceModule": "kernel.tests.test_temporal_contract_governance",
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
     },
     {
-      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_invalid_temporal_coordinates_refuse[mixed-point-window]",
-      "sourceModule": "kernel.tests.test_temporal_contract_governance",
-      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_invalid_temporal_coordinates_refuse[naive-time]",
-      "sourceModule": "kernel.tests.test_temporal_contract_governance",
-      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_invalid_temporal_coordinates_refuse[negative-position]",
-      "sourceModule": "kernel.tests.test_temporal_contract_governance",
-      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_invalid_temporal_coordinates_refuse[nil-tenant]",
-      "sourceModule": "kernel.tests.test_temporal_contract_governance",
-      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_invalid_temporal_coordinates_refuse[tenant-alias]",
-      "sourceModule": "kernel.tests.test_temporal_contract_governance",
-      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_invalid_temporal_coordinates_refuse[unknown-coordinate-field]",
-      "sourceModule": "kernel.tests.test_temporal_contract_governance",
-      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_non_real_gregorian_instant_refuses_semantically",
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_load_bearing_coordinate_schema_definitions_are_pinned",
       "sourceModule": "kernel.tests.test_temporal_contract_governance",
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
     },
@@ -9991,22 +9961,92 @@
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
     },
     {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_shared_temporal_refusal_vectors[boolean-position]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_shared_temporal_refusal_vectors[empty-query-window]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_shared_temporal_refusal_vectors[empty-valid-interval]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_shared_temporal_refusal_vectors[excess-fractional-precision]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_shared_temporal_refusal_vectors[leap-second]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_shared_temporal_refusal_vectors[mixed-point-window]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_shared_temporal_refusal_vectors[naive-time]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_shared_temporal_refusal_vectors[negative-position]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_shared_temporal_refusal_vectors[nil-tenant]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_shared_temporal_refusal_vectors[non-real-gregorian-instant]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_shared_temporal_refusal_vectors[open-query-window]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_shared_temporal_refusal_vectors[reversed-query-window]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_shared_temporal_refusal_vectors[reversed-valid-interval]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_shared_temporal_refusal_vectors[tenant-alias]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_shared_temporal_refusal_vectors[unknown-coordinate-field]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_shared_temporal_refusal_vectors[unknown-window-meaning]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_shared_temporal_refusal_vectors[unsafe-position]",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
       "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_temporal_candidate_governance_is_complete_and_inactive",
-      "sourceModule": "kernel.tests.test_temporal_contract_governance",
-      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_valid_interval_must_be_non_empty_and_half_open[empty]",
-      "sourceModule": "kernel.tests.test_temporal_contract_governance",
-      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_valid_interval_must_be_non_empty_and_half_open[reversed]",
-      "sourceModule": "kernel.tests.test_temporal_contract_governance",
-      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
-    },
-    {
-      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_window_meaning_is_a_closed_per_step_vocabulary",
       "sourceModule": "kernel.tests.test_temporal_contract_governance",
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
     },
@@ -10061,8 +10101,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "42a255a704b375d341174528f084c048ea624fba02b0b599caf329a885df38a9",
-  "entryCount": 2012,
+  "entriesSha256": "6adc7bb87b5dbc24ef1430caa22c0a2c88d028b6327505114922e7ca0eb86433",
+  "entryCount": 2020,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
