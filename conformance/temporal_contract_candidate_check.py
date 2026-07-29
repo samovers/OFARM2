@@ -2,6 +2,7 @@
 """Validate the inactive temporal-governance candidate package and isolation."""
 from __future__ import annotations
 
+import ast
 import copy
 import hashlib
 import json
@@ -66,6 +67,7 @@ ENVELOPE_SCHEMA_PATH = (
 EXECUTION_SCHEMA_PATH = (
     PACKAGE_ROOT / "contracts/core/OFARM_ExecutionRecordPayload_schema_v0_1.json"
 )
+TEMPORAL_SELECTOR_MODULE_PATH = PACKAGE_ROOT / "kernel/temporal_carriers.py"
 RUNTIME_CATALOG_PATH = PACKAGE_ROOT / "kernel/runtime_bundle_components.json"
 ACTIVE_ARTIFACT_SET_PATH = (
     PACKAGE_ROOT
@@ -787,6 +789,121 @@ def validate_runtime_selection_binding() -> None:
         raise TemporalCandidateError(
             "runtime carrier-selection identity differs from its artifact"
         )
+    binding = _expected_selection_binding()
+    source_contracts = binding["sourceContracts"]
+    selectors = binding["selectors"]
+    expected_constants = {
+        "ENVELOPE_EVENT_FAMILY": source_contracts[0]["discriminatorValue"],
+        "EXECUTION_RECORD_CLASS": source_contracts[1]["discriminatorValue"],
+        "EXECUTION_TIME_BASIS": selectors[1]["requiredTimeBasis"],
+        "EVENT_OCCURRENCE": selectors[0]["windowMeaning"],
+        "STATE_OVERLAP": selectors[1]["windowMeaning"],
+    }
+    observed_constants = {
+        field: getattr(temporal_carriers, field)
+        for field in expected_constants
+    }
+    if observed_constants != expected_constants:
+        raise TemporalCandidateError(
+            "runtime carrier-selection values differ from its artifact"
+        )
+    if hasattr(temporal_carriers, "CarrierBindingIdentity"):
+        raise TemporalCandidateError(
+            "runtime carrier-selection identity is publicly constructible"
+        )
+    try:
+        type(identity)(binding_id="caller-selected")
+    except TypeError:
+        pass
+    else:
+        raise TemporalCandidateError(
+            "runtime carrier-selection authority accepts caller values"
+        )
+
+
+def validate_runtime_selector_paths(binding: dict[str, object]) -> None:
+    # validate_selection_binding runs first and fixes this complete shape.
+    source_contracts = binding["sourceContracts"]
+    selectors = binding["selectors"]
+    unsupported = binding["unsupportedEnvelopeFields"]
+    envelope_contract, execution_contract = source_contracts
+    occurrence_selector, interval_selector = selectors
+
+    def leaf(path: str) -> str:
+        return path.rsplit("/", 1)[1]
+
+    expected_gets = [
+        ("envelope_object", "schemaVersion"),
+        ("envelope_object", leaf(envelope_contract["discriminatorPath"])),
+        ("payload_object", "schemaVersion"),
+        ("payload_object", leaf(execution_contract["discriminatorPath"])),
+        ("envelope_object", "timeSemantics"),
+        ("time_semantics", leaf(occurrence_selector["valuePath"])),
+        ("payload_object", "effectiveTimeInterval"),
+        ("interval", leaf(interval_selector["timeBasisPath"])),
+        ("interval", leaf(interval_selector["startPath"])),
+        ("interval", leaf(interval_selector["endPath"])),
+    ]
+    expected_memberships = [
+        ("time_semantics", leaf(path)) for path in unsupported
+    ]
+
+    try:
+        module = ast.parse(
+            TEMPORAL_SELECTOR_MODULE_PATH.read_text(encoding="utf-8"),
+            filename=str(TEMPORAL_SELECTOR_MODULE_PATH),
+        )
+    except (OSError, UnicodeDecodeError, SyntaxError) as exc:
+        raise TemporalCandidateError(
+            "carrier-selection implementation is not parseable"
+        ) from exc
+    functions = [
+        node
+        for node in module.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "select_intervention_valid_time"
+    ]
+    if len(functions) != 1:
+        raise TemporalCandidateError(
+            "carrier-selection implementation entry point differs"
+        )
+
+    observed_gets: list[tuple[str, str]] = []
+    observed_memberships: list[tuple[str, str]] = []
+    for node in ast.walk(functions[0]):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "get"
+            and isinstance(node.func.value, ast.Name)
+            and len(node.args) == 1
+            and not node.keywords
+            and isinstance(node.args[0], ast.Constant)
+            and type(node.args[0].value) is str
+        ):
+            observed_gets.append(
+                (node.func.value.id, node.args[0].value)
+            )
+        if (
+            isinstance(node, ast.Compare)
+            and len(node.ops) == 1
+            and isinstance(node.ops[0], ast.In)
+            and len(node.comparators) == 1
+            and isinstance(node.comparators[0], ast.Name)
+            and isinstance(node.left, ast.Constant)
+            and type(node.left.value) is str
+        ):
+            observed_memberships.append(
+                (node.comparators[0].id, node.left.value)
+            )
+
+    if (
+        sorted(observed_gets) != sorted(expected_gets)
+        or sorted(observed_memberships) != sorted(expected_memberships)
+    ):
+        raise TemporalCandidateError(
+            "runtime selector field lookups differ from its binding artifact"
+        )
 
 
 def validate_runtime_selection_isolation() -> None:
@@ -861,6 +978,7 @@ def validate_candidate_governance() -> None:
     validate_selection_schema_shape(selection_schema)
     validate_selection_binding(selection_binding)
     validate_runtime_selection_binding()
+    validate_runtime_selector_paths(selection_binding)
     validate_runtime_selection_isolation()
 
     manifest = _load_json(MANIFEST_PATH)

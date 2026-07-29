@@ -124,6 +124,12 @@ The selector refuses:
 - any attempt to substitute capture, assertion, record, ingestion, identifier,
   or wall-clock time.
 
+The occurrence point and execution interval are independent carriers in this
+version. The occurrence is not required to fall inside the execution interval,
+and their non-overlap is not a refusal. Adding a relationship between them
+would create new temporal law and requires a separately reviewed versioned
+binding.
+
 ## Authority map
 
 - ADR 0002 owns carrier meanings and half-open predicates.
@@ -169,8 +175,10 @@ Verification proves:
 
 - complete Draft 2020-12 schema validity;
 - exact artifact, prerequisite, source-contract, matrix, and row identities;
+- exact artifact-to-implementation discriminator and field-path mappings;
 - the closed two-argument API;
 - strict UTC refusals;
+- temporal equality for lexically different forms of the same accepted instant;
 - `EXECUTION_INTERVAL` enforcement;
 - half-open point, state-at, overlap, and adjacency behavior;
 - atomic selection and deterministic immutable output;

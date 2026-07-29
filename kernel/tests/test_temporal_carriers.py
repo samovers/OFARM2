@@ -62,21 +62,15 @@ def test_candidate_binding_is_full_draft_2020_12_valid():
 
 
 @pytest.mark.parametrize(
-    ("field", "replacement_index"),
-    [
-        ("sourceContracts", 0),
-        ("selectors", 0),
-        ("unsupportedEnvelopeFields", 0),
-    ],
+    "field",
+    ["sourceContracts", "selectors", "unsupportedEnvelopeFields"],
 )
-def test_candidate_schema_refuses_duplicate_authority_slots(
-    field: str,
-    replacement_index: int,
-):
+def test_candidate_schema_pins_complete_authority_array(field: str):
     schema = json.loads(BINDING_SCHEMA_PATH.read_text(encoding="utf-8"))
     binding = _binding()
     values = binding[field]
-    values[1] = copy.deepcopy(values[replacement_index])
+    assert type(values) is list
+    values[1] = copy.deepcopy(values[0])
 
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.Draft202012Validator(schema).validate(binding)
@@ -114,6 +108,9 @@ def test_binding_identity_is_artifact_owned_and_api_is_closed():
     assert identity.execution_schema_digest == binding["sourceContracts"][1][
         "schemaDigest"
     ]
+    assert not hasattr(temporal, "CarrierBindingIdentity")
+    with pytest.raises(TypeError):
+        type(identity)(binding_id="caller-selected")
     assert list(inspect.signature(
         temporal.select_intervention_valid_time
     ).parameters) == ["envelope", "execution_payload"]
@@ -156,6 +153,21 @@ def test_selects_both_intervention_carriers_atomically():
         selected.occurrence = temporal.StrictUtcInstant(  # type: ignore[misc]
             "2026-07-28T12:00:00Z"
         )
+
+
+def test_instants_compare_by_temporal_value_not_lexical_form():
+    short = temporal.StrictUtcInstant("2026-07-28T10:30:00Z")
+    expanded = temporal.StrictUtcInstant("2026-07-28T10:30:00.000000Z")
+
+    assert short.text != expanded.text
+    assert short == expanded
+    assert hash(short) == hash(expanded)
+
+    envelope = _envelope()
+    envelope["timeSemantics"]["eventTime"] = expanded.text
+    assert temporal.select_intervention_valid_time(
+        _envelope(), _payload()
+    ) == temporal.select_intervention_valid_time(envelope, _payload())
 
 
 @pytest.mark.parametrize(
@@ -263,6 +275,18 @@ def test_half_open_boundary_predicates_are_explicit_and_adjacent():
     assert temporal.event_in_window(b, second) is True
     assert temporal.state_at(first, b) is False
     assert temporal.state_overlaps(first, second) is False
+
+
+def test_occurrence_and_execution_interval_are_independent():
+    envelope = _envelope()
+    envelope["timeSemantics"]["eventTime"] = "2020-01-01T00:00:00Z"
+
+    selected = temporal.select_intervention_valid_time(envelope, _payload())
+
+    assert temporal.event_in_window(
+        selected.occurrence,
+        selected.execution_interval,
+    ) is False
 
 
 def test_selection_is_deterministic_and_does_not_mutate_inputs():

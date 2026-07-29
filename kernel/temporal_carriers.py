@@ -38,6 +38,9 @@ EXECUTION_SCHEMA_VERSION: Final = "ofarm.executionrecordpayload.v0.1"
 EXECUTION_SCHEMA_DIGEST: Final = (
     "sha256:ca62f01d056794ee588d55c3f5df652fc039124b76af5631d417714bc7059ff0"
 )
+ENVELOPE_EVENT_FAMILY: Final = "InterventionEvent"
+EXECUTION_RECORD_CLASS: Final = "OPERATION_CLAIM"
+EXECUTION_TIME_BASIS: Final = "EXECUTION_INTERVAL"
 EVENT_OCCURRENCE: Final = "EVENT_OCCURRENCE"
 STATE_OVERLAP: Final = "STATE_OVERLAP"
 
@@ -53,28 +56,48 @@ class TemporalCarrierError(ValueError):
 
 
 @dataclass(frozen=True, slots=True)
-class CarrierBindingIdentity:
-    binding_schema_version: str = BINDING_SCHEMA_VERSION
-    binding_id: str = BINDING_ID
-    binding_artifact_digest: str = BINDING_ARTIFACT_DIGEST
-    coordinate_schema_version: str = COORDINATE_SCHEMA_VERSION
-    coordinate_schema_digest: str = COORDINATE_SCHEMA_DIGEST
-    carrier_matrix_id: str = CARRIER_MATRIX_ID
-    carrier_matrix_digest: str = CARRIER_MATRIX_DIGEST
-    carrier_matrix_row_id: str = CARRIER_MATRIX_ROW_ID
-    envelope_schema_version: str = ENVELOPE_SCHEMA_VERSION
-    envelope_schema_digest: str = ENVELOPE_SCHEMA_DIGEST
-    execution_schema_version: str = EXECUTION_SCHEMA_VERSION
-    execution_schema_digest: str = EXECUTION_SCHEMA_DIGEST
+class _CarrierBindingIdentity:
+    binding_schema_version: str = field(
+        default=BINDING_SCHEMA_VERSION, init=False
+    )
+    binding_id: str = field(default=BINDING_ID, init=False)
+    binding_artifact_digest: str = field(
+        default=BINDING_ARTIFACT_DIGEST, init=False
+    )
+    coordinate_schema_version: str = field(
+        default=COORDINATE_SCHEMA_VERSION, init=False
+    )
+    coordinate_schema_digest: str = field(
+        default=COORDINATE_SCHEMA_DIGEST, init=False
+    )
+    carrier_matrix_id: str = field(default=CARRIER_MATRIX_ID, init=False)
+    carrier_matrix_digest: str = field(
+        default=CARRIER_MATRIX_DIGEST, init=False
+    )
+    carrier_matrix_row_id: str = field(
+        default=CARRIER_MATRIX_ROW_ID, init=False
+    )
+    envelope_schema_version: str = field(
+        default=ENVELOPE_SCHEMA_VERSION, init=False
+    )
+    envelope_schema_digest: str = field(
+        default=ENVELOPE_SCHEMA_DIGEST, init=False
+    )
+    execution_schema_version: str = field(
+        default=EXECUTION_SCHEMA_VERSION, init=False
+    )
+    execution_schema_digest: str = field(
+        default=EXECUTION_SCHEMA_DIGEST, init=False
+    )
 
 
-INTERVENTION_BINDING: Final = CarrierBindingIdentity()
+INTERVENTION_BINDING: Final = _CarrierBindingIdentity()
 
 
 @dataclass(frozen=True, slots=True)
 class StrictUtcInstant:
-    text: str
-    _instant: datetime = field(init=False, repr=False, compare=False)
+    text: str = field(compare=False)
+    _instant: datetime = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         if type(self.text) is not str or _UTC_INSTANT.fullmatch(self.text) is None:
@@ -125,7 +148,7 @@ class InterventionValidTime:
             )
 
     @property
-    def binding(self) -> CarrierBindingIdentity:
+    def binding(self) -> _CarrierBindingIdentity:
         return INTERVENTION_BINDING
 
     @property
@@ -170,7 +193,7 @@ def select_intervention_valid_time(
     )
     _exact(
         envelope_object.get("primaryEventFamily"),
-        "InterventionEvent",
+        ENVELOPE_EVENT_FAMILY,
         "SemanticEventEnvelope primaryEventFamily",
     )
     _exact(
@@ -180,7 +203,7 @@ def select_intervention_valid_time(
     )
     _exact(
         payload_object.get("recordClass"),
-        "OPERATION_CLAIM",
+        EXECUTION_RECORD_CLASS,
         "ExecutionRecordPayload recordClass",
     )
 
@@ -203,7 +226,7 @@ def select_intervention_valid_time(
     )
     _exact(
         interval.get("timeBasis"),
-        "EXECUTION_INTERVAL",
+        EXECUTION_TIME_BASIS,
         "ExecutionRecordPayload effectiveTimeInterval timeBasis",
     )
     execution_interval = BoundedHalfOpenInterval(
