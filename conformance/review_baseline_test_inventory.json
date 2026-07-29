@@ -9976,6 +9976,146 @@
       "sourcePath": "kernel/tests/test_stages.py"
     },
     {
+      "nodeid": "kernel/tests/test_temporal_carriers.py::test_binding_identity_is_artifact_owned_and_api_is_closed",
+      "sourceModule": "kernel.tests.test_temporal_carriers",
+      "sourcePath": "kernel/tests/test_temporal_carriers.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_carriers.py::test_candidate_binding_is_full_draft_2020_12_valid",
+      "sourceModule": "kernel.tests.test_temporal_carriers",
+      "sourcePath": "kernel/tests/test_temporal_carriers.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_carriers.py::test_candidate_schema_refuses_duplicate_authority_slots[selectors-0]",
+      "sourceModule": "kernel.tests.test_temporal_carriers",
+      "sourcePath": "kernel/tests/test_temporal_carriers.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_carriers.py::test_candidate_schema_refuses_duplicate_authority_slots[sourceContracts-0]",
+      "sourceModule": "kernel.tests.test_temporal_carriers",
+      "sourcePath": "kernel/tests/test_temporal_carriers.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_carriers.py::test_candidate_schema_refuses_duplicate_authority_slots[unsupportedEnvelopeFields-0]",
+      "sourceModule": "kernel.tests.test_temporal_carriers",
+      "sourcePath": "kernel/tests/test_temporal_carriers.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_carriers.py::test_half_open_boundary_predicates_are_explicit_and_adjacent",
+      "sourceModule": "kernel.tests.test_temporal_carriers",
+      "sourcePath": "kernel/tests/test_temporal_carriers.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_carriers.py::test_missing_event_time_never_falls_back_to_secondary_times",
+      "sourceModule": "kernel.tests.test_temporal_carriers",
+      "sourcePath": "kernel/tests/test_temporal_carriers.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_carriers.py::test_refuses_caller_source_contract_claims_that_differ[envelope]",
+      "sourceModule": "kernel.tests.test_temporal_carriers",
+      "sourcePath": "kernel/tests/test_temporal_carriers.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_carriers.py::test_refuses_caller_source_contract_claims_that_differ[payload]",
+      "sourceModule": "kernel.tests.test_temporal_carriers",
+      "sourcePath": "kernel/tests/test_temporal_carriers.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_carriers.py::test_refuses_empty_or_reversed_execution_interval[2026-07-28T10:30:00Z-2026-07-28T10:30:00Z]",
+      "sourceModule": "kernel.tests.test_temporal_carriers",
+      "sourcePath": "kernel/tests/test_temporal_carriers.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_carriers.py::test_refuses_empty_or_reversed_execution_interval[2026-07-28T11:00:00Z-2026-07-28T10:30:00Z]",
+      "sourceModule": "kernel.tests.test_temporal_carriers",
+      "sourcePath": "kernel/tests/test_temporal_carriers.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_carriers.py::test_refuses_noncanonical_or_nonreal_instants[2026-02-30T10:30:00Z]",
+      "sourceModule": "kernel.tests.test_temporal_carriers",
+      "sourcePath": "kernel/tests/test_temporal_carriers.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_carriers.py::test_refuses_noncanonical_or_nonreal_instants[2026-07-28T10:30:00+00:00]",
+      "sourceModule": "kernel.tests.test_temporal_carriers",
+      "sourcePath": "kernel/tests/test_temporal_carriers.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_carriers.py::test_refuses_noncanonical_or_nonreal_instants[2026-07-28T10:30:00-00:00]",
+      "sourceModule": "kernel.tests.test_temporal_carriers",
+      "sourcePath": "kernel/tests/test_temporal_carriers.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_carriers.py::test_refuses_noncanonical_or_nonreal_instants[2026-07-28T10:30:00.1234567Z]",
+      "sourceModule": "kernel.tests.test_temporal_carriers",
+      "sourcePath": "kernel/tests/test_temporal_carriers.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_carriers.py::test_refuses_noncanonical_or_nonreal_instants[2026-07-28T10:30:00]",
+      "sourceModule": "kernel.tests.test_temporal_carriers",
+      "sourcePath": "kernel/tests/test_temporal_carriers.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_carriers.py::test_refuses_noncanonical_or_nonreal_instants[2026-12-31T23:59:60Z]",
+      "sourceModule": "kernel.tests.test_temporal_carriers",
+      "sourcePath": "kernel/tests/test_temporal_carriers.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_carriers.py::test_refuses_unsupported_envelope_effective_bounds[effectiveFrom]",
+      "sourceModule": "kernel.tests.test_temporal_carriers",
+      "sourcePath": "kernel/tests/test_temporal_carriers.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_carriers.py::test_refuses_unsupported_envelope_effective_bounds[effectiveUntil]",
+      "sourceModule": "kernel.tests.test_temporal_carriers",
+      "sourcePath": "kernel/tests/test_temporal_carriers.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_carriers.py::test_refuses_unsupported_family_record_class_or_time_basis[family-ObservationEvent-primaryEventFamily]",
+      "sourceModule": "kernel.tests.test_temporal_carriers",
+      "sourcePath": "kernel/tests/test_temporal_carriers.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_carriers.py::test_refuses_unsupported_family_record_class_or_time_basis[recordClass-CORRECTION-recordClass]",
+      "sourceModule": "kernel.tests.test_temporal_carriers",
+      "sourcePath": "kernel/tests/test_temporal_carriers.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_carriers.py::test_refuses_unsupported_family_record_class_or_time_basis[timeBasis-None-timeBasis]",
+      "sourceModule": "kernel.tests.test_temporal_carriers",
+      "sourcePath": "kernel/tests/test_temporal_carriers.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_carriers.py::test_refuses_unsupported_family_record_class_or_time_basis[timeBasis-PLANNED_WINDOW-timeBasis]",
+      "sourceModule": "kernel.tests.test_temporal_carriers",
+      "sourcePath": "kernel/tests/test_temporal_carriers.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_carriers.py::test_refuses_unsupported_family_record_class_or_time_basis[timeBasis-UNKNOWN-timeBasis]",
+      "sourceModule": "kernel.tests.test_temporal_carriers",
+      "sourcePath": "kernel/tests/test_temporal_carriers.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_carriers.py::test_selection_is_deterministic_and_does_not_mutate_inputs",
+      "sourceModule": "kernel.tests.test_temporal_carriers",
+      "sourcePath": "kernel/tests/test_temporal_carriers.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_carriers.py::test_selector_artifacts_are_absent_from_runtime_and_profile_activation",
+      "sourceModule": "kernel.tests.test_temporal_carriers",
+      "sourcePath": "kernel/tests/test_temporal_carriers.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_carriers.py::test_selector_is_absent_from_production_and_legacy_import_closures",
+      "sourceModule": "kernel.tests.test_temporal_carriers",
+      "sourcePath": "kernel/tests/test_temporal_carriers.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_carriers.py::test_selects_both_intervention_carriers_atomically",
+      "sourceModule": "kernel.tests.test_temporal_carriers",
+      "sourcePath": "kernel/tests/test_temporal_carriers.py"
+    },
+    {
       "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_candidate_does_not_enter_runtime_or_production_activation_inputs",
       "sourceModule": "kernel.tests.test_temporal_contract_governance",
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
@@ -10171,8 +10311,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "bdafd67325db946da830fdb905c6d060bbfec0cc9bd153fb7298d0df84027cb6",
-  "entryCount": 2034,
+  "entriesSha256": "4b3c180e7549f08619d37c8087da736c30f1474ead079b93af7f7070e6bf7075",
+  "entryCount": 2062,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

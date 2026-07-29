@@ -504,6 +504,24 @@
       "promotionLadderStage": "CANDIDATE_ARTIFACT",
       "currentnessNote": "Package-local ADR 0002 carrier-matrix candidate for issue #176; classification-only, inactive, and not selected by the production RuntimeBundle.",
       "lawBasis": "ADR 0002 and docs/rfcs/OFARM_Temporal_Coordinate_Candidate_RFC_v0_1.md"
+    },
+    {
+      "packagePath": "contracts/candidates/temporal_carrier_selection/OFARM_TemporalCarrierSelectionBinding_schema_v0_1.json",
+      "sourcePath": null,
+      "sha256": "d252420507393d1d9816a0f20549faa8cf67c94bd1e2c10a3c509aadf4f3800a",
+      "status": "NEW_CANDIDATE",
+      "promotionLadderStage": "CANDIDATE_ARTIFACT",
+      "currentnessNote": "Package-local temporal carrier-selection binding schema candidate for issue #176; inactive, production-unbound, and not selected by the production RuntimeBundle.",
+      "lawBasis": "ADR 0002 and docs/rfcs/OFARM_Intervention_Valid_Time_Carrier_Selection_RFC_v0_1.md"
+    },
+    {
+      "packagePath": "contracts/candidates/temporal_carrier_selection/OFARM_InterventionValidTimeCarrierSelection_candidate_v0_1.json",
+      "sourcePath": null,
+      "sha256": "9886aace0670b6a83f17cd33cbc67aa62fafcfd0ea873faed9194c2aaa07efe5",
+      "status": "NEW_CANDIDATE",
+      "promotionLadderStage": "CANDIDATE_ARTIFACT",
+      "currentnessNote": "Package-local intervention valid-time carrier-selection candidate for issue #176; executable only as an isolated pure library, inactive, and not selected by the production RuntimeBundle.",
+      "lawBasis": "ADR 0002 and docs/rfcs/OFARM_Intervention_Valid_Time_Carrier_Selection_RFC_v0_1.md"
     }
   ],
   "fixtureEntries": [

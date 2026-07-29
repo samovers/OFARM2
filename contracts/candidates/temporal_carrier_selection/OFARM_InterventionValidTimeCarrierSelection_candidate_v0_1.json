@@ -1,0 +1,55 @@
+{
+  "schemaVersion": "ofarm.temporal-carrier-selection-binding.v0.1",
+  "bindingId": "ofarm.temporal-carrier-selection.intervention.v0.1",
+  "status": "CANDIDATE_INACTIVE",
+  "executionPosture": "PURE_LIBRARY_PRODUCTION_UNBOUND",
+  "identityAuthority": "REVIEWED_BINDING_ARTIFACT_NOT_CALLER_DATA",
+  "coordinateContract": {
+    "schemaVersion": "ofarm.temporal-coordinate.v0.1",
+    "schemaDigest": "sha256:b81e4c7b0aacebb11ff8bf0d186cdb36150fade31180552b46f7be9e13c551eb"
+  },
+  "carrierMatrix": {
+    "matrixId": "ofarm.temporal-carrier-matrix.adr0002.v0.1",
+    "matrixDigest": "sha256:7cb26513b5abdbcadecaf6f9b47d874a742ba8fa05a332c9130deebe449d7fc6",
+    "rowId": "INTERVENTION_EVENT"
+  },
+  "sourceContracts": [
+    {
+      "contractRole": "SEMANTIC_EVENT_ENVELOPE",
+      "schemaVersion": "ofarm.semanticeventenvelope.v0.1",
+      "schemaDigest": "sha256:75662a6c4952a62b7e8f8e9de99c23c98899c692914a98ba4b752873f48bd1a4",
+      "discriminatorPath": "/primaryEventFamily",
+      "discriminatorValue": "InterventionEvent"
+    },
+    {
+      "contractRole": "EXECUTION_RECORD_PAYLOAD",
+      "schemaVersion": "ofarm.executionrecordpayload.v0.1",
+      "schemaDigest": "sha256:ca62f01d056794ee588d55c3f5df652fc039124b76af5631d417714bc7059ff0",
+      "discriminatorPath": "/recordClass",
+      "discriminatorValue": "OPERATION_CLAIM"
+    }
+  ],
+  "selectors": [
+    {
+      "selectorId": "INTERVENTION_OCCURRENCE",
+      "sourceContractRole": "SEMANTIC_EVENT_ENVELOPE",
+      "carrierShape": "POINT",
+      "valuePath": "/timeSemantics/eventTime",
+      "windowMeaning": "EVENT_OCCURRENCE"
+    },
+    {
+      "selectorId": "INTERVENTION_EXECUTION_INTERVAL",
+      "sourceContractRole": "EXECUTION_RECORD_PAYLOAD",
+      "carrierShape": "BOUNDED_HALF_OPEN_INTERVAL",
+      "startPath": "/effectiveTimeInterval/start",
+      "endPath": "/effectiveTimeInterval/end",
+      "timeBasisPath": "/effectiveTimeInterval/timeBasis",
+      "requiredTimeBasis": "EXECUTION_INTERVAL",
+      "windowMeaning": "STATE_OVERLAP"
+    }
+  ],
+  "unsupportedEnvelopeFields": [
+    "/timeSemantics/effectiveFrom",
+    "/timeSemantics/effectiveUntil"
+  ]
+}

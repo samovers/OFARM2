@@ -29,11 +29,23 @@ CARRIER_MATRIX_RELATIVE_PATH = (
     "OFARM_TemporalCarrierMatrix_ADR0002_candidate_v0_1.json"
 )
 CARRIER_MATRIX_PATH = PACKAGE_ROOT / CARRIER_MATRIX_RELATIVE_PATH
+SELECTION_SCHEMA_RELATIVE_PATH = (
+    "contracts/candidates/temporal_carrier_selection/"
+    "OFARM_TemporalCarrierSelectionBinding_schema_v0_1.json"
+)
+SELECTION_SCHEMA_PATH = PACKAGE_ROOT / SELECTION_SCHEMA_RELATIVE_PATH
+SELECTION_BINDING_RELATIVE_PATH = (
+    "contracts/candidates/temporal_carrier_selection/"
+    "OFARM_InterventionValidTimeCarrierSelection_candidate_v0_1.json"
+)
+SELECTION_BINDING_PATH = PACKAGE_ROOT / SELECTION_BINDING_RELATIVE_PATH
 CANDIDATE_RELATIVE_PATHS = frozenset(
     {
         COORDINATE_SCHEMA_RELATIVE_PATH,
         CARRIER_SCHEMA_RELATIVE_PATH,
         CARRIER_MATRIX_RELATIVE_PATH,
+        SELECTION_SCHEMA_RELATIVE_PATH,
+        SELECTION_BINDING_RELATIVE_PATH,
     }
 )
 MANIFEST_PATH = PACKAGE_ROOT / "contracts/CONTRACTS_MANIFEST.json"
@@ -41,8 +53,19 @@ RFC_PATH = (
     PACKAGE_ROOT
     / "docs/rfcs/OFARM_Temporal_Coordinate_Candidate_RFC_v0_1.md"
 )
+SELECTION_RFC_PATH = (
+    PACKAGE_ROOT
+    / "docs/rfcs/"
+    "OFARM_Intervention_Valid_Time_Carrier_Selection_RFC_v0_1.md"
+)
 ADR_PATH = PACKAGE_ROOT / "docs/adr/0002-valid-time-and-knowledge-time.md"
 ERRATA_PATH = PACKAGE_ROOT / "ERRATA.md"
+ENVELOPE_SCHEMA_PATH = (
+    PACKAGE_ROOT / "contracts/kernel/OFARM_SemanticEventEnvelope_schema_v0_1.json"
+)
+EXECUTION_SCHEMA_PATH = (
+    PACKAGE_ROOT / "contracts/core/OFARM_ExecutionRecordPayload_schema_v0_1.json"
+)
 RUNTIME_CATALOG_PATH = PACKAGE_ROOT / "kernel/runtime_bundle_components.json"
 ACTIVE_ARTIFACT_SET_PATH = (
     PACKAGE_ROOT
@@ -66,6 +89,23 @@ CARRIER_SOURCE_AUTHORITY = (
     "docs/adr/0002-valid-time-and-knowledge-time.md"
     "#governed-carrier-and-window-meaning-matrix"
 )
+SELECTION_SCHEMA_VERSION = (
+    "ofarm.temporal-carrier-selection-binding.v0.1"
+)
+SELECTION_SCHEMA_ID = (
+    "https://ofarm.dev/schema/temporal-carrier-selection-binding/v0.1"
+)
+SELECTION_BINDING_ID = (
+    "ofarm.temporal-carrier-selection.intervention.v0.1"
+)
+SELECTION_STATUS = "CANDIDATE_INACTIVE"
+SELECTION_EXECUTION_POSTURE = "PURE_LIBRARY_PRODUCTION_UNBOUND"
+SELECTION_IDENTITY_AUTHORITY = (
+    "REVIEWED_BINDING_ARTIFACT_NOT_CALLER_DATA"
+)
+SELECTION_ROW_ID = "INTERVENTION_EVENT"
+ENVELOPE_SCHEMA_VERSION = "ofarm.semanticeventenvelope.v0.1"
+EXECUTION_SCHEMA_VERSION = "ofarm.executionrecordpayload.v0.1"
 CARRIER_ROW_IDS = (
     "STRUCTURE_EVENT",
     "OBSERVATION_EVENT",
@@ -584,6 +624,190 @@ def validate_carrier_matrix(value: object) -> None:
         raise TemporalCandidateError("carrier matrix row identities differ")
 
 
+def validate_selection_schema_shape(schema: dict[str, object]) -> None:
+    if (
+        schema.get("$schema") != "https://json-schema.org/draft/2020-12/schema"
+        or schema.get("$id") != SELECTION_SCHEMA_ID
+        or schema.get("type") != "object"
+        or schema.get("additionalProperties") is not False
+        or schema.get("required")
+        != [
+            "schemaVersion",
+            "bindingId",
+            "status",
+            "executionPosture",
+            "identityAuthority",
+            "coordinateContract",
+            "carrierMatrix",
+            "sourceContracts",
+            "selectors",
+            "unsupportedEnvelopeFields",
+        ]
+    ):
+        raise TemporalCandidateError(
+            "candidate carrier-selection schema root differs"
+        )
+    comment = schema.get("$comment")
+    properties = schema.get("properties")
+    if (
+        type(comment) is not str
+        or "NEW_CANDIDATE" not in comment
+        or "caller data never selects" not in comment
+        or type(properties) is not dict
+    ):
+        raise TemporalCandidateError(
+            "candidate carrier-selection schema authority differs"
+        )
+    expected_constants = {
+        "schemaVersion": SELECTION_SCHEMA_VERSION,
+        "bindingId": SELECTION_BINDING_ID,
+        "status": SELECTION_STATUS,
+        "executionPosture": SELECTION_EXECUTION_POSTURE,
+        "identityAuthority": SELECTION_IDENTITY_AUTHORITY,
+    }
+    for field, expected in expected_constants.items():
+        if _schema_semantics(properties.get(field)) != {"const": expected}:
+            raise TemporalCandidateError(
+                f"candidate carrier-selection {field} differs"
+            )
+    expected_binding = _expected_selection_binding()
+    for field in (
+        "coordinateContract",
+        "carrierMatrix",
+        "sourceContracts",
+        "selectors",
+        "unsupportedEnvelopeFields",
+    ):
+        if _schema_semantics(properties.get(field)) != {
+            "const": expected_binding[field]
+        }:
+            raise TemporalCandidateError(
+                f"candidate carrier-selection {field} authority differs"
+            )
+    if "$defs" in schema:
+        raise TemporalCandidateError(
+            "candidate carrier-selection schema has unused definitions"
+        )
+
+
+def _expected_selection_binding() -> dict[str, object]:
+    return {
+        "schemaVersion": SELECTION_SCHEMA_VERSION,
+        "bindingId": SELECTION_BINDING_ID,
+        "status": SELECTION_STATUS,
+        "executionPosture": SELECTION_EXECUTION_POSTURE,
+        "identityAuthority": SELECTION_IDENTITY_AUTHORITY,
+        "coordinateContract": {
+            "schemaVersion": CONTRACT_VERSION,
+            "schemaDigest": f"sha256:{_sha256(COORDINATE_SCHEMA_PATH)}",
+        },
+        "carrierMatrix": {
+            "matrixId": CARRIER_MATRIX_ID,
+            "matrixDigest": f"sha256:{_sha256(CARRIER_MATRIX_PATH)}",
+            "rowId": SELECTION_ROW_ID,
+        },
+        "sourceContracts": [
+            {
+                "contractRole": "SEMANTIC_EVENT_ENVELOPE",
+                "schemaVersion": ENVELOPE_SCHEMA_VERSION,
+                "schemaDigest": f"sha256:{_sha256(ENVELOPE_SCHEMA_PATH)}",
+                "discriminatorPath": "/primaryEventFamily",
+                "discriminatorValue": "InterventionEvent",
+            },
+            {
+                "contractRole": "EXECUTION_RECORD_PAYLOAD",
+                "schemaVersion": EXECUTION_SCHEMA_VERSION,
+                "schemaDigest": f"sha256:{_sha256(EXECUTION_SCHEMA_PATH)}",
+                "discriminatorPath": "/recordClass",
+                "discriminatorValue": "OPERATION_CLAIM",
+            },
+        ],
+        "selectors": [
+            {
+                "selectorId": "INTERVENTION_OCCURRENCE",
+                "sourceContractRole": "SEMANTIC_EVENT_ENVELOPE",
+                "carrierShape": "POINT",
+                "valuePath": "/timeSemantics/eventTime",
+                "windowMeaning": "EVENT_OCCURRENCE",
+            },
+            {
+                "selectorId": "INTERVENTION_EXECUTION_INTERVAL",
+                "sourceContractRole": "EXECUTION_RECORD_PAYLOAD",
+                "carrierShape": "BOUNDED_HALF_OPEN_INTERVAL",
+                "startPath": "/effectiveTimeInterval/start",
+                "endPath": "/effectiveTimeInterval/end",
+                "timeBasisPath": "/effectiveTimeInterval/timeBasis",
+                "requiredTimeBasis": "EXECUTION_INTERVAL",
+                "windowMeaning": "STATE_OVERLAP",
+            },
+        ],
+        "unsupportedEnvelopeFields": [
+            "/timeSemantics/effectiveFrom",
+            "/timeSemantics/effectiveUntil",
+        ],
+    }
+
+
+def validate_selection_binding(value: object) -> None:
+    if value != _expected_selection_binding():
+        raise TemporalCandidateError(
+            "intervention carrier-selection binding differs"
+        )
+
+
+def validate_runtime_selection_binding() -> None:
+    package_root = str(PACKAGE_ROOT)
+    if package_root not in sys.path:
+        sys.path.insert(0, package_root)
+    from kernel import temporal_carriers
+
+    identity = temporal_carriers.INTERVENTION_BINDING
+    expected_identity = {
+        "binding_schema_version": SELECTION_SCHEMA_VERSION,
+        "binding_id": SELECTION_BINDING_ID,
+        "binding_artifact_digest": (
+            f"sha256:{_sha256(SELECTION_BINDING_PATH)}"
+        ),
+        "coordinate_schema_version": CONTRACT_VERSION,
+        "coordinate_schema_digest": (
+            f"sha256:{_sha256(COORDINATE_SCHEMA_PATH)}"
+        ),
+        "carrier_matrix_id": CARRIER_MATRIX_ID,
+        "carrier_matrix_digest": f"sha256:{_sha256(CARRIER_MATRIX_PATH)}",
+        "carrier_matrix_row_id": SELECTION_ROW_ID,
+        "envelope_schema_version": ENVELOPE_SCHEMA_VERSION,
+        "envelope_schema_digest": f"sha256:{_sha256(ENVELOPE_SCHEMA_PATH)}",
+        "execution_schema_version": EXECUTION_SCHEMA_VERSION,
+        "execution_schema_digest": f"sha256:{_sha256(EXECUTION_SCHEMA_PATH)}",
+    }
+    observed_identity = {
+        field: getattr(identity, field) for field in expected_identity
+    }
+    if observed_identity != expected_identity:
+        raise TemporalCandidateError(
+            "runtime carrier-selection identity differs from its artifact"
+        )
+
+
+def validate_runtime_selection_isolation() -> None:
+    package_root = str(PACKAGE_ROOT)
+    if package_root not in sys.path:
+        sys.path.insert(0, package_root)
+    from conformance import rewrite_architecture_check as architecture
+
+    sources = architecture._module_sources(PACKAGE_ROOT)
+    graph, _trees = architecture._import_graph(sources)
+    for roots, label in (
+        (architecture.PRODUCTION_IMPORT_ROOTS, "production"),
+        (architecture.LEGACY_IMPORT_ROOTS, "legacy"),
+    ):
+        reachable = architecture._reachable_paths(graph, roots)
+        if "kernel.temporal_carriers" in reachable:
+            raise TemporalCandidateError(
+                f"carrier selector entered the {label} import closure"
+            )
+
+
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -592,6 +816,10 @@ def _expected_manifest_entry(
     path: str,
     artifact_path: Path,
     currentness_note: str,
+    law_basis: str = (
+        "ADR 0002 and "
+        "docs/rfcs/OFARM_Temporal_Coordinate_Candidate_RFC_v0_1.md"
+    ),
 ) -> dict[str, object]:
     return {
         "packagePath": path,
@@ -600,10 +828,7 @@ def _expected_manifest_entry(
         "status": "NEW_CANDIDATE",
         "promotionLadderStage": "CANDIDATE_ARTIFACT",
         "currentnessNote": currentness_note,
-        "lawBasis": (
-            "ADR 0002 and "
-            "docs/rfcs/OFARM_Temporal_Coordinate_Candidate_RFC_v0_1.md"
-        ),
+        "lawBasis": law_basis,
     }
 
 
@@ -628,9 +853,15 @@ def validate_candidate_governance() -> None:
     coordinate_schema = _load_json(COORDINATE_SCHEMA_PATH)
     carrier_schema = _load_json(CARRIER_SCHEMA_PATH)
     carrier_matrix = _load_json(CARRIER_MATRIX_PATH)
+    selection_schema = _load_json(SELECTION_SCHEMA_PATH)
+    selection_binding = _load_json(SELECTION_BINDING_PATH)
     validate_coordinate_schema_shape(coordinate_schema)
     validate_carrier_schema_shape(carrier_schema)
     validate_carrier_matrix(carrier_matrix)
+    validate_selection_schema_shape(selection_schema)
+    validate_selection_binding(selection_binding)
+    validate_runtime_selection_binding()
+    validate_runtime_selection_isolation()
 
     manifest = _load_json(MANIFEST_PATH)
     entries = manifest.get("entries")
@@ -662,6 +893,33 @@ def validate_candidate_governance() -> None:
                 "Package-local ADR 0002 carrier-matrix candidate for issue "
                 "#176; classification-only, inactive, and not selected by "
                 "the production RuntimeBundle."
+            ),
+        ),
+        SELECTION_SCHEMA_RELATIVE_PATH: _expected_manifest_entry(
+            SELECTION_SCHEMA_RELATIVE_PATH,
+            SELECTION_SCHEMA_PATH,
+            (
+                "Package-local temporal carrier-selection binding schema "
+                "candidate for issue #176; inactive, production-unbound, and "
+                "not selected by the production RuntimeBundle."
+            ),
+            (
+                "ADR 0002 and docs/rfcs/"
+                "OFARM_Intervention_Valid_Time_Carrier_Selection_RFC_v0_1.md"
+            ),
+        ),
+        SELECTION_BINDING_RELATIVE_PATH: _expected_manifest_entry(
+            SELECTION_BINDING_RELATIVE_PATH,
+            SELECTION_BINDING_PATH,
+            (
+                "Package-local intervention valid-time carrier-selection "
+                "candidate for issue #176; executable only as an isolated "
+                "pure library, inactive, and not selected by the production "
+                "RuntimeBundle."
+            ),
+            (
+                "ADR 0002 and docs/rfcs/"
+                "OFARM_Intervention_Valid_Time_Carrier_Selection_RFC_v0_1.md"
             ),
         ),
     }
@@ -709,10 +967,42 @@ def validate_candidate_governance() -> None:
     if any(marker not in rfc for marker in required_rfc_markers):
         raise TemporalCandidateError("candidate RFC stop conditions differ")
 
+    selection_rfc = SELECTION_RFC_PATH.read_text(encoding="utf-8")
+    selection_digest_markers = (
+        f"`sha256:{_sha256(SELECTION_SCHEMA_PATH)}`",
+        f"`sha256:{_sha256(SELECTION_BINDING_PATH)}`",
+    )
+    if any(
+        selection_rfc.count(marker) != 1
+        for marker in selection_digest_markers
+    ):
+        raise TemporalCandidateError(
+            "carrier-selection RFC digest binding differs"
+        )
+    required_selection_markers = (
+        SELECTION_BINDING_ID,
+        SELECTION_IDENTITY_AUTHORITY,
+        "never taken from caller data",
+        "INTERVENTION_EVENT",
+        "OPERATION_CLAIM",
+        "production-unbound",
+    )
+    if any(
+        marker not in selection_rfc for marker in required_selection_markers
+    ):
+        raise TemporalCandidateError(
+            "carrier-selection RFC authority or stop conditions differ"
+        )
+
     errata = ERRATA_PATH.read_text(encoding="utf-8")
     if any(
         marker not in errata
-        for marker in ("| E-008 |", CONTRACT_VERSION, CARRIER_MATRIX_ID)
+        for marker in (
+            "| E-008 |",
+            CONTRACT_VERSION,
+            CARRIER_MATRIX_ID,
+            SELECTION_BINDING_ID,
+        )
     ):
         raise TemporalCandidateError("candidate ERRATA governance record differs")
 
@@ -722,6 +1012,9 @@ def validate_candidate_governance() -> None:
         CONTRACT_VERSION,
         CARRIER_SCHEMA_VERSION,
         CARRIER_MATRIX_ID,
+        SELECTION_SCHEMA_VERSION,
+        SELECTION_BINDING_ID,
+        SELECTION_EXECUTION_POSTURE,
         *CANDIDATE_RELATIVE_PATHS,
     )
     for path, label in (
