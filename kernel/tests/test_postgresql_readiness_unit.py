@@ -339,8 +339,8 @@ def test_tenant_structural_report_is_independent_and_has_no_service_decision(
     assert report.manifest() == {
         "schemaVersion": "ofarm.postgresql-structural-compatibility.v1",
         "serviceIdentity": TENANT_SERVICE.identity,
-        "supportedVersion": 2,
-        "observedVersion": 2,
+        "supportedVersion": 3,
+        "observedVersion": 3,
     }
     assert not hasattr(report, "ready")
     assert not hasattr(report, "runtime_ready")
@@ -354,7 +354,7 @@ def test_tenant_structural_report_is_independent_and_has_no_service_decision(
     ]
     assert harness.catalog_calls == [("tenant", TENANT_SERVICE)]
     with pytest.raises(FrozenInstanceError):
-        report.observed_version = 2
+        report.observed_version = 3
     _assert_lane_closed(harness.tenant)
     _assert_lane_untouched(harness.audit)
 
@@ -414,8 +414,8 @@ def test_promoted_physical_clone_observation_has_no_promotion_result(
     assert report.manifest() == {
         "schemaVersion": "ofarm.postgresql-structural-compatibility.v1",
         "serviceIdentity": TENANT_SERVICE.identity,
-        "supportedVersion": 2,
-        "observedVersion": 2,
+        "supportedVersion": 3,
+        "observedVersion": 3,
     }
     serialized = json.dumps(report.manifest(), sort_keys=True).lower()
     for prohibited in (

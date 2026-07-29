@@ -65,6 +65,9 @@ from kernel.tests.test_postgresql_migration_runner import (
 ADMIN_ENV = "OFARM_TENANT_PROVISIONING_PG_ADMIN_DSN"
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 MIGRATION_PATH = PACKAGE_ROOT / "kernel" / "migrations" / "0001_initial.sql"
+KNOWLEDGE_POSITION_MIGRATION_PATH = (
+    PACKAGE_ROOT / "kernel" / "migrations" / "0003_tenant_knowledge_position.sql"
+)
 RELEASE_IDENTITY = "ofarm-tests/issue-174-tenant-baseline"
 ISSUER = "https://issuer.example.test/tenant"
 SUBJECT = "subject-tenant-01"
@@ -452,8 +455,9 @@ def authority(
             """
             INSERT INTO ofarm.governed_write_batch (
                 tenant_id, batch_id, authenticated_principal_ref,
-                governed_operation, request_id, runtime_bundle_digest
-            ) VALUES (%s, %s, %s, %s, %s, %s)
+                governed_operation, request_id, runtime_bundle_digest,
+                knowledge_position
+            ) VALUES (%s, %s, %s, %s, %s, %s, 1)
             """,
             (
                 tenant_id,
@@ -831,8 +835,9 @@ def other_authority(
             """
             INSERT INTO ofarm.governed_write_batch (
                 tenant_id, batch_id, authenticated_principal_ref,
-                governed_operation, request_id, runtime_bundle_digest
-            ) VALUES (%s, %s, %s, %s, %s, %s)
+                governed_operation, request_id, runtime_bundle_digest,
+                knowledge_position
+            ) VALUES (%s, %s, %s, %s, %s, %s, 1)
             """,
             (
                 tenant_id,
@@ -1070,9 +1075,171 @@ def test_authoritative_source_ledger_contract_and_apply_noop(
     assert TENANT_CONTEXT_CONTRACT.digest == (
         "sha256:39e979fa296122cb66d42eae5e2d7c6dc797ac77ef4324515ae1ab6020088d83"
     )
-    assert tenant_target.first_report.applied_versions == (1, 2)
+    assert tenant_target.first_report.applied_versions == (1, 2, 3)
     assert tenant_target.noop_report.applied_versions == ()
-    assert tenant_target.noop_report.final_version == 2
+    assert tenant_target.noop_report.final_version == 3
+
+
+def test_tenant_knowledge_position_catalog_is_structurally_compatible(
+    tenant_target: TenantTarget,
+) -> None:
+    with psycopg.connect(tenant_target.migrator_dsn) as migrator:
+        observed = _verify(migrator)
+    assert observed[0] is True, observed
+
+
+def test_tenant_knowledge_position_storage_has_one_ledger_authority(
+    tenant_target: TenantTarget,
+) -> None:
+    with psycopg.connect(tenant_target.migrator_dsn) as migrator:
+        migrator.execute("SET LOCAL ROLE ofarm_owner")
+        column = migrator.execute(
+            """
+            SELECT data_type, is_nullable, column_default
+            FROM information_schema.columns
+            WHERE table_schema = 'ofarm'
+              AND table_name = 'governed_write_batch'
+              AND column_name = 'knowledge_position'
+            """
+        ).fetchone()
+        carriers = migrator.execute(
+            """
+            SELECT table_name
+            FROM information_schema.columns
+            WHERE table_schema = 'ofarm'
+              AND column_name = 'knowledge_position'
+            ORDER BY table_name
+            """
+        ).fetchall()
+        constraints = migrator.execute(
+            """
+            SELECT constraint_row.conname, constraint_row.contype
+            FROM pg_catalog.pg_constraint AS constraint_row
+            JOIN pg_catalog.pg_namespace AS namespace
+              ON namespace.oid = constraint_row.connamespace
+            WHERE namespace.nspname = 'ofarm'
+              AND constraint_row.conname IN (
+                    'governed_write_batch_knowledge_position_check',
+                    'governed_write_batch_knowledge_position_key'
+              )
+            ORDER BY constraint_row.conname
+            """
+        ).fetchall()
+        relation_posture = migrator.execute(
+            """
+            SELECT relrowsecurity, relforcerowsecurity
+            FROM pg_catalog.pg_class AS relation
+            JOIN pg_catalog.pg_namespace AS namespace
+              ON namespace.oid = relation.relnamespace
+            WHERE namespace.nspname = 'ofarm'
+              AND relation.relname = 'governed_write_batch'
+            """
+        ).fetchone()
+        mutable_authorities = migrator.execute(
+            """
+            SELECT relation.relname, relation.relkind
+            FROM pg_catalog.pg_class AS relation
+            JOIN pg_catalog.pg_namespace AS namespace
+              ON namespace.oid = relation.relnamespace
+            WHERE namespace.nspname = 'ofarm'
+              AND relation.relkind IN ('r', 'p', 'S')
+              AND relation.relname LIKE '%knowledge%position%'
+            ORDER BY relation.relname
+            """
+        ).fetchall()
+
+    assert column == ("bigint", "NO", None)
+    assert carriers == [("governed_write_batch",)]
+    assert constraints == [
+        ("governed_write_batch_knowledge_position_check", "c"),
+        ("governed_write_batch_knowledge_position_key", "u"),
+    ]
+    assert relation_posture == (True, True)
+    assert mutable_authorities == []
+
+
+def test_tenant_knowledge_position_migration_refuses_a_nonempty_ledger(
+    tenant_target: TenantTarget,
+    authority: TenantAuthority,
+) -> None:
+    assert authority.batch_id
+    source = KNOWLEDGE_POSITION_MIGRATION_PATH.read_text(encoding="utf-8")
+    guard, separator, _ = source.partition(
+        "\nALTER TABLE ofarm.governed_write_batch\n    ADD COLUMN"
+    )
+    assert separator
+
+    with psycopg.connect(tenant_target.migrator_dsn) as migrator:
+        with pytest.raises(psycopg.errors.ObjectNotInPrerequisiteState):
+            with migrator.transaction():
+                migrator.execute("SET LOCAL ROLE ofarm_owner")
+                migrator.execute(guard)
+
+
+def test_pre_binding_genesis_cannot_allocate_a_second_position(
+    tenant_target: TenantTarget,
+    authority: TenantAuthority,
+) -> None:
+    with pytest.raises(psycopg.errors.UniqueViolation) as raised:
+        with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+            admin.execute(
+                """
+                INSERT INTO ofarm.governed_write_batch (
+                    tenant_id, batch_id, authenticated_principal_ref,
+                    governed_operation, request_id, runtime_bundle_digest,
+                    knowledge_position
+                ) VALUES (%s, %s, %s, %s, %s, %s, 1)
+                """,
+                (
+                    authority.tenant_id,
+                    f"batch-second-genesis-{uuid4().hex}",
+                    authority.party_ref,
+                    "AUTHORITY_BOOTSTRAP",
+                    f"request-second-genesis-{uuid4().hex}",
+                    authority.runtime_bundle_digest,
+                ),
+            )
+
+    assert raised.value.diag.constraint_name == (
+        "governed_write_batch_knowledge_position_key"
+    )
+
+
+def test_knowledge_position_allocation_requires_read_committed(
+    tenant_target: TenantTarget,
+    authority: TenantAuthority,
+) -> None:
+    with psycopg.connect(
+        tenant_target.target_admin_dsn,
+        autocommit=True,
+    ) as admin:
+        admin.execute("BEGIN ISOLATION LEVEL REPEATABLE READ")
+        try:
+            with pytest.raises(psycopg.errors.ActiveSqlTransaction) as raised:
+                admin.execute(
+                    """
+                    INSERT INTO ofarm.governed_write_batch (
+                        tenant_id, batch_id, authenticated_principal_ref,
+                        governed_operation, request_id, runtime_bundle_digest,
+                        knowledge_position
+                    ) VALUES (%s, %s, %s, %s, %s, %s, 1)
+                    """,
+                    (
+                        authority.tenant_id,
+                        f"batch-repeatable-read-{uuid4().hex}",
+                        authority.party_ref,
+                        "AUTHORITY_BOOTSTRAP",
+                        f"request-repeatable-read-{uuid4().hex}",
+                        authority.runtime_bundle_digest,
+                    ),
+                )
+        finally:
+            admin.rollback()
+
+    assert raised.value.sqlstate == "25001"
+    assert raised.value.diag.message_primary == (
+        "tenant knowledge allocation requires read committed"
+    )
 
 
 def test_tenant_catalog_fingerprint_has_exact_shared_schema_class_parity() -> None:
@@ -4027,10 +4194,13 @@ def test_transition_refuses_ineligible_party_state_and_payload_id(
     }
     party_schema_digest = _sha256_id(b"ofarm.party.v0.1.schema")
     party_payload_digest = _sha256_id(_canonical_json(payload))
-    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
-        _insert_batch(admin, authority, batch_id)
+    with psycopg.connect(
+        tenant_target.role_dsn("ofarm_app")
+    ) as application:
+        _install_test_bound_context(application, authority)
+        _insert_batch(application, authority, batch_id)
         _insert_record(
-            admin,
+            application,
             authority,
             batch_id=batch_id,
             record_id=party_ref,
@@ -5847,7 +6017,7 @@ def test_complete_catalog_fingerprint_refuses_function_constraint_index_policy_a
             assert pristine[0] is True
             assert pristine[2] == 0
             assert pristine[3] == (
-                "sha256:897001ea090224da95746e9de94a6f0098c8a2eae01abab68ac1f32b6509e950"
+                "sha256:a975adc87f7706cffebdaedce8fef761a88bad1b7b7184ba919410e099492a25"
             )
         finally:
             migrator.rollback()
@@ -6536,10 +6706,10 @@ def test_readiness_observation_is_complete_after_commit(
     assert row[1] == TENANT_CONTEXT_CONTRACT.digest
     assert row[2] == 0
     assert row[3] == (
-        "sha256:897001ea090224da95746e9de94a6f0098c8a2eae01abab68ac1f32b6509e950"
+        "sha256:a975adc87f7706cffebdaedce8fef761a88bad1b7b7184ba919410e099492a25"
     )
     assert row[5] == TENANT_PROVISIONING_SPEC.digest
     assert row[6] == TENANT_SERVICE.identity
-    assert row[7] == 2
-    assert row[9] == 2
+    assert row[7] == 3
+    assert row[9] == 3
     assert row[10] is False

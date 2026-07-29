@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import time
 from concurrent.futures import ThreadPoolExecutor
-from threading import Barrier
+from threading import Barrier, Event
 from uuid import uuid4
 
 import psycopg
@@ -104,6 +104,20 @@ def _principal(target: TenantTarget, tenant_authority: TenantAuthority):
     )
 
 
+def _knowledge_head(target: TenantTarget, tenant_id) -> int:
+    with psycopg.connect(target.target_admin_dsn) as admin:
+        value = admin.execute(
+            """
+            SELECT COALESCE(pg_catalog.max(knowledge_position), 0)
+            FROM ofarm.governed_write_batch
+            WHERE tenant_id = %s
+            """,
+            (tenant_id,),
+        ).fetchone()[0]
+    assert type(value) is int
+    return value
+
+
 @pytest.fixture(scope="module")
 def target(request) -> TenantTarget:
     return request.getfixturevalue("tenant_target")
@@ -167,8 +181,9 @@ def other_authority(
             """
             INSERT INTO ofarm.governed_write_batch (
                 tenant_id, batch_id, authenticated_principal_ref,
-                governed_operation, request_id, runtime_bundle_digest
-            ) VALUES (%s, %s, %s, %s, %s, %s)
+                governed_operation, request_id, runtime_bundle_digest,
+                knowledge_position
+            ) VALUES (%s, %s, %s, %s, %s, %s, 1)
             """,
             (
                 tenant_authority.other_tenant_id,
@@ -298,6 +313,7 @@ def test_real_pool_binds_allocates_rolls_back_and_reuses_idle_backend(
     tenant_manager: TenantUnitOfWorkManager,
 ) -> None:
     principal = _principal(target, tenant_authority)
+    head_before = _knowledge_head(target, tenant_authority.tenant_id)
     committed_batch = f"batch-uow-{uuid4().hex}"
     committed_request = f"request-uow-{uuid4().hex}"
 
@@ -315,17 +331,19 @@ def test_real_pool_binds_allocates_rolls_back_and_reuses_idle_backend(
             )
         )
         assert batch.tenant_id == tenant_authority.tenant_id
+        assert batch.knowledge_position == head_before + 1
         assert unit.fetch_one("SELECT ofarm.current_tenant_id()") == (
             tenant_authority.tenant_id,
         )
 
     rolled_back_batch = f"batch-uow-{uuid4().hex}"
+    rolled_back_position: list[int] = []
     with pytest.raises(RuntimeError, match="force rollback"):
         with tenant_manager.unit_of_work(principal) as unit:
             second_pid = unit.fetch_one("SELECT pg_catalog.pg_backend_pid()")[0]
             assert second_pid == first_pid
             assert unit.binding.capability_nonce != first_nonce
-            unit.begin_batch(
+            rolled_back = unit.begin_batch(
                 GovernedBatchRequest(
                     rolled_back_batch,
                     "UOW_REFUSE",
@@ -333,19 +351,219 @@ def test_real_pool_binds_allocates_rolls_back_and_reuses_idle_backend(
                     tenant_authority.runtime_bundle_digest,
                 )
             )
+            rolled_back_position.append(rolled_back.knowledge_position)
             raise RuntimeError("force rollback")
+
+    replacement_batch = f"batch-uow-{uuid4().hex}"
+    with tenant_manager.unit_of_work(principal) as unit:
+        replacement = unit.begin_batch(
+            GovernedBatchRequest(
+                replacement_batch,
+                "UOW_RETRY",
+                f"request-uow-{uuid4().hex}",
+                tenant_authority.runtime_bundle_digest,
+            )
+        )
+    assert replacement.knowledge_position == rolled_back_position[0]
 
     with psycopg.connect(target.target_admin_dsn) as admin:
         rows = admin.execute(
             """
-            SELECT batch_id
+            SELECT batch_id, knowledge_position
             FROM ofarm.governed_write_batch
             WHERE tenant_id = %s AND batch_id = ANY(%s)
-            ORDER BY batch_id
+            ORDER BY knowledge_position
             """,
-            (tenant_authority.tenant_id, [committed_batch, rolled_back_batch]),
+            (
+                tenant_authority.tenant_id,
+                [committed_batch, rolled_back_batch, replacement_batch],
+            ),
         ).fetchall()
-    assert rows == [(committed_batch,)]
+    assert rows == [
+        (committed_batch, head_before + 1),
+        (replacement_batch, head_before + 2),
+    ]
+
+
+def test_empty_unit_of_work_consumes_no_knowledge_position(
+    target: TenantTarget,
+    tenant_authority: TenantAuthority,
+    tenant_manager: TenantUnitOfWorkManager,
+) -> None:
+    principal = _principal(target, tenant_authority)
+    head_before = _knowledge_head(target, tenant_authority.tenant_id)
+
+    with tenant_manager.unit_of_work(principal) as unit:
+        assert unit.batch is None
+        assert unit.fetch_one("SELECT ofarm.current_tenant_id()") == (
+            tenant_authority.tenant_id,
+        )
+
+    assert _knowledge_head(target, tenant_authority.tenant_id) == head_before
+
+
+def test_runtime_cannot_supply_a_knowledge_position(
+    target: TenantTarget,
+    tenant_authority: TenantAuthority,
+    tenant_manager: TenantUnitOfWorkManager,
+) -> None:
+    principal = _principal(target, tenant_authority)
+    head_before = _knowledge_head(target, tenant_authority.tenant_id)
+
+    with tenant_manager.unit_of_work(principal) as unit:
+        with pytest.raises(psycopg.errors.InvalidParameterValue):
+            with unit.savepoint():
+                unit.execute(
+                    """
+                    INSERT INTO ofarm.governed_write_batch (
+                        tenant_id, batch_id, authenticated_principal_ref,
+                        governed_operation, request_id, runtime_bundle_digest,
+                        knowledge_position
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        tenant_authority.tenant_id,
+                        f"batch-explicit-{uuid4().hex}",
+                        tenant_authority.party_ref,
+                        "EXPLICIT_POSITION",
+                        f"request-explicit-{uuid4().hex}",
+                        tenant_authority.runtime_bundle_digest,
+                        head_before + 1,
+                    ),
+                )
+        accepted = unit.begin_batch(
+            GovernedBatchRequest(
+                f"batch-allocated-{uuid4().hex}",
+                "DATABASE_POSITION",
+                f"request-allocated-{uuid4().hex}",
+                tenant_authority.runtime_bundle_digest,
+            )
+        )
+
+    assert accepted.knowledge_position == head_before + 1
+
+
+def test_knowledge_positions_are_tenant_local(
+    target: TenantTarget,
+    tenant_authority: TenantAuthority,
+    other_authority: TenantAuthority,
+    tenant_manager: TenantUnitOfWorkManager,
+) -> None:
+    first_head = _knowledge_head(target, tenant_authority.tenant_id)
+    other_head = _knowledge_head(target, other_authority.tenant_id)
+
+    with tenant_manager.unit_of_work(
+        _principal(target, tenant_authority)
+    ) as first_unit:
+        first = first_unit.begin_batch(
+            GovernedBatchRequest(
+                f"batch-local-a-{uuid4().hex}",
+                "TENANT_LOCAL",
+                f"request-local-a-{uuid4().hex}",
+                tenant_authority.runtime_bundle_digest,
+            )
+        )
+    with tenant_manager.unit_of_work(
+        _principal(target, other_authority)
+    ) as other_unit:
+        other = other_unit.begin_batch(
+            GovernedBatchRequest(
+                f"batch-local-b-{uuid4().hex}",
+                "TENANT_LOCAL",
+                f"request-local-b-{uuid4().hex}",
+                other_authority.runtime_bundle_digest,
+            )
+        )
+
+    assert first.knowledge_position == first_head + 1
+    assert other.knowledge_position == other_head + 1
+    with psycopg.connect(target.target_admin_dsn) as admin:
+        assert admin.execute(
+            """
+            SELECT pg_catalog.count(DISTINCT tenant_id)
+            FROM ofarm.governed_write_batch
+            WHERE knowledge_position = 1
+            """
+        ).fetchone() == (2,)
+
+
+def test_same_tenant_allocation_blocks_until_prior_position_commits(
+    target: TenantTarget,
+    tenant_authority: TenantAuthority,
+    tenant_manager: TenantUnitOfWorkManager,
+) -> None:
+    principal = _principal(target, tenant_authority)
+    head_before = _knowledge_head(target, tenant_authority.tenant_id)
+    first_ready = Event()
+    second_attempting = Event()
+    release_first = Event()
+    observations: dict[str, int] = {}
+
+    def allocate_first() -> int:
+        with tenant_manager.unit_of_work(principal) as unit:
+            observations["first_pid"] = unit.fetch_one(
+                "SELECT pg_catalog.pg_backend_pid()"
+            )[0]
+            batch = unit.begin_batch(
+                GovernedBatchRequest(
+                    f"batch-ordered-a-{uuid4().hex}",
+                    "ORDERED_POSITION",
+                    f"request-ordered-a-{uuid4().hex}",
+                    tenant_authority.runtime_bundle_digest,
+                )
+            )
+            first_ready.set()
+            if not release_first.wait(timeout=10):
+                raise TimeoutError("first allocator was not released")
+            return batch.knowledge_position
+
+    def allocate_second() -> int:
+        if not first_ready.wait(timeout=10):
+            raise TimeoutError("first allocator did not start")
+        with tenant_manager.unit_of_work(principal) as unit:
+            observations["second_pid"] = unit.fetch_one(
+                "SELECT pg_catalog.pg_backend_pid()"
+            )[0]
+            second_attempting.set()
+            return unit.begin_batch(
+                GovernedBatchRequest(
+                    f"batch-ordered-b-{uuid4().hex}",
+                    "ORDERED_POSITION",
+                    f"request-ordered-b-{uuid4().hex}",
+                    tenant_authority.runtime_bundle_digest,
+                )
+            ).knowledge_position
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first_future = executor.submit(allocate_first)
+        assert first_ready.wait(timeout=10)
+        second_future = executor.submit(allocate_second)
+        assert second_attempting.wait(timeout=10)
+        blocked = False
+        deadline = time.monotonic() + 5
+        try:
+            with psycopg.connect(target.target_admin_dsn) as admin:
+                while time.monotonic() < deadline:
+                    wait_state = admin.execute(
+                        """
+                        SELECT wait_event_type
+                        FROM pg_catalog.pg_stat_activity
+                        WHERE pid = %s
+                        """,
+                        (observations["second_pid"],),
+                    ).fetchone()
+                    if wait_state == ("Lock",):
+                        blocked = True
+                        break
+                    time.sleep(0.02)
+        finally:
+            release_first.set()
+        first_position = first_future.result(timeout=10)
+        second_position = second_future.result(timeout=10)
+
+    assert blocked is True
+    assert first_position == head_before + 1
+    assert second_position == head_before + 2
 
 
 def test_asgi_concurrency_keeps_two_actors_in_two_tenants(

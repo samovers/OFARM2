@@ -6021,6 +6021,11 @@
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_knowledge_position_allocation_requires_read_committed",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_large_object_state_is_fingerprinted_refused_and_removable",
       "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
@@ -6146,6 +6151,11 @@
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_pre_binding_genesis_cannot_allocate_a_second_position",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_principal_revoke_anti_barging_after_savepoint_retry",
       "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
@@ -6261,6 +6271,21 @@
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_tenant_knowledge_position_catalog_is_structurally_compatible",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_tenant_knowledge_position_migration_refuses_a_nonempty_ledger",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_tenant_knowledge_position_storage_has_one_ledger_authority",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_tenant_observer_requires_zero_prepared_transaction_capacity",
       "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
@@ -6306,7 +6331,27 @@
       "sourcePath": "kernel/tests/test_postgresql_tenant_uow.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_tenant_uow.py::test_empty_unit_of_work_consumes_no_knowledge_position",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_uow",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_uow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_uow.py::test_knowledge_positions_are_tenant_local",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_uow",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_uow.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_tenant_uow.py::test_real_pool_binds_allocates_rolls_back_and_reuses_idle_backend",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_uow",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_uow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_uow.py::test_runtime_cannot_supply_a_knowledge_position",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_uow",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_uow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_uow.py::test_same_tenant_allocation_blocks_until_prior_position_commits",
       "sourceModule": "kernel.tests.test_postgresql_tenant_uow",
       "sourcePath": "kernel/tests/test_postgresql_tenant_uow.py"
     },
@@ -10099,10 +10144,35 @@
       "nodeid": "kernel/tests/test_tenant_uow.py::test_unit_of_work_binds_allocates_one_batch_and_commits",
       "sourceModule": "kernel.tests.test_tenant_uow",
       "sourcePath": "kernel/tests/test_tenant_uow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow.py::test_unit_of_work_refuses_invalid_database_knowledge_position[-1]",
+      "sourceModule": "kernel.tests.test_tenant_uow",
+      "sourcePath": "kernel/tests/test_tenant_uow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow.py::test_unit_of_work_refuses_invalid_database_knowledge_position[0]",
+      "sourceModule": "kernel.tests.test_tenant_uow",
+      "sourcePath": "kernel/tests/test_tenant_uow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow.py::test_unit_of_work_refuses_invalid_database_knowledge_position[1]",
+      "sourceModule": "kernel.tests.test_tenant_uow",
+      "sourcePath": "kernel/tests/test_tenant_uow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow.py::test_unit_of_work_refuses_invalid_database_knowledge_position[9007199254740992]",
+      "sourceModule": "kernel.tests.test_tenant_uow",
+      "sourcePath": "kernel/tests/test_tenant_uow.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_tenant_uow.py::test_unit_of_work_refuses_invalid_database_knowledge_position[True]",
+      "sourceModule": "kernel.tests.test_tenant_uow",
+      "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "6adc7bb87b5dbc24ef1430caa22c0a2c88d028b6327505114922e7ca0eb86433",
-  "entryCount": 2020,
+  "entriesSha256": "bdafd67325db946da830fdb905c6d060bbfec0cc9bd153fb7298d0df84027cb6",
+  "entryCount": 2034,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

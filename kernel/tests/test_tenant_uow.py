@@ -75,6 +75,7 @@ class _Connection:
         context_row=None,
         commit_error=None,
         rollback_error=None,
+        batch_position=1,
     ):
         self.info = _Info()
         self.closed = False
@@ -83,6 +84,7 @@ class _Connection:
         self._context_row = context_row or _binding_row(principal)
         self._commit_error = commit_error
         self._rollback_error = rollback_error
+        self._batch_position = batch_position
 
     def execute(self, query, parameters=()):
         compact = " ".join(query.split())
@@ -96,8 +98,6 @@ class _Connection:
             return _Cursor((None,))
         if "current_tenant_context" in compact:
             return _Cursor(self._context_row)
-        if "take_tenant_write_lock" in compact:
-            return _Cursor((None,))
         if compact.startswith("INSERT INTO ofarm.governed_write_batch"):
             authority = self._principal.authority
             return _Cursor(
@@ -109,6 +109,7 @@ class _Connection:
                     parameters[3],
                     parameters[4],
                     parameters[5],
+                    self._batch_position,
                     datetime.now(timezone.utc),
                 )
             )
@@ -214,6 +215,7 @@ def test_unit_of_work_binds_allocates_one_batch_and_commits(principal):
                 unit.begin_batch(request)
         batch = unit.begin_batch(request)
         assert batch.full_xid == 42
+        assert batch.knowledge_position == 1
         assert batch.authenticated_principal_ref == principal.authority.party_ref
         with pytest.raises(RuntimeError, match="already exists"):
             unit.begin_batch(request)
@@ -223,9 +225,41 @@ def test_unit_of_work_binds_allocates_one_batch_and_commits(principal):
             )
 
     assert connection.events[-1] == ("COMMIT", ())
+    assert not any(
+        "take_tenant_write_lock" in query
+        for query, _parameters in connection.events
+    )
     assert pool.returned == [connection]
     with pytest.raises(RuntimeError, match="closed"):
         unit.fetch_one("SELECT tenant")
+
+
+@pytest.mark.parametrize(
+    "batch_position",
+    (0, -1, 9_007_199_254_740_992, True, "1"),
+)
+def test_unit_of_work_refuses_invalid_database_knowledge_position(
+    principal,
+    batch_position,
+):
+    connection = _Connection(principal, batch_position=batch_position)
+    manager = TenantUnitOfWorkManager(_Pool(connection), _Minter())
+
+    with pytest.raises(
+        RuntimeError,
+        match="governed batch knowledge position differs",
+    ):
+        with manager.unit_of_work(principal) as unit:
+            unit.begin_batch(
+                GovernedBatchRequest(
+                    "batch-invalid-position",
+                    "TEST_OPERATION",
+                    "request-invalid-position",
+                    "sha256:" + "7" * 64,
+                )
+            )
+
+    assert ("ROLLBACK", ()) in connection.events
 
 
 @pytest.mark.parametrize(

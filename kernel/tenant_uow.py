@@ -29,6 +29,7 @@ _POOL_MIN_SIZE = 1
 _POOL_MAX_SIZE = 8
 _POOL_WAIT_SECONDS = 5.0
 _POOL_MAX_WAITING = 32
+_MAX_KNOWLEDGE_POSITION = 9_007_199_254_740_991
 
 Connection = psycopg.Connection[tuple[object, ...]]
 Row = tuple[object, ...]
@@ -183,6 +184,7 @@ class GovernedWriteBatch:
     operation: str
     request_id: str
     runtime_bundle_digest: str
+    knowledge_position: int
     created_at: datetime
 
 
@@ -244,7 +246,6 @@ class TenantUnitOfWork:
             raise RuntimeError("governed batch belongs to the outer transaction")
         if type(request) is not GovernedBatchRequest or self._batch is not None:
             raise RuntimeError("governed batch already exists")
-        self._connection.execute("SELECT ofarm.take_tenant_write_lock()")
         row = self._connection.execute(
             """
             INSERT INTO ofarm.governed_write_batch (
@@ -253,7 +254,8 @@ class TenantUnitOfWork:
             ) VALUES (%s, %s, %s, %s, %s, %s)
             RETURNING tenant_id, batch_id, full_xid::pg_catalog.text,
                       authenticated_principal_ref, governed_operation,
-                      request_id, runtime_bundle_digest, created_at
+                      request_id, runtime_bundle_digest,
+                      knowledge_position, created_at
             """,
             (
                 self.binding.tenant_id,
@@ -264,7 +266,7 @@ class TenantUnitOfWork:
                 request.runtime_bundle_digest,
             ),
         ).fetchone()
-        if row is None or len(row) != 8:
+        if row is None or len(row) != 9:
             raise RuntimeError("governed batch allocation failed")
         expected = (
             self.binding.tenant_id,
@@ -279,6 +281,13 @@ class TenantUnitOfWork:
         full_xid = int(row[2])
         if full_xid <= 0:
             raise RuntimeError("governed batch transaction differs")
+        knowledge_position = row[7]
+        if (
+            type(knowledge_position) is not int
+            or knowledge_position < 1
+            or knowledge_position > _MAX_KNOWLEDGE_POSITION
+        ):
+            raise RuntimeError("governed batch knowledge position differs")
         self._batch = GovernedWriteBatch(
             tenant_id=_uuid(row[0], "batch tenant"),
             batch_id=request.batch_id,
@@ -287,7 +296,8 @@ class TenantUnitOfWork:
             operation=request.operation,
             request_id=request.request_id,
             runtime_bundle_digest=request.runtime_bundle_digest,
-            created_at=_time(row[7], "batch creation time"),
+            knowledge_position=knowledge_position,
+            created_at=_time(row[8], "batch creation time"),
         )
         return self._batch
 
