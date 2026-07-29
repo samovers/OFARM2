@@ -558,6 +558,24 @@
       "promotionLadderStage": "CANDIDATE_ARTIFACT",
       "currentnessNote": "Package-local issue #176 temporal-governance RuntimeBundle carrier vocabulary candidate; inactive, eligibility-only, runtime-unsupported, and absent from every active RuntimeBundle authority.",
       "lawBasis": "ADR 0002 and docs/rfcs/OFARM_Temporal_Governance_RuntimeBundle_Carrier_RFC_v0_1.md"
+    },
+    {
+      "packagePath": "contracts/candidates/temporal_runtime_bundle_selection/OFARM_TenantCommandRuntimeBundleSelectionBinding_schema_v0_1.json",
+      "sourcePath": null,
+      "sha256": "56604a52465ffc027382e99dea96f2c9bc1bd2479cbaff30dec6bd39c08e6b3d",
+      "status": "NEW_CANDIDATE",
+      "promotionLadderStage": "CANDIDATE_ARTIFACT",
+      "currentnessNote": "Package-local exact schema for the issue #176 tenant command RuntimeBundle-selection binding; inactive, contract-only, production-unbound, and absent from every active RuntimeBundle authority.",
+      "lawBasis": "ADR 0002 and docs/rfcs/OFARM_Tenant_Command_RuntimeBundle_Selection_RFC_v0_1.md"
+    },
+    {
+      "packagePath": "contracts/candidates/temporal_runtime_bundle_selection/OFARM_TenantCommandRuntimeBundleSelection_candidate_v0_1.json",
+      "sourcePath": null,
+      "sha256": "1500ffbbfdf11207a6657848fce12618347f767578e55dc070bb282dc5775aac",
+      "status": "NEW_CANDIDATE",
+      "promotionLadderStage": "CANDIDATE_ARTIFACT",
+      "currentnessNote": "Package-local issue #176 tenant command RuntimeBundle-selection candidate; inactive, contract-only, production-unbound, and absent from every active RuntimeBundle authority.",
+      "lawBasis": "ADR 0002 and docs/rfcs/OFARM_Tenant_Command_RuntimeBundle_Selection_RFC_v0_1.md"
     }
   ],
   "fixtureEntries": [

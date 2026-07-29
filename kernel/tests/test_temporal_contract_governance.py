@@ -34,6 +34,18 @@ def _carrier_matrix() -> dict:
     return json.loads(temporal.CARRIER_MATRIX_PATH.read_text(encoding="utf-8"))
 
 
+def _selection_schema() -> dict:
+    return json.loads(
+        temporal.SELECTION_SCHEMA_PATH.read_text(encoding="utf-8")
+    )
+
+
+def _selection_binding() -> dict:
+    return json.loads(
+        temporal.SELECTION_BINDING_PATH.read_text(encoding="utf-8")
+    )
+
+
 def _command_schema() -> dict:
     return json.loads(
         temporal.COMMAND_SCHEMA_PATH.read_text(encoding="utf-8")
@@ -62,6 +74,22 @@ def _runtime_bundle_carrier_binding() -> dict:
     )
 
 
+def _runtime_bundle_selection_schema() -> dict:
+    return json.loads(
+        temporal.RUNTIME_BUNDLE_SELECTION_SCHEMA_PATH.read_text(
+            encoding="utf-8"
+        )
+    )
+
+
+def _runtime_bundle_selection_binding() -> dict:
+    return json.loads(
+        temporal.RUNTIME_BUNDLE_SELECTION_BINDING_PATH.read_text(
+            encoding="utf-8"
+        )
+    )
+
+
 def _coordinate() -> dict:
     return {
         "schemaVersion": temporal.CONTRACT_VERSION,
@@ -84,23 +112,39 @@ def test_candidate_schemas_and_instances_are_full_draft_2020_12_valid():
     coordinate_schema = _coordinate_schema()
     carrier_schema = _carrier_schema()
     carrier_matrix = _carrier_matrix()
+    selection_schema = _selection_schema()
+    selection_binding = _selection_binding()
     command_schema = _command_schema()
     command_binding = _command_binding()
     runtime_bundle_carrier_schema = _runtime_bundle_carrier_schema()
     runtime_bundle_carrier_binding = _runtime_bundle_carrier_binding()
+    runtime_bundle_selection_schema = _runtime_bundle_selection_schema()
+    runtime_bundle_selection_binding = _runtime_bundle_selection_binding()
 
     jsonschema.Draft202012Validator.check_schema(coordinate_schema)
     jsonschema.Draft202012Validator.check_schema(carrier_schema)
+    jsonschema.Draft202012Validator.check_schema(selection_schema)
     jsonschema.Draft202012Validator.check_schema(command_schema)
     jsonschema.Draft202012Validator.check_schema(
         runtime_bundle_carrier_schema
     )
+    jsonschema.Draft202012Validator.check_schema(
+        runtime_bundle_selection_schema
+    )
     jsonschema.Draft202012Validator(carrier_schema).validate(carrier_matrix)
+    jsonschema.Draft202012Validator(selection_schema).validate(
+        selection_binding
+    )
     jsonschema.Draft202012Validator(command_schema).validate(command_binding)
     jsonschema.Draft202012Validator(
         runtime_bundle_carrier_schema
     ).validate(runtime_bundle_carrier_binding)
+    jsonschema.Draft202012Validator(
+        runtime_bundle_selection_schema
+    ).validate(runtime_bundle_selection_binding)
     temporal.validate_carrier_matrix(carrier_matrix)
+    temporal.validate_selection_schema_shape(selection_schema)
+    temporal.validate_selection_binding(selection_binding)
     temporal.validate_command_schema_shape(command_schema, command_binding)
     temporal.validate_command_binding(command_binding)
     temporal.validate_runtime_bundle_carrier_schema_shape(
@@ -109,6 +153,13 @@ def test_candidate_schemas_and_instances_are_full_draft_2020_12_valid():
     )
     temporal.validate_runtime_bundle_carrier_binding(
         runtime_bundle_carrier_binding
+    )
+    temporal.validate_runtime_bundle_selection_schema_shape(
+        runtime_bundle_selection_schema,
+        runtime_bundle_selection_binding,
+    )
+    temporal.validate_runtime_bundle_selection_binding(
+        runtime_bundle_selection_binding
     )
 
 
@@ -313,6 +364,171 @@ def test_runtime_bundle_carrier_is_closed_eligibility_not_required_closure():
             temporal.validate_runtime_bundle_carrier_binding(binding)
 
 
+def test_tenant_command_runtime_bundle_selection_is_exact_and_inactive(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    schema = _runtime_bundle_selection_schema()
+    binding = _runtime_bundle_selection_binding()
+    validator = jsonschema.Draft202012Validator(schema)
+
+    assert (
+        binding["requiredComponentClosure"]["components"]
+        == temporal._expected_runtime_bundle_selection_components()
+    )
+    mutations = (
+        (
+            lambda value: value["selectionSource"].update(
+                {"callerSelectable": True}
+            ),
+            "source differs",
+        ),
+        (
+            lambda value: value["selectionSource"].update(
+                {"lookupKey": ["request.tenantId", "request.bindingId"]}
+            ),
+            "source differs",
+        ),
+        (
+            lambda value: value["selectionRecord"][
+                "authorityBearingFields"
+            ].remove("selectionKnowledgePosition"),
+            "record authority differs",
+        ),
+        (
+            lambda value: value["selectionRecord"]["stateTransitions"][1].update(
+                {"effect": "REPLACE"}
+            ),
+            "state transitions differ",
+        ),
+        (
+            lambda value: value["resolution"].update(
+                {"before": "AFTER_COMMAND_ADMISSION"}
+            ),
+            "resolution differs",
+        ),
+        (
+            lambda value: value["resolution"].update(
+                {"refusalWrites": "ONE_BATCH"}
+            ),
+            "resolution differs",
+        ),
+        (
+            lambda value: value["governancePrerequisite"].update(
+                {"relationship": "REQUIRED_ROLE_MEMBER"}
+            ),
+            "prerequisite differs",
+        ),
+        (
+            lambda value: value["requiredComponentClosure"][
+                "components"
+            ].pop(),
+            "closure differs",
+        ),
+        (
+            lambda value: value["requiredComponentClosure"]["components"][
+                0
+            ].update({"role": "REFERENCE_SOURCE"}),
+            "closure differs",
+        ),
+        (
+            lambda value: value["requiredComponentClosure"]["components"][
+                -1
+            ].update({"contentDigest": "sha256:" + ("0" * 64)}),
+            "closure differs",
+        ),
+        (
+            lambda value: value["requiredComponentClosure"].update(
+                {"unrelatedComponentAuthority": "COMMAND_ADMISSION"}
+            ),
+            "closure differs",
+        ),
+        (
+            lambda value: value["trustedAuthorities"].pop(),
+            "authority map differs",
+        ),
+        (
+            lambda value: value["invariants"].remove(
+                "TCRS-017_SELECTION_REFUSAL_IS_NO_WRITE"
+            ),
+            "invariants differ",
+        ),
+        (
+            lambda value: value["negativeCases"].remove(
+                "SELECTION_CHANGES_DURING_COMMAND"
+            ),
+            "stops differ",
+        ),
+        (
+            lambda value: value["unsupported"].remove(
+                "HOT_RELOAD_UPGRADE_SUPERSESSION_OR_ROLLBACK"
+            ),
+            "stops differ",
+        ),
+        (
+            lambda value: value["implementationStops"].remove(
+                "NO_REVIEWED_SELECTION_REFUSAL_PUBLIC_REASON_MAPPING"
+            ),
+            "stops differ",
+        ),
+        (
+            lambda value: value["implementationStops"].clear(),
+            "stops differ",
+        ),
+    )
+    for mutation, expected_error in mutations:
+        mutated = copy.deepcopy(binding)
+        mutation(mutated)
+        assert list(validator.iter_errors(mutated))
+        with pytest.raises(
+            temporal.TemporalCandidateError,
+            match=expected_error,
+        ):
+            temporal.validate_runtime_bundle_selection_binding(mutated)
+
+    tampered_binding = copy.deepcopy(binding)
+    tampered_binding["trustedAuthorities"][1]["separateFrom"].remove(
+        "AUTHORIZER"
+    )
+    tampered_binding_path = tmp_path / "selection-binding.json"
+    tampered_binding_path.write_text(
+        json.dumps(tampered_binding, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    with monkeypatch.context() as digest_patch:
+        digest_patch.setattr(
+            temporal,
+            "RUNTIME_BUNDLE_SELECTION_BINDING_PATH",
+            tampered_binding_path,
+        )
+        with pytest.raises(
+            temporal.TemporalCandidateError,
+            match="binding digest differs",
+        ):
+            temporal.validate_runtime_bundle_selection_binding(
+                tampered_binding
+            )
+
+    tampered_schema = copy.deepcopy(schema)
+    tampered_schema["$comment"] = "tampered"
+    tampered_schema_path = tmp_path / "selection-schema.json"
+    tampered_schema_path.write_text(
+        json.dumps(tampered_schema, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    with monkeypatch.context() as digest_patch:
+        digest_patch.setattr(
+            temporal,
+            "RUNTIME_BUNDLE_SELECTION_SCHEMA_PATH",
+            tampered_schema_path,
+        )
+        with pytest.raises(
+            temporal.TemporalCandidateError,
+            match="schema digest differs",
+        ):
+            temporal.validate_runtime_bundle_selection_binding(binding)
+
+
 def test_candidate_does_not_enter_runtime_or_production_activation_inputs(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -406,6 +622,9 @@ def test_candidate_does_not_enter_runtime_or_production_activation_inputs(
         temporal.RUNTIME_BUNDLE_CARRIER_BINDING_ID,
         temporal.RUNTIME_BUNDLE_CARRIER_EXECUTION_POSTURE,
         temporal.RUNTIME_BUNDLE_CARRIER_ROLE,
+        temporal.RUNTIME_BUNDLE_SELECTION_SCHEMA_VERSION,
+        temporal.RUNTIME_BUNDLE_SELECTION_BINDING_ID,
+        temporal.RUNTIME_BUNDLE_SELECTION_EXECUTION_POSTURE,
         *temporal.CANDIDATE_RELATIVE_PATHS,
     )
     for path in (

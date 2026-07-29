@@ -1,0 +1,378 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/tenant-command-runtime-bundle-selection-binding/v0.1",
+  "title": "OFARM TenantCommandRuntimeBundleSelectionBinding v0.1 (candidate)",
+  "$comment": "NEW_CANDIDATE exact schema; inactive and production-unbound. It fixes one tenant-bound command selection source and exact command-required component closure without adding storage, a selector, runtime activation, routes, outputs, or issue #192 behavior.",
+  "const": {
+    "schemaVersion": "ofarm.tenant-command-runtime-bundle-selection-binding.v0.1",
+    "bindingId": "ofarm.tenant-command-runtime-bundle-selection.commit-operation-claim-draft.v0.1",
+    "status": "CANDIDATE_INACTIVE",
+    "executionPosture": "CONTRACT_ONLY_PRODUCTION_UNBOUND",
+    "identityAuthority": "REVIEWED_BINDING_ARTIFACT_NOT_CALLER_DATA",
+    "command": {
+      "commandId": "COMMIT_OPERATION_CLAIM_DRAFT",
+      "commandBindingId": "ofarm.temporal-governed-command.commit-operation-claim-draft.v0.1",
+      "commandBindingCanonicalDigest": "sha256:6dad47b836b737c8d58b38f566ed0a7d6caeba9023a734357320326630309da1"
+    },
+    "selectionSource": {
+      "sourceKind": "IMMUTABLE_TENANT_COMMAND_SELECTION_RECORD",
+      "lookupKey": [
+        "TenantBinding.tenant_id",
+        "LITERAL_SELECTION_BINDING_ID"
+      ],
+      "fixedSelectionBindingId": "ofarm.tenant-command-runtime-bundle-selection.commit-operation-claim-draft.v0.1",
+      "callerSelectable": false,
+      "disallowedSelectors": [
+        "CALLER_OR_REQUEST_DATA",
+        "ROUTE_OR_HEADER_DATA",
+        "PROFILE_OR_ENVIRONMENT_DATA",
+        "CAPABILITY_OR_PRINCIPAL_DATA",
+        "TIMESTAMP_OR_IDEMPOTENCY_DATA",
+        "PUBLISHER_OR_BUNDLE_EXISTENCE",
+        "LATEST_OR_SOLE_BUNDLE",
+        "LOOSE_COMPONENT_ROWS"
+      ],
+      "versionRule": "ONE_IMMUTABLE_SELECTION_PER_TENANT_AND_BINDING_VERSION",
+      "changeRule": "NEW_REVIEWED_SELECTION_BINDING_VERSION_REQUIRED",
+      "mutableCurrentPointer": "UNSUPPORTED"
+    },
+    "selectionRecord": {
+      "identityFields": [
+        "tenantId",
+        "selectionBindingId"
+      ],
+      "authorityBearingFields": [
+        "tenantId",
+        "selectionBindingId",
+        "selectionBindingCanonicalDigest",
+        "commandId",
+        "commandBindingId",
+        "commandBindingCanonicalDigest",
+        "runtimeBundleDigest",
+        "selectionBatchId",
+        "selectionKnowledgePosition"
+      ],
+      "tenantIdAuthority": "TenantBinding.tenant_id",
+      "selectionBindingIdAuthority": "FIXED_REVIEWED_BINDING_ARTIFACT",
+      "commandIdentityAuthority": "FIXED_REVIEWED_BINDING_ARTIFACT",
+      "runtimeBundleDigestAuthority": "DEDICATED_TENANT_COMMAND_SELECTION_AUTHORITY",
+      "selectionBatchAuthority": "SEPARATELY_GOVERNED_SELECTION_ACTIVATION_BATCH",
+      "selectionKnowledgeRule": "MUST_PRECEDE_COMMAND_KNOWLEDGE_BEFORE",
+      "custody": "TENANT_OWNED_IMMUTABLE",
+      "creation": "ATOMIC_GOVERNED_SELECTION_ACTIVATION_ONLY",
+      "stateTransitions": [
+        {
+          "from": "ABSENT",
+          "event": "EXACT_GOVERNED_ACTIVATION",
+          "to": "SEALED"
+        },
+        {
+          "from": "SEALED",
+          "event": "EXACT_RETRY",
+          "to": "SEALED",
+          "effect": "NO_OP"
+        },
+        {
+          "from": "SEALED",
+          "event": "UNEQUAL_REUSE_UPDATE_DELETE_OR_REPLACEMENT",
+          "to": "REFUSED",
+          "effect": "NO_WRITE"
+        }
+      ]
+    },
+    "resolution": {
+      "after": "TRUSTED_TENANT_BINDING",
+      "before": "COMMAND_ADMISSION_EXACT_REPLAY_AND_BATCH_ALLOCATION",
+      "inputAuthorities": [
+        "TenantBinding",
+        "FIXED_REVIEWED_SELECTION_BINDING"
+      ],
+      "successType": "TrustedCommandRuntimeBundle",
+      "refusal": "RUNTIME_BUNDLE_SELECTION_REFUSED_NO_WRITE",
+      "refusalVisibility": "INTERNAL_NO_NEW_PUBLIC_REASON_CODE",
+      "refusalWrites": "NONE",
+      "selectedDigestUse": [
+        "COMMAND_ADMISSION",
+        "IDEMPOTENCY_REPLAY_EQUALITY",
+        "BATCH_PROVENANCE",
+        "EVIDENCE",
+        "COMMAND_RESULT"
+      ],
+      "digestMutation": "UNSUPPORTED"
+    },
+    "governancePrerequisite": {
+      "bindingId": "ofarm.temporal-governance-runtime-bundle-carrier.v0.1",
+      "bindingFileDigest": "sha256:391c8110029f004375e668e5e902864c0b4aaf6f650005abed8a206d4049e5b4",
+      "role": "TEMPORAL_GOVERNANCE_ARTIFACT",
+      "relationship": "EXTERNAL_GOVERNANCE_PREREQUISITE_NOT_AN_EXTRA_ROLE_MEMBER"
+    },
+    "requiredComponentClosure": {
+      "semantics": "EXACT_COMMAND_REQUIRED_COMPONENT_SUBSET",
+      "wholeBundleExactness": "UNRELATED_COMPONENTS_MAY_EXIST_BUT_ARE_INERT_FOR_THIS_COMMAND",
+      "componentCount": 16,
+      "components": [
+        {
+          "role": "CONTRACT_SCHEMA",
+          "identity": "contract:ofarm.temporal-coordinate.v0.1",
+          "sourcePath": "contracts/candidates/temporal_coordinate/OFARM_TemporalCoordinate_schema_v0_1.json",
+          "canonicalization": "EXACT_BYTES_V1",
+          "placement": "GLOBAL_IMMUTABLE_CONTENT",
+          "byteLength": 3943,
+          "contentDigest": "sha256:b81e4c7b0aacebb11ff8bf0d186cdb36150fade31180552b46f7be9e13c551eb"
+        },
+        {
+          "role": "CONTRACT_SCHEMA",
+          "identity": "contract:ofarm.temporal-carrier-matrix.v0.1",
+          "sourcePath": "contracts/candidates/temporal_coordinate/OFARM_TemporalCarrierMatrix_schema_v0_1.json",
+          "canonicalization": "EXACT_BYTES_V1",
+          "placement": "GLOBAL_IMMUTABLE_CONTENT",
+          "byteLength": 3088,
+          "contentDigest": "sha256:cdb5c09ec033cc3b4de1dea9eb383c499045d8a3bfc5b80fd7abeab579a566ed"
+        },
+        {
+          "role": "CONTRACT_SCHEMA",
+          "identity": "contract:ofarm.temporal-carrier-selection-binding.v0.1",
+          "sourcePath": "contracts/candidates/temporal_carrier_selection/OFARM_TemporalCarrierSelectionBinding_schema_v0_1.json",
+          "canonicalization": "EXACT_BYTES_V1",
+          "placement": "GLOBAL_IMMUTABLE_CONTENT",
+          "byteLength": 3340,
+          "contentDigest": "sha256:d252420507393d1d9816a0f20549faa8cf67c94bd1e2c10a3c509aadf4f3800a"
+        },
+        {
+          "role": "CONTRACT_SCHEMA",
+          "identity": "contract:ofarm.temporal-governed-command-binding.v0.1",
+          "sourcePath": "contracts/candidates/temporal_governed_command/OFARM_TemporalGovernedCommandBinding_schema_v0_1.json",
+          "canonicalization": "EXACT_BYTES_V1",
+          "placement": "GLOBAL_IMMUTABLE_CONTENT",
+          "byteLength": 13132,
+          "contentDigest": "sha256:afda003df90e2787cfdc97f5561e3e5b098177a5add91556af2e935a3b9711db"
+        },
+        {
+          "role": "CONTRACT_SCHEMA",
+          "identity": "contract:ofarm.commitingressrequest.v0.1",
+          "sourcePath": "contracts/kernel/OFARM_CommitIngressRequest_schema_v0_1.json",
+          "canonicalization": "EXACT_BYTES_V1",
+          "placement": "GLOBAL_IMMUTABLE_CONTENT",
+          "byteLength": 3405,
+          "contentDigest": "sha256:397ec3a61ed572b14f9916bc9e7b316ff48150c743c6b7aa2eab94a3be3e8ffc"
+        },
+        {
+          "role": "CONTRACT_SCHEMA",
+          "identity": "contract:ofarm.semanticeventenvelope.v0.1",
+          "sourcePath": "contracts/kernel/OFARM_SemanticEventEnvelope_schema_v0_1.json",
+          "canonicalization": "EXACT_BYTES_V1",
+          "placement": "GLOBAL_IMMUTABLE_CONTENT",
+          "byteLength": 4238,
+          "contentDigest": "sha256:75662a6c4952a62b7e8f8e9de99c23c98899c692914a98ba4b752873f48bd1a4"
+        },
+        {
+          "role": "CONTRACT_SCHEMA",
+          "identity": "contract:ofarm.executionrecordpayload.v0.1",
+          "sourcePath": "contracts/core/OFARM_ExecutionRecordPayload_schema_v0_1.json",
+          "canonicalization": "EXACT_BYTES_V1",
+          "placement": "GLOBAL_IMMUTABLE_CONTENT",
+          "byteLength": 20245,
+          "contentDigest": "sha256:ca62f01d056794ee588d55c3f5df652fc039124b76af5631d417714bc7059ff0"
+        },
+        {
+          "role": "CONTRACT_SCHEMA",
+          "identity": "contract:ofarm.authorizationdecisionrequest.v0.1",
+          "sourcePath": "contracts/kernel/OFARM_AuthorizationDecisionRequest_schema_v0_1.json",
+          "canonicalization": "EXACT_BYTES_V1",
+          "placement": "GLOBAL_IMMUTABLE_CONTENT",
+          "byteLength": 4666,
+          "contentDigest": "sha256:a62c7b8a269130a4c3b618ab029ffada97597626131bd45e2335ff31e95880fa"
+        },
+        {
+          "role": "CONTRACT_SCHEMA",
+          "identity": "contract:ofarm.authorizationdecisionresult.v0.1",
+          "sourcePath": "contracts/kernel/OFARM_AuthorizationDecisionResult_schema_v0_1.json",
+          "canonicalization": "EXACT_BYTES_V1",
+          "placement": "GLOBAL_IMMUTABLE_CONTENT",
+          "byteLength": 5538,
+          "contentDigest": "sha256:f6d0de06e1bc6b8fc7a3f991abf28f2a3242942b50834b97292fa8e00fdd0127"
+        },
+        {
+          "role": "CONTRACT_SCHEMA",
+          "identity": "contract:ofarm.authorizationdecisiontrace.v0.1",
+          "sourcePath": "contracts/kernel/OFARM_AuthorizationDecisionTrace_schema_v0_1.json",
+          "canonicalization": "EXACT_BYTES_V1",
+          "placement": "GLOBAL_IMMUTABLE_CONTENT",
+          "byteLength": 3606,
+          "contentDigest": "sha256:1cc9886c3a9787a76657753fb682dd29337f2b8485e51557607bb6736de1571d"
+        },
+        {
+          "role": "CONTRACT_SCHEMA",
+          "identity": "contract:ofarm.promotiontrace.v0.1",
+          "sourcePath": "contracts/kernel/OFARM_PromotionTrace_schema_v0_1.json",
+          "canonicalization": "EXACT_BYTES_V1",
+          "placement": "GLOBAL_IMMUTABLE_CONTENT",
+          "byteLength": 4759,
+          "contentDigest": "sha256:07c073fba6fa023e4463339a383d4b0d881be38c17d626ec7d27caaa688d4e3f"
+        },
+        {
+          "role": "CONTRACT_SCHEMA",
+          "identity": "contract:ofarm.commitingressresult.v0.1",
+          "sourcePath": "contracts/kernel/OFARM_CommitIngressResult_schema_v0_1.json",
+          "canonicalization": "EXACT_BYTES_V1",
+          "placement": "GLOBAL_IMMUTABLE_CONTENT",
+          "byteLength": 5362,
+          "contentDigest": "sha256:55a21c697a651cdff6ce8d64dd7c29dd2afaa329047b4ebd55c94497a411e7d5"
+        },
+        {
+          "role": "CONTRACT_SCHEMA",
+          "identity": "contract:ofarm.runtimeproblem.v0.1",
+          "sourcePath": "contracts/kernel/OFARM_RuntimeProblem_schema_v0_1.json",
+          "canonicalization": "EXACT_BYTES_V1",
+          "placement": "GLOBAL_IMMUTABLE_CONTENT",
+          "byteLength": 1319,
+          "contentDigest": "sha256:873dbeda2932d48a54e5d08d22f4031c6a86b44712a3cec85f1c1008f4d6e95b"
+        },
+        {
+          "role": "TEMPORAL_GOVERNANCE_ARTIFACT",
+          "identity": "ofarm.temporal-carrier-matrix.adr0002.v0.1",
+          "sourcePath": "contracts/candidates/temporal_coordinate/OFARM_TemporalCarrierMatrix_ADR0002_candidate_v0_1.json",
+          "schemaIdentity": "contract:ofarm.temporal-carrier-matrix.v0.1",
+          "canonicalization": "OFARM_CANONICAL_JSON_V1",
+          "placement": "GLOBAL_IMMUTABLE_CONTENT",
+          "byteLength": 9504,
+          "contentDigest": "sha256:c404c0cd1e08f389664b5381c2c038cf65bac9a3b725fc2b1882990636eb179b"
+        },
+        {
+          "role": "TEMPORAL_GOVERNANCE_ARTIFACT",
+          "identity": "ofarm.temporal-carrier-selection.intervention.v0.1",
+          "sourcePath": "contracts/candidates/temporal_carrier_selection/OFARM_InterventionValidTimeCarrierSelection_candidate_v0_1.json",
+          "schemaIdentity": "contract:ofarm.temporal-carrier-selection-binding.v0.1",
+          "canonicalization": "OFARM_CANONICAL_JSON_V1",
+          "placement": "GLOBAL_IMMUTABLE_CONTENT",
+          "byteLength": 1814,
+          "contentDigest": "sha256:373a5f402ad077039946c1dfe7b972e4382d3c6a6805fbf0b271e4a0bc729bf1"
+        },
+        {
+          "role": "TEMPORAL_GOVERNANCE_ARTIFACT",
+          "identity": "ofarm.temporal-governed-command.commit-operation-claim-draft.v0.1",
+          "sourcePath": "contracts/candidates/temporal_governed_command/OFARM_OperationClaimDraftTemporalCommand_candidate_v0_1.json",
+          "schemaIdentity": "contract:ofarm.temporal-governed-command-binding.v0.1",
+          "canonicalization": "OFARM_CANONICAL_JSON_V1",
+          "placement": "GLOBAL_IMMUTABLE_CONTENT",
+          "byteLength": 9614,
+          "contentDigest": "sha256:6dad47b836b737c8d58b38f566ed0a7d6caeba9023a734357320326630309da1"
+        }
+      ],
+      "schemaValidation": "EACH_GOVERNANCE_INSTANCE_VALIDATES_COMPLETELY_AGAINST_ITS_SAME_BUNDLE_SCHEMA",
+      "digestOnlyReference": "UNSUPPORTED",
+      "missingOrSubstitutedComponent": "RUNTIME_BUNDLE_SELECTION_REFUSED_NO_WRITE",
+      "unrelatedComponentAuthority": "NONE"
+    },
+    "trustedAuthorities": [
+      {
+        "name": "TENANT_AND_PRINCIPAL_RELATIONSHIP",
+        "source": "TenantBinding",
+        "doesNotSupply": "RUNTIME_BUNDLE_DIGEST"
+      },
+      {
+        "name": "SELECTION_RECORD",
+        "source": "DEDICATED_TENANT_COMMAND_SELECTION_AUTHORITY",
+        "separateFrom": [
+          "RUNTIME_BUNDLE_PUBLISHER",
+          "TENANT_BINDER",
+          "APPLICATION_RUNTIME",
+          "WORKER",
+          "AUTHORIZER",
+          "REGISTRAR",
+          "IDENTITY_CONTROLLER"
+        ]
+      },
+      {
+        "name": "BUNDLE_INTEGRITY",
+        "source": "RuntimeBundle",
+        "owns": "SEAL_BYTES_MEMBERSHIP_AND_DIGEST"
+      },
+      {
+        "name": "COMPONENT_ROLE_AND_ALLOWED_IDENTITIES",
+        "source": "ofarm.temporal-governance-runtime-bundle-carrier.v0.1"
+      },
+      {
+        "name": "COMMAND_SEMANTICS",
+        "source": "ofarm.temporal-governed-command.commit-operation-claim-draft.v0.1"
+      },
+      {
+        "name": "KNOWLEDGE_POSITIONS",
+        "source": "GOVERNED_TENANT_KNOWLEDGE_ALLOCATOR"
+      },
+      {
+        "name": "AUTHORIZATION",
+        "source": "FUTURE_SEPARATELY_REVIEWED_PRODUCTION_AUTHORIZATION_PROVIDER"
+      },
+      {
+        "name": "AUDIT_RUNTIME",
+        "source": "ISSUE_192_UNCHANGED"
+      }
+    ],
+    "invariants": [
+      "TCRS-001_ONE_COMMAND",
+      "TCRS-002_ONE_TRUSTED_SELECTION_SOURCE",
+      "TCRS-003_SEPARATE_SELECTION_CUSTODY",
+      "TCRS-004_BOUND_TENANT_ONLY",
+      "TCRS-005_PRIOR_GOVERNED_SELECTION",
+      "TCRS-006_IMMUTABLE_VERSIONED_SELECTION",
+      "TCRS-007_SELECTION_BEFORE_ADMISSION_REPLAY_AND_BATCH",
+      "TCRS-008_SEALED_RUNTIME_BUNDLE_ONLY",
+      "TCRS-009_EXACT_SIXTEEN_COMPONENT_COMMAND_CLOSURE",
+      "TCRS-010_SCHEMA_AND_INSTANCE_REQUIRED",
+      "TCRS-011_ONE_RUNTIME_BUNDLE_DIGEST_END_TO_END",
+      "TCRS-012_REPLAY_COUPLED_TO_SELECTED_DIGEST",
+      "TCRS-013_UNRELATED_COMPONENTS_INERT",
+      "TCRS-014_NO_IMPLICIT_SELECTION",
+      "TCRS-015_CANDIDATE_INACTIVE",
+      "TCRS-016_PRODUCTION_LEGACY_FIREWALL",
+      "TCRS-017_SELECTION_REFUSAL_IS_NO_WRITE",
+      "TCRS-018_ISSUE_192_SEPARATE"
+    ],
+    "negativeCases": [
+      "SELECTION_BEFORE_TENANT_BINDING",
+      "CALLER_SUPPLIES_TENANT_BUNDLE_OR_BINDING_IDENTITY",
+      "CAPABILITY_PRINCIPAL_PROFILE_ENVIRONMENT_OR_IDEMPOTENCY_SELECTS",
+      "NEWEST_SOLE_OR_TIMESTAMP_ORDERING_SELECTS",
+      "PUBLICATION_EXISTENCE_OR_LOOSE_COMPONENT_SELECTS",
+      "MISSING_MUTABLE_CROSS_TENANT_OR_UNBATCHED_SELECTION_RECORD",
+      "UNSEALED_OR_MISSING_RUNTIME_BUNDLE",
+      "BUNDLE_DIGEST_MEMBERSHIP_BYTE_LENGTH_OR_COMPONENT_DIGEST_MISMATCH",
+      "MISSING_WRONG_ROLE_OR_SUBSTITUTED_REQUIRED_COMPONENT",
+      "GOVERNANCE_INSTANCE_SCHEMA_VALIDATION_FAILURE",
+      "UNLISTED_TEMPORAL_IDENTITY_ALIAS_OR_DIGEST_ONLY_REFERENCE",
+      "UNRELATED_COMPONENT_AFFECTS_COMMAND",
+      "SELECTION_CHANGES_DURING_COMMAND",
+      "REPLAY_USES_DIFFERENT_RUNTIME_BUNDLE_DIGEST",
+      "SELECTION_REFUSAL_WRITES_ANYTHING",
+      "LEGACY_STORE_CONFIG_OR_PROFILE_SELECTS",
+      "PUBLISHER_BINDER_APPLICATION_WORKER_AUTHORIZER_REGISTRAR_OR_IDENTITY_CONTROLLER_SELECTS",
+      "ISSUE_192_BEHAVIOR_IS_ADDED"
+    ],
+    "unsupported": [
+      "DATABASE_RELATION_MIGRATION_ROLE_OR_PRIVILEGE",
+      "SELECTION_CONTROLLER_OR_ACTIVATION_BATCH",
+      "ACTIVE_RUNTIME_BUNDLE_ROLE_MODEL_CATALOG_REPOSITORY_OR_PUBLISHER",
+      "PRODUCTION_SELECTOR_OR_APPLICATION_RUNTIME_INTEGRATION",
+      "COMMAND_OR_AUTHORIZATION_INTEGRATION",
+      "ROUTE_PROFILE_OR_ACTIVE_REGISTRY",
+      "MATERIALIZATION_CURRENT_STATE_READ_HISTORICAL_OR_WINDOW_EXECUTION",
+      "OUTPUT_RECEIPT_QUALIFICATION_OR_PROMOTION",
+      "HOT_RELOAD_UPGRADE_SUPERSESSION_OR_ROLLBACK",
+      "FROZEN_ACTIVE_CONTRACT_OR_EXISTING_TEMPORAL_CANDIDATE_REWRITE",
+      "ISSUE_192_BEHAVIOR"
+    ],
+    "implementationStops": [
+      "NO_TEMPORAL_CANDIDATE_PROMOTION_OR_REPLACEMENT",
+      "NO_ACTIVE_TEMPORAL_GOVERNANCE_COMPONENT_ROLE_OR_DATABASE_CONSTRAINT",
+      "NO_ACTIVE_COMMAND_BINDING_SCHEMA_VERSION_EXTRACTION_FOR_TOP_LEVEL_CONST",
+      "NO_REVIEWED_SELECTION_STORAGE_CONTROL_OR_GOVERNED_ACTIVATION",
+      "NO_REVIEWED_PRODUCTION_READ_ONLY_SELECTOR_WITHOUT_LEGACY_IMPORTS",
+      "NO_REVIEWED_SELECTION_REFUSAL_PUBLIC_REASON_MAPPING",
+      "NO_REVIEWED_PRODUCTION_AUTHORIZATION_PROVIDER",
+      "NO_GOVERNED_COMMAND_INTEGRATION",
+      "NO_ROUTE_PROFILE_MATERIALIZATION_READ_HISTORY_WINDOW_OUTPUT_OR_RECEIPT",
+      "NO_ISSUE_192_BEHAVIOR"
+    ]
+  }
+}
