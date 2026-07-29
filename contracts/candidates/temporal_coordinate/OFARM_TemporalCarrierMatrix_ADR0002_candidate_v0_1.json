@@ -1,0 +1,118 @@
+{
+  "schemaVersion": "ofarm.temporal-carrier-matrix.v0.1",
+  "matrixId": "ofarm.temporal-carrier-matrix.adr0002.v0.1",
+  "status": "CANDIDATE_INACTIVE",
+  "executionPosture": "CLASSIFICATION_ONLY_RUNTIME_UNSUPPORTED",
+  "coordinateContract": {
+    "schemaVersion": "ofarm.temporal-coordinate.v0.1",
+    "schemaDigest": "sha256:b81e4c7b0aacebb11ff8bf0d186cdb36150fade31180552b46f7be9e13c551eb"
+  },
+  "sourceAuthority": "docs/adr/0002-valid-time-and-knowledge-time.md#governed-carrier-and-window-meaning-matrix",
+  "rows": [
+    {
+      "rowId": "STRUCTURE_EVENT",
+      "recordOrEventFamily": "StructureEvent",
+      "authoritativeValidTimeCarrierRule": "Envelope eventTime for the change act; effectiveFrom/effectiveUntil for resulting state.",
+      "allowedSecondaryTimeAndConsistencyRule": "assertionTime and recordTime remain decision/diagnostic data. A payload lifecycle bound describing the same state must equal the normalized envelope bound.",
+      "windowAndRefusalRule": "The act uses EVENT_OCCURRENCE; resulting state uses STATE_OVERLAP. Missing or conflicting required carriers refuse."
+    },
+    {
+      "rowId": "OBSERVATION_EVENT",
+      "recordOrEventFamily": "ObservationEvent",
+      "authoritativeValidTimeCarrierRule": "Envelope observationTime for a point observation; the governed payload's phenomenon/time-object interval for an interval observation.",
+      "allowedSecondaryTimeAndConsistencyRule": "eventTime is allowed only for a distinct source act. If it purports to be the observation instant it must equal observationTime.",
+      "windowAndRefusalRule": "Point observations use EVENT_OCCURRENCE; interval observations use STATE_OVERLAP. Ambiguous point-versus-interval posture refuses."
+    },
+    {
+      "rowId": "OCCURRENCE_EVENT",
+      "recordOrEventFamily": "OccurrenceEvent",
+      "authoritativeValidTimeCarrierRule": "Envelope eventTime.",
+      "allowedSecondaryTimeAndConsistencyRule": "assertionTime and recordTime do not select the occurrence.",
+      "windowAndRefusalRule": "Uses EVENT_OCCURRENCE; absent eventTime refuses."
+    },
+    {
+      "rowId": "INTERVENTION_EVENT",
+      "recordOrEventFamily": "InterventionEvent",
+      "authoritativeValidTimeCarrierRule": "Envelope eventTime for the intervention occurrence; ExecutionRecordPayload.effectiveTimeInterval for an execution span only when timeBasis is the governed EXECUTION_INTERVAL.",
+      "allowedSecondaryTimeAndConsistencyRule": "Capture, assertion, and record times remain provenance. PRESCRIPTION_WINDOW, PLANNED_WINDOW, OBSERVED_INTERVAL, or EFFECTIVE_INTERVAL may be used only by a separately governed carrier rule for that distinct meaning. When envelope effective bounds describe the same span, they must equal the payload bounds.",
+      "windowAndRefusalRule": "A point act uses EVENT_OCCURRENCE; a governed execution span uses STATE_OVERLAP. Absent, UNKNOWN, planned/prescription, or otherwise incompatible basis refuses as execution validity. No capture-time fallback."
+    },
+    {
+      "rowId": "MATERIAL_EVENT",
+      "recordOrEventFamily": "MaterialEvent",
+      "authoritativeValidTimeCarrierRule": "Envelope eventTime for the material act; explicit effective bounds for resulting custody or state.",
+      "allowedSecondaryTimeAndConsistencyRule": "Secondary provenance fields are allowed only for their named meanings. Duplicate representations of one bound must match.",
+      "windowAndRefusalRule": "The act uses EVENT_OCCURRENCE; resulting state uses STATE_OVERLAP. Unclassified material time refuses."
+    },
+    {
+      "rowId": "EVIDENCE_EVENT",
+      "recordOrEventFamily": "EvidenceEvent",
+      "authoritativeValidTimeCarrierRule": "Envelope eventTime for the governed capture, issue, receipt, or signing act.",
+      "allowedSecondaryTimeAndConsistencyRule": "capturedAt, resultTime, source-access time, and recordTime remain provenance unless a governed profile rule explicitly makes one the act time and the envelope records the same instant.",
+      "windowAndRefusalRule": "Uses EVENT_OCCURRENCE; the runtime never silently promotes capture or receipt provenance into valid time."
+    },
+    {
+      "rowId": "GOVERNANCE_EVENT",
+      "recordOrEventFamily": "GovernanceEvent",
+      "authoritativeValidTimeCarrierRule": "Envelope decisionTime; an independently effective outcome uses explicit effectiveFrom/effectiveUntil.",
+      "allowedSecondaryTimeAndConsistencyRule": "Decision-record fields such as ReviewDecision.decidedAt must equal envelope decisionTime when they describe the same act.",
+      "windowAndRefusalRule": "The act uses EVENT_OCCURRENCE; an effective state uses STATE_OVERLAP. Decision time never substitutes for missing effect."
+    },
+    {
+      "rowId": "ASSERTION_RECORD",
+      "recordOrEventFamily": "AssertionRecord",
+      "authoritativeValidTimeCarrierRule": "occurrenceTime for a point/event claim; effectiveFrom/effectiveUntil for a state claim.",
+      "allowedSecondaryTimeAndConsistencyRule": "assertedAt is assertion-act time only. When carried by an envelope, corresponding occurrence/effective values must match after normalization.",
+      "windowAndRefusalRule": "Point claims use EVENT_OCCURRENCE; state claims use STATE_OVERLAP. A claim that needs valid time and supplies neither refuses."
+    },
+    {
+      "rowId": "ACCEPTED_EVENT_CONSEQUENCE",
+      "recordOrEventFamily": "AcceptedEventConsequence",
+      "authoritativeValidTimeCarrierRule": "effectiveFrom/effectiveUntil for state applicability; the immutable source event's classified carrier for an event-occurrence view.",
+      "allowedSecondaryTimeAndConsistencyRule": "acceptedAt is the acceptance act and never selects domain validity. Source and consequence bounds that claim the same state must match.",
+      "windowAndRefusalRule": "State selection uses STATE_OVERLAP; event selection uses the source carrier and EVENT_OCCURRENCE. No acceptedAt fallback."
+    },
+    {
+      "rowId": "REVIEW_AND_GOVERNANCE_RECORDS",
+      "recordOrEventFamily": "Review and governance records",
+      "authoritativeValidTimeCarrierRule": "ReviewDecision.decidedAt or the record's governed decision field for the act; explicit effective bounds for a separately effective outcome.",
+      "allowedSecondaryTimeAndConsistencyRule": "A linked GovernanceEvent.decisionTime must match the record's normalized decision time.",
+      "windowAndRefusalRule": "Decision-act views use EVENT_OCCURRENCE; outcome-state views use STATE_OVERLAP."
+    },
+    {
+      "rowId": "POINT_OBSERVATION_PAYLOADS",
+      "recordOrEventFamily": "Point-observation payloads",
+      "authoritativeValidTimeCarrierRule": "MeasurementEvidence.phenomenonTime.instant or AgronomicObservationContext.phenomenonTime.instant, with timeType=INSTANT and a present, governed timeBasis compatible with the selected observation meaning. OBSERVED_TIME and SAMPLE_TIME may qualify for their named meanings; ESTIMATED_TIME requires an explicit policy and qualification.",
+      "allowedSecondaryTimeAndConsistencyRule": "resultTime, createdAt, generatedAt, capture fields, and a phenomenon time whose basis is RESULT_TIME or RECORD_TIME are secondary and never valid carriers. Equivalent point fields must match.",
+      "windowAndRefusalRule": "A WINDOW view uses EVENT_OCCURRENCE; absent or incompatible basis, a mismatched shape, or multiple unequal candidate instants refuses."
+    },
+    {
+      "rowId": "PARTIAL_EXTENT_TEMPORAL_APPLICABILITY",
+      "recordOrEventFamily": "PartialExtent temporal applicability",
+      "authoritativeValidTimeCarrierRule": "temporalApplicability.instant for a governed point-applicability view, or intervalStart/intervalEnd for a governed interval-applicability view, only when timeType, timeBasis, extent role, and selected use are compatible.",
+      "allowedSecondaryTimeAndConsistencyRule": "OBSERVED_TIME, SAMPLE_TIME, PRESCRIPTION_WINDOW, EXECUTION_INTERVAL, DAMAGE_WINDOW, and REPLANT_WINDOW retain only their named meanings. RECORD_TIME is never a valid carrier; ESTIMATED_TIME requires explicit policy and qualification.",
+      "windowAndRefusalRule": "A point WINDOW view uses EVENT_OCCURRENCE; an interval WINDOW view uses STATE_OVERLAP. Absent or incompatible basis, mismatched instant/interval shape, or contradictory values refuses."
+    },
+    {
+      "rowId": "INTERVAL_STATE_OR_OBSERVATION",
+      "recordOrEventFamily": "Interval state or interval observation",
+      "authoritativeValidTimeCarrierRule": "The record's explicit start/end pair, with an open end only where that contract permits it. A time object must declare an interval-compatible timeType and, where exposed, a present timeBasis compatible with the selected state or observation meaning.",
+      "allowedSecondaryTimeAndConsistencyRule": "Creation, generation, assertion, decision, result, and record times remain secondary. A RESULT_TIME or RECORD_TIME basis never supplies domain validity; an estimated basis requires explicit policy and qualification. Equivalent bounds must match.",
+      "windowAndRefusalRule": "A WINDOW view uses STATE_OVERLAP; incompatible basis, incomplete, empty, reversed, shape-mismatched, or contradictory intervals refuse."
+    },
+    {
+      "rowId": "PENDING_OR_DISPUTED_ANNEX_ENTRY",
+      "recordOrEventFamily": "Pending/disputed annex entry",
+      "authoritativeValidTimeCarrierRule": "The underlying assertion or consequence carrier selected by the applicable row above. Dispute state is reconstructed at the tenant knowledge cut.",
+      "allowedSecondaryTimeAndConsistencyRule": "Review/decision time explains the annex state but does not replace the underlying valid carrier.",
+      "windowAndRefusalRule": "Uses the underlying carrier's meaning. An unclassified entry blocks high-consequence freeze rather than being silently included or omitted."
+    },
+    {
+      "rowId": "EVIDENCE_SUFFICIENCY_CASE",
+      "recordOrEventFamily": "EvidenceSufficiencyCase",
+      "authoritativeValidTimeCarrierRule": "Inherits the exact valid cut, carrier selections, and per-step meanings of its governed basis.",
+      "allowedSecondaryTimeAndConsistencyRule": "generatedAt is diagnostic and never a valid carrier.",
+      "windowAndRefusalRule": "It cannot widen or reinterpret the basis window. Missing inheritance blocks use."
+    }
+  ]
+}

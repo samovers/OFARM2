@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/temporal-carrier-matrix/v0.1",
+  "title": "OFARM TemporalCarrierMatrix v0.1 (candidate)",
+  "$comment": "NEW_CANDIDATE package-local classification contract transcribing ADR 0002's governed carrier and window-meaning matrix. It is inactive, non-executable, and absent from every production registry and activation input.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "matrixId",
+    "status",
+    "executionPosture",
+    "coordinateContract",
+    "sourceAuthority",
+    "rows"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ofarm.temporal-carrier-matrix.v0.1"
+    },
+    "matrixId": {
+      "const": "ofarm.temporal-carrier-matrix.adr0002.v0.1"
+    },
+    "status": {
+      "const": "CANDIDATE_INACTIVE"
+    },
+    "executionPosture": {
+      "const": "CLASSIFICATION_ONLY_RUNTIME_UNSUPPORTED"
+    },
+    "coordinateContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "schemaDigest"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "ofarm.temporal-coordinate.v0.1"
+        },
+        "schemaDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "sourceAuthority": {
+      "const": "docs/adr/0002-valid-time-and-knowledge-time.md#governed-carrier-and-window-meaning-matrix"
+    },
+    "rows": {
+      "type": "array",
+      "minItems": 15,
+      "maxItems": 15,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/carrierMatrixRow"
+      }
+    }
+  },
+  "$defs": {
+    "carrierMatrixRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rowId",
+        "recordOrEventFamily",
+        "authoritativeValidTimeCarrierRule",
+        "allowedSecondaryTimeAndConsistencyRule",
+        "windowAndRefusalRule"
+      ],
+      "properties": {
+        "rowId": {
+          "enum": [
+            "STRUCTURE_EVENT",
+            "OBSERVATION_EVENT",
+            "OCCURRENCE_EVENT",
+            "INTERVENTION_EVENT",
+            "MATERIAL_EVENT",
+            "EVIDENCE_EVENT",
+            "GOVERNANCE_EVENT",
+            "ASSERTION_RECORD",
+            "ACCEPTED_EVENT_CONSEQUENCE",
+            "REVIEW_AND_GOVERNANCE_RECORDS",
+            "POINT_OBSERVATION_PAYLOADS",
+            "PARTIAL_EXTENT_TEMPORAL_APPLICABILITY",
+            "INTERVAL_STATE_OR_OBSERVATION",
+            "PENDING_OR_DISPUTED_ANNEX_ENTRY",
+            "EVIDENCE_SUFFICIENCY_CASE"
+          ]
+        },
+        "recordOrEventFamily": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authoritativeValidTimeCarrierRule": {
+          "type": "string",
+          "minLength": 1
+        },
+        "allowedSecondaryTimeAndConsistencyRule": {
+          "type": "string",
+          "minLength": 1
+        },
+        "windowAndRefusalRule": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}
