@@ -40,6 +40,16 @@ SELECTION_BINDING_RELATIVE_PATH = (
     "OFARM_InterventionValidTimeCarrierSelection_candidate_v0_1.json"
 )
 SELECTION_BINDING_PATH = PACKAGE_ROOT / SELECTION_BINDING_RELATIVE_PATH
+COMMAND_SCHEMA_RELATIVE_PATH = (
+    "contracts/candidates/temporal_governed_command/"
+    "OFARM_TemporalGovernedCommandBinding_schema_v0_1.json"
+)
+COMMAND_SCHEMA_PATH = PACKAGE_ROOT / COMMAND_SCHEMA_RELATIVE_PATH
+COMMAND_BINDING_RELATIVE_PATH = (
+    "contracts/candidates/temporal_governed_command/"
+    "OFARM_OperationClaimDraftTemporalCommand_candidate_v0_1.json"
+)
+COMMAND_BINDING_PATH = PACKAGE_ROOT / COMMAND_BINDING_RELATIVE_PATH
 CANDIDATE_RELATIVE_PATHS = frozenset(
     {
         COORDINATE_SCHEMA_RELATIVE_PATH,
@@ -47,6 +57,8 @@ CANDIDATE_RELATIVE_PATHS = frozenset(
         CARRIER_MATRIX_RELATIVE_PATH,
         SELECTION_SCHEMA_RELATIVE_PATH,
         SELECTION_BINDING_RELATIVE_PATH,
+        COMMAND_SCHEMA_RELATIVE_PATH,
+        COMMAND_BINDING_RELATIVE_PATH,
     }
 )
 MANIFEST_PATH = PACKAGE_ROOT / "contracts/CONTRACTS_MANIFEST.json"
@@ -59,6 +71,20 @@ SELECTION_RFC_PATH = (
     / "docs/rfcs/"
     "OFARM_Intervention_Valid_Time_Carrier_Selection_RFC_v0_1.md"
 )
+COMMAND_RFC_PATH = (
+    PACKAGE_ROOT
+    / "docs/rfcs/OFARM_Operation_Claim_Draft_Temporal_Command_RFC_v0_1.md"
+)
+KNOWLEDGE_STORAGE_RFC_PATH = (
+    PACKAGE_ROOT
+    / "docs/rfcs/OFARM_Tenant_Knowledge_Position_Storage_RFC_v0_1.md"
+)
+KNOWLEDGE_STORAGE_MIGRATION_PATH = (
+    PACKAGE_ROOT / "kernel/migrations/0003_tenant_knowledge_position.sql"
+)
+MIGRATION_SET_AUTHORITY_PATH = (
+    PACKAGE_ROOT / "deployment/postgresql/migration_sets.py"
+)
 ADR_PATH = PACKAGE_ROOT / "docs/adr/0002-valid-time-and-knowledge-time.md"
 ERRATA_PATH = PACKAGE_ROOT / "ERRATA.md"
 ENVELOPE_SCHEMA_PATH = (
@@ -66,6 +92,30 @@ ENVELOPE_SCHEMA_PATH = (
 )
 EXECUTION_SCHEMA_PATH = (
     PACKAGE_ROOT / "contracts/core/OFARM_ExecutionRecordPayload_schema_v0_1.json"
+)
+COMMIT_REQUEST_SCHEMA_PATH = (
+    PACKAGE_ROOT / "contracts/kernel/OFARM_CommitIngressRequest_schema_v0_1.json"
+)
+AUTHORIZATION_REQUEST_SCHEMA_PATH = (
+    PACKAGE_ROOT
+    / "contracts/kernel/OFARM_AuthorizationDecisionRequest_schema_v0_1.json"
+)
+AUTHORIZATION_RESULT_SCHEMA_PATH = (
+    PACKAGE_ROOT
+    / "contracts/kernel/OFARM_AuthorizationDecisionResult_schema_v0_1.json"
+)
+AUTHORIZATION_TRACE_SCHEMA_PATH = (
+    PACKAGE_ROOT
+    / "contracts/kernel/OFARM_AuthorizationDecisionTrace_schema_v0_1.json"
+)
+PROMOTION_TRACE_SCHEMA_PATH = (
+    PACKAGE_ROOT / "contracts/kernel/OFARM_PromotionTrace_schema_v0_1.json"
+)
+COMMIT_RESULT_SCHEMA_PATH = (
+    PACKAGE_ROOT / "contracts/kernel/OFARM_CommitIngressResult_schema_v0_1.json"
+)
+RUNTIME_PROBLEM_SCHEMA_PATH = (
+    PACKAGE_ROOT / "contracts/kernel/OFARM_RuntimeProblem_schema_v0_1.json"
 )
 TEMPORAL_SELECTOR_MODULE_PATH = PACKAGE_ROOT / "kernel/temporal_carriers.py"
 RUNTIME_CATALOG_PATH = PACKAGE_ROOT / "kernel/runtime_bundle_components.json"
@@ -108,6 +158,29 @@ SELECTION_IDENTITY_AUTHORITY = (
 SELECTION_ROW_ID = "INTERVENTION_EVENT"
 ENVELOPE_SCHEMA_VERSION = "ofarm.semanticeventenvelope.v0.1"
 EXECUTION_SCHEMA_VERSION = "ofarm.executionrecordpayload.v0.1"
+COMMAND_SCHEMA_VERSION = "ofarm.temporal-governed-command-binding.v0.1"
+COMMAND_SCHEMA_ID = (
+    "https://ofarm.dev/schema/temporal-governed-command-binding/v0.1"
+)
+COMMAND_BINDING_ID = (
+    "ofarm.temporal-governed-command.commit-operation-claim-draft.v0.1"
+)
+COMMAND_STATUS = "CANDIDATE_INACTIVE"
+COMMAND_EXECUTION_POSTURE = "CONTRACT_ONLY_PRODUCTION_SURFACE_CLOSED"
+COMMAND_IDENTITY_AUTHORITY = "REVIEWED_BINDING_ARTIFACT_NOT_CALLER_DATA"
+COMMAND_SCHEMA_DIGEST = (
+    "afda003df90e2787cfdc97f5561e3e5b098177a5add91556af2e935a3b9711db"
+)
+COMMAND_BINDING_DIGEST = (
+    "0909ec653cb99a94cd1b35afaf2d386258aac671c5f730960ed485df8a4b8f2e"
+)
+KNOWLEDGE_STORAGE_ID = "ofarm.tenant-knowledge-position-storage.v0.1"
+KNOWLEDGE_STORAGE_RFC_DIGEST = (
+    "6ddf1b6b289c9e638646cf7ddd356165f3ec8cbcc96b3c988e3f6585d11f26f8"
+)
+KNOWLEDGE_STORAGE_MIGRATION_DIGEST = (
+    "d59af77e23fe012203696023ec343038dbcab5d5ffb9689be11ba67dca22f827"
+)
 CARRIER_ROW_IDS = (
     "STRUCTURE_EVENT",
     "OBSERVATION_EVENT",
@@ -757,6 +830,383 @@ def validate_selection_binding(value: object) -> None:
         )
 
 
+def _schema_version(path: Path) -> str:
+    schema = _load_json(path)
+    value = (
+        schema.get("properties", {})
+        .get("schemaVersion", {})
+        .get("const")
+    )
+    if type(value) is not str:
+        raise TemporalCandidateError(
+            f"{path.name} has no fixed schemaVersion"
+        )
+    return value
+
+
+def _tenant_authoritative_migration_set_head() -> str:
+    try:
+        module = ast.parse(
+            MIGRATION_SET_AUTHORITY_PATH.read_text(encoding="utf-8"),
+            filename=str(MIGRATION_SET_AUTHORITY_PATH),
+        )
+    except (OSError, UnicodeDecodeError, SyntaxError) as exc:
+        raise TemporalCandidateError(
+            "tenant migration-set authority is not parseable"
+        ) from exc
+    assignments = [
+        node
+        for node in module.body
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name)
+            and target.id == "TENANT_AUTHORITATIVE_MIGRATION_SET"
+            for target in node.targets
+        )
+    ]
+    if (
+        len(assignments) != 1
+        or not isinstance(assignments[0].value, ast.Call)
+        or not isinstance(assignments[0].value.func, ast.Name)
+        or assignments[0].value.func.id != "AuthoritativeMigrationSet"
+    ):
+        raise TemporalCandidateError(
+            "tenant migration-set authority assignment differs"
+        )
+    digest_values = [
+        keyword.value.value
+        for keyword in assignments[0].value.keywords
+        if keyword.arg == "digest"
+        and isinstance(keyword.value, ast.Constant)
+        and type(keyword.value.value) is str
+    ]
+    if (
+        len(digest_values) != 1
+        or re.fullmatch(r"sha256:[0-9a-f]{64}", digest_values[0]) is None
+    ):
+        raise TemporalCandidateError(
+            "tenant migration-set authority digest differs"
+        )
+    return digest_values[0]
+
+
+def validate_command_schema_shape(
+    schema: dict[str, object],
+    binding: dict[str, object],
+) -> None:
+    if _sha256(COMMAND_SCHEMA_PATH) != COMMAND_SCHEMA_DIGEST:
+        raise TemporalCandidateError(
+            "temporal governed-command schema digest differs"
+        )
+    if set(schema) != {"$schema", "$id", "title", "$comment", "const"}:
+        raise TemporalCandidateError(
+            "temporal governed-command schema fields differ"
+        )
+    if (
+        schema.get("$schema")
+        != "https://json-schema.org/draft/2020-12/schema"
+        or schema.get("$id") != COMMAND_SCHEMA_ID
+        or schema.get("title")
+        != "OFARM TemporalGovernedCommandBinding v0.1 (candidate)"
+        or schema.get("const") != binding
+    ):
+        raise TemporalCandidateError(
+            "temporal governed-command exact schema differs"
+        )
+    comment = schema.get("$comment")
+    if (
+        type(comment) is not str
+        or "NEW_CANDIDATE exact schema" not in comment
+        or "no production route or activation" not in comment
+        or "no caller-selected temporal or tenant authority" not in comment
+    ):
+        raise TemporalCandidateError(
+            "temporal governed-command schema posture differs"
+        )
+
+
+def validate_command_binding(binding: dict[str, object]) -> None:
+    if _sha256(COMMAND_BINDING_PATH) != COMMAND_BINDING_DIGEST:
+        raise TemporalCandidateError(
+            "temporal governed-command binding digest differs"
+        )
+    expected_fields = {
+        "schemaVersion",
+        "bindingId",
+        "status",
+        "executionPosture",
+        "identityAuthority",
+        "command",
+        "prerequisites",
+        "sourceContracts",
+        "evidenceContracts",
+        "admissionRules",
+        "trustedAuthorities",
+        "stateTransitions",
+        "idempotency",
+        "outcomeRules",
+        "durableBatch",
+        "unsupported",
+        "implementationStops",
+    }
+    if set(binding) != expected_fields:
+        raise TemporalCandidateError(
+            "temporal governed-command binding fields differ"
+        )
+    if {
+        field: binding.get(field)
+        for field in (
+            "schemaVersion",
+            "bindingId",
+            "status",
+            "executionPosture",
+            "identityAuthority",
+        )
+    } != {
+        "schemaVersion": COMMAND_SCHEMA_VERSION,
+        "bindingId": COMMAND_BINDING_ID,
+        "status": COMMAND_STATUS,
+        "executionPosture": COMMAND_EXECUTION_POSTURE,
+        "identityAuthority": COMMAND_IDENTITY_AUTHORITY,
+    }:
+        raise TemporalCandidateError(
+            "temporal governed-command identity differs"
+        )
+    if binding.get("command") != {
+        "commandId": "COMMIT_OPERATION_CLAIM_DRAFT",
+        "governedOperation": "COMMIT_OPERATION_CLAIM_DRAFT",
+        "ingressChannel": "MANUAL_UI",
+        "actionClass": "ASSERT_OPERATION_CLAIM",
+        "actionStage": "DRAFT_PREPARATION",
+        "successOutcome": "RETAIN_DRAFT",
+        "promotionOutcome": "UNSUPPORTED",
+        "routePosture": "CLOSED",
+    }:
+        raise TemporalCandidateError(
+            "temporal governed-command specialization differs"
+        )
+    if binding.get("prerequisites") != [
+        {
+            "role": "TEMPORAL_COORDINATE",
+            "identity": CONTRACT_VERSION,
+            "digest": f"sha256:{_sha256(COORDINATE_SCHEMA_PATH)}",
+        },
+        {
+            "role": "TENANT_KNOWLEDGE_POSITION_STORAGE",
+            "identity": KNOWLEDGE_STORAGE_ID,
+            "rfcDigest": (
+                f"sha256:{_sha256(KNOWLEDGE_STORAGE_RFC_PATH)}"
+            ),
+            "migrationDigest": (
+                f"sha256:{_sha256(KNOWLEDGE_STORAGE_MIGRATION_PATH)}"
+            ),
+            "migrationSetHead": _tenant_authoritative_migration_set_head(),
+        },
+        {
+            "role": "INTERVENTION_VALID_TIME_SELECTION",
+            "identity": SELECTION_BINDING_ID,
+            "digest": f"sha256:{_sha256(SELECTION_BINDING_PATH)}",
+        },
+    ]:
+        raise TemporalCandidateError(
+            "temporal governed-command prerequisite binding differs"
+        )
+    if (
+        _sha256(KNOWLEDGE_STORAGE_RFC_PATH)
+        != KNOWLEDGE_STORAGE_RFC_DIGEST
+        or _sha256(KNOWLEDGE_STORAGE_MIGRATION_PATH)
+        != KNOWLEDGE_STORAGE_MIGRATION_DIGEST
+    ):
+        raise TemporalCandidateError(
+            "tenant knowledge-position prerequisite digest differs"
+        )
+    expected_source_contracts = [
+        {
+            "role": "COMMAND_REQUEST",
+            "schemaVersion": _schema_version(COMMIT_REQUEST_SCHEMA_PATH),
+            "schemaDigest": (
+                f"sha256:{_sha256(COMMIT_REQUEST_SCHEMA_PATH)}"
+            ),
+            "discriminatorPath": "/commitClass",
+            "discriminatorValue": "OPERATION_CLAIM",
+        },
+        {
+            "role": "SEMANTIC_EVENT",
+            "schemaVersion": _schema_version(ENVELOPE_SCHEMA_PATH),
+            "schemaDigest": f"sha256:{_sha256(ENVELOPE_SCHEMA_PATH)}",
+            "discriminatorPath": "/primaryEventFamily",
+            "discriminatorValue": "InterventionEvent",
+        },
+        {
+            "role": "EXECUTION_PAYLOAD",
+            "schemaVersion": _schema_version(EXECUTION_SCHEMA_PATH),
+            "schemaDigest": f"sha256:{_sha256(EXECUTION_SCHEMA_PATH)}",
+            "discriminatorPath": "/recordClass",
+            "discriminatorValue": "OPERATION_CLAIM",
+        },
+    ]
+    if binding.get("sourceContracts") != expected_source_contracts:
+        raise TemporalCandidateError(
+            "temporal governed-command source contracts differ"
+        )
+    expected_evidence_contracts = [
+        ("AUTHORIZATION_REQUEST", AUTHORIZATION_REQUEST_SCHEMA_PATH),
+        ("AUTHORIZATION_RESULT", AUTHORIZATION_RESULT_SCHEMA_PATH),
+        ("AUTHORIZATION_TRACE", AUTHORIZATION_TRACE_SCHEMA_PATH),
+        ("PROMOTION_TRACE", PROMOTION_TRACE_SCHEMA_PATH),
+        ("COMMAND_RESULT", COMMIT_RESULT_SCHEMA_PATH),
+        ("RUNTIME_PROBLEM", RUNTIME_PROBLEM_SCHEMA_PATH),
+    ]
+    if binding.get("evidenceContracts") != [
+        {
+            "role": role,
+            "schemaVersion": _schema_version(path),
+            "schemaDigest": f"sha256:{_sha256(path)}",
+        }
+        for role, path in expected_evidence_contracts
+    ]:
+        raise TemporalCandidateError(
+            "temporal governed-command evidence contracts differ"
+        )
+
+    admission_rules = binding.get("admissionRules")
+    trusted_authorities = binding.get("trustedAuthorities")
+    outcome_rules = binding.get("outcomeRules")
+    durable_batch = binding.get("durableBatch")
+    if (
+        type(admission_rules) is not list
+        or tuple(
+            rule.get("ruleId")
+            for rule in admission_rules
+            if type(rule) is dict
+        )
+        != (
+            "ACTING_PARTY_IS_BOUND_PARTY",
+            "HUMAN_PARTY_ONLY",
+            "DRAFT_ONLY",
+            "REQUEST_EVENT_IDENTITY",
+            "EVENT_PAYLOAD_IDENTITY",
+            "OPTIONAL_PAYLOAD_EVENT_BACKLINK",
+            "EXACT_COMMAND_TARGET",
+            "EVENT_TARGET",
+            "EVENT_SUBJECT_TARGET",
+            "PAYLOAD_SUBJECT_TARGET",
+            "PAYLOAD_ANCHOR_TARGET",
+            "PAYLOAD_ACTOR_IS_BOUND_PARTY",
+            "CLAIMED_RECORD_ONLY",
+        )
+    ):
+        raise TemporalCandidateError(
+            "temporal governed-command admission rules differ"
+        )
+    if (
+        type(trusted_authorities) is not list
+        or tuple(
+            authority.get("name")
+            for authority in trusted_authorities
+            if type(authority) is dict
+        )
+        != (
+            "TENANT_AND_PRINCIPAL",
+            "RUNTIME_BUNDLE_DIGEST",
+            "AUTHORIZATION_DECISION",
+            "COMMAND_EVALUATION_INSTANT",
+            "KNOWLEDGE_POSITION",
+            "VALID_TIME_BINDING",
+        )
+        or any(
+            type(authority) is not dict
+            or authority.get("callerSelectable") is not False
+            for authority in trusted_authorities
+        )
+    ):
+        raise TemporalCandidateError(
+            "temporal governed-command authority map differs"
+        )
+    if (
+        type(outcome_rules) is not list
+        or tuple(
+            rule.get("condition")
+            for rule in outcome_rules
+            if type(rule) is dict
+        )
+        != (
+            "EXACT_REPLAY",
+            "CONFLICTING_REPLAY",
+            "AUTHORIZATION_DENY",
+            "AUTHORIZATION_REVIEW_REQUIRED",
+            "AUTHORIZATION_ALLOW_VALID_TIME_REFUSED",
+            "AUTHORIZATION_ALLOW_VALID_TIME_SELECTED",
+        )
+    ):
+        raise TemporalCandidateError(
+            "temporal governed-command outcome rules differ"
+        )
+    if (
+        type(durable_batch) is not dict
+        or durable_batch.get("allocationPoint")
+        != "AFTER_EXACT_REPLAY_CHECK_BEFORE_AUTHORITY_OR_TEMPORAL_OUTCOME"
+        or durable_batch.get("knowledgeBeforeCommand")
+        != "allocatedKnowledgePositionMinusOne"
+        or durable_batch.get("sourceLane") != "draft"
+        or durable_batch.get("exactReplayWrites") != []
+        or durable_batch.get("conflictingReplayWrites") != []
+        or durable_batch.get("newlyWrittenAllowedOutcomes")
+        != ["RETAIN_DRAFT", "DENY", "REQUIRE_REVIEW"]
+        or durable_batch.get("atomicity")
+        != "ONE_BOUND_TENANT_TRANSACTION"
+    ):
+        raise TemporalCandidateError(
+            "temporal governed-command batch policy differs"
+        )
+    idempotency = binding.get("idempotency")
+    if (
+        type(idempotency) is not dict
+        or idempotency.get("replayEquality")
+        != "SAME_REQUEST_DIGEST_AND_SAME_TRUSTED_RUNTIME_BUNDLE_DIGEST"
+        or idempotency.get("exactReplay")
+        != "RETURN_PRIOR_COMMITTED_RESULT_UNCHANGED_NO_NEW_BATCH"
+        or idempotency.get("conflictingReplay")
+        != (
+            "REFUSE_NO_NEW_BATCH_NO_NEW_RECORD_"
+            "NO_SECOND_IDEMPOTENCY_CLAIM"
+        )
+    ):
+        raise TemporalCandidateError(
+            "temporal governed-command idempotency policy differs"
+        )
+    required_unsupported = {
+        "ROUTE_ACTIVATION",
+        "PROMOTE_ACCEPTED",
+        "CURRENT_STATE_MATERIALIZATION",
+        "HISTORICAL_OR_WINDOW_EXECUTION",
+        "CURRENT_STATE_READ",
+        "QUALIFICATION_OR_OUTPUT",
+        "DATABASE_OR_MIGRATION_CHANGE",
+        "RUNTIME_BUNDLE_OR_PROFILE_ACTIVATION",
+        "ISSUE_192_BEHAVIOR",
+    }
+    required_stops = {
+        "NO_REVIEWED_PRODUCTION_AUTHORIZATION_PROVIDER_FOR_THIS_COMMAND",
+        "NO_REVIEWED_RUNTIME_BUNDLE_SOURCE_FOR_COMMAND_AND_BINDING_IDENTITY",
+        "ANY_REQUIRED_FROZEN_CONTRACT_CHANGE",
+        "ANY_REQUIRED_PUBLIC_REFUSAL_VOCABULARY_CHANGE",
+        "ANY_REQUIRED_ROUTE_OR_ACTIVE_REGISTRY_CHANGE",
+    }
+    # The digest still pins this exact version. If a reviewed artifact and
+    # digest add stricter unsupported cases, only removal of this safety floor
+    # is the semantic conformance failure.
+    if (
+        type(binding.get("unsupported")) is not list
+        or not required_unsupported.issubset(binding["unsupported"])
+        or type(binding.get("implementationStops")) is not list
+        or set(binding["implementationStops"]) != required_stops
+    ):
+        raise TemporalCandidateError(
+            "temporal governed-command stop conditions differ"
+        )
+
+
 def validate_runtime_selection_binding() -> None:
     package_root = str(PACKAGE_ROOT)
     if package_root not in sys.path:
@@ -972,11 +1422,15 @@ def validate_candidate_governance() -> None:
     carrier_matrix = _load_json(CARRIER_MATRIX_PATH)
     selection_schema = _load_json(SELECTION_SCHEMA_PATH)
     selection_binding = _load_json(SELECTION_BINDING_PATH)
+    command_schema = _load_json(COMMAND_SCHEMA_PATH)
+    command_binding = _load_json(COMMAND_BINDING_PATH)
     validate_coordinate_schema_shape(coordinate_schema)
     validate_carrier_schema_shape(carrier_schema)
     validate_carrier_matrix(carrier_matrix)
     validate_selection_schema_shape(selection_schema)
     validate_selection_binding(selection_binding)
+    validate_command_schema_shape(command_schema, command_binding)
+    validate_command_binding(command_binding)
     validate_runtime_selection_binding()
     validate_runtime_selector_paths(selection_binding)
     validate_runtime_selection_isolation()
@@ -1038,6 +1492,34 @@ def validate_candidate_governance() -> None:
             (
                 "ADR 0002 and docs/rfcs/"
                 "OFARM_Intervention_Valid_Time_Carrier_Selection_RFC_v0_1.md"
+            ),
+        ),
+        COMMAND_SCHEMA_RELATIVE_PATH: _expected_manifest_entry(
+            COMMAND_SCHEMA_RELATIVE_PATH,
+            COMMAND_SCHEMA_PATH,
+            (
+                "Package-local exact schema for one issue #176 "
+                "operation-claim draft temporal-command candidate; "
+                "contract-only, inactive, production-surface-closed, and "
+                "not selected by the production RuntimeBundle."
+            ),
+            (
+                "ADR 0002 and docs/rfcs/"
+                "OFARM_Operation_Claim_Draft_Temporal_Command_RFC_v0_1.md"
+            ),
+        ),
+        COMMAND_BINDING_RELATIVE_PATH: _expected_manifest_entry(
+            COMMAND_BINDING_RELATIVE_PATH,
+            COMMAND_BINDING_PATH,
+            (
+                "Package-local exact issue #176 operation-claim draft "
+                "temporal-command candidate; contract-only, inactive, "
+                "production-surface-closed, and not selected by the "
+                "production RuntimeBundle."
+            ),
+            (
+                "ADR 0002 and docs/rfcs/"
+                "OFARM_Operation_Claim_Draft_Temporal_Command_RFC_v0_1.md"
             ),
         ),
     }
@@ -1112,6 +1594,51 @@ def validate_candidate_governance() -> None:
             "carrier-selection RFC authority or stop conditions differ"
         )
 
+    command_rfc = COMMAND_RFC_PATH.read_text(encoding="utf-8")
+    command_digest_markers = (
+        f"`sha256:{_sha256(COMMAND_SCHEMA_PATH)}`",
+        f"`sha256:{_sha256(COMMAND_BINDING_PATH)}`",
+    )
+    if any(
+        command_rfc.count(marker) != 1
+        for marker in command_digest_markers
+    ):
+        raise TemporalCandidateError(
+            "temporal governed-command RFC digest binding differs"
+        )
+    required_command_rfc_markers = (
+        COMMAND_BINDING_ID,
+        "COMMIT_OPERATION_CLAIM_DRAFT",
+        "reviewed versioned artifact. None is accepted from caller data.",
+        "Kbefore = Kbatch - 1",
+        "returns the prior committed `CommitIngressResult` unchanged",
+        "production authorization provider that owns",
+        "production source of the trusted RuntimeBundle digest",
+        "production-surface-closed and inactive",
+        "Current-state reads, historical views, WINDOW behavior",
+    )
+    if any(
+        marker not in command_rfc
+        for marker in required_command_rfc_markers
+    ):
+        raise TemporalCandidateError(
+            "temporal governed-command RFC authority or stops differ"
+        )
+    binding_text = json.dumps(command_binding, sort_keys=True)
+    required_command_binding_markers = (
+        COMMAND_IDENTITY_AUTHORITY,
+        "RETURN_PRIOR_COMMITTED_RESULT_UNCHANGED_NO_NEW_BATCH",
+        "NO_REVIEWED_PRODUCTION_AUTHORIZATION_PROVIDER_FOR_THIS_COMMAND",
+        "NO_REVIEWED_RUNTIME_BUNDLE_SOURCE_FOR_COMMAND_AND_BINDING_IDENTITY",
+    )
+    if any(
+        marker not in binding_text
+        for marker in required_command_binding_markers
+    ):
+        raise TemporalCandidateError(
+            "temporal governed-command binding authority or stops differ"
+        )
+
     errata = ERRATA_PATH.read_text(encoding="utf-8")
     if any(
         marker not in errata
@@ -1120,6 +1647,9 @@ def validate_candidate_governance() -> None:
             CONTRACT_VERSION,
             CARRIER_MATRIX_ID,
             SELECTION_BINDING_ID,
+            COMMAND_BINDING_ID,
+            "production authorization provider",
+            "trusted RuntimeBundle-digest source",
         )
     ):
         raise TemporalCandidateError("candidate ERRATA governance record differs")
@@ -1133,6 +1663,9 @@ def validate_candidate_governance() -> None:
         SELECTION_SCHEMA_VERSION,
         SELECTION_BINDING_ID,
         SELECTION_EXECUTION_POSTURE,
+        COMMAND_SCHEMA_VERSION,
+        COMMAND_BINDING_ID,
+        COMMAND_EXECUTION_POSTURE,
         *CANDIDATE_RELATIVE_PATHS,
     )
     for path, label in (

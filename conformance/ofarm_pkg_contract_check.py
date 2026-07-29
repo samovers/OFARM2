@@ -8,9 +8,9 @@ Checks, in order:
    deliberately small JSON Schema subset validator (the subset the OFARM
    machine contracts actually use: type, const, enum, required, properties,
    additionalProperties:false, pattern, items, minItems, minLength, oneOf).
-4. the non-default temporal-governance coordinate, carrier matrix, and
-   intervention carrier-selection candidates satisfy their semantic and
-   non-activation contracts; and
+4. the non-default temporal-governance coordinate, carrier matrix,
+   intervention carrier-selection, and governed-command candidates satisfy
+   their semantic and non-activation contracts; and
 5. rewritten trust-boundary modules satisfy their architecture and size gates.
 
 This tool is package tooling, not OFARM law and not a full JSON Schema
@@ -132,6 +132,10 @@ def sha256(p: Path) -> str:
 
 # Authored example instances -> the schema each must validate against.
 INSTANCE_BINDINGS = {
+    "contracts/candidates/temporal_governed_command/"
+    "OFARM_OperationClaimDraftTemporalCommand_candidate_v0_1.json":
+        "contracts/candidates/temporal_governed_command/"
+        "OFARM_TemporalGovernedCommandBinding_schema_v0_1.json",
     "contracts/candidates/temporal_carrier_selection/"
     "OFARM_InterventionValidTimeCarrierSelection_candidate_v0_1.json":
         "contracts/candidates/temporal_carrier_selection/"
