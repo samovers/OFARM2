@@ -254,7 +254,19 @@ def test_runtime_bundle_carrier_is_closed_eligibility_not_required_closure():
             "allowed identity set differs",
         ),
         (
+            # The binding's allowed set is exact even though no RuntimeBundle
+            # or role use is required to contain every allowed identity.
             lambda value: value["allowedIdentities"].pop(),
+            "allowed identity set differs",
+        ),
+        (
+            lambda value: value["allowedIdentities"][0].update(
+                {
+                    "canonicalInstanceDigest": value["allowedIdentities"][0][
+                        "instanceFileDigest"
+                    ]
+                }
+            ),
             "allowed identity set differs",
         ),
         (
@@ -275,6 +287,20 @@ def test_runtime_bundle_carrier_is_closed_eligibility_not_required_closure():
             ),
             "carrier binding differs",
         ),
+        (
+            lambda value: value["schemaRelationship"].update(
+                {"sameRuntimeBundleRequiredWhenInstanceIsUsed": False}
+            ),
+            "carrier binding differs",
+        ),
+        (
+            lambda value: value["forbiddenContentClasses"].pop(),
+            "carrier binding differs",
+        ),
+        (
+            lambda value: value["implementationStops"].clear(),
+            "carrier binding differs",
+        ),
     )
     for mutation, expected_error in mutations:
         binding = _runtime_bundle_carrier_binding()
@@ -287,7 +313,10 @@ def test_runtime_bundle_carrier_is_closed_eligibility_not_required_closure():
             temporal.validate_runtime_bundle_carrier_binding(binding)
 
 
-def test_candidate_does_not_enter_runtime_or_production_activation_inputs():
+def test_candidate_does_not_enter_runtime_or_production_activation_inputs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
     runtime_catalog = json.loads(
         temporal.RUNTIME_CATALOG_PATH.read_text(encoding="utf-8")
     )
@@ -310,6 +339,61 @@ def test_candidate_does_not_enter_runtime_or_production_activation_inputs():
         match="runtime component",
     ):
         temporal.validate_non_activation(mutated_catalog)
+
+    assert temporal.RUNTIME_BUNDLE_SCHEMA_PATH in (
+        temporal.RUNTIME_BUNDLE_ACTIVE_AUTHORITY_PATHS
+    )
+    assert temporal.RUNTIME_BUNDLE_REPOSITORY_PATH in (
+        temporal.RUNTIME_BUNDLE_ACTIVE_AUTHORITY_PATHS
+    )
+    active_authority = tmp_path / "schema.sql"
+    active_authority.write_text(
+        temporal.RUNTIME_BUNDLE_CARRIER_ROLE,
+        encoding="utf-8",
+    )
+    migration_dir = tmp_path / "migrations"
+    migration_dir.mkdir()
+    (migration_dir / "0001.sql").write_text("-- active", encoding="utf-8")
+    with monkeypatch.context() as candidate_patch:
+        candidate_patch.setattr(
+            temporal,
+            "RUNTIME_BUNDLE_ACTIVE_AUTHORITY_PATHS",
+            (active_authority,),
+        )
+        candidate_patch.setattr(
+            temporal,
+            "TENANT_MIGRATIONS_PATH",
+            migration_dir,
+        )
+        with pytest.raises(
+            temporal.TemporalCandidateError,
+            match="entered an active RuntimeBundle authority",
+        ):
+            temporal.validate_runtime_bundle_carrier_role_is_inactive()
+
+        empty_migration_dir = tmp_path / "empty-migrations"
+        empty_migration_dir.mkdir()
+        candidate_patch.setattr(
+            temporal,
+            "TENANT_MIGRATIONS_PATH",
+            empty_migration_dir,
+        )
+        with pytest.raises(
+            temporal.TemporalCandidateError,
+            match="migration authority set is empty",
+        ):
+            temporal.validate_runtime_bundle_carrier_role_is_inactive()
+
+        candidate_patch.setattr(
+            temporal,
+            "TENANT_MIGRATIONS_PATH",
+            tmp_path / "missing-migrations",
+        )
+        with pytest.raises(
+            temporal.TemporalCandidateError,
+            match="migration authority directory is missing",
+        ):
+            temporal.validate_runtime_bundle_carrier_role_is_inactive()
 
     activation_markers = (
         temporal.CONTRACT_VERSION,

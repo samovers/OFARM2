@@ -141,6 +141,15 @@ RUNTIME_PROBLEM_SCHEMA_PATH = (
 TEMPORAL_SELECTOR_MODULE_PATH = PACKAGE_ROOT / "kernel/temporal_carriers.py"
 RUNTIME_CATALOG_PATH = PACKAGE_ROOT / "kernel/runtime_bundle_components.json"
 RUNTIME_BUNDLE_MODEL_PATH = PACKAGE_ROOT / "kernel/runtime_bundle.py"
+RUNTIME_BUNDLE_REPOSITORY_PATH = (
+    PACKAGE_ROOT / "kernel/runtime_bundle_repository.py"
+)
+RUNTIME_BUNDLE_SCHEMA_PATH = PACKAGE_ROOT / "kernel/schema.sql"
+RUNTIME_BUNDLE_ACTIVE_AUTHORITY_PATHS = (
+    RUNTIME_BUNDLE_MODEL_PATH,
+    RUNTIME_BUNDLE_REPOSITORY_PATH,
+    RUNTIME_BUNDLE_SCHEMA_PATH,
+)
 TENANT_MIGRATIONS_PATH = PACKAGE_ROOT / "kernel/migrations"
 ACTIVE_ARTIFACT_SET_PATH = (
     PACKAGE_ROOT
@@ -1361,11 +1370,12 @@ def _expected_runtime_bundle_carrier_binding() -> dict[str, object]:
 
 
 def validate_runtime_bundle_carrier_binding(value: object) -> None:
+    expected = _expected_runtime_bundle_carrier_binding()
     binding = _closed_object(
         value,
         label="TemporalGovernanceRuntimeBundleCarrierBinding",
-        allowed=frozenset(_expected_runtime_bundle_carrier_binding()),
-        required=frozenset(_expected_runtime_bundle_carrier_binding()),
+        allowed=frozenset(expected),
+        required=frozenset(expected),
     )
     if (
         binding["schemaVersion"] != RUNTIME_BUNDLE_CARRIER_SCHEMA_VERSION
@@ -1392,7 +1402,7 @@ def validate_runtime_bundle_carrier_binding(value: object) -> None:
             "temporal RuntimeBundle component vocabulary differs"
         )
     allowed_identities = binding["allowedIdentities"]
-    expected_identities = _expected_runtime_bundle_carrier_allowed_identities()
+    expected_identities = expected["allowedIdentities"]
     if (
         type(allowed_identities) is not list
         or allowed_identities != expected_identities
@@ -1417,7 +1427,6 @@ def validate_runtime_bundle_carrier_binding(value: object) -> None:
         raise TemporalCandidateError(
             "temporal RuntimeBundle component closure authority differs"
         )
-    expected = _expected_runtime_bundle_carrier_binding()
     if binding != expected:
         raise TemporalCandidateError(
             "temporal RuntimeBundle carrier binding differs"
@@ -1445,6 +1454,11 @@ def validate_runtime_bundle_carrier_schema_shape(
         or schema.get("$schema")
         != "https://json-schema.org/draft/2020-12/schema"
         or schema.get("$id") != RUNTIME_BUNDLE_CARRIER_SCHEMA_ID
+        or schema.get("title")
+        != (
+            "OFARM TemporalGovernanceRuntimeBundleCarrierBinding "
+            "v0.1 (candidate)"
+        )
         or schema.get("const") != binding
     ):
         raise TemporalCandidateError(
@@ -1462,7 +1476,6 @@ def validate_runtime_bundle_carrier_schema_shape(
         raise TemporalCandidateError(
             "temporal RuntimeBundle carrier schema authority differs"
         )
-    validate_runtime_bundle_carrier_binding(binding)
 
 
 def validate_runtime_selection_binding() -> None:
@@ -1638,13 +1651,12 @@ def _sha256(path: Path) -> str:
 
 
 def _canonical_json_digest(path: Path) -> str:
-    canonical = json.dumps(
-        _load_json(path),
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
-        allow_nan=False,
-    ).encode("utf-8")
+    package_root = str(PACKAGE_ROOT)
+    if package_root not in sys.path:
+        sys.path.insert(0, package_root)
+    from kernel.runtime_bundle import canonical_json_bytes
+
+    canonical = canonical_json_bytes(_load_json(path))
     return f"sha256:{hashlib.sha256(canonical).hexdigest()}"
 
 
@@ -1692,10 +1704,19 @@ def validate_non_activation(runtime_catalog: object) -> None:
 
 
 def validate_runtime_bundle_carrier_role_is_inactive() -> None:
-    active_authority_paths = [
-        RUNTIME_BUNDLE_MODEL_PATH,
-        *sorted(TENANT_MIGRATIONS_PATH.glob("*.sql")),
-    ]
+    if not TENANT_MIGRATIONS_PATH.is_dir():
+        raise TemporalCandidateError(
+            "active RuntimeBundle migration authority directory is missing"
+        )
+    migration_paths = tuple(sorted(TENANT_MIGRATIONS_PATH.glob("*.sql")))
+    if not migration_paths:
+        raise TemporalCandidateError(
+            "active RuntimeBundle migration authority set is empty"
+        )
+    active_authority_paths = (
+        *RUNTIME_BUNDLE_ACTIVE_AUTHORITY_PATHS,
+        *migration_paths,
+    )
     for path in active_authority_paths:
         if RUNTIME_BUNDLE_CARRIER_ROLE in path.read_text(encoding="utf-8"):
             raise TemporalCandidateError(
@@ -2014,7 +2035,7 @@ def validate_candidate_governance() -> None:
             "closed allowed identity set",
             "not as a requirement that every RuntimeBundle",
             "production authorization provider",
-            "RuntimeBundle-digest source",
+            "trusted tenant RuntimeBundle-digest source",
         )
     ):
         raise TemporalCandidateError("candidate ERRATA governance record differs")
