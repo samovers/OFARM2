@@ -1,0 +1,366 @@
+{
+  "schemaVersion": "ofarm.temporal-governed-command-binding.v0.1",
+  "bindingId": "ofarm.temporal-governed-command.commit-operation-claim-draft.v0.1",
+  "status": "CANDIDATE_INACTIVE",
+  "executionPosture": "CONTRACT_ONLY_PRODUCTION_SURFACE_CLOSED",
+  "identityAuthority": "REVIEWED_BINDING_ARTIFACT_NOT_CALLER_DATA",
+  "command": {
+    "commandId": "COMMIT_OPERATION_CLAIM_DRAFT",
+    "governedOperation": "COMMIT_OPERATION_CLAIM_DRAFT",
+    "ingressChannel": "MANUAL_UI",
+    "actionClass": "ASSERT_OPERATION_CLAIM",
+    "actionStage": "DRAFT_PREPARATION",
+    "successOutcome": "RETAIN_DRAFT",
+    "promotionOutcome": "UNSUPPORTED",
+    "routePosture": "CLOSED"
+  },
+  "prerequisites": [
+    {
+      "role": "TEMPORAL_COORDINATE",
+      "identity": "ofarm.temporal-coordinate.v0.1",
+      "digest": "sha256:b81e4c7b0aacebb11ff8bf0d186cdb36150fade31180552b46f7be9e13c551eb"
+    },
+    {
+      "role": "TENANT_KNOWLEDGE_POSITION_STORAGE",
+      "identity": "ofarm.tenant-knowledge-position-storage.v0.1",
+      "rfcDigest": "sha256:6ddf1b6b289c9e638646cf7ddd356165f3ec8cbcc96b3c988e3f6585d11f26f8",
+      "migrationDigest": "sha256:d59af77e23fe012203696023ec343038dbcab5d5ffb9689be11ba67dca22f827",
+      "migrationSetHead": "sha256:ba7a193e96ca78d01edf529ed2e20bbd1810c0a3a0c13bc717969e8c5c739bf0"
+    },
+    {
+      "role": "INTERVENTION_VALID_TIME_SELECTION",
+      "identity": "ofarm.temporal-carrier-selection.intervention.v0.1",
+      "digest": "sha256:9886aace0670b6a83f17cd33cbc67aa62fafcfd0ea873faed9194c2aaa07efe5"
+    }
+  ],
+  "sourceContracts": [
+    {
+      "role": "COMMAND_REQUEST",
+      "schemaVersion": "ofarm.commitingressrequest.v0.1",
+      "schemaDigest": "sha256:397ec3a61ed572b14f9916bc9e7b316ff48150c743c6b7aa2eab94a3be3e8ffc",
+      "discriminatorPath": "/commitClass",
+      "discriminatorValue": "OPERATION_CLAIM"
+    },
+    {
+      "role": "SEMANTIC_EVENT",
+      "schemaVersion": "ofarm.semanticeventenvelope.v0.1",
+      "schemaDigest": "sha256:75662a6c4952a62b7e8f8e9de99c23c98899c692914a98ba4b752873f48bd1a4",
+      "discriminatorPath": "/primaryEventFamily",
+      "discriminatorValue": "InterventionEvent"
+    },
+    {
+      "role": "EXECUTION_PAYLOAD",
+      "schemaVersion": "ofarm.executionrecordpayload.v0.1",
+      "schemaDigest": "sha256:ca62f01d056794ee588d55c3f5df652fc039124b76af5631d417714bc7059ff0",
+      "discriminatorPath": "/recordClass",
+      "discriminatorValue": "OPERATION_CLAIM"
+    }
+  ],
+  "evidenceContracts": [
+    {
+      "role": "AUTHORIZATION_REQUEST",
+      "schemaVersion": "ofarm.authorizationdecisionrequest.v0.1",
+      "schemaDigest": "sha256:a62c7b8a269130a4c3b618ab029ffada97597626131bd45e2335ff31e95880fa"
+    },
+    {
+      "role": "AUTHORIZATION_RESULT",
+      "schemaVersion": "ofarm.authorizationdecisionresult.v0.1",
+      "schemaDigest": "sha256:f6d0de06e1bc6b8fc7a3f991abf28f2a3242942b50834b97292fa8e00fdd0127"
+    },
+    {
+      "role": "AUTHORIZATION_TRACE",
+      "schemaVersion": "ofarm.authorizationdecisiontrace.v0.1",
+      "schemaDigest": "sha256:1cc9886c3a9787a76657753fb682dd29337f2b8485e51557607bb6736de1571d"
+    },
+    {
+      "role": "PROMOTION_TRACE",
+      "schemaVersion": "ofarm.promotiontrace.v0.1",
+      "schemaDigest": "sha256:07c073fba6fa023e4463339a383d4b0d881be38c17d626ec7d27caaa688d4e3f"
+    },
+    {
+      "role": "COMMAND_RESULT",
+      "schemaVersion": "ofarm.commitingressresult.v0.1",
+      "schemaDigest": "sha256:55a21c697a651cdff6ce8d64dd7c29dd2afaa329047b4ebd55c94497a411e7d5"
+    },
+    {
+      "role": "RUNTIME_PROBLEM",
+      "schemaVersion": "ofarm.runtimeproblem.v0.1",
+      "schemaDigest": "sha256:873dbeda2932d48a54e5d08d22f4031c6a86b44712a3cec85f1c1008f4d6e95b"
+    }
+  ],
+  "admissionRules": [
+    {
+      "ruleId": "ACTING_PARTY_IS_BOUND_PARTY",
+      "leftPath": "/commandRequest/actingPartyRef",
+      "relation": "EQUALS_TRUSTED",
+      "rightAuthority": "TenantBinding.party_ref"
+    },
+    {
+      "ruleId": "HUMAN_PARTY_ONLY",
+      "leftPath": "/commandRequest/actingAgentRef",
+      "relation": "MUST_BE_ABSENT",
+      "rightAuthority": "NONE"
+    },
+    {
+      "ruleId": "DRAFT_ONLY",
+      "leftPath": "/commandRequest/requestedPromotionTarget",
+      "relation": "MUST_BE_ABSENT",
+      "rightAuthority": "NONE"
+    },
+    {
+      "ruleId": "REQUEST_EVENT_IDENTITY",
+      "leftPath": "/commandRequest/semanticEventRef",
+      "relation": "EQUALS",
+      "rightPath": "/semanticEvent/semanticEventId"
+    },
+    {
+      "ruleId": "EVENT_PAYLOAD_IDENTITY",
+      "leftPath": "/semanticEvent/executionRecordPayloadRefs",
+      "relation": "EXACT_SINGLETON_EQUALS",
+      "rightPath": "/executionPayload/executionRecordPayloadId"
+    },
+    {
+      "ruleId": "OPTIONAL_PAYLOAD_EVENT_BACKLINK",
+      "leftPath": "/executionPayload/sourceEventRef",
+      "relation": "IF_PRESENT_EQUALS",
+      "rightPath": "/semanticEvent/semanticEventId"
+    },
+    {
+      "ruleId": "EXACT_COMMAND_TARGET",
+      "leftPath": "/commandRequest/targetScopes",
+      "relation": "EXACT_SINGLETON_EQUALS",
+      "rightPath": "/executionPayload/executionExtent/targetScope"
+    },
+    {
+      "ruleId": "EVENT_TARGET",
+      "leftPath": "/semanticEvent/anchorScopes",
+      "relation": "EXACT_SINGLETON_EQUALS",
+      "rightPath": "/executionPayload/executionExtent/targetScope"
+    },
+    {
+      "ruleId": "EVENT_SUBJECT_TARGET",
+      "leftPath": "/semanticEvent/subjectRefs",
+      "relation": "EXACT_SINGLETON_EQUALS",
+      "rightPath": "/executionPayload/subject/subjectRef"
+    },
+    {
+      "ruleId": "PAYLOAD_SUBJECT_TARGET",
+      "leftPath": "/executionPayload/subject",
+      "relation": "EQUALS",
+      "rightPath": "/executionPayload/executionExtent/targetScope"
+    },
+    {
+      "ruleId": "PAYLOAD_ANCHOR_TARGET",
+      "leftPath": "/executionPayload/anchorScopes",
+      "relation": "CONTAINS_EXACT",
+      "rightPath": "/executionPayload/executionExtent/targetScope"
+    },
+    {
+      "ruleId": "PAYLOAD_ACTOR_IS_BOUND_PARTY",
+      "leftPath": "/executionPayload/actor/actorPartyRef",
+      "relation": "EQUALS_TRUSTED",
+      "rightAuthority": "TenantBinding.party_ref"
+    },
+    {
+      "ruleId": "CLAIMED_RECORD_ONLY",
+      "leftPath": "/executionPayload/recordState",
+      "relation": "EQUALS_LITERAL",
+      "rightLiteral": "CLAIMED"
+    }
+  ],
+  "trustedAuthorities": [
+    {
+      "name": "TENANT_AND_PRINCIPAL",
+      "source": "TenantBinding",
+      "callerSelectable": false
+    },
+    {
+      "name": "RUNTIME_BUNDLE_DIGEST",
+      "source": "Reviewed production RuntimeBundle selection",
+      "callerSelectable": false
+    },
+    {
+      "name": "AUTHORIZATION_DECISION",
+      "source": "Reviewed production authorization provider for this exact command",
+      "callerSelectable": false
+    },
+    {
+      "name": "COMMAND_EVALUATION_INSTANT",
+      "source": "Trusted server clock resolved once after tenant binding",
+      "callerSelectable": false
+    },
+    {
+      "name": "KNOWLEDGE_POSITION",
+      "source": "ofarm.governed_write_batch database allocator",
+      "callerSelectable": false
+    },
+    {
+      "name": "VALID_TIME_BINDING",
+      "source": "ofarm.temporal-carrier-selection.intervention.v0.1",
+      "callerSelectable": false
+    }
+  ],
+  "stateTransitions": [
+    {
+      "from": "BOUND",
+      "event": "ADMIT_EXACT_SOURCE_TUPLE",
+      "to": "SOURCE_TUPLE_ADMITTED",
+      "failure": "NOT_THIS_COMMAND_NO_WRITE"
+    },
+    {
+      "from": "SOURCE_TUPLE_ADMITTED",
+      "event": "EXACT_REPLAY",
+      "to": "PRIOR_RESULT_RETURNED",
+      "writes": "NONE"
+    },
+    {
+      "from": "SOURCE_TUPLE_ADMITTED",
+      "event": "CONFLICTING_REPLAY",
+      "to": "REFUSED_NO_WRITE",
+      "writes": "NONE"
+    },
+    {
+      "from": "SOURCE_TUPLE_ADMITTED",
+      "event": "NEW_REQUEST",
+      "to": "BATCH_ALLOCATED"
+    },
+    {
+      "from": "BATCH_ALLOCATED",
+      "event": "EVALUATE_AUTHORITY",
+      "to": "AUTHORITY_EVALUATED"
+    },
+    {
+      "from": "AUTHORITY_EVALUATED",
+      "event": "ALLOW",
+      "to": "VALID_TIME_EVALUATED"
+    },
+    {
+      "from": "AUTHORITY_EVALUATED",
+      "event": "DENY_OR_REVIEW_REQUIRED",
+      "to": "RESULT_RECORDED"
+    },
+    {
+      "from": "VALID_TIME_EVALUATED",
+      "event": "RECORD_DRAFT_AND_EVIDENCE",
+      "to": "RESULT_RECORDED"
+    },
+    {
+      "from": "RESULT_RECORDED",
+      "event": "COMMIT",
+      "to": "COMMITTED"
+    }
+  ],
+  "idempotency": {
+    "keyAuthority": [
+      "TenantBinding.tenant_id",
+      "TenantBinding.party_ref",
+      "COMMIT_OPERATION_CLAIM_DRAFT",
+      "/commandRequest/idempotencyKey"
+    ],
+    "requestDigestAuthority": "OFARM canonical digest of the admitted three-artifact source tuple",
+    "replayEquality": "SAME_REQUEST_DIGEST_AND_SAME_TRUSTED_RUNTIME_BUNDLE_DIGEST",
+    "exactReplay": "RETURN_PRIOR_COMMITTED_RESULT_UNCHANGED_NO_NEW_BATCH",
+    "conflictingReplay": "REFUSE_NO_NEW_BATCH_NO_NEW_RECORD_NO_SECOND_IDEMPOTENCY_CLAIM"
+  },
+  "outcomeRules": [
+    {
+      "condition": "EXACT_REPLAY",
+      "authorization": "NOT_EVALUATED",
+      "validTime": "NOT_EVALUATED",
+      "result": "RETURN_PRIOR_COMMITTED_RESULT_UNCHANGED",
+      "writes": "NONE"
+    },
+    {
+      "condition": "CONFLICTING_REPLAY",
+      "authorization": "NOT_EVALUATED",
+      "validTime": "NOT_EVALUATED",
+      "result": "REFUSE_WITHOUT_COMMIT_RESULT",
+      "writes": "NONE"
+    },
+    {
+      "condition": "AUTHORIZATION_DENY",
+      "authorization": "DENY",
+      "validTime": "NOT_EVALUATED",
+      "result": "DENY",
+      "writes": "ONE_REFUSAL_BATCH"
+    },
+    {
+      "condition": "AUTHORIZATION_REVIEW_REQUIRED",
+      "authorization": "REQUIRE_REVIEW_OR_REQUIRE_HUMAN_APPROVAL",
+      "validTime": "NOT_EVALUATED",
+      "result": "REQUIRE_REVIEW",
+      "writes": "ONE_REFUSAL_BATCH"
+    },
+    {
+      "condition": "AUTHORIZATION_ALLOW_VALID_TIME_REFUSED",
+      "authorization": "ALLOW",
+      "validTime": "REFUSED",
+      "result": "RETAIN_DRAFT",
+      "writes": "ONE_DRAFT_BATCH",
+      "problemReasonCode": "EVIDENCE_INSUFFICIENT",
+      "problemAuthority": "ERRATA_E_001_INTERIM_ONLY"
+    },
+    {
+      "condition": "AUTHORIZATION_ALLOW_VALID_TIME_SELECTED",
+      "authorization": "ALLOW",
+      "validTime": "SELECTED",
+      "result": "RETAIN_DRAFT",
+      "writes": "ONE_DRAFT_BATCH"
+    }
+  ],
+  "durableBatch": {
+    "allocationPoint": "AFTER_EXACT_REPLAY_CHECK_BEFORE_AUTHORITY_OR_TEMPORAL_OUTCOME",
+    "knowledgeBeforeCommand": "allocatedKnowledgePositionMinusOne",
+    "sourceLane": "draft",
+    "newRequestRequiredMembers": [
+      "COMMAND_REQUEST",
+      "SEMANTIC_EVENT",
+      "EXECUTION_PAYLOAD",
+      "AUTHORIZATION_REQUEST",
+      "AUTHORIZATION_RESULT",
+      "AUTHORIZATION_TRACE",
+      "PROMOTION_TRACE",
+      "COMMAND_RESULT"
+    ],
+    "exactReplayWrites": [],
+    "conflictingReplayWrites": [],
+    "newlyWrittenAllowedOutcomes": [
+      "RETAIN_DRAFT",
+      "DENY",
+      "REQUIRE_REVIEW"
+    ],
+    "forbiddenMembers": [
+      "ASSERTION_RECORD",
+      "REVIEW_DECISION",
+      "ACCEPTED_EVENT_CONSEQUENCE",
+      "DERIVED_MATERIALIZATION",
+      "OUTPUT_RECEIPT"
+    ],
+    "atomicity": "ONE_BOUND_TENANT_TRANSACTION"
+  },
+  "unsupported": [
+    "ROUTE_ACTIVATION",
+    "PROMOTE_ACCEPTED",
+    "CURRENT_STATE_MATERIALIZATION",
+    "HISTORICAL_OR_WINDOW_EXECUTION",
+    "CURRENT_STATE_READ",
+    "QUALIFICATION_OR_OUTPUT",
+    "OTHER_COMMIT_CLASS",
+    "OTHER_EVENT_FAMILY",
+    "OTHER_EXECUTION_RECORD_CLASS",
+    "OTHER_INGRESS_CHANNEL",
+    "ACTING_AGENT_OR_OFFLINE_REPLAY",
+    "ENVELOPE_EFFECTIVE_BOUNDS",
+    "LEGACY_RUNTIME_IMPORT",
+    "DATABASE_OR_MIGRATION_CHANGE",
+    "RUNTIME_BUNDLE_OR_PROFILE_ACTIVATION",
+    "ISSUE_192_BEHAVIOR"
+  ],
+  "implementationStops": [
+    "NO_REVIEWED_PRODUCTION_AUTHORIZATION_PROVIDER_FOR_THIS_COMMAND",
+    "NO_REVIEWED_RUNTIME_BUNDLE_SOURCE_FOR_COMMAND_AND_BINDING_IDENTITY",
+    "ANY_REQUIRED_FROZEN_CONTRACT_CHANGE",
+    "ANY_REQUIRED_PUBLIC_REFUSAL_VOCABULARY_CHANGE",
+    "ANY_REQUIRED_ROUTE_OR_ACTIVE_REGISTRY_CHANGE"
+  ]
+}

@@ -10136,7 +10136,7 @@
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
     },
     {
-      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_candidate_schemas_and_carrier_matrix_are_full_draft_2020_12_valid",
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_candidate_schemas_and_instances_are_full_draft_2020_12_valid",
       "sourceModule": "kernel.tests.test_temporal_contract_governance",
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
     },
@@ -10246,6 +10246,11 @@
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
     },
     {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_temporal_governed_command_is_exact_and_cannot_be_activated_by_mutation",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
       "nodeid": "kernel/tests/test_tenant_uow.py::test_ambiguous_commit_discards_connection",
       "sourceModule": "kernel.tests.test_tenant_uow",
       "sourcePath": "kernel/tests/test_tenant_uow.py"
@@ -10321,8 +10326,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "dc923b1238b7c3bdc3a821e6b7888eac721eca55d1b6ac27667caa75af1d8928",
-  "entryCount": 2064,
+  "entriesSha256": "34c49c4ba87fab1be13ce2b134a7765c94c9557908bdac62e48d9eb8daa6ff6d",
+  "entryCount": 2065,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

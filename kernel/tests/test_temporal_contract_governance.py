@@ -34,6 +34,18 @@ def _carrier_matrix() -> dict:
     return json.loads(temporal.CARRIER_MATRIX_PATH.read_text(encoding="utf-8"))
 
 
+def _command_schema() -> dict:
+    return json.loads(
+        temporal.COMMAND_SCHEMA_PATH.read_text(encoding="utf-8")
+    )
+
+
+def _command_binding() -> dict:
+    return json.loads(
+        temporal.COMMAND_BINDING_PATH.read_text(encoding="utf-8")
+    )
+
+
 def _coordinate() -> dict:
     return {
         "schemaVersion": temporal.CONTRACT_VERSION,
@@ -52,15 +64,21 @@ def test_temporal_candidate_governance_is_complete_and_inactive():
     temporal.validate_candidate_governance()
 
 
-def test_candidate_schemas_and_carrier_matrix_are_full_draft_2020_12_valid():
+def test_candidate_schemas_and_instances_are_full_draft_2020_12_valid():
     coordinate_schema = _coordinate_schema()
     carrier_schema = _carrier_schema()
     carrier_matrix = _carrier_matrix()
+    command_schema = _command_schema()
+    command_binding = _command_binding()
 
     jsonschema.Draft202012Validator.check_schema(coordinate_schema)
     jsonschema.Draft202012Validator.check_schema(carrier_schema)
+    jsonschema.Draft202012Validator.check_schema(command_schema)
     jsonschema.Draft202012Validator(carrier_schema).validate(carrier_matrix)
+    jsonschema.Draft202012Validator(command_schema).validate(command_binding)
     temporal.validate_carrier_matrix(carrier_matrix)
+    temporal.validate_command_schema_shape(command_schema, command_binding)
+    temporal.validate_command_binding(command_binding)
 
 
 def test_point_and_window_coordinates_validate_against_schema_and_semantics():
@@ -143,6 +161,29 @@ def test_carrier_matrix_schema_and_adr_rows_are_pinned():
         temporal.validate_carrier_matrix(carrier_matrix)
 
 
+def test_temporal_governed_command_is_exact_and_cannot_be_activated_by_mutation():
+    schema = _command_schema()
+    validator = jsonschema.Draft202012Validator(schema)
+
+    mutations = (
+        lambda value: value["command"].update({"routePosture": "OPEN"}),
+        lambda value: value["command"].update(
+            {"promotionOutcome": "PROMOTE_ACCEPTED"}
+        ),
+        lambda value: value.update(
+            {"identityAuthority": "CALLER_SELECTED"}
+        ),
+        lambda value: value["durableBatch"][
+            "newlyWrittenAllowedOutcomes"
+        ].append("PROMOTE_ACCEPTED"),
+        lambda value: value["implementationStops"].clear(),
+    )
+    for mutation in mutations:
+        binding = _command_binding()
+        mutation(binding)
+        assert list(validator.iter_errors(binding))
+
+
 def test_candidate_does_not_enter_runtime_or_production_activation_inputs():
     runtime_catalog = json.loads(
         temporal.RUNTIME_CATALOG_PATH.read_text(encoding="utf-8")
@@ -171,6 +212,9 @@ def test_candidate_does_not_enter_runtime_or_production_activation_inputs():
         temporal.CONTRACT_VERSION,
         temporal.CARRIER_SCHEMA_VERSION,
         temporal.CARRIER_MATRIX_ID,
+        temporal.COMMAND_SCHEMA_VERSION,
+        temporal.COMMAND_BINDING_ID,
+        temporal.COMMAND_EXECUTION_POSTURE,
         *temporal.CANDIDATE_RELATIVE_PATHS,
     )
     for path in (

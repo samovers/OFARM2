@@ -522,6 +522,24 @@
       "promotionLadderStage": "CANDIDATE_ARTIFACT",
       "currentnessNote": "Package-local intervention valid-time carrier-selection candidate for issue #176; executable only as an isolated pure library, inactive, and not selected by the production RuntimeBundle.",
       "lawBasis": "ADR 0002 and docs/rfcs/OFARM_Intervention_Valid_Time_Carrier_Selection_RFC_v0_1.md"
+    },
+    {
+      "packagePath": "contracts/candidates/temporal_governed_command/OFARM_TemporalGovernedCommandBinding_schema_v0_1.json",
+      "sourcePath": null,
+      "sha256": "afda003df90e2787cfdc97f5561e3e5b098177a5add91556af2e935a3b9711db",
+      "status": "NEW_CANDIDATE",
+      "promotionLadderStage": "CANDIDATE_ARTIFACT",
+      "currentnessNote": "Package-local exact schema for one issue #176 operation-claim draft temporal-command candidate; contract-only, inactive, production-surface-closed, and not selected by the production RuntimeBundle.",
+      "lawBasis": "ADR 0002 and docs/rfcs/OFARM_Operation_Claim_Draft_Temporal_Command_RFC_v0_1.md"
+    },
+    {
+      "packagePath": "contracts/candidates/temporal_governed_command/OFARM_OperationClaimDraftTemporalCommand_candidate_v0_1.json",
+      "sourcePath": null,
+      "sha256": "0909ec653cb99a94cd1b35afaf2d386258aac671c5f730960ed485df8a4b8f2e",
+      "status": "NEW_CANDIDATE",
+      "promotionLadderStage": "CANDIDATE_ARTIFACT",
+      "currentnessNote": "Package-local exact issue #176 operation-claim draft temporal-command candidate; contract-only, inactive, production-surface-closed, and not selected by the production RuntimeBundle.",
+      "lawBasis": "ADR 0002 and docs/rfcs/OFARM_Operation_Claim_Draft_Temporal_Command_RFC_v0_1.md"
     }
   ],
   "fixtureEntries": [
