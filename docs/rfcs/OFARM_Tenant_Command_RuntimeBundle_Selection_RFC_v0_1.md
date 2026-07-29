@@ -10,13 +10,13 @@
 
 **Governed command:** `COMMIT_OPERATION_CLAIM_DRAFT`
 
-**Schema file digest:** `sha256:ca85ad312889df3c3f1993f923b475eccd6fba20f57beee455dac97a925324ee`
+**Schema file digest:** `sha256:56604a52465ffc027382e99dea96f2c9bc1bd2479cbaff30dec6bd39c08e6b3d`
 
-**Binding file digest:** `sha256:97809ff3daa4fbaeee394720ce55255567c44828b38c9d4915c099a19302af30`
+**Binding file digest:** `sha256:1500ffbbfdf11207a6657848fce12618347f767578e55dc070bb282dc5775aac`
 
-**Binding canonical length:** `13233` bytes
+**Binding canonical length:** `13287` bytes
 
-**Binding canonical digest:** `sha256:1f0709200477222000cf0dd0dbd365588d6b58e7b31eaae7c802a663b2cc2b1b`
+**Binding canonical digest:** `sha256:56fb0f14a2514b34428841cb7bfc8681bb577ea3ecf57598be480683fb68524f`
 
 ## Decision
 
@@ -140,6 +140,9 @@ trusted TenantBinding + fixed reviewed selection binding
 The refusal name is internal to the future selection seam. This contract adds
 no public `RuntimeProblem` reason code. Selection refusal writes no batch,
 draft, evidence, idempotency claim, result, receipt, or #192 audit behavior.
+Mapping this internal refusal to any public result or existing reason code
+remains unsupported until a separate authorization-order and output-governance
+review. A selector or command implementation must not choose that mapping.
 
 On success, the selected RuntimeBundle digest is used unchanged for:
 
@@ -368,9 +371,11 @@ After this inactive package is approved, implementation still stops before:
 4. creating selection storage, selection-control custody, or a governed
    activation batch;
 5. implementing a production read-only selector or adding any legacy import;
-6. implementing the production authorization provider;
-7. integrating `COMMIT_OPERATION_CLAIM_DRAFT`; or
-8. opening a route, profile, materialization, current-state read, historical
+6. mapping selection refusal to any public result or existing reason code
+   without a separate authorization-order and output-governance review;
+7. implementing the production authorization provider;
+8. integrating `COMMIT_OPERATION_CLAIM_DRAFT`; or
+9. opening a route, profile, materialization, current-state read, historical
    view, WINDOW behavior, qualification, output, receipt, or #192 behavior.
 
 Each item requires a separately reviewed trust boundary and PR. Database and

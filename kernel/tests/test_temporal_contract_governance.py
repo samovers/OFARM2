@@ -451,6 +451,24 @@ def test_tenant_command_runtime_bundle_selection_is_exact_and_inactive():
             "invariants differ",
         ),
         (
+            lambda value: value["negativeCases"].remove(
+                "SELECTION_CHANGES_DURING_COMMAND"
+            ),
+            "stops differ",
+        ),
+        (
+            lambda value: value["unsupported"].remove(
+                "HOT_RELOAD_UPGRADE_SUPERSESSION_OR_ROLLBACK"
+            ),
+            "stops differ",
+        ),
+        (
+            lambda value: value["implementationStops"].remove(
+                "NO_REVIEWED_SELECTION_REFUSAL_PUBLIC_REASON_MAPPING"
+            ),
+            "stops differ",
+        ),
+        (
             lambda value: value["implementationStops"].clear(),
             "stops differ",
         ),

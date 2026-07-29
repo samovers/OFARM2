@@ -562,7 +562,7 @@
     {
       "packagePath": "contracts/candidates/temporal_runtime_bundle_selection/OFARM_TenantCommandRuntimeBundleSelectionBinding_schema_v0_1.json",
       "sourcePath": null,
-      "sha256": "ca85ad312889df3c3f1993f923b475eccd6fba20f57beee455dac97a925324ee",
+      "sha256": "56604a52465ffc027382e99dea96f2c9bc1bd2479cbaff30dec6bd39c08e6b3d",
       "status": "NEW_CANDIDATE",
       "promotionLadderStage": "CANDIDATE_ARTIFACT",
       "currentnessNote": "Package-local exact schema for the issue #176 tenant command RuntimeBundle-selection binding; inactive, contract-only, production-unbound, and absent from every active RuntimeBundle authority.",
@@ -571,7 +571,7 @@
     {
       "packagePath": "contracts/candidates/temporal_runtime_bundle_selection/OFARM_TenantCommandRuntimeBundleSelection_candidate_v0_1.json",
       "sourcePath": null,
-      "sha256": "97809ff3daa4fbaeee394720ce55255567c44828b38c9d4915c099a19302af30",
+      "sha256": "1500ffbbfdf11207a6657848fce12618347f767578e55dc070bb282dc5775aac",
       "status": "NEW_CANDIDATE",
       "promotionLadderStage": "CANDIDATE_ARTIFACT",
       "currentnessNote": "Package-local issue #176 tenant command RuntimeBundle-selection candidate; inactive, contract-only, production-unbound, and absent from every active RuntimeBundle authority.",

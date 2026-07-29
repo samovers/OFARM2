@@ -270,10 +270,10 @@ RUNTIME_BUNDLE_SELECTION_IDENTITY_AUTHORITY = (
     "REVIEWED_BINDING_ARTIFACT_NOT_CALLER_DATA"
 )
 RUNTIME_BUNDLE_SELECTION_SCHEMA_DIGEST = (
-    "ca85ad312889df3c3f1993f923b475eccd6fba20f57beee455dac97a925324ee"
+    "56604a52465ffc027382e99dea96f2c9bc1bd2479cbaff30dec6bd39c08e6b3d"
 )
 RUNTIME_BUNDLE_SELECTION_BINDING_DIGEST = (
-    "97809ff3daa4fbaeee394720ce55255567c44828b38c9d4915c099a19302af30"
+    "1500ffbbfdf11207a6657848fce12618347f767578e55dc070bb282dc5775aac"
 )
 KNOWLEDGE_STORAGE_ID = "ofarm.tenant-knowledge-position-storage.v0.1"
 KNOWLEDGE_STORAGE_RFC_DIGEST = (
@@ -1944,32 +1944,57 @@ def validate_runtime_bundle_selection_binding(value: object) -> None:
         raise TemporalCandidateError(
             "tenant command RuntimeBundle-selection invariants differ"
         )
-    required_unsupported = {
+    expected_negative_cases = [
+        "SELECTION_BEFORE_TENANT_BINDING",
+        "CALLER_SUPPLIES_TENANT_BUNDLE_OR_BINDING_IDENTITY",
+        "CAPABILITY_PRINCIPAL_PROFILE_ENVIRONMENT_OR_IDEMPOTENCY_SELECTS",
+        "NEWEST_SOLE_OR_TIMESTAMP_ORDERING_SELECTS",
+        "PUBLICATION_EXISTENCE_OR_LOOSE_COMPONENT_SELECTS",
+        "MISSING_MUTABLE_CROSS_TENANT_OR_UNBATCHED_SELECTION_RECORD",
+        "UNSEALED_OR_MISSING_RUNTIME_BUNDLE",
+        "BUNDLE_DIGEST_MEMBERSHIP_BYTE_LENGTH_OR_COMPONENT_DIGEST_MISMATCH",
+        "MISSING_WRONG_ROLE_OR_SUBSTITUTED_REQUIRED_COMPONENT",
+        "GOVERNANCE_INSTANCE_SCHEMA_VALIDATION_FAILURE",
+        "UNLISTED_TEMPORAL_IDENTITY_ALIAS_OR_DIGEST_ONLY_REFERENCE",
+        "UNRELATED_COMPONENT_AFFECTS_COMMAND",
+        "SELECTION_CHANGES_DURING_COMMAND",
+        "REPLAY_USES_DIFFERENT_RUNTIME_BUNDLE_DIGEST",
+        "SELECTION_REFUSAL_WRITES_ANYTHING",
+        "LEGACY_STORE_CONFIG_OR_PROFILE_SELECTS",
+        (
+            "PUBLISHER_BINDER_APPLICATION_WORKER_AUTHORIZER_"
+            "REGISTRAR_OR_IDENTITY_CONTROLLER_SELECTS"
+        ),
+        "ISSUE_192_BEHAVIOR_IS_ADDED",
+    ]
+    expected_unsupported = [
         "DATABASE_RELATION_MIGRATION_ROLE_OR_PRIVILEGE",
+        "SELECTION_CONTROLLER_OR_ACTIVATION_BATCH",
         "ACTIVE_RUNTIME_BUNDLE_ROLE_MODEL_CATALOG_REPOSITORY_OR_PUBLISHER",
         "PRODUCTION_SELECTOR_OR_APPLICATION_RUNTIME_INTEGRATION",
         "COMMAND_OR_AUTHORIZATION_INTEGRATION",
         "ROUTE_PROFILE_OR_ACTIVE_REGISTRY",
         "MATERIALIZATION_CURRENT_STATE_READ_HISTORICAL_OR_WINDOW_EXECUTION",
         "OUTPUT_RECEIPT_QUALIFICATION_OR_PROMOTION",
+        "HOT_RELOAD_UPGRADE_SUPERSESSION_OR_ROLLBACK",
+        "FROZEN_ACTIVE_CONTRACT_OR_EXISTING_TEMPORAL_CANDIDATE_REWRITE",
         "ISSUE_192_BEHAVIOR",
-    }
+    ]
     required_stops = {
         "NO_TEMPORAL_CANDIDATE_PROMOTION_OR_REPLACEMENT",
         "NO_ACTIVE_TEMPORAL_GOVERNANCE_COMPONENT_ROLE_OR_DATABASE_CONSTRAINT",
         "NO_ACTIVE_COMMAND_BINDING_SCHEMA_VERSION_EXTRACTION_FOR_TOP_LEVEL_CONST",
         "NO_REVIEWED_SELECTION_STORAGE_CONTROL_OR_GOVERNED_ACTIVATION",
         "NO_REVIEWED_PRODUCTION_READ_ONLY_SELECTOR_WITHOUT_LEGACY_IMPORTS",
+        "NO_REVIEWED_SELECTION_REFUSAL_PUBLIC_REASON_MAPPING",
         "NO_REVIEWED_PRODUCTION_AUTHORIZATION_PROVIDER",
         "NO_GOVERNED_COMMAND_INTEGRATION",
         "NO_ROUTE_PROFILE_MATERIALIZATION_READ_HISTORY_WINDOW_OUTPUT_OR_RECEIPT",
         "NO_ISSUE_192_BEHAVIOR",
     }
     if (
-        type(binding.get("negativeCases")) is not list
-        or "ISSUE_192_BEHAVIOR_IS_ADDED" not in binding["negativeCases"]
-        or type(binding.get("unsupported")) is not list
-        or not required_unsupported.issubset(binding["unsupported"])
+        binding.get("negativeCases") != expected_negative_cases
+        or binding.get("unsupported") != expected_unsupported
         or type(binding.get("implementationStops")) is not list
         or set(binding["implementationStops"]) != required_stops
     ):
@@ -2603,6 +2628,8 @@ def validate_candidate_governance() -> None:
         "Unrelated components may",
         "RUNTIME_BUNDLE_SELECTION_REFUSED_NO_WRITE",
         "Selection failure is atomic no-write refusal",
+        "Mapping this internal refusal to any public result",
+        "separate authorization-order and output-governance",
         "Current-state reads and outputs remain blocked",
     )
     if any(
@@ -2631,6 +2658,7 @@ def validate_candidate_governance() -> None:
             "creates no storage, selector, active role, or command integration",
             "production authorization provider",
             "selection storage/control",
+            "public refusal mapping",
         )
     ):
         raise TemporalCandidateError("candidate ERRATA governance record differs")
