@@ -12,17 +12,17 @@
 `sha256:b81e4c7b0aacebb11ff8bf0d186cdb36150fade31180552b46f7be9e13c551eb`
 
 **Authoritative migration:** `0003_tenant_knowledge_position.sql`,
-`sha256:c52d3f05dedbcfaa9948f137d4be500afba58b29852fce7f5920ae64be2fd65f`,
-6514 bytes
+`sha256:d59af77e23fe012203696023ec343038dbcab5d5ffb9689be11ba67dca22f827`,
+6565 bytes
 
 **Tenant migration-set head:**
-`sha256:1b8c69f4b6df584d228e1c34a54ef9f61f68a1bcf651480a4bb2425ccc41adf3`
+`sha256:ba7a193e96ca78d01edf529ed2e20bbd1810c0a3a0c13bc717969e8c5c739bf0`
 
 **Tenant structural catalog fingerprint:**
-`sha256:e501479c20111d914e74a6b41b826f5b459e65e9be2ff90d36dcda29f03c2826`
+`sha256:a975adc87f7706cffebdaedce8fef761a88bad1b7b7184ba919410e099492a25`
 
 **Tenant catalog-verifier identity:**
-`sha256:29679f5e934f9d58b6ce6802e1b434254df7c62f00f141bd014c7c8623b0727e`
+`sha256:9e7bd92c602df519071e0bd2ecde3c9168b3bbc2d5c7e48ef7800ca1c6a2cc3b`
 
 ## Decision
 

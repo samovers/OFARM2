@@ -6021,6 +6021,11 @@
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_knowledge_position_allocation_requires_read_committed",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_large_object_state_is_fingerprinted_refused_and_removable",
       "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
@@ -10166,8 +10171,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "1f82f2e04756a9263c820da5b3616473530fde8e1767a4ec389f91b9b47f7277",
-  "entryCount": 2033,
+  "entriesSha256": "bdafd67325db946da830fdb905c6d060bbfec0cc9bd153fb7298d0df84027cb6",
+  "entryCount": 2034,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

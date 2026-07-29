@@ -88,10 +88,16 @@ BEGIN
             MESSAGE = 'pre-binding tenant genesis is unsupported';
     END IF;
 
-    SELECT registry.advisory_lock_key
-      INTO STRICT fixture_lock_key
-      FROM ofarm.tenant_registry AS registry
-     WHERE registry.tenant_id = NEW.tenant_id;
+    BEGIN
+        SELECT registry.advisory_lock_key
+          INTO STRICT fixture_lock_key
+          FROM ofarm.tenant_registry AS registry
+         WHERE registry.tenant_id = NEW.tenant_id;
+    EXCEPTION
+        WHEN NO_DATA_FOUND OR TOO_MANY_ROWS THEN
+            RAISE EXCEPTION USING ERRCODE = '42501',
+                MESSAGE = 'tenant knowledge-position authority is unavailable';
+    END;
     PERFORM pg_catalog.pg_advisory_xact_lock(fixture_lock_key);
     IF EXISTS (
         SELECT 1
@@ -103,10 +109,6 @@ BEGIN
             CONSTRAINT = 'governed_write_batch_knowledge_position_key';
     END IF;
     RETURN NEW;
-EXCEPTION
-    WHEN NO_DATA_FOUND OR TOO_MANY_ROWS THEN
-        RAISE EXCEPTION USING ERRCODE = '42501',
-            MESSAGE = 'tenant knowledge-position authority is unavailable';
 END
 $body$;
 
@@ -156,7 +158,7 @@ BEGIN
     verifier := pg_catalog.replace(
         verifier,
         'sha256:897001ea090224da95746e9de94a6f0098c8a2eae01abab68ac1f32b6509e950',
-        'sha256:e501479c20111d914e74a6b41b826f5b459e65e9be2ff90d36dcda29f03c2826'
+        'sha256:a975adc87f7706cffebdaedce8fef761a88bad1b7b7184ba919410e099492a25'
     );
     EXECUTE verifier;
 END

@@ -1205,6 +1205,43 @@ def test_pre_binding_genesis_cannot_allocate_a_second_position(
     )
 
 
+def test_knowledge_position_allocation_requires_read_committed(
+    tenant_target: TenantTarget,
+    authority: TenantAuthority,
+) -> None:
+    with psycopg.connect(
+        tenant_target.target_admin_dsn,
+        autocommit=True,
+    ) as admin:
+        admin.execute("BEGIN ISOLATION LEVEL REPEATABLE READ")
+        try:
+            with pytest.raises(psycopg.errors.ActiveSqlTransaction) as raised:
+                admin.execute(
+                    """
+                    INSERT INTO ofarm.governed_write_batch (
+                        tenant_id, batch_id, authenticated_principal_ref,
+                        governed_operation, request_id, runtime_bundle_digest,
+                        knowledge_position
+                    ) VALUES (%s, %s, %s, %s, %s, %s, 1)
+                    """,
+                    (
+                        authority.tenant_id,
+                        f"batch-repeatable-read-{uuid4().hex}",
+                        authority.party_ref,
+                        "AUTHORITY_BOOTSTRAP",
+                        f"request-repeatable-read-{uuid4().hex}",
+                        authority.runtime_bundle_digest,
+                    ),
+                )
+        finally:
+            admin.rollback()
+
+    assert raised.value.sqlstate == "25001"
+    assert raised.value.diag.message_primary == (
+        "tenant knowledge allocation requires read committed"
+    )
+
+
 def test_tenant_catalog_fingerprint_has_exact_shared_schema_class_parity() -> None:
     source = MIGRATION_PATH.read_text(encoding="utf-8")
     marker = "-- SCHEMA_LOCAL_CATALOG_CLASSIFIER_V1"
@@ -5980,7 +6017,7 @@ def test_complete_catalog_fingerprint_refuses_function_constraint_index_policy_a
             assert pristine[0] is True
             assert pristine[2] == 0
             assert pristine[3] == (
-                "sha256:e501479c20111d914e74a6b41b826f5b459e65e9be2ff90d36dcda29f03c2826"
+                "sha256:a975adc87f7706cffebdaedce8fef761a88bad1b7b7184ba919410e099492a25"
             )
         finally:
             migrator.rollback()
@@ -6669,7 +6706,7 @@ def test_readiness_observation_is_complete_after_commit(
     assert row[1] == TENANT_CONTEXT_CONTRACT.digest
     assert row[2] == 0
     assert row[3] == (
-        "sha256:e501479c20111d914e74a6b41b826f5b459e65e9be2ff90d36dcda29f03c2826"
+        "sha256:a975adc87f7706cffebdaedce8fef761a88bad1b7b7184ba919410e099492a25"
     )
     assert row[5] == TENANT_PROVISIONING_SPEC.digest
     assert row[6] == TENANT_SERVICE.identity
