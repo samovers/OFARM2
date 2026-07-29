@@ -364,7 +364,10 @@ def test_runtime_bundle_carrier_is_closed_eligibility_not_required_closure():
             temporal.validate_runtime_bundle_carrier_binding(binding)
 
 
-def test_tenant_command_runtime_bundle_selection_is_exact_and_inactive():
+def test_tenant_command_runtime_bundle_selection_is_exact_and_inactive(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
     schema = _runtime_bundle_selection_schema()
     binding = _runtime_bundle_selection_binding()
     validator = jsonschema.Draft202012Validator(schema)
@@ -482,6 +485,48 @@ def test_tenant_command_runtime_bundle_selection_is_exact_and_inactive():
             match=expected_error,
         ):
             temporal.validate_runtime_bundle_selection_binding(mutated)
+
+    tampered_binding = copy.deepcopy(binding)
+    tampered_binding["trustedAuthorities"][1]["separateFrom"].remove(
+        "AUTHORIZER"
+    )
+    tampered_binding_path = tmp_path / "selection-binding.json"
+    tampered_binding_path.write_text(
+        json.dumps(tampered_binding, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    with monkeypatch.context() as digest_patch:
+        digest_patch.setattr(
+            temporal,
+            "RUNTIME_BUNDLE_SELECTION_BINDING_PATH",
+            tampered_binding_path,
+        )
+        with pytest.raises(
+            temporal.TemporalCandidateError,
+            match="binding digest differs",
+        ):
+            temporal.validate_runtime_bundle_selection_binding(
+                tampered_binding
+            )
+
+    tampered_schema = copy.deepcopy(schema)
+    tampered_schema["$comment"] = "tampered"
+    tampered_schema_path = tmp_path / "selection-schema.json"
+    tampered_schema_path.write_text(
+        json.dumps(tampered_schema, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    with monkeypatch.context() as digest_patch:
+        digest_patch.setattr(
+            temporal,
+            "RUNTIME_BUNDLE_SELECTION_SCHEMA_PATH",
+            tampered_schema_path,
+        )
+        with pytest.raises(
+            temporal.TemporalCandidateError,
+            match="schema digest differs",
+        ):
+            temporal.validate_runtime_bundle_selection_binding(binding)
 
 
 def test_candidate_does_not_enter_runtime_or_production_activation_inputs(

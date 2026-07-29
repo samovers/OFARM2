@@ -1660,10 +1660,7 @@ def _expected_runtime_bundle_selection_components() -> list[dict[str, object]]:
     return result
 
 
-def validate_runtime_bundle_selection_schema_shape(
-    schema: dict[str, object],
-    binding: dict[str, object],
-) -> None:
+def _assert_runtime_bundle_selection_digests() -> None:
     if _sha256(RUNTIME_BUNDLE_SELECTION_SCHEMA_PATH) != (
         RUNTIME_BUNDLE_SELECTION_SCHEMA_DIGEST
     ):
@@ -1676,6 +1673,13 @@ def validate_runtime_bundle_selection_schema_shape(
         raise TemporalCandidateError(
             "tenant command RuntimeBundle-selection binding digest differs"
         )
+
+
+def validate_runtime_bundle_selection_schema_shape(
+    schema: dict[str, object],
+    binding: dict[str, object],
+) -> None:
+    _assert_runtime_bundle_selection_digests()
     if (
         set(schema) != {"$schema", "$id", "title", "$comment", "const"}
         or schema.get("$schema")
@@ -1705,6 +1709,7 @@ def validate_runtime_bundle_selection_schema_shape(
 
 
 def validate_runtime_bundle_selection_binding(value: object) -> None:
+    _assert_runtime_bundle_selection_digests()
     expected = _load_json(RUNTIME_BUNDLE_SELECTION_BINDING_PATH)
     binding = _closed_object(
         value,
