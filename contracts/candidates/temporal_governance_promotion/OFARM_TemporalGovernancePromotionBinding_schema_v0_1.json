@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/temporal-governance-promotion-binding/v0.1",
+  "title": "OFARM TemporalGovernancePromotionBinding v0.1 (candidate)",
+  "$comment": "NEW_CANDIDATE exact schema for one inactive issue #176 lifecycle-promotion contract. It governs only an atomic future decision over three exact temporal identities and has no promotion, current/default, RuntimeBundle, profile, database, command, route, output, legacy, or issue #192 effect.",
+  "const": {
+    "schemaVersion": "ofarm.temporal-governance-promotion-binding.v0.1",
+    "bindingId": "ofarm.temporal-governance-promotion.issue176-foundation.v0.1",
+    "status": "CANDIDATE_INACTIVE",
+    "executionPosture": "CONTRACT_ONLY_NO_PROMOTION_EFFECT",
+    "identityAuthority": "REVIEWED_BINDING_ARTIFACT_AND_HUMAN_CURRENTNESS_DECISION_NOT_CALLER_DATA",
+    "promotionMeaning": {
+      "sourceLifecycleState": "CANDIDATE_INACTIVE",
+      "targetLifecycleState": "GOVERNED_INACTIVE",
+      "effect": "EXTERNAL_LIFECYCLE_CLASSIFICATION_ONLY",
+      "embeddedStatusMeaning": "IMMUTABLE_CREATION_STATE_ATTESTATION",
+      "effectiveLifecycleAuthority": "REVIEWED_PROMOTION_DECISION_AND_CURRENTNESS_TRACE",
+      "currentDefaultPromotion": false,
+      "runtimeActivation": false,
+      "productionReadiness": false
+    },
+    "subjectSet": {
+      "setSemantics": "EXACT_ATOMIC_PROMOTION_SET_NOT_RUNTIME_COMPONENT_CLOSURE",
+      "dependencyOrder": [
+        "ofarm.temporal-carrier-matrix.adr0002.v0.1",
+        "ofarm.temporal-carrier-selection.intervention.v0.1",
+        "ofarm.temporal-governed-command.commit-operation-claim-draft.v0.1"
+      ],
+      "partialPromotion": "REFUSED_ALL_REMAIN_CANDIDATE_INACTIVE",
+      "subjects": [
+        {
+          "artifactKind": "TEMPORAL_CARRIER_MATRIX",
+          "identity": "ofarm.temporal-carrier-matrix.adr0002.v0.1",
+          "subjectPath": "contracts/candidates/temporal_coordinate/OFARM_TemporalCarrierMatrix_ADR0002_candidate_v0_1.json",
+          "repositoryFileDigest": "sha256:7cb26513b5abdbcadecaf6f9b47d874a742ba8fa05a332c9130deebe449d7fc6",
+          "schemaVersion": "ofarm.temporal-carrier-matrix.v0.1",
+          "schemaPath": "contracts/candidates/temporal_coordinate/OFARM_TemporalCarrierMatrix_schema_v0_1.json",
+          "schemaDigest": "sha256:cdb5c09ec033cc3b4de1dea9eb383c499045d8a3bfc5b80fd7abeab579a566ed",
+          "canonicalization": "OFARM_CANONICAL_JSON_V1",
+          "canonicalByteLength": 9504,
+          "canonicalContentDigest": "sha256:c404c0cd1e08f389664b5381c2c038cf65bac9a3b725fc2b1882990636eb179b",
+          "creationState": "CANDIDATE_INACTIVE",
+          "preservedExecutionPosture": "CLASSIFICATION_ONLY_RUNTIME_UNSUPPORTED"
+        },
+        {
+          "artifactKind": "TEMPORAL_CARRIER_SELECTION_BINDING",
+          "identity": "ofarm.temporal-carrier-selection.intervention.v0.1",
+          "subjectPath": "contracts/candidates/temporal_carrier_selection/OFARM_InterventionValidTimeCarrierSelection_candidate_v0_1.json",
+          "repositoryFileDigest": "sha256:9886aace0670b6a83f17cd33cbc67aa62fafcfd0ea873faed9194c2aaa07efe5",
+          "schemaVersion": "ofarm.temporal-carrier-selection-binding.v0.1",
+          "schemaPath": "contracts/candidates/temporal_carrier_selection/OFARM_TemporalCarrierSelectionBinding_schema_v0_1.json",
+          "schemaDigest": "sha256:d252420507393d1d9816a0f20549faa8cf67c94bd1e2c10a3c509aadf4f3800a",
+          "canonicalization": "OFARM_CANONICAL_JSON_V1",
+          "canonicalByteLength": 1814,
+          "canonicalContentDigest": "sha256:373a5f402ad077039946c1dfe7b972e4382d3c6a6805fbf0b271e4a0bc729bf1",
+          "creationState": "CANDIDATE_INACTIVE",
+          "preservedExecutionPosture": "PURE_LIBRARY_PRODUCTION_UNBOUND"
+        },
+        {
+          "artifactKind": "TEMPORAL_GOVERNED_COMMAND_BINDING",
+          "identity": "ofarm.temporal-governed-command.commit-operation-claim-draft.v0.1",
+          "subjectPath": "contracts/candidates/temporal_governed_command/OFARM_OperationClaimDraftTemporalCommand_candidate_v0_1.json",
+          "repositoryFileDigest": "sha256:0909ec653cb99a94cd1b35afaf2d386258aac671c5f730960ed485df8a4b8f2e",
+          "schemaVersion": "ofarm.temporal-governed-command-binding.v0.1",
+          "schemaPath": "contracts/candidates/temporal_governed_command/OFARM_TemporalGovernedCommandBinding_schema_v0_1.json",
+          "schemaDigest": "sha256:afda003df90e2787cfdc97f5561e3e5b098177a5add91556af2e935a3b9711db",
+          "canonicalization": "OFARM_CANONICAL_JSON_V1",
+          "canonicalByteLength": 9614,
+          "canonicalContentDigest": "sha256:6dad47b836b737c8d58b38f566ed0a7d6caeba9023a734357320326630309da1",
+          "creationState": "CANDIDATE_INACTIVE",
+          "preservedExecutionPosture": "CONTRACT_ONLY_PRODUCTION_SURFACE_CLOSED"
+        }
+      ]
+    },
+    "dependencyConsistency": {
+      "selectorMatrixIdentity": "ofarm.temporal-carrier-matrix.adr0002.v0.1",
+      "selectorMatrixRepositoryFileDigest": "sha256:7cb26513b5abdbcadecaf6f9b47d874a742ba8fa05a332c9130deebe449d7fc6",
+      "selectorMatrixRowId": "INTERVENTION_EVENT",
+      "commandSelectorIdentity": "ofarm.temporal-carrier-selection.intervention.v0.1",
+      "commandSelectorRepositoryFileDigest": "sha256:9886aace0670b6a83f17cd33cbc67aa62fafcfd0ea873faed9194c2aaa07efe5"
+    },
+    "decisionContract": {
+      "allowedOutcomes": [
+        "PROMOTE_GOVERNED_INACTIVE",
+        "REFUSE_PROMOTION"
+      ],
+      "positiveOutcome": "PROMOTE_GOVERNED_INACTIVE",
+      "positiveEffect": "ALL_THREE_EXACT_SUBJECTS_BECOME_GOVERNED_INACTIVE",
+      "refusalOutcome": "REFUSE_PROMOTION",
+      "refusalEffect": "ALL_THREE_SUBJECTS_REMAIN_CANDIDATE_INACTIVE",
+      "requiredDecisionEvidenceFields": [
+        "promotionDecisionRef",
+        "humanPromotionAuthorityRef",
+        "decidedAt",
+        "reviewEvidenceRefs",
+        "currentnessTraceRef"
+      ],
+      "humanGoverned": true,
+      "contractApprovalIsPromotion": false,
+      "mergeIsPromotion": false,
+      "conformanceSuccessIsPromotion": false,
+      "callerSelectable": false,
+      "conflictDisposition": "REFUSE_ALL_REMAIN_CANDIDATE_INACTIVE"
+    },
+    "authoritySeparation": {
+      "bindingOwns": "CLOSED_SUBJECT_SET_DIGESTS_ATOMICITY_AND_GOVERNED_INACTIVE_OUTCOME",
+      "humanPromotionAuthorityOwns": "PROMOTE_OR_REFUSE_DECISION",
+      "currentnessTraceOwns": "EFFECTIVE_LIFECYCLE_HEAD_EVIDENCE",
+      "subjectArtifactsOwn": "TEMPORAL_SEMANTICS_AND_EXECUTION_POSTURES",
+      "runtimeAuthoritiesUnchanged": true,
+      "issue192AuthorityUnchanged": true
+    },
+    "unsupported": [
+      "SCHEMA_PROMOTION",
+      "CURRENT_DEFAULT_PROMOTION",
+      "RUNTIME_OR_PROFILE_ACTIVATION",
+      "RUNTIME_BUNDLE_ROLE_OR_MEMBERSHIP_CHANGE",
+      "DATABASE_STORAGE_OR_MIGRATION",
+      "PROMOTION_DECISION_STORAGE_OR_SIGNING",
+      "TENANT_RUNTIME_BUNDLE_SELECTION",
+      "PRODUCTION_TEMPORAL_SELECTOR",
+      "GOVERNED_COMMAND_INTEGRATION_OR_AUTHORIZATION",
+      "ROUTE_OR_PRODUCTION_SEMANTIC_ACTIVATION",
+      "MATERIALIZATION_CURRENT_STATE_HISTORY_WINDOW_OR_OUTPUT",
+      "LEGACY_SEMANTIC_OR_OUTPUT_IMPORT",
+      "ISSUE_192_BEHAVIOR"
+    ],
+    "implementationStops": [
+      "NO_POSITIVE_PROMOTION_WITHOUT_SEPARATE_HUMAN_DECISION_AND_CURRENTNESS_TRACE",
+      "NO_SUBJECT_OUTSIDE_EXACT_THREE_IDENTITY_SET",
+      "NO_SCHEMA_OR_OTHER_IDENTITY_PROMOTION",
+      "NO_SUBJECT_REWRITE_OR_RELOCATION",
+      "NO_ACTIVE_RUNTIME_BUNDLE_OR_PROFILE_CHANGE",
+      "NO_DATABASE_COMMAND_ROUTE_OUTPUT_LEGACY_OR_ISSUE_192_CHANGE"
+    ]
+  }
+}

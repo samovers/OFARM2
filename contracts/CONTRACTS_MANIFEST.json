@@ -576,6 +576,24 @@
       "promotionLadderStage": "CANDIDATE_ARTIFACT",
       "currentnessNote": "Package-local issue #176 tenant command RuntimeBundle-selection candidate; inactive, contract-only, production-unbound, and absent from every active RuntimeBundle authority.",
       "lawBasis": "ADR 0002 and docs/rfcs/OFARM_Tenant_Command_RuntimeBundle_Selection_RFC_v0_1.md"
+    },
+    {
+      "packagePath": "contracts/candidates/temporal_governance_promotion/OFARM_TemporalGovernancePromotionBinding_schema_v0_1.json",
+      "sourcePath": null,
+      "sha256": "ec83671c586b4408ab822572ec195cfe1697e4aa47573dc8606c096db716cf34",
+      "status": "NEW_CANDIDATE",
+      "promotionLadderStage": "CANDIDATE_ARTIFACT",
+      "currentnessNote": "Package-local exact schema for the issue #176 temporal-governance promotion contract; inactive, contract-only, and without promotion, current/default, or runtime effect.",
+      "lawBasis": "Constitution RC2.1 section 6.16, CP15, and docs/rfcs/OFARM_Temporal_Governance_Identity_Promotion_RFC_v0_1.md"
+    },
+    {
+      "packagePath": "contracts/candidates/temporal_governance_promotion/OFARM_TemporalGovernancePromotion_candidate_v0_1.json",
+      "sourcePath": null,
+      "sha256": "1769f2a3a3f5535d43dae88f05d7246b885608378e00c0f2a7951e81b82f811f",
+      "status": "NEW_CANDIDATE",
+      "promotionLadderStage": "CANDIDATE_ARTIFACT",
+      "currentnessNote": "Package-local exact issue #176 temporal-governance promotion candidate for three identities; inactive, atomic, contract-only, and without promotion, current/default, or runtime effect.",
+      "lawBasis": "Constitution RC2.1 section 6.16, CP15, and docs/rfcs/OFARM_Temporal_Governance_Identity_Promotion_RFC_v0_1.md"
     }
   ],
   "fixtureEntries": [

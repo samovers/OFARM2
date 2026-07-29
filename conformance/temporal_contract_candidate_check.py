@@ -78,6 +78,16 @@ RUNTIME_BUNDLE_SELECTION_BINDING_RELATIVE_PATH = (
 RUNTIME_BUNDLE_SELECTION_BINDING_PATH = (
     PACKAGE_ROOT / RUNTIME_BUNDLE_SELECTION_BINDING_RELATIVE_PATH
 )
+PROMOTION_SCHEMA_RELATIVE_PATH = (
+    "contracts/candidates/temporal_governance_promotion/"
+    "OFARM_TemporalGovernancePromotionBinding_schema_v0_1.json"
+)
+PROMOTION_SCHEMA_PATH = PACKAGE_ROOT / PROMOTION_SCHEMA_RELATIVE_PATH
+PROMOTION_BINDING_RELATIVE_PATH = (
+    "contracts/candidates/temporal_governance_promotion/"
+    "OFARM_TemporalGovernancePromotion_candidate_v0_1.json"
+)
+PROMOTION_BINDING_PATH = PACKAGE_ROOT / PROMOTION_BINDING_RELATIVE_PATH
 CANDIDATE_RELATIVE_PATHS = frozenset(
     {
         COORDINATE_SCHEMA_RELATIVE_PATH,
@@ -91,6 +101,8 @@ CANDIDATE_RELATIVE_PATHS = frozenset(
         RUNTIME_BUNDLE_CARRIER_BINDING_RELATIVE_PATH,
         RUNTIME_BUNDLE_SELECTION_SCHEMA_RELATIVE_PATH,
         RUNTIME_BUNDLE_SELECTION_BINDING_RELATIVE_PATH,
+        PROMOTION_SCHEMA_RELATIVE_PATH,
+        PROMOTION_BINDING_RELATIVE_PATH,
     }
 )
 MANIFEST_PATH = PACKAGE_ROOT / "contracts/CONTRACTS_MANIFEST.json"
@@ -116,6 +128,10 @@ RUNTIME_BUNDLE_SELECTION_RFC_PATH = (
     PACKAGE_ROOT
     / "docs/rfcs/"
     "OFARM_Tenant_Command_RuntimeBundle_Selection_RFC_v0_1.md"
+)
+PROMOTION_RFC_PATH = (
+    PACKAGE_ROOT
+    / "docs/rfcs/OFARM_Temporal_Governance_Identity_Promotion_RFC_v0_1.md"
 )
 KNOWLEDGE_STORAGE_RFC_PATH = (
     PACKAGE_ROOT
@@ -274,6 +290,26 @@ RUNTIME_BUNDLE_SELECTION_SCHEMA_DIGEST = (
 )
 RUNTIME_BUNDLE_SELECTION_BINDING_DIGEST = (
     "1500ffbbfdf11207a6657848fce12618347f767578e55dc070bb282dc5775aac"
+)
+PROMOTION_SCHEMA_VERSION = (
+    "ofarm.temporal-governance-promotion-binding.v0.1"
+)
+PROMOTION_SCHEMA_ID = (
+    "https://ofarm.dev/schema/temporal-governance-promotion-binding/v0.1"
+)
+PROMOTION_BINDING_ID = (
+    "ofarm.temporal-governance-promotion.issue176-foundation.v0.1"
+)
+PROMOTION_STATUS = "CANDIDATE_INACTIVE"
+PROMOTION_EXECUTION_POSTURE = "CONTRACT_ONLY_NO_PROMOTION_EFFECT"
+PROMOTION_IDENTITY_AUTHORITY = (
+    "REVIEWED_BINDING_ARTIFACT_AND_HUMAN_CURRENTNESS_DECISION_NOT_CALLER_DATA"
+)
+PROMOTION_SCHEMA_DIGEST = (
+    "ec83671c586b4408ab822572ec195cfe1697e4aa47573dc8606c096db716cf34"
+)
+PROMOTION_BINDING_DIGEST = (
+    "1769f2a3a3f5535d43dae88f05d7246b885608378e00c0f2a7951e81b82f811f"
 )
 KNOWLEDGE_STORAGE_ID = "ofarm.tenant-knowledge-position-storage.v0.1"
 KNOWLEDGE_STORAGE_RFC_DIGEST = (
@@ -2012,6 +2048,331 @@ def validate_runtime_bundle_selection_binding(value: object) -> None:
         )
 
 
+def _expected_promotion_subjects() -> list[dict[str, object]]:
+    return [
+        {
+            "artifactKind": "TEMPORAL_CARRIER_MATRIX",
+            "identity": CARRIER_MATRIX_ID,
+            "subjectPath": CARRIER_MATRIX_RELATIVE_PATH,
+            "repositoryFileDigest": f"sha256:{_sha256(CARRIER_MATRIX_PATH)}",
+            "schemaVersion": CARRIER_SCHEMA_VERSION,
+            "schemaPath": CARRIER_SCHEMA_RELATIVE_PATH,
+            "schemaDigest": f"sha256:{_sha256(CARRIER_SCHEMA_PATH)}",
+            "canonicalization": "OFARM_CANONICAL_JSON_V1",
+            "canonicalByteLength": _canonical_json_length(
+                CARRIER_MATRIX_PATH
+            ),
+            "canonicalContentDigest": _canonical_json_digest(
+                CARRIER_MATRIX_PATH
+            ),
+            "creationState": CARRIER_MATRIX_STATUS,
+            "preservedExecutionPosture": CARRIER_EXECUTION_POSTURE,
+        },
+        {
+            "artifactKind": "TEMPORAL_CARRIER_SELECTION_BINDING",
+            "identity": SELECTION_BINDING_ID,
+            "subjectPath": SELECTION_BINDING_RELATIVE_PATH,
+            "repositoryFileDigest": (
+                f"sha256:{_sha256(SELECTION_BINDING_PATH)}"
+            ),
+            "schemaVersion": SELECTION_SCHEMA_VERSION,
+            "schemaPath": SELECTION_SCHEMA_RELATIVE_PATH,
+            "schemaDigest": f"sha256:{_sha256(SELECTION_SCHEMA_PATH)}",
+            "canonicalization": "OFARM_CANONICAL_JSON_V1",
+            "canonicalByteLength": _canonical_json_length(
+                SELECTION_BINDING_PATH
+            ),
+            "canonicalContentDigest": _canonical_json_digest(
+                SELECTION_BINDING_PATH
+            ),
+            "creationState": SELECTION_STATUS,
+            "preservedExecutionPosture": SELECTION_EXECUTION_POSTURE,
+        },
+        {
+            "artifactKind": "TEMPORAL_GOVERNED_COMMAND_BINDING",
+            "identity": COMMAND_BINDING_ID,
+            "subjectPath": COMMAND_BINDING_RELATIVE_PATH,
+            "repositoryFileDigest": (
+                f"sha256:{_sha256(COMMAND_BINDING_PATH)}"
+            ),
+            "schemaVersion": COMMAND_SCHEMA_VERSION,
+            "schemaPath": COMMAND_SCHEMA_RELATIVE_PATH,
+            "schemaDigest": f"sha256:{_sha256(COMMAND_SCHEMA_PATH)}",
+            "canonicalization": "OFARM_CANONICAL_JSON_V1",
+            "canonicalByteLength": _canonical_json_length(
+                COMMAND_BINDING_PATH
+            ),
+            "canonicalContentDigest": _canonical_json_digest(
+                COMMAND_BINDING_PATH
+            ),
+            "creationState": COMMAND_STATUS,
+            "preservedExecutionPosture": COMMAND_EXECUTION_POSTURE,
+        },
+    ]
+
+
+def _expected_promotion_binding() -> dict[str, object]:
+    return {
+        "schemaVersion": PROMOTION_SCHEMA_VERSION,
+        "bindingId": PROMOTION_BINDING_ID,
+        "status": PROMOTION_STATUS,
+        "executionPosture": PROMOTION_EXECUTION_POSTURE,
+        "identityAuthority": PROMOTION_IDENTITY_AUTHORITY,
+        "promotionMeaning": {
+            "sourceLifecycleState": "CANDIDATE_INACTIVE",
+            "targetLifecycleState": "GOVERNED_INACTIVE",
+            "effect": "EXTERNAL_LIFECYCLE_CLASSIFICATION_ONLY",
+            "embeddedStatusMeaning": "IMMUTABLE_CREATION_STATE_ATTESTATION",
+            "effectiveLifecycleAuthority": (
+                "REVIEWED_PROMOTION_DECISION_AND_CURRENTNESS_TRACE"
+            ),
+            "currentDefaultPromotion": False,
+            "runtimeActivation": False,
+            "productionReadiness": False,
+        },
+        "subjectSet": {
+            "setSemantics": (
+                "EXACT_ATOMIC_PROMOTION_SET_NOT_RUNTIME_COMPONENT_CLOSURE"
+            ),
+            "dependencyOrder": [
+                CARRIER_MATRIX_ID,
+                SELECTION_BINDING_ID,
+                COMMAND_BINDING_ID,
+            ],
+            "partialPromotion": (
+                "REFUSED_ALL_REMAIN_CANDIDATE_INACTIVE"
+            ),
+            "subjects": _expected_promotion_subjects(),
+        },
+        "dependencyConsistency": {
+            "selectorMatrixIdentity": CARRIER_MATRIX_ID,
+            "selectorMatrixRepositoryFileDigest": (
+                f"sha256:{_sha256(CARRIER_MATRIX_PATH)}"
+            ),
+            "selectorMatrixRowId": SELECTION_ROW_ID,
+            "commandSelectorIdentity": SELECTION_BINDING_ID,
+            "commandSelectorRepositoryFileDigest": (
+                f"sha256:{_sha256(SELECTION_BINDING_PATH)}"
+            ),
+        },
+        "decisionContract": {
+            "allowedOutcomes": [
+                "PROMOTE_GOVERNED_INACTIVE",
+                "REFUSE_PROMOTION",
+            ],
+            "positiveOutcome": "PROMOTE_GOVERNED_INACTIVE",
+            "positiveEffect": (
+                "ALL_THREE_EXACT_SUBJECTS_BECOME_GOVERNED_INACTIVE"
+            ),
+            "refusalOutcome": "REFUSE_PROMOTION",
+            "refusalEffect": (
+                "ALL_THREE_SUBJECTS_REMAIN_CANDIDATE_INACTIVE"
+            ),
+            "requiredDecisionEvidenceFields": [
+                "promotionDecisionRef",
+                "humanPromotionAuthorityRef",
+                "decidedAt",
+                "reviewEvidenceRefs",
+                "currentnessTraceRef",
+            ],
+            "humanGoverned": True,
+            "contractApprovalIsPromotion": False,
+            "mergeIsPromotion": False,
+            "conformanceSuccessIsPromotion": False,
+            "callerSelectable": False,
+            "conflictDisposition": (
+                "REFUSE_ALL_REMAIN_CANDIDATE_INACTIVE"
+            ),
+        },
+        "authoritySeparation": {
+            "bindingOwns": (
+                "CLOSED_SUBJECT_SET_DIGESTS_ATOMICITY_"
+                "AND_GOVERNED_INACTIVE_OUTCOME"
+            ),
+            "humanPromotionAuthorityOwns": "PROMOTE_OR_REFUSE_DECISION",
+            "currentnessTraceOwns": (
+                "EFFECTIVE_LIFECYCLE_HEAD_EVIDENCE"
+            ),
+            "subjectArtifactsOwn": (
+                "TEMPORAL_SEMANTICS_AND_EXECUTION_POSTURES"
+            ),
+            "runtimeAuthoritiesUnchanged": True,
+            "issue192AuthorityUnchanged": True,
+        },
+        "unsupported": [
+            "SCHEMA_PROMOTION",
+            "CURRENT_DEFAULT_PROMOTION",
+            "RUNTIME_OR_PROFILE_ACTIVATION",
+            "RUNTIME_BUNDLE_ROLE_OR_MEMBERSHIP_CHANGE",
+            "DATABASE_STORAGE_OR_MIGRATION",
+            "PROMOTION_DECISION_STORAGE_OR_SIGNING",
+            "TENANT_RUNTIME_BUNDLE_SELECTION",
+            "PRODUCTION_TEMPORAL_SELECTOR",
+            "GOVERNED_COMMAND_INTEGRATION_OR_AUTHORIZATION",
+            "ROUTE_OR_PRODUCTION_SEMANTIC_ACTIVATION",
+            "MATERIALIZATION_CURRENT_STATE_HISTORY_WINDOW_OR_OUTPUT",
+            "LEGACY_SEMANTIC_OR_OUTPUT_IMPORT",
+            "ISSUE_192_BEHAVIOR",
+        ],
+        "implementationStops": [
+            (
+                "NO_POSITIVE_PROMOTION_WITHOUT_SEPARATE_"
+                "HUMAN_DECISION_AND_CURRENTNESS_TRACE"
+            ),
+            "NO_SUBJECT_OUTSIDE_EXACT_THREE_IDENTITY_SET",
+            "NO_SCHEMA_OR_OTHER_IDENTITY_PROMOTION",
+            "NO_SUBJECT_REWRITE_OR_RELOCATION",
+            "NO_ACTIVE_RUNTIME_BUNDLE_OR_PROFILE_CHANGE",
+            "NO_DATABASE_COMMAND_ROUTE_OUTPUT_LEGACY_OR_ISSUE_192_CHANGE",
+        ],
+    }
+
+
+def _assert_promotion_digests() -> None:
+    if _sha256(PROMOTION_SCHEMA_PATH) != PROMOTION_SCHEMA_DIGEST:
+        raise TemporalCandidateError(
+            "temporal promotion schema digest differs"
+        )
+    if _sha256(PROMOTION_BINDING_PATH) != PROMOTION_BINDING_DIGEST:
+        raise TemporalCandidateError(
+            "temporal promotion binding digest differs"
+        )
+
+
+def validate_promotion_schema_shape(
+    schema: dict[str, object],
+    binding: dict[str, object],
+) -> None:
+    _assert_promotion_digests()
+    if (
+        set(schema) != {"$schema", "$id", "title", "$comment", "const"}
+        or schema.get("$schema")
+        != "https://json-schema.org/draft/2020-12/schema"
+        or schema.get("$id") != PROMOTION_SCHEMA_ID
+        or schema.get("title")
+        != "OFARM TemporalGovernancePromotionBinding v0.1 (candidate)"
+        or schema.get("const") != binding
+    ):
+        raise TemporalCandidateError(
+            "temporal promotion schema shape differs"
+        )
+    comment = schema.get("$comment")
+    if (
+        type(comment) is not str
+        or "NEW_CANDIDATE exact schema" not in comment
+        or "three exact temporal identities" not in comment
+        or "has no promotion" not in comment
+        or "issue #192 effect" not in comment
+    ):
+        raise TemporalCandidateError(
+            "temporal promotion schema posture differs"
+        )
+
+
+def validate_promotion_binding(value: object) -> None:
+    _assert_promotion_digests()
+    expected = _expected_promotion_binding()
+    binding = _closed_object(
+        value,
+        label="TemporalGovernancePromotionBinding",
+        allowed=frozenset(expected),
+        required=frozenset(expected),
+    )
+    if {
+        field: binding.get(field)
+        for field in (
+            "schemaVersion",
+            "bindingId",
+            "status",
+            "executionPosture",
+            "identityAuthority",
+        )
+    } != {
+        "schemaVersion": PROMOTION_SCHEMA_VERSION,
+        "bindingId": PROMOTION_BINDING_ID,
+        "status": PROMOTION_STATUS,
+        "executionPosture": PROMOTION_EXECUTION_POSTURE,
+        "identityAuthority": PROMOTION_IDENTITY_AUTHORITY,
+    }:
+        raise TemporalCandidateError(
+            "temporal promotion identity differs"
+        )
+    subject_set = binding.get("subjectSet")
+    if (
+        type(subject_set) is not dict
+        or subject_set.get("setSemantics")
+        != "EXACT_ATOMIC_PROMOTION_SET_NOT_RUNTIME_COMPONENT_CLOSURE"
+        or subject_set.get("dependencyOrder")
+        != [CARRIER_MATRIX_ID, SELECTION_BINDING_ID, COMMAND_BINDING_ID]
+        or subject_set.get("partialPromotion")
+        != "REFUSED_ALL_REMAIN_CANDIDATE_INACTIVE"
+        or subject_set.get("subjects") != _expected_promotion_subjects()
+    ):
+        raise TemporalCandidateError(
+            "temporal promotion subject set differs"
+        )
+    decision = binding.get("decisionContract")
+    if (
+        type(decision) is not dict
+        or decision.get("allowedOutcomes")
+        != ["PROMOTE_GOVERNED_INACTIVE", "REFUSE_PROMOTION"]
+        or decision.get("humanGoverned") is not True
+        or decision.get("contractApprovalIsPromotion") is not False
+        or decision.get("mergeIsPromotion") is not False
+        or decision.get("conformanceSuccessIsPromotion") is not False
+        or decision.get("callerSelectable") is not False
+        or decision.get("requiredDecisionEvidenceFields")
+        != [
+            "promotionDecisionRef",
+            "humanPromotionAuthorityRef",
+            "decidedAt",
+            "reviewEvidenceRefs",
+            "currentnessTraceRef",
+        ]
+    ):
+        raise TemporalCandidateError(
+            "temporal promotion decision authority differs"
+        )
+    if binding != expected:
+        raise TemporalCandidateError(
+            "temporal promotion binding differs"
+        )
+
+
+def validate_promotion_dependency_consistency() -> None:
+    selection = _load_json(SELECTION_BINDING_PATH)
+    command = _load_json(COMMAND_BINDING_PATH)
+    if selection.get("carrierMatrix") != {
+        "matrixId": CARRIER_MATRIX_ID,
+        "matrixDigest": f"sha256:{_sha256(CARRIER_MATRIX_PATH)}",
+        "rowId": SELECTION_ROW_ID,
+    }:
+        raise TemporalCandidateError(
+            "promoted selector no longer binds the exact matrix dependency"
+        )
+    prerequisites = command.get("prerequisites")
+    if type(prerequisites) is not list:
+        raise TemporalCandidateError(
+            "promoted command prerequisites are malformed"
+        )
+    selector_prerequisites = [
+        item
+        for item in prerequisites
+        if type(item) is dict
+        and item.get("role") == "INTERVENTION_VALID_TIME_SELECTION"
+    ]
+    if selector_prerequisites != [
+        {
+            "role": "INTERVENTION_VALID_TIME_SELECTION",
+            "identity": SELECTION_BINDING_ID,
+            "digest": f"sha256:{_sha256(SELECTION_BINDING_PATH)}",
+        }
+    ]:
+        raise TemporalCandidateError(
+            "promoted command no longer binds the exact selector dependency"
+        )
+
+
 def validate_runtime_selection_binding() -> None:
     package_root = str(PACKAGE_ROOT)
     if package_root not in sys.path:
@@ -2287,6 +2648,8 @@ def validate_candidate_governance() -> None:
     runtime_bundle_selection_binding = _load_json(
         RUNTIME_BUNDLE_SELECTION_BINDING_PATH
     )
+    promotion_schema = _load_json(PROMOTION_SCHEMA_PATH)
+    promotion_binding = _load_json(PROMOTION_BINDING_PATH)
     validate_coordinate_schema_shape(coordinate_schema)
     validate_carrier_schema_shape(carrier_schema)
     validate_carrier_matrix(carrier_matrix)
@@ -2308,6 +2671,9 @@ def validate_candidate_governance() -> None:
     validate_runtime_bundle_selection_binding(
         runtime_bundle_selection_binding
     )
+    validate_promotion_schema_shape(promotion_schema, promotion_binding)
+    validate_promotion_binding(promotion_binding)
+    validate_promotion_dependency_consistency()
     validate_runtime_selection_binding()
     validate_runtime_selector_paths(selection_binding)
     validate_runtime_selection_isolation()
@@ -2458,6 +2824,34 @@ def validate_candidate_governance() -> None:
                     "OFARM_Tenant_Command_RuntimeBundle_Selection_RFC_v0_1.md"
                 ),
             )
+        ),
+        PROMOTION_SCHEMA_RELATIVE_PATH: _expected_manifest_entry(
+            PROMOTION_SCHEMA_RELATIVE_PATH,
+            PROMOTION_SCHEMA_PATH,
+            (
+                "Package-local exact schema for the issue #176 "
+                "temporal-governance promotion contract; inactive, "
+                "contract-only, and without promotion, current/default, "
+                "or runtime effect."
+            ),
+            (
+                "Constitution RC2.1 section 6.16, CP15, and docs/rfcs/"
+                "OFARM_Temporal_Governance_Identity_Promotion_RFC_v0_1.md"
+            ),
+        ),
+        PROMOTION_BINDING_RELATIVE_PATH: _expected_manifest_entry(
+            PROMOTION_BINDING_RELATIVE_PATH,
+            PROMOTION_BINDING_PATH,
+            (
+                "Package-local exact issue #176 temporal-governance "
+                "promotion candidate for three identities; inactive, "
+                "atomic, contract-only, and without promotion, "
+                "current/default, or runtime effect."
+            ),
+            (
+                "Constitution RC2.1 section 6.16, CP15, and docs/rfcs/"
+                "OFARM_Temporal_Governance_Identity_Promotion_RFC_v0_1.md"
+            ),
         ),
     }
     candidate_entries = [
@@ -2645,6 +3039,37 @@ def validate_candidate_governance() -> None:
             "tenant command RuntimeBundle-selection RFC authority or stops differ"
         )
 
+    promotion_rfc = PROMOTION_RFC_PATH.read_text(encoding="utf-8")
+    promotion_digest_markers = (
+        f"`sha256:{_sha256(PROMOTION_SCHEMA_PATH)}`",
+        f"`sha256:{_sha256(PROMOTION_BINDING_PATH)}`",
+    )
+    if any(
+        promotion_rfc.count(marker) != 1
+        for marker in promotion_digest_markers
+    ):
+        raise TemporalCandidateError(
+            "temporal promotion RFC digest binding differs"
+        )
+    required_promotion_rfc_markers = (
+        PROMOTION_SCHEMA_VERSION,
+        PROMOTION_BINDING_ID,
+        "GOVERNED_INACTIVE",
+        "Approval, merge,",
+        "currentness trace",
+        "exactly three",
+        "promotion set is atomic",
+        "universal RuntimeBundle co-presence requirement",
+        "Current-state reads and outputs remain blocked",
+    )
+    if any(
+        marker not in promotion_rfc
+        for marker in required_promotion_rfc_markers
+    ):
+        raise TemporalCandidateError(
+            "temporal promotion RFC authority or stops differ"
+        )
+
     errata = ERRATA_PATH.read_text(encoding="utf-8")
     if any(
         marker not in errata
@@ -2661,6 +3086,10 @@ def validate_candidate_governance() -> None:
             RUNTIME_BUNDLE_SELECTION_BINDING_ID,
             "exact sixteen-component command-required subset",
             "creates no storage, selector, active role, or command integration",
+            PROMOTION_BINDING_ID,
+            "atomic future human-governed lifecycle decision",
+            "targets only `GOVERNED_INACTIVE`",
+            "separate human decision and currentness trace",
             "production authorization provider",
             "selection storage/control",
             "public refusal mapping",
@@ -2688,6 +3117,9 @@ def validate_candidate_governance() -> None:
         RUNTIME_BUNDLE_SELECTION_SCHEMA_VERSION,
         RUNTIME_BUNDLE_SELECTION_BINDING_ID,
         RUNTIME_BUNDLE_SELECTION_EXECUTION_POSTURE,
+        PROMOTION_SCHEMA_VERSION,
+        PROMOTION_BINDING_ID,
+        PROMOTION_EXECUTION_POSTURE,
         *CANDIDATE_RELATIVE_PATHS,
     )
     for path, label in (

@@ -10256,6 +10256,11 @@
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
     },
     {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_temporal_promotion_contract_is_atomic_exact_and_has_no_effect",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
       "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_tenant_command_runtime_bundle_selection_is_exact_and_inactive",
       "sourceModule": "kernel.tests.test_temporal_contract_governance",
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
@@ -10336,8 +10341,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "9e7e5598ab93e62d367e7eec248b2c68ad5794ae3318caed388d072425e7144a",
-  "entryCount": 2067,
+  "entriesSha256": "85005d07ec6f3677784ab3942bdf1bded905c69f8f0323d87be7f8c78d507a58",
+  "entryCount": 2068,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
