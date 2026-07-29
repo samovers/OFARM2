@@ -82,6 +82,9 @@ KNOWLEDGE_STORAGE_RFC_PATH = (
 KNOWLEDGE_STORAGE_MIGRATION_PATH = (
     PACKAGE_ROOT / "kernel/migrations/0003_tenant_knowledge_position.sql"
 )
+MIGRATION_SET_AUTHORITY_PATH = (
+    PACKAGE_ROOT / "deployment/postgresql/migration_sets.py"
+)
 ADR_PATH = PACKAGE_ROOT / "docs/adr/0002-valid-time-and-knowledge-time.md"
 ERRATA_PATH = PACKAGE_ROOT / "ERRATA.md"
 ENVELOPE_SCHEMA_PATH = (
@@ -177,9 +180,6 @@ KNOWLEDGE_STORAGE_RFC_DIGEST = (
 )
 KNOWLEDGE_STORAGE_MIGRATION_DIGEST = (
     "d59af77e23fe012203696023ec343038dbcab5d5ffb9689be11ba67dca22f827"
-)
-KNOWLEDGE_STORAGE_MIGRATION_SET_HEAD = (
-    "ba7a193e96ca78d01edf529ed2e20bbd1810c0a3a0c13bc717969e8c5c739bf0"
 )
 CARRIER_ROW_IDS = (
     "STRUCTURE_EVENT",
@@ -844,6 +844,52 @@ def _schema_version(path: Path) -> str:
     return value
 
 
+def _tenant_authoritative_migration_set_head() -> str:
+    try:
+        module = ast.parse(
+            MIGRATION_SET_AUTHORITY_PATH.read_text(encoding="utf-8"),
+            filename=str(MIGRATION_SET_AUTHORITY_PATH),
+        )
+    except (OSError, UnicodeDecodeError, SyntaxError) as exc:
+        raise TemporalCandidateError(
+            "tenant migration-set authority is not parseable"
+        ) from exc
+    assignments = [
+        node
+        for node in module.body
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name)
+            and target.id == "TENANT_AUTHORITATIVE_MIGRATION_SET"
+            for target in node.targets
+        )
+    ]
+    if (
+        len(assignments) != 1
+        or not isinstance(assignments[0].value, ast.Call)
+        or not isinstance(assignments[0].value.func, ast.Name)
+        or assignments[0].value.func.id != "AuthoritativeMigrationSet"
+    ):
+        raise TemporalCandidateError(
+            "tenant migration-set authority assignment differs"
+        )
+    digest_values = [
+        keyword.value.value
+        for keyword in assignments[0].value.keywords
+        if keyword.arg == "digest"
+        and isinstance(keyword.value, ast.Constant)
+        and type(keyword.value.value) is str
+    ]
+    if (
+        len(digest_values) != 1
+        or re.fullmatch(r"sha256:[0-9a-f]{64}", digest_values[0]) is None
+    ):
+        raise TemporalCandidateError(
+            "tenant migration-set authority digest differs"
+        )
+    return digest_values[0]
+
+
 def validate_command_schema_shape(
     schema: dict[str, object],
     binding: dict[str, object],
@@ -954,9 +1000,7 @@ def validate_command_binding(binding: dict[str, object]) -> None:
             "migrationDigest": (
                 f"sha256:{_sha256(KNOWLEDGE_STORAGE_MIGRATION_PATH)}"
             ),
-            "migrationSetHead": (
-                f"sha256:{KNOWLEDGE_STORAGE_MIGRATION_SET_HEAD}"
-            ),
+            "migrationSetHead": _tenant_authoritative_migration_set_head(),
         },
         {
             "role": "INTERVENTION_VALID_TIME_SELECTION",
@@ -1149,6 +1193,9 @@ def validate_command_binding(binding: dict[str, object]) -> None:
         "ANY_REQUIRED_PUBLIC_REFUSAL_VOCABULARY_CHANGE",
         "ANY_REQUIRED_ROUTE_OR_ACTIVE_REGISTRY_CHANGE",
     }
+    # The digest still pins this exact version. If a reviewed artifact and
+    # digest add stricter unsupported cases, only removal of this safety floor
+    # is the semantic conformance failure.
     if (
         type(binding.get("unsupported")) is not list
         or not required_unsupported.issubset(binding["unsupported"])
@@ -1549,8 +1596,8 @@ def validate_candidate_governance() -> None:
 
     command_rfc = COMMAND_RFC_PATH.read_text(encoding="utf-8")
     command_digest_markers = (
-        f"`sha256:{COMMAND_SCHEMA_DIGEST}`",
-        f"`sha256:{COMMAND_BINDING_DIGEST}`",
+        f"`sha256:{_sha256(COMMAND_SCHEMA_PATH)}`",
+        f"`sha256:{_sha256(COMMAND_BINDING_PATH)}`",
     )
     if any(
         command_rfc.count(marker) != 1
@@ -1559,24 +1606,37 @@ def validate_candidate_governance() -> None:
         raise TemporalCandidateError(
             "temporal governed-command RFC digest binding differs"
         )
-    required_command_markers = (
+    required_command_rfc_markers = (
         COMMAND_BINDING_ID,
         "COMMIT_OPERATION_CLAIM_DRAFT",
-        "REVIEWED_BINDING_ARTIFACT_NOT_CALLER_DATA",
+        "reviewed versioned artifact. None is accepted from caller data.",
         "Kbefore = Kbatch - 1",
-        "RETURN_PRIOR_COMMITTED_RESULT_UNCHANGED",
-        "NO_REVIEWED_PRODUCTION_AUTHORIZATION_PROVIDER_FOR_THIS_COMMAND",
-        "NO_REVIEWED_RUNTIME_BUNDLE_SOURCE_FOR_COMMAND_AND_BINDING_IDENTITY",
+        "returns the prior committed `CommitIngressResult` unchanged",
+        "production authorization provider that owns",
+        "production source of the trusted RuntimeBundle digest",
         "production-surface-closed and inactive",
         "Current-state reads, historical views, WINDOW behavior",
     )
-    binding_text = json.dumps(command_binding, sort_keys=True)
     if any(
-        marker not in command_rfc and marker not in binding_text
-        for marker in required_command_markers
+        marker not in command_rfc
+        for marker in required_command_rfc_markers
     ):
         raise TemporalCandidateError(
             "temporal governed-command RFC authority or stops differ"
+        )
+    binding_text = json.dumps(command_binding, sort_keys=True)
+    required_command_binding_markers = (
+        COMMAND_IDENTITY_AUTHORITY,
+        "RETURN_PRIOR_COMMITTED_RESULT_UNCHANGED_NO_NEW_BATCH",
+        "NO_REVIEWED_PRODUCTION_AUTHORIZATION_PROVIDER_FOR_THIS_COMMAND",
+        "NO_REVIEWED_RUNTIME_BUNDLE_SOURCE_FOR_COMMAND_AND_BINDING_IDENTITY",
+    )
+    if any(
+        marker not in binding_text
+        for marker in required_command_binding_markers
+    ):
+        raise TemporalCandidateError(
+            "temporal governed-command binding authority or stops differ"
         )
 
     errata = ERRATA_PATH.read_text(encoding="utf-8")

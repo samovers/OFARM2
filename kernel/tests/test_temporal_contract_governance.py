@@ -166,22 +166,44 @@ def test_temporal_governed_command_is_exact_and_cannot_be_activated_by_mutation(
     validator = jsonschema.Draft202012Validator(schema)
 
     mutations = (
-        lambda value: value["command"].update({"routePosture": "OPEN"}),
-        lambda value: value["command"].update(
-            {"promotionOutcome": "PROMOTE_ACCEPTED"}
+        (
+            lambda value: value["command"].update(
+                {"routePosture": "OPEN"}
+            ),
+            "specialization differs",
         ),
-        lambda value: value.update(
-            {"identityAuthority": "CALLER_SELECTED"}
+        (
+            lambda value: value["command"].update(
+                {"promotionOutcome": "PROMOTE_ACCEPTED"}
+            ),
+            "specialization differs",
         ),
-        lambda value: value["durableBatch"][
-            "newlyWrittenAllowedOutcomes"
-        ].append("PROMOTE_ACCEPTED"),
-        lambda value: value["implementationStops"].clear(),
+        (
+            lambda value: value.update(
+                {"identityAuthority": "CALLER_SELECTED"}
+            ),
+            "identity differs",
+        ),
+        (
+            lambda value: value["durableBatch"][
+                "newlyWrittenAllowedOutcomes"
+            ].append("PROMOTE_ACCEPTED"),
+            "batch policy differs",
+        ),
+        (
+            lambda value: value["implementationStops"].clear(),
+            "stop conditions differ",
+        ),
     )
-    for mutation in mutations:
+    for mutation, expected_error in mutations:
         binding = _command_binding()
         mutation(binding)
         assert list(validator.iter_errors(binding))
+        with pytest.raises(
+            temporal.TemporalCandidateError,
+            match=expected_error,
+        ):
+            temporal.validate_command_binding(binding)
 
 
 def test_candidate_does_not_enter_runtime_or_production_activation_inputs():
