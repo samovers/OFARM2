@@ -7,13 +7,13 @@ inactive, and without promotion effect
 `ofarm.temporal-governance-promotion-binding.v0.1`
 
 **Promotion schema digest:**
-`sha256:ec83671c586b4408ab822572ec195cfe1697e4aa47573dc8606c096db716cf34`
+`sha256:6f4545c4101d1b984e3eee55e89ff833184d5474ce1fa8e81b02a85753b8c5c2`
 
 **Promotion binding identity:**
 `ofarm.temporal-governance-promotion.issue176-foundation.v0.1`
 
 **Promotion binding digest:**
-`sha256:1769f2a3a3f5535d43dae88f05d7246b885608378e00c0f2a7951e81b82f811f`
+`sha256:10cf2208a4480c5d86c257fce99725c0284781458cee1796ee6ab3974cc06bf0`
 
 ## Decision
 
@@ -122,6 +122,11 @@ carrier matrix -> intervention selector binding -> governed command binding
 The selector must still bind the exact matrix repository-file digest and the
 `INTERVENTION_EVENT` row. The command must still bind the exact selector
 identity and repository-file digest.
+
+The binding's `dependencyConsistency` fields deliberately repeat identities
+and digests from `subjectSet.subjects`. The subject set proves exact
+membership; the repeated fields name the directed relationships. Conformance
+requires both representations to agree.
 
 Atomic promotion is lifecycle governance only. It does not alter the carrier
 contract's rule that these identities form an allowed identity set rather
@@ -278,6 +283,28 @@ The approved candidate-governance package contains only:
 
 The schema and binding are governance support artifacts. They are not members
 of the three-subject promotion set and issue no positive promotion decision.
+Constitution RC2.1 section 6.16 directly governs their own candidate
+lifecycle until a separately reviewed decision changes it; this contract
+cannot promote itself.
+
+## Re-pinning procedure
+
+Before promotion, any reviewed subject revision must be re-pinned as one
+coherent change:
+
+1. recompute the subject repository-file digest, canonical length, and
+   canonical digest;
+2. update the promotion binding and its exact-schema `const`;
+3. recompute the promotion schema and binding file digests;
+4. update the contract manifest, RFC header, RFC subject table and digest
+   list, and checker constants;
+5. update the checker-owned RFC digest only after the RFC text is final; and
+6. run the focused temporal-governance tests and package conformance gate.
+
+Once a subject digest has received a positive promotion decision, TGP-011
+applies instead: semantic or canonical-content change requires a new subject
+identity/version and a new promotion-contract version. No regeneration script
+may silently rewrite a promoted identity.
 
 ## Verification
 

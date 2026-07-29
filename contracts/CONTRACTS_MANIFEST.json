@@ -580,7 +580,7 @@
     {
       "packagePath": "contracts/candidates/temporal_governance_promotion/OFARM_TemporalGovernancePromotionBinding_schema_v0_1.json",
       "sourcePath": null,
-      "sha256": "ec83671c586b4408ab822572ec195cfe1697e4aa47573dc8606c096db716cf34",
+      "sha256": "6f4545c4101d1b984e3eee55e89ff833184d5474ce1fa8e81b02a85753b8c5c2",
       "status": "NEW_CANDIDATE",
       "promotionLadderStage": "CANDIDATE_ARTIFACT",
       "currentnessNote": "Package-local exact schema for the issue #176 temporal-governance promotion contract; inactive, contract-only, and without promotion, current/default, or runtime effect.",
@@ -589,7 +589,7 @@
     {
       "packagePath": "contracts/candidates/temporal_governance_promotion/OFARM_TemporalGovernancePromotion_candidate_v0_1.json",
       "sourcePath": null,
-      "sha256": "1769f2a3a3f5535d43dae88f05d7246b885608378e00c0f2a7951e81b82f811f",
+      "sha256": "10cf2208a4480c5d86c257fce99725c0284781458cee1796ee6ab3974cc06bf0",
       "status": "NEW_CANDIDATE",
       "promotionLadderStage": "CANDIDATE_ARTIFACT",
       "currentnessNote": "Package-local exact issue #176 temporal-governance promotion candidate for three identities; inactive, atomic, contract-only, and without promotion, current/default, or runtime effect.",

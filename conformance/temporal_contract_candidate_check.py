@@ -291,9 +291,7 @@ RUNTIME_BUNDLE_SELECTION_SCHEMA_DIGEST = (
 RUNTIME_BUNDLE_SELECTION_BINDING_DIGEST = (
     "1500ffbbfdf11207a6657848fce12618347f767578e55dc070bb282dc5775aac"
 )
-PROMOTION_SCHEMA_VERSION = (
-    "ofarm.temporal-governance-promotion-binding.v0.1"
-)
+PROMOTION_SCHEMA_VERSION = "ofarm.temporal-governance-promotion-binding.v0.1"
 PROMOTION_SCHEMA_ID = (
     "https://ofarm.dev/schema/temporal-governance-promotion-binding/v0.1"
 )
@@ -306,10 +304,45 @@ PROMOTION_IDENTITY_AUTHORITY = (
     "REVIEWED_BINDING_ARTIFACT_AND_HUMAN_CURRENTNESS_DECISION_NOT_CALLER_DATA"
 )
 PROMOTION_SCHEMA_DIGEST = (
-    "ec83671c586b4408ab822572ec195cfe1697e4aa47573dc8606c096db716cf34"
+    "6f4545c4101d1b984e3eee55e89ff833184d5474ce1fa8e81b02a85753b8c5c2"
 )
 PROMOTION_BINDING_DIGEST = (
-    "1769f2a3a3f5535d43dae88f05d7246b885608378e00c0f2a7951e81b82f811f"
+    "10cf2208a4480c5d86c257fce99725c0284781458cee1796ee6ab3974cc06bf0"
+)
+PROMOTION_RFC_DIGEST = (
+    "be4a8873821045c752cc2df8e61df0898e3dc88db204ee9121acb05d17a13764"
+)
+PROMOTION_INVARIANTS = (
+    "TGP-001_EXACT_SUBJECTS",
+    "TGP-002_EXACT_CONTENT",
+    "TGP-003_ATOMIC_DECISION",
+    "TGP-004_IMMUTABLE_SUBJECTS",
+    "TGP-005_EXTERNAL_LIFECYCLE_AUTHORITY",
+    "TGP-006_GOVERNED_BUT_INACTIVE",
+    "TGP-007_EXECUTION_POSTURE_PRESERVED",
+    "TGP-008_NO_INFERENCE",
+    "TGP-009_NO_CALLER_AUTHORITY",
+    "TGP-010_NO_SUBSTITUTION",
+    "TGP-011_POST_PROMOTION_IMMUTABILITY",
+    "TGP-012_FAIL_CLOSED",
+    "TGP-013_NO_CURRENT_DEFAULT_CLAIM",
+    "TGP-014_PRODUCTION_LEGACY_FIREWALL",
+)
+PROMOTION_NEGATIVE_CASES = (
+    "MISSING_ADDITIONAL_DUPLICATED_REORDERED_OR_SUBSTITUTED_SUBJECT",
+    "PARTIAL_PROMOTION_SET",
+    "SUBJECT_IDENTITY_SCHEMA_DIGEST_CANONICALIZATION_OR_LENGTH_MISMATCH",
+    "SUBJECT_SCHEMA_VALIDATION_FAILURE",
+    "SELECTOR_MATRIX_IDENTITY_DIGEST_OR_ROW_MISMATCH",
+    "COMMAND_SELECTOR_PREREQUISITE_MISMATCH",
+    "NON_HUMAN_MISSING_OR_AMBIGUOUS_PROMOTION_AUTHORITY",
+    "MISSING_OR_CONFLICTING_CURRENTNESS_TRACE",
+    "OUTCOME_OUTSIDE_CLOSED_SET",
+    "POSITIVE_DECISION_STRONGER_THAN_GOVERNED_INACTIVE",
+    "PROMOTION_INFERRED_FROM_REVIEW_MERGE_MANIFEST_CONFORMANCE_OR_RUNTIME",
+    "SCHEMA_CARRIER_SELECTION_OR_OTHER_IDENTITY_PROMOTION",
+    "SUBJECT_REWRITE_OR_RELOCATION",
+    "PRODUCTION_OR_LEGACY_RUNTIME_IMPORT",
 )
 KNOWLEDGE_STORAGE_ID = "ofarm.tenant-knowledge-position-storage.v0.1"
 KNOWLEDGE_STORAGE_RFC_DIGEST = (
@@ -2199,6 +2232,8 @@ def _expected_promotion_binding() -> dict[str, object]:
             "runtimeAuthoritiesUnchanged": True,
             "issue192AuthorityUnchanged": True,
         },
+        "invariants": list(PROMOTION_INVARIANTS),
+        "negativeCases": list(PROMOTION_NEGATIVE_CASES),
         "unsupported": [
             "SCHEMA_PROMOTION",
             "CURRENT_DEFAULT_PROMOTION",
@@ -2237,6 +2272,11 @@ def _assert_promotion_digests() -> None:
         raise TemporalCandidateError(
             "temporal promotion binding digest differs"
         )
+
+
+def _assert_promotion_rfc_digest() -> None:
+    if _sha256(PROMOTION_RFC_PATH) != PROMOTION_RFC_DIGEST:
+        raise TemporalCandidateError("temporal promotion RFC digest differs")
 
 
 def validate_promotion_schema_shape(
@@ -2332,6 +2372,14 @@ def validate_promotion_binding(value: object) -> None:
     ):
         raise TemporalCandidateError(
             "temporal promotion decision authority differs"
+        )
+    if (
+        tuple(binding.get("invariants", ())) != PROMOTION_INVARIANTS
+        or tuple(binding.get("negativeCases", ()))
+        != PROMOTION_NEGATIVE_CASES
+    ):
+        raise TemporalCandidateError(
+            "temporal promotion invariants or negative cases differ"
         )
     if binding != expected:
         raise TemporalCandidateError(
@@ -3039,6 +3087,7 @@ def validate_candidate_governance() -> None:
             "tenant command RuntimeBundle-selection RFC authority or stops differ"
         )
 
+    _assert_promotion_rfc_digest()
     promotion_rfc = PROMOTION_RFC_PATH.read_text(encoding="utf-8")
     promotion_digest_markers = (
         f"`sha256:{_sha256(PROMOTION_SCHEMA_PATH)}`",

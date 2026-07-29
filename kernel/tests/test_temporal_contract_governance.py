@@ -553,7 +553,10 @@ def test_tenant_command_runtime_bundle_selection_is_exact_and_inactive(
             temporal.validate_runtime_bundle_selection_binding(binding)
 
 
-def test_temporal_promotion_contract_is_atomic_exact_and_has_no_effect():
+def test_temporal_promotion_contract_is_atomic_exact_and_has_no_effect(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
     schema = _promotion_schema()
     binding = _promotion_binding()
     validator = jsonschema.Draft202012Validator(schema)
@@ -575,6 +578,10 @@ def test_temporal_promotion_contract_is_atomic_exact_and_has_no_effect():
         "productionReadiness": False,
     }
     mutations = (
+        (
+            lambda value: value.update({"status": "GOVERNED_INACTIVE"}),
+            "identity differs",
+        ),
         (
             lambda value: value["subjectSet"]["subjects"].pop(),
             "subject set differs",
@@ -626,6 +633,30 @@ def test_temporal_promotion_contract_is_atomic_exact_and_has_no_effect():
             "decision authority differs",
         ),
         (
+            lambda value: value["dependencyConsistency"].update(
+                {"selectorMatrixRowId": "ASSERTION_RECORD"}
+            ),
+            "binding differs",
+        ),
+        (
+            lambda value: value["authoritySeparation"].update(
+                {"runtimeAuthoritiesUnchanged": False}
+            ),
+            "binding differs",
+        ),
+        (
+            lambda value: value["invariants"].remove(
+                "TGP-003_ATOMIC_DECISION"
+            ),
+            "invariants or negative cases differ",
+        ),
+        (
+            lambda value: value["negativeCases"].remove(
+                "POSITIVE_DECISION_STRONGER_THAN_GOVERNED_INACTIVE"
+            ),
+            "invariants or negative cases differ",
+        ),
+        (
             lambda value: value["promotionMeaning"].update(
                 {"targetLifecycleState": "CURRENT_DEFAULT"}
             ),
@@ -641,6 +672,14 @@ def test_temporal_promotion_contract_is_atomic_exact_and_has_no_effect():
             lambda value: value["implementationStops"].clear(),
             "binding differs",
         ),
+        (
+            lambda value: value.update({"callerDecision": "PROMOTE"}),
+            "unknown fields",
+        ),
+        (
+            lambda value: value.pop("authoritySeparation"),
+            "missing fields",
+        ),
     )
     for mutation, expected_error in mutations:
         mutated = copy.deepcopy(binding)
@@ -651,6 +690,124 @@ def test_temporal_promotion_contract_is_atomic_exact_and_has_no_effect():
             match=expected_error,
         ):
             temporal.validate_promotion_binding(mutated)
+
+    schema_mutations = (
+        (
+            lambda value: value.update(
+                {"$id": "https://example.invalid/promotion"}
+            ),
+            "schema shape differs",
+        ),
+        (
+            lambda value: value.update({"title": "Unreviewed promotion"}),
+            "schema shape differs",
+        ),
+        (
+            lambda value: value["const"].update(
+                {"status": "GOVERNED_INACTIVE"}
+            ),
+            "schema shape differs",
+        ),
+        (
+            lambda value: value.update({"$comment": "inactive"}),
+            "schema posture differs",
+        ),
+    )
+    for mutation, expected_error in schema_mutations:
+        mutated_schema = copy.deepcopy(schema)
+        mutation(mutated_schema)
+        with pytest.raises(
+            temporal.TemporalCandidateError,
+            match=expected_error,
+        ):
+            temporal.validate_promotion_schema_shape(
+                mutated_schema,
+                binding,
+            )
+
+    promotion_rfc = temporal.PROMOTION_RFC_PATH.read_text(encoding="utf-8")
+    rfc_mutations = (
+        promotion_rfc.replace(
+            "TGP-003 — Atomic decision.",
+            "TGP-003 — Deleted atomic decision.",
+            1,
+        ),
+        promotion_rfc.replace("9504", "9999", 1),
+        promotion_rfc.replace("## Required negative cases", "", 1),
+    )
+    for index, mutated_rfc in enumerate(rfc_mutations):
+        mutated_rfc_path = tmp_path / f"promotion-rfc-{index}.md"
+        mutated_rfc_path.write_text(mutated_rfc, encoding="utf-8")
+        with monkeypatch.context() as rfc_patch:
+            rfc_patch.setattr(
+                temporal,
+                "PROMOTION_RFC_PATH",
+                mutated_rfc_path,
+            )
+            with pytest.raises(
+                temporal.TemporalCandidateError,
+                match="RFC digest differs",
+            ):
+                temporal._assert_promotion_rfc_digest()
+
+    tampered_selector = _selection_binding()
+    tampered_selector["carrierMatrix"]["rowId"] = "ASSERTION_RECORD"
+    tampered_selector_path = tmp_path / "tampered-selector.json"
+    tampered_selector_path.write_text(
+        json.dumps(tampered_selector, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    with monkeypatch.context() as dependency_patch:
+        dependency_patch.setattr(
+            temporal,
+            "SELECTION_BINDING_PATH",
+            tampered_selector_path,
+        )
+        with pytest.raises(
+            temporal.TemporalCandidateError,
+            match="exact matrix dependency",
+        ):
+            temporal.validate_promotion_dependency_consistency()
+
+    malformed_command = _command_binding()
+    malformed_command["prerequisites"] = "caller-selected"
+    malformed_command_path = tmp_path / "malformed-command.json"
+    malformed_command_path.write_text(
+        json.dumps(malformed_command, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    with monkeypatch.context() as dependency_patch:
+        dependency_patch.setattr(
+            temporal,
+            "COMMAND_BINDING_PATH",
+            malformed_command_path,
+        )
+        with pytest.raises(
+            temporal.TemporalCandidateError,
+            match="prerequisites are malformed",
+        ):
+            temporal.validate_promotion_dependency_consistency()
+
+    tampered_command = _command_binding()
+    for prerequisite in tampered_command["prerequisites"]:
+        if prerequisite["role"] == "INTERVENTION_VALID_TIME_SELECTION":
+            prerequisite["identity"] = "caller-selected"
+    tampered_command_path = tmp_path / "tampered-command.json"
+    tampered_command_path.write_text(
+        json.dumps(tampered_command, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    with monkeypatch.context() as dependency_patch:
+        dependency_patch.setattr(
+            temporal,
+            "COMMAND_BINDING_PATH",
+            tampered_command_path,
+        )
+        with pytest.raises(
+            temporal.TemporalCandidateError,
+            match="exact selector dependency",
+        ):
+            temporal.validate_promotion_dependency_consistency()
 
     temporal.validate_promotion_dependency_consistency()
 
