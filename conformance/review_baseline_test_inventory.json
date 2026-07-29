@@ -10256,6 +10256,11 @@
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
     },
     {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_tenant_command_runtime_bundle_selection_is_exact_and_inactive",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
       "nodeid": "kernel/tests/test_tenant_uow.py::test_ambiguous_commit_discards_connection",
       "sourceModule": "kernel.tests.test_tenant_uow",
       "sourcePath": "kernel/tests/test_tenant_uow.py"
@@ -10331,8 +10336,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "c202c711a67878c1b07be3f0469edcde59826b6e6778d312e2e4473b8159473e",
-  "entryCount": 2066,
+  "entriesSha256": "9e7e5598ab93e62d367e7eec248b2c68ad5794ae3318caed388d072425e7144a",
+  "entryCount": 2067,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
