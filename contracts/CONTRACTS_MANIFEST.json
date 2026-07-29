@@ -540,6 +540,24 @@
       "promotionLadderStage": "CANDIDATE_ARTIFACT",
       "currentnessNote": "Package-local exact issue #176 operation-claim draft temporal-command candidate; contract-only, inactive, production-surface-closed, and not selected by the production RuntimeBundle.",
       "lawBasis": "ADR 0002 and docs/rfcs/OFARM_Operation_Claim_Draft_Temporal_Command_RFC_v0_1.md"
+    },
+    {
+      "packagePath": "contracts/candidates/temporal_runtime_bundle_carrier/OFARM_TemporalGovernanceRuntimeBundleCarrierBinding_schema_v0_1.json",
+      "sourcePath": null,
+      "sha256": "6a04b0c3a68428ca0b505e70ba056a4295bde31a3c510fb75191222d8dc228bf",
+      "status": "NEW_CANDIDATE",
+      "promotionLadderStage": "CANDIDATE_ARTIFACT",
+      "currentnessNote": "Package-local exact schema for the issue #176 temporal-governance RuntimeBundle carrier vocabulary; inactive, eligibility-only, runtime-unsupported, and absent from every active RuntimeBundle authority.",
+      "lawBasis": "ADR 0002 and docs/rfcs/OFARM_Temporal_Governance_RuntimeBundle_Carrier_RFC_v0_1.md"
+    },
+    {
+      "packagePath": "contracts/candidates/temporal_runtime_bundle_carrier/OFARM_TemporalGovernanceRuntimeBundleCarrier_candidate_v0_1.json",
+      "sourcePath": null,
+      "sha256": "391c8110029f004375e668e5e902864c0b4aaf6f650005abed8a206d4049e5b4",
+      "status": "NEW_CANDIDATE",
+      "promotionLadderStage": "CANDIDATE_ARTIFACT",
+      "currentnessNote": "Package-local issue #176 temporal-governance RuntimeBundle carrier vocabulary candidate; inactive, eligibility-only, runtime-unsupported, and absent from every active RuntimeBundle authority.",
+      "lawBasis": "ADR 0002 and docs/rfcs/OFARM_Temporal_Governance_RuntimeBundle_Carrier_RFC_v0_1.md"
     }
   ],
   "fixtureEntries": [

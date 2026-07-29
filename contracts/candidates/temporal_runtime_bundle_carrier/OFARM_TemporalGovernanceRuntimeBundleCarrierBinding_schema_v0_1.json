@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ofarm.dev/schema/temporal-governance-runtime-bundle-carrier-binding/v0.1",
+  "title": "OFARM TemporalGovernanceRuntimeBundleCarrierBinding v0.1 (candidate)",
+  "$comment": "NEW_CANDIDATE exact package-local vocabulary for a future TEMPORAL_GOVERNANCE_ARTIFACT RuntimeBundle role. The three identities form a closed allowed set, not a required component closure. This schema is inactive and changes no RuntimeBundle authority.",
+  "const": {
+    "schemaVersion": "ofarm.temporal-governance-runtime-bundle-carrier-binding.v0.1",
+    "bindingId": "ofarm.temporal-governance-runtime-bundle-carrier.v0.1",
+    "status": "CANDIDATE_INACTIVE",
+    "executionPosture": "VOCABULARY_ONLY_RUNTIME_UNSUPPORTED",
+    "identityAuthority": "REVIEWED_BINDING_ARTIFACT_NOT_CALLER_DATA",
+    "componentVocabulary": {
+      "role": "TEMPORAL_GOVERNANCE_ARTIFACT",
+      "canonicalization": "OFARM_CANONICAL_JSON_V1",
+      "placement": "GLOBAL_IMMUTABLE_CONTENT",
+      "meaning": "IMMUTABLE_PROVENANCE_ONLY",
+      "identitySetSemantics": "ALLOWED_IDENTITIES_NOT_REQUIRED_CO_PRESENCE"
+    },
+    "allowedIdentities": [
+      {
+        "artifactKind": "TEMPORAL_CARRIER_MATRIX",
+        "schemaVersion": "ofarm.temporal-carrier-matrix.v0.1",
+        "schemaPath": "contracts/candidates/temporal_coordinate/OFARM_TemporalCarrierMatrix_schema_v0_1.json",
+        "schemaDigest": "sha256:cdb5c09ec033cc3b4de1dea9eb383c499045d8a3bfc5b80fd7abeab579a566ed",
+        "instanceIdentity": "ofarm.temporal-carrier-matrix.adr0002.v0.1",
+        "instancePath": "contracts/candidates/temporal_coordinate/OFARM_TemporalCarrierMatrix_ADR0002_candidate_v0_1.json",
+        "instanceFileDigest": "sha256:7cb26513b5abdbcadecaf6f9b47d874a742ba8fa05a332c9130deebe449d7fc6",
+        "canonicalInstanceDigest": "sha256:c404c0cd1e08f389664b5381c2c038cf65bac9a3b725fc2b1882990636eb179b"
+      },
+      {
+        "artifactKind": "TEMPORAL_CARRIER_SELECTION_BINDING",
+        "schemaVersion": "ofarm.temporal-carrier-selection-binding.v0.1",
+        "schemaPath": "contracts/candidates/temporal_carrier_selection/OFARM_TemporalCarrierSelectionBinding_schema_v0_1.json",
+        "schemaDigest": "sha256:d252420507393d1d9816a0f20549faa8cf67c94bd1e2c10a3c509aadf4f3800a",
+        "instanceIdentity": "ofarm.temporal-carrier-selection.intervention.v0.1",
+        "instancePath": "contracts/candidates/temporal_carrier_selection/OFARM_InterventionValidTimeCarrierSelection_candidate_v0_1.json",
+        "instanceFileDigest": "sha256:9886aace0670b6a83f17cd33cbc67aa62fafcfd0ea873faed9194c2aaa07efe5",
+        "canonicalInstanceDigest": "sha256:373a5f402ad077039946c1dfe7b972e4382d3c6a6805fbf0b271e4a0bc729bf1"
+      },
+      {
+        "artifactKind": "TEMPORAL_GOVERNED_COMMAND_BINDING",
+        "schemaVersion": "ofarm.temporal-governed-command-binding.v0.1",
+        "schemaPath": "contracts/candidates/temporal_governed_command/OFARM_TemporalGovernedCommandBinding_schema_v0_1.json",
+        "schemaDigest": "sha256:afda003df90e2787cfdc97f5561e3e5b098177a5add91556af2e935a3b9711db",
+        "instanceIdentity": "ofarm.temporal-governed-command.commit-operation-claim-draft.v0.1",
+        "instancePath": "contracts/candidates/temporal_governed_command/OFARM_OperationClaimDraftTemporalCommand_candidate_v0_1.json",
+        "instanceFileDigest": "sha256:0909ec653cb99a94cd1b35afaf2d386258aac671c5f730960ed485df8a4b8f2e",
+        "canonicalInstanceDigest": "sha256:6dad47b836b737c8d58b38f566ed0a7d6caeba9023a734357320326630309da1"
+      }
+    ],
+    "schemaRelationship": {
+      "schemaComponentRole": "CONTRACT_SCHEMA",
+      "instanceComponentRole": "TEMPORAL_GOVERNANCE_ARTIFACT",
+      "sameRuntimeBundleRequiredWhenInstanceIsUsed": true,
+      "completeDraft202012ValidationRequired": true,
+      "digestReferenceWithoutRetainedInstance": "UNSUPPORTED"
+    },
+    "closureAuthority": {
+      "carrierContractRule": "ELIGIBILITY_ONLY",
+      "everyRuntimeBundleRequiresAllAllowedIdentities": false,
+      "everyRoleUseRequiresAllAllowedIdentities": false,
+      "futureCommandId": "COMMIT_OPERATION_CLAIM_DRAFT",
+      "exactRequiredComponentClosureOwner": "LATER_REVIEWED_GOVERNED_COMMAND_AND_TENANT_RUNTIME_BUNDLE_SELECTION_CONTRACT"
+    },
+    "forbiddenContentClasses": [
+      "TENANT_IDENTITY",
+      "PRINCIPAL_OR_PARTY_IDENTITY",
+      "REQUEST_OR_BATCH_IDENTITY",
+      "KNOWLEDGE_POSITION",
+      "DEPLOYMENT_SECRET_OR_CREDENTIAL",
+      "MUTABLE_ACTIVATION_STATE"
+    ],
+    "candidateIsolation": {
+      "runtimeBundleMembership": "UNSUPPORTED",
+      "activeRegistryMembership": "UNSUPPORTED",
+      "profileActivation": "UNSUPPORTED",
+      "presenceMeaningIfLaterPromoted": "PROVENANCE_ONLY_NO_EXECUTION"
+    },
+    "implementationStops": [
+      "NO_CANDIDATE_RUNTIME_BUNDLE_MEMBERSHIP",
+      "NO_TEMPORAL_CANDIDATE_PROMOTION_OR_REWRITE",
+      "NO_DATABASE_COMPONENT_ROLE_OR_PUBLISHER_CHANGE",
+      "NO_ACTIVE_RUNTIME_BUNDLE_CATALOG_OR_MODEL_CHANGE",
+      "NO_TENANT_COMMAND_RUNTIME_BUNDLE_SELECTION",
+      "NO_GOVERNED_COMMAND_OR_AUTHORIZATION_CONNECTION",
+      "NO_ROUTE_PROFILE_MATERIALIZATION_READ_HISTORY_WINDOW_OR_OUTPUT",
+      "NO_ISSUE_192_BEHAVIOR"
+    ]
+  }
+}
