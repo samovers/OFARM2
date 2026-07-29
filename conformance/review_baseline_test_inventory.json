@@ -10156,6 +10156,11 @@
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
     },
     {
+      "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_runtime_bundle_carrier_is_closed_eligibility_not_required_closure",
+      "sourceModule": "kernel.tests.test_temporal_contract_governance",
+      "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
+    },
+    {
       "nodeid": "kernel/tests/test_temporal_contract_governance.py::test_shared_temporal_refusal_vectors[boolean-position]",
       "sourceModule": "kernel.tests.test_temporal_contract_governance",
       "sourcePath": "kernel/tests/test_temporal_contract_governance.py"
@@ -10326,8 +10331,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "34c49c4ba87fab1be13ce2b134a7765c94c9557908bdac62e48d9eb8daa6ff6d",
-  "entryCount": 2065,
+  "entriesSha256": "c202c711a67878c1b07be3f0469edcde59826b6e6778d312e2e4473b8159473e",
+  "entryCount": 2066,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

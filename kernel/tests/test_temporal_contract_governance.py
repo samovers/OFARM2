@@ -46,6 +46,22 @@ def _command_binding() -> dict:
     )
 
 
+def _runtime_bundle_carrier_schema() -> dict:
+    return json.loads(
+        temporal.RUNTIME_BUNDLE_CARRIER_SCHEMA_PATH.read_text(
+            encoding="utf-8"
+        )
+    )
+
+
+def _runtime_bundle_carrier_binding() -> dict:
+    return json.loads(
+        temporal.RUNTIME_BUNDLE_CARRIER_BINDING_PATH.read_text(
+            encoding="utf-8"
+        )
+    )
+
+
 def _coordinate() -> dict:
     return {
         "schemaVersion": temporal.CONTRACT_VERSION,
@@ -70,15 +86,30 @@ def test_candidate_schemas_and_instances_are_full_draft_2020_12_valid():
     carrier_matrix = _carrier_matrix()
     command_schema = _command_schema()
     command_binding = _command_binding()
+    runtime_bundle_carrier_schema = _runtime_bundle_carrier_schema()
+    runtime_bundle_carrier_binding = _runtime_bundle_carrier_binding()
 
     jsonschema.Draft202012Validator.check_schema(coordinate_schema)
     jsonschema.Draft202012Validator.check_schema(carrier_schema)
     jsonschema.Draft202012Validator.check_schema(command_schema)
+    jsonschema.Draft202012Validator.check_schema(
+        runtime_bundle_carrier_schema
+    )
     jsonschema.Draft202012Validator(carrier_schema).validate(carrier_matrix)
     jsonschema.Draft202012Validator(command_schema).validate(command_binding)
+    jsonschema.Draft202012Validator(
+        runtime_bundle_carrier_schema
+    ).validate(runtime_bundle_carrier_binding)
     temporal.validate_carrier_matrix(carrier_matrix)
     temporal.validate_command_schema_shape(command_schema, command_binding)
     temporal.validate_command_binding(command_binding)
+    temporal.validate_runtime_bundle_carrier_schema_shape(
+        runtime_bundle_carrier_schema,
+        runtime_bundle_carrier_binding,
+    )
+    temporal.validate_runtime_bundle_carrier_binding(
+        runtime_bundle_carrier_binding
+    )
 
 
 def test_point_and_window_coordinates_validate_against_schema_and_semantics():
@@ -206,6 +237,56 @@ def test_temporal_governed_command_is_exact_and_cannot_be_activated_by_mutation(
             temporal.validate_command_binding(binding)
 
 
+def test_runtime_bundle_carrier_is_closed_eligibility_not_required_closure():
+    schema = _runtime_bundle_carrier_schema()
+    validator = jsonschema.Draft202012Validator(schema)
+    mutations = (
+        (
+            lambda value: value["componentVocabulary"].update(
+                {"role": "REFERENCE_SOURCE"}
+            ),
+            "component vocabulary differs",
+        ),
+        (
+            lambda value: value["allowedIdentities"].append(
+                copy.deepcopy(value["allowedIdentities"][0])
+            ),
+            "allowed identity set differs",
+        ),
+        (
+            lambda value: value["allowedIdentities"].pop(),
+            "allowed identity set differs",
+        ),
+        (
+            lambda value: value["closureAuthority"].update(
+                {"everyRuntimeBundleRequiresAllAllowedIdentities": True}
+            ),
+            "component closure authority differs",
+        ),
+        (
+            lambda value: value["closureAuthority"].update(
+                {"everyRoleUseRequiresAllAllowedIdentities": True}
+            ),
+            "component closure authority differs",
+        ),
+        (
+            lambda value: value["candidateIsolation"].update(
+                {"runtimeBundleMembership": "SUPPORTED"}
+            ),
+            "carrier binding differs",
+        ),
+    )
+    for mutation, expected_error in mutations:
+        binding = _runtime_bundle_carrier_binding()
+        mutation(binding)
+        assert list(validator.iter_errors(binding))
+        with pytest.raises(
+            temporal.TemporalCandidateError,
+            match=expected_error,
+        ):
+            temporal.validate_runtime_bundle_carrier_binding(binding)
+
+
 def test_candidate_does_not_enter_runtime_or_production_activation_inputs():
     runtime_catalog = json.loads(
         temporal.RUNTIME_CATALOG_PATH.read_text(encoding="utf-8")
@@ -237,6 +318,10 @@ def test_candidate_does_not_enter_runtime_or_production_activation_inputs():
         temporal.COMMAND_SCHEMA_VERSION,
         temporal.COMMAND_BINDING_ID,
         temporal.COMMAND_EXECUTION_POSTURE,
+        temporal.RUNTIME_BUNDLE_CARRIER_SCHEMA_VERSION,
+        temporal.RUNTIME_BUNDLE_CARRIER_BINDING_ID,
+        temporal.RUNTIME_BUNDLE_CARRIER_EXECUTION_POSTURE,
+        temporal.RUNTIME_BUNDLE_CARRIER_ROLE,
         *temporal.CANDIDATE_RELATIVE_PATHS,
     )
     for path in (
@@ -245,6 +330,7 @@ def test_candidate_does_not_enter_runtime_or_production_activation_inputs():
     ):
         active_text = path.read_text(encoding="utf-8")
         assert all(marker not in active_text for marker in activation_markers)
+    temporal.validate_runtime_bundle_carrier_role_is_inactive()
 
 
 def test_candidate_paths_are_not_frozen_or_active_contract_directories():

@@ -50,6 +50,20 @@ COMMAND_BINDING_RELATIVE_PATH = (
     "OFARM_OperationClaimDraftTemporalCommand_candidate_v0_1.json"
 )
 COMMAND_BINDING_PATH = PACKAGE_ROOT / COMMAND_BINDING_RELATIVE_PATH
+RUNTIME_BUNDLE_CARRIER_SCHEMA_RELATIVE_PATH = (
+    "contracts/candidates/temporal_runtime_bundle_carrier/"
+    "OFARM_TemporalGovernanceRuntimeBundleCarrierBinding_schema_v0_1.json"
+)
+RUNTIME_BUNDLE_CARRIER_SCHEMA_PATH = (
+    PACKAGE_ROOT / RUNTIME_BUNDLE_CARRIER_SCHEMA_RELATIVE_PATH
+)
+RUNTIME_BUNDLE_CARRIER_BINDING_RELATIVE_PATH = (
+    "contracts/candidates/temporal_runtime_bundle_carrier/"
+    "OFARM_TemporalGovernanceRuntimeBundleCarrier_candidate_v0_1.json"
+)
+RUNTIME_BUNDLE_CARRIER_BINDING_PATH = (
+    PACKAGE_ROOT / RUNTIME_BUNDLE_CARRIER_BINDING_RELATIVE_PATH
+)
 CANDIDATE_RELATIVE_PATHS = frozenset(
     {
         COORDINATE_SCHEMA_RELATIVE_PATH,
@@ -59,6 +73,8 @@ CANDIDATE_RELATIVE_PATHS = frozenset(
         SELECTION_BINDING_RELATIVE_PATH,
         COMMAND_SCHEMA_RELATIVE_PATH,
         COMMAND_BINDING_RELATIVE_PATH,
+        RUNTIME_BUNDLE_CARRIER_SCHEMA_RELATIVE_PATH,
+        RUNTIME_BUNDLE_CARRIER_BINDING_RELATIVE_PATH,
     }
 )
 MANIFEST_PATH = PACKAGE_ROOT / "contracts/CONTRACTS_MANIFEST.json"
@@ -74,6 +90,11 @@ SELECTION_RFC_PATH = (
 COMMAND_RFC_PATH = (
     PACKAGE_ROOT
     / "docs/rfcs/OFARM_Operation_Claim_Draft_Temporal_Command_RFC_v0_1.md"
+)
+RUNTIME_BUNDLE_CARRIER_RFC_PATH = (
+    PACKAGE_ROOT
+    / "docs/rfcs/"
+    "OFARM_Temporal_Governance_RuntimeBundle_Carrier_RFC_v0_1.md"
 )
 KNOWLEDGE_STORAGE_RFC_PATH = (
     PACKAGE_ROOT
@@ -119,6 +140,8 @@ RUNTIME_PROBLEM_SCHEMA_PATH = (
 )
 TEMPORAL_SELECTOR_MODULE_PATH = PACKAGE_ROOT / "kernel/temporal_carriers.py"
 RUNTIME_CATALOG_PATH = PACKAGE_ROOT / "kernel/runtime_bundle_components.json"
+RUNTIME_BUNDLE_MODEL_PATH = PACKAGE_ROOT / "kernel/runtime_bundle.py"
+TENANT_MIGRATIONS_PATH = PACKAGE_ROOT / "kernel/migrations"
 ACTIVE_ARTIFACT_SET_PATH = (
     PACKAGE_ROOT
     / "profile_si_ffs/OFARM_ActiveArtifactSet_example_si_ffs_pilot_v0_1.json"
@@ -173,6 +196,30 @@ COMMAND_SCHEMA_DIGEST = (
 )
 COMMAND_BINDING_DIGEST = (
     "0909ec653cb99a94cd1b35afaf2d386258aac671c5f730960ed485df8a4b8f2e"
+)
+RUNTIME_BUNDLE_CARRIER_SCHEMA_VERSION = (
+    "ofarm.temporal-governance-runtime-bundle-carrier-binding.v0.1"
+)
+RUNTIME_BUNDLE_CARRIER_SCHEMA_ID = (
+    "https://ofarm.dev/schema/"
+    "temporal-governance-runtime-bundle-carrier-binding/v0.1"
+)
+RUNTIME_BUNDLE_CARRIER_BINDING_ID = (
+    "ofarm.temporal-governance-runtime-bundle-carrier.v0.1"
+)
+RUNTIME_BUNDLE_CARRIER_STATUS = "CANDIDATE_INACTIVE"
+RUNTIME_BUNDLE_CARRIER_EXECUTION_POSTURE = (
+    "VOCABULARY_ONLY_RUNTIME_UNSUPPORTED"
+)
+RUNTIME_BUNDLE_CARRIER_IDENTITY_AUTHORITY = (
+    "REVIEWED_BINDING_ARTIFACT_NOT_CALLER_DATA"
+)
+RUNTIME_BUNDLE_CARRIER_ROLE = "TEMPORAL_GOVERNANCE_ARTIFACT"
+RUNTIME_BUNDLE_CARRIER_SCHEMA_DIGEST = (
+    "6a04b0c3a68428ca0b505e70ba056a4295bde31a3c510fb75191222d8dc228bf"
+)
+RUNTIME_BUNDLE_CARRIER_BINDING_DIGEST = (
+    "391c8110029f004375e668e5e902864c0b4aaf6f650005abed8a206d4049e5b4"
 )
 KNOWLEDGE_STORAGE_ID = "ofarm.tenant-knowledge-position-storage.v0.1"
 KNOWLEDGE_STORAGE_RFC_DIGEST = (
@@ -1207,6 +1254,217 @@ def validate_command_binding(binding: dict[str, object]) -> None:
         )
 
 
+def _expected_runtime_bundle_carrier_allowed_identities() -> list[dict[str, str]]:
+    return [
+        {
+            "artifactKind": "TEMPORAL_CARRIER_MATRIX",
+            "schemaVersion": CARRIER_SCHEMA_VERSION,
+            "schemaPath": CARRIER_SCHEMA_RELATIVE_PATH,
+            "schemaDigest": f"sha256:{_sha256(CARRIER_SCHEMA_PATH)}",
+            "instanceIdentity": CARRIER_MATRIX_ID,
+            "instancePath": CARRIER_MATRIX_RELATIVE_PATH,
+            "instanceFileDigest": f"sha256:{_sha256(CARRIER_MATRIX_PATH)}",
+            "canonicalInstanceDigest": _canonical_json_digest(
+                CARRIER_MATRIX_PATH
+            ),
+        },
+        {
+            "artifactKind": "TEMPORAL_CARRIER_SELECTION_BINDING",
+            "schemaVersion": SELECTION_SCHEMA_VERSION,
+            "schemaPath": SELECTION_SCHEMA_RELATIVE_PATH,
+            "schemaDigest": f"sha256:{_sha256(SELECTION_SCHEMA_PATH)}",
+            "instanceIdentity": SELECTION_BINDING_ID,
+            "instancePath": SELECTION_BINDING_RELATIVE_PATH,
+            "instanceFileDigest": f"sha256:{_sha256(SELECTION_BINDING_PATH)}",
+            "canonicalInstanceDigest": _canonical_json_digest(
+                SELECTION_BINDING_PATH
+            ),
+        },
+        {
+            "artifactKind": "TEMPORAL_GOVERNED_COMMAND_BINDING",
+            "schemaVersion": COMMAND_SCHEMA_VERSION,
+            "schemaPath": COMMAND_SCHEMA_RELATIVE_PATH,
+            "schemaDigest": f"sha256:{_sha256(COMMAND_SCHEMA_PATH)}",
+            "instanceIdentity": COMMAND_BINDING_ID,
+            "instancePath": COMMAND_BINDING_RELATIVE_PATH,
+            "instanceFileDigest": f"sha256:{_sha256(COMMAND_BINDING_PATH)}",
+            "canonicalInstanceDigest": _canonical_json_digest(
+                COMMAND_BINDING_PATH
+            ),
+        },
+    ]
+
+
+def _expected_runtime_bundle_carrier_binding() -> dict[str, object]:
+    return {
+        "schemaVersion": RUNTIME_BUNDLE_CARRIER_SCHEMA_VERSION,
+        "bindingId": RUNTIME_BUNDLE_CARRIER_BINDING_ID,
+        "status": RUNTIME_BUNDLE_CARRIER_STATUS,
+        "executionPosture": RUNTIME_BUNDLE_CARRIER_EXECUTION_POSTURE,
+        "identityAuthority": RUNTIME_BUNDLE_CARRIER_IDENTITY_AUTHORITY,
+        "componentVocabulary": {
+            "role": RUNTIME_BUNDLE_CARRIER_ROLE,
+            "canonicalization": "OFARM_CANONICAL_JSON_V1",
+            "placement": "GLOBAL_IMMUTABLE_CONTENT",
+            "meaning": "IMMUTABLE_PROVENANCE_ONLY",
+            "identitySetSemantics": (
+                "ALLOWED_IDENTITIES_NOT_REQUIRED_CO_PRESENCE"
+            ),
+        },
+        "allowedIdentities": (
+            _expected_runtime_bundle_carrier_allowed_identities()
+        ),
+        "schemaRelationship": {
+            "schemaComponentRole": "CONTRACT_SCHEMA",
+            "instanceComponentRole": RUNTIME_BUNDLE_CARRIER_ROLE,
+            "sameRuntimeBundleRequiredWhenInstanceIsUsed": True,
+            "completeDraft202012ValidationRequired": True,
+            "digestReferenceWithoutRetainedInstance": "UNSUPPORTED",
+        },
+        "closureAuthority": {
+            "carrierContractRule": "ELIGIBILITY_ONLY",
+            "everyRuntimeBundleRequiresAllAllowedIdentities": False,
+            "everyRoleUseRequiresAllAllowedIdentities": False,
+            "futureCommandId": "COMMIT_OPERATION_CLAIM_DRAFT",
+            "exactRequiredComponentClosureOwner": (
+                "LATER_REVIEWED_GOVERNED_COMMAND_AND_TENANT_"
+                "RUNTIME_BUNDLE_SELECTION_CONTRACT"
+            ),
+        },
+        "forbiddenContentClasses": [
+            "TENANT_IDENTITY",
+            "PRINCIPAL_OR_PARTY_IDENTITY",
+            "REQUEST_OR_BATCH_IDENTITY",
+            "KNOWLEDGE_POSITION",
+            "DEPLOYMENT_SECRET_OR_CREDENTIAL",
+            "MUTABLE_ACTIVATION_STATE",
+        ],
+        "candidateIsolation": {
+            "runtimeBundleMembership": "UNSUPPORTED",
+            "activeRegistryMembership": "UNSUPPORTED",
+            "profileActivation": "UNSUPPORTED",
+            "presenceMeaningIfLaterPromoted": (
+                "PROVENANCE_ONLY_NO_EXECUTION"
+            ),
+        },
+        "implementationStops": [
+            "NO_CANDIDATE_RUNTIME_BUNDLE_MEMBERSHIP",
+            "NO_TEMPORAL_CANDIDATE_PROMOTION_OR_REWRITE",
+            "NO_DATABASE_COMPONENT_ROLE_OR_PUBLISHER_CHANGE",
+            "NO_ACTIVE_RUNTIME_BUNDLE_CATALOG_OR_MODEL_CHANGE",
+            "NO_TENANT_COMMAND_RUNTIME_BUNDLE_SELECTION",
+            "NO_GOVERNED_COMMAND_OR_AUTHORIZATION_CONNECTION",
+            "NO_ROUTE_PROFILE_MATERIALIZATION_READ_HISTORY_WINDOW_OR_OUTPUT",
+            "NO_ISSUE_192_BEHAVIOR",
+        ],
+    }
+
+
+def validate_runtime_bundle_carrier_binding(value: object) -> None:
+    binding = _closed_object(
+        value,
+        label="TemporalGovernanceRuntimeBundleCarrierBinding",
+        allowed=frozenset(_expected_runtime_bundle_carrier_binding()),
+        required=frozenset(_expected_runtime_bundle_carrier_binding()),
+    )
+    if (
+        binding["schemaVersion"] != RUNTIME_BUNDLE_CARRIER_SCHEMA_VERSION
+        or binding["bindingId"] != RUNTIME_BUNDLE_CARRIER_BINDING_ID
+        or binding["status"] != RUNTIME_BUNDLE_CARRIER_STATUS
+        or binding["executionPosture"]
+        != RUNTIME_BUNDLE_CARRIER_EXECUTION_POSTURE
+        or binding["identityAuthority"]
+        != RUNTIME_BUNDLE_CARRIER_IDENTITY_AUTHORITY
+    ):
+        raise TemporalCandidateError(
+            "temporal RuntimeBundle carrier identity differs"
+        )
+    if binding["componentVocabulary"] != {
+        "role": RUNTIME_BUNDLE_CARRIER_ROLE,
+        "canonicalization": "OFARM_CANONICAL_JSON_V1",
+        "placement": "GLOBAL_IMMUTABLE_CONTENT",
+        "meaning": "IMMUTABLE_PROVENANCE_ONLY",
+        "identitySetSemantics": (
+            "ALLOWED_IDENTITIES_NOT_REQUIRED_CO_PRESENCE"
+        ),
+    }:
+        raise TemporalCandidateError(
+            "temporal RuntimeBundle component vocabulary differs"
+        )
+    allowed_identities = binding["allowedIdentities"]
+    expected_identities = _expected_runtime_bundle_carrier_allowed_identities()
+    if (
+        type(allowed_identities) is not list
+        or allowed_identities != expected_identities
+    ):
+        raise TemporalCandidateError(
+            "temporal RuntimeBundle carrier allowed identity set differs"
+        )
+    closure = binding["closureAuthority"]
+    if (
+        type(closure) is not dict
+        or closure.get("carrierContractRule") != "ELIGIBILITY_ONLY"
+        or closure.get("everyRuntimeBundleRequiresAllAllowedIdentities")
+        is not False
+        or closure.get("everyRoleUseRequiresAllAllowedIdentities") is not False
+        or closure.get("futureCommandId") != "COMMIT_OPERATION_CLAIM_DRAFT"
+        or closure.get("exactRequiredComponentClosureOwner")
+        != (
+            "LATER_REVIEWED_GOVERNED_COMMAND_AND_TENANT_"
+            "RUNTIME_BUNDLE_SELECTION_CONTRACT"
+        )
+    ):
+        raise TemporalCandidateError(
+            "temporal RuntimeBundle component closure authority differs"
+        )
+    expected = _expected_runtime_bundle_carrier_binding()
+    if binding != expected:
+        raise TemporalCandidateError(
+            "temporal RuntimeBundle carrier binding differs"
+        )
+
+
+def validate_runtime_bundle_carrier_schema_shape(
+    schema: dict[str, object],
+    binding: dict[str, object],
+) -> None:
+    if _sha256(RUNTIME_BUNDLE_CARRIER_SCHEMA_PATH) != (
+        RUNTIME_BUNDLE_CARRIER_SCHEMA_DIGEST
+    ):
+        raise TemporalCandidateError(
+            "temporal RuntimeBundle carrier schema digest differs"
+        )
+    if _sha256(RUNTIME_BUNDLE_CARRIER_BINDING_PATH) != (
+        RUNTIME_BUNDLE_CARRIER_BINDING_DIGEST
+    ):
+        raise TemporalCandidateError(
+            "temporal RuntimeBundle carrier binding digest differs"
+        )
+    if (
+        set(schema) != {"$schema", "$id", "title", "$comment", "const"}
+        or schema.get("$schema")
+        != "https://json-schema.org/draft/2020-12/schema"
+        or schema.get("$id") != RUNTIME_BUNDLE_CARRIER_SCHEMA_ID
+        or schema.get("const") != binding
+    ):
+        raise TemporalCandidateError(
+            "temporal RuntimeBundle carrier schema shape differs"
+        )
+    comment = schema.get("$comment")
+    if (
+        type(comment) is not str
+        or "NEW_CANDIDATE" not in comment
+        or "closed allowed set, not a required component closure"
+        not in comment
+        or "inactive" not in comment
+        or "changes no RuntimeBundle authority" not in comment
+    ):
+        raise TemporalCandidateError(
+            "temporal RuntimeBundle carrier schema authority differs"
+        )
+    validate_runtime_bundle_carrier_binding(binding)
+
+
 def validate_runtime_selection_binding() -> None:
     package_root = str(PACKAGE_ROOT)
     if package_root not in sys.path:
@@ -1379,6 +1637,17 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _canonical_json_digest(path: Path) -> str:
+    canonical = json.dumps(
+        _load_json(path),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
+    return f"sha256:{hashlib.sha256(canonical).hexdigest()}"
+
+
 def _expected_manifest_entry(
     path: str,
     artifact_path: Path,
@@ -1414,6 +1683,24 @@ def validate_non_activation(runtime_catalog: object) -> None:
             and component.get("relativePath") in CANDIDATE_RELATIVE_PATHS
         ):
             raise TemporalCandidateError("candidate entered a runtime component")
+    if RUNTIME_BUNDLE_CARRIER_ROLE in json.dumps(
+        runtime_catalog, sort_keys=True
+    ):
+        raise TemporalCandidateError(
+            "candidate role entered the active RuntimeBundle catalog"
+        )
+
+
+def validate_runtime_bundle_carrier_role_is_inactive() -> None:
+    active_authority_paths = [
+        RUNTIME_BUNDLE_MODEL_PATH,
+        *sorted(TENANT_MIGRATIONS_PATH.glob("*.sql")),
+    ]
+    for path in active_authority_paths:
+        if RUNTIME_BUNDLE_CARRIER_ROLE in path.read_text(encoding="utf-8"):
+            raise TemporalCandidateError(
+                "candidate role entered an active RuntimeBundle authority"
+            )
 
 
 def validate_candidate_governance() -> None:
@@ -1424,6 +1711,12 @@ def validate_candidate_governance() -> None:
     selection_binding = _load_json(SELECTION_BINDING_PATH)
     command_schema = _load_json(COMMAND_SCHEMA_PATH)
     command_binding = _load_json(COMMAND_BINDING_PATH)
+    runtime_bundle_carrier_schema = _load_json(
+        RUNTIME_BUNDLE_CARRIER_SCHEMA_PATH
+    )
+    runtime_bundle_carrier_binding = _load_json(
+        RUNTIME_BUNDLE_CARRIER_BINDING_PATH
+    )
     validate_coordinate_schema_shape(coordinate_schema)
     validate_carrier_schema_shape(carrier_schema)
     validate_carrier_matrix(carrier_matrix)
@@ -1431,6 +1724,13 @@ def validate_candidate_governance() -> None:
     validate_selection_binding(selection_binding)
     validate_command_schema_shape(command_schema, command_binding)
     validate_command_binding(command_binding)
+    validate_runtime_bundle_carrier_schema_shape(
+        runtime_bundle_carrier_schema,
+        runtime_bundle_carrier_binding,
+    )
+    validate_runtime_bundle_carrier_binding(
+        runtime_bundle_carrier_binding
+    )
     validate_runtime_selection_binding()
     validate_runtime_selector_paths(selection_binding)
     validate_runtime_selection_isolation()
@@ -1520,6 +1820,34 @@ def validate_candidate_governance() -> None:
             (
                 "ADR 0002 and docs/rfcs/"
                 "OFARM_Operation_Claim_Draft_Temporal_Command_RFC_v0_1.md"
+            ),
+        ),
+        RUNTIME_BUNDLE_CARRIER_SCHEMA_RELATIVE_PATH: _expected_manifest_entry(
+            RUNTIME_BUNDLE_CARRIER_SCHEMA_RELATIVE_PATH,
+            RUNTIME_BUNDLE_CARRIER_SCHEMA_PATH,
+            (
+                "Package-local exact schema for the issue #176 "
+                "temporal-governance RuntimeBundle carrier vocabulary; "
+                "inactive, eligibility-only, runtime-unsupported, and "
+                "absent from every active RuntimeBundle authority."
+            ),
+            (
+                "ADR 0002 and docs/rfcs/"
+                "OFARM_Temporal_Governance_RuntimeBundle_Carrier_RFC_v0_1.md"
+            ),
+        ),
+        RUNTIME_BUNDLE_CARRIER_BINDING_RELATIVE_PATH: _expected_manifest_entry(
+            RUNTIME_BUNDLE_CARRIER_BINDING_RELATIVE_PATH,
+            RUNTIME_BUNDLE_CARRIER_BINDING_PATH,
+            (
+                "Package-local issue #176 temporal-governance RuntimeBundle "
+                "carrier vocabulary candidate; inactive, eligibility-only, "
+                "runtime-unsupported, and absent from every active "
+                "RuntimeBundle authority."
+            ),
+            (
+                "ADR 0002 and docs/rfcs/"
+                "OFARM_Temporal_Governance_RuntimeBundle_Carrier_RFC_v0_1.md"
             ),
         ),
     }
@@ -1639,6 +1967,39 @@ def validate_candidate_governance() -> None:
             "temporal governed-command binding authority or stops differ"
         )
 
+    runtime_bundle_carrier_rfc = (
+        RUNTIME_BUNDLE_CARRIER_RFC_PATH.read_text(encoding="utf-8")
+    )
+    runtime_bundle_carrier_digest_markers = (
+        f"`sha256:{_sha256(RUNTIME_BUNDLE_CARRIER_SCHEMA_PATH)}`",
+        f"`sha256:{_sha256(RUNTIME_BUNDLE_CARRIER_BINDING_PATH)}`",
+    )
+    if any(
+        runtime_bundle_carrier_rfc.count(marker) != 1
+        for marker in runtime_bundle_carrier_digest_markers
+    ):
+        raise TemporalCandidateError(
+            "temporal RuntimeBundle carrier RFC digest binding differs"
+        )
+    required_runtime_bundle_carrier_rfc_markers = (
+        RUNTIME_BUNDLE_CARRIER_SCHEMA_VERSION,
+        RUNTIME_BUNDLE_CARRIER_BINDING_ID,
+        RUNTIME_BUNDLE_CARRIER_ROLE,
+        "allowed identity set is closed",
+        "Eligibility for this role is not a component-closure rule",
+        "not require every RuntimeBundle",
+        "exact component closure required for",
+        "CANDIDATE_INACTIVE",
+        "Current-state reads and outputs remain blocked",
+    )
+    if any(
+        marker not in runtime_bundle_carrier_rfc
+        for marker in required_runtime_bundle_carrier_rfc_markers
+    ):
+        raise TemporalCandidateError(
+            "temporal RuntimeBundle carrier RFC authority or stops differ"
+        )
+
     errata = ERRATA_PATH.read_text(encoding="utf-8")
     if any(
         marker not in errata
@@ -1648,14 +2009,19 @@ def validate_candidate_governance() -> None:
             CARRIER_MATRIX_ID,
             SELECTION_BINDING_ID,
             COMMAND_BINDING_ID,
+            RUNTIME_BUNDLE_CARRIER_BINDING_ID,
+            RUNTIME_BUNDLE_CARRIER_ROLE,
+            "closed allowed identity set",
+            "not as a requirement that every RuntimeBundle",
             "production authorization provider",
-            "trusted RuntimeBundle-digest source",
+            "RuntimeBundle-digest source",
         )
     ):
         raise TemporalCandidateError("candidate ERRATA governance record differs")
 
     runtime_catalog = _load_json(RUNTIME_CATALOG_PATH)
     validate_non_activation(runtime_catalog)
+    validate_runtime_bundle_carrier_role_is_inactive()
     activation_markers = (
         CONTRACT_VERSION,
         CARRIER_SCHEMA_VERSION,
@@ -1666,6 +2032,10 @@ def validate_candidate_governance() -> None:
         COMMAND_SCHEMA_VERSION,
         COMMAND_BINDING_ID,
         COMMAND_EXECUTION_POSTURE,
+        RUNTIME_BUNDLE_CARRIER_SCHEMA_VERSION,
+        RUNTIME_BUNDLE_CARRIER_BINDING_ID,
+        RUNTIME_BUNDLE_CARRIER_EXECUTION_POSTURE,
+        RUNTIME_BUNDLE_CARRIER_ROLE,
         *CANDIDATE_RELATIVE_PATHS,
     )
     for path, label in (

@@ -9,8 +9,8 @@ Checks, in order:
    machine contracts actually use: type, const, enum, required, properties,
    additionalProperties:false, pattern, items, minItems, minLength, oneOf).
 4. the non-default temporal-governance coordinate, carrier matrix,
-   intervention carrier-selection, and governed-command candidates satisfy
-   their semantic and non-activation contracts; and
+   intervention carrier-selection, governed-command, and RuntimeBundle carrier
+   candidates satisfy their semantic and non-activation contracts; and
 5. rewritten trust-boundary modules satisfy their architecture and size gates.
 
 This tool is package tooling, not OFARM law and not a full JSON Schema
@@ -132,6 +132,10 @@ def sha256(p: Path) -> str:
 
 # Authored example instances -> the schema each must validate against.
 INSTANCE_BINDINGS = {
+    "contracts/candidates/temporal_runtime_bundle_carrier/"
+    "OFARM_TemporalGovernanceRuntimeBundleCarrier_candidate_v0_1.json":
+        "contracts/candidates/temporal_runtime_bundle_carrier/"
+        "OFARM_TemporalGovernanceRuntimeBundleCarrierBinding_schema_v0_1.json",
     "contracts/candidates/temporal_governed_command/"
     "OFARM_OperationClaimDraftTemporalCommand_candidate_v0_1.json":
         "contracts/candidates/temporal_governed_command/"
