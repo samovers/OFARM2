@@ -40,9 +40,12 @@ their fixed frozen contract. Their request, event, payload, party, subject, and
 target identities must also satisfy every cross-artifact admission rule in the
 binding artifact. Only that exact, linked tuple becomes this command.
 
-Success means `RETAIN_DRAFT`. The command never emits an assertion, review
-decision, accepted consequence, materialization, qualification, output, or
-receipt. `PROMOTE_ACCEPTED` is unsupported.
+`RETAIN_DRAFT` means safe persistence of an unpromoted draft, not semantic
+success. It is the defined disposition both when valid-time selection succeeds
+and when an authorized request reaches the explicit selector-refusal branch.
+The command never emits an assertion, review decision, accepted consequence,
+materialization, qualification, output, or receipt. `PROMOTE_ACCEPTED` is
+unsupported.
 
 The binding artifact is exact by design. Its schema contains one complete
 `const`, rather than an extensible command family, so adding another command,
@@ -263,8 +266,13 @@ read, or implement historical reconstruction.
 | Conflicting replay | not evaluated | not evaluated | Refuse before the command; no write |
 | New request, authority denies | `DENY` | not evaluated | One refusal batch; `DENY` |
 | New request, authority requires review or human approval | `REQUIRE_REVIEW` or `REQUIRE_HUMAN_APPROVAL` | not evaluated | One refusal batch; `REQUIRE_REVIEW` |
-| New request, authority allows and selector refuses | `ALLOW` | refused | One draft batch; `RETAIN_DRAFT` |
+| New request, authority allows and selector refuses | `ALLOW` | refused | One safe unpromoted draft batch; `RETAIN_DRAFT` |
 | New request, authority allows and selector succeeds | `ALLOW` | both carriers selected | One draft batch; `RETAIN_DRAFT` |
+
+Selector refusal is not a success path. It may produce only the explicitly
+defined safe `RETAIN_DRAFT` branch above. That retained draft must never become
+accepted, promoted, materialized, qualified, published, output, or current
+truth.
 
 `REQUIRE_HUMAN_APPROVAL` maps to the existing command-result
 `REQUIRE_REVIEW`; the frozen command-result contract has no separate human
@@ -315,9 +323,12 @@ artifact that presents the claim as accepted or current truth.
   become visible together at one tenant position or not at all.
 - **GCT-008 — Draft only.** No branch promotes, materializes, qualifies,
   publishes, or emits an in-force artifact.
-- **GCT-009 — Default refusal.** Unknown discriminator, identity mismatch,
-  missing authority, unsupported temporal field, or ungoverned outcome cannot
-  fall through to success.
+- **GCT-009 — Default refusal and safe retention.** Unknown discriminator,
+  identity mismatch, missing authority, or ungoverned outcome cannot be
+  admitted or fall through. An unsupported temporal field or selector refusal
+  may reach only the explicitly defined safe `RETAIN_DRAFT` branch after
+  authorization `ALLOW`; that retained draft must never become accepted,
+  promoted, materialized, qualified, published, output, or current truth.
 - **GCT-010 — Replay before allocation.** Exact and conflicting replays consume
   no batch or knowledge position.
 - **GCT-011 — Cross-bundle refusal.** A prior idempotency claim made under a
@@ -348,6 +359,9 @@ Conformance must refuse or prove unsupported:
 - missing `eventTime`, missing execution bounds, wrong time basis, invalid UTC,
   empty or reversed interval, or envelope effective bounds;
 - a selector result that is partial or differs from the reviewed binding;
+- selector refusal producing anything other than the one safe unpromoted
+  `RETAIN_DRAFT` batch, including any accepted, promoted, materialized,
+  qualified, published, output, or current-truth state;
 - authority `DENY`, `REQUIRE_REVIEW`, or `REQUIRE_HUMAN_APPROVAL` reaching
   valid-time selection;
 - exact replay allocating a batch or writing evidence;
