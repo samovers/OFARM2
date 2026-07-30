@@ -8,7 +8,6 @@ from uuid import UUID, uuid4
 
 import psycopg
 import pytest
-from psycopg import sql
 
 from deployment.postgresql.migration_sets import (
     SECURITY_AUDIT_SERVICE,
@@ -25,6 +24,17 @@ QUERY_IDENTITY = (
     "ofarm_security.query_operational_security_events"
     "(uuid, timestamptz, uuid, integer, bigint)"
 )
+ACCESS_INTENT_SQL = """
+    SELECT *
+    FROM ofarm_security.commit_audit_access_intent(
+        'OPERATIONAL_DIAGNOSTIC_QUERY_V1',
+        %s,
+        NULL,
+        NULL,
+        10,
+        100000
+    )
+"""
 
 
 def _insert_historical_v1(
@@ -72,10 +82,6 @@ def _insert_historical_v1(
 def _prove_access_clock_mutex_release_after_failure(
     state: dict[str, object],
 ) -> None:
-    sequence = sql.Identifier(
-        "ofarm_security",
-        "operational_security_access_clock_high_water",
-    )
     control_dsn = _role_dsn(
         state,
         "ofarm_security_audit_control_login",
@@ -97,33 +103,22 @@ def _prove_access_clock_mutex_release_after_failure(
             WHERE event_kind = 'AUDIT_ACCESS'
             """
         ).fetchone()[0]
-        forced_high_water = admin.execute(
-            """
-            SELECT (
-                pg_catalog.floor(
-                    EXTRACT(
-                        EPOCH FROM pg_catalog.clock_timestamp()
-                    ) * 1000000
-                )::pg_catalog.int8 - 1000000
-            )
-            """
-        ).fetchone()[0]
         admin.execute(
             """
             SELECT pg_catalog.setval(
                 'ofarm_security.operational_security_access_clock_high_water'::
                     pg_catalog.regclass,
-                %s,
+                1,
                 true
             )
-            """,
-            (forced_high_water,),
+            """
         )
         admin.execute(
-            sql.SQL("ALTER SEQUENCE {} MAXVALUE {}").format(
-                sequence,
-                sql.Literal(forced_high_water),
-            )
+            """
+            ALTER SEQUENCE
+                ofarm_security.operational_security_access_clock_high_water
+            MAXVALUE 1
+            """
         )
         control_a.execute("SET statement_timeout = '2s'")
         control_a_pid = control_a.execute(
@@ -133,17 +128,7 @@ def _prove_access_clock_mutex_release_after_failure(
         try:
             with pytest.raises(psycopg.Error) as failure:
                 control_a.execute(
-                    """
-                    SELECT *
-                    FROM ofarm_security.commit_audit_access_intent(
-                        'OPERATIONAL_DIAGNOSTIC_QUERY_V1',
-                        %s,
-                        NULL,
-                        NULL,
-                        10,
-                        100000
-                    )
-                    """,
+                    ACCESS_INTENT_SQL,
                     (QUERY_IDENTITY,),
                 ).fetchone()
 
@@ -166,7 +151,11 @@ def _prove_access_clock_mutex_release_after_failure(
             ).fetchone()[0] == 0
         finally:
             admin.execute(
-                sql.SQL("ALTER SEQUENCE {} NO MAXVALUE").format(sequence)
+                """
+                ALTER SEQUENCE
+                    ofarm_security.operational_security_access_clock_high_water
+                NO MAXVALUE
+                """
             )
             admin.execute(
                 """
@@ -190,17 +179,7 @@ def _prove_access_clock_mutex_release_after_failure(
             control_b.execute("SET lock_timeout = '500ms'")
             control_b.execute("SET statement_timeout = '2s'")
             access = control_b.execute(
-                """
-                SELECT *
-                FROM ofarm_security.commit_audit_access_intent(
-                    'OPERATIONAL_DIAGNOSTIC_QUERY_V1',
-                    %s,
-                    NULL,
-                    NULL,
-                    10,
-                    100000
-                )
-                """,
+                ACCESS_INTENT_SQL,
                 (QUERY_IDENTITY,),
             ).fetchone()
 
