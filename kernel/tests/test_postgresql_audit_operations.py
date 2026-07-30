@@ -86,114 +86,141 @@ def _prove_access_clock_mutex_release_after_failure(
         state,
         "ofarm_security_audit_control_login",
     )
-    with (
-        psycopg.connect(
-            str(state["target_admin_dsn"]),
-            autocommit=True,
-        ) as admin,
-        psycopg.connect(
-            control_dsn,
-            autocommit=True,
-        ) as control_a,
-    ):
-        access_count_before = admin.execute(
+    with psycopg.connect(
+        str(state["target_admin_dsn"]),
+        autocommit=True,
+    ) as admin:
+        original_connection_limit = admin.execute(
             """
-            SELECT pg_catalog.count(*)
-            FROM ofarm_security.operational_security_event
-            WHERE event_kind = 'AUDIT_ACCESS'
+            SELECT rolconnlimit
+            FROM pg_catalog.pg_roles
+            WHERE rolname = 'ofarm_security_audit_control_login'
             """
         ).fetchone()[0]
+        assert original_connection_limit == 1
         admin.execute(
             """
-            SELECT pg_catalog.setval(
-                'ofarm_security.operational_security_access_clock_high_water'::
-                    pg_catalog.regclass,
-                1,
-                true
-            )
+            ALTER ROLE ofarm_security_audit_control_login
+            CONNECTION LIMIT 2
             """
         )
-        admin.execute(
-            """
-            ALTER SEQUENCE
-                ofarm_security.operational_security_access_clock_high_water
-            MAXVALUE 1
-            """
-        )
-        control_a.execute("SET statement_timeout = '2s'")
-        control_a_pid = control_a.execute(
-            "SELECT pg_catalog.pg_backend_pid()"
-        ).fetchone()[0]
-
         try:
-            with pytest.raises(psycopg.Error) as failure:
-                control_a.execute(
-                    ACCESS_INTENT_SQL,
-                    (QUERY_IDENTITY,),
-                ).fetchone()
+            with psycopg.connect(
+                control_dsn,
+                autocommit=True,
+            ) as control_a:
+                access_count_before = admin.execute(
+                    """
+                    SELECT pg_catalog.count(*)
+                    FROM ofarm_security.operational_security_event
+                    WHERE event_kind = 'AUDIT_ACCESS'
+                    """
+                ).fetchone()[0]
+                admin.execute(
+                    """
+                    SELECT pg_catalog.setval(
+                        'ofarm_security.operational_security_access_clock_high_water'::
+                            pg_catalog.regclass,
+                        1,
+                        true
+                    )
+                    """
+                )
+                admin.execute(
+                    """
+                    ALTER SEQUENCE
+                        ofarm_security.operational_security_access_clock_high_water
+                    MAXVALUE 1
+                    """
+                )
+                try:
+                    control_a.execute("SET statement_timeout = '2s'")
+                    control_a_pid = control_a.execute(
+                        "SELECT pg_catalog.pg_backend_pid()"
+                    ).fetchone()[0]
+                    with pytest.raises(psycopg.Error) as failure:
+                        control_a.execute(
+                            ACCESS_INTENT_SQL,
+                            (QUERY_IDENTITY,),
+                        ).fetchone()
 
-            assert failure.value.sqlstate == "22003"
-            assert admin.execute(
-                """
-                SELECT pg_catalog.count(*)
-                FROM ofarm_security.operational_security_event
-                WHERE event_kind = 'AUDIT_ACCESS'
-                """
-            ).fetchone()[0] == access_count_before
-            assert admin.execute(
-                """
-                SELECT pg_catalog.count(*)
-                FROM pg_catalog.pg_locks
-                WHERE pid = %s
-                  AND locktype = 'advisory'
-                """,
-                (control_a_pid,),
-            ).fetchone()[0] == 0
+                    assert failure.value.sqlstate == "22003"
+                    assert admin.execute(
+                        """
+                        SELECT pg_catalog.count(*)
+                        FROM ofarm_security.operational_security_event
+                        WHERE event_kind = 'AUDIT_ACCESS'
+                        """
+                    ).fetchone()[0] == access_count_before
+                    assert admin.execute(
+                        """
+                        SELECT pg_catalog.count(*)
+                        FROM pg_catalog.pg_locks
+                        WHERE pid = %s
+                          AND locktype = 'advisory'
+                        """,
+                        (control_a_pid,),
+                    ).fetchone()[0] == 0
+                finally:
+                    admin.execute(
+                        """
+                        ALTER SEQUENCE
+                            ofarm_security.operational_security_access_clock_high_water
+                        NO MAXVALUE
+                        """
+                    )
+                    admin.execute(
+                        """
+                        SELECT pg_catalog.setval(
+                            'ofarm_security.operational_security_access_clock_high_water'::
+                                pg_catalog.regclass,
+                            pg_catalog.floor(
+                                EXTRACT(
+                                    EPOCH FROM pg_catalog.clock_timestamp()
+                                ) * 1000000
+                            )::pg_catalog.int8,
+                            true
+                        )
+                        """
+                    )
+
+                with psycopg.connect(
+                    control_dsn,
+                    autocommit=True,
+                ) as control_b:
+                    control_b.execute("SET lock_timeout = '500ms'")
+                    control_b.execute("SET statement_timeout = '2s'")
+                    access = control_b.execute(
+                        ACCESS_INTENT_SQL,
+                        (QUERY_IDENTITY,),
+                    ).fetchone()
+
+                assert access is not None
+                assert control_a.execute(
+                    "SELECT pg_catalog.pg_backend_pid()"
+                ).fetchone()[0] == control_a_pid
+                assert admin.execute(
+                    """
+                    SELECT pg_catalog.count(*)
+                    FROM ofarm_security.operational_security_event
+                    WHERE event_kind = 'AUDIT_ACCESS'
+                    """
+                ).fetchone()[0] == access_count_before + 1
         finally:
             admin.execute(
                 """
-                ALTER SEQUENCE
-                    ofarm_security.operational_security_access_clock_high_water
-                NO MAXVALUE
-                """
-            )
-            admin.execute(
-                """
-                SELECT pg_catalog.setval(
-                    'ofarm_security.operational_security_access_clock_high_water'::
-                        pg_catalog.regclass,
-                    pg_catalog.floor(
-                        EXTRACT(
-                            EPOCH FROM pg_catalog.clock_timestamp()
-                        ) * 1000000
-                    )::pg_catalog.int8,
-                    true
-                )
+                ALTER ROLE ofarm_security_audit_control_login
+                CONNECTION LIMIT 1
                 """
             )
 
-        with psycopg.connect(
-            control_dsn,
-            autocommit=True,
-        ) as control_b:
-            control_b.execute("SET lock_timeout = '500ms'")
-            control_b.execute("SET statement_timeout = '2s'")
-            access = control_b.execute(
-                ACCESS_INTENT_SQL,
-                (QUERY_IDENTITY,),
-            ).fetchone()
-
-        assert access is not None
-        assert control_a.execute(
-            "SELECT pg_catalog.pg_backend_pid()"
-        ).fetchone()[0] == control_a_pid
         assert admin.execute(
             """
-            SELECT pg_catalog.count(*)
-            FROM ofarm_security.operational_security_event
-            WHERE event_kind = 'AUDIT_ACCESS'
+            SELECT rolconnlimit
+            FROM pg_catalog.pg_roles
+            WHERE rolname = 'ofarm_security_audit_control_login'
             """
-        ).fetchone()[0] == access_count_before + 1
+        ).fetchone()[0] == original_connection_limit
 
 
 def test_operations_migration_is_bounded_and_keeps_0001_immutable():
