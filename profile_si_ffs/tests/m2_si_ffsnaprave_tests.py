@@ -464,14 +464,10 @@ def test_p3_attach_inspection_evidence_is_race_safe(store):
         sid = snapshot_refs[0]
         barrier = threading.Barrier(2)
         results, errors = [], []
+        worker_stores = []
+        threads = []
 
-        def worker():
-            worker_store = Store(
-                dsn=selected.dsn,
-                tenant_ref=selected.tenant_ref,
-                runtime_bundle=selected.runtime_bundle,
-                active_descriptor=selected.active_descriptor,
-            )
+        def worker(worker_store):
             try:
                 barrier.wait(timeout=10)        # both contend on attach together
                 results.append(ffsn.attach_inspection_evidence(
@@ -479,19 +475,38 @@ def test_p3_attach_inspection_evidence_is_race_safe(store):
                     captured_by=demo.FARMER, farm_ref=demo.FARM)["evidenceRef"])
             except Exception as exc:            # noqa: BLE001
                 errors.append(repr(exc))
-            finally:
-                worker_store.close()
 
-        threads = [threading.Thread(target=worker) for _ in range(2)]
-        for thread in threads:
-            thread.start()
-        for thread in threads:
-            thread.join(timeout=20)
-        assert not errors, \
-            f"idempotent attach must not raise under concurrency: {errors}"
-        assert len(results) == 2
-        assert results[0] == results[1] and results[0] is not None
-        assert selected.get_record(results[0]) is not None
+        try:
+            for _ in range(2):
+                worker_store = Store(
+                    dsn=selected.dsn,
+                    tenant_ref=selected.tenant_ref,
+                    runtime_bundle=selected.runtime_bundle,
+                    active_descriptor=selected.active_descriptor,
+                )
+                worker_stores.append(worker_store)
+                complete_store_startup(worker_store)
+
+            threads = [
+                threading.Thread(target=worker, args=(worker_store,))
+                for worker_store in worker_stores
+            ]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(timeout=20)
+            assert all(not thread.is_alive() for thread in threads), \
+                "idempotent attach workers did not finish"
+            assert not errors, \
+                f"idempotent attach must not raise under concurrency: {errors}"
+            assert len(results) == 2
+            assert results[0] == results[1] and results[0] is not None
+            assert selected.get_record(results[0]) is not None
+        finally:
+            for thread in threads:
+                thread.join(timeout=20)
+            for worker_store in worker_stores:
+                worker_store.close()
 
 
 # ---------------------------------------------------------------------------

@@ -7466,6 +7466,31 @@
       "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
     },
     {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_descriptor_rejects_malformed_code_binding_pack_refs[None]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_descriptor_rejects_malformed_code_binding_pack_refs[pack:si.ffs.pilot.v0_1]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_descriptor_rejects_malformed_code_binding_pack_refs[pack_refs1]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_descriptor_rejects_malformed_code_binding_pack_refs[pack_refs3]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_descriptor_rejects_malformed_code_binding_pack_refs[pack_refs4]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
       "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_descriptor_rejects_malformed_refs",
       "sourceModule": "kernel.tests.test_profile_runtime_selection",
       "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
@@ -7482,6 +7507,11 @@
     },
     {
       "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_descriptor_rejects_multiple_active_packs_or_profiles",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_descriptor_rejects_non_object_code_binding_profile_scope",
       "sourceModule": "kernel.tests.test_profile_runtime_selection",
       "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
     },
@@ -7661,6 +7691,36 @@
       "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
     },
     {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_selection_documents_reject_malformed_code_binding_pack_refs[None]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_selection_documents_reject_malformed_code_binding_pack_refs[pack:si.ffs.pilot.v0_1]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_selection_documents_reject_malformed_code_binding_pack_refs[pack_refs1]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_selection_documents_reject_malformed_code_binding_pack_refs[pack_refs3]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_selection_documents_reject_malformed_code_binding_pack_refs[pack_refs4]",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_selection.py::test_selection_documents_reject_non_object_code_binding_profile_scope",
+      "sourceModule": "kernel.tests.test_profile_runtime_selection",
+      "sourcePath": "kernel/tests/test_profile_runtime_selection.py"
+    },
+    {
       "nodeid": "kernel/tests/test_profile_runtime_services.py::test_acceptance_sufficiency_uses_descriptor_policy_ref_without_policy_body",
       "sourceModule": "kernel.tests.test_profile_runtime_services",
       "sourcePath": "kernel/tests/test_profile_runtime_services.py"
@@ -7677,6 +7737,11 @@
     },
     {
       "nodeid": "kernel/tests/test_profile_runtime_services.py::test_composition_requires_trusted_manifest_evidence_inputs",
+      "sourceModule": "kernel.tests.test_profile_runtime_services",
+      "sourcePath": "kernel/tests/test_profile_runtime_services.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_context_assembler_missing_context_spine_refuses_direct_use",
       "sourceModule": "kernel.tests.test_profile_runtime_services",
       "sourcePath": "kernel/tests/test_profile_runtime_services.py"
     },
@@ -7786,7 +7851,7 @@
       "sourcePath": "kernel/tests/test_profile_runtime_services.py"
     },
     {
-      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_materializer_missing_context_spine_refuses_use_governably",
+      "nodeid": "kernel/tests/test_profile_runtime_services.py::test_materializer_requires_committed_store_startup",
       "sourceModule": "kernel.tests.test_profile_runtime_services",
       "sourcePath": "kernel/tests/test_profile_runtime_services.py"
     },
@@ -8491,12 +8556,12 @@
       "sourcePath": "kernel/tests/test_runtime_activation.py"
     },
     {
-      "nodeid": "kernel/tests/test_runtime_activation.py::test_failed_repeat_startup_preserves_prior_committed_readiness",
+      "nodeid": "kernel/tests/test_runtime_activation.py::test_failed_repeat_startup_poisoned_after_live_schema_drift",
       "sourceModule": "kernel.tests.test_runtime_activation",
       "sourcePath": "kernel/tests/test_runtime_activation.py"
     },
     {
-      "nodeid": "kernel/tests/test_runtime_activation.py::test_failed_store_startup_does_not_publish_service_readiness",
+      "nodeid": "kernel/tests/test_runtime_activation.py::test_failed_store_startup_poisoned_after_closed_connection",
       "sourceModule": "kernel.tests.test_runtime_activation",
       "sourcePath": "kernel/tests/test_runtime_activation.py"
     },
@@ -8541,6 +8606,26 @@
       "sourcePath": "kernel/tests/test_runtime_activation.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_activation.py::test_nested_startup_cannot_publish_readiness_before_outer_rollback",
+      "sourceModule": "kernel.tests.test_runtime_activation",
+      "sourcePath": "kernel/tests/test_runtime_activation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_activation.py::test_schema_and_bundle_migration_is_kernel_startup_only",
+      "sourceModule": "kernel.tests.test_runtime_activation",
+      "sourcePath": "kernel/tests/test_runtime_activation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_activation.py::test_startup_record_writer_refuses_outside_active_startup",
+      "sourceModule": "kernel.tests.test_runtime_activation",
+      "sourcePath": "kernel/tests/test_runtime_activation.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_activation.py::test_unstarted_store_refuses_receipted_writes_against_initialized_database",
+      "sourceModule": "kernel.tests.test_runtime_activation",
+      "sourcePath": "kernel/tests/test_runtime_activation.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_active_artifact_set_cannot_activate_a_retained_draft_contract",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
@@ -8566,12 +8651,67 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_canonical_encoder_bound_cannot_be_overridden_by_int_subclass",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_canonical_encoder_refuses_cycles_governably",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_canonical_encoder_refuses_non_string_object_keys_before_encoding",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_canonical_encoder_snapshots_dict_subclass_before_encoding",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_canonical_encoder_traverses_stateful_list_subclass_once",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_canonical_json_encoder_integer_bound_covers_int_subclasses",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_canonical_json_encoder_integer_bound_is_process_independent[at-limit-negative]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_canonical_json_encoder_integer_bound_is_process_independent[at-limit-positive]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_canonical_json_encoder_integer_bound_is_process_independent[over-limit-negative]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_canonical_json_encoder_integer_bound_is_process_independent[over-limit-positive]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_canonical_json_logical_ref_must_match_intrinsic_identity",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_canonical_numeric_profile_refuses_a_lossy_float_collision",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_canonical_snapshot_retains_original_container_identity",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
@@ -8696,12 +8836,42 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_direct_bundle_construction_enforces_integer_bound[at-limit-negative]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_direct_bundle_construction_enforces_integer_bound[at-limit-positive]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_direct_bundle_construction_enforces_integer_bound[over-limit-negative]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_direct_bundle_construction_enforces_integer_bound[over-limit-positive]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_direct_bundle_construction_enforces_selected_runtime_closure[mismatched-deployment]",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_direct_bundle_construction_enforces_selected_runtime_closure[mixed-tenant]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_direct_bundle_construction_refuses_malformed_profile_pack_refs",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_direct_bundle_construction_refuses_malformed_profile_scope",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
@@ -8912,6 +9082,26 @@
     },
     {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_shipped_artifact_source_cannot_be_omitted_from_catalog",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_strict_json_integer_bound_is_process_independent[at-limit-negative]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_strict_json_integer_bound_is_process_independent[at-limit-positive]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_strict_json_integer_bound_is_process_independent[over-limit-negative]",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_strict_json_integer_bound_is_process_independent[over-limit-positive]",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
@@ -9191,7 +9381,22 @@
       "sourcePath": "kernel/tests/test_runtime_bundle_repository.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle_repository.py::test_cold_audit_refuses_integer_outside_fixed_canonical_limit",
+      "sourceModule": "kernel.tests.test_runtime_bundle_repository",
+      "sourcePath": "kernel/tests/test_runtime_bundle_repository.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle_repository.py::test_cold_audit_refuses_malformed_context_anchor_scope_members",
+      "sourceModule": "kernel.tests.test_runtime_bundle_repository",
+      "sourcePath": "kernel/tests/test_runtime_bundle_repository.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_repository.py::test_cold_audit_refuses_malformed_profile_pack_refs_without_mutation",
+      "sourceModule": "kernel.tests.test_runtime_bundle_repository",
+      "sourcePath": "kernel/tests/test_runtime_bundle_repository.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle_repository.py::test_cold_audit_refuses_malformed_profile_scope_without_mutation",
       "sourceModule": "kernel.tests.test_runtime_bundle_repository",
       "sourcePath": "kernel/tests/test_runtime_bundle_repository.py"
     },
@@ -10491,8 +10696,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "e84318408439c82eff21802bb1b72828aa0407cf2f5fff480aef646a3e439016",
-  "entryCount": 2098,
+  "entriesSha256": "36ae183473e7824eea9afa604d02aadb83b8ec78fdfe5ae67404630bbb4fd26a",
+  "entryCount": 2139,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

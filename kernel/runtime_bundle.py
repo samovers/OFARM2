@@ -20,6 +20,19 @@ _SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _LOGICAL_REF_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/#-]{0,1023}$")
 _TENANT_REF_RE = re.compile(r"^tenant:[A-Za-z0-9._:-]{1,248}$")
 _CONTEXT_SCOPE_REF_RE = re.compile(r"^[A-Za-z0-9._:-]+$")
+# CPython's minimum enabled integer-string conversion limit is 640 digits.
+# This is the largest bound that parsing and encoding can always honor.
+_MAX_CANONICAL_INTEGER_DIGITS = 640
+_MAX_CANONICAL_INTEGER_MAGNITUDE = 10 ** _MAX_CANONICAL_INTEGER_DIGITS
+_CANONICAL_INTEGER_LIMIT_ERROR = (
+    "JSON integer exceeds the canonical limit of "
+    f"{_MAX_CANONICAL_INTEGER_DIGITS} decimal digits"
+)
+_CANONICAL_OBJECT_KEY_ERROR = "JSON object keys must be strings"
+_CANONICAL_CYCLE_ERROR = "canonical JSON value must not contain cycles"
+_CANONICAL_CONTAINER_IDENTITY_ERROR = (
+    "canonical JSON container identity was reused inconsistently"
+)
 _CONTEXT_SCOPE_TYPES = frozenset({
     "FARM",
     "SITE",
@@ -160,6 +173,100 @@ def _reject_nonfinite(value: str) -> None:
     raise RuntimeBundleError(f"JSON contains non-finite number {value}")
 
 
+def _parse_canonical_int(token: str) -> int:
+    """Accept integers within one process-independent decimal digit bound."""
+    digits = token[1:] if token.startswith("-") else token
+    if len(digits) > _MAX_CANONICAL_INTEGER_DIGITS:
+        raise RuntimeBundleError(_CANONICAL_INTEGER_LIMIT_ERROR)
+    try:
+        return int(token)
+    except ValueError as exc:
+        raise RuntimeBundleError(
+            "JSON integer is outside the canonical numeric profile"
+        ) from exc
+
+
+def _canonical_json_snapshot(value: Any) -> Any:
+    """Capture one built-in JSON view while enforcing the numeric profile."""
+    memo: dict[int, tuple[Any, Any]] = {}
+    active_containers: set[int] = set()
+
+    def cached_container(item: Any) -> Any | None:
+        cached = memo.get(id(item))
+        if cached is None:
+            return None
+        original, normalized = cached
+        if original is not item:
+            raise RuntimeBundleError(_CANONICAL_CONTAINER_IDENTITY_ERROR)
+        return normalized
+
+    def normalize(item: Any) -> Any:
+        if item is None or type(item) is bool:
+            return item
+        if isinstance(item, str):
+            return str.__str__(item)
+        if isinstance(item, int):
+            normalized = int.__int__(item)
+            if int.__abs__(normalized) >= _MAX_CANONICAL_INTEGER_MAGNITUDE:
+                raise RuntimeBundleError(_CANONICAL_INTEGER_LIMIT_ERROR)
+            return normalized
+        if isinstance(item, float):
+            return float.__float__(item)
+
+        if isinstance(item, dict):
+            container_id = id(item)
+            if container_id in active_containers:
+                raise RuntimeBundleError(_CANONICAL_CYCLE_ERROR)
+            cached = cached_container(item)
+            if cached is not None:
+                return cached
+
+            normalized_object: dict[str, Any] = {}
+            memo[container_id] = (item, normalized_object)
+            active_containers.add(container_id)
+            try:
+                for key, child in item.items():
+                    if not isinstance(key, str):
+                        raise RuntimeBundleError(_CANONICAL_OBJECT_KEY_ERROR)
+                    normalized_key = str.__str__(key)
+                    if normalized_key in normalized_object:
+                        raise RuntimeBundleError(
+                            f"JSON contains duplicate key {normalized_key!r}"
+                        )
+                    normalized_object[normalized_key] = normalize(child)
+            finally:
+                active_containers.remove(container_id)
+            return normalized_object
+
+        if isinstance(item, (list, tuple)):
+            container_id = id(item)
+            if container_id in active_containers:
+                raise RuntimeBundleError(_CANONICAL_CYCLE_ERROR)
+            cached = cached_container(item)
+            if cached is not None:
+                return cached
+
+            normalized_array: list[Any] = []
+            memo[container_id] = (item, normalized_array)
+            active_containers.add(container_id)
+            try:
+                normalized_array.extend(normalize(child) for child in item)
+            finally:
+                active_containers.remove(container_id)
+            return normalized_array
+
+        raise RuntimeBundleError("document is outside canonical JSON")
+
+    try:
+        return normalize(value)
+    except RuntimeBundleError:
+        raise
+    except MemoryError:
+        raise
+    except Exception as exc:
+        raise RuntimeBundleError("document is outside canonical JSON") from exc
+
+
 def _parse_canonical_float(token: str) -> float:
     """Accept finite binary64 values only when canonical encoding preserves value."""
     value = float(token)
@@ -194,6 +301,7 @@ def strict_json_document(raw: bytes, label: str) -> tuple[dict[str, Any], bytes]
         value = json.loads(
             text,
             object_pairs_hook=_reject_duplicate_keys,
+            parse_int=_parse_canonical_int,
             parse_float=_parse_canonical_float,
             parse_constant=_reject_nonfinite,
         )
@@ -222,9 +330,10 @@ def canonical_json_bytes(value: dict[str, Any]) -> bytes:
     """Encode a trusted in-memory document using the bundle JSON profile."""
     if type(value) is not dict:
         raise RuntimeBundleError("canonical JSON value must be an object")
+    snapshot = _canonical_json_snapshot(value)
     try:
         return json.dumps(
-            value,
+            snapshot,
             sort_keys=True,
             separators=(",", ":"),
             ensure_ascii=False,

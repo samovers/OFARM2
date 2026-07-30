@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import json
 import shutil
+import sys
 from dataclasses import replace
+from enum import IntEnum
 from pathlib import Path
 
 import pytest
@@ -549,6 +551,73 @@ def test_direct_bundle_construction_rejects_malformed_context_anchor_scopes(
         )
 
 
+def test_direct_bundle_construction_refuses_malformed_profile_scope():
+    bundle = RuntimeBundleBuilder.from_manifest(PACKAGE_ROOT).build()
+    code_binding = next(
+        component for component in bundle.components
+        if (
+            component.role is RuntimeComponentRole.PROFILE_INSTANCE
+            and json.loads(component.canonical_bytes).get("schemaVersion")
+            == "ofarm.agronomiccodebindingprofile.v0.1"
+        )
+    )
+    document = json.loads(code_binding.canonical_bytes)
+    document["profileScope"] = ["not-an-object"]
+    changed_code_binding = RuntimeComponent.from_selected_bytes(
+        role=code_binding.role,
+        logical_ref=code_binding.logical_ref,
+        canonicalization=code_binding.canonicalization,
+        placement=code_binding.placement,
+        selected_bytes=canonical_json_bytes(document),
+    )
+
+    with pytest.raises(
+        RuntimeBundleError,
+        match=(
+            "selected profile runtime is inconsistent: "
+            "code-binding profile profileScope must be an object"
+        ),
+    ):
+        RuntimeBundle.create(
+            changed_code_binding if component is code_binding else component
+            for component in bundle.components
+        )
+
+
+def test_direct_bundle_construction_refuses_malformed_profile_pack_refs():
+    bundle = RuntimeBundleBuilder.from_manifest(PACKAGE_ROOT).build()
+    code_binding = next(
+        component for component in bundle.components
+        if (
+            component.role is RuntimeComponentRole.PROFILE_INSTANCE
+            and json.loads(component.canonical_bytes).get("schemaVersion")
+            == "ofarm.agronomiccodebindingprofile.v0.1"
+        )
+    )
+    document = json.loads(code_binding.canonical_bytes)
+    document["profileScope"]["packRefs"] = [123]
+    changed_code_binding = RuntimeComponent.from_selected_bytes(
+        role=code_binding.role,
+        logical_ref=code_binding.logical_ref,
+        canonicalization=code_binding.canonicalization,
+        placement=code_binding.placement,
+        selected_bytes=canonical_json_bytes(document),
+    )
+
+    with pytest.raises(
+        RuntimeBundleError,
+        match=(
+            "selected profile runtime is inconsistent: "
+            "code-binding profile profileScope.packRefs must be a "
+            "non-empty list of strings"
+        ),
+    ):
+        RuntimeBundle.create(
+            changed_code_binding if component is code_binding else component
+            for component in bundle.components
+        )
+
+
 def test_canonical_numeric_profile_refuses_a_lossy_float_collision():
     accepted = RuntimeComponent.from_selected_bytes(
         role=RuntimeComponentRole.PROFILE_POLICY,
@@ -573,6 +642,320 @@ def test_canonical_numeric_profile_refuses_a_lossy_float_collision():
                 b'"value":9007199254740993.0}'
             ),
         )
+
+
+@pytest.mark.parametrize("sign", ("", "-"), ids=("positive", "negative"))
+@pytest.mark.parametrize(
+    ("digit_count", "accepted"),
+    ((640, True), (641, False)),
+    ids=("at-limit", "over-limit"),
+)
+def test_strict_json_integer_bound_is_process_independent(
+    sign,
+    digit_count,
+    accepted,
+):
+    token = sign + ("1" * digit_count)
+    raw = f'{{"value":{token}}}'.encode("ascii")
+    original_limit = sys.get_int_max_str_digits()
+    outcomes = []
+
+    try:
+        for process_limit in (640, 0):
+            sys.set_int_max_str_digits(process_limit)
+            try:
+                document, canonical = strict_json_document(
+                    raw, "test runtime document"
+                )
+            except RuntimeBundleError as exc:
+                outcomes.append(("error", str(exc)))
+            else:
+                outcomes.append(("accepted", document["value"], canonical))
+    finally:
+        sys.set_int_max_str_digits(original_limit)
+
+    assert sys.get_int_max_str_digits() == original_limit
+    assert outcomes[0] == outcomes[1]
+    if accepted:
+        assert outcomes[0] == ("accepted", int(token), raw)
+    else:
+        assert outcomes[0] == (
+            "error",
+            "JSON integer exceeds the canonical limit of 640 decimal digits",
+        )
+
+
+@pytest.mark.parametrize("sign", (1, -1), ids=("positive", "negative"))
+@pytest.mark.parametrize(
+    ("digit_count", "accepted"),
+    ((640, True), (641, False)),
+    ids=("at-limit", "over-limit"),
+)
+def test_canonical_json_encoder_integer_bound_is_process_independent(
+    sign,
+    digit_count,
+    accepted,
+):
+    value = sign * (10 ** (digit_count - 1))
+    document = {"nested": [{"value": value}]}
+    original_limit = sys.get_int_max_str_digits()
+    outcomes = []
+
+    try:
+        for process_limit in (640, 0):
+            sys.set_int_max_str_digits(process_limit)
+            try:
+                canonical = canonical_json_bytes(document)
+            except RuntimeBundleError as exc:
+                outcomes.append(("error", str(exc)))
+            else:
+                outcomes.append(("accepted", canonical))
+    finally:
+        sys.set_int_max_str_digits(original_limit)
+
+    assert sys.get_int_max_str_digits() == original_limit
+    assert outcomes[0] == outcomes[1]
+    if accepted:
+        token = ("-" if sign < 0 else "") + "1" + ("0" * (digit_count - 1))
+        assert outcomes[0] == (
+            "accepted",
+            f'{{"nested":[{{"value":{token}}}]}}'.encode("ascii"),
+        )
+    else:
+        assert outcomes[0] == (
+            "error",
+            "JSON integer exceeds the canonical limit of 640 decimal digits",
+        )
+
+
+def test_canonical_json_encoder_integer_bound_covers_int_subclasses():
+    class OverLimitInteger(IntEnum):
+        VALUE = 10 ** 640
+
+    document = {"nested": [{"value": OverLimitInteger.VALUE}]}
+    original_limit = sys.get_int_max_str_digits()
+    outcomes = []
+
+    try:
+        for process_limit in (640, 0):
+            sys.set_int_max_str_digits(process_limit)
+            try:
+                canonical_json_bytes(document)
+            except RuntimeBundleError as exc:
+                outcomes.append(("error", str(exc)))
+            else:
+                outcomes.append(("accepted",))
+    finally:
+        sys.set_int_max_str_digits(original_limit)
+
+    assert outcomes == [
+        (
+            "error",
+            "JSON integer exceeds the canonical limit of 640 decimal digits",
+        ),
+        (
+            "error",
+            "JSON integer exceeds the canonical limit of 640 decimal digits",
+        ),
+    ]
+
+
+def test_canonical_encoder_bound_cannot_be_overridden_by_int_subclass():
+    class BypassInteger(int):
+        def __abs__(self):
+            return 0
+
+    document = {"nested": [{"value": BypassInteger(10 ** 640)}]}
+    original_limit = sys.get_int_max_str_digits()
+    outcomes = []
+
+    try:
+        for process_limit in (640, 0):
+            sys.set_int_max_str_digits(process_limit)
+            try:
+                canonical_json_bytes(document)
+            except RuntimeBundleError as exc:
+                outcomes.append(("error", str(exc)))
+            else:
+                outcomes.append(("accepted",))
+    finally:
+        sys.set_int_max_str_digits(original_limit)
+
+    assert outcomes == [
+        (
+            "error",
+            "JSON integer exceeds the canonical limit of 640 decimal digits",
+        ),
+        (
+            "error",
+            "JSON integer exceeds the canonical limit of 640 decimal digits",
+        ),
+    ]
+
+
+def test_canonical_encoder_refuses_non_string_object_keys_before_encoding():
+    document = {"nested": [{10 ** 640: "value"}]}
+    original_limit = sys.get_int_max_str_digits()
+    outcomes = []
+
+    try:
+        for process_limit in (640, 0):
+            sys.set_int_max_str_digits(process_limit)
+            try:
+                canonical_json_bytes(document)
+            except RuntimeBundleError as exc:
+                outcomes.append(("error", str(exc)))
+            else:
+                outcomes.append(("accepted",))
+    finally:
+        sys.set_int_max_str_digits(original_limit)
+
+    assert outcomes == [
+        ("error", "JSON object keys must be strings"),
+        ("error", "JSON object keys must be strings"),
+    ]
+
+
+def test_canonical_encoder_snapshots_dict_subclass_before_encoding():
+    class SplitDict(dict):
+        def __iter__(self):
+            return iter(("safe",))
+
+        def values(self):
+            return (0,)
+
+        def items(self):
+            return (("value", 10 ** 640),)
+
+    original_limit = sys.get_int_max_str_digits()
+    outcomes = []
+
+    try:
+        for process_limit in (640, 0):
+            sys.set_int_max_str_digits(process_limit)
+            try:
+                canonical_json_bytes({"nested": SplitDict(safe=0)})
+            except RuntimeBundleError as exc:
+                outcomes.append(("error", str(exc)))
+            else:
+                outcomes.append(("accepted",))
+    finally:
+        sys.set_int_max_str_digits(original_limit)
+
+    assert outcomes == [
+        (
+            "error",
+            "JSON integer exceeds the canonical limit of 640 decimal digits",
+        ),
+        (
+            "error",
+            "JSON integer exceeds the canonical limit of 640 decimal digits",
+        ),
+    ]
+
+
+def test_canonical_encoder_traverses_stateful_list_subclass_once():
+    class SplitList(list):
+        def __init__(self):
+            super().__init__([0])
+            self.iterations = 0
+
+        def __iter__(self):
+            self.iterations += 1
+            if self.iterations == 1:
+                return iter((0,))
+            return iter((10 ** 640,))
+
+    original_limit = sys.get_int_max_str_digits()
+    outcomes = []
+
+    try:
+        for process_limit in (640, 0):
+            sys.set_int_max_str_digits(process_limit)
+            nested = SplitList()
+            canonical = canonical_json_bytes({"nested": nested})
+            outcomes.append((canonical, nested.iterations))
+    finally:
+        sys.set_int_max_str_digits(original_limit)
+
+    assert outcomes == [
+        (b'{"nested":[0]}', 1),
+        (b'{"nested":[0]}', 1),
+    ]
+
+
+def test_canonical_snapshot_retains_original_container_identity():
+    class EphemeralTuples(list):
+        def __iter__(self):
+            for value in range(3):
+                yield (value,)
+
+    expected = b'{"nested":[[0],[1],[2]]}'
+    assert [
+        canonical_json_bytes({"nested": EphemeralTuples()})
+        for _ in range(5)
+    ] == [expected] * 5
+
+
+def test_canonical_encoder_refuses_cycles_governably():
+    document = {}
+    document["nested"] = document
+
+    with pytest.raises(
+        RuntimeBundleError,
+        match="canonical JSON value must not contain cycles",
+    ):
+        canonical_json_bytes(document)
+
+
+@pytest.mark.parametrize("sign", ("", "-"), ids=("positive", "negative"))
+@pytest.mark.parametrize(
+    ("digit_count", "accepted"),
+    ((640, True), (641, False)),
+    ids=("at-limit", "over-limit"),
+)
+def test_direct_bundle_construction_enforces_integer_bound(
+    sign,
+    digit_count,
+    accepted,
+):
+    token = sign + ("1" * digit_count)
+    raw = (
+        b'{"policyId":"policy:test.integer.v1","value":'
+        + token.encode("ascii")
+        + b"}"
+    )
+    original_limit = sys.get_int_max_str_digits()
+
+    try:
+        sys.set_int_max_str_digits(0)
+        if accepted:
+            component = RuntimeComponent.from_selected_bytes(
+                role=RuntimeComponentRole.PROFILE_POLICY,
+                logical_ref="policy:test.integer.v1",
+                canonicalization=Canonicalization.CANONICAL_JSON,
+                placement=ContentPlacement.GLOBAL,
+                selected_bytes=raw,
+            )
+            assert component.canonical_bytes == raw
+            assert RuntimeBundle.create((component,)).components == (component,)
+        else:
+            with pytest.raises(
+                RuntimeBundleError,
+                match="canonical limit of 640 decimal digits",
+            ):
+                RuntimeComponent.from_selected_bytes(
+                    role=RuntimeComponentRole.PROFILE_POLICY,
+                    logical_ref="policy:test.integer.v1",
+                    canonicalization=Canonicalization.CANONICAL_JSON,
+                    placement=ContentPlacement.GLOBAL,
+                    selected_bytes=raw,
+                )
+        assert sys.get_int_max_str_digits() == 0
+    finally:
+        sys.set_int_max_str_digits(original_limit)
+
+    assert sys.get_int_max_str_digits() == original_limit
 
 
 @pytest.mark.parametrize(

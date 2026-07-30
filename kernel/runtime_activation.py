@@ -16,7 +16,7 @@ def complete_store_startup(store) -> DatabaseObservation:
     from . import context
 
     with store._startup_transaction():
-        observation = store.migrate()
+        observation = store._migrate_during_startup()
         context.bootstrap(store)
     return observation
 

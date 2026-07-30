@@ -17,8 +17,10 @@ from __future__ import annotations
 
 import hashlib
 from contextlib import contextmanager
+from enum import Enum, auto
 
 import psycopg
+from psycopg.pq import TransactionStatus
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
@@ -61,6 +63,13 @@ _SCHEMA_SQL_BYTES = (config.PACKAGE_ROOT / "kernel" / "schema.sql").read_bytes()
 
 class RuntimeBundleBindingError(RuntimeError):
     """The Store has no single verified RuntimeBundle for receipted work."""
+
+
+class _StoreState(Enum):
+    NEW = auto()
+    STARTING = auto()
+    READY = auto()
+    POISONED = auto()
 
 
 class Store:
@@ -108,7 +117,7 @@ class Store:
             self._verify_active_descriptor_binding()
             self._active_profile_package_name = active_descriptor.profile_root.name
         self._conn: psycopg.Connection | None = None
-        self._startup_complete = False
+        self._state = _StoreState.NEW
 
     # -- connection / lifecycle ------------------------------------------------
 
@@ -189,15 +198,21 @@ class Store:
         return self._tenant_ref
 
     def _receipt(self) -> tuple[str, str]:
+        self.require_startup_complete("receipted work")
         return self.tenant_ref, self.runtime_bundle_digest
 
-    def migrate(self) -> DatabaseObservation:
-        """Apply the schema and install this Store's exact bundle atomically.
+    def _migrate_during_startup(self) -> DatabaseObservation:
+        """Install the schema and exact bundle during kernel-managed startup.
 
         ``runtime_bundle=None`` is reserved for the isolated RuntimeBundle
         repository tests, which need an empty persistence surface and may not
         write operational receipts.
         """
+        if self._state is not _StoreState.STARTING:
+            raise RuntimeBundleBindingError(
+                "schema and bundle migration requires an active Store startup "
+                "transaction"
+            )
         with self.conn.transaction():
             with self.conn.cursor() as cur:
                 posture = verify_transaction_posture(cur)
@@ -213,21 +228,48 @@ class Store:
 
     @contextmanager
     def _startup_transaction(self):
-        """Publish readiness only after the complete startup unit commits."""
-        prior_readiness = self._startup_complete
-        self._startup_complete = False
+        """Kernel-internal transition for initial or repeat verification.
+
+        ``NEW`` and ``READY`` may enter ``STARTING``. Allowing ``READY`` is
+        deliberate re-verification: readiness is withdrawn while verification
+        runs, and any failure revokes the prior readiness permanently. Readiness
+        is published only after the complete startup unit commits.
+        """
+        if self._state is _StoreState.POISONED:
+            raise RuntimeBundleBindingError(
+                "this Store is poisoned by a failed startup; a fresh Store is "
+                "required"
+            )
+        if self._state is _StoreState.STARTING:
+            raise RuntimeBundleBindingError(
+                "this Store already has a startup transaction in progress"
+            )
+        self._state = _StoreState.STARTING
         try:
-            with self.conn.transaction():
+            connection = self.conn
+            # Invalid caller posture is itself a failed startup. Poisoning even
+            # before verification SQL runs prevents caller misuse, such as nested
+            # startup, from preserving or publishing ambiguous readiness.
+            if connection.info.transaction_status is not TransactionStatus.IDLE:
+                raise RuntimeBundleBindingError(
+                    "Store startup must own the outermost database transaction"
+                )
+            with connection.transaction():
                 yield
         except BaseException:
-            self._startup_complete = prior_readiness
+            self._state = _StoreState.POISONED
             raise
         else:
-            self._startup_complete = True
+            self._state = _StoreState.READY
 
     def require_startup_complete(self, consumer: str) -> None:
         """Refuse high-level runtime services before verified startup commits."""
-        if not self._startup_complete:
+        if self._state is _StoreState.POISONED:
+            raise RuntimeBundleBindingError(
+                f"{consumer} cannot use a Store poisoned by failed startup; "
+                "a fresh Store is required"
+            )
+        if self._state is not _StoreState.READY:
             raise RuntimeBundleBindingError(
                 f"{consumer} requires completed schema, bundle, and profile startup"
             )
@@ -263,6 +305,7 @@ class Store:
         connection it is granted immediately (no self-contention); it only blocks
         a *different* connection's write, which is the cross-writer race we mean
         to serialize."""
+        self.require_startup_complete("serialized transactions")
         with self.conn.transaction():
             with self.conn.cursor() as cur:
                 cur.execute("SELECT pg_advisory_xact_lock(%s)", (_SINGLE_WRITER_LOCK_KEY,))
@@ -280,6 +323,35 @@ class Store:
             raise RuntimeBundleBindingError(
                 f"record tenant {tenant_ref!r} is not the Store bundle tenant "
                 f"{bound_tenant!r}")
+        return self._insert_canonical_record(
+            cur,
+            payload,
+            tenant_ref=tenant_ref,
+            bundle_digest=bundle_digest,
+        )
+
+    def _insert_startup_record(self, cur, payload: dict) -> str:
+        """Kernel-internal writer for selected records during Store startup."""
+        if self._state is not _StoreState.STARTING:
+            raise RuntimeBundleBindingError(
+                "startup bootstrap insertion requires an active Store startup "
+                "transaction"
+            )
+        return self._insert_canonical_record(
+            cur,
+            payload,
+            tenant_ref=self.tenant_ref,
+            bundle_digest=self.runtime_bundle_digest,
+        )
+
+    def _insert_canonical_record(
+        self,
+        cur,
+        payload: dict,
+        *,
+        tenant_ref: str,
+        bundle_digest: str,
+    ) -> str:
         contract = self.registry.validate(payload)
         if contract.lane != "canonical":
             raise ContractViolation(

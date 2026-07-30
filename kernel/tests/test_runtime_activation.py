@@ -15,6 +15,7 @@ from kernel.gates import GatePipeline
 from kernel.profile_runtime_provider import load_profile_runtime_services
 from kernel.runtime_activation import complete_store_startup
 from kernel.runtime_bundle import RuntimeComponentRole, sha256_bytes
+from kernel.schema_posture import SchemaPostureError
 from kernel.store import RuntimeBundleBindingError, Store
 from kernel.tests.conftest import TEST_DEPLOYMENT_IMAGE_DIGEST
 
@@ -131,8 +132,8 @@ def test_high_level_services_require_committed_store_startup(fresh_env):
         store.close()
 
 
-def test_failed_store_startup_does_not_publish_service_readiness(
-    fresh_env, monkeypatch
+def test_unstarted_store_refuses_receipted_writes_against_initialized_database(
+    fresh_env,
 ):
     ready, _, _ = fresh_env
     store = Store(
@@ -141,36 +142,178 @@ def test_failed_store_startup_does_not_publish_service_readiness(
         runtime_bundle=ready.runtime_bundle,
         active_descriptor=ready.active_descriptor,
     )
-
-    def refuse_bootstrap(_store):
-        raise RuntimeError("fictional startup refusal")
-
-    monkeypatch.setattr("kernel.context.bootstrap", refuse_bootstrap)
+    record_marker = "record:test-unstarted-store"
+    gate_marker = "request:test-unstarted-store"
     try:
-        with pytest.raises(RuntimeError, match="fictional startup refusal"):
-            complete_store_startup(store)
-        for service in (GatePipeline, ImportRunner, _output_assembler):
-            with pytest.raises(RuntimeBundleBindingError):
-                service(store)
+        with pytest.raises(
+            RuntimeBundleBindingError,
+            match="requires completed schema, bundle, and profile startup",
+        ):
+            with store.serialized_tx() as cur:
+                store.log_gate(
+                    cur,
+                    gate_marker,
+                    "STARTUP_BOUNDARY",
+                    "REFUSE",
+                )
+
+        with store.tx() as cur:
+            with pytest.raises(
+                RuntimeBundleBindingError,
+                match="requires completed schema, bundle, and profile startup",
+            ):
+                store.insert_record(cur, {"assertionId": record_marker})
+
+        assert ready.conn.execute(
+            "SELECT count(*) AS count FROM kernel_gate_log "
+            "WHERE request_id = %s",
+            (gate_marker,),
+        ).fetchone()["count"] == 0
+        assert ready.conn.execute(
+            "SELECT count(*) AS count FROM kernel_record WHERE record_id = %s",
+            (record_marker,),
+        ).fetchone()["count"] == 0
     finally:
         store.close()
 
 
-def test_failed_repeat_startup_preserves_prior_committed_readiness(
-    fresh_env, monkeypatch
+def test_failed_store_startup_poisoned_after_closed_connection(fresh_env):
+    ready, _, _ = fresh_env
+    store = Store(
+        dsn=ready.dsn,
+        tenant_ref=ready.tenant_ref,
+        runtime_bundle=ready.runtime_bundle,
+        active_descriptor=ready.active_descriptor,
+    )
+    try:
+        store.conn
+        store.close()
+        with pytest.raises(
+            RuntimeBundleBindingError,
+            match="database connection is closed",
+        ):
+            complete_store_startup(store)
+        for service in (GatePipeline, ImportRunner, _output_assembler):
+            with pytest.raises(RuntimeBundleBindingError, match="poisoned"):
+                service(store)
+        with pytest.raises(RuntimeBundleBindingError, match="poisoned"):
+            complete_store_startup(store)
+    finally:
+        store.close()
+
+
+def test_nested_startup_cannot_publish_readiness_before_outer_rollback(
+    fresh_env,
 ):
+    ready, _, _ = fresh_env
+    store = Store(
+        dsn=ready.dsn,
+        tenant_ref=ready.tenant_ref,
+        runtime_bundle=ready.runtime_bundle,
+        active_descriptor=ready.active_descriptor,
+    )
+    tables = ("runtime_bundle", "runtime_bundle_component", "kernel_record")
+    before = {
+        table: ready.conn.execute(
+            f"SELECT count(*) AS count FROM {table}"
+        ).fetchone()["count"]
+        for table in tables
+    }
+    startup_error = None
+
+    class OuterRollback(Exception):
+        pass
+
+    try:
+        with pytest.raises(OuterRollback):
+            with store.tx():
+                try:
+                    complete_store_startup(store)
+                except RuntimeBundleBindingError as exc:
+                    startup_error = exc
+                raise OuterRollback
+
+        assert startup_error is not None
+        assert "must own the outermost database transaction" in str(startup_error)
+        with pytest.raises(RuntimeBundleBindingError, match="poisoned"):
+            complete_store_startup(store)
+        with pytest.raises(RuntimeBundleBindingError, match="poisoned"):
+            with store.serialized_tx():
+                pytest.fail("nested startup published readiness before outer rollback")
+
+        after = {
+            table: ready.conn.execute(
+                f"SELECT count(*) AS count FROM {table}"
+            ).fetchone()["count"]
+            for table in tables
+        }
+        assert after == before
+    finally:
+        store.close()
+
+
+def test_failed_repeat_startup_poisoned_after_live_schema_drift(fresh_env):
     store, _, _ = fresh_env
+    store.conn.execute(
+        "DROP TRIGGER trg_kernel_record_append_only ON kernel_record"
+    )
+    tables = ("runtime_bundle", "runtime_bundle_component", "kernel_record")
+    before = {
+        table: store.conn.execute(
+            f"SELECT count(*) AS count FROM {table}"
+        ).fetchone()["count"]
+        for table in tables
+    }
 
-    def refuse_bootstrap(_store):
-        raise RuntimeError("fictional repeat startup refusal")
-
-    monkeypatch.setattr("kernel.context.bootstrap", refuse_bootstrap)
-    with pytest.raises(RuntimeError, match="fictional repeat startup refusal"):
+    with pytest.raises(
+        SchemaPostureError,
+        match="live database schema catalog does not match",
+    ):
         complete_store_startup(store)
 
-    GatePipeline(store)
-    ImportRunner(store)
-    _output_assembler(store)
+    after = {
+        table: store.conn.execute(
+            f"SELECT count(*) AS count FROM {table}"
+        ).fetchone()["count"]
+        for table in tables
+    }
+    assert after == before
+    for service in (GatePipeline, ImportRunner, _output_assembler):
+        with pytest.raises(RuntimeBundleBindingError, match="poisoned"):
+            service(store)
+    with pytest.raises(RuntimeBundleBindingError, match="poisoned"):
+        complete_store_startup(store)
+    with pytest.raises(RuntimeBundleBindingError, match="poisoned"):
+        with store.serialized_tx():
+            pytest.fail("poisoned Store opened a governed transaction")
+
+
+def test_schema_and_bundle_migration_is_kernel_startup_only(fresh_env):
+    store, _, _ = fresh_env
+
+    assert not hasattr(Store, "migrate")
+    with pytest.raises(
+        RuntimeBundleBindingError,
+        match="requires an active Store startup transaction",
+    ):
+        store._migrate_during_startup()
+
+
+def test_startup_record_writer_refuses_outside_active_startup(fresh_env):
+    store, _, _ = fresh_env
+    marker = "record:test-startup-writer-outside-startup"
+
+    with store.tx() as cur:
+        with pytest.raises(
+            RuntimeBundleBindingError,
+            match="requires an active Store startup transaction",
+        ):
+            store._insert_startup_record(cur, {"assertionId": marker})
+
+    assert store.conn.execute(
+        "SELECT count(*) AS count FROM kernel_record WHERE record_id = %s",
+        (marker,),
+    ).fetchone()["count"] == 0
 
 
 def test_closed_verified_connection_refuses_before_governed_mutation(fresh_env):
