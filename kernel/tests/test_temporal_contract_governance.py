@@ -120,6 +120,52 @@ def test_temporal_candidate_governance_is_complete_and_inactive():
     temporal.validate_candidate_governance()
 
 
+def test_temporal_card_errata_trace_is_pinned():
+    errata = temporal.ERRATA_PATH.read_text(encoding="utf-8")
+    temporal.validate_temporal_card_errata_trace(errata)
+
+
+@pytest.mark.parametrize(
+    ("marker", "replacement"),
+    [
+        ("| E-009 |", "| E-010 |"),
+        (
+            "sha256:6f8d61738483ad75c56292297696a372"
+            "4950d2e170fab6032a2eea6736e3a759",
+            "sha256:" + ("0" * 64),
+        ),
+        ("withdrawn permanently", "withdrawn"),
+    ],
+)
+def test_temporal_card_errata_trace_rejects_modified_markers(
+    marker: str,
+    replacement: str,
+):
+    errata = temporal.ERRATA_PATH.read_text(encoding="utf-8")
+    assert marker in errata
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="temporal decision-card ERRATA trace differs",
+    ):
+        temporal.validate_temporal_card_errata_trace(
+            errata.replace(marker, replacement, 1)
+        )
+
+
+def test_temporal_card_errata_trace_rejects_duplicate_row():
+    errata = temporal.ERRATA_PATH.read_text(encoding="utf-8")
+    row = next(
+        line for line in errata.splitlines() if line.startswith("| E-009 |")
+    )
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="temporal decision-card ERRATA trace differs",
+    ):
+        temporal.validate_temporal_card_errata_trace(f"{errata}\n{row}\n")
+
+
 def test_candidate_schemas_and_instances_are_full_draft_2020_12_valid():
     coordinate_schema = _coordinate_schema()
     carrier_schema = _carrier_schema()

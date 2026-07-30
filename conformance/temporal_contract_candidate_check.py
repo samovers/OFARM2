@@ -2676,6 +2676,24 @@ def validate_runtime_bundle_carrier_role_is_inactive() -> None:
             )
 
 
+def validate_temporal_card_errata_trace(errata: str) -> None:
+    row_prefix = "| E-009 |"
+    rows = tuple(
+        line for line in errata.splitlines() if line.startswith(row_prefix)
+    )
+    required_markers = (
+        "sha256:6f8d61738483ad75c56292297696a372"
+        "4950d2e170fab6032a2eea6736e3a759",
+        "withdrawn permanently",
+    )
+    if len(rows) != 1 or any(
+        rows[0].count(marker) != 1 for marker in required_markers
+    ):
+        raise TemporalCandidateError(
+            "temporal decision-card ERRATA trace differs"
+        )
+
+
 def validate_candidate_governance() -> None:
     coordinate_schema = _load_json(COORDINATE_SCHEMA_PATH)
     carrier_schema = _load_json(CARRIER_SCHEMA_PATH)
@@ -3120,6 +3138,7 @@ def validate_candidate_governance() -> None:
         )
 
     errata = ERRATA_PATH.read_text(encoding="utf-8")
+    validate_temporal_card_errata_trace(errata)
     if any(
         marker not in errata
         for marker in (
