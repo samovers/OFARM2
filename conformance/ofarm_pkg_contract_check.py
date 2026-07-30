@@ -226,6 +226,17 @@ def main() -> int:
         failures += 1
     print("temporal candidate check done")
 
+    temporal_decision_log = subprocess.run(
+        [
+            sys.executable,
+            str(PKG / "conformance/temporal_decision_log_check.py"),
+        ],
+        check=False,
+    )
+    if temporal_decision_log.returncode != 0:
+        failures += 1
+    print("temporal decision log check done")
+
     architecture = subprocess.run(
         [sys.executable, str(PKG / "conformance/rewrite_architecture_check.py")],
         check=False,
