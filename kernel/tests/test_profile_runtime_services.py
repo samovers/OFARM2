@@ -163,24 +163,35 @@ def test_descriptor_compliance_recognized_refs_are_exact():
         })
 
 
-def test_materializer_missing_context_spine_cannot_write_before_startup():
+def test_materializer_requires_committed_store_startup():
     with _fresh_unbootstrapped_store() as store:
-        materializer = Materializer(
-            store,
-            specification=TEST_MATERIALIZATION_SPECIFICATION,
-            context_assembler=context.ContextAssembler(
+        with pytest.raises(
+            RuntimeBundleBindingError,
+            match="requires completed schema, bundle, and profile startup",
+        ):
+            Materializer(
                 store,
+                specification=TEST_MATERIALIZATION_SPECIFICATION,
+                context_assembler=context.ContextAssembler(
+                    store,
+                    active_descriptor=config.ACTIVE_PROFILE,
+                ),
                 active_descriptor=config.ACTIVE_PROFILE,
-            ),
+            )
+
+
+def test_context_assembler_missing_context_spine_refuses_direct_use():
+    with _fresh_unbootstrapped_store() as store:
+        assembler = context.ContextAssembler(
+            store,
             active_descriptor=config.ACTIVE_PROFILE,
         )
-
         with store.tx() as cur:
             with pytest.raises(
-                RuntimeBundleBindingError,
-                match="requires completed schema, bundle, and profile startup",
+                context.ContextNotReconstructible,
+                match="context spine not bootstrapped",
             ):
-                materializer.resolve_for_use(cur, demo.FARM)
+                assembler.assemble(cur, demo.FARM)
 
 
 def test_api_startup_refuses_non_exact_selected_profile_instance():

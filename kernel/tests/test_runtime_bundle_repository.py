@@ -259,6 +259,8 @@ def _seed_raw_bundle_with_replaced_component(
                 len(canonical_document_bytes),
             ),
         )
+        # Clone every link while substituting the target component's global
+        # digest, tenant digest, and byte length in the three CASE expressions.
         cur.execute(
             """
             INSERT INTO runtime_bundle_component

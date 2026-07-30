@@ -20,7 +20,14 @@ _SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _LOGICAL_REF_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/#-]{0,1023}$")
 _TENANT_REF_RE = re.compile(r"^tenant:[A-Za-z0-9._:-]{1,248}$")
 _CONTEXT_SCOPE_REF_RE = re.compile(r"^[A-Za-z0-9._:-]+$")
+# CPython's minimum enabled integer-string conversion limit is 640 digits.
+# This is the largest bound that parsing and encoding can always honor.
 _MAX_CANONICAL_INTEGER_DIGITS = 640
+_MAX_CANONICAL_INTEGER_MAGNITUDE = 10 ** _MAX_CANONICAL_INTEGER_DIGITS
+_CANONICAL_INTEGER_LIMIT_ERROR = (
+    "JSON integer exceeds the canonical limit of "
+    f"{_MAX_CANONICAL_INTEGER_DIGITS} decimal digits"
+)
 _CONTEXT_SCOPE_TYPES = frozenset({
     "FARM",
     "SITE",
@@ -165,16 +172,37 @@ def _parse_canonical_int(token: str) -> int:
     """Accept integers within one process-independent decimal digit bound."""
     digits = token[1:] if token.startswith("-") else token
     if len(digits) > _MAX_CANONICAL_INTEGER_DIGITS:
-        raise RuntimeBundleError(
-            "JSON integer exceeds the canonical limit of "
-            f"{_MAX_CANONICAL_INTEGER_DIGITS} decimal digits"
-        )
+        raise RuntimeBundleError(_CANONICAL_INTEGER_LIMIT_ERROR)
     try:
         return int(token)
     except ValueError as exc:
         raise RuntimeBundleError(
             "JSON integer is outside the canonical numeric profile"
         ) from exc
+
+
+def _require_canonical_integer_bounds(value: Any) -> None:
+    """Reject over-limit built-in integers anywhere in a JSON value."""
+    pending = [value]
+    seen_containers: set[int] = set()
+    while pending:
+        item = pending.pop()
+        if type(item) is int:
+            if abs(item) >= _MAX_CANONICAL_INTEGER_MAGNITUDE:
+                raise RuntimeBundleError(_CANONICAL_INTEGER_LIMIT_ERROR)
+            continue
+        if isinstance(item, dict):
+            container_id = id(item)
+            if container_id in seen_containers:
+                continue
+            seen_containers.add(container_id)
+            pending.extend(item.values())
+        elif isinstance(item, (list, tuple)):
+            container_id = id(item)
+            if container_id in seen_containers:
+                continue
+            seen_containers.add(container_id)
+            pending.extend(item)
 
 
 def _parse_canonical_float(token: str) -> float:
@@ -240,6 +268,7 @@ def canonical_json_bytes(value: dict[str, Any]) -> bytes:
     """Encode a trusted in-memory document using the bundle JSON profile."""
     if type(value) is not dict:
         raise RuntimeBundleError("canonical JSON value must be an object")
+    _require_canonical_integer_bounds(value)
     try:
         return json.dumps(
             value,

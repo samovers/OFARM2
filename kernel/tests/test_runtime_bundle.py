@@ -684,6 +684,49 @@ def test_strict_json_integer_bound_is_process_independent(
         )
 
 
+@pytest.mark.parametrize("sign", (1, -1), ids=("positive", "negative"))
+@pytest.mark.parametrize(
+    ("digit_count", "accepted"),
+    ((640, True), (641, False)),
+    ids=("at-limit", "over-limit"),
+)
+def test_canonical_json_encoder_integer_bound_is_process_independent(
+    sign,
+    digit_count,
+    accepted,
+):
+    value = sign * (10 ** (digit_count - 1))
+    document = {"nested": [{"value": value}]}
+    original_limit = sys.get_int_max_str_digits()
+    outcomes = []
+
+    try:
+        for process_limit in (640, 0):
+            sys.set_int_max_str_digits(process_limit)
+            try:
+                canonical = canonical_json_bytes(document)
+            except RuntimeBundleError as exc:
+                outcomes.append(("error", str(exc)))
+            else:
+                outcomes.append(("accepted", canonical))
+    finally:
+        sys.set_int_max_str_digits(original_limit)
+
+    assert sys.get_int_max_str_digits() == original_limit
+    assert outcomes[0] == outcomes[1]
+    if accepted:
+        token = ("-" if sign < 0 else "") + "1" + ("0" * (digit_count - 1))
+        assert outcomes[0] == (
+            "accepted",
+            f'{{"nested":[{{"value":{token}}}]}}'.encode("ascii"),
+        )
+    else:
+        assert outcomes[0] == (
+            "error",
+            "JSON integer exceeds the canonical limit of 640 decimal digits",
+        )
+
+
 @pytest.mark.parametrize("sign", ("", "-"), ids=("positive", "negative"))
 @pytest.mark.parametrize(
     ("digit_count", "accepted"),

@@ -526,7 +526,12 @@ def _note_submission(idem_key: str) -> dict:
 
 @contextmanager
 def _preseeded_dirty_spine_store(mutate):
-    """Fresh store where descriptor-id spine records exist before bootstrap."""
+    """Fresh store where descriptor-id spine records exist before bootstrap.
+
+    This test-only fixture deliberately fabricates ``READY`` with a spine that
+    production startup would refuse, solely to exercise downstream
+    defence-in-depth refusal paths.
+    """
     dbname = f"ofarm_dirty_spine_{_uid()}"
     with psycopg.connect(_admin_dsn(), autocommit=True) as admin:
         admin.execute(f'DROP DATABASE IF EXISTS "{dbname}"')

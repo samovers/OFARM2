@@ -80,6 +80,7 @@ class Materializer:
             active_descriptor=active_descriptor,
             active_profile=active_profile,
         )
+        store.require_startup_complete("Materializer")
         if not isinstance(context_assembler, ProfileContextAssembler):
             raise TypeError(
                 "materializer requires a profile context assembler"

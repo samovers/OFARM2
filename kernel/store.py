@@ -223,7 +223,13 @@ class Store:
 
     @contextmanager
     def _startup_transaction(self):
-        """Publish readiness only after the complete startup unit commits."""
+        """Kernel-internal transition for initial or repeat verification.
+
+        ``NEW`` and ``READY`` may enter ``STARTING``. Allowing ``READY`` is
+        deliberate re-verification: readiness is withdrawn while verification
+        runs, and any failure revokes the prior readiness permanently. Readiness
+        is published only after the complete startup unit commits.
+        """
         if self._state is _StoreState.POISONED:
             raise RuntimeBundleBindingError(
                 "this Store is poisoned by a failed startup; a fresh Store is "
@@ -236,6 +242,9 @@ class Store:
         self._state = _StoreState.STARTING
         try:
             connection = self.conn
+            # Invalid caller posture is itself a failed startup. Poisoning even
+            # before verification SQL runs prevents caller misuse, such as nested
+            # startup, from preserving or publishing ambiguous readiness.
             if connection.info.transaction_status is not TransactionStatus.IDLE:
                 raise RuntimeBundleBindingError(
                     "Store startup must own the outermost database transaction"
@@ -317,7 +326,7 @@ class Store:
         )
 
     def _insert_startup_record(self, cur, payload: dict) -> str:
-        """Insert one selected bootstrap record only during Store startup."""
+        """Kernel-internal writer for selected records during Store startup."""
         if self._state is not _StoreState.STARTING:
             raise RuntimeBundleBindingError(
                 "startup bootstrap insertion requires an active Store startup "
