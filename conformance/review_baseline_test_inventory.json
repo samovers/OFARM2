@@ -10556,12 +10556,27 @@
       "sourcePath": "kernel/tests/test_temporal_decision_log.py"
     },
     {
+      "nodeid": "kernel/tests/test_temporal_decision_log.py::test_temporal_decision_log_approval_sentence_digest_constant_is_pinned",
+      "sourceModule": "kernel.tests.test_temporal_decision_log",
+      "sourcePath": "kernel/tests/test_temporal_decision_log.py"
+    },
+    {
       "nodeid": "kernel/tests/test_temporal_decision_log.py::test_temporal_decision_log_entry_bytes_and_filename_are_canonical",
       "sourceModule": "kernel.tests.test_temporal_decision_log",
       "sourcePath": "kernel/tests/test_temporal_decision_log.py"
     },
     {
+      "nodeid": "kernel/tests/test_temporal_decision_log.py::test_temporal_decision_log_rejects_changed_entry_digest_pin",
+      "sourceModule": "kernel.tests.test_temporal_decision_log",
+      "sourcePath": "kernel/tests/test_temporal_decision_log.py"
+    },
+    {
       "nodeid": "kernel/tests/test_temporal_decision_log.py::test_temporal_decision_log_rejects_filename_not_bound_to_entry_digest",
+      "sourceModule": "kernel.tests.test_temporal_decision_log",
+      "sourcePath": "kernel/tests/test_temporal_decision_log.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_decision_log.py::test_temporal_decision_log_rejects_invalid_utf8_without_traceback",
       "sourceModule": "kernel.tests.test_temporal_decision_log",
       "sourcePath": "kernel/tests/test_temporal_decision_log.py"
     },
@@ -10596,6 +10611,16 @@
       "sourcePath": "kernel/tests/test_temporal_decision_log.py"
     },
     {
+      "nodeid": "kernel/tests/test_temporal_decision_log.py::test_temporal_decision_log_rejects_recanonicalized_unapproved_content[card_decision]",
+      "sourceModule": "kernel.tests.test_temporal_decision_log",
+      "sourcePath": "kernel/tests/test_temporal_decision_log.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_decision_log.py::test_temporal_decision_log_rejects_recanonicalized_unapproved_content[card_key_removed]",
+      "sourceModule": "kernel.tests.test_temporal_decision_log",
+      "sourcePath": "kernel/tests/test_temporal_decision_log.py"
+    },
+    {
       "nodeid": "kernel/tests/test_temporal_decision_log.py::test_temporal_decision_log_rejects_recanonicalized_unapproved_content[decided_at]",
       "sourceModule": "kernel.tests.test_temporal_decision_log",
       "sourcePath": "kernel/tests/test_temporal_decision_log.py"
@@ -10622,6 +10647,16 @@
     },
     {
       "nodeid": "kernel/tests/test_temporal_decision_log.py::test_temporal_decision_log_rejects_recanonicalized_unapproved_content[subject_digest]",
+      "sourceModule": "kernel.tests.test_temporal_decision_log",
+      "sourcePath": "kernel/tests/test_temporal_decision_log.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_decision_log.py::test_temporal_decision_log_rejects_recanonicalized_unapproved_content[subject_shape]",
+      "sourceModule": "kernel.tests.test_temporal_decision_log",
+      "sourcePath": "kernel/tests/test_temporal_decision_log.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_decision_log.py::test_temporal_decision_log_rejects_tampered_pinned_authority",
       "sourceModule": "kernel.tests.test_temporal_decision_log",
       "sourcePath": "kernel/tests/test_temporal_decision_log.py"
     },
@@ -10701,8 +10736,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "ddb29d338071814b619776599788e5501e05c9fc54625be3b9e89be893403eb7",
-  "entryCount": 2140,
+  "entriesSha256": "cece7034b6ec6a3b2ccb8f0e28d7c94f47adc3efd6db317c07c0b4e3448b7839",
+  "entryCount": 2147,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
