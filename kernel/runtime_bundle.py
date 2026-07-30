@@ -20,6 +20,7 @@ _SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _LOGICAL_REF_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/#-]{0,1023}$")
 _TENANT_REF_RE = re.compile(r"^tenant:[A-Za-z0-9._:-]{1,248}$")
 _CONTEXT_SCOPE_REF_RE = re.compile(r"^[A-Za-z0-9._:-]+$")
+_MAX_CANONICAL_INTEGER_DIGITS = 640
 _CONTEXT_SCOPE_TYPES = frozenset({
     "FARM",
     "SITE",
@@ -160,6 +161,22 @@ def _reject_nonfinite(value: str) -> None:
     raise RuntimeBundleError(f"JSON contains non-finite number {value}")
 
 
+def _parse_canonical_int(token: str) -> int:
+    """Accept integers within one process-independent decimal digit bound."""
+    digits = token[1:] if token.startswith("-") else token
+    if len(digits) > _MAX_CANONICAL_INTEGER_DIGITS:
+        raise RuntimeBundleError(
+            "JSON integer exceeds the canonical limit of "
+            f"{_MAX_CANONICAL_INTEGER_DIGITS} decimal digits"
+        )
+    try:
+        return int(token)
+    except ValueError as exc:
+        raise RuntimeBundleError(
+            "JSON integer is outside the canonical numeric profile"
+        ) from exc
+
+
 def _parse_canonical_float(token: str) -> float:
     """Accept finite binary64 values only when canonical encoding preserves value."""
     value = float(token)
@@ -194,6 +211,7 @@ def strict_json_document(raw: bytes, label: str) -> tuple[dict[str, Any], bytes]
         value = json.loads(
             text,
             object_pairs_hook=_reject_duplicate_keys,
+            parse_int=_parse_canonical_int,
             parse_float=_parse_canonical_float,
             parse_constant=_reject_nonfinite,
         )

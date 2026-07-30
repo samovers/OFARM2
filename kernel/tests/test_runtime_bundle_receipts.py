@@ -313,7 +313,12 @@ def _foreign_tenant_store(source: Store, label: str):
         active_descriptor=source.active_descriptor,
     )
     try:
-        store.migrate()
+        # The shared-schema fixture cannot duplicate globally keyed selected
+        # profile record ids for a second tenant. Verify/persist its bundle in
+        # the private startup transaction, then exercise only tenant-isolated
+        # operational rows through the READY Store.
+        with store._startup_transaction():
+            store.migrate()
         yield tenant_ref, store
     finally:
         store.close()
@@ -550,15 +555,16 @@ def test_live_schema_catalog_requires_validated_composite_foreign_keys():
 
 def test_profile_bootstrap_refuses_non_exact_existing_selected_instance():
     with _isolated_store("profile_reuse") as store:
-        store.migrate()
         path = next(
             path for path in config.ACTIVE_PROFILE.profile_instance_paths
             if "ActiveArtifactSet" in path.name
         )
         payload = json.loads(path.read_text())
         payload["notes"] += " Mutated pre-existing payload."
-        with store.tx() as cur:
-            store.insert_record(cur, payload)
+        with store._startup_transaction():
+            store.migrate()
+            with store.tx() as cur:
+                store._insert_startup_record(cur, payload)
 
         with pytest.raises(
             context.ContextNotReconstructible,
@@ -599,13 +605,14 @@ def test_profile_bootstrap_inserts_every_bundle_selected_canonical_instance():
 
 def test_profile_bootstrap_refuses_extra_selected_snapshot_mismatch_atomically():
     with _isolated_store("extra_selected_mismatch") as seed_store:
-        seed_store.migrate()
         selected_bundle, extra_snapshot = _bundle_with_extra_selected_snapshot(
             seed_store.runtime_bundle)
         unequal = json.loads(extra_snapshot.canonical_bytes)
         unequal["notes"] += " Pre-existing unequal payload."
-        with seed_store.tx() as cur:
-            seed_store.insert_record(cur, unequal)
+        with seed_store._startup_transaction():
+            seed_store.migrate()
+            with seed_store.tx() as cur:
+                seed_store._insert_startup_record(cur, unequal)
 
         refusing_store = Store(
             dsn=seed_store.dsn,

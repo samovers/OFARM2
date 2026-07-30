@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import sys
 from dataclasses import replace
 from pathlib import Path
 
@@ -549,6 +550,73 @@ def test_direct_bundle_construction_rejects_malformed_context_anchor_scopes(
         )
 
 
+def test_direct_bundle_construction_refuses_malformed_profile_scope():
+    bundle = RuntimeBundleBuilder.from_manifest(PACKAGE_ROOT).build()
+    code_binding = next(
+        component for component in bundle.components
+        if (
+            component.role is RuntimeComponentRole.PROFILE_INSTANCE
+            and json.loads(component.canonical_bytes).get("schemaVersion")
+            == "ofarm.agronomiccodebindingprofile.v0.1"
+        )
+    )
+    document = json.loads(code_binding.canonical_bytes)
+    document["profileScope"] = ["not-an-object"]
+    changed_code_binding = RuntimeComponent.from_selected_bytes(
+        role=code_binding.role,
+        logical_ref=code_binding.logical_ref,
+        canonicalization=code_binding.canonicalization,
+        placement=code_binding.placement,
+        selected_bytes=canonical_json_bytes(document),
+    )
+
+    with pytest.raises(
+        RuntimeBundleError,
+        match=(
+            "selected profile runtime is inconsistent: "
+            "code-binding profile profileScope must be an object"
+        ),
+    ):
+        RuntimeBundle.create(
+            changed_code_binding if component is code_binding else component
+            for component in bundle.components
+        )
+
+
+def test_direct_bundle_construction_refuses_malformed_profile_pack_refs():
+    bundle = RuntimeBundleBuilder.from_manifest(PACKAGE_ROOT).build()
+    code_binding = next(
+        component for component in bundle.components
+        if (
+            component.role is RuntimeComponentRole.PROFILE_INSTANCE
+            and json.loads(component.canonical_bytes).get("schemaVersion")
+            == "ofarm.agronomiccodebindingprofile.v0.1"
+        )
+    )
+    document = json.loads(code_binding.canonical_bytes)
+    document["profileScope"]["packRefs"] = [123]
+    changed_code_binding = RuntimeComponent.from_selected_bytes(
+        role=code_binding.role,
+        logical_ref=code_binding.logical_ref,
+        canonicalization=code_binding.canonicalization,
+        placement=code_binding.placement,
+        selected_bytes=canonical_json_bytes(document),
+    )
+
+    with pytest.raises(
+        RuntimeBundleError,
+        match=(
+            "selected profile runtime is inconsistent: "
+            "code-binding profile profileScope.packRefs must be a "
+            "non-empty list of strings"
+        ),
+    ):
+        RuntimeBundle.create(
+            changed_code_binding if component is code_binding else component
+            for component in bundle.components
+        )
+
+
 def test_canonical_numeric_profile_refuses_a_lossy_float_collision():
     accepted = RuntimeComponent.from_selected_bytes(
         role=RuntimeComponentRole.PROFILE_POLICY,
@@ -573,6 +641,97 @@ def test_canonical_numeric_profile_refuses_a_lossy_float_collision():
                 b'"value":9007199254740993.0}'
             ),
         )
+
+
+@pytest.mark.parametrize("sign", ("", "-"), ids=("positive", "negative"))
+@pytest.mark.parametrize(
+    ("digit_count", "accepted"),
+    ((640, True), (641, False)),
+    ids=("at-limit", "over-limit"),
+)
+def test_strict_json_integer_bound_is_process_independent(
+    sign,
+    digit_count,
+    accepted,
+):
+    token = sign + ("1" * digit_count)
+    raw = f'{{"value":{token}}}'.encode("ascii")
+    original_limit = sys.get_int_max_str_digits()
+    outcomes = []
+
+    try:
+        for process_limit in (640, 0):
+            sys.set_int_max_str_digits(process_limit)
+            try:
+                document, canonical = strict_json_document(
+                    raw, "test runtime document"
+                )
+            except RuntimeBundleError as exc:
+                outcomes.append(("error", str(exc)))
+            else:
+                outcomes.append(("accepted", document["value"], canonical))
+    finally:
+        sys.set_int_max_str_digits(original_limit)
+
+    assert sys.get_int_max_str_digits() == original_limit
+    assert outcomes[0] == outcomes[1]
+    if accepted:
+        assert outcomes[0] == ("accepted", int(token), raw)
+    else:
+        assert outcomes[0] == (
+            "error",
+            "JSON integer exceeds the canonical limit of 640 decimal digits",
+        )
+
+
+@pytest.mark.parametrize("sign", ("", "-"), ids=("positive", "negative"))
+@pytest.mark.parametrize(
+    ("digit_count", "accepted"),
+    ((640, True), (641, False)),
+    ids=("at-limit", "over-limit"),
+)
+def test_direct_bundle_construction_enforces_integer_bound(
+    sign,
+    digit_count,
+    accepted,
+):
+    token = sign + ("1" * digit_count)
+    raw = (
+        b'{"policyId":"policy:test.integer.v1","value":'
+        + token.encode("ascii")
+        + b"}"
+    )
+    original_limit = sys.get_int_max_str_digits()
+
+    try:
+        sys.set_int_max_str_digits(0)
+        if accepted:
+            component = RuntimeComponent.from_selected_bytes(
+                role=RuntimeComponentRole.PROFILE_POLICY,
+                logical_ref="policy:test.integer.v1",
+                canonicalization=Canonicalization.CANONICAL_JSON,
+                placement=ContentPlacement.GLOBAL,
+                selected_bytes=raw,
+            )
+            assert component.canonical_bytes == raw
+            assert RuntimeBundle.create((component,)).components == (component,)
+        else:
+            with pytest.raises(
+                RuntimeBundleError,
+                match="canonical limit of 640 decimal digits",
+            ):
+                RuntimeComponent.from_selected_bytes(
+                    role=RuntimeComponentRole.PROFILE_POLICY,
+                    logical_ref="policy:test.integer.v1",
+                    canonicalization=Canonicalization.CANONICAL_JSON,
+                    placement=ContentPlacement.GLOBAL,
+                    selected_bytes=raw,
+                )
+        assert sys.get_int_max_str_digits() == 0
+    finally:
+        sys.set_int_max_str_digits(original_limit)
+
+    assert sys.get_int_max_str_digits() == original_limit
 
 
 @pytest.mark.parametrize(

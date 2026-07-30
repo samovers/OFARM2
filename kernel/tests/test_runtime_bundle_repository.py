@@ -194,13 +194,13 @@ def _seed_raw_persisted_bundle(
     return bundle_digest
 
 
-def _seed_raw_bundle_with_replaced_tenant_component(
+def _seed_raw_bundle_with_replaced_component(
     store: Store,
     bundle: RuntimeBundle,
     component: RuntimeComponent,
     replacement_bytes: bytes,
 ) -> str:
-    """Retain one malformed tenant component without invoking the model."""
+    """Retain one malformed component without invoking the model."""
     replacement_digest = sha256_bytes(replacement_bytes)
     identity_document = json.loads(bundle.canonical_document_bytes)
     identity = next(
@@ -216,19 +216,35 @@ def _seed_raw_bundle_with_replaced_tenant_component(
     bundle_digest = sha256_bytes(canonical_document_bytes)
 
     with store.tx() as cur:
-        cur.execute(
-            """
-            INSERT INTO runtime_tenant_content_blob
-              (tenant_ref, content_digest, canonical_bytes, byte_length)
-            VALUES (%s, %s, %s, %s)
-            """,
-            (
-                SELECTED_TENANT_REF,
-                replacement_digest,
-                replacement_bytes,
-                len(replacement_bytes),
-            ),
-        )
+        if component.placement is ContentPlacement.GLOBAL:
+            cur.execute(
+                """
+                INSERT INTO runtime_content_blob
+                  (content_digest, canonical_bytes, byte_length)
+                VALUES (%s, %s, %s)
+                """,
+                (
+                    replacement_digest,
+                    replacement_bytes,
+                    len(replacement_bytes),
+                ),
+            )
+            global_digest, tenant_digest = replacement_digest, None
+        else:
+            cur.execute(
+                """
+                INSERT INTO runtime_tenant_content_blob
+                  (tenant_ref, content_digest, canonical_bytes, byte_length)
+                VALUES (%s, %s, %s, %s)
+                """,
+                (
+                    SELECTED_TENANT_REF,
+                    replacement_digest,
+                    replacement_bytes,
+                    len(replacement_bytes),
+                ),
+            )
+            global_digest, tenant_digest = None, replacement_digest
         cur.execute(
             """
             INSERT INTO runtime_bundle
@@ -250,7 +266,9 @@ def _seed_raw_bundle_with_replaced_tenant_component(
                canonicalization, content_placement, global_content_digest,
                tenant_content_digest, byte_length)
             SELECT tenant_ref, %s, component_role, logical_ref,
-                   canonicalization, content_placement, global_content_digest,
+                   canonicalization, content_placement,
+                   CASE WHEN component_role = %s AND logical_ref = %s
+                        THEN %s ELSE global_content_digest END,
                    CASE WHEN component_role = %s AND logical_ref = %s
                         THEN %s ELSE tenant_content_digest END,
                    CASE WHEN component_role = %s AND logical_ref = %s
@@ -262,7 +280,10 @@ def _seed_raw_bundle_with_replaced_tenant_component(
                 bundle_digest,
                 component.role.value,
                 component.logical_ref,
-                replacement_digest,
+                global_digest,
+                component.role.value,
+                component.logical_ref,
+                tenant_digest,
                 component.role.value,
                 component.logical_ref,
                 len(replacement_bytes),
@@ -685,7 +706,7 @@ def test_cold_audit_refuses_malformed_context_anchor_scope_members(
             "scopeRef": SELECTED_TENANT_REF,
         },
     ]
-    malformed_digest = _seed_raw_bundle_with_replaced_tenant_component(
+    malformed_digest = _seed_raw_bundle_with_replaced_component(
         store,
         bundle,
         context,
@@ -699,6 +720,131 @@ def test_cold_audit_refuses_malformed_context_anchor_scope_members(
             match=(
                 "persisted RuntimeBundle model is invalid: "
                 "ContextSnapshot anchorScopes are malformed"
+            ),
+        ):
+            repository.load_for_audit(
+                cur,
+                SELECTED_TENANT_REF,
+                malformed_digest,
+            )
+        cur.execute("SELECT 1")
+
+    assert _snapshot_runtime_tables(store) == before_audit
+
+
+def test_cold_audit_refuses_integer_outside_fixed_canonical_limit(
+    migrated_store,
+):
+    store = migrated_store
+    repository = RuntimeBundleRepository()
+    policy_ref = "policy:test.integer-limit.v1"
+    selected_bytes = (
+        b'{"policyId":"' + policy_ref.encode("ascii") + b'","value":'
+        + b"9" * 641
+        + b"}"
+    )
+    bundle_digest = _seed_raw_persisted_bundle(
+        store,
+        role=RuntimeComponentRole.PROFILE_POLICY,
+        logical_ref=policy_ref,
+        canonicalization=Canonicalization.CANONICAL_JSON,
+        placement=ContentPlacement.GLOBAL,
+        selected_bytes=selected_bytes,
+    )
+    before_audit = _snapshot_runtime_tables(store)
+
+    with store.tx() as cur:
+        with pytest.raises(
+            RuntimeBundleRepositoryError,
+            match=(
+                "persisted RuntimeBundle model is invalid: "
+                "JSON integer exceeds the canonical limit of "
+                "640 decimal digits"
+            ),
+        ):
+            repository.load_for_audit(cur, TENANT_REF, bundle_digest)
+        cur.execute("SELECT 1")
+
+    assert _snapshot_runtime_tables(store) == before_audit
+
+
+def test_cold_audit_refuses_malformed_profile_scope_without_mutation(
+    migrated_store,
+):
+    store = migrated_store
+    repository = RuntimeBundleRepository()
+    bundle = RuntimeBundleBuilder.from_manifest(PACKAGE_ROOT).build()
+    _persist(store, bundle, SELECTED_TENANT_REF)
+    code_binding = next(
+        component for component in bundle.components
+        if (
+            component.role is RuntimeComponentRole.PROFILE_INSTANCE
+            and json.loads(component.canonical_bytes).get("schemaVersion")
+            == "ofarm.agronomiccodebindingprofile.v0.1"
+        )
+    )
+    code_binding_document = json.loads(code_binding.canonical_bytes)
+    code_binding_document["profileScope"] = ["not-an-object"]
+    malformed_digest = _seed_raw_bundle_with_replaced_component(
+        store,
+        bundle,
+        code_binding,
+        canonical_json_bytes(code_binding_document),
+    )
+    before_audit = _snapshot_runtime_tables(store)
+
+    with store.tx() as cur:
+        with pytest.raises(
+            RuntimeBundleRepositoryError,
+            match=(
+                "persisted RuntimeBundle model is invalid: "
+                "selected profile runtime is inconsistent: "
+                "code-binding profile profileScope must be an object"
+            ),
+        ):
+            repository.load_for_audit(
+                cur,
+                SELECTED_TENANT_REF,
+                malformed_digest,
+            )
+        cur.execute("SELECT 1")
+
+    assert _snapshot_runtime_tables(store) == before_audit
+
+
+def test_cold_audit_refuses_malformed_profile_pack_refs_without_mutation(
+    migrated_store,
+):
+    store = migrated_store
+    repository = RuntimeBundleRepository()
+    bundle = RuntimeBundleBuilder.from_manifest(PACKAGE_ROOT).build()
+    _persist(store, bundle, SELECTED_TENANT_REF)
+    code_binding = next(
+        component for component in bundle.components
+        if (
+            component.role is RuntimeComponentRole.PROFILE_INSTANCE
+            and json.loads(component.canonical_bytes).get("schemaVersion")
+            == "ofarm.agronomiccodebindingprofile.v0.1"
+        )
+    )
+    code_binding_document = json.loads(code_binding.canonical_bytes)
+    code_binding_document["profileScope"]["packRefs"] = [123]
+    malformed_digest = _seed_raw_bundle_with_replaced_component(
+        store,
+        bundle,
+        code_binding,
+        canonical_json_bytes(code_binding_document),
+    )
+    before_audit = _snapshot_runtime_tables(store)
+
+    with store.tx() as cur:
+        with pytest.raises(
+            RuntimeBundleRepositoryError,
+            match=(
+                "persisted RuntimeBundle model is invalid: "
+                "selected profile runtime is inconsistent: "
+                "code-binding profile profileScope.packRefs must be a "
+                "non-empty list of strings"
             ),
         ):
             repository.load_for_audit(

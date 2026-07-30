@@ -45,6 +45,7 @@ def test_g2_output_render_serializes_under_lock(store):
     )
     done = threading.Event()
     box = {}
+    complete_store_startup(a)
     complete_store_startup(b)
 
     def render():
@@ -91,6 +92,7 @@ def test_g2_freeze_serializes_under_lock(store):
     )
     done = threading.Event()
     box = {}
+    complete_store_startup(a)
     complete_store_startup(b)
 
     def freeze():

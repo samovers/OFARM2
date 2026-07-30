@@ -473,6 +473,7 @@ def test_p3_attach_inspection_evidence_is_race_safe(store):
                 active_descriptor=selected.active_descriptor,
             )
             try:
+                complete_store_startup(worker_store)
                 barrier.wait(timeout=10)        # both contend on attach together
                 results.append(ffsn.attach_inspection_evidence(
                     worker_store, sid, sticker, validity=validity,

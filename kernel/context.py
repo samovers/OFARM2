@@ -280,7 +280,7 @@ def bootstrap_for_descriptor(store, active_profile) -> list[str]:
                     "exact selected contract and payload"
                 )
         for payload, record_id in missing:
-            store.insert_record(cur, payload)
+            store._insert_startup_record(cur, payload)
             inserted.append(record_id)
     return inserted
 

@@ -88,7 +88,7 @@ from kernel.stages import (
     parse_ingress_header,
 )
 
-from kernel.store import Store
+from kernel.store import RuntimeBundleBindingError, Store
 
 TEST_MATERIALIZATION_SPECIFICATION = MaterializationSpecification(
     policy_ref="policy:test.materialization.v0_1",
@@ -540,7 +540,6 @@ def _preseeded_dirty_spine_store(mutate):
         active_descriptor=config.ACTIVE_PROFILE,
     )
     try:
-        store.migrate()
         profile = _profile_instance_payload(
             "agronomicCodeBindingProfileId",
             config.ACTIVE_PROFILE.code_binding_profile_ref,
@@ -552,22 +551,24 @@ def _preseeded_dirty_spine_store(mutate):
             "activeArtifactSetId", config.ACTIVE_PROFILE.active_artifact_set_ref
         )
         mutate(profile, activation, artifact)
-        with store.tx() as cur:
-            store.insert_record(cur, profile)
-            store.insert_record(cur, activation)
-            store.insert_record(cur, artifact)
-        # This fixture deliberately constructs corrupt same-ID spine records so
-        # downstream refusal paths can be tested. Production bootstrap now
-        # refuses those records immediately; insert only the remaining exact
-        # shipped instances here to preserve the fixture's narrower purpose.
-        for path in config.ACTIVE_PROFILE.profile_instance_paths:
-            payload = json.loads(path.read_text())
-            contract = store.registry.get(payload["schemaVersion"])
-            record_id = payload[contract.id_field]
-            if store.record_exists(record_id):
-                continue
+        with store._startup_transaction():
+            store.migrate()
             with store.tx() as cur:
-                store.insert_record(cur, payload)
+                store._insert_startup_record(cur, profile)
+                store._insert_startup_record(cur, activation)
+                store._insert_startup_record(cur, artifact)
+            # This fixture deliberately constructs corrupt same-ID spine records
+            # so downstream refusal paths can be tested. Production bootstrap
+            # refuses those records immediately; insert only the remaining exact
+            # shipped instances through the private startup writer.
+            for path in config.ACTIVE_PROFILE.profile_instance_paths:
+                payload = json.loads(path.read_text())
+                contract = store.registry.get(payload["schemaVersion"])
+                record_id = payload[contract.id_field]
+                if store.record_exists(record_id):
+                    continue
+                with store.tx() as cur:
+                    store._insert_startup_record(cur, payload)
         for payload in demo.substrate_records():
             contract = store.registry.get(payload["schemaVersion"])
             record_id = payload[contract.id_field]

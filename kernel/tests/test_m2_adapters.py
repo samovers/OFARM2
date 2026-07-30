@@ -119,6 +119,8 @@ def test_g2_single_writer_lock_is_mutually_exclusive(store):
         active_descriptor=store.active_descriptor,
     )
     try:
+        complete_store_startup(a)
+        complete_store_startup(b)
         with b.conn.cursor() as cb:
             with a.serialized_tx():
                 cb.execute("SELECT pg_try_advisory_lock(%s)", (_SINGLE_WRITER_LOCK_KEY,))

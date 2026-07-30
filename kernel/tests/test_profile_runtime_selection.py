@@ -2,6 +2,25 @@
 # ruff: noqa: F403, F405
 
 from kernel.tests._profile_runtime_test_support import *
+from kernel.profile_runtime import validate_profile_runtime_selection_documents
+
+
+def _selection_documents():
+    descriptor = _base_doc()
+    payloads = [
+        json.loads((config.PROFILE_ROOT / rel).read_text())
+        for rel in descriptor["profileInstanceFiles"]
+    ]
+    return descriptor, payloads
+
+
+def _selection_code_binding_profile(descriptor, payloads):
+    return next(
+        payload
+        for payload in payloads
+        if payload.get("agronomicCodeBindingProfileId")
+        == descriptor["codeBindingProfileRef"]
+    )
 
 
 def test_profile_route_rejects_descriptor_identity_mismatch():
@@ -391,6 +410,74 @@ def test_descriptor_rejects_code_binding_profile_wrong_pack_scope(tmp_path):
         load_profile_runtime_descriptor(root)
 
 
+def test_selection_documents_reject_non_object_code_binding_profile_scope():
+    descriptor, payloads = _selection_documents()
+    profile = _selection_code_binding_profile(descriptor, payloads)
+    profile["profileScope"] = ["truthy", "array"]
+
+    with pytest.raises(ProfileRuntimeError, match="profileScope must be an object"):
+        validate_profile_runtime_selection_documents(descriptor, payloads)
+
+
+def test_descriptor_rejects_non_object_code_binding_profile_scope(tmp_path):
+    root, doc = _copied_profile_root(tmp_path)
+    profile_path, profile = _profile_file_by_id(
+        root,
+        doc,
+        "agronomicCodeBindingProfileId",
+        doc["codeBindingProfileRef"],
+    )
+    profile["profileScope"] = ["truthy", "array"]
+    profile_path.write_text(json.dumps(profile), encoding="utf-8")
+
+    with pytest.raises(ProfileRuntimeError, match="profileScope must be an object"):
+        load_profile_runtime_descriptor(root)
+
+
+@pytest.mark.parametrize("pack_refs", [
+    None,
+    [],
+    "pack:si.ffs.pilot.v0_1",
+    [123],
+    {"pack": "pack:si.ffs.pilot.v0_1"},
+])
+def test_selection_documents_reject_malformed_code_binding_pack_refs(pack_refs):
+    descriptor, payloads = _selection_documents()
+    profile = _selection_code_binding_profile(descriptor, payloads)
+    profile["profileScope"]["packRefs"] = pack_refs
+
+    with pytest.raises(
+        ProfileRuntimeError,
+        match="profileScope.packRefs must be a non-empty list of strings",
+    ):
+        validate_profile_runtime_selection_documents(descriptor, payloads)
+
+
+@pytest.mark.parametrize("pack_refs", [
+    None,
+    [],
+    "pack:si.ffs.pilot.v0_1",
+    [123],
+    {"pack": "pack:si.ffs.pilot.v0_1"},
+])
+def test_descriptor_rejects_malformed_code_binding_pack_refs(tmp_path, pack_refs):
+    root, doc = _copied_profile_root(tmp_path)
+    profile_path, profile = _profile_file_by_id(
+        root,
+        doc,
+        "agronomicCodeBindingProfileId",
+        doc["codeBindingProfileRef"],
+    )
+    profile["profileScope"]["packRefs"] = pack_refs
+    profile_path.write_text(json.dumps(profile), encoding="utf-8")
+
+    with pytest.raises(
+        ProfileRuntimeError,
+        match="profileScope.packRefs must be a non-empty list of strings",
+    ):
+        load_profile_runtime_descriptor(root)
+
+
 def test_descriptor_rejects_missing_active_spine_ref(tmp_path):
     with pytest.raises(ProfileRuntimeError, match="expected exactly one"):
         _load_modified(
@@ -421,7 +508,12 @@ def test_descriptor_rejects_mismatched_shipped_snapshot_ref(tmp_path):
 def test_explicit_descriptor_bootstrap_inserts_expected_profile_instances():
     with _fresh_unbootstrapped_store() as store:
         expected = _expected_profile_instance_ids(store, config.ACTIVE_PROFILE)
-        inserted = context.bootstrap_for_descriptor(store, config.ACTIVE_PROFILE)
+        with store._startup_transaction():
+            store.migrate()
+            inserted = context.bootstrap_for_descriptor(
+                store,
+                config.ACTIVE_PROFILE,
+            )
 
         assert inserted == expected
         assert all(store.record_exists(record_id) for record_id in expected)
@@ -433,13 +525,17 @@ def test_explicit_descriptor_bootstrap_matches_compatibility_wrapper():
             implicit_store,
             config.ACTIVE_PROFILE,
         )
-        implicit = context.bootstrap(implicit_store)
+        with implicit_store._startup_transaction():
+            implicit_store.migrate()
+            implicit = context.bootstrap(implicit_store)
 
     with _fresh_unbootstrapped_store() as explicit_store:
-        explicit = context.bootstrap_for_descriptor(
-            explicit_store,
-            config.ACTIVE_PROFILE,
-        )
+        with explicit_store._startup_transaction():
+            explicit_store.migrate()
+            explicit = context.bootstrap_for_descriptor(
+                explicit_store,
+                config.ACTIVE_PROFILE,
+            )
 
     assert implicit == explicit == expected
 

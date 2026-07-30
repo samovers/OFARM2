@@ -163,7 +163,7 @@ def test_descriptor_compliance_recognized_refs_are_exact():
         })
 
 
-def test_materializer_missing_context_spine_refuses_use_governably():
+def test_materializer_missing_context_spine_cannot_write_before_startup():
     with _fresh_unbootstrapped_store() as store:
         materializer = Materializer(
             store,
@@ -176,13 +176,11 @@ def test_materializer_missing_context_spine_refuses_use_governably():
         )
 
         with store.tx() as cur:
-            result = materializer.resolve_for_use(cur, demo.FARM)
-
-        assert result["decision"] == "REFUSE_USE"
-        assert result["freshness"] == "INVALID"
-        assert result["contextSnapshotRef"] == "contextsnapshot:not-reconstructible"
-        assert result["problems"][0]["reasonCode"] == "MATERIALIZATION_INVALID"
-        assert "context spine not bootstrapped" in result["problems"][0]["detail"]
+            with pytest.raises(
+                RuntimeBundleBindingError,
+                match="requires completed schema, bundle, and profile startup",
+            ):
+                materializer.resolve_for_use(cur, demo.FARM)
 
 
 def test_api_startup_refuses_non_exact_selected_profile_instance():
