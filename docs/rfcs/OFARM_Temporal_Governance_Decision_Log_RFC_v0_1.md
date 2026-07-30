@@ -90,6 +90,8 @@ The old invariants have these exact dispositions:
 | `TLAW-015` | Preserved → `TDL-014`. |
 | `TLAW-016` | Preserved → `TDL-013`, provisional design record. |
 
+`TDL-010` is new in this contract and has no `TLAW` predecessor.
+
 Until this replacement contract is landed, nothing changes.
 
 ## 3. Decision
@@ -182,8 +184,8 @@ make this documentation object incapable of authorizing an entry.
 
 ```json
 {
-  "contractIdentity": "ofarm.temporal-governance-decision-log.issue176-predeployment.v0.1",
   "codexTaskId": "<CODEX_TASK_ID>",
+  "contractIdentity": "ofarm.temporal-governance-decision-log.issue176-predeployment.v0.1",
   "decision": "PROMOTE_GOVERNED_INACTIVE",
   "decisionEffect": "ALL_THREE_EXACT_SUBJECTS_ARE_CURRENT_PREDEPLOYMENT_GOVERNED_INACTIVE_DECISION",
   "nonEffects": [
@@ -296,8 +298,8 @@ forbidden. Every placeholder string is invalid.
   "contractIdentity": "ofarm.temporal-governance-decision-log.issue176-predeployment.v0.1",
   "decisionCardDigest": "<CARD_DIGEST>",
   "decisionCardPayload": {
-    "contractIdentity": "ofarm.temporal-governance-decision-log.issue176-predeployment.v0.1",
     "codexTaskId": "<CODEX_TASK_ID>",
+    "contractIdentity": "ofarm.temporal-governance-decision-log.issue176-predeployment.v0.1",
     "decision": "PROMOTE_GOVERNED_INACTIVE",
     "decisionEffect": "ALL_THREE_EXACT_SUBJECTS_ARE_CURRENT_PREDEPLOYMENT_GOVERNED_INACTIVE_DECISION",
     "nonEffects": [
