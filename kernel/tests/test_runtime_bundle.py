@@ -5,6 +5,7 @@ import json
 import shutil
 import sys
 from dataclasses import replace
+from enum import IntEnum
 from pathlib import Path
 
 import pytest
@@ -725,6 +726,38 @@ def test_canonical_json_encoder_integer_bound_is_process_independent(
             "error",
             "JSON integer exceeds the canonical limit of 640 decimal digits",
         )
+
+
+def test_canonical_json_encoder_integer_bound_covers_int_subclasses():
+    class OverLimitInteger(IntEnum):
+        VALUE = 10 ** 640
+
+    document = {"nested": [{"value": OverLimitInteger.VALUE}]}
+    original_limit = sys.get_int_max_str_digits()
+    outcomes = []
+
+    try:
+        for process_limit in (640, 0):
+            sys.set_int_max_str_digits(process_limit)
+            try:
+                canonical_json_bytes(document)
+            except RuntimeBundleError as exc:
+                outcomes.append(("error", str(exc)))
+            else:
+                outcomes.append(("accepted",))
+    finally:
+        sys.set_int_max_str_digits(original_limit)
+
+    assert outcomes == [
+        (
+            "error",
+            "JSON integer exceeds the canonical limit of 640 decimal digits",
+        ),
+        (
+            "error",
+            "JSON integer exceeds the canonical limit of 640 decimal digits",
+        ),
+    ]
 
 
 @pytest.mark.parametrize("sign", ("", "-"), ids=("positive", "negative"))

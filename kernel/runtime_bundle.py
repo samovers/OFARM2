@@ -182,12 +182,12 @@ def _parse_canonical_int(token: str) -> int:
 
 
 def _require_canonical_integer_bounds(value: Any) -> None:
-    """Reject over-limit built-in integers anywhere in a JSON value."""
+    """Reject over-limit integer values, excluding booleans, in a JSON value."""
     pending = [value]
     seen_containers: set[int] = set()
     while pending:
         item = pending.pop()
-        if type(item) is int:
+        if isinstance(item, int) and not isinstance(item, bool):
             if abs(item) >= _MAX_CANONICAL_INTEGER_MAGNITUDE:
                 raise RuntimeBundleError(_CANONICAL_INTEGER_LIMIT_ERROR)
             continue
