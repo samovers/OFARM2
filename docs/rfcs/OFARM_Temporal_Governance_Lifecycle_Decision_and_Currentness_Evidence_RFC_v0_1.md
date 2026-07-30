@@ -106,9 +106,9 @@ I explicitly approve PROMOTE_GOVERNED_INACTIVE under ofarm.temporal-governance-p
 ```
 
 The architect must post that sentence alone. Leading or trailing whitespace
-may be removed when comparing text. No other normalization, abbreviation,
-Markdown markup, quotation, prefix, suffix, or substituted wording is
-allowed.
+may be removed before comparison and digesting. No other normalization,
+abbreviation, Markdown markup, quotation, prefix, suffix, or substituted
+wording is allowed.
 
 The SHA-256 digest of the exact UTF-8 sentence, with no leading whitespace,
 trailing whitespace, or newline, is:
@@ -187,7 +187,7 @@ or caller field advances this state machine.
   approve, infer approval, or alter the decision.
 - GitHub user `samovers` owns the pre-deployment architect decision.
 - GitHub owns existing authentication, actor attribution, ordering, and the
-  immutable approval-comment reference.
+  stable approval-comment reference.
 - The future decision record owns the authorized disposition after it is
   created under a separately approved implementation contract.
 - The future currentness trace owns effective lifecycle-head evidence. It is
@@ -244,7 +244,7 @@ The workflow refuses record authorization when:
 - the card changes after approval;
 - one approval is reused for another record, contract version, subject set, or
   outcome;
-- the future record omits or changes approval evidence; or
+- the future record omits or changes approval evidence;
 - the approval comment is edited or deleted before record creation; or
 - approval is treated as a currentness trace, activation, or promotion by
   itself.
