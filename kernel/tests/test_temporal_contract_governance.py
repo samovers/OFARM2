@@ -90,6 +90,18 @@ def _runtime_bundle_selection_binding() -> dict:
     )
 
 
+def _promotion_schema() -> dict:
+    return json.loads(
+        temporal.PROMOTION_SCHEMA_PATH.read_text(encoding="utf-8")
+    )
+
+
+def _promotion_binding() -> dict:
+    return json.loads(
+        temporal.PROMOTION_BINDING_PATH.read_text(encoding="utf-8")
+    )
+
+
 def _coordinate() -> dict:
     return {
         "schemaVersion": temporal.CONTRACT_VERSION,
@@ -120,6 +132,8 @@ def test_candidate_schemas_and_instances_are_full_draft_2020_12_valid():
     runtime_bundle_carrier_binding = _runtime_bundle_carrier_binding()
     runtime_bundle_selection_schema = _runtime_bundle_selection_schema()
     runtime_bundle_selection_binding = _runtime_bundle_selection_binding()
+    promotion_schema = _promotion_schema()
+    promotion_binding = _promotion_binding()
 
     jsonschema.Draft202012Validator.check_schema(coordinate_schema)
     jsonschema.Draft202012Validator.check_schema(carrier_schema)
@@ -131,6 +145,7 @@ def test_candidate_schemas_and_instances_are_full_draft_2020_12_valid():
     jsonschema.Draft202012Validator.check_schema(
         runtime_bundle_selection_schema
     )
+    jsonschema.Draft202012Validator.check_schema(promotion_schema)
     jsonschema.Draft202012Validator(carrier_schema).validate(carrier_matrix)
     jsonschema.Draft202012Validator(selection_schema).validate(
         selection_binding
@@ -142,6 +157,9 @@ def test_candidate_schemas_and_instances_are_full_draft_2020_12_valid():
     jsonschema.Draft202012Validator(
         runtime_bundle_selection_schema
     ).validate(runtime_bundle_selection_binding)
+    jsonschema.Draft202012Validator(promotion_schema).validate(
+        promotion_binding
+    )
     temporal.validate_carrier_matrix(carrier_matrix)
     temporal.validate_selection_schema_shape(selection_schema)
     temporal.validate_selection_binding(selection_binding)
@@ -161,6 +179,12 @@ def test_candidate_schemas_and_instances_are_full_draft_2020_12_valid():
     temporal.validate_runtime_bundle_selection_binding(
         runtime_bundle_selection_binding
     )
+    temporal.validate_promotion_schema_shape(
+        promotion_schema,
+        promotion_binding,
+    )
+    temporal.validate_promotion_binding(promotion_binding)
+    temporal.validate_promotion_dependency_consistency()
 
 
 def test_point_and_window_coordinates_validate_against_schema_and_semantics():
@@ -529,6 +553,265 @@ def test_tenant_command_runtime_bundle_selection_is_exact_and_inactive(
             temporal.validate_runtime_bundle_selection_binding(binding)
 
 
+def test_temporal_promotion_contract_is_atomic_exact_and_has_no_effect(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    schema = _promotion_schema()
+    binding = _promotion_binding()
+    validator = jsonschema.Draft202012Validator(schema)
+
+    assert (
+        binding["subjectSet"]["subjects"]
+        == temporal._expected_promotion_subjects()
+    )
+    assert binding["promotionMeaning"] == {
+        "sourceLifecycleState": "CANDIDATE_INACTIVE",
+        "targetLifecycleState": "GOVERNED_INACTIVE",
+        "effect": "EXTERNAL_LIFECYCLE_CLASSIFICATION_ONLY",
+        "embeddedStatusMeaning": "IMMUTABLE_CREATION_STATE_ATTESTATION",
+        "effectiveLifecycleAuthority": (
+            "REVIEWED_PROMOTION_DECISION_AND_CURRENTNESS_TRACE"
+        ),
+        "currentDefaultPromotion": False,
+        "runtimeActivation": False,
+        "productionReadiness": False,
+    }
+    mutations = (
+        (
+            lambda value: value.update({"status": "GOVERNED_INACTIVE"}),
+            "identity differs",
+        ),
+        (
+            lambda value: value["subjectSet"]["subjects"].pop(),
+            "subject set differs",
+        ),
+        (
+            lambda value: value["subjectSet"]["subjects"].append(
+                copy.deepcopy(value["subjectSet"]["subjects"][0])
+            ),
+            "subject set differs",
+        ),
+        (
+            lambda value: value["subjectSet"]["subjects"].reverse(),
+            "subject set differs",
+        ),
+        (
+            lambda value: value["subjectSet"]["subjects"][0].update(
+                {"repositoryFileDigest": "sha256:" + ("0" * 64)}
+            ),
+            "subject set differs",
+        ),
+        (
+            lambda value: value["subjectSet"].update(
+                {"partialPromotion": "ALLOW_PARTIAL"}
+            ),
+            "subject set differs",
+        ),
+        (
+            lambda value: value["decisionContract"]["allowedOutcomes"].append(
+                "PROMOTE_ACTIVE"
+            ),
+            "decision authority differs",
+        ),
+        (
+            lambda value: value["decisionContract"].update(
+                {"humanGoverned": False}
+            ),
+            "decision authority differs",
+        ),
+        (
+            lambda value: value["decisionContract"].update(
+                {"contractApprovalIsPromotion": True}
+            ),
+            "decision authority differs",
+        ),
+        (
+            lambda value: value["decisionContract"].update(
+                {"callerSelectable": True}
+            ),
+            "decision authority differs",
+        ),
+        (
+            lambda value: value["dependencyConsistency"].update(
+                {"selectorMatrixRowId": "ASSERTION_RECORD"}
+            ),
+            "binding differs",
+        ),
+        (
+            lambda value: value["authoritySeparation"].update(
+                {"runtimeAuthoritiesUnchanged": False}
+            ),
+            "binding differs",
+        ),
+        (
+            lambda value: value["invariants"].remove(
+                "TGP-003_ATOMIC_DECISION"
+            ),
+            "invariants or negative cases differ",
+        ),
+        (
+            lambda value: value["negativeCases"].remove(
+                "POSITIVE_DECISION_STRONGER_THAN_GOVERNED_INACTIVE"
+            ),
+            "invariants or negative cases differ",
+        ),
+        (
+            lambda value: value["promotionMeaning"].update(
+                {"targetLifecycleState": "CURRENT_DEFAULT"}
+            ),
+            "binding differs",
+        ),
+        (
+            lambda value: value["unsupported"].remove(
+                "CURRENT_DEFAULT_PROMOTION"
+            ),
+            "binding differs",
+        ),
+        (
+            lambda value: value["implementationStops"].clear(),
+            "binding differs",
+        ),
+        (
+            lambda value: value.update({"callerDecision": "PROMOTE"}),
+            "unknown fields",
+        ),
+        (
+            lambda value: value.pop("authoritySeparation"),
+            "missing fields",
+        ),
+    )
+    for mutation, expected_error in mutations:
+        mutated = copy.deepcopy(binding)
+        mutation(mutated)
+        assert list(validator.iter_errors(mutated))
+        with pytest.raises(
+            temporal.TemporalCandidateError,
+            match=expected_error,
+        ):
+            temporal.validate_promotion_binding(mutated)
+
+    schema_mutations = (
+        (
+            lambda value: value.update(
+                {"$id": "https://example.invalid/promotion"}
+            ),
+            "schema shape differs",
+        ),
+        (
+            lambda value: value.update({"title": "Unreviewed promotion"}),
+            "schema shape differs",
+        ),
+        (
+            lambda value: value["const"].update(
+                {"status": "GOVERNED_INACTIVE"}
+            ),
+            "schema shape differs",
+        ),
+        (
+            lambda value: value.update({"$comment": "inactive"}),
+            "schema posture differs",
+        ),
+    )
+    for mutation, expected_error in schema_mutations:
+        mutated_schema = copy.deepcopy(schema)
+        mutation(mutated_schema)
+        with pytest.raises(
+            temporal.TemporalCandidateError,
+            match=expected_error,
+        ):
+            temporal.validate_promotion_schema_shape(
+                mutated_schema,
+                binding,
+            )
+
+    promotion_rfc = temporal.PROMOTION_RFC_PATH.read_text(encoding="utf-8")
+    rfc_mutations = (
+        promotion_rfc.replace(
+            "TGP-003 — Atomic decision.",
+            "TGP-003 — Deleted atomic decision.",
+            1,
+        ),
+        promotion_rfc.replace("9504", "9999", 1),
+        promotion_rfc.replace("## Required negative cases", "", 1),
+    )
+    for index, mutated_rfc in enumerate(rfc_mutations):
+        mutated_rfc_path = tmp_path / f"promotion-rfc-{index}.md"
+        mutated_rfc_path.write_text(mutated_rfc, encoding="utf-8")
+        with monkeypatch.context() as rfc_patch:
+            rfc_patch.setattr(
+                temporal,
+                "PROMOTION_RFC_PATH",
+                mutated_rfc_path,
+            )
+            with pytest.raises(
+                temporal.TemporalCandidateError,
+                match="RFC digest differs",
+            ):
+                temporal._assert_promotion_rfc_digest()
+
+    tampered_selector = _selection_binding()
+    tampered_selector["carrierMatrix"]["rowId"] = "ASSERTION_RECORD"
+    tampered_selector_path = tmp_path / "tampered-selector.json"
+    tampered_selector_path.write_text(
+        json.dumps(tampered_selector, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    with monkeypatch.context() as dependency_patch:
+        dependency_patch.setattr(
+            temporal,
+            "SELECTION_BINDING_PATH",
+            tampered_selector_path,
+        )
+        with pytest.raises(
+            temporal.TemporalCandidateError,
+            match="exact matrix dependency",
+        ):
+            temporal.validate_promotion_dependency_consistency()
+
+    malformed_command = _command_binding()
+    malformed_command["prerequisites"] = "caller-selected"
+    malformed_command_path = tmp_path / "malformed-command.json"
+    malformed_command_path.write_text(
+        json.dumps(malformed_command, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    with monkeypatch.context() as dependency_patch:
+        dependency_patch.setattr(
+            temporal,
+            "COMMAND_BINDING_PATH",
+            malformed_command_path,
+        )
+        with pytest.raises(
+            temporal.TemporalCandidateError,
+            match="prerequisites are malformed",
+        ):
+            temporal.validate_promotion_dependency_consistency()
+
+    tampered_command = _command_binding()
+    for prerequisite in tampered_command["prerequisites"]:
+        if prerequisite["role"] == "INTERVENTION_VALID_TIME_SELECTION":
+            prerequisite["identity"] = "caller-selected"
+    tampered_command_path = tmp_path / "tampered-command.json"
+    tampered_command_path.write_text(
+        json.dumps(tampered_command, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    with monkeypatch.context() as dependency_patch:
+        dependency_patch.setattr(
+            temporal,
+            "COMMAND_BINDING_PATH",
+            tampered_command_path,
+        )
+        with pytest.raises(
+            temporal.TemporalCandidateError,
+            match="exact selector dependency",
+        ):
+            temporal.validate_promotion_dependency_consistency()
+
+    temporal.validate_promotion_dependency_consistency()
+
+
 def test_candidate_does_not_enter_runtime_or_production_activation_inputs(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -625,6 +908,9 @@ def test_candidate_does_not_enter_runtime_or_production_activation_inputs(
         temporal.RUNTIME_BUNDLE_SELECTION_SCHEMA_VERSION,
         temporal.RUNTIME_BUNDLE_SELECTION_BINDING_ID,
         temporal.RUNTIME_BUNDLE_SELECTION_EXECUTION_POSTURE,
+        temporal.PROMOTION_SCHEMA_VERSION,
+        temporal.PROMOTION_BINDING_ID,
+        temporal.PROMOTION_EXECUTION_POSTURE,
         *temporal.CANDIDATE_RELATIVE_PATHS,
     )
     for path in (
