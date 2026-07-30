@@ -51,7 +51,7 @@ RUNTIME_TABLE_KEYS = {
 
 @pytest.fixture
 def migrated_store():
-    """One migrated, unbootstrapped database for immutable-receipt tests."""
+    """One schema-only test Store with no operational receipt capability."""
     base = os.environ.get("OFARM_PG_DBNAME", "ofarm_kernel_test")
     dbname = f"{base[:38]}_bundle_{uuid.uuid4().hex[:10]}"
     admin_dsn = _admin_dsn()
@@ -64,7 +64,10 @@ def migrated_store():
         runtime_bundle=None,
     )
     try:
-        store.migrate()
+        # This isolated fixture deliberately completes only the guarded
+        # low-level migration unit. An unbound Store cannot emit receipts.
+        with store._startup_transaction():
+            store._migrate_during_startup()
         yield store
     finally:
         store.close()

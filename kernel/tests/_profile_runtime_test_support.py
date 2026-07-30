@@ -378,7 +378,14 @@ def _fresh_unbootstrapped_store():
         active_descriptor=config.ACTIVE_PROFILE,
     )
     try:
-        store.migrate()
+        # Install only the low-level persistence surface through a separate,
+        # unbound startup. The Store under test remains NEW and unbootstrapped.
+        installer = Store(dsn=store.dsn, runtime_bundle=None)
+        try:
+            with installer._startup_transaction():
+                installer._migrate_during_startup()
+        finally:
+            installer.close()
         yield store
     finally:
         store.close()
@@ -557,7 +564,7 @@ def _preseeded_dirty_spine_store(mutate):
         )
         mutate(profile, activation, artifact)
         with store._startup_transaction():
-            store.migrate()
+            store._migrate_during_startup()
             with store.tx() as cur:
                 store._insert_startup_record(cur, profile)
                 store._insert_startup_record(cur, activation)

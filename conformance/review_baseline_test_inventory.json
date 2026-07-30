@@ -8611,6 +8611,11 @@
       "sourcePath": "kernel/tests/test_runtime_activation.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_activation.py::test_schema_and_bundle_migration_is_kernel_startup_only",
+      "sourceModule": "kernel.tests.test_runtime_activation",
+      "sourcePath": "kernel/tests/test_runtime_activation.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_activation.py::test_startup_record_writer_refuses_outside_active_startup",
       "sourceModule": "kernel.tests.test_runtime_activation",
       "sourcePath": "kernel/tests/test_runtime_activation.py"
@@ -8642,6 +8647,16 @@
     },
     {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_active_profile_catalog_cannot_omit_descriptor_selected_policy",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_canonical_encoder_bound_cannot_be_overridden_by_int_subclass",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_canonical_encoder_refuses_non_string_object_keys_before_encoding",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
@@ -10661,8 +10676,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "742250eed53dd9d3ff625a2e4a0d3019dbd5e76cef180f23840a886dcba84b99",
-  "entryCount": 2132,
+  "entriesSha256": "f030c7943d88a89e5d4846bab75d09514c85a67ccfe44bbe4c06e3387794df57",
+  "entryCount": 2135,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

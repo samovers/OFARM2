@@ -201,13 +201,18 @@ class Store:
         self.require_startup_complete("receipted work")
         return self.tenant_ref, self.runtime_bundle_digest
 
-    def migrate(self) -> DatabaseObservation:
-        """Apply the schema and install this Store's exact bundle atomically.
+    def _migrate_during_startup(self) -> DatabaseObservation:
+        """Install the schema and exact bundle during kernel-managed startup.
 
         ``runtime_bundle=None`` is reserved for the isolated RuntimeBundle
         repository tests, which need an empty persistence surface and may not
         write operational receipts.
         """
+        if self._state is not _StoreState.STARTING:
+            raise RuntimeBundleBindingError(
+                "schema and bundle migration requires an active Store startup "
+                "transaction"
+            )
         with self.conn.transaction():
             with self.conn.cursor() as cur:
                 posture = verify_transaction_posture(cur)

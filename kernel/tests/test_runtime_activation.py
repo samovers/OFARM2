@@ -288,6 +288,17 @@ def test_failed_repeat_startup_poisoned_after_live_schema_drift(fresh_env):
             pytest.fail("poisoned Store opened a governed transaction")
 
 
+def test_schema_and_bundle_migration_is_kernel_startup_only(fresh_env):
+    store, _, _ = fresh_env
+
+    assert not hasattr(Store, "migrate")
+    with pytest.raises(
+        RuntimeBundleBindingError,
+        match="requires an active Store startup transaction",
+    ):
+        store._migrate_during_startup()
+
+
 def test_startup_record_writer_refuses_outside_active_startup(fresh_env):
     store, _, _ = fresh_env
     marker = "record:test-startup-writer-outside-startup"

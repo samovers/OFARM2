@@ -28,6 +28,7 @@ _CANONICAL_INTEGER_LIMIT_ERROR = (
     "JSON integer exceeds the canonical limit of "
     f"{_MAX_CANONICAL_INTEGER_DIGITS} decimal digits"
 )
+_CANONICAL_OBJECT_KEY_ERROR = "JSON object keys must be strings"
 _CONTEXT_SCOPE_TYPES = frozenset({
     "FARM",
     "SITE",
@@ -188,7 +189,7 @@ def _require_canonical_integer_bounds(value: Any) -> None:
     while pending:
         item = pending.pop()
         if isinstance(item, int) and not isinstance(item, bool):
-            if abs(item) >= _MAX_CANONICAL_INTEGER_MAGNITUDE:
+            if int.__abs__(item) >= _MAX_CANONICAL_INTEGER_MAGNITUDE:
                 raise RuntimeBundleError(_CANONICAL_INTEGER_LIMIT_ERROR)
             continue
         if isinstance(item, dict):
@@ -196,6 +197,8 @@ def _require_canonical_integer_bounds(value: Any) -> None:
             if container_id in seen_containers:
                 continue
             seen_containers.add(container_id)
+            if any(not isinstance(key, str) for key in item):
+                raise RuntimeBundleError(_CANONICAL_OBJECT_KEY_ERROR)
             pending.extend(item.values())
         elif isinstance(item, (list, tuple)):
             container_id = id(item)

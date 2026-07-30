@@ -760,6 +760,62 @@ def test_canonical_json_encoder_integer_bound_covers_int_subclasses():
     ]
 
 
+def test_canonical_encoder_bound_cannot_be_overridden_by_int_subclass():
+    class BypassInteger(int):
+        def __abs__(self):
+            return 0
+
+    document = {"nested": [{"value": BypassInteger(10 ** 640)}]}
+    original_limit = sys.get_int_max_str_digits()
+    outcomes = []
+
+    try:
+        for process_limit in (640, 0):
+            sys.set_int_max_str_digits(process_limit)
+            try:
+                canonical_json_bytes(document)
+            except RuntimeBundleError as exc:
+                outcomes.append(("error", str(exc)))
+            else:
+                outcomes.append(("accepted",))
+    finally:
+        sys.set_int_max_str_digits(original_limit)
+
+    assert outcomes == [
+        (
+            "error",
+            "JSON integer exceeds the canonical limit of 640 decimal digits",
+        ),
+        (
+            "error",
+            "JSON integer exceeds the canonical limit of 640 decimal digits",
+        ),
+    ]
+
+
+def test_canonical_encoder_refuses_non_string_object_keys_before_encoding():
+    document = {"nested": [{10 ** 640: "value"}]}
+    original_limit = sys.get_int_max_str_digits()
+    outcomes = []
+
+    try:
+        for process_limit in (640, 0):
+            sys.set_int_max_str_digits(process_limit)
+            try:
+                canonical_json_bytes(document)
+            except RuntimeBundleError as exc:
+                outcomes.append(("error", str(exc)))
+            else:
+                outcomes.append(("accepted",))
+    finally:
+        sys.set_int_max_str_digits(original_limit)
+
+    assert outcomes == [
+        ("error", "JSON object keys must be strings"),
+        ("error", "JSON object keys must be strings"),
+    ]
+
+
 @pytest.mark.parametrize("sign", ("", "-"), ids=("positive", "negative"))
 @pytest.mark.parametrize(
     ("digit_count", "accepted"),

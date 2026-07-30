@@ -318,7 +318,7 @@ def _foreign_tenant_store(source: Store, label: str):
         # the private startup transaction, then exercise only tenant-isolated
         # operational rows through the READY Store.
         with store._startup_transaction():
-            store.migrate()
+            store._migrate_during_startup()
         yield tenant_ref, store
     finally:
         store.close()
@@ -339,6 +339,14 @@ def _isolated_store(label: str):
         active_descriptor=config.ACTIVE_PROFILE,
     )
     try:
+        # Low-level refusal tests need database relations while the bound Store
+        # remains NEW. Install them through a separate unbound startup.
+        installer = Store(dsn=store.dsn, runtime_bundle=None)
+        try:
+            with installer._startup_transaction():
+                installer._migrate_during_startup()
+        finally:
+            installer.close()
         yield store
     finally:
         store.close()
@@ -522,7 +530,6 @@ def test_store_refuses_descriptor_observation_outside_selected_bundle():
 
 def test_live_schema_catalog_requires_validated_composite_foreign_keys():
     with _isolated_store("not_valid_fk") as store:
-        store.migrate()
         row = store.conn.execute(
             "SELECT conname FROM pg_constraint "
             "WHERE conrelid = 'kernel_gate_log'::regclass AND contype = 'f' "
@@ -550,7 +557,10 @@ def test_live_schema_catalog_requires_validated_composite_foreign_keys():
             SchemaPostureError,
             match="live database schema catalog does not match",
         ):
-            store.migrate()
+            complete_store_startup(store)
+        with pytest.raises(RuntimeBundleBindingError, match="poisoned"):
+            with store.serialized_tx():
+                pytest.fail("known-invalid Store retained governed authority")
 
 
 def test_profile_bootstrap_refuses_non_exact_existing_selected_instance():
@@ -562,7 +572,7 @@ def test_profile_bootstrap_refuses_non_exact_existing_selected_instance():
         payload = json.loads(path.read_text())
         payload["notes"] += " Mutated pre-existing payload."
         with store._startup_transaction():
-            store.migrate()
+            store._migrate_during_startup()
             with store.tx() as cur:
                 store._insert_startup_record(cur, payload)
 
@@ -610,7 +620,7 @@ def test_profile_bootstrap_refuses_extra_selected_snapshot_mismatch_atomically()
         unequal = json.loads(extra_snapshot.canonical_bytes)
         unequal["notes"] += " Pre-existing unequal payload."
         with seed_store._startup_transaction():
-            seed_store.migrate()
+            seed_store._migrate_during_startup()
             with seed_store.tx() as cur:
                 seed_store._insert_startup_record(cur, unequal)
 
@@ -659,7 +669,6 @@ def test_profile_bootstrap_refuses_changed_path_absent_from_bound_bundle(tmp_pat
     descriptor = replace(config.ACTIVE_PROFILE, profile_instance_paths=paths)
 
     with _isolated_store("changed_profile") as store:
-        store.migrate()
         with pytest.raises(
             context.ContextNotReconstructible,
             match="not the Store startup selection",

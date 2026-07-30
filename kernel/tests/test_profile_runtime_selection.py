@@ -509,7 +509,7 @@ def test_explicit_descriptor_bootstrap_inserts_expected_profile_instances():
     with _fresh_unbootstrapped_store() as store:
         expected = _expected_profile_instance_ids(store, config.ACTIVE_PROFILE)
         with store._startup_transaction():
-            store.migrate()
+            store._migrate_during_startup()
             inserted = context.bootstrap_for_descriptor(
                 store,
                 config.ACTIVE_PROFILE,
@@ -526,12 +526,12 @@ def test_explicit_descriptor_bootstrap_matches_compatibility_wrapper():
             config.ACTIVE_PROFILE,
         )
         with implicit_store._startup_transaction():
-            implicit_store.migrate()
+            implicit_store._migrate_during_startup()
             implicit = context.bootstrap(implicit_store)
 
     with _fresh_unbootstrapped_store() as explicit_store:
         with explicit_store._startup_transaction():
-            explicit_store.migrate()
+            explicit_store._migrate_during_startup()
             explicit = context.bootstrap_for_descriptor(
                 explicit_store,
                 config.ACTIVE_PROFILE,

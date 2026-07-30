@@ -10,6 +10,7 @@ from psycopg import sql
 
 from kernel import config
 from kernel.legacy_m1.api import create_test_app
+from kernel.runtime_activation import complete_store_startup
 from kernel.runtime_bundle import (
     Canonicalization,
     ContentPlacement,
@@ -74,7 +75,7 @@ def test_schema_identity_is_the_digest_of_exact_schema_sql_bytes(fresh_env):
     schema_bytes = (config.PACKAGE_ROOT / "kernel" / "schema.sql").read_bytes()
     expected = sha256_bytes(schema_bytes)
 
-    observation = store.migrate()
+    observation = complete_store_startup(store)
     identity = store.conn.execute(
         "SELECT identity_key, schema_digest, catalog_manifest, catalog_digest "
         "FROM runtime_schema_identity"
@@ -107,7 +108,7 @@ def test_healthy_restart_exactly_reuses_the_installed_schema_catalog(fresh_env):
         active_descriptor=store.active_descriptor,
     )
     try:
-        observation = restarted.migrate()
+        observation = complete_store_startup(restarted)
         after_identity = restarted.conn.execute(
             "SELECT to_jsonb(i) AS identity FROM runtime_schema_identity AS i"
         ).fetchone()["identity"]
@@ -146,7 +147,7 @@ def test_schema_catalog_is_stable_across_independent_oid_allocations(fresh_env):
             runtime_bundle=store.runtime_bundle,
             active_descriptor=store.active_descriptor,
         )
-        second.migrate()
+        complete_store_startup(second)
         observed = second.conn.execute(
             "SELECT catalog_manifest, catalog_digest FROM runtime_schema_identity"
         ).fetchone()
