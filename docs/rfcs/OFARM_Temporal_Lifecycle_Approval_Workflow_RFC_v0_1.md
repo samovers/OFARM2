@@ -54,8 +54,8 @@ No new service is introduced.
 - Only a message whose task role is `user` can carry approval.
 - The approval message must follow the exact card in the same task.
 - The approval message must contain only the exact approval sentence.
-- Codex task and message metadata provide the provisional task, author-role,
-  message-order, and stable-reference evidence.
+- Codex task and message metadata, as observed by the AI, provide the
+  provisional task, author-role, message-order, and stable-reference evidence.
 - Repository ownership, GitHub credentials, commits, comments, reviews,
   reactions, and merges provide no architect-approval evidence.
 - A future decision record must snapshot the task and user-message evidence.
@@ -65,6 +65,13 @@ The workflow assumes only that the task surface distinguishes user-authored
 messages from assistant, tool, automation, and repository actions. It does not
 treat the AI's access to the user's repository credentials as access to the
 user-message role.
+
+In version 0.1, the AI is the sole witness that reads and copies task and
+message metadata. The task surface does not provide an independent attestation
+that a later reviewer can re-derive. Any future technical record produced from
+this workflow therefore contains AI-attested, independently unverifiable task
+evidence. This limitation is the primary reason the workflow is provisional
+and forbidden for deployment.
 
 If the task surface cannot provide a stable task identifier and stable
 user-message identifier or reference, record preparation must stop.
@@ -153,9 +160,13 @@ Any change to a payload field, subject, digest, effect, or non-effect creates a
 different card and requires a new contract version, new digest, new displayed
 card, and new user-authored approval.
 
-## Exact decision card
+## Decision-card template
 
-The AI must show this complete card in the Codex task:
+This RFC shows a deliberately incomplete template for plain English review.
+The placeholders prevent this documentation copy from being a live decision
+card. A future live card must replace every placeholder with the exact value
+fixed by this contract and pass this contract's completeness and exactness
+requirements before the AI may show it in a Codex task.
 
 ```text
 TEMPORAL LIFECYCLE DECISION CARD
@@ -171,10 +182,10 @@ Applies only to:
 
 Authority:
 ofarm.temporal-governance-promotion.issue176-foundation.v0.1
-sha256:10cf2208a4480c5d86c257fce99725c0284781458cee1796ee6ab3974cc06bf0
+<AUTHORITY_DIGEST>
 
 Card digest:
-sha256:aa9d5b5fc8aa39745e5ffbd2b8b05e9edda59ab46df98ca61e2a91e02434b819
+<CARD_DIGEST>
 
 What approval authorizes:
 Preparation of one technical decision record with outcome
@@ -191,13 +202,17 @@ One later user-authored message in this same Codex task.
 
 Exact approval sentence:
 I explicitly approve decision card
-sha256:aa9d5b5fc8aa39745e5ffbd2b8b05e9edda59ab46df98ca61e2a91e02434b819
+<CARD_DIGEST>
 under ofarm.temporal-governance-promotion.issue176-foundation.v0.1 at
-sha256:10cf2208a4480c5d86c257fce99725c0284781458cee1796ee6ab3974cc06bf0
+<AUTHORITY_DIGEST>
 for exactly its three digest-pinned subjects, authorizing one technical
 decision record for PROMOTE_GOVERNED_INACTIVE with no activation or
 current/default effect.
 ```
+
+The placeholders are literal redactions in this documentation copy. A card
+containing either placeholder is incomplete and cannot enter
+`SHOWN_UNAPPROVED`.
 
 Line wrapping is presentation only. The exact approval text is this single
 sentence:
@@ -310,11 +325,13 @@ The required values are:
 - `approvalMessageRole` is exactly `user`;
 - `approvalSentence` is the exact sentence above;
 - `approvalSentenceDigest` is the exact digest above; and
-- `approvalMessageOrder` proves the user message followed the card.
+- `approvalMessageOrder` records the AI-observed ordering in which the user
+  message followed the card.
 
 The record must not accept these fields from repository state, a request,
-environment, profile, caller, or AI assertion. They are copied from the task
-evidence and fixed contract.
+environment, profile, or caller data. In version 0.1, the AI reads them from
+the task surface and attests that it copied the task evidence and fixed
+contract exactly. No independent verifier exists.
 
 The record is a technical preservation of the architect's decision. Its
 existence, commit, review, or merge cannot cure missing or invalid user
@@ -339,8 +356,9 @@ in for that trace.
 - The AI owns preparation and exactness checks only. It has no authority to
   approve or infer approval.
 - The designated architect owns the user-authored decision message.
-- The Codex task surface provisionally owns user-role attribution, task and
-  message identity, and ordering evidence.
+- The Codex task surface provisionally presents user-role attribution, task
+  and message identity, and ordering evidence to the AI. It does not
+  independently attest that evidence for a later reviewer.
 - GitHub credentials and repository actions own no approval authority.
 - The future technical record preserves evidence but does not create or
   replace the architect's authority.
@@ -382,12 +400,18 @@ in for that trace.
 - **TLAW-014 — Production firewall.** No production or legacy runtime
   consumes this approval workflow.
 - **TLAW-015 — Audit separation.** The workflow adds no #192 behavior.
+- **TLAW-016 — AI-attested evidence only.** The AI is the sole witness for
+  task and message metadata in version 0.1. Technical-record task evidence is
+  AI-attested and independently unverifiable. This limitation is the primary
+  reason TLAW-013 forbids the workflow for deployment.
 
 ## Required negative cases
 
 Record preparation remains unauthorized when:
 
 - the AI omits or changes part of the card;
+- the documentation template or either placeholder is presented as a live
+  card;
 - the card digest does not match the fixed payload;
 - the user message appears before the exact card;
 - the user message is in another task;
@@ -436,7 +460,7 @@ approval protocol without implementing or executing it.
 
 ## Verification
 
-Review must prove:
+Review must verify the fixed content and prove that this contract requires:
 
 - the card agrees exactly with the merged promotion contract;
 - the card digest recomputes from the fixed payload;
@@ -448,6 +472,8 @@ Review must prove:
 - AI messages, copied generic approval, PR state, GitHub activity, repository
   credentials, checks, timestamps, and merges have no approval authority;
 - the technical record preserves the decision evidence without replacing it;
+- task and message evidence is AI-attested and not independently verifiable in
+  version 0.1;
 - currentness remains separate and mandatory;
 - deployment requires replacement by independent human control;
 - every negative case fails closed;
