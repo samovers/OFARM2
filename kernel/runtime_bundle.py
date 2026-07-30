@@ -29,6 +29,7 @@ _CANONICAL_INTEGER_LIMIT_ERROR = (
     f"{_MAX_CANONICAL_INTEGER_DIGITS} decimal digits"
 )
 _CANONICAL_OBJECT_KEY_ERROR = "JSON object keys must be strings"
+_CANONICAL_CYCLE_ERROR = "canonical JSON value must not contain cycles"
 _CONTEXT_SCOPE_TYPES = frozenset({
     "FARM",
     "SITE",
@@ -182,30 +183,74 @@ def _parse_canonical_int(token: str) -> int:
         ) from exc
 
 
-def _require_canonical_integer_bounds(value: Any) -> None:
-    """Reject over-limit integer values, excluding booleans, in a JSON value."""
-    pending = [value]
-    seen_containers: set[int] = set()
-    while pending:
-        item = pending.pop()
-        if isinstance(item, int) and not isinstance(item, bool):
-            if int.__abs__(item) >= _MAX_CANONICAL_INTEGER_MAGNITUDE:
+def _canonical_json_snapshot(value: Any) -> Any:
+    """Capture one built-in JSON view while enforcing the numeric profile."""
+    memo: dict[int, Any] = {}
+    active_containers: set[int] = set()
+
+    def normalize(item: Any) -> Any:
+        if item is None or type(item) is bool:
+            return item
+        if isinstance(item, str):
+            return str.__str__(item)
+        if isinstance(item, int):
+            normalized = int.__int__(item)
+            if int.__abs__(normalized) >= _MAX_CANONICAL_INTEGER_MAGNITUDE:
                 raise RuntimeBundleError(_CANONICAL_INTEGER_LIMIT_ERROR)
-            continue
+            return normalized
+        if isinstance(item, float):
+            return float.__float__(item)
+
         if isinstance(item, dict):
             container_id = id(item)
-            if container_id in seen_containers:
-                continue
-            seen_containers.add(container_id)
-            if any(not isinstance(key, str) for key in item):
-                raise RuntimeBundleError(_CANONICAL_OBJECT_KEY_ERROR)
-            pending.extend(item.values())
-        elif isinstance(item, (list, tuple)):
+            if container_id in active_containers:
+                raise RuntimeBundleError(_CANONICAL_CYCLE_ERROR)
+            if container_id in memo:
+                return memo[container_id]
+
+            normalized_object: dict[str, Any] = {}
+            memo[container_id] = normalized_object
+            active_containers.add(container_id)
+            try:
+                for key, child in item.items():
+                    if not isinstance(key, str):
+                        raise RuntimeBundleError(_CANONICAL_OBJECT_KEY_ERROR)
+                    normalized_key = str.__str__(key)
+                    if normalized_key in normalized_object:
+                        raise RuntimeBundleError(
+                            f"JSON contains duplicate key {normalized_key!r}"
+                        )
+                    normalized_object[normalized_key] = normalize(child)
+            finally:
+                active_containers.remove(container_id)
+            return normalized_object
+
+        if isinstance(item, (list, tuple)):
             container_id = id(item)
-            if container_id in seen_containers:
-                continue
-            seen_containers.add(container_id)
-            pending.extend(item)
+            if container_id in active_containers:
+                raise RuntimeBundleError(_CANONICAL_CYCLE_ERROR)
+            if container_id in memo:
+                return memo[container_id]
+
+            normalized_array: list[Any] = []
+            memo[container_id] = normalized_array
+            active_containers.add(container_id)
+            try:
+                normalized_array.extend(normalize(child) for child in item)
+            finally:
+                active_containers.remove(container_id)
+            return normalized_array
+
+        raise RuntimeBundleError("document is outside canonical JSON")
+
+    try:
+        return normalize(value)
+    except RuntimeBundleError:
+        raise
+    except MemoryError:
+        raise
+    except Exception as exc:
+        raise RuntimeBundleError("document is outside canonical JSON") from exc
 
 
 def _parse_canonical_float(token: str) -> float:
@@ -271,10 +316,10 @@ def canonical_json_bytes(value: dict[str, Any]) -> bytes:
     """Encode a trusted in-memory document using the bundle JSON profile."""
     if type(value) is not dict:
         raise RuntimeBundleError("canonical JSON value must be an object")
-    _require_canonical_integer_bounds(value)
+    snapshot = _canonical_json_snapshot(value)
     try:
         return json.dumps(
-            value,
+            snapshot,
             sort_keys=True,
             separators=(",", ":"),
             ensure_ascii=False,

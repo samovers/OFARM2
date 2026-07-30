@@ -8656,7 +8656,22 @@
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
     {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_canonical_encoder_refuses_cycles_governably",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
       "nodeid": "kernel/tests/test_runtime_bundle.py::test_canonical_encoder_refuses_non_string_object_keys_before_encoding",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_canonical_encoder_snapshots_dict_subclass_before_encoding",
+      "sourceModule": "kernel.tests.test_runtime_bundle",
+      "sourcePath": "kernel/tests/test_runtime_bundle.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_runtime_bundle.py::test_canonical_encoder_traverses_stateful_list_subclass_once",
       "sourceModule": "kernel.tests.test_runtime_bundle",
       "sourcePath": "kernel/tests/test_runtime_bundle.py"
     },
@@ -10676,8 +10691,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "f030c7943d88a89e5d4846bab75d09514c85a67ccfe44bbe4c06e3387794df57",
-  "entryCount": 2135,
+  "entriesSha256": "48567f84b8cf9e0ddbcb229c9df06ae0cc93436b70c5c73c794dfc261c14cc1e",
+  "entryCount": 2138,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

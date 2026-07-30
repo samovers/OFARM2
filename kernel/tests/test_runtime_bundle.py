@@ -816,6 +816,85 @@ def test_canonical_encoder_refuses_non_string_object_keys_before_encoding():
     ]
 
 
+def test_canonical_encoder_snapshots_dict_subclass_before_encoding():
+    class SplitDict(dict):
+        def __iter__(self):
+            return iter(("safe",))
+
+        def values(self):
+            return (0,)
+
+        def items(self):
+            return (("value", 10 ** 640),)
+
+    original_limit = sys.get_int_max_str_digits()
+    outcomes = []
+
+    try:
+        for process_limit in (640, 0):
+            sys.set_int_max_str_digits(process_limit)
+            try:
+                canonical_json_bytes({"nested": SplitDict(safe=0)})
+            except RuntimeBundleError as exc:
+                outcomes.append(("error", str(exc)))
+            else:
+                outcomes.append(("accepted",))
+    finally:
+        sys.set_int_max_str_digits(original_limit)
+
+    assert outcomes == [
+        (
+            "error",
+            "JSON integer exceeds the canonical limit of 640 decimal digits",
+        ),
+        (
+            "error",
+            "JSON integer exceeds the canonical limit of 640 decimal digits",
+        ),
+    ]
+
+
+def test_canonical_encoder_traverses_stateful_list_subclass_once():
+    class SplitList(list):
+        def __init__(self):
+            super().__init__([0])
+            self.iterations = 0
+
+        def __iter__(self):
+            self.iterations += 1
+            if self.iterations == 1:
+                return iter((0,))
+            return iter((10 ** 640,))
+
+    original_limit = sys.get_int_max_str_digits()
+    outcomes = []
+
+    try:
+        for process_limit in (640, 0):
+            sys.set_int_max_str_digits(process_limit)
+            nested = SplitList()
+            canonical = canonical_json_bytes({"nested": nested})
+            outcomes.append((canonical, nested.iterations))
+    finally:
+        sys.set_int_max_str_digits(original_limit)
+
+    assert outcomes == [
+        (b'{"nested":[0]}', 1),
+        (b'{"nested":[0]}', 1),
+    ]
+
+
+def test_canonical_encoder_refuses_cycles_governably():
+    document = {}
+    document["nested"] = document
+
+    with pytest.raises(
+        RuntimeBundleError,
+        match="canonical JSON value must not contain cycles",
+    ):
+        canonical_json_bytes(document)
+
+
 @pytest.mark.parametrize("sign", ("", "-"), ids=("positive", "negative"))
 @pytest.mark.parametrize(
     ("digit_count", "accepted"),
