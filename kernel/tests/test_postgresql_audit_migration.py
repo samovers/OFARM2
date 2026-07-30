@@ -177,7 +177,7 @@ def _wait_for_blocked_event_writer(
 def _wait_for_access_clock_mutex_and_sequence_wait(
     state: dict[str, object], target_pid: int
 ) -> None:
-    deadline = monotonic() + 2
+    deadline = monotonic() + 15
     observed = (False, False)
     with psycopg.connect(
         state["target_admin_dsn"], autocommit=True
@@ -1895,7 +1895,10 @@ def test_access_clock_mutex_is_released_after_post_acquisition_cancel(
         psycopg.connect(control_dsn) as control,
         psycopg.connect(state["target_admin_dsn"]) as blocker,
     ):
+        # Controller-side deadlines bound the test; only its explicit cancel
+        # may produce the expected query_canceled outcome.
         control.execute("SET lock_timeout = 0")
+        control.execute("SET statement_timeout = 0")
         control.execute("SET transaction_timeout = 0")
         target_pid = control.execute(
             "SELECT pg_catalog.pg_backend_pid()"
@@ -1947,6 +1950,25 @@ def test_access_clock_mutex_is_released_after_post_acquisition_cancel(
         assert cancelled.value.diag.message_primary == (
             "canceling statement due to user request"
         )
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            assert admin.execute(
+                """
+                SELECT pg_catalog.count(*)
+                FROM pg_catalog.pg_locks
+                WHERE pid = %s
+                  AND locktype = 'advisory'
+                  AND classid =
+                      (-274079271)::pg_catalog.int4::pg_catalog.oid
+                  AND objid =
+                      (-1019032096)::pg_catalog.int4::pg_catalog.oid
+                  AND objsubid = 2
+                  AND granted
+                """,
+                (target_pid,),
+            ).fetchone() == (0,)
+
         control.rollback()
         assert control.execute(
             "SELECT pg_catalog.pg_backend_pid()"
