@@ -30,6 +30,9 @@ _CANONICAL_INTEGER_LIMIT_ERROR = (
 )
 _CANONICAL_OBJECT_KEY_ERROR = "JSON object keys must be strings"
 _CANONICAL_CYCLE_ERROR = "canonical JSON value must not contain cycles"
+_CANONICAL_CONTAINER_IDENTITY_ERROR = (
+    "canonical JSON container identity was reused inconsistently"
+)
 _CONTEXT_SCOPE_TYPES = frozenset({
     "FARM",
     "SITE",
@@ -185,8 +188,17 @@ def _parse_canonical_int(token: str) -> int:
 
 def _canonical_json_snapshot(value: Any) -> Any:
     """Capture one built-in JSON view while enforcing the numeric profile."""
-    memo: dict[int, Any] = {}
+    memo: dict[int, tuple[Any, Any]] = {}
     active_containers: set[int] = set()
+
+    def cached_container(item: Any) -> Any | None:
+        cached = memo.get(id(item))
+        if cached is None:
+            return None
+        original, normalized = cached
+        if original is not item:
+            raise RuntimeBundleError(_CANONICAL_CONTAINER_IDENTITY_ERROR)
+        return normalized
 
     def normalize(item: Any) -> Any:
         if item is None or type(item) is bool:
@@ -205,11 +217,12 @@ def _canonical_json_snapshot(value: Any) -> Any:
             container_id = id(item)
             if container_id in active_containers:
                 raise RuntimeBundleError(_CANONICAL_CYCLE_ERROR)
-            if container_id in memo:
-                return memo[container_id]
+            cached = cached_container(item)
+            if cached is not None:
+                return cached
 
             normalized_object: dict[str, Any] = {}
-            memo[container_id] = normalized_object
+            memo[container_id] = (item, normalized_object)
             active_containers.add(container_id)
             try:
                 for key, child in item.items():
@@ -229,11 +242,12 @@ def _canonical_json_snapshot(value: Any) -> Any:
             container_id = id(item)
             if container_id in active_containers:
                 raise RuntimeBundleError(_CANONICAL_CYCLE_ERROR)
-            if container_id in memo:
-                return memo[container_id]
+            cached = cached_container(item)
+            if cached is not None:
+                return cached
 
             normalized_array: list[Any] = []
-            memo[container_id] = normalized_array
+            memo[container_id] = (item, normalized_array)
             active_containers.add(container_id)
             try:
                 normalized_array.extend(normalize(child) for child in item)

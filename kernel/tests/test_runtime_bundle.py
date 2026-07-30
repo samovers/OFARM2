@@ -884,6 +884,19 @@ def test_canonical_encoder_traverses_stateful_list_subclass_once():
     ]
 
 
+def test_canonical_snapshot_retains_original_container_identity():
+    class EphemeralTuples(list):
+        def __iter__(self):
+            for value in range(3):
+                yield (value,)
+
+    expected = b'{"nested":[[0],[1],[2]]}'
+    assert [
+        canonical_json_bytes({"nested": EphemeralTuples()})
+        for _ in range(5)
+    ] == [expected] * 5
+
+
 def test_canonical_encoder_refuses_cycles_governably():
     document = {}
     document["nested"] = document
