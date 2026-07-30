@@ -64,6 +64,7 @@ def test_temporal_decision_log_entry_bytes_and_filename_are_canonical():
 )
 def test_temporal_decision_log_rejects_recanonicalized_unapproved_content(
     mutation: str,
+    monkeypatch: pytest.MonkeyPatch,
 ):
     entry = _entry()
     mutations = {
@@ -101,16 +102,40 @@ def test_temporal_decision_log_rejects_recanonicalized_unapproved_content(
     }
     mutations[mutation](entry)
     candidate, filename, raw = _refinalize(entry)
+    evidence_error = "decision-log evidence differs from approved decision"
+    expected_errors = {
+        "approval_role": evidence_error,
+        "approval_reference": evidence_error,
+        "decided_at": evidence_error,
+        "promotion_reference": evidence_error,
+        "review_evidence_order": evidence_error,
+        "subject_digest": "approved decision-card digest differs",
+        "predecessor": evidence_error,
+        "extra_field": "decision-log entry fields differ",
+    }
+    monkeypatch.setattr(
+        decision_log,
+        "ENTRY_DIGEST",
+        candidate["entryDigest"],
+    )
+    monkeypatch.setattr(
+        decision_log,
+        "ENTRY_FILE_DIGEST",
+        decision_log.digest_bytes(raw),
+    )
+    monkeypatch.setattr(
+        decision_log,
+        "FINAL_ENTRY_CANONICAL_BYTE_LENGTH",
+        len(raw),
+    )
 
-    with pytest.raises(
-        decision_log.TemporalDecisionLogError,
-        match="fields differ|differs from approved decision|digest differs",
-    ):
+    with pytest.raises(decision_log.TemporalDecisionLogError) as exc_info:
         decision_log.validate_entry(
             candidate,
             filename=filename,
             raw=raw,
         )
+    assert str(exc_info.value) == expected_errors[mutation]
 
 
 def test_temporal_decision_log_rejects_noncanonical_entry_bytes():
