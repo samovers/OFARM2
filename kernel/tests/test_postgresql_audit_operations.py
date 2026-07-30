@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 
 import psycopg
 import pytest
+from psycopg import sql
 
 from deployment.postgresql.migration_sets import (
     SECURITY_AUDIT_SERVICE,
@@ -20,6 +21,10 @@ from kernel.tests.postgresql_audit_support import (
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
+QUERY_IDENTITY = (
+    "ofarm_security.query_operational_security_events"
+    "(uuid, timestamptz, uuid, integer, bigint)"
+)
 
 
 def _insert_historical_v1(
@@ -62,6 +67,154 @@ def _insert_historical_v1(
             (event_id, correlation_hmac, event_id, correlation_hmac),
         ).fetchone()
     return event_id, correlation_hmac, outcome
+
+
+def _prove_access_clock_mutex_release_after_failure(
+    state: dict[str, object],
+) -> None:
+    sequence = sql.Identifier(
+        "ofarm_security",
+        "operational_security_access_clock_high_water",
+    )
+    control_dsn = _role_dsn(
+        state,
+        "ofarm_security_audit_control_login",
+    )
+    with (
+        psycopg.connect(
+            str(state["target_admin_dsn"]),
+            autocommit=True,
+        ) as admin,
+        psycopg.connect(
+            control_dsn,
+            autocommit=True,
+        ) as control_a,
+    ):
+        access_count_before = admin.execute(
+            """
+            SELECT pg_catalog.count(*)
+            FROM ofarm_security.operational_security_event
+            WHERE event_kind = 'AUDIT_ACCESS'
+            """
+        ).fetchone()[0]
+        forced_high_water = admin.execute(
+            """
+            SELECT (
+                pg_catalog.floor(
+                    EXTRACT(
+                        EPOCH FROM pg_catalog.clock_timestamp()
+                    ) * 1000000
+                )::pg_catalog.int8 - 1000000
+            )
+            """
+        ).fetchone()[0]
+        admin.execute(
+            """
+            SELECT pg_catalog.setval(
+                'ofarm_security.operational_security_access_clock_high_water'::
+                    pg_catalog.regclass,
+                %s,
+                true
+            )
+            """,
+            (forced_high_water,),
+        )
+        admin.execute(
+            sql.SQL("ALTER SEQUENCE {} MAXVALUE {}").format(
+                sequence,
+                sql.Literal(forced_high_water),
+            )
+        )
+        control_a.execute("SET statement_timeout = '2s'")
+        control_a_pid = control_a.execute(
+            "SELECT pg_catalog.pg_backend_pid()"
+        ).fetchone()[0]
+
+        try:
+            with pytest.raises(psycopg.Error) as failure:
+                control_a.execute(
+                    """
+                    SELECT *
+                    FROM ofarm_security.commit_audit_access_intent(
+                        'OPERATIONAL_DIAGNOSTIC_QUERY_V1',
+                        %s,
+                        NULL,
+                        NULL,
+                        10,
+                        100000
+                    )
+                    """,
+                    (QUERY_IDENTITY,),
+                ).fetchone()
+
+            assert failure.value.sqlstate == "22003"
+            assert admin.execute(
+                """
+                SELECT pg_catalog.count(*)
+                FROM ofarm_security.operational_security_event
+                WHERE event_kind = 'AUDIT_ACCESS'
+                """
+            ).fetchone()[0] == access_count_before
+            assert admin.execute(
+                """
+                SELECT pg_catalog.count(*)
+                FROM pg_catalog.pg_locks
+                WHERE pid = %s
+                  AND locktype = 'advisory'
+                """,
+                (control_a_pid,),
+            ).fetchone()[0] == 0
+        finally:
+            admin.execute(
+                sql.SQL("ALTER SEQUENCE {} NO MAXVALUE").format(sequence)
+            )
+            admin.execute(
+                """
+                SELECT pg_catalog.setval(
+                    'ofarm_security.operational_security_access_clock_high_water'::
+                        pg_catalog.regclass,
+                    pg_catalog.floor(
+                        EXTRACT(
+                            EPOCH FROM pg_catalog.clock_timestamp()
+                        ) * 1000000
+                    )::pg_catalog.int8,
+                    true
+                )
+                """
+            )
+
+        with psycopg.connect(
+            control_dsn,
+            autocommit=True,
+        ) as control_b:
+            control_b.execute("SET lock_timeout = '500ms'")
+            control_b.execute("SET statement_timeout = '2s'")
+            access = control_b.execute(
+                """
+                SELECT *
+                FROM ofarm_security.commit_audit_access_intent(
+                    'OPERATIONAL_DIAGNOSTIC_QUERY_V1',
+                    %s,
+                    NULL,
+                    NULL,
+                    10,
+                    100000
+                )
+                """,
+                (QUERY_IDENTITY,),
+            ).fetchone()
+
+        assert access is not None
+        assert control_a.execute(
+            "SELECT pg_catalog.pg_backend_pid()"
+        ).fetchone()[0] == control_a_pid
+        assert admin.execute(
+            """
+            SELECT pg_catalog.count(*)
+            FROM ofarm_security.operational_security_event
+            WHERE event_kind = 'AUDIT_ACCESS'
+            """
+        ).fetchone()[0] == access_count_before + 1
 
 
 def test_operations_migration_is_bounded_and_keeps_0001_immutable():
@@ -263,6 +416,8 @@ def test_key_retention_observation_is_one_closed_control_row(
                 """
             ).fetchall()
     assert unauthorized.value.sqlstate == "42501"
+
+    _prove_access_clock_mutex_release_after_failure(state)
 
 
 def test_overflow_observation_refuses_wrong_role(
