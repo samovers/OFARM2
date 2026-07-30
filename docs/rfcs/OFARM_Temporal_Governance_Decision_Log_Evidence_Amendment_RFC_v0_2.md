@@ -75,12 +75,37 @@ V0.2 preserves every v0.1 rule except:
 - the entry gains the five promotion-contract evidence fields; and
 - the final entry contains eleven top-level fields instead of six.
 
+`TDL-001` through `TDL-014` all remain binding. `TDE-001` onward adds
+amendment invariants and does not replace the TDL set.
+
 No valid v0.1 entry exists. There is no entry migration, predecessor rewrite,
 or currentness conversion.
 
-The earlier live card with digest
-`sha256:6f8d61738483ad75c56292297696a3724950d2e170fab6032a2eea6736e3a759`
-is withdrawn. It cannot authorize any entry and must not be approved.
+A complete v0.1 live card was displayed in:
+
+- Codex task `019fa821-93c9-7ef1-8c94-1c0e92ea46b9`;
+- the user-authorized turn identified by
+  `019fb246-e554-7c31-a973-facc6bd4376c`;
+- the turn that began at `2026-07-30T09:06:58.525Z`; and
+- card digest
+  `sha256:6f8d61738483ad75c56292297696a3724950d2e170fab6032a2eea6736e3a759`.
+
+The user separately authorized card presentation after the workflow stopped
+at that boundary. Presentation was therefore not architect approval. No exact
+approval message followed, and no decision-log path, entry, promotion, or
+lifecycle change was created.
+
+The displayed card is withdrawn. It cannot authorize any entry and must not be
+approved.
+
+This task-attested statement does not replace the repository's ERRATA
+authority. A separate ERRATA change must record the displayed card and its
+non-effect before any v0.2 live card is shown. This PR does not edit ERRATA.
+
+After v0.2 lands, its exact merged RFC bytes are immutable and
+decision-bearing. Any edit, including a wording or typographical correction,
+requires a v0.3 contract. Existing cards and entries remain bound to the exact
+v0.2 repository-file digest they record.
 
 ## 4. Exact evidence-field mapping
 
@@ -108,8 +133,8 @@ The exact value is:
 
 ```json
 {
-  "codexTaskId": "<CODEX_TASK_ID>",
-  "userMessageIdOrStableRef": "<APPROVAL_USER_MESSAGE_ID_OR_STABLE_REF>"
+  "approvalUserMessageIdOrStableRef": "<APPROVAL_USER_MESSAGE_ID_OR_STABLE_REF>",
+  "codexTaskId": "<CODEX_TASK_ID>"
 }
 ```
 
@@ -122,7 +147,11 @@ credentials, GitHub activity, or the AI a human promotion authority.
 
 ### `decidedAt`
 
-`decidedAt` is the decision time of the architect's exact approval message.
+`decidedAt` is the approval turn's start time, used as the provisional decision
+time for the architect's exact approval message. It is an explicit
+approximation of the decision instant, not the exact typing, submission, or
+receipt instant.
+
 Its only lawful source is:
 
 ```text
@@ -139,11 +168,24 @@ AI clock time, tool time, commit time, merge time, filesystem time, PR time,
 and entry-publication time are forbidden substitutes. Missing, malformed, or
 inconsistent approval-turn time stops entry preparation.
 
+The metadata key is an unversioned Codex platform dependency. If Codex renames,
+removes, changes, or stops exposing it, the workflow becomes unusable and
+fails closed. No fallback clock or inferred key is allowed. Restoring the
+workflow requires a separately reviewed contract version.
+
 `decidedAt` describes the human decision act. It never orders entries or
 establishes currentness. If a future governance envelope describes the same
 act, ADR 0002 requires its decision time to equal this value.
 
 ### `reviewEvidenceRefs`
+
+The promotion contract requires this field name but leaves its value semantics
+undefined. This amendment supplies the v0.2-local meaning: references to the
+exact reviewed contract bytes that govern the promotion decision. It does not
+define a general OFARM meaning for review evidence.
+
+These references prove which reviewed contract content governs the decision.
+They do not attest a reviewer act and cannot substitute for architect approval.
 
 The exact ordered array is:
 
@@ -297,8 +339,9 @@ validated final entry, avoiding a digest cycle.
   exact promotion set, content pins, atomicity, and outcome.
 - The v0.1 base contract owns the preserved card, approval, entry, digest,
   chain, effect, non-effect, provisional, and deployment-stop rules.
-- This v0.2 amendment owns only the explicit five-field mapping and the closed
-  card and entry transformations.
+- This v0.2 amendment supplies and owns only the local value semantics for the
+  five fields, their explicit mapping, and the closed card and entry
+  transformations.
 - The designated architect's later exact user-authored message owns the
   promote-or-refuse decision.
 - The Codex approval turn is the provisional source of the task identifier,
@@ -337,6 +380,7 @@ validated final entry, avoiding a digest cycle.
   reviewed and present on repository `main`.
 - `TDE-013` — The workflow remains provisional and forbidden for deployment.
 - `TDE-014` — No runtime, storage, output, legacy, or #192 authority changes.
+- `TDE-015` — Merged v0.2 RFC bytes are immutable; any edit requires v0.3.
 
 ## 9. Required negative cases
 
@@ -350,6 +394,7 @@ Entry preparation stops when:
 - the authority reference differs from the approval task or user message;
 - `decidedAt` is missing, inferred, rounded, reformatted, or sourced from any
   clock or repository event;
+- the unversioned Codex metadata key changes or is replaced by a fallback;
 - `decidedAt` is used to select a current entry;
 - review evidence is missing, reordered, additional, branch-derived, or
   replaced by PR, GitHub, model, test, or merge evidence;
@@ -358,6 +403,8 @@ Entry preparation stops when:
   chain validation on `main`;
 - approval or currentness authority substitutes for the other;
 - a v0.1 card, sentence, digest, or entry is reused;
+- merged v0.2 bytes are edited in place or treated as mutable;
+- the required separate ERRATA trace is absent when a v0.2 card is shown;
 - a card is shown before v0.2 is reviewed and landed;
 - caller, user, AI, environment, profile, route, or timestamp data selects a
   decision-bearing value; or
@@ -379,16 +426,19 @@ Review and mechanical verification must confirm:
 - the entry-digest input has exactly ten top-level fields;
 - the final entry rule adds only `entryDigest`;
 - decision, approval-turn, review, and currentness references agree;
+- the displayed v0.1 card facts and separate ERRATA prerequisite are explicit;
+- all TDL invariants remain binding and TDE invariants are additional;
 - no timestamp participates in currentness;
+- merged v0.2 bytes are declared immutable;
 - no self-digest cycle exists;
-- no live card, approval, log path, entry, or promotion is created; and
+- no v0.2 live card, approval, log path, entry, or promotion is created; and
 - package conformance and Markdown hygiene still pass.
 
 ## 11. Non-goals and stop conditions
 
 This amendment does not:
 
-- display or create a live decision card;
+- display or create a v0.2 live decision card;
 - solicit or record architect approval;
 - create a decision-log entry or governed log path;
 - issue promotion or change any lifecycle state;
@@ -401,9 +451,10 @@ This amendment does not:
 
 After this RFC is reviewed and landed, work still stops before:
 
-1. recomputing and displaying the complete v0.2 live card from merged `main`;
-2. soliciting the exact approval sentence;
-3. preparing an entry from approval-turn metadata;
-4. creating the governed log path or entry;
-5. issuing promotion; or
-6. changing any runtime or production authority.
+1. landing the separate ERRATA trace for the displayed v0.1 card;
+2. recomputing and displaying the complete v0.2 live card from merged `main`;
+3. soliciting the exact approval sentence;
+4. preparing an entry from approval-turn metadata;
+5. creating the governed log path or entry;
+6. issuing promotion; or
+7. changing any runtime or production authority.
