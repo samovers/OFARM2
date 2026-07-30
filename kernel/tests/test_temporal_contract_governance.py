@@ -126,44 +126,92 @@ def test_temporal_card_errata_trace_is_pinned():
 
 
 @pytest.mark.parametrize(
-    ("marker", "replacement"),
-    [
-        ("| E-009 |", "| E-010 |"),
-        (
-            "sha256:6f8d61738483ad75c56292297696a372"
-            "4950d2e170fab6032a2eea6736e3a759",
-            "sha256:" + ("0" * 64),
-        ),
-        ("withdrawn permanently", "withdrawn"),
-    ],
+    "marker",
+    temporal.TEMPORAL_CARD_ERRATA_REQUIRED_MARKERS,
 )
-def test_temporal_card_errata_trace_rejects_modified_markers(
-    marker: str,
-    replacement: str,
-):
+def test_temporal_card_errata_trace_rejects_modified_marker(marker: str):
     errata = temporal.ERRATA_PATH.read_text(encoding="utf-8")
     assert marker in errata
 
     with pytest.raises(
         temporal.TemporalCandidateError,
-        match="temporal decision-card ERRATA trace differs",
+        match="temporal decision-card ERRATA trace markers differ",
     ):
         temporal.validate_temporal_card_errata_trace(
-            errata.replace(marker, replacement, 1)
+            errata.replace(marker, "tampered", 1)
         )
 
 
-def test_temporal_card_errata_trace_rejects_duplicate_row():
+@pytest.mark.parametrize(
+    "mutation",
+    ("removed", "duplicate", "spaced_duplicate", "gutted"),
+)
+def test_temporal_card_errata_trace_rejects_structural_mutation(
+    mutation: str,
+):
     errata = temporal.ERRATA_PATH.read_text(encoding="utf-8")
     row = next(
-        line for line in errata.splitlines() if line.startswith("| E-009 |")
+        line
+        for line in errata.splitlines()
+        if temporal._markdown_table_row_identity(line)
+        == temporal.TEMPORAL_CARD_ERRATA_ROW_ID
+    )
+    mutations = {
+        "removed": errata.replace(f"{row}\n", "", 1),
+        "duplicate": f"{errata}\n{row}\n",
+        "spaced_duplicate": (
+            f"{errata}\n"
+            f"{row.replace('| E-009 |', '|  E-009  |', 1)}\n"
+        ),
+        "gutted": errata.replace(
+            row,
+            "| E-009 | x | x | x | x | "
+            f"{temporal.TEMPORAL_CARD_ERRATA_CARD_DIGEST} "
+            "withdrawn permanently |",
+            1,
+        ),
+    }
+    expected_error = (
+        "trace markers differ"
+        if mutation == "gutted"
+        else "row identity differs"
     )
 
     with pytest.raises(
         temporal.TemporalCandidateError,
-        match="temporal decision-card ERRATA trace differs",
+        match=expected_error,
     ):
-        temporal.validate_temporal_card_errata_trace(f"{errata}\n{row}\n")
+        temporal.validate_temporal_card_errata_trace(mutations[mutation])
+
+
+def test_candidate_governance_wires_temporal_card_errata_trace(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    errata = temporal.ERRATA_PATH.read_text(encoding="utf-8")
+    row = next(
+        line
+        for line in errata.splitlines()
+        if temporal._markdown_table_row_identity(line)
+        == temporal.TEMPORAL_CARD_ERRATA_ROW_ID
+    )
+    tampered_errata_path = tmp_path / "ERRATA.md"
+    tampered_errata_path.write_text(
+        errata.replace(f"{row}\n", "", 1),
+        encoding="utf-8",
+    )
+
+    with monkeypatch.context() as errata_patch:
+        errata_patch.setattr(
+            temporal,
+            "ERRATA_PATH",
+            tampered_errata_path,
+        )
+        with pytest.raises(
+            temporal.TemporalCandidateError,
+            match="temporal decision-card ERRATA row identity differs",
+        ):
+            temporal.validate_candidate_governance()
 
 
 def test_candidate_schemas_and_instances_are_full_draft_2020_12_valid():

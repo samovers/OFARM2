@@ -145,6 +145,22 @@ MIGRATION_SET_AUTHORITY_PATH = (
 )
 ADR_PATH = PACKAGE_ROOT / "docs/adr/0002-valid-time-and-knowledge-time.md"
 ERRATA_PATH = PACKAGE_ROOT / "ERRATA.md"
+TEMPORAL_CARD_ERRATA_ROW_ID = "E-009"
+TEMPORAL_CARD_ERRATA_CARD_DIGEST = (
+    "sha256:6f8d61738483ad75c56292297696a372"
+    "4950d2e170fab6032a2eea6736e3a759"
+)
+TEMPORAL_CARD_ERRATA_REQUIRED_MARKERS = (
+    "019fa821-93c9-7ef1-8c94-1c0e92ea46b9",
+    "019fb246-e554-7c31-a973-facc6bd4376c",
+    "2026-07-30T09:06:58.525Z",
+    "card canonical byte length `1883`",
+    TEMPORAL_CARD_ERRATA_CARD_DIGEST,
+    "no later user-authored exact approval sentence",
+    "no `governance/temporal-decision-log/` path or entry",
+    "withdrawn permanently",
+    "does not itself authorize card presentation",
+)
 ENVELOPE_SCHEMA_PATH = (
     PACKAGE_ROOT / "contracts/kernel/OFARM_SemanticEventEnvelope_schema_v0_1.json"
 )
@@ -2676,21 +2692,29 @@ def validate_runtime_bundle_carrier_role_is_inactive() -> None:
             )
 
 
+def _markdown_table_row_identity(line: str) -> str | None:
+    cells = line.split("|", 2)
+    if len(cells) < 3 or cells[0].strip():
+        return None
+    return cells[1].strip()
+
+
 def validate_temporal_card_errata_trace(errata: str) -> None:
-    row_prefix = "| E-009 |"
     rows = tuple(
-        line for line in errata.splitlines() if line.startswith(row_prefix)
+        line
+        for line in errata.splitlines()
+        if _markdown_table_row_identity(line) == TEMPORAL_CARD_ERRATA_ROW_ID
     )
-    required_markers = (
-        "sha256:6f8d61738483ad75c56292297696a372"
-        "4950d2e170fab6032a2eea6736e3a759",
-        "withdrawn permanently",
-    )
-    if len(rows) != 1 or any(
-        rows[0].count(marker) != 1 for marker in required_markers
+    if len(rows) != 1:
+        raise TemporalCandidateError(
+            "temporal decision-card ERRATA row identity differs"
+        )
+    if any(
+        rows[0].count(marker) != 1
+        for marker in TEMPORAL_CARD_ERRATA_REQUIRED_MARKERS
     ):
         raise TemporalCandidateError(
-            "temporal decision-card ERRATA trace differs"
+            "temporal decision-card ERRATA trace markers differ"
         )
 
 
