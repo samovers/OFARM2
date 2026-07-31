@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import shutil
 import sys
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from enum import IntEnum
 from pathlib import Path
 
@@ -1671,7 +1671,9 @@ def test_checked_in_component_catalog_builds_the_reviewed_closed_set():
 
     assert len(bundle.components) == 95
     assert {component.role for component in bundle.components} == expected_catalog_roles
-    assert set(RuntimeComponentRole) == expected_catalog_roles
+    assert set(RuntimeComponentRole) == expected_catalog_roles | {
+        RuntimeComponentRole.TEMPORAL_GOVERNANCE_ARTIFACT,
+    }
     assert {
         component.logical_ref
         for component in bundle.components
@@ -2058,6 +2060,511 @@ def test_contract_schema_version_preserves_top_level_duplicate_lane_refusal():
 
     with pytest.raises(RuntimeBundleError, match="more than once across lanes"):
         RuntimeBundle.create(components)
+
+
+@dataclass(frozen=True, slots=True)
+class _TemporalGovernanceCase:
+    case_id: str
+    logical_ref: str
+    schema_version: str
+    identity_field: str
+    instance_path: str
+    repository_file_digest: str
+    canonical_byte_length: int
+    content_digest: str
+    schema_logical_ref: str
+    schema_path: str
+    schema_byte_length: int
+    schema_content_digest: str
+
+
+_TEMPORAL_GOVERNANCE_CASES = (
+    _TemporalGovernanceCase(
+        case_id="carrier-matrix",
+        logical_ref="ofarm.temporal-carrier-matrix.adr0002.v0.1",
+        schema_version="ofarm.temporal-carrier-matrix.v0.1",
+        identity_field="matrixId",
+        instance_path=(
+            "contracts/candidates/temporal_coordinate/"
+            "OFARM_TemporalCarrierMatrix_ADR0002_candidate_v0_1.json"
+        ),
+        repository_file_digest=(
+            "sha256:7cb26513b5abdbcadecaf6f9b47d874a742ba8fa05a332c9130deebe449d7fc6"
+        ),
+        canonical_byte_length=9504,
+        content_digest=(
+            "sha256:c404c0cd1e08f389664b5381c2c038cf65bac9a3b725fc2b1882990636eb179b"
+        ),
+        schema_logical_ref="contract:ofarm.temporal-carrier-matrix.v0.1",
+        schema_path=(
+            "contracts/candidates/temporal_coordinate/"
+            "OFARM_TemporalCarrierMatrix_schema_v0_1.json"
+        ),
+        schema_byte_length=3088,
+        schema_content_digest=(
+            "sha256:cdb5c09ec033cc3b4de1dea9eb383c499045d8a3bfc5b80fd7abeab579a566ed"
+        ),
+    ),
+    _TemporalGovernanceCase(
+        case_id="carrier-selector",
+        logical_ref="ofarm.temporal-carrier-selection.intervention.v0.1",
+        schema_version="ofarm.temporal-carrier-selection-binding.v0.1",
+        identity_field="bindingId",
+        instance_path=(
+            "contracts/candidates/temporal_carrier_selection/"
+            "OFARM_InterventionValidTimeCarrierSelection_candidate_v0_1.json"
+        ),
+        repository_file_digest=(
+            "sha256:9886aace0670b6a83f17cd33cbc67aa62fafcfd0ea873faed9194c2aaa07efe5"
+        ),
+        canonical_byte_length=1814,
+        content_digest=(
+            "sha256:373a5f402ad077039946c1dfe7b972e4382d3c6a6805fbf0b271e4a0bc729bf1"
+        ),
+        schema_logical_ref=(
+            "contract:ofarm.temporal-carrier-selection-binding.v0.1"
+        ),
+        schema_path=(
+            "contracts/candidates/temporal_carrier_selection/"
+            "OFARM_TemporalCarrierSelectionBinding_schema_v0_1.json"
+        ),
+        schema_byte_length=3340,
+        schema_content_digest=(
+            "sha256:d252420507393d1d9816a0f20549faa8cf67c94bd1e2c10a3c509aadf4f3800a"
+        ),
+    ),
+    _TemporalGovernanceCase(
+        case_id="governed-command",
+        logical_ref=(
+            "ofarm.temporal-governed-command.commit-operation-claim-draft.v0.1"
+        ),
+        schema_version="ofarm.temporal-governed-command-binding.v0.1",
+        identity_field="bindingId",
+        instance_path=(
+            "contracts/candidates/temporal_governed_command/"
+            "OFARM_OperationClaimDraftTemporalCommand_candidate_v0_1.json"
+        ),
+        repository_file_digest=(
+            "sha256:0909ec653cb99a94cd1b35afaf2d386258aac671c5f730960ed485df8a4b8f2e"
+        ),
+        canonical_byte_length=9614,
+        content_digest=(
+            "sha256:6dad47b836b737c8d58b38f566ed0a7d6caeba9023a734357320326630309da1"
+        ),
+        schema_logical_ref=(
+            "contract:ofarm.temporal-governed-command-binding.v0.1"
+        ),
+        schema_path=(
+            "contracts/candidates/temporal_governed_command/"
+            "OFARM_TemporalGovernedCommandBinding_schema_v0_1.json"
+        ),
+        schema_byte_length=13132,
+        schema_content_digest=(
+            "sha256:afda003df90e2787cfdc97f5561e3e5b098177a5add91556af2e935a3b9711db"
+        ),
+    ),
+)
+
+
+def _temporal_governance_ids(case: _TemporalGovernanceCase) -> str:
+    return case.case_id
+
+
+def _temporal_governance_document(case: _TemporalGovernanceCase) -> dict:
+    document, _canonical = strict_json_document(
+        (PACKAGE_ROOT / case.instance_path).read_bytes(),
+        case.case_id,
+    )
+    return document
+
+
+def _temporal_governance_component(
+    case: _TemporalGovernanceCase,
+    *,
+    logical_ref: str | None = None,
+    document: dict | None = None,
+    canonicalization: Canonicalization = Canonicalization.CANONICAL_JSON,
+    placement: ContentPlacement = ContentPlacement.GLOBAL,
+) -> RuntimeComponent:
+    selected_bytes = (
+        (PACKAGE_ROOT / case.instance_path).read_bytes()
+        if document is None
+        else canonical_json_bytes(document)
+    )
+    return RuntimeComponent.from_selected_bytes(
+        role=RuntimeComponentRole.TEMPORAL_GOVERNANCE_ARTIFACT,
+        logical_ref=case.logical_ref if logical_ref is None else logical_ref,
+        canonicalization=canonicalization,
+        placement=placement,
+        selected_bytes=selected_bytes,
+    )
+
+
+def _temporal_governance_schema_component(
+    case: _TemporalGovernanceCase,
+    *,
+    role: RuntimeComponentRole = RuntimeComponentRole.CONTRACT_SCHEMA,
+    document: dict | None = None,
+) -> RuntimeComponent:
+    selected_bytes = (
+        (PACKAGE_ROOT / case.schema_path).read_bytes()
+        if document is None
+        else canonical_json_bytes(document)
+    )
+    return RuntimeComponent.from_selected_bytes(
+        role=role,
+        logical_ref=case.schema_logical_ref,
+        canonicalization=Canonicalization.EXACT_BYTES,
+        placement=ContentPlacement.GLOBAL,
+        selected_bytes=selected_bytes,
+    )
+
+
+@pytest.mark.parametrize(
+    "case", _TEMPORAL_GOVERNANCE_CASES, ids=_temporal_governance_ids
+)
+def test_temporal_governance_component_accepts_each_exact_row(case):
+    component = _temporal_governance_component(case)
+    document, _canonical = strict_json_document(
+        component.canonical_bytes,
+        case.case_id,
+    )
+
+    assert component.logical_ref == case.logical_ref
+    assert component.byte_length == case.canonical_byte_length
+    assert component.content_digest == case.content_digest
+    assert document["schemaVersion"] == case.schema_version
+    assert document[case.identity_field] == case.logical_ref
+
+
+@pytest.mark.parametrize(
+    "case", _TEMPORAL_GOVERNANCE_CASES, ids=_temporal_governance_ids
+)
+def test_temporal_governance_bundle_accepts_each_row_independently(case):
+    component = _temporal_governance_component(case)
+    schema = _temporal_governance_schema_component(case)
+
+    bundle = RuntimeBundle.create((component, schema))
+
+    assert bundle.selected_tenant_ref is None
+    assert bundle.components == tuple(sorted(
+        (component, schema),
+        key=lambda item: (item.role.value, item.logical_ref),
+    ))
+
+
+@pytest.mark.parametrize(
+    "case", _TEMPORAL_GOVERNANCE_CASES, ids=_temporal_governance_ids
+)
+def test_temporal_governance_explicit_builder_accepts_each_row(tmp_path, case):
+    root = _contract_registry_root(tmp_path / case.case_id)
+    instance_path = "selected/temporal-governance.json"
+    schema_path = "contracts/kernel/temporal-governance-schema.json"
+    _write(root, instance_path, (PACKAGE_ROOT / case.instance_path).read_bytes())
+    _write(root, schema_path, (PACKAGE_ROOT / case.schema_path).read_bytes())
+    spec = RuntimeComponentSpec(
+        role=RuntimeComponentRole.TEMPORAL_GOVERNANCE_ARTIFACT,
+        logical_ref=case.logical_ref,
+        relative_path=instance_path,
+        canonicalization=Canonicalization.CANONICAL_JSON,
+        placement=ContentPlacement.GLOBAL,
+    )
+
+    bundle = RuntimeBundleBuilder(root, (spec,), (schema_path,)).build()
+
+    assert bundle.component(
+        RuntimeComponentRole.TEMPORAL_GOVERNANCE_ARTIFACT,
+        case.logical_ref,
+    ).content_digest == case.content_digest
+
+
+@pytest.mark.parametrize(
+    "case", _TEMPORAL_GOVERNANCE_CASES, ids=_temporal_governance_ids
+)
+def test_temporal_governance_reserves_each_identity_for_every_other_role(case):
+    changed_bytes = canonical_json_bytes({"changed": True})
+    for role in RuntimeComponentRole:
+        if role is RuntimeComponentRole.TEMPORAL_GOVERNANCE_ARTIFACT:
+            continue
+        with pytest.raises(
+            RuntimeBundleError,
+            match="reserved temporal governance identity or digest",
+        ):
+            RuntimeComponent.from_selected_bytes(
+                role=role,
+                logical_ref=case.logical_ref,
+                canonicalization=Canonicalization.CANONICAL_JSON,
+                placement=ContentPlacement.GLOBAL,
+                selected_bytes=changed_bytes,
+            )
+
+
+@pytest.mark.parametrize(
+    "case", _TEMPORAL_GOVERNANCE_CASES, ids=_temporal_governance_ids
+)
+def test_temporal_governance_reserves_each_digest_for_every_other_role(case):
+    canonical_bytes = canonical_json_bytes(_temporal_governance_document(case))
+    for role in RuntimeComponentRole:
+        if role is RuntimeComponentRole.TEMPORAL_GOVERNANCE_ARTIFACT:
+            continue
+        with pytest.raises(
+            RuntimeBundleError,
+            match="reserved temporal governance identity or digest",
+        ):
+            RuntimeComponent.from_selected_bytes(
+                role=role,
+                logical_ref="artifact:temporal-governance-alias",
+                canonicalization=Canonicalization.CANONICAL_JSON,
+                placement=ContentPlacement.GLOBAL,
+                selected_bytes=canonical_bytes,
+            )
+
+
+@pytest.mark.parametrize(
+    "case", _TEMPORAL_GOVERNANCE_CASES, ids=_temporal_governance_ids
+)
+def test_temporal_governance_builder_reserves_identity_and_digest_for_sources(
+    tmp_path,
+    case,
+):
+    canonical_bytes = canonical_json_bytes(_temporal_governance_document(case))
+    for role in runtime_bundle_module._EXACT_GLOBAL_COMPONENT_ROLES:
+        root = tmp_path / f"{case.case_id}-{role.value}"
+        relative_path = "selected/source.bin"
+        _write(root, relative_path, b"changed")
+        reserved_identity = RuntimeComponentSpec(
+            role=role,
+            logical_ref=case.logical_ref,
+            relative_path=relative_path,
+            canonicalization=Canonicalization.EXACT_BYTES,
+            placement=ContentPlacement.GLOBAL,
+        )
+        with pytest.raises(
+            RuntimeBundleError,
+            match="reserved temporal governance identity or digest",
+        ):
+            RuntimeBundleBuilder(root, (reserved_identity,)).build()
+
+        _write(root, relative_path, canonical_bytes)
+        reserved_digest = replace(
+            reserved_identity,
+            logical_ref="artifact:temporal-governance-alias",
+        )
+        with pytest.raises(
+            RuntimeBundleError,
+            match="reserved temporal governance identity or digest",
+        ):
+            RuntimeBundleBuilder(root, (reserved_digest,)).build()
+
+
+@pytest.mark.parametrize(
+    "case", _TEMPORAL_GOVERNANCE_CASES, ids=_temporal_governance_ids
+)
+def test_temporal_governance_refuses_aliased_or_unlisted_identity(case):
+    for logical_ref in (
+        f"{case.logical_ref}.alias",
+        case.logical_ref.replace(".v0.1", ".v0.2"),
+    ):
+        with pytest.raises(RuntimeBundleError, match="identity .* is not admitted"):
+            _temporal_governance_component(case, logical_ref=logical_ref)
+
+
+@pytest.mark.parametrize(
+    "mutation", ("schema-version", "identity-field", "extra-field")
+)
+@pytest.mark.parametrize(
+    "case", _TEMPORAL_GOVERNANCE_CASES, ids=_temporal_governance_ids
+)
+def test_temporal_governance_refuses_changed_exact_provenance(case, mutation):
+    document = dict(_temporal_governance_document(case))
+    if mutation == "schema-version":
+        document["schemaVersion"] = f"{case.schema_version}.changed"
+    elif mutation == "identity-field":
+        document[case.identity_field] = f"{case.logical_ref}.changed"
+    else:
+        document["callerSupplied"] = True
+
+    message = {
+        "schema-version": "schemaVersion differs",
+        "identity-field": f"does not declare {case.identity_field}",
+        "extra-field": "bytes differ",
+    }[mutation]
+    with pytest.raises(RuntimeBundleError, match=message):
+        _temporal_governance_component(case, document=document)
+
+
+@pytest.mark.parametrize(
+    "field",
+    (
+        "tenantId",
+        "partyRef",
+        "requestId",
+        "batchId",
+        "knowledgePosition",
+        "credential",
+        "secret",
+        "activationState",
+    ),
+)
+def test_temporal_governance_refuses_forbidden_mutable_or_scoped_fields(field):
+    case = _TEMPORAL_GOVERNANCE_CASES[0]
+    document = dict(_temporal_governance_document(case))
+    document[field] = "caller-supplied"
+
+    with pytest.raises(RuntimeBundleError, match="bytes differ"):
+        _temporal_governance_component(case, document=document)
+
+
+def test_temporal_governance_refuses_wrong_placement_or_canonicalization():
+    case = _TEMPORAL_GOVERNANCE_CASES[0]
+    with pytest.raises(RuntimeBundleError, match="canonical JSON and global"):
+        _temporal_governance_component(case, placement=ContentPlacement.TENANT)
+    with pytest.raises(RuntimeBundleError, match="canonical JSON and global"):
+        _temporal_governance_component(
+            case,
+            canonicalization=Canonicalization.EXACT_BYTES,
+        )
+
+
+def test_temporal_governance_refuses_noncanonical_component_bytes():
+    case = _TEMPORAL_GOVERNANCE_CASES[0]
+    raw = (PACKAGE_ROOT / case.instance_path).read_bytes()
+    assert raw != canonical_json_bytes(_temporal_governance_document(case))
+
+    with pytest.raises(RuntimeBundleError, match="bytes are not canonical JSON"):
+        RuntimeComponent(
+            role=RuntimeComponentRole.TEMPORAL_GOVERNANCE_ARTIFACT,
+            logical_ref=case.logical_ref,
+            canonicalization=Canonicalization.CANONICAL_JSON,
+            placement=ContentPlacement.GLOBAL,
+            canonical_bytes=raw,
+            content_digest=runtime_bundle_module.sha256_bytes(raw),
+        )
+
+
+def test_temporal_governance_refuses_repository_digest_as_content_digest():
+    case = _TEMPORAL_GOVERNANCE_CASES[0]
+    canonical_bytes = canonical_json_bytes(_temporal_governance_document(case))
+
+    with pytest.raises(RuntimeBundleError, match="digest does not match its bytes"):
+        RuntimeComponent(
+            role=RuntimeComponentRole.TEMPORAL_GOVERNANCE_ARTIFACT,
+            logical_ref=case.logical_ref,
+            canonicalization=Canonicalization.CANONICAL_JSON,
+            placement=ContentPlacement.GLOBAL,
+            canonical_bytes=canonical_bytes,
+            content_digest=case.repository_file_digest,
+        )
+
+
+@pytest.mark.parametrize(
+    "case", _TEMPORAL_GOVERNANCE_CASES, ids=_temporal_governance_ids
+)
+def test_temporal_governance_bundle_requires_exact_active_schema(case):
+    component = _temporal_governance_component(case)
+    with pytest.raises(RuntimeBundleError, match="requires .* in CONTRACT_SCHEMA"):
+        RuntimeBundle.create((component,))
+
+    draft_schema = _temporal_governance_schema_component(
+        case,
+        role=RuntimeComponentRole.DRAFT_CONTRACT_SCHEMA,
+    )
+    with pytest.raises(RuntimeBundleError, match="requires .* in CONTRACT_SCHEMA"):
+        RuntimeBundle.create((component, draft_schema))
+
+    schema_document, _canonical = strict_json_document(
+        (PACKAGE_ROOT / case.schema_path).read_bytes(),
+        case.schema_path,
+    )
+    changed_schema_document = dict(schema_document)
+    changed_schema_document["title"] = "changed but version-compatible schema"
+    changed_schema = _temporal_governance_schema_component(
+        case,
+        document=changed_schema_document,
+    )
+    with pytest.raises(RuntimeBundleError, match="schema .* bytes differ"):
+        RuntimeBundle.create((component, changed_schema))
+
+
+def test_temporal_governance_bundle_refuses_duplicate_identity():
+    case = _TEMPORAL_GOVERNANCE_CASES[0]
+    component = _temporal_governance_component(case)
+    schema = _temporal_governance_schema_component(case)
+
+    with pytest.raises(RuntimeBundleError, match="duplicate component identities"):
+        RuntimeBundle.create((component, component, schema))
+
+
+def test_temporal_governance_bundle_refuses_schema_validation_failure(monkeypatch):
+    case = _TEMPORAL_GOVERNANCE_CASES[0]
+    component = _temporal_governance_component(case)
+    schema = _temporal_governance_schema_component(case)
+
+    def refuse_validation(_validator, _instance):
+        raise runtime_bundle_module.jsonschema.exceptions.ValidationError(
+            "forced validation refusal"
+        )
+
+    monkeypatch.setattr(
+        runtime_bundle_module.jsonschema.Draft202012Validator,
+        "validate",
+        refuse_validation,
+    )
+    with pytest.raises(RuntimeBundleError, match="fails its retained schema"):
+        RuntimeBundle.create((component, schema))
+
+
+def test_temporal_governance_explicit_builder_requires_schema(tmp_path):
+    case = _TEMPORAL_GOVERNANCE_CASES[0]
+    root = tmp_path / "missing-schema"
+    instance_path = "selected/temporal-governance.json"
+    _write(root, instance_path, (PACKAGE_ROOT / case.instance_path).read_bytes())
+    spec = RuntimeComponentSpec(
+        role=RuntimeComponentRole.TEMPORAL_GOVERNANCE_ARTIFACT,
+        logical_ref=case.logical_ref,
+        relative_path=instance_path,
+        canonicalization=Canonicalization.CANONICAL_JSON,
+        placement=ContentPlacement.GLOBAL,
+    )
+
+    with pytest.raises(RuntimeBundleError, match="requires .* in CONTRACT_SCHEMA"):
+        RuntimeBundleBuilder(root, (spec,)).build()
+
+
+def test_temporal_governance_role_remains_outside_component_catalog(tmp_path):
+    root = tmp_path / "catalog"
+    root.mkdir()
+    document = _manifest_document()
+    document["components"] = [{
+        "role": RuntimeComponentRole.TEMPORAL_GOVERNANCE_ARTIFACT.value,
+        "logicalRef": _TEMPORAL_GOVERNANCE_CASES[0].logical_ref,
+        "path": "selected/temporal-governance.json",
+        "canonicalization": Canonicalization.CANONICAL_JSON.value,
+        "placement": ContentPlacement.GLOBAL.value,
+    }]
+    _write_manifest(root, document)
+
+    with pytest.raises(
+        RuntimeBundleError,
+        match="catalog cannot select temporal governance artifacts",
+    ):
+        RuntimeBundleBuilder.from_manifest(root)
+
+
+def test_temporal_governance_membership_is_profile_neutral():
+    case = _TEMPORAL_GOVERNANCE_CASES[0]
+    active = RuntimeBundleBuilder.from_manifest(PACKAGE_ROOT).build()
+    component = _temporal_governance_component(case)
+    schema = _temporal_governance_schema_component(case)
+
+    extended = RuntimeBundle.create(active.components + (component, schema))
+
+    assert extended.selected_tenant_ref == active.selected_tenant_ref
+    assert set(active.components).issubset(extended.components)
+    assert extended.component(
+        RuntimeComponentRole.TEMPORAL_GOVERNANCE_ARTIFACT,
+        case.logical_ref,
+    ) == component
 
 
 def test_contract_lane_changes_bundle_identity_for_identical_schema_bytes(tmp_path):

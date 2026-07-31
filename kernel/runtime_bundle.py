@@ -13,6 +13,8 @@ from enum import Enum
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable
 
+import jsonschema
+
 
 BUNDLE_SCHEMA_VERSION = "ofarm.runtime-bundle.local.v1"
 COMPONENT_CATALOG_VERSION = "ofarm.runtime-component-catalog.local.v1"
@@ -66,6 +68,7 @@ class RuntimeComponentRole(str, Enum):
     QUERY_OUTPUT_SOURCE = "QUERY_OUTPUT_SOURCE"
     REFERENCE_SNAPSHOT = "REFERENCE_SNAPSHOT"
     REFERENCE_SOURCE = "REFERENCE_SOURCE"
+    TEMPORAL_GOVERNANCE_ARTIFACT = "TEMPORAL_GOVERNANCE_ARTIFACT"
 
 
 class Canonicalization(str, Enum):
@@ -76,6 +79,70 @@ class Canonicalization(str, Enum):
 class ContentPlacement(str, Enum):
     GLOBAL = "GLOBAL_IMMUTABLE_CONTENT"
     TENANT = "TENANT_RUNTIME_SELECTION"
+
+
+@dataclass(frozen=True, slots=True)
+class _TemporalGovernanceArtifactRule:
+    logical_ref: str
+    schema_version: str
+    identity_field: str
+    canonical_byte_length: int
+    content_digest: str
+    schema_logical_ref: str
+    schema_byte_length: int
+    schema_content_digest: str
+
+
+_TEMPORAL_GOVERNANCE_ARTIFACT_RULES = (
+    _TemporalGovernanceArtifactRule(
+        logical_ref="ofarm.temporal-carrier-matrix.adr0002.v0.1",
+        schema_version="ofarm.temporal-carrier-matrix.v0.1",
+        identity_field="matrixId",
+        canonical_byte_length=9504,
+        content_digest=(
+            "sha256:c404c0cd1e08f389664b5381c2c038cf65bac9a3b725fc2b1882990636eb179b"
+        ),
+        schema_logical_ref="contract:ofarm.temporal-carrier-matrix.v0.1",
+        schema_byte_length=3088,
+        schema_content_digest=(
+            "sha256:cdb5c09ec033cc3b4de1dea9eb383c499045d8a3bfc5b80fd7abeab579a566ed"
+        ),
+    ),
+    _TemporalGovernanceArtifactRule(
+        logical_ref="ofarm.temporal-carrier-selection.intervention.v0.1",
+        schema_version="ofarm.temporal-carrier-selection-binding.v0.1",
+        identity_field="bindingId",
+        canonical_byte_length=1814,
+        content_digest=(
+            "sha256:373a5f402ad077039946c1dfe7b972e4382d3c6a6805fbf0b271e4a0bc729bf1"
+        ),
+        schema_logical_ref=(
+            "contract:ofarm.temporal-carrier-selection-binding.v0.1"
+        ),
+        schema_byte_length=3340,
+        schema_content_digest=(
+            "sha256:d252420507393d1d9816a0f20549faa8cf67c94bd1e2c10a3c509aadf4f3800a"
+        ),
+    ),
+    _TemporalGovernanceArtifactRule(
+        logical_ref=(
+            "ofarm.temporal-governed-command.commit-operation-claim-draft.v0.1"
+        ),
+        schema_version="ofarm.temporal-governed-command-binding.v0.1",
+        identity_field="bindingId",
+        canonical_byte_length=9614,
+        content_digest=(
+            "sha256:6dad47b836b737c8d58b38f566ed0a7d6caeba9023a734357320326630309da1"
+        ),
+        schema_logical_ref=(
+            "contract:ofarm.temporal-governed-command-binding.v0.1"
+        ),
+        schema_byte_length=13132,
+        schema_content_digest=(
+            "sha256:afda003df90e2787cfdc97f5561e3e5b098177a5add91556af2e935a3b9711db"
+        ),
+    ),
+)
 
 
 _JSON_COMPONENT_RULES = {
@@ -414,6 +481,69 @@ def _contract_schema_version(document: dict[str, Any], label: str) -> str:
     return schema_version
 
 
+def _temporal_governance_rule(
+    logical_ref: str,
+) -> _TemporalGovernanceArtifactRule | None:
+    return next(
+        (
+            rule for rule in _TEMPORAL_GOVERNANCE_ARTIFACT_RULES
+            if rule.logical_ref == logical_ref
+        ),
+        None,
+    )
+
+
+def _matches_temporal_governance_reservation(
+    logical_ref: str,
+    content_digest: str,
+) -> bool:
+    return any(
+        rule.logical_ref == logical_ref or rule.content_digest == content_digest
+        for rule in _TEMPORAL_GOVERNANCE_ARTIFACT_RULES
+    )
+
+
+def _validate_temporal_governance_component(
+    *,
+    logical_ref: str,
+    canonicalization: Canonicalization,
+    placement: ContentPlacement,
+    canonical_bytes: bytes,
+    content_digest: str,
+    document: dict[str, Any] | None,
+) -> None:
+    if (
+        canonicalization is not Canonicalization.CANONICAL_JSON
+        or placement is not ContentPlacement.GLOBAL
+        or document is None
+    ):
+        raise RuntimeBundleError(
+            "TEMPORAL_GOVERNANCE_ARTIFACT must use canonical JSON "
+            "and global placement"
+        )
+    rule = _temporal_governance_rule(logical_ref)
+    if rule is None:
+        raise RuntimeBundleError(
+            f"temporal governance identity {logical_ref!r} is not admitted"
+        )
+    if document.get("schemaVersion") != rule.schema_version:
+        raise RuntimeBundleError(
+            f"temporal governance component {logical_ref!r} schemaVersion differs"
+        )
+    if document.get(rule.identity_field) != logical_ref:
+        raise RuntimeBundleError(
+            f"temporal governance component {logical_ref!r} "
+            f"does not declare {rule.identity_field}"
+        )
+    if (
+        len(canonical_bytes) != rule.canonical_byte_length
+        or content_digest != rule.content_digest
+    ):
+        raise RuntimeBundleError(
+            f"temporal governance component {logical_ref!r} bytes differ"
+        )
+
+
 def _validate_runtime_component_semantics(
     *,
     role: RuntimeComponentRole,
@@ -423,6 +553,28 @@ def _validate_runtime_component_semantics(
     canonical_bytes: bytes,
     document: dict[str, Any] | None,
 ) -> None:
+    content_digest = sha256_bytes(canonical_bytes)
+    if (
+        role is not RuntimeComponentRole.TEMPORAL_GOVERNANCE_ARTIFACT
+        and _matches_temporal_governance_reservation(
+            logical_ref, content_digest
+        )
+    ):
+        raise RuntimeBundleError(
+            "reserved temporal governance identity or digest requires "
+            "TEMPORAL_GOVERNANCE_ARTIFACT"
+        )
+    if role is RuntimeComponentRole.TEMPORAL_GOVERNANCE_ARTIFACT:
+        _validate_temporal_governance_component(
+            logical_ref=logical_ref,
+            canonicalization=canonicalization,
+            placement=placement,
+            canonical_bytes=canonical_bytes,
+            content_digest=content_digest,
+            document=document,
+        )
+        return
+
     if role in _EXACT_GLOBAL_COMPONENT_ROLES:
         if (
             canonicalization is not Canonicalization.EXACT_BYTES
@@ -640,6 +792,70 @@ def _canonical_component_documents(
     return documents
 
 
+def _validate_temporal_governance_components(
+    components: tuple[RuntimeComponent, ...],
+) -> None:
+    temporal_components = tuple(
+        component for component in components
+        if component.role is RuntimeComponentRole.TEMPORAL_GOVERNANCE_ARTIFACT
+    )
+    if not temporal_components:
+        return
+    contract_components = {
+        component.logical_ref: component for component in components
+        if component.role is RuntimeComponentRole.CONTRACT_SCHEMA
+    }
+    for component in temporal_components:
+        rule = _temporal_governance_rule(component.logical_ref)
+        if rule is None:  # pragma: no cover - component validation owns this state
+            raise RuntimeBundleError(
+                f"temporal governance identity {component.logical_ref!r} is not admitted"
+            )
+        schema_component = contract_components.get(rule.schema_logical_ref)
+        if schema_component is None:
+            raise RuntimeBundleError(
+                f"temporal governance component {component.logical_ref!r} "
+                f"requires {rule.schema_logical_ref!r} in CONTRACT_SCHEMA"
+            )
+        if (
+            schema_component.byte_length != rule.schema_byte_length
+            or schema_component.content_digest != rule.schema_content_digest
+        ):
+            raise RuntimeBundleError(
+                f"temporal governance schema {rule.schema_logical_ref!r} bytes differ"
+            )
+        schema, _canonical = strict_json_document(
+            schema_component.canonical_bytes,
+            f"temporal governance schema {rule.schema_logical_ref!r}",
+        )
+        if _contract_schema_version(
+            schema, f"temporal governance schema {rule.schema_logical_ref!r}"
+        ) != rule.schema_version:
+            raise RuntimeBundleError(
+                f"temporal governance schema {rule.schema_logical_ref!r} "
+                "version differs"
+            )
+        instance, _canonical = strict_json_document(
+            component.canonical_bytes,
+            f"temporal governance component {component.logical_ref!r}",
+        )
+        try:
+            jsonschema.Draft202012Validator.check_schema(schema)
+            jsonschema.Draft202012Validator(
+                schema,
+                format_checker=jsonschema.FormatChecker(),
+            ).validate(instance)
+        except jsonschema.exceptions.SchemaError as exc:
+            raise RuntimeBundleError(
+                f"temporal governance schema {rule.schema_logical_ref!r} is invalid"
+            ) from exc
+        except jsonschema.exceptions.ValidationError as exc:
+            raise RuntimeBundleError(
+                f"temporal governance component {component.logical_ref!r} "
+                "fails its retained schema"
+            ) from exc
+
+
 def _validate_runtime_bundle_semantics(
     components: tuple[RuntimeComponent, ...],
 ) -> str | None:
@@ -651,6 +867,7 @@ def _validate_runtime_bundle_semantics(
         raise RuntimeBundleError(
             "contract schemaVersion is selected more than once across lanes"
         )
+    _validate_temporal_governance_components(components)
     descriptor_components = tuple(
         component for component in components
         if component.role is RuntimeComponentRole.PROFILE_DESCRIPTOR
@@ -1185,12 +1402,20 @@ class RuntimeBundleBuilder:
             type(path) is not str for path in document["contractSchemas"]
         ):
             raise RuntimeBundleError("component catalog contractSchemas must be strings")
+        component_specs = [
+            RuntimeComponentSpec.from_document(value, index)
+            for index, value in enumerate(document["components"])
+        ]
+        if any(
+            spec.role is RuntimeComponentRole.TEMPORAL_GOVERNANCE_ARTIFACT
+            for spec in component_specs
+        ):
+            raise RuntimeBundleError(
+                "component catalog cannot select temporal governance artifacts"
+            )
         return cls(
             root,
-            [
-                RuntimeComponentSpec.from_document(value, index)
-                for index, value in enumerate(document["components"])
-            ],
+            component_specs,
             document["contractSchemas"],
             require_profile_descriptor=True,
         )
@@ -1216,6 +1441,7 @@ class RuntimeBundleBuilder:
             spec.role not in _EXACT_GLOBAL_COMPONENT_ROLES
             and spec.role not in _JSON_COMPONENT_RULES
             and spec.role is not RuntimeComponentRole.PROFILE_INSTANCE
+            and spec.role is not RuntimeComponentRole.TEMPORAL_GOVERNANCE_ARTIFACT
         ):
             raise RuntimeBundleError(
                 f"{spec.role.value} is not valid in explicit component entries"
