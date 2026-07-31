@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from kernel import runtime_bundle as runtime_bundle_module
 from kernel.contracts import ContractRegistry
 from kernel.runtime_bundle import (
     COMPONENT_CATALOG_VERSION,
@@ -1715,12 +1716,7 @@ def _direct_contract_schema_component(
 
 
 def _contract_registry_root(root: Path) -> Path:
-    for directory in (
-        "contracts/kernel",
-        "contracts/core",
-        "contracts/platform",
-        "contracts/drafts_reference/explainable_current_state_evidence",
-    ):
+    for directory in runtime_bundle_module._CONTRACT_REGISTRY_DIRECTORIES:
         (root / directory).mkdir(parents=True, exist_ok=True)
     return root
 
@@ -1809,14 +1805,25 @@ def test_contract_schema_version_refuses_unlisted_declaration_locations(document
         )
 
 
-@pytest.mark.parametrize("form", ("property", "whole-document"))
+@pytest.mark.parametrize(
+    ("form", "message"),
+    (
+        ("property", r"malformed properties\.schemaVersion\.const"),
+        ("whole-document", r"malformed const\.schemaVersion"),
+    ),
+    ids=("property", "whole-document"),
+)
 @pytest.mark.parametrize(
     "value",
     ("", None, True, 1, [], {}),
     ids=("empty", "null", "boolean", "number", "array", "object"),
 )
-def test_contract_schema_version_refuses_empty_or_non_string_values(form, value):
-    with pytest.raises(RuntimeBundleError, match="malformed"):
+def test_contract_schema_version_refuses_empty_or_non_string_values(
+    form,
+    message,
+    value,
+):
+    with pytest.raises(RuntimeBundleError, match=message):
         _direct_contract_schema_component(
             role=RuntimeComponentRole.CONTRACT_SCHEMA,
             logical_ref="contract:ofarm.test.invalid.v0.1",
@@ -1827,8 +1834,11 @@ def test_contract_schema_version_refuses_empty_or_non_string_values(form, value)
 @pytest.mark.parametrize(
     ("document", "message"),
     (
-        ({"properties": {"schemaVersion": {}}}, "malformed"),
-        ({"const": {}}, "malformed"),
+        (
+            {"properties": {"schemaVersion": {}}},
+            r"malformed properties\.schemaVersion\.const",
+        ),
+        ({"const": {}}, r"malformed const\.schemaVersion"),
         (
             {
                 "properties": {
@@ -1838,14 +1848,14 @@ def test_contract_schema_version_refuses_empty_or_non_string_values(form, value)
                 },
                 "const": "not-an-object",
             },
-            "more than once",
+            "declares schemaVersion const more than once",
         ),
         (
             {
                 "properties": {"schemaVersion": "not-an-object"},
                 "const": {"schemaVersion": "ofarm.test.valid-whole.v0.1"},
             },
-            "more than once",
+            "declares schemaVersion const more than once",
         ),
     ),
     ids=(
@@ -1883,7 +1893,10 @@ def test_contract_schema_version_refuses_two_declaration_forms(
         "const": {"schemaVersion": whole_document_version},
     }
 
-    with pytest.raises(RuntimeBundleError, match="more than once"):
+    with pytest.raises(
+        RuntimeBundleError,
+        match="declares schemaVersion const more than once",
+    ):
         _direct_contract_schema_component(
             role=RuntimeComponentRole.CONTRACT_SCHEMA,
             logical_ref=f"contract:{property_version}",
@@ -1936,6 +1949,28 @@ def test_contract_schema_version_builder_accepts_top_level_const(
     assert bundle.components[0].logical_ref == f"contract:{schema_version}"
 
 
+def test_contract_schema_version_builder_skips_registry_metadata(tmp_path):
+    root = _contract_registry_root(tmp_path / "registry-metadata")
+    relative_path = "contracts/kernel/schema.json"
+    schema_version = "ofarm.test.builder-metadata-skip.v0.1"
+    _write(
+        root,
+        relative_path,
+        canonical_json_bytes(_schema_version_document("property", schema_version)),
+    )
+    _write(
+        root,
+        "contracts/drafts_reference/"
+        "explainable_current_state_evidence/folder.status.json",
+        canonical_json_bytes({"status": "draft-reference"}),
+    )
+
+    bundle = RuntimeBundleBuilder(root, (), (relative_path,)).build()
+
+    assert len(bundle.components) == 1
+    assert bundle.components[0].logical_ref == f"contract:{schema_version}"
+
+
 @pytest.mark.parametrize(
     "whole_document_version",
     (
@@ -1958,7 +1993,10 @@ def test_contract_schema_version_builder_refuses_two_declaration_forms(
         "const": {"schemaVersion": whole_document_version},
     }))
 
-    with pytest.raises(RuntimeBundleError, match="more than once"):
+    with pytest.raises(
+        RuntimeBundleError,
+        match="declares schemaVersion const more than once",
+    ):
         RuntimeBundleBuilder(root, (), (relative_path,)).build()
 
 

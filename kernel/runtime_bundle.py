@@ -371,12 +371,20 @@ def _require_relative_path(value: str, label: str) -> None:
         raise RuntimeBundleError(f"{label} must be a normalized relative path")
 
 
-def _contract_schema_version(document: dict[str, Any], label: str) -> str:
+def _contract_schema_version_forms(
+    document: dict[str, Any],
+) -> tuple[bool, bool]:
     properties = document.get("properties")
-    property_form_present = (
-        type(properties) is dict and "schemaVersion" in properties
+    return (
+        type(properties) is dict and "schemaVersion" in properties,
+        "const" in document,
     )
-    whole_document_form_present = "const" in document
+
+
+def _contract_schema_version(document: dict[str, Any], label: str) -> str:
+    property_form_present, whole_document_form_present = (
+        _contract_schema_version_forms(document)
+    )
     if property_form_present and whole_document_form_present:
         raise RuntimeBundleError(
             f"{label} declares schemaVersion const more than once"
@@ -385,7 +393,7 @@ def _contract_schema_version(document: dict[str, Any], label: str) -> str:
         raise RuntimeBundleError(f"{label} has no schemaVersion const")
 
     if property_form_present:
-        schema_property = properties["schemaVersion"]
+        schema_property = document["properties"]["schemaVersion"]
         if type(schema_property) is not dict or "const" not in schema_property:
             raise RuntimeBundleError(
                 f"{label} has malformed properties.schemaVersion.const"
@@ -1315,11 +1323,8 @@ class RuntimeBundleBuilder:
                     self.package_root, relative_path, "contract registry schema")
                 document, _canonical = strict_json_document(
                     raw, f"contract registry schema {relative_path!r}")
-                properties = document.get("properties")
-                if not (
-                    (type(properties) is dict and "schemaVersion" in properties)
-                    or "const" in document
-                ):
+                # Registry directories also contain non-schema metadata JSON.
+                if not any(_contract_schema_version_forms(document)):
                     continue
                 _contract_schema_version(
                     document, f"contract registry schema {relative_path!r}"
