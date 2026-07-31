@@ -173,6 +173,54 @@ def _wait_for_blocked_event_writer(
         f"{application_name} did not block while holding the event writer lock"
     )
 
+
+def _wait_for_access_clock_mutex_and_sequence_wait(
+    state: dict[str, object], target_pid: int
+) -> None:
+    deadline = monotonic() + 15
+    observed = (False, False)
+    with psycopg.connect(
+        state["target_admin_dsn"], autocommit=True
+    ) as admin:
+        while monotonic() < deadline:
+            observed = admin.execute(
+                """
+                SELECT
+                    EXISTS (
+                        SELECT 1
+                        FROM pg_catalog.pg_locks AS mutex
+                        WHERE mutex.pid = %s
+                          AND mutex.locktype = 'advisory'
+                          AND mutex.classid =
+                              (-274079271)::pg_catalog.int4::pg_catalog.oid
+                          AND mutex.objid =
+                              (-1019032096)::pg_catalog.int4::pg_catalog.oid
+                          AND mutex.objsubid = 2
+                          AND mutex.granted
+                    ),
+                    EXISTS (
+                        SELECT 1
+                        FROM pg_catalog.pg_locks AS sequence_wait
+                        WHERE sequence_wait.pid = %s
+                          AND sequence_wait.locktype = 'relation'
+                          AND sequence_wait.relation =
+                              'ofarm_security.'
+                              'operational_security_access_clock_high_water'::
+                                  pg_catalog.regclass
+                          AND NOT sequence_wait.granted
+                    )
+                """,
+                (target_pid, target_pid),
+            ).fetchone()
+            if observed == (True, True):
+                return
+            sleep(0.025)
+    raise AssertionError(
+        "target did not hold the exact access-clock mutex while waiting on "
+        f"the high-water sequence; observed={observed}"
+    )
+
+
 def test_authoritative_audit_migration_preserves_initial_and_adds_exact_v2():
     migration_set = load_migration_set(PACKAGE_ROOT, SECURITY_AUDIT_SERVICE)
     initial, operations, *_later = migration_set.migrations
@@ -1824,6 +1872,133 @@ def test_access_clock_mutex_is_released_before_reader_transaction_ends(
             ).fetchall()
 
     assert first_rows == second_rows
+
+
+def test_access_clock_mutex_is_released_after_post_acquisition_cancel(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
+    application_name = "issue252-access-clock-cancel-" + uuid4().hex
+    control_dsn = psycopg.conninfo.make_conninfo(
+        _role_dsn(state, "ofarm_security_audit_control_login"),
+        application_name=application_name,
+    )
+    access_count_sql = """
+        SELECT pg_catalog.count(*)
+        FROM ofarm_security.operational_security_event
+        WHERE event_kind = 'AUDIT_ACCESS'
+          AND access_purpose = 'OPERATIONAL_DIAGNOSTIC_QUERY_V1'
+          AND access_function_identity = %s
+    """
+
+    with (
+        psycopg.connect(control_dsn) as control,
+        psycopg.connect(state["target_admin_dsn"]) as blocker,
+    ):
+        # Controller-side deadlines bound the test; only its explicit cancel
+        # may produce the expected query_canceled outcome.
+        control.execute("SET lock_timeout = 0")
+        control.execute("SET statement_timeout = 0")
+        control.execute("SET transaction_timeout = 0")
+        target_pid = control.execute(
+            "SELECT pg_catalog.pg_backend_pid()"
+        ).fetchone()[0]
+        access_count_before = blocker.execute(
+            access_count_sql, (QUERY_IDENTITY,)
+        ).fetchone()[0]
+        # LOCK TABLE rejects sequences. This no-op ALTER takes AccessExclusiveLock,
+        # and the later rollback leaves the migration-owned sequence unchanged.
+        blocker.execute(
+            """
+            ALTER SEQUENCE
+                ofarm_security.operational_security_access_clock_high_water
+                NO CYCLE
+            """
+        )
+
+        def commit_access_intent() -> tuple[object, ...]:
+            return control.execute(
+                """
+                SELECT * FROM ofarm_security.commit_audit_access_intent(
+                    'OPERATIONAL_DIAGNOSTIC_QUERY_V1', %s,
+                    NULL, NULL, 10, 100000
+                )
+                """,
+                (QUERY_IDENTITY,),
+            ).fetchone()
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            access_future = executor.submit(commit_access_intent)
+            try:
+                _wait_for_access_clock_mutex_and_sequence_wait(
+                    state, target_pid
+                )
+                assert not access_future.done()
+                control.cancel()
+                with pytest.raises(
+                    psycopg.errors.QueryCanceled
+                ) as cancelled:
+                    access_future.result(timeout=5)
+            finally:
+                if not access_future.done():
+                    try:
+                        control.cancel()
+                    finally:
+                        blocker.rollback()
+
+        assert cancelled.value.sqlstate == "57014"
+        assert cancelled.value.diag.message_primary == (
+            "canceling statement due to user request"
+        )
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            assert admin.execute(
+                """
+                SELECT pg_catalog.count(*)
+                FROM pg_catalog.pg_locks
+                WHERE pid = %s
+                  AND locktype = 'advisory'
+                  AND classid =
+                      (-274079271)::pg_catalog.int4::pg_catalog.oid
+                  AND objid =
+                      (-1019032096)::pg_catalog.int4::pg_catalog.oid
+                  AND objsubid = 2
+                  AND granted
+                """,
+                (target_pid,),
+            ).fetchone() == (0,)
+
+        control.rollback()
+        assert control.execute(
+            "SELECT pg_catalog.pg_backend_pid()"
+        ).fetchone() == (target_pid,)
+        assert control.execute(
+            """
+            SELECT pg_catalog.count(*)
+            FROM pg_catalog.pg_locks
+            WHERE pid = pg_catalog.pg_backend_pid()
+              AND locktype = 'advisory'
+              AND classid =
+                  (-274079271)::pg_catalog.int4::pg_catalog.oid
+              AND objid =
+                  (-1019032096)::pg_catalog.int4::pg_catalog.oid
+              AND objsubid = 2
+              AND granted
+            """
+        ).fetchone() == (0,)
+
+        blocker.rollback()
+        assert control.execute(
+            "SELECT pg_catalog.pg_backend_pid()"
+        ).fetchone() == (target_pid,)
+        with psycopg.connect(
+            state["target_admin_dsn"], autocommit=True
+        ) as admin:
+            access_count_after = admin.execute(
+                access_count_sql, (QUERY_IDENTITY,)
+            ).fetchone()[0]
+        assert access_count_after == access_count_before
 
 
 def _set_access_clock_high_water(

@@ -2646,6 +2646,11 @@
       "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_access_clock_mutex_is_released_after_post_acquisition_cancel",
+      "sourceModule": "kernel.tests.test_postgresql_audit_migration",
+      "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_audit_migration.py::test_access_clock_mutex_is_released_before_reader_transaction_ends",
       "sourceModule": "kernel.tests.test_postgresql_audit_migration",
       "sourcePath": "kernel/tests/test_postgresql_audit_migration.py"
@@ -10696,8 +10701,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "36ae183473e7824eea9afa604d02aadb83b8ec78fdfe5ae67404630bbb4fd26a",
-  "entryCount": 2139,
+  "entriesSha256": "ddb29d338071814b619776599788e5501e05c9fc54625be3b9e89be893403eb7",
+  "entryCount": 2140,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
