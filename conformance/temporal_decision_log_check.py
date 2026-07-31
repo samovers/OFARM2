@@ -1,8 +1,16 @@
 #!/usr/bin/env python3
+"""Verify the one approved #176 pre-deployment decision-log entry.
+
+This checker deliberately pins the current first entry. It is not a general
+v0.2 successor-chain validator; admitting a second entry requires a separately
+reviewed implementation boundary.
+"""
+
 from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 import sys
 from pathlib import Path
@@ -71,7 +79,7 @@ CARD_CANONICAL_BYTE_LENGTH = 2557
 DECISION_EVIDENCE_MAPPING = {
     "currentnessTraceRef": "CONTAINING_ENTRY_AND_EXPLICIT_PREDECESSOR_CHAIN",
     "decidedAt": "APPROVAL_USER_MESSAGE_TURN_STARTED_AT_UTC_MILLISECONDS",
-    "humanPromotionAuthorityRef": ("CODEX_TASK_AND_APPROVAL_USER_MESSAGE_STABLE_REF"),
+    "humanPromotionAuthorityRef": "CODEX_TASK_AND_APPROVAL_USER_MESSAGE_STABLE_REF",
     "promotionDecisionRef": "DECISION_LOG_CONTRACT_IDENTITY_AND_CARD_DIGEST",
     "reviewEvidenceRefs": "PINNED_PROMOTION_BASE_AND_AMENDMENT_CONTRACTS",
 }
@@ -118,6 +126,32 @@ def _exact_dict(value: object, keys: set[str], label: str) -> dict:
     return value
 
 
+def _reject_non_json_constant(_value: str) -> object:
+    raise TemporalDecisionLogError(
+        "decision-log entry contains non-JSON numeric constant"
+    )
+
+
+def _parse_finite_json_float(value: str) -> float:
+    parsed = float(value)
+    if not math.isfinite(parsed):
+        raise TemporalDecisionLogError(
+            "decision-log entry contains non-finite JSON number"
+        )
+    return parsed
+
+
+def _load_entry(raw: bytes) -> object:
+    try:
+        return json.loads(
+            raw,
+            parse_constant=_reject_non_json_constant,
+            parse_float=_parse_finite_json_float,
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise TemporalDecisionLogError("decision-log entry is not UTF-8 JSON") from exc
+
+
 def validate_entry(value: object, *, filename: str, raw: bytes) -> None:
     entry = _exact_dict(
         value,
@@ -154,13 +188,13 @@ def validate_entry(value: object, *, filename: str, raw: bytes) -> None:
         raise TemporalDecisionLogError("decision-log entry filename differs")
 
     expected_approval = {
-        "approvalMessageOrder": ("AI_ATTESTED_CARD_PRECEDES_APPROVAL_IN_SAME_TASK"),
+        "approvalMessageOrder": "AI_ATTESTED_CARD_PRECEDES_APPROVAL_IN_SAME_TASK",
         "approvalMessageRole": "user",
         "approvalSentence": APPROVAL_SENTENCE,
         "approvalSentenceDigest": APPROVAL_SENTENCE_DIGEST,
         "approvalUserMessageIdOrStableRef": APPROVAL_USER_MESSAGE_REF,
         "codexTaskId": CODEX_TASK_ID,
-        "evidencePosture": ("AI_ATTESTED_INDEPENDENTLY_UNVERIFIABLE_PREDEPLOYMENT"),
+        "evidencePosture": "AI_ATTESTED_INDEPENDENTLY_UNVERIFIABLE_PREDEPLOYMENT",
     }
     expected_reviews = [
         {
@@ -210,8 +244,6 @@ def validate_entry(value: object, *, filename: str, raw: bytes) -> None:
         raise TemporalDecisionLogError(
             "decision-log evidence differs from approved decision"
         )
-    if digest_bytes(APPROVAL_SENTENCE.encode("utf-8")) != (APPROVAL_SENTENCE_DIGEST):
-        raise TemporalDecisionLogError("approval sentence digest differs")
 
     card = _exact_dict(
         entry["decisionCardPayload"],
@@ -230,6 +262,11 @@ def validate_entry(value: object, *, filename: str, raw: bytes) -> None:
         },
         "decision-card",
     )
+    subjects = card["subjects"]
+    if type(subjects) is not list or any(
+        type(subject) is not dict for subject in subjects
+    ):
+        raise TemporalDecisionLogError("decision-card subjects differ")
     if (
         card["codexTaskId"] != CODEX_TASK_ID
         or card["contractIdentity"] != CONTRACT_IDENTITY
@@ -244,8 +281,7 @@ def validate_entry(value: object, *, filename: str, raw: bytes) -> None:
         or card["nonEffects"] != NON_EFFECTS
         or card["promotionContractIdentity"] != PROMOTION_CONTRACT_IDENTITY
         or card["promotionContractRepositoryFileDigest"] != PROMOTION_CONTRACT_DIGEST
-        or [subject.get("identity") for subject in card["subjects"]]
-        != SUBJECT_IDENTITIES
+        or [subject.get("identity") for subject in subjects] != SUBJECT_IDENTITIES
         or card["supersedesEntryDigest"] is not None
     ):
         raise TemporalDecisionLogError("decision-card differs from approved decision")
@@ -278,13 +314,13 @@ def validate_decision_log(log_path: Path = LOG_PATH) -> None:
             "decision-log must contain exactly one first entry"
         )
     raw = paths[0].read_bytes()
-    validate_entry(json.loads(raw), filename=paths[0].name, raw=raw)
+    validate_entry(_load_entry(raw), filename=paths[0].name, raw=raw)
 
 
 def main() -> int:
     try:
-        validate_decision_log()
-    except (OSError, json.JSONDecodeError, TemporalDecisionLogError) as exc:
+        validate_decision_log(LOG_PATH)
+    except (OSError, TemporalDecisionLogError) as exc:
         print(f"TEMPORAL DECISION LOG FAIL: {exc}")
         return 1
     print("TEMPORAL DECISION LOG PASS")
