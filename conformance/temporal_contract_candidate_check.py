@@ -2668,7 +2668,7 @@ def validate_non_activation(runtime_catalog: object) -> None:
     for component in components:
         if (
             type(component) is dict
-            and component.get("relativePath") in CANDIDATE_RELATIVE_PATHS
+            and component.get("path") in CANDIDATE_RELATIVE_PATHS
         ):
             raise TemporalCandidateError("candidate entered a runtime component")
     if RUNTIME_BUNDLE_CARRIER_ROLE in json.dumps(

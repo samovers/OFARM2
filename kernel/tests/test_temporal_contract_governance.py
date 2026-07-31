@@ -1098,12 +1098,24 @@ def test_temporal_candidates_and_role_do_not_enter_active_catalog():
         for path in temporal.CANDIDATE_RELATIVE_PATHS
     )
 
+    contract_catalog = copy.deepcopy(runtime_catalog)
+    contract_catalog["contractSchemas"].append(
+        temporal.CARRIER_SCHEMA_RELATIVE_PATH
+    )
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="RuntimeBundle contracts",
+    ):
+        temporal.validate_non_activation(contract_catalog)
+
     mutated_catalog = copy.deepcopy(runtime_catalog)
     mutated_catalog["components"].append(
         {
-            "logicalRef": "untrusted:alias",
-            "relativePath": temporal.CARRIER_MATRIX_RELATIVE_PATH,
-            "mediaType": "application/json",
+            "role": "REFERENCE_SOURCE",
+            "logicalRef": "candidate:temporal-matrix",
+            "path": temporal.CARRIER_MATRIX_RELATIVE_PATH,
+            "canonicalization": "EXACT_BYTES_V1",
+            "placement": "GLOBAL_IMMUTABLE_CONTENT",
         }
     )
     with pytest.raises(
