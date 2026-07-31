@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 import sys
 from pathlib import Path
@@ -131,9 +132,22 @@ def _reject_non_json_constant(_value: str) -> object:
     )
 
 
+def _parse_finite_json_float(value: str) -> float:
+    parsed = float(value)
+    if not math.isfinite(parsed):
+        raise TemporalDecisionLogError(
+            "decision-log entry contains non-finite JSON number"
+        )
+    return parsed
+
+
 def _load_entry(raw: bytes) -> object:
     try:
-        return json.loads(raw, parse_constant=_reject_non_json_constant)
+        return json.loads(
+            raw,
+            parse_constant=_reject_non_json_constant,
+            parse_float=_parse_finite_json_float,
+        )
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise TemporalDecisionLogError("decision-log entry is not UTF-8 JSON") from exc
 

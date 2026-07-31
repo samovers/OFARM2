@@ -251,6 +251,29 @@ def test_temporal_decision_log_rejects_non_json_numeric_constants(
     )
 
 
+def test_temporal_decision_log_rejects_finite_syntax_numeric_overflow(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+):
+    raw = decision_log.ENTRY_PATH.read_bytes()
+    raw = raw.replace(
+        b'"decidedAt":"2026-07-30T13:02:37.932Z"',
+        b'"decidedAt":1e309',
+    )
+    (tmp_path / decision_log.ENTRY_PATH.name).write_bytes(raw)
+    monkeypatch.setattr(decision_log, "PINNED_FILES", ())
+    monkeypatch.setattr(decision_log, "LOG_PATH", tmp_path)
+
+    assert decision_log.main() == 1
+    captured = capsys.readouterr()
+    assert captured.out == (
+        "TEMPORAL DECISION LOG FAIL: "
+        "decision-log entry contains non-finite JSON number\n"
+    )
+    assert captured.err == ""
+
+
 def test_temporal_decision_log_main_reports_pass(
     capsys: pytest.CaptureFixture[str],
 ):

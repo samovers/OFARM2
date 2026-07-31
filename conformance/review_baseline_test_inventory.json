@@ -10591,6 +10591,11 @@
       "sourcePath": "kernel/tests/test_temporal_decision_log.py"
     },
     {
+      "nodeid": "kernel/tests/test_temporal_decision_log.py::test_temporal_decision_log_rejects_finite_syntax_numeric_overflow",
+      "sourceModule": "kernel.tests.test_temporal_decision_log",
+      "sourcePath": "kernel/tests/test_temporal_decision_log.py"
+    },
+    {
       "nodeid": "kernel/tests/test_temporal_decision_log.py::test_temporal_decision_log_rejects_invalid_utf8_without_traceback",
       "sourceModule": "kernel.tests.test_temporal_decision_log",
       "sourcePath": "kernel/tests/test_temporal_decision_log.py"
@@ -10766,8 +10771,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "3ff458675f7953a1bdb22619cf5eb9d334fdb963da44f48218b08fad83c18d72",
-  "entryCount": 2153,
+  "entriesSha256": "cb54452b24d5e8117563fc7fb2d65c5b7da76bb663b73af7ba6dae7221298307",
+  "entryCount": 2154,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }
