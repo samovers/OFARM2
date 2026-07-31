@@ -125,9 +125,15 @@ def _exact_dict(value: object, keys: set[str], label: str) -> dict:
     return value
 
 
+def _reject_non_json_constant(_value: str) -> object:
+    raise TemporalDecisionLogError(
+        "decision-log entry contains non-JSON numeric constant"
+    )
+
+
 def _load_entry(raw: bytes) -> object:
     try:
-        return json.loads(raw)
+        return json.loads(raw, parse_constant=_reject_non_json_constant)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise TemporalDecisionLogError("decision-log entry is not UTF-8 JSON") from exc
 
@@ -299,7 +305,7 @@ def validate_decision_log(log_path: Path = LOG_PATH) -> None:
 
 def main() -> int:
     try:
-        validate_decision_log()
+        validate_decision_log(LOG_PATH)
     except (OSError, TemporalDecisionLogError) as exc:
         print(f"TEMPORAL DECISION LOG FAIL: {exc}")
         return 1

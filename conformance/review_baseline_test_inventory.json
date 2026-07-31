@@ -10566,7 +10566,22 @@
       "sourcePath": "kernel/tests/test_temporal_decision_log.py"
     },
     {
+      "nodeid": "kernel/tests/test_temporal_decision_log.py::test_temporal_decision_log_main_reports_pass",
+      "sourceModule": "kernel.tests.test_temporal_decision_log",
+      "sourcePath": "kernel/tests/test_temporal_decision_log.py"
+    },
+    {
       "nodeid": "kernel/tests/test_temporal_decision_log.py::test_temporal_decision_log_rejects_changed_entry_digest_pin",
+      "sourceModule": "kernel.tests.test_temporal_decision_log",
+      "sourcePath": "kernel/tests/test_temporal_decision_log.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_decision_log.py::test_temporal_decision_log_rejects_changed_file_pin",
+      "sourceModule": "kernel.tests.test_temporal_decision_log",
+      "sourcePath": "kernel/tests/test_temporal_decision_log.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_decision_log.py::test_temporal_decision_log_rejects_claimed_pinned_digest_for_changed_body",
       "sourceModule": "kernel.tests.test_temporal_decision_log",
       "sourcePath": "kernel/tests/test_temporal_decision_log.py"
     },
@@ -10592,6 +10607,21 @@
     },
     {
       "nodeid": "kernel/tests/test_temporal_decision_log.py::test_temporal_decision_log_rejects_non_closed_log_directory[second_entry]",
+      "sourceModule": "kernel.tests.test_temporal_decision_log",
+      "sourcePath": "kernel/tests/test_temporal_decision_log.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_decision_log.py::test_temporal_decision_log_rejects_non_json_numeric_constants[-Infinity]",
+      "sourceModule": "kernel.tests.test_temporal_decision_log",
+      "sourcePath": "kernel/tests/test_temporal_decision_log.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_decision_log.py::test_temporal_decision_log_rejects_non_json_numeric_constants[Infinity]",
+      "sourceModule": "kernel.tests.test_temporal_decision_log",
+      "sourcePath": "kernel/tests/test_temporal_decision_log.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_temporal_decision_log.py::test_temporal_decision_log_rejects_non_json_numeric_constants[NaN]",
       "sourceModule": "kernel.tests.test_temporal_decision_log",
       "sourcePath": "kernel/tests/test_temporal_decision_log.py"
     },
@@ -10736,8 +10766,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "cece7034b6ec6a3b2ccb8f0e28d7c94f47adc3efd6db317c07c0b4e3448b7839",
-  "entryCount": 2147,
+  "entriesSha256": "3ff458675f7953a1bdb22619cf5eb9d334fdb963da44f48218b08fad83c18d72",
+  "entryCount": 2153,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

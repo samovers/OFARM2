@@ -167,6 +167,40 @@ def test_temporal_decision_log_rejects_changed_entry_digest_pin():
     assert str(exc_info.value) == "decision-log entry digest differs"
 
 
+def test_temporal_decision_log_rejects_claimed_pinned_digest_for_changed_body():
+    entry = _entry()
+    entry["decidedAt"] = "2026-07-30T13:02:37.933Z"
+    raw = decision_log.canonical_json(entry)
+
+    with pytest.raises(decision_log.TemporalDecisionLogError) as exc_info:
+        decision_log.validate_entry(
+            entry,
+            filename=decision_log.ENTRY_PATH.name,
+            raw=raw,
+        )
+    assert str(exc_info.value) == "decision-log entry digest differs"
+
+
+def test_temporal_decision_log_rejects_changed_file_pin(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    entry = _entry()
+    raw = decision_log.canonical_json(entry)
+    monkeypatch.setattr(
+        decision_log,
+        "ENTRY_FILE_DIGEST",
+        "sha256:" + ("0" * 64),
+    )
+
+    with pytest.raises(decision_log.TemporalDecisionLogError) as exc_info:
+        decision_log.validate_entry(
+            entry,
+            filename=decision_log.ENTRY_PATH.name,
+            raw=raw,
+        )
+    assert str(exc_info.value) == "decision-log entry file pin differs"
+
+
 def test_temporal_decision_log_rejects_tampered_pinned_authority(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -186,12 +220,42 @@ def test_temporal_decision_log_rejects_tampered_pinned_authority(
 
 def test_temporal_decision_log_rejects_invalid_utf8_without_traceback(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ):
     (tmp_path / decision_log.ENTRY_PATH.name).write_bytes(b"\xff")
+    monkeypatch.setattr(decision_log, "PINNED_FILES", ())
+    monkeypatch.setattr(decision_log, "LOG_PATH", tmp_path)
+
+    assert decision_log.main() == 1
+    assert capsys.readouterr().out == (
+        "TEMPORAL DECISION LOG FAIL: decision-log entry is not UTF-8 JSON\n"
+    )
+
+
+@pytest.mark.parametrize("constant", ("NaN", "Infinity", "-Infinity"))
+def test_temporal_decision_log_rejects_non_json_numeric_constants(
+    constant: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    (tmp_path / decision_log.ENTRY_PATH.name).write_bytes(
+        f'{{"value":{constant}}}'.encode()
+    )
+    monkeypatch.setattr(decision_log, "PINNED_FILES", ())
 
     with pytest.raises(decision_log.TemporalDecisionLogError) as exc_info:
         decision_log.validate_decision_log(tmp_path)
-    assert str(exc_info.value) == "decision-log entry is not UTF-8 JSON"
+    assert str(exc_info.value) == (
+        "decision-log entry contains non-JSON numeric constant"
+    )
+
+
+def test_temporal_decision_log_main_reports_pass(
+    capsys: pytest.CaptureFixture[str],
+):
+    assert decision_log.main() == 0
+    assert capsys.readouterr().out == "TEMPORAL DECISION LOG PASS\n"
 
 
 def test_temporal_decision_log_approval_sentence_digest_constant_is_pinned():
