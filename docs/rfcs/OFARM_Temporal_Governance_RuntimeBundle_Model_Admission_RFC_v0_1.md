@@ -1,7 +1,8 @@
 # OFARM2 Temporal-Governance RuntimeBundle Model Admission — Phase A Contract v0.1
 
-**Status:** architect-approved Phase A contract; documentation-only, pending
-merge, and without implementation or activation effect
+**Status:** amended proposed Phase A contract; documentation-only, awaiting
+re-review and explicit approval, and without implementation or activation
+effect
 
 **Contract identity:**
 `ofarm.temporal-governance-runtime-bundle-model-admission.issue176.v0.1`
@@ -15,6 +16,25 @@ temporal-governance provenance components
 
 **Intended future implementation PR boundary:** RuntimeBundle model vocabulary,
 component validation, bundle validation, and focused tests only
+
+## Problem and goal
+
+The active RuntimeBundle model has no role or validation path for retaining the
+three exact temporal-governance provenance components. A future governed
+command therefore cannot bind those reviewed bytes into its immutable runtime
+provenance without either misusing an existing role or widening another
+authority.
+
+This contract establishes one closed, model-only admission rule for those
+three identities. It does not place them in a bundle or give them lifecycle,
+selection, command, or output effect.
+
+## Learning value
+
+The boundary demonstrates that temporal governance can become exact,
+content-addressed RuntimeBundle provenance while remaining inert and separate
+from lifecycle currentness, command closure, publication, persistence,
+selection, authorization, execution, outputs, legacy behavior, and #192.
 
 ## Decision
 
@@ -48,6 +68,29 @@ versioned artifacts pinned below. They are never taken from caller data.
 
 This contract does not amend ADR 0002, any frozen active contract, any existing
 temporal candidate, or the current decision-log entry.
+
+## Mandatory separate prerequisite
+
+Review 4826614068 demonstrated that the governed-command schema cannot enter
+the current RuntimeBundle model. Its version is declared at top-level
+`const.schemaVersion`, while `_contract_schema_version(...)` currently accepts
+only `properties.schemaVersion.const`.
+
+That separate trust boundary is governed by:
+
+- contract:
+  `ofarm.runtime-bundle-contract-schema-version-extraction.issue176.v0.1`;
+- Phase A contract PR: #265; and
+- future implementation boundary: the Phase B PR explicitly authorized by the
+  approved #265 contract.
+
+This contract neither duplicates nor implements that extraction rule. Phase B
+for this temporal model-admission contract must not begin until the #265
+contract is approved and its separate Phase B implementation is merged.
+
+If that prerequisite changes the supported declaration forms, logical-reference
+rule, owning model seam, or refusal behavior described here, this contract
+must return for amendment before implementation.
 
 ## Reviewed authority pins
 
@@ -133,6 +176,10 @@ the exact component closure required by `COMMIT_OPERATION_CLAIM_DRAFT`.
 - The active RuntimeBundle model owns its closed role enum, component
   validation, canonical bytes, content digest, bundle membership, and bundle
   digest.
+- The separate contract
+  `ofarm.runtime-bundle-contract-schema-version-extraction.issue176.v0.1`
+  owns extraction of one schema version from exact retained schema bytes. It
+  does not own temporal identity eligibility.
 - This contract owns permission for a future model-only PR to recognize the
   one role under the exact rules above.
 - `kernel/runtime_bundle_components.json` and its publisher retain authority
@@ -149,6 +196,100 @@ the exact component closure required by `COMMIT_OPERATION_CLAIM_DRAFT`.
 - A separately reviewed production authorization provider must own
   `ASSERT_OPERATION_CLAIM` authorization at `DRAFT_PREPARATION`.
 - #192 retains sole authority over audit-runtime behavior.
+
+## Trust model
+
+### Protected assets
+
+- the exact relationship among each temporal-governance instance, its logical
+  identity, canonical bytes, digest, declared schema, and retained schema
+  component;
+- the closed RuntimeBundle role vocabulary and the three-identity eligibility
+  set;
+- RuntimeBundle component and bundle identity;
+- the distinction between model eligibility, lifecycle governance, component
+  closure, publication, persistence, selection, and execution; and
+- the production-versus-legacy firewall and closed production semantic
+  surface.
+
+### Trusted components and authorities
+
+- the reviewed authority pins and closed rows in this contract;
+- the exact carrier, selector, governed-command, schema, promotion, and
+  decision-log artifacts named by those pins;
+- the separately approved schema-version extraction prerequisite;
+- `RuntimeComponent` for exact canonical bytes, digest, role, placement,
+  logical-reference, schema-version, and identity-field validation;
+- `RuntimeBundle.create(...)` and bundle semantic validation for same-bundle
+  schema retention and complete instance validation; and
+- the unchanged external authorities in the authority map for lifecycle,
+  catalog, persistence, tenant selection, authorization, execution, and #192.
+
+### Untrusted actors and inputs
+
+- all component bytes, logical references, roles, placements, and component
+  tuples before model validation;
+- unknown, aliased, changed, malformed, or partially validated temporal
+  artifacts and schemas;
+- request data, headers, claims, profiles, environment values, timestamps,
+  routes, idempotency values, and caller-selected registries; and
+- component presence offered as proof of lifecycle currentness, deployment,
+  command authority, or output eligibility.
+
+### Excluded compromise capabilities
+
+Arbitrary in-process or private-field mutation, compromised Python or
+third-party validation dependencies, concurrent filesystem mutation during one
+builder operation, compromised repository or publisher custody, database or
+operator compromise, and cryptographic hash compromise are outside this
+boundary.
+
+Local source substitution before component construction remains an untrusted
+input and must fail unless the resulting exact canonical bytes satisfy the
+closed identity row, digest, schema relationship, and complete validation.
+This model boundary does not decide whether an otherwise valid component is
+published, persisted, selected, or lifecycle-current.
+
+## State machine and ordering
+
+The future model path has these states:
+
+```text
+UNTRUSTED_SELECTED_BYTES
+  -> EXACT_COMPONENT_VALID
+  -> SAME_BUNDLE_SCHEMA_BOUND
+  -> MODEL_ADMISSIBLE_INERT
+```
+
+Any failure transitions directly to `REFUSED_NO_BUNDLE`. There is no state in
+which a temporal-governance component is partially admitted.
+
+Validation order is fixed:
+
+1. construct every `RuntimeComponent` from selected bytes;
+2. require the exact new role, canonical JSON, global immutable placement,
+   one listed logical identity, its declared schema version and identity
+   field, exact byte length, and exact canonical content digest;
+3. canonically order components and refuse duplicate component identities;
+4. for each temporal-governance component, locate the one exact
+   `CONTRACT_SCHEMA` component required by its closed row;
+5. require that schema component's exact logical reference, byte length, and
+   content digest;
+6. complete Draft 2020-12 validation of the instance against those retained
+   exact schema bytes;
+7. complete existing bundle semantic validation; and
+8. return one immutable RuntimeBundle whose temporal membership remains inert.
+
+Temporal schema binding and validation must occur inside
+`_validate_runtime_bundle_semantics(...)` before its existing
+profile-selection branch can return. The constructor may compute candidate
+canonical identity bytes and a digest, but no RuntimeBundle object is returned
+and no external side effect occurs until every semantic check succeeds.
+
+No database transaction, publication, persistence, lifecycle transition,
+selection, authorization, command execution, route, output, or audit write
+exists in this boundary. There is therefore no external time-of-check/time-of-use
+window to govern here.
 
 ## Invariants
 
@@ -213,6 +354,10 @@ Phase B verification must refuse or prove absent:
   repository code;
 - modification of a frozen contract, candidate artifact, decision-log entry,
   active profile authority, or lifecycle record; and
+- Phase B beginning, or TGRMA-004 being claimed as satisfied, before the #265
+  contract is approved and its separate Phase B implementation is merged;
+- a schema-version extraction change added to this temporal model-admission
+  boundary; and
 - any import from the legacy semantic/output surface or any #192 behavior.
 
 ## Non-goals
@@ -232,7 +377,8 @@ This Phase A contract does not:
 - implement a production selector, authorization provider, temporal command,
   route, materialization, current-state read, historical view, WINDOW
   behavior, qualification, output, or receipt;
-- change command-binding schema-version extraction;
+- change contract-schema version extraction governed separately by
+  `ofarm.runtime-bundle-contract-schema-version-extraction.issue176.v0.1`;
 - open another temporal carrier row or command; or
 - implement or change #192.
 
@@ -258,12 +404,107 @@ That Phase B PR must not change the database, catalog, publisher, repository,
 selection authority, command runtime, routes, outputs, legacy surface, or
 #192.
 
-## Verification
+## Proposed architecture
+
+After the separate schema-version extraction prerequisite is implemented,
+Phase B may make one direct RuntimeBundle model change:
+
+1. add `TEMPORAL_GOVERNANCE_ARTIFACT` to the closed
+   `RuntimeComponentRole` enum;
+2. define one immutable, compiled three-row rule set containing the exact
+   identity, schema version, identity field, byte length, canonical digest,
+   and required schema component pinned above;
+3. route the new role through one focused temporal-governance component
+   validator from `_validate_runtime_component_semantics(...)`;
+4. permit that role through the existing explicit component-spec construction
+   path without adding it to `RuntimeBundleBuilder.from_manifest(...)`, the
+   checked-in catalog, or active package-loading configuration;
+5. call one focused same-bundle schema validator from
+   `_validate_runtime_bundle_semantics(...)` before the existing
+   profile-selection branch; and
+6. add focused tests for every invariant and negative case.
+
+The component validator proves row membership and exact component identity.
+The bundle validator proves exact schema retention and complete Draft 2020-12
+instance validation. Neither helper reads a file path, package registry,
+decision log, environment value, request, profile, database, or network
+source.
+
+## Elegance audit
+
+- Runtime sources of allowed temporal identity truth: one immutable compiled
+  three-row rule set.
+- Authoritative validation transitions: component validation and same-bundle
+  schema validation, each owning a distinct necessary question.
+- Dynamic registries, configuration switches, plugin hooks, and compatibility
+  aliases introduced: none.
+- Mutable state introduced: none.
+- Existing fields duplicated: none beyond the deliberate cross-check among
+  logical identity, declared schema version, identity field, digest, and exact
+  retained schema.
+- Existing authority or fallback to delete: none; no temporal model path
+  exists yet.
+
+A clean RuntimeBundle rewrite is not justified. One enum member, one closed
+rule set, two focused validation seams, and tests are smaller and clearer than
+a temporal subsystem or generalized plugin mechanism.
+
+## Pull request boundary
+
+This amended Phase A PR changes only this RFC.
+
+The future Phase B PR may change only:
+
+- `kernel/runtime_bundle.py`;
+- `kernel/tests/test_runtime_bundle.py`; and
+- mechanically required test inventory or baseline metadata.
+
+It depends on the approved #265 contract and its merged separate Phase B
+implementation. It must not stack schema-version extraction changes into the
+temporal model-admission branch.
+
+Reviewers must not require catalog membership, publisher or repository
+custody, database admission, tenant selection, authorization, command
+integration, routes, outputs, current-state reads, historical or WINDOW
+behavior, legacy changes, or #192 behavior from this PR or its Phase B.
+
+Later boundaries remain tracked by #176. They are prerequisites or Follow-ups,
+not reasons to combine authorities here.
+
+## Provisional design record
+
+Not provisional.
+
+The role and its three-row allowed identity set are versioned and closed.
+Widening the role, changing any row, or changing an authority pin requires a
+new reviewed contract rather than a compatibility hook.
+
+## Traceability and verification
+
+The future Phase B implementation must reproduce this table before editing:
+
+| Invariant | Owning model function/type | Supported construction path | Required negative test | Acceptance evidence | Smallest verification command |
+| --- | --- | --- | --- | --- | --- |
+| TGRMA-001 | `RuntimeComponentRole`, `RuntimeComponentSpec.from_document(...)`, `RuntimeBundleBuilder._component_from_spec(...)` | direct component and explicit builder spec | unknown role and temporal bytes under an existing role refuse | focused enum/spec tests | `python3 -m pytest -q kernel/tests/test_runtime_bundle.py -k temporal_governance` |
+| TGRMA-002 | proposed immutable three-row rule set and temporal component validator | `RuntimeComponent.from_selected_bytes(...)` and explicit builder spec | unlisted, aliased, or differently versioned identity refuses | one acceptance case per row plus mutations | `python3 -m pytest -q kernel/tests/test_runtime_bundle.py -k temporal_governance` |
+| TGRMA-003 | `RuntimeComponent`, temporal component validator | direct component and builder | bytes, length, digest, logical ref, schema version, or identity-field mismatch refuses | exact-row and mutation tests | `python3 -m pytest -q kernel/tests/test_runtime_bundle.py -k temporal_governance` |
+| TGRMA-004 | `_contract_schema_version(...)` under the separate prerequisite and proposed same-bundle validator | `RuntimeBundle.create(...)` and builder | missing, wrong-role, changed, ambiguous-version, or validation-failing schema refuses | prerequisite top-level-version regression plus three schema-bound acceptance cases | `python3 -m pytest -q kernel/tests/test_runtime_bundle.py -k temporal_governance` |
+| TGRMA-005 | temporal component validator | direct component and builder | tenant, principal, request, batch, position, credential, secret, or mutable lifecycle field changes exact bytes and refuses | field-injection mutation tests | `python3 -m pytest -q kernel/tests/test_runtime_bundle.py -k temporal_governance` |
+| TGRMA-006 | proposed same-bundle validator | `RuntimeBundle.create(...)` and builder | each single allowed identity can form a model-valid schema-bound bundle without the other two | three independent bundle tests | `python3 -m pytest -q kernel/tests/test_runtime_bundle.py -k temporal_governance` |
+| TGRMA-007 | `_validate_runtime_bundle_semantics(...)` | direct bundle and builder | temporal membership neither requires nor changes profile components | profile-free and unchanged-profile bundle tests | `python3 -m pytest -q kernel/tests/test_runtime_bundle.py -k temporal_governance` |
+| TGRMA-008 | `RuntimeBundle` model only; unchanged external authorities | direct bundle | component presence produces no activation, selection, execution, output, or current-truth state | inert bundle assertion plus boundary diff | `python3 conformance/ofarm_pkg_contract_check.py` |
+| TGRMA-009 | immutable rule set and temporal component validator | direct component and builder | caller-shaped identity, schema, row, binding, or digest substitution refuses | mutation tests and absence of runtime input seam | `python3 -m pytest -q kernel/tests/test_runtime_bundle.py -k temporal_governance` |
+| TGRMA-010 | unchanged repository and database authorities | all model paths | current persistence vocabulary remains unchanged | boundary diff and existing repository tests | `git diff --exit-code origin/main...HEAD -- kernel/runtime_bundle_repository.py kernel/migrations` |
+| TGRMA-011 | production import and architecture guards | all model paths | no legacy Store, profile gate, materializer, route, or output dependency | architecture conformance | `python3 conformance/ofarm_pkg_contract_check.py` |
+| TGRMA-012 | unchanged #192 authority | all model paths | model admission emits no audit event, receipt, or delivery behavior | boundary diff and audit isolation | `python3 conformance/ofarm_pkg_contract_check.py` |
+| TGRMA-013 | immutable compiled rules and focused validators | direct component and builder | package scan, environment registry, newest-file, or caller registry cannot widen admission | unknown-identity tests and boundary diff | `python3 -m pytest -q kernel/tests/test_runtime_bundle.py -k temporal_governance` |
 
 Phase A review must verify:
 
 - the authority pins and three admitted rows match the merged carrier,
   promotion, and decision-log artifacts byte-for-byte;
+- #265 is named as a separate prerequisite and this PR contains none of its
+  implementation;
 - the contract distinguishes model admission from lifecycle promotion,
   component closure, catalog membership, persistence, selection, execution,
   and output;
@@ -275,29 +516,73 @@ Phase A review must verify:
 - `python3 conformance/ofarm_pkg_contract_check.py` and `git diff --check`
   pass.
 
+Future Phase B verification is:
+
+- `python3 -m pytest -q kernel/tests/test_runtime_bundle.py -k temporal_governance`;
+- the complete `kernel/tests/test_runtime_bundle.py` module;
+- `python3 conformance/ofarm_pkg_contract_check.py`;
+- `git diff --check`; and
+- review of the exact head against this traceability table.
+
+## Open decisions and review disposition
+
+### Open decisions
+
+None inside this trust boundary.
+
+PR #265 is a mandatory external prerequisite, not an undecided alternative.
+Its contract must be approved and its separate implementation merged before
+this contract's Phase B can begin.
+
+### Review disposition
+
+- Blockers: review 4826614068 requires re-review of these amendments at the
+  new exact head; no other design Blocker is known.
+- Follow-ups: #265 and its future Phase B implementation are mandatory
+  prerequisites for this contract's Phase B. All persistence, catalog,
+  selection, authorization, command, route, output, historical or WINDOW, and
+  #192 work remains in later separate boundaries under #176 or #192.
+- Preferences: none.
+
+### Merge stop rule
+
+This amended Phase A contract must not be treated as approved or merged until
+the designated architect explicitly approves the amended contract after
+review and no demonstrated Blocker remains.
+
+After approval, the future Phase B PR must not merge until every invariant has
+the acceptance evidence in the traceability table. New ideas, Preferences, and
+out-of-boundary hardening become Follow-ups and do not expand that PR.
+
 ## Stop conditions
 
-Phase B model work must not start until this exact contract is explicitly
-approved.
+Phase B model work must not start until:
+
+1. this exact amended contract is explicitly approved;
+2. the #265 contract is explicitly approved; and
+3. the separate Phase B implementation authorized by #265 is merged.
 
 Even after approval, implementation stops before editing another authority:
 
-1. PostgreSQL role constraints, migrations, privileges, or
+1. Contract-schema version extraction beyond the merged #265 implementation
+   requires its own new contract amendment and PR.
+2. PostgreSQL role constraints, migrations, privileges, or
    `RuntimeBundleRepository` require a separate database/persistence contract.
-2. `kernel/runtime_bundle_components.json`, publisher custody, package loading,
-   or active bundle contents require a separate catalog/publication contract.
-3. Tenant selection storage, its activation controller, or knowledge-position
+3. `kernel/runtime_bundle_components.json`, publisher custody, checked-in
+   package-loading configuration, or active bundle contents require a separate
+   catalog/publication contract.
+4. Tenant selection storage, its activation controller, or knowledge-position
    allocation require a separate selection-control contract.
-4. A production read-only tenant bundle selector requires its own
+5. A production read-only tenant bundle selector requires its own
    implementation boundary and approved lifecycle posture.
-5. Authorization-provider integration and command integration remain separate
+6. Authorization-provider integration and command integration remain separate
    boundaries.
-6. Public refusal mapping, results, receipts, current-state reads, historical
+7. Public refusal mapping, results, receipts, current-state reads, historical
    views, WINDOW behavior, materialization, qualification, and outputs remain
    blocked by their own reviewed contracts.
-7. Any need to change the current decision entry, admitted identity set,
+8. Any need to change the current decision entry, admitted identity set,
    carrier matrix, selector, command binding, or frozen active contract
    requires a new versioned contract.
-8. Any #192 change remains outside #176.
+9. Any #192 change remains outside #176.
 
 The production semantic surface remains closed throughout this boundary.
