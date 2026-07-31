@@ -80,13 +80,14 @@ That separate trust boundary is governed by:
 
 - contract:
   `ofarm.runtime-bundle-contract-schema-version-extraction.issue176.v0.1`;
-- Phase A contract PR: #265; and
+- merged Phase A contract PR: #265, merge commit
+  `0e7aa911c59680097342bf57882d2a5ddf957263`; and
 - future implementation boundary: the Phase B PR explicitly authorized by the
   approved #265 contract.
 
 This contract neither duplicates nor implements that extraction rule. Phase B
 for this temporal model-admission contract must not begin until the #265
-contract is approved and its separate Phase B implementation is merged.
+contract's separate Phase B implementation is merged.
 
 If that prerequisite changes the supported declaration forms, logical-reference
 rule, owning model seam, or refusal behavior described here, this contract
@@ -176,6 +177,10 @@ the exact component closure required by `COMMIT_OPERATION_CLAIM_DRAFT`.
 - The active RuntimeBundle model owns its closed role enum, component
   validation, canonical bytes, content digest, bundle membership, and bundle
   digest.
+- This contract reserves the three logical identities and three canonical
+  content digests to `TEMPORAL_GOVERNANCE_ARTIFACT`. The same immutable
+  three-row rule set owns both reservation and exact admission; no second
+  denylist or caller-supplied reservation source exists.
 - The separate contract
   `ofarm.runtime-bundle-contract-schema-version-extraction.issue176.v0.1`
   owns extraction of one schema version from exact retained schema bytes. It
@@ -206,6 +211,8 @@ the exact component closure required by `COMMIT_OPERATION_CLAIM_DRAFT`.
   component;
 - the closed RuntimeBundle role vocabulary and the three-identity eligibility
   set;
+- exclusive use of the three reserved identities and exact digests by the new
+  temporal-governance role;
 - RuntimeBundle component and bundle identity;
 - the distinction between model eligibility, lifecycle governance, component
   closure, publication, persistence, selection, and execution; and
@@ -218,6 +225,8 @@ the exact component closure required by `COMMIT_OPERATION_CLAIM_DRAFT`.
 - the exact carrier, selector, governed-command, schema, promotion, and
   decision-log artifacts named by those pins;
 - the separately approved schema-version extraction prerequisite;
+- one pre-branch RuntimeComponent reservation guard derived only from the
+  immutable three-row identity rules;
 - `RuntimeComponent` for exact canonical bytes, digest, role, placement,
   logical-reference, schema-version, and identity-field validation;
 - `RuntimeBundle.create(...)` and bundle semantic validation for same-bundle
@@ -256,6 +265,7 @@ The future model path has these states:
 
 ```text
 UNTRUSTED_SELECTED_BYTES
+  -> ROLE_RESERVATION_PASSED
   -> EXACT_COMPONENT_VALID
   -> SAME_BUNDLE_SCHEMA_BOUND
   -> MODEL_ADMISSIBLE_INERT
@@ -267,18 +277,21 @@ which a temporal-governance component is partially admitted.
 Validation order is fixed:
 
 1. construct every `RuntimeComponent` from selected bytes;
-2. require the exact new role, canonical JSON, global immutable placement,
+2. before any existing role-specific branch or early return, derive the
+   canonical-content digest and refuse a non-temporal role when either its
+   logical reference or digest is reserved by one of the three closed rows;
+3. for the temporal role, require canonical JSON, global immutable placement,
    one listed logical identity, its declared schema version and identity
    field, exact byte length, and exact canonical content digest;
-3. canonically order components and refuse duplicate component identities;
-4. for each temporal-governance component, locate the one exact
+4. canonically order components and refuse duplicate component identities;
+5. for each temporal-governance component, locate the one exact
    `CONTRACT_SCHEMA` component required by its closed row;
-5. require that schema component's exact logical reference, byte length, and
+6. require that schema component's exact logical reference, byte length, and
    content digest;
-6. complete Draft 2020-12 validation of the instance against those retained
+7. complete Draft 2020-12 validation of the instance against those retained
    exact schema bytes;
-7. complete existing bundle semantic validation; and
-8. return one immutable RuntimeBundle whose temporal membership remains inert.
+8. complete existing bundle semantic validation; and
+9. return one immutable RuntimeBundle whose temporal membership remains inert.
 
 Temporal schema binding and validation must occur inside
 `_validate_runtime_bundle_semantics(...)` before its existing
@@ -293,8 +306,11 @@ window to govern here.
 
 ## Invariants
 
-- **TGRMA-001 — One new role.** Phase B may add only
-  `TEMPORAL_GOVERNANCE_ARTIFACT`; no existing role is reinterpreted.
+- **TGRMA-001 — One exclusive new role.** Phase B may add only
+  `TEMPORAL_GOVERNANCE_ARTIFACT`; no existing role is reinterpreted. When any
+  other role is used, component validation must refuse if either the logical
+  reference is one of the three reserved temporal identities or the
+  canonical-content digest is one of the three reserved temporal digests.
 - **TGRMA-002 — Closed identities.** Only the three exact identities and
   digests in this contract are model-admissible under version 0.1.
 - **TGRMA-003 — Exact provenance.** Canonical bytes, byte length, content
@@ -334,6 +350,10 @@ window to govern here.
 Phase B verification must refuse or prove absent:
 
 - an unknown role or any temporal instance carried under an existing role;
+- each reserved temporal logical identity paired with changed bytes under each
+  existing exact-global role;
+- each exact reviewed temporal digest paired with an aliased logical reference
+  under each existing exact-global role;
 - an unlisted, differently versioned, duplicated, or aliased identity;
 - caller-supplied identity, schema, matrix row, binding, digest, lifecycle
   state, or RuntimeBundle choice;
@@ -394,6 +414,8 @@ After explicit approval, the smallest coherent Phase B model PR may contain
 only:
 
 - the new closed `RuntimeComponentRole` enum value;
+- one pre-branch reservation guard derived from the same three exact identity
+  rows;
 - exact component validation for the three admitted identities;
 - exact same-bundle schema validation before the existing profile-selection
   branch;
@@ -414,28 +436,37 @@ Phase B may make one direct RuntimeBundle model change:
 2. define one immutable, compiled three-row rule set containing the exact
    identity, schema version, identity field, byte length, canonical digest,
    and required schema component pinned above;
-3. route the new role through one focused temporal-governance component
+3. install one reservation guard in
+   `_validate_runtime_component_semantics(...)` before every existing
+   role-specific branch or early return; for any role other than
+   `TEMPORAL_GOVERNANCE_ARTIFACT`, refuse a reserved logical identity or a
+   reserved canonical digest;
+4. route the new role through one focused temporal-governance component
    validator from `_validate_runtime_component_semantics(...)`;
-4. permit that role through the existing explicit component-spec construction
+5. permit that role through the existing explicit component-spec construction
    path without adding it to `RuntimeBundleBuilder.from_manifest(...)`, the
    checked-in catalog, or active package-loading configuration;
-5. call one focused same-bundle schema validator from
+6. call one focused same-bundle schema validator from
    `_validate_runtime_bundle_semantics(...)` before the existing
    profile-selection branch; and
-6. add focused tests for every invariant and negative case.
+7. add focused tests for every invariant and negative case.
 
-The component validator proves row membership and exact component identity.
-The bundle validator proves exact schema retention and complete Draft 2020-12
-instance validation. Neither helper reads a file path, package registry,
-decision log, environment value, request, profile, database, or network
-source.
+The reservation guard and component validator derive their identity and digest
+sets from the same immutable three-row rules; Phase B must not introduce a
+second denylist. The component validator proves row membership and exact
+component identity. The bundle validator proves exact schema retention and
+complete Draft 2020-12 instance validation. None reads a file path, package
+registry, decision log, environment value, request, profile, database, or
+network source.
 
 ## Elegance audit
 
 - Runtime sources of allowed temporal identity truth: one immutable compiled
   three-row rule set.
-- Authoritative validation transitions: component validation and same-bundle
-  schema validation, each owning a distinct necessary question.
+- Authoritative validation transitions: one pre-branch component seam owns
+  reservation and exact role admission; one bundle seam owns same-bundle
+  schema validation.
+- Reservation lists duplicated from the three-row rules: none.
 - Dynamic registries, configuration switches, plugin hooks, and compatibility
   aliases introduced: none.
 - Mutable state introduced: none.
@@ -485,7 +516,7 @@ The future Phase B implementation must reproduce this table before editing:
 
 | Invariant | Owning model function/type | Supported construction path | Required negative test | Acceptance evidence | Smallest verification command |
 | --- | --- | --- | --- | --- | --- |
-| TGRMA-001 | `RuntimeComponentRole`, `RuntimeComponentSpec.from_document(...)`, `RuntimeBundleBuilder._component_from_spec(...)` | direct component and explicit builder spec | unknown role and temporal bytes under an existing role refuse | focused enum/spec tests | `python3 -m pytest -q kernel/tests/test_runtime_bundle.py -k temporal_governance` |
+| TGRMA-001 | `_validate_runtime_component_semantics(...)` pre-branch reservation guard, `RuntimeComponentRole`, `RuntimeComponentSpec.from_document(...)`, `RuntimeBundleBuilder._component_from_spec(...)` | `RuntimeComponent.from_selected_bytes(...)` and explicit builder spec | for every existing exact-global role: reserved identity with changed bytes refuses, and alias with an exact reserved digest refuses | direct and builder reservation matrix plus unknown-role tests | `python3 -m pytest -q kernel/tests/test_runtime_bundle.py -k temporal_governance` |
 | TGRMA-002 | proposed immutable three-row rule set and temporal component validator | `RuntimeComponent.from_selected_bytes(...)` and explicit builder spec | unlisted, aliased, or differently versioned identity refuses | one acceptance case per row plus mutations | `python3 -m pytest -q kernel/tests/test_runtime_bundle.py -k temporal_governance` |
 | TGRMA-003 | `RuntimeComponent`, temporal component validator | direct component and builder | bytes, length, digest, logical ref, schema version, or identity-field mismatch refuses | exact-row and mutation tests | `python3 -m pytest -q kernel/tests/test_runtime_bundle.py -k temporal_governance` |
 | TGRMA-004 | `_contract_schema_version(...)` under the separate prerequisite and proposed same-bundle validator | `RuntimeBundle.create(...)` and builder | missing, wrong-role, changed, ambiguous-version, or validation-failing schema refuses | prerequisite top-level-version regression plus three schema-bound acceptance cases | `python3 -m pytest -q kernel/tests/test_runtime_bundle.py -k temporal_governance` |
@@ -505,6 +536,8 @@ Phase A review must verify:
   promotion, and decision-log artifacts byte-for-byte;
 - #265 is named as a separate prerequisite and this PR contains none of its
   implementation;
+- the same immutable rows reserve each temporal identity and exact digest
+  before every existing role-specific return;
 - the contract distinguishes model admission from lifecycle promotion,
   component closure, catalog membership, persistence, selection, execution,
   and output;
@@ -530,18 +563,20 @@ Future Phase B verification is:
 
 None inside this trust boundary.
 
-PR #265 is a mandatory external prerequisite, not an undecided alternative.
-Its contract must be approved and its separate implementation merged before
-this contract's Phase B can begin.
+The approved Phase A contract in merged PR #265 is a mandatory external
+prerequisite, not an undecided alternative. Its separate implementation must
+merge before this contract's Phase B can begin.
 
 ### Review disposition
 
-- Blockers: review 4826614068 requires re-review of these amendments at the
-  new exact head; no other design Blocker is known.
-- Follow-ups: #265 and its future Phase B implementation are mandatory
-  prerequisites for this contract's Phase B. All persistence, catalog,
-  selection, authorization, command, route, output, historical or WINDOW, and
-  #192 work remains in later separate boundaries under #176 or #192.
+- Blockers: the TGRMA-001 ownership gap from review 4826836138 is corrected in
+  this contract and requires bounded re-review at the new exact head; no other
+  design Blocker is known.
+- Follow-ups: the future Phase B implementation authorized by merged #265 is
+  a mandatory prerequisite for this contract's Phase B. All persistence,
+  catalog, selection, authorization, command, route, output, historical or
+  WINDOW, and #192 work remains in later separate boundaries under #176 or
+  #192.
 - Preferences: none.
 
 ### Merge stop rule
@@ -559,8 +594,7 @@ out-of-boundary hardening become Follow-ups and do not expand that PR.
 Phase B model work must not start until:
 
 1. this exact amended contract is explicitly approved;
-2. the #265 contract is explicitly approved; and
-3. the separate Phase B implementation authorized by #265 is merged.
+2. the separate Phase B implementation authorized by merged #265 is merged.
 
 Even after approval, implementation stops before editing another authority:
 
