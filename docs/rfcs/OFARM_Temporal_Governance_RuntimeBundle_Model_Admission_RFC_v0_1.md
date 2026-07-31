@@ -1,8 +1,7 @@
 # OFARM2 Temporal-Governance RuntimeBundle Model Admission — Phase A Contract v0.1
 
-**Status:** amended proposed Phase A contract; documentation-only, awaiting
-re-review and explicit approval, and without implementation or activation
-effect
+**Status:** architect-approved amended Phase A contract; documentation-only,
+pending merge, and without implementation or activation effect
 
 **Contract identity:**
 `ofarm.temporal-governance-runtime-bundle-model-admission.issue176.v0.1`
@@ -569,9 +568,9 @@ merge before this contract's Phase B can begin.
 
 ### Review disposition
 
-- Blockers: the TGRMA-001 ownership gap from review 4826836138 is corrected in
-  this contract and requires bounded re-review at the new exact head; no other
-  design Blocker is known.
+- Blockers: none. The TGRMA-001 ownership gap from review 4826836138 was
+  corrected at `c2938b3a5c3ddce104d7457241f8805986f87d93` and the designated
+  architect explicitly approved that amended design in the same Codex task.
 - Follow-ups: the future Phase B implementation authorized by merged #265 is
   a mandatory prerequisite for this contract's Phase B. All persistence,
   catalog, selection, authorization, command, route, output, historical or
@@ -581,9 +580,10 @@ merge before this contract's Phase B can begin.
 
 ### Merge stop rule
 
-This amended Phase A contract must not be treated as approved or merged until
-the designated architect explicitly approves the amended contract after
-review and no demonstrated Blocker remains.
+The designated architect approved the amended design at `c2938b3` after the
+TGRMA-001 correction. This wording-only approval record changes no design.
+Merge only if the resulting exact head contains no other change and no
+demonstrated Blocker remains.
 
 After approval, the future Phase B PR must not merge until every invariant has
 the acceptance evidence in the traceability table. New ideas, Preferences, and
@@ -593,7 +593,7 @@ out-of-boundary hardening become Follow-ups and do not expand that PR.
 
 Phase B model work must not start until:
 
-1. this exact amended contract is explicitly approved;
+1. this amended design is explicitly approved, as satisfied at `c2938b3`;
 2. the separate Phase B implementation authorized by merged #265 is merged.
 
 Even after approval, implementation stops before editing another authority:
