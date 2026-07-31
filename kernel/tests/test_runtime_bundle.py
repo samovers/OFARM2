@@ -1699,6 +1699,329 @@ def test_checked_in_component_catalog_builds_the_reviewed_closed_set():
     }
 
 
+def _direct_contract_schema_component(
+    *,
+    role: RuntimeComponentRole,
+    logical_ref: str,
+    document: dict,
+) -> RuntimeComponent:
+    return RuntimeComponent.from_selected_bytes(
+        role=role,
+        logical_ref=logical_ref,
+        canonicalization=Canonicalization.EXACT_BYTES,
+        placement=ContentPlacement.GLOBAL,
+        selected_bytes=canonical_json_bytes(document),
+    )
+
+
+def _contract_registry_root(root: Path) -> Path:
+    for directory in (
+        "contracts/kernel",
+        "contracts/core",
+        "contracts/platform",
+        "contracts/drafts_reference/explainable_current_state_evidence",
+    ):
+        (root / directory).mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def _schema_version_document(form: str, value: object) -> dict:
+    if form == "property":
+        return {"properties": {"schemaVersion": {"const": value}}}
+    return {"const": {"schemaVersion": value}}
+
+
+@pytest.mark.parametrize(
+    "role",
+    (
+        RuntimeComponentRole.CONTRACT_SCHEMA,
+        RuntimeComponentRole.DRAFT_CONTRACT_SCHEMA,
+    ),
+    ids=("active-lane", "draft-lane"),
+)
+@pytest.mark.parametrize("form", ("property", "whole-document"))
+def test_contract_schema_version_accepts_each_reviewed_form_in_both_lanes(
+    role,
+    form,
+):
+    schema_version = "ofarm.test.extraction-accepted.v0.1"
+    document = _schema_version_document(form, schema_version)
+
+    component = _direct_contract_schema_component(
+        role=role,
+        logical_ref=f"contract:{schema_version}",
+        document=document,
+    )
+
+    assert component.role is role
+    assert component.logical_ref == f"contract:{schema_version}"
+
+
+@pytest.mark.parametrize(
+    "role",
+    (
+        RuntimeComponentRole.CONTRACT_SCHEMA,
+        RuntimeComponentRole.DRAFT_CONTRACT_SCHEMA,
+    ),
+    ids=("active-lane", "draft-lane"),
+)
+def test_contract_schema_version_accepts_exact_governed_command_schema(role):
+    schema_version = "ofarm.temporal-governed-command-binding.v0.1"
+    raw = (
+        PACKAGE_ROOT
+        / "contracts/candidates/temporal_governed_command/"
+        "OFARM_TemporalGovernedCommandBinding_schema_v0_1.json"
+    ).read_bytes()
+
+    component = RuntimeComponent.from_selected_bytes(
+        role=role,
+        logical_ref=f"contract:{schema_version}",
+        canonicalization=Canonicalization.EXACT_BYTES,
+        placement=ContentPlacement.GLOBAL,
+        selected_bytes=raw,
+    )
+
+    assert component.canonical_bytes == raw
+
+
+@pytest.mark.parametrize(
+    "document",
+    (
+        {"$id": "ofarm.test.unlisted.v0.1"},
+        {"enum": [{"schemaVersion": "ofarm.test.unlisted.v0.1"}]},
+        {"default": {"schemaVersion": "ofarm.test.unlisted.v0.1"}},
+        {
+            "allOf": [{
+                "properties": {
+                    "schemaVersion": {"const": "ofarm.test.unlisted.v0.1"},
+                },
+            }],
+        },
+    ),
+    ids=("id", "enum", "default", "nested-property"),
+)
+def test_contract_schema_version_refuses_unlisted_declaration_locations(document):
+    with pytest.raises(RuntimeBundleError, match="no schemaVersion const"):
+        _direct_contract_schema_component(
+            role=RuntimeComponentRole.CONTRACT_SCHEMA,
+            logical_ref="contract:ofarm.test.unlisted.v0.1",
+            document=document,
+        )
+
+
+@pytest.mark.parametrize("form", ("property", "whole-document"))
+@pytest.mark.parametrize(
+    "value",
+    ("", None, True, 1, [], {}),
+    ids=("empty", "null", "boolean", "number", "array", "object"),
+)
+def test_contract_schema_version_refuses_empty_or_non_string_values(form, value):
+    with pytest.raises(RuntimeBundleError, match="malformed"):
+        _direct_contract_schema_component(
+            role=RuntimeComponentRole.CONTRACT_SCHEMA,
+            logical_ref="contract:ofarm.test.invalid.v0.1",
+            document=_schema_version_document(form, value),
+        )
+
+
+@pytest.mark.parametrize(
+    ("document", "message"),
+    (
+        ({"properties": {"schemaVersion": {}}}, "malformed"),
+        ({"const": {}}, "malformed"),
+        (
+            {
+                "properties": {
+                    "schemaVersion": {
+                        "const": "ofarm.test.valid-property.v0.1",
+                    },
+                },
+                "const": "not-an-object",
+            },
+            "more than once",
+        ),
+        (
+            {
+                "properties": {"schemaVersion": "not-an-object"},
+                "const": {"schemaVersion": "ofarm.test.valid-whole.v0.1"},
+            },
+            "more than once",
+        ),
+    ),
+    ids=(
+        "property-missing-const",
+        "whole-missing-version",
+        "malformed-whole-with-valid-property",
+        "malformed-property-with-valid-whole",
+    ),
+)
+def test_contract_schema_version_refuses_malformed_present_form(document, message):
+    with pytest.raises(RuntimeBundleError, match=message):
+        _direct_contract_schema_component(
+            role=RuntimeComponentRole.CONTRACT_SCHEMA,
+            logical_ref="contract:ofarm.test.invalid.v0.1",
+            document=document,
+        )
+
+
+@pytest.mark.parametrize(
+    "whole_document_version",
+    (
+        "ofarm.test.duplicate.v0.1",
+        "ofarm.test.conflicting.v0.2",
+    ),
+    ids=("equal", "conflicting"),
+)
+def test_contract_schema_version_refuses_two_declaration_forms(
+    whole_document_version,
+):
+    property_version = "ofarm.test.duplicate.v0.1"
+    document = {
+        "properties": {
+            "schemaVersion": {"const": property_version},
+        },
+        "const": {"schemaVersion": whole_document_version},
+    }
+
+    with pytest.raises(RuntimeBundleError, match="more than once"):
+        _direct_contract_schema_component(
+            role=RuntimeComponentRole.CONTRACT_SCHEMA,
+            logical_ref=f"contract:{property_version}",
+            document=document,
+        )
+
+
+def test_contract_schema_version_refuses_whole_document_logical_ref_mismatch():
+    with pytest.raises(RuntimeBundleError, match="does not declare its logical ref"):
+        _direct_contract_schema_component(
+            role=RuntimeComponentRole.CONTRACT_SCHEMA,
+            logical_ref="contract:ofarm.test.expected.v0.1",
+            document={
+                "const": {"schemaVersion": "ofarm.test.different.v0.1"},
+            },
+        )
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "expected_role"),
+    (
+        (
+            "contracts/kernel/top-level-const.json",
+            RuntimeComponentRole.CONTRACT_SCHEMA,
+        ),
+        (
+            "contracts/drafts_reference/"
+            "explainable_current_state_evidence/top-level-const.json",
+            RuntimeComponentRole.DRAFT_CONTRACT_SCHEMA,
+        ),
+    ),
+    ids=("active-lane", "draft-lane"),
+)
+def test_contract_schema_version_builder_accepts_top_level_const(
+    tmp_path,
+    relative_path,
+    expected_role,
+):
+    root = _contract_registry_root(tmp_path / "top-level-const")
+    schema_version = "ofarm.test.builder-top-level.v0.1"
+    schema = canonical_json_bytes({
+        "const": {"schemaVersion": schema_version},
+    })
+    _write(root, relative_path, schema)
+
+    bundle = RuntimeBundleBuilder(root, (), (relative_path,)).build()
+
+    assert len(bundle.components) == 1
+    assert bundle.components[0].role is expected_role
+    assert bundle.components[0].logical_ref == f"contract:{schema_version}"
+
+
+@pytest.mark.parametrize(
+    "whole_document_version",
+    (
+        "ofarm.test.builder-duplicate.v0.1",
+        "ofarm.test.builder-conflicting.v0.2",
+    ),
+    ids=("equal", "conflicting"),
+)
+def test_contract_schema_version_builder_refuses_two_declaration_forms(
+    tmp_path,
+    whole_document_version,
+):
+    root = _contract_registry_root(tmp_path / "two-declarations")
+    relative_path = "contracts/kernel/two-declarations.json"
+    property_version = "ofarm.test.builder-duplicate.v0.1"
+    _write(root, relative_path, canonical_json_bytes({
+        "properties": {
+            "schemaVersion": {"const": property_version},
+        },
+        "const": {"schemaVersion": whole_document_version},
+    }))
+
+    with pytest.raises(RuntimeBundleError, match="more than once"):
+        RuntimeBundleBuilder(root, (), (relative_path,)).build()
+
+
+@pytest.mark.parametrize(
+    ("raw", "message"),
+    (
+        (b"{", "not strict UTF-8 JSON"),
+        (
+            b'{"properties":{"schemaVersion":{"const":"first",'
+            b'"const":"second"}}}',
+            "duplicate key",
+        ),
+        (b"[]", "must be a JSON object"),
+    ),
+    ids=("malformed-json", "duplicate-key", "non-object"),
+)
+@pytest.mark.parametrize("entry_point", ("component", "builder"))
+def test_contract_schema_version_refuses_ambiguous_json_at_each_entry_point(
+    tmp_path,
+    raw,
+    message,
+    entry_point,
+):
+    if entry_point == "component":
+        def construct():
+            return RuntimeComponent.from_selected_bytes(
+                role=RuntimeComponentRole.CONTRACT_SCHEMA,
+                logical_ref="contract:ofarm.test.invalid-json.v0.1",
+                canonicalization=Canonicalization.EXACT_BYTES,
+                placement=ContentPlacement.GLOBAL,
+                selected_bytes=raw,
+            )
+    else:
+        root = _contract_registry_root(tmp_path / "ambiguous-json")
+        relative_path = "contracts/kernel/ambiguous.json"
+        _write(root, relative_path, raw)
+
+        def construct():
+            return RuntimeBundleBuilder(root, (), (relative_path,)).build()
+
+    with pytest.raises(RuntimeBundleError, match=message):
+        construct()
+
+
+def test_contract_schema_version_preserves_top_level_duplicate_lane_refusal():
+    schema_version = "ofarm.test.top-level-duplicate-lane.v0.1"
+    document = {"const": {"schemaVersion": schema_version}}
+    components = tuple(
+        _direct_contract_schema_component(
+            role=role,
+            logical_ref=f"contract:{schema_version}",
+            document=document,
+        )
+        for role in (
+            RuntimeComponentRole.CONTRACT_SCHEMA,
+            RuntimeComponentRole.DRAFT_CONTRACT_SCHEMA,
+        )
+    )
+
+    with pytest.raises(RuntimeBundleError, match="more than once across lanes"):
+        RuntimeBundle.create(components)
+
+
 def test_contract_lane_changes_bundle_identity_for_identical_schema_bytes(tmp_path):
     schema = canonical_json_bytes({
         "type": "object",
