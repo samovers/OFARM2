@@ -371,18 +371,46 @@ def _require_relative_path(value: str, label: str) -> None:
         raise RuntimeBundleError(f"{label} must be a normalized relative path")
 
 
-def _contract_schema_version(document: dict[str, Any], label: str) -> str:
+def _contract_schema_version_forms(
+    document: dict[str, Any],
+) -> tuple[bool, bool]:
     properties = document.get("properties")
-    schema_property = (
-        properties.get("schemaVersion")
-        if type(properties) is dict else None
+    return (
+        type(properties) is dict and "schemaVersion" in properties,
+        "const" in document,
     )
-    schema_version = (
-        schema_property.get("const")
-        if type(schema_property) is dict else None
+
+
+def _contract_schema_version(document: dict[str, Any], label: str) -> str:
+    property_form_present, whole_document_form_present = (
+        _contract_schema_version_forms(document)
     )
-    if type(schema_version) is not str or not schema_version:
+    if property_form_present and whole_document_form_present:
+        raise RuntimeBundleError(
+            f"{label} declares schemaVersion const more than once"
+        )
+    if not property_form_present and not whole_document_form_present:
         raise RuntimeBundleError(f"{label} has no schemaVersion const")
+
+    if property_form_present:
+        schema_property = document["properties"]["schemaVersion"]
+        if type(schema_property) is not dict or "const" not in schema_property:
+            raise RuntimeBundleError(
+                f"{label} has malformed properties.schemaVersion.const"
+            )
+        schema_version = schema_property["const"]
+        location = "properties.schemaVersion.const"
+    else:
+        whole_document = document["const"]
+        if type(whole_document) is not dict or "schemaVersion" not in whole_document:
+            raise RuntimeBundleError(
+                f"{label} has malformed const.schemaVersion"
+            )
+        schema_version = whole_document["schemaVersion"]
+        location = "const.schemaVersion"
+
+    if type(schema_version) is not str or not schema_version:
+        raise RuntimeBundleError(f"{label} has malformed {location}")
     return schema_version
 
 
@@ -1295,11 +1323,13 @@ class RuntimeBundleBuilder:
                     self.package_root, relative_path, "contract registry schema")
                 document, _canonical = strict_json_document(
                     raw, f"contract registry schema {relative_path!r}")
-                schema_version = (
-                    document.get("properties", {}).get("schemaVersion", {}).get("const")
+                # Registry directories also contain non-schema metadata JSON.
+                if not any(_contract_schema_version_forms(document)):
+                    continue
+                _contract_schema_version(
+                    document, f"contract registry schema {relative_path!r}"
                 )
-                if schema_version:
-                    loaded_paths.add(relative_path)
+                loaded_paths.add(relative_path)
         selected_paths = set(self.contract_schema_paths)
         if (
             len(selected_paths) != len(self.contract_schema_paths)
