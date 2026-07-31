@@ -194,12 +194,20 @@ RUNTIME_PROBLEM_SCHEMA_PATH = (
 TEMPORAL_SELECTOR_MODULE_PATH = PACKAGE_ROOT / "kernel/temporal_carriers.py"
 RUNTIME_CATALOG_PATH = PACKAGE_ROOT / "kernel/runtime_bundle_components.json"
 RUNTIME_BUNDLE_MODEL_PATH = PACKAGE_ROOT / "kernel/runtime_bundle.py"
+RUNTIME_BUNDLE_MODEL_ADMISSION_RFC_PATH = (
+    PACKAGE_ROOT
+    / "docs/rfcs/"
+    "OFARM_Temporal_Governance_RuntimeBundle_Model_Admission_RFC_v0_1.md"
+)
+RUNTIME_BUNDLE_MODEL_ADMISSION_RFC_BYTE_LENGTH = 33787
+RUNTIME_BUNDLE_MODEL_ADMISSION_RFC_DIGEST = (
+    "9dbe62b18f4214b93b02ae2ccd8d17ee40aed4e1925fff7482993b2eedc9fac8"
+)
 RUNTIME_BUNDLE_REPOSITORY_PATH = (
     PACKAGE_ROOT / "kernel/runtime_bundle_repository.py"
 )
 RUNTIME_BUNDLE_SCHEMA_PATH = PACKAGE_ROOT / "kernel/schema.sql"
-RUNTIME_BUNDLE_ACTIVE_AUTHORITY_PATHS = (
-    RUNTIME_BUNDLE_MODEL_PATH,
+RUNTIME_BUNDLE_ROLE_FORBIDDEN_AUTHORITY_PATHS = (
     RUNTIME_BUNDLE_REPOSITORY_PATH,
     RUNTIME_BUNDLE_SCHEMA_PATH,
 )
@@ -2660,7 +2668,7 @@ def validate_non_activation(runtime_catalog: object) -> None:
     for component in components:
         if (
             type(component) is dict
-            and component.get("relativePath") in CANDIDATE_RELATIVE_PATHS
+            and component.get("path") in CANDIDATE_RELATIVE_PATHS
         ):
             raise TemporalCandidateError("candidate entered a runtime component")
     if RUNTIME_BUNDLE_CARRIER_ROLE in json.dumps(
@@ -2671,7 +2679,33 @@ def validate_non_activation(runtime_catalog: object) -> None:
         )
 
 
-def validate_runtime_bundle_carrier_role_is_inactive() -> None:
+def validate_runtime_bundle_model_admission_authority() -> None:
+    if not RUNTIME_BUNDLE_MODEL_ADMISSION_RFC_PATH.is_file():
+        raise TemporalCandidateError(
+            "RuntimeBundle model-admission authority is missing"
+        )
+    authority_bytes = RUNTIME_BUNDLE_MODEL_ADMISSION_RFC_PATH.read_bytes()
+    if len(authority_bytes) != RUNTIME_BUNDLE_MODEL_ADMISSION_RFC_BYTE_LENGTH:
+        raise TemporalCandidateError(
+            "RuntimeBundle model-admission authority byte length differs"
+        )
+    if (
+        hashlib.sha256(authority_bytes).hexdigest()
+        != RUNTIME_BUNDLE_MODEL_ADMISSION_RFC_DIGEST
+    ):
+        raise TemporalCandidateError(
+            "RuntimeBundle model-admission authority digest differs"
+        )
+
+
+def validate_runtime_bundle_carrier_role_posture() -> None:
+    validate_runtime_bundle_model_admission_authority()
+    if not RUNTIME_BUNDLE_MODEL_PATH.is_file():
+        raise TemporalCandidateError(
+            "RuntimeBundle model eligibility authority is missing"
+        )
+    # Role text in this exact model path is inert eligibility, not activation.
+    RUNTIME_BUNDLE_MODEL_PATH.read_text(encoding="utf-8")
     if not TENANT_MIGRATIONS_PATH.is_dir():
         raise TemporalCandidateError(
             "active RuntimeBundle migration authority directory is missing"
@@ -2681,15 +2715,48 @@ def validate_runtime_bundle_carrier_role_is_inactive() -> None:
         raise TemporalCandidateError(
             "active RuntimeBundle migration authority set is empty"
         )
-    active_authority_paths = (
-        *RUNTIME_BUNDLE_ACTIVE_AUTHORITY_PATHS,
+    forbidden_authority_paths = (
+        *RUNTIME_BUNDLE_ROLE_FORBIDDEN_AUTHORITY_PATHS,
         *migration_paths,
     )
-    for path in active_authority_paths:
+    for path in forbidden_authority_paths:
         if RUNTIME_BUNDLE_CARRIER_ROLE in path.read_text(encoding="utf-8"):
             raise TemporalCandidateError(
-                "candidate role entered an active RuntimeBundle authority"
+                "candidate role entered an explicitly forbidden "
+                f"RuntimeBundle authority: {path}"
             )
+
+
+def validate_active_temporal_activation_inputs() -> None:
+    activation_markers = (
+        CONTRACT_VERSION,
+        CARRIER_SCHEMA_VERSION,
+        CARRIER_MATRIX_ID,
+        SELECTION_SCHEMA_VERSION,
+        SELECTION_BINDING_ID,
+        SELECTION_EXECUTION_POSTURE,
+        COMMAND_SCHEMA_VERSION,
+        COMMAND_BINDING_ID,
+        COMMAND_EXECUTION_POSTURE,
+        RUNTIME_BUNDLE_CARRIER_SCHEMA_VERSION,
+        RUNTIME_BUNDLE_CARRIER_BINDING_ID,
+        RUNTIME_BUNDLE_CARRIER_EXECUTION_POSTURE,
+        RUNTIME_BUNDLE_CARRIER_ROLE,
+        RUNTIME_BUNDLE_SELECTION_SCHEMA_VERSION,
+        RUNTIME_BUNDLE_SELECTION_BINDING_ID,
+        RUNTIME_BUNDLE_SELECTION_EXECUTION_POSTURE,
+        PROMOTION_SCHEMA_VERSION,
+        PROMOTION_BINDING_ID,
+        PROMOTION_EXECUTION_POSTURE,
+        *CANDIDATE_RELATIVE_PATHS,
+    )
+    for path, label in (
+        (ACTIVE_ARTIFACT_SET_PATH, "ActiveArtifactSet"),
+        (CAPABILITY_MANIFEST_PATH, "Capability Manifest"),
+    ):
+        active_text = path.read_text(encoding="utf-8")
+        if any(marker in active_text for marker in activation_markers):
+            raise TemporalCandidateError(f"candidate entered the {label}")
 
 
 def _markdown_table_row_identity(line: str) -> str | None:
@@ -3191,36 +3258,8 @@ def validate_candidate_governance() -> None:
 
     runtime_catalog = _load_json(RUNTIME_CATALOG_PATH)
     validate_non_activation(runtime_catalog)
-    validate_runtime_bundle_carrier_role_is_inactive()
-    activation_markers = (
-        CONTRACT_VERSION,
-        CARRIER_SCHEMA_VERSION,
-        CARRIER_MATRIX_ID,
-        SELECTION_SCHEMA_VERSION,
-        SELECTION_BINDING_ID,
-        SELECTION_EXECUTION_POSTURE,
-        COMMAND_SCHEMA_VERSION,
-        COMMAND_BINDING_ID,
-        COMMAND_EXECUTION_POSTURE,
-        RUNTIME_BUNDLE_CARRIER_SCHEMA_VERSION,
-        RUNTIME_BUNDLE_CARRIER_BINDING_ID,
-        RUNTIME_BUNDLE_CARRIER_EXECUTION_POSTURE,
-        RUNTIME_BUNDLE_CARRIER_ROLE,
-        RUNTIME_BUNDLE_SELECTION_SCHEMA_VERSION,
-        RUNTIME_BUNDLE_SELECTION_BINDING_ID,
-        RUNTIME_BUNDLE_SELECTION_EXECUTION_POSTURE,
-        PROMOTION_SCHEMA_VERSION,
-        PROMOTION_BINDING_ID,
-        PROMOTION_EXECUTION_POSTURE,
-        *CANDIDATE_RELATIVE_PATHS,
-    )
-    for path, label in (
-        (ACTIVE_ARTIFACT_SET_PATH, "ActiveArtifactSet"),
-        (CAPABILITY_MANIFEST_PATH, "Capability Manifest"),
-    ):
-        active_text = path.read_text(encoding="utf-8")
-        if any(marker in active_text for marker in activation_markers):
-            raise TemporalCandidateError(f"candidate entered the {label}")
+    validate_runtime_bundle_carrier_role_posture()
+    validate_active_temporal_activation_inputs()
 
 
 def _coordinate_value(

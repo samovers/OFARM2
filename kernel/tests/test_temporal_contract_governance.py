@@ -906,10 +906,189 @@ def test_temporal_promotion_contract_is_atomic_exact_and_has_no_effect(
     temporal.validate_promotion_dependency_consistency()
 
 
-def test_candidate_does_not_enter_runtime_or_production_activation_inputs(
+@pytest.mark.parametrize(
+    "model_text",
+    ("# temporal role absent\n", temporal.RUNTIME_BUNDLE_CARRIER_ROLE),
+    ids=("role-absent", "role-in-model"),
+)
+def test_runtime_bundle_role_posture_allows_absent_or_model_only_role(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    model_text: str,
+):
+    model_path = tmp_path / "runtime_bundle.py"
+    model_path.write_text(model_text, encoding="utf-8")
+    repository_path = tmp_path / "runtime_bundle_repository.py"
+    repository_path.write_text("# role absent\n", encoding="utf-8")
+    schema_path = tmp_path / "schema.sql"
+    schema_path.write_text("-- role absent\n", encoding="utf-8")
+    migration_dir = tmp_path / "migrations"
+    migration_dir.mkdir()
+    (migration_dir / "0001.sql").write_text("-- role absent\n", encoding="utf-8")
+
+    monkeypatch.setattr(temporal, "RUNTIME_BUNDLE_MODEL_PATH", model_path)
+    monkeypatch.setattr(
+        temporal,
+        "RUNTIME_BUNDLE_ROLE_FORBIDDEN_AUTHORITY_PATHS",
+        (repository_path, schema_path),
+    )
+    monkeypatch.setattr(temporal, "TENANT_MIGRATIONS_PATH", migration_dir)
+
+    temporal.validate_runtime_bundle_carrier_role_posture()
+
+
+def test_runtime_bundle_role_posture_pins_model_admission_authority(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ):
+    with monkeypatch.context() as candidate_patch:
+        candidate_patch.setattr(
+            temporal,
+            "RUNTIME_BUNDLE_MODEL_ADMISSION_RFC_PATH",
+            tmp_path / "missing-model-admission-rfc.md",
+        )
+        with pytest.raises(
+            temporal.TemporalCandidateError,
+            match="model-admission authority is missing",
+        ):
+            temporal.validate_runtime_bundle_carrier_role_posture()
+
+    authority_bytes = temporal.RUNTIME_BUNDLE_MODEL_ADMISSION_RFC_PATH.read_bytes()
+    wrong_length_path = tmp_path / "wrong-length-model-admission-rfc.md"
+    wrong_length_path.write_bytes(authority_bytes + b"\n")
+    with monkeypatch.context() as candidate_patch:
+        candidate_patch.setattr(
+            temporal,
+            "RUNTIME_BUNDLE_MODEL_ADMISSION_RFC_PATH",
+            wrong_length_path,
+        )
+        with pytest.raises(
+            temporal.TemporalCandidateError,
+            match="authority byte length differs",
+        ):
+            temporal.validate_runtime_bundle_carrier_role_posture()
+
+    wrong_digest_path = tmp_path / "wrong-digest-model-admission-rfc.md"
+    changed_bytes = b"!" + authority_bytes[1:]
+    assert len(changed_bytes) == len(authority_bytes)
+    wrong_digest_path.write_bytes(changed_bytes)
+    with monkeypatch.context() as candidate_patch:
+        candidate_patch.setattr(
+            temporal,
+            "RUNTIME_BUNDLE_MODEL_ADMISSION_RFC_PATH",
+            wrong_digest_path,
+        )
+        with pytest.raises(
+            temporal.TemporalCandidateError,
+            match="authority digest differs",
+        ):
+            temporal.validate_runtime_bundle_carrier_role_posture()
+
+
+@pytest.mark.parametrize(
+    "forbidden_authority",
+    ("repository", "schema"),
+)
+def test_runtime_bundle_role_posture_refuses_each_fixed_authority(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    forbidden_authority: str,
+):
+    model_path = tmp_path / "runtime_bundle.py"
+    model_path.write_text(
+        temporal.RUNTIME_BUNDLE_CARRIER_ROLE,
+        encoding="utf-8",
+    )
+    repository_path = tmp_path / "runtime_bundle_repository.py"
+    schema_path = tmp_path / "schema.sql"
+    for path, authority in (
+        (repository_path, "repository"),
+        (schema_path, "schema"),
+    ):
+        path.write_text(
+            temporal.RUNTIME_BUNDLE_CARRIER_ROLE
+            if authority == forbidden_authority
+            else "role absent",
+            encoding="utf-8",
+        )
+    migration_dir = tmp_path / "migrations"
+    migration_dir.mkdir()
+    (migration_dir / "0001.sql").write_text("-- role absent\n", encoding="utf-8")
+
+    monkeypatch.setattr(temporal, "RUNTIME_BUNDLE_MODEL_PATH", model_path)
+    monkeypatch.setattr(
+        temporal,
+        "RUNTIME_BUNDLE_ROLE_FORBIDDEN_AUTHORITY_PATHS",
+        (repository_path, schema_path),
+    )
+    monkeypatch.setattr(temporal, "TENANT_MIGRATIONS_PATH", migration_dir)
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="explicitly forbidden RuntimeBundle authority",
+    ):
+        temporal.validate_runtime_bundle_carrier_role_posture()
+
+
+def test_runtime_bundle_role_posture_refuses_migration_authority_failures(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    model_path = tmp_path / "runtime_bundle.py"
+    model_path.write_text(
+        temporal.RUNTIME_BUNDLE_CARRIER_ROLE,
+        encoding="utf-8",
+    )
+    repository_path = tmp_path / "runtime_bundle_repository.py"
+    repository_path.write_text("# role absent\n", encoding="utf-8")
+    schema_path = tmp_path / "schema.sql"
+    schema_path.write_text("-- role absent\n", encoding="utf-8")
+    monkeypatch.setattr(temporal, "RUNTIME_BUNDLE_MODEL_PATH", model_path)
+    monkeypatch.setattr(
+        temporal,
+        "RUNTIME_BUNDLE_ROLE_FORBIDDEN_AUTHORITY_PATHS",
+        (repository_path, schema_path),
+    )
+
+    migration_dir = tmp_path / "migrations"
+    migration_dir.mkdir()
+    (migration_dir / "0001.sql").write_text(
+        temporal.RUNTIME_BUNDLE_CARRIER_ROLE,
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(temporal, "TENANT_MIGRATIONS_PATH", migration_dir)
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="explicitly forbidden RuntimeBundle authority",
+    ):
+        temporal.validate_runtime_bundle_carrier_role_posture()
+
+    empty_migration_dir = tmp_path / "empty-migrations"
+    empty_migration_dir.mkdir()
+    monkeypatch.setattr(
+        temporal,
+        "TENANT_MIGRATIONS_PATH",
+        empty_migration_dir,
+    )
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="migration authority set is empty",
+    ):
+        temporal.validate_runtime_bundle_carrier_role_posture()
+
+    monkeypatch.setattr(
+        temporal,
+        "TENANT_MIGRATIONS_PATH",
+        tmp_path / "missing-migrations",
+    )
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="migration authority directory is missing",
+    ):
+        temporal.validate_runtime_bundle_carrier_role_posture()
+
+
+def test_temporal_candidates_and_role_do_not_enter_active_catalog():
     runtime_catalog = json.loads(
         temporal.RUNTIME_CATALOG_PATH.read_text(encoding="utf-8")
     )
@@ -919,12 +1098,24 @@ def test_candidate_does_not_enter_runtime_or_production_activation_inputs(
         for path in temporal.CANDIDATE_RELATIVE_PATHS
     )
 
+    contract_catalog = copy.deepcopy(runtime_catalog)
+    contract_catalog["contractSchemas"].append(
+        temporal.CARRIER_SCHEMA_RELATIVE_PATH
+    )
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="RuntimeBundle contracts",
+    ):
+        temporal.validate_non_activation(contract_catalog)
+
     mutated_catalog = copy.deepcopy(runtime_catalog)
     mutated_catalog["components"].append(
         {
-            "logicalRef": "untrusted:alias",
-            "relativePath": temporal.CARRIER_MATRIX_RELATIVE_PATH,
-            "mediaType": "application/json",
+            "role": "REFERENCE_SOURCE",
+            "logicalRef": "candidate:temporal-matrix",
+            "path": temporal.CARRIER_MATRIX_RELATIVE_PATH,
+            "canonicalization": "EXACT_BYTES_V1",
+            "placement": "GLOBAL_IMMUTABLE_CONTENT",
         }
     )
     with pytest.raises(
@@ -933,87 +1124,48 @@ def test_candidate_does_not_enter_runtime_or_production_activation_inputs(
     ):
         temporal.validate_non_activation(mutated_catalog)
 
-    assert temporal.RUNTIME_BUNDLE_SCHEMA_PATH in (
-        temporal.RUNTIME_BUNDLE_ACTIVE_AUTHORITY_PATHS
+    role_catalog = copy.deepcopy(runtime_catalog)
+    role_catalog["components"].append(
+        {
+            "logicalRef": "untrusted:temporal-role",
+            "relativePath": "kernel/untrusted-temporal-role.json",
+            "role": temporal.RUNTIME_BUNDLE_CARRIER_ROLE,
+        }
     )
-    assert temporal.RUNTIME_BUNDLE_REPOSITORY_PATH in (
-        temporal.RUNTIME_BUNDLE_ACTIVE_AUTHORITY_PATHS
-    )
-    active_authority = tmp_path / "schema.sql"
-    active_authority.write_text(
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="active RuntimeBundle catalog",
+    ):
+        temporal.validate_non_activation(role_catalog)
+
+
+@pytest.mark.parametrize(
+    ("path_attribute", "label"),
+    (
+        ("ACTIVE_ARTIFACT_SET_PATH", "ActiveArtifactSet"),
+        ("CAPABILITY_MANIFEST_PATH", "Capability Manifest"),
+    ),
+    ids=("active-artifact-set", "capability-manifest"),
+)
+def test_active_temporal_activation_inputs_refuse_each_exact_authority(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    path_attribute: str,
+    label: str,
+):
+    active_path = tmp_path / f"{path_attribute}.json"
+    active_path.write_text(
         temporal.RUNTIME_BUNDLE_CARRIER_ROLE,
         encoding="utf-8",
     )
-    migration_dir = tmp_path / "migrations"
-    migration_dir.mkdir()
-    (migration_dir / "0001.sql").write_text("-- active", encoding="utf-8")
-    with monkeypatch.context() as candidate_patch:
-        candidate_patch.setattr(
-            temporal,
-            "RUNTIME_BUNDLE_ACTIVE_AUTHORITY_PATHS",
-            (active_authority,),
-        )
-        candidate_patch.setattr(
-            temporal,
-            "TENANT_MIGRATIONS_PATH",
-            migration_dir,
-        )
-        with pytest.raises(
-            temporal.TemporalCandidateError,
-            match="entered an active RuntimeBundle authority",
-        ):
-            temporal.validate_runtime_bundle_carrier_role_is_inactive()
+    monkeypatch.setattr(temporal, path_attribute, active_path)
 
-        empty_migration_dir = tmp_path / "empty-migrations"
-        empty_migration_dir.mkdir()
-        candidate_patch.setattr(
-            temporal,
-            "TENANT_MIGRATIONS_PATH",
-            empty_migration_dir,
-        )
-        with pytest.raises(
-            temporal.TemporalCandidateError,
-            match="migration authority set is empty",
-        ):
-            temporal.validate_runtime_bundle_carrier_role_is_inactive()
+    with pytest.raises(temporal.TemporalCandidateError, match=label):
+        temporal.validate_active_temporal_activation_inputs()
 
-        candidate_patch.setattr(
-            temporal,
-            "TENANT_MIGRATIONS_PATH",
-            tmp_path / "missing-migrations",
-        )
-        with pytest.raises(
-            temporal.TemporalCandidateError,
-            match="migration authority directory is missing",
-        ):
-            temporal.validate_runtime_bundle_carrier_role_is_inactive()
 
-    activation_markers = (
-        temporal.CONTRACT_VERSION,
-        temporal.CARRIER_SCHEMA_VERSION,
-        temporal.CARRIER_MATRIX_ID,
-        temporal.COMMAND_SCHEMA_VERSION,
-        temporal.COMMAND_BINDING_ID,
-        temporal.COMMAND_EXECUTION_POSTURE,
-        temporal.RUNTIME_BUNDLE_CARRIER_SCHEMA_VERSION,
-        temporal.RUNTIME_BUNDLE_CARRIER_BINDING_ID,
-        temporal.RUNTIME_BUNDLE_CARRIER_EXECUTION_POSTURE,
-        temporal.RUNTIME_BUNDLE_CARRIER_ROLE,
-        temporal.RUNTIME_BUNDLE_SELECTION_SCHEMA_VERSION,
-        temporal.RUNTIME_BUNDLE_SELECTION_BINDING_ID,
-        temporal.RUNTIME_BUNDLE_SELECTION_EXECUTION_POSTURE,
-        temporal.PROMOTION_SCHEMA_VERSION,
-        temporal.PROMOTION_BINDING_ID,
-        temporal.PROMOTION_EXECUTION_POSTURE,
-        *temporal.CANDIDATE_RELATIVE_PATHS,
-    )
-    for path in (
-        temporal.ACTIVE_ARTIFACT_SET_PATH,
-        temporal.CAPABILITY_MANIFEST_PATH,
-    ):
-        active_text = path.read_text(encoding="utf-8")
-        assert all(marker not in active_text for marker in activation_markers)
-    temporal.validate_runtime_bundle_carrier_role_is_inactive()
+def test_active_temporal_activation_inputs_remain_clear():
+    temporal.validate_active_temporal_activation_inputs()
 
 
 def test_candidate_paths_are_not_frozen_or_active_contract_directories():
