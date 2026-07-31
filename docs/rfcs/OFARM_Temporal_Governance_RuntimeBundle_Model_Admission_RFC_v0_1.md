@@ -1,7 +1,7 @@
 # OFARM2 Temporal-Governance RuntimeBundle Model Admission — Phase A Contract v0.1
 
-**Status:** proposed Phase A contract; documentation-only, unapproved, and
-without implementation or activation effect
+**Status:** architect-approved Phase A contract; documentation-only, pending
+merge, and without implementation or activation effect
 
 **Contract identity:**
 `ofarm.temporal-governance-runtime-bundle-model-admission.issue176.v0.1`
