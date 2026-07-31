@@ -10,6 +10,37 @@ merge, and without implementation, lifecycle, or activation effect
 
 **Base commit:** `4322655db26645abd5da90dcfb8f7318464aedcf`
 
+## Approval record
+
+- Approval channel: Codex task
+  `019fa821-93c9-7ef1-8c94-1c0e92ea46b9`.
+- Stable approval reference:
+  `codex-task:019fa821-93c9-7ef1-8c94-1c0e92ea46b9;user-message-exact-text:approved;immediately-after-final-contract-approval-request`.
+- Architect action: the designated architect sent a later user-authored message
+  consisting exactly of `approved` in that same task, immediately after the
+  assistant returned the amended contract and stated that final review and
+  explicit approval were next.
+- Exact approved snapshot byte length: `25931`.
+- Exact approved snapshot SHA-256:
+  `sha256:fdc52f8727f4c90564feb8f6680846e663cc03138c8742fe0507e9d47a133af6`.
+
+The approved snapshot is this contract before approval bookkeeping. Its status
+was exactly:
+
+```text
+proposed Phase A contract; documentation-only, unapproved, and without
+implementation, lifecycle, or activation effect
+```
+
+After that explicit user-authored approval, the assistant changed only the
+status metadata to record the satisfied approval and then published the
+contract. This approval-record section is evidence of that already completed
+transition; it changes no decision, authority, invariant, negative case,
+non-goal, PR boundary, verification requirement, or stop condition.
+
+AI-authored text, PR authorship, branch or commit state, mergeability, GitHub
+credentials, and review conclusions do not count as architect approval.
+
 **Primary implementation ticket:** #176
 
 **Primary trust boundary:** the temporal candidate conformance checker's
