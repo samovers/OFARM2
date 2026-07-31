@@ -79,9 +79,10 @@ def _insert_historical_v1(
     return event_id, correlation_hmac, outcome
 
 
-def _prove_access_clock_mutex_release_after_failure(
-    state: dict[str, object],
-) -> None:
+def test_access_clock_mutex_is_released_after_post_acquisition_failure(
+    migrated_audit_service,
+):
+    state = migrated_audit_service
     control_dsn = _role_dsn(
         state,
         "ofarm_security_audit_control_login",
@@ -422,8 +423,6 @@ def test_key_retention_observation_is_one_closed_control_row(
                 """
             ).fetchall()
     assert unauthorized.value.sqlstate == "42501"
-
-    _prove_access_clock_mutex_release_after_failure(state)
 
 
 def test_overflow_observation_refuses_wrong_role(
