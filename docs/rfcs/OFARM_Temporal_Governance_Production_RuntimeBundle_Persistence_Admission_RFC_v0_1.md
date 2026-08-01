@@ -29,8 +29,10 @@ authorities.
 
 - Approval channel: Codex task
   `019fa821-93c9-7ef1-8c94-1c0e92ea46b9`.
-- Stable approval reference:
-  `codex-task:019fa821-93c9-7ef1-8c94-1c0e92ea46b9;user-message-exact-text:approve;immediately-after-complete-amended-contract-approval-request`.
+- Approval turn:
+  `019fbc81-6313-7d92-8444-803946f2158c`.
+- Stable user-message reference: `item-1325`.
+- Exact user-message text: `approve`.
 - Architect action: the designated architect sent a later user-authored message
   consisting exactly of `approve` in that same task immediately after the
   complete amended contract and explicit approval request.
