@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import ast
 import copy
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import jsonschema
 import pytest
@@ -100,6 +102,141 @@ def _promotion_binding() -> dict:
     return json.loads(
         temporal.PROMOTION_BINDING_PATH.read_text(encoding="utf-8")
     )
+
+
+def _migration_authority_source() -> str:
+    return temporal.MIGRATION_SET_AUTHORITY_PATH.read_text(encoding="utf-8")
+
+
+def _role_snapshot(
+    *migrations: tuple[str, bytes],
+) -> temporal.TenantMigrationAuthoritySnapshot:
+    entries = tuple(
+        SimpleNamespace(filename=filename, source_bytes=source_bytes)
+        for filename, source_bytes in migrations
+    )
+    return temporal.TenantMigrationAuthoritySnapshot(
+        migration_set=SimpleNamespace(migrations=entries),
+        version_3_prefix=temporal.KNOWLEDGE_STORAGE_MIGRATION_PREFIX_DIGEST,
+    )
+
+
+def _tenant_literal_source(
+    *,
+    version_3_entries: int = 1,
+    field_overrides: dict[str, object] | None = None,
+) -> str:
+    fields = {
+        "version": 3,
+        "filename": temporal.KNOWLEDGE_STORAGE_MIGRATION_FILENAME,
+        "source_sha256": (
+            f"sha256:{temporal.KNOWLEDGE_STORAGE_MIGRATION_DIGEST}"
+        ),
+        "byte_length": temporal.KNOWLEDGE_STORAGE_MIGRATION_BYTE_LENGTH,
+        "applied_prefix_digest": (
+            temporal.KNOWLEDGE_STORAGE_MIGRATION_PREFIX_DIGEST
+        ),
+    }
+    fields.update(field_overrides or {})
+    entries = "\n".join(
+        (
+            "        AuthoritativeMigration(\n"
+            f"            version={fields['version']!r},\n"
+            f"            filename={fields['filename']!r},\n"
+            f"            source_sha256={fields['source_sha256']!r},\n"
+            f"            byte_length={fields['byte_length']!r},\n"
+            "            applied_prefix_digest="
+            f"{fields['applied_prefix_digest']!r},\n"
+            "        ),"
+        )
+        for _ in range(version_3_entries)
+    )
+    return (
+        "TENANT_AUTHORITATIVE_MIGRATION_SET = AuthoritativeMigrationSet(\n"
+        "    service=TENANT_SERVICE,\n"
+        "    migrations=(\n"
+        f"{entries}\n"
+        "    ),\n"
+        f"    digest={temporal.KNOWLEDGE_STORAGE_MIGRATION_PREFIX_DIGEST!r},\n"
+        ")\n"
+    )
+
+
+def _authoritative_tenant_assignment(
+    migration_set: object,
+    *,
+    name: str = "TENANT_AUTHORITATIVE_MIGRATION_SET",
+) -> str:
+    migrations = getattr(migration_set, "migrations")
+    entries = []
+    for migration in migrations:
+        prefix = migration_set.prefix_digest(migration.version)
+        entries.append(
+            "        AuthoritativeMigration(\n"
+            f"            version={migration.version!r},\n"
+            f"            filename={migration.filename!r},\n"
+            f"            source_sha256={migration.source_sha256!r},\n"
+            f"            byte_length={migration.byte_length!r},\n"
+            f"            applied_prefix_digest={prefix!r},\n"
+            "        ),"
+        )
+    return (
+        f"{name} = AuthoritativeMigrationSet(\n"
+        "    service=TENANT_SERVICE,\n"
+        "    migrations=(\n"
+        f"{'\n'.join(entries)}\n"
+        "    ),\n"
+        f"    digest={migration_set.digest!r},\n"
+        ")\n"
+    )
+
+
+def _replace_tenant_authority(source: str, assignment: str) -> str:
+    start = source.index("TENANT_AUTHORITATIVE_MIGRATION_SET =")
+    end = source.index(
+        "\n\nSECURITY_AUDIT_AUTHORITATIVE_MIGRATION_SET =",
+        start,
+    )
+    return source[:start] + assignment + source[end:]
+
+
+def _synthetic_tenant_authority(
+    tmp_path: Path,
+    extra_migrations: tuple[tuple[str, bytes], ...],
+) -> tuple[Path, Path]:
+    package_root = tmp_path / "package"
+    migration_directory = package_root / "kernel/migrations"
+    migration_directory.mkdir(parents=True)
+    for version in range(1, 4):
+        source_path = PACKAGE_ROOT / "kernel/migrations" / (
+            f"{version:04d}_"
+            + (
+                "initial.sql"
+                if version == 1
+                else "authentication_read_api.sql"
+                if version == 2
+                else "tenant_knowledge_position.sql"
+            )
+        )
+        (migration_directory / source_path.name).write_bytes(
+            source_path.read_bytes()
+        )
+    for filename, source_bytes in extra_migrations:
+        (migration_directory / filename).write_bytes(source_bytes)
+
+    source = _migration_authority_source()
+    module = temporal._execute_migration_authority_source(source)
+    migration_set = module.load_migration_set(
+        package_root,
+        module.TENANT_SERVICE,
+    )
+    assignment = _authoritative_tenant_assignment(migration_set)
+    authority_path = tmp_path / "migration_sets.py"
+    authority_path.write_text(
+        _replace_tenant_authority(source, assignment),
+        encoding="utf-8",
+    )
+    return package_root, authority_path
 
 
 def _coordinate() -> dict:
@@ -258,7 +395,10 @@ def test_candidate_schemas_and_instances_are_full_draft_2020_12_valid():
     temporal.validate_selection_schema_shape(selection_schema)
     temporal.validate_selection_binding(selection_binding)
     temporal.validate_command_schema_shape(command_schema, command_binding)
-    temporal.validate_command_binding(command_binding)
+    temporal.validate_command_binding(
+        command_binding,
+        temporal.load_tenant_migration_authority_snapshot(),
+    )
     temporal.validate_runtime_bundle_carrier_schema_shape(
         runtime_bundle_carrier_schema,
         runtime_bundle_carrier_binding,
@@ -403,7 +543,10 @@ def test_temporal_governed_command_is_exact_and_cannot_be_activated_by_mutation(
             temporal.TemporalCandidateError,
             match=expected_error,
         ):
-            temporal.validate_command_binding(binding)
+            temporal.validate_command_binding(
+                binding,
+                temporal.load_tenant_migration_authority_snapshot(),
+            )
 
 
 def test_runtime_bundle_carrier_is_closed_eligibility_not_required_closure():
@@ -906,6 +1049,344 @@ def test_temporal_promotion_contract_is_atomic_exact_and_has_no_effect(
     temporal.validate_promotion_dependency_consistency()
 
 
+def test_persistence_admission_authority_is_exactly_pinned(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    temporal.validate_persistence_admission_authority()
+    authority_bytes = temporal.PERSISTENCE_ADMISSION_RFC_PATH.read_bytes()
+
+    cases = (
+        (tmp_path / "missing.md", "authority is missing"),
+        (tmp_path / "wrong-length.md", "byte length differs"),
+        (tmp_path / "wrong-digest.md", "digest differs"),
+    )
+    cases[1][0].write_bytes(authority_bytes + b"\n")
+    changed_bytes = b"!" + authority_bytes[1:]
+    assert len(changed_bytes) == len(authority_bytes)
+    cases[2][0].write_bytes(changed_bytes)
+
+    for path, expected_error in cases:
+        with monkeypatch.context() as authority_patch:
+            authority_patch.setattr(
+                temporal,
+                "PERSISTENCE_ADMISSION_RFC_PATH",
+                path,
+            )
+            with pytest.raises(
+                temporal.TemporalCandidateError,
+                match=expected_error,
+            ):
+                temporal.validate_persistence_admission_authority()
+
+
+def test_tenant_migration_authority_snapshot_authenticates_stable_v3():
+    migration_authority = temporal.load_tenant_migration_authority_snapshot()
+    version_3 = migration_authority.migration_set.migrations[2]
+
+    assert version_3.version == 3
+    assert version_3.filename == temporal.KNOWLEDGE_STORAGE_MIGRATION_FILENAME
+    assert version_3.source_sha256 == (
+        f"sha256:{temporal.KNOWLEDGE_STORAGE_MIGRATION_DIGEST}"
+    )
+    assert version_3.byte_length == (
+        temporal.KNOWLEDGE_STORAGE_MIGRATION_BYTE_LENGTH
+    )
+    assert migration_authority.version_3_prefix == (
+        temporal.KNOWLEDGE_STORAGE_MIGRATION_PREFIX_DIGEST
+    )
+
+
+@pytest.mark.parametrize(
+    "source",
+    (
+        "",
+        _tenant_literal_source(version_3_entries=0),
+        _tenant_literal_source(version_3_entries=2),
+        _tenant_literal_source() + _tenant_literal_source(),
+        _tenant_literal_source(
+            field_overrides={"filename": "0003_substituted.sql"}
+        ),
+        _tenant_literal_source(
+            field_overrides={"source_sha256": "sha256:" + "0" * 64}
+        ),
+        _tenant_literal_source(field_overrides={"byte_length": 1}),
+        _tenant_literal_source(
+            field_overrides={"applied_prefix_digest": "sha256:" + "0" * 64}
+        ),
+    ),
+    ids=(
+        "missing-assignment",
+        "missing-v3",
+        "duplicate-v3",
+        "duplicate-assignment",
+        "filename",
+        "source-digest",
+        "byte-length",
+        "prefix",
+    ),
+)
+def test_tenant_v3_literal_refuses_ambiguous_or_changed_authority(
+    source: str,
+):
+    with pytest.raises(temporal.TemporalCandidateError):
+        temporal._parse_tenant_version_3_literal(ast.parse(source))
+
+
+@pytest.mark.parametrize(
+    ("extra_migrations", "should_pass"),
+    (
+        (
+            (
+                (
+                    temporal.RUNTIME_BUNDLE_PERSISTENCE_MIGRATION_FILENAME,
+                    b"-- governed migration without the role\n",
+                ),
+            ),
+            True,
+        ),
+        (
+            (
+                (
+                    temporal.RUNTIME_BUNDLE_PERSISTENCE_MIGRATION_FILENAME,
+                    temporal.RUNTIME_BUNDLE_CARRIER_ROLE.encode("utf-8"),
+                ),
+            ),
+            True,
+        ),
+        (
+            (
+                (
+                    temporal.RUNTIME_BUNDLE_PERSISTENCE_MIGRATION_FILENAME,
+                    b"-- role absent\n",
+                ),
+                (
+                    "0005_later_role.sql",
+                    temporal.RUNTIME_BUNDLE_CARRIER_ROLE.encode("utf-8"),
+                ),
+            ),
+            False,
+        ),
+    ),
+    ids=("v4-without-role", "role-only-in-v4", "role-in-v5"),
+)
+def test_authenticated_release_controls_migration_role_classification(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    extra_migrations: tuple[tuple[str, bytes], ...],
+    should_pass: bool,
+):
+    package_root, authority_path = _synthetic_tenant_authority(
+        tmp_path,
+        extra_migrations,
+    )
+    monkeypatch.setattr(temporal, "PACKAGE_ROOT", package_root)
+    monkeypatch.setattr(
+        temporal,
+        "MIGRATION_SET_AUTHORITY_PATH",
+        authority_path,
+    )
+    migration_authority = temporal.load_tenant_migration_authority_snapshot()
+    if should_pass:
+        temporal.validate_runtime_bundle_carrier_role_posture(
+            migration_authority
+        )
+    else:
+        with pytest.raises(
+            temporal.TemporalCandidateError,
+            match="forbidden authenticated migration authority",
+        ):
+            temporal.validate_runtime_bundle_carrier_role_posture(
+                migration_authority
+            )
+
+
+def test_unlisted_migration_0004_is_refused_by_production_authentication(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    package_root, authority_path = _synthetic_tenant_authority(
+        tmp_path,
+        (
+            (
+                temporal.RUNTIME_BUNDLE_PERSISTENCE_MIGRATION_FILENAME,
+                b"-- unlisted migration\n",
+            ),
+        ),
+    )
+    authority_path.write_text(_migration_authority_source(), encoding="utf-8")
+    monkeypatch.setattr(temporal, "PACKAGE_ROOT", package_root)
+    monkeypatch.setattr(
+        temporal,
+        "MIGRATION_SET_AUTHORITY_PATH",
+        authority_path,
+    )
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="refused the checked-in release",
+    ):
+        temporal.load_tenant_migration_authority_snapshot()
+
+
+def test_named_v3_literal_cannot_mask_loader_selected_v3_substitution(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    package_root, authority_path = _synthetic_tenant_authority(
+        tmp_path,
+        (),
+    )
+    version_3_path = (
+        package_root
+        / "kernel/migrations"
+        / temporal.KNOWLEDGE_STORAGE_MIGRATION_FILENAME
+    )
+    version_3_path.write_bytes(version_3_path.read_bytes() + b"\n-- drift\n")
+
+    source = _migration_authority_source()
+    module = temporal._execute_migration_authority_source(source)
+    substituted_set = module.load_migration_set(
+        package_root,
+        module.TENANT_SERVICE,
+    )
+    substituted_assignment = _authoritative_tenant_assignment(
+        substituted_set,
+        name="TENANT_CURRENT_RELEASE",
+    )
+    security_marker = "\n\nSECURITY_AUDIT_AUTHORITATIVE_MIGRATION_SET ="
+    source = source.replace(
+        security_marker,
+        f"\n\n{substituted_assignment}{security_marker}",
+        1,
+    )
+    source = source.replace(
+        "AUTHORITATIVE_MIGRATION_SETS = (\n"
+        "    TENANT_AUTHORITATIVE_MIGRATION_SET,",
+        "AUTHORITATIVE_MIGRATION_SETS = (\n"
+        "    TENANT_CURRENT_RELEASE,",
+        1,
+    )
+    authority_path.write_text(source, encoding="utf-8")
+    monkeypatch.setattr(temporal, "PACKAGE_ROOT", package_root)
+    monkeypatch.setattr(
+        temporal,
+        "MIGRATION_SET_AUTHORITY_PATH",
+        authority_path,
+    )
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match="authenticated tenant migration-set version-3 entry differs",
+    ):
+        temporal.load_tenant_migration_authority_snapshot()
+
+
+@pytest.mark.parametrize(
+    ("source_mutation", "expected_error"),
+    (
+        (lambda _source: None, "authority is not parseable"),
+        (lambda _source: "def malformed(", "authority is not parseable"),
+        (
+            lambda source: source.replace(
+                "def load_authoritative_migration_set(",
+                "def unavailable_authoritative_migration_set(",
+                1,
+            ),
+            "authority exports differ",
+        ),
+        (
+            lambda source: source
+            + "\ndef load_authoritative_migration_set(package_root, service):\n"
+            + "    raise MigrationSetError('synthetic refusal')\n",
+            "refused the checked-in release",
+        ),
+    ),
+    ids=(
+        "missing-module",
+        "malformed-module",
+        "missing-loader",
+        "migration-set-error",
+    ),
+)
+def test_migration_authority_failures_become_temporal_refusals(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    source_mutation,
+    expected_error: str,
+):
+    authority_path = tmp_path / "migration_sets.py"
+    mutated_source = source_mutation(_migration_authority_source())
+    if mutated_source is not None:
+        authority_path.write_text(mutated_source, encoding="utf-8")
+    monkeypatch.setattr(
+        temporal,
+        "MIGRATION_SET_AUTHORITY_PATH",
+        authority_path,
+    )
+
+    with pytest.raises(
+        temporal.TemporalCandidateError,
+        match=expected_error,
+    ):
+        temporal.load_tenant_migration_authority_snapshot()
+
+
+def test_complete_check_reads_one_authority_source_and_one_migration_snapshot(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    source = _migration_authority_source() + (
+        "\n_original_temporal_loader = load_authoritative_migration_set\n"
+        "_temporal_loader_calls = 0\n"
+        "def load_authoritative_migration_set(package_root, service):\n"
+        "    global _temporal_loader_calls\n"
+        "    _temporal_loader_calls += 1\n"
+        "    if _temporal_loader_calls != 1:\n"
+        "        raise MigrationSetError('loader called more than once')\n"
+        "    return _original_temporal_loader(package_root, service)\n"
+    )
+    authority_path = tmp_path / "migration_sets.py"
+    authority_path.write_text(source, encoding="utf-8")
+
+    class CountingAuthorityPath:
+        def __init__(self, path: Path):
+            self.path = path
+            self.read_count = 0
+
+        def read_bytes(self) -> bytes:
+            self.read_count += 1
+            return self.path.read_bytes()
+
+        def __str__(self) -> str:
+            return str(self.path)
+
+    counting_path = CountingAuthorityPath(authority_path)
+    original_sha256 = temporal._sha256
+    original_glob = Path.glob
+
+    def refuse_checker_sql_reread(path: Path) -> str:
+        if path.suffix == ".sql":
+            raise AssertionError("checker reread migration SQL")
+        return original_sha256(path)
+
+    def refuse_migration_glob(path: Path, pattern: str, **kwargs):
+        if pattern.endswith(".sql"):
+            raise AssertionError("checker performed a migration glob")
+        return original_glob(path, pattern, **kwargs)
+
+    monkeypatch.setattr(
+        temporal,
+        "MIGRATION_SET_AUTHORITY_PATH",
+        counting_path,
+    )
+    monkeypatch.setattr(temporal, "_sha256", refuse_checker_sql_reread)
+    monkeypatch.setattr(Path, "glob", refuse_migration_glob)
+
+    temporal.validate_candidate_governance()
+    assert counting_path.read_count == 1
+
+
 @pytest.mark.parametrize(
     "model_text",
     ("# temporal role absent\n", temporal.RUNTIME_BUNDLE_CARRIER_ROLE),
@@ -922,25 +1403,22 @@ def test_runtime_bundle_role_posture_allows_absent_or_model_only_role(
     repository_path.write_text("# role absent\n", encoding="utf-8")
     schema_path = tmp_path / "schema.sql"
     schema_path.write_text("-- role absent\n", encoding="utf-8")
-    migration_dir = tmp_path / "migrations"
-    migration_dir.mkdir()
-    (migration_dir / "0001.sql").write_text("-- role absent\n", encoding="utf-8")
-
     monkeypatch.setattr(temporal, "RUNTIME_BUNDLE_MODEL_PATH", model_path)
     monkeypatch.setattr(
         temporal,
         "RUNTIME_BUNDLE_ROLE_FORBIDDEN_AUTHORITY_PATHS",
         (repository_path, schema_path),
     )
-    monkeypatch.setattr(temporal, "TENANT_MIGRATIONS_PATH", migration_dir)
-
-    temporal.validate_runtime_bundle_carrier_role_posture()
+    temporal.validate_runtime_bundle_carrier_role_posture(
+        temporal.load_tenant_migration_authority_snapshot()
+    )
 
 
 def test_runtime_bundle_role_posture_pins_model_admission_authority(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ):
+    migration_authority = temporal.load_tenant_migration_authority_snapshot()
     with monkeypatch.context() as candidate_patch:
         candidate_patch.setattr(
             temporal,
@@ -951,7 +1429,9 @@ def test_runtime_bundle_role_posture_pins_model_admission_authority(
             temporal.TemporalCandidateError,
             match="model-admission authority is missing",
         ):
-            temporal.validate_runtime_bundle_carrier_role_posture()
+            temporal.validate_runtime_bundle_carrier_role_posture(
+                migration_authority
+            )
 
     authority_bytes = temporal.RUNTIME_BUNDLE_MODEL_ADMISSION_RFC_PATH.read_bytes()
     wrong_length_path = tmp_path / "wrong-length-model-admission-rfc.md"
@@ -966,7 +1446,9 @@ def test_runtime_bundle_role_posture_pins_model_admission_authority(
             temporal.TemporalCandidateError,
             match="authority byte length differs",
         ):
-            temporal.validate_runtime_bundle_carrier_role_posture()
+            temporal.validate_runtime_bundle_carrier_role_posture(
+                migration_authority
+            )
 
     wrong_digest_path = tmp_path / "wrong-digest-model-admission-rfc.md"
     changed_bytes = b"!" + authority_bytes[1:]
@@ -982,7 +1464,9 @@ def test_runtime_bundle_role_posture_pins_model_admission_authority(
             temporal.TemporalCandidateError,
             match="authority digest differs",
         ):
-            temporal.validate_runtime_bundle_carrier_role_posture()
+            temporal.validate_runtime_bundle_carrier_role_posture(
+                migration_authority
+            )
 
 
 @pytest.mark.parametrize(
@@ -1011,28 +1495,33 @@ def test_runtime_bundle_role_posture_refuses_each_fixed_authority(
             else "role absent",
             encoding="utf-8",
         )
-    migration_dir = tmp_path / "migrations"
-    migration_dir.mkdir()
-    (migration_dir / "0001.sql").write_text("-- role absent\n", encoding="utf-8")
-
     monkeypatch.setattr(temporal, "RUNTIME_BUNDLE_MODEL_PATH", model_path)
     monkeypatch.setattr(
         temporal,
         "RUNTIME_BUNDLE_ROLE_FORBIDDEN_AUTHORITY_PATHS",
         (repository_path, schema_path),
     )
-    monkeypatch.setattr(temporal, "TENANT_MIGRATIONS_PATH", migration_dir)
-
     with pytest.raises(
         temporal.TemporalCandidateError,
         match="explicitly forbidden RuntimeBundle authority",
     ):
-        temporal.validate_runtime_bundle_carrier_role_posture()
+        temporal.validate_runtime_bundle_carrier_role_posture(
+            temporal.load_tenant_migration_authority_snapshot()
+        )
 
 
-def test_runtime_bundle_role_posture_refuses_migration_authority_failures(
+@pytest.mark.parametrize(
+    ("filename", "should_pass"),
+    (
+        (temporal.RUNTIME_BUNDLE_PERSISTENCE_MIGRATION_FILENAME, True),
+        ("0005_other.sql", False),
+    ),
+)
+def test_runtime_bundle_role_posture_uses_exact_authenticated_exception(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    filename: str,
+    should_pass: bool,
 ):
     model_path = tmp_path / "runtime_bundle.py"
     model_path.write_text(
@@ -1050,42 +1539,25 @@ def test_runtime_bundle_role_posture_refuses_migration_authority_failures(
         (repository_path, schema_path),
     )
 
-    migration_dir = tmp_path / "migrations"
-    migration_dir.mkdir()
-    (migration_dir / "0001.sql").write_text(
-        temporal.RUNTIME_BUNDLE_CARRIER_ROLE,
-        encoding="utf-8",
+    migration_authority = _role_snapshot(
+        (
+            temporal.KNOWLEDGE_STORAGE_MIGRATION_FILENAME,
+            b"-- role absent\n",
+        ),
+        (filename, temporal.RUNTIME_BUNDLE_CARRIER_ROLE.encode("utf-8")),
     )
-    monkeypatch.setattr(temporal, "TENANT_MIGRATIONS_PATH", migration_dir)
-    with pytest.raises(
-        temporal.TemporalCandidateError,
-        match="explicitly forbidden RuntimeBundle authority",
-    ):
-        temporal.validate_runtime_bundle_carrier_role_posture()
-
-    empty_migration_dir = tmp_path / "empty-migrations"
-    empty_migration_dir.mkdir()
-    monkeypatch.setattr(
-        temporal,
-        "TENANT_MIGRATIONS_PATH",
-        empty_migration_dir,
-    )
-    with pytest.raises(
-        temporal.TemporalCandidateError,
-        match="migration authority set is empty",
-    ):
-        temporal.validate_runtime_bundle_carrier_role_posture()
-
-    monkeypatch.setattr(
-        temporal,
-        "TENANT_MIGRATIONS_PATH",
-        tmp_path / "missing-migrations",
-    )
-    with pytest.raises(
-        temporal.TemporalCandidateError,
-        match="migration authority directory is missing",
-    ):
-        temporal.validate_runtime_bundle_carrier_role_posture()
+    if should_pass:
+        temporal.validate_runtime_bundle_carrier_role_posture(
+            migration_authority
+        )
+    else:
+        with pytest.raises(
+            temporal.TemporalCandidateError,
+            match="forbidden authenticated migration authority",
+        ):
+            temporal.validate_runtime_bundle_carrier_role_posture(
+                migration_authority
+            )
 
 
 def test_temporal_candidates_and_role_do_not_enter_active_catalog():
