@@ -211,7 +211,15 @@ exact selection-control login:
 - the governed-batch policy permits only the bound tenant and permits writes
   only when `tenant_id` and `authenticated_principal_ref` equal the protected
   current context, the operation and identifier shapes are fixed, the caller
-  knowledge position is null, and the RuntimeBundle is sealed for that tenant.
+  has the exact selection-control `SESSION_USER`, the allocator-assigned final
+  knowledge position is positive and within the accepted JavaScript-safe
+  bound, and the RuntimeBundle is sealed for that tenant.
+
+The governed-batch policy observes the final row after `BEFORE INSERT`
+triggers. It must not require the stored knowledge position to remain null.
+Null-input enforcement belongs exclusively to
+`ofarm.allocate_tenant_knowledge_position()` before that trigger assigns the
+next position.
 
 The existing application/worker policies are unchanged. Neither new policy
 grants a relation privilege to the login or controller capability, and the
@@ -825,6 +833,11 @@ fresh PostgreSQL target:
 - exact forced-RLS posture, unchanged application/worker policy, exact
   session-gated bound-tenant owner policies, and absence of direct controller
   or login relation privilege or execute on another owner function;
+- exact governed-batch policy acceptance of the allocator-assigned positive
+  final position and structural proof that its expression does not require the
+  stored position to be null;
+- allocator-branch refusal of an explicitly supplied knowledge position before
+  any assignment or write;
 - exact function-only execution under the dedicated control login;
 - absence of a tenant or principal argument at the adapter and SQL seams;
 - refusal before any selection read, lock, or write when the protected
