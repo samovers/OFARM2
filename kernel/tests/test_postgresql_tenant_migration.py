@@ -184,11 +184,12 @@ def _assert_v4_guards_refuse_before_catalog_change(
 ) -> tuple[str, ...]:
     with psycopg.connect(target_admin_dsn) as admin:
         admin.execute("SET LOCAL ROLE ofarm_owner")
-        publisher_definition = admin.execute(
-            "SELECT pg_catalog.pg_get_functiondef("
+        publisher_definition, publisher_source = admin.execute(
+            "SELECT pg_catalog.pg_get_functiondef(routine.oid), routine.prosrc "
+            "FROM pg_catalog.pg_proc AS routine WHERE routine.oid = "
             "'ofarm.publish_runtime_bundle(uuid,text,jsonb)'"
-            "::pg_catalog.regprocedure)"
-        ).fetchone()[0]
+            "::pg_catalog.regprocedure"
+        ).fetchone()
         verifier_definition = admin.execute(
             "SELECT pg_catalog.pg_get_functiondef("
             "'ofarm.verify_tenant_structure()'::pg_catalog.regprocedure)"
@@ -210,8 +211,8 @@ def _assert_v4_guards_refuse_before_catalog_change(
         ", 'REFERENCE_SOURCE'", ""
     )
     changed_publisher = publisher_definition.replace(
-        "runtime bundle component role is not closed",
-        "runtime bundle component role differs",
+        "SECURITY DEFINER",
+        "SECURITY INVOKER",
     )
     changed_verifier = verifier_definition.replace(
         "observed_migration_count <> 3",
@@ -252,6 +253,15 @@ def _assert_v4_guards_refuse_before_catalog_change(
     for label, mutation, restoration, expected_message in cases:
         _execute_as_owner(target_admin_dsn, mutation)
         try:
+            if label == "publisher":
+                with psycopg.connect(target_admin_dsn) as admin:
+                    admin.execute("SET LOCAL ROLE ofarm_owner")
+                    assert admin.execute(
+                        "SELECT routine.prosrc, routine.prosecdef "
+                        "FROM pg_catalog.pg_proc AS routine WHERE routine.oid = "
+                        "'ofarm.publish_runtime_bundle(uuid,text,jsonb)'"
+                        "::pg_catalog.regprocedure"
+                    ).fetchone() == (publisher_source, False)
             with pytest.raises(
                 MigrationExecutionError, match=expected_message
             ) as refusal:

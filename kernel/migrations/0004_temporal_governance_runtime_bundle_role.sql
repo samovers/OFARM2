@@ -41,6 +41,12 @@ BEGIN
             pg_catalog.sha256(pg_catalog.convert_to(publisher_source, 'UTF8')),
             'hex'
        ) <> '02a4cd5b6d42902ac8e261d3c81e0ddd25dd0493b2e0c360effa99f4cc897441'
+       OR pg_catalog.encode(
+            pg_catalog.sha256(
+                pg_catalog.convert_to(publisher_definition, 'UTF8')
+            ),
+            'hex'
+          ) <> 'a262bf8e351d1ed4fdafcad85b35c50331afa20f0b1c7bcd29469fc9c1fb0c63'
        OR pg_catalog.strpos(publisher_definition, old_role_fragment) = 0
        OR pg_catalog.strpos(
             publisher_definition, 'TEMPORAL_GOVERNANCE_ARTIFACT'
