@@ -8,10 +8,11 @@ import hashlib
 import json
 import re
 import sys
+import types
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Protocol, cast
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent
@@ -137,11 +138,14 @@ KNOWLEDGE_STORAGE_RFC_PATH = (
     PACKAGE_ROOT
     / "docs/rfcs/OFARM_Tenant_Knowledge_Position_Storage_RFC_v0_1.md"
 )
-KNOWLEDGE_STORAGE_MIGRATION_PATH = (
-    PACKAGE_ROOT / "kernel/migrations/0003_tenant_knowledge_position.sql"
-)
 MIGRATION_SET_AUTHORITY_PATH = (
     PACKAGE_ROOT / "deployment/postgresql/migration_sets.py"
+)
+PERSISTENCE_ADMISSION_RFC_PATH = (
+    PACKAGE_ROOT
+    / "docs/rfcs/"
+    "OFARM_Temporal_Governance_Production_"
+    "RuntimeBundle_Persistence_Admission_RFC_v0_1.md"
 )
 ADR_PATH = PACKAGE_ROOT / "docs/adr/0002-valid-time-and-knowledge-time.md"
 ERRATA_PATH = PACKAGE_ROOT / "ERRATA.md"
@@ -211,7 +215,6 @@ RUNTIME_BUNDLE_ROLE_FORBIDDEN_AUTHORITY_PATHS = (
     RUNTIME_BUNDLE_REPOSITORY_PATH,
     RUNTIME_BUNDLE_SCHEMA_PATH,
 )
-TENANT_MIGRATIONS_PATH = PACKAGE_ROOT / "kernel/migrations"
 ACTIVE_ARTIFACT_SET_PATH = (
     PACKAGE_ROOT
     / "profile_si_ffs/OFARM_ActiveArtifactSet_example_si_ffs_pilot_v0_1.json"
@@ -285,6 +288,16 @@ RUNTIME_BUNDLE_CARRIER_IDENTITY_AUTHORITY = (
     "REVIEWED_BINDING_ARTIFACT_NOT_CALLER_DATA"
 )
 RUNTIME_BUNDLE_CARRIER_ROLE = "TEMPORAL_GOVERNANCE_ARTIFACT"
+RUNTIME_BUNDLE_PERSISTENCE_MIGRATION_FILENAME = (
+    "0004_temporal_governance_runtime_bundle_role.sql"
+)
+PERSISTENCE_ADMISSION_RFC_BYTE_LENGTH = 37254
+PERSISTENCE_ADMISSION_RFC_DIGEST = (
+    "40a20c5053857664cfbb2d6ac2814c6136125eb9908635495af9377e9d9f0870"
+)
+MIGRATION_AUTHORITY_PRIVATE_MODULE_NAME = (
+    "_ofarm_temporal_migration_set_authority"
+)
 RUNTIME_BUNDLE_CARRIER_SCHEMA_DIGEST = (
     "6a04b0c3a68428ca0b505e70ba056a4295bde31a3c510fb75191222d8dc228bf"
 )
@@ -375,6 +388,14 @@ KNOWLEDGE_STORAGE_RFC_DIGEST = (
 KNOWLEDGE_STORAGE_MIGRATION_DIGEST = (
     "d59af77e23fe012203696023ec343038dbcab5d5ffb9689be11ba67dca22f827"
 )
+KNOWLEDGE_STORAGE_MIGRATION_FILENAME = (
+    "0003_tenant_knowledge_position.sql"
+)
+KNOWLEDGE_STORAGE_MIGRATION_BYTE_LENGTH = 6565
+KNOWLEDGE_STORAGE_MIGRATION_PREFIX_DIGEST = (
+    "sha256:ba7a193e96ca78d01edf529ed2e20bb"
+    "d1810c0a3a0c13bc717969e8c5c739bf0"
+)
 CARRIER_ROW_IDS = (
     "STRUCTURE_EVENT",
     "OBSERVATION_EVENT",
@@ -406,6 +427,28 @@ _CANONICAL_UUID = re.compile(
 
 class TemporalCandidateError(ValueError):
     """The candidate document differs from its approved temporal semantics."""
+
+
+class _AuthenticatedMigration(Protocol):
+    version: int
+    filename: str
+    source_bytes: bytes
+    source_sha256: str
+    byte_length: int
+
+
+class _AuthenticatedMigrationSet(Protocol):
+    migrations: tuple[_AuthenticatedMigration, ...]
+
+    def prefix_digest(self, version: int) -> str: ...
+
+
+@dataclass(frozen=True)
+class TenantMigrationAuthoritySnapshot:
+    """One production-authenticated migration release and its stable V3 cut."""
+
+    migration_set: _AuthenticatedMigrationSet
+    version_3_prefix: str
 
 
 @dataclass(frozen=True)
@@ -1038,16 +1081,45 @@ def _schema_version(path: Path) -> str:
     return value
 
 
-def _tenant_authoritative_migration_set_head() -> str:
-    try:
-        module = ast.parse(
-            MIGRATION_SET_AUTHORITY_PATH.read_text(encoding="utf-8"),
-            filename=str(MIGRATION_SET_AUTHORITY_PATH),
-        )
-    except (OSError, UnicodeDecodeError, SyntaxError) as exc:
+def validate_persistence_admission_authority() -> None:
+    if not PERSISTENCE_ADMISSION_RFC_PATH.is_file():
         raise TemporalCandidateError(
-            "tenant migration-set authority is not parseable"
+            "RuntimeBundle persistence-admission authority is missing"
+        )
+    try:
+        authority_bytes = PERSISTENCE_ADMISSION_RFC_PATH.read_bytes()
+    except OSError as exc:
+        raise TemporalCandidateError(
+            "RuntimeBundle persistence-admission authority is unreadable"
         ) from exc
+    if len(authority_bytes) != PERSISTENCE_ADMISSION_RFC_BYTE_LENGTH:
+        raise TemporalCandidateError(
+            "RuntimeBundle persistence-admission authority byte length differs"
+        )
+    if (
+        hashlib.sha256(authority_bytes).hexdigest()
+        != PERSISTENCE_ADMISSION_RFC_DIGEST
+    ):
+        raise TemporalCandidateError(
+            "RuntimeBundle persistence-admission authority digest differs"
+        )
+
+
+def _exact_keyword(call: ast.Call, name: str, label: str) -> ast.expr:
+    values = [keyword.value for keyword in call.keywords if keyword.arg == name]
+    if len(values) != 1:
+        raise TemporalCandidateError(f"{label} {name} field differs")
+    return values[0]
+
+
+def _literal_field(call: ast.Call, name: str, label: str) -> object:
+    value = _exact_keyword(call, name, label)
+    if not isinstance(value, ast.Constant):
+        raise TemporalCandidateError(f"{label} {name} field is not literal")
+    return value.value
+
+
+def _parse_tenant_version_3_literal(module: ast.Module) -> str:
     assignments = [
         node
         for node in module.body
@@ -1058,30 +1130,231 @@ def _tenant_authoritative_migration_set_head() -> str:
             for target in node.targets
         )
     ]
+    if len(assignments) != 1:
+        raise TemporalCandidateError(
+            "tenant migration-set authority assignment differs"
+        )
+    assignment = assignments[0]
     if (
-        len(assignments) != 1
-        or not isinstance(assignments[0].value, ast.Call)
-        or not isinstance(assignments[0].value.func, ast.Name)
-        or assignments[0].value.func.id != "AuthoritativeMigrationSet"
+        len(assignment.targets) != 1
+        or not isinstance(assignment.targets[0], ast.Name)
+        or not isinstance(assignment.value, ast.Call)
+        or not isinstance(assignment.value.func, ast.Name)
+        or assignment.value.func.id != "AuthoritativeMigrationSet"
+        or assignment.value.args
+        or {keyword.arg for keyword in assignment.value.keywords}
+        != {"service", "migrations", "digest"}
     ):
         raise TemporalCandidateError(
             "tenant migration-set authority assignment differs"
         )
-    digest_values = [
-        keyword.value.value
-        for keyword in assignments[0].value.keywords
-        if keyword.arg == "digest"
-        and isinstance(keyword.value, ast.Constant)
-        and type(keyword.value.value) is str
-    ]
+    service = _exact_keyword(
+        assignment.value,
+        "service",
+        "tenant migration-set authority",
+    )
+    migrations = _exact_keyword(
+        assignment.value,
+        "migrations",
+        "tenant migration-set authority",
+    )
+    digest = _literal_field(
+        assignment.value,
+        "digest",
+        "tenant migration-set authority",
+    )
     if (
-        len(digest_values) != 1
-        or re.fullmatch(r"sha256:[0-9a-f]{64}", digest_values[0]) is None
+        not isinstance(service, ast.Name)
+        or service.id != "TENANT_SERVICE"
+        or not isinstance(migrations, ast.Tuple)
+        or type(digest) is not str
+        or re.fullmatch(r"sha256:[0-9a-f]{64}", digest) is None
     ):
         raise TemporalCandidateError(
-            "tenant migration-set authority digest differs"
+            "tenant migration-set authority structure differs"
         )
-    return digest_values[0]
+
+    version_3_entries: list[ast.Call] = []
+    expected_fields = {
+        "version",
+        "filename",
+        "source_sha256",
+        "byte_length",
+        "applied_prefix_digest",
+    }
+    for entry in migrations.elts:
+        if (
+            not isinstance(entry, ast.Call)
+            or not isinstance(entry.func, ast.Name)
+            or entry.func.id != "AuthoritativeMigration"
+            or entry.args
+            or {keyword.arg for keyword in entry.keywords} != expected_fields
+        ):
+            raise TemporalCandidateError(
+                "tenant migration-set authority entry structure differs"
+            )
+        version = _literal_field(
+            entry,
+            "version",
+            "tenant migration-set authority entry",
+        )
+        if type(version) is not int:
+            raise TemporalCandidateError(
+                "tenant migration-set authority entry version is not literal"
+            )
+        if version == 3:
+            version_3_entries.append(entry)
+    if len(version_3_entries) != 1:
+        raise TemporalCandidateError(
+            "tenant migration-set authority version-3 entry differs"
+        )
+
+    version_3 = version_3_entries[0]
+    observed = {
+        name: _literal_field(
+            version_3,
+            name,
+            "tenant migration-set authority version-3 entry",
+        )
+        for name in expected_fields
+    }
+    expected = {
+        "version": 3,
+        "filename": KNOWLEDGE_STORAGE_MIGRATION_FILENAME,
+        "source_sha256": f"sha256:{KNOWLEDGE_STORAGE_MIGRATION_DIGEST}",
+        "byte_length": KNOWLEDGE_STORAGE_MIGRATION_BYTE_LENGTH,
+        "applied_prefix_digest": KNOWLEDGE_STORAGE_MIGRATION_PREFIX_DIGEST,
+    }
+    if observed != expected:
+        raise TemporalCandidateError(
+            "tenant migration-set authority version-3 literal differs"
+        )
+    return KNOWLEDGE_STORAGE_MIGRATION_PREFIX_DIGEST
+
+
+def _execute_migration_authority_source(source_text: str) -> types.ModuleType:
+    if MIGRATION_AUTHORITY_PRIVATE_MODULE_NAME in sys.modules:
+        raise TemporalCandidateError(
+            "tenant migration-set private module name is already occupied"
+        )
+    module = types.ModuleType(MIGRATION_AUTHORITY_PRIVATE_MODULE_NAME)
+    module.__file__ = str(MIGRATION_SET_AUTHORITY_PATH)
+    module.__package__ = ""
+    sys.modules[MIGRATION_AUTHORITY_PRIVATE_MODULE_NAME] = module
+    try:
+        code = compile(
+            source_text,
+            str(MIGRATION_SET_AUTHORITY_PATH),
+            "exec",
+        )
+        exec(code, module.__dict__)
+    except Exception as exc:
+        raise TemporalCandidateError(
+            "tenant migration-set authority module failed to load"
+        ) from exc
+    finally:
+        sys.modules.pop(MIGRATION_AUTHORITY_PRIVATE_MODULE_NAME, None)
+    return module
+
+
+def _validated_migration_set_shape(value: object) -> _AuthenticatedMigrationSet:
+    migrations = getattr(value, "migrations", None)
+    prefix_digest = getattr(value, "prefix_digest", None)
+    if type(migrations) is not tuple or not migrations or not callable(prefix_digest):
+        raise TemporalCandidateError(
+            "authenticated tenant migration-set shape differs"
+        )
+    for migration in migrations:
+        if (
+            type(getattr(migration, "version", None)) is not int
+            or type(getattr(migration, "filename", None)) is not str
+            or type(getattr(migration, "source_bytes", None)) is not bytes
+            or type(getattr(migration, "source_sha256", None)) is not str
+            or type(getattr(migration, "byte_length", None)) is not int
+        ):
+            raise TemporalCandidateError(
+                "authenticated tenant migration entry shape differs"
+            )
+    return cast(_AuthenticatedMigrationSet, value)
+
+
+def load_tenant_migration_authority_snapshot() -> TenantMigrationAuthoritySnapshot:
+    validate_persistence_admission_authority()
+    try:
+        source_bytes = MIGRATION_SET_AUTHORITY_PATH.read_bytes()
+        source_text = source_bytes.decode("utf-8", errors="strict")
+        parsed_module = ast.parse(
+            source_text,
+            filename=str(MIGRATION_SET_AUTHORITY_PATH),
+        )
+    except (OSError, UnicodeDecodeError, SyntaxError) as exc:
+        raise TemporalCandidateError(
+            "tenant migration-set authority is not parseable"
+        ) from exc
+    module = _execute_migration_authority_source(source_text)
+    loader = getattr(module, "load_authoritative_migration_set", None)
+    tenant_service = getattr(module, "TENANT_SERVICE", None)
+    migration_error = getattr(module, "MigrationSetError", None)
+    if (
+        not callable(loader)
+        or getattr(tenant_service, "identity", None)
+        != "ofarm.tenant-postgresql.v1"
+        or not isinstance(migration_error, type)
+        or not issubclass(migration_error, Exception)
+    ):
+        raise TemporalCandidateError(
+            "tenant migration-set authority exports differ"
+        )
+    try:
+        raw_migration_set = loader(PACKAGE_ROOT, tenant_service)
+    except migration_error as exc:
+        raise TemporalCandidateError(
+            "tenant migration-set authority refused the checked-in release"
+        ) from exc
+    except Exception as exc:
+        raise TemporalCandidateError(
+            "tenant migration-set authority loader failed"
+        ) from exc
+    if getattr(raw_migration_set, "service", None) != tenant_service:
+        raise TemporalCandidateError(
+            "authenticated tenant migration-set service differs"
+        )
+    migration_set = _validated_migration_set_shape(raw_migration_set)
+    parsed_version_3_prefix = _parse_tenant_version_3_literal(parsed_module)
+    if len(migration_set.migrations) < 3:
+        raise TemporalCandidateError(
+            "authenticated tenant migration-set has no version-3 entry"
+        )
+    version_3 = migration_set.migrations[2]
+    if (
+        version_3.version != 3
+        or version_3.filename != KNOWLEDGE_STORAGE_MIGRATION_FILENAME
+        or version_3.source_sha256
+        != f"sha256:{KNOWLEDGE_STORAGE_MIGRATION_DIGEST}"
+        or version_3.byte_length != KNOWLEDGE_STORAGE_MIGRATION_BYTE_LENGTH
+    ):
+        raise TemporalCandidateError(
+            "authenticated tenant migration-set version-3 entry differs"
+        )
+    try:
+        authenticated_version_3_prefix = migration_set.prefix_digest(3)
+    except Exception as exc:
+        raise TemporalCandidateError(
+            "authenticated tenant migration-set version-3 prefix failed"
+        ) from exc
+    if (
+        type(authenticated_version_3_prefix) is not str
+        or authenticated_version_3_prefix != parsed_version_3_prefix
+        or authenticated_version_3_prefix
+        != KNOWLEDGE_STORAGE_MIGRATION_PREFIX_DIGEST
+    ):
+        raise TemporalCandidateError(
+            "parsed and authenticated tenant version-3 prefixes differ"
+        )
+    return TenantMigrationAuthoritySnapshot(
+        migration_set=migration_set,
+        version_3_prefix=authenticated_version_3_prefix,
+    )
 
 
 def validate_command_schema_shape(
@@ -1119,7 +1392,10 @@ def validate_command_schema_shape(
         )
 
 
-def validate_command_binding(binding: dict[str, object]) -> None:
+def validate_command_binding(
+    binding: dict[str, object],
+    migration_authority: TenantMigrationAuthoritySnapshot,
+) -> None:
     if _sha256(COMMAND_BINDING_PATH) != COMMAND_BINDING_DIGEST:
         raise TemporalCandidateError(
             "temporal governed-command binding digest differs"
@@ -1166,6 +1442,7 @@ def validate_command_binding(binding: dict[str, object]) -> None:
         raise TemporalCandidateError(
             "temporal governed-command identity differs"
         )
+    version_3 = migration_authority.migration_set.migrations[2]
     if binding.get("command") != {
         "commandId": "COMMIT_OPERATION_CLAIM_DRAFT",
         "governedOperation": "COMMIT_OPERATION_CLAIM_DRAFT",
@@ -1191,10 +1468,8 @@ def validate_command_binding(binding: dict[str, object]) -> None:
             "rfcDigest": (
                 f"sha256:{_sha256(KNOWLEDGE_STORAGE_RFC_PATH)}"
             ),
-            "migrationDigest": (
-                f"sha256:{_sha256(KNOWLEDGE_STORAGE_MIGRATION_PATH)}"
-            ),
-            "migrationSetHead": _tenant_authoritative_migration_set_head(),
+            "migrationDigest": version_3.source_sha256,
+            "migrationSetHead": migration_authority.version_3_prefix,
         },
         {
             "role": "INTERVENTION_VALID_TIME_SELECTION",
@@ -1208,8 +1483,8 @@ def validate_command_binding(binding: dict[str, object]) -> None:
     if (
         _sha256(KNOWLEDGE_STORAGE_RFC_PATH)
         != KNOWLEDGE_STORAGE_RFC_DIGEST
-        or _sha256(KNOWLEDGE_STORAGE_MIGRATION_PATH)
-        != KNOWLEDGE_STORAGE_MIGRATION_DIGEST
+        or version_3.source_sha256
+        != f"sha256:{KNOWLEDGE_STORAGE_MIGRATION_DIGEST}"
     ):
         raise TemporalCandidateError(
             "tenant knowledge-position prerequisite digest differs"
@@ -2698,7 +2973,9 @@ def validate_runtime_bundle_model_admission_authority() -> None:
         )
 
 
-def validate_runtime_bundle_carrier_role_posture() -> None:
+def validate_runtime_bundle_carrier_role_posture(
+    migration_authority: TenantMigrationAuthoritySnapshot,
+) -> None:
     validate_runtime_bundle_model_admission_authority()
     if not RUNTIME_BUNDLE_MODEL_PATH.is_file():
         raise TemporalCandidateError(
@@ -2706,24 +2983,22 @@ def validate_runtime_bundle_carrier_role_posture() -> None:
         )
     # Role text in this exact model path is inert eligibility, not activation.
     RUNTIME_BUNDLE_MODEL_PATH.read_text(encoding="utf-8")
-    if not TENANT_MIGRATIONS_PATH.is_dir():
-        raise TemporalCandidateError(
-            "active RuntimeBundle migration authority directory is missing"
-        )
-    migration_paths = tuple(sorted(TENANT_MIGRATIONS_PATH.glob("*.sql")))
-    if not migration_paths:
-        raise TemporalCandidateError(
-            "active RuntimeBundle migration authority set is empty"
-        )
-    forbidden_authority_paths = (
-        *RUNTIME_BUNDLE_ROLE_FORBIDDEN_AUTHORITY_PATHS,
-        *migration_paths,
-    )
-    for path in forbidden_authority_paths:
+    for path in RUNTIME_BUNDLE_ROLE_FORBIDDEN_AUTHORITY_PATHS:
         if RUNTIME_BUNDLE_CARRIER_ROLE in path.read_text(encoding="utf-8"):
             raise TemporalCandidateError(
                 "candidate role entered an explicitly forbidden "
                 f"RuntimeBundle authority: {path}"
+            )
+    role_bytes = RUNTIME_BUNDLE_CARRIER_ROLE.encode("utf-8")
+    for migration in migration_authority.migration_set.migrations:
+        if (
+            role_bytes in migration.source_bytes
+            and migration.filename
+            != RUNTIME_BUNDLE_PERSISTENCE_MIGRATION_FILENAME
+        ):
+            raise TemporalCandidateError(
+                "candidate role entered a forbidden authenticated "
+                f"migration authority: {migration.filename}"
             )
 
 
@@ -2786,6 +3061,7 @@ def validate_temporal_card_errata_trace(errata: str) -> None:
 
 
 def validate_candidate_governance() -> None:
+    migration_authority = load_tenant_migration_authority_snapshot()
     coordinate_schema = _load_json(COORDINATE_SCHEMA_PATH)
     carrier_schema = _load_json(CARRIER_SCHEMA_PATH)
     carrier_matrix = _load_json(CARRIER_MATRIX_PATH)
@@ -2813,7 +3089,10 @@ def validate_candidate_governance() -> None:
     validate_selection_schema_shape(selection_schema)
     validate_selection_binding(selection_binding)
     validate_command_schema_shape(command_schema, command_binding)
-    validate_command_binding(command_binding)
+    validate_command_binding(
+        command_binding,
+        migration_authority,
+    )
     validate_runtime_bundle_carrier_schema_shape(
         runtime_bundle_carrier_schema,
         runtime_bundle_carrier_binding,
@@ -3258,7 +3537,7 @@ def validate_candidate_governance() -> None:
 
     runtime_catalog = _load_json(RUNTIME_CATALOG_PATH)
     validate_non_activation(runtime_catalog)
-    validate_runtime_bundle_carrier_role_posture()
+    validate_runtime_bundle_carrier_role_posture(migration_authority)
     validate_active_temporal_activation_inputs()
 
 
