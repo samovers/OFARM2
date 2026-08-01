@@ -89,6 +89,7 @@ The only accepted migrations are:
 - `kernel/migrations/0001_initial.sql`;
 - `kernel/migrations/0002_authentication_read_api.sql`;
 - `kernel/migrations/0003_tenant_knowledge_position.sql`;
+- `kernel/migrations/0004_temporal_governance_runtime_bundle_role.sql`;
 - `security_audit/migrations/0001_initial.sql`;
 - `security_audit/migrations/0002_hmac_v2_operations.sql`; and
 - `security_audit/migrations/0003_outcome_reason_vocabulary.sql`.
@@ -221,6 +222,13 @@ SQLSTATE `PT001` when database authority is internally inconsistent.
 That full-chain validation is deliberate and linear in the relevant lifecycle
 history. Callers observe authority at the decision point and must not reuse a
 signing result across mints or retain a principal result after its request.
+
+The additive `0003` migration adds the tenant knowledge-position ledger head.
+The additive `0004` migration admits only `TEMPORAL_GOVERNANCE_ARTIFACT` to the
+closed persisted RuntimeBundle component-role vocabulary. It leaves candidate
+selection, RuntimeBundle composition, profiles, commands, routes, outputs, and
+runtime activation unchanged; persisted membership alone has no semantic or
+current/default effect.
 
 Issue #172 owns external identity verification, exact principal resolution, an
 independent capability codec, nonce and capability creation, and signing with

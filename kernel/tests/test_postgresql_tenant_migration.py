@@ -23,7 +23,9 @@ from deployment.postgresql.catalog_classifier import (
 )
 from deployment.postgresql.migration_runner import (
     MigrationDirtyError,
+    MigrationExecutionError,
     MigrationTargetError,
+    _migrate_service_for_testing,
     initial_ledger_sql,
     migrate_service,
 )
@@ -47,6 +49,13 @@ from deployment.postgresql.tenant_contract import (
     valid_oidc_issuer,
     validate_tenant_capability,
 )
+from kernel.runtime_bundle import (
+    Canonicalization,
+    ContentPlacement,
+    RuntimeBundle,
+    RuntimeComponent,
+    RuntimeComponentRole,
+)
 from kernel.tests.tenant_capability_fixture import (
     RFC8032_TEST_PUBLIC_KEY,
     RFC8032_TEST_SEED,
@@ -67,6 +76,16 @@ PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 MIGRATION_PATH = PACKAGE_ROOT / "kernel" / "migrations" / "0001_initial.sql"
 KNOWLEDGE_POSITION_MIGRATION_PATH = (
     PACKAGE_ROOT / "kernel" / "migrations" / "0003_tenant_knowledge_position.sql"
+)
+TEMPORAL_CARRIER_MATRIX_PATH = (
+    PACKAGE_ROOT
+    / "contracts/candidates/temporal_coordinate/"
+    "OFARM_TemporalCarrierMatrix_ADR0002_candidate_v0_1.json"
+)
+TEMPORAL_CARRIER_MATRIX_SCHEMA_PATH = (
+    PACKAGE_ROOT
+    / "contracts/candidates/temporal_coordinate/"
+    "OFARM_TemporalCarrierMatrix_schema_v0_1.json"
 )
 RELEASE_IDENTITY = "ofarm-tests/issue-174-tenant-baseline"
 ISSUER = "https://issuer.example.test/tenant"
@@ -89,6 +108,8 @@ class TenantTarget:
     migrator_dsn: str
     passwords: Mapping[str, str]
     migration_set: MigrationSet
+    v3_report: object
+    v4_guard_evidence: tuple[str, ...]
     first_report: object
     noop_report: object
 
@@ -147,6 +168,132 @@ def _admin_dsn() -> str:
     return value
 
 
+def _execute_as_owner(target_admin_dsn: str, statements: tuple[str, ...]) -> None:
+    with psycopg.connect(target_admin_dsn, autocommit=True) as admin:
+        admin.execute("SET ROLE ofarm_owner")
+        for statement in statements:
+            admin.execute(statement)
+
+
+def _assert_v4_guards_refuse_before_catalog_change(
+    *,
+    admin_dsn: str,
+    target_admin_dsn: str,
+    migrator_dsn: str,
+    migration_set: MigrationSet,
+) -> tuple[str, ...]:
+    with psycopg.connect(target_admin_dsn) as admin:
+        admin.execute("SET LOCAL ROLE ofarm_owner")
+        publisher_definition, publisher_source = admin.execute(
+            "SELECT pg_catalog.pg_get_functiondef(routine.oid), routine.prosrc "
+            "FROM pg_catalog.pg_proc AS routine WHERE routine.oid = "
+            "'ofarm.publish_runtime_bundle(uuid,text,jsonb)'"
+            "::pg_catalog.regprocedure"
+        ).fetchone()
+        verifier_definition = admin.execute(
+            "SELECT pg_catalog.pg_get_functiondef("
+            "'ofarm.verify_tenant_structure()'::pg_catalog.regprocedure)"
+        ).fetchone()[0]
+
+    v3_constraint = """
+        ALTER TABLE ofarm.runtime_bundle_component
+        ADD CONSTRAINT runtime_bundle_component_role_check CHECK (
+            component_role IN (
+                'PROFILE_DESCRIPTOR', 'ACTIVE_MANIFEST', 'PROFILE_INSTANCE',
+                'PROFILE_POLICY', 'QUERY_SPECIFICATION', 'QUERY_PLAN',
+                'VIEW_BINDING', 'CONTRACT_SCHEMA', 'DRAFT_CONTRACT_SCHEMA',
+                'VALIDATOR_SOURCE', 'ADAPTER_SOURCE', 'QUERY_OUTPUT_SOURCE',
+                'REFERENCE_SNAPSHOT', 'REFERENCE_SOURCE'
+            )
+        )
+    """
+    narrowed_constraint = v3_constraint.replace(
+        ", 'REFERENCE_SOURCE'", ""
+    )
+    changed_publisher = publisher_definition.replace(
+        "SECURITY DEFINER",
+        "SECURITY INVOKER",
+    )
+    changed_verifier = verifier_definition.replace(
+        "observed_migration_count <> 3",
+        "observed_migration_count <> (3)",
+    )
+    assert changed_publisher != publisher_definition
+    assert changed_verifier != verifier_definition
+
+    cases = (
+        (
+            "constraint",
+            (
+                "ALTER TABLE ofarm.runtime_bundle_component DROP CONSTRAINT "
+                "runtime_bundle_component_role_check",
+                narrowed_constraint,
+            ),
+            (
+                "ALTER TABLE ofarm.runtime_bundle_component DROP CONSTRAINT "
+                "runtime_bundle_component_role_check",
+                v3_constraint,
+            ),
+            "version-3 RuntimeBundle role constraint differs",
+        ),
+        (
+            "publisher",
+            (changed_publisher,),
+            (publisher_definition,),
+            "version-3 RuntimeBundle publisher differs",
+        ),
+        (
+            "verifier",
+            (changed_verifier,),
+            (verifier_definition,),
+            "version-3 tenant verifier source differs",
+        ),
+    )
+    evidence: list[str] = []
+    for label, mutation, restoration, expected_message in cases:
+        _execute_as_owner(target_admin_dsn, mutation)
+        try:
+            if label == "publisher":
+                with psycopg.connect(target_admin_dsn) as admin:
+                    admin.execute("SET LOCAL ROLE ofarm_owner")
+                    assert admin.execute(
+                        "SELECT routine.prosrc, routine.prosecdef "
+                        "FROM pg_catalog.pg_proc AS routine WHERE routine.oid = "
+                        "'ofarm.publish_runtime_bundle(uuid,text,jsonb)'"
+                        "::pg_catalog.regprocedure"
+                    ).fetchone() == (publisher_source, False)
+            with pytest.raises(
+                MigrationExecutionError, match=expected_message
+            ) as refusal:
+                migrate_service(
+                    admin_dsn=admin_dsn,
+                    migrator_dsn=migrator_dsn,
+                    spec=TENANT_PROVISIONING_SPEC,
+                    migration_set=migration_set,
+                    release_identity=f"{RELEASE_IDENTITY}-v4-guard-{label}",
+                    execution_id=uuid4(),
+                )
+            assert refusal.value.version == 4
+            with psycopg.connect(target_admin_dsn) as admin:
+                admin.execute("SET LOCAL ROLE ofarm_owner")
+                assert admin.execute(
+                    "SELECT pg_catalog.count(*), pg_catalog.max(version) "
+                    "FROM ofarm.schema_migration"
+                ).fetchone() == (3, 3)
+                role_constraint = admin.execute(
+                    "SELECT pg_catalog.pg_get_constraintdef(c.oid, true) "
+                    "FROM pg_catalog.pg_constraint AS c "
+                    "WHERE c.conname = 'runtime_bundle_component_role_check' "
+                    "AND c.conrelid = "
+                    "'ofarm.runtime_bundle_component'::pg_catalog.regclass"
+                ).fetchone()[0]
+                assert "TEMPORAL_GOVERNANCE_ARTIFACT" not in role_constraint
+            evidence.append(label)
+        finally:
+            _execute_as_owner(target_admin_dsn, restoration)
+    return tuple(evidence)
+
+
 @pytest.fixture(scope="module")
 def tenant_target() -> TenantTarget:
     admin_dsn = _admin_dsn()
@@ -154,6 +301,11 @@ def tenant_target() -> TenantTarget:
     _assert_clean_service(admin_dsn, spec)
     passwords = _passwords(spec, "tenant-baseline")
     migration_set = load_migration_set(PACKAGE_ROOT, TENANT_SERVICE)
+    v3_set = MigrationSet(
+        service=TENANT_SERVICE,
+        migrations=migration_set.migrations[:3],
+        digest=migration_set.prefix_digest(3),
+    )
     try:
         provision_service(admin_dsn, spec, login_passwords=passwords)
         migrator_dsn = _database_dsn(
@@ -161,6 +313,21 @@ def tenant_target() -> TenantTarget:
             spec.database_name,
             user="ofarm_migrator",
             password=passwords["ofarm_migrator"],
+        )
+        v3_report = _migrate_service_for_testing(
+            admin_dsn=admin_dsn,
+            migrator_dsn=migrator_dsn,
+            spec=spec,
+            migration_set=v3_set,
+            release_identity=f"{RELEASE_IDENTITY}-v3-prefix",
+            execution_id=uuid4(),
+        )
+        target_admin_dsn = _database_dsn(admin_dsn, spec.database_name)
+        v4_guard_evidence = _assert_v4_guards_refuse_before_catalog_change(
+            admin_dsn=admin_dsn,
+            target_admin_dsn=target_admin_dsn,
+            migrator_dsn=migrator_dsn,
+            migration_set=migration_set,
         )
         first_report = migrate_service(
             admin_dsn=admin_dsn,
@@ -180,10 +347,12 @@ def tenant_target() -> TenantTarget:
         )
         yield TenantTarget(
             admin_dsn=admin_dsn,
-            target_admin_dsn=_database_dsn(admin_dsn, spec.database_name),
+            target_admin_dsn=target_admin_dsn,
             migrator_dsn=migrator_dsn,
             passwords=passwords,
             migration_set=migration_set,
+            v3_report=v3_report,
+            v4_guard_evidence=v4_guard_evidence,
             first_report=first_report,
             noop_report=noop_report,
         )
@@ -249,6 +418,24 @@ def _publish_runtime_bundle(
         (tenant_id, digest, Jsonb(document)),
     ).fetchone() == (digest,)
     return digest
+
+
+def _model_valid_temporal_carrier_bundle() -> RuntimeBundle:
+    component = RuntimeComponent.from_selected_bytes(
+        role=RuntimeComponentRole.TEMPORAL_GOVERNANCE_ARTIFACT,
+        logical_ref="ofarm.temporal-carrier-matrix.adr0002.v0.1",
+        canonicalization=Canonicalization.CANONICAL_JSON,
+        placement=ContentPlacement.GLOBAL,
+        selected_bytes=TEMPORAL_CARRIER_MATRIX_PATH.read_bytes(),
+    )
+    schema = RuntimeComponent.from_selected_bytes(
+        role=RuntimeComponentRole.CONTRACT_SCHEMA,
+        logical_ref="contract:ofarm.temporal-carrier-matrix.v0.1",
+        canonicalization=Canonicalization.EXACT_BYTES,
+        placement=ContentPlacement.GLOBAL,
+        selected_bytes=TEMPORAL_CARRIER_MATRIX_SCHEMA_PATH.read_bytes(),
+    )
+    return RuntimeBundle.create((component, schema))
 
 
 def _compute_binding_digest(
@@ -1075,9 +1262,18 @@ def test_authoritative_source_ledger_contract_and_apply_noop(
     assert TENANT_CONTEXT_CONTRACT.digest == (
         "sha256:39e979fa296122cb66d42eae5e2d7c6dc797ac77ef4324515ae1ab6020088d83"
     )
-    assert tenant_target.first_report.applied_versions == (1, 2, 3)
+    assert tenant_target.migration_set.prefix_digest(3) == (
+        "sha256:ba7a193e96ca78d01edf529ed2e20bbd1810c0a3a0c13bc717969e8c5c739bf0"
+    )
+    assert tenant_target.v3_report.applied_versions == (1, 2, 3)
+    assert tenant_target.v4_guard_evidence == (
+        "constraint",
+        "publisher",
+        "verifier",
+    )
+    assert tenant_target.first_report.applied_versions == (4,)
     assert tenant_target.noop_report.applied_versions == ()
-    assert tenant_target.noop_report.final_version == 3
+    assert tenant_target.noop_report.final_version == 4
 
 
 def test_tenant_knowledge_position_catalog_is_structurally_compatible(
@@ -3294,9 +3490,11 @@ def test_runtime_roles_cannot_bypass_atomic_bundle_publication(
                     authority.tenant_id,
                     [
                         _runtime_component_identity(
-                            role="REFERENCE_SOURCE",
-                            logical_ref="runtime:unauthorized-publication",
-                            canonicalization="EXACT_BYTES_V1",
+                            role="TEMPORAL_GOVERNANCE_ARTIFACT",
+                            logical_ref=(
+                                "ofarm.temporal-carrier-matrix.adr0002.v0.1"
+                            ),
+                            canonicalization="OFARM_CANONICAL_JSON_V1",
                             placement="GLOBAL_IMMUTABLE_CONTENT",
                             content_digest=_sha256_id(b"unauthorized-content"),
                             byte_length=len(b"unauthorized-content"),
@@ -3340,7 +3538,10 @@ def test_runtime_roles_cannot_bypass_atomic_bundle_publication(
                         tenant_id, bundle_digest, component_role, logical_ref,
                         canonicalization, content_placement,
                         global_content_digest, tenant_content_digest, byte_length
-                    ) VALUES (%s, %s, 'REFERENCE_SOURCE', %s, %s, %s, %s, %s, %s)
+                    ) VALUES (
+                        %s, %s, 'TEMPORAL_GOVERNANCE_ARTIFACT',
+                        %s, %s, %s, %s, %s, %s
+                    )
                     """,
                     (
                         authority.tenant_id,
@@ -3355,6 +3556,22 @@ def test_runtime_bundle_publication_is_exact_and_idempotent(
     tenant_target: TenantTarget,
     authority: TenantAuthority,
 ) -> None:
+    temporal_bundle = _model_valid_temporal_carrier_bundle()
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        for component in temporal_bundle.components:
+            admin.execute(
+                """
+                INSERT INTO ofarm.runtime_content_blob (
+                    content_digest, canonical_bytes, byte_length
+                ) VALUES (%s, %s, %s)
+                """,
+                (
+                    component.content_digest,
+                    component.canonical_bytes,
+                    component.byte_length,
+                ),
+            )
+
     with psycopg.connect(tenant_target.role_dsn("ofarm_app")) as application:
         _install_test_bound_context(application, authority)
         components = [
@@ -3385,6 +3602,37 @@ def test_runtime_bundle_publication_is_exact_and_idempotent(
         assert _publish_runtime_bundle(
             publisher, authority.tenant_id, components
         ) == authority.runtime_bundle_digest
+        temporal_components = [
+            component.identity_document()
+            for component in temporal_bundle.components
+        ]
+        assert _publish_runtime_bundle(
+            publisher, authority.tenant_id, temporal_components
+        ) == temporal_bundle.digest
+        assert _publish_runtime_bundle(
+            publisher, authority.tenant_id, temporal_components
+        ) == temporal_bundle.digest
+
+        unknown_role_components = [{
+            **temporal_components[0],
+            "role": "TEMPORAL_GOVERNANCE_ARTIFACT_V2",
+            "logicalRef": "ofarm.temporal-governance.unknown.v0.1",
+        }]
+        unknown_role_document = {
+            "schemaVersion": "ofarm.runtime-bundle.local.v1",
+            "canonicalization": "OFARM_CANONICAL_JSON_V1",
+            "components": unknown_role_components,
+        }
+        unknown_role_digest = _sha256_id(
+            _canonical_json(unknown_role_document)
+        )
+        with pytest.raises(psycopg.errors.InvalidParameterValue):
+            with publisher.transaction():
+                _publish_runtime_bundle(
+                    publisher,
+                    authority.tenant_id,
+                    unknown_role_components,
+                )
 
         with pytest.raises(psycopg.errors.InvalidParameterValue):
             with publisher.transaction():
@@ -3477,6 +3725,28 @@ def test_runtime_bundle_publication_is_exact_and_idempotent(
             """,
             (authority.tenant_id, authority.runtime_bundle_digest),
         ).fetchone() == (len(components),)
+        assert application.execute(
+            """
+            SELECT component_role, logical_ref, canonicalization,
+                   content_placement, global_content_digest,
+                   tenant_content_digest, byte_length
+            FROM ofarm.runtime_bundle_component
+            WHERE tenant_id = %s AND bundle_digest = %s
+            ORDER BY component_role COLLATE "C", logical_ref COLLATE "C"
+            """,
+            (authority.tenant_id, temporal_bundle.digest),
+        ).fetchall() == [
+            (
+                component.role.value,
+                component.logical_ref,
+                component.canonicalization.value,
+                component.placement.value,
+                component.content_digest,
+                None,
+                component.byte_length,
+            )
+            for component in temporal_bundle.components
+        ]
 
     with psycopg.connect(tenant_target.target_admin_dsn) as admin:
         assert admin.execute(
@@ -3487,7 +3757,11 @@ def test_runtime_bundle_publication_is_exact_and_idempotent(
             """,
             (
                 authority.tenant_id,
-                [digest_mismatch_candidate, unsorted_candidate],
+                [
+                    digest_mismatch_candidate,
+                    unsorted_candidate,
+                    unknown_role_digest,
+                ],
             ),
         ).fetchone() == (0,)
 
@@ -6017,7 +6291,7 @@ def test_complete_catalog_fingerprint_refuses_function_constraint_index_policy_a
             assert pristine[0] is True
             assert pristine[2] == 0
             assert pristine[3] == (
-                "sha256:a975adc87f7706cffebdaedce8fef761a88bad1b7b7184ba919410e099492a25"
+                "sha256:d4819f6ede7496d42bbae566e8d8a8db76b453108ab3b53cc1a6ef01f8b9fe8f"
             )
         finally:
             migrator.rollback()
@@ -6706,10 +6980,10 @@ def test_readiness_observation_is_complete_after_commit(
     assert row[1] == TENANT_CONTEXT_CONTRACT.digest
     assert row[2] == 0
     assert row[3] == (
-        "sha256:a975adc87f7706cffebdaedce8fef761a88bad1b7b7184ba919410e099492a25"
+        "sha256:d4819f6ede7496d42bbae566e8d8a8db76b453108ab3b53cc1a6ef01f8b9fe8f"
     )
     assert row[5] == TENANT_PROVISIONING_SPEC.digest
     assert row[6] == TENANT_SERVICE.identity
-    assert row[7] == 3
-    assert row[9] == 3
+    assert row[7] == 4
+    assert row[9] == 4
     assert row[10] is False
