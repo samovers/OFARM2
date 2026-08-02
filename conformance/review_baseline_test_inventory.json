@@ -2241,6 +2241,11 @@
       "sourcePath": "kernel/tests/test_migration_sets.py"
     },
     {
+      "nodeid": "kernel/tests/test_migration_sets.py::test_tenant_v6_is_verifier_only_and_pins_the_closed_owner_admission",
+      "sourceModule": "kernel.tests.test_migration_sets",
+      "sourcePath": "kernel/tests/test_migration_sets.py"
+    },
+    {
       "nodeid": "kernel/tests/test_migration_sets.py::test_ungoverned_migration_filename_refuses[0001-initial.sql]",
       "sourceModule": "kernel.tests.test_migration_sets",
       "sourcePath": "kernel/tests/test_migration_sets.py"
@@ -2262,6 +2267,11 @@
     },
     {
       "nodeid": "kernel/tests/test_migration_sets.py::test_v5_admission_pins_the_complete_merged_child_contract",
+      "sourceModule": "kernel.tests.test_migration_sets",
+      "sourcePath": "kernel/tests/test_migration_sets.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_migration_sets.py::test_v6_admission_pins_the_complete_merged_child_contract",
       "sourceModule": "kernel.tests.test_migration_sets",
       "sourcePath": "kernel/tests/test_migration_sets.py"
     },
@@ -3146,6 +3156,11 @@
       "sourcePath": "kernel/tests/test_postgresql_catalog_identity_unit.py"
     },
     {
+      "nodeid": "kernel/tests/test_postgresql_catalog_identity_unit.py::test_tenant_v6_external_catalog_anchor_is_literal",
+      "sourceModule": "kernel.tests.test_postgresql_catalog_identity_unit",
+      "sourcePath": "kernel/tests/test_postgresql_catalog_identity_unit.py"
+    },
+    {
       "nodeid": "kernel/tests/test_postgresql_catalog_identity_unit.py::test_unknown_service_and_malformed_expected_digest_refuse",
       "sourceModule": "kernel.tests.test_postgresql_catalog_identity_unit",
       "sourcePath": "kernel/tests/test_postgresql_catalog_identity_unit.py"
@@ -3652,6 +3667,26 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_v5_precommit_failure_restores_v4_capsule_and_absent_grants",
+      "sourceModule": "kernel.tests.test_postgresql_migration_runner",
+      "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_v6_capsule_requires_all_nine_current_runner_row_fields",
+      "sourceModule": "kernel.tests.test_postgresql_migration_runner",
+      "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_v6_postcommit_acknowledgement_loss_recovers_as_verified_noop",
+      "sourceModule": "kernel.tests.test_postgresql_migration_runner",
+      "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_v6_precommit_backend_loss_reconnects_from_exact_v5",
+      "sourceModule": "kernel.tests.test_postgresql_migration_runner",
+      "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_v6_precommit_failure_restores_exact_v5_and_mixed_states_refuse",
       "sourceModule": "kernel.tests.test_postgresql_migration_runner",
       "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
     },
@@ -5932,6 +5967,11 @@
     },
     {
       "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_context_storage_rls_copy_search_path_and_lock_namespace",
+      "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
+      "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_tenant_migration.py::test_current_context_owner_admission_is_exact_and_does_not_add_assumption",
       "sourceModule": "kernel.tests.test_postgresql_tenant_migration",
       "sourcePath": "kernel/tests/test_postgresql_tenant_migration.py"
     },
@@ -11421,8 +11461,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "c20ee6edf7df809b5e23c51df61827805d9cfdf52ecb381997c986fa307d4b01",
-  "entryCount": 2284,
+  "entriesSha256": "a2462214e8e997513ccd300e1a9586f3d5ff3216771530f6d1159954c6c70f40",
+  "entryCount": 2292,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

@@ -153,6 +153,12 @@ def test_exact_injected_trust_anchor_accepts_and_one_byte_change_refuses() -> No
         )
 
 
+def test_tenant_v6_external_catalog_anchor_is_literal() -> None:
+    assert catalog.TENANT_CATALOG_VERIFIER_DIGEST == (
+        "sha256:683ee77aa8c9549f4ef284addbf204108e5d770530350b1d6258d13de912c75f"
+    )
+
+
 def test_unset_production_anchor_refuses_before_catalog_access(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

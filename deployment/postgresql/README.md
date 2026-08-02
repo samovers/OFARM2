@@ -91,6 +91,7 @@ The only accepted migrations are:
 - `kernel/migrations/0003_tenant_knowledge_position.sql`;
 - `kernel/migrations/0004_temporal_governance_runtime_bundle_role.sql`;
 - `kernel/migrations/0005_tenant_binding_selection_control_admission.sql`;
+- `kernel/migrations/0006_tenant_current_context_selection_owner_admission.sql`;
 - `security_audit/migrations/0001_initial.sql`;
 - `security_audit/migrations/0002_hmac_v2_operations.sql`; and
 - `security_audit/migrations/0003_outcome_reason_vocabulary.sql`.
@@ -107,15 +108,46 @@ selection-control login to the existing tenant challenge and
 capability-binding entry points. Fresh provisioning creates its controller,
 login, sole non-assumable membership, inert `CONNECT`/schema `USAGE`, and one
 closed one-use grant capsule. The runner authenticates the complete V5 ledger
-row before consuming that capsule in the same transaction. Durable V4 requires
-the capsule and forbids both binder grants; durable V5 requires the exact two
-binder-granted controller ACLs and forbids the capsule. No selection storage,
-runtime activation, route, output, or audit-service authority is added.
+row before consuming that capsule in the same transaction. Fresh provisioning
+also creates the independently governed V6 capsule described below. Through
+durable V4, both capsules must remain exact and both admission grant sets must
+remain absent. Durable V5 requires the exact two binder-granted controller ACLs,
+forbids the V5 capsule, and retains the exact V6 capsule with its grants absent.
+No selection storage, runtime activation, route, output, or audit-service
+authority is added.
 
 The complete merged authority for that admission is the 32,169-byte
 `docs/rfcs/OFARM_Tenant_Binding_Selection_Control_Admission_RFC_v0_1.md` at
 `sha256:c1d02969811be0d5b02bdae158cb48e5d8148356ca9d4bac956c8861d529c37a`.
 The implementation does not rely only on the earlier child-design digest.
+
+Tenant migration `0006` admits only the existing `NOLOGIN ofarm_owner` role to
+`ofarm.current_tenant_id()` and
+`ofarm.current_authenticated_principal_ref()`. Fresh provisioning creates one
+static no-argument V6 capsule owned by the external provisioning superuser. The
+runner appends and authenticates all nine V6 ledger fields before invoking that
+capsule. The capsule checks only the exact V6 ordering marker, grants the two
+fixed privileges, self-demotes to `SECURITY INVOKER`, transfers itself to
+`ofarm_migrator`, and removes its temporary schema `CREATE` privilege. The
+runner verifies the exact binder-attributed ACLs, drops only the V6 capsule, and
+runs the final structural verifier before commit. Migration `0006` itself is
+verifier-only and issues no grant.
+
+This P0/P1/P3 matrix is the sole durable phase authority: P0 through head 4 has
+both capsules and neither admission grant set; P1 at exact head 5 has only the
+V6 capsule, the V5 controller grants, and no owner grants; P3 at exact head 6
+has neither capsule and both exact grant sets. Any mixed ledger, capsule, or ACL
+state refuses without repair. Failure before commit restores P1. Lost commit
+acknowledgement reports an unknown outcome; reconnect accepts only exact P1 for
+retry or exact P3 as a verified no-op preserving the committed execution UUID.
+
+The complete merged authority for V6 is the 50,383-byte
+`docs/rfcs/OFARM_Tenant_Current_Context_Selection_Owner_Admission_RFC_v0_1.md`
+at
+`sha256:af85e259230b69edeba80ddc2eea2f070a601fd3888fd463ce595f9cc446b13d`.
+This admission creates no owner login or role-assumption edge and does not add
+storage, tenant-lock behavior, RuntimeBundle activation, command integration,
+routes, reads, outputs, deployment behavior, legacy behavior, or #192 behavior.
 
 The source and set digests cover exact bytes. The set framing uses the tagged,
 length-prefixed `OFARM_POSTGRESQL_MIGRATION_SET_V1` policy documented in

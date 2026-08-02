@@ -822,6 +822,40 @@ def _configure_target(
                     )
                 )
 
+            if (
+                spec.tenant_current_context_selection_owner_admission_sealer
+                is not None
+            ):
+                context_sealer_spec = (
+                    spec.tenant_current_context_selection_owner_admission_sealer
+                )
+                context_sealer = sql.Identifier(
+                    context_sealer_spec.schema_name,
+                    context_sealer_spec.function_name,
+                )
+                target.execute(
+                    sql.SQL(
+                        "CREATE FUNCTION {}() RETURNS pg_catalog.void "
+                        "LANGUAGE plpgsql VOLATILE PARALLEL UNSAFE "
+                        "SECURITY DEFINER "
+                        "SET search_path = pg_catalog, pg_temp AS {}"
+                    ).format(
+                        context_sealer,
+                        sql.Literal(context_sealer_spec.source),
+                    )
+                )
+                target.execute(
+                    sql.SQL(
+                        "REVOKE ALL PRIVILEGES ON FUNCTION {}() FROM PUBLIC"
+                    ).format(context_sealer)
+                )
+                target.execute(
+                    sql.SQL("GRANT EXECUTE ON FUNCTION {}() TO {}").format(
+                        context_sealer,
+                        sql.Identifier(context_sealer_spec.execute_role),
+                    )
+                )
+
             for owner in spec.default_privilege_owner_roles:
                 target.execute(
                     sql.SQL(
@@ -2594,21 +2628,60 @@ def _backend_statistics_acl_differences(
     return differences
 
 
-def _tenant_binding_selection_admission_phase(
+@dataclass(frozen=True, slots=True)
+class _TenantBindingAdmissionPhase:
+    """One closed durable phase for the independently governed V5/V6 capsules."""
+
+    name: str
+    selection_capsule_required: bool
+    selection_grants_required: bool
+    context_capsule_required: bool
+    context_grants_required: bool
+
+
+_TENANT_BINDING_ADMISSION_P0 = _TenantBindingAdmissionPhase(
+    name="P0",
+    selection_capsule_required=True,
+    selection_grants_required=False,
+    context_capsule_required=True,
+    context_grants_required=False,
+)
+_TENANT_BINDING_ADMISSION_P1 = _TenantBindingAdmissionPhase(
+    name="P1",
+    selection_capsule_required=False,
+    selection_grants_required=True,
+    context_capsule_required=True,
+    context_grants_required=False,
+)
+_TENANT_BINDING_ADMISSION_P3 = _TenantBindingAdmissionPhase(
+    name="P3",
+    selection_capsule_required=False,
+    selection_grants_required=True,
+    context_capsule_required=False,
+    context_grants_required=True,
+)
+
+
+def _tenant_binding_admission_phase(
     target: psycopg.Connection,
     spec: ProvisioningSpec,
-) -> tuple[bool, list[str]]:
-    """Return whether the V5 admission capsule must exist at this ledger head."""
+) -> tuple[_TenantBindingAdmissionPhase | None, list[str]]:
+    """Classify the sole durable V5/V6 capsule-and-grant phase matrix."""
 
-    sealer = spec.tenant_binding_selection_control_admission_sealer
-    if sealer is None:
-        return False, []
+    selection_sealer = spec.tenant_binding_selection_control_admission_sealer
+    context_sealer = (
+        spec.tenant_current_context_selection_owner_admission_sealer
+    )
+    if selection_sealer is None and context_sealer is None:
+        return None, []
+    if selection_sealer is None or context_sealer is None:
+        return None, ["tenant binding admission capsule family differs"]
     ledger_present = target.execute(
         "SELECT pg_catalog.to_regclass(%s) IS NOT NULL",
         (spec.migration_service.qualified_ledger,),
     ).fetchone()[0]
     if not ledger_present:
-        return True, []
+        return _TENANT_BINDING_ADMISSION_P0, []
     ledger_columns = target.execute(
         """
         SELECT relation.relkind,
@@ -2639,15 +2712,15 @@ def _tenant_binding_selection_admission_phase(
         ("r", "service_identity", "text"),
         ("r", "version", "integer"),
     }:
-        return False, [
-            "tenant binding selection-control admission phase differs"
-        ]
+        return None, ["tenant binding admission phase differs"]
     row = target.execute(
         sql.SQL(
             "SELECT pg_catalog.count(*), pg_catalog.min(version), "
             "pg_catalog.max(version), "
             "pg_catalog.max(filename) FILTER (WHERE version = 5), "
-            "pg_catalog.max(service_identity) FILTER (WHERE version = 5) "
+            "pg_catalog.max(service_identity) FILTER (WHERE version = 5), "
+            "pg_catalog.max(filename) FILTER (WHERE version = 6), "
+            "pg_catalog.max(service_identity) FILTER (WHERE version = 6) "
             "FROM {}"
         ).format(
             sql.Identifier(
@@ -2656,40 +2729,72 @@ def _tenant_binding_selection_admission_phase(
             )
         )
     ).fetchone()
-    count, minimum, maximum, head_filename, head_service = tuple(row or ())
+    (
+        count,
+        minimum,
+        maximum,
+        v5_filename,
+        v5_service,
+        v6_filename,
+        v6_service,
+    ) = tuple(row or ())
     if count == 0 and minimum is None and maximum is None:
-        return True, []
+        return _TENANT_BINDING_ADMISSION_P0, []
     if (
         isinstance(count, int)
         and 1 <= count <= 4
         and minimum == 1
         and maximum == count
-        and head_filename is None
-        and head_service is None
+        and v5_filename is None
+        and v5_service is None
+        and v6_filename is None
+        and v6_service is None
     ):
-        return True, []
+        return _TENANT_BINDING_ADMISSION_P0, []
     if (
         count,
         minimum,
         maximum,
-        head_filename,
-        head_service,
+        v5_filename,
+        v5_service,
+        v6_filename,
+        v6_service,
     ) == (
         5,
         1,
         5,
         "0005_tenant_binding_selection_control_admission.sql",
         "ofarm.tenant-postgresql.v1",
+        None,
+        None,
     ):
-        return False, []
-    return False, ["tenant binding selection-control admission phase differs"]
+        return _TENANT_BINDING_ADMISSION_P1, []
+    if (
+        count,
+        minimum,
+        maximum,
+        v5_filename,
+        v5_service,
+        v6_filename,
+        v6_service,
+    ) == (
+        6,
+        1,
+        6,
+        "0005_tenant_binding_selection_control_admission.sql",
+        "ofarm.tenant-postgresql.v1",
+        "0006_tenant_current_context_selection_owner_admission.sql",
+        "ofarm.tenant-postgresql.v1",
+    ):
+        return _TENANT_BINDING_ADMISSION_P3, []
+    return None, ["tenant binding admission phase differs"]
 
 
 def _tenant_binding_selection_admission_acl_differences(
     target: psycopg.Connection,
     spec: ProvisioningSpec,
     *,
-    capsule_required: bool,
+    phase: _TenantBindingAdmissionPhase | None,
 ) -> list[str]:
     sealer = spec.tenant_binding_selection_control_admission_sealer
     if sealer is None:
@@ -2724,7 +2829,7 @@ def _tenant_binding_selection_admission_acl_differences(
         ),
     ).fetchall()
     expected: set[tuple[object, ...]] = set()
-    if not capsule_required:
+    if phase is not None and phase.selection_grants_required:
         expected = {
             (
                 sealer.target_schema_name,
@@ -2750,6 +2855,75 @@ def _tenant_binding_selection_admission_acl_differences(
     return []
 
 
+def _tenant_current_context_owner_admission_acl_differences(
+    target: psycopg.Connection,
+    spec: ProvisioningSpec,
+    *,
+    phase: _TenantBindingAdmissionPhase | None,
+) -> list[str]:
+    sealer = spec.tenant_current_context_selection_owner_admission_sealer
+    if sealer is None:
+        return []
+    rows = target.execute(
+        """
+        SELECT routine.proname::text,
+               pg_catalog.oidvectortypes(routine.proargtypes),
+               grantee.rolname::text,
+               pg_catalog.pg_get_userbyid(acl.grantor),
+               acl.privilege_type,
+               acl.is_grantable
+        FROM pg_catalog.pg_proc AS routine
+        JOIN pg_catalog.pg_namespace AS namespace
+             ON namespace.oid = routine.pronamespace
+        CROSS JOIN LATERAL pg_catalog.aclexplode(
+            COALESCE(
+                routine.proacl,
+                pg_catalog.acldefault('f', routine.proowner)
+            )
+        ) AS acl
+        JOIN pg_catalog.pg_roles AS grantee ON grantee.oid = acl.grantee
+        WHERE namespace.nspname = %s
+          AND routine.proname = ANY (%s::text[])
+          AND pg_catalog.oidvectortypes(routine.proargtypes) = ''
+          AND grantee.rolname = ANY (%s::text[])
+        ORDER BY 1, 2, 3, 4, 5, 6
+        """,
+        (
+            sealer.target_schema_name,
+            ["current_authenticated_principal_ref", "current_tenant_id"],
+            [
+                sealer.owner_role,
+                "ofarm_command_runtime_bundle_selection_controller",
+                "ofarm_command_runtime_bundle_selection_control_login",
+                sealer.execute_role,
+            ],
+        ),
+    ).fetchall()
+    expected: set[tuple[object, ...]] = set()
+    if phase is not None and phase.context_grants_required:
+        expected = {
+            (
+                "current_authenticated_principal_ref",
+                "",
+                sealer.owner_role,
+                "ofarm_binder",
+                "EXECUTE",
+                False,
+            ),
+            (
+                "current_tenant_id",
+                "",
+                sealer.owner_role,
+                "ofarm_binder",
+                "EXECUTE",
+                False,
+            ),
+        }
+    if {tuple(row) for row in rows} != expected:
+        return ["tenant current-context selection-owner admission ACL differs"]
+    return []
+
+
 def _migration_lock_capsule_differences(
     target: psycopg.Connection, spec: ProvisioningSpec
 ) -> list[str]:
@@ -2758,8 +2932,16 @@ def _migration_lock_capsule_differences(
         "SELECT pg_catalog.to_regclass(%s) IS NOT NULL",
         (spec.migration_service.qualified_ledger,),
     ).fetchone()[0]
-    selection_capsule_required, selection_phase_differences = (
-        _tenant_binding_selection_admission_phase(target, spec)
+    admission_phase, admission_phase_differences = (
+        _tenant_binding_admission_phase(target, spec)
+    )
+    selection_capsule_required = (
+        admission_phase is not None
+        and admission_phase.selection_capsule_required
+    )
+    context_capsule_required = (
+        admission_phase is not None
+        and admission_phase.context_capsule_required
     )
     rows = target.execute(
         """
@@ -2818,7 +3000,7 @@ def _migration_lock_capsule_differences(
         True,
         True,
     )
-    differences: list[str] = list(selection_phase_differences)
+    differences: list[str] = list(admission_phase_differences)
     row_map = {(row[0], row[1]): row for row in rows}
     expected_identities = {(lock.function_name, "")}
     access_lock = spec.access_clock_lock
@@ -2879,6 +3061,11 @@ def _migration_lock_capsule_differences(
     selection_sealer = spec.tenant_binding_selection_control_admission_sealer
     if selection_sealer is not None and selection_capsule_required:
         expected_identities.add((selection_sealer.function_name, ""))
+    context_sealer = (
+        spec.tenant_current_context_selection_owner_admission_sealer
+    )
+    if context_sealer is not None and context_capsule_required:
+        expected_identities.add((context_sealer.function_name, ""))
     if set(row_map) != expected_identities:
         differences.append("migration-lock infrastructure routine differs")
     elif tuple(row_map[(lock.function_name, "")]) != expected_lock:
@@ -2956,6 +3143,43 @@ def _migration_lock_capsule_differences(
             ):
                 differences.append(
                     "tenant binding selection-control admission sealer differs"
+                )
+
+    context_sealer_owner: str | None = None
+    if context_sealer is not None and context_capsule_required:
+        context_sealer_row = row_map.get((context_sealer.function_name, ""))
+        if context_sealer_row is None:
+            differences.append(
+                "tenant current-context selection-owner admission sealer differs"
+            )
+        else:
+            context_sealer_owner = context_sealer_row[2]
+            if (
+                context_sealer_owner.startswith("ofarm_")
+                or tuple(context_sealer_row[3:])
+                != (
+                    True,
+                    "plpgsql",
+                    "f",
+                    True,
+                    False,
+                    False,
+                    "v",
+                    "u",
+                    False,
+                    True,
+                    False,
+                    context_sealer.source,
+                    None,
+                    ["search_path=pg_catalog, pg_temp"],
+                    100,
+                    0,
+                    True,
+                    True,
+                )
+            ):
+                differences.append(
+                    "tenant current-context selection-owner admission sealer differs"
                 )
 
     acl_rows = target.execute(
@@ -3070,6 +3294,31 @@ def _migration_lock_capsule_differences(
                 ),
             }
         )
+    if (
+        context_sealer is not None
+        and context_capsule_required
+        and context_sealer_owner is not None
+    ):
+        expected_acl.update(
+            {
+                (
+                    context_sealer.function_name,
+                    "",
+                    context_sealer_owner,
+                    context_sealer_owner,
+                    "EXECUTE",
+                    False,
+                ),
+                (
+                    context_sealer.function_name,
+                    "",
+                    context_sealer.execute_role,
+                    context_sealer_owner,
+                    "EXECUTE",
+                    False,
+                ),
+            }
+        )
     if {tuple(row) for row in acl_rows} != expected_acl:
         differences.append("migration-lock infrastructure routine ACL differs")
 
@@ -3123,7 +3372,14 @@ def _migration_lock_capsule_differences(
         _tenant_binding_selection_admission_acl_differences(
             target,
             spec,
-            capsule_required=selection_capsule_required,
+            phase=admission_phase,
+        )
+    )
+    differences.extend(
+        _tenant_current_context_owner_admission_acl_differences(
+            target,
+            spec,
+            phase=admission_phase,
         )
     )
     return differences
@@ -3233,8 +3489,12 @@ def _unmigrated_object_differences(
             unexpected_rows.remove(expected_sealer_routine)
         except ValueError:
             pass
-    selection_capsule_required, _selection_phase_differences = (
-        _tenant_binding_selection_admission_phase(target, spec)
+    admission_phase, _admission_phase_differences = (
+        _tenant_binding_admission_phase(target, spec)
+    )
+    selection_capsule_required = (
+        admission_phase is not None
+        and admission_phase.selection_capsule_required
     )
     if (
         spec.tenant_binding_selection_control_admission_sealer is not None
@@ -3250,6 +3510,27 @@ def _unmigrated_object_differences(
         )
         try:
             unexpected_rows.remove(expected_selection_sealer_routine)
+        except ValueError:
+            pass
+    context_capsule_required = (
+        admission_phase is not None
+        and admission_phase.context_capsule_required
+    )
+    if (
+        spec.tenant_current_context_selection_owner_admission_sealer
+        is not None
+        and context_capsule_required
+    ):
+        context_sealer = (
+            spec.tenant_current_context_selection_owner_admission_sealer
+        )
+        expected_context_sealer_routine = (
+            "routine",
+            context_sealer.schema_name,
+            context_sealer.function_name,
+        )
+        try:
+            unexpected_rows.remove(expected_context_sealer_routine)
         except ValueError:
             pass
     if spec.native_verifier is not None:

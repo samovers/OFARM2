@@ -32,6 +32,10 @@ TENANT_BINDING_SELECTION_CONTROL_ADMISSION_RFC = (
     PACKAGE_ROOT
     / "docs/rfcs/OFARM_Tenant_Binding_Selection_Control_Admission_RFC_v0_1.md"
 )
+TENANT_CURRENT_CONTEXT_SELECTION_OWNER_ADMISSION_RFC = (
+    PACKAGE_ROOT
+    / "docs/rfcs/OFARM_Tenant_Current_Context_Selection_Owner_Admission_RFC_v0_1.md"
+)
 
 
 def _write_migration(root: Path, relative_directory: str, name: str, data: bytes) -> None:
@@ -57,6 +61,15 @@ def test_v5_admission_pins_the_complete_merged_child_contract():
     assert len(source) == 32_169
     assert hashlib.sha256(source).hexdigest() == (
         "c1d02969811be0d5b02bdae158cb48e5d8148356ca9d4bac956c8861d529c37a"
+    )
+
+
+def test_v6_admission_pins_the_complete_merged_child_contract():
+    source = TENANT_CURRENT_CONTEXT_SELECTION_OWNER_ADMISSION_RFC.read_bytes()
+
+    assert len(source) == 50_383
+    assert hashlib.sha256(source).hexdigest() == (
+        "af85e259230b69edeba80ddc2eea2f070a601fd3888fd463ce595f9cc446b13d"
     )
 
 
@@ -105,7 +118,7 @@ def test_tenant_v5_is_verifier_only_and_pins_the_closed_admission_transition():
     assert migration.source_sha256 == \
         "sha256:fde66e835f8c4456d7404eb00b99292e267f573f8b126f781f3ed55bd5e8df9a"
     assert migration.byte_length == 8545
-    assert migration_set.digest == \
+    assert migration_set.prefix_digest(5) == \
         "sha256:ef2e85c150d7c445ae33d4c1cc63a06bbcf17c79f1e7bdaf070ae4819ed38288"
     assert b"observed_migration_count <> 5" in migration.source_bytes
     assert b"tenant binding selection-control admission ACL differs" in (
@@ -117,6 +130,29 @@ def test_tenant_v5_is_verifier_only_and_pins_the_closed_admission_transition():
     assert b"GRANT EXECUTE ON FUNCTION ofarm.bind_tenant_capability" not in (
         migration.source_bytes
     )
+
+
+def test_tenant_v6_is_verifier_only_and_pins_the_closed_owner_admission():
+    migration_set = load_authoritative_migration_set(
+        PACKAGE_ROOT,
+        TENANT_SERVICE,
+    )
+    migration = migration_set.migrations[5]
+
+    assert migration.filename == \
+        "0006_tenant_current_context_selection_owner_admission.sql"
+    assert migration.source_sha256 == \
+        "sha256:a61c668a2bae04026b8413385f8bc1b5fd43f08f8d5281501ff766a57d552b48"
+    assert migration.byte_length == 8655
+    assert migration_set.digest == \
+        "sha256:209990a8a9ac60ab096b11d418051127b7c891e4bfc6cefdf282d72f3875d0de"
+    assert b"observed_migration_count <> 6" in migration.source_bytes
+    assert b"tenant current-context selection-owner admission ACL differs" in (
+        migration.source_bytes
+    )
+    assert b"GRANT EXECUTE ON FUNCTION" not in migration.source_bytes
+    assert b"ALTER FUNCTION ofarm.current_" not in migration.source_bytes
+    assert b"CREATE ROLE" not in migration.source_bytes
 
 
 @pytest.mark.parametrize("mutation", ("edited", "renamed", "future", "missing"))
