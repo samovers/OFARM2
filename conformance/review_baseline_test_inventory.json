@@ -3641,12 +3641,17 @@
       "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_v5_precommit_failure_restores_v4_capsule_and_absent_grants",
+      "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_v5_postcommit_acknowledgement_loss_reconnects_as_verified_noop",
       "sourceModule": "kernel.tests.test_postgresql_migration_runner",
       "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
     },
     {
-      "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_v5_real_commit_disconnect_reconnects_from_exact_v4",
+      "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_v5_precommit_backend_loss_reconnects_from_exact_v4",
+      "sourceModule": "kernel.tests.test_postgresql_migration_runner",
+      "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
+    },
+    {
+      "nodeid": "kernel/tests/test_postgresql_migration_runner.py::test_v5_precommit_failure_restores_v4_capsule_and_absent_grants",
       "sourceModule": "kernel.tests.test_postgresql_migration_runner",
       "sourcePath": "kernel/tests/test_postgresql_migration_runner.py"
     },
@@ -11416,8 +11421,8 @@
       "sourcePath": "kernel/tests/test_tenant_uow.py"
     }
   ],
-  "entriesSha256": "09a1e9da3696a35757aa5a528c0f2ea84835ab3953106ffbdf91bffb5fcf4903",
-  "entryCount": 2283,
+  "entriesSha256": "c20ee6edf7df809b5e23c51df61827805d9cfdf52ecb381997c986fa307d4b01",
+  "entryCount": 2284,
   "schemaVersion": "ofarm.review-baseline-test-inventory.v1",
   "testRoot": "kernel/tests"
 }

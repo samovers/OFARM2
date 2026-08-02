@@ -1385,6 +1385,8 @@ def test_tenant_knowledge_position_catalog_is_structurally_compatible(
 
 def test_selection_control_admission_is_exact_and_stays_binder_only(
     tenant_target: TenantTarget,
+    authority: TenantAuthority,
+    capability_key: CapabilityKeyAuthority,
 ) -> None:
     controller = "ofarm_command_runtime_bundle_selection_controller"
     login = "ofarm_command_runtime_bundle_selection_control_login"
@@ -1457,12 +1459,6 @@ def test_selection_control_admission_is_exact_and_stays_binder_only(
             "CURRENT_USER, 'pg_catalog.pg_advisory_xact_lock(bigint)', "
             "'EXECUTE')"
         ).fetchone() == (True, True, False, False, False)
-        challenge = control.execute(
-            "SELECT challenge_id, audience "
-            "FROM ofarm.create_tenant_challenge()"
-        ).fetchone()
-        assert isinstance(challenge[0], UUID)
-        assert isinstance(challenge[1], str) and challenge[1]
         for relation_name in (
             "tenant_registry",
             "tenant_binding_context",
@@ -1474,7 +1470,56 @@ def test_selection_control_admission_is_exact_and_stays_binder_only(
                 "CURRENT_USER, %s, 'SELECT,INSERT,UPDATE,DELETE')",
                 ("ofarm." + relation_name,),
             ).fetchone() == (False,)
+
+        invalid_token = _signed_capability_for_new_challenge(
+            control,
+            authority=authority,
+            key=capability_key,
+        )
+        header, payload, signature = invalid_token.split(".")
+        corrupt_signature = ("A" if signature[0] != "A" else "B") + signature[1:]
+        with pytest.raises(psycopg.errors.InvalidAuthorizationSpecification):
+            control.execute(
+                "SELECT ofarm.bind_tenant_capability(%s)",
+                (f"{header}.{payload}.{corrupt_signature}",),
+            )
         control.rollback()
+
+    with psycopg.connect(tenant_target.role_dsn(login)) as control:
+        token = _signed_capability_for_new_challenge(
+            control,
+            authority=authority,
+            key=capability_key,
+        )
+        control.execute(
+            "SELECT ofarm.bind_tenant_capability(%s)",
+            (token,),
+        )
+        backend_pid, full_xid = control.execute(
+            "SELECT pg_catalog.pg_backend_pid(), "
+            "pg_catalog.pg_current_xact_id()::pg_catalog.text"
+        ).fetchone()
+        control.commit()
+
+        with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+            assert admin.execute(
+                """
+                SELECT context_state, equality_policy, issuer, subject,
+                       tenant_id, party_ref, capability_key_id
+                FROM ofarm.tenant_binding_context
+                WHERE backend_pid = %s
+                  AND full_xid = %s::pg_catalog.xid8
+                """,
+                (backend_pid, full_xid),
+            ).fetchone() == (
+                "BOUND",
+                OIDC_ISSUER_EQUALITY_POLICY,
+                ISSUER,
+                authority.subject,
+                authority.tenant_id,
+                authority.party_ref,
+                capability_key.kid,
+            )
 
 
 def test_selection_control_mixed_v5_states_refuse_reconciliation(
