@@ -1468,6 +1468,248 @@ _EXPECTED_CURRENT_CONTEXT_OWNER_ADMISSION = [
 ]
 
 
+_V6_LEDGER_FIELDS = (
+    "version",
+    "filename",
+    "source_sha256",
+    "source_byte_length",
+    "applied_prefix_digest",
+    "service_identity",
+    "provisioning_spec_digest",
+    "release_identity",
+    "execution_id",
+)
+
+
+@pytest.mark.parametrize("substituted_field", _V6_LEDGER_FIELDS)
+def test_v6_live_ledger_substitution_refuses_before_capsule_use(
+    tenant_target: _TenantTarget,
+    monkeypatch,
+    substituted_field: str,
+) -> None:
+    full_set = _advance_tenant_target_to_v5(tenant_target)
+    assert _current_context_owner_admission_state(
+        tenant_target.target_admin_dsn
+    ) == ((5, 5), True, [])
+
+    capsule_invoked = False
+    original_consume = (
+        migration_runner_module
+        ._consume_tenant_current_context_selection_owner_admission_sealer
+    )
+
+    def observe_capsule_invocation(*args, **kwargs):
+        nonlocal capsule_invoked
+        capsule_invoked = True
+        return original_consume(*args, **kwargs)
+
+    def insert_substituted_v6_row(
+        connection,
+        spec,
+        migration_set,
+        migration,
+        release_identity,
+        execution_id,
+    ) -> None:
+        values = [
+            migration.version,
+            migration.filename,
+            migration.source_sha256,
+            migration.byte_length,
+            migration_set.prefix_digest(migration.version),
+            spec.migration_service.identity,
+            spec.digest,
+            release_identity,
+            execution_id,
+        ]
+        substitutions = {
+            "version": 7,
+            "filename": "0006_substituted.sql",
+            "source_sha256": "sha256:" + "0" * 64,
+            "source_byte_length": migration.byte_length + 1,
+            "applied_prefix_digest": "sha256:" + "1" * 64,
+            "service_identity": SECURITY_AUDIT_SERVICE.identity,
+            "provisioning_spec_digest": "sha256:" + "2" * 64,
+            "release_identity": "ofarm-tests/substituted-release",
+            "execution_id": uuid4(),
+        }
+        values[_V6_LEDGER_FIELDS.index(substituted_field)] = substitutions[
+            substituted_field
+        ]
+        connection.execute(
+            sql.SQL(
+                "INSERT INTO {} ("
+                "version, filename, source_sha256, source_byte_length, "
+                "applied_prefix_digest, service_identity, "
+                "provisioning_spec_digest, release_identity, execution_id"
+                ") VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
+            ).format(
+                sql.Identifier(
+                    spec.schema_name,
+                    spec.migration_service.ledger_name,
+                )
+            ),
+            tuple(values),
+        )
+
+    monkeypatch.setattr(
+        migration_runner_module,
+        "_insert_ledger_row",
+        insert_substituted_v6_row,
+    )
+    monkeypatch.setattr(
+        migration_runner_module,
+        "_consume_tenant_current_context_selection_owner_admission_sealer",
+        observe_capsule_invocation,
+    )
+    with pytest.raises((MigrationDirtyError, MigrationExecutionError)):
+        migrate_authoritative_service(
+            admin_dsn=tenant_target.admin_dsn,
+            migrator_dsn=tenant_target.migrator_dsn,
+            spec=TENANT_PROVISIONING_SPEC,
+            migration_set=full_set,
+            release_identity=RELEASE_IDENTITY + "-v6-substitution",
+            execution_id=uuid4(),
+        )
+
+    assert capsule_invoked is False
+    assert _current_context_owner_admission_state(
+        tenant_target.target_admin_dsn
+    ) == ((5, 5), True, [])
+    verified = verify_service_infrastructure(
+        tenant_target.admin_dsn,
+        TENANT_PROVISIONING_SPEC,
+    )
+    assert verified.provisioning_spec_digest == TENANT_PROVISIONING_SPEC.digest
+
+
+def test_v6_row_is_authenticated_before_and_after_capsule_consumption(
+    tenant_target: _TenantTarget,
+    monkeypatch,
+) -> None:
+    full_set = _advance_tenant_target_to_v5(tenant_target)
+    sealer = (
+        TENANT_PROVISIONING_SPEC
+        .tenant_current_context_selection_owner_admission_sealer
+    )
+    assert sealer is not None
+    events: list[object] = []
+    authentication_count = 0
+    transition_verified = False
+    original_authenticate = (
+        migration_runner_module
+        ._authenticate_tenant_current_context_selection_owner_admission_row
+    )
+    original_consume = (
+        migration_runner_module
+        ._consume_tenant_current_context_selection_owner_admission_sealer
+    )
+    original_boundary = migration_runner_module._locked_boundary_differences
+    original_final = migration_runner_module._verify_final_service_structure
+
+    def trace_authentication(connection, *args, **kwargs):
+        nonlocal authentication_count
+        original_authenticate(connection, *args, **kwargs)
+        authentication_count += 1
+        state = connection.execute(
+            """
+            SELECT CURRENT_USER::text,
+                   EXISTS (
+                       SELECT 1
+                       FROM pg_catalog.pg_proc AS capsule
+                       JOIN pg_catalog.pg_namespace AS capsule_namespace
+                         ON capsule_namespace.oid = capsule.pronamespace
+                       WHERE capsule_namespace.nspname = %s
+                         AND capsule.proname = %s
+                         AND pg_catalog.pg_get_function_identity_arguments(
+                                 capsule.oid
+                             ) = ''
+                   ),
+                   (
+                       SELECT pg_catalog.count(*)
+                       FROM pg_catalog.pg_proc AS routine
+                       JOIN pg_catalog.pg_namespace AS namespace
+                         ON namespace.oid = routine.pronamespace
+                       CROSS JOIN LATERAL pg_catalog.aclexplode(
+                           COALESCE(
+                               routine.proacl,
+                               pg_catalog.acldefault('f', routine.proowner)
+                           )
+                       ) AS acl
+                       JOIN pg_catalog.pg_roles AS grantee
+                         ON grantee.oid = acl.grantee
+                       WHERE namespace.nspname = 'ofarm'
+                         AND routine.proname = ANY (%s::text[])
+                         AND pg_catalog.oidvectortypes(routine.proargtypes) = ''
+                         AND grantee.rolname = 'ofarm_owner'
+                   )
+            """,
+            (
+                sealer.schema_name,
+                sealer.function_name,
+                ["current_authenticated_principal_ref", "current_tenant_id"],
+            ),
+        ).fetchone()
+        events.append(("authenticate", *tuple(state or ())))
+
+    def trace_consumption(*args, **kwargs):
+        events.append("consume")
+        return original_consume(*args, **kwargs)
+
+    def trace_boundary(*args, **kwargs):
+        if authentication_count and not transition_verified:
+            events.append("boundary")
+        return original_boundary(*args, **kwargs)
+
+    def trace_final(*args, **kwargs):
+        nonlocal transition_verified
+        if not transition_verified:
+            events.append("final")
+            transition_verified = True
+        return original_final(*args, **kwargs)
+
+    monkeypatch.setattr(
+        migration_runner_module,
+        "_authenticate_tenant_current_context_selection_owner_admission_row",
+        trace_authentication,
+    )
+    monkeypatch.setattr(
+        migration_runner_module,
+        "_consume_tenant_current_context_selection_owner_admission_sealer",
+        trace_consumption,
+    )
+    monkeypatch.setattr(
+        migration_runner_module,
+        "_locked_boundary_differences",
+        trace_boundary,
+    )
+    monkeypatch.setattr(
+        migration_runner_module,
+        "_verify_final_service_structure",
+        trace_final,
+    )
+
+    migrated = migrate_authoritative_service(
+        admin_dsn=tenant_target.admin_dsn,
+        migrator_dsn=tenant_target.migrator_dsn,
+        spec=TENANT_PROVISIONING_SPEC,
+        migration_set=full_set,
+        release_identity=RELEASE_IDENTITY + "-v6-order",
+        execution_id=uuid4(),
+    )
+    assert migrated.applied_versions == (6,)
+    assert events == [
+        ("authenticate", "ofarm_owner", True, 0),
+        "consume",
+        ("authenticate", "ofarm_owner", False, 2),
+        "boundary",
+        "final",
+    ]
+    assert _current_context_owner_admission_state(
+        tenant_target.target_admin_dsn
+    ) == ((6, 6), False, _EXPECTED_CURRENT_CONTEXT_OWNER_ADMISSION)
+
+
 def test_v6_precommit_failure_restores_exact_v5_and_mixed_states_refuse(
     tenant_target: _TenantTarget,
     monkeypatch,

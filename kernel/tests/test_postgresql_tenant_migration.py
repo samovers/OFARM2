@@ -1699,7 +1699,10 @@ def test_current_context_owner_admission_is_exact_and_does_not_add_assumption(
             """
             SELECT routine.proname::text,
                    pg_catalog.pg_get_function_identity_arguments(routine.oid),
-                   pg_catalog.format_type(routine.prorettype, NULL),
+                   routine.prorettype =
+                        'ofarm.tenant_local_ref'::pg_catalog.regtype,
+                   routine.prorettype =
+                        'pg_catalog.uuid'::pg_catalog.regtype,
                    owner.rolname::text,
                    language.lanname::text,
                    routine.prosecdef,
@@ -1730,7 +1733,8 @@ def test_current_context_owner_admission_is_exact_and_does_not_add_assumption(
             (
                 "current_authenticated_principal_ref",
                 "",
-                "ofarm.tenant_local_ref",
+                True,
+                False,
                 "ofarm_binder",
                 "plpgsql",
                 True,
@@ -1744,7 +1748,8 @@ def test_current_context_owner_admission_is_exact_and_does_not_add_assumption(
             (
                 "current_tenant_id",
                 "",
-                "uuid",
+                False,
+                True,
                 "ofarm_binder",
                 "plpgsql",
                 True,

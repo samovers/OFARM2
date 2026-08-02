@@ -2630,7 +2630,11 @@ def _backend_statistics_acl_differences(
 
 @dataclass(frozen=True, slots=True)
 class _TenantBindingAdmissionPhase:
-    """One closed durable phase for the independently governed V5/V6 capsules."""
+    """One closed durable phase for the independently governed V5/V6 capsules.
+
+    P2 is intentionally absent because it is an uncommitted transition, never
+    a lawful durable state for the provisioning observer.
+    """
 
     name: str
     selection_capsule_required: bool
@@ -2864,6 +2868,8 @@ def _tenant_current_context_owner_admission_acl_differences(
     sealer = spec.tenant_current_context_selection_owner_admission_sealer
     if sealer is None:
         return []
+    # This closes admission-adjacent roles. The final SQL verifier owns the
+    # exhaustive ten-row current-context ACL inventory.
     rows = target.execute(
         """
         SELECT routine.proname::text,

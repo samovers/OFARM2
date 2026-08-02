@@ -148,6 +148,10 @@ at
 This admission creates no owner login or role-assumption edge and does not add
 storage, tenant-lock behavior, RuntimeBundle activation, command integration,
 routes, reads, outputs, deployment behavior, legacy behavior, or #192 behavior.
+An existing pre-deployment target at durable head 5 or earlier that lacks the
+exact provisioning-owned V6 capsule is deliberately refused. This boundary
+authorizes no in-place upgrade or repair; that target must be reprovisioned
+before migration 0006 may run.
 
 The source and set digests cover exact bytes. The set framing uses the tagged,
 length-prefixed `OFARM_POSTGRESQL_MIGRATION_SET_V1` policy documented in

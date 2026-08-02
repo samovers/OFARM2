@@ -1069,6 +1069,8 @@ def _consume_tenant_current_context_selection_owner_admission_sealer(
             "tenant current-context selection-owner admission sealer ACL differs"
         )
 
+    # This closes admission-adjacent roles. The final SQL verifier owns the
+    # exhaustive ten-row current-context ACL inventory.
     current_context_acl = connection.execute(
         """
         SELECT routine.proname::text,
@@ -2119,6 +2121,14 @@ def _migrate_service(
                             connection,
                             spec,
                             migration,
+                        )
+                        _authenticate_tenant_current_context_selection_owner_admission_row(
+                            connection,
+                            spec,
+                            migration_set,
+                            migration,
+                            release_identity,
+                            execution_id,
                         )
                         admitted_boundary = _locked_boundary_differences(
                             connection,
