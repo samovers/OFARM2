@@ -1,7 +1,7 @@
 # OFARM2 Tenant Command RuntimeBundle Selection Activation Admission — Phase A Contract v0.1
 
-**Status:** proposed Phase A contract; documentation-only, unapproved, and
-without storage, custody, activation, selection, runtime, or deployment effect
+**Status:** architect-approved Phase A contract; documentation-only and without
+storage, custody, activation, selection, runtime, or deployment effect
 
 **Contract identity:**
 `ofarm.tenant-command-runtime-bundle-selection-activation-admission.issue176.v0.1`
@@ -913,3 +913,62 @@ credentials, or merge do not approve it.
 Phase B remains forbidden until the designated architect explicitly approves
 the exact contract in the designated Codex task and a documentation-only PR
 truthfully records that approval before merge.
+
+## Appendix A. Architect approval record
+
+This appendix is the documentation-only approval record required by section
+17. The proposal-state wording in section 17 describes the state of the exact
+design bytes before the later approval recorded here. It is preserved as part
+of those approved design bytes and is not a competing current status.
+
+The designated architect approved this exact Phase A design:
+
+- contract identity:
+  `ofarm.tenant-command-runtime-bundle-selection-activation-admission.issue176.v0.1`;
+- repository path:
+  `docs/rfcs/OFARM_Tenant_Command_RuntimeBundle_Selection_Activation_Admission_RFC_v0_1.md`;
+- repository review base:
+  `4aa82240f788ba5f8e3e2451c3822df4293bb5be`;
+- approved design canonical byte length: `49259`; and
+- approved design digest:
+  `sha256:137fc69f203ff18229efd0c97ada8affae209c0e64dd3e8c464d7627937de44b`.
+
+The complete live decision card preceded the approval in the same Codex task.
+Its evidence is:
+
+- Codex task identifier:
+  `019fa821-93c9-7ef1-8c94-1c0e92ea46b9`;
+- decision-card canonical byte length: `1886`;
+- decision-card digest:
+  `sha256:d0782493042dc2b6dd782a2a8dcced1315ad2474c5b305da1a54ae7ab775fc28`;
+- approval turn stable reference:
+  `019fc0d0-7f17-7db0-9989-316971f4d112`;
+- user-authored approval-message stable reference: `item-1550`;
+- user-authored approval-message timestamp: `2026-08-02T04:51:57Z`;
+- approval-sentence canonical byte length: `528`; and
+- approval-sentence digest:
+  `sha256:4e195b7443c3919d748c5697a3f265b9ee9b675236ea23d7741926cd171f0b4c`.
+
+The exact user-authored approval sentence was:
+
+> I explicitly approve the Phase A design of contract ofarm.tenant-command-runtime-bundle-selection-activation-admission.issue176.v0.1 at sha256:137fc69f203ff18229efd0c97ada8affae209c0e64dd3e8c464d7627937de44b (49,259 bytes) in Codex task 019fa821-93c9-7ef1-8c94-1c0e92ea46b9 and authorize one documentation-only parent approval record with exactly the provenance, effects, non-effects, preservation rules, and next required sequence stated in decision card sha256:d0782493042dc2b6dd782a2a8dcced1315ad2474c5b305da1a54ae7ab775fc28.
+
+The approval has exactly two effects:
+
+1. the pinned parent Phase A design is architect-approved; and
+2. this one documentation-only parent approval record is authorized.
+
+The only permitted changes from the approved design bytes are the status
+metadata and this appendix. The decision, authority map, invariants, negative
+cases, architecture, and pull-request boundaries remain byte-for-byte
+unchanged.
+
+The approval does not approve the tenant-binding child contract and does not
+authorize Phase B, a migration, database storage, a role or grant change,
+runtime selection or activation, a RuntimeBundle or profile change, command or
+route integration, materialization, output, legacy behavior, or #192 behavior.
+
+After this approval record merges, later work must compute the complete
+approved-parent file length and digest, re-pin the child contract to that
+identity, obtain explicit approval of the exact re-pinned child, and publish
+and merge the child approval record before evaluating its Phase B gate.
