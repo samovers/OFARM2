@@ -28,6 +28,10 @@ from deployment.postgresql.migration_sets import (
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
+TENANT_BINDING_SELECTION_CONTROL_ADMISSION_RFC = (
+    PACKAGE_ROOT
+    / "docs/rfcs/OFARM_Tenant_Binding_Selection_Control_Admission_RFC_v0_1.md"
+)
 
 
 def _write_migration(root: Path, relative_directory: str, name: str, data: bytes) -> None:
@@ -45,6 +49,15 @@ def test_services_have_distinct_fixed_migration_and_ledger_identities():
     assert SECURITY_AUDIT_SERVICE.qualified_ledger == \
         "ofarm_security.schema_migration"
     assert TENANT_SERVICE != SECURITY_AUDIT_SERVICE
+
+
+def test_v5_admission_pins_the_complete_merged_child_contract():
+    source = TENANT_BINDING_SELECTION_CONTROL_ADMISSION_RFC.read_bytes()
+
+    assert len(source) == 32_169
+    assert hashlib.sha256(source).hexdigest() == (
+        "c1d02969811be0d5b02bdae158cb48e5d8148356ca9d4bac956c8861d529c37a"
+    )
 
 
 @pytest.mark.parametrize(
@@ -77,6 +90,32 @@ def test_checked_in_migration_release_has_one_literal_authority(service, expecte
             migration.applied_prefix_digest,
         )
         for migration in expected.migrations
+    )
+
+
+def test_tenant_v5_is_verifier_only_and_pins_the_closed_admission_transition():
+    migration_set = load_authoritative_migration_set(
+        PACKAGE_ROOT,
+        TENANT_SERVICE,
+    )
+    migration = migration_set.migrations[4]
+
+    assert migration.filename == \
+        "0005_tenant_binding_selection_control_admission.sql"
+    assert migration.source_sha256 == \
+        "sha256:fde66e835f8c4456d7404eb00b99292e267f573f8b126f781f3ed55bd5e8df9a"
+    assert migration.byte_length == 8545
+    assert migration_set.digest == \
+        "sha256:ef2e85c150d7c445ae33d4c1cc63a06bbcf17c79f1e7bdaf070ae4819ed38288"
+    assert b"observed_migration_count <> 5" in migration.source_bytes
+    assert b"tenant binding selection-control admission ACL differs" in (
+        migration.source_bytes
+    )
+    assert b"GRANT EXECUTE ON FUNCTION ofarm.create_tenant_challenge" not in (
+        migration.source_bytes
+    )
+    assert b"GRANT EXECUTE ON FUNCTION ofarm.bind_tenant_capability" not in (
+        migration.source_bytes
     )
 
 

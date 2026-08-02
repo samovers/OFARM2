@@ -714,6 +714,217 @@ def _consume_tenant_initial_owner_sealer(
     _set_owner_role(connection, spec)
 
 
+def _authenticate_tenant_binding_selection_control_admission_row(
+    connection: psycopg.Connection,
+    spec: ProvisioningSpec,
+    migration_set: MigrationSet,
+    migration: Migration,
+    release_identity: str,
+    execution_id: UUID,
+) -> None:
+    """Authenticate the complete runner-owned V5 row before capsule use."""
+
+    row = connection.execute(
+        sql.SQL(
+            "SELECT version, filename, source_sha256, source_byte_length, "
+            "applied_prefix_digest, service_identity, "
+            "provisioning_spec_digest, release_identity, execution_id "
+            "FROM {} WHERE version = 5"
+        ).format(
+            sql.Identifier(
+                spec.migration_service.schema_name,
+                spec.migration_service.ledger_name,
+            )
+        )
+    ).fetchone()
+    if tuple(row or ()) != (
+        5,
+        "0005_tenant_binding_selection_control_admission.sql",
+        migration.source_sha256,
+        migration.byte_length,
+        migration_set.prefix_digest(5),
+        "ofarm.tenant-postgresql.v1",
+        spec.digest,
+        release_identity,
+        execution_id,
+    ):
+        raise MigrationDirtyError(
+            "tenant binding selection-control admission row is not exact"
+        )
+
+
+def _consume_tenant_binding_selection_control_admission_sealer(
+    connection: psycopg.Connection,
+    spec: ProvisioningSpec,
+    migration: Migration,
+) -> None:
+    """Consume the closed V5 binder-admission capsule and prove its result."""
+
+    sealer = spec.tenant_binding_selection_control_admission_sealer
+    if sealer is None:
+        return
+    if (
+        migration.version,
+        migration.filename,
+    ) != (5, "0005_tenant_binding_selection_control_admission.sql"):
+        raise MigrationDirtyError(
+            "tenant binding selection-control admission sealer reached wrong migration"
+        )
+
+    connection.execute("RESET ROLE")
+    if connection.execute("SELECT CURRENT_USER::text").fetchone()[0] != (
+        sealer.execute_role
+    ):
+        raise MigrationTargetError(
+            "tenant binding selection-control admission sealer caller differs"
+        )
+    connection.execute(
+        sql.SQL("SELECT {}()").format(
+            sql.Identifier(sealer.schema_name, sealer.function_name)
+        )
+    ).fetchone()
+
+    sealer_row = connection.execute(
+        """
+        SELECT owner.rolname::text,
+               routine.prosecdef,
+               language.lanname::text,
+               routine.provolatile,
+               routine.proparallel,
+               routine.proretset,
+               routine.prorettype = 'pg_catalog.void'::pg_catalog.regtype,
+               routine.prosrc,
+               COALESCE(routine.proconfig, ARRAY[]::text[])
+        FROM pg_catalog.pg_proc AS routine
+        JOIN pg_catalog.pg_namespace AS namespace
+             ON namespace.oid = routine.pronamespace
+        JOIN pg_catalog.pg_roles AS owner ON owner.oid = routine.proowner
+        JOIN pg_catalog.pg_language AS language ON language.oid = routine.prolang
+        WHERE namespace.nspname = %s
+          AND routine.proname = %s
+          AND pg_catalog.pg_get_function_identity_arguments(routine.oid) = ''
+        """,
+        (sealer.schema_name, sealer.function_name),
+    ).fetchone()
+    if tuple(sealer_row or ()) != (
+        sealer.execute_role,
+        False,
+        "plpgsql",
+        "v",
+        "u",
+        False,
+        True,
+        sealer.source,
+        ["search_path=pg_catalog, pg_temp"],
+    ):
+        raise MigrationDirtyError(
+            "tenant binding selection-control admission sealer did not self-demote"
+        )
+
+    capsule_acl = connection.execute(
+        """
+        SELECT CASE WHEN acl.grantee = 0 THEN 'PUBLIC'
+                    ELSE pg_catalog.pg_get_userbyid(acl.grantee) END,
+               pg_catalog.pg_get_userbyid(acl.grantor),
+               acl.privilege_type,
+               acl.is_grantable
+        FROM pg_catalog.pg_proc AS routine
+        JOIN pg_catalog.pg_namespace AS namespace
+             ON namespace.oid = routine.pronamespace
+        CROSS JOIN LATERAL pg_catalog.aclexplode(
+            COALESCE(
+                routine.proacl,
+                pg_catalog.acldefault('f', routine.proowner)
+            )
+        ) AS acl
+        WHERE namespace.nspname = %s
+          AND routine.proname = %s
+          AND pg_catalog.pg_get_function_identity_arguments(routine.oid) = ''
+        ORDER BY 1, 2, 3, 4
+        """,
+        (sealer.schema_name, sealer.function_name),
+    ).fetchall()
+    if {tuple(row) for row in capsule_acl} != {
+        (
+            sealer.execute_role,
+            sealer.execute_role,
+            "EXECUTE",
+            False,
+        )
+    }:
+        raise MigrationDirtyError(
+            "tenant binding selection-control admission sealer ACL differs"
+        )
+
+    binder_acl = connection.execute(
+        """
+        SELECT routine.proname::text,
+               pg_catalog.oidvectortypes(routine.proargtypes),
+               grantee.rolname::text,
+               pg_catalog.pg_get_userbyid(acl.grantor),
+               acl.privilege_type,
+               acl.is_grantable
+        FROM pg_catalog.pg_proc AS routine
+        JOIN pg_catalog.pg_namespace AS namespace
+             ON namespace.oid = routine.pronamespace
+        CROSS JOIN LATERAL pg_catalog.aclexplode(
+            COALESCE(
+                routine.proacl,
+                pg_catalog.acldefault('f', routine.proowner)
+            )
+        ) AS acl
+        JOIN pg_catalog.pg_roles AS grantee ON grantee.oid = acl.grantee
+        WHERE namespace.nspname = %s
+          AND grantee.rolname = ANY (%s::text[])
+        ORDER BY 1, 2, 3, 4, 5, 6
+        """,
+        (
+            sealer.target_schema_name,
+            [
+                sealer.controller_role,
+                "ofarm_command_runtime_bundle_selection_control_login",
+            ],
+        ),
+    ).fetchall()
+    if {tuple(row) for row in binder_acl} != {
+        (
+            "create_tenant_challenge",
+            "",
+            sealer.controller_role,
+            "ofarm_binder",
+            "EXECUTE",
+            False,
+        ),
+        (
+            "bind_tenant_capability",
+            "text",
+            sealer.controller_role,
+            "ofarm_binder",
+            "EXECUTE",
+            False,
+        ),
+    }:
+        raise MigrationDirtyError(
+            "tenant binding selection-control admission grants differ"
+        )
+
+    create_privilege = connection.execute(
+        "SELECT pg_catalog.has_schema_privilege(%s, %s, 'CREATE')",
+        (sealer.execute_role, sealer.schema_name),
+    ).fetchone()
+    if tuple(create_privilege or ()) != (False,):
+        raise MigrationDirtyError(
+            "tenant binding selection-control admission sealer left schema CREATE"
+        )
+
+    connection.execute(
+        sql.SQL("DROP FUNCTION {}()").format(
+            sql.Identifier(sealer.schema_name, sealer.function_name)
+        )
+    )
+    _set_owner_role(connection, spec)
+
+
 def _relation_acl(
     connection: psycopg.Connection, oid: int
 ) -> set[tuple[str, str, str, bool]]:
@@ -1645,6 +1856,33 @@ def _migrate_service(
                         )
                     observed_head_execution_id = \
                         appended_history.head_execution_id
+                    if (
+                        spec.tenant_binding_selection_control_admission_sealer
+                        is not None
+                        and migration.version == 5
+                    ):
+                        _authenticate_tenant_binding_selection_control_admission_row(
+                            connection,
+                            spec,
+                            migration_set,
+                            migration,
+                            release_identity,
+                            execution_id,
+                        )
+                        _consume_tenant_binding_selection_control_admission_sealer(
+                            connection,
+                            spec,
+                            migration,
+                        )
+                        admitted_boundary = _locked_boundary_differences(
+                            connection,
+                            spec,
+                        )
+                        if admitted_boundary:
+                            raise MigrationDirtyError(
+                                "tenant binding selection-control admission "
+                                "boundary differs"
+                            )
                     if (
                         verify_final_structure
                         and migration.version == len(migration_set.migrations)

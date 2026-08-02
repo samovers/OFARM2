@@ -693,6 +693,105 @@ class TenantInitialOwnerSealerSpec:
 
 
 @dataclass(frozen=True, slots=True)
+class TenantBindingSelectionControlAdmissionSealerSpec:
+    """One-use V5 capsule for the selection-control binder admission."""
+
+    schema_name: str
+    function_name: str
+    execute_role: str
+    ledger_schema_name: str
+    ledger_name: str
+    target_schema_name: str
+    controller_role: str
+
+    @property
+    def qualified_function(self) -> str:
+        return f"{self.schema_name}.{self.function_name}"
+
+    @property
+    def source(self) -> str:
+        return " ".join(
+            (
+                "BEGIN",
+                "IF (SELECT pg_catalog.count(*) = 5 "
+                "AND pg_catalog.max(version) = 5 "
+                "AND pg_catalog.max(filename) FILTER (WHERE version = 5) = "
+                "'0005_tenant_binding_selection_control_admission.sql' "
+                "AND pg_catalog.max(service_identity) "
+                "FILTER (WHERE version = 5) = "
+                "'ofarm.tenant-postgresql.v1' "
+                f"FROM {self.ledger_schema_name}.{self.ledger_name}) "
+                "IS DISTINCT FROM TRUE THEN",
+                "RAISE EXCEPTION USING ERRCODE = '55000', "
+                "MESSAGE = 'tenant binding selection-control admission "
+                "ordering marker differs';",
+                "END IF;",
+                "GRANT EXECUTE ON FUNCTION "
+                f"{self.target_schema_name}.create_tenant_challenge() "
+                f"TO {self.controller_role};",
+                "GRANT EXECUTE ON FUNCTION "
+                f"{self.target_schema_name}.bind_tenant_capability(text) "
+                f"TO {self.controller_role};",
+                f"GRANT CREATE ON SCHEMA {self.schema_name} "
+                f"TO {self.execute_role};",
+                f"ALTER FUNCTION {self.qualified_function}() SECURITY INVOKER;",
+                f"ALTER FUNCTION {self.qualified_function}() OWNER TO "
+                f"{self.execute_role};",
+                f"REVOKE CREATE ON SCHEMA {self.schema_name} "
+                f"FROM {self.execute_role};",
+                "END",
+            )
+        )
+
+    def manifest(self) -> dict[str, object]:
+        return {
+            "qualifiedName": self.qualified_function,
+            "argumentTypes": [],
+            "returnType": "pg_catalog.void",
+            "ownerCategory": "external-provisioning-superuser",
+            "language": "plpgsql",
+            "securityDefiner": True,
+            "strict": False,
+            "leakproof": False,
+            "volatility": "VOLATILE",
+            "parallelSafety": "UNSAFE",
+            "searchPath": ["pg_catalog", "pg_temp"],
+            "source": self.source,
+            "executeRoles": [self.execute_role],
+            "orderingMarker": {
+                "ledger": f"{self.ledger_schema_name}.{self.ledger_name}",
+                "rowCount": 5,
+                "headVersion": 5,
+                "headFilename": (
+                    "0005_tenant_binding_selection_control_admission.sql"
+                ),
+                "headServiceIdentity": "ofarm.tenant-postgresql.v1",
+            },
+            "grants": [
+                {
+                    "schema": self.target_schema_name,
+                    "name": "create_tenant_challenge",
+                    "argumentTypes": [],
+                    "grantee": self.controller_role,
+                },
+                {
+                    "schema": self.target_schema_name,
+                    "name": "bind_tenant_capability",
+                    "argumentTypes": ["text"],
+                    "grantee": self.controller_role,
+                },
+            ],
+            "consumedAfterMigrationVersion": 5,
+            "postConsumption": {
+                "securityInvoker": True,
+                "owner": self.execute_role,
+                "droppedBeforeCommit": True,
+                "transientSchemaCreatePrivilegesAbsent": True,
+            },
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class ProvisioningSpec:
     """One database on one independently provisioned PostgreSQL service."""
 
@@ -711,6 +810,9 @@ class ProvisioningSpec:
     tenant_write_lock: TenantWriteLockSpec | None
     tenant_admission_lock: TenantAdmissionLockSpec | None
     tenant_initial_owner_sealer: TenantInitialOwnerSealerSpec | None
+    tenant_binding_selection_control_admission_sealer: (
+        TenantBindingSelectionControlAdmissionSealerSpec | None
+    )
     native_verifier: NativeVerifierSpec | None
     roles: tuple[RoleSpec, ...]
     memberships: tuple[MembershipSpec, ...]
@@ -811,6 +913,16 @@ class ProvisioningSpec:
                     None
                     if self.tenant_initial_owner_sealer is None
                     else self.tenant_initial_owner_sealer.manifest()
+                ),
+                **(
+                    {
+                        "tenantBindingSelectionControlAdmissionSealer": (
+                            self.tenant_binding_selection_control_admission_sealer.manifest()
+                        )
+                    }
+                    if self.tenant_binding_selection_control_admission_sealer
+                    is not None
+                    else {}
                 ),
                 **(
                     {"nativeVerifier": self.native_verifier.manifest()}
@@ -1553,6 +1665,19 @@ _TENANT_INITIAL_OWNER_SEALER = TenantInitialOwnerSealerSpec(
 )
 
 
+_TENANT_BINDING_SELECTION_CONTROL_ADMISSION_SEALER = (
+    TenantBindingSelectionControlAdmissionSealerSpec(
+        schema_name="ofarm_infrastructure",
+        function_name="seal_tenant_binding_selection_control_admission",
+        execute_role="ofarm_migrator",
+        ledger_schema_name="ofarm",
+        ledger_name="schema_migration",
+        target_schema_name="ofarm",
+        controller_role="ofarm_command_runtime_bundle_selection_controller",
+    )
+)
+
+
 _TENANT_NATIVE_VERIFIER = NativeVerifierSpec(
     schema_name="ofarm_crypto",
     installer_role="ofarm_crypto_installer",
@@ -1586,6 +1711,9 @@ TENANT_PROVISIONING_SPEC = ProvisioningSpec(
     tenant_write_lock=_TENANT_WRITE_LOCK,
     tenant_admission_lock=_TENANT_ADMISSION_LOCK,
     tenant_initial_owner_sealer=_TENANT_INITIAL_OWNER_SEALER,
+    tenant_binding_selection_control_admission_sealer=(
+        _TENANT_BINDING_SELECTION_CONTROL_ADMISSION_SEALER
+    ),
     native_verifier=_TENANT_NATIVE_VERIFIER,
     roles=(
         RoleSpec("ofarm_owner", False, False, False, -1),
@@ -1661,6 +1789,22 @@ TENANT_PROVISIONING_SPEC = ProvisioningSpec(
         ),
         RoleSpec("ofarm_backend_observer", False, True, False, -1),
         RoleSpec("ofarm_graph_validator", False, False, False, -1),
+        RoleSpec(
+            "ofarm_command_runtime_bundle_selection_controller",
+            False,
+            False,
+            False,
+            -1,
+        ),
+        RoleSpec(
+            "ofarm_command_runtime_bundle_selection_control_login",
+            True,
+            True,
+            False,
+            1,
+            True,
+            _CONTROL_SETTINGS,
+        ),
     ),
     memberships=(
         MembershipSpec("ofarm_owner", "ofarm_migrator", False, True, False),
@@ -1699,6 +1843,13 @@ TENANT_PROVISIONING_SPEC = ProvisioningSpec(
             False,
             False,
         ),
+        MembershipSpec(
+            "ofarm_command_runtime_bundle_selection_controller",
+            "ofarm_command_runtime_bundle_selection_control_login",
+            True,
+            False,
+            False,
+        ),
     ),
     database_connect_roles=(
         "ofarm_migrator",
@@ -1709,6 +1860,7 @@ TENANT_PROVISIONING_SPEC = ProvisioningSpec(
         "ofarm_tenant_registrar",
         "ofarm_identity_writer",
         "ofarm_capability_key_controller",
+        "ofarm_command_runtime_bundle_selection_control_login",
     ),
     schema_usage_roles=(
         "ofarm_app",
@@ -1722,6 +1874,7 @@ TENANT_PROVISIONING_SPEC = ProvisioningSpec(
         "ofarm_capability_key_controller",
         "ofarm_graph_validator",
         "ofarm_tenant_lock_owner",
+        "ofarm_command_runtime_bundle_selection_controller",
     ),
     public_execute_revoked_routines=_ADVISORY_LOCK_ROUTINES,
     large_object_routines=_LARGE_OBJECT_ROUTINES,
@@ -1770,6 +1923,7 @@ SECURITY_AUDIT_PROVISIONING_SPEC = ProvisioningSpec(
     tenant_write_lock=None,
     tenant_admission_lock=None,
     tenant_initial_owner_sealer=None,
+    tenant_binding_selection_control_admission_sealer=None,
     native_verifier=None,
     roles=(
         RoleSpec("ofarm_security_audit_owner", False, False, False, -1),
@@ -2150,6 +2304,9 @@ def _validate_spec(spec: ProvisioningSpec) -> None:
     tenant_lock = spec.tenant_write_lock
     admission_lock = spec.tenant_admission_lock
     sealer = spec.tenant_initial_owner_sealer
+    selection_admission_sealer = (
+        spec.tenant_binding_selection_control_admission_sealer
+    )
     native_verifier = spec.native_verifier
     if spec == TENANT_PROVISIONING_SPEC:
         if tenant_lock != _TENANT_WRITE_LOCK:
@@ -2158,12 +2315,20 @@ def _validate_spec(spec: ProvisioningSpec) -> None:
             raise ProvisioningSpecError("tenant admission-lock boundary is not exact")
         if sealer != _TENANT_INITIAL_OWNER_SEALER:
             raise ProvisioningSpecError("tenant initial owner sealer is not exact")
+        if (
+            selection_admission_sealer
+            != _TENANT_BINDING_SELECTION_CONTROL_ADMISSION_SEALER
+        ):
+            raise ProvisioningSpecError(
+                "tenant binding selection-control admission sealer is not exact"
+            )
         if native_verifier != _TENANT_NATIVE_VERIFIER:
             raise ProvisioningSpecError("tenant native verifier boundary is not exact")
     elif (
         tenant_lock is not None
         or admission_lock is not None
         or sealer is not None
+        or selection_admission_sealer is not None
         or native_verifier is not None
     ):
         raise ProvisioningSpecError(
@@ -2318,6 +2483,50 @@ def _validate_spec(spec: ProvisioningSpec) -> None:
             ):
                 raise ProvisioningSpecError("tenant sealer argument type differs")
 
+    if selection_admission_sealer is not None:
+        for value, label in (
+            (selection_admission_sealer.schema_name, "selection sealer schema"),
+            (
+                selection_admission_sealer.function_name,
+                "selection sealer function",
+            ),
+            (selection_admission_sealer.execute_role, "selection sealer caller"),
+            (
+                selection_admission_sealer.ledger_schema_name,
+                "selection sealer ledger schema",
+            ),
+            (selection_admission_sealer.ledger_name, "selection sealer ledger"),
+            (
+                selection_admission_sealer.target_schema_name,
+                "selection sealer target schema",
+            ),
+            (
+                selection_admission_sealer.controller_role,
+                "selection sealer controller",
+            ),
+        ):
+            _validate_identifier(value, label)
+        if (
+            selection_admission_sealer.schema_name,
+            selection_admission_sealer.function_name,
+            selection_admission_sealer.execute_role,
+            selection_admission_sealer.ledger_schema_name,
+            selection_admission_sealer.ledger_name,
+            selection_admission_sealer.target_schema_name,
+            selection_admission_sealer.controller_role,
+        ) != (
+            lock.schema_name,
+            "seal_tenant_binding_selection_control_admission",
+            "ofarm_migrator",
+            spec.migration_service.schema_name,
+            spec.migration_service.ledger_name,
+            spec.schema_name,
+            "ofarm_command_runtime_bundle_selection_controller",
+        ):
+            raise ProvisioningSpecError(
+                "tenant binding selection-control admission sealer identity differs"
+            )
+
     expected_memberships: set[tuple[str, str]] = set()
     external_role_map = {
         role.name: role for role in spec.external_membership_roles
@@ -2414,6 +2623,82 @@ def _validate_spec(spec: ProvisioningSpec) -> None:
         ):
             raise ProvisioningSpecError(
                 "graph validator must have no membership edge"
+            )
+        selection_controller_name = (
+            "ofarm_command_runtime_bundle_selection_controller"
+        )
+        selection_login_name = (
+            "ofarm_command_runtime_bundle_selection_control_login"
+        )
+        selection_controller = role_map.get(selection_controller_name)
+        selection_login = role_map.get(selection_login_name)
+        if selection_controller is None or (
+            selection_controller.login,
+            selection_controller.inherit,
+            selection_controller.bypass_rls,
+            selection_controller.connection_limit,
+            selection_controller.superuser,
+        ) != (False, False, False, -1, False):
+            raise ProvisioningSpecError(
+                "selection controller attributes are not exact"
+            )
+        if selection_login is None or (
+            selection_login.login,
+            selection_login.inherit,
+            selection_login.bypass_rls,
+            selection_login.connection_limit,
+            selection_login.password_required,
+            selection_login.settings,
+            selection_login.superuser,
+        ) != (True, True, False, 1, True, _CONTROL_SETTINGS, False):
+            raise ProvisioningSpecError(
+                "selection-control login attributes are not exact"
+            )
+        selection_memberships = {
+            (
+                membership.granted_role,
+                membership.member_role,
+                membership.inherit,
+                membership.set_role,
+                membership.admin,
+            )
+            for membership in spec.memberships
+            if selection_controller_name in (
+                membership.granted_role,
+                membership.member_role,
+            )
+            or selection_login_name in (
+                membership.granted_role,
+                membership.member_role,
+            )
+        }
+        if selection_memberships != {
+            (
+                selection_controller_name,
+                selection_login_name,
+                True,
+                False,
+                False,
+            )
+        }:
+            raise ProvisioningSpecError(
+                "selection-control membership is not exact"
+            )
+        if spec.database_connect_roles.count(selection_login_name) != 1:
+            raise ProvisioningSpecError(
+                "selection-control login CONNECT grant is not exact"
+            )
+        if selection_controller_name in spec.database_connect_roles:
+            raise ProvisioningSpecError(
+                "selection controller must not receive direct CONNECT"
+            )
+        if spec.schema_usage_roles.count(selection_controller_name) != 1:
+            raise ProvisioningSpecError(
+                "selection controller schema USAGE grant is not exact"
+            )
+        if selection_login_name in spec.schema_usage_roles:
+            raise ProvisioningSpecError(
+                "selection-control login must not receive direct schema USAGE"
             )
 
     for name in spec.database_connect_roles + spec.schema_usage_roles:
