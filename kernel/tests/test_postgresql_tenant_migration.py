@@ -110,6 +110,8 @@ class TenantTarget:
     migration_set: MigrationSet
     v3_report: object
     v4_guard_evidence: tuple[str, ...]
+    v4_report: object
+    v4_admission_evidence: tuple[str, ...]
     first_report: object
     noop_report: object
 
@@ -294,6 +296,68 @@ def _assert_v4_guards_refuse_before_catalog_change(
     return tuple(evidence)
 
 
+def _assert_v4_selection_admission_is_inert(
+    *,
+    target_admin_dsn: str,
+    migrator_dsn: str,
+    control_dsn: str,
+) -> tuple[str, ...]:
+    sealer = (
+        TENANT_PROVISIONING_SPEC
+        .tenant_binding_selection_control_admission_sealer
+    )
+    assert sealer is not None
+    with psycopg.connect(target_admin_dsn) as admin:
+        row = admin.execute(
+            """
+            SELECT owner.rolsuper,
+                   pg_catalog.left(owner.rolname::text, 6) = 'ofarm_',
+                   routine.prosecdef,
+                   language.lanname::text,
+                   routine.prosrc
+            FROM pg_catalog.pg_proc AS routine
+            JOIN pg_catalog.pg_namespace AS namespace
+                 ON namespace.oid = routine.pronamespace
+            JOIN pg_catalog.pg_roles AS owner ON owner.oid = routine.proowner
+            JOIN pg_catalog.pg_language AS language
+                 ON language.oid = routine.prolang
+            WHERE namespace.nspname = %s
+              AND routine.proname = %s
+              AND pg_catalog.pg_get_function_identity_arguments(routine.oid) = ''
+            """,
+            (sealer.schema_name, sealer.function_name),
+        ).fetchone()
+        assert row == (True, False, True, "plpgsql", sealer.source)
+        assert admin.execute(
+            "SELECT pg_catalog.count(*), pg_catalog.max(version) "
+            "FROM ofarm.schema_migration"
+        ).fetchone() == (4, 4)
+
+    with psycopg.connect(control_dsn) as control:
+        assert control.execute(
+            "SELECT pg_catalog.has_schema_privilege("
+            "CURRENT_USER, 'ofarm', 'USAGE'), "
+            "pg_catalog.has_function_privilege("
+            "CURRENT_USER, 'ofarm.create_tenant_challenge()', 'EXECUTE'), "
+            "pg_catalog.has_function_privilege("
+            "CURRENT_USER, 'ofarm.bind_tenant_capability(text)', 'EXECUTE')"
+        ).fetchone() == (True, False, False)
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            control.execute("SELECT ofarm.create_tenant_challenge()")
+
+    with psycopg.connect(migrator_dsn) as migrator:
+        with pytest.raises(
+            psycopg.errors.ObjectNotInPrerequisiteState,
+            match="ordering marker differs",
+        ):
+            migrator.execute(
+                sql.SQL("SELECT {}()").format(
+                    sql.Identifier(sealer.schema_name, sealer.function_name)
+                )
+            )
+    return ("capsule-present", "grants-absent", "early-call-refused")
+
+
 @pytest.fixture(scope="module")
 def tenant_target() -> TenantTarget:
     admin_dsn = _admin_dsn()
@@ -329,6 +393,33 @@ def tenant_target() -> TenantTarget:
             migrator_dsn=migrator_dsn,
             migration_set=migration_set,
         )
+        v4_set = MigrationSet(
+            service=TENANT_SERVICE,
+            migrations=migration_set.migrations[:4],
+            digest=migration_set.prefix_digest(4),
+        )
+        v4_report = _migrate_service_for_testing(
+            admin_dsn=admin_dsn,
+            migrator_dsn=migrator_dsn,
+            spec=spec,
+            migration_set=v4_set,
+            release_identity=f"{RELEASE_IDENTITY}-v4-prefix",
+            execution_id=uuid4(),
+        )
+        v4_admission_evidence = _assert_v4_selection_admission_is_inert(
+            target_admin_dsn=target_admin_dsn,
+            migrator_dsn=migrator_dsn,
+            control_dsn=_database_dsn(
+                admin_dsn,
+                spec.database_name,
+                user=(
+                    "ofarm_command_runtime_bundle_selection_control_login"
+                ),
+                password=passwords[
+                    "ofarm_command_runtime_bundle_selection_control_login"
+                ],
+            ),
+        )
         first_report = migrate_service(
             admin_dsn=admin_dsn,
             migrator_dsn=migrator_dsn,
@@ -353,6 +444,8 @@ def tenant_target() -> TenantTarget:
             migration_set=migration_set,
             v3_report=v3_report,
             v4_guard_evidence=v4_guard_evidence,
+            v4_report=v4_report,
+            v4_admission_evidence=v4_admission_evidence,
             first_report=first_report,
             noop_report=noop_report,
         )
@@ -1271,9 +1364,15 @@ def test_authoritative_source_ledger_contract_and_apply_noop(
         "publisher",
         "verifier",
     )
-    assert tenant_target.first_report.applied_versions == (4,)
+    assert tenant_target.v4_report.applied_versions == (4,)
+    assert tenant_target.v4_admission_evidence == (
+        "capsule-present",
+        "grants-absent",
+        "early-call-refused",
+    )
+    assert tenant_target.first_report.applied_versions == (5,)
     assert tenant_target.noop_report.applied_versions == ()
-    assert tenant_target.noop_report.final_version == 4
+    assert tenant_target.noop_report.final_version == 5
 
 
 def test_tenant_knowledge_position_catalog_is_structurally_compatible(
@@ -1282,6 +1381,227 @@ def test_tenant_knowledge_position_catalog_is_structurally_compatible(
     with psycopg.connect(tenant_target.migrator_dsn) as migrator:
         observed = _verify(migrator)
     assert observed[0] is True, observed
+
+
+def test_selection_control_admission_is_exact_and_stays_binder_only(
+    tenant_target: TenantTarget,
+    authority: TenantAuthority,
+    capability_key: CapabilityKeyAuthority,
+) -> None:
+    controller = "ofarm_command_runtime_bundle_selection_controller"
+    login = "ofarm_command_runtime_bundle_selection_control_login"
+    sealer = (
+        TENANT_PROVISIONING_SPEC
+        .tenant_binding_selection_control_admission_sealer
+    )
+    assert sealer is not None
+
+    with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+        assert admin.execute(
+            "SELECT pg_catalog.to_regprocedure(%s)",
+            (sealer.qualified_function + "()",),
+        ).fetchone() == (None,)
+        rows = admin.execute(
+            """
+            SELECT routine.proname::text,
+                   pg_catalog.oidvectortypes(routine.proargtypes),
+                   grantee.rolname::text,
+                   grantor.rolname::text,
+                   acl.privilege_type,
+                   acl.is_grantable
+            FROM pg_catalog.pg_proc AS routine
+            JOIN pg_catalog.pg_namespace AS namespace
+                 ON namespace.oid = routine.pronamespace
+            CROSS JOIN LATERAL pg_catalog.aclexplode(
+                COALESCE(
+                    routine.proacl,
+                    pg_catalog.acldefault('f', routine.proowner)
+                )
+            ) AS acl
+            JOIN pg_catalog.pg_roles AS grantee ON grantee.oid = acl.grantee
+            JOIN pg_catalog.pg_roles AS grantor ON grantor.oid = acl.grantor
+            WHERE namespace.nspname = 'ofarm'
+              AND grantee.rolname = ANY (%s::text[])
+            ORDER BY 1, 2, 3, 4, 5, 6
+            """,
+            ([controller, login],),
+        ).fetchall()
+        assert rows == [
+            (
+                "bind_tenant_capability",
+                "text",
+                controller,
+                "ofarm_binder",
+                "EXECUTE",
+                False,
+            ),
+            (
+                "create_tenant_challenge",
+                "",
+                controller,
+                "ofarm_binder",
+                "EXECUTE",
+                False,
+            ),
+        ]
+
+    with psycopg.connect(tenant_target.role_dsn(login)) as control:
+        assert control.execute(
+            "SELECT pg_catalog.has_function_privilege("
+            "CURRENT_USER, 'ofarm.create_tenant_challenge()', 'EXECUTE'), "
+            "pg_catalog.has_function_privilege("
+            "CURRENT_USER, 'ofarm.bind_tenant_capability(text)', 'EXECUTE'), "
+            "pg_catalog.has_function_privilege("
+            "CURRENT_USER, 'ofarm.current_tenant_context()', 'EXECUTE'), "
+            "pg_catalog.has_function_privilege("
+            "CURRENT_USER, 'ofarm.take_tenant_write_lock()', 'EXECUTE'), "
+            "pg_catalog.has_function_privilege("
+            "CURRENT_USER, 'pg_catalog.pg_advisory_xact_lock(bigint)', "
+            "'EXECUTE')"
+        ).fetchone() == (True, True, False, False, False)
+        for relation_name in (
+            "tenant_registry",
+            "tenant_binding_context",
+            "runtime_bundle",
+            "governed_write_batch",
+        ):
+            assert control.execute(
+                "SELECT pg_catalog.has_table_privilege("
+                "CURRENT_USER, %s, 'SELECT,INSERT,UPDATE,DELETE')",
+                ("ofarm." + relation_name,),
+            ).fetchone() == (False,)
+
+        invalid_token = _signed_capability_for_new_challenge(
+            control,
+            authority=authority,
+            key=capability_key,
+        )
+        header, payload, signature = invalid_token.split(".")
+        corrupt_signature = ("A" if signature[0] != "A" else "B") + signature[1:]
+        with pytest.raises(psycopg.errors.InvalidAuthorizationSpecification):
+            control.execute(
+                "SELECT ofarm.bind_tenant_capability(%s)",
+                (f"{header}.{payload}.{corrupt_signature}",),
+            )
+        control.rollback()
+
+    with psycopg.connect(tenant_target.role_dsn(login)) as control:
+        token = _signed_capability_for_new_challenge(
+            control,
+            authority=authority,
+            key=capability_key,
+        )
+        control.execute(
+            "SELECT ofarm.bind_tenant_capability(%s)",
+            (token,),
+        )
+        backend_pid, full_xid = control.execute(
+            "SELECT pg_catalog.pg_backend_pid(), "
+            "pg_catalog.pg_current_xact_id()::pg_catalog.text"
+        ).fetchone()
+        control.commit()
+
+        with psycopg.connect(tenant_target.target_admin_dsn) as admin:
+            assert admin.execute(
+                """
+                SELECT context_state, equality_policy, issuer, subject,
+                       tenant_id, party_ref, capability_key_id
+                FROM ofarm.tenant_binding_context
+                WHERE backend_pid = %s
+                  AND full_xid = %s::pg_catalog.xid8
+                """,
+                (backend_pid, full_xid),
+            ).fetchone() == (
+                "BOUND",
+                OIDC_ISSUER_EQUALITY_POLICY,
+                ISSUER,
+                authority.subject,
+                authority.tenant_id,
+                authority.party_ref,
+                capability_key.kid,
+            )
+
+
+def test_selection_control_mixed_v5_states_refuse_reconciliation(
+    tenant_target: TenantTarget,
+) -> None:
+    sealer = (
+        TENANT_PROVISIONING_SPEC
+        .tenant_binding_selection_control_admission_sealer
+    )
+    assert sealer is not None
+    sealer_identity = sql.Identifier(sealer.schema_name, sealer.function_name)
+    with psycopg.connect(
+        tenant_target.target_admin_dsn,
+        autocommit=True,
+    ) as admin:
+        admin.execute(
+            sql.SQL(
+                "CREATE FUNCTION {}() RETURNS pg_catalog.void "
+                "LANGUAGE plpgsql VOLATILE PARALLEL UNSAFE "
+                "SECURITY DEFINER "
+                "SET search_path = pg_catalog, pg_temp AS {}"
+            ).format(sealer_identity, sql.Literal(sealer.source))
+        )
+        admin.execute(
+            sql.SQL("REVOKE ALL PRIVILEGES ON FUNCTION {}() FROM PUBLIC").format(
+                sealer_identity
+            )
+        )
+        admin.execute(
+            sql.SQL("GRANT EXECUTE ON FUNCTION {}() TO ofarm_migrator").format(
+                sealer_identity
+            )
+        )
+    try:
+        with pytest.raises(MigrationTargetError, match="migration-lock"):
+            migrate_service(
+                admin_dsn=tenant_target.admin_dsn,
+                migrator_dsn=tenant_target.migrator_dsn,
+                spec=TENANT_PROVISIONING_SPEC,
+                migration_set=tenant_target.migration_set,
+                release_identity=RELEASE_IDENTITY,
+                execution_id=uuid4(),
+            )
+    finally:
+        with psycopg.connect(
+            tenant_target.target_admin_dsn,
+            autocommit=True,
+        ) as admin:
+            admin.execute(sql.SQL("DROP FUNCTION {}()").format(sealer_identity))
+
+    with psycopg.connect(
+        tenant_target.target_admin_dsn,
+        autocommit=True,
+    ) as admin:
+        admin.execute(
+            "REVOKE EXECUTE ON FUNCTION "
+            "ofarm.bind_tenant_capability(text) FROM "
+            "ofarm_command_runtime_bundle_selection_controller"
+        )
+    try:
+        with pytest.raises(MigrationTargetError, match="admission ACL differs"):
+            migrate_service(
+                admin_dsn=tenant_target.admin_dsn,
+                migrator_dsn=tenant_target.migrator_dsn,
+                spec=TENANT_PROVISIONING_SPEC,
+                migration_set=tenant_target.migration_set,
+                release_identity=RELEASE_IDENTITY,
+                execution_id=uuid4(),
+            )
+    finally:
+        with psycopg.connect(
+            tenant_target.target_admin_dsn,
+            autocommit=True,
+        ) as admin:
+            admin.execute(
+                "GRANT EXECUTE ON FUNCTION "
+                "ofarm.bind_tenant_capability(text) TO "
+                "ofarm_command_runtime_bundle_selection_controller"
+            )
+
+    with psycopg.connect(tenant_target.migrator_dsn) as migrator:
+        assert _verify(migrator)[0] is True
 
 
 def test_tenant_knowledge_position_storage_has_one_ledger_authority(
@@ -6291,7 +6611,7 @@ def test_complete_catalog_fingerprint_refuses_function_constraint_index_policy_a
             assert pristine[0] is True
             assert pristine[2] == 0
             assert pristine[3] == (
-                "sha256:d4819f6ede7496d42bbae566e8d8a8db76b453108ab3b53cc1a6ef01f8b9fe8f"
+                "sha256:383a646365a29c5e4c487a6defc8f4a6aa40ca7019f1baa9882d855afa73c602"
             )
         finally:
             migrator.rollback()
@@ -6980,10 +7300,10 @@ def test_readiness_observation_is_complete_after_commit(
     assert row[1] == TENANT_CONTEXT_CONTRACT.digest
     assert row[2] == 0
     assert row[3] == (
-        "sha256:d4819f6ede7496d42bbae566e8d8a8db76b453108ab3b53cc1a6ef01f8b9fe8f"
+        "sha256:383a646365a29c5e4c487a6defc8f4a6aa40ca7019f1baa9882d855afa73c602"
     )
     assert row[5] == TENANT_PROVISIONING_SPEC.digest
     assert row[6] == TENANT_SERVICE.identity
-    assert row[7] == 4
-    assert row[9] == 4
+    assert row[7] == 5
+    assert row[9] == 5
     assert row[10] is False

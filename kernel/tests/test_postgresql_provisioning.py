@@ -490,7 +490,7 @@ def test_provisioning_specs_freeze_distinct_service_and_role_boundaries():
     ).hexdigest() == \
         "17e431e33221426151a6ceb3eb2214b1abc51a7b9390d508603f233742deca28"
     assert tenant.digest == \
-        "sha256:87122affe6e45127d33b50bb7ee7cb9e35f5e66d81549bcae821019b3fd15f00"
+        "sha256:e15a5d5903681e2796c70ca2cac19b1aa85d3538589f99046a01c3663f5d8556"
     assert audit.digest == \
         "sha256:9b9d06c6f6ac5527a32014ec1719a3cee9742d4d5ab7d8e8a4ff2797053824f7"
     assert next(
@@ -963,6 +963,13 @@ def test_binder_and_runtime_memberships_are_closed():
             False,
             False,
         ),
+        (
+            "ofarm_command_runtime_bundle_selection_controller",
+            "ofarm_command_runtime_bundle_selection_control_login",
+            True,
+            False,
+            False,
+        ),
     }
 
     observer = next(
@@ -994,6 +1001,86 @@ def test_binder_and_runtime_memberships_are_closed():
         "ofarm_backend_observer",
         "ofarm_graph_validator",
         "ofarm_crypto_installer",
+    )
+
+
+def test_selection_control_roles_and_one_use_capsule_are_closed() -> None:
+    tenant = TENANT_PROVISIONING_SPEC
+    audit = SECURITY_AUDIT_PROVISIONING_SPEC
+    controller_name = "ofarm_command_runtime_bundle_selection_controller"
+    login_name = "ofarm_command_runtime_bundle_selection_control_login"
+    controller = next(role for role in tenant.roles if role.name == controller_name)
+    login = next(role for role in tenant.roles if role.name == login_name)
+    existing_control = next(
+        role
+        for role in tenant.roles
+        if role.name == "ofarm_runtime_bundle_control_login"
+    )
+
+    assert (
+        controller.login,
+        controller.inherit,
+        controller.bypass_rls,
+        controller.connection_limit,
+        controller.superuser,
+    ) == (False, False, False, -1, False)
+    assert (
+        login.login,
+        login.inherit,
+        login.bypass_rls,
+        login.connection_limit,
+        login.password_required,
+        login.settings,
+        login.superuser,
+    ) == (True, True, False, 1, True, existing_control.settings, False)
+    assert tenant.database_connect_roles.count(login_name) == 1
+    assert controller_name not in tenant.database_connect_roles
+    assert tenant.schema_usage_roles.count(controller_name) == 1
+    assert login_name not in tenant.schema_usage_roles
+
+    sealer = tenant.tenant_binding_selection_control_admission_sealer
+    assert sealer is not None
+    assert (
+        sealer.qualified_function,
+        sealer.execute_role,
+        sealer.ledger_schema_name,
+        sealer.ledger_name,
+        sealer.target_schema_name,
+        sealer.controller_role,
+    ) == (
+        "ofarm_infrastructure."
+        "seal_tenant_binding_selection_control_admission",
+        "ofarm_migrator",
+        "ofarm",
+        "schema_migration",
+        "ofarm",
+        controller_name,
+    )
+    source = sealer.source
+    assert source.count("GRANT EXECUTE ON FUNCTION") == 2
+    assert "ledger row count" not in source
+    assert "0005_tenant_binding_selection_control_admission.sql" in source
+    assert "ofarm.tenant-postgresql.v1" in source
+    assert "EXECUTE " not in source.replace("GRANT EXECUTE", "GRANT")
+    for forbidden in (
+        "provisioning_spec_digest",
+        "source_sha256",
+        "source_byte_length",
+        "applied_prefix_digest",
+        "release_identity",
+        "execution_id",
+        "current_setting",
+        "EXECUTE format",
+        "EXECUTE USING",
+    ):
+        assert forbidden not in source
+    assert (
+        "tenantBindingSelectionControlAdmissionSealer"
+        in tenant.manifest()["preLedgerBootstrap"]
+    )
+    assert (
+        "tenantBindingSelectionControlAdmissionSealer"
+        not in audit.manifest()["preLedgerBootstrap"]
     )
 
 
@@ -2349,6 +2436,8 @@ def test_tenant_owner_sealer_and_bigint_lock_grant_are_exactly_isolated(
     sealer = spec.tenant_initial_owner_sealer
     tenant_lock = spec.tenant_write_lock
     assert sealer is not None
+    selection_sealer = spec.tenant_binding_selection_control_admission_sealer
+    assert selection_sealer is not None
     assert tenant_lock is not None
     admin_dsn = provisioned_services["tenantAdmin"]
     target_dsn = _database_dsn(admin_dsn, spec.database_name)
@@ -2374,6 +2463,31 @@ def test_tenant_owner_sealer_and_bigint_lock_grant_are_exactly_isolated(
             (sealer.schema_name, sealer.function_name),
         ).fetchone() == (True, False, True, "plpgsql", sealer.source)
         assert admin.execute(
+            """
+            SELECT owner.rolsuper,
+                   pg_catalog.left(owner.rolname::text, 6) = 'ofarm_',
+                   routine.prosecdef,
+                   language.lanname::text,
+                   routine.prosrc
+            FROM pg_catalog.pg_proc AS routine
+            JOIN pg_catalog.pg_namespace AS namespace
+                 ON namespace.oid = routine.pronamespace
+            JOIN pg_catalog.pg_roles AS owner ON owner.oid = routine.proowner
+            JOIN pg_catalog.pg_language AS language
+                 ON language.oid = routine.prolang
+            WHERE namespace.nspname = %s
+              AND routine.proname = %s
+              AND pg_catalog.pg_get_function_identity_arguments(routine.oid) = ''
+            """,
+            (selection_sealer.schema_name, selection_sealer.function_name),
+        ).fetchone() == (
+            True,
+            False,
+            True,
+            "plpgsql",
+            selection_sealer.source,
+        )
+        assert admin.execute(
             "SELECT pg_catalog.has_function_privilege("
             "'ofarm_migrator', %s, 'EXECUTE')",
             (sealer.qualified_function + "()",),
@@ -2382,6 +2496,17 @@ def test_tenant_owner_sealer_and_bigint_lock_grant_are_exactly_isolated(
             "SELECT pg_catalog.has_function_privilege("
             "'ofarm_app', %s, 'EXECUTE')",
             (sealer.qualified_function + "()",),
+        ).fetchone() == (False,)
+        assert admin.execute(
+            "SELECT pg_catalog.has_function_privilege("
+            "'ofarm_migrator', %s, 'EXECUTE')",
+            (selection_sealer.qualified_function + "()",),
+        ).fetchone() == (True,)
+        assert admin.execute(
+            "SELECT pg_catalog.has_function_privilege("
+            "'ofarm_command_runtime_bundle_selection_control_login', %s, "
+            "'EXECUTE')",
+            (selection_sealer.qualified_function + "()",),
         ).fetchone() == (False,)
         assert admin.execute(
             "SELECT pg_catalog.has_function_privilege("
