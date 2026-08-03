@@ -351,7 +351,8 @@ one present refuses.
 
 ### 5.2 Exact classifier inventories
 
-The classifier evaluates four closed inventories.
+The classifier evaluates three closed scanned inventories and separately
+classifies the exact non-production occurrence classes below.
 
 **SQL production inventory.** Use only the one retained authenticated tenant
 `MigrationSet` and each retained `Migration.source_bytes`. Do not glob the
@@ -364,6 +365,14 @@ trust a filename found only on disk.
 conformance.rewrite_architecture_check._module_sources(PACKAGE_ROOT)
 ```
 
+This is an acknowledged dependency on an underscore-private helper owned by
+the architecture checker. The temporal checker already uses that helper, so
+this boundary reuses the existing inventory authority instead of creating a
+second walker or editing its owner. It does not promote the helper to a public
+API. A rename, signature change, or change to its inventory semantics is a stop
+condition requiring an amended conformance contract or a separate change owned
+by the architecture-checker boundary.
+
 Retain that one mapping for marker classification and import-graph
 construction. Every returned Python path is production-classified for marker
 purposes except:
@@ -371,6 +380,11 @@ purposes except:
 - the exact checker path
   `conformance/temporal_contract_candidate_check.py`; and
 - the fixed verification family under `kernel/tests/`.
+
+`profile_si_ffs/tests/` is intentionally not exempt. Those modules remain
+production-classified for marker purposes, and either selection marker there
+refuses. The future conformance PR's synthetic marker tests are confined to
+the already named `kernel/tests/` family.
 
 The exact adapter remains production-classified even though it is an
 administrator control module. Any selection marker in any other returned
@@ -386,8 +400,21 @@ profile_si_ffs/OFARM_ActiveArtifactSet_example_si_ffs_pilot_v0_1.json
 profile_si_ffs/OFARM_Capability_Manifest_si_ffs_pilot_v0_1.json
 ```
 
-**Non-production authority classes.** The only existing non-production
-marker-bearing paths are:
+**Scanned non-production exemptions.** These paths are inside the retained
+Python inventory but are exempt from production-marker refusal because they
+own conformance constants or synthetic verification:
+
+```text
+conformance/temporal_contract_candidate_check.py
+kernel/tests/**
+```
+
+Their marker occurrences never satisfy the implementation pair. The exemption
+does not override the import-closure rule: either path refuses if it becomes
+reachable from a production or legacy root.
+
+**Outside-inventory governance occurrences.** The following exact existing
+marker-bearing governance paths are outside all three scanned inventories:
 
 ```text
 ERRATA.md
@@ -396,16 +423,16 @@ contracts/candidates/temporal_runtime_bundle_selection/OFARM_TenantCommandRuntim
 docs/rfcs/OFARM_Tenant_Command_RuntimeBundle_Selection_RFC_v0_1.md
 docs/rfcs/OFARM_Tenant_Command_RuntimeBundle_Selection_Activation_Admission_RFC_v0_1.md
 docs/rfcs/OFARM_Temporal_Candidate_Conformance_Selection_Storage_Admission_RFC_v0_1.md
-conformance/temporal_contract_candidate_check.py
-kernel/tests/**
 ```
 
-These paths carry candidate governance, authorizing law, conformance
-constants, or synthetic verification. Their marker occurrences never satisfy
-the implementation pair and never become production selection authority.
-Adding another non-production class or marker-bearing governance path requires
-a reviewed amendment; the classifier does not discover exemptions from file
-contents.
+These paths carry candidate governance or authorizing law. They are not
+classifier exemptions because the classifier does not scan them. Their exact
+bytes remain governed by the candidate, RFC, ERRATA, manifest, and package
+authorities that already own them. Their marker occurrences never satisfy the
+implementation pair and never become production selection authority. Adding
+another outside-inventory governance class or marker-bearing authority requires
+a reviewed amendment; the classifier does not imply repository-wide coverage
+or discover exemptions from file contents.
 
 ### 5.3 Per-path marker and filesystem rules
 
@@ -486,6 +513,15 @@ The last item is a stop condition, not permission for dynamic filesystem
 discovery. If a new active authority must be classified, its exact path and
 meaning require a reviewed contract amendment.
 
+The exclusivity claims in this contract are bounded to the SQL, Python, and
+three active non-Python inventories in section 5.2. They are not a claim that
+every Markdown, JSON, SQL, or other repository file is scanned. In particular,
+`kernel/schema.sql` is outside the authenticated migration inventory and
+remains quarantined legacy-M1 authority; other non-Python profile files are
+outside the three named active paths. None gains selection authority from being
+unscanned. The conformance PR cannot edit them, and any future need to classify
+one is governed by the amendment stop above.
+
 The conformance PR must also prove from its exact changed-file boundary and
 focused evidence that it introduces no checked-in operational selection row,
 tenant capability, target-tenant choice, selected RuntimeBundle instance,
@@ -546,16 +582,20 @@ Synthetic values and checker constants never satisfy the production pair.
 - **TCSS-001 — Exact authority first.** No selection-storage exception is
   available until this complete merged RFC, the parent, the persistence
   authority, and all three custody RFC bytes are exact.
-- **TCSS-002 — Two production paths only.** Only exact authenticated migration
-  0008 and the exact deployment adapter may carry the two reviewed selection
-  markers as production references.
+- **TCSS-002 — Two production paths within the closed inventories.** Within the
+  exact SQL, Python, and active non-Python inventories in section 5.2, only
+  authenticated migration 0008 and the exact deployment adapter may carry the
+  two reviewed markers as permitted production references. Sources outside
+  those inventories receive no implicit allowance; a need to classify one
+  stops for amendment.
 - **TCSS-003 — Absence is conformant.** The conformance prerequisite passes
   before either future production path exists. One present without the other
   refuses; the implemented state requires the complete pair.
 - **TCSS-004 — One SQL and one Python snapshot.** Migration classification uses
   one retained authenticated `MigrationSet`; Python classification and import
   isolation use one retained `_module_sources(PACKAGE_ROOT)` result. No second
-  scan or read creates authority.
+  scan or read creates authority. The private-helper coupling is explicit and
+  any change to it stops for its owning boundary.
 - **TCSS-005 — Stable prefixes.** The authenticated knowledge-storage prefix
   through migration 0003 remains the candidate's fixed knowledge prerequisite.
   The exact prefix through migration 0007 remains fixed when the complete set
@@ -571,14 +611,17 @@ Synthetic values and checker constants never satisfy the production pair.
 - **TCSS-009 — Candidate bytes remain unchanged.** No candidate schema,
   binding, manifest digest, ERRATA row, promotion record, or lifecycle decision
   changes.
-- **TCSS-010 — Catalog and profiles remain closed.** No marker or candidate
-  path enters the runtime catalog, ActiveArtifactSet, Capability Manifest, or
-  another profile authority.
+- **TCSS-010 — Named catalog and profile authorities remain closed.** No marker
+  or candidate path enters the exact runtime catalog, ActiveArtifactSet, or
+  Capability Manifest scanned here. Other non-Python profile authorities are
+  outside this classifier and require amendment before classification; their
+  absence from the inventory grants no authority.
 - **TCSS-011 — Python universe and isolation remain closed.** Every
   production-classified Python source other than the exact adapter refuses
-  either marker. The regular, non-symlink adapter is absent from
-  `deployment/postgresql/__init__.py` and unreachable from both fixed import
-  closures.
+  either marker, including `profile_si_ffs/tests/`. The regular, non-symlink
+  adapter is absent from `deployment/postgresql/__init__.py` and unreachable
+  from both fixed import closures. Scanned conformance/test exemptions also
+  refuse if they become reachable from either closure.
 - **TCSS-012 — No activation inference.** An allowed reference or passing
   check creates no relation, row, batch, selected bundle, command authority,
   route, read, output, current truth, or deployment state.
@@ -634,10 +677,14 @@ The future Phase B conformance implementation must prove:
 | The exact adapter becomes reachable from a legacy import root | refuse |
 | A dormant non-test Python module outside either import closure copies either marker | refuse from the retained source inventory |
 | A production or legacy wrapper copies either marker without importing the adapter | refuse from the retained source inventory |
+| Either marker occurs under `profile_si_ffs/tests/` | refuse; that test family is intentionally not exempt |
+| An exempt checker or `kernel/tests/` module becomes reachable from a production or legacy root | refuse reachability even though marker occurrence is non-production evidence |
 | A second Python source scan differs from the retained inventory | refuse the design; no second scan is permitted |
+| `_module_sources` is renamed or its signature or inventory semantics change | stop for an amended contract or the architecture-checker owner boundary |
 | A marker or candidate path enters the active runtime catalog | refuse |
 | A temporal activation marker enters the ActiveArtifactSet | refuse |
 | A temporal activation marker enters the Capability Manifest | refuse |
+| A marker appears in `kernel/schema.sql` or another source outside the exact inventories | no classifier claim is made; any requested recognition or changed-file use stops for amendment, and the existing authority remains closed |
 | A conformance change adds an operational selection row, tenant capability, target tenant, selected bundle instance, credential, secret, or retained fixture | refuse; synthetic temporary evidence only |
 | A profile, environment, route, caller, request, newest-file rule, or dynamic registry selects the exception | no such seam may exist; refuse if introduced |
 | The checker attempts to validate or redefine the future relation, SQL function, RLS, allocator, lock, retry, or sixteen-component closure | refuse the scope expansion |
@@ -779,12 +826,12 @@ Traceability is:
 | Invariant | Future seam | Required proof |
 | --- | --- | --- |
 | TCSS-001, TCSS-019 | complete merged self-authority and fixed prerequisite constants | exact bytes pass; missing, length-mismatched, same-length digest-mismatched, substituted, or multiply resolved bytes refuse |
-| TCSS-002, TCSS-003 | explicit two-path and state classifier | exact V7 absence passes; exact V8 pair classifies; partial pair, aliases, symlinks, and third paths refuse |
-| TCSS-004, TCSS-005 | retained authenticated migration and Python snapshots | no second read or scan; exact version-3 and version-7 prefixes pass; substitutions refuse |
+| TCSS-002, TCSS-003 | explicit two-path and state classifier bounded to the exact inventories | exact V7 absence passes; exact V8 pair classifies; partial pair, aliases, symlinks, and third inventoried paths refuse; outside-inventory needs stop for amendment |
+| TCSS-004, TCSS-005 | retained authenticated migration and Python snapshots | no second read or scan; exact version-3 and version-7 prefixes pass; substitutions refuse; private-helper changes stop |
 | TCSS-006 | existing persistence and custody checks | persistence RFC, migration 0004, and migrations 0005 through 0007 remain exact in both states |
 | TCSS-007, TCSS-008 | fixed marker constants and narrow classification | no caller/configuration seam and no duplicated storage/selection semantics |
-| TCSS-009, TCSS-010 | unchanged candidate and active authorities | candidate bytes unchanged; catalog and active profile mutations refuse |
-| TCSS-011, TCSS-014 | one retained Python inventory, existing architecture graph, and fixed roots | dormant copies refuse; `__init__.py` re-export refuses; adapter is regular/non-symlink and unreachable from both closures |
+| TCSS-009, TCSS-010 | unchanged candidate and exact active non-Python authorities | candidate bytes unchanged; the three inventoried catalog/profile mutations refuse; other non-Python authorities gain no implicit coverage or allowance |
+| TCSS-011, TCSS-014 | one retained Python inventory, existing architecture graph, and fixed roots | dormant copies and `profile_si_ffs/tests/` markers refuse; `__init__.py` re-export refuses; adapter is regular/non-symlink and unreachable; exemptions refuse on reachability |
 | TCSS-012, TCSS-013 | no changed runtime surface | boundary diff and package architecture checks |
 | TCSS-015 | unchanged #192 authority | boundary diff and package checks |
 | TCSS-016, TCSS-017 | closed Phase B allowlist | only checker, focused tests, and mechanically required inventory metadata change |
@@ -804,7 +851,8 @@ Work stops before:
    merges and passes on current `main`;
 5. adding a third production exception, alias, dynamic registry, environment
    switch, profile switch, second migration or Python scan, caller-selected
-   path, or adapter import/re-export from `deployment/postgresql/__init__.py`;
+   path, adapter import/re-export from `deployment/postgresql/__init__.py`, or
+   renaming or changing the private `_module_sources` inventory contract;
 6. changing a candidate, manifest, ERRATA row, promotion record, lifecycle
    decision, frozen contract, active registry, RuntimeBundle, or profile;
 7. changing migrations 0001 through 0007 or any previously admitted role,
@@ -820,6 +868,10 @@ Work stops before:
 11. importing or changing legacy production behavior;
 12. implementing or changing #192; or
 13. changing a file outside the applicable Phase A or Phase B allowlist.
+
+The private helper remains owned by the architecture checker. If conformance
+implementation cannot reuse it exactly, work stops rather than editing that
+authority or creating a parallel source walker in this PR.
 
 Each stopped item requires its own reviewed trust boundary and PR. Current-state
 reads and outputs remain blocked by their separate output-governance
